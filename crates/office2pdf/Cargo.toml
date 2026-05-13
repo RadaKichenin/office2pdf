@@ -11,7 +11,7 @@ keywords = ["pdf", "docx", "xlsx", "pptx", "converter"]
 categories = ["text-processing"]
 
 [features]
-wasm = ["wasm-bindgen"]
+wasm = ["wasm-bindgen", "web-time"]
 pdf-ops = ["lopdf"]
 typescript = ["ts-rs"]
 
@@ -20,7 +20,10 @@ thiserror = "2"
 lopdf = { version = "0.39", optional = true }
 typst = "0.14"
 typst-pdf = "0.14"
-typst-kit = { version = "0.14", default-features = false, features = ["fonts", "embed-fonts"] }
+typst-kit = { version = "0.14", default-features = false, features = [
+    "fonts",
+    "embed-fonts",
+] }
 comemo = "0.5"
 docx-rs = "0.4"
 serde = "1"
@@ -33,6 +36,7 @@ image = "0.25"
 tracing = "0.1"
 wasm-bindgen = { version = "0.2", optional = true }
 ts-rs = { version = "12", optional = true }
+web-time = { version = "1.1", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"] }
