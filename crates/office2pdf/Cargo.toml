@@ -20,7 +20,10 @@ thiserror = "2"
 lopdf = { version = "0.39", optional = true }
 typst = "0.14"
 typst-pdf = "0.14"
-typst-kit = { version = "0.14", default-features = false, features = ["fonts", "embed-fonts"] }
+typst-kit = { version = "0.14", default-features = false, features = [
+    "fonts",
+    "embed-fonts",
+] }
 comemo = "0.5"
 docx-rs = "0.4"
 serde = "1"
@@ -37,14 +40,24 @@ ts-rs = { version = "12", optional = true }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"] }
 getrandom = { version = "0.3", features = ["wasm_js"] }
+# `std::time::{Instant, SystemTime}` panic with "time not implemented on this
+# platform" on wasm32-unknown-unknown. web-time shims them via the browser
+# clock and re-exports std on every other target. Kept out of the `wasm`
+# feature so a no-feature wasm32 build (CI `wasm-check` step 1) still compiles.
+web-time = "1.1"
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 wasm-bindgen-test = "0.3"
 
 [dev-dependencies]
-criterion = { version = "0.5", features = ["html_reports"] }
 paste = "1"
 pdf-extract = "0.10"
+
+# criterion pulls rayon, which fails to compile for wasm32. Keep the benchmark
+# harness off wasm targets so `wasm-pack test` (which builds all dev-deps) can
+# build and run the wasm integration tests in src/wasm.rs.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
 
 [[bench]]
 name = "conversion"
