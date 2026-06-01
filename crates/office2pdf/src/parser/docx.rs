@@ -540,7 +540,7 @@ fn convert_paragraph_blocks(
     let mut inline_images: Vec<Block> = Vec::new();
     let mut emitted_paragraph: bool = false;
     let mut emitted_media_blocks: bool = false;
-    let mut emitted_floating_shape_anchor: bool = false;
+    let mut emitted_floating_anchor: bool = false;
 
     for child in &para.children {
         match child {
@@ -572,10 +572,9 @@ fn convert_paragraph_blocks(
 
                 if !media.text_box_blocks.is_empty() {
                     emitted_media_blocks = true;
-                    emitted_floating_shape_anchor |= media
-                        .text_box_blocks
-                        .iter()
-                        .any(|block| matches!(block, Block::FloatingShape(_)));
+                    emitted_floating_anchor |= media.text_box_blocks.iter().any(|block| {
+                        matches!(block, Block::FloatingShape(_) | Block::FloatingTextBox(_))
+                    });
                     if !runs.is_empty() {
                         out.append(&mut inline_images);
                         push_paragraph_from_runs(out, para, resolved_style, is_rtl, &mut runs);
@@ -638,13 +637,11 @@ fn convert_paragraph_blocks(
     // Emit image blocks before the paragraph (inline images are block-level in our IR)
     out.extend(inline_images);
 
-    if !runs.is_empty()
-        || !emitted_media_blocks
-        || (emitted_floating_shape_anchor && !emitted_paragraph)
+    if !runs.is_empty() || !emitted_media_blocks || (emitted_floating_anchor && !emitted_paragraph)
     {
-        // Keep paragraph marks for geometry-only floating shapes. Text boxes
-        // already carry their own content, but bare shapes rely on the anchor
-        // paragraph to keep following content out of the drawing cluster.
+        // Keep paragraph marks for floating drawing anchors. The drawing itself
+        // is positioned by offsets, but the source paragraph still contributes
+        // to flow spacing between the drawing cluster and following content.
         push_paragraph_from_runs(out, para, resolved_style, is_rtl, &mut runs);
     }
 }

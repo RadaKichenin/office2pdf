@@ -875,13 +875,64 @@ fn generate_blocks(
     blocks: &[Block],
     ctx: &mut GenCtx,
 ) -> Result<(), ConvertError> {
-    for (i, block) in blocks.iter().enumerate() {
-        if i > 0 {
+    let mut index: usize = 0;
+    while index < blocks.len() {
+        if index > 0 {
             out.push('\n');
         }
-        generate_block(out, block, ctx)?;
+
+        if is_zero_size_floating_anchor(&blocks[index]) {
+            let consumed = generate_floating_anchor_group(out, &blocks[index..], ctx)?;
+            index += consumed;
+            continue;
+        }
+
+        generate_block(out, &blocks[index], ctx)?;
+        index += 1;
     }
+
     Ok(())
+}
+
+fn is_zero_size_floating_anchor(block: &Block) -> bool {
+    match block {
+        Block::FloatingShape(shape) => matches!(
+            shape.wrap_mode,
+            WrapMode::Behind | WrapMode::InFront | WrapMode::None
+        ),
+        Block::FloatingTextBox(text_box) => matches!(
+            text_box.wrap_mode,
+            WrapMode::Behind | WrapMode::InFront | WrapMode::None
+        ),
+        _ => false,
+    }
+}
+
+fn generate_floating_anchor_group(
+    out: &mut String,
+    blocks: &[Block],
+    ctx: &mut GenCtx,
+) -> Result<usize, ConvertError> {
+    out.push_str("#box(width: 0pt, height: 0pt)[\n");
+    let mut consumed: usize = 0;
+
+    for block in blocks {
+        if !is_zero_size_floating_anchor(block) {
+            break;
+        }
+
+        match block {
+            Block::FloatingShape(shape) => generate_floating_shape_overlay(out, shape),
+            Block::FloatingTextBox(text_box) => {
+                generate_floating_text_box_overlay(out, text_box, ctx)?;
+            }
+            _ => unreachable!("checked by is_zero_size_floating_anchor"),
+        }
+        consumed += 1;
+    }
+
+    out.push_str("]\n");
+    Ok(consumed)
 }
 
 fn generate_block(out: &mut String, block: &Block, ctx: &mut GenCtx) -> Result<(), ConvertError> {
@@ -1089,14 +1140,9 @@ fn generate_floating_text_box(
             // page, by wrapping `#place` in a zero-size box. Without this the
             // box piles at the page top, away from the shapes it belongs with
             // (issue #176).
-            let _ = writeln!(
-                out,
-                "#box(width: 0pt, height: 0pt)[#place(top + left, dx: {}pt, dy: {}pt)[",
-                format_f64(ftb.offset_x),
-                format_f64(ftb.offset_y)
-            );
-            generate_floating_text_box_content(out, ftb, ctx)?;
-            out.push_str("]]\n");
+            out.push_str("#box(width: 0pt, height: 0pt)[\n");
+            generate_floating_text_box_overlay(out, ftb, ctx)?;
+            out.push_str("]\n");
         }
         WrapMode::Square | WrapMode::Tight => {
             let _ = writeln!(
@@ -1123,14 +1169,36 @@ fn generate_floating_text_box(
 /// zero-size `#box`, whose top-left sits exactly where the anchoring paragraph
 /// is laid out. Word-processing shapes use `wrapNone`, so no float is needed.
 fn generate_floating_shape(out: &mut String, fs: &FloatingShape) {
+    out.push_str("#box(width: 0pt, height: 0pt)[\n");
+    generate_floating_shape_overlay(out, fs);
+    out.push_str("]\n");
+}
+
+fn generate_floating_shape_overlay(out: &mut String, fs: &FloatingShape) {
     let _ = write!(
         out,
-        "#box(width: 0pt, height: 0pt)[#place(top + left, dx: {}pt, dy: {}pt)[",
+        "#place(top + left, dx: {}pt, dy: {}pt)[",
         format_f64(fs.offset_x),
         format_f64(fs.offset_y)
     );
     shapes::generate_shape(out, &fs.shape, fs.width, fs.height);
-    out.push_str("]]\n");
+    out.push_str("]\n");
+}
+
+fn generate_floating_text_box_overlay(
+    out: &mut String,
+    ftb: &FloatingTextBox,
+    ctx: &mut GenCtx,
+) -> Result<(), ConvertError> {
+    let _ = writeln!(
+        out,
+        "#place(top + left, dx: {}pt, dy: {}pt)[",
+        format_f64(ftb.offset_x),
+        format_f64(ftb.offset_y)
+    );
+    generate_floating_text_box_content(out, ftb, ctx)?;
+    out.push_str("]\n");
+    Ok(())
 }
 
 fn generate_floating_text_box_content(
