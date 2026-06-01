@@ -207,6 +207,37 @@ fn test_floating_text_box_top_and_bottom_codegen() {
 // ── Math equation codegen tests ──
 
 #[test]
+fn test_floating_text_box_content_is_top_left_aligned_inside_bounds() {
+    let doc = make_doc(vec![make_flow_page(vec![Block::FloatingTextBox(
+        FloatingTextBox {
+            content: vec![make_paragraph("Top aligned")],
+            wrap_mode: WrapMode::None,
+            width: 120.0,
+            height: 40.0,
+            offset_x: 10.0,
+            offset_y: 5.0,
+        },
+    )])]);
+
+    let output = generate_typst(&doc).unwrap();
+
+    assert!(
+        output
+            .source
+            .contains("#box(width: 120pt, height: 40pt, inset: 0pt)["),
+        "Expected floating text box bounds to use a zero-inset box, got:\n{}",
+        output.source
+    );
+    assert!(
+        output
+            .source
+            .contains("#place(top + left, dy: -6pt)[\n#block(width: 120pt)["),
+        "Expected floating text box content to be placed at the top-left of its bounds, got:\n{}",
+        output.source
+    );
+}
+
+#[test]
 fn test_codegen_display_math() {
     let doc = make_doc(vec![make_flow_page(vec![Block::MathEquation(
         MathEquation {

@@ -59,6 +59,8 @@ pub struct TypstOutput {
 
 /// Maximum nesting depth for tables-within-tables, matching the parser limit.
 const MAX_TABLE_DEPTH: usize = 64;
+/// Typst's line box leaves more top leading than Word/LibreOffice text frames.
+const FLOATING_TEXT_BOX_TOP_LEADING_COMPENSATION_PT: f64 = 6.0;
 
 /// Internal context for tracking image assets during code generation.
 struct GenCtx {
@@ -1138,9 +1140,15 @@ fn generate_floating_text_box_content(
 ) -> Result<(), ConvertError> {
     let _ = writeln!(
         out,
-        "#block(width: {}pt, height: {}pt)[",
+        "#box(width: {}pt, height: {}pt, inset: 0pt)[",
         format_f64(ftb.width),
         format_f64(ftb.height)
+    );
+    let _ = writeln!(
+        out,
+        "#place(top + left, dy: -{}pt)[\n#block(width: {}pt)[",
+        format_f64(FLOATING_TEXT_BOX_TOP_LEADING_COMPENSATION_PT),
+        format_f64(ftb.width)
     );
     for (index, block) in ftb.content.iter().enumerate() {
         if index > 0 {
@@ -1148,7 +1156,7 @@ fn generate_floating_text_box_content(
         }
         generate_fixed_text_box_block(out, block, ctx, Some(ftb.width), false)?;
     }
-    out.push_str("]\n");
+    out.push_str("]\n]\n]\n");
     Ok(())
 }
 
