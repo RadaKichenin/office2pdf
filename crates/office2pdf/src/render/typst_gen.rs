@@ -6,7 +6,7 @@ use image::{GenericImageView, ImageFormat as RasterImageFormat};
 use crate::config::ConvertOptions;
 use crate::error::ConvertError;
 use crate::ir::{
-    Alignment, ArrowHead, Block, BorderLineStyle, BorderSide, CellBorder, CellVerticalAlign, Chart,
+    Alignment, ArrowHead, Block, BorderLineStyle, BorderSide, CellBorder, CellHorizontalAlign, CellVerticalAlign, Chart,
     ChartType, Color, ColumnLayout, Document, FixedElement, FixedElementKind, FixedPage,
     FloatingImage, FloatingShape, FloatingTextBox, FlowPage, GradientFill, HFInline, HeaderFooter,
     ImageCrop, ImageData, ImageFormat, Insets, LineSpacing, List, ListKind, Margins, MathEquation,
