@@ -1009,7 +1009,7 @@ fn border_line_style_to_typst(style: BorderLineStyle) -> &'static str {
         BorderLineStyle::Dotted => "dotted",
         BorderLineStyle::DashDot => "dash-dotted",
         BorderLineStyle::DashDotDot => "dash-dotted",
-        BorderLineStyle::Double => "dashed",
+        BorderLineStyle::Double => "solid",
         BorderLineStyle::None => "solid",
     }
 }
