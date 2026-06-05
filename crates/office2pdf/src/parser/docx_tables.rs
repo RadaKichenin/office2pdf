@@ -83,7 +83,7 @@ fn extract_cell_padding(
     inherited_padding: Option<Insets>,
 ) -> Option<Insets> {
     let margins_json = prop_json.and_then(|j| j.get("margins"))?;
-    extract_insets_from_margins_json(margins_json)?;
+
     let mut merged_padding = inherited_padding.unwrap_or_default();
 
     if let Some(top) = margins_json.get("top").and_then(extract_margin_side_points) {
@@ -456,7 +456,7 @@ fn extract_cell_shading(shading_json: &serde_json::Value) -> Option<Color> {
         return None;
     }
     let fill = shading_json.get("fill").and_then(|v| v.as_str())?;
-    if fill == "auto" || fill == "FFFFFF" || fill.is_empty() {
+    if fill == "auto" || fill.is_empty() {
         return None;
     }
     parse_hex_color(fill)
