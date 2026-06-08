@@ -6,13 +6,14 @@ use image::{GenericImageView, ImageFormat as RasterImageFormat};
 use crate::config::ConvertOptions;
 use crate::error::ConvertError;
 use crate::ir::{
-    Alignment, ArrowHead, Block, BorderLineStyle, BorderSide, CellBorder, CellHorizontalAlign, CellVerticalAlign, Chart,
-    ChartType, Color, ColumnLayout, Document, FixedElement, FixedElementKind, FixedPage,
-    FloatingImage, FloatingShape, FloatingTextBox, FlowPage, GradientFill, HFInline, HeaderFooter,
-    ImageCrop, ImageData, ImageFormat, Insets, LineSpacing, List, ListKind, Margins, MathEquation,
-    Metadata, Page, PageSize, Paragraph, ParagraphStyle, Run, Shadow, Shape, ShapeKind, SheetPage,
-    SmartArt, TabAlignment, TabLeader, TabStop, Table, TableCell, TableRow, TextBoxData,
-    TextBoxVerticalAlign, TextDirection, TextStyle, VerticalTextAlign, WrapMode,
+    Alignment, ArrowHead, Block, BorderLineStyle, BorderSide, CellBorder, CellHorizontalAlign,
+    CellVerticalAlign, Chart, ChartType, Color, ColumnLayout, Document, FixedElement,
+    FixedElementKind, FixedPage, FloatingImage, FloatingShape, FloatingTextBox, FlowPage,
+    GradientFill, HFInline, HeaderFooter, ImageCrop, ImageData, ImageFormat, Insets, LineSpacing,
+    List, ListKind, Margins, MathEquation, Metadata, Page, PageSize, Paragraph, ParagraphStyle,
+    Run, Shadow, Shape, ShapeKind, SheetPage, SmartArt, TabAlignment, TabLeader, TabStop, Table,
+    TableCell, TableRow, TextBoxData, TextBoxVerticalAlign, TextDirection, TextStyle,
+    VerticalTextAlign, WrapMode,
 };
 
 use self::diagrams::{generate_chart, generate_smartart};

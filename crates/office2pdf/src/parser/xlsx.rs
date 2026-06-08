@@ -270,19 +270,19 @@ impl Parser for XlsxParser {
 fn paper_size_pts(code: u32) -> (f64, f64) {
     // Codes per OOXML spec §20.3.1.14 (ST_PaperSize)
     match code {
-        1 | 2 | 19 => (612.0, 792.0),   // Letter / Letter Small / Note  (8.5×11 in)
-        3          => (792.0, 1224.0),  // Tabloid (11×17 in)
-        4          => (1224.0, 792.0),  // Ledger (17×11 in)
-        5          => (612.0, 1008.0),  // Legal (8.5×14 in)
-        6          => (522.0, 756.0),   // Statement (7.25×10.5 in)
-        7          => (720.0, 1008.0),  // Executive (10×14 in)
-        8          => (841.89, 1190.55),// A3
-        9          => (595.28, 841.89), // A4
-        10         => (595.28, 841.89), // A4 Small
-        11         => (419.53, 595.28), // A5
-        12         => (728.50, 1031.81),// B4 (JIS)
-        13         => (515.91, 728.50), // B5 (JIS)
-        _          => (595.28, 841.89), // default to A4
+        1 | 2 => (612.0, 792.0), // Letter / Letter Small (8.5×11 in)
+        3 => (792.0, 1224.0),    // Tabloid (11×17 in)
+        4 => (1224.0, 792.0),    // Ledger (17×11 in)
+        5 => (612.0, 1008.0),    // Legal (8.5×14 in)
+        6 => (396.0, 612.0),     // Statement (5.5×8.5 in)
+        7 => (522.0, 756.0),     // Executive (7.25×10.5 in)
+        8 => (841.89, 1190.55),  // A3
+        9 => (595.28, 841.89),   // A4
+        10 => (595.28, 841.89),  // A4 Small
+        11 => (419.53, 595.28),  // A5
+        12 => (728.50, 1031.81), // B4 (JIS)
+        13 => (515.91, 728.50),  // B5 (JIS)
+        _ => (595.28, 841.89),   // default to A4
     }
 }
 
@@ -290,11 +290,27 @@ fn paper_size_pts(code: u32) -> (f64, f64) {
 fn extract_sheet_margins(sheet: &umya_spreadsheet::Worksheet) -> Margins {
     let pm = sheet.get_page_margins();
     const IN_TO_PT: f64 = 72.0;
+    // Excel always writes pageMargins, but files from other generators may
+    // omit it. umya returns 0.0 for all sides when the element is absent,
+    // so fall back to Excel's built-in defaults (0.75in top/bottom,
+    // 0.7in left/right) when all values are zero.
+    let top = *pm.get_top() * IN_TO_PT;
+    let bottom = *pm.get_bottom() * IN_TO_PT;
+    let left = *pm.get_left() * IN_TO_PT;
+    let right = *pm.get_right() * IN_TO_PT;
+    if top == 0.0 && bottom == 0.0 && left == 0.0 && right == 0.0 {
+        return Margins {
+            top: 0.75 * IN_TO_PT,
+            bottom: 0.75 * IN_TO_PT,
+            left: 0.7 * IN_TO_PT,
+            right: 0.7 * IN_TO_PT,
+        };
+    }
     Margins {
-        top:    *pm.get_top()    * IN_TO_PT,
-        bottom: *pm.get_bottom() * IN_TO_PT,
-        left:   *pm.get_left()   * IN_TO_PT,
-        right:  *pm.get_right()  * IN_TO_PT,
+        top,
+        bottom,
+        left,
+        right,
     }
 }
 
@@ -308,9 +324,15 @@ fn extract_sheet_page_size(sheet: &umya_spreadsheet::Worksheet) -> PageSize {
         umya_spreadsheet::structs::OrientationValues::Landscape
     );
     if landscape {
-        PageSize { width: h, height: w }
+        PageSize {
+            width: h,
+            height: w,
+        }
     } else {
-        PageSize { width: w, height: h }
+        PageSize {
+            width: w,
+            height: h,
+        }
     }
 }
 
