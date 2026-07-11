@@ -772,13 +772,19 @@ fn write_flow_page_setup(out: &mut String, page: &FlowPage, size: &PageSize, ctx
     }
 
     if let Some(footer) = &page.footer {
-        if hf_needs_context(footer) {
+        if hf_needs_stack_offset(footer) {
+            out.push_str(", footer: context { let footer_content = block(width: 100%)[");
+            generate_hf_content(out, footer, ctx);
+            out.push_str("]; move(dy: -measure(footer_content).height / 2)[#footer_content] }");
+        } else if hf_needs_context(footer) {
             out.push_str(", footer: context [");
+            generate_hf_content(out, footer, ctx);
+            out.push(']');
         } else {
             out.push_str(", footer: [");
+            generate_hf_content(out, footer, ctx);
+            out.push(']');
         }
-        generate_hf_content(out, footer, ctx);
-        out.push(']');
     }
 
     out.push_str(")\n");
@@ -813,13 +819,19 @@ fn write_table_page_setup(out: &mut String, page: &SheetPage, size: &PageSize, c
     }
 
     if let Some(footer) = &page.footer {
-        if hf_needs_context(footer) {
+        if hf_needs_stack_offset(footer) {
+            out.push_str(", footer: context { let footer_content = block(width: 100%)[");
+            generate_hf_content(out, footer, ctx);
+            out.push_str("]; move(dy: -measure(footer_content).height / 2)[#footer_content] }");
+        } else if hf_needs_context(footer) {
             out.push_str(", footer: context [");
+            generate_hf_content(out, footer, ctx);
+            out.push(']');
         } else {
             out.push_str(", footer: [");
+            generate_hf_content(out, footer, ctx);
+            out.push(']');
         }
-        generate_hf_content(out, footer, ctx);
-        out.push(']');
     }
 
     out.push_str(")\n");
@@ -832,6 +844,15 @@ fn hf_needs_context(hf: &HeaderFooter) -> bool {
             .iter()
             .any(|e| matches!(e, HFInline::PageNumber | HFInline::TotalPages))
     })
+}
+
+fn hf_needs_stack_offset(hf: &HeaderFooter) -> bool {
+    hf.paragraphs.len() > 1
+        || hf
+            .paragraphs
+            .iter()
+            .flat_map(|paragraph| &paragraph.elements)
+            .any(|element| matches!(element, HFInline::Image(_)))
 }
 
 /// Generate inline content for a header or footer.
