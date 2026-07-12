@@ -307,6 +307,7 @@ fn visit_block_fonts(block: &Block, visitor: &mut impl FnMut(&str) -> bool) -> b
                 .all(|paragraph| visit_paragraph_fonts(paragraph, visitor))
         }),
         Block::Image(_)
+        | Block::InlineImages(_)
         | Block::FloatingImage(_)
         | Block::FloatingShape(_)
         | Block::MathEquation(_)

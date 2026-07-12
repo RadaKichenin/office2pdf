@@ -315,6 +315,11 @@ fn generate_cell_content(
                 }
             }
             Block::Image(img) => generate_image(out, img, ctx),
+            Block::InlineImages(images) => {
+                for image in images {
+                    generate_image(out, image, ctx);
+                }
+            }
             Block::FloatingImage(fi) => generate_floating_image(out, fi, ctx),
             Block::FloatingTextBox(ftb) => generate_floating_text_box(out, ftb, ctx)?,
             Block::FloatingShape(fs) => generate_floating_shape(out, fs),

@@ -103,6 +103,7 @@ fn collect_runs_from_block<'a>(block: &'a Block, out: &mut Vec<&'a Run>) {
             }
         }
         Block::Image(_)
+        | Block::InlineImages(_)
         | Block::FloatingImage(_)
         | Block::FloatingShape(_)
         | Block::MathEquation(_)
@@ -141,6 +142,7 @@ fn block_text(block: &Block) -> String {
             .collect::<Vec<String>>()
             .join("\n"),
         Block::Image(_)
+        | Block::InlineImages(_)
         | Block::FloatingImage(_)
         | Block::FloatingShape(_)
         | Block::MathEquation(_)
@@ -169,7 +171,23 @@ fn has_image_block(blocks: &[&Block]) -> bool {
 fn image_block_count(blocks: &[&Block]) -> usize {
     blocks
         .iter()
-        .filter(|block| matches!(block, Block::Image(_) | Block::FloatingImage(_)))
+        .map(|block| match block {
+            Block::Image(_) | Block::FloatingImage(_) => 1,
+            Block::InlineImages(images) => images.len(),
+            _ => 0,
+        })
+        .sum()
+}
+
+fn image_flow_container_count(blocks: &[&Block]) -> usize {
+    blocks
+        .iter()
+        .filter(|block| {
+            matches!(
+                block,
+                Block::Image(_) | Block::InlineImages(_) | Block::FloatingImage(_)
+            )
+        })
         .count()
 }
 
@@ -822,6 +840,18 @@ fn structure_various_pictures_preserves_modern_raster_and_emf_images() {
         image_block_count(&blocks),
         4,
         "PNG, JPEG, and both EMF images should survive parsing; legacy WMF is out of scope"
+    );
+}
+
+#[test]
+fn structure_various_pictures_keeps_inline_images_in_one_flow_container() {
+    let pages = flow_pages("VariousPictures.docx");
+    let blocks = all_blocks(&pages);
+
+    assert_eq!(
+        image_flow_container_count(&blocks),
+        1,
+        "images from one Word paragraph should wrap within one flow container"
     );
 }
 docx_fixture_tests!(with_tabs, "WithTabs.docx");

@@ -601,7 +601,7 @@ fn process_hyperlink_runs(
 
 /// Convert a docx-rs Paragraph to IR blocks, handling page breaks and inline images.
 /// If the paragraph has `page_break_before`, a `Block::PageBreak` is emitted first.
-/// Inline images within runs are extracted as separate `Block::Image` elements.
+/// Consecutive inline images within a paragraph are kept in one wrapping flow container.
 /// Style formatting from the document's style definitions is merged with explicit formatting.
 fn convert_paragraph_blocks(
     para: &docx_rs::Paragraph,
@@ -665,11 +665,11 @@ fn convert_paragraph_blocks(
                         matches!(block, Block::FloatingShape(_) | Block::FloatingTextBox(_))
                     });
                     if !runs.is_empty() {
-                        out.append(&mut inline_images);
+                        push_inline_images(out, &mut inline_images);
                         push_paragraph_from_runs(out, para, resolved_style, is_rtl, &mut runs);
                         emitted_paragraph = true;
                     } else if !inline_images.is_empty() {
-                        out.append(&mut inline_images);
+                        push_inline_images(out, &mut inline_images);
                     }
                     out.extend(media.text_box_blocks);
                 }
@@ -677,7 +677,7 @@ fn convert_paragraph_blocks(
                 if media.has_page_break || media.has_column_break {
                     // Flush current runs as a paragraph before the layout break.
                     if !runs.is_empty() {
-                        out.append(&mut inline_images);
+                        push_inline_images(out, &mut inline_images);
                         push_paragraph_from_runs(out, para, resolved_style, is_rtl, &mut runs);
                         emitted_paragraph = true;
                     }
@@ -727,8 +727,7 @@ fn convert_paragraph_blocks(
         }
     }
 
-    // Emit image blocks before the paragraph (inline images are block-level in our IR)
-    out.extend(inline_images);
+    push_inline_images(out, &mut inline_images);
 
     if !runs.is_empty() || !emitted_media_blocks || (emitted_floating_anchor && !emitted_paragraph)
     {
@@ -736,6 +735,29 @@ fn convert_paragraph_blocks(
         // is positioned by offsets, but the source paragraph still contributes
         // to flow spacing between the drawing cluster and following content.
         push_paragraph_from_runs(out, para, resolved_style, is_rtl, &mut runs);
+    }
+}
+
+fn push_inline_images(out: &mut Vec<Block>, inline_images: &mut Vec<Block>) {
+    let mut grouped: Vec<ImageData> = Vec::new();
+
+    for block in inline_images.drain(..) {
+        match block {
+            Block::Image(image) => grouped.push(image),
+            other => {
+                flush_inline_image_group(out, &mut grouped);
+                out.push(other);
+            }
+        }
+    }
+    flush_inline_image_group(out, &mut grouped);
+}
+
+fn flush_inline_image_group(out: &mut Vec<Block>, grouped: &mut Vec<ImageData>) {
+    match grouped.len() {
+        0 => {}
+        1 => out.push(Block::Image(grouped.pop().expect("one inline image"))),
+        _ => out.push(Block::InlineImages(std::mem::take(grouped))),
     }
 }
 

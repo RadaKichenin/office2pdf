@@ -34,6 +34,8 @@ pub enum Block {
     Paragraph(Paragraph),
     Table(Table),
     Image(ImageData),
+    /// Consecutive inline images from one flow paragraph.
+    InlineImages(Vec<ImageData>),
     FloatingImage(FloatingImage),
     FloatingTextBox(FloatingTextBox),
     FloatingShape(FloatingShape),
