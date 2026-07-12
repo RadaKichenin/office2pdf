@@ -2,6 +2,8 @@ pub(crate) mod chart;
 pub(crate) mod cond_fmt;
 pub mod docx;
 pub(crate) mod embedded_fonts;
+#[path = "pptx_emf.rs"]
+pub(crate) mod emf;
 pub(crate) mod metadata;
 pub(crate) mod omml;
 pub mod pptx;

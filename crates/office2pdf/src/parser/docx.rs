@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::io::Read;
 
 use crate::config::ConvertOptions;
 use crate::error::{ConvertError, ConvertWarning};
@@ -68,8 +69,14 @@ mod text;
 /// Parser for DOCX (Office Open XML Word) documents.
 pub struct DocxParser;
 
-/// Map from relationship ID → PNG image bytes.
-type ImageMap = HashMap<String, Vec<u8>>;
+#[derive(Clone)]
+struct DocxImageAsset {
+    data: Vec<u8>,
+    format: ImageFormat,
+}
+
+/// Map from relationship ID to normalized image assets.
+type ImageMap = HashMap<String, DocxImageAsset>;
 
 /// Map from relationship ID → hyperlink URL.
 type HyperlinkMap = HashMap<String, String>;
@@ -88,7 +95,74 @@ fn build_hyperlink_map(docx: &docx_rs::Docx) -> HyperlinkMap {
 fn build_image_map(docx: &docx_rs::Docx) -> ImageMap {
     docx.images
         .iter()
-        .map(|(id, _path, _image, png)| (id.clone(), png.0.clone()))
+        .map(|(id, _path, _image, png)| {
+            (
+                id.clone(),
+                DocxImageAsset {
+                    data: png.0.clone(),
+                    format: ImageFormat::Png,
+                },
+            )
+        })
+        .collect()
+}
+
+fn build_document_emf_image_map<R: Read + std::io::Seek>(
+    archive: &mut zip::ZipArchive<R>,
+) -> ImageMap {
+    let Some(relationships_xml) = read_zip_text(archive, "word/_rels/document.xml.rels") else {
+        return ImageMap::new();
+    };
+    let mut reader = quick_xml::Reader::from_str(&relationships_xml);
+    let mut relationships: Vec<(String, String)> = Vec::new();
+
+    loop {
+        match reader.read_event() {
+            Ok(quick_xml::events::Event::Start(ref element))
+            | Ok(quick_xml::events::Event::Empty(ref element))
+                if element.local_name().as_ref() == b"Relationship" =>
+            {
+                let mut id: Option<String> = None;
+                let mut target: Option<String> = None;
+                let mut is_image: bool = false;
+                for attribute in element.attributes().flatten() {
+                    let Ok(value) = attribute.unescape_value() else {
+                        continue;
+                    };
+                    match attribute.key.local_name().as_ref() {
+                        b"Id" => id = Some(value.to_string()),
+                        b"Target" => target = Some(value.to_string()),
+                        b"Type" => is_image = value.ends_with("/image"),
+                        _ => {}
+                    }
+                }
+                if is_image
+                    && let (Some(id), Some(target)) = (id, target)
+                    && target.to_ascii_lowercase().ends_with(".emf")
+                {
+                    relationships.push((id, target));
+                }
+            }
+            Ok(quick_xml::events::Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+
+    relationships
+        .into_iter()
+        .filter_map(|(id, target)| {
+            let path = format!("word/{}", target.trim_start_matches('/'));
+            let mut data: Vec<u8> = Vec::new();
+            archive.by_name(&path).ok()?.read_to_end(&mut data).ok()?;
+            let svg = crate::parser::emf::convert_emf_to_svg(&data)?;
+            Some((
+                id,
+                DocxImageAsset {
+                    data: svg,
+                    format: ImageFormat::Svg,
+                },
+            ))
+        })
         .collect()
 }
 
@@ -100,6 +174,7 @@ struct ZipPreParseAssets {
     chart_ctx: ChartContext,
     column_layouts: Vec<Option<ColumnLayout>>,
     header_footer_assets: HeaderFooterAssets,
+    emf_images: ImageMap,
 }
 
 /// Build all pre-parse contexts from the DOCX ZIP in a single pass.
@@ -125,6 +200,7 @@ fn build_zip_preparse_assets(data: &[u8]) -> ZipPreParseAssets {
             let bidi = BidiContext::from_xml(doc_xml.as_deref());
             let small_caps = SmallCapsContext::from_xml(doc_xml.as_deref());
             let header_footer_assets = build_header_footer_assets(&mut archive);
+            let emf_images = build_document_emf_image_map(&mut archive);
             let ctx = DocxConversionContext {
                 notes,
                 wraps,
@@ -142,6 +218,7 @@ fn build_zip_preparse_assets(data: &[u8]) -> ZipPreParseAssets {
                 chart_ctx,
                 column_layouts,
                 header_footer_assets,
+                emf_images,
             }
         }
         Err(_) => ZipPreParseAssets {
@@ -160,6 +237,7 @@ fn build_zip_preparse_assets(data: &[u8]) -> ZipPreParseAssets {
             chart_ctx: ChartContext::empty(),
             column_layouts: Vec::new(),
             header_footer_assets: HeaderFooterAssets::default(),
+            emf_images: ImageMap::new(),
         },
     }
 }
@@ -177,6 +255,7 @@ impl Parser for DocxParser {
             mut chart_ctx,
             column_layouts,
             header_footer_assets,
+            emf_images,
         } = build_zip_preparse_assets(data);
 
         let docx = docx_rs::read_docx(data).map_err(|e| {
@@ -186,7 +265,8 @@ impl Parser for DocxParser {
         // Populate locale-specific footnote/endnote style IDs from docx styles
         ctx.notes.populate_style_ids(&docx.styles);
 
-        let images = build_image_map(&docx);
+        let mut images = build_image_map(&docx);
+        images.extend(emf_images);
         let hyperlinks = build_hyperlink_map(&docx);
         let numberings = build_numbering_map(&docx.numberings);
         let style_map = build_style_map(&docx.styles);

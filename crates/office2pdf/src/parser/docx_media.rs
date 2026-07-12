@@ -1,8 +1,7 @@
 use super::contexts::DocxConversionContext;
 use super::{
-    Block, DrawingTextBoxInfo, FloatingImage, FloatingTextBox, HyperlinkMap, ImageData,
-    ImageFormat, ImageMap, StyleMap, VmlTextBoxInfo, WrapContext, convert_paragraph_blocks,
-    convert_table,
+    Block, DrawingTextBoxInfo, FloatingImage, FloatingTextBox, HyperlinkMap, ImageData, ImageMap,
+    StyleMap, VmlTextBoxInfo, WrapContext, convert_paragraph_blocks, convert_table,
 };
 use crate::parser::units::emu_to_pt;
 
@@ -16,7 +15,7 @@ pub(super) fn extract_drawing_image(
         _ => return None,
     };
 
-    let data = images.get(&pic.id)?;
+    let asset = images.get(&pic.id)?;
     let (w_emu, h_emu) = pic.size;
     let width = if w_emu > 0 {
         Some(emu_to_pt(w_emu))
@@ -30,8 +29,8 @@ pub(super) fn extract_drawing_image(
     };
 
     let image_data = ImageData {
-        data: data.clone(),
-        format: ImageFormat::Png,
+        data: asset.data.clone(),
+        format: asset.format,
         width,
         height,
         crop: None,
@@ -62,14 +61,14 @@ pub(super) fn extract_drawing_image(
 
 pub(super) fn extract_shape_image(shape: &docx_rs::Shape, images: &ImageMap) -> Option<Block> {
     let image_id = shape.image_data.as_ref()?.id.as_str();
-    let data = images.get(image_id)?;
+    let asset = images.get(image_id)?;
 
     let width = extract_vml_style_dimension(shape.style.as_deref(), "width");
     let height = extract_vml_style_dimension(shape.style.as_deref(), "height");
 
     Some(Block::Image(ImageData {
-        data: data.clone(),
-        format: ImageFormat::Png,
+        data: asset.data.clone(),
+        format: asset.format,
         width,
         height,
         crop: None,

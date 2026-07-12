@@ -324,7 +324,13 @@ fn build_part_image_map<R: Read + Seek>(
             let image = image::load_from_memory(&bytes).ok()?;
             let mut png = Cursor::new(Vec::new());
             image.write_to(&mut png, image::ImageFormat::Png).ok()?;
-            Some((id, png.into_inner()))
+            Some((
+                id,
+                super::DocxImageAsset {
+                    data: png.into_inner(),
+                    format: crate::ir::ImageFormat::Png,
+                },
+            ))
         })
         .collect()
 }
