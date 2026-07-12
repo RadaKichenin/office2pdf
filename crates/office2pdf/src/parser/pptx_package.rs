@@ -421,7 +421,7 @@ fn normalize_slide_image_asset(target: &str, data: Vec<u8>) -> (Vec<u8>, SlideIm
     }
 
     if target.to_ascii_lowercase().ends_with(".emf")
-        && let Some(svg) = super::emf::convert_emf_to_svg(&data)
+        && let Some(svg) = crate::parser::emf::convert_emf_to_svg(&data)
     {
         return (svg, SlideImageSource::Supported(ImageFormat::Svg));
     }

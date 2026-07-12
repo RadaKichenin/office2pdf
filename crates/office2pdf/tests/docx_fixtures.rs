@@ -166,6 +166,13 @@ fn has_image_block(blocks: &[&Block]) -> bool {
     blocks.iter().any(|b| matches!(b, Block::Image(_)))
 }
 
+fn image_block_count(blocks: &[&Block]) -> usize {
+    blocks
+        .iter()
+        .filter(|block| matches!(block, Block::Image(_) | Block::FloatingImage(_)))
+        .count()
+}
+
 fn has_list_block(blocks: &[&Block]) -> bool {
     blocks.iter().any(|b| matches!(b, Block::List(_)))
 }
@@ -805,6 +812,18 @@ docx_fixture_tests!(poi_footnotes, "poi_footnotes.docx");
 docx_fixture_tests!(poi_sample, "poi_sample.docx");
 docx_fixture_tests!(poi_styles, "poi_styles.docx");
 docx_fixture_tests!(various_pictures, "VariousPictures.docx");
+
+#[test]
+fn structure_various_pictures_preserves_modern_raster_and_emf_images() {
+    let pages = flow_pages("VariousPictures.docx");
+    let blocks = all_blocks(&pages);
+
+    assert_eq!(
+        image_block_count(&blocks),
+        4,
+        "PNG, JPEG, and both EMF images should survive parsing; legacy WMF is out of scope"
+    );
+}
 docx_fixture_tests!(with_tabs, "WithTabs.docx");
 docx_fixture_tests!(word_with_attachments, "WordWithAttachments.docx");
 
