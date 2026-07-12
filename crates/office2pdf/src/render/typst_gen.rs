@@ -985,6 +985,20 @@ fn generate_block(out: &mut String, block: &Block, ctx: &mut GenCtx) -> Result<(
             }
             Ok(())
         }
+        Block::InlineImages(images) => {
+            out.push_str("#block(width: 100%)[\n");
+            for (index, image) in images.iter().enumerate() {
+                if index > 0 {
+                    out.push(' ');
+                }
+                out.push_str("#box[");
+                generate_image(out, image, ctx);
+                out.pop();
+                out.push(']');
+            }
+            out.push_str("\n]\n");
+            Ok(())
+        }
         Block::FloatingImage(fi) => {
             generate_floating_image(out, fi, ctx);
             Ok(())
