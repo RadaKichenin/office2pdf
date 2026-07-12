@@ -23,6 +23,18 @@ pub(super) struct HeaderFooterAssets {
     footers: HashMap<String, HeaderFooter>,
 }
 
+#[derive(Clone, Copy)]
+enum SimpleFieldKind {
+    PageNumber,
+    TotalPages,
+}
+
+#[derive(Clone, Copy)]
+struct SimpleFieldMarker {
+    preceding_runs: usize,
+    kind: SimpleFieldKind,
+}
+
 fn scan_header_footer_relationships(
     rels_xml: &str,
 ) -> (HashMap<String, String>, HashMap<String, String>) {
@@ -105,10 +117,11 @@ pub(super) fn build_header_footer_assets<R: Read + Seek>(
             continue;
         };
         let images = build_part_image_map(archive, &path);
+        let simple_fields = scan_simple_fields(&xml);
         let Ok(header) = <docx_rs::Header as docx_rs::FromXML>::from_xml(xml.as_bytes()) else {
             continue;
         };
-        if let Some(converted) = convert_docx_header(&header, &images) {
+        if let Some(converted) = convert_docx_header(&header, &images, &simple_fields) {
             assets.headers.insert(relationship_id, converted);
         }
     }
@@ -119,15 +132,100 @@ pub(super) fn build_header_footer_assets<R: Read + Seek>(
         };
         let images = build_part_image_map(archive, &path);
         let bidi_paragraphs = scan_bidi_paragraphs(&xml);
+        let simple_fields = scan_simple_fields(&xml);
         let Ok(footer) = <docx_rs::Footer as docx_rs::FromXML>::from_xml(xml.as_bytes()) else {
             continue;
         };
-        if let Some(converted) = convert_docx_footer(&footer, &images, &bidi_paragraphs) {
+        if let Some(converted) =
+            convert_docx_footer(&footer, &images, &bidi_paragraphs, &simple_fields)
+        {
             assets.footers.insert(relationship_id, converted);
         }
     }
 
     assets
+}
+
+fn scan_simple_fields(xml: &str) -> Vec<Vec<SimpleFieldMarker>> {
+    let mut reader = quick_xml::Reader::from_str(xml);
+    let mut paragraphs: Vec<Vec<SimpleFieldMarker>> = Vec::new();
+    let mut paragraph_depth: usize = 0;
+    let mut simple_field_depth: usize = 0;
+    let mut direct_run_count: usize = 0;
+    let mut fields: Vec<SimpleFieldMarker> = Vec::new();
+
+    loop {
+        match reader.read_event() {
+            Ok(quick_xml::events::Event::Start(ref element)) => {
+                match element.local_name().as_ref() {
+                    b"p" => {
+                        paragraph_depth += 1;
+                        if paragraph_depth == 1 {
+                            direct_run_count = 0;
+                            fields.clear();
+                        }
+                    }
+                    b"fldSimple" if paragraph_depth == 1 => {
+                        if let Some(kind) = simple_field_kind(element) {
+                            fields.push(SimpleFieldMarker {
+                                preceding_runs: direct_run_count,
+                                kind,
+                            });
+                        }
+                        simple_field_depth += 1;
+                    }
+                    b"r" if paragraph_depth == 1 && simple_field_depth == 0 => {
+                        direct_run_count += 1;
+                    }
+                    _ => {}
+                }
+            }
+            Ok(quick_xml::events::Event::Empty(ref element)) => {
+                if element.local_name().as_ref() == b"fldSimple"
+                    && paragraph_depth == 1
+                    && let Some(kind) = simple_field_kind(element)
+                {
+                    fields.push(SimpleFieldMarker {
+                        preceding_runs: direct_run_count,
+                        kind,
+                    });
+                }
+            }
+            Ok(quick_xml::events::Event::End(ref element)) => match element.local_name().as_ref() {
+                b"fldSimple" if paragraph_depth == 1 => {
+                    simple_field_depth = simple_field_depth.saturating_sub(1);
+                }
+                b"p" if paragraph_depth > 0 => {
+                    if paragraph_depth == 1 {
+                        paragraphs.push(std::mem::take(&mut fields));
+                    }
+                    paragraph_depth -= 1;
+                }
+                _ => {}
+            },
+            Ok(quick_xml::events::Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+
+    paragraphs
+}
+
+fn simple_field_kind(element: &quick_xml::events::BytesStart<'_>) -> Option<SimpleFieldKind> {
+    let instruction = element
+        .attributes()
+        .flatten()
+        .find(|attribute| attribute.key.local_name().as_ref() == b"instr")?
+        .unescape_value()
+        .ok()?;
+    let field_name = instruction.split_whitespace().next()?;
+    if field_name.eq_ignore_ascii_case("page") {
+        Some(SimpleFieldKind::PageNumber)
+    } else if field_name.eq_ignore_ascii_case("numpages") {
+        Some(SimpleFieldKind::TotalPages)
+    } else {
+        None
+    }
 }
 
 fn scan_bidi_paragraphs(xml: &str) -> Vec<bool> {
@@ -317,15 +415,26 @@ pub(super) fn build_flow_page_from_section(
     }
 }
 
-fn convert_docx_header(header: &docx_rs::Header, images: &ImageMap) -> Option<HeaderFooter> {
+fn convert_docx_header(
+    header: &docx_rs::Header,
+    images: &ImageMap,
+    simple_fields: &[Vec<SimpleFieldMarker>],
+) -> Option<HeaderFooter> {
     let paragraphs = header
         .children
         .iter()
         .filter_map(|child| match child {
-            docx_rs::HeaderChild::Paragraph(paragraph) => {
-                Some(convert_hf_paragraph(paragraph, images, false))
-            }
+            docx_rs::HeaderChild::Paragraph(paragraph) => Some(paragraph),
             _ => None,
+        })
+        .enumerate()
+        .map(|(index, paragraph)| {
+            convert_hf_paragraph(
+                paragraph,
+                images,
+                false,
+                simple_fields.get(index).map(Vec::as_slice).unwrap_or(&[]),
+            )
         })
         .collect::<Vec<_>>();
     if paragraphs.is_empty() {
@@ -338,6 +447,7 @@ fn convert_docx_footer(
     footer: &docx_rs::Footer,
     images: &ImageMap,
     bidi_paragraphs: &[bool],
+    simple_fields: &[Vec<SimpleFieldMarker>],
 ) -> Option<HeaderFooter> {
     let paragraphs = footer
         .children
@@ -352,6 +462,7 @@ fn convert_docx_footer(
                 paragraph,
                 images,
                 bidi_paragraphs.get(index).copied().unwrap_or(false),
+                simple_fields.get(index).map(Vec::as_slice).unwrap_or(&[]),
             )
         })
         .collect::<Vec<_>>();
@@ -376,7 +487,7 @@ fn extract_docx_header(
                 .header
                 .as_ref()
                 .and_then(|(_relationship_id, header)| {
-                    convert_docx_header(header, &ImageMap::new())
+                    convert_docx_header(header, &ImageMap::new(), &[])
                 })
         })
         .or_else(|| {
@@ -390,7 +501,7 @@ fn extract_docx_header(
                 .first_header
                 .as_ref()
                 .and_then(|(_relationship_id, header)| {
-                    convert_docx_header(header, &ImageMap::new())
+                    convert_docx_header(header, &ImageMap::new(), &[])
                 })
         })
         .or_else(|| {
@@ -404,7 +515,7 @@ fn extract_docx_header(
                 .even_header
                 .as_ref()
                 .and_then(|(_relationship_id, header)| {
-                    convert_docx_header(header, &ImageMap::new())
+                    convert_docx_header(header, &ImageMap::new(), &[])
                 })
         })
 }
@@ -424,7 +535,7 @@ fn extract_docx_footer(
                 .footer
                 .as_ref()
                 .and_then(|(_relationship_id, footer)| {
-                    convert_docx_footer(footer, &ImageMap::new(), &[])
+                    convert_docx_footer(footer, &ImageMap::new(), &[], &[])
                 })
         })
         .or_else(|| {
@@ -438,7 +549,7 @@ fn extract_docx_footer(
                 .first_footer
                 .as_ref()
                 .and_then(|(_relationship_id, footer)| {
-                    convert_docx_footer(footer, &ImageMap::new(), &[])
+                    convert_docx_footer(footer, &ImageMap::new(), &[], &[])
                 })
         })
         .or_else(|| {
@@ -452,7 +563,7 @@ fn extract_docx_footer(
                 .even_footer
                 .as_ref()
                 .and_then(|(_relationship_id, footer)| {
-                    convert_docx_footer(footer, &ImageMap::new(), &[])
+                    convert_docx_footer(footer, &ImageMap::new(), &[], &[])
                 })
         })
 }
@@ -463,6 +574,7 @@ fn convert_hf_paragraph(
     paragraph: &docx_rs::Paragraph,
     images: &ImageMap,
     is_bidi: bool,
+    simple_fields: &[SimpleFieldMarker],
 ) -> HeaderFooterParagraph {
     let explicit_style = extract_paragraph_style(&paragraph.property);
     let explicit_tab_overrides = extract_tab_stop_overrides(&paragraph.property.tabs);
@@ -472,28 +584,53 @@ fn convert_hf_paragraph(
     }
     let mut elements: Vec<HFInline> = Vec::new();
 
+    let mut processed_runs: usize = 0;
+    append_simple_fields(&mut elements, simple_fields, processed_runs);
     for child in &paragraph.children {
-        if let docx_rs::ParagraphChild::Run(run) = child {
-            let run_style = extract_run_style(&run.run_property);
-            extract_hf_run_elements(&run.children, &run_style, &mut elements);
-            for run_child in &run.children {
-                if let docx_rs::RunChild::Drawing(drawing) = run_child
-                    && let Some(block) =
-                        extract_drawing_image(drawing, images, &WrapContext::empty())
-                {
-                    match block {
-                        Block::Image(image) => elements.push(HFInline::Image(image)),
-                        Block::FloatingImage(image) => {
-                            elements.push(HFInline::Image(image.image));
+        match child {
+            docx_rs::ParagraphChild::Run(run) => {
+                let run_style = extract_run_style(&run.run_property);
+                extract_hf_run_elements(&run.children, &run_style, &mut elements);
+                for run_child in &run.children {
+                    if let docx_rs::RunChild::Drawing(drawing) = run_child
+                        && let Some(block) =
+                            extract_drawing_image(drawing, images, &WrapContext::empty())
+                    {
+                        match block {
+                            Block::Image(image) => elements.push(HFInline::Image(image)),
+                            Block::FloatingImage(image) => {
+                                elements.push(HFInline::Image(image.image));
+                            }
+                            _ => {}
                         }
-                        _ => {}
                     }
                 }
+                processed_runs += 1;
+                append_simple_fields(&mut elements, simple_fields, processed_runs);
             }
+            docx_rs::ParagraphChild::PageNum(_) => elements.push(HFInline::PageNumber),
+            docx_rs::ParagraphChild::NumPages(_) => elements.push(HFInline::TotalPages),
+            _ => {}
         }
     }
 
     HeaderFooterParagraph { style, elements }
+}
+
+fn append_simple_fields(
+    elements: &mut Vec<HFInline>,
+    simple_fields: &[SimpleFieldMarker],
+    processed_runs: usize,
+) {
+    for field in simple_fields
+        .iter()
+        .filter(|field| field.preceding_runs == processed_runs)
+    {
+        elements.push(match field.kind {
+            SimpleFieldKind::PageNumber => HFInline::PageNumber,
+            SimpleFieldKind::TotalPages => HFInline::TotalPages,
+        });
+    }
 }
 
 /// Extract inline elements from a run's children for header/footer use.

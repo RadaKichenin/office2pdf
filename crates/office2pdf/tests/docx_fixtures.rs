@@ -10,7 +10,9 @@ mod common;
 use std::path::PathBuf;
 
 use office2pdf::config::ConvertOptions;
-use office2pdf::ir::{ArrowHead, Block, FlowPage, ListKind, Page, Paragraph, Run, ShapeKind};
+use office2pdf::ir::{
+    ArrowHead, Block, FlowPage, HFInline, ListKind, Page, Paragraph, Run, ShapeKind,
+};
 use office2pdf::parser::Parser;
 use office2pdf::parser::docx::DocxParser;
 
@@ -174,6 +176,25 @@ fn has_header(pages: &[FlowPage]) -> bool {
 
 fn has_footer(pages: &[FlowPage]) -> bool {
     pages.iter().any(|p| p.footer.is_some())
+}
+
+fn footer_elements(pages: &[FlowPage]) -> Vec<&HFInline> {
+    pages
+        .iter()
+        .filter_map(|page| page.footer.as_ref())
+        .flat_map(|footer| footer.paragraphs.iter())
+        .flat_map(|paragraph| paragraph.elements.iter())
+        .collect()
+}
+
+fn footer_text(pages: &[FlowPage]) -> String {
+    footer_elements(pages)
+        .iter()
+        .filter_map(|element| match element {
+            HFInline::Run(run) => Some(run.text.as_str()),
+            _ => None,
+        })
+        .collect()
 }
 
 fn has_bold_run(runs: &[&Run]) -> bool {
@@ -734,12 +755,44 @@ docx_fixture_tests!(comment, "comment.docx");
 docx_fixture_tests!(complex_numbered_lists, "ComplexNumberedLists.docx");
 docx_fixture_tests!(delins, "delins.docx");
 docx_fixture_tests!(diff_first_page_head_foot, "DiffFirstPageHeadFoot.docx");
+
+#[test]
+fn structure_diff_first_page_head_foot_preserves_default_footer_columns() {
+    let text = footer_text(&flow_pages("DiffFirstPageHeadFoot.docx"));
+
+    assert!(text.contains("Footer Left"));
+    assert!(text.contains("Footer Middle"));
+    assert!(text.contains("Footer Right"));
+}
 docx_fixture_tests!(drawing, "drawing.docx");
 docx_fixture_tests!(embedded_document, "EmbeddedDocument.docx");
 docx_fixture_tests!(endnotes, "endnotes.docx");
 docx_fixture_tests!(fancy_foot, "FancyFoot.docx");
+
+#[test]
+fn structure_fancy_foot_preserves_text_and_simple_page_field() {
+    let pages = flow_pages("FancyFoot.docx");
+    let elements = footer_elements(&pages);
+    let text = footer_text(&pages);
+
+    assert!(text.contains("This is a fancy alphabet footer, with page number and everything"));
+    assert!(text.contains("Page "));
+    assert!(
+        elements
+            .iter()
+            .any(|element| matches!(element, HFInline::PageNumber)),
+        "the real-world fldSimple PAGE field should survive parsing"
+    );
+}
 docx_fixture_tests!(field_codes, "FieldCodes.docx");
 docx_fixture_tests!(header_footer_unicode, "HeaderFooterUnicode.docx");
+
+#[test]
+fn structure_header_footer_unicode_preserves_accented_text() {
+    let text = footer_text(&flow_pages("HeaderFooterUnicode.docx"));
+
+    assert!(text.contains("The footer, with Molière, has Unicode in it."));
+}
 docx_fixture_tests!(heading123, "heading123.docx");
 docx_fixture_tests!(illustrative_cases, "IllustrativeCases.docx");
 docx_fixture_tests!(poi_footnotes, "poi_footnotes.docx");
