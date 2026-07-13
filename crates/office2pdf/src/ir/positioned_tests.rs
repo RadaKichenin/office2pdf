@@ -72,6 +72,8 @@ fn floating_text_box_positioned_maps_offsets_to_xy() {
         wrap_mode: WrapMode::TopAndBottom,
         width: 250.0,
         height: 180.0,
+        padding: Insets::default(),
+        vertical_align: TextBoxVerticalAlign::Top,
         offset_x: 30.0,
         offset_y: 45.0,
     };
@@ -103,6 +105,8 @@ fn positioned_trait_works_through_dyn_dispatch() {
         wrap_mode: WrapMode::Behind,
         width: 200.0,
         height: 80.0,
+        padding: Insets::default(),
+        vertical_align: TextBoxVerticalAlign::Top,
         offset_x: 15.0,
         offset_y: 25.0,
     };
@@ -143,6 +147,8 @@ fn floating_text_box_positioned_with_negative_offsets() {
         wrap_mode: WrapMode::InFront,
         width: 100.0,
         height: 60.0,
+        padding: Insets::default(),
+        vertical_align: TextBoxVerticalAlign::Top,
         offset_x: -10.0,
         offset_y: -5.0,
     };

@@ -24,7 +24,7 @@ mod wrap;
 pub(super) use bidi::BidiContext;
 pub(super) use chart::{ChartContext, build_chart_context_from_xml};
 pub(super) use columns::{extract_column_layout_from_section_property, scan_column_layouts};
-pub(super) use docx_context_shape::DrawingShapeContext;
+pub(super) use docx_context_shape::{DrawingShapeContext, WpgDrawingInfo};
 pub(super) use drawing::{DrawingTextBoxContext, DrawingTextBoxInfo};
 pub(super) use math::{MathContext, build_math_context_from_xml};
 pub(super) use notes::{

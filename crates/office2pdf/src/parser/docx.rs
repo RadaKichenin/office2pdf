@@ -20,7 +20,7 @@ use self::contexts::scan_table_headers;
 use self::contexts::{
     BidiContext, ChartContext, DocxConversionContext, DrawingShapeContext, DrawingTextBoxContext,
     DrawingTextBoxInfo, MathContext, NoteContext, SmallCapsContext, TableHeaderContext,
-    VmlTextBoxContext, VmlTextBoxInfo, WrapContext, build_chart_context_from_xml,
+    VmlTextBoxContext, VmlTextBoxInfo, WpgDrawingInfo, WrapContext, build_chart_context_from_xml,
     build_math_context_from_xml, build_note_context_from_xml, build_wrap_context_from_xml,
     extract_column_layout_from_section_property, is_note_reference_run, read_zip_text,
     scan_column_layouts,
@@ -189,10 +189,12 @@ fn build_zip_preparse_assets(data: &[u8]) -> ZipPreParseAssets {
         Ok(mut archive) => {
             let metadata = crate::parser::metadata::extract_metadata_from_zip(&mut archive);
             let doc_xml = read_zip_text(&mut archive, "word/document.xml");
+            let theme_xml = read_zip_text(&mut archive, "word/theme/theme1.xml");
             let notes = build_note_context_from_xml(doc_xml.as_deref(), &mut archive);
             let wraps = build_wrap_context_from_xml(doc_xml.as_deref());
             let drawing_text_boxes = DrawingTextBoxContext::from_xml(doc_xml.as_deref());
-            let drawing_shapes = DrawingShapeContext::from_xml(doc_xml.as_deref());
+            let drawing_shapes =
+                DrawingShapeContext::from_xml_with_theme(doc_xml.as_deref(), theme_xml.as_deref());
             let table_headers = TableHeaderContext::from_xml(doc_xml.as_deref());
             let vml_text_boxes = VmlTextBoxContext::from_xml(doc_xml.as_deref());
             let math = build_math_context_from_xml(doc_xml.as_deref());
@@ -524,25 +526,32 @@ fn extract_run_children_media(
     let mut text_box_blocks: Vec<Block> = Vec::new();
 
     for run_child in &run.children {
-        if let docx_rs::RunChild::Drawing(drawing) = run_child
-            && let Some(img_block) = extract_drawing_image(drawing, images, &ctx.wraps)
-        {
-            inline_images.push(img_block);
-        }
         if let docx_rs::RunChild::Drawing(drawing) = run_child {
-            text_box_blocks.extend(extract_drawing_text_box_blocks(
-                drawing, images, hyperlinks, style_map, ctx,
-            ));
-        }
-        // A `<w:drawing>` that docx-rs cannot classify as a picture or a text box
-        // (geometry-only `wps:wsp` shapes) leaves `data == None`. Pair each such
-        // drawing, in document order, with the geometry scanned from the raw XML
-        // so rectangles, lines and arrows are not dropped (issue #176).
-        if let docx_rs::RunChild::Drawing(drawing) = run_child
-            && drawing.data.is_none()
-            && let Some(shape) = ctx.drawing_shapes.consume_next()
-        {
-            text_box_blocks.push(Block::FloatingShape(shape));
+            let wpg_drawing: Option<WpgDrawingInfo> = ctx.drawing_shapes.consume_wpg_drawing();
+            if let Some(wpg_drawing) = wpg_drawing {
+                // docx-rs represents only one child from a WPG group. Use the
+                // complete raw-XML group instead to avoid dropping its siblings.
+                text_box_blocks.extend(convert_wpg_drawing_blocks(
+                    wpg_drawing,
+                    images,
+                    hyperlinks,
+                    style_map,
+                    ctx,
+                ));
+            } else {
+                if let Some(img_block) = extract_drawing_image(drawing, images, &ctx.wraps) {
+                    inline_images.push(img_block);
+                }
+                text_box_blocks.extend(extract_drawing_text_box_blocks(
+                    drawing, images, hyperlinks, style_map, ctx,
+                ));
+                if drawing.data.is_none()
+                    && let Some(shape) = ctx.drawing_shapes.consume_next()
+                {
+                    // docx-rs leaves geometry-only `wps:wsp` drawings unclassified.
+                    text_box_blocks.push(Block::FloatingShape(shape));
+                }
+            }
         }
         if let docx_rs::RunChild::Shape(shape) = run_child {
             let vml_text_box: VmlTextBoxInfo = ctx.vml_text_boxes.consume_next();
@@ -572,6 +581,87 @@ fn extract_run_children_media(
         has_column_break,
         has_page_break,
         text_box_blocks,
+    }
+}
+
+fn convert_wpg_drawing_blocks(
+    drawing: WpgDrawingInfo,
+    images: &ImageMap,
+    hyperlinks: &HyperlinkMap,
+    style_map: &StyleMap,
+    ctx: &DocxConversionContext,
+) -> Vec<Block> {
+    let mut result: Vec<Block> = Vec::new();
+    for child in drawing.children {
+        if let Some(shape) = child.shape {
+            result.push(Block::FloatingShape(shape));
+        }
+
+        let mut content: Vec<Block> = Vec::new();
+        for document_child in &child.content {
+            match document_child {
+                docx_rs::DocumentChild::Paragraph(paragraph) => convert_paragraph_blocks(
+                    paragraph,
+                    &mut content,
+                    images,
+                    hyperlinks,
+                    style_map,
+                    ctx,
+                ),
+                docx_rs::DocumentChild::Table(table) => content.push(Block::Table(convert_table(
+                    table, images, hyperlinks, style_map, ctx, 0,
+                ))),
+                _ => {}
+            }
+        }
+        if let Some(text_color) = child.text_color {
+            apply_default_text_color(&mut content, text_color);
+        }
+        if !content.is_empty() {
+            result.push(Block::FloatingTextBox(FloatingTextBox {
+                content,
+                wrap_mode: child.wrap_mode,
+                width: child.width,
+                height: child.height,
+                padding: child.padding,
+                vertical_align: child.vertical_align,
+                offset_x: child.offset_x,
+                offset_y: child.offset_y,
+            }));
+        }
+    }
+    result
+}
+
+fn apply_default_text_color(blocks: &mut [Block], color: Color) {
+    for block in blocks {
+        match block {
+            Block::Paragraph(paragraph) => {
+                for run in &mut paragraph.runs {
+                    run.style.color.get_or_insert(color);
+                }
+            }
+            Block::List(list) => {
+                for item in &mut list.items {
+                    for paragraph in &mut item.content {
+                        for run in &mut paragraph.runs {
+                            run.style.color.get_or_insert(color);
+                        }
+                    }
+                }
+            }
+            Block::Table(table) => {
+                for row in &mut table.rows {
+                    for cell in &mut row.cells {
+                        apply_default_text_color(&mut cell.content, color);
+                    }
+                }
+            }
+            Block::FloatingTextBox(text_box) => {
+                apply_default_text_color(&mut text_box.content, color);
+            }
+            _ => {}
+        }
     }
 }
 
