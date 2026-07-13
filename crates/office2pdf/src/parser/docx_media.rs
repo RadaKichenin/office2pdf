@@ -107,6 +107,8 @@ pub(super) fn extract_vml_shape_text_box(
         wrap_mode,
         width,
         height,
+        padding: crate::ir::Insets::default(),
+        vertical_align: crate::ir::TextBoxVerticalAlign::Top,
         offset_x,
         offset_y,
     })
@@ -235,6 +237,8 @@ pub(super) fn extract_drawing_text_box_blocks(
             wrap_mode,
             width,
             height,
+            padding: crate::ir::Insets::default(),
+            vertical_align: crate::ir::TextBoxVerticalAlign::Top,
             offset_x,
             offset_y,
         })]

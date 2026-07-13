@@ -11,7 +11,8 @@ use std::path::PathBuf;
 
 use office2pdf::config::ConvertOptions;
 use office2pdf::ir::{
-    ArrowHead, Block, FlowPage, HFInline, ListKind, Page, Paragraph, Run, ShapeKind,
+    ArrowHead, Block, Color, FlowPage, HFInline, ListKind, Page, Paragraph, Run, ShapeKind,
+    TextBoxVerticalAlign,
 };
 use office2pdf::parser::Parser;
 use office2pdf::parser::docx::DocxParser;
@@ -932,6 +933,100 @@ docx_fixture_tests!(tdf111964, "libreoffice/tdf111964.docx");
 docx_fixture_tests!(tdf124670, "libreoffice/tdf124670.docx");
 docx_fixture_tests!(tdf129659, "libreoffice/tdf129659.docx");
 docx_fixture_tests!(table_rtl, "libreoffice/table-rtl.docx");
+
+docx_fixture_tests!(wpg_only, "libreoffice/wpg-only.docx");
+
+#[test]
+fn structure_wpg_only_preserves_grouped_shapes() {
+    let pages = flow_pages("libreoffice/wpg-only.docx");
+    let blocks = all_blocks(&pages);
+    let shapes = blocks
+        .iter()
+        .filter_map(|block| match block {
+            Block::FloatingShape(shape) => Some(shape),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(shapes.len(), 2, "both WPG child shapes should survive");
+    assert!(matches!(shapes[0].shape.kind, ShapeKind::Ellipse));
+    assert!(matches!(shapes[1].shape.kind, ShapeKind::Polygon { .. }));
+    assert!((shapes[0].offset_x - 43.15).abs() < 0.01);
+    assert!((shapes[0].offset_y - 27.40).abs() < 0.01);
+    assert!((shapes[0].width - 42.75).abs() < 0.01);
+    assert!((shapes[0].height - 39.75).abs() < 0.01);
+    assert!((shapes[1].offset_x - 112.15).abs() < 0.01);
+    assert!((shapes[1].offset_y - 38.65).abs() < 0.01);
+    assert!((shapes[1].width - 57.0).abs() < 0.01);
+    assert!((shapes[1].height - 45.0).abs() < 0.01);
+}
+
+docx_fixture_tests!(wpg_textboxes, "libreoffice/testWPGtextboxes.docx");
+
+#[test]
+fn structure_wpg_textboxes_preserves_grouped_text_content() {
+    let pages = flow_pages("libreoffice/testWPGtextboxes.docx");
+    let blocks = all_blocks(&pages);
+    let text = blocks
+        .iter()
+        .map(|block| block_text(block))
+        .collect::<Vec<String>>()
+        .join("\n");
+    let text_box_count = blocks
+        .iter()
+        .filter(|block| matches!(block, Block::FloatingTextBox(_)))
+        .count();
+
+    assert_eq!(text_box_count, 3, "all WPG text boxes should survive");
+
+    let text_boxes = blocks
+        .iter()
+        .filter_map(|block| match block {
+            Block::FloatingTextBox(text_box) => Some(text_box),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    for text_box in &text_boxes {
+        assert_eq!(text_box.vertical_align, TextBoxVerticalAlign::Center);
+    }
+    assert!(text_boxes[0].padding.left > 50.0);
+    assert!(text_boxes[0].padding.top > 100.0);
+    assert!(text_boxes[1].padding.left > 25.0);
+    assert!(text_boxes[1].padding.top > 20.0);
+    assert!(text_boxes[2].padding.left > 30.0);
+    assert!(text_boxes[2].padding.top > 20.0);
+
+    let text_box_blocks = text_boxes
+        .iter()
+        .flat_map(|text_box| text_box.content.iter())
+        .collect::<Vec<_>>();
+    let text_box_runs = all_runs(&text_box_blocks);
+    assert!(
+        text_box_runs
+            .iter()
+            .filter(|run| !run.text.trim().is_empty())
+            .all(|run| run.style.color == Some(Color::new(255, 255, 255))),
+        "WPG fontRef color should be applied to unstyled text"
+    );
+    assert!(
+        text.contains("This is a triangle having a table inside:"),
+        "missing triangle text in {text:?}"
+    );
+    assert!(
+        text.contains("This is a circle, having a picture inside:"),
+        "missing circle text in {text:?}"
+    );
+    assert!(
+        text.contains("This is a diamond"),
+        "missing diamond text in {text:?}"
+    );
+    for cell in ["A", "B", "C", "D"] {
+        assert!(
+            text.lines().any(|line| line == cell),
+            "missing table cell {cell}"
+        );
+    }
+}
 
 #[test]
 fn structure_table_rtl_uses_visual_right_to_left_cell_order() {

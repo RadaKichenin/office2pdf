@@ -1250,25 +1250,66 @@ fn generate_floating_text_box_content(
     ftb: &FloatingTextBox,
     ctx: &mut GenCtx,
 ) -> Result<(), ConvertError> {
+    let inner_width: f64 = (ftb.width - ftb.padding.left - ftb.padding.right).max(0.0);
+    let inner_height: f64 = (ftb.height - ftb.padding.top - ftb.padding.bottom).max(0.0);
+    let inset: String = if ftb.padding == Insets::default() {
+        "0pt".to_string()
+    } else {
+        format_insets(&ftb.padding)
+    };
     let _ = writeln!(
         out,
-        "#box(width: {}pt, height: {}pt, inset: 0pt)[",
+        "#box(width: {}pt, height: {}pt, inset: {})[",
         format_f64(ftb.width),
-        format_f64(ftb.height)
+        format_f64(ftb.height),
+        inset,
     );
+
+    if matches!(ftb.vertical_align, TextBoxVerticalAlign::Top) {
+        let _ = writeln!(
+            out,
+            "#place(top + left, dy: -{}pt)[\n#block(width: {}pt)[",
+            format_f64(FLOATING_TEXT_BOX_TOP_LEADING_COMPENSATION_PT),
+            format_f64(inner_width)
+        );
+        for (index, block) in ftb.content.iter().enumerate() {
+            if index > 0 {
+                out.push('\n');
+            }
+            generate_fixed_text_box_block(out, block, ctx, Some(inner_width), false)?;
+        }
+        out.push_str("]\n]\n]\n");
+        return Ok(());
+    }
+
+    let text_box_id: usize = ctx.next_text_box_id();
     let _ = writeln!(
         out,
-        "#place(top + left, dy: -{}pt)[\n#block(width: {}pt)[",
-        format_f64(FLOATING_TEXT_BOX_TOP_LEADING_COMPENSATION_PT),
-        format_f64(ftb.width)
+        "#let floating_text_box_content_{text_box_id} = block(width: {}pt)[",
+        format_f64(inner_width)
     );
     for (index, block) in ftb.content.iter().enumerate() {
         if index > 0 {
             out.push('\n');
         }
-        generate_fixed_text_box_block(out, block, ctx, Some(ftb.width), false)?;
+        generate_fixed_text_box_block(out, block, ctx, Some(inner_width), false)?;
     }
-    out.push_str("]\n]\n]\n");
+    out.push_str("]\n#context {\n");
+    let _ = writeln!(
+        out,
+        "  let floating_text_box_slack_{text_box_id} = calc.max({}pt - measure(floating_text_box_content_{text_box_id}).height, 0pt)",
+        format_f64(inner_height)
+    );
+    let spacer: String = match ftb.vertical_align {
+        TextBoxVerticalAlign::Center => format!("floating_text_box_slack_{text_box_id} / 2"),
+        TextBoxVerticalAlign::Bottom => format!("floating_text_box_slack_{text_box_id}"),
+        TextBoxVerticalAlign::Top => unreachable!(),
+    };
+    out.push_str("  [\n");
+    let _ = writeln!(out, "    #v({spacer})");
+    let _ = writeln!(out, "    #floating_text_box_content_{text_box_id}");
+    out.push_str("  ]\n");
+    out.push_str("}\n]\n");
     Ok(())
 }
 

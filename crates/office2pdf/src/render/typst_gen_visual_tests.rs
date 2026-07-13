@@ -135,6 +135,8 @@ fn test_floating_text_box_square_wrap_codegen() {
             wrap_mode: WrapMode::Square,
             width: 200.0,
             height: 100.0,
+            padding: Insets::default(),
+            vertical_align: TextBoxVerticalAlign::Top,
             offset_x: 72.0,
             offset_y: 36.0,
         },
@@ -181,6 +183,8 @@ fn test_floating_text_box_top_and_bottom_codegen() {
             wrap_mode: WrapMode::TopAndBottom,
             width: 150.0,
             height: 60.0,
+            padding: Insets::default(),
+            vertical_align: TextBoxVerticalAlign::Top,
             offset_x: 10.0,
             offset_y: 0.0,
         },
@@ -214,6 +218,8 @@ fn test_floating_text_box_content_is_top_left_aligned_inside_bounds() {
             wrap_mode: WrapMode::None,
             width: 120.0,
             height: 40.0,
+            padding: Insets::default(),
+            vertical_align: TextBoxVerticalAlign::Top,
             offset_x: 10.0,
             offset_y: 5.0,
         },
@@ -235,6 +241,40 @@ fn test_floating_text_box_content_is_top_left_aligned_inside_bounds() {
         "Expected floating text box content to be placed at the top-left of its bounds, got:\n{}",
         output.source
     );
+}
+
+#[test]
+fn test_floating_text_box_applies_padding_and_center_alignment() {
+    let doc = make_doc(vec![make_flow_page(vec![Block::FloatingTextBox(
+        FloatingTextBox {
+            content: vec![make_paragraph("Centered")],
+            wrap_mode: WrapMode::None,
+            width: 120.0,
+            height: 60.0,
+            padding: Insets {
+                top: 3.0,
+                right: 6.0,
+                bottom: 3.0,
+                left: 6.0,
+            },
+            vertical_align: TextBoxVerticalAlign::Center,
+            offset_x: 10.0,
+            offset_y: 5.0,
+        },
+    )])]);
+
+    let output = generate_typst(&doc).unwrap();
+
+    assert!(output.source.contains(
+        "#box(width: 120pt, height: 60pt, inset: (top: 3pt, right: 6pt, bottom: 3pt, left: 6pt))["
+    ));
+    assert!(output.source.contains("block(width: 108pt)["));
+    assert!(
+        output
+            .source
+            .contains("calc.max(54pt - measure(floating_text_box_content_0).height, 0pt)")
+    );
+    assert!(output.source.contains("#v(floating_text_box_slack_0 / 2)"));
 }
 
 #[test]
