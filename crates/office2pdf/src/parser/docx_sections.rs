@@ -613,7 +613,7 @@ fn convert_hf_paragraph(
                 for run_child in &run.children {
                     if let docx_rs::RunChild::Drawing(drawing) = run_child
                         && let Some(block) =
-                            extract_drawing_image(drawing, images, &WrapContext::empty())
+                            extract_drawing_image(drawing, images, &WrapContext::empty(), None)
                     {
                         match block {
                             Block::Image(image) => elements.push(HFInline::Image(image)),

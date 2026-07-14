@@ -528,6 +528,8 @@ fn extract_run_children_media(
     for run_child in &run.children {
         if let docx_rs::RunChild::Drawing(drawing) = run_child {
             let wpg_drawing: Option<WpgDrawingInfo> = ctx.drawing_shapes.consume_wpg_drawing();
+            let canvas_image_offset: Option<(f64, f64)> =
+                ctx.drawing_shapes.consume_canvas_image_offset();
             if let Some(wpg_drawing) = wpg_drawing {
                 // docx-rs represents only one child from a WPG group. Use the
                 // complete raw-XML group instead to avoid dropping its siblings.
@@ -539,7 +541,9 @@ fn extract_run_children_media(
                     ctx,
                 ));
             } else {
-                if let Some(img_block) = extract_drawing_image(drawing, images, &ctx.wraps) {
+                if let Some(img_block) =
+                    extract_drawing_image(drawing, images, &ctx.wraps, canvas_image_offset)
+                {
                     inline_images.push(img_block);
                 }
                 text_box_blocks.extend(extract_drawing_text_box_blocks(

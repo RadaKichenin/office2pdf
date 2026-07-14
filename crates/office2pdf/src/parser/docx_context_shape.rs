@@ -63,6 +63,8 @@ pub(in super::super) struct DrawingShapeContext {
     cursor: Cell<usize>,
     wpg_drawings: Vec<Option<WpgDrawingInfo>>,
     wpg_cursor: Cell<usize>,
+    canvas_image_offsets: Vec<Option<(f64, f64)>>,
+    canvas_cursor: Cell<usize>,
 }
 
 impl DrawingShapeContext {
@@ -81,6 +83,8 @@ impl DrawingShapeContext {
                 .map(|xml| scan_wpg_drawings(xml, theme_xml))
                 .unwrap_or_default(),
             wpg_cursor: Cell::new(0),
+            canvas_image_offsets: xml.map(scan_canvas_image_offsets).unwrap_or_default(),
+            canvas_cursor: Cell::new(0),
         }
     }
 
@@ -99,6 +103,15 @@ impl DrawingShapeContext {
         let index: usize = self.wpg_cursor.get();
         self.wpg_cursor.set(index + 1);
         self.wpg_drawings.get(index).cloned().flatten()
+    }
+
+    /// Return the selected picture's offset inside a WordprocessingCanvas.
+    /// The cursor advances for every docx-rs drawing so AlternateContent
+    /// fallbacks remain metadata-only and are never rendered a second time.
+    pub(in super::super) fn consume_canvas_image_offset(&self) -> Option<(f64, f64)> {
+        let index: usize = self.canvas_cursor.get();
+        self.canvas_cursor.set(index + 1);
+        self.canvas_image_offsets.get(index).copied().flatten()
     }
 }
 
@@ -426,6 +439,99 @@ fn handle_geometry_element(
 
 fn arrow_type_present(element: &BytesStart<'_>) -> bool {
     !matches!(attribute_value(element, b"type").as_deref(), Some("none"))
+}
+
+#[derive(Default)]
+struct CanvasDrawingBuilder {
+    record_index: usize,
+    is_canvas: bool,
+    picture_depth: usize,
+    shape_properties_depth: usize,
+    transform_depth: usize,
+    offset: Option<(f64, f64)>,
+}
+
+fn scan_canvas_image_offsets(xml: &str) -> Vec<Option<(f64, f64)>> {
+    let mut reader = quick_xml::Reader::from_str(xml);
+    let mut buffer: Vec<u8> = Vec::new();
+    let mut records: Vec<Option<(f64, f64)>> = Vec::new();
+    let mut drawings: Vec<CanvasDrawingBuilder> = Vec::new();
+
+    loop {
+        match reader.read_event_into(&mut buffer) {
+            Ok(Event::Start(ref element)) if element.local_name().as_ref() == b"drawing" => {
+                let record_index: usize = records.len();
+                records.push(None);
+                drawings.push(CanvasDrawingBuilder {
+                    record_index,
+                    ..CanvasDrawingBuilder::default()
+                });
+            }
+            Ok(Event::Start(ref element)) => {
+                if let Some(drawing) = drawings.last_mut() {
+                    handle_canvas_start(drawing, element);
+                }
+            }
+            Ok(Event::Empty(ref element)) => {
+                if let Some(drawing) = drawings.last_mut() {
+                    handle_canvas_element(drawing, element);
+                }
+            }
+            Ok(Event::End(ref element)) if element.local_name().as_ref() == b"drawing" => {
+                if let Some(drawing) = drawings.pop() {
+                    records[drawing.record_index] = drawing.offset;
+                }
+            }
+            Ok(Event::End(ref element)) => {
+                if let Some(drawing) = drawings.last_mut() {
+                    handle_canvas_end(drawing, element.local_name().as_ref());
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(_) => break,
+            _ => {}
+        }
+        buffer.clear();
+    }
+
+    records
+}
+
+fn handle_canvas_start(drawing: &mut CanvasDrawingBuilder, element: &BytesStart<'_>) {
+    match element.local_name().as_ref() {
+        b"graphicData"
+            if attribute_value(element, b"uri")
+                .is_some_and(|uri| uri.ends_with("/wordprocessingCanvas")) =>
+        {
+            drawing.is_canvas = true;
+        }
+        b"pic" if drawing.is_canvas => drawing.picture_depth += 1,
+        b"spPr" if drawing.picture_depth > 0 => drawing.shape_properties_depth += 1,
+        b"xfrm" if drawing.shape_properties_depth > 0 => drawing.transform_depth += 1,
+        _ => handle_canvas_element(drawing, element),
+    }
+}
+
+fn handle_canvas_element(drawing: &mut CanvasDrawingBuilder, element: &BytesStart<'_>) {
+    if drawing.transform_depth == 0 || element.local_name().as_ref() != b"off" {
+        return;
+    }
+    let Some(x) = numeric_attr(element, b"x") else {
+        return;
+    };
+    let Some(y) = numeric_attr(element, b"y") else {
+        return;
+    };
+    drawing.offset = Some((x / EMU_PER_POINT, y / EMU_PER_POINT));
+}
+
+fn handle_canvas_end(drawing: &mut CanvasDrawingBuilder, local_name: &[u8]) {
+    match local_name {
+        b"xfrm" if drawing.transform_depth > 0 => drawing.transform_depth -= 1,
+        b"spPr" if drawing.shape_properties_depth > 0 => drawing.shape_properties_depth -= 1,
+        b"pic" if drawing.picture_depth > 0 => drawing.picture_depth -= 1,
+        _ => {}
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

@@ -1028,6 +1028,59 @@ fn structure_wpg_textboxes_preserves_grouped_text_content() {
     }
 }
 
+docx_fixture_tests!(groupshape_picture, "libreoffice/groupshape-picture.docx");
+
+#[test]
+fn structure_groupshape_picture_preserves_one_positioned_choice_image() {
+    let pages = flow_pages("libreoffice/groupshape-picture.docx");
+    let blocks = all_blocks(&pages);
+    let floating_images = blocks
+        .iter()
+        .filter_map(|block| match block {
+            Block::FloatingImage(image) => Some(image),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let other_image_count = blocks
+        .iter()
+        .map(|block| match block {
+            Block::Image(_) => 1,
+            Block::InlineImages(images) => images.len(),
+            _ => 0,
+        })
+        .sum::<usize>();
+
+    assert_eq!(
+        floating_images.len(),
+        1,
+        "selected choice image should survive"
+    );
+    assert_eq!(other_image_count, 0, "VML fallback must not be duplicated");
+    assert!((floating_images[0].offset_x - 31.423).abs() < 0.01);
+    assert!((floating_images[0].offset_y - 74.573).abs() < 0.01);
+}
+
+docx_fixture_tests!(n592908_picture, "libreoffice/n592908-picture.docx");
+
+#[test]
+fn structure_n592908_picture_preserves_one_legacy_vml_image() {
+    let pages = flow_pages("libreoffice/n592908-picture.docx");
+    let blocks = all_blocks(&pages);
+    let image_count = blocks
+        .iter()
+        .map(|block| match block {
+            Block::Image(_) | Block::FloatingImage(_) => 1,
+            Block::InlineImages(images) => images.len(),
+            _ => 0,
+        })
+        .sum::<usize>();
+
+    assert_eq!(
+        image_count, 1,
+        "legacy w:pict image should survive exactly once"
+    );
+}
+
 #[test]
 fn structure_table_rtl_uses_visual_right_to_left_cell_order() {
     let pages = flow_pages("libreoffice/table-rtl.docx");

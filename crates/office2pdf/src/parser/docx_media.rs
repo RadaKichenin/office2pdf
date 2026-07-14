@@ -9,6 +9,7 @@ pub(super) fn extract_drawing_image(
     drawing: &docx_rs::Drawing,
     images: &ImageMap,
     wraps: &WrapContext,
+    canvas_image_offset: Option<(f64, f64)>,
 ) -> Option<Block> {
     let pic = match &drawing.data {
         Some(docx_rs::DrawingData::Pic(pic)) => pic,
@@ -51,6 +52,13 @@ pub(super) fn extract_drawing_image(
         Some(Block::FloatingImage(FloatingImage {
             image: image_data,
             wrap_mode,
+            offset_x,
+            offset_y,
+        }))
+    } else if let Some((offset_x, offset_y)) = canvas_image_offset {
+        Some(Block::FloatingImage(FloatingImage {
+            image: image_data,
+            wrap_mode: crate::ir::WrapMode::None,
             offset_x,
             offset_y,
         }))
