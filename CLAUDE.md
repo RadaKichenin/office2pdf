@@ -56,6 +56,7 @@
 - If no relevant project exists in `references/`, search the web for well-maintained open-source projects that solve similar problems. Search across all languages — architectural patterns transfer regardless of language.
 - When a new useful project is discovered and `references/` exists, add it to `references/INDEX.md` and create a corresponding detail file. Keep detail files under 50 lines.
 - Cite which reference project informed your approach when applying patterns from it.
+- If a dependency limitation or bug breaks PDF conversion, clone that library, fix and test it upstream, and open a PR. Follow its repository conventions and match the tone and scope of its recently merged PRs.
 
 ## Confidentiality
 
