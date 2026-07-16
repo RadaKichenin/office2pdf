@@ -92,8 +92,6 @@ jobs:
     name: Bulk Third-Party Fixture Test
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    env:
-      BULK_REPORT_DIR: ${{ runner.temp }}/bulk-conversion
     steps:
       - uses: actions/checkout@v4
         with:
@@ -102,6 +100,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Compare fixture outcomes with baseline
         run: cargo test --release -p office2pdf --test bulk_conversion test_bulk_regression_gate -- --ignored --nocapture --exact
+        env:
+          BULK_REPORT_DIR: ${{ runner.temp }}/bulk-conversion
       - name: Upload bulk conversion reports
         if: always()
         uses: actions/upload-artifact@v4
