@@ -534,6 +534,7 @@ fn test_render_document_with_header() {
                 }],
             })],
             header: Some(HeaderFooter {
+                distance_from_edge: None,
                 paragraphs: vec![HeaderFooterParagraph {
                     style: ParagraphStyle::default(),
                     elements: vec![HFInline::Run(Run {
@@ -542,6 +543,8 @@ fn test_render_document_with_header() {
                         href: None,
                         footnote: None,
                     })],
+                    border: None,
+                    frame: None,
                 }],
             }),
             footer: None,
@@ -572,6 +575,7 @@ fn test_render_document_with_page_number_footer() {
             })],
             header: None,
             footer: Some(HeaderFooter {
+                distance_from_edge: None,
                 paragraphs: vec![HeaderFooterParagraph {
                     style: ParagraphStyle::default(),
                     elements: vec![
@@ -583,6 +587,8 @@ fn test_render_document_with_page_number_footer() {
                         }),
                         HFInline::PageNumber,
                     ],
+                    border: None,
+                    frame: None,
                 }],
             }),
             columns: None,

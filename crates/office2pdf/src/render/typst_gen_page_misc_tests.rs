@@ -9,6 +9,7 @@ fn test_generate_flow_page_with_text_header() {
         margins: Margins::default(),
         content: vec![make_paragraph("Body text")],
         header: Some(HeaderFooter {
+            distance_from_edge: None,
             paragraphs: vec![HeaderFooterParagraph {
                 style: ParagraphStyle::default(),
                 elements: vec![HFInline::Run(Run {
@@ -17,6 +18,8 @@ fn test_generate_flow_page_with_text_header() {
                     href: None,
                     footnote: None,
                 })],
+                border: None,
+                frame: None,
             }],
         }),
         footer: None,
@@ -37,6 +40,7 @@ fn test_generate_flow_page_with_page_number_footer() {
         content: vec![make_paragraph("Body text")],
         header: None,
         footer: Some(HeaderFooter {
+            distance_from_edge: Some(35.4),
             paragraphs: vec![HeaderFooterParagraph {
                 style: ParagraphStyle::default(),
                 elements: vec![
@@ -48,6 +52,8 @@ fn test_generate_flow_page_with_page_number_footer() {
                     }),
                     HFInline::PageNumber,
                 ],
+                border: None,
+                frame: None,
             }],
         }),
         columns: None,
@@ -56,6 +62,110 @@ fn test_generate_flow_page_with_page_number_footer() {
     assert!(output.source.contains("footer:"));
     assert!(output.source.contains("counter(page).display()"));
     assert!(output.source.contains("Page "));
+    assert!(output.source.contains("move(dy: -36.6pt)"));
+}
+
+#[test]
+fn test_generate_footer_with_compound_border_and_right_positioned_tab() {
+    use crate::ir::{
+        BorderSide, CellBorder, HFInline, HeaderFooter, HeaderFooterParagraph, PositionedTab,
+        PositionedTabAlignment, PositionedTabRelativeTo,
+    };
+
+    let doc = make_doc(vec![Page::Flow(FlowPage {
+        size: PageSize::default(),
+        margins: Margins::default(),
+        content: vec![make_paragraph("Body")],
+        header: None,
+        footer: Some(HeaderFooter {
+            distance_from_edge: None,
+            paragraphs: vec![HeaderFooterParagraph {
+                style: ParagraphStyle::default(),
+                elements: vec![
+                    HFInline::Run(Run {
+                        text: "Left".to_string(),
+                        style: TextStyle::default(),
+                        href: None,
+                        footnote: None,
+                    }),
+                    HFInline::PositionedTab(PositionedTab {
+                        alignment: PositionedTabAlignment::Right,
+                        relative_to: PositionedTabRelativeTo::Margin,
+                        leader: TabLeader::None,
+                    }),
+                    HFInline::Run(Run {
+                        text: "Page ".to_string(),
+                        style: TextStyle::default(),
+                        href: None,
+                        footnote: None,
+                    }),
+                    HFInline::PageNumber,
+                ],
+                border: Some(CellBorder {
+                    top: Some(BorderSide {
+                        width: 3.0,
+                        color: Color::new(0x62, 0x24, 0x23),
+                        style: BorderLineStyle::Double,
+                    }),
+                    bottom: None,
+                    left: None,
+                    right: None,
+                }),
+                frame: None,
+            }],
+        }),
+        columns: None,
+    })]);
+
+    let output = generate_typst(&doc).unwrap();
+    assert!(output.source.contains("#grid(columns: (1fr, auto)"));
+    assert!(output.source.contains("rgb(98, 36, 35)"));
+    assert_eq!(output.source.matches("line(length: 100%").count(), 2);
+}
+
+#[test]
+fn test_generate_page_anchored_footer_frame_in_foreground() {
+    use crate::ir::{
+        FrameAnchor, HFInline, HeaderFooter, HeaderFooterFrame, HeaderFooterParagraph,
+    };
+
+    let doc = make_doc(vec![Page::Flow(FlowPage {
+        size: PageSize::default(),
+        margins: Margins::default(),
+        content: vec![make_paragraph("Body")],
+        header: None,
+        footer: Some(HeaderFooter {
+            distance_from_edge: None,
+            paragraphs: vec![HeaderFooterParagraph {
+                style: ParagraphStyle::default(),
+                elements: vec![HFInline::Run(Run {
+                    text: "Framed footer".to_string(),
+                    style: TextStyle::default(),
+                    href: None,
+                    footnote: None,
+                })],
+                border: None,
+                frame: Some(HeaderFooterFrame {
+                    x: Some(71.8),
+                    y: Some(198.5),
+                    width: None,
+                    height: None,
+                    horizontal_anchor: FrameAnchor::Page,
+                    vertical_anchor: FrameAnchor::Page,
+                }),
+            }],
+        }),
+        columns: None,
+    })]);
+
+    let output = generate_typst(&doc).unwrap();
+    assert!(output.source.contains("foreground: ["));
+    assert!(
+        output
+            .source
+            .contains("#place(top + left, dx: 71.8pt, dy: 198.5pt)")
+    );
+    assert!(!output.source.contains("footer:"));
 }
 
 #[test]
@@ -67,6 +177,7 @@ fn test_generate_flow_page_with_header_and_footer() {
         margins: Margins::default(),
         content: vec![make_paragraph("Body")],
         header: Some(HeaderFooter {
+            distance_from_edge: None,
             paragraphs: vec![HeaderFooterParagraph {
                 style: ParagraphStyle::default(),
                 elements: vec![HFInline::Run(Run {
@@ -75,12 +186,17 @@ fn test_generate_flow_page_with_header_and_footer() {
                     href: None,
                     footnote: None,
                 })],
+                border: None,
+                frame: None,
             }],
         }),
         footer: Some(HeaderFooter {
+            distance_from_edge: None,
             paragraphs: vec![HeaderFooterParagraph {
                 style: ParagraphStyle::default(),
                 elements: vec![HFInline::PageNumber],
+                border: None,
+                frame: None,
             }],
         }),
         columns: None,
@@ -368,6 +484,7 @@ fn test_table_page_with_header() {
         margins: Margins::default(),
         table: make_simple_table(vec![vec!["A"]]),
         header: Some(HeaderFooter {
+            distance_from_edge: None,
             paragraphs: vec![HeaderFooterParagraph {
                 style: ParagraphStyle {
                     alignment: Some(Alignment::Center),
@@ -379,6 +496,8 @@ fn test_table_page_with_header() {
                     href: None,
                     footnote: None,
                 })],
+                border: None,
+                frame: None,
             }],
         }),
         footer: None,
@@ -399,6 +518,7 @@ fn test_table_page_with_page_number_footer() {
         table: make_simple_table(vec![vec!["A"]]),
         header: None,
         footer: Some(HeaderFooter {
+            distance_from_edge: None,
             paragraphs: vec![HeaderFooterParagraph {
                 style: ParagraphStyle {
                     alignment: Some(Alignment::Center),
@@ -420,6 +540,8 @@ fn test_table_page_with_page_number_footer() {
                     }),
                     HFInline::TotalPages,
                 ],
+                border: None,
+                frame: None,
             }],
         }),
         charts: vec![],

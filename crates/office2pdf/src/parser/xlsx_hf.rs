@@ -98,6 +98,8 @@ pub(super) fn parse_hf_format_string(format_str: &str) -> Option<HeaderFooter> {
                     ..ParagraphStyle::default()
                 },
                 elements,
+                border: None,
+                frame: None,
             });
         }
     }
@@ -105,7 +107,10 @@ pub(super) fn parse_hf_format_string(format_str: &str) -> Option<HeaderFooter> {
     if paragraphs.is_empty() {
         None
     } else {
-        Some(HeaderFooter { paragraphs })
+        Some(HeaderFooter {
+            paragraphs,
+            distance_from_edge: None,
+        })
     }
 }
 

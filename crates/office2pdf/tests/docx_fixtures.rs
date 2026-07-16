@@ -11,7 +11,8 @@ use std::path::PathBuf;
 
 use office2pdf::config::ConvertOptions;
 use office2pdf::ir::{
-    ArrowHead, Block, Color, FlowPage, HFInline, ListKind, Page, Paragraph, Run, ShapeKind,
+    ArrowHead, Block, BorderLineStyle, Color, FlowPage, FrameAnchor, HFInline, ListKind, Page,
+    Paragraph, PositionedTabAlignment, PositionedTabRelativeTo, Run, ShapeKind,
     TextBoxVerticalAlign,
 };
 use office2pdf::parser::Parser;
@@ -846,6 +847,8 @@ docx_fixture_tests!(fancy_foot, "FancyFoot.docx");
 #[test]
 fn structure_fancy_foot_preserves_text_and_simple_page_field() {
     let pages = flow_pages("FancyFoot.docx");
+    let footer = pages[0].footer.as_ref().expect("default footer");
+    let first_paragraph = &footer.paragraphs[0];
     let elements = footer_elements(&pages);
     let text = footer_text(&pages);
 
@@ -863,6 +866,21 @@ fn structure_fancy_foot_preserves_text_and_simple_page_field() {
             .any(|element| matches!(element, HFInline::PageNumber)),
         "the real-world fldSimple PAGE field should survive parsing"
     );
+    let top_border = first_paragraph
+        .border
+        .as_ref()
+        .and_then(|border| border.top.as_ref())
+        .expect("the compound top border should survive parsing");
+    assert_eq!(top_border.style, BorderLineStyle::Double);
+    assert!((top_border.width - 3.0).abs() < f64::EPSILON);
+    assert_eq!(top_border.color, Color::new(0x62, 0x24, 0x23));
+    assert!(first_paragraph.elements.iter().any(|element| matches!(
+        element,
+        HFInline::PositionedTab(tab)
+            if tab.alignment == PositionedTabAlignment::Right
+                && tab.relative_to == PositionedTabRelativeTo::Margin
+    )));
+    assert!((footer.distance_from_edge.expect("footer distance") - 35.4).abs() < 0.01);
 }
 docx_fixture_tests!(field_codes, "FieldCodes.docx");
 docx_fixture_tests!(header_footer_unicode, "HeaderFooterUnicode.docx");
@@ -1062,6 +1080,40 @@ docx_fixture_tests!(tdf111550, "libreoffice/tdf111550.docx");
 docx_fixture_tests!(tdf111964, "libreoffice/tdf111964.docx");
 docx_fixture_tests!(tdf124670, "libreoffice/tdf124670.docx");
 docx_fixture_tests!(tdf129659, "libreoffice/tdf129659.docx");
+docx_fixture_tests!(
+    tdf159207_footer_frame_border,
+    "libreoffice/tdf159207_footerFramePrBorder.docx"
+);
+
+#[test]
+fn structure_tdf159207_preserves_page_anchored_footer_frame_position() {
+    let pages = flow_pages("libreoffice/tdf159207_footerFramePrBorder.docx");
+    let footer = pages[0].footer.as_ref().expect("default footer");
+    let framed_paragraphs = footer
+        .paragraphs
+        .iter()
+        .filter_map(|paragraph| paragraph.frame.as_ref())
+        .collect::<Vec<_>>();
+
+    assert_eq!(framed_paragraphs.len(), 6);
+    for frame in framed_paragraphs {
+        assert_eq!(frame.horizontal_anchor, FrameAnchor::Page);
+        assert_eq!(frame.vertical_anchor, FrameAnchor::Page);
+        assert!((frame.x.expect("absolute x") - 71.8).abs() < 0.01);
+        assert!((frame.y.expect("absolute y") - 198.5).abs() < 0.01);
+    }
+}
+
+#[test]
+fn conversion_tdf159207_renders_positioned_footer_frame() {
+    let result = office2pdf::convert(fixture_path(
+        "libreoffice/tdf159207_footerFramePrBorder.docx",
+    ))
+    .expect("the positioned footer frame should render");
+
+    assert!(result.pdf.starts_with(b"%PDF"));
+    common::validate_pdf_with_qpdf(&result.pdf);
+}
 docx_fixture_tests!(table_rtl, "libreoffice/table-rtl.docx");
 
 docx_fixture_tests!(wpg_only, "libreoffice/wpg-only.docx");

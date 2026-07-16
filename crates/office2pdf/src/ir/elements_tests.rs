@@ -187,6 +187,7 @@ fn test_paragraph_with_runs() {
 #[test]
 fn test_header_footer_with_text() {
     let hf = HeaderFooter {
+        distance_from_edge: None,
         paragraphs: vec![HeaderFooterParagraph {
             style: ParagraphStyle::default(),
             elements: vec![HFInline::Run(Run {
@@ -195,6 +196,8 @@ fn test_header_footer_with_text() {
                 href: None,
                 footnote: None,
             })],
+            border: None,
+            frame: None,
         }],
     };
     assert_eq!(hf.paragraphs.len(), 1);
@@ -208,6 +211,7 @@ fn test_header_footer_with_text() {
 #[test]
 fn test_header_footer_with_page_number() {
     let hf = HeaderFooter {
+        distance_from_edge: None,
         paragraphs: vec![HeaderFooterParagraph {
             style: ParagraphStyle::default(),
             elements: vec![
@@ -219,6 +223,8 @@ fn test_header_footer_with_page_number() {
                 }),
                 HFInline::PageNumber,
             ],
+            border: None,
+            frame: None,
         }],
     };
     assert_eq!(hf.paragraphs[0].elements.len(), 2);
