@@ -1,11 +1,13 @@
 use std::collections::BTreeMap;
 
-use super::style::{Alignment, Color, ParagraphStyle, TextStyle};
+use super::style::{Alignment, Color, ParagraphStyle, TabLeader, TextStyle};
 
 /// Header or footer content for flow pages.
 #[derive(Debug, Clone)]
 pub struct HeaderFooter {
     pub paragraphs: Vec<HeaderFooterParagraph>,
+    /// Distance in points from the page edge, as specified by the section page margins.
+    pub distance_from_edge: Option<f64>,
 }
 
 /// A paragraph within a header or footer.
@@ -13,6 +15,50 @@ pub struct HeaderFooter {
 pub struct HeaderFooterParagraph {
     pub style: ParagraphStyle,
     pub elements: Vec<HFInline>,
+    pub border: Option<CellBorder>,
+    pub frame: Option<HeaderFooterFrame>,
+}
+
+/// Page- or margin-relative positioning for a header/footer paragraph frame.
+#[derive(Debug, Clone, PartialEq)]
+pub struct HeaderFooterFrame {
+    pub x: Option<f64>,
+    pub y: Option<f64>,
+    pub width: Option<f64>,
+    pub height: Option<f64>,
+    pub horizontal_anchor: FrameAnchor,
+    pub vertical_anchor: FrameAnchor,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FrameAnchor {
+    Page,
+    Margin,
+    #[default]
+    Text,
+}
+
+/// A position-relative tab (`w:ptab`) inside header/footer content.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PositionedTab {
+    pub alignment: PositionedTabAlignment,
+    pub relative_to: PositionedTabRelativeTo,
+    pub leader: TabLeader,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PositionedTabAlignment {
+    Center,
+    #[default]
+    Left,
+    Right,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PositionedTabRelativeTo {
+    Indent,
+    #[default]
+    Margin,
 }
 
 /// An inline element within a header or footer paragraph.
@@ -26,6 +72,8 @@ pub enum HFInline {
     PageNumber,
     /// Total page count field.
     TotalPages,
+    /// Alignment tab positioned relative to the paragraph indent or page margin.
+    PositionedTab(PositionedTab),
 }
 
 /// Block-level content elements.

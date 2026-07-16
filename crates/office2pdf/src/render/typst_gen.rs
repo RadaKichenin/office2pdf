@@ -8,9 +8,10 @@ use crate::error::ConvertError;
 use crate::ir::{
     Alignment, ArrowHead, Block, BorderLineStyle, BorderSide, CellBorder, CellVerticalAlign, Chart,
     ChartType, Color, ColumnLayout, Document, FixedElement, FixedElementKind, FixedPage,
-    FloatingImage, FloatingShape, FloatingTextBox, FlowPage, GradientFill, HFInline, HeaderFooter,
-    ImageCrop, ImageData, ImageFormat, Insets, LineSpacing, List, ListKind, Margins, MathEquation,
-    Metadata, Page, PageSize, Paragraph, ParagraphStyle, Run, Shadow, Shape, ShapeKind, SheetPage,
+    FloatingImage, FloatingShape, FloatingTextBox, FlowPage, FrameAnchor, GradientFill, HFInline,
+    HeaderFooter, HeaderFooterFrame, ImageCrop, ImageData, ImageFormat, Insets, LineSpacing, List,
+    ListKind, Margins, MathEquation, Metadata, Page, PageSize, Paragraph, ParagraphStyle,
+    PositionedTabAlignment, PositionedTabRelativeTo, Run, Shadow, Shape, ShapeKind, SheetPage,
     SmartArt, TabAlignment, TabLeader, TabStop, Table, TableCell, TableRow, TextBoxData,
     TextBoxVerticalAlign, TextDirection, TextStyle, VerticalTextAlign, WrapMode,
 };
@@ -761,33 +762,162 @@ fn write_flow_page_setup(out: &mut String, page: &FlowPage, size: &PageSize, ctx
         format_f64(page.margins.right),
     );
 
-    if let Some(header) = &page.header {
+    if let Some(header) = &page.header
+        && hf_has_flow_content(header)
+    {
         if hf_needs_context(header) {
             out.push_str(", header: context [");
         } else {
             out.push_str(", header: [");
         }
-        generate_hf_content(out, header, ctx);
+        generate_flow_hf_content(out, header, ctx);
         out.push(']');
     }
 
-    if let Some(footer) = &page.footer {
-        if hf_needs_stack_offset(footer) {
+    if let Some(footer) = &page.footer
+        && hf_has_flow_content(footer)
+    {
+        let edge_offset = footer
+            .distance_from_edge
+            .map(|distance| (page.margins.bottom - distance).max(0.0))
+            .unwrap_or(0.0);
+        if hf_needs_stack_offset(footer) || edge_offset > 0.0 {
             out.push_str(", footer: context { let footer_content = block(width: 100%)[");
-            generate_hf_content(out, footer, ctx);
-            out.push_str("]; move(dy: -measure(footer_content).height / 2)[#footer_content] }");
+            generate_flow_hf_content(out, footer, ctx);
+            out.push_str("]; move(dy: ");
+            if hf_needs_stack_offset(footer) {
+                out.push_str("-measure(footer_content).height / 2");
+                if edge_offset > 0.0 {
+                    let _ = write!(out, " - {}pt", format_f64(edge_offset));
+                }
+            } else {
+                let _ = write!(out, "-{}pt", format_f64(edge_offset));
+            }
+            out.push_str(")[#footer_content] }");
         } else if hf_needs_context(footer) {
             out.push_str(", footer: context [");
-            generate_hf_content(out, footer, ctx);
+            generate_flow_hf_content(out, footer, ctx);
             out.push(']');
         } else {
             out.push_str(", footer: [");
-            generate_hf_content(out, footer, ctx);
+            generate_flow_hf_content(out, footer, ctx);
             out.push(']');
         }
     }
 
+    if page
+        .header
+        .iter()
+        .chain(page.footer.iter())
+        .any(hf_has_page_anchored_frames)
+    {
+        out.push_str(", foreground: [");
+        if let Some(header) = &page.header {
+            generate_page_anchored_hf_frames(out, header, size.width, page.margins.right, ctx);
+        }
+        if let Some(footer) = &page.footer {
+            generate_page_anchored_hf_frames(out, footer, size.width, page.margins.right, ctx);
+        }
+        out.push(']');
+    }
+
     out.push_str(")\n");
+}
+
+fn is_page_anchored_frame(frame: &HeaderFooterFrame) -> bool {
+    frame.horizontal_anchor == FrameAnchor::Page && frame.vertical_anchor == FrameAnchor::Page
+}
+
+fn hf_has_flow_content(header_footer: &HeaderFooter) -> bool {
+    header_footer
+        .paragraphs
+        .iter()
+        .any(hf_paragraph_has_flow_content)
+}
+
+fn hf_paragraph_has_content(paragraph: &crate::ir::HeaderFooterParagraph) -> bool {
+    !paragraph.elements.is_empty() || paragraph.border.is_some()
+}
+
+fn hf_paragraph_has_flow_content(paragraph: &crate::ir::HeaderFooterParagraph) -> bool {
+    hf_paragraph_has_content(paragraph)
+        && paragraph
+            .frame
+            .as_ref()
+            .is_none_or(|frame| !is_page_anchored_frame(frame))
+}
+
+fn hf_has_page_anchored_frames(header_footer: &HeaderFooter) -> bool {
+    header_footer
+        .paragraphs
+        .iter()
+        .any(|paragraph| paragraph.frame.as_ref().is_some_and(is_page_anchored_frame))
+}
+
+fn generate_flow_hf_content(out: &mut String, hf: &HeaderFooter, ctx: &mut GenCtx) {
+    let mut is_first: bool = true;
+    for paragraph in &hf.paragraphs {
+        if paragraph.frame.as_ref().is_some_and(is_page_anchored_frame)
+            || !hf_paragraph_has_content(paragraph)
+        {
+            continue;
+        }
+        if !is_first {
+            out.push_str("\\\n");
+        }
+        generate_hf_styled_paragraph(out, paragraph, ctx);
+        is_first = false;
+    }
+}
+
+fn generate_page_anchored_hf_frames(
+    out: &mut String,
+    hf: &HeaderFooter,
+    page_width: f64,
+    right_margin: f64,
+    ctx: &mut GenCtx,
+) {
+    let mut index: usize = 0;
+    while index < hf.paragraphs.len() {
+        let Some(frame) = hf.paragraphs[index].frame.as_ref() else {
+            index += 1;
+            continue;
+        };
+        if !is_page_anchored_frame(frame) {
+            index += 1;
+            continue;
+        }
+        let mut end: usize = index + 1;
+        while end < hf.paragraphs.len() && hf.paragraphs[end].frame.as_ref() == Some(frame) {
+            end += 1;
+        }
+        let x = frame.x.unwrap_or(0.0);
+        let y = frame.y.unwrap_or(0.0);
+        let _ = write!(
+            out,
+            "#place(top + left, dx: {}pt, dy: {}pt)[#block(",
+            format_f64(x),
+            format_f64(y)
+        );
+        if let Some(width) = frame.width {
+            let _ = write!(out, "width: {}pt", format_f64(width));
+        } else {
+            let width = (page_width - x - right_margin).max(0.0);
+            let _ = write!(out, "width: {}pt", format_f64(width));
+        }
+        out.push_str(")[#stack(dir: ttb, spacing: 4pt");
+        for paragraph in &hf.paragraphs[index..end] {
+            out.push_str(", [");
+            if hf_paragraph_has_content(paragraph) {
+                generate_hf_styled_paragraph(out, paragraph, ctx);
+            } else {
+                out.push_str("#box(height: 12pt)");
+            }
+            out.push(']');
+        }
+        out.push_str(")]]");
+        index = end;
+    }
 }
 
 /// Write the full page setup for a SheetPage, including optional header/footer.
@@ -847,10 +977,15 @@ fn hf_needs_context(hf: &HeaderFooter) -> bool {
 }
 
 fn hf_needs_stack_offset(hf: &HeaderFooter) -> bool {
-    hf.paragraphs.len() > 1
+    hf.paragraphs
+        .iter()
+        .filter(|paragraph| hf_paragraph_has_flow_content(paragraph))
+        .count()
+        > 1
         || hf
             .paragraphs
             .iter()
+            .filter(|paragraph| hf_paragraph_has_flow_content(paragraph))
             .flat_map(|paragraph| &paragraph.elements)
             .any(|element| matches!(element, HFInline::Image(_)))
 }
@@ -861,40 +996,112 @@ fn generate_hf_content(out: &mut String, hf: &HeaderFooter, ctx: &mut GenCtx) {
         if i > 0 {
             out.push_str("\\\n");
         }
-        // Apply paragraph alignment if set
-        if let Some(align) = para.style.alignment {
-            let align_str = match align {
-                Alignment::Left => "left",
-                Alignment::Center => "center",
-                Alignment::Right => "right",
-                Alignment::Justify => "left",
-            };
-            let _ = write!(out, "#align({align_str})[");
+        generate_hf_styled_paragraph(out, para, ctx);
+    }
+}
+
+fn generate_hf_styled_paragraph(
+    out: &mut String,
+    paragraph: &crate::ir::HeaderFooterParagraph,
+    ctx: &mut GenCtx,
+) {
+    if let Some(align) = paragraph.style.alignment {
+        let align_str = match align {
+            Alignment::Left => "left",
+            Alignment::Center => "center",
+            Alignment::Right => "right",
+            Alignment::Justify => "left",
+        };
+        let _ = write!(out, "#align({align_str})[");
+    }
+    if paragraph.style.direction == Some(TextDirection::Rtl) {
+        out.push_str("#text(dir: rtl)[");
+    }
+    generate_hf_paragraph(out, paragraph, ctx);
+    if paragraph.style.direction == Some(TextDirection::Rtl) {
+        out.push(']');
+    }
+    if paragraph.style.alignment.is_some() {
+        out.push(']');
+    }
+}
+
+fn generate_hf_paragraph(
+    out: &mut String,
+    paragraph: &crate::ir::HeaderFooterParagraph,
+    ctx: &mut GenCtx,
+) {
+    let right_tab = paragraph.elements.iter().position(|element| {
+        matches!(
+            element,
+            HFInline::PositionedTab(tab)
+                if tab.alignment == PositionedTabAlignment::Right
+                    && tab.relative_to == PositionedTabRelativeTo::Margin
+        )
+    });
+    let has_top_border = paragraph
+        .border
+        .as_ref()
+        .and_then(|border| border.top.as_ref());
+
+    if let Some(border) = has_top_border {
+        out.push_str("#stack(dir: ttb, spacing: 0.5pt, ");
+        write_hf_border_line(out, border, border.style == BorderLineStyle::Double);
+        if border.style == BorderLineStyle::Double {
+            out.push_str(", ");
+            write_hf_border_line(out, border, false);
         }
-        if para.style.direction == Some(TextDirection::Rtl) {
-            out.push_str("#text(dir: rtl)[");
+        out.push_str(", [");
+    }
+
+    if let Some(index) = right_tab {
+        out.push_str("#grid(columns: (1fr, auto), [");
+        generate_hf_elements(out, &paragraph.elements[..index], ctx);
+        out.push_str("], [");
+        generate_hf_elements(out, &paragraph.elements[index + 1..], ctx);
+        out.push_str("])");
+    } else {
+        generate_hf_elements(out, &paragraph.elements, ctx);
+    }
+
+    if has_top_border.is_some() {
+        out.push_str("])");
+    }
+}
+
+fn write_hf_border_line(out: &mut String, border: &BorderSide, is_primary_double: bool) {
+    let width = if is_primary_double {
+        border.width * 0.67
+    } else if border.style == BorderLineStyle::Double {
+        border.width * 0.17
+    } else {
+        border.width
+    };
+    let dash = border_line_style_to_typst(border.style);
+    let _ = write!(
+        out,
+        "block(height: {}pt)[#line(length: 100%, stroke: (paint: rgb({}, {}, {}), thickness: {}pt, dash: \"{}\"))]",
+        format_f64(width),
+        border.color.r,
+        border.color.g,
+        border.color.b,
+        format_f64(width),
+        if border.style == BorderLineStyle::Double {
+            "solid"
+        } else {
+            dash
         }
-        for elem in &para.elements {
-            match elem {
-                HFInline::Run(run) => {
-                    generate_run(out, run);
-                }
-                HFInline::Image(image) => {
-                    generate_image(out, image, ctx);
-                }
-                HFInline::PageNumber => {
-                    out.push_str("#counter(page).display()");
-                }
-                HFInline::TotalPages => {
-                    out.push_str("#counter(page).final().first()");
-                }
-            }
-        }
-        if para.style.direction == Some(TextDirection::Rtl) {
-            out.push(']');
-        }
-        if para.style.alignment.is_some() {
-            out.push(']');
+    );
+}
+
+fn generate_hf_elements(out: &mut String, elements: &[HFInline], ctx: &mut GenCtx) {
+    for element in elements {
+        match element {
+            HFInline::Run(run) => generate_run(out, run),
+            HFInline::Image(image) => generate_image(out, image, ctx),
+            HFInline::PageNumber => out.push_str("#counter(page).display()"),
+            HFInline::TotalPages => out.push_str("#counter(page).final().first()"),
+            HFInline::PositionedTab(_) => out.push_str("#h(1em)"),
         }
     }
 }

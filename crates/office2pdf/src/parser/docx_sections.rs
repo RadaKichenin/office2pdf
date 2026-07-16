@@ -3,8 +3,10 @@ use std::io::{Cursor, Read, Seek};
 
 use crate::error::ConvertWarning;
 use crate::ir::{
-    Block, ColumnLayout, FlowPage, HFInline, HeaderFooter, HeaderFooterParagraph, Margins,
-    PageSize, Run, TextDirection, TextStyle,
+    Block, BorderLineStyle, BorderSide, CellBorder, Color, ColumnLayout, FlowPage, FrameAnchor,
+    HFInline, HeaderFooter, HeaderFooterFrame, HeaderFooterParagraph, Margins, PageSize,
+    PositionedTab, PositionedTabAlignment, PositionedTabRelativeTo, Run, TabLeader, TextDirection,
+    TextStyle,
 };
 
 use super::contexts::WrapContext;
@@ -15,6 +17,7 @@ use super::{
     merge_paragraph_style, read_zip_text,
 };
 use crate::parser::units::twips_to_pt;
+use crate::parser::xml_util::parse_hex_color;
 
 /// Parsed header/footer assets addressed by relationship ID.
 #[derive(Default)]
@@ -418,12 +421,21 @@ pub(super) fn build_flow_page_from_section(
         });
     }
 
+    let mut header = extract_docx_header(section_prop, header_footer_assets);
+    if let Some(header) = &mut header {
+        header.distance_from_edge = Some(twips_to_pt(section_prop.page_margin.header));
+    }
+    let mut footer = extract_docx_footer(section_prop, header_footer_assets);
+    if let Some(footer) = &mut footer {
+        footer.distance_from_edge = Some(twips_to_pt(section_prop.page_margin.footer));
+    }
+
     FlowPage {
         size,
         margins,
         content,
-        header: extract_docx_header(section_prop, header_footer_assets),
-        footer: extract_docx_footer(section_prop, header_footer_assets),
+        header,
+        footer,
         columns: column_layout
             .or_else(|| extract_column_layout_from_section_property(section_prop)),
     }
@@ -454,7 +466,10 @@ fn convert_docx_header(
     if paragraphs.is_empty() {
         return None;
     }
-    Some(HeaderFooter { paragraphs })
+    Some(HeaderFooter {
+        paragraphs,
+        distance_from_edge: None,
+    })
 }
 
 fn convert_docx_footer(
@@ -483,7 +498,10 @@ fn convert_docx_footer(
     if paragraphs.is_empty() {
         return None;
     }
-    Some(HeaderFooter { paragraphs })
+    Some(HeaderFooter {
+        paragraphs,
+        distance_from_edge: None,
+    })
 }
 
 /// Extract the header for a section, preferring the default variant and falling back to
@@ -634,7 +652,87 @@ fn convert_hf_paragraph(
         }
     }
 
-    HeaderFooterParagraph { style, elements }
+    HeaderFooterParagraph {
+        style,
+        elements,
+        border: extract_hf_paragraph_border(&paragraph.property),
+        frame: extract_hf_frame(&paragraph.property),
+    }
+}
+
+fn extract_hf_paragraph_border(property: &docx_rs::ParagraphProperty) -> Option<CellBorder> {
+    let borders = serde_json::to_value(property.borders.as_ref()?).ok()?;
+    let extract_side = |key: &str| -> Option<BorderSide> {
+        let side = borders.get(key)?.as_object()?;
+        let border_type = side
+            .get("borderType")
+            .or_else(|| side.get("val"))?
+            .as_str()?;
+        if matches!(border_type, "none" | "nil") {
+            return None;
+        }
+        let width = side.get("size")?.as_f64()? / 8.0;
+        let color = side
+            .get("color")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| *value != "auto")
+            .and_then(parse_hex_color)
+            .unwrap_or_else(Color::black);
+        let style = match border_type {
+            "dashed" | "dashSmallGap" => BorderLineStyle::Dashed,
+            "dotted" => BorderLineStyle::Dotted,
+            "dashDotStroked" | "dotDash" => BorderLineStyle::DashDot,
+            "dotDotDash" => BorderLineStyle::DashDotDot,
+            "double"
+            | "thinThickSmallGap"
+            | "thickThinSmallGap"
+            | "thinThickMediumGap"
+            | "thickThinMediumGap"
+            | "thinThickLargeGap"
+            | "thickThinLargeGap"
+            | "thinThickThinSmallGap"
+            | "thinThickThinMediumGap"
+            | "thinThickThinLargeGap"
+            | "triple" => BorderLineStyle::Double,
+            _ => BorderLineStyle::Solid,
+        };
+        Some(BorderSide {
+            width,
+            color,
+            style,
+        })
+    };
+    let border = CellBorder {
+        top: extract_side("top"),
+        bottom: extract_side("bottom"),
+        left: extract_side("left"),
+        right: extract_side("right"),
+    };
+    (border.top.is_some()
+        || border.bottom.is_some()
+        || border.left.is_some()
+        || border.right.is_some())
+    .then_some(border)
+}
+
+fn extract_hf_frame(property: &docx_rs::ParagraphProperty) -> Option<HeaderFooterFrame> {
+    let frame = property.frame_property.as_ref()?;
+    Some(HeaderFooterFrame {
+        x: frame.x.map(twips_to_pt),
+        y: frame.y.map(twips_to_pt),
+        width: frame.w.map(|value| twips_to_pt(value as i32)),
+        height: frame.h.map(|value| twips_to_pt(value as i32)),
+        horizontal_anchor: frame_anchor(frame.h_anchor.as_deref()),
+        vertical_anchor: frame_anchor(frame.v_anchor.as_deref()),
+    })
+}
+
+fn frame_anchor(value: Option<&str>) -> FrameAnchor {
+    match value {
+        Some("page") => FrameAnchor::Page,
+        Some("margin") => FrameAnchor::Margin,
+        _ => FrameAnchor::Text,
+    }
 }
 
 fn append_simple_fields(
@@ -726,6 +824,28 @@ fn extract_hf_run_elements(
                     style: style.clone(),
                     href: None,
                     footnote: None,
+                }));
+            }
+            docx_rs::RunChild::PTab(tab) if !in_field => {
+                let alignment = match tab.alignment {
+                    docx_rs::PositionalTabAlignmentType::Center => PositionedTabAlignment::Center,
+                    docx_rs::PositionalTabAlignmentType::Right => PositionedTabAlignment::Right,
+                    docx_rs::PositionalTabAlignmentType::Left => PositionedTabAlignment::Left,
+                };
+                let relative_to = match tab.relative_to {
+                    docx_rs::PositionalTabRelativeTo::Indent => PositionedTabRelativeTo::Indent,
+                    docx_rs::PositionalTabRelativeTo::Margin => PositionedTabRelativeTo::Margin,
+                };
+                let leader = match tab.leader {
+                    docx_rs::TabLeaderType::Dot => TabLeader::Dot,
+                    docx_rs::TabLeaderType::Hyphen => TabLeader::Hyphen,
+                    docx_rs::TabLeaderType::Underscore => TabLeader::Underscore,
+                    _ => TabLeader::None,
+                };
+                elements.push(HFInline::PositionedTab(PositionedTab {
+                    alignment,
+                    relative_to,
+                    leader,
                 }));
             }
             _ => {}
