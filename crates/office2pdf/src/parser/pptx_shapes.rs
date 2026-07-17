@@ -176,6 +176,7 @@ pub(super) fn parse_group_shape(
                         warning_context,
                         inherited_text_body_defaults,
                         table_styles,
+                        None,
                     )?;
                     for element in &mut child_elements {
                         transform.apply(element);

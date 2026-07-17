@@ -518,3 +518,6 @@ mod preset_shape_tests;
 
 #[path = "pptx_connector_tests.rs"]
 mod connector_tests;
+
+#[path = "pptx_placeholder_geometry_tests.rs"]
+mod placeholder_geometry_tests;
