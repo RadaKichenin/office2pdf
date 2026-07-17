@@ -345,6 +345,7 @@ fn test_edge_image_only_docx() {
             header: None,
             footer: None,
             columns: None,
+            line_grid_pitch: None,
         })],
         styles: StyleSheet::default(),
     };

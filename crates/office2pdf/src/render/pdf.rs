@@ -379,3 +379,54 @@ impl World for MinimalWorld {
 #[cfg(test)]
 #[path = "pdf_tests.rs"]
 mod tests;
+
+/// hhea line metrics of the best face for `family`, in em units:
+/// (ascender, descender magnitude, line gap). Word bases its "single" line
+/// spacing on their sum, which Typst's glyph-tight line boxes undershoot.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn font_line_metrics_em(family: &str) -> Option<(f64, f64, f64)> {
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+    type LineMetricsEm = Option<(f64, f64, f64)>;
+    static METRICS_CACHE: OnceLock<Mutex<HashMap<String, LineMetricsEm>>> = OnceLock::new();
+
+    let cache = METRICS_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    let key: String = family.to_lowercase();
+    if let Some(cached) = cache
+        .lock()
+        .expect("metrics cache mutex should not be poisoned")
+        .get(&key)
+    {
+        return *cached;
+    }
+
+    // Use the same font set the compiler will use (system + discovered
+    // Office font dirs); this also primes the compile-time cache.
+    let search_context = super::font_context::resolve_font_search_context(&[]);
+    let data = get_fonts_for_extra_paths(search_context.search_paths());
+    let metrics: Option<(f64, f64, f64)> = data
+        .book
+        .select(&key, typst::text::FontVariant::default())
+        .and_then(|index| data.fonts.get(index))
+        .and_then(|slot| slot.get())
+        .map(|font| {
+            // Use Typst's own resolved metrics so the emitted leading matches
+            // exactly what the layout engine will produce with metric edges.
+            let metrics = font.metrics();
+            (
+                metrics.ascender.get(),
+                -metrics.descender.get(),
+                f64::from(font.ttf().line_gap()) / f64::from(font.ttf().units_per_em()).max(1.0),
+            )
+        });
+    cache
+        .lock()
+        .expect("metrics cache mutex should not be poisoned")
+        .insert(key, metrics);
+    metrics
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn font_line_metrics_em(_family: &str) -> Option<(f64, f64, f64)> {
+    None
+}

@@ -44,6 +44,7 @@ fn test_generate_bulleted_list() {
         header: None,
         footer: None,
         columns: None,
+        line_grid_pitch: None,
     })]);
     let output = generate_typst(&doc).unwrap();
     assert!(output.source.contains("#list("));
@@ -103,6 +104,7 @@ fn test_generate_numbered_list() {
         header: None,
         footer: None,
         columns: None,
+        line_grid_pitch: None,
     })]);
     let output = generate_typst(&doc).unwrap();
     assert!(output.source.contains("#enum("));
@@ -232,6 +234,7 @@ fn test_generate_nested_list() {
         header: None,
         footer: None,
         columns: None,
+        line_grid_pitch: None,
     })]);
     let output = generate_typst(&doc).unwrap();
     assert!(output.source.contains("Parent"));
@@ -284,6 +287,7 @@ fn test_nested_list_single_content_block() {
         header: None,
         footer: None,
         columns: None,
+        line_grid_pitch: None,
     })]);
     let output = generate_typst(&doc).unwrap();
     assert!(!output.source.contains("][#list"));

@@ -86,6 +86,7 @@ fn test_generate_flow_page_with_equal_columns() {
             spacing: 36.0,
             column_widths: None,
         }),
+        line_grid_pitch: None,
     })]);
     let result = generate_typst(&doc).unwrap().source;
     assert!(
@@ -111,6 +112,7 @@ fn test_generate_flow_page_with_three_columns() {
             spacing: 18.0,
             column_widths: None,
         }),
+        line_grid_pitch: None,
     })]);
     let result = generate_typst(&doc).unwrap().source;
     assert!(
@@ -132,6 +134,7 @@ fn test_generate_flow_page_with_unequal_columns() {
             spacing: 36.0,
             column_widths: Some(vec![300.0, 150.0]),
         }),
+        line_grid_pitch: None,
     })]);
     let result = generate_typst(&doc).unwrap().source;
     assert!(
@@ -157,6 +160,7 @@ fn test_generate_column_break() {
             spacing: 36.0,
             column_widths: None,
         }),
+        line_grid_pitch: None,
     })]);
     let result = generate_typst(&doc).unwrap().source;
     assert!(

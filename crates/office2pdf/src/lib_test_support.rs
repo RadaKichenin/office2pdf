@@ -18,6 +18,7 @@ pub(super) fn make_simple_document(text: &str) -> Document {
             header: None,
             footer: None,
             columns: None,
+            line_grid_pitch: None,
         })],
         styles: StyleSheet::default(),
     }

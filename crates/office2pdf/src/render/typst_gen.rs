@@ -69,6 +69,8 @@ struct GenCtx {
     next_image_id: usize,
     next_text_box_id: usize,
     table_depth: usize,
+    /// Active section's Word document-grid line pitch, in points.
+    line_grid_pitch: Option<f64>,
 }
 
 impl GenCtx {
@@ -78,6 +80,7 @@ impl GenCtx {
             next_image_id: 0,
             next_text_box_id: 0,
             table_depth: 0,
+            line_grid_pitch: None,
         }
     }
 
@@ -302,6 +305,7 @@ fn generate_flow_page(
     let size = resolve_page_size(&page.size, options);
     write_flow_page_setup(out, page, &size, ctx);
     out.push('\n');
+    ctx.line_grid_pitch = page.line_grid_pitch;
 
     if let Some(ref cols) = page.columns {
         generate_flow_page_columns(out, &page.content, cols, ctx)?;
@@ -1174,7 +1178,7 @@ fn generate_floating_anchor_group(
 
 fn generate_block(out: &mut String, block: &Block, ctx: &mut GenCtx) -> Result<(), ConvertError> {
     match block {
-        Block::Paragraph(para) => generate_paragraph(out, para),
+        Block::Paragraph(para) => generate_paragraph(out, para, ctx.line_grid_pitch),
         Block::PageBreak => {
             out.push_str("#pagebreak()\n");
             Ok(())
@@ -1227,7 +1231,30 @@ fn generate_block(out: &mut String, block: &Block, ctx: &mut GenCtx) -> Result<(
             generate_floating_shape(out, fs);
             Ok(())
         }
-        Block::List(list) => generate_list(out, list),
+        Block::List(list) => {
+            // Grid-snapped line height applies to list items too (Word's
+            // document grid covers all body text).
+            let settings: Option<String> = list
+                .items
+                .first()
+                .and_then(|item| item.content.first())
+                .and_then(|paragraph| {
+                    word_line_height_settings(
+                        &paragraph.runs,
+                        &paragraph.style,
+                        ctx.line_grid_pitch,
+                    )
+                });
+            if let Some(settings) = settings {
+                out.push_str("#block(width: 100%)[\n");
+                out.push_str(&settings);
+                generate_list(out, list)?;
+                out.push_str("]\n");
+                Ok(())
+            } else {
+                generate_list(out, list)
+            }
+        }
         Block::MathEquation(math) => {
             generate_math_equation(out, math);
             Ok(())

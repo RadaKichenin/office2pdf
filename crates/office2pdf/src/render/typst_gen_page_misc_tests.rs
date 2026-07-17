@@ -24,6 +24,7 @@ fn test_generate_flow_page_with_text_header() {
         }),
         footer: None,
         columns: None,
+        line_grid_pitch: None,
     })]);
     let output = generate_typst(&doc).unwrap();
     assert!(output.source.contains("header:"));
@@ -57,6 +58,7 @@ fn test_generate_flow_page_with_page_number_footer() {
             }],
         }),
         columns: None,
+        line_grid_pitch: None,
     })]);
     let output = generate_typst(&doc).unwrap();
     assert!(output.source.contains("footer:"));
@@ -115,6 +117,7 @@ fn test_generate_footer_with_compound_border_and_right_positioned_tab() {
             }],
         }),
         columns: None,
+        line_grid_pitch: None,
     })]);
 
     let output = generate_typst(&doc).unwrap();
@@ -156,6 +159,7 @@ fn test_generate_page_anchored_footer_frame_in_foreground() {
             }],
         }),
         columns: None,
+        line_grid_pitch: None,
     })]);
 
     let output = generate_typst(&doc).unwrap();
@@ -200,6 +204,7 @@ fn test_generate_flow_page_with_header_and_footer() {
             }],
         }),
         columns: None,
+        line_grid_pitch: None,
     })]);
     let output = generate_typst(&doc).unwrap();
     assert!(output.source.contains("header:") && output.source.contains("footer:"));
@@ -222,6 +227,7 @@ fn test_generate_typst_inserts_pagebreak_between_flow_pages() {
         header: None,
         footer: None,
         columns: None,
+        line_grid_pitch: None,
     });
     let second = Page::Flow(FlowPage {
         size: PageSize::default(),
@@ -230,6 +236,7 @@ fn test_generate_typst_inserts_pagebreak_between_flow_pages() {
         header: None,
         footer: None,
         columns: None,
+        line_grid_pitch: None,
     });
 
     let output = generate_typst(&make_doc(vec![first, second])).unwrap();

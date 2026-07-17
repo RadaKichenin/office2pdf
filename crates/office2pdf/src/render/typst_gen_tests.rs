@@ -23,6 +23,7 @@ fn make_flow_page(content: Vec<Block>) -> Page {
         header: None,
         footer: None,
         columns: None,
+        line_grid_pitch: None,
     })
 }
 
