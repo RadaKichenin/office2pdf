@@ -185,12 +185,12 @@ fn test_fixed_page_text_box_ordered_list_preserves_textbox_styling() {
     assert!(
         output
             .source
-            .contains("#text(size: 24pt)[1.]#text(size: 24pt)[ First item]")
+            .contains("#text(size: 24pt)[1\\.]#text(size: 24pt)[ First item]")
     );
     assert!(
         output
             .source
-            .contains("#text(size: 24pt)[2.]#text(size: 24pt)[ Second item]")
+            .contains("#text(size: 24pt)[2\\.]#text(size: 24pt)[ Second item]")
     );
     assert!(!output.source.contains("\\\n2. Second item"));
     assert!(output.source.contains("#v(12pt)"));
@@ -1573,7 +1573,7 @@ fn test_fixed_page_text_box_ordered_grid_normalizes_marker_spacing() {
         }],
     )]);
     let output = generate_typst(&doc).unwrap();
-    assert!(output.source.contains("#text(size: 20pt)[1. ]"));
-    assert!(output.source.contains("#text(size: 20pt)[2. ]"));
+    assert!(output.source.contains("#text(size: 20pt)[1\\. ]"));
+    assert!(output.source.contains("#text(size: 20pt)[2\\. ]"));
     assert!(!output.source.contains("#text(size: 20pt)[ Alpha]"));
 }

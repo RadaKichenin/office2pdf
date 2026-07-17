@@ -769,9 +769,26 @@ pub(super) fn format_f64(v: f64) -> String {
 
 pub(super) fn escape_typst(text: &str) -> String {
     let normalized_text: String = text.nfc().collect();
+
+    // A leading "<digits>. " would be re-typeset as a Typst numbered-list
+    // marker (e.g. "2026. 07. 17." became "2026. 7. 17."); escape its dot.
+    let enum_marker_dot: Option<usize> = {
+        let digit_count = normalized_text
+            .chars()
+            .take_while(|c| c.is_ascii_digit())
+            .count();
+        let rest = &normalized_text[digit_count..];
+        if digit_count > 0 && (rest.starts_with(". ") || rest == ".") {
+            Some(digit_count)
+        } else {
+            None
+        }
+    };
+
     let mut result = String::with_capacity(normalized_text.len());
     let mut chars = normalized_text.chars().peekable();
     let mut is_first_char = true;
+    let mut char_index: usize = 0;
 
     while let Some(ch) = chars.next() {
         let should_escape_list_prefix: bool = is_first_char
@@ -796,10 +813,15 @@ pub(super) fn escape_typst(text: &str) -> String {
                 result.push('\\');
                 result.push(ch);
             }
+            '.' if enum_marker_dot == Some(char_index) => {
+                result.push('\\');
+                result.push('.');
+            }
             _ => result.push(ch),
         }
 
         is_first_char = false;
+        char_index += 1;
     }
     result
 }
