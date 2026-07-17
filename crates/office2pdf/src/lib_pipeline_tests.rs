@@ -95,6 +95,7 @@ fn test_should_resolve_font_context_true_when_document_requests_font_family() {
             header: None,
             footer: None,
             columns: None,
+            line_grid_pitch: None,
         })],
         styles: StyleSheet::default(),
     };

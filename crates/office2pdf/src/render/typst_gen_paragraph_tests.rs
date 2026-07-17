@@ -38,6 +38,7 @@ fn test_generate_page_setup() {
         header: None,
         footer: None,
         columns: None,
+        line_grid_pitch: None,
     })]);
     let result = generate_typst(&doc).unwrap().source;
     assert!(result.contains("612pt"));
@@ -607,4 +608,64 @@ fn test_centered_paragraph_with_spacing_keeps_full_width_block() {
         block_params.contains("width: 100%"),
         "Block wrapper must span the full width for alignment to apply: {block_params}"
     );
+}
+
+#[test]
+fn test_document_grid_pitch_snaps_line_height() {
+    // A Korean Word section with <w:docGrid w:linePitch="360"> snaps body
+    // lines to an 18pt grid; the emitted leading must top up the font's
+    // metric line box to the pitch. Uses a font from Typst's embedded set
+    // so the test is environment-independent.
+    let Some((ascender, descender, _)) =
+        crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+    let mut page = match make_flow_page(vec![Block::Paragraph(Paragraph {
+        style: ParagraphStyle::default(),
+        runs: vec![Run {
+            text: "grid snapped".to_string(),
+            style: TextStyle {
+                font_family: Some("Libertinus Serif".to_string()),
+                font_size: Some(10.0),
+                ..TextStyle::default()
+            },
+            href: None,
+            footnote: None,
+        }],
+    })]) {
+        Page::Flow(flow) => flow,
+        _ => unreachable!(),
+    };
+    page.line_grid_pitch = Some(18.0);
+    let doc = make_doc(vec![Page::Flow(page)]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    let expected_leading = 18.0 - (ascender + descender) * 10.0;
+    assert!(
+        result.contains("top-edge: \"ascender\""),
+        "metric edges expected in: {result}"
+    );
+    assert!(
+        result.contains(&format!("leading: {}pt", format_f64(expected_leading))),
+        "grid leading {expected_leading} expected in: {result}"
+    );
+}
+
+#[test]
+fn test_no_document_grid_keeps_default_line_height() {
+    let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
+        style: ParagraphStyle::default(),
+        runs: vec![Run {
+            text: "plain".to_string(),
+            style: TextStyle {
+                font_family: Some("Libertinus Serif".to_string()),
+                ..TextStyle::default()
+            },
+            href: None,
+            footnote: None,
+        }],
+    })])]);
+    let result = generate_typst(&doc).unwrap().source;
+    assert!(!result.contains("top-edge"), "no grid: {result}");
 }

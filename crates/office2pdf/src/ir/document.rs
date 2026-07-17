@@ -90,6 +90,9 @@ pub struct FlowPage {
     pub footer: Option<super::elements::HeaderFooter>,
     /// Optional multi-column layout for the page.
     pub columns: Option<ColumnLayout>,
+    /// Word document-grid line pitch in points (`w:docGrid w:linePitch`).
+    /// When set, body lines snap to multiples of this pitch.
+    pub line_grid_pitch: Option<f64>,
 }
 
 /// A fixed-layout page (PPTX slides).

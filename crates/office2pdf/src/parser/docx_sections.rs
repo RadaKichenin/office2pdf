@@ -438,7 +438,19 @@ pub(super) fn build_flow_page_from_section(
         footer,
         columns: column_layout
             .or_else(|| extract_column_layout_from_section_property(section_prop)),
+        line_grid_pitch: extract_line_grid_pitch(section_prop),
     }
+}
+
+/// Word snaps body lines to the section's document grid; the pitch is the
+/// effective single-spacing line height for grid-aligned paragraphs
+/// (`<w:docGrid w:linePitch>`, in twips). docx-rs keeps the fields private,
+/// so read them through the type's serde representation.
+fn extract_line_grid_pitch(section_prop: &docx_rs::SectionProperty) -> Option<f64> {
+    let grid = section_prop.doc_grid.as_ref()?;
+    let value = serde_json::to_value(grid).ok()?;
+    let pitch_twips = value.get("linePitch")?.as_f64()?;
+    (pitch_twips > 0.0).then(|| twips_to_pt(pitch_twips as i32))
 }
 
 fn convert_docx_header(

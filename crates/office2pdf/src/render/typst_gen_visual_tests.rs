@@ -26,6 +26,7 @@ fn test_floating_image_square_wrap_codegen() {
             header: None,
             footer: None,
             columns: None,
+            line_grid_pitch: None,
         })],
         styles: StyleSheet::default(),
     };
@@ -72,6 +73,7 @@ fn test_floating_image_top_and_bottom_codegen() {
             header: None,
             footer: None,
             columns: None,
+            line_grid_pitch: None,
         })],
         styles: StyleSheet::default(),
     };
@@ -113,6 +115,7 @@ fn test_floating_image_behind_codegen() {
             header: None,
             footer: None,
             columns: None,
+            line_grid_pitch: None,
         })],
         styles: StyleSheet::default(),
     };

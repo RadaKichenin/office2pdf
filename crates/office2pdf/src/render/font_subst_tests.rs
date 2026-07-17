@@ -261,6 +261,7 @@ fn test_detect_missing_font_fallbacks_with_context_prefers_office_font() {
             header: None,
             footer: None,
             columns: None,
+            line_grid_pitch: None,
         })],
         styles: crate::ir::StyleSheet::default(),
     };
@@ -291,6 +292,7 @@ fn test_document_requests_font_families_false_when_all_runs_use_defaults() {
             header: None,
             footer: None,
             columns: None,
+            line_grid_pitch: None,
         })],
         styles: crate::ir::StyleSheet::default(),
     };
@@ -320,6 +322,7 @@ fn test_document_requests_font_families_true_when_any_run_sets_family() {
             header: None,
             footer: None,
             columns: None,
+            line_grid_pitch: None,
         })],
         styles: crate::ir::StyleSheet::default(),
     };

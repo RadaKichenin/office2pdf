@@ -10,7 +10,11 @@ use super::*;
 const DEFAULT_TAB_WIDTH_PT: f64 = 36.0;
 const PPTX_SOFT_LINE_BREAK_CHAR: char = '\u{000B}';
 
-pub(super) fn generate_paragraph(out: &mut String, para: &Paragraph) -> Result<(), ConvertError> {
+pub(super) fn generate_paragraph(
+    out: &mut String,
+    para: &Paragraph,
+    line_grid_pitch: Option<f64>,
+) -> Result<(), ConvertError> {
     let style = &para.style;
 
     if let Some(level) = style.heading_level {
@@ -20,7 +24,9 @@ pub(super) fn generate_paragraph(out: &mut String, para: &Paragraph) -> Result<(
         return Ok(());
     }
 
-    let has_para_style = needs_block_wrapper(style);
+    let line_height_settings: Option<String> =
+        word_line_height_settings(&para.runs, style, line_grid_pitch);
+    let has_para_style = needs_block_wrapper(style) || line_height_settings.is_some();
 
     if has_para_style {
         // The wrapper must span the full line width: Typst blocks shrink to
@@ -29,6 +35,9 @@ pub(super) fn generate_paragraph(out: &mut String, para: &Paragraph) -> Result<(
         write_block_params_continuation(out, style);
         out.push_str(")[\n");
         write_par_settings(out, style);
+        if let Some(ref settings) = line_height_settings {
+            out.push_str(settings);
+        }
     }
 
     if para.runs.is_empty() {
@@ -76,6 +85,42 @@ pub(super) fn needs_block_wrapper(style: &ParagraphStyle) -> bool {
         || style.line_spacing.is_some()
         || matches!(style.alignment, Some(Alignment::Justify))
         || matches!(style.direction, Some(TextDirection::Rtl))
+}
+
+/// Word snaps body lines to the section's document grid (`w:docGrid`
+/// `w:linePitch`); Typst's glyph-tight default renders such documents
+/// 20-30% shorter and shifts every page break. When the section carries a
+/// grid pitch, the paragraph has no explicit line spacing, and the font's
+/// metrics are known, emit metric line edges plus leading that tops the
+/// line box up to the next grid multiple.
+pub(super) fn word_line_height_settings(
+    runs: &[Run],
+    style: &ParagraphStyle,
+    line_grid_pitch: Option<f64>,
+) -> Option<String> {
+    if style.line_spacing.is_some() {
+        return None;
+    }
+    let pitch: f64 = line_grid_pitch?;
+    let family: &str = runs
+        .iter()
+        .find_map(|run| run.style.font_family.as_deref())?;
+    let (ascender_em, descender_em, _) = crate::render::pdf::font_line_metrics_em(family)?;
+    let font_size: f64 = runs
+        .iter()
+        .filter_map(|run| run.style.font_size)
+        .fold(f64::NAN, f64::max);
+    let font_size: f64 = if font_size.is_nan() { 11.0 } else { font_size };
+    let line_box_pt: f64 = (ascender_em + descender_em) * font_size;
+    if line_box_pt <= 0.0 || pitch <= 0.0 {
+        return None;
+    }
+    let grid_lines: f64 = (line_box_pt / pitch).ceil().max(1.0);
+    let leading_pt: f64 = grid_lines * pitch - line_box_pt;
+    Some(format!(
+        "#set text(top-edge: \"ascender\", bottom-edge: \"descender\")\n#set par(leading: {}pt)\n",
+        format_f64(leading_pt)
+    ))
 }
 
 pub(super) fn write_block_params(out: &mut String, style: &ParagraphStyle) {
