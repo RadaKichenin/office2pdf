@@ -542,3 +542,26 @@ fn test_unstyled_run_with_parens_after_styled_run() {
         "Unstyled text should be wrapped in #[...] to prevent syntax issues. Got: {result}"
     );
 }
+
+#[test]
+fn test_escape_typst_escapes_leading_numeric_enum_marker() {
+    // "2026. 07. 17." at line start would otherwise be re-typeset as a
+    // Typst numbered list, dropping the zero padding ("2026. 7. 17.").
+    let result = escape_typst("2026. 07. 17.");
+    assert!(
+        result.starts_with("2026\\."),
+        "leading digits-period must be escaped: {result}"
+    );
+}
+
+#[test]
+fn test_escape_typst_keeps_mid_text_numbers_untouched() {
+    let result = escape_typst("가격은 2026. 07 기준");
+    assert!(result.contains("07"), "digits must survive: {result}");
+}
+
+#[test]
+fn test_escape_typst_numeric_without_following_space_untouched() {
+    // "3.14" is not an enum marker.
+    assert_eq!(escape_typst("3.14"), "3.14");
+}
