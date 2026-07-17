@@ -431,7 +431,10 @@ fn test_hidden_slide_is_skipped() {
 fn test_hidden_slide_with_false_literal_is_skipped() {
     let slides = vec![
         make_slide_xml(&[make_text_box(0, 0, 5_000_000, 500_000, "First")]),
-        make_slide_xml_with_show("false", &[make_text_box(0, 0, 5_000_000, 500_000, "Hidden")]),
+        make_slide_xml_with_show(
+            "false",
+            &[make_text_box(0, 0, 5_000_000, 500_000, "Hidden")],
+        ),
     ];
     let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &slides);
 
