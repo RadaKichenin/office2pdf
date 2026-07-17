@@ -2,6 +2,7 @@ use super::package::{
     load_chart_data, load_slide_images, load_smartart_data, resolve_layout_master_paths,
     scan_chart_refs,
 };
+use super::placeholders::PlaceholderGeometryMap;
 use super::*;
 
 // ── Slide inheritance chain ─────────────────────────────────────────────
@@ -85,6 +86,7 @@ fn parse_layer_elements<R: Read + std::io::Seek>(
         text_style_defaults,
         &empty_table_styles,
         true, // skip placeholder shapes in master/layout layers
+        None,
     )
     .unwrap_or_default()
 }
@@ -203,6 +205,11 @@ pub(super) fn parse_single_slide<R: Read + std::io::Seek>(
     let slide_images: SlideImageMap = load_slide_images(slide_path, archive);
     let mut warnings: Vec<ConvertWarning> = Vec::new();
 
+    let placeholder_geometry: PlaceholderGeometryMap = PlaceholderGeometryMap::build(
+        chain.layout_xml.as_deref(),
+        chain.master_xml.as_deref(),
+    );
+
     let (slide_elements, slide_warnings) = parse_slide_xml(
         &chain.slide_xml,
         &slide_images,
@@ -211,6 +218,7 @@ pub(super) fn parse_single_slide<R: Read + std::io::Seek>(
         slide_label,
         &chain.master_text_style_defaults,
         table_styles,
+        Some(&placeholder_geometry),
     )?;
     warnings.extend(slide_warnings);
 
@@ -359,6 +367,12 @@ struct PictureState {
     y: i64,
     cx: i64,
     cy: i64,
+    has_placeholder: bool,
+    ph_type: Option<String>,
+    ph_idx: Option<String>,
+    /// True when the slide itself provides `<a:xfrm>`; placeholders without
+    /// one inherit geometry from the layout/master chain.
+    has_explicit_xfrm: bool,
     blip_embed: Option<String>,
     svg_blip_embed: Option<String>,
     img_layer_embeds: Vec<String>,
@@ -401,6 +415,11 @@ struct ShapeState {
     cx: i64,
     cy: i64,
     has_placeholder: bool,
+    ph_type: Option<String>,
+    ph_idx: Option<String>,
+    /// True when the slide itself provides `<a:xfrm>`; placeholders without
+    /// one inherit geometry from the layout/master chain.
+    has_explicit_xfrm: bool,
     rotation_deg: Option<f64>,
     flip_h: bool,
     flip_v: bool,
@@ -440,6 +459,9 @@ impl Default for ShapeState {
             cx: 0,
             cy: 0,
             has_placeholder: false,
+            ph_type: None,
+            ph_idx: None,
+            has_explicit_xfrm: false,
             rotation_deg: None,
             flip_h: false,
             flip_v: false,
@@ -712,6 +734,9 @@ struct SlideXmlParser<'a> {
     /// Used when parsing master/layout layers whose placeholder content
     /// should not render unless the slide overrides it.
     skip_placeholders: bool,
+    /// Layout/master placeholder geometry for slide placeholders that
+    /// omit `<a:xfrm>`. None outside slide-layer parsing.
+    placeholder_geometry: Option<&'a PlaceholderGeometryMap>,
 
     // ── Output accumulators ─────────────────────────────────────────
     elements: Vec<FixedElement>,
@@ -787,6 +812,7 @@ impl<'a> SlideXmlParser<'a> {
             table_styles,
 
             skip_placeholders: false,
+            placeholder_geometry: None,
 
             elements: Vec::new(),
             warnings: Vec::new(),
@@ -898,6 +924,7 @@ impl<'a> SlideXmlParser<'a> {
             }
             b"xfrm" if self.in_shape && self.shape.in_sp_pr => {
                 self.shape.in_xfrm = true;
+                self.shape.has_explicit_xfrm = true;
                 if let Some(rot) = get_attr_i64(e, b"rot") {
                     self.shape.rotation_deg = Some(rot as f64 / 60_000.0);
                 }
@@ -961,6 +988,13 @@ impl<'a> SlideXmlParser<'a> {
             }
             b"ph" if self.in_shape => {
                 self.shape.has_placeholder = true;
+                self.shape.ph_type = get_attr_str(e, b"type");
+                self.shape.ph_idx = get_attr_str(e, b"idx");
+            }
+            b"ph" if self.in_pic => {
+                self.pic.has_placeholder = true;
+                self.pic.ph_type = get_attr_str(e, b"type");
+                self.pic.ph_idx = get_attr_str(e, b"idx");
             }
             b"txBody" if self.in_shape => {
                 self.in_txbody = true;
@@ -1133,6 +1167,7 @@ impl<'a> SlideXmlParser<'a> {
             }
             b"xfrm" if self.in_pic && self.pic.in_sp_pr => {
                 self.pic.in_xfrm = true;
+                self.pic.has_explicit_xfrm = true;
             }
             b"ln" if self.in_pic && self.pic.in_sp_pr => {
                 self.pic.in_ln = true;
@@ -1218,6 +1253,13 @@ impl<'a> SlideXmlParser<'a> {
             // Handle self-closing <p:ph type="..."/> (placeholder marker).
             b"ph" if self.in_shape => {
                 self.shape.has_placeholder = true;
+                self.shape.ph_type = get_attr_str(e, b"type");
+                self.shape.ph_idx = get_attr_str(e, b"idx");
+            }
+            b"ph" if self.in_pic => {
+                self.pic.has_placeholder = true;
+                self.pic.ph_type = get_attr_str(e, b"type");
+                self.pic.ph_idx = get_attr_str(e, b"idx");
             }
             // Handle self-closing <a:bodyPr anchor="ctr"/> (no child elements).
             b"bodyPr" if self.in_shape && self.in_txbody => {
@@ -1397,6 +1439,16 @@ impl<'a> SlideXmlParser<'a> {
                     // Placeholder content is only visible when the slide itself
                     // overrides it; master/layout placeholder text (e.g.
                     // "마스터 제목 스타일 편집") should never be rendered.
+                    if self.shape.has_placeholder && !self.shape.has_explicit_xfrm
+                        && let Some(geometry) = self.placeholder_geometry.and_then(|map| {
+                            map.lookup(self.shape.ph_type.as_deref(), self.shape.ph_idx.as_deref())
+                        })
+                    {
+                        self.shape.x = geometry.x;
+                        self.shape.y = geometry.y;
+                        self.shape.cx = geometry.cx;
+                        self.shape.cy = geometry.cy;
+                    }
                     if !(self.skip_placeholders && self.shape.has_placeholder) {
                         self.elements.extend(finalize_shape(
                             &mut self.shape,
@@ -1482,6 +1534,16 @@ impl<'a> SlideXmlParser<'a> {
                 self.in_text = false;
             }
             b"pic" if self.in_pic => {
+                if self.pic.has_placeholder && !self.pic.has_explicit_xfrm
+                    && let Some(geometry) = self.placeholder_geometry.and_then(|map| {
+                        map.lookup(self.pic.ph_type.as_deref(), self.pic.ph_idx.as_deref())
+                    })
+                {
+                    self.pic.x = geometry.x;
+                    self.pic.y = geometry.y;
+                    self.pic.cx = geometry.cx;
+                    self.pic.cy = geometry.cy;
+                }
                 let (element, picture_warnings) =
                     finalize_picture(&self.pic, self.images, self.warning_context);
                 self.warnings.extend(picture_warnings);
@@ -1518,6 +1580,7 @@ impl<'a> SlideXmlParser<'a> {
 // ── Main parse function ─────────────────────────────────────────────────
 
 /// Parse a slide XML to extract positioned elements (text boxes, shapes, images).
+#[allow(clippy::too_many_arguments)]
 pub(super) fn parse_slide_xml(
     xml: &str,
     images: &SlideImageMap,
@@ -1526,6 +1589,7 @@ pub(super) fn parse_slide_xml(
     warning_context: &str,
     inherited_text_body_defaults: &PptxTextBodyStyleDefaults,
     table_styles: &table_styles::TableStyleMap,
+    placeholder_geometry: Option<&PlaceholderGeometryMap>,
 ) -> Result<(Vec<FixedElement>, Vec<ConvertWarning>), ConvertError> {
     parse_slide_xml_inner(
         xml,
@@ -1536,6 +1600,7 @@ pub(super) fn parse_slide_xml(
         inherited_text_body_defaults,
         table_styles,
         false,
+        placeholder_geometry,
     )
 }
 
@@ -1549,6 +1614,7 @@ fn parse_slide_xml_inner(
     inherited_text_body_defaults: &PptxTextBodyStyleDefaults,
     table_styles: &table_styles::TableStyleMap,
     skip_placeholders: bool,
+    placeholder_geometry: Option<&PlaceholderGeometryMap>,
 ) -> Result<(Vec<FixedElement>, Vec<ConvertWarning>), ConvertError> {
     let mut reader = Reader::from_str(xml);
     let mut parser = SlideXmlParser::new(
@@ -1561,6 +1627,7 @@ fn parse_slide_xml_inner(
         table_styles,
     );
     parser.skip_placeholders = skip_placeholders;
+    parser.placeholder_geometry = placeholder_geometry;
 
     loop {
         match reader.read_event() {
