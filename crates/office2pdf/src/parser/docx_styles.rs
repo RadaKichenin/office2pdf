@@ -94,6 +94,27 @@ pub(super) fn build_style_map(styles: &docx_rs::Styles) -> StyleMap {
         }
     }
 
+    // Paragraphs without an explicit pStyle inherit the default paragraph
+    // style (w:default="1", normally "Normal"), not just the bare document
+    // defaults — fold it into the synthetic doc-default entry so its spacing,
+    // line spacing, and text properties survive the cascade (issue #288).
+    let default_paragraph_style_id: Option<String> = styles
+        .styles
+        .iter()
+        .find(|style| style.default && style.style_type == docx_rs::StyleType::Paragraph)
+        .map(|style| style.style_id.clone());
+    if let Some(style_id) = default_paragraph_style_id
+        && let Some(default_style) = map.get(&style_id)
+    {
+        let merged = ResolvedStyle {
+            text: default_style.text.clone(),
+            paragraph: default_style.paragraph.clone(),
+            paragraph_tab_overrides: default_style.paragraph_tab_overrides.clone(),
+            heading_level: None,
+        };
+        map.insert(DOC_DEFAULT_STYLE_ID.to_string(), merged);
+    }
+
     map
 }
 
