@@ -510,3 +510,29 @@ fn encrypted_xlsx_returns_unsupported_encryption() {
         "Expected UnsupportedEncryption for protected_passtika.xlsx, got: {err:?}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Worksheet drawings (issue #238)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn with_drawing_renders_anchored_images() {
+    let pages = sheet_pages("poi/WithDrawing.xlsx");
+    let total_images: usize = pages.iter().map(|sp| sp.images.len()).sum();
+    assert!(
+        total_images >= 3,
+        "the drawing anchors five pictures (jpeg/png plus metafiles); at least \
+         the raster ones must be extracted, got {total_images}"
+    );
+    let first = pages
+        .iter()
+        .flat_map(|sp| sp.images.iter())
+        .next()
+        .expect("at least one image");
+    assert!(!first.image.data.is_empty(), "image bytes must be loaded");
+    assert!(
+        first.image.width.unwrap_or(0.0) > 10.0,
+        "anchor geometry must produce a real width, got {:?}",
+        first.image.width
+    );
+}

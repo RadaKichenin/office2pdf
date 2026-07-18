@@ -66,6 +66,7 @@ fn make_page(column_widths: Vec<f64>, rows: Vec<TableRow>) -> SheetPage {
         header: None,
         footer: None,
         charts: vec![],
+        images: Vec::new(),
     }
 }
 
