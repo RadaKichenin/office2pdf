@@ -386,10 +386,14 @@ pub(super) fn load_table_styles<R: Read + std::io::Seek>(
     theme: &ThemeData,
     color_map: &ColorMapData,
 ) -> table_styles::TableStyleMap {
-    let Ok(xml) = read_zip_entry(archive, "ppt/tableStyles.xml") else {
-        return table_styles::TableStyleMap::new();
+    let mut styles = match read_zip_entry(archive, "ppt/tableStyles.xml") {
+        Ok(xml) => table_styles::parse_table_styles_xml(&xml, theme, color_map),
+        Err(_) => table_styles::TableStyleMap::new(),
     };
-    table_styles::parse_table_styles_xml(&xml, theme, color_map)
+    // Built-in styles are referenced by GUID without a definition in the
+    // file; add generated definitions for the ones we support.
+    table_styles::add_builtin_table_styles(&mut styles, theme, color_map);
+    styles
 }
 
 pub(super) fn resolve_relative_path(base_dir: &str, relative: &str) -> String {

@@ -169,7 +169,7 @@ pub(super) fn resolve_effective_color_map(
     parse_color_map_override(xml).unwrap_or_else(|| master_color_map.clone())
 }
 
-fn resolve_scheme_color(
+pub(super) fn resolve_scheme_color(
     theme: &ThemeData,
     color_map: &ColorMapData,
     scheme_name: &str,
