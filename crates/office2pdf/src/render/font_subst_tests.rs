@@ -406,3 +406,44 @@ fn test_is_primary_font_available_returns_false_when_missing() {
     });
     assert!(!result);
 }
+
+// --- Noto CJK family substitutes (issue #290) ---
+
+#[test]
+fn test_noto_sans_cjk_kr_substitutes() {
+    let subs = substitutes("Noto Sans CJK KR").expect("Noto Sans CJK KR should have substitutes");
+    assert!(subs.contains(&"Apple SD Gothic Neo"));
+    assert!(subs.contains(&"Malgun Gothic"));
+}
+
+#[test]
+fn test_noto_sans_cjk_sc_substitutes() {
+    let subs = substitutes("Noto Sans CJK SC").expect("Noto Sans CJK SC should have substitutes");
+    assert!(subs.contains(&"PingFang SC"));
+}
+
+#[test]
+fn test_noto_sans_cjk_jp_substitutes() {
+    let subs = substitutes("Noto Sans CJK JP").expect("Noto Sans CJK JP should have substitutes");
+    assert!(subs.contains(&"Hiragino Sans"));
+}
+
+#[test]
+fn test_noto_sans_cjk_tc_substitutes() {
+    let subs = substitutes("Noto Sans CJK TC").expect("Noto Sans CJK TC should have substitutes");
+    assert!(subs.contains(&"PingFang TC"));
+}
+
+#[test]
+fn test_noto_serif_cjk_kr_substitutes() {
+    let subs = substitutes("Noto Serif CJK KR").expect("Noto Serif CJK KR should have substitutes");
+    assert!(subs.contains(&"Apple Myungjo") || subs.contains(&"Batang"));
+}
+
+#[test]
+fn test_noto_sans_kr_short_name_substitutes() {
+    // Google Fonts ships the short-name variants ("Noto Sans KR"); they must
+    // resolve the same way as the CJK superfamily names.
+    let subs = substitutes("Noto Sans KR").expect("Noto Sans KR should have substitutes");
+    assert!(subs.contains(&"Apple SD Gothic Neo"));
+}
