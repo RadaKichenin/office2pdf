@@ -612,6 +612,7 @@ fn finalize_shape(
     text_box_vertical_align: TextBoxVerticalAlign,
     text_box_no_wrap: bool,
     text_box_auto_fit: bool,
+    text_box_text_rotation_deg: Option<f64>,
 ) -> Vec<FixedElement> {
     // Resolve effective fill: explicit > noFill > style fallback.
     let effective_fill: Option<Color> = if shape.fill.is_some() {
@@ -690,6 +691,7 @@ fn finalize_shape(
                     shape_kind: None,
                     no_wrap: text_box_no_wrap,
                     auto_fit: text_box_auto_fit,
+                    text_rotation_deg: text_box_text_rotation_deg,
                 }),
             });
         } else {
@@ -709,6 +711,7 @@ fn finalize_shape(
                     shape_kind: None,
                     no_wrap: text_box_no_wrap,
                     auto_fit: text_box_auto_fit,
+                    text_rotation_deg: text_box_text_rotation_deg,
                 }),
             });
         }
@@ -861,6 +864,7 @@ struct SlideXmlParser<'a> {
     text_box_vertical_align: TextBoxVerticalAlign,
     text_box_no_wrap: bool,
     text_box_auto_fit: bool,
+    text_box_text_rotation_deg: Option<f64>,
     text_body_style_defaults: PptxTextBodyStyleDefaults,
 
     // ── Paragraph state (`<a:p>`) ───────────────────────────────────
@@ -937,6 +941,7 @@ impl<'a> SlideXmlParser<'a> {
             text_box_vertical_align: TextBoxVerticalAlign::Top,
             text_box_no_wrap: false,
             text_box_auto_fit: false,
+            text_box_text_rotation_deg: None,
             text_body_style_defaults: PptxTextBodyStyleDefaults::default(),
 
             in_para: false,
@@ -1027,6 +1032,7 @@ impl<'a> SlideXmlParser<'a> {
                 self.text_box_vertical_align = TextBoxVerticalAlign::Top;
                 self.text_box_no_wrap = false;
                 self.text_box_auto_fit = false;
+                self.text_box_text_rotation_deg = None;
             }
             b"sp" | b"cxnSp" if self.in_shape => {
                 self.shape.depth += 1;
@@ -1136,6 +1142,7 @@ impl<'a> SlideXmlParser<'a> {
                     &mut self.text_box_padding,
                     &mut self.text_box_vertical_align,
                     &mut self.text_box_no_wrap,
+                    &mut self.text_box_text_rotation_deg,
                 );
             }
             b"spAutoFit" | b"normAutofit" if self.in_shape && self.in_txbody => {
@@ -1391,6 +1398,7 @@ impl<'a> SlideXmlParser<'a> {
                     &mut self.text_box_padding,
                     &mut self.text_box_vertical_align,
                     &mut self.text_box_no_wrap,
+                    &mut self.text_box_text_rotation_deg,
                 );
             }
             b"spAutoFit" | b"normAutofit" if self.in_shape && self.in_txbody => {
@@ -1592,6 +1600,7 @@ impl<'a> SlideXmlParser<'a> {
                             self.text_box_vertical_align,
                             self.text_box_no_wrap,
                             self.text_box_auto_fit,
+                            self.text_box_text_rotation_deg,
                         ));
                     }
                     self.in_shape = false;
