@@ -217,6 +217,66 @@ pub fn substitutes(font_family: &str) -> Option<&'static [&'static str]> {
             "Arial Unicode MS",
         ]),
         "simsun" => Some(&["SimSun", "Noto Serif CJK SC", "STSong", "Arial Unicode MS"]),
+        // Noto CJK families are common in documents authored on Linux or with
+        // Google Fonts, but are rarely installed on macOS/Windows. Without a
+        // chain the renderer emits a one-element font stack and Typst's own
+        // fallback picks a regular-only face, silently dropping bold/italic.
+        // Short names ("Noto Sans KR") are the Google Fonts per-language
+        // builds of the same designs.
+        "noto sans cjk kr" | "noto sans kr" => Some(&[
+            "Noto Sans CJK KR",
+            "Noto Sans KR",
+            "Apple SD Gothic Neo",
+            "Malgun Gothic",
+            "Arial Unicode MS",
+        ]),
+        "noto sans cjk sc" | "noto sans sc" => Some(&[
+            "Noto Sans CJK SC",
+            "Noto Sans SC",
+            "PingFang SC",
+            "Microsoft YaHei",
+            "Apple SD Gothic Neo",
+            "Arial Unicode MS",
+        ]),
+        "noto sans cjk tc" | "noto sans tc" => Some(&[
+            "Noto Sans CJK TC",
+            "Noto Sans TC",
+            "PingFang TC",
+            "Microsoft JhengHei",
+            "Arial Unicode MS",
+        ]),
+        "noto sans cjk jp" | "noto sans jp" => Some(&[
+            "Noto Sans CJK JP",
+            "Noto Sans JP",
+            "Hiragino Sans",
+            "Yu Gothic",
+            "Meiryo",
+            "Arial Unicode MS",
+        ]),
+        "noto serif cjk kr" | "noto serif kr" => Some(&[
+            "Noto Serif CJK KR",
+            "Noto Serif KR",
+            "Apple Myungjo",
+            "Batang",
+            "Arial Unicode MS",
+        ]),
+        "noto serif cjk sc" | "noto serif sc" => Some(&[
+            "Noto Serif CJK SC",
+            "Noto Serif SC",
+            "STSong",
+            "SimSun",
+            "Arial Unicode MS",
+        ]),
+        "noto serif cjk tc" | "noto serif tc" => {
+            Some(&["Noto Serif CJK TC", "Noto Serif TC", "Arial Unicode MS"])
+        }
+        "noto serif cjk jp" | "noto serif jp" => Some(&[
+            "Noto Serif CJK JP",
+            "Noto Serif JP",
+            "Hiragino Mincho ProN",
+            "Yu Mincho",
+            "Arial Unicode MS",
+        ]),
         _ => None,
     }
 }
