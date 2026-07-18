@@ -175,6 +175,7 @@ pub(super) fn convert_table(
         alignment,
         default_cell_padding,
         use_content_driven_row_heights: false,
+        default_vertical_align: None,
     }
 }
 

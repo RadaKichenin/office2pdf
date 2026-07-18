@@ -919,3 +919,22 @@ fn test_merged_cell_clips_at_merge_edge_instead_of_wrapping() {
         "clip width should equal the merged width {merged_width}pt, got {spill_width}pt"
     );
 }
+
+// ----- Default bottom vertical alignment (issue #298) -----
+
+#[test]
+fn test_sheet_table_defaults_to_bottom_vertical_alignment() {
+    // Excel's default cell vertical alignment is bottom; sheets must carry
+    // that down to the renderer so text sits at the row bottom like Excel
+    // prints it.
+    let data = build_xlsx_formatted(|sheet| {
+        sheet.get_cell_mut("A1").set_value("바닥 정렬");
+    });
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let tp = get_sheet_page(&doc, 0);
+    assert_eq!(
+        tp.table.default_vertical_align,
+        Some(crate::ir::CellVerticalAlign::Bottom)
+    );
+}

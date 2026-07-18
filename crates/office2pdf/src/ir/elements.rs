@@ -304,6 +304,10 @@ pub struct Table {
     /// When true, row heights should be derived from content instead of forced to
     /// the exact source row sizes. PowerPoint often renders slide tables this way.
     pub use_content_driven_row_heights: bool,
+    /// Default vertical alignment for cells that don't override it.
+    /// Excel prints cells bottom-aligned by default; Word/PowerPoint keep
+    /// the renderer default (top).
+    pub default_vertical_align: Option<CellVerticalAlign>,
 }
 
 /// A table row.

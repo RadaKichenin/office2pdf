@@ -402,6 +402,7 @@ impl<'a> PptxTableParser<'a> {
             alignment: None,
             default_cell_padding: Some(default_pptx_table_cell_padding()),
             use_content_driven_row_heights: true,
+            default_vertical_align: None,
         };
         table_styles::apply_table_style(&mut table, &self.table_props, self.table_styles);
         table

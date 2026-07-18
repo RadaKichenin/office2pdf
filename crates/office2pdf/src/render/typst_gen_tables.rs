@@ -37,6 +37,15 @@ fn generate_table_inner(
     // default 1pt grid painted spurious borders on every unbordered table.
     out.push_str("  stroke: none,\n");
 
+    if let Some(ref default_vertical_align) = table.default_vertical_align {
+        let align_str: &str = match default_vertical_align {
+            CellVerticalAlign::Top => "top",
+            CellVerticalAlign::Center => "horizon",
+            CellVerticalAlign::Bottom => "bottom",
+        };
+        let _ = writeln!(out, "  align: {align_str},");
+    }
+
     if let Some(padding) = table.default_cell_padding {
         let _ = writeln!(out, "  inset: {},", format_insets(&padding));
     }
