@@ -155,6 +155,7 @@ fn test_apply_table_style_first_row_gets_header_fill_and_text_color() {
                 fill: Some(Color::new(0x44, 0x72, 0xC4)),
                 text_color: Some(Color::new(255, 255, 255)),
                 text_bold: Some(true),
+                borders: Default::default(),
             }),
             ..Default::default()
         },
@@ -252,6 +253,7 @@ fn test_apply_table_style_banded_rows_skip_first_row() {
                 fill: Some(Color::new(0xDD, 0xEE, 0xFF)),
                 text_color: None,
                 text_bold: None,
+                borders: Default::default(),
             }),
             ..Default::default()
         },
@@ -333,6 +335,7 @@ fn test_apply_table_style_explicit_cell_fill_not_overridden() {
                 fill: Some(Color::new(0xAA, 0xBB, 0xCC)),
                 text_color: None,
                 text_bold: None,
+                borders: Default::default(),
             }),
             ..Default::default()
         },
@@ -618,4 +621,159 @@ fn test_pptx_table_without_table_styles_xml_still_works() {
     let table = table_element(&page.elements[0]);
     assert_eq!(table.rows.len(), 2);
     assert_eq!(table.rows[0].cells[0].background, None);
+}
+
+// ── Built-in table styles (issue #224) ─────────────────────────────────
+
+#[test]
+fn test_builtin_medium_style_2_no_accent() {
+    let mut styles = TableStyleMap::new();
+    table_styles::add_builtin_table_styles(&mut styles, &test_theme(), &test_color_map());
+
+    let def = styles
+        .get("{073A0DAA-6AF3-43AB-8588-CEC1D06C72B9}")
+        .expect("built-in Medium Style 2 must be generated");
+    let first_row = def.first_row.as_ref().expect("firstRow region");
+    assert_eq!(
+        first_row.fill,
+        Some(Color::new(0, 0, 0)),
+        "solid dk1 header"
+    );
+    assert_eq!(
+        first_row.text_color,
+        Some(Color::new(255, 255, 255)),
+        "lt1 header text"
+    );
+    let whole = def.whole_table.as_ref().expect("wholeTbl region");
+    assert_eq!(
+        whole.fill,
+        Some(Color::new(230, 230, 230)),
+        "dk1 tint 10% body fill"
+    );
+    let band = def.band1_h.as_ref().expect("band1H region");
+    assert_eq!(
+        band.fill,
+        Some(Color::new(204, 204, 204)),
+        "dk1 tint 20% band fill"
+    );
+    let inside_h = whole
+        .borders
+        .inside_h
+        .as_ref()
+        .expect("wholeTbl insideH border");
+    assert_eq!(inside_h.color, Color::new(255, 255, 255), "lt1 grid lines");
+    assert_eq!(inside_h.width, 1.0);
+}
+
+#[test]
+fn test_builtin_medium_style_2_accent1() {
+    let mut styles = TableStyleMap::new();
+    table_styles::add_builtin_table_styles(&mut styles, &test_theme(), &test_color_map());
+
+    let def = styles
+        .get("{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}")
+        .expect("built-in Medium Style 2 Accent 1 must be generated");
+    let first_row = def.first_row.as_ref().unwrap();
+    assert_eq!(first_row.fill, Some(Color::new(0x44, 0x72, 0xC4)));
+    let whole = def.whole_table.as_ref().unwrap();
+    assert_eq!(
+        whole.fill,
+        Some(Color::new(236, 241, 249)),
+        "accent1 tint 10%"
+    );
+}
+
+#[test]
+fn test_file_defined_style_wins_over_builtin() {
+    let mut styles = TableStyleMap::new();
+    let custom = PptxTableStyleDef {
+        first_row: Some(TableCellRegionStyle {
+            fill: Some(Color::new(1, 2, 3)),
+            ..TableCellRegionStyle::default()
+        }),
+        ..PptxTableStyleDef::default()
+    };
+    styles.insert("{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}".to_string(), custom);
+    table_styles::add_builtin_table_styles(&mut styles, &test_theme(), &test_color_map());
+
+    let def = &styles["{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}"];
+    assert_eq!(
+        def.first_row.as_ref().unwrap().fill,
+        Some(Color::new(1, 2, 3)),
+        "a style defined in the file's tableStyles.xml must not be overwritten"
+    );
+}
+
+#[test]
+fn test_builtin_style_borders_applied_to_cells() {
+    let mut styles = TableStyleMap::new();
+    table_styles::add_builtin_table_styles(&mut styles, &test_theme(), &test_color_map());
+
+    let mut table = Table {
+        rows: (0..3)
+            .map(|_| TableRow {
+                cells: (0..3).map(|_| TableCell::default()).collect(),
+                height: None,
+            })
+            .collect(),
+        column_widths: vec![100.0, 100.0, 100.0],
+        ..Table::default()
+    };
+    let props = PptxTableProps {
+        style_id: Some("{073A0DAA-6AF3-43AB-8588-CEC1D06C72B9}".to_string()),
+        first_row: true,
+        band_row: true,
+        ..PptxTableProps::default()
+    };
+    table_styles::apply_table_style(&mut table, &props, &styles);
+
+    // Interior cell gets white grid borders on all sides.
+    let middle = table.rows[1].cells[1]
+        .border
+        .as_ref()
+        .expect("interior cell should get style borders");
+    for side in [&middle.top, &middle.bottom, &middle.left, &middle.right] {
+        let side = side.as_ref().expect("all interior sides bordered");
+        assert_eq!(side.color, Color::new(255, 255, 255));
+    }
+    // Header cells keep the firstRow solid fill.
+    assert_eq!(table.rows[0].cells[0].background, Some(Color::new(0, 0, 0)));
+    // Band row (first data row) uses the 20% tint.
+    assert_eq!(
+        table.rows[1].cells[0].background,
+        Some(Color::new(204, 204, 204))
+    );
+    // Second data row falls back to the wholeTbl 10% tint — and still gets
+    // the style grid borders.
+    assert_eq!(
+        table.rows[2].cells[0].background,
+        Some(Color::new(230, 230, 230))
+    );
+    assert!(
+        table.rows[2].cells[1].border.is_some(),
+        "fallback (band2) cells must still get wholeTbl grid borders"
+    );
+}
+
+#[test]
+fn test_parse_region_borders_from_tc_bdr() {
+    let body = r#"<a:wholeTbl><a:tcStyle><a:tcBdr><a:bottom><a:ln w="25400" cmpd="sng"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:ln></a:bottom><a:insideH><a:ln w="12700"><a:solidFill><a:srgbClr val="00FF00"/></a:solidFill></a:ln></a:insideH></a:tcBdr><a:fill><a:solidFill><a:srgbClr val="0000FF"/></a:solidFill></a:fill></a:tcStyle></a:wholeTbl>"#;
+    let xml = make_table_style_xml(&[("{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}", body)]);
+    let styles = table_styles::parse_table_styles_xml(&xml, &test_theme(), &test_color_map());
+    let def = &styles["{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}"];
+    let whole = def.whole_table.as_ref().unwrap();
+
+    let bottom = whole.borders.bottom.as_ref().expect("bottom border parsed");
+    assert_eq!(bottom.color, Color::new(0xFF, 0, 0));
+    assert_eq!(bottom.width, 2.0, "25400 EMU = 2pt");
+
+    let inside_h = whole.borders.inside_h.as_ref().expect("insideH parsed");
+    assert_eq!(inside_h.color, Color::new(0, 0xFF, 0));
+    assert_eq!(inside_h.width, 1.0);
+
+    assert_eq!(
+        whole.fill,
+        Some(Color::new(0, 0, 0xFF)),
+        "fill still parsed alongside borders"
+    );
 }
