@@ -351,6 +351,8 @@ pub struct TableCell {
     pub data_bar: Option<DataBarInfo>,
     /// IconSet text symbol prepended to cell content.
     pub icon_text: Option<String>,
+    /// Fill color of the IconSet symbol (Excel draws icons in band colors).
+    pub icon_color: Option<Color>,
     /// Vertical alignment of cell content.
     pub vertical_align: Option<CellVerticalAlign>,
     /// Optional cell padding override in points.
@@ -367,6 +369,7 @@ impl Default for TableCell {
             background: None,
             data_bar: None,
             icon_text: None,
+            icon_color: None,
             vertical_align: None,
             padding: None,
         }

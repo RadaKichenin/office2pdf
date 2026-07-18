@@ -197,7 +197,17 @@ fn generate_table_cell(
     }
 
     if let Some(ref icon) = cell.icon_text {
-        let _ = write!(out, "{} ", icon);
+        // Excel draws icon set glyphs in their band color, independent of the
+        // cell's font color.
+        if let Some(color) = cell.icon_color {
+            let _ = write!(
+                out,
+                "#text(fill: rgb({}, {}, {}))[{}] ",
+                color.r, color.g, color.b, icon
+            );
+        } else {
+            let _ = write!(out, "{} ", icon);
+        }
     }
 
     generate_cell_content(out, &cell.content, ctx)?;

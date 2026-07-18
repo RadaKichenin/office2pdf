@@ -401,23 +401,112 @@ fn test_cond_fmt_icon_set() {
     let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
     let tp = get_sheet_page(&doc, 0);
 
-    let icon1 = tp.table.rows[0].cells[0]
-        .icon_text
-        .as_ref()
-        .expect("A1 should have icon_text");
-    assert_eq!(icon1, "↓", "Low value should get down arrow");
+    // No iconSet attribute → OOXML default is 3TrafficLights1 (colored circles),
+    // not arrows.
+    let cell1 = &tp.table.rows[0].cells[0];
+    assert_eq!(
+        cell1.icon_text.as_deref(),
+        Some("●"),
+        "Low value should get a circle icon"
+    );
+    assert_eq!(
+        cell1.icon_color,
+        Some(Color::new(214, 85, 50)),
+        "Low value circle should be red"
+    );
 
-    let icon2 = tp.table.rows[1].cells[0]
-        .icon_text
-        .as_ref()
-        .expect("A2 should have icon_text");
-    assert_eq!(icon2, "→", "Mid value should get right arrow");
+    let cell2 = &tp.table.rows[1].cells[0];
+    assert_eq!(cell2.icon_text.as_deref(), Some("●"));
+    assert_eq!(
+        cell2.icon_color,
+        Some(Color::new(234, 191, 87)),
+        "Mid value circle should be yellow"
+    );
 
-    let icon3 = tp.table.rows[2].cells[0]
-        .icon_text
-        .as_ref()
-        .expect("A3 should have icon_text");
-    assert_eq!(icon3, "↑", "High value should get up arrow");
+    let cell3 = &tp.table.rows[2].cells[0];
+    assert_eq!(cell3.icon_text.as_deref(), Some("●"));
+    assert_eq!(
+        cell3.icon_color,
+        Some(Color::new(104, 164, 144)),
+        "High value circle should be green"
+    );
+}
+
+/// Helper: build a 3-band percent icon set rule over A1:A3 with the given type.
+fn build_icon_set_fixture(icon_set_type: Option<&str>) -> Vec<u8> {
+    build_xlsx_with_cond_fmt(|sheet| {
+        sheet.get_cell_mut("A1").set_value_number(10.0);
+        sheet.get_cell_mut("A2").set_value_number(50.0);
+        sheet.get_cell_mut("A3").set_value_number(90.0);
+
+        let mut rule = umya_spreadsheet::ConditionalFormattingRule::default();
+        rule.set_type(umya_spreadsheet::ConditionalFormatValues::IconSet);
+        rule.set_priority(1);
+
+        let mut is = umya_spreadsheet::IconSet::default();
+        if let Some(set_type) = icon_set_type {
+            is.set_icon_set_type(set_type);
+        }
+        for pct in ["0", "33", "67"] {
+            let mut cfvo = umya_spreadsheet::ConditionalFormatValueObject::default();
+            cfvo.set_type(umya_spreadsheet::ConditionalFormatValueObjectValues::Percent);
+            cfvo.set_val(pct);
+            is.add_cfvo_collection(cfvo);
+        }
+        rule.set_icon_set(is);
+
+        let mut seq = umya_spreadsheet::SequenceOfReferences::default();
+        seq.set_sqref("A1:A3");
+        let mut cf = umya_spreadsheet::ConditionalFormatting::default();
+        cf.set_sequence_of_references(seq);
+        cf.add_conditional_collection(rule);
+        sheet.set_conditional_formatting_collection(vec![cf]);
+    })
+}
+
+#[test]
+fn test_cond_fmt_icon_set_traffic_lights_explicit() {
+    let data = build_icon_set_fixture(Some("3TrafficLights1"));
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let tp = get_sheet_page(&doc, 0);
+
+    let cell3 = &tp.table.rows[2].cells[0];
+    assert_eq!(cell3.icon_text.as_deref(), Some("●"));
+    assert_eq!(cell3.icon_color, Some(Color::new(104, 164, 144)));
+}
+
+#[test]
+fn test_cond_fmt_icon_set_arrows_explicit() {
+    let data = build_icon_set_fixture(Some("3Arrows"));
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let tp = get_sheet_page(&doc, 0);
+
+    let cell1 = &tp.table.rows[0].cells[0];
+    assert_eq!(
+        cell1.icon_text.as_deref(),
+        Some("↓"),
+        "3Arrows keeps arrow glyphs"
+    );
+    assert_eq!(cell1.icon_color, Some(Color::new(214, 85, 50)));
+
+    let cell3 = &tp.table.rows[2].cells[0];
+    assert_eq!(cell3.icon_text.as_deref(), Some("↑"));
+    assert_eq!(cell3.icon_color, Some(Color::new(104, 164, 144)));
+}
+
+#[test]
+fn test_cond_fmt_icon_set_symbols_explicit() {
+    let data = build_icon_set_fixture(Some("3Symbols"));
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let tp = get_sheet_page(&doc, 0);
+
+    let cell1 = &tp.table.rows[0].cells[0];
+    assert_eq!(cell1.icon_text.as_deref(), Some("✗"));
+    let cell3 = &tp.table.rows[2].cells[0];
+    assert_eq!(cell3.icon_text.as_deref(), Some("✓"));
 }
 
 #[test]
