@@ -342,3 +342,34 @@ fn test_default_paragraph_style_applies_without_pstyle() {
     );
     assert_eq!(paragraph.runs[0].style.font_size, Some(12.0));
 }
+
+#[test]
+fn test_doc_default_theme_font_resolves_via_theme() {
+    // docDefaults referencing asciiTheme="minorHAnsi" must resolve to the
+    // theme's minor latin typeface instead of falling back to the renderer
+    // default (issue #287). docx-rs's builder can't author theme slots, so
+    // exercise the resolver directly.
+    let theme_xml = r#"<?xml version="1.0"?>
+<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <a:themeElements><a:fontScheme name="Office">
+    <a:majorFont><a:latin typeface="Calibri Light"/></a:majorFont>
+    <a:minorFont><a:latin typeface="Calibri"/></a:minorFont>
+  </a:fontScheme></a:themeElements>
+</a:theme>"#;
+    let theme = parse_theme_fonts(theme_xml);
+    assert_eq!(theme.minor_latin.as_deref(), Some("Calibri"));
+    assert_eq!(theme.major_latin.as_deref(), Some("Calibri Light"));
+
+    let run_property = serde_json::json!({ "fonts": { "asciiTheme": "minorHAnsi" } });
+    assert_eq!(
+        resolve_theme_font_family(&run_property, &theme).as_deref(),
+        Some("Calibri")
+    );
+    let heading_property = serde_json::json!({ "fonts": { "asciiTheme": "majorHAnsi" } });
+    assert_eq!(
+        resolve_theme_font_family(&heading_property, &theme).as_deref(),
+        Some("Calibri Light")
+    );
+    let no_theme = serde_json::json!({ "fonts": { "ascii": "Arial" } });
+    assert_eq!(resolve_theme_font_family(&no_theme, &theme), None);
+}
