@@ -3,7 +3,8 @@ use std::io::Cursor;
 use crate::config::ConvertOptions;
 use crate::error::{ConvertError, ConvertWarning};
 use crate::ir::{
-    Document, ImageData, Margins, Metadata, Page, PageSize, SheetPage, StyleSheet, Table, TableRow,
+    Chart, Document, ImageData, Margins, Metadata, Page, PageSize, SheetPage, StyleSheet, Table,
+    TableRow,
 };
 use crate::parser::Parser;
 
@@ -213,7 +214,8 @@ impl XlsxParser {
                 let sheet_name = sheet.get_name().to_string();
                 let raw_images = image_map.remove(&sheet_name);
                 let raw_text_boxes = text_box_map.remove(&sheet_name);
-                if raw_images.is_some() || raw_text_boxes.is_some() {
+                let raw_charts = chart_map.remove(&sheet_name);
+                if raw_images.is_some() || raw_text_boxes.is_some() || raw_charts.is_some() {
                     let stub_ctx = empty_sheet_context();
                     let images: Vec<crate::ir::SheetImage> = raw_images
                         .unwrap_or_default()
@@ -225,7 +227,8 @@ impl XlsxParser {
                         .into_iter()
                         .map(|anchor| anchored_text_box(anchor, sheet, &stub_ctx))
                         .collect();
-                    if !images.is_empty() || !text_boxes.is_empty() {
+                    let charts: Vec<(u32, Chart)> = raw_charts.unwrap_or_default();
+                    if !images.is_empty() || !text_boxes.is_empty() || !charts.is_empty() {
                         chunks.push(Document {
                             metadata: metadata.clone(),
                             pages: vec![Page::Sheet(SheetPage {
@@ -235,7 +238,7 @@ impl XlsxParser {
                                 table: Table::default(),
                                 header: None,
                                 footer: None,
-                                charts: Vec::new(),
+                                charts,
                                 images,
                                 text_boxes,
                             })],
@@ -394,7 +397,8 @@ impl Parser for XlsxParser {
                 let sheet_name = sheet.get_name().to_string();
                 let raw_images = image_map.remove(&sheet_name);
                 let raw_text_boxes = text_box_map.remove(&sheet_name);
-                if raw_images.is_some() || raw_text_boxes.is_some() {
+                let raw_charts = chart_map.remove(&sheet_name);
+                if raw_images.is_some() || raw_text_boxes.is_some() || raw_charts.is_some() {
                     let stub_ctx = empty_sheet_context();
                     let images: Vec<crate::ir::SheetImage> = raw_images
                         .unwrap_or_default()
@@ -406,7 +410,8 @@ impl Parser for XlsxParser {
                         .into_iter()
                         .map(|anchor| anchored_text_box(anchor, sheet, &stub_ctx))
                         .collect();
-                    if !images.is_empty() || !text_boxes.is_empty() {
+                    let charts: Vec<(u32, Chart)> = raw_charts.unwrap_or_default();
+                    if !images.is_empty() || !text_boxes.is_empty() || !charts.is_empty() {
                         pages.push(Page::Sheet(SheetPage {
                             name: sheet_name,
                             size: PageSize::default(),
@@ -414,7 +419,7 @@ impl Parser for XlsxParser {
                             table: Table::default(),
                             header: None,
                             footer: None,
-                            charts: Vec::new(),
+                            charts,
                             images,
                             text_boxes,
                         }));

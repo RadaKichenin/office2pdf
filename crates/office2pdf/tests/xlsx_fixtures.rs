@@ -583,3 +583,29 @@ fn with_text_box_renders_anchored_text() {
         Some(Color::new(0, 0, 0xFF))
     );
 }
+
+// ---------------------------------------------------------------------------
+// Embedded charts on chart-only sheets (issue #239)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn with_chart_renders_embedded_chart() {
+    // WithChart.xlsx puts its chart on a sheet with no cells; that sheet was
+    // skipped entirely, dropping the chart (same class as #238's image-only
+    // sheets, which the fix did not extend to charts).
+    let pages = sheet_pages("poi/WithChart.xlsx");
+    let total_charts: usize = pages.iter().map(|sp| sp.charts.len()).sum();
+    assert!(
+        total_charts >= 1,
+        "the embedded chart must be extracted, got {total_charts}"
+    );
+    let chart = pages
+        .iter()
+        .flat_map(|sp| sp.charts.iter())
+        .next()
+        .expect("a chart");
+    assert!(
+        !chart.1.series.is_empty(),
+        "chart must carry its series data"
+    );
+}
