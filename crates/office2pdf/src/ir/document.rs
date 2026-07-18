@@ -144,6 +144,18 @@ pub struct SheetPage {
     /// Charts anchored within this sheet, stored as (anchor_row, chart) where
     /// `anchor_row` is the 1-indexed row number after which the chart is rendered.
     pub charts: Vec<(u32, super::elements::Chart)>,
+    /// Drawing images anchored within this sheet.
+    pub images: Vec<SheetImage>,
+}
+
+/// A worksheet drawing image anchored to a sheet row.
+#[derive(Debug, Clone)]
+pub struct SheetImage {
+    /// 1-indexed row number after which the image is rendered (like charts).
+    pub anchor_row: u32,
+    /// Horizontal offset of the anchor from the sheet's left edge, points.
+    pub x_offset_pt: f64,
+    pub image: super::elements::ImageData,
 }
 
 #[cfg(test)]

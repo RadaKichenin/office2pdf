@@ -67,9 +67,14 @@ pub(super) fn split_sheet_page_by_width(
             table,
             header: page.header.clone(),
             footer: page.footer.clone(),
-            // Charts anchor to rows of the first column group only.
+            // Charts and images anchor to rows of the first column group only.
             charts: if index == 0 {
                 page.charts.clone()
+            } else {
+                Vec::new()
+            },
+            images: if index == 0 {
+                page.images.clone()
             } else {
                 Vec::new()
             },

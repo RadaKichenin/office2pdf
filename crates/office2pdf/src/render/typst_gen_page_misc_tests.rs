@@ -509,6 +509,7 @@ fn test_table_page_with_header() {
         }),
         footer: None,
         charts: vec![],
+        images: Vec::new(),
     });
     let doc = make_doc(vec![page]);
     let output = generate_typst(&doc).unwrap();
@@ -552,6 +553,7 @@ fn test_table_page_with_page_number_footer() {
             }],
         }),
         charts: vec![],
+        images: Vec::new(),
     });
     let doc = make_doc(vec![page]);
     let output = generate_typst(&doc).unwrap();
@@ -570,6 +572,7 @@ fn test_table_page_no_header_footer() {
         header: None,
         footer: None,
         charts: vec![],
+        images: Vec::new(),
     });
     let doc = make_doc(vec![page]);
     let output = generate_typst(&doc).unwrap();
@@ -605,6 +608,7 @@ fn test_table_page_with_chart_at_row() {
         header: None,
         footer: None,
         charts: vec![(2, chart)],
+        images: Vec::new(),
     });
 
     let doc = make_doc(vec![page]);
@@ -637,6 +641,7 @@ fn test_table_page_with_chart_at_end() {
         header: None,
         footer: None,
         charts: vec![(u32::MAX, chart)],
+        images: Vec::new(),
     });
 
     let doc = make_doc(vec![page]);

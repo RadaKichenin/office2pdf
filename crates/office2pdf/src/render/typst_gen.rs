@@ -432,26 +432,41 @@ fn generate_table_page(
     write_table_page_setup(out, page, &size, ctx);
     out.push('\n');
 
-    if page.charts.is_empty() {
+    if page.charts.is_empty() && page.images.is_empty() {
         generate_table(out, &page.table, ctx)?;
     } else {
-        generate_table_with_charts(out, &page.table, &page.charts, ctx)?;
+        generate_table_with_anchors(out, &page.table, &page.charts, &page.images, ctx)?;
     }
     Ok(())
 }
 
-/// Render a table interleaved with charts at their anchor positions.
-/// Splits the table into segments at chart anchor rows and emits charts between segments.
-fn generate_table_with_charts(
+/// An element anchored to a sheet row: emitted between table segments.
+enum SheetAnchor<'a> {
+    Chart(&'a Chart),
+    Image(&'a crate::ir::SheetImage),
+}
+
+/// Render a table interleaved with charts/images at their anchor positions.
+/// Splits the table into segments at anchor rows and emits the anchored
+/// elements between segments.
+fn generate_table_with_anchors(
     out: &mut String,
     table: &Table,
     charts: &[(u32, Chart)],
+    images: &[crate::ir::SheetImage],
     ctx: &mut GenCtx,
 ) -> Result<(), ConvertError> {
     use crate::ir::Table;
 
-    // Sort charts by anchor row (should already be sorted, but ensure)
-    let mut sorted_charts: Vec<&(u32, Chart)> = charts.iter().collect();
+    let mut sorted_charts: Vec<(u32, SheetAnchor)> = charts
+        .iter()
+        .map(|(row, chart)| (*row, SheetAnchor::Chart(chart)))
+        .chain(
+            images
+                .iter()
+                .map(|sheet_image| (sheet_image.anchor_row, SheetAnchor::Image(sheet_image))),
+        )
+        .collect();
     sorted_charts.sort_by_key(|(row, _)| *row);
 
     let total_rows = table.rows.len();
@@ -483,8 +498,8 @@ fn generate_table_with_charts(
                 out.push('\n');
                 row_start = row_end + 1;
             }
-            // Emit the chart
-            generate_chart(out, &sorted_charts[chart_idx].1);
+            // Emit the anchored element
+            generate_sheet_anchor(out, &sorted_charts[chart_idx].1, ctx);
             out.push('\n');
             chart_idx += 1;
         }
@@ -509,14 +524,33 @@ fn generate_table_with_charts(
         out.push('\n');
     }
 
-    // Emit any remaining charts (anchored beyond last row, e.g., u32::MAX)
+    // Emit any remaining anchors (anchored beyond last row, e.g., u32::MAX)
     while chart_idx < sorted_charts.len() {
-        generate_chart(out, &sorted_charts[chart_idx].1);
+        generate_sheet_anchor(out, &sorted_charts[chart_idx].1, ctx);
         out.push('\n');
         chart_idx += 1;
     }
 
     Ok(())
+}
+
+fn generate_sheet_anchor(out: &mut String, anchor: &SheetAnchor, ctx: &mut GenCtx) {
+    match anchor {
+        SheetAnchor::Chart(chart) => generate_chart(out, chart),
+        SheetAnchor::Image(sheet_image) => {
+            // Keep the anchor's horizontal position: reserve the image height
+            // in the flow and place the image at its column offset.
+            let height: f64 = sheet_image.image.height.unwrap_or(100.0);
+            let _ = write!(
+                out,
+                "#box(width: 100%, height: {}pt)[#place(top + left, dx: {}pt)[",
+                format_f64(height),
+                format_f64(sheet_image.x_offset_pt),
+            );
+            generate_image(out, &sheet_image.image, ctx);
+            out.push_str("]]\n");
+        }
+    }
 }
 
 fn generate_fixed_element(

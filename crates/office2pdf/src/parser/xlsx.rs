@@ -3,7 +3,7 @@ use std::io::Cursor;
 use crate::config::ConvertOptions;
 use crate::error::{ConvertError, ConvertWarning};
 use crate::ir::{
-    Document, Margins, Metadata, Page, PageSize, SheetPage, StyleSheet, Table, TableRow,
+    Document, ImageData, Margins, Metadata, Page, PageSize, SheetPage, StyleSheet, Table, TableRow,
 };
 use crate::parser::Parser;
 
@@ -59,6 +59,87 @@ fn title_column_indices(print_titles: PrintTitles, ctx: &SheetContext) -> Option
     Some((start_idx as usize, end_idx as usize))
 }
 
+/// Convert a raw drawing anchor into a render-ready image: 1-indexed anchor
+/// row plus a size in points resolved against the sheet's column widths and
+/// row heights (twoCellAnchor) or the declared extent (oneCellAnchor).
+fn anchored_image(
+    anchor: xlsx_drawing::RawImageAnchor,
+    sheet: &umya_spreadsheet::Worksheet,
+    ctx: &SheetContext,
+) -> crate::ir::SheetImage {
+    const EMU_PER_PT: f64 = 12_700.0;
+
+    let column_width_at = |col_zero_based: u32| -> f64 {
+        let col: u32 = col_zero_based + 1;
+        if col >= ctx.col_start && col <= ctx.col_end {
+            ctx.column_widths
+                .get((col - ctx.col_start) as usize)
+                .copied()
+                .unwrap_or(0.0)
+        } else {
+            column_width_to_pt(DEFAULT_COLUMN_WIDTH)
+        }
+    };
+    let row_height_at = |row_zero_based: u32| -> f64 {
+        sheet
+            .get_row_dimension(&(row_zero_based + 1))
+            .map(|row| *row.get_height())
+            .filter(|height| *height > 0.0)
+            .unwrap_or(15.0)
+    };
+
+    let (width, height): (f64, f64) =
+        if let Some((to_col, to_col_off, to_row, to_row_off)) = anchor.to {
+            let width: f64 = (anchor.from_col..to_col).map(column_width_at).sum::<f64>()
+                - anchor.from_col_off_emu as f64 / EMU_PER_PT
+                + to_col_off as f64 / EMU_PER_PT;
+            let height: f64 = (anchor.from_row..to_row).map(row_height_at).sum::<f64>()
+                - anchor.from_row_off_emu as f64 / EMU_PER_PT
+                + to_row_off as f64 / EMU_PER_PT;
+            (width.max(1.0), height.max(1.0))
+        } else if let Some((cx, cy)) = anchor.ext_emu {
+            (
+                (cx as f64 / EMU_PER_PT).max(1.0),
+                (cy as f64 / EMU_PER_PT).max(1.0),
+            )
+        } else {
+            (100.0, 100.0)
+        };
+
+    let x_offset_pt: f64 = (0..anchor.from_col).map(column_width_at).sum::<f64>()
+        + anchor.from_col_off_emu as f64 / EMU_PER_PT;
+
+    let image = ImageData {
+        data: anchor.data,
+        format: anchor.format,
+        width: Some(width),
+        height: Some(height),
+        crop: None,
+        stroke: None,
+        alignment: None,
+        clip_shape: None,
+    };
+    crate::ir::SheetImage {
+        anchor_row: anchor.from_row + 1,
+        x_offset_pt,
+        image,
+    }
+}
+
+/// Context stand-in for sheets with no used cells, so drawing anchors can
+/// still resolve against default column widths and row heights.
+fn empty_sheet_context() -> SheetContext {
+    SheetContext {
+        col_start: 1,
+        col_end: 0,
+        num_cols: 0,
+        column_widths: Vec::new(),
+        merge_tops: std::collections::HashMap::new(),
+        merge_skips: std::collections::HashSet::new(),
+        cond_fmt_overrides: std::collections::HashMap::new(),
+    }
+}
+
 pub struct XlsxParser;
 
 impl XlsxParser {
@@ -80,6 +161,7 @@ impl XlsxParser {
 
         let metadata = extract_xlsx_metadata(&book);
         let mut chart_map = extract_charts_with_anchors(data);
+        let mut image_map = extract_images_with_anchors(data);
 
         let mut chunks = Vec::new();
         let mut warnings = Vec::new();
@@ -93,6 +175,32 @@ impl XlsxParser {
             }
 
             let Some((ctx, row_start, row_end)) = prepare_sheet_context(sheet) else {
+                // A sheet without used cells can still carry drawings; give
+                // its images a page instead of dropping them.
+                let sheet_name = sheet.get_name().to_string();
+                if let Some(raw_images) = image_map.remove(&sheet_name) {
+                    let stub_ctx = empty_sheet_context();
+                    let images: Vec<crate::ir::SheetImage> = raw_images
+                        .into_iter()
+                        .map(|anchor| anchored_image(anchor, sheet, &stub_ctx))
+                        .collect();
+                    if !images.is_empty() {
+                        chunks.push(Document {
+                            metadata: metadata.clone(),
+                            pages: vec![Page::Sheet(SheetPage {
+                                name: sheet_name,
+                                size: PageSize::default(),
+                                margins: sheet_print_margins(sheet),
+                                table: Table::default(),
+                                header: None,
+                                footer: None,
+                                charts: Vec::new(),
+                                images,
+                            })],
+                            styles: StyleSheet::default(),
+                        });
+                    }
+                }
                 continue;
             };
 
@@ -114,6 +222,13 @@ impl XlsxParser {
                 });
             }
             sheet_charts.sort_by_key(|(row, _)| *row);
+            let mut sheet_images: Vec<crate::ir::SheetImage> = image_map
+                .remove(&sheet_name)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|anchor| anchored_image(anchor, sheet, &ctx))
+                .collect();
+            sheet_images.sort_by_key(|sheet_image| sheet_image.anchor_row);
 
             let print_titles = find_print_titles(&book, sheet);
             let title_columns: Option<(usize, usize)> = title_column_indices(print_titles, &ctx);
@@ -160,8 +275,13 @@ impl XlsxParser {
                             header: sheet_header.clone(),
                             footer: sheet_footer.clone(),
                             charts: if first_chunk {
-                                first_chunk = false;
                                 std::mem::take(&mut sheet_charts)
+                            } else {
+                                vec![]
+                            },
+                            images: if first_chunk {
+                                first_chunk = false;
+                                std::mem::take(&mut sheet_images)
                             } else {
                                 vec![]
                             },
@@ -199,6 +319,7 @@ impl Parser for XlsxParser {
 
         // Extract charts with anchor positions per sheet
         let mut chart_map = extract_charts_with_anchors(data);
+        let mut image_map = extract_images_with_anchors(data);
 
         let sheet_count = book.get_sheet_collection().len();
         let mut pages = Vec::with_capacity(sheet_count);
@@ -213,6 +334,28 @@ impl Parser for XlsxParser {
             }
 
             let Some((ctx, row_start, row_end)) = prepare_sheet_context(sheet) else {
+                // A sheet without used cells can still carry drawings; give
+                // its images a page instead of dropping them.
+                let sheet_name = sheet.get_name().to_string();
+                if let Some(raw_images) = image_map.remove(&sheet_name) {
+                    let stub_ctx = empty_sheet_context();
+                    let images: Vec<crate::ir::SheetImage> = raw_images
+                        .into_iter()
+                        .map(|anchor| anchored_image(anchor, sheet, &stub_ctx))
+                        .collect();
+                    if !images.is_empty() {
+                        pages.push(Page::Sheet(SheetPage {
+                            name: sheet_name,
+                            size: PageSize::default(),
+                            margins: sheet_print_margins(sheet),
+                            table: Table::default(),
+                            header: None,
+                            footer: None,
+                            charts: Vec::new(),
+                            images,
+                        }));
+                    }
+                }
                 continue;
             };
 
@@ -252,6 +395,13 @@ impl Parser for XlsxParser {
             }
             // Sort by anchor row
             sheet_charts.sort_by_key(|(row, _)| *row);
+            let mut sheet_images: Vec<crate::ir::SheetImage> = image_map
+                .remove(&sheet_name)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|anchor| anchored_image(anchor, sheet, &ctx))
+                .collect();
+            sheet_images.sort_by_key(|sheet_image| sheet_image.anchor_row);
 
             if row_breaks.is_empty() {
                 // No page breaks — single page
@@ -273,6 +423,7 @@ impl Parser for XlsxParser {
                             header: sheet_header.clone(),
                             footer: sheet_footer.clone(),
                             charts: sheet_charts,
+                            images: sheet_images,
                         },
                         title_columns,
                     )
@@ -341,8 +492,13 @@ impl Parser for XlsxParser {
                                 header: sheet_header.clone(),
                                 footer: sheet_footer.clone(),
                                 charts: if first_segment {
-                                    first_segment = false;
                                     std::mem::take(&mut sheet_charts)
+                                } else {
+                                    vec![]
+                                },
+                                images: if first_segment {
+                                    first_segment = false;
+                                    std::mem::take(&mut sheet_images)
                                 } else {
                                     vec![]
                                 },

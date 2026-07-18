@@ -385,3 +385,265 @@ pub(super) fn parse_drawing_chart_anchors(xml: &str) -> Vec<(u32, String)> {
 
     result
 }
+
+// ── Drawing images ──────────────────────────────────────────────────────
+
+/// A picture anchor from a worksheet drawing, in raw drawing coordinates.
+/// Rows/columns are 0-indexed as in the XML; offsets and extents are EMU.
+pub(super) struct RawImageAnchor {
+    pub(super) from_row: u32,
+    pub(super) from_col: u32,
+    pub(super) from_col_off_emu: i64,
+    pub(super) from_row_off_emu: i64,
+    /// twoCellAnchor bottom-right corner: (col, col_off, row, row_off).
+    pub(super) to: Option<(u32, i64, u32, i64)>,
+    /// oneCellAnchor extent (cx, cy).
+    pub(super) ext_emu: Option<(i64, i64)>,
+    pub(super) data: Vec<u8>,
+    pub(super) format: crate::ir::ImageFormat,
+}
+
+/// Extract anchored pictures per sheet from worksheet drawings.
+/// Metafiles (EMF/WMF) are converted to SVG; unknown formats are skipped.
+pub(super) fn extract_images_with_anchors(data: &[u8]) -> HashMap<String, Vec<RawImageAnchor>> {
+    let Ok(mut archive) = crate::parser::open_zip(data) else {
+        return HashMap::new();
+    };
+
+    let workbook_xml = read_zip_entry_string(&mut archive, "xl/workbook.xml");
+    let sheet_rids = parse_workbook_sheet_rids(&workbook_xml);
+    let workbook_rels_xml = read_zip_entry_string(&mut archive, "xl/_rels/workbook.xml.rels");
+    let rid_to_target = parse_rels_targets(&workbook_rels_xml);
+
+    let mut result: HashMap<String, Vec<RawImageAnchor>> = HashMap::new();
+
+    for (sheet_name, sheet_rid) in &sheet_rids {
+        let Some(sheet_target) = rid_to_target.get(sheet_rid) else {
+            continue;
+        };
+        let sheet_full_path = format!("xl/{sheet_target}");
+        let sheet_filename = sheet_full_path.rsplit('/').next().unwrap_or(sheet_target);
+        let sheet_rels_path = format!("xl/worksheets/_rels/{sheet_filename}.rels");
+        let sheet_rels_xml = read_zip_entry_string(&mut archive, &sheet_rels_path);
+        if sheet_rels_xml.is_empty() {
+            continue;
+        }
+
+        for drawing_target in &parse_rels_by_type(&sheet_rels_xml, "drawing") {
+            let drawing_path = resolve_relative_xl_path("xl/worksheets", drawing_target);
+            let drawing_xml = read_zip_entry_string(&mut archive, &drawing_path);
+            if drawing_xml.is_empty() {
+                continue;
+            }
+
+            let anchors = parse_drawing_image_anchors(&drawing_xml);
+            if anchors.is_empty() {
+                continue;
+            }
+
+            let drawing_filename = drawing_path.rsplit('/').next().unwrap_or(&drawing_path);
+            let drawing_dir = drawing_path
+                .rsplit_once('/')
+                .map(|(dir, _)| dir)
+                .unwrap_or("xl/drawings");
+            let drawing_rels_path = format!("{drawing_dir}/_rels/{drawing_filename}.rels");
+            let drawing_rels_xml = read_zip_entry_string(&mut archive, &drawing_rels_path);
+            let rid_to_media = parse_rels_targets(&drawing_rels_xml);
+
+            for (geometry, rid) in anchors {
+                let Some(media_target) = rid_to_media.get(&rid) else {
+                    continue;
+                };
+                let media_path = resolve_relative_xl_path(drawing_dir, media_target);
+                let Some(bytes) = read_zip_entry_bytes(&mut archive, &media_path) else {
+                    continue;
+                };
+                let Some((data, format)) = decode_media(&media_path, bytes) else {
+                    continue;
+                };
+                result
+                    .entry(sheet_name.clone())
+                    .or_default()
+                    .push(RawImageAnchor {
+                        from_row: geometry.from_row,
+                        from_col: geometry.from_col,
+                        from_col_off_emu: geometry.from_col_off_emu,
+                        from_row_off_emu: geometry.from_row_off_emu,
+                        to: geometry.to,
+                        ext_emu: geometry.ext_emu,
+                        data,
+                        format,
+                    });
+            }
+        }
+    }
+
+    result
+}
+
+fn read_zip_entry_bytes<R: std::io::Read + std::io::Seek>(
+    archive: &mut zip::ZipArchive<R>,
+    path: &str,
+) -> Option<Vec<u8>> {
+    use std::io::Read;
+    let mut file = archive.by_name(path).ok()?;
+    let mut buffer = Vec::new();
+    file.read_to_end(&mut buffer).ok()?;
+    Some(buffer)
+}
+
+/// Map media bytes to a renderable (data, format) pair; metafiles are
+/// converted to SVG.
+fn decode_media(path: &str, bytes: Vec<u8>) -> Option<(Vec<u8>, crate::ir::ImageFormat)> {
+    use crate::ir::ImageFormat;
+    let extension: String = path.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
+    match extension.as_str() {
+        "png" => Some((bytes, ImageFormat::Png)),
+        "jpg" | "jpeg" => Some((bytes, ImageFormat::Jpeg)),
+        "gif" => Some((bytes, ImageFormat::Gif)),
+        "bmp" => Some((bytes, ImageFormat::Bmp)),
+        "tif" | "tiff" => Some((bytes, ImageFormat::Tiff)),
+        "svg" => Some((bytes, ImageFormat::Svg)),
+        "emf" => crate::parser::emf::convert_emf_to_svg(&bytes).map(|svg| (svg, ImageFormat::Svg)),
+        "wmf" => crate::parser::wmf::convert_wmf_to_svg(&bytes).map(|svg| (svg, ImageFormat::Svg)),
+        _ => None,
+    }
+}
+
+/// Geometry captured from a single pic anchor before media resolution.
+pub(super) struct ImageAnchorGeometry {
+    pub(super) from_row: u32,
+    pub(super) from_col: u32,
+    pub(super) from_col_off_emu: i64,
+    pub(super) from_row_off_emu: i64,
+    pub(super) to: Option<(u32, i64, u32, i64)>,
+    pub(super) ext_emu: Option<(i64, i64)>,
+}
+
+/// Parse `<xdr:pic>` anchors from a worksheet drawing: anchor geometry plus
+/// the blip relationship id.
+pub(super) fn parse_drawing_image_anchors(xml: &str) -> Vec<(ImageAnchorGeometry, String)> {
+    #[derive(Default, Clone, Copy)]
+    struct Corner {
+        col: u32,
+        col_off: i64,
+        row: u32,
+        row_off: i64,
+    }
+
+    let mut result: Vec<(ImageAnchorGeometry, String)> = Vec::new();
+    let mut reader = quick_xml::Reader::from_str(xml);
+
+    let mut in_anchor = false;
+    let mut in_pic = false;
+    let mut corner_target: Option<bool> = None; // Some(true)=from, Some(false)=to
+    let mut current_field: Option<&'static str> = None;
+    let mut from = Corner::default();
+    let mut to: Option<Corner> = None;
+    let mut ext_emu: Option<(i64, i64)> = None;
+    let mut blip_rid: Option<String> = None;
+
+    loop {
+        match reader.read_event() {
+            Ok(quick_xml::events::Event::Start(ref e)) => match e.local_name().as_ref() {
+                b"twoCellAnchor" | b"oneCellAnchor" | b"absoluteAnchor" => {
+                    in_anchor = true;
+                    in_pic = false;
+                    from = Corner::default();
+                    to = None;
+                    ext_emu = None;
+                    blip_rid = None;
+                }
+                b"from" if in_anchor => corner_target = Some(true),
+                b"to" if in_anchor => {
+                    corner_target = Some(false);
+                    to = Some(Corner::default());
+                }
+                b"col" if corner_target.is_some() => current_field = Some("col"),
+                b"colOff" if corner_target.is_some() => current_field = Some("colOff"),
+                b"row" if corner_target.is_some() => current_field = Some("row"),
+                b"rowOff" if corner_target.is_some() => current_field = Some("rowOff"),
+                b"pic" if in_anchor => in_pic = true,
+                _ => {}
+            },
+            Ok(quick_xml::events::Event::Empty(ref e)) => {
+                let local = e.local_name();
+                if in_anchor && local.as_ref() == b"ext" && !in_pic && to.is_none() {
+                    // oneCellAnchor extent (the pic's own a:ext lives inside
+                    // xfrm, which we ignore by requiring !in_pic).
+                    let mut cx: i64 = 0;
+                    let mut cy: i64 = 0;
+                    for attr in e.attributes().flatten() {
+                        let value: i64 = attr
+                            .unescape_value()
+                            .ok()
+                            .and_then(|v| v.parse().ok())
+                            .unwrap_or(0);
+                        match attr.key.local_name().as_ref() {
+                            b"cx" => cx = value,
+                            b"cy" => cy = value,
+                            _ => {}
+                        }
+                    }
+                    ext_emu = Some((cx, cy));
+                }
+                if in_pic && local.as_ref() == b"blip" {
+                    for attr in e.attributes().flatten() {
+                        if attr.key.local_name().as_ref() == b"embed"
+                            && let Ok(val) = attr.unescape_value()
+                        {
+                            blip_rid = Some(val.to_string());
+                        }
+                    }
+                }
+            }
+            Ok(quick_xml::events::Event::Text(ref t)) => {
+                if let (Some(is_from), Some(field)) = (corner_target, current_field)
+                    && let Ok(text) = t.xml_content()
+                    && let Ok(number) = text.trim().parse::<i64>()
+                {
+                    let corner: &mut Corner = if is_from {
+                        &mut from
+                    } else {
+                        to.as_mut().expect("to corner initialized on <to>")
+                    };
+                    match field {
+                        "col" => corner.col = number as u32,
+                        "colOff" => corner.col_off = number,
+                        "row" => corner.row = number as u32,
+                        "rowOff" => corner.row_off = number,
+                        _ => {}
+                    }
+                }
+            }
+            Ok(quick_xml::events::Event::End(ref e)) => match e.local_name().as_ref() {
+                b"twoCellAnchor" | b"oneCellAnchor" | b"absoluteAnchor" => {
+                    if in_pic && let Some(rid) = blip_rid.take() {
+                        result.push((
+                            ImageAnchorGeometry {
+                                from_row: from.row,
+                                from_col: from.col,
+                                from_col_off_emu: from.col_off,
+                                from_row_off_emu: from.row_off,
+                                to: to.map(|c| (c.col, c.col_off, c.row, c.row_off)),
+                                ext_emu,
+                            },
+                            rid,
+                        ));
+                    }
+                    in_anchor = false;
+                    in_pic = false;
+                    corner_target = None;
+                }
+                b"from" | b"to" => corner_target = None,
+                b"col" | b"colOff" | b"row" | b"rowOff" => current_field = None,
+                _ => {}
+            },
+            Ok(quick_xml::events::Event::Eof) => break,
+            Err(_) => break,
+            _ => {}
+        }
+    }
+
+    result
+}

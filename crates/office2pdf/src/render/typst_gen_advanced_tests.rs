@@ -38,6 +38,7 @@ fn test_data_bar_codegen() {
         header: None,
         footer: None,
         charts: vec![],
+        images: Vec::new(),
     });
     let doc = make_doc(vec![page]);
     let output = generate_typst(&doc).unwrap();
@@ -95,6 +96,7 @@ fn test_icon_text_codegen() {
         header: None,
         footer: None,
         charts: vec![],
+        images: Vec::new(),
     });
     let doc = make_doc(vec![page]);
     let output = generate_typst(&doc).unwrap();
@@ -857,6 +859,7 @@ fn test_spill_width_codegen() {
         header: None,
         footer: None,
         charts: vec![],
+        images: Vec::new(),
     });
     let doc = make_doc(vec![page]);
     let output = generate_typst(&doc).unwrap();
@@ -902,6 +905,7 @@ fn test_table_default_vertical_align_codegen() {
         header: None,
         footer: None,
         charts: vec![],
+        images: Vec::new(),
     });
     let doc = make_doc(vec![page]);
     let output = generate_typst(&doc).unwrap();
