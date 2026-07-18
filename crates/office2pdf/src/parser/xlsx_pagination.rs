@@ -141,6 +141,7 @@ fn slice_table_columns(table: &Table, start: usize, end: usize) -> Table {
         alignment: table.alignment,
         default_cell_padding: table.default_cell_padding,
         use_content_driven_row_heights: table.use_content_driven_row_heights,
+        default_vertical_align: table.default_vertical_align,
     }
 }
 

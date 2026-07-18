@@ -222,6 +222,7 @@ fn test_apply_table_style_first_row_gets_header_fill_and_text_color() {
         alignment: None,
         default_cell_padding: None,
         use_content_driven_row_heights: true,
+        default_vertical_align: None,
     };
 
     table_styles::apply_table_style(&mut table, &props, &styles);
@@ -301,6 +302,7 @@ fn test_apply_table_style_banded_rows_skip_first_row() {
         alignment: None,
         default_cell_padding: None,
         use_content_driven_row_heights: true,
+        default_vertical_align: None,
     };
 
     table_styles::apply_table_style(&mut table, &props, &styles);
@@ -370,6 +372,7 @@ fn test_apply_table_style_explicit_cell_fill_not_overridden() {
         alignment: None,
         default_cell_padding: None,
         use_content_driven_row_heights: true,
+        default_vertical_align: None,
     };
 
     table_styles::apply_table_style(&mut table, &props, &styles);
@@ -411,6 +414,7 @@ fn test_apply_table_style_missing_style_id_is_noop() {
         alignment: None,
         default_cell_padding: None,
         use_content_driven_row_heights: true,
+        default_vertical_align: None,
     };
 
     table_styles::apply_table_style(&mut table, &props, &styles);

@@ -477,6 +477,7 @@ fn generate_table_with_charts(
                     alignment: table.alignment,
                     default_cell_padding: table.default_cell_padding,
                     use_content_driven_row_heights: table.use_content_driven_row_heights,
+                    default_vertical_align: table.default_vertical_align,
                 };
                 generate_table(out, &segment, ctx)?;
                 out.push('\n');
@@ -502,6 +503,7 @@ fn generate_table_with_charts(
             alignment: table.alignment,
             default_cell_padding: table.default_cell_padding,
             use_content_driven_row_heights: table.use_content_driven_row_heights,
+            default_vertical_align: table.default_vertical_align,
         };
         generate_table(out, &segment, ctx)?;
         out.push('\n');

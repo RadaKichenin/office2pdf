@@ -871,3 +871,43 @@ fn test_spill_width_codegen() {
         output.source,
     );
 }
+
+#[test]
+fn test_table_default_vertical_align_codegen() {
+    let table = Table {
+        rows: vec![TableRow {
+            cells: vec![TableCell {
+                content: vec![Block::Paragraph(Paragraph {
+                    style: ParagraphStyle::default(),
+                    runs: vec![Run {
+                        text: "value".to_string(),
+                        style: TextStyle::default(),
+                        href: None,
+                        footnote: None,
+                    }],
+                })],
+                ..TableCell::default()
+            }],
+            height: None,
+        }],
+        column_widths: vec![100.0],
+        default_vertical_align: Some(CellVerticalAlign::Bottom),
+        ..Table::default()
+    };
+    let page = Page::Sheet(SheetPage {
+        name: "Sheet1".to_string(),
+        size: PageSize::default(),
+        margins: Margins::default(),
+        table,
+        header: None,
+        footer: None,
+        charts: vec![],
+    });
+    let doc = make_doc(vec![page]);
+    let output = generate_typst(&doc).unwrap();
+    assert!(
+        output.source.contains("align: bottom"),
+        "table-wide bottom alignment must be emitted. Got: {}",
+        output.source,
+    );
+}

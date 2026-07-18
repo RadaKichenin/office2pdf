@@ -63,6 +63,7 @@ fn test_table_with_default_cell_padding() {
             left: 4.0,
         }),
         use_content_driven_row_heights: false,
+        default_vertical_align: None,
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -108,6 +109,7 @@ fn test_table_cell_with_padding_override() {
             left: 4.0,
         }),
         use_content_driven_row_heights: false,
+        default_vertical_align: None,
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -130,6 +132,7 @@ fn test_table_alignment_center_wraps_table() {
         alignment: Some(Alignment::Center),
         default_cell_padding: None,
         use_content_driven_row_heights: false,
+        default_vertical_align: None,
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -307,6 +310,7 @@ fn test_table_with_content_driven_row_heights_omits_explicit_rows() {
         ],
         column_widths: vec![100.0, 100.0],
         use_content_driven_row_heights: true,
+        default_vertical_align: None,
         ..Table::default()
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
