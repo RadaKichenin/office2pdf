@@ -300,3 +300,45 @@ fn test_direct_jc_center_applied_to_paragraph() {
 
     assert_eq!(para.style.alignment, Some(Alignment::Center));
 }
+
+#[test]
+fn test_default_paragraph_style_applies_without_pstyle() {
+    // w:default="1" marks the style that paragraphs without an explicit
+    // pStyle inherit (issue #288): its spacing must survive the cascade.
+    let mut normal = docx_rs::Style::new("Normal", docx_rs::StyleType::Paragraph)
+        .name("Normal")
+        .size(24)
+        .line_spacing(
+            docx_rs::LineSpacing::new()
+                .after(160)
+                .line(360)
+                .line_rule(docx_rs::LineSpacingType::Auto),
+        );
+    normal.default = true;
+
+    let data = build_docx_bytes_with_styles(
+        vec![docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text("본문 문단"))],
+        vec![normal],
+    );
+
+    let parser = DocxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let Page::Flow(flow) = &doc.pages[0] else {
+        panic!("expected flow page");
+    };
+    let Block::Paragraph(paragraph) = flow
+        .content
+        .iter()
+        .find(|b| matches!(b, Block::Paragraph(_)))
+        .expect("paragraph")
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        paragraph.style.space_after,
+        Some(8.0),
+        "default style spacing (160 twips = 8pt) must apply to pStyle-less paragraphs"
+    );
+    assert_eq!(paragraph.runs[0].style.font_size, Some(12.0));
+}
