@@ -115,16 +115,21 @@ fn test_codegen_chart_line_trend_indicators() {
     })])]);
 
     let output = generate_typst(&doc).unwrap();
+    // Multi-point line charts now render as an axis-scaled polyline plot
+    // (not a trend-indicator table).
     assert!(
-        output.source.contains("Line Chart"),
-        "Expected line chart label, got:\n{}",
+        output.source.contains("Trends"),
+        "Expected chart title, got:\n{}",
         output.source
     );
-    let has_trend =
-        output.source.contains('↑') || output.source.contains('↓') || output.source.contains('→');
     assert!(
-        has_trend,
-        "Expected trend indicators in line chart, got:\n{}",
+        output.source.contains("path(stroke:"),
+        "Expected polyline path for the line chart, got:\n{}",
+        output.source
+    );
+    assert!(
+        output.source.contains("Sales"),
+        "Expected series name in legend, got:\n{}",
         output.source
     );
 }
@@ -293,4 +298,39 @@ fn test_smartart_codegen_special_chars() {
         "Expected escaped $, got:\n{}",
         output.source
     );
+}
+
+#[test]
+fn test_codegen_chart_line_plot() {
+    let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Chart {
+        chart_type: ChartType::Line,
+        title: None,
+        categories: vec!["1".to_string(), "2".to_string(), "3".to_string()],
+        series: vec![
+            ChartSeries {
+                name: Some("A".to_string()),
+                values: vec![1.0, 2.0, 3.0],
+            },
+            ChartSeries {
+                name: Some("B".to_string()),
+                values: vec![10.0, 9.0, 14.0],
+            },
+        ],
+    })])]);
+
+    let output = generate_typst(&doc).unwrap();
+    assert!(
+        output.source.contains("path(stroke:"),
+        "line chart must draw polyline paths; got:\n{}",
+        output.source
+    );
+    assert!(
+        output.source.contains("line(end:"),
+        "line chart must draw axis gridlines; got:\n{}",
+        output.source
+    );
+    // Both series names appear in the legend.
+    assert!(output.source.contains("[A]") && output.source.contains("[B]"));
+    // Category labels 1..3 present.
+    assert!(output.source.contains("[1]") && output.source.contains("[3]"));
 }

@@ -18,6 +18,14 @@ pub(super) fn generate_chart(out: &mut String, chart: &Chart) {
         generate_chart_axis(out, chart);
         return;
     }
+    // Line/area charts render as a polyline plot over the same axis.
+    if matches!(chart.chart_type, ChartType::Line | ChartType::Area)
+        && !chart.series.is_empty()
+        && chart.categories.len() >= 2
+    {
+        generate_chart_line_plot(out, chart);
+        return;
+    }
 
     let _ = writeln!(
         out,
@@ -362,6 +370,158 @@ fn generate_chart_bar(out: &mut String, chart: &Chart) {
             );
         }
     }
+}
+
+/// Render a line/area chart as a polyline plot over a value axis, matching
+/// the native Excel/PowerPoint composition (gridlines, tick labels, category
+/// axis, markers, legend).
+fn generate_chart_line_plot(out: &mut String, chart: &Chart) {
+    const PLOT_W: f64 = 320.0;
+    const PLOT_H: f64 = 210.0;
+    const VALUE_GAP: f64 = 24.0; // value tick label gutter (left)
+    const CAT_GAP: f64 = 18.0; // category label gutter (bottom)
+    const LEGEND_W: f64 = 88.0;
+    const INSET: f64 = 10.0; // keep first/last points off the axes
+    const GAP: f64 = 6.0;
+
+    let categories: usize = chart.categories.len();
+    let series: &[crate::ir::ChartSeries] = &chart.series;
+
+    let max_value: f64 = series
+        .iter()
+        .flat_map(|s| s.values.iter())
+        .copied()
+        .fold(0.0_f64, f64::max);
+    let (nice_max, step) = nice_axis(max_value);
+
+    if let Some(title) = chart.title.as_deref() {
+        let _ = writeln!(
+            out,
+            "#align(center)[#text(size: 11pt, weight: \"bold\")[{}]]",
+            escape_typst(title)
+        );
+        out.push_str("#v(4pt)\n");
+    }
+
+    let plot_x: f64 = VALUE_GAP + GAP;
+    let plot_y: f64 = 0.0;
+    let total_w: f64 = plot_x + PLOT_W + GAP + LEGEND_W;
+    let total_h: f64 = PLOT_H + CAT_GAP;
+    let _ = writeln!(
+        out,
+        "#box(width: {}pt, height: {}pt)[",
+        format_f64(total_w),
+        format_f64(total_h)
+    );
+
+    // Horizontal gridlines + value tick labels.
+    let mut tick: f64 = 0.0;
+    while tick <= nice_max + step * 1e-6 {
+        let y: f64 = plot_y + (1.0 - tick / nice_max) * PLOT_H;
+        let _ = writeln!(
+            out,
+            "#place(top + left, dx: {}pt, dy: {}pt, line(end: ({}pt, 0pt), stroke: 0.6pt + rgb(200, 200, 200)))",
+            format_f64(plot_x),
+            format_f64(y),
+            format_f64(PLOT_W)
+        );
+        let _ = writeln!(
+            out,
+            "#place(top + left, dx: 0pt, dy: {}pt, box(width: {}pt, height: 10pt)[#align(right + horizon)[#text(size: 8pt)[{}]]])",
+            format_f64(y - 5.0),
+            format_f64(VALUE_GAP),
+            chart_value_label(tick)
+        );
+        tick += step;
+    }
+
+    let point_x = |index: usize| -> f64 {
+        if categories <= 1 {
+            plot_x + PLOT_W / 2.0
+        } else {
+            plot_x + INSET + (index as f64 / (categories as f64 - 1.0)) * (PLOT_W - 2.0 * INSET)
+        }
+    };
+    let point_y =
+        |value: f64| -> f64 { plot_y + (1.0 - (value / nice_max).clamp(0.0, 1.0)) * PLOT_H };
+
+    // Category axis labels.
+    for (index, category) in chart.categories.iter().enumerate() {
+        let x: f64 = point_x(index);
+        let _ = writeln!(
+            out,
+            "#place(top + left, dx: {}pt, dy: {}pt, box(width: 24pt)[#align(center)[#text(size: 8pt)[{}]]])",
+            format_f64(x - 12.0),
+            format_f64(plot_y + PLOT_H + 3.0),
+            escape_typst(category)
+        );
+    }
+
+    // Series polylines + markers.
+    for (s_index, s) in series.iter().enumerate() {
+        let color: &str = CHART_SERIES_COLORS[s_index % CHART_SERIES_COLORS.len()];
+        let points: Vec<(f64, f64)> = s
+            .values
+            .iter()
+            .enumerate()
+            .map(|(index, value)| (point_x(index), point_y(*value)))
+            .collect();
+        if points.len() >= 2 {
+            let coords: String = points
+                .iter()
+                .map(|(x, y)| format!("({}pt, {}pt)", format_f64(*x), format_f64(*y)))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let _ = writeln!(
+                out,
+                "#place(top + left, path(stroke: 2pt + {color}, {coords}))"
+            );
+        }
+        // Point markers.
+        for (x, y) in &points {
+            let _ = writeln!(
+                out,
+                "#place(top + left, dx: {}pt, dy: {}pt, rect(width: 5pt, height: 5pt, fill: {color}, stroke: none))",
+                format_f64(x - 2.5),
+                format_f64(y - 2.5)
+            );
+        }
+    }
+
+    // Value/category axis lines.
+    let _ = writeln!(
+        out,
+        "#place(top + left, dx: {}pt, dy: {}pt, line(end: (0pt, {}pt), stroke: 0.8pt + rgb(120, 120, 120)))",
+        format_f64(plot_x),
+        format_f64(plot_y),
+        format_f64(PLOT_H)
+    );
+    let _ = writeln!(
+        out,
+        "#place(top + left, dx: {}pt, dy: {}pt, line(end: ({}pt, 0pt), stroke: 0.8pt + rgb(120, 120, 120)))",
+        format_f64(plot_x),
+        format_f64(plot_y + PLOT_H),
+        format_f64(PLOT_W)
+    );
+
+    // Legend on the right.
+    let legend_x: f64 = plot_x + PLOT_W + GAP;
+    let legend_h: f64 = series.len() as f64 * 16.0;
+    let legend_y: f64 = (PLOT_H - legend_h).max(0.0) / 2.0;
+    for (s_index, s) in series.iter().enumerate() {
+        let color: &str = CHART_SERIES_COLORS[s_index % CHART_SERIES_COLORS.len()];
+        let default_name: String = format!("Series {}", s_index + 1);
+        let name: &str = s.name.as_deref().unwrap_or(&default_name);
+        let _ = writeln!(
+            out,
+            "#place(top + left, dx: {}pt, dy: {}pt, box[#box(width: 12pt, height: 3pt, fill: {color}, baseline: -3pt) #text(size: 9pt)[{}]])",
+            format_f64(legend_x),
+            format_f64(legend_y + s_index as f64 * 16.0),
+            escape_typst(name)
+        );
+    }
+
+    out.push_str("]\n");
 }
 
 fn generate_chart_pie(out: &mut String, chart: &Chart) {

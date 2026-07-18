@@ -57,6 +57,14 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
     }
 
     let chart_type = chart_type?;
+
+    // Charts may omit <c:cat> entirely; Excel then labels the category axis
+    // 1..N (the point count of the longest series).
+    if categories.is_empty() {
+        let point_count: usize = series.iter().map(|s| s.values.len()).max().unwrap_or(0);
+        categories = (1..=point_count).map(|i| i.to_string()).collect();
+    }
+
     Some(Chart {
         chart_type,
         title,
