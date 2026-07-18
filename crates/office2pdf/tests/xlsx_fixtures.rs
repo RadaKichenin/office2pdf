@@ -193,7 +193,6 @@ fn structure_pr_186_contributor_acceptance_supported_behavior() {
 }
 
 #[test]
-#[ignore = "pending PR #186 adaptation: General numeric cells should align right"]
 fn acceptance_pr_186_contributor_acceptance_numeric_general_alignment() {
     let pages = sheet_pages(PR_186_FIXTURE);
     let statement = sheet_page_named(&pages, "Statement Landscape");
@@ -212,7 +211,6 @@ fn acceptance_pr_186_contributor_acceptance_numeric_general_alignment() {
 }
 
 #[test]
-#[ignore = "pending PR #186 adaptation: preserve worksheet paper size and orientation"]
 fn acceptance_pr_186_contributor_acceptance_page_setup() {
     let pages = sheet_pages(PR_186_FIXTURE);
     let statement = sheet_page_named(&pages, "Statement Landscape");
@@ -225,7 +223,6 @@ fn acceptance_pr_186_contributor_acceptance_page_setup() {
 }
 
 #[test]
-#[ignore = "pending PR #186 adaptation: render Double as a 2.5x solid stroke"]
 fn acceptance_pr_186_contributor_acceptance_double_border_rendering() {
     let data = load_fixture(PR_186_FIXTURE);
     let (document, _warnings) = XlsxParser
@@ -234,7 +231,11 @@ fn acceptance_pr_186_contributor_acceptance_double_border_rendering() {
     let output = generate_typst(&document).expect("fixture should generate Typst");
 
     assert!(!output.source.contains("dash: \"dashed\""));
-    assert!(output.source.contains("2.5pt + rgb(0, 0, 0)"));
+    assert!(
+        output
+            .source
+            .contains("(paint: rgb(0, 0, 0), thickness: 2.5pt)")
+    );
 }
 
 // ---------------------------------------------------------------------------

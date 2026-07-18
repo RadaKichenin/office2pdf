@@ -312,6 +312,13 @@ fn format_border_side(side: &BorderSide) -> String {
     );
     match side.style {
         BorderLineStyle::Solid | BorderLineStyle::None => base,
+        BorderLineStyle::Double => format!(
+            "(paint: rgb({}, {}, {}), thickness: {}pt)",
+            side.color.r,
+            side.color.g,
+            side.color.b,
+            format_f64(side.width * 2.5),
+        ),
         _ => format!(
             "(paint: rgb({}, {}, {}), thickness: {}pt, dash: \"{}\")",
             side.color.r,
