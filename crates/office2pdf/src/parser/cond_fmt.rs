@@ -12,6 +12,7 @@ pub(crate) struct CondFmtOverride {
     pub bold: Option<bool>,
     pub data_bar: Option<DataBarInfo>,
     pub icon_text: Option<String>,
+    pub icon_color: Option<Color>,
 }
 
 /// Parse an sqref string (e.g., "A1:C10" or "A1") into a list of CellRanges.
@@ -381,12 +382,12 @@ fn apply_icon_set_rule(
         ]
     };
 
-    // Default 3-icon arrows: down (low), right (mid), up (high)
-    let icons: &[&str] = if thresholds.len() >= 5 {
-        &["⇊", "↓", "→", "↑", "⇈"]
-    } else {
-        &["↓", "→", "↑"]
-    };
+    let set_type: &str = rule
+        .get_icon_set()
+        .map(|is| is.get_icon_set_type())
+        .unwrap_or("");
+    let icons: Vec<(&'static str, Option<Color>)> =
+        icon_set_glyphs(set_type, thresholds.len().max(3));
 
     for range in ranges {
         for row in range.start_row..=range.end_row {
@@ -395,9 +396,117 @@ fn apply_icon_set_rule(
                     && let Some(val) = cell_numeric_value(cell)
                 {
                     let icon_idx: usize = evaluate_icon_index(val, &thresholds, icons.len());
+                    let (glyph, color) = &icons[icon_idx];
                     let entry = overrides.entry((col, row)).or_default();
-                    entry.icon_text = Some(icons[icon_idx].to_string());
+                    entry.icon_text = Some((*glyph).to_string());
+                    entry.icon_color = *color;
                 }
+            }
+        }
+    }
+}
+
+/// Excel's icon band colors (sampled from Excel's own PDF output).
+const ICON_RED: Color = Color {
+    r: 214,
+    g: 85,
+    b: 50,
+};
+const ICON_YELLOW: Color = Color {
+    r: 234,
+    g: 191,
+    b: 87,
+};
+const ICON_GREEN: Color = Color {
+    r: 104,
+    g: 164,
+    b: 144,
+};
+const ICON_GRAY: Color = Color {
+    r: 128,
+    g: 128,
+    b: 128,
+};
+const ICON_BLACK: Color = Color { r: 0, g: 0, b: 0 };
+
+/// Map an OOXML iconSet type to per-band (glyph, color) pairs, low band first.
+/// An absent attribute means the spec default 3TrafficLights1. Unknown set
+/// types fall back to colored arrows of the requested band count.
+fn icon_set_glyphs(set_type: &str, band_count: usize) -> Vec<(&'static str, Option<Color>)> {
+    let effective_type: &str = if set_type.is_empty() {
+        "3TrafficLights1"
+    } else {
+        set_type
+    };
+    match effective_type {
+        "3TrafficLights1" | "3TrafficLights2" | "3Signs" => vec![
+            ("●", Some(ICON_RED)),
+            ("●", Some(ICON_YELLOW)),
+            ("●", Some(ICON_GREEN)),
+        ],
+        "4TrafficLights" => vec![
+            ("●", Some(ICON_BLACK)),
+            ("●", Some(ICON_RED)),
+            ("●", Some(ICON_YELLOW)),
+            ("●", Some(ICON_GREEN)),
+        ],
+        "3Symbols" | "3Symbols2" => vec![
+            ("✗", Some(ICON_RED)),
+            ("!", Some(ICON_YELLOW)),
+            ("✓", Some(ICON_GREEN)),
+        ],
+        "3Flags" => vec![
+            ("⚑", Some(ICON_RED)),
+            ("⚑", Some(ICON_YELLOW)),
+            ("⚑", Some(ICON_GREEN)),
+        ],
+        "3Arrows" => vec![
+            ("↓", Some(ICON_RED)),
+            ("→", Some(ICON_YELLOW)),
+            ("↑", Some(ICON_GREEN)),
+        ],
+        "3ArrowsGray" => vec![
+            ("↓", Some(ICON_GRAY)),
+            ("→", Some(ICON_GRAY)),
+            ("↑", Some(ICON_GRAY)),
+        ],
+        "4Arrows" => vec![
+            ("↓", Some(ICON_RED)),
+            ("↘", Some(ICON_YELLOW)),
+            ("↗", Some(ICON_YELLOW)),
+            ("↑", Some(ICON_GREEN)),
+        ],
+        "4ArrowsGray" => vec![
+            ("↓", Some(ICON_GRAY)),
+            ("↘", Some(ICON_GRAY)),
+            ("↗", Some(ICON_GRAY)),
+            ("↑", Some(ICON_GRAY)),
+        ],
+        "5Arrows" => vec![
+            ("↓", Some(ICON_RED)),
+            ("↘", Some(ICON_YELLOW)),
+            ("→", Some(ICON_YELLOW)),
+            ("↗", Some(ICON_YELLOW)),
+            ("↑", Some(ICON_GREEN)),
+        ],
+        "5ArrowsGray" => vec![
+            ("↓", Some(ICON_GRAY)),
+            ("↘", Some(ICON_GRAY)),
+            ("→", Some(ICON_GRAY)),
+            ("↗", Some(ICON_GRAY)),
+            ("↑", Some(ICON_GRAY)),
+        ],
+        _ => {
+            if band_count >= 5 {
+                vec![
+                    ("⇊", None),
+                    ("↓", None),
+                    ("→", None),
+                    ("↑", None),
+                    ("⇈", None),
+                ]
+            } else {
+                vec![("↓", None), ("→", None), ("↑", None)]
             }
         }
     }

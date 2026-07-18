@@ -66,6 +66,7 @@ fn test_icon_text_codegen() {
             }],
         })],
         icon_text: Some("↑".to_string()),
+        icon_color: Some(Color::new(214, 85, 50)),
         ..TableCell::default()
     };
     let table = Table {
@@ -90,6 +91,11 @@ fn test_icon_text_codegen() {
     assert!(
         output.source.contains("↑"),
         "Icon text should appear in output. Got: {}",
+        output.source,
+    );
+    assert!(
+        output.source.contains("rgb(214, 85, 50)"),
+        "Icon color should tint the icon glyph. Got: {}",
         output.source,
     );
 }
