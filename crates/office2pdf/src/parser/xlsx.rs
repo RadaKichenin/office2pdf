@@ -48,6 +48,43 @@ fn sheet_print_margins(sheet: &umya_spreadsheet::Worksheet) -> Margins {
     }
 }
 
+/// Map an OOXML worksheet paper-size code to portrait dimensions in points.
+/// Unknown or omitted codes keep the renderer's A4 default.
+fn worksheet_paper_size(code: u32) -> PageSize {
+    let (width, height) = match code {
+        1 | 2 => (612.0, 792.0),    // Letter / Letter Small
+        3 => (792.0, 1224.0),       // Tabloid
+        4 => (1224.0, 792.0),       // Ledger
+        5 => (612.0, 1008.0),       // Legal
+        6 => (396.0, 612.0),        // Statement
+        7 => (522.0, 756.0),        // Executive
+        8 => (841.89, 1190.55),     // A3
+        9 | 10 => (595.28, 841.89), // A4 / A4 Small
+        11 => (419.53, 595.28),     // A5
+        12 => (728.50, 1031.81),    // B4 (JIS)
+        13 => (515.91, 728.50),     // B5 (JIS)
+        _ => return PageSize::default(),
+    };
+    PageSize { width, height }
+}
+
+/// Preserve a worksheet's paper size and landscape orientation in the IR.
+fn sheet_page_size(sheet: &umya_spreadsheet::Worksheet) -> PageSize {
+    let page_setup = sheet.get_page_setup();
+    let size = worksheet_paper_size(*page_setup.get_paper_size());
+    if matches!(
+        page_setup.get_orientation(),
+        umya_spreadsheet::structs::OrientationValues::Landscape
+    ) {
+        PageSize {
+            width: size.height,
+            height: size.width,
+        }
+    } else {
+        size
+    }
+}
+
 /// Convert absolute print-title columns to 0-based indices within the
 /// rendered column range, half-open. None when the titles fall outside it.
 fn title_column_indices(print_titles: PrintTitles, ctx: &SheetContext) -> Option<(usize, usize)> {
@@ -233,7 +270,7 @@ impl XlsxParser {
                             metadata: metadata.clone(),
                             pages: vec![Page::Sheet(SheetPage {
                                 name: sheet_name,
-                                size: PageSize::default(),
+                                size: sheet_page_size(sheet),
                                 margins: sheet_print_margins(sheet),
                                 table: Table::default(),
                                 header: None,
@@ -313,7 +350,7 @@ impl XlsxParser {
                     pages: xlsx_pagination::split_sheet_page_by_width(
                         SheetPage {
                             name: sheet_name.clone(),
-                            size: PageSize::default(),
+                            size: sheet_page_size(sheet),
                             margins: sheet_print_margins(sheet),
                             table: Table {
                                 rows,
@@ -414,7 +451,7 @@ impl Parser for XlsxParser {
                     if !images.is_empty() || !text_boxes.is_empty() || !charts.is_empty() {
                         pages.push(Page::Sheet(SheetPage {
                             name: sheet_name,
-                            size: PageSize::default(),
+                            size: sheet_page_size(sheet),
                             margins: sheet_print_margins(sheet),
                             table: Table::default(),
                             header: None,
@@ -485,7 +522,7 @@ impl Parser for XlsxParser {
                     xlsx_pagination::split_sheet_page_by_width(
                         SheetPage {
                             name: sheet_name,
-                            size: PageSize::default(),
+                            size: sheet_page_size(sheet),
                             margins: sheet_print_margins(sheet),
                             table: Table {
                                 rows,
@@ -553,7 +590,7 @@ impl Parser for XlsxParser {
                         xlsx_pagination::split_sheet_page_by_width(
                             SheetPage {
                                 name: sheet_name.clone(),
-                                size: PageSize::default(),
+                                size: sheet_page_size(sheet),
                                 margins: sheet_print_margins(sheet),
                                 table: Table {
                                     rows: segment,

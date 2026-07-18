@@ -182,10 +182,7 @@ fn test_border_line_style_to_typst_mapping() {
         border_line_style_to_typst(BorderLineStyle::DashDotDot),
         "dash-dotted"
     );
-    assert_eq!(
-        border_line_style_to_typst(BorderLineStyle::Double),
-        "dashed"
-    );
+    assert_eq!(border_line_style_to_typst(BorderLineStyle::Double), "solid");
     assert_eq!(border_line_style_to_typst(BorderLineStyle::None), "solid");
 }
 

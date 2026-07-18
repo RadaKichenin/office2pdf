@@ -526,6 +526,11 @@ pub(super) fn build_rows_for_range(
                     .filter(|is_rtl| *is_rtl)
                     .map(|_| crate::ir::Alignment::Right)
             });
+            let paragraph_alignment = cell_alignment.or_else(|| {
+                umya_cell
+                    .and_then(|cell| cell.get_value_number())
+                    .map(|_| crate::ir::Alignment::Right)
+            });
 
             let (col_span, row_span) = if let Some(info) = ctx.merge_tops.get(&(col_idx, row_idx)) {
                 (info.col_span, info.row_span)
@@ -539,7 +544,7 @@ pub(super) fn build_rows_for_range(
                 col_idx,
                 row_idx,
                 &runs,
-                cell_alignment,
+                paragraph_alignment,
                 col_span,
                 umya_cell,
             );
@@ -549,7 +554,7 @@ pub(super) fn build_rows_for_range(
             } else {
                 vec![Block::Paragraph(Paragraph {
                     style: ParagraphStyle {
-                        alignment: cell_alignment,
+                        alignment: paragraph_alignment,
                         ..ParagraphStyle::default()
                     },
                     runs,
