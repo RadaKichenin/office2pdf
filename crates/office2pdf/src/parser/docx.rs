@@ -43,10 +43,10 @@ use self::styles::{
 };
 use self::tables::convert_table;
 use self::text::{
-    extract_doc_default_text_style, extract_paragraph_style, extract_run_style,
-    extract_run_style_id, extract_run_text, extract_run_text_skip_layout_breaks,
-    extract_tab_stop_overrides, is_column_break, is_page_break, parse_hex_color,
-    resolve_hyperlink_url,
+    ThemeFonts, extract_doc_default_text_style_with_theme, extract_paragraph_style,
+    extract_run_style, extract_run_style_id, extract_run_text, extract_run_text_skip_layout_breaks,
+    extract_tab_stop_overrides, is_column_break, is_page_break, parse_hex_color, parse_theme_fonts,
+    resolve_hyperlink_url, resolve_theme_font_family,
 };
 #[cfg(test)]
 use self::text::{extract_tab_stops, resolve_highlight_color};
@@ -179,6 +179,7 @@ struct ZipPreParseAssets {
     column_layouts: Vec<Option<ColumnLayout>>,
     header_footer_assets: HeaderFooterAssets,
     metafile_images: ImageMap,
+    theme_fonts: ThemeFonts,
 }
 
 /// Build all pre-parse contexts from the DOCX ZIP in a single pass.
@@ -229,6 +230,10 @@ fn build_zip_preparse_assets(data: &[u8]) -> ZipPreParseAssets {
                 column_layouts,
                 header_footer_assets,
                 metafile_images,
+                theme_fonts: theme_xml
+                    .as_deref()
+                    .map(parse_theme_fonts)
+                    .unwrap_or_default(),
             }
         }
         Err(_) => ZipPreParseAssets {
@@ -249,6 +254,7 @@ fn build_zip_preparse_assets(data: &[u8]) -> ZipPreParseAssets {
             column_layouts: Vec::new(),
             header_footer_assets: HeaderFooterAssets::default(),
             metafile_images: ImageMap::new(),
+            theme_fonts: ThemeFonts::default(),
         },
     }
 }
@@ -267,6 +273,7 @@ impl Parser for DocxParser {
             column_layouts,
             header_footer_assets,
             metafile_images,
+            theme_fonts,
         } = build_zip_preparse_assets(data);
 
         let docx = docx_rs::read_docx(data).map_err(|e| {
@@ -280,7 +287,7 @@ impl Parser for DocxParser {
         images.extend(metafile_images);
         let hyperlinks = build_hyperlink_map(&docx);
         let numberings = build_numbering_map(&docx.numberings);
-        let style_map = build_style_map(&docx.styles);
+        let style_map = build_style_map(&docx.styles, &theme_fonts);
         let mut warnings: Vec<ConvertWarning> = Vec::new();
 
         let mut elements: Vec<TaggedElement> = Vec::new();

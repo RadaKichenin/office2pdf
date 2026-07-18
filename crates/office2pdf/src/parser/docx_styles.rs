@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use crate::ir::{ParagraphStyle, TabStop, TextStyle};
 
 use super::{
-    extract_doc_default_text_style, extract_paragraph_style, extract_run_style,
-    extract_tab_stop_overrides,
+    ThemeFonts, extract_doc_default_text_style_with_theme, extract_paragraph_style,
+    extract_run_style, extract_tab_stop_overrides, resolve_theme_font_family,
 };
 
 /// Resolved style formatting extracted from a document style definition.
@@ -33,9 +33,9 @@ use crate::defaults::HEADING_FONT_SIZES;
 
 /// Build a map from style ID → resolved formatting by extracting formatting
 /// from each style's run_property and paragraph_property.
-pub(super) fn build_style_map(styles: &docx_rs::Styles) -> StyleMap {
+pub(super) fn build_style_map(styles: &docx_rs::Styles, theme_fonts: &ThemeFonts) -> StyleMap {
     let mut map = StyleMap::new();
-    let default_text: TextStyle = extract_doc_default_text_style(styles);
+    let default_text: TextStyle = extract_doc_default_text_style_with_theme(styles, theme_fonts);
 
     map.insert(
         DOC_DEFAULT_STYLE_ID.to_string(),
@@ -50,10 +50,14 @@ pub(super) fn build_style_map(styles: &docx_rs::Styles) -> StyleMap {
     for style in &styles.styles {
         match style.style_type {
             docx_rs::StyleType::Paragraph => {
-                let text = merge_text_style(
-                    &extract_run_style(&style.run_property),
-                    map.get(DOC_DEFAULT_STYLE_ID),
-                );
+                let mut own_text = extract_run_style(&style.run_property);
+                if own_text.font_family.is_none()
+                    && let Ok(run_property_json) = serde_json::to_value(&style.run_property)
+                {
+                    own_text.font_family =
+                        resolve_theme_font_family(&run_property_json, theme_fonts);
+                }
+                let text = merge_text_style(&own_text, map.get(DOC_DEFAULT_STYLE_ID));
                 let paragraph = extract_paragraph_style(&style.paragraph_property);
                 let paragraph_tab_overrides =
                     extract_tab_stop_overrides(&style.paragraph_property.tabs);

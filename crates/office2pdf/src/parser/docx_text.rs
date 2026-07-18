@@ -184,7 +184,10 @@ fn json_bool_or_val(value: &serde_json::Value) -> Option<bool> {
         .or_else(|| value.get("val").and_then(serde_json::Value::as_bool))
 }
 
-pub(super) fn extract_doc_default_text_style(styles: &docx_rs::Styles) -> TextStyle {
+pub(super) fn extract_doc_default_text_style_with_theme(
+    styles: &docx_rs::Styles,
+    theme_fonts: &ThemeFonts,
+) -> TextStyle {
     let Ok(json) = serde_json::to_value(&styles.doc_defaults) else {
         return TextStyle::default();
     };
@@ -195,7 +198,86 @@ pub(super) fn extract_doc_default_text_style(styles: &docx_rs::Styles) -> TextSt
         return TextStyle::default();
     };
 
-    extract_run_style_from_json(run_property)
+    let mut style = extract_run_style_from_json(run_property);
+    if style.font_family.is_none() {
+        style.font_family = resolve_theme_font_family(run_property, theme_fonts);
+    }
+    style
+}
+
+/// Latin typefaces of the document theme's minor (body) and major (heading)
+/// font schemes, from `word/theme/theme1.xml`.
+#[derive(Debug, Clone, Default)]
+pub(super) struct ThemeFonts {
+    pub(super) minor_latin: Option<String>,
+    pub(super) major_latin: Option<String>,
+}
+
+/// Parse the theme's font scheme latin typefaces.
+pub(super) fn parse_theme_fonts(theme_xml: &str) -> ThemeFonts {
+    use quick_xml::Reader;
+    use quick_xml::events::Event;
+
+    let mut fonts = ThemeFonts::default();
+    let mut reader = Reader::from_str(theme_xml);
+    let mut in_minor = false;
+    let mut in_major = false;
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(ref e)) => match e.local_name().as_ref() {
+                b"minorFont" => in_minor = true,
+                b"majorFont" => in_major = true,
+                _ => {}
+            },
+            Ok(Event::Empty(ref e)) if e.local_name().as_ref() == b"latin" => {
+                let typeface: Option<String> = e.attributes().flatten().find_map(|attr| {
+                    (attr.key.local_name().as_ref() == b"typeface")
+                        .then(|| attr.unescape_value().ok())
+                        .flatten()
+                        .map(|v| v.to_string())
+                        .filter(|v| !v.is_empty())
+                });
+                if in_minor {
+                    fonts.minor_latin = typeface;
+                } else if in_major {
+                    fonts.major_latin = typeface;
+                }
+            }
+            Ok(Event::End(ref e)) => match e.local_name().as_ref() {
+                b"minorFont" => in_minor = false,
+                b"majorFont" => in_major = false,
+                _ => {}
+            },
+            Ok(Event::Eof) => break,
+            Err(_) => break,
+            _ => {}
+        }
+    }
+
+    fonts
+}
+
+/// Resolve rFonts theme slots (asciiTheme="minorHAnsi" etc.) against the
+/// document theme when no literal font family is given.
+pub(super) fn resolve_theme_font_family(
+    run_property_json: &serde_json::Value,
+    theme_fonts: &ThemeFonts,
+) -> Option<String> {
+    let fonts = run_property_json.get("fonts")?;
+    let slot: &str = fonts
+        .get("asciiTheme")
+        .or_else(|| fonts.get("hiAnsiTheme"))
+        .or_else(|| fonts.get("eastAsiaTheme"))
+        .or_else(|| fonts.get("csTheme"))
+        .and_then(serde_json::Value::as_str)?;
+    if slot.starts_with("minor") {
+        theme_fonts.minor_latin.clone()
+    } else if slot.starts_with("major") {
+        theme_fonts.major_latin.clone()
+    } else {
+        None
+    }
 }
 
 pub(super) fn resolve_highlight_color(name: &str) -> Option<Color> {
