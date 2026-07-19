@@ -302,6 +302,7 @@ impl Parser for DocxParser {
                         &hyperlinks,
                         &style_map,
                         &ctx,
+                        &docx.styles,
                     )];
                     // Inject math equations for this body child
                     let eqs = math.take(idx);
@@ -326,7 +327,7 @@ impl Parser for DocxParser {
                     ))])]
                 }
                 docx_rs::DocumentChild::StructuredDataTag(sdt) => {
-                    convert_sdt_children(sdt, &images, &hyperlinks, &style_map, &ctx)
+                    convert_sdt_children(sdt, &images, &hyperlinks, &style_map, &ctx, &docx.styles)
                 }
                 _ => vec![TaggedElement::Plain(vec![])],
             }));
@@ -402,13 +403,14 @@ fn convert_sdt_children(
     hyperlinks: &HyperlinkMap,
     style_map: &StyleMap,
     ctx: &DocxConversionContext,
+    styles: &docx_rs::Styles,
 ) -> Vec<TaggedElement> {
     let mut result = Vec::new();
     for child in &sdt.children {
         match child {
             docx_rs::StructuredDataTagChild::Paragraph(para) => {
                 result.push(convert_paragraph_element(
-                    para, images, hyperlinks, style_map, ctx,
+                    para, images, hyperlinks, style_map, ctx, styles,
                 ));
             }
             docx_rs::StructuredDataTagChild::Table(table) => {
@@ -418,7 +420,7 @@ fn convert_sdt_children(
             }
             docx_rs::StructuredDataTagChild::StructuredDataTag(nested) => {
                 result.extend(convert_sdt_children(
-                    nested, images, hyperlinks, style_map, ctx,
+                    nested, images, hyperlinks, style_map, ctx, styles,
                 ));
             }
             _ => {}
@@ -435,8 +437,9 @@ fn convert_paragraph_element(
     hyperlinks: &HyperlinkMap,
     style_map: &StyleMap,
     ctx: &DocxConversionContext,
+    styles: &docx_rs::Styles,
 ) -> TaggedElement {
-    let num_info = extract_num_info(para);
+    let num_info = extract_num_info(para, styles);
 
     // Build the paragraph IR
     let mut blocks = Vec::new();
