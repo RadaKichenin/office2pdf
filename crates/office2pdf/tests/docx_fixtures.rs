@@ -209,7 +209,6 @@ fn structure_pr_187_contributor_acceptance_supported_behavior() {
 }
 
 #[test]
-#[ignore = "pending PR #187 adaptation: retain explicit white cell shading"]
 fn acceptance_pr_187_contributor_acceptance_explicit_white_shading() {
     let pages = flow_pages(PR_187_FIXTURE);
     let table = pr_187_table(&pages);
@@ -221,7 +220,6 @@ fn acceptance_pr_187_contributor_acceptance_explicit_white_shading() {
 }
 
 #[test]
-#[ignore = "pending PR #187 adaptation: resolve paragraph numbering from its style"]
 fn acceptance_pr_187_contributor_acceptance_style_inherited_numbering() {
     let pages = flow_pages(PR_187_FIXTURE);
     let lists = pages

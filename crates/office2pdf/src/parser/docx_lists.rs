@@ -217,11 +217,37 @@ pub(super) fn build_numbering_map(numberings: &docx_rs::Numberings) -> Numbering
 }
 
 /// Extract numbering info from a paragraph, if it has numPr.
-pub(super) fn extract_num_info(para: &docx_rs::Paragraph) -> Option<NumInfo> {
-    if !para.has_numbering {
-        return None;
+///
+/// Falls back to the style definition when the paragraph carries no inline
+/// `<w:numPr>` — this handles Word built-in list styles such as "List Bullet"
+/// and "List Number" whose numbering is defined on the style, not the paragraph.
+pub(super) fn extract_num_info(
+    para: &docx_rs::Paragraph,
+    styles: &docx_rs::Styles,
+) -> Option<NumInfo> {
+    if para.has_numbering {
+        let numbering_property = para.property.numbering_property.as_ref()?;
+        let num_id = numbering_property.id.as_ref()?.id;
+        let level = numbering_property
+            .level
+            .as_ref()
+            .map_or(0, |level| level.val as u32);
+        if num_id == 0 {
+            return None;
+        }
+        return Some(NumInfo { num_id, level });
     }
-    let numbering_property = para.property.numbering_property.as_ref()?;
+
+    let style_id = para
+        .property
+        .style
+        .as_ref()
+        .map(|style| style.val.as_str())?;
+    let style = styles
+        .styles
+        .iter()
+        .find(|style| style.style_id == style_id)?;
+    let numbering_property = style.paragraph_property.numbering_property.as_ref()?;
     let num_id = numbering_property.id.as_ref()?.id;
     let level = numbering_property
         .level
@@ -291,10 +317,11 @@ fn finalize_list(numbered_items: Vec<NumberedItem>, numberings: &NumberingMap) -
     }
 }
 
-/// Group consecutive list paragraphs into List blocks. Adjacent list paragraphs
-/// are merged into a single list even when their `numId` differs, so ordered
-/// numbering continues and `ilvl` nesting is preserved (issue #176). Any
-/// non-list element ends the current list.
+/// Group consecutive list paragraphs into List blocks. Compatible adjacent list
+/// paragraphs are merged even when their `numId` differs, so ordered numbering
+/// continues and `ilvl` nesting is preserved (issue #176). A top-level change
+/// between ordered and unordered numbering starts a new list, as does any
+/// non-list element.
 pub(super) fn group_into_lists(
     elements: Vec<TaggedElement>,
     numberings: &NumberingMap,
@@ -318,10 +345,30 @@ pub(super) fn group_into_lists(
                     .is_some_and(|previous| *previous != info.num_id);
                 let has_explicit_restart = resolved_level
                     .is_some_and(|level| level.has_start_override && is_num_id_change);
-                let is_first_in_block = current_list.is_empty();
                 let changes_series = current_list
                     .last()
                     .is_some_and(|numbered| numbered.series != series);
+                let current_root = current_list
+                    .iter()
+                    .filter_map(|numbered| {
+                        numberings
+                            .get(&numbered.num_id)
+                            .and_then(|numbering| numbering.levels.get(&numbered.item.level))
+                            .map(|level| (numbered.item.level, level.style.kind))
+                    })
+                    .min_by_key(|(level, _)| *level);
+                let starts_new_list = changes_series
+                    && current_root.is_some_and(|(root_level, root_kind)| {
+                        info.level <= root_level
+                            && resolved_level.is_some_and(|level| level.style.kind != root_kind)
+                    });
+                if starts_new_list {
+                    result.push(Block::List(finalize_list(
+                        std::mem::take(&mut current_list),
+                        numberings,
+                    )));
+                }
+                let is_first_in_block = current_list.is_empty();
                 let mut item = ListItem {
                     content: vec![paragraph],
                     level: info.level,
