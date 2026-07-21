@@ -33,6 +33,20 @@
 - After: `assets/bugfixes/issue-<!-- N -->/after.jpg`
 - Compare: `assets/bugfixes/issue-<!-- N -->/compare.jpg`
 
+### Visual comparison
+
+<!-- Replace each cell comment with rendered Markdown image syntax using a stable commit-pinned raw URL or GitHub attachment URL. -->
+
+| GT | Before | After |
+| --- | --- | --- |
+| <!-- ![GT](IMAGE_URL) --> | <!-- ![Before](IMAGE_URL) --> | <!-- ![After](IMAGE_URL) --> |
+
+<!-- Defect mode only: replace the cell comment with the rendered Compare image and remove the GT/Before/After table. -->
+
+| Compare |
+| --- |
+| <!-- ![Compare](IMAGE_URL) --> |
+
 ### Required inspection
 
 - [ ] Rendered all evidence at 150 DPI or higher
