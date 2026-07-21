@@ -195,6 +195,9 @@ pub(super) fn merge_paragraph_style(
             explicit_tab_overrides,
             inherited_tab_stops.as_deref(),
         ),
+        background: explicit
+            .background
+            .or(style_paragraph.and_then(|style| style.background)),
     }
 }
 

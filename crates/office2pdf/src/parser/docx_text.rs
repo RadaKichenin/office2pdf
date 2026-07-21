@@ -21,6 +21,7 @@ pub(super) fn extract_paragraph_style(prop: &docx_rs::ParagraphProperty) -> Para
     let (indent_left, indent_right, indent_first_line) = extract_indent(&prop.indent);
     let (line_spacing, space_before, space_after) = extract_line_spacing(&prop.line_spacing);
     let tab_stops = extract_tab_stops(&prop.tabs);
+    let background = extract_paragraph_shading(&prop.shading);
 
     ParagraphStyle {
         alignment,
@@ -34,7 +35,15 @@ pub(super) fn extract_paragraph_style(prop: &docx_rs::ParagraphProperty) -> Para
         heading_level: None,
         direction: None,
         tab_stops,
+        background,
     }
+}
+
+/// Word paints `w:pPr/w:shd` behind the whole paragraph. Only the fill color
+/// participates in print output; "auto" means no shading.
+fn extract_paragraph_shading(shading: &Option<docx_rs::Shading>) -> Option<Color> {
+    let shading = shading.as_ref()?;
+    xml_util::parse_hex_color(&shading.fill)
 }
 
 fn extract_indent(indent: &Option<docx_rs::Indent>) -> (Option<f64>, Option<f64>, Option<f64>) {

@@ -703,3 +703,30 @@ fn test_no_document_grid_keeps_default_line_height() {
     let result = generate_typst(&doc).unwrap().source;
     assert!(!result.contains("top-edge"), "no grid: {result}");
 }
+
+#[test]
+fn test_generate_paragraph_with_background_shading() {
+    // w:pPr/w:shd paints the whole paragraph; the block wrapper must carry
+    // the fill so the shading spans the full line width (issue #351).
+    let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
+        style: ParagraphStyle {
+            background: Some(Color::new(0xF4, 0xF4, 0xF4)),
+            ..ParagraphStyle::default()
+        },
+        runs: vec![Run {
+            text: "$ cargo install office2pdf-cli".to_string(),
+            style: TextStyle::default(),
+            href: None,
+            footnote: None,
+        }],
+    })])]);
+    let result = generate_typst(&doc).unwrap().source;
+    assert!(
+        result.contains("fill: rgb(244, 244, 244)"),
+        "paragraph shading must fill the block wrapper: {result}"
+    );
+    assert!(
+        result.contains("#block(width: 100%"),
+        "shaded paragraphs need the full-width block wrapper: {result}"
+    );
+}

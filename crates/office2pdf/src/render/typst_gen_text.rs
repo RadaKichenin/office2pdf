@@ -83,6 +83,7 @@ pub(super) fn generate_paragraph(
 pub(super) fn needs_block_wrapper(style: &ParagraphStyle) -> bool {
     style.space_before.is_some()
         || style.space_after.is_some()
+        || style.background.is_some()
         || style.line_spacing.is_some()
         || style.line_box.is_some()
         || matches!(style.alignment, Some(Alignment::Justify))
@@ -144,6 +145,14 @@ fn write_block_params_continuation(out: &mut String, style: &ParagraphStyle) {
     }
     if let Some(below) = style.space_after {
         let _ = write!(out, ", below: {}pt", format_f64(below));
+    }
+    if let Some(background) = style.background {
+        // Word paints w:pPr/w:shd across the full paragraph width.
+        let _ = write!(
+            out,
+            ", fill: rgb({}, {}, {})",
+            background.r, background.g, background.b
+        );
     }
 }
 
