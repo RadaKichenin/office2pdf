@@ -255,16 +255,25 @@ fn generate_table_cell(
     }
 
     if let Some(ref icon) = cell.icon_text {
-        // Excel draws icon set glyphs in their band color, independent of the
-        // cell's font color.
-        if let Some(color) = cell.icon_color {
-            let _ = write!(
-                out,
-                "#text(fill: rgb({}, {}, {}))[{}] ",
-                color.r, color.g, color.b, icon
-            );
-        } else {
-            let _ = write!(out, "{} ", icon);
+        // Excel draws icon set glyphs in their band color, independent of
+        // the cell's font color, anchored at the cell's left edge on the
+        // value's own line. Placing the icon out of layout keeps narrow
+        // cells from wrapping the value onto a second line, which doubled
+        // the row height (issue #367).
+        match cell.icon_color {
+            Some(color) => {
+                let _ = write!(
+                    out,
+                    "#place(left + horizon, text(fill: rgb({}, {}, {}), weight: \"bold\")[{}])",
+                    color.r, color.g, color.b, icon
+                );
+            }
+            None => {
+                let _ = write!(
+                    out,
+                    "#place(left + horizon, text(weight: \"bold\")[{icon}])"
+                );
+            }
         }
     }
 

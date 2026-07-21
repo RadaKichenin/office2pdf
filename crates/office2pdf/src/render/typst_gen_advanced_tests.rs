@@ -175,6 +175,19 @@ fn test_icon_text_codegen() {
         "Icon color should tint the icon glyph. Got: {}",
         output.source,
     );
+    // Excel anchors the icon at the cell's left edge on the value's own
+    // line. An in-flow icon wraps narrow cells onto a second line, doubling
+    // the row height (issue #367) — the icon must be placed out of layout.
+    assert!(
+        output.source.contains("#place(left + horizon, text("),
+        "Icon must be placed out of layout at the cell's left edge. Got: {}",
+        output.source,
+    );
+    assert!(
+        !output.source.contains(")[↑] 90"),
+        "Icon must not be an in-flow prefix of the value. Got: {}",
+        output.source,
+    );
 }
 
 #[test]
