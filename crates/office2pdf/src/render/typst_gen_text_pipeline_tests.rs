@@ -571,3 +571,43 @@ fn test_escape_typst_numeric_without_following_space_untouched() {
     // "3.14" is not an enum marker.
     assert_eq!(escape_typst("3.14"), "3.14");
 }
+
+// ── Preserved-space tests (issue #352) ───────────────────────────
+
+#[test]
+fn test_escape_typst_preserves_consecutive_spaces() {
+    // Word keeps literal space runs (xml:space="preserve") that documents
+    // use for manual alignment; Typst markup collapses them to one space.
+    let result = escape_typst("Invoice #: INV-0342    Date: July 10");
+    assert!(
+        result.contains("#\"    \""),
+        "runs of spaces must survive markup collapsing: {result}"
+    );
+}
+
+#[test]
+fn test_escape_typst_preserves_leading_space_runs() {
+    // Leading indentation ("      2. 계정 현행화 양식 1부.", code lines)
+    // is stripped by markup whitespace handling.
+    let result = escape_typst("      2. indented");
+    assert!(
+        result.starts_with("#\"      \""),
+        "leading space runs must survive: {result}"
+    );
+    assert!(result.ends_with("2. indented"), "text must follow: {result}");
+}
+
+#[test]
+fn test_escape_typst_preserves_spaces_after_hard_linebreak() {
+    // Code blocks carry hard breaks followed by indentation.
+    let result = escape_typst("match x {\n  b\"w:p\" => 1,\n}");
+    assert!(
+        result.contains("#linebreak()#\"  \""),
+        "post-break indentation must survive: {result}"
+    );
+}
+
+#[test]
+fn test_escape_typst_single_interior_space_untouched() {
+    assert_eq!(escape_typst("a b"), "a b");
+}

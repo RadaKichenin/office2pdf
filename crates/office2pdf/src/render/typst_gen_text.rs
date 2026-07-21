@@ -850,6 +850,7 @@ pub(super) fn escape_typst(text: &str) -> String {
     let mut is_first_char = true;
     let mut char_index: usize = 0;
 
+    let mut after_linebreak = false;
     while let Some(ch) = chars.next() {
         let should_escape_list_prefix: bool = is_first_char
             && matches!(ch, '-' | '+')
@@ -862,6 +863,24 @@ pub(super) fn escape_typst(text: &str) -> String {
             // (issue #176).
             '\n' => result.push_str("#linebreak()"),
             '\r' => {}
+            // Word preserves literal space runs (xml:space="preserve") that
+            // documents use for manual alignment and code indentation; Typst
+            // markup collapses consecutive and line-leading spaces to one.
+            // Emit runs of two or more — and post-break indentation — as a
+            // code-mode string, which markup cannot collapse (issue #352).
+            // Single run-leading spaces stay literal: they sit between
+            // sibling runs in the same markup line and survive as-is.
+            ' ' if after_linebreak || chars.peek().is_some_and(|next| *next == ' ') => {
+                let mut run_len: usize = 1;
+                while chars.peek().is_some_and(|next| *next == ' ') {
+                    chars.next();
+                    run_len += 1;
+                    char_index += 1;
+                }
+                result.push_str("#\"");
+                result.push_str(&" ".repeat(run_len));
+                result.push('"');
+            }
             '#' | '*' | '_' | '`' | '<' | '>' | '@' | '\\' | '~' | '/' | '$' | '[' | ']' | '{'
             | '}'
                 if !should_escape_list_prefix =>
@@ -880,6 +899,7 @@ pub(super) fn escape_typst(text: &str) -> String {
             _ => result.push(ch),
         }
 
+        after_linebreak = ch == '\n';
         is_first_char = false;
         char_index += 1;
     }
