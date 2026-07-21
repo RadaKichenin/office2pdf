@@ -423,3 +423,40 @@ fn test_regular_polygons_fill_their_bounding_box() {
         );
     }
 }
+
+#[test]
+fn test_shape_chevron() {
+    // chevron: arrow band with a pointed right edge and a matching notch cut
+    // into the left edge; rendered as a plain rectangle before (issue #358).
+    let shape = make_shape(
+        0,
+        0,
+        1_980_000,
+        584_391,
+        "chevron",
+        Some("00259A"),
+        None,
+        None,
+    );
+    let slide = make_slide_xml(&[shape]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = first_fixed_page(&doc);
+    let shape = get_shape(&page.elements[0]);
+    match &shape.kind {
+        ShapeKind::Polygon { vertices } => {
+            assert_eq!(vertices.len(), 6, "chevron should have 6 vertices");
+            // Pointed right edge at (1.0, 0.5)
+            assert!((vertices[2].0 - 1.0).abs() < 0.01);
+            assert!((vertices[2].1 - 0.5).abs() < 0.01);
+            // Notch cut into the left edge, between x=0 and the point
+            assert!(vertices[5].0 > 0.0 && vertices[5].0 < 0.5);
+            assert!((vertices[5].1 - 0.5).abs() < 0.01);
+            // Top-left corner starts at x=0
+            assert!(vertices[0].0.abs() < 0.01);
+        }
+        other => panic!("Expected Polygon for chevron, got {other:?}"),
+    }
+}

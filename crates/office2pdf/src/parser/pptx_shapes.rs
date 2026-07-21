@@ -348,6 +348,26 @@ pub(super) fn prst_to_shape_kind(
                 ],
             }
         }
+        // chevron: arrow band with a pointed right edge and a matching notch
+        // cut into the left edge (timeline steps); rendered as a plain
+        // rectangle before (issue #358).
+        "chevron" => {
+            let adj: f64 = adj_values.first().copied().unwrap_or(50_000.0);
+            let ss: f64 = width.min(height);
+            let dx: f64 = (adj / 100_000.0 * ss).min(width);
+            let notch_x: f64 = dx / width;
+            let shoulder_x: f64 = ((width - dx) / width).max(0.0);
+            ShapeKind::Polygon {
+                vertices: vec![
+                    (0.0, 0.0),
+                    (shoulder_x, 0.0),
+                    (1.0, 0.5),
+                    (shoulder_x, 1.0),
+                    (0.0, 1.0),
+                    (notch_x, 0.5),
+                ],
+            }
+        }
         "triangle" => ShapeKind::Polygon {
             vertices: vec![(0.5, 0.0), (1.0, 1.0), (0.0, 1.0)],
         },
