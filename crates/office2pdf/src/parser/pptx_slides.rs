@@ -587,6 +587,7 @@ fn build_background_image_element<R: Read + std::io::Seek>(
             stroke: None,
             alignment: None,
             clip_shape: None,
+            shadow: None,
         }),
     })
 }
@@ -822,6 +823,8 @@ struct PictureState {
     blip_alpha: Option<f64>,
     /// Preset geometry name from `<a:prstGeom prst>` ("crop to shape").
     prst_geom: Option<String>,
+    /// Outer shadow from the picture's `<a:effectLst>` (issue #360).
+    shadow: Option<Shadow>,
     /// First `<a:gd>` adjust value inside the picture's prstGeom avLst.
     prst_adj: Option<f64>,
     in_prst_geom: bool,
@@ -1183,6 +1186,7 @@ fn finalize_picture(
                     stroke: stroke.clone(),
                     alignment: None,
                     clip_shape,
+                    shadow: pic.shadow.clone(),
                 }),
             }
         })
@@ -1323,6 +1327,8 @@ struct SlideXmlParser<'a> {
     para_end_run_style: TextStyle,
     para_bullet_definition: PptxBulletDefinition,
     in_ln_spc: bool,
+    in_spc_bef: bool,
+    in_spc_aft: bool,
     runs: Vec<Run>,
 
     // ── Run state (`<a:r>`) ─────────────────────────────────────────
@@ -1399,6 +1405,8 @@ impl<'a> SlideXmlParser<'a> {
             para_end_run_style: TextStyle::default(),
             para_bullet_definition: PptxBulletDefinition::default(),
             in_ln_spc: false,
+            in_spc_bef: false,
+            in_spc_aft: false,
             runs: Vec::new(),
 
             in_run: false,
@@ -1502,6 +1510,9 @@ impl<'a> SlideXmlParser<'a> {
             b"prstGeom" if self.in_pic && self.pic.in_sp_pr => {
                 self.pic.prst_geom = get_attr_str(e, b"prst");
                 self.pic.in_prst_geom = true;
+            }
+            b"effectLst" if self.in_pic && self.pic.in_sp_pr => {
+                self.pic.shadow = parse_effect_list(reader, self.theme, self.color_map);
             }
             b"gd" if self.in_pic && self.pic.in_prst_geom => {
                 if self.pic.prst_adj.is_none()
@@ -1646,11 +1657,23 @@ impl<'a> SlideXmlParser<'a> {
             b"lnSpc" if self.in_para && !self.in_run => {
                 self.in_ln_spc = true;
             }
+            b"spcBef" if self.in_para && !self.in_run => {
+                self.in_spc_bef = true;
+            }
+            b"spcAft" if self.in_para && !self.in_run => {
+                self.in_spc_aft = true;
+            }
             b"spcPct" if self.in_ln_spc => {
                 extract_pptx_line_spacing_pct(e, &mut self.para_style);
             }
             b"spcPts" if self.in_ln_spc => {
                 extract_pptx_line_spacing_pts(e, &mut self.para_style);
+            }
+            b"spcPts" if self.in_spc_bef => {
+                extract_pptx_space_points(e, &mut self.para_style.space_before);
+            }
+            b"spcPts" if self.in_spc_aft => {
+                extract_pptx_space_points(e, &mut self.para_style.space_after);
             }
             b"buAutoNum" if self.in_para && !self.in_run => {
                 self.para_bullet_definition.kind = Some(PptxBulletKind::AutoNumber(
@@ -1993,11 +2016,23 @@ impl<'a> SlideXmlParser<'a> {
             b"lnSpc" if self.in_para && !self.in_run => {
                 self.in_ln_spc = true;
             }
+            b"spcBef" if self.in_para && !self.in_run => {
+                self.in_spc_bef = true;
+            }
+            b"spcAft" if self.in_para && !self.in_run => {
+                self.in_spc_aft = true;
+            }
             b"spcPct" if self.in_ln_spc => {
                 extract_pptx_line_spacing_pct(e, &mut self.para_style);
             }
             b"spcPts" if self.in_ln_spc => {
                 extract_pptx_line_spacing_pts(e, &mut self.para_style);
+            }
+            b"spcPts" if self.in_spc_bef => {
+                extract_pptx_space_points(e, &mut self.para_style.space_before);
+            }
+            b"spcPts" if self.in_spc_aft => {
+                extract_pptx_space_points(e, &mut self.para_style.space_after);
             }
             b"buAutoNum" if self.in_para && !self.in_run => {
                 self.para_bullet_definition.kind = Some(PptxBulletKind::AutoNumber(
@@ -2163,6 +2198,12 @@ impl<'a> SlideXmlParser<'a> {
             }
             b"lnSpc" if self.in_ln_spc => {
                 self.in_ln_spc = false;
+            }
+            b"spcBef" if self.in_spc_bef => {
+                self.in_spc_bef = false;
+            }
+            b"spcAft" if self.in_spc_aft => {
+                self.in_spc_aft = false;
             }
             b"solidFill" if self.solid_fill_ctx != SolidFillCtx::None => {
                 self.solid_fill_ctx = SolidFillCtx::None;

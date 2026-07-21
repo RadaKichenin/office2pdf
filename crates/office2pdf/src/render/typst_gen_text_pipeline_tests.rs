@@ -571,3 +571,91 @@ fn test_escape_typst_numeric_without_following_space_untouched() {
     // "3.14" is not an enum marker.
     assert_eq!(escape_typst("3.14"), "3.14");
 }
+
+// ── Preserved-space tests (issue #352) ───────────────────────────
+
+#[test]
+fn test_escape_typst_preserves_consecutive_spaces() {
+    // Word keeps literal space runs (xml:space="preserve") that documents
+    // use for manual alignment; Typst markup collapses them to one space.
+    let result = escape_typst("Invoice #: INV-0342    Date: July 10");
+    assert!(
+        result.contains("#\"    \";"),
+        "runs of spaces must survive markup collapsing: {result}"
+    );
+}
+
+#[test]
+fn test_escape_typst_preserves_leading_space_runs() {
+    // Leading indentation ("      2. 계정 현행화 양식 1부.", code lines)
+    // is stripped by markup whitespace handling.
+    let result = escape_typst("      2. indented");
+    assert!(
+        result.starts_with("#\"      \";"),
+        "leading space runs must survive: {result}"
+    );
+    assert!(
+        result.ends_with("2. indented"),
+        "text must follow: {result}"
+    );
+}
+
+#[test]
+fn test_escape_typst_preserves_spaces_after_hard_linebreak() {
+    // Code blocks carry hard breaks followed by indentation.
+    let result = escape_typst("match x {\n  b\"w:p\" => 1,\n}");
+    assert!(
+        result.contains("#linebreak()#\"  \";"),
+        "post-break indentation must survive: {result}"
+    );
+}
+
+#[test]
+fn test_escape_typst_single_interior_space_untouched() {
+    assert_eq!(escape_typst("a b"), "a b");
+}
+
+// ── Smart-typography escape tests (issue #353) ───────────────────
+
+#[test]
+fn test_escape_typst_keeps_straight_double_quotes() {
+    // Typst smart quotes turned literal "quoted" into curly “quoted”.
+    let result = escape_typst("run \"quoted\" text");
+    assert!(
+        result.contains("\\\"quoted\\\""),
+        "straight double quotes must be escaped so smartquote cannot rewrite them: {result}"
+    );
+}
+
+#[test]
+fn test_escape_typst_keeps_straight_single_quotes() {
+    let result = escape_typst("it's 'fine'");
+    assert!(
+        result.contains("it\\'s \\'fine\\'"),
+        "straight apostrophes must be escaped: {result}"
+    );
+}
+
+#[test]
+fn test_escape_typst_keeps_double_hyphens() {
+    // `--` ligates to an en dash, corrupting CLI flags like --font-path.
+    let result = escape_typst("office2pdf --font-path dir --version");
+    assert!(
+        result.contains("\\-\\-font\\-path") || result.contains("\\-\\-font-path"),
+        "double hyphens must not ligate to an en dash: {result}"
+    );
+    assert!(
+        !result.contains("--"),
+        "no raw double hyphen may remain: {result}"
+    );
+}
+
+#[test]
+fn test_escape_typst_keeps_hyphen_before_digits() {
+    // A hyphen before digits becomes a Unicode minus (−18%) in markup.
+    let result = escape_typst("blended CAC, -18%");
+    assert!(
+        result.contains("\\-18"),
+        "hyphen before digits must stay a hyphen-minus: {result}"
+    );
+}

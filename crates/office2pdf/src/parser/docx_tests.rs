@@ -192,7 +192,7 @@ fn test_parse_simple_bulleted_list() {
             kind: ListKind::Unordered,
             numbering_pattern: None,
             full_numbering: false,
-            marker_text: None,
+            marker_text: Some("•".to_string()),
             marker_style: None,
         })
     );
@@ -424,7 +424,7 @@ fn test_parse_nested_multi_level_list() {
             kind: ListKind::Unordered,
             numbering_pattern: None,
             full_numbering: false,
-            marker_text: None,
+            marker_text: Some("◦".to_string()),
             marker_style: None,
         })
     );
@@ -551,7 +551,7 @@ fn test_parse_mixed_ordered_and_bulleted_levels() {
                     kind: ListKind::Unordered,
                     numbering_pattern: None,
                     full_numbering: false,
-                    marker_text: None,
+                    marker_text: Some("•".to_string()),
                     marker_style: None,
                 },
             ),
@@ -1000,5 +1000,129 @@ fn issue_189_footer_preserves_inline_image_and_rtl_text() {
     assert!(
         pdf_text.contains("ةطساوب"),
         "extracted PDF text: {pdf_text:?}"
+    );
+}
+
+#[test]
+fn test_bullet_level_marker_glyph_preserved() {
+    // Word's level-2 bullets use the numbering definition's lvlText glyph
+    // (e.g. ○); dropping it made every level render the level-1 disc
+    // (issue #356).
+    let abstract_num = docx_rs::AbstractNumbering::new(0)
+        .add_level(docx_rs::Level::new(
+            0,
+            docx_rs::Start::new(1),
+            docx_rs::NumberFormat::new("bullet"),
+            docx_rs::LevelText::new("•"),
+            docx_rs::LevelJc::new("left"),
+        ))
+        .add_level(docx_rs::Level::new(
+            1,
+            docx_rs::Start::new(1),
+            docx_rs::NumberFormat::new("bullet"),
+            docx_rs::LevelText::new("○"),
+            docx_rs::LevelJc::new("left"),
+        ));
+    let numbering = docx_rs::Numbering::new(1, 0);
+
+    let data = build_docx_with_numbering(
+        vec![abstract_num],
+        vec![numbering],
+        vec![
+            docx_rs::Paragraph::new()
+                .add_run(docx_rs::Run::new().add_text("level one"))
+                .numbering(docx_rs::NumberingId::new(1), docx_rs::IndentLevel::new(0)),
+            docx_rs::Paragraph::new()
+                .add_run(docx_rs::Run::new().add_text("level two"))
+                .numbering(docx_rs::NumberingId::new(1), docx_rs::IndentLevel::new(1)),
+        ],
+    );
+    let parser = DocxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let list = doc
+        .pages
+        .iter()
+        .find_map(|page| match page {
+            Page::Flow(flow) => flow.content.iter().find_map(|block| match block {
+                Block::List(list) => Some(list),
+                _ => None,
+            }),
+            _ => None,
+        })
+        .expect("expected a list block");
+    assert_eq!(
+        list.level_styles
+            .get(&1)
+            .and_then(|style| style.marker_text.as_deref()),
+        Some("○"),
+        "level-2 bullet glyph must come from lvlText"
+    );
+}
+
+#[test]
+fn test_zero_indent_numbering_renders_inline_number_with_tab() {
+    // Korean clause numbering (제N조) uses w:ind left=0 hanging=0: Word puts
+    // the number inline, follows it with a tab, and wraps continuation
+    // lines back to the margin. Rendering these as hanging-indent lists
+    // indented every continuation line (issue #357).
+    let abstract_num = docx_rs::AbstractNumbering::new(0).add_level(
+        docx_rs::Level::new(
+            0,
+            docx_rs::Start::new(1),
+            docx_rs::NumberFormat::new("decimal"),
+            docx_rs::LevelText::new("제%1조"),
+            docx_rs::LevelJc::new("left"),
+        )
+        .indent(
+            Some(0),
+            Some(docx_rs::SpecialIndentType::Hanging(0)),
+            None,
+            None,
+        ),
+    );
+    let numbering = docx_rs::Numbering::new(1, 0);
+
+    let data = build_docx_with_numbering(
+        vec![abstract_num],
+        vec![numbering],
+        vec![
+            docx_rs::Paragraph::new()
+                .add_run(docx_rs::Run::new().add_text("(목적) 본 계약은"))
+                .numbering(docx_rs::NumberingId::new(1), docx_rs::IndentLevel::new(0)),
+            docx_rs::Paragraph::new()
+                .add_run(docx_rs::Run::new().add_text("(계약 기간) 본 계약의"))
+                .numbering(docx_rs::NumberingId::new(1), docx_rs::IndentLevel::new(0)),
+        ],
+    );
+    let parser = DocxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = match &doc.pages[0] {
+        Page::Flow(flow) => flow,
+        _ => panic!("expected flow page"),
+    };
+    let paragraphs: Vec<&Paragraph> = page
+        .content
+        .iter()
+        .filter_map(|block| match block {
+            Block::Paragraph(paragraph) => Some(paragraph),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        paragraphs.len(),
+        2,
+        "flush numbering must not become a list"
+    );
+    assert!(
+        paragraphs[0].runs[0].text.starts_with("제1조\t"),
+        "first clause number inline with tab: {:?}",
+        paragraphs[0].runs[0].text
+    );
+    assert!(
+        paragraphs[1].runs[0].text.starts_with("제2조\t"),
+        "second clause number advances: {:?}",
+        paragraphs[1].runs[0].text
     );
 }

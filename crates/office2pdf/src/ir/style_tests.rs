@@ -188,6 +188,8 @@ fn paragraph_style_merge_from_all_none_source_preserves_target() {
             alignment: TabAlignment::Left,
             leader: TabLeader::None,
         }]),
+        background: Some(Color::new(0xEE, 0xEE, 0xEE)),
+        border: None,
     };
     let original: ParagraphStyle = target.clone();
     let source = ParagraphStyle::default();
@@ -228,6 +230,8 @@ fn paragraph_style_merge_from_all_some_source_overwrites_target() {
         space_after: Some(16.0),
         heading_level: Some(1),
         direction: Some(TextDirection::Rtl),
+        background: Some(Color::new(0xF4, 0xF4, 0xF4)),
+        border: None,
         tab_stops: Some(vec![TabStop {
             position: 144.0,
             alignment: TabAlignment::Right,

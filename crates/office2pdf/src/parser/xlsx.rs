@@ -158,6 +158,7 @@ fn anchored_image(
         stroke: None,
         alignment: None,
         clip_shape: None,
+        shadow: None,
     };
     crate::ir::SheetImage {
         anchor_row: anchor.from_row + 1,
@@ -234,6 +235,11 @@ impl XlsxParser {
 
         let metadata = extract_xlsx_metadata(&book);
         let cond_fmt_hints = cond_fmt_raw::extract_cond_fmt_hints(data);
+        // Excel derives every column print metric from the workbook Normal
+        // font; cell fonts do not participate (issue #366).
+        let normal_font_mdw: Option<f64> = extract_normal_font(data)
+            .map(|(family, size)| max_digit_width_px_for_normal_font(&family, size));
+
         let mut chart_map = extract_charts_with_anchors(data);
         let mut image_map = extract_images_with_anchors(data);
         let mut text_box_map = extract_text_boxes_with_anchors(data);
@@ -250,7 +256,7 @@ impl XlsxParser {
             }
 
             let Some((ctx, row_start, row_end)) =
-                prepare_sheet_context(sheet, cond_fmt_hints.get(sheet.get_name()))
+                prepare_sheet_context(sheet, normal_font_mdw, cond_fmt_hints.get(sheet.get_name()))
             else {
                 // A sheet without used cells can still carry drawings; give
                 // its images a page instead of dropping them.
@@ -417,6 +423,10 @@ impl Parser for XlsxParser {
         // Extract metadata from umya-spreadsheet properties
         let metadata = extract_xlsx_metadata(&book);
         let cond_fmt_hints = cond_fmt_raw::extract_cond_fmt_hints(data);
+        // Excel derives every column print metric from the workbook Normal
+        // font; cell fonts do not participate (issue #366).
+        let normal_font_mdw: Option<f64> = extract_normal_font(data)
+            .map(|(family, size)| max_digit_width_px_for_normal_font(&family, size));
 
         // Extract charts with anchor positions per sheet
         let mut chart_map = extract_charts_with_anchors(data);
@@ -436,7 +446,7 @@ impl Parser for XlsxParser {
             }
 
             let Some((ctx, row_start, row_end)) =
-                prepare_sheet_context(sheet, cond_fmt_hints.get(sheet.get_name()))
+                prepare_sheet_context(sheet, normal_font_mdw, cond_fmt_hints.get(sheet.get_name()))
             else {
                 // A sheet without used cells can still carry drawings; give
                 // its images a page instead of dropping them.

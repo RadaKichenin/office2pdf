@@ -658,7 +658,7 @@ fn test_document_grid_pitch_snaps_line_height() {
     let mut page = match make_flow_page(vec![Block::Paragraph(Paragraph {
         style: ParagraphStyle::default(),
         runs: vec![Run {
-            text: "grid snapped".to_string(),
+            text: "그리드 정렬 grid snapped".to_string(),
             style: TextStyle {
                 font_family: Some("Libertinus Serif".to_string()),
                 font_size: Some(10.0),
@@ -687,13 +687,61 @@ fn test_document_grid_pitch_snaps_line_height() {
 }
 
 #[test]
-fn test_no_document_grid_keeps_default_line_height() {
+fn test_latin_paragraph_ignores_document_grid() {
+    // Word leaves Latin-only paragraphs at their metric line height even
+    // when the section carries a document grid; only East Asian text snaps
+    // (issue #354).
+    let mut page = match make_flow_page(vec![Block::Paragraph(Paragraph {
+        style: ParagraphStyle::default(),
+        runs: vec![Run {
+            text: "latin only body text".to_string(),
+            style: TextStyle {
+                font_family: Some("Libertinus Serif".to_string()),
+                font_size: Some(10.0),
+                ..TextStyle::default()
+            },
+            href: None,
+            footnote: None,
+        }],
+    })]) {
+        Page::Flow(flow) => flow,
+        _ => unreachable!(),
+    };
+    page.line_grid_pitch = Some(18.0);
+    let doc = make_doc(vec![Page::Flow(page)]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    // The paragraph keeps Word's metric single-spacing leading; the 18pt
+    // grid top-up (leading = 18 - line box) must not appear.
+    let Some((ascender, descender, word_pitch)) =
+        crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
+        return;
+    };
+    let box_pt = (ascender + descender) * 10.0;
+    let single_leading = (word_pitch * 10.0 - box_pt).max(0.0);
+    let grid_leading = 18.0 - box_pt;
+    assert!(
+        result.contains(&format!("leading: {}pt", format_f64(single_leading))),
+        "Latin paragraphs keep Word single spacing: {result}"
+    );
+    assert!(
+        !result.contains(&format!("leading: {}pt", format_f64(grid_leading))),
+        "Latin paragraphs must not snap to the grid: {result}"
+    );
+}
+
+#[test]
+fn test_no_document_grid_uses_word_single_spacing() {
+    // Without a document grid, paragraphs still use Word's hhea single-line
+    // pitch instead of Typst's glyph-tight default (issue #354).
     let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
         style: ParagraphStyle::default(),
         runs: vec![Run {
             text: "plain".to_string(),
             style: TextStyle {
                 font_family: Some("Libertinus Serif".to_string()),
+                font_size: Some(10.0),
                 ..TextStyle::default()
             },
             href: None,
@@ -701,5 +749,110 @@ fn test_no_document_grid_keeps_default_line_height() {
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
-    assert!(!result.contains("top-edge"), "no grid: {result}");
+    let Some((ascender, descender, word_pitch)) =
+        crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
+        return;
+    };
+    let single_leading = (word_pitch * 10.0 - (ascender + descender) * 10.0).max(0.0);
+    assert!(
+        result.contains("top-edge: \"ascender\""),
+        "metric edges expected: {result}"
+    );
+    assert!(
+        result.contains(&format!("leading: {}pt", format_f64(single_leading))),
+        "Word single-spacing leading expected: {result}"
+    );
+}
+
+#[test]
+fn test_generate_paragraph_with_background_shading() {
+    // w:pPr/w:shd paints the whole paragraph; the block wrapper must carry
+    // the fill so the shading spans the full line width (issue #351).
+    let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
+        style: ParagraphStyle {
+            background: Some(Color::new(0xF4, 0xF4, 0xF4)),
+            ..ParagraphStyle::default()
+        },
+        runs: vec![Run {
+            text: "$ cargo install office2pdf-cli".to_string(),
+            style: TextStyle::default(),
+            href: None,
+            footnote: None,
+        }],
+    })])]);
+    let result = generate_typst(&doc).unwrap().source;
+    assert!(
+        result.contains("fill: rgb(244, 244, 244)"),
+        "paragraph shading must fill the block wrapper: {result}"
+    );
+    assert!(
+        result.contains("#block(width: 100%"),
+        "shaded paragraphs need the full-width block wrapper: {result}"
+    );
+}
+
+#[test]
+fn test_generate_paragraph_with_bottom_border_rule() {
+    // w:pBdr bottom rules (resume header underline) must stroke the block
+    // wrapper's bottom edge (issue #368).
+    let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
+        style: ParagraphStyle {
+            border: Some(Box::new(CellBorder {
+                bottom: Some(BorderSide {
+                    width: 0.75,
+                    color: Color::new(0x1E, 0x27, 0x61),
+                    style: BorderLineStyle::Solid,
+                }),
+                ..CellBorder::default()
+            })),
+            ..ParagraphStyle::default()
+        },
+        runs: vec![Run {
+            text: "JAMIE PARKER".to_string(),
+            style: TextStyle::default(),
+            href: None,
+            footnote: None,
+        }],
+    })])]);
+    let result = generate_typst(&doc).unwrap().source;
+    assert!(
+        result.contains("stroke: (bottom: 0.75pt + rgb(30, 39, 97))"),
+        "bottom border must stroke the wrapper: {result}"
+    );
+}
+
+#[test]
+fn test_generate_paragraph_with_double_bottom_border() {
+    // Double letterhead rules render as two placed hairlines; Typst strokes
+    // have no double style (issue #368).
+    let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
+        style: ParagraphStyle {
+            border: Some(Box::new(CellBorder {
+                bottom: Some(BorderSide {
+                    width: 1.0,
+                    color: Color::black(),
+                    style: BorderLineStyle::Double,
+                }),
+                ..CellBorder::default()
+            })),
+            ..ParagraphStyle::default()
+        },
+        runs: vec![Run {
+            text: "주식회사 에이엑스솔루션".to_string(),
+            style: TextStyle::default(),
+            href: None,
+            footnote: None,
+        }],
+    })])]);
+    let result = generate_typst(&doc).unwrap().source;
+    let rule_count = result.matches("line(length: 100%").count();
+    assert_eq!(
+        rule_count, 2,
+        "double borders draw exactly two rules: {result}"
+    );
+    assert!(
+        !result.contains("stroke: (bottom:"),
+        "double sides must not also stroke the wrapper: {result}"
+    );
 }

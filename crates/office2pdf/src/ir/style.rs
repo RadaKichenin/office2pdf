@@ -36,6 +36,13 @@ pub struct ParagraphStyle {
     pub direction: Option<TextDirection>,
     /// Custom tab stop positions for this paragraph.
     pub tab_stops: Option<Vec<TabStop>>,
+    /// Paragraph-wide shading fill (`w:pPr/w:shd`), painted behind the full
+    /// paragraph width like Word's code-block backgrounds.
+    pub background: Option<Color>,
+    /// Paragraph borders (`w:pPr/w:pBdr`), drawn around the full paragraph
+    /// width like Word's heading rules and letterhead frames. Boxed to keep
+    /// paragraph-carrying enum variants compact.
+    pub border: Option<Box<super::elements::CellBorder>>,
 }
 
 /// A custom tab stop definition.
@@ -215,6 +222,12 @@ impl ParagraphStyle {
         }
         if other.tab_stops.is_some() {
             self.tab_stops = other.tab_stops.clone();
+        }
+        if other.background.is_some() {
+            self.background = other.background;
+        }
+        if other.border.is_some() {
+            self.border = other.border.clone();
         }
     }
 }

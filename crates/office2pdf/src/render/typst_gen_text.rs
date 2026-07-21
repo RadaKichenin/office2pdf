@@ -34,6 +34,7 @@ pub(super) fn generate_paragraph(
         out.push_str("#block(width: 100%");
         write_block_params_continuation(out, style);
         out.push_str(")[\n");
+        write_paragraph_double_border_overlays(out, &style.border);
         write_line_box_settings(out, style.line_box);
         write_par_settings(out, style);
         if let Some(ref settings) = line_height_settings {
@@ -83,6 +84,8 @@ pub(super) fn generate_paragraph(
 pub(super) fn needs_block_wrapper(style: &ParagraphStyle) -> bool {
     style.space_before.is_some()
         || style.space_after.is_some()
+        || style.background.is_some()
+        || style.border.is_some()
         || style.line_spacing.is_some()
         || style.line_box.is_some()
         || matches!(style.alignment, Some(Alignment::Justify))
@@ -103,22 +106,38 @@ pub(super) fn word_line_height_settings(
     if style.line_spacing.is_some() || style.line_box.is_some() {
         return None;
     }
-    let pitch: f64 = line_grid_pitch?;
     let family: &str = runs
         .iter()
         .find_map(|run| run.style.font_family.as_deref())?;
-    let (ascender_em, descender_em, _) = crate::render::pdf::font_line_metrics_em(family)?;
+    let (ascender_em, descender_em, word_pitch_em) =
+        crate::render::pdf::font_line_metrics_em(family)?;
     let font_size: f64 = runs
         .iter()
         .filter_map(|run| run.style.font_size)
         .fold(f64::NAN, f64::max);
     let font_size: f64 = if font_size.is_nan() { 11.0 } else { font_size };
     let line_box_pt: f64 = (ascender_em + descender_em) * font_size;
-    if line_box_pt <= 0.0 || pitch <= 0.0 {
+    if line_box_pt <= 0.0 {
         return None;
     }
-    let grid_lines: f64 = (line_box_pt / pitch).ceil().max(1.0);
-    let leading_pt: f64 = grid_lines * pitch - line_box_pt;
+
+    // Word only snaps East Asian text to the document grid: with the
+    // default grid type, Latin-only paragraphs keep their hhea line height
+    // (native Word GT: Arial 10.5 lines are 12pt while Korean lines in the
+    // same document snap to the 18pt grid). Snapping Latin paragraphs
+    // inflated every Western document by 30-50% (issue #354).
+    let has_east_asian_text: bool = runs.iter().any(|run| run.text.chars().any(is_cjk_like));
+
+    let leading_pt: f64 = match line_grid_pitch {
+        Some(pitch) if pitch > 0.0 && has_east_asian_text => {
+            let grid_lines: f64 = (line_box_pt / pitch).ceil().max(1.0);
+            grid_lines * pitch - line_box_pt
+        }
+        // Word's single spacing is the font's full hhea line (ascender +
+        // descender + line gap); Typst's metric edges resolve the typo
+        // values, so the leading bridges the difference.
+        _ => (word_pitch_em * font_size - line_box_pt).max(0.0),
+    };
     Some(format!(
         "#set text(top-edge: \"ascender\", bottom-edge: \"descender\")\n#set par(leading: {}pt)\n",
         format_f64(leading_pt)
@@ -144,6 +163,107 @@ fn write_block_params_continuation(out: &mut String, style: &ParagraphStyle) {
     }
     if let Some(below) = style.space_after {
         let _ = write!(out, ", below: {}pt", format_f64(below));
+    }
+    if let Some(background) = style.background {
+        // Word paints w:pPr/w:shd across the full paragraph width.
+        let _ = write!(
+            out,
+            ", fill: rgb({}, {}, {})",
+            background.r, background.g, background.b
+        );
+    }
+    if let Some(border) = &style.border {
+        write_paragraph_border_params(out, border);
+    }
+}
+
+/// Word offsets paragraph border rules slightly from the text; `w:space` is
+/// not carried per side, so a fixed 4pt gap approximates typical documents.
+const PARAGRAPH_BORDER_GAP_PT: f64 = 4.0;
+
+fn stroke_literal(side: &BorderSide) -> String {
+    let paint = format!("rgb({}, {}, {})", side.color.r, side.color.g, side.color.b);
+    let dash = match side.style {
+        BorderLineStyle::Dotted => Some("dotted"),
+        BorderLineStyle::Dashed => Some("dashed"),
+        BorderLineStyle::DashDot | BorderLineStyle::DashDotDot => Some("dash-dotted"),
+        _ => None,
+    };
+    match dash {
+        Some(dash) => format!(
+            "(paint: {paint}, thickness: {}pt, dash: \"{dash}\")",
+            format_f64(side.width)
+        ),
+        None => format!("{}pt + {paint}", format_f64(side.width)),
+    }
+}
+
+/// Emit `stroke:`/`inset:` block parameters for the paragraph's borders.
+/// Double rules are drawn as overlays (Typst strokes have no double style),
+/// so those sides only reserve inset space here.
+fn write_paragraph_border_params(out: &mut String, border: &CellBorder) {
+    let mut strokes: Vec<String> = Vec::new();
+    let mut insets: Vec<String> = Vec::new();
+
+    let mut push_side = |name: &str, side: &Option<BorderSide>| {
+        let Some(side) = side else {
+            return;
+        };
+        let reserved = if side.style == BorderLineStyle::Double {
+            PARAGRAPH_BORDER_GAP_PT + side.width * 3.0
+        } else {
+            strokes.push(format!("{name}: {}", stroke_literal(side)));
+            PARAGRAPH_BORDER_GAP_PT + side.width
+        };
+        insets.push(format!("{name}: {}pt", format_f64(reserved)));
+    };
+    push_side("top", &border.top);
+    push_side("bottom", &border.bottom);
+    push_side("left", &border.left);
+    push_side("right", &border.right);
+
+    if !strokes.is_empty() {
+        let _ = write!(out, ", stroke: ({})", strokes.join(", "));
+    }
+    if !insets.is_empty() {
+        let _ = write!(out, ", inset: ({})", insets.join(", "));
+    }
+}
+
+/// Draw double-rule paragraph borders as two placed hairlines; Typst strokes
+/// cannot render Word's double style. Only horizontal doubles occur in
+/// practice (letterhead rules); vertical doubles fall back to a single
+/// stroke drawn by `write_paragraph_border_params`.
+fn write_paragraph_double_border_overlays(out: &mut String, border: &Option<Box<CellBorder>>) {
+    let Some(border) = border else {
+        return;
+    };
+    for (name, side) in [("top", &border.top), ("bottom", &border.bottom)] {
+        let Some(side) = side else {
+            continue;
+        };
+        if side.style != BorderLineStyle::Double {
+            continue;
+        }
+        let w = side.width;
+        let near_dy = PARAGRAPH_BORDER_GAP_PT + w;
+        let far_dy = PARAGRAPH_BORDER_GAP_PT + w * 3.0;
+        let (align, sign) = if name == "top" {
+            ("top", -1.0)
+        } else {
+            ("bottom", 1.0)
+        };
+        for dy in [near_dy, far_dy] {
+            let _ = write!(
+                out,
+                "#place({align}, dy: {}pt, line(length: 100%, stroke: {}pt + rgb({}, {}, {})))",
+                format_f64(sign * dy),
+                format_f64(w),
+                side.color.r,
+                side.color.g,
+                side.color.b,
+            );
+        }
     }
 }
 
@@ -850,6 +970,7 @@ pub(super) fn escape_typst(text: &str) -> String {
     let mut is_first_char = true;
     let mut char_index: usize = 0;
 
+    let mut after_linebreak = false;
     while let Some(ch) = chars.next() {
         let should_escape_list_prefix: bool = is_first_char
             && matches!(ch, '-' | '+')
@@ -862,8 +983,34 @@ pub(super) fn escape_typst(text: &str) -> String {
             // (issue #176).
             '\n' => result.push_str("#linebreak()"),
             '\r' => {}
+            // Word preserves literal space runs (xml:space="preserve") that
+            // documents use for manual alignment and code indentation; Typst
+            // markup collapses consecutive and line-leading spaces to one.
+            // Emit runs of two or more — and post-break indentation — as a
+            // code-mode string, which markup cannot collapse (issue #352).
+            // Single run-leading spaces stay literal: they sit between
+            // sibling runs in the same markup line and survive as-is.
+            ' ' if after_linebreak || chars.peek().is_some_and(|next| *next == ' ') => {
+                let mut run_len: usize = 1;
+                while chars.peek().is_some_and(|next| *next == ' ') {
+                    chars.next();
+                    run_len += 1;
+                    char_index += 1;
+                }
+                result.push_str("#\"");
+                result.push_str(&" ".repeat(run_len));
+                // The semicolon ends the code expression: without it, a
+                // following `(` or `[` in the text would chain onto the
+                // string as a function call (`#"  "(SIB)`).
+                result.push_str("\";");
+            }
+            // Quotes and hyphens are Typst markup shorthands: smartquote
+            // curls straight quotes, `--` ligates to an en dash, and a
+            // hyphen before digits becomes a Unicode minus. Word stores the
+            // literal characters the author typed, so all of them must
+            // render verbatim (issue #353).
             '#' | '*' | '_' | '`' | '<' | '>' | '@' | '\\' | '~' | '/' | '$' | '[' | ']' | '{'
-            | '}'
+            | '}' | '"' | '\'' | '-'
                 if !should_escape_list_prefix =>
             {
                 result.push('\\');
@@ -880,6 +1027,7 @@ pub(super) fn escape_typst(text: &str) -> String {
             _ => result.push(ch),
         }
 
+        after_linebreak = ch == '\n';
         is_first_char = false;
         char_index += 1;
     }

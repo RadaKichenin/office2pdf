@@ -386,7 +386,7 @@ impl Default for TableCell {
 }
 
 /// Cell border specification.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CellBorder {
     pub top: Option<BorderSide>,
     pub bottom: Option<BorderSide>,
@@ -445,6 +445,8 @@ pub struct ImageData {
     pub alignment: Option<Alignment>,
     /// Clip geometry from the picture's `<a:prstGeom>` (crop to shape).
     pub clip_shape: Option<ImageClipShape>,
+    /// Outer shadow effect (`a:effectLst/a:outerShdw` on `p:pic`).
+    pub shadow: Option<Shadow>,
 }
 
 /// Supported picture clip geometries (PowerPoint "crop to shape").
