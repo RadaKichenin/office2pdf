@@ -460,3 +460,48 @@ fn test_shape_chevron() {
         other => panic!("Expected Polygon for chevron, got {other:?}"),
     }
 }
+
+#[test]
+fn test_shape_round_rect_honors_adj() {
+    // roundRect corner radius comes from the adj value (fraction of the
+    // short side, in 100k units); it was hardcoded to 0.1 (issue #361).
+    let shape = r##"<p:sp><p:nvSpPr><p:cNvPr id="3" name="Card"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="2000000" cy="1000000"/></a:xfrm><a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 3333"/></a:avLst></a:prstGeom><a:solidFill><a:srgbClr val="EEF2FA"/></a:solidFill></p:spPr></p:sp>"##.to_string();
+    let slide = make_slide_xml(&[shape]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = first_fixed_page(&doc);
+    let shape = get_shape(&page.elements[0]);
+    match &shape.kind {
+        ShapeKind::RoundedRectangle { radius_fraction } => {
+            assert!(
+                (radius_fraction - 0.03333).abs() < 0.001,
+                "adj 3333 must give a 3.3% radius, got {radius_fraction}"
+            );
+        }
+        other => panic!("Expected RoundedRectangle, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_shape_round_rect_default_adj() {
+    // Without avLst, the OOXML default adj is 16667 (1/6 of the short side).
+    let shape = make_shape(0, 0, 2_000_000, 1_000_000, "roundRect", None, None, None);
+    let slide = make_slide_xml(&[shape]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = first_fixed_page(&doc);
+    let shape = get_shape(&page.elements[0]);
+    match &shape.kind {
+        ShapeKind::RoundedRectangle { radius_fraction } => {
+            assert!(
+                (radius_fraction - 0.16667).abs() < 0.001,
+                "default adj must give a 16.7% radius, got {radius_fraction}"
+            );
+        }
+        other => panic!("Expected RoundedRectangle, got {other:?}"),
+    }
+}
