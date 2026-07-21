@@ -35,9 +35,31 @@ office2pdf = "0.4"
 cargo install office2pdf-cli
 ```
 
-Prebuilt binaries for Linux (x86_64 gnu/musl, aarch64), macOS (Apple Silicon
-and Intel), and Windows are attached to each
-[GitHub release](https://github.com/developer0hye/office2pdf/releases).
+#### Prebuilt binaries
+
+Every [GitHub release](https://github.com/developer0hye/office2pdf/releases) ships standalone CLI binaries — no Rust toolchain needed:
+
+| Platform | Asset |
+|----------|-------|
+| Linux x86_64 (glibc) | `office2pdf-<version>-x86_64-unknown-linux-gnu.tar.gz` |
+| Linux x86_64 (static musl) | `office2pdf-<version>-x86_64-unknown-linux-musl.tar.gz` |
+| Linux ARM64 | `office2pdf-<version>-aarch64-unknown-linux-gnu.tar.gz` |
+| macOS Apple Silicon | `office2pdf-<version>-aarch64-apple-darwin.tar.gz` |
+| macOS Intel | `office2pdf-<version>-x86_64-apple-darwin.tar.gz` |
+| Windows x86_64 | `office2pdf-<version>-x86_64-pc-windows-msvc.zip` |
+
+On Linux and macOS, download, extract, and place the binary on your `PATH`:
+
+```sh
+VERSION=v0.6.2
+TARGET=x86_64-unknown-linux-gnu  # pick your platform's target from the table above
+curl -L "https://github.com/developer0hye/office2pdf/releases/download/${VERSION}/office2pdf-${VERSION}-${TARGET}.tar.gz" | tar xz
+sudo install "office2pdf-${VERSION}-${TARGET}/office2pdf" /usr/local/bin/
+```
+
+On Windows, unzip the archive and add `office2pdf.exe` to your `PATH`.
+
+The macOS binaries are not notarized. Binaries downloaded with a browser are quarantined by Gatekeeper; clear the flag with `xattr -d com.apple.quarantine office2pdf` (downloads via `curl` are unaffected).
 
 ## Quick Start
 
