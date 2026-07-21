@@ -17,7 +17,7 @@ from scripts.check_visual_pr import (
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def visual_body(result_overrides=None):
+def visual_body(result_overrides=None, include_previews=True):
     results = {row: "Matches GT" for row in AUDIT_ROWS}
     results.update(result_overrides or {})
     follow_ups = sorted(
@@ -26,6 +26,17 @@ def visual_body(result_overrides=None):
     follow_up_value = ", ".join(follow_ups) if follow_ups else "None"
     inspections = "\n".join(f"- [x] {item}" for item in INSPECTION_ITEMS)
     rows = "\n".join(f"| {row} | {results[row]} |" for row in AUDIT_ROWS)
+    previews = (
+        """### Visual comparison
+
+| GT | Before | After |
+| --- | --- | --- |
+| ![GT](https://example.com/gt.jpg) | ![Before](https://example.com/before.jpg) | ![After](https://example.com/after.jpg) |
+
+"""
+        if include_previews
+        else ""
+    )
     return f"""## Visual impact
 
 - [ ] No rendered PDF change
@@ -44,6 +55,7 @@ def visual_body(result_overrides=None):
 - Before: `assets/bugfixes/issue-186/before.jpg`
 - After: `assets/bugfixes/issue-186/after.jpg`
 
+{previews}
 ### Required inspection
 
 {inspections}
@@ -54,6 +66,27 @@ def visual_body(result_overrides=None):
 | --- | --- |
 {rows}
 """
+
+
+def defect_body():
+    return (
+        visual_body()
+        .replace("- Evidence mode: `fix`", "- Evidence mode: `defect`")
+        .replace(
+            """- GT: `assets/bugfixes/issue-186/gt.jpg`
+- Before: `assets/bugfixes/issue-186/before.jpg`
+- After: `assets/bugfixes/issue-186/after.jpg`""",
+            "- Compare: `assets/bugfixes/issue-186/compare.jpg`",
+        )
+        .replace(
+            """| GT | Before | After |
+| --- | --- | --- |
+| ![GT](https://example.com/gt.jpg) | ![Before](https://example.com/before.jpg) | ![After](https://example.com/after.jpg) |""",
+            """| Compare |
+| --- |
+| ![Compare](https://example.com/compare.jpg) |""",
+        )
+    )
 
 
 class PullRequestBodyTests(unittest.TestCase):
@@ -70,6 +103,44 @@ class PullRequestBodyTests(unittest.TestCase):
         errors = validate_pr_body(
             visual_body({"Fill": "Remaining: #328"}),
             ["assets/bugfixes/issue-186/after.jpg"],
+        )
+        self.assertEqual(errors, [])
+
+    def test_visual_audit_requires_rendered_evidence_previews(self):
+        errors = validate_pr_body(
+            visual_body(include_previews=False),
+            ["assets/bugfixes/issue-186/after.jpg"],
+        )
+        self.assertTrue(any("rendered preview" in error for error in errors))
+
+    def test_visual_audit_requires_distinct_preview_urls(self):
+        body = visual_body().replace(
+            "https://example.com/before.jpg",
+            "https://example.com/gt.jpg",
+        )
+        errors = validate_pr_body(body, ["assets/bugfixes/issue-186/after.jpg"])
+        self.assertTrue(any("different evidence image" in error for error in errors))
+
+    def test_commented_preview_does_not_count_as_rendered(self):
+        body = visual_body().replace(
+            "![GT](https://example.com/gt.jpg)",
+            "<!-- ![GT](https://example.com/gt.jpg) -->",
+        )
+        errors = validate_pr_body(body, ["assets/bugfixes/issue-186/after.jpg"])
+        self.assertTrue(any("rendered preview for GT" in error for error in errors))
+
+    def test_backticked_preview_does_not_count_as_rendered(self):
+        body = visual_body().replace(
+            "![GT](https://example.com/gt.jpg)",
+            "`![GT](https://example.com/gt.jpg)`",
+        )
+        errors = validate_pr_body(body, ["assets/bugfixes/issue-186/after.jpg"])
+        self.assertTrue(any("rendered preview for GT" in error for error in errors))
+
+    def test_defect_audit_requires_only_rendered_compare_preview(self):
+        errors = validate_pr_body(
+            defect_body(),
+            ["assets/bugfixes/issue-186/compare.jpg"],
         )
         self.assertEqual(errors, [])
 

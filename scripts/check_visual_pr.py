@@ -42,6 +42,8 @@ INSPECTION_ITEMS = (
     "Inventoried hairlines and border dash styles",
     "Inventoried font weight, italic, and underline emphasis",
 )
+FIX_PREVIEW_LABELS = ("GT", "Before", "After")
+DEFECT_PREVIEW_LABELS = ("Compare",)
 ALLOWED_RESULTS = ("Matches GT", "Fixed", "No deviation observed")
 
 
@@ -85,6 +87,21 @@ def audit_table(section: str) -> dict[str, str]:
         if len(cells) == 2 and cells[0] in AUDIT_ROWS:
             rows[cells[0]] = cells[1]
     return rows
+
+
+def rendered_preview_urls(section: str, labels: tuple[str, ...]) -> dict[str, str]:
+    rendered_markup = re.sub(r"(?s)<!--.*?-->", "", section)
+    rendered_markup = re.sub(r"(?s)```.*?```", "", rendered_markup)
+    rendered_markup = re.sub(r"`[^`\n]*`", "", rendered_markup)
+    urls: dict[str, str] = {}
+    for label in labels:
+        match = re.search(
+            rf"!\[{re.escape(label)}\]\((?P<url>https?://[^\s)]+)\)",
+            rendered_markup,
+        )
+        if match:
+            urls[label] = match.group("url")
+    return urls
 
 
 def validate_pr_body(body: str, changed_paths: list[str]) -> list[str]:
@@ -140,6 +157,23 @@ def validate_pr_body(body: str, changed_paths: list[str]) -> list[str]:
             expected_path = f"assets/bugfixes/issue-{issue_number}/{basename}.jpg"
             if field(audit, field_name) != expected_path:
                 errors.append(f"Visual audit > {field_name} must be `{expected_path}`.")
+
+    preview_labels: tuple[str, ...] = ()
+    if mode == "fix":
+        preview_labels = FIX_PREVIEW_LABELS
+    elif mode == "defect":
+        preview_labels = DEFECT_PREVIEW_LABELS
+    preview_urls = rendered_preview_urls(audit, preview_labels)
+    for label in preview_labels:
+        if label not in preview_urls:
+            errors.append(
+                f"Visual audit must include a rendered preview for {label}: "
+                f"![{label}](https://...)."
+            )
+    if len(preview_urls) == len(preview_labels) and len(set(preview_urls.values())) != len(
+        preview_labels
+    ):
+        errors.append("Each rendered preview must reference a different evidence image.")
 
     follow_up_value = field(audit, "New follow-up issues found in this audit")
     if not follow_up_value:
