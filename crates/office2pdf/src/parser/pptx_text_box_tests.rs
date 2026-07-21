@@ -330,9 +330,7 @@ fn test_text_box_paragraph_before_after_spacing() {
     // a:spcBef / a:spcAft carry PowerPoint's inter-paragraph gaps in
     // hundredths of a point; dropping them packed bullet lists into a dense
     // block (issue #359).
-    let shape = format!(
-        r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="TextBox"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="4000000" cy="2000000"/></a:xfrm></p:spPr><p:txBody><a:bodyPr/><a:p><a:pPr><a:spcBef><a:spcPts val="400"/></a:spcBef><a:spcAft><a:spcPts val="600"/></a:spcAft></a:pPr><a:r><a:rPr lang="en-US"/><a:t>spaced bullet</a:t></a:r></a:p></p:txBody></p:sp>"#
-    );
+    let shape = r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="TextBox"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="4000000" cy="2000000"/></a:xfrm></p:spPr><p:txBody><a:bodyPr/><a:p><a:pPr><a:spcBef><a:spcPts val="400"/></a:spcBef><a:spcAft><a:spcPts val="600"/></a:spcAft></a:pPr><a:r><a:rPr lang="en-US"/><a:t>spaced bullet</a:t></a:r></a:p></p:txBody></p:sp>"#.to_string();
     let slide = make_slide_xml(&[shape]);
     let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
     let parser = PptxParser;
