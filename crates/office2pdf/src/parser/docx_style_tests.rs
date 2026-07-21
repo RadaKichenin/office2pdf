@@ -373,3 +373,21 @@ fn test_doc_default_theme_font_resolves_via_theme() {
     let no_theme = serde_json::json!({ "fonts": { "ascii": "Arial" } });
     assert_eq!(resolve_theme_font_family(&no_theme, &theme), None);
 }
+
+#[test]
+fn test_paragraph_shading_extracted_as_background() {
+    // Word paints w:pPr/w:shd behind the whole paragraph (code blocks in
+    // the CLI-manual fixture); the fill must reach the IR (issue #351).
+    let mut shaded = docx_rs::Paragraph::new()
+        .add_run(docx_rs::Run::new().add_text("$ cargo install office2pdf-cli"));
+    shaded.property = shaded
+        .property
+        .shading(docx_rs::Shading::new().fill("F4F4F4"));
+    let data = build_docx_bytes(vec![shaded]);
+
+    let parser = DocxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let para = first_paragraph(&doc);
+
+    assert_eq!(para.style.background, Some(Color::new(0xF4, 0xF4, 0xF4)));
+}
