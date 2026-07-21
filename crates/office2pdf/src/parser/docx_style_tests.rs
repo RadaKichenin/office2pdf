@@ -344,6 +344,19 @@ fn test_default_paragraph_style_applies_without_pstyle() {
 }
 
 #[test]
+fn test_scan_default_paragraph_style_id_from_raw_styles_xml() {
+    let xml = r#"<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+      <w:style w:type="character" w:default="1" w:styleId="DefaultCharacter"/>
+      <w:style w:type="paragraph" w:default="1" w:styleId="BodyDefault"/>
+    </w:styles>"#;
+
+    assert_eq!(
+        styles::scan_default_paragraph_style_id(xml).as_deref(),
+        Some("BodyDefault")
+    );
+}
+
+#[test]
 fn test_doc_default_theme_font_resolves_via_theme() {
     // docDefaults referencing asciiTheme="minorHAnsi" must resolve to the
     // theme's minor latin typeface instead of falling back to the renderer

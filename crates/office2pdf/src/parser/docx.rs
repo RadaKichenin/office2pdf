@@ -198,6 +198,7 @@ struct ZipPreParseAssets {
     header_footer_assets: HeaderFooterAssets,
     metafile_images: ImageMap,
     theme_fonts: ThemeFonts,
+    default_paragraph_style_id: Option<String>,
 }
 
 /// Build all pre-parse contexts from the DOCX ZIP in a single pass.
@@ -209,6 +210,9 @@ fn build_zip_preparse_assets(data: &[u8]) -> ZipPreParseAssets {
             let metadata = crate::parser::metadata::extract_metadata_from_zip(&mut archive);
             let doc_xml = read_zip_text(&mut archive, "word/document.xml");
             let styles_xml = read_zip_text(&mut archive, "word/styles.xml");
+            let default_paragraph_style_id = styles_xml
+                .as_deref()
+                .and_then(styles::scan_default_paragraph_style_id);
             let theme_xml = read_zip_text(&mut archive, "word/theme/theme1.xml");
             let notes = build_note_context_from_xml(doc_xml.as_deref(), &mut archive);
             let wraps = build_wrap_context_from_xml(doc_xml.as_deref());
@@ -252,6 +256,7 @@ fn build_zip_preparse_assets(data: &[u8]) -> ZipPreParseAssets {
                     .as_deref()
                     .map(parse_theme_fonts)
                     .unwrap_or_default(),
+                default_paragraph_style_id,
             }
         }
         Err(_) => ZipPreParseAssets {
@@ -273,6 +278,7 @@ fn build_zip_preparse_assets(data: &[u8]) -> ZipPreParseAssets {
             header_footer_assets: HeaderFooterAssets::default(),
             metafile_images: ImageMap::new(),
             theme_fonts: ThemeFonts::default(),
+            default_paragraph_style_id: None,
         },
     }
 }
@@ -292,6 +298,7 @@ impl Parser for DocxParser {
             header_footer_assets,
             metafile_images,
             theme_fonts,
+            default_paragraph_style_id,
         } = build_zip_preparse_assets(data);
 
         let docx = docx_rs::read_docx(data).map_err(|e| {
@@ -305,7 +312,11 @@ impl Parser for DocxParser {
         images.extend(metafile_images);
         let hyperlinks = build_hyperlink_map(&docx);
         let numberings = build_numbering_map(&docx.numberings);
-        let style_map = build_style_map(&docx.styles, &theme_fonts);
+        let style_map = build_style_map(
+            &docx.styles,
+            &theme_fonts,
+            default_paragraph_style_id.as_deref(),
+        );
         let mut warnings: Vec<ConvertWarning> = Vec::new();
 
         let mut elements: Vec<TaggedElement> = Vec::new();

@@ -8,6 +8,8 @@ use crate::ir::{
 };
 use crate::parser::Parser;
 
+#[path = "xlsx_cond_fmt_raw.rs"]
+pub(crate) mod cond_fmt_raw;
 #[path = "xlsx_cells.rs"]
 mod xlsx_cells;
 #[path = "xlsx_drawing.rs"]
@@ -231,6 +233,7 @@ impl XlsxParser {
         })?;
 
         let metadata = extract_xlsx_metadata(&book);
+        let cond_fmt_hints = cond_fmt_raw::extract_cond_fmt_hints(data);
         let mut chart_map = extract_charts_with_anchors(data);
         let mut image_map = extract_images_with_anchors(data);
         let mut text_box_map = extract_text_boxes_with_anchors(data);
@@ -246,7 +249,9 @@ impl XlsxParser {
                 continue;
             }
 
-            let Some((ctx, row_start, row_end)) = prepare_sheet_context(sheet) else {
+            let Some((ctx, row_start, row_end)) =
+                prepare_sheet_context(sheet, cond_fmt_hints.get(sheet.get_name()))
+            else {
                 // A sheet without used cells can still carry drawings; give
                 // its images a page instead of dropping them.
                 let sheet_name = sheet.get_name().to_string();
@@ -411,6 +416,7 @@ impl Parser for XlsxParser {
 
         // Extract metadata from umya-spreadsheet properties
         let metadata = extract_xlsx_metadata(&book);
+        let cond_fmt_hints = cond_fmt_raw::extract_cond_fmt_hints(data);
 
         // Extract charts with anchor positions per sheet
         let mut chart_map = extract_charts_with_anchors(data);
@@ -429,7 +435,9 @@ impl Parser for XlsxParser {
                 continue;
             }
 
-            let Some((ctx, row_start, row_end)) = prepare_sheet_context(sheet) else {
+            let Some((ctx, row_start, row_end)) =
+                prepare_sheet_context(sheet, cond_fmt_hints.get(sheet.get_name()))
+            else {
                 // A sheet without used cells can still carry drawings; give
                 // its images a page instead of dropping them.
                 let sheet_name = sheet.get_name().to_string();
