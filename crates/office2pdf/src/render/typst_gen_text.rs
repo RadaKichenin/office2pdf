@@ -879,7 +879,10 @@ pub(super) fn escape_typst(text: &str) -> String {
                 }
                 result.push_str("#\"");
                 result.push_str(&" ".repeat(run_len));
-                result.push('"');
+                // The semicolon ends the code expression: without it, a
+                // following `(` or `[` in the text would chain onto the
+                // string as a function call (`#"  "(SIB)`).
+                result.push_str("\";");
             }
             '#' | '*' | '_' | '`' | '<' | '>' | '@' | '\\' | '~' | '/' | '$' | '[' | ']' | '{'
             | '}'

@@ -580,7 +580,7 @@ fn test_escape_typst_preserves_consecutive_spaces() {
     // use for manual alignment; Typst markup collapses them to one space.
     let result = escape_typst("Invoice #: INV-0342    Date: July 10");
     assert!(
-        result.contains("#\"    \""),
+        result.contains("#\"    \";"),
         "runs of spaces must survive markup collapsing: {result}"
     );
 }
@@ -591,7 +591,7 @@ fn test_escape_typst_preserves_leading_space_runs() {
     // is stripped by markup whitespace handling.
     let result = escape_typst("      2. indented");
     assert!(
-        result.starts_with("#\"      \""),
+        result.starts_with("#\"      \";"),
         "leading space runs must survive: {result}"
     );
     assert!(
@@ -605,7 +605,7 @@ fn test_escape_typst_preserves_spaces_after_hard_linebreak() {
     // Code blocks carry hard breaks followed by indentation.
     let result = escape_typst("match x {\n  b\"w:p\" => 1,\n}");
     assert!(
-        result.contains("#linebreak()#\"  \""),
+        result.contains("#linebreak()#\"  \";"),
         "post-break indentation must survive: {result}"
     );
 }
