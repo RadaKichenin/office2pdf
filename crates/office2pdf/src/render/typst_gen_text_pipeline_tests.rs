@@ -644,7 +644,10 @@ fn test_escape_typst_keeps_double_hyphens() {
         result.contains("\\-\\-font\\-path") || result.contains("\\-\\-font-path"),
         "double hyphens must not ligate to an en dash: {result}"
     );
-    assert!(!result.contains("--"), "no raw double hyphen may remain: {result}");
+    assert!(
+        !result.contains("--"),
+        "no raw double hyphen may remain: {result}"
+    );
 }
 
 #[test]
