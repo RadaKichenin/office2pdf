@@ -41,6 +41,9 @@ pub const DEFAULT_MARGIN_PT: f64 = 72.0;
 /// Index 0 = Heading 1, index 5 = Heading 6.
 pub const HEADING_FONT_SIZES: [f64; 6] = [24.0, 20.0, 16.0, 14.0, 12.0, 11.0];
 
+/// Typst's default body text size when generated markup does not set one.
+pub const TYPST_DEFAULT_FONT_SIZE_PT: f64 = 11.0;
+
 // ---------------------------------------------------------------------------
 // Streaming
 // ---------------------------------------------------------------------------

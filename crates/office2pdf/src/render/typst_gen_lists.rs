@@ -51,6 +51,7 @@ fn write_list_open(
     style: &EffectiveListStyle<'_>,
     fallback_marker_style: Option<&TextStyle>,
     indent: Option<ListIndentGeometry>,
+    spacing_pt: Option<f64>,
     start_at: Option<u32>,
 ) {
     let (func, _) = list_funcs(style.kind);
@@ -62,6 +63,10 @@ fn write_list_open(
             "indent: {}pt, body-indent: 0pt, ",
             format_f64(indent.marker_origin_pt)
         );
+    }
+
+    if let Some(spacing_pt) = spacing_pt {
+        let _ = write!(out, "spacing: {}pt, ", format_f64(spacing_pt));
     }
 
     if style.kind == ListKind::Ordered {
@@ -199,22 +204,131 @@ fn common_list_level_indent(
         .then_some(first)
 }
 
+fn paragraph_space_before(item: &crate::ir::ListItem) -> f64 {
+    item.content
+        .first()
+        .and_then(|paragraph| paragraph.style.space_before)
+        .unwrap_or(0.0)
+        .max(0.0)
+}
+
+fn paragraph_space_after(item: &crate::ir::ListItem) -> f64 {
+    item.content
+        .last()
+        .and_then(|paragraph| paragraph.style.space_after)
+        .unwrap_or(0.0)
+        .max(0.0)
+}
+
+fn paragraph_line_height(paragraph: &Paragraph) -> f64 {
+    let font_size = paragraph
+        .runs
+        .iter()
+        .filter_map(|run| run.style.font_size)
+        .max_by(f64::total_cmp)
+        .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_SIZE_PT);
+
+    match paragraph.style.line_spacing {
+        Some(LineSpacing::Proportional(factor)) => font_size * factor.max(0.0),
+        Some(LineSpacing::Exact(points)) => points.max(0.0),
+        None => font_size,
+    }
+}
+
+fn list_boundary_spacing(
+    previous: &crate::ir::ListItem,
+    next: &crate::ir::ListItem,
+) -> Option<f64> {
+    let previous_paragraph = previous.content.last()?;
+    let next_paragraph = next.content.first()?;
+    let has_paragraph_spacing = previous_paragraph.style.space_after.is_some()
+        || next_paragraph.style.space_before.is_some();
+    if !has_paragraph_spacing {
+        return None;
+    }
+
+    // An explicit Typst list spacing replaces its automatic paragraph
+    // leading. Carry the Word line box as well as the before/after gap so
+    // adding paragraph spacing cannot accidentally make a tight list tighter.
+    let line_height =
+        paragraph_line_height(previous_paragraph).max(paragraph_line_height(next_paragraph));
+    let paragraph_gap = paragraph_space_after(previous).max(paragraph_space_before(next));
+    Some(line_height + paragraph_gap)
+}
+
+fn common_list_level_spacing(items: &[crate::ir::ListItem], level: u32) -> Option<f64> {
+    let level_items = items
+        .iter()
+        .filter(|item| item.level == level)
+        .collect::<Vec<_>>();
+    let mut boundaries = level_items
+        .windows(2)
+        .map(|pair| list_boundary_spacing(pair[0], pair[1]));
+    let first = boundaries.next()??;
+
+    (first > 0.0001
+        && boundaries.all(|spacing| spacing.is_some_and(|spacing| f64_approx_eq(spacing, first))))
+    .then_some(first)
+}
+
+fn list_edge_spacing(list: &List, level: u32) -> (Option<f64>, Option<f64>) {
+    let first = list.items.iter().find(|item| item.level == level);
+    let last = list.items.iter().rev().find(|item| item.level == level);
+    let above = first
+        .and_then(|item| item.content.first())
+        .and_then(|paragraph| {
+            paragraph
+                .style
+                .space_before
+                .map(|spacing| paragraph_line_height(paragraph) + spacing.max(0.0))
+        })
+        .filter(|spacing| *spacing > 0.0001);
+    let below = last
+        .and_then(|item| item.content.last())
+        .and_then(|paragraph| {
+            paragraph
+                .style
+                .space_after
+                .map(|spacing| paragraph_line_height(paragraph) + spacing.max(0.0))
+        })
+        .filter(|spacing| *spacing > 0.0001);
+    (above, below)
+}
+
 pub(super) fn generate_list(out: &mut String, list: &List) -> Result<(), ConvertError> {
     let root_level: u32 = list_root_level(list);
     let style = list_style_for_level(list, root_level);
     let fallback_marker_style = common_list_level_text_style(&list.items, root_level);
     let indent = common_list_level_indent(&list.items, root_level);
+    let spacing_pt = common_list_level_spacing(&list.items, root_level);
+    let (space_before, space_after) = list_edge_spacing(list, root_level);
     let start_at = list.items.first().and_then(|item| item.start_at);
+    if space_before.is_some() || space_after.is_some() {
+        out.push_str("#block(");
+        write_block_params(
+            out,
+            &ParagraphStyle {
+                space_before,
+                space_after,
+                ..ParagraphStyle::default()
+            },
+        );
+        out.push_str(")[\n");
+    }
     write_list_open(
         out,
         "#",
         &style,
         fallback_marker_style.as_ref(),
         indent,
+        spacing_pt,
         start_at,
     );
     generate_list_items(out, list, &list.items, root_level)?;
     out.push_str(")\n");
+    if space_before.is_some() || space_after.is_some() {
+        out.push_str("]\n");
+    }
     Ok(())
 }
 
@@ -992,6 +1106,8 @@ fn generate_list_items(
                     common_list_level_text_style(&items[nested_start..nested_end], base_level + 1);
                 let indent =
                     common_list_level_indent(&items[nested_start..nested_end], base_level + 1);
+                let spacing_pt =
+                    common_list_level_spacing(&items[nested_start..nested_end], base_level + 1);
                 let nested_start_at = items[nested_start].start_at;
                 write_list_open(
                     out,
@@ -999,6 +1115,7 @@ fn generate_list_items(
                     &nested_style,
                     fallback_marker_style.as_ref(),
                     indent,
+                    spacing_pt,
                     nested_start_at,
                 );
                 generate_list_items(out, list, &items[nested_start..nested_end], base_level + 1)?;

@@ -69,6 +69,10 @@ mod text;
 /// Parser for DOCX (Office Open XML Word) documents.
 pub struct DocxParser;
 
+/// Word supplies this built-in paragraph spacing to numbered paragraphs when
+/// neither the paragraph nor its style hierarchy specifies a value.
+const WORD_COMPATIBLE_LIST_SPACE_AFTER_PT: f64 = 8.0;
+
 #[derive(Clone)]
 struct DocxImageAsset {
     data: Vec<u8>,
@@ -473,8 +477,12 @@ fn convert_paragraph_element(
                     runs: Vec::new(),
                 })));
                 TaggedElement::Plain(pre_blocks)
-            } else if let Some(p) = paragraph {
-                TaggedElement::ListParagraph { info, paragraph: p }
+            } else if let Some(mut paragraph) = paragraph {
+                paragraph
+                    .style
+                    .space_after
+                    .get_or_insert(WORD_COMPATIBLE_LIST_SPACE_AFTER_PT);
+                TaggedElement::ListParagraph { info, paragraph }
             } else {
                 TaggedElement::Plain(vec![])
             }
