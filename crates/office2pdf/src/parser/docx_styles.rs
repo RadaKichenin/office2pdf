@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::ir::{ParagraphStyle, TabStop, TextStyle};
+use crate::ir::{Color, ParagraphStyle, TabStop, TextStyle};
 
 use super::{
     ThemeFonts, extract_doc_default_text_style_with_theme, extract_paragraph_style,
@@ -72,6 +72,7 @@ pub(super) fn build_style_map(
     styles: &docx_rs::Styles,
     theme_fonts: &ThemeFonts,
     default_paragraph_style_id: Option<&str>,
+    paragraph_backgrounds: &HashMap<String, Color>,
 ) -> StyleMap {
     let mut map = StyleMap::new();
     let default_text: TextStyle = extract_doc_default_text_style_with_theme(styles, theme_fonts);
@@ -97,7 +98,8 @@ pub(super) fn build_style_map(
                         resolve_theme_font_family(&run_property_json, theme_fonts);
                 }
                 let text = merge_text_style(&own_text, map.get(DOC_DEFAULT_STYLE_ID));
-                let paragraph = extract_paragraph_style(&style.paragraph_property);
+                let mut paragraph = extract_paragraph_style(&style.paragraph_property);
+                paragraph.background = paragraph_backgrounds.get(&style.style_id).copied();
                 let paragraph_tab_overrides =
                     extract_tab_stop_overrides(&style.paragraph_property.tabs);
                 let heading_level = style
