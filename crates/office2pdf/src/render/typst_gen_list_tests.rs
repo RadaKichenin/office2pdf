@@ -190,6 +190,82 @@ fn test_generate_bulleted_list_preserves_nonstandard_hanging_indent_columns() {
 }
 
 #[test]
+fn test_generate_list_preserves_paragraph_spacing_between_items() {
+    use crate::ir::List;
+
+    let make_item = |text: &str| ListItem {
+        content: vec![Paragraph {
+            style: ParagraphStyle {
+                space_after: Some(8.0),
+                ..ParagraphStyle::default()
+            },
+            runs: vec![Run {
+                text: text.to_string(),
+                style: TextStyle::default(),
+                href: None,
+                footnote: None,
+            }],
+        }],
+        level: 0,
+        start_at: None,
+    };
+    let list = List {
+        kind: ListKind::Unordered,
+        items: vec![make_item("First"), make_item("Second")],
+        level_styles: BTreeMap::new(),
+    };
+
+    let output = generate_typst(&make_doc(vec![make_flow_page(vec![Block::List(list)])])).unwrap();
+
+    assert!(output.source.contains("spacing: 19pt"), "{}", output.source);
+    assert!(
+        output.source.contains("#block(below: 19pt)"),
+        "{}",
+        output.source
+    );
+}
+
+#[test]
+fn test_generate_list_combines_exact_line_height_with_paragraph_spacing() {
+    use crate::ir::List;
+
+    let make_item = |text: &str| ListItem {
+        content: vec![Paragraph {
+            style: ParagraphStyle {
+                line_spacing: Some(LineSpacing::Exact(18.0)),
+                space_after: Some(6.0),
+                ..ParagraphStyle::default()
+            },
+            runs: vec![Run {
+                text: text.to_string(),
+                style: TextStyle {
+                    font_size: Some(13.0),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        }],
+        level: 0,
+        start_at: None,
+    };
+    let list = List {
+        kind: ListKind::Ordered,
+        items: vec![make_item("First"), make_item("Second")],
+        level_styles: BTreeMap::new(),
+    };
+
+    let output = generate_typst(&make_doc(vec![make_flow_page(vec![Block::List(list)])])).unwrap();
+
+    assert!(output.source.contains("spacing: 24pt"), "{}", output.source);
+    assert!(
+        output.source.contains("#block(below: 24pt)"),
+        "{}",
+        output.source
+    );
+}
+
+#[test]
 fn test_generate_numbered_list_marker_inherits_common_text_font() {
     use crate::ir::List;
 

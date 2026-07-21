@@ -250,6 +250,7 @@ fn acceptance_pr_187_contributor_acceptance_style_inherited_numbering() {
             let style = &item.content[0].style;
             assert_eq!(style.indent_left, Some(36.0));
             assert_eq!(style.indent_first_line, Some(-18.0));
+            assert_eq!(style.space_after, Some(8.0));
         }
     }
 }
