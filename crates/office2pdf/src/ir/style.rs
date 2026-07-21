@@ -2,6 +2,10 @@
 #[derive(Debug, Clone, Default)]
 pub struct StyleSheet {
     pub styles: Vec<NamedStyle>,
+    /// Document default tab stop interval in points (`w:defaultTabStop`
+    /// from `word/settings.xml`). `None` when the document does not
+    /// declare one.
+    pub default_tab_stop_pt: Option<f64>,
 }
 
 /// A named style that can be referenced by paragraphs/runs.

@@ -856,3 +856,56 @@ fn test_generate_paragraph_with_double_bottom_border() {
         "double sides must not also stroke the wrapper: {result}"
     );
 }
+
+fn make_tab_paragraph() -> Block {
+    Block::Paragraph(Paragraph {
+        style: ParagraphStyle::default(),
+        runs: vec![Run {
+            text: "제1조\t(목적) 본문".to_string(),
+            style: TextStyle::default(),
+            href: None,
+            footnote: None,
+        }],
+    })
+}
+
+#[test]
+fn test_tab_advance_uses_document_default_tab_stop() {
+    // Word documents carry w:defaultTabStop; tabs advance to multiples of
+    // it, not the ECMA fallback (issue #393).
+    let mut doc = make_doc(vec![make_flow_page(vec![make_tab_paragraph()])]);
+    doc.styles.default_tab_stop_pt = Some(40.0);
+    let result = generate_typst(&doc).unwrap().source;
+    assert!(
+        result.contains("calc.rem-euclid(tab_prefix_width_1.abs.pt(), 40)"),
+        "explicit default tab stop must drive the advance: {result}"
+    );
+}
+
+#[test]
+fn test_tab_advance_defaults_to_40pt_under_document_grid() {
+    // When settings.xml omits w:defaultTabStop, East Asian Word (signalled
+    // by the section's w:docGrid) falls back to 800 twips = 40pt, not the
+    // ECMA 720 twips (issue #393).
+    let mut page = match make_flow_page(vec![make_tab_paragraph()]) {
+        Page::Flow(flow) => flow,
+        _ => unreachable!(),
+    };
+    page.line_grid_pitch = Some(18.0);
+    let doc = make_doc(vec![Page::Flow(page)]);
+    let result = generate_typst(&doc).unwrap().source;
+    assert!(
+        result.contains("calc.rem-euclid(tab_prefix_width_1.abs.pt(), 40)"),
+        "grid documents default to 40pt tab stops: {result}"
+    );
+}
+
+#[test]
+fn test_tab_advance_defaults_to_36pt_without_grid() {
+    let doc = make_doc(vec![make_flow_page(vec![make_tab_paragraph()])]);
+    let result = generate_typst(&doc).unwrap().source;
+    assert!(
+        result.contains("calc.rem-euclid(tab_prefix_width_1.abs.pt(), 36)"),
+        "ECMA default stays 36pt: {result}"
+    );
+}

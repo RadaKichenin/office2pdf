@@ -7,19 +7,28 @@ use crate::render::font_subst;
 use super::*;
 
 /// Word's default tab stop interval (0.5 inch = 36pt).
-const DEFAULT_TAB_WIDTH_PT: f64 = 36.0;
+pub(super) const DEFAULT_TAB_WIDTH_PT: f64 = 36.0;
+/// East Asian Word's default tab stop (800 twips) when settings.xml omits
+/// `w:defaultTabStop`.
+pub(super) const EAST_ASIAN_DEFAULT_TAB_WIDTH_PT: f64 = 40.0;
 const PPTX_SOFT_LINE_BREAK_CHAR: char = '\u{000B}';
 
 pub(super) fn generate_paragraph(
     out: &mut String,
     para: &Paragraph,
     line_grid_pitch: Option<f64>,
+    default_tab_width_pt: f64,
 ) -> Result<(), ConvertError> {
     let style = &para.style;
 
     if let Some(level) = style.heading_level {
         let _ = write!(out, "#heading(level: {level})[");
-        generate_runs_with_tabs(out, &para.runs, style.tab_stops.as_deref());
+        generate_runs_with_tabs(
+            out,
+            &para.runs,
+            style.tab_stops.as_deref(),
+            default_tab_width_pt,
+        );
         out.push_str("]\n");
         return Ok(());
     }
@@ -67,7 +76,12 @@ pub(super) fn generate_paragraph(
         let _ = write!(out, "#align({align_str})[");
     }
 
-    generate_runs_with_tabs(out, &para.runs, style.tab_stops.as_deref());
+    generate_runs_with_tabs(
+        out,
+        &para.runs,
+        style.tab_stops.as_deref(),
+        default_tab_width_pt,
+    );
 
     if use_align {
         out.push(']');
@@ -318,6 +332,7 @@ pub(super) fn generate_runs_with_tabs(
     out: &mut String,
     runs: &[Run],
     tab_stops: Option<&[TabStop]>,
+    default_tab_width_pt: f64,
 ) {
     if !paragraph_contains_tabs(runs) {
         generate_runs(out, runs);
@@ -337,7 +352,7 @@ pub(super) fn generate_runs_with_tabs(
             continue;
         }
 
-        write_tab_segment_bindings(out, index, segment, tab_stops);
+        write_tab_segment_bindings(out, index, segment, tab_stops, default_tab_width_pt);
     }
 
     let _ = writeln!(out, "  tab_prefix_{}", segments.len() - 1);
@@ -348,6 +363,7 @@ pub(super) fn generate_runs_with_tabs_no_wrap(
     out: &mut String,
     runs: &[Run],
     tab_stops: Option<&[TabStop]>,
+    default_tab_width_pt: f64,
 ) {
     let preserve_cjk_no_wrap: bool = runs
         .iter()
@@ -371,7 +387,7 @@ pub(super) fn generate_runs_with_tabs_no_wrap(
         })
         .collect();
 
-    generate_runs_with_tabs(out, &transformed_runs, tab_stops);
+    generate_runs_with_tabs(out, &transformed_runs, tab_stops, default_tab_width_pt);
 }
 
 #[derive(Clone, Copy, Default)]
@@ -388,6 +404,7 @@ fn write_tab_segment_bindings(
     index: usize,
     segment: &[Run],
     tab_stops: Option<&[TabStop]>,
+    default_tab_width_pt: f64,
 ) {
     let _ = writeln!(
         out,
@@ -412,12 +429,12 @@ fn write_tab_segment_bindings(
     let _ = writeln!(
         out,
         "  let tab_default_remainder_{index} = calc.rem-euclid(tab_prefix_width_{index}.abs.pt(), {})",
-        format_f64(DEFAULT_TAB_WIDTH_PT)
+        format_f64(default_tab_width_pt)
     );
     let _ = writeln!(
         out,
         "  let tab_advance_{index} = {}",
-        build_tab_advance_expr(index, segment, tab_stops)
+        build_tab_advance_expr(index, segment, tab_stops, default_tab_width_pt)
     );
     let _ = writeln!(
         out,
@@ -623,12 +640,17 @@ fn is_grouped_integer(text: &str, separator: char) -> bool {
         && parts[1..].iter().all(|part| part.len() == 3)
 }
 
-fn build_tab_advance_expr(index: usize, segment: &[Run], tab_stops: Option<&[TabStop]>) -> String {
+fn build_tab_advance_expr(
+    index: usize,
+    segment: &[Run],
+    tab_stops: Option<&[TabStop]>,
+    default_tab_width_pt: f64,
+) -> String {
     let prefix_width_var = format!("tab_prefix_width_{index}");
     let segment_width_var = format!("tab_segment_width_{index}");
     let decimal_width_var =
         extract_decimal_anchor_runs(segment).map(|_| format!("tab_decimal_width_{index}"));
-    let default_expr = build_default_tab_advance_expr(index);
+    let default_expr = build_default_tab_advance_expr(index, default_tab_width_pt);
 
     let Some(tab_stops) = tab_stops else {
         return default_expr;
@@ -709,11 +731,11 @@ fn tab_fill_content_expr(index: usize, leader: TabLeader) -> String {
     format!("box(width: tab_advance_{index}, repeat[{leader_markup}])")
 }
 
-fn build_default_tab_advance_expr(index: usize) -> String {
+fn build_default_tab_advance_expr(index: usize, default_tab_width_pt: f64) -> String {
     format!(
         "if tab_default_remainder_{index} == 0 {{ {}pt }} else {{ ({} - tab_default_remainder_{index}) * 1pt }}",
-        format_f64(DEFAULT_TAB_WIDTH_PT),
-        format_f64(DEFAULT_TAB_WIDTH_PT)
+        format_f64(default_tab_width_pt),
+        format_f64(default_tab_width_pt)
     )
 }
 

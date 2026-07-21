@@ -501,7 +501,7 @@ fn generate_cell_content(
             out.push('\n');
         }
         match block {
-            Block::Paragraph(para) => generate_cell_paragraph(out, para),
+            Block::Paragraph(para) => generate_cell_paragraph(out, para, ctx.default_tab_width_pt),
             Block::Table(table) => {
                 if ctx.table_depth < MAX_TABLE_DEPTH {
                     generate_table(out, table, ctx)?;
@@ -531,7 +531,7 @@ fn generate_cell_content(
     Ok(())
 }
 
-fn generate_cell_paragraph(out: &mut String, para: &Paragraph) {
+fn generate_cell_paragraph(out: &mut String, para: &Paragraph, default_tab_width_pt: f64) {
     let style: &ParagraphStyle = &para.style;
     let alignment = style.alignment;
     let align_str: Option<&str> = match alignment {
@@ -557,7 +557,12 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph) {
         let _ = writeln!(out, "#v({}pt)", format_f64(space_before));
     }
 
-    generate_runs_with_tabs(out, &para.runs, style.tab_stops.as_deref());
+    generate_runs_with_tabs(
+        out,
+        &para.runs,
+        style.tab_stops.as_deref(),
+        default_tab_width_pt,
+    );
 
     if let Some(space_after) = style.space_after {
         let _ = write!(out, "\n#v({}pt)", format_f64(space_after));

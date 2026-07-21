@@ -290,6 +290,7 @@ impl Parser for DocxParser {
         data: &[u8],
         _options: &ConvertOptions,
     ) -> Result<(Document, Vec<ConvertWarning>), ConvertError> {
+        let default_tab_stop_pt: Option<f64> = extract_default_tab_stop_pt(data);
         let ZipPreParseAssets {
             metadata,
             mut ctx,
@@ -419,11 +420,29 @@ impl Parser for DocxParser {
             Document {
                 metadata,
                 pages,
-                styles: StyleSheet::default(),
+                styles: StyleSheet {
+                    default_tab_stop_pt,
+                    ..StyleSheet::default()
+                },
             },
             warnings,
         ))
     }
+}
+
+/// `w:defaultTabStop w:val` from `word/settings.xml`, in points. Read from
+/// the raw part because docx-rs substitutes its own default when the
+/// element is absent, erasing the absent-vs-explicit distinction the
+/// East Asian fallback depends on (issue #393).
+fn extract_default_tab_stop_pt(data: &[u8]) -> Option<f64> {
+    let mut archive = crate::parser::open_zip(data).ok()?;
+    let settings_xml: String = read_zip_text(&mut archive, "word/settings.xml")?;
+    let element_start: usize = settings_xml.find("<w:defaultTabStop")?;
+    let rest: &str = &settings_xml[element_start..];
+    let value_start: usize = rest.find("w:val=\"")? + 7;
+    let value_end: usize = rest[value_start..].find('"')? + value_start;
+    let twips: f64 = rest[value_start..value_end].parse().ok()?;
+    (twips > 0.0).then_some(twips / 20.0)
 }
 
 /// Extract content from a StructuredDataTag (SDT), processing its paragraph
