@@ -160,76 +160,101 @@ fn rotate_point(
     )
 }
 
-/// Render a shadow approximation as an offset duplicate shape with reduced opacity.
+/// Number of concentric layers approximating the Gaussian blur of an
+/// outer shadow. Typst has no blur primitive; stacked translucent rings
+/// whose alphas compound to the shadow opacity read as a soft edge.
+const SHADOW_BLUR_LAYERS: usize = 4;
+
+/// Per-layer (outward expansion, alpha) pairs for a shadow. Layers span
+/// from `blur_radius/2` inset to `blur_radius/2` outset of the nominal
+/// silhouette, matching PowerPoint's blur that straddles the edge. A
+/// zero-blur shadow keeps the single crisp duplicate.
+pub(super) fn shadow_blur_layers(shadow: &Shadow) -> Vec<(f64, u8)> {
+    let opacity = shadow.opacity.clamp(0.0, 1.0);
+    if shadow.blur_radius <= 0.0 {
+        return vec![(0.0, (opacity * 255.0).round() as u8)];
+    }
+    let layer_count = SHADOW_BLUR_LAYERS;
+    let layer_opacity = 1.0 - (1.0 - opacity).powf(1.0 / layer_count as f64);
+    let alpha = (layer_opacity * 255.0).round() as u8;
+    (0..layer_count)
+        .map(|layer| {
+            let expansion = shadow.blur_radius * ((layer as f64 + 0.5) / layer_count as f64 - 0.5);
+            (expansion, alpha)
+        })
+        .collect()
+}
+
+/// Render a shadow approximation: concentric translucent duplicates whose
+/// stacked alphas peak at the core and fade across the blur radius.
 fn write_shadow_shape(out: &mut String, shape: &Shape, width: f64, height: f64, shadow: &Shadow) {
+    if matches!(shape.kind, ShapeKind::Line { .. }) {
+        // Lines don't have meaningful shadows; skip
+        return;
+    }
     let dir_rad = shadow.direction.to_radians();
     let dx = shadow.distance * dir_rad.cos();
     let dy = shadow.distance * dir_rad.sin();
-    let alpha = (shadow.opacity * 255.0).round() as u8;
 
-    let _ = write!(
-        out,
-        "#place(top + left, dx: {}pt, dy: {}pt)[",
-        format_f64(dx),
-        format_f64(dy),
-    );
-
-    match &shape.kind {
-        ShapeKind::Line { .. } => {
-            // Lines don't have meaningful shadows; skip
-            out.push_str("]\n");
-            return;
+    for (expansion, alpha) in shadow_blur_layers(shadow) {
+        let layer_width = (width + 2.0 * expansion).max(0.0);
+        let layer_height = (height + 2.0 * expansion).max(0.0);
+        let _ = write!(
+            out,
+            "#place(top + left, dx: {}pt, dy: {}pt)[",
+            format_f64(dx - expansion),
+            format_f64(dy - expansion),
+        );
+        match &shape.kind {
+            ShapeKind::Polygon { vertices } => {
+                out.push_str("#polygon(");
+                write_polygon_vertices(out, layer_width, layer_height, vertices);
+                let _ = write!(
+                    out,
+                    ", fill: rgb({}, {}, {}, {})",
+                    shadow.color.r, shadow.color.g, shadow.color.b, alpha,
+                );
+                out.push(')');
+            }
+            ShapeKind::RoundedRectangle { radius_fraction } => {
+                let radius = (radius_fraction * width.min(height) + expansion).max(0.0);
+                let _ = write!(
+                    out,
+                    "#rect(width: {}pt, height: {}pt, radius: {}pt, fill: rgb({}, {}, {}, {}))",
+                    format_f64(layer_width),
+                    format_f64(layer_height),
+                    format_f64(radius),
+                    shadow.color.r,
+                    shadow.color.g,
+                    shadow.color.b,
+                    alpha,
+                );
+            }
+            ShapeKind::Rectangle | ShapeKind::Ellipse => {
+                let func = if matches!(shape.kind, ShapeKind::Rectangle) {
+                    "#rect("
+                } else {
+                    "#ellipse("
+                };
+                out.push_str(func);
+                let _ = write!(
+                    out,
+                    "width: {}pt, height: {}pt, fill: rgb({}, {}, {}, {})",
+                    format_f64(layer_width),
+                    format_f64(layer_height),
+                    shadow.color.r,
+                    shadow.color.g,
+                    shadow.color.b,
+                    alpha,
+                );
+                out.push(')');
+            }
+            // Line is handled above; any future variants gracefully skip
+            // the shadow rather than panicking.
+            _ => {}
         }
-        ShapeKind::Polygon { vertices } => {
-            // Shadow for polygon: duplicate polygon with shadow color
-            out.push_str("#polygon(");
-            write_polygon_vertices(out, width, height, vertices);
-            let _ = write!(
-                out,
-                ", fill: rgb({}, {}, {}, {})",
-                shadow.color.r, shadow.color.g, shadow.color.b, alpha,
-            );
-            out.push_str(")]\n");
-            return;
-        }
-        _ => {}
+        out.push_str("]\n");
     }
-    let shape_cmd = match &shape.kind {
-        ShapeKind::Rectangle => "#rect(",
-        ShapeKind::Ellipse => "#ellipse(",
-        ShapeKind::RoundedRectangle { radius_fraction } => {
-            let _ = writeln!(
-                out,
-                "#rect(width: {}pt, height: {}pt, radius: {}pt, fill: rgb({}, {}, {}, {}))]",
-                format_f64(width),
-                format_f64(height),
-                format_f64(radius_fraction * width.min(height)),
-                shadow.color.r,
-                shadow.color.g,
-                shadow.color.b,
-                alpha,
-            );
-            return;
-        }
-        // Line and Polygon are handled by early returns above; any future
-        // variants gracefully skip the shadow rather than panicking.
-        _ => {
-            out.push_str("]\n");
-            return;
-        }
-    };
-    out.push_str(shape_cmd);
-    let _ = write!(
-        out,
-        "width: {}pt, height: {}pt, fill: rgb({}, {}, {}, {})",
-        format_f64(width),
-        format_f64(height),
-        shadow.color.r,
-        shadow.color.g,
-        shadow.color.b,
-        alpha,
-    );
-    out.push_str(")]\n");
 }
 
 /// Write fill color, using rgb with 4 args when opacity is set, rgb with 3 args otherwise.

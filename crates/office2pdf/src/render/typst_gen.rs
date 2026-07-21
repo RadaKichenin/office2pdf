@@ -22,7 +22,7 @@ use self::lists::{
     write_common_text_settings, write_fixed_text_default_par_settings,
 };
 use self::shapes::{
-    generate_shape, write_fill_color, write_gradient_fill, write_shape_stroke,
+    generate_shape, shadow_blur_layers, write_fill_color, write_gradient_fill, write_shape_stroke,
     write_text_box_shape_background,
 };
 use self::tables::generate_table;
@@ -619,24 +619,26 @@ fn generate_fixed_element(
         FixedElementKind::TextBox(text_box) => generate_fixed_text_box(out, elem, text_box, ctx)?,
         FixedElementKind::Image(img) => {
             if let Some(ref shadow) = img.shadow {
-                // Match the shape-shadow approximation: an offset duplicate
-                // with reduced opacity (Typst has no blur primitive).
+                // Match the shape-shadow approximation: concentric
+                // translucent duplicates whose stacked alphas fade across
+                // the blur radius (Typst has no blur primitive).
                 let dir_rad = shadow.direction.to_radians();
                 let dx = shadow.distance * dir_rad.cos();
                 let dy = shadow.distance * dir_rad.sin();
-                let alpha = (shadow.opacity * 255.0).round() as u8;
-                let _ = writeln!(
-                    out,
-                    "#place(top + left, dx: {}pt, dy: {}pt, rect(width: {}pt, height: {}pt, fill: rgb({}, {}, {}, {})))",
-                    format_f64(dx),
-                    format_f64(dy),
-                    format_f64(elem.width),
-                    format_f64(elem.height),
-                    shadow.color.r,
-                    shadow.color.g,
-                    shadow.color.b,
-                    alpha,
-                );
+                for (expansion, alpha) in shadow_blur_layers(shadow) {
+                    let _ = writeln!(
+                        out,
+                        "#place(top + left, dx: {}pt, dy: {}pt, rect(width: {}pt, height: {}pt, fill: rgb({}, {}, {}, {})))",
+                        format_f64(dx - expansion),
+                        format_f64(dy - expansion),
+                        format_f64((elem.width + 2.0 * expansion).max(0.0)),
+                        format_f64((elem.height + 2.0 * expansion).max(0.0)),
+                        shadow.color.r,
+                        shadow.color.g,
+                        shadow.color.b,
+                        alpha,
+                    );
+                }
             }
             generate_image(out, img, ctx);
             // Render image border as a separate overlay so that #image()

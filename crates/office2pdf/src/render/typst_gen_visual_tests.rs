@@ -552,12 +552,14 @@ fn test_shape_shadow_codegen() {
     };
     let doc = make_doc(vec![make_fixed_page(720.0, 540.0, vec![elem])]);
     let output = generate_typst(&doc).unwrap();
+    // Blurred shadows stack 4 layers whose alphas compound to the shadow
+    // opacity (1-(1-0.5)^(1/4) = 0.159 -> 41 per layer).
     assert!(
-        output.source.contains("rgb(0, 0, 0, 128)"),
-        "Shadow should use rgb with alpha. Got: {}",
+        output.source.contains("rgb(0, 0, 0, 41)"),
+        "Shadow layers should use rgb with per-layer alpha. Got: {}",
         output.source,
     );
-    let shadow_pos = output.source.find("rgb(0, 0, 0, 128)");
+    let shadow_pos = output.source.find("rgb(0, 0, 0, 41)");
     let main_pos = output.source.find("rgb(255, 0, 0)");
     assert!(
         shadow_pos < main_pos,
@@ -669,5 +671,87 @@ fn test_gradient_unsorted_stops_rendered_in_sorted_order() {
         pos_red < pos_green && pos_green < pos_blue,
         "Stops should be in sorted order (0% < 50% < 100%). Got: {}",
         src,
+    );
+}
+
+#[test]
+fn test_shape_shadow_blur_renders_layered_rings() {
+    // PowerPoint blurs outer shadows over `blurRad`; a single crisp offset
+    // duplicate reads as a second shape. The approximation stacks
+    // concentric layers from B/2 inset to B/2 outset whose alphas compound
+    // to the shadow opacity at the core and fade at the rim (issue #390).
+    use crate::ir::Shadow;
+
+    let elem = FixedElement {
+        x: 10.0,
+        y: 20.0,
+        width: 200.0,
+        height: 150.0,
+        kind: FixedElementKind::Shape(Shape {
+            kind: ShapeKind::Rectangle,
+            fill: Some(Color::new(255, 0, 0)),
+            gradient_fill: None,
+            stroke: None,
+            rotation_deg: None,
+            opacity: None,
+            shadow: Some(Shadow {
+                blur_radius: 8.0,
+                distance: 3.0,
+                direction: 45.0,
+                color: Color::new(0, 0, 0),
+                opacity: 0.5,
+            }),
+        }),
+    };
+    let doc = make_doc(vec![make_fixed_page(720.0, 540.0, vec![elem])]);
+    let source = generate_typst(&doc).unwrap().source;
+
+    // 4 layers, each with alpha 1-(1-0.5)^(1/4) = 0.159 -> 41.
+    let layer_alpha = source.matches("rgb(0, 0, 0, 41)").count();
+    assert_eq!(layer_alpha, 4, "expected 4 shadow layers in: {source}");
+    // Outermost layer: expanded by B/2 - B/8 = 3pt each side.
+    assert!(
+        source.contains("width: 206pt, height: 156pt"),
+        "outermost ring must outset the shape by 3pt: {source}"
+    );
+    // Innermost layer: inset by 3pt each side.
+    assert!(
+        source.contains("width: 194pt, height: 144pt"),
+        "innermost ring must inset the shape by 3pt: {source}"
+    );
+}
+
+#[test]
+fn test_shape_shadow_without_blur_keeps_single_duplicate() {
+    use crate::ir::Shadow;
+
+    let elem = FixedElement {
+        x: 10.0,
+        y: 20.0,
+        width: 200.0,
+        height: 150.0,
+        kind: FixedElementKind::Shape(Shape {
+            kind: ShapeKind::Rectangle,
+            fill: Some(Color::new(255, 0, 0)),
+            gradient_fill: None,
+            stroke: None,
+            rotation_deg: None,
+            opacity: None,
+            shadow: Some(Shadow {
+                blur_radius: 0.0,
+                distance: 3.0,
+                direction: 45.0,
+                color: Color::new(0, 0, 0),
+                opacity: 0.5,
+            }),
+        }),
+    };
+    let doc = make_doc(vec![make_fixed_page(720.0, 540.0, vec![elem])]);
+    let source = generate_typst(&doc).unwrap().source;
+
+    assert_eq!(
+        source.matches("rgb(0, 0, 0, 128)").count(),
+        1,
+        "zero blur keeps the single offset duplicate: {source}"
     );
 }
