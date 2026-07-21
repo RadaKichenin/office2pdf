@@ -329,8 +329,11 @@ pub(super) fn prst_to_shape_kind(
                 tail_end,
             }
         }
+        // roundRect: the corner radius is the adj value as a fraction of the
+        // short side (100k units, OOXML default 16667); it was hardcoded to
+        // 0.1, over-rounding nearly-square cards (issue #361).
         "roundRect" => ShapeKind::RoundedRectangle {
-            radius_fraction: 0.1,
+            radius_fraction: adj_values.first().copied().unwrap_or(16_667.0) / 100_000.0,
         },
         // homePlate: pentagon arrow tab (rect with pointed right edge)
         "homePlate" => {
