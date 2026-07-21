@@ -324,3 +324,24 @@ fn test_vert_text_in_plain_rect_keeps_anchor() {
         "plain rectangles keep their bodyPr anchor"
     );
 }
+
+#[test]
+fn test_text_box_paragraph_before_after_spacing() {
+    // a:spcBef / a:spcAft carry PowerPoint's inter-paragraph gaps in
+    // hundredths of a point; dropping them packed bullet lists into a dense
+    // block (issue #359).
+    let shape = r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="TextBox"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="4000000" cy="2000000"/></a:xfrm></p:spPr><p:txBody><a:bodyPr/><a:p><a:pPr><a:spcBef><a:spcPts val="400"/></a:spcBef><a:spcAft><a:spcPts val="600"/></a:spcAft></a:pPr><a:r><a:rPr lang="en-US"/><a:t>spaced bullet</a:t></a:r></a:p></p:txBody></p:sp>"#.to_string();
+    let slide = make_slide_xml(&[shape]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = first_fixed_page(&doc);
+    let blocks = text_box_blocks(&page.elements[0]);
+    let para = match &blocks[0] {
+        Block::Paragraph(p) => p,
+        _ => panic!("Expected Paragraph"),
+    };
+    assert_eq!(para.style.space_before, Some(4.0));
+    assert_eq!(para.style.space_after, Some(6.0));
+}

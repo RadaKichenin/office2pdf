@@ -505,6 +505,17 @@ pub(super) fn extract_pptx_line_spacing_pts(
     }
 }
 
+/// `a:spcBef`/`a:spcAft` points value: hundredths of a point. Percent-based
+/// spacing (`a:spcPct`) is rare for before/after gaps and is not yet mapped.
+pub(super) fn extract_pptx_space_points(
+    e: &quick_xml::events::BytesStart,
+    target: &mut Option<f64>,
+) {
+    if let Some(value) = get_attr_i64(e, b"val") {
+        *target = Some(value as f64 / 100.0);
+    }
+}
+
 pub(super) fn extract_pptx_text_box_body_props(
     e: &quick_xml::events::BytesStart,
     padding: &mut Insets,
