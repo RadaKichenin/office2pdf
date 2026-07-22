@@ -71,6 +71,10 @@ struct GenCtx {
     table_depth: usize,
     /// Active section's Word document-grid line pitch, in points.
     line_grid_pitch: Option<f64>,
+    /// `w:defaultTabStop` from the document settings, in points.
+    document_default_tab_stop_pt: Option<f64>,
+    /// Effective default tab stop interval, in points, for the active page.
+    default_tab_width_pt: f64,
 }
 
 impl GenCtx {
@@ -81,6 +85,8 @@ impl GenCtx {
             next_text_box_id: 0,
             table_depth: 0,
             line_grid_pitch: None,
+            document_default_tab_stop_pt: None,
+            default_tab_width_pt: DEFAULT_TAB_WIDTH_PT,
         }
     }
 
@@ -277,6 +283,7 @@ pub(crate) fn generate_typst_with_options_and_font_context(
         generate_document_metadata(&mut out, &doc.metadata);
 
         let mut ctx = GenCtx::new();
+        ctx.document_default_tab_stop_pt = doc.styles.default_tab_stop_pt;
         for (index, page) in doc.pages.iter().enumerate() {
             if index > 0 {
                 out.push_str("\n#pagebreak()\n");
@@ -306,6 +313,16 @@ fn generate_flow_page(
     write_flow_page_setup(out, page, &size, ctx);
     out.push('\n');
     ctx.line_grid_pitch = page.line_grid_pitch;
+    // Absent w:defaultTabStop: East Asian Word editions (signalled by the
+    // section's w:docGrid) default to 800 twips = 40pt where Western
+    // editions use the ECMA 720 twips = 36pt (issue #393).
+    ctx.default_tab_width_pt =
+        ctx.document_default_tab_stop_pt
+            .unwrap_or(if page.line_grid_pitch.is_some() {
+                EAST_ASIAN_DEFAULT_TAB_WIDTH_PT
+            } else {
+                DEFAULT_TAB_WIDTH_PT
+            });
 
     if let Some(ref cols) = page.columns {
         generate_flow_page_columns(out, &page.content, cols, ctx)?;
@@ -1366,7 +1383,9 @@ fn generate_floating_anchor_group(
 
 fn generate_block(out: &mut String, block: &Block, ctx: &mut GenCtx) -> Result<(), ConvertError> {
     match block {
-        Block::Paragraph(para) => generate_paragraph(out, para, ctx.line_grid_pitch),
+        Block::Paragraph(para) => {
+            generate_paragraph(out, para, ctx.line_grid_pitch, ctx.default_tab_width_pt)
+        }
         Block::PageBreak => {
             out.push_str("#pagebreak()\n");
             Ok(())
@@ -1922,9 +1941,19 @@ fn generate_fixed_text_paragraph(
 
     if no_wrap {
         out.push_str("#box[");
-        generate_runs_with_tabs_no_wrap(out, &para.runs, style.tab_stops.as_deref());
+        generate_runs_with_tabs_no_wrap(
+            out,
+            &para.runs,
+            style.tab_stops.as_deref(),
+            DEFAULT_TAB_WIDTH_PT,
+        );
     } else {
-        generate_runs_with_tabs(out, &para.runs, style.tab_stops.as_deref());
+        generate_runs_with_tabs(
+            out,
+            &para.runs,
+            style.tab_stops.as_deref(),
+            DEFAULT_TAB_WIDTH_PT,
+        );
     }
     if no_wrap {
         out.push(']');

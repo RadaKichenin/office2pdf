@@ -1126,3 +1126,56 @@ fn test_zero_indent_numbering_renders_inline_number_with_tab() {
         paragraphs[1].runs[0].text
     );
 }
+
+/// Rewrites `word/settings.xml` inside a DOCX, replacing the
+/// `w:defaultTabStop` element with `replacement` (empty string removes it).
+fn rewrite_settings_default_tab_stop(docx_bytes: &[u8], replacement: &str) -> Vec<u8> {
+    let mut archive =
+        zip::ZipArchive::new(std::io::Cursor::new(docx_bytes.to_vec())).expect("read zip");
+    let mut out = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i).expect("zip entry");
+        let name: String = file.name().to_string();
+        let mut content: Vec<u8> = Vec::new();
+        std::io::Read::read_to_end(&mut file, &mut content).expect("read entry");
+        if name == "word/settings.xml" {
+            let xml = String::from_utf8(content).expect("settings utf8");
+            let rewritten = match (xml.find("<w:defaultTabStop"), xml.find("/>")) {
+                (Some(start), Some(_)) => {
+                    let end = xml[start..].find("/>").expect("self-closing") + start + 2;
+                    format!("{}{}{}", &xml[..start], replacement, &xml[end..])
+                }
+                _ => xml,
+            };
+            content = rewritten.into_bytes();
+        }
+        out.start_file(name, zip::write::FileOptions::default())
+            .expect("start entry");
+        std::io::Write::write_all(&mut out, &content).expect("write entry");
+    }
+    out.finish().expect("finish zip").into_inner()
+}
+
+#[test]
+fn test_explicit_default_tab_stop_is_parsed() {
+    // Korean Word writes w:defaultTabStop val="800" (40pt); honoring it
+    // places suffix tabs at Word's stops (issue #393).
+    let data = build_docx_bytes(vec![
+        docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text("본문")),
+    ]);
+    let data = rewrite_settings_default_tab_stop(&data, r#"<w:defaultTabStop w:val="800"/>"#);
+    let parser = DocxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    assert_eq!(doc.styles.default_tab_stop_pt, Some(40.0));
+}
+
+#[test]
+fn test_absent_default_tab_stop_is_none() {
+    let data = build_docx_bytes(vec![
+        docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text("body")),
+    ]);
+    let data = rewrite_settings_default_tab_stop(&data, "");
+    let parser = DocxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    assert_eq!(doc.styles.default_tab_stop_pt, None);
+}

@@ -722,7 +722,7 @@ fn write_fixed_text_list_item_paragraph(out: &mut String, style: &ParagraphStyle
         out.push_str("#par[");
     }
 
-    generate_runs_with_tabs(out, runs, tab_stops.as_deref());
+    generate_runs_with_tabs(out, runs, tab_stops.as_deref(), DEFAULT_TAB_WIDTH_PT);
     out.push(']');
 }
 
