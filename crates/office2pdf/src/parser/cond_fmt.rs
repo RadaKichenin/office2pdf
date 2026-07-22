@@ -488,6 +488,18 @@ const ICON_BLACK: Color = Color { r: 0, g: 0, b: 0 };
 /// Map an OOXML iconSet type to per-band (glyph, color) pairs, low band first.
 /// An absent attribute means the spec default 3TrafficLights1. Unknown set
 /// types fall back to colored arrows of the requested band count.
+/// Excel's icon-set arrows are solid filled glyphs. The plain Unicode
+/// arrows (↑→↓) render at outline weight and read much lighter than
+/// Excel's icons; the heavy "black arrow" codepoints resolve to color
+/// emoji that ignore the icon fill. Solid geometric triangles are the
+/// heaviest arrow-like glyphs that stay in text presentation and take the
+/// icon fill color, so they match Excel's weight far better (issue #377).
+const ARROW_UP: &str = "\u{25B2}"; // ▲ black up-pointing triangle
+const ARROW_DOWN: &str = "\u{25BC}"; // ▼ black down-pointing triangle
+const ARROW_RIGHT: &str = "\u{25B6}"; // ▶ black right-pointing triangle
+const ARROW_UP_RIGHT: &str = "\u{25E5}"; // ◥ black upper-right triangle
+const ARROW_DOWN_RIGHT: &str = "\u{25E2}"; // ◢ black lower-right triangle
+
 fn icon_set_glyphs(set_type: &str, band_count: usize) -> Vec<(&'static str, Option<Color>)> {
     let effective_type: &str = if set_type.is_empty() {
         "3TrafficLights1"
@@ -517,52 +529,52 @@ fn icon_set_glyphs(set_type: &str, band_count: usize) -> Vec<(&'static str, Opti
             ("⚑", Some(ICON_GREEN)),
         ],
         "3Arrows" => vec![
-            ("↓", Some(ICON_RED)),
-            ("→", Some(ICON_YELLOW)),
-            ("↑", Some(ICON_GREEN)),
+            (ARROW_DOWN, Some(ICON_RED)),
+            (ARROW_RIGHT, Some(ICON_YELLOW)),
+            (ARROW_UP, Some(ICON_GREEN)),
         ],
         "3ArrowsGray" => vec![
-            ("↓", Some(ICON_GRAY)),
-            ("→", Some(ICON_GRAY)),
-            ("↑", Some(ICON_GRAY)),
+            (ARROW_DOWN, Some(ICON_GRAY)),
+            (ARROW_RIGHT, Some(ICON_GRAY)),
+            (ARROW_UP, Some(ICON_GRAY)),
         ],
         "4Arrows" => vec![
-            ("↓", Some(ICON_RED)),
-            ("↘", Some(ICON_YELLOW)),
-            ("↗", Some(ICON_YELLOW)),
-            ("↑", Some(ICON_GREEN)),
+            (ARROW_DOWN, Some(ICON_RED)),
+            (ARROW_DOWN_RIGHT, Some(ICON_YELLOW)),
+            (ARROW_UP_RIGHT, Some(ICON_YELLOW)),
+            (ARROW_UP, Some(ICON_GREEN)),
         ],
         "4ArrowsGray" => vec![
-            ("↓", Some(ICON_GRAY)),
-            ("↘", Some(ICON_GRAY)),
-            ("↗", Some(ICON_GRAY)),
-            ("↑", Some(ICON_GRAY)),
+            (ARROW_DOWN, Some(ICON_GRAY)),
+            (ARROW_DOWN_RIGHT, Some(ICON_GRAY)),
+            (ARROW_UP_RIGHT, Some(ICON_GRAY)),
+            (ARROW_UP, Some(ICON_GRAY)),
         ],
         "5Arrows" => vec![
-            ("↓", Some(ICON_RED)),
-            ("↘", Some(ICON_YELLOW)),
-            ("→", Some(ICON_YELLOW)),
-            ("↗", Some(ICON_YELLOW)),
-            ("↑", Some(ICON_GREEN)),
+            (ARROW_DOWN, Some(ICON_RED)),
+            (ARROW_DOWN_RIGHT, Some(ICON_YELLOW)),
+            (ARROW_RIGHT, Some(ICON_YELLOW)),
+            (ARROW_UP_RIGHT, Some(ICON_YELLOW)),
+            (ARROW_UP, Some(ICON_GREEN)),
         ],
         "5ArrowsGray" => vec![
-            ("↓", Some(ICON_GRAY)),
-            ("↘", Some(ICON_GRAY)),
-            ("→", Some(ICON_GRAY)),
-            ("↗", Some(ICON_GRAY)),
-            ("↑", Some(ICON_GRAY)),
+            (ARROW_DOWN, Some(ICON_GRAY)),
+            (ARROW_DOWN_RIGHT, Some(ICON_GRAY)),
+            (ARROW_RIGHT, Some(ICON_GRAY)),
+            (ARROW_UP_RIGHT, Some(ICON_GRAY)),
+            (ARROW_UP, Some(ICON_GRAY)),
         ],
         _ => {
             if band_count >= 5 {
                 vec![
-                    ("⇊", None),
-                    ("↓", None),
-                    ("→", None),
-                    ("↑", None),
-                    ("⇈", None),
+                    (ARROW_DOWN, None),
+                    (ARROW_DOWN_RIGHT, None),
+                    (ARROW_RIGHT, None),
+                    (ARROW_UP_RIGHT, None),
+                    (ARROW_UP, None),
                 ]
             } else {
-                vec![("↓", None), ("→", None), ("↑", None)]
+                vec![(ARROW_DOWN, None), (ARROW_RIGHT, None), (ARROW_UP, None)]
             }
         }
     }
