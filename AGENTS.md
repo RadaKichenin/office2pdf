@@ -4,6 +4,12 @@
 - For visual bug fixes, store reproducible before/after images under `assets/bugfixes/issue-<number>/`.
 - If a dependency limitation or bug breaks PDF conversion, clone that library, fix and test it upstream, and open a PR. Follow its repository conventions and match the tone and scope of its recently merged PRs.
 
+## Release Rules
+
+- Follow `RELEASING.md` end to end in one turn; a version bump or GitHub Release alone is not completion.
+- Perform every GitHub operation for this repository as `developer0hye`. Ignore stale shell tokens with `GH_TOKEN=''` and verify `gh api user --jq .login` before the first write.
+- After the version PR merges, start releases only by dispatching `release.yml` with the tag. Monitor that exact run and verify the tag, both crates.io packages, and all six assets before reporting success.
+
 ## Visual Check Discipline (applies to every agent; canonical copy in CLAUDE.md)
 
 - **Enumerate before fixing.** For every compared page, walk this checklist and record each deviation before touching code: page count/order; element presence; position; size; rotation/flip; fill; stroke/border (incl. dash style); text content; font family/weight/style; text color; alignment; line/paragraph spacing; clipping/overflow.

@@ -11,6 +11,56 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  release-contract:
+    name: Release Automation Contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Validate release preparation contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/release/prepare-release.sh
+
+          if grep -Eq '^  release:' .github/workflows/release.yml; then
+            echo "::error::release.published would duplicate a workflow_dispatch release"
+            exit 1
+          fi
+
+          version="$(cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[] | select(.name == "office2pdf") | .version')"
+
+          GH_CLI_BIN=true \
+          RELEASE_TAG="v${version}" \
+          GITHUB_EVENT_NAME=workflow_dispatch \
+          GITHUB_REF_NAME=main \
+          DEFAULT_BRANCH=main \
+          GITHUB_REPOSITORY="${GITHUB_REPOSITORY}" \
+          bash scripts/release/prepare-release.sh
+
+          if GH_CLI_BIN=true \
+            RELEASE_TAG="${version}" \
+            GITHUB_EVENT_NAME=workflow_dispatch \
+            GITHUB_REF_NAME=main \
+            DEFAULT_BRANCH=main \
+            GITHUB_REPOSITORY="${GITHUB_REPOSITORY}" \
+            bash scripts/release/prepare-release.sh; then
+            echo "::error::A tag without the v prefix was accepted"
+            exit 1
+          fi
+
+          if GH_CLI_BIN=true \
+            RELEASE_TAG="v${version}" \
+            GITHUB_EVENT_NAME=workflow_dispatch \
+            GITHUB_REF_NAME=feature \
+            DEFAULT_BRANCH=main \
+            GITHUB_REPOSITORY="${GITHUB_REPOSITORY}" \
+            bash scripts/release/prepare-release.sh; then
+            echo "::error::A new release from a non-default branch was accepted"
+            exit 1
+          fi
+
   business-golden-contract:
     name: Business Golden Contract
     runs-on: ubuntu-latest
