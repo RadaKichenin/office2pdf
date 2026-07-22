@@ -23,6 +23,11 @@ jobs:
           set -euo pipefail
           bash -n scripts/release/prepare-release.sh
 
+          if grep -Eq '^  release:' .github/workflows/release.yml; then
+            echo "::error::release.published would duplicate a workflow_dispatch release"
+            exit 1
+          fi
+
           version="$(cargo metadata --no-deps --format-version 1 \
             | jq -r '.packages[] | select(.name == "office2pdf") | .version')"
 
