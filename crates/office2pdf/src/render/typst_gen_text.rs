@@ -37,11 +37,25 @@ pub(super) fn generate_paragraph(
         word_line_height_settings(&para.runs, style, line_grid_pitch);
     let has_para_style = needs_block_wrapper(style) || line_height_settings.is_some();
 
+    // Word measures w:spacing w:before/w:after from the bottom of the full
+    // grid line box, while the metric text edges end at the descender: a
+    // grid-snapped paragraph must carry the grid top-up leading on its
+    // block above/below or every paragraph boundary loses it and the page
+    // rhythm drifts (issue #394).
+    let mut boundary_style = std::borrow::Cow::Borrowed(style);
+    if let Some(leading) = word_grid_boundary_leading_pt(&para.runs, style, line_grid_pitch)
+        && (style.space_before.is_some() || style.space_after.is_some())
+    {
+        let adjusted = boundary_style.to_mut();
+        adjusted.space_before = style.space_before.map(|gap| gap.max(0.0) + leading);
+        adjusted.space_after = style.space_after.map(|gap| gap.max(0.0) + leading);
+    }
+
     if has_para_style {
         // The wrapper must span the full line width: Typst blocks shrink to
         // their content by default, which would defeat the inner #align.
         out.push_str("#block(width: 100%");
-        write_block_params_continuation(out, style);
+        write_block_params_continuation(out, &boundary_style);
         out.push_str(")[\n");
         write_paragraph_double_border_overlays(out, &style.border);
         write_line_box_settings(out, style.line_box);
@@ -170,6 +184,26 @@ pub(super) fn word_line_leading_pt(
         _ => (word_pitch_em * font_size - line_box_pt).max(0.0),
     };
     Some(leading_pt)
+}
+
+/// The grid top-up leading a paragraph carries only when its lines snap to
+/// the document grid (East Asian text under a `w:docGrid`). Word measures
+/// `w:spacing w:before/w:after` from the bottom of the full grid line box,
+/// so a metric-edge paragraph must add this leading to its block
+/// above/below or every paragraph boundary loses it and the page rhythm
+/// drifts (issue #394). Latin single-spacing paragraphs are excluded:
+/// their `w:spacing` sits directly below the metric box in Word, so adding
+/// the hhea leading there overshoots (measured on Western fixtures).
+pub(super) fn word_grid_boundary_leading_pt(
+    runs: &[Run],
+    style: &ParagraphStyle,
+    line_grid_pitch: Option<f64>,
+) -> Option<f64> {
+    let pitch: f64 = line_grid_pitch.filter(|pitch| *pitch > 0.0)?;
+    if !runs.iter().any(|run| run.text.chars().any(is_cjk_like)) {
+        return None;
+    }
+    word_line_leading_pt(runs, style, Some(pitch))
 }
 
 pub(super) fn write_block_params(out: &mut String, style: &ParagraphStyle) {
