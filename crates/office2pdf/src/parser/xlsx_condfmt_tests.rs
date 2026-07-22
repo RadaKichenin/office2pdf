@@ -544,13 +544,17 @@ fn test_cond_fmt_icon_set_arrows_explicit() {
     let cell1 = &tp.table.rows[0].cells[0];
     assert_eq!(
         cell1.icon_text.as_deref(),
-        Some("↓"),
-        "3Arrows keeps arrow glyphs"
+        Some("\u{25BC}"),
+        "3Arrows uses a solid down-triangle for the low band (issue #377)"
     );
     assert_eq!(cell1.icon_color, Some(Color::new(214, 85, 50)));
 
     let cell3 = &tp.table.rows[2].cells[0];
-    assert_eq!(cell3.icon_text.as_deref(), Some("↑"));
+    assert_eq!(
+        cell3.icon_text.as_deref(),
+        Some("\u{25B2}"),
+        "3Arrows uses a solid up-triangle for the high band (issue #377)"
+    );
     assert_eq!(cell3.icon_color, Some(Color::new(104, 164, 144)));
 }
 
