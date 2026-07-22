@@ -909,3 +909,79 @@ fn test_tab_advance_defaults_to_36pt_without_grid() {
         "ECMA default stays 36pt: {result}"
     );
 }
+
+#[test]
+fn test_latin_paragraph_space_after_stays_raw_gap() {
+    // Latin single-spacing paragraphs (no document grid) keep their raw
+    // w:spacing w:after: Word places that gap directly below the metric
+    // box, so adding the hhea leading here overshoots (issue #394 is scoped
+    // to grid paragraphs; measured Western fixtures confirm the raw gap).
+    let make_para = |text: &str| {
+        Block::Paragraph(Paragraph {
+            style: ParagraphStyle {
+                space_after: Some(4.0),
+                ..ParagraphStyle::default()
+            },
+            runs: vec![Run {
+                text: text.to_string(),
+                style: TextStyle {
+                    font_family: Some("Libertinus Serif".to_string()),
+                    font_size: Some(10.0),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })
+    };
+    let doc = make_doc(vec![make_flow_page(vec![
+        make_para("first paragraph"),
+        make_para("second paragraph"),
+    ])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains("below: 4pt"),
+        "Latin paragraph keeps the raw 4pt gap: {result}"
+    );
+}
+
+#[test]
+fn test_grid_paragraph_space_after_extends_grid_advance() {
+    // Grid variant: the after-gap sits below the snapped grid line box, so
+    // the block's `below` is the grid top-up leading plus the gap.
+    let Some((ascender, descender, _)) =
+        crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
+        return;
+    };
+    let mut page = match make_flow_page(vec![Block::Paragraph(Paragraph {
+        style: ParagraphStyle {
+            space_after: Some(4.0),
+            ..ParagraphStyle::default()
+        },
+        runs: vec![Run {
+            text: "그리드 본문".to_string(),
+            style: TextStyle {
+                font_family: Some("Libertinus Serif".to_string()),
+                font_size: Some(10.0),
+                ..TextStyle::default()
+            },
+            href: None,
+            footnote: None,
+        }],
+    })]) {
+        Page::Flow(flow) => flow,
+        _ => unreachable!(),
+    };
+    page.line_grid_pitch = Some(18.0);
+    let doc = make_doc(vec![Page::Flow(page)]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    let grid_leading = 18.0 - (ascender + descender) * 10.0;
+    let expected = format!("below: {}pt", format_f64(grid_leading + 4.0));
+    assert!(
+        result.contains(&expected),
+        "expected grid paragraph {expected} in: {result}"
+    );
+}
