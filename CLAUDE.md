@@ -8,7 +8,7 @@
 - When editing `CLAUDE.md`, use the minimum words and sentences needed to convey 100% of the meaning.
 - After completing each planned task, run tests and commit before moving to the next task. **Skip tests if the change has no impact on runtime behavior** (e.g., docs, comments, CI config). Changes to runtime config files (YAML, JSON, etc. read by code) must still trigger tests.
 - **After any code change (feature addition, bug fix, refactoring, PR merge), check if `README.md` needs updating.** If project description, usage, setup, architecture, or API changed, update `README.md` with clear, concise language. Keep it minimal — only document what users need to know.
-- **Before every commit, delegate a read-only freshness audit to `documentation_freshness_reviewer` and wait for `PASS:`.** Compare existing documentation, examples, and code comments with the current code and configuration; update or remove stale versions, commands, APIs, behavior, defaults, paths, architecture, limitations, and unverified claims in the same commit.
+- **Before every commit, delegate a read-only freshness audit and wait for `PASS:`.** Codex must use `documentation_freshness_reviewer`; Claude Code must use `documentation-freshness-reviewer`. Compare existing documentation, examples, and code comments with the current code and configuration; update or remove stale versions, commands, APIs, behavior, defaults, paths, architecture, limitations, and unverified claims in the same commit.
 
 ## Testing (TDD)
 
