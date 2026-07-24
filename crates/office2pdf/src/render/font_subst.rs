@@ -18,6 +18,7 @@ use crate::ir::{
 };
 
 use super::font_context::FontSearchContext;
+use super::typst_gen::escape_typst_string;
 
 thread_local! {
     static ACTIVE_FONT_CONTEXT: RefCell<Option<FontSearchContext>> = const { RefCell::new(None) };
@@ -322,10 +323,13 @@ fn font_with_fallbacks_for_context(
     context: Option<&FontSearchContext>,
 ) -> String {
     let fallbacks = fallback_candidates(font_family, context);
+    // Family names originate from parsed OOXML (document-controlled); escape
+    // them so `"` or `\` cannot break out of the Typst string literal.
+    let family = escape_typst_string(font_family);
     if fallbacks.is_empty() {
-        let mut result = String::with_capacity(font_family.len() + 2);
+        let mut result = String::with_capacity(family.len() + 2);
         result.push('"');
-        result.push_str(font_family);
+        result.push_str(&family);
         result.push('"');
         return result;
     }
@@ -333,11 +337,11 @@ fn font_with_fallbacks_for_context(
     let mut result = String::with_capacity(64);
     result.push('(');
     result.push('"');
-    result.push_str(font_family);
+    result.push_str(&family);
     result.push('"');
     for sub in fallbacks {
         result.push_str(", \"");
-        result.push_str(&sub);
+        result.push_str(&escape_typst_string(&sub));
         result.push('"');
     }
     result.push(')');
