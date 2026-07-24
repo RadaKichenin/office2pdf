@@ -28,19 +28,8 @@ pub(super) struct ColorMapData {
     pub(super) aliases: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-pub(super) struct ParsedColor {
-    pub(super) color: Option<Color>,
-    pub(super) alpha: Option<f64>,
-}
-
-#[derive(Debug, Clone, Copy)]
-enum ColorTransform {
-    Tint(f64),
-    Shade(f64),
-    LumMod(f64),
-    LumOff(f64),
-}
+pub(super) use crate::parser::drawingml::ParsedColor;
+use crate::parser::drawingml::{self, SchemeColors};
 
 const COLOR_MAP_KEYS: &[&str] = &[
     "bg1", "tx1", "bg2", "tx2", "accent1", "accent2", "accent3", "accent4", "accent5", "accent6",
@@ -177,98 +166,15 @@ pub(super) fn resolve_scheme_color(
     color_map: &ColorMapData,
     scheme_name: &str,
 ) -> Option<Color> {
-    let mapped_name = color_map
-        .aliases
-        .get(scheme_name)
-        .map(String::as_str)
-        .unwrap_or(scheme_name);
-
-    theme
-        .colors
-        .get(mapped_name)
-        .copied()
-        .or_else(|| theme.colors.get(scheme_name).copied())
+    drawingml::resolve_scheme_color(&scheme_colors(theme, color_map), scheme_name)
 }
 
-fn parse_base_color(
-    element: &BytesStart<'_>,
-    theme: &ThemeData,
-    color_map: &ColorMapData,
-) -> Option<Color> {
-    match element.local_name().as_ref() {
-        b"srgbClr" => get_attr_str(element, b"val").and_then(|hex| parse_hex_color(&hex)),
-        b"schemeClr" => get_attr_str(element, b"val")
-            .and_then(|name| resolve_scheme_color(theme, color_map, &name)),
-        b"sysClr" => get_attr_str(element, b"lastClr").and_then(|hex| parse_hex_color(&hex)),
-        _ => None,
+/// Adapt pptx theme + clrMap to the shared DrawingML color scheme view.
+fn scheme_colors<'a>(theme: &'a ThemeData, color_map: &'a ColorMapData) -> SchemeColors<'a> {
+    SchemeColors {
+        colors: &theme.colors,
+        aliases: &color_map.aliases,
     }
-}
-
-fn parse_color_transform(element: &BytesStart<'_>) -> Option<ColorTransform> {
-    let val = get_attr_i64(element, b"val")? as f64 / 100_000.0;
-    match element.local_name().as_ref() {
-        b"tint" => Some(ColorTransform::Tint(val)),
-        b"shade" => Some(ColorTransform::Shade(val)),
-        b"lumMod" => Some(ColorTransform::LumMod(val)),
-        b"lumOff" => Some(ColorTransform::LumOff(val)),
-        _ => None,
-    }
-}
-
-fn apply_color_transforms(color: Color, transforms: &[ColorTransform]) -> Color {
-    // Apply tint/shade in RGB space first (OOXML spec: blend toward white/black).
-    let mut r: f64 = color.r as f64;
-    let mut g: f64 = color.g as f64;
-    let mut b: f64 = color.b as f64;
-
-    for transform in transforms {
-        match transform {
-            ColorTransform::Tint(t) => {
-                r = 255.0 - (255.0 - r) * t;
-                g = 255.0 - (255.0 - g) * t;
-                b = 255.0 - (255.0 - b) * t;
-            }
-            ColorTransform::Shade(s) => {
-                r *= s;
-                g *= s;
-                b *= s;
-            }
-            _ => {}
-        }
-    }
-
-    let tinted = Color::new(
-        r.round().clamp(0.0, 255.0) as u8,
-        g.round().clamp(0.0, 255.0) as u8,
-        b.round().clamp(0.0, 255.0) as u8,
-    );
-
-    // Then apply luminance transforms in HSL space.
-    let has_lum_transforms: bool = transforms
-        .iter()
-        .any(|t| matches!(t, ColorTransform::LumMod(_) | ColorTransform::LumOff(_)));
-
-    if !has_lum_transforms {
-        return tinted;
-    }
-
-    let (mut hue, mut saturation, mut lightness) = rgb_to_hsl(tinted);
-
-    for transform in transforms {
-        match transform {
-            ColorTransform::LumMod(value) => {
-                lightness = (lightness * value).clamp(0.0, 1.0);
-            }
-            ColorTransform::LumOff(value) => {
-                lightness = (lightness + value).clamp(0.0, 1.0);
-            }
-            _ => {}
-        }
-    }
-
-    saturation = saturation.clamp(0.0, 1.0);
-    hue = hue.rem_euclid(360.0);
-    hsl_to_rgb(hue, saturation, lightness)
 }
 
 pub(super) fn parse_color_from_empty(
@@ -276,10 +182,7 @@ pub(super) fn parse_color_from_empty(
     theme: &ThemeData,
     color_map: &ColorMapData,
 ) -> ParsedColor {
-    ParsedColor {
-        color: parse_base_color(element, theme, color_map),
-        alpha: None,
-    }
+    drawingml::parse_color_from_empty(element, &scheme_colors(theme, color_map))
 }
 
 pub(super) fn parse_color_from_start(
@@ -288,91 +191,7 @@ pub(super) fn parse_color_from_start(
     theme: &ThemeData,
     color_map: &ColorMapData,
 ) -> ParsedColor {
-    let base_color = parse_base_color(element, theme, color_map);
-    let mut transforms: Vec<ColorTransform> = Vec::new();
-    let mut alpha: Option<f64> = None;
-    let mut depth: usize = 1;
-
-    while depth > 0 {
-        match reader.read_event() {
-            Ok(Event::Start(ref child)) => {
-                depth += 1;
-                if let Some(transform) = parse_color_transform(child) {
-                    transforms.push(transform);
-                } else if child.local_name().as_ref() == b"alpha" {
-                    alpha = get_attr_i64(child, b"val").map(|v| v as f64 / 100_000.0);
-                }
-            }
-            Ok(Event::Empty(ref child)) => {
-                if let Some(transform) = parse_color_transform(child) {
-                    transforms.push(transform);
-                } else if child.local_name().as_ref() == b"alpha" {
-                    alpha = get_attr_i64(child, b"val").map(|v| v as f64 / 100_000.0);
-                }
-            }
-            Ok(Event::End(_)) => {
-                depth -= 1;
-            }
-            Ok(Event::Eof) => break,
-            Err(_) => break,
-            _ => {}
-        }
-    }
-
-    let color = base_color.map(|base| apply_color_transforms(base, &transforms));
-
-    ParsedColor { color, alpha }
-}
-
-fn rgb_to_hsl(color: Color) -> (f64, f64, f64) {
-    let red = color.r as f64 / 255.0;
-    let green = color.g as f64 / 255.0;
-    let blue = color.b as f64 / 255.0;
-
-    let max = red.max(green.max(blue));
-    let min = red.min(green.min(blue));
-    let delta = max - min;
-    let lightness = (max + min) / 2.0;
-
-    if delta == 0.0 {
-        return (0.0, 0.0, lightness);
-    }
-
-    let saturation = delta / (1.0 - (2.0 * lightness - 1.0).abs());
-    let hue_sector = if max == red {
-        ((green - blue) / delta).rem_euclid(6.0)
-    } else if max == green {
-        ((blue - red) / delta) + 2.0
-    } else {
-        ((red - green) / delta) + 4.0
-    };
-
-    (60.0 * hue_sector, saturation, lightness)
-}
-
-fn hsl_to_rgb(hue: f64, saturation: f64, lightness: f64) -> Color {
-    if saturation == 0.0 {
-        let channel = (lightness * 255.0).round() as u8;
-        return Color::new(channel, channel, channel);
-    }
-
-    let chroma = (1.0 - (2.0 * lightness - 1.0).abs()) * saturation;
-    let hue_prime = hue / 60.0;
-    let secondary = chroma * (1.0 - ((hue_prime.rem_euclid(2.0)) - 1.0).abs());
-    let match_lightness = lightness - chroma / 2.0;
-
-    let (red, green, blue) = match hue_prime {
-        h if (0.0..1.0).contains(&h) => (chroma, secondary, 0.0),
-        h if (1.0..2.0).contains(&h) => (secondary, chroma, 0.0),
-        h if (2.0..3.0).contains(&h) => (0.0, chroma, secondary),
-        h if (3.0..4.0).contains(&h) => (0.0, secondary, chroma),
-        h if (4.0..5.0).contains(&h) => (secondary, 0.0, chroma),
-        _ => (chroma, 0.0, secondary),
-    };
-
-    let to_u8 = |value: f64| ((value + match_lightness).clamp(0.0, 1.0) * 255.0).round() as u8;
-
-    Color::new(to_u8(red), to_u8(green), to_u8(blue))
+    drawingml::parse_color_from_start(reader, element, &scheme_colors(theme, color_map))
 }
 
 /// Parse a theme XML string to extract the color scheme and font scheme.
