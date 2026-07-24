@@ -250,7 +250,7 @@ fn parse_iso8601_date(s: &str) -> Option<(i32, u8, u8, u8, u8, u8)> {
 }
 
 /// Escape a string for use inside Typst double quotes.
-fn escape_typst_string(s: &str) -> String {
+pub(crate) fn escape_typst_string(s: &str) -> String {
     s.replace('\\', "\\\\").replace('"', "\\\"")
 }
 

@@ -213,6 +213,33 @@ fn test_font_with_fallbacks_single_substitute() {
     assert_eq!(result, r#"("Comic Sans MS", "Comic Neue")"#);
 }
 
+// Family names come from parsed OOXML, i.e. document-controlled input. A name
+// containing `"` or `\` must not break out of the generated Typst string
+// literal (it would corrupt the whole generated source).
+
+#[test]
+fn test_font_with_fallbacks_escapes_quotes_in_family_name() {
+    let result = font_with_fallbacks(r#"Weird "Quoted" Font"#);
+    assert_eq!(result, r#""Weird \"Quoted\" Font""#);
+}
+
+#[test]
+fn test_font_with_fallbacks_escapes_backslashes_in_family_name() {
+    let result = font_with_fallbacks(r"Fonts\Custom");
+    assert_eq!(result, r#""Fonts\\Custom""#);
+}
+
+#[test]
+fn test_font_with_fallbacks_escapes_quotes_in_fallback_array_head() {
+    // "Pretendard <anything>" resolves to the Pretendard substitute chain, so
+    // the raw (quote-carrying) name lands at the head of a Typst array literal.
+    let result = font_with_fallbacks(r#"Pretendard "Display""#);
+    assert!(
+        result.starts_with(r#"("Pretendard \"Display\"""#),
+        "array head must escape document-supplied quotes: {result}"
+    );
+}
+
 #[test]
 fn test_font_with_fallbacks_preserves_original_case() {
     // The original font name should appear as-is (not lowercased)
