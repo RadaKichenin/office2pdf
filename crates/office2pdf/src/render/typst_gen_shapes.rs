@@ -261,13 +261,9 @@ fn write_shadow_shape(out: &mut String, shape: &Shape, width: f64, height: f64, 
 pub(super) fn write_fill_color(out: &mut String, fill: &Color, opacity: Option<f64>) {
     if let Some(op) = opacity {
         let alpha = (op * 255.0).round() as u8;
-        let _ = write!(
-            out,
-            ", fill: rgb({}, {}, {}, {})",
-            fill.r, fill.g, fill.b, alpha
-        );
+        let _ = write!(out, ", fill: {}", rgb_with_alpha(fill, alpha));
     } else {
-        let _ = write!(out, ", fill: rgb({}, {}, {})", fill.r, fill.g, fill.b);
+        let _ = write!(out, ", fill: {}", rgb(fill));
     }
 }
 
@@ -290,57 +286,13 @@ fn write_shape_params(out: &mut String, shape: &Shape, width: f64, height: f64) 
 /// Write stroke parameter for shapes, handling dash patterns.
 pub(super) fn write_shape_stroke(out: &mut String, stroke: &Option<BorderSide>) {
     if let Some(stroke) = stroke {
-        match stroke.style {
-            BorderLineStyle::Solid | BorderLineStyle::None => {
-                let _ = write!(
-                    out,
-                    ", stroke: {}pt + rgb({}, {}, {})",
-                    format_f64(stroke.width),
-                    stroke.color.r,
-                    stroke.color.g,
-                    stroke.color.b,
-                );
-            }
-            _ => {
-                let _ = write!(
-                    out,
-                    ", stroke: (paint: rgb({}, {}, {}), thickness: {}pt, dash: \"{}\")",
-                    stroke.color.r,
-                    stroke.color.g,
-                    stroke.color.b,
-                    format_f64(stroke.width),
-                    border_line_style_to_typst(stroke.style),
-                );
-            }
-        }
+        let _ = write!(out, ", stroke: {}", stroke_value(stroke, false));
     }
 }
 
 /// Write a border stroke value for image box wrapping (no leading comma).
 pub(super) fn write_image_border_stroke(out: &mut String, stroke: &BorderSide) {
-    match stroke.style {
-        BorderLineStyle::Solid | BorderLineStyle::None => {
-            let _ = write!(
-                out,
-                "{}pt + rgb({}, {}, {})",
-                format_f64(stroke.width),
-                stroke.color.r,
-                stroke.color.g,
-                stroke.color.b,
-            );
-        }
-        _ => {
-            let _ = write!(
-                out,
-                "(paint: rgb({}, {}, {}), thickness: {}pt, dash: \"{}\")",
-                stroke.color.r,
-                stroke.color.g,
-                stroke.color.b,
-                format_f64(stroke.width),
-                border_line_style_to_typst(stroke.style),
-            );
-        }
-    }
+    out.push_str(&stroke_value(stroke, false));
 }
 
 /// Write polygon vertex coordinates scaled to actual dimensions.
@@ -388,11 +340,7 @@ pub(super) fn write_gradient_fill(out: &mut String, gradient: &GradientFill) {
     // Fall back to solid fill if fewer than 2 stops.
     if gradient.stops.len() < 2 {
         if let Some(stop) = gradient.stops.first() {
-            let _ = write!(
-                out,
-                "rgb({}, {}, {})",
-                stop.color.r, stop.color.g, stop.color.b,
-            );
+            out.push_str(&rgb(&stop.color));
         }
         return;
     }
@@ -415,11 +363,7 @@ pub(super) fn write_gradient_fill(out: &mut String, gradient: &GradientFill) {
             out.push_str(", ");
         }
         let pos_pct = (stop.position * 100.0).round() as i64;
-        let _ = write!(
-            out,
-            "(rgb({}, {}, {}), {}%)",
-            stop.color.r, stop.color.g, stop.color.b, pos_pct,
-        );
+        let _ = write!(out, "({}, {}%)", rgb(&stop.color), pos_pct);
     }
     if gradient.angle.abs() > 0.001 {
         let _ = write!(out, ", angle: {}deg", format_f64(gradient.angle));
@@ -484,16 +428,14 @@ fn write_arrowhead_at(
     out.push_str("#place(top + left)[#polygon(");
     let _ = write!(
         out,
-        "({}pt, {}pt), ({}pt, {}pt), ({}pt, {}pt), fill: rgb({}, {}, {})",
+        "({}pt, {}pt), ({}pt, {}pt), ({}pt, {}pt), fill: {}",
         format_f64(v1.0),
         format_f64(v1.1),
         format_f64(v2.0),
         format_f64(v2.1),
         format_f64(v3.0),
         format_f64(v3.1),
-        stroke.color.r,
-        stroke.color.g,
-        stroke.color.b,
+        rgb(&stroke.color),
     );
     out.push_str(")]\n");
 }

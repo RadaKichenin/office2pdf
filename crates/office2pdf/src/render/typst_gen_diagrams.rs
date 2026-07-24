@@ -79,6 +79,19 @@ const CHART_SERIES_COLORS: [&str; 6] = [
     "rgb(112, 173, 71)",
 ];
 
+/// Category palette used by the bar-plot and pie-table fallbacks.
+///
+/// Intentionally distinct from [`CHART_SERIES_COLORS`]; unifying them would
+/// change rendered output and needs visual verification.
+const CHART_CATEGORY_COLORS: [&str; 6] = [
+    "rgb(66, 133, 244)",
+    "rgb(219, 68, 55)",
+    "rgb(244, 180, 0)",
+    "rgb(15, 157, 88)",
+    "rgb(171, 71, 188)",
+    "rgb(0, 172, 193)",
+];
+
 /// Format a chart value without floating-point noise (e.g. 8.2000001 → 8.2).
 pub(super) fn chart_value_label(value: f64) -> String {
     if value.fract().abs() < 1e-9 {
@@ -335,12 +348,7 @@ fn generate_chart_bar(out: &mut String, chart: &Chart) {
         .fold(0.0_f64, f64::max);
     let max_value: f64 = if max_value == 0.0 { 1.0 } else { max_value };
 
-    let colors: [&str; 4] = [
-        "rgb(66, 133, 244)",
-        "rgb(219, 68, 55)",
-        "rgb(244, 180, 0)",
-        "rgb(15, 157, 88)",
-    ];
+    let colors: &[&str] = &CHART_CATEGORY_COLORS[..4];
 
     for (row_index, category) in chart.categories.iter().enumerate() {
         let escaped_category: String = escape_typst(category);
@@ -532,14 +540,7 @@ fn generate_chart_pie(out: &mut String, chart: &Chart) {
     let total: f64 = series.values.iter().sum();
     let total: f64 = if total == 0.0 { 1.0 } else { total };
 
-    let colors: [&str; 6] = [
-        "rgb(66, 133, 244)",
-        "rgb(219, 68, 55)",
-        "rgb(244, 180, 0)",
-        "rgb(15, 157, 88)",
-        "rgb(171, 71, 188)",
-        "rgb(0, 172, 193)",
-    ];
+    let colors: &[&str] = &CHART_CATEGORY_COLORS;
 
     let _ = writeln!(out, "#table(");
     let _ = writeln!(out, "  columns: 3,");

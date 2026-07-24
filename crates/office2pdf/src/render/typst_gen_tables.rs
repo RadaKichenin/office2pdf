@@ -242,15 +242,11 @@ fn generate_table_cell(
         };
         let _ = write!(
             out,
-            "#place(left + horizon, box(width: {}%, height: {}, fill: gradient.linear(rgb({}, {}, {}), rgb({}, {}, {}).lighten(70%))))",
+            "#place(left + horizon, box(width: {}%, height: {}, fill: gradient.linear({}, {}.lighten(70%))))",
             format_f64(pct),
             bar_height,
-            db.color.r,
-            db.color.g,
-            db.color.b,
-            db.color.r,
-            db.color.g,
-            db.color.b,
+            rgb(&db.color),
+            rgb(&db.color),
         );
     }
 
@@ -264,8 +260,9 @@ fn generate_table_cell(
             Some(color) => {
                 let _ = write!(
                     out,
-                    "#place(left + horizon, text(fill: rgb({}, {}, {}), weight: \"bold\")[{}])",
-                    color.r, color.g, color.b, icon
+                    "#place(left + horizon, text(fill: {}, weight: \"bold\")[{}])",
+                    rgb(&color),
+                    icon
                 );
             }
             None => {
@@ -388,14 +385,12 @@ fn write_double_border_line(
 ) {
     let _ = write!(
         out,
-        "#place({align}, dx: {}pt, dy: {}pt, line(length: 100% + {}pt, angle: {angle}, stroke: {}pt + rgb({}, {}, {})))",
+        "#place({align}, dx: {}pt, dy: {}pt, line(length: 100% + {}pt, angle: {angle}, stroke: {}pt + {}))",
         format_geometry(dx),
         format_geometry(dy),
         format_geometry(length_extra),
         format_geometry(side.width),
-        side.color.r,
-        side.color.g,
-        side.color.b,
+        rgb(&side.color),
     );
 }
 
@@ -471,24 +466,7 @@ fn format_cell_stroke(border: &CellBorder) -> String {
 }
 
 fn format_border_side(side: &BorderSide) -> String {
-    let base = format!(
-        "{}pt + rgb({}, {}, {})",
-        format_f64(side.width),
-        side.color.r,
-        side.color.g,
-        side.color.b
-    );
-    match side.style {
-        BorderLineStyle::Solid | BorderLineStyle::Double | BorderLineStyle::None => base,
-        _ => format!(
-            "(paint: rgb({}, {}, {}), thickness: {}pt, dash: \"{}\")",
-            side.color.r,
-            side.color.g,
-            side.color.b,
-            format_f64(side.width),
-            border_line_style_to_typst(side.style),
-        ),
-    }
+    stroke_value(side, true)
 }
 
 fn generate_cell_content(

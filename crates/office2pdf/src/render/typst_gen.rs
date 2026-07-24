@@ -17,6 +17,7 @@ use crate::ir::{
 };
 
 use self::diagrams::{generate_chart, generate_smartart};
+use self::fmt::*;
 use self::lists::{
     can_render_fixed_text_list_inline, common_text_style, generate_fixed_text_list, generate_list,
     write_common_text_settings, write_fixed_text_default_par_settings,
@@ -31,6 +32,8 @@ use super::font_context::FontSearchContext;
 
 #[path = "typst_gen_diagrams.rs"]
 mod diagrams;
+#[path = "typst_gen_fmt.rs"]
+mod fmt;
 #[path = "typst_gen_lists.rs"]
 mod lists;
 #[path = "typst_gen_shapes.rs"]
@@ -419,12 +422,10 @@ fn generate_fixed_page(
     } else if let Some(ref bg) = page.background_color {
         let _ = writeln!(
             out,
-            "#set page(width: {}pt, height: {}pt, margin: 0pt, fill: rgb({}, {}, {}))",
+            "#set page(width: {}pt, height: {}pt, margin: 0pt, fill: {})",
             format_f64(size.width),
             format_f64(size.height),
-            bg.r,
-            bg.g,
-            bg.b,
+            rgb(bg),
         );
     } else {
         let _ = writeln!(
@@ -581,16 +582,14 @@ fn generate_sheet_anchor(out: &mut String, anchor: &SheetAnchor, ctx: &mut GenCt
                 format_f64(text_box.height),
             );
             if let Some(fill) = text_box.fill {
-                let _ = write!(out, ", fill: rgb({}, {}, {})", fill.r, fill.g, fill.b);
+                let _ = write!(out, ", fill: {}", rgb(&fill));
             }
             if let Some(ref border) = text_box.border {
                 let _ = write!(
                     out,
-                    ", stroke: {}pt + rgb({}, {}, {})",
+                    ", stroke: {}pt + {}",
                     format_f64(border.width),
-                    border.color.r,
-                    border.color.g,
-                    border.color.b,
+                    rgb(&border.color),
                 );
             }
             out.push_str(", inset: 4pt)[");
@@ -1292,11 +1291,9 @@ fn write_hf_border_line(out: &mut String, border: &BorderSide, is_primary_double
     let dash = border_line_style_to_typst(border.style);
     let _ = write!(
         out,
-        "block(height: {}pt)[#line(length: 100%, stroke: (paint: rgb({}, {}, {}), thickness: {}pt, dash: \"{}\"))]",
+        "block(height: {}pt)[#line(length: 100%, stroke: (paint: {}, thickness: {}pt, dash: \"{}\"))]",
         format_f64(width),
-        border.color.r,
-        border.color.g,
-        border.color.b,
+        rgb(&border.color),
         format_f64(width),
         if border.style == BorderLineStyle::Double {
             "solid"
