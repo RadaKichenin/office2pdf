@@ -31,7 +31,7 @@ use self::shapes::{
     parse_arrow_head, parse_group_shape, parse_src_rect, pptx_dash_to_border_style,
     prst_to_shape_kind,
 };
-use self::slides::{parse_single_slide, parse_slide_xml};
+use self::slides::{SlideParseContext, parse_single_slide, parse_slide_xml};
 use self::tables::{parse_pptx_table, scale_pptx_table_geometry_to_frame};
 use self::text::*;
 use self::theme::{

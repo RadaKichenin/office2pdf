@@ -121,16 +121,10 @@ impl GroupTransform {
 /// Reads through the group's header sections (`nvGrpSpPr`, `grpSpPr`),
 /// extracts the coordinate transform, then slices the original XML to
 /// get the child shapes, and recursively parses them via `parse_slide_xml`.
-#[allow(clippy::too_many_arguments)]
-pub(super) fn parse_group_shape(
+pub(super) fn parse_group_shape<'a>(
     reader: &mut Reader<&[u8]>,
     xml: &str,
-    images: &SlideImageMap,
-    theme: &ThemeData,
-    color_map: &ColorMapData,
-    warning_context: &str,
-    inherited_text_body_defaults: &PptxTextBodyStyleDefaults,
-    table_styles: &table_styles::TableStyleMap,
+    ctx: &SlideParseContext<'a>,
 ) -> Result<(Vec<FixedElement>, Vec<ConvertWarning>), ConvertError> {
     let mut transform = GroupTransform::default();
     let mut in_xfrm = false;
@@ -216,16 +210,7 @@ pub(super) fn parse_group_shape(
                         r#"<r xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">{children_xml}</r>"#
                     );
 
-                    let (mut child_elements, warnings) = parse_slide_xml(
-                        &wrapped,
-                        images,
-                        theme,
-                        color_map,
-                        warning_context,
-                        inherited_text_body_defaults,
-                        table_styles,
-                        None,
-                    )?;
+                    let (mut child_elements, warnings) = parse_slide_xml(&wrapped, ctx, None)?;
                     for element in &mut child_elements {
                         transform.apply(element);
                     }
