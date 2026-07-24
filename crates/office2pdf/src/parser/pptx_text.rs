@@ -516,13 +516,39 @@ pub(super) fn extract_pptx_space_points(
     }
 }
 
+/// Text-box layout settings accumulated from `<a:bodyPr>` and autofit hints.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct PptxTextBoxSettings {
+    pub(super) padding: Insets,
+    pub(super) vertical_align: TextBoxVerticalAlign,
+    pub(super) no_wrap: bool,
+    pub(super) auto_fit: bool,
+    pub(super) text_rotation_deg: Option<f64>,
+}
+
+impl Default for PptxTextBoxSettings {
+    fn default() -> Self {
+        Self {
+            padding: default_pptx_text_box_padding(),
+            vertical_align: TextBoxVerticalAlign::Top,
+            no_wrap: false,
+            auto_fit: false,
+            text_rotation_deg: None,
+        }
+    }
+}
+
 pub(super) fn extract_pptx_text_box_body_props(
     e: &quick_xml::events::BytesStart,
-    padding: &mut Insets,
-    vertical_align: &mut TextBoxVerticalAlign,
-    no_wrap: &mut bool,
-    text_rotation_deg: &mut Option<f64>,
+    settings: &mut PptxTextBoxSettings,
 ) {
+    let PptxTextBoxSettings {
+        padding,
+        vertical_align,
+        no_wrap,
+        text_rotation_deg,
+        ..
+    } = settings;
     if let Some(vert) = get_attr_str(e, b"vert") {
         // "vert" runs top-to-bottom (90° cw), "vert270" bottom-to-top.
         *text_rotation_deg = match vert.as_str() {

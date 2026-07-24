@@ -77,18 +77,16 @@ fn parse_layer_elements<R: Read + std::io::Seek>(
 ) -> (Vec<FixedElement>, Vec<ConvertWarning>) {
     let images: SlideImageMap = load_slide_images(layer_path, archive);
     let empty_table_styles: table_styles::TableStyleMap = table_styles::TableStyleMap::new();
-    parse_slide_xml_inner(
-        layer_xml,
-        &images,
+    let ctx = SlideParseContext {
+        images: &images,
         theme,
         color_map,
-        label,
-        text_style_defaults,
-        &empty_table_styles,
-        true, // skip placeholder shapes in master/layout layers
-        None,
-    )
-    .unwrap_or_default()
+        warning_context: label,
+        inherited_text_body_defaults: text_style_defaults,
+        table_styles: &empty_table_styles,
+    };
+    // Skip placeholder shapes in master/layout layers.
+    parse_slide_xml_inner(layer_xml, &ctx, true, None).unwrap_or_default()
 }
 
 // ── Embedded object helpers ─────────────────────────────────────────────
@@ -311,17 +309,17 @@ fn parse_smartart_drawing(
                         && shape.cx > 0
                         && shape.cy > 0
                     {
-                        elements.extend(smartart_shape_to_elements(shape_fields(
-                            &shape.preset,
-                            shape.fill,
-                            shape.line,
-                            shape.line_w,
-                            &shape.texts,
-                            frame_x_pt + emu_to_pt(shape.x),
-                            frame_y_pt + emu_to_pt(shape.y),
-                            emu_to_pt(shape.cx),
-                            emu_to_pt(shape.cy),
-                        )));
+                        elements.extend(smartart_shape_to_elements(SmartArtShapeFields {
+                            x: frame_x_pt + emu_to_pt(shape.x),
+                            y: frame_y_pt + emu_to_pt(shape.y),
+                            width: emu_to_pt(shape.cx),
+                            height: emu_to_pt(shape.cy),
+                            preset: shape.preset,
+                            fill: shape.fill,
+                            line: shape.line,
+                            line_w: shape.line_w,
+                            texts: shape.texts,
+                        }));
                     }
                 }
                 _ => {}
@@ -332,31 +330,6 @@ fn parse_smartart_drawing(
     }
 
     elements
-}
-
-#[allow(clippy::too_many_arguments)]
-fn shape_fields(
-    preset: &Option<String>,
-    fill: Option<Color>,
-    line: Option<Color>,
-    line_w: i64,
-    texts: &[String],
-    x: f64,
-    y: f64,
-    width: f64,
-    height: f64,
-) -> SmartArtShapeFields {
-    SmartArtShapeFields {
-        preset: preset.clone(),
-        fill,
-        line,
-        line_w,
-        texts: texts.to_vec(),
-        x,
-        y,
-        width,
-        height,
-    }
 }
 
 struct SmartArtShapeFields {
@@ -646,16 +619,16 @@ pub(super) fn parse_single_slide<R: Read + std::io::Seek>(
         chain.master_text_styles.clone(),
     );
 
-    let (slide_elements, slide_warnings) = parse_slide_xml(
-        &chain.slide_xml,
-        &slide_images,
+    let slide_ctx = SlideParseContext {
+        images: &slide_images,
         theme,
-        &chain.slide_color_map,
-        slide_label,
-        &chain.master_text_styles.other,
+        color_map: &chain.slide_color_map,
+        warning_context: slide_label,
+        inherited_text_body_defaults: &chain.master_text_styles.other,
         table_styles,
-        Some(&placeholder_geometry),
-    )?;
+    };
+    let (slide_elements, slide_warnings) =
+        parse_slide_xml(&chain.slide_xml, &slide_ctx, Some(&placeholder_geometry))?;
     warnings.extend(slide_warnings);
 
     let mut elements: Vec<FixedElement> = Vec::new();
@@ -956,15 +929,10 @@ impl ShapeState {
 /// Finalize a shape element when `</p:sp>` is reached.
 /// Returns elements to add: for shapes with text AND non-rectangular geometry,
 /// returns two elements (shape background + transparent text overlay).
-#[allow(clippy::too_many_arguments)]
 fn finalize_shape(
     shape: &mut ShapeState,
     paragraphs: &mut Vec<PptxParagraphEntry>,
-    text_box_padding: Insets,
-    text_box_vertical_align: TextBoxVerticalAlign,
-    text_box_no_wrap: bool,
-    text_box_auto_fit: bool,
-    text_box_text_rotation_deg: Option<f64>,
+    text_box: PptxTextBoxSettings,
     theme_line_style_widths: &[i64],
 ) -> Vec<FixedElement> {
     // Outline width: explicit `<a:ln w>` when present, otherwise the theme
@@ -1045,10 +1013,10 @@ fn finalize_shape(
             // don't model; for rotated (vert) text, edge-anchoring the
             // column lands it on the shape's sloped boundary where
             // PowerPoint keeps it near the middle — center it instead.
-            let overlay_vertical_align = if text_box_text_rotation_deg.is_some() {
+            let overlay_vertical_align = if text_box.text_rotation_deg.is_some() {
                 TextBoxVerticalAlign::Center
             } else {
-                text_box_vertical_align
+                text_box.vertical_align
             };
             elements.push(FixedElement {
                 x: emu_to_pt(shape.x),
@@ -1057,15 +1025,15 @@ fn finalize_shape(
                 height: emu_to_pt(shape.cy),
                 kind: FixedElementKind::TextBox(TextBoxData {
                     content: blocks,
-                    padding: text_box_padding,
+                    padding: text_box.padding,
                     vertical_align: overlay_vertical_align,
                     fill: None,
                     opacity: None,
                     stroke: None,
                     shape_kind: None,
-                    no_wrap: text_box_no_wrap,
-                    auto_fit: text_box_auto_fit,
-                    text_rotation_deg: text_box_text_rotation_deg,
+                    no_wrap: text_box.no_wrap,
+                    auto_fit: text_box.auto_fit,
+                    text_rotation_deg: text_box.text_rotation_deg,
                 }),
             });
         } else {
@@ -1077,15 +1045,15 @@ fn finalize_shape(
                 height: emu_to_pt(shape.cy),
                 kind: FixedElementKind::TextBox(TextBoxData {
                     content: blocks,
-                    padding: text_box_padding,
-                    vertical_align: text_box_vertical_align,
+                    padding: text_box.padding,
+                    vertical_align: text_box.vertical_align,
                     fill: effective_fill,
                     opacity: shape.opacity,
                     stroke,
                     shape_kind: None,
-                    no_wrap: text_box_no_wrap,
-                    auto_fit: text_box_auto_fit,
-                    text_rotation_deg: text_box_text_rotation_deg,
+                    no_wrap: text_box.no_wrap,
+                    auto_fit: text_box.auto_fit,
+                    text_rotation_deg: text_box.text_rotation_deg,
                 }),
             });
         }
@@ -1276,6 +1244,20 @@ fn apply_solid_fill_color(
 
 // ── SlideXmlParser state machine ────────────────────────────────────────
 
+/// Shared read-only inputs for parsing one slide-layer XML part.
+///
+/// Groups the per-slide references that every sub-parser needs, so they
+/// travel as one value instead of six positional parameters.
+#[derive(Clone, Copy)]
+pub(super) struct SlideParseContext<'a> {
+    pub(super) images: &'a SlideImageMap,
+    pub(super) theme: &'a ThemeData,
+    pub(super) color_map: &'a ColorMapData,
+    pub(super) warning_context: &'a str,
+    pub(super) inherited_text_body_defaults: &'a PptxTextBodyStyleDefaults,
+    pub(super) table_styles: &'a table_styles::TableStyleMap,
+}
+
 /// Bundles the 20+ mutable state variables of the slide XML event loop
 /// into a single struct, with methods for each event type.
 ///
@@ -1285,12 +1267,7 @@ fn apply_solid_fill_color(
 struct SlideXmlParser<'a> {
     // ── Context references (immutable for the parse lifetime) ────────
     xml: &'a str,
-    images: &'a SlideImageMap,
-    theme: &'a ThemeData,
-    color_map: &'a ColorMapData,
-    warning_context: &'a str,
-    inherited_text_body_defaults: &'a PptxTextBodyStyleDefaults,
-    table_styles: &'a table_styles::TableStyleMap,
+    ctx: SlideParseContext<'a>,
 
     // ── Options ─────────────────────────────────────────────────────
     /// When true, shapes with `<p:ph>` (placeholder) are skipped.
@@ -1312,11 +1289,7 @@ struct SlideXmlParser<'a> {
     // ── Text body state (`<p:txBody>`) ──────────────────────────────
     in_txbody: bool,
     paragraphs: Vec<PptxParagraphEntry>,
-    text_box_padding: Insets,
-    text_box_vertical_align: TextBoxVerticalAlign,
-    text_box_no_wrap: bool,
-    text_box_auto_fit: bool,
-    text_box_text_rotation_deg: Option<f64>,
+    text_box: PptxTextBoxSettings,
     text_body_style_defaults: PptxTextBodyStyleDefaults,
 
     // ── Paragraph state (`<a:p>`) ───────────────────────────────────
@@ -1362,23 +1335,10 @@ struct SlideXmlParser<'a> {
 }
 
 impl<'a> SlideXmlParser<'a> {
-    fn new(
-        xml: &'a str,
-        images: &'a SlideImageMap,
-        theme: &'a ThemeData,
-        color_map: &'a ColorMapData,
-        warning_context: &'a str,
-        inherited_text_body_defaults: &'a PptxTextBodyStyleDefaults,
-        table_styles: &'a table_styles::TableStyleMap,
-    ) -> Self {
+    fn new(xml: &'a str, ctx: SlideParseContext<'a>) -> Self {
         Self {
             xml,
-            images,
-            theme,
-            color_map,
-            warning_context,
-            inherited_text_body_defaults,
-            table_styles,
+            ctx,
 
             skip_placeholders: false,
             placeholder_geometry: None,
@@ -1391,11 +1351,7 @@ impl<'a> SlideXmlParser<'a> {
 
             in_txbody: false,
             paragraphs: Vec::new(),
-            text_box_padding: default_pptx_text_box_padding(),
-            text_box_vertical_align: TextBoxVerticalAlign::Top,
-            text_box_no_wrap: false,
-            text_box_auto_fit: false,
-            text_box_text_rotation_deg: None,
+            text_box: PptxTextBoxSettings::default(),
             text_body_style_defaults: PptxTextBodyStyleDefaults::default(),
 
             in_para: false,
@@ -1443,9 +1399,12 @@ impl<'a> SlideXmlParser<'a> {
                 self.gf.in_xfrm = true;
             }
             b"tbl" if self.in_graphic_frame => {
-                if let Ok(mut table) =
-                    parse_pptx_table(reader, self.theme, self.color_map, self.table_styles)
-                {
+                if let Ok(mut table) = parse_pptx_table(
+                    reader,
+                    self.ctx.theme,
+                    self.ctx.color_map,
+                    self.ctx.table_styles,
+                ) {
                     scale_pptx_table_geometry_to_frame(
                         &mut table,
                         emu_to_pt(self.gf.cx),
@@ -1464,16 +1423,9 @@ impl<'a> SlideXmlParser<'a> {
                 }
             }
             b"grpSp" if !self.in_shape && !self.in_pic && !self.in_graphic_frame => {
-                if let Ok((group_elems, group_warnings)) = parse_group_shape(
-                    reader,
-                    self.xml,
-                    self.images,
-                    self.theme,
-                    self.color_map,
-                    self.warning_context,
-                    self.inherited_text_body_defaults,
-                    self.table_styles,
-                ) {
+                if let Ok((group_elems, group_warnings)) =
+                    parse_group_shape(reader, self.xml, &self.ctx)
+                {
                     self.elements.extend(group_elems);
                     self.warnings.extend(group_warnings);
                 }
@@ -1484,11 +1436,7 @@ impl<'a> SlideXmlParser<'a> {
                 self.shape.depth = 1;
                 self.in_txbody = false;
                 self.paragraphs.clear();
-                self.text_box_padding = default_pptx_text_box_padding();
-                self.text_box_vertical_align = TextBoxVerticalAlign::Top;
-                self.text_box_no_wrap = false;
-                self.text_box_auto_fit = false;
-                self.text_box_text_rotation_deg = None;
+                self.text_box = PptxTextBoxSettings::default();
             }
             b"sp" | b"cxnSp" if self.in_shape => {
                 self.shape.depth += 1;
@@ -1512,7 +1460,7 @@ impl<'a> SlideXmlParser<'a> {
                 self.pic.in_prst_geom = true;
             }
             b"effectLst" if self.in_pic && self.pic.in_sp_pr => {
-                self.pic.shadow = parse_effect_list(reader, self.theme, self.color_map);
+                self.pic.shadow = parse_effect_list(reader, self.ctx.theme, self.ctx.color_map);
             }
             b"gd" if self.in_pic && self.pic.in_prst_geom => {
                 if self.pic.prst_adj.is_none()
@@ -1540,7 +1488,7 @@ impl<'a> SlideXmlParser<'a> {
             }
             b"gradFill" if self.shape.in_sp_pr && !self.shape.in_ln && !self.in_rpr => {
                 self.shape.gradient_fill =
-                    parse_shape_gradient_fill(reader, self.theme, self.color_map);
+                    parse_shape_gradient_fill(reader, self.ctx.theme, self.ctx.color_map);
                 if let Some(ref gradient_fill) = self.shape.gradient_fill
                     && self.shape.fill.is_none()
                 {
@@ -1548,7 +1496,7 @@ impl<'a> SlideXmlParser<'a> {
                 }
             }
             b"effectLst" if self.shape.in_sp_pr && !self.shape.in_ln => {
-                self.shape.shadow = parse_effect_list(reader, self.theme, self.color_map);
+                self.shape.shadow = parse_effect_list(reader, self.ctx.theme, self.ctx.color_map);
             }
             b"extLst" if self.shape.in_sp_pr && !self.in_txbody => {
                 // Office extension payloads such as a16:hiddenLine are not visible shape
@@ -1600,7 +1548,7 @@ impl<'a> SlideXmlParser<'a> {
                         })
                         .unwrap_or_default()
                 } else {
-                    self.inherited_text_body_defaults.clone()
+                    self.ctx.inherited_text_body_defaults.clone()
                 };
                 // Apply fontRef default text color from <p:style> to all text levels,
                 // overriding inherited layout/master defaults.
@@ -1609,19 +1557,14 @@ impl<'a> SlideXmlParser<'a> {
                 }
             }
             b"bodyPr" if self.in_shape && self.in_txbody => {
-                extract_pptx_text_box_body_props(
-                    e,
-                    &mut self.text_box_padding,
-                    &mut self.text_box_vertical_align,
-                    &mut self.text_box_no_wrap,
-                    &mut self.text_box_text_rotation_deg,
-                );
+                extract_pptx_text_box_body_props(e, &mut self.text_box);
             }
             b"spAutoFit" | b"normAutofit" if self.in_shape && self.in_txbody => {
-                self.text_box_auto_fit = true;
+                self.text_box.auto_fit = true;
             }
             b"lstStyle" if self.in_shape && self.in_txbody => {
-                let local_defaults = parse_pptx_list_style(reader, self.theme, self.color_map);
+                let local_defaults =
+                    parse_pptx_list_style(reader, self.ctx.theme, self.ctx.color_map);
                 self.text_body_style_defaults.merge_from(&local_defaults);
             }
             b"p" if self.in_txbody => {
@@ -1692,7 +1635,7 @@ impl<'a> SlideXmlParser<'a> {
             b"buFont" if self.in_para && !self.in_run => {
                 if let Some(typeface) = get_attr_str(e, b"typeface") {
                     self.para_bullet_definition.font = Some(PptxBulletFontSource::Explicit(
-                        resolve_theme_font(&typeface, self.theme),
+                        resolve_theme_font(&typeface, self.ctx.theme),
                     ));
                 }
             }
@@ -1746,7 +1689,7 @@ impl<'a> SlideXmlParser<'a> {
                 self.solid_fill_ctx = SolidFillCtx::EndParaFill;
             }
             b"srgbClr" | b"schemeClr" | b"sysClr" if self.solid_fill_ctx != SolidFillCtx::None => {
-                let parsed = parse_color_from_start(reader, e, self.theme, self.color_map);
+                let parsed = parse_color_from_start(reader, e, self.ctx.theme, self.ctx.color_map);
                 apply_solid_fill_color(
                     self.solid_fill_ctx,
                     &parsed,
@@ -1761,15 +1704,15 @@ impl<'a> SlideXmlParser<'a> {
             // can carry shade/tint transforms, which arrive as Start events;
             // the Empty-event arms below would miss them.
             b"srgbClr" | b"schemeClr" | b"sysClr" if self.in_style_ln_ref => {
-                let parsed = parse_color_from_start(reader, e, self.theme, self.color_map);
+                let parsed = parse_color_from_start(reader, e, self.ctx.theme, self.ctx.color_map);
                 self.shape.style_ln_color = parsed.color;
             }
             b"srgbClr" | b"schemeClr" | b"sysClr" if self.in_style_fill_ref => {
-                let parsed = parse_color_from_start(reader, e, self.theme, self.color_map);
+                let parsed = parse_color_from_start(reader, e, self.ctx.theme, self.ctx.color_map);
                 self.shape.style_fill_color = parsed.color;
             }
             b"srgbClr" | b"schemeClr" | b"sysClr" if self.in_style_font_ref => {
-                let parsed = parse_color_from_start(reader, e, self.theme, self.color_map);
+                let parsed = parse_color_from_start(reader, e, self.ctx.theme, self.ctx.color_map);
                 self.shape.style_font_color = parsed.color;
             }
             // `<a:lnRef>` inside `<p:style>` provides fallback line color.
@@ -1905,16 +1848,10 @@ impl<'a> SlideXmlParser<'a> {
             }
             // Handle self-closing <a:bodyPr anchor="ctr"/> (no child elements).
             b"bodyPr" if self.in_shape && self.in_txbody => {
-                extract_pptx_text_box_body_props(
-                    e,
-                    &mut self.text_box_padding,
-                    &mut self.text_box_vertical_align,
-                    &mut self.text_box_no_wrap,
-                    &mut self.text_box_text_rotation_deg,
-                );
+                extract_pptx_text_box_body_props(e, &mut self.text_box);
             }
             b"spAutoFit" | b"normAutofit" if self.in_shape && self.in_txbody => {
-                self.text_box_auto_fit = true;
+                self.text_box.auto_fit = true;
             }
             b"prstGeom" if self.in_pic && self.pic.in_sp_pr => {
                 self.pic.prst_geom = get_attr_str(e, b"prst");
@@ -1966,19 +1903,19 @@ impl<'a> SlideXmlParser<'a> {
                 self.shape.explicit_no_fill = true;
             }
             b"srgbClr" | b"schemeClr" | b"sysClr" if self.in_style_font_ref => {
-                let parsed = parse_color_from_empty(e, self.theme, self.color_map);
+                let parsed = parse_color_from_empty(e, self.ctx.theme, self.ctx.color_map);
                 self.shape.style_font_color = parsed.color;
             }
             b"srgbClr" | b"schemeClr" | b"sysClr" if self.in_style_fill_ref => {
-                let parsed = parse_color_from_empty(e, self.theme, self.color_map);
+                let parsed = parse_color_from_empty(e, self.ctx.theme, self.ctx.color_map);
                 self.shape.style_fill_color = parsed.color;
             }
             b"srgbClr" | b"schemeClr" | b"sysClr" if self.in_style_ln_ref => {
-                let parsed = parse_color_from_empty(e, self.theme, self.color_map);
+                let parsed = parse_color_from_empty(e, self.ctx.theme, self.ctx.color_map);
                 self.shape.style_ln_color = parsed.color;
             }
             b"srgbClr" | b"schemeClr" | b"sysClr" if self.solid_fill_ctx != SolidFillCtx::None => {
-                let parsed = parse_color_from_empty(e, self.theme, self.color_map);
+                let parsed = parse_color_from_empty(e, self.ctx.theme, self.ctx.color_map);
                 apply_solid_fill_color(
                     self.solid_fill_ctx,
                     &parsed,
@@ -2051,7 +1988,7 @@ impl<'a> SlideXmlParser<'a> {
             b"buFont" if self.in_para && !self.in_run => {
                 if let Some(typeface) = get_attr_str(e, b"typeface") {
                     self.para_bullet_definition.font = Some(PptxBulletFontSource::Explicit(
-                        resolve_theme_font(&typeface, self.theme),
+                        resolve_theme_font(&typeface, self.ctx.theme),
                     ));
                 }
             }
@@ -2086,14 +2023,14 @@ impl<'a> SlideXmlParser<'a> {
                 if !self.rpr_applied_typeface {
                     self.run_style.font_family = None;
                 }
-                apply_typeface_to_style(e, &mut self.run_style, self.theme);
+                apply_typeface_to_style(e, &mut self.run_style, self.ctx.theme);
                 self.rpr_applied_typeface |= self.run_style.font_family.is_some();
             }
             b"latin" | b"ea" | b"cs" if self.in_end_para_rpr => {
                 if !self.rpr_applied_typeface {
                     self.para_end_run_style.font_family = None;
                 }
-                apply_typeface_to_style(e, &mut self.para_end_run_style, self.theme);
+                apply_typeface_to_style(e, &mut self.para_end_run_style, self.ctx.theme);
                 self.rpr_applied_typeface |= self.para_end_run_style.font_family.is_some();
             }
             _ => {}
@@ -2132,12 +2069,8 @@ impl<'a> SlideXmlParser<'a> {
                         self.elements.extend(finalize_shape(
                             &mut self.shape,
                             &mut self.paragraphs,
-                            self.text_box_padding,
-                            self.text_box_vertical_align,
-                            self.text_box_no_wrap,
-                            self.text_box_auto_fit,
-                            self.text_box_text_rotation_deg,
-                            &self.theme.line_style_widths,
+                            self.text_box,
+                            &self.ctx.theme.line_style_widths,
                         ));
                     }
                     self.in_shape = false;
@@ -2233,7 +2166,7 @@ impl<'a> SlideXmlParser<'a> {
                     self.pic.cy = geometry.cy;
                 }
                 let (element, picture_warnings) =
-                    finalize_picture(&self.pic, self.images, self.warning_context);
+                    finalize_picture(&self.pic, self.ctx.images, self.ctx.warning_context);
                 self.warnings.extend(picture_warnings);
                 if let Some(element) = element {
                     self.elements.push(element);
@@ -2271,52 +2204,22 @@ impl<'a> SlideXmlParser<'a> {
 // ── Main parse function ─────────────────────────────────────────────────
 
 /// Parse a slide XML to extract positioned elements (text boxes, shapes, images).
-#[allow(clippy::too_many_arguments)]
-pub(super) fn parse_slide_xml(
-    xml: &str,
-    images: &SlideImageMap,
-    theme: &ThemeData,
-    color_map: &ColorMapData,
-    warning_context: &str,
-    inherited_text_body_defaults: &PptxTextBodyStyleDefaults,
-    table_styles: &table_styles::TableStyleMap,
-    placeholder_geometry: Option<&PlaceholderGeometryMap>,
+pub(super) fn parse_slide_xml<'a>(
+    xml: &'a str,
+    ctx: &SlideParseContext<'a>,
+    placeholder_geometry: Option<&'a PlaceholderGeometryMap>,
 ) -> Result<(Vec<FixedElement>, Vec<ConvertWarning>), ConvertError> {
-    parse_slide_xml_inner(
-        xml,
-        images,
-        theme,
-        color_map,
-        warning_context,
-        inherited_text_body_defaults,
-        table_styles,
-        false,
-        placeholder_geometry,
-    )
+    parse_slide_xml_inner(xml, ctx, false, placeholder_geometry)
 }
 
-#[allow(clippy::too_many_arguments)]
-fn parse_slide_xml_inner(
-    xml: &str,
-    images: &SlideImageMap,
-    theme: &ThemeData,
-    color_map: &ColorMapData,
-    warning_context: &str,
-    inherited_text_body_defaults: &PptxTextBodyStyleDefaults,
-    table_styles: &table_styles::TableStyleMap,
+fn parse_slide_xml_inner<'a>(
+    xml: &'a str,
+    ctx: &SlideParseContext<'a>,
     skip_placeholders: bool,
-    placeholder_geometry: Option<&PlaceholderGeometryMap>,
+    placeholder_geometry: Option<&'a PlaceholderGeometryMap>,
 ) -> Result<(Vec<FixedElement>, Vec<ConvertWarning>), ConvertError> {
     let mut reader = Reader::from_str(xml);
-    let mut parser = SlideXmlParser::new(
-        xml,
-        images,
-        theme,
-        color_map,
-        warning_context,
-        inherited_text_body_defaults,
-        table_styles,
-    );
+    let mut parser = SlideXmlParser::new(xml, *ctx);
     parser.skip_placeholders = skip_placeholders;
     parser.placeholder_geometry = placeholder_geometry;
 
