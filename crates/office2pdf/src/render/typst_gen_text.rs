@@ -283,11 +283,7 @@ fn write_block_params_continuation(out: &mut String, style: &ParagraphStyle) {
     }
     if let Some(background) = style.background {
         // Word paints w:pPr/w:shd across the full paragraph width.
-        let _ = write!(
-            out,
-            ", fill: rgb({}, {}, {})",
-            background.r, background.g, background.b
-        );
+        let _ = write!(out, ", fill: {}", rgb(&background));
     }
     if let Some(border) = &style.border {
         write_paragraph_border_params(out, border);
@@ -299,20 +295,9 @@ fn write_block_params_continuation(out: &mut String, style: &ParagraphStyle) {
 const PARAGRAPH_BORDER_GAP_PT: f64 = 4.0;
 
 fn stroke_literal(side: &BorderSide) -> String {
-    let paint = format!("rgb({}, {}, {})", side.color.r, side.color.g, side.color.b);
-    let dash = match side.style {
-        BorderLineStyle::Dotted => Some("dotted"),
-        BorderLineStyle::Dashed => Some("dashed"),
-        BorderLineStyle::DashDot | BorderLineStyle::DashDotDot => Some("dash-dotted"),
-        _ => None,
-    };
-    match dash {
-        Some(dash) => format!(
-            "(paint: {paint}, thickness: {}pt, dash: \"{dash}\")",
-            format_f64(side.width)
-        ),
-        None => format!("{}pt + {paint}", format_f64(side.width)),
-    }
+    // Callers skip Double sides (drawn as overlays), so for every reachable
+    // style this matches the table flavor of the shared stroke formatter.
+    stroke_value(side, true)
 }
 
 /// Emit `stroke:`/`inset:` block parameters for the paragraph's borders.
@@ -373,12 +358,10 @@ fn write_paragraph_double_border_overlays(out: &mut String, border: &Option<Box<
         for dy in [near_dy, far_dy] {
             let _ = write!(
                 out,
-                "#place({align}, dy: {}pt, line(length: 100%, stroke: {}pt + rgb({}, {}, {})))",
+                "#place({align}, dy: {}pt, line(length: 100%, stroke: {}pt + {}))",
                 format_f64(sign * dy),
                 format_f64(w),
-                side.color.r,
-                side.color.g,
-                side.color.b,
+                rgb(&side.color),
             );
         }
     }
@@ -910,10 +893,7 @@ fn collect_formatting_wrappers(run: &Run) -> Vec<String> {
         wrappers.push(format!("#link(\"{href}\")["));
     }
     if let Some(ref highlight) = style.highlight {
-        wrappers.push(format!(
-            "#highlight(fill: rgb({}, {}, {}))[",
-            highlight.r, highlight.g, highlight.b
-        ));
+        wrappers.push(format!("#highlight(fill: {})[", rgb(highlight)));
     }
     if matches!(style.strikethrough, Some(true)) {
         wrappers.push("#strike[".to_string());
@@ -1061,15 +1041,7 @@ pub(super) fn write_param(out: &mut String, first: &mut bool, param: &str) {
 }
 
 pub(super) fn format_color(color: &Color) -> String {
-    format!("fill: rgb({}, {}, {})", color.r, color.g, color.b)
-}
-
-pub(super) fn format_f64(v: f64) -> String {
-    if v.fract() == 0.0 {
-        format!("{}", v as i64)
-    } else {
-        format!("{v}")
-    }
+    format!("fill: {}", rgb(color))
 }
 
 pub(super) fn escape_typst(text: &str) -> String {
