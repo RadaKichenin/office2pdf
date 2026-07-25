@@ -114,11 +114,11 @@ fn test_data_bar_fixed_row_height_codegen() {
     });
     let doc = make_doc(vec![page]);
     let output = generate_typst(&doc).unwrap();
-    // With a 24pt row and 5pt top/bottom insets, the bar fills the cell's
-    // 14pt content height instead of resolving against the page.
+    // A 24pt row less Excel's 2pt clearance per side gives a concrete 20pt
+    // bar instead of a height that resolves against the page.
     assert!(
-        output.source.contains("height: 14pt"),
-        "DataBar in a fixed-height row should fill the cell content height. Got: {}",
+        output.source.contains("height: 20pt"),
+        "DataBar in a fixed-height row should be inset from the row edges. Got: {}",
         output.source,
     );
     assert!(
@@ -1143,4 +1143,104 @@ fn test_header_without_non_repeating_rows_stays_a_single_block() {
     assert!(output.source.contains("table.header(\n"));
     assert!(!output.source.contains("repeat: false"));
     assert!(!output.source.contains("level: 2"));
+}
+
+/// Excel insets data bars from the row's top and bottom edges instead of
+/// filling the cell: native Excel PDFs print a 10 pt bar in a 14 pt row.
+#[test]
+fn test_data_bar_is_inset_from_the_row_edges() {
+    use crate::ir::DataBarInfo;
+
+    let cell = TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: "120".to_string(),
+                style: TextStyle::default(),
+                href: None,
+                footnote: None,
+            }],
+        })],
+        data_bar: Some(DataBarInfo {
+            color: Color::new(0x63, 0x8E, 0xC6),
+            fill_pct: 24.0,
+        }),
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            cells: vec![cell],
+            height: Some(14.0),
+        }],
+        column_widths: vec![100.0],
+        ..Table::default()
+    };
+    let page = Page::Sheet(SheetPage {
+        name: "Sheet1".to_string(),
+        size: PageSize::default(),
+        margins: Margins::default(),
+        table,
+        header: None,
+        footer: None,
+        charts: vec![],
+        images: Vec::new(),
+        text_boxes: Vec::new(),
+    });
+    let doc = make_doc(vec![page]);
+    let output = generate_typst(&doc).unwrap();
+    assert!(
+        output.source.contains("height: 10pt"),
+        "a 14pt row must print a 10pt bar. Got: {}",
+        output.source,
+    );
+}
+
+/// The inset never collapses the bar in very short rows.
+#[test]
+fn test_data_bar_in_a_short_row_keeps_a_visible_height() {
+    use crate::ir::DataBarInfo;
+
+    let cell = TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: "3".to_string(),
+                style: TextStyle::default(),
+                href: None,
+                footnote: None,
+            }],
+        })],
+        data_bar: Some(DataBarInfo {
+            color: Color::new(0x63, 0x8E, 0xC6),
+            fill_pct: 50.0,
+        }),
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            cells: vec![cell],
+            height: Some(3.0),
+        }],
+        column_widths: vec![100.0],
+        ..Table::default()
+    };
+    let page = Page::Sheet(SheetPage {
+        name: "Sheet1".to_string(),
+        size: PageSize::default(),
+        margins: Margins::default(),
+        table,
+        header: None,
+        footer: None,
+        charts: vec![],
+        images: Vec::new(),
+        text_boxes: Vec::new(),
+    });
+    let doc = make_doc(vec![page]);
+    let output = generate_typst(&doc).unwrap();
+    assert!(
+        !output.source.contains("height: 0pt"),
+        "the bar must stay visible. Got: {}",
+        output.source,
+    );
+    assert!(!output.source.contains("height: -"));
 }
