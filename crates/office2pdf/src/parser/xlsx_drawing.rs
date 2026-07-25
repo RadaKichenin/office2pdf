@@ -3,6 +3,7 @@ use std::io::Cursor;
 
 use crate::ir::Chart;
 use crate::parser::chart::parse_chart_xml;
+use crate::parser::drawingml::ThemeFontScheme;
 use crate::parser::xml_util;
 
 /// Extract charts from the XLSX ZIP with their anchor positions per sheet.
@@ -671,7 +672,7 @@ pub(super) fn extract_text_boxes_with_anchors(
     let sheet_rids = parse_workbook_sheet_rids(&workbook_xml);
     let workbook_rels_xml = read_zip_entry_string(&mut archive, "xl/_rels/workbook.xml.rels");
     let rid_to_target = parse_rels_targets(&workbook_rels_xml);
-    let theme_colors = workbook_theme_colors(&mut archive, &workbook_rels_xml);
+    let (theme_colors, theme_fonts) = workbook_theme(&mut archive, &workbook_rels_xml);
 
     let mut result: HashMap<String, Vec<RawTextBoxAnchor>> = HashMap::new();
 
@@ -693,7 +694,7 @@ pub(super) fn extract_text_boxes_with_anchors(
             if drawing_xml.is_empty() {
                 continue;
             }
-            let boxes = parse_drawing_text_boxes(&drawing_xml, &theme_colors);
+            let boxes = parse_drawing_text_boxes(&drawing_xml, &theme_colors, &theme_fonts);
             if !boxes.is_empty() {
                 result.entry(sheet_name.clone()).or_default().extend(boxes);
             }
@@ -746,10 +747,12 @@ fn resolved_or_legacy(
 }
 
 /// Parse `<xdr:sp>` text boxes from a worksheet drawing, resolving scheme
-/// colors against the workbook theme palette.
+/// colors against the workbook theme palette and run typefaces against its
+/// font scheme.
 pub(super) fn parse_drawing_text_boxes(
     xml: &str,
     theme_colors: &HashMap<String, crate::ir::Color>,
+    theme_fonts: &ThemeFontScheme,
 ) -> Vec<RawTextBoxAnchor> {
     use crate::ir::{
         Alignment, BorderLineStyle, BorderSide, Paragraph, ParagraphStyle, Run, TextStyle,
@@ -895,6 +898,13 @@ pub(super) fn parse_drawing_text_boxes(
                             }
                         }
                     }
+                    b"latin" if in_run => {
+                        if let Some(typeface) = xml_util::get_attr_str(e, b"typeface")
+                            && let Some(family) = theme_fonts.resolve_typeface(&typeface)
+                        {
+                            current_style.font_family = Some(family);
+                        }
+                    }
                     b"pPr" if current_para.is_some() => {
                         for attr in e.attributes().flatten() {
                             if attr.key.local_name().as_ref() == b"algn"
@@ -948,9 +958,17 @@ pub(super) fn parse_drawing_text_boxes(
             Ok(quick_xml::events::Event::Text(ref t)) => {
                 if in_text && let Ok(text) = t.xml_content() {
                     if let Some(para) = current_para.as_mut() {
+                        let mut style = current_style.clone();
+                        // An `<a:rPr>` without `<a:latin>` - how Excel writes
+                        // plain shape labels - resolves to the theme's minor
+                        // Latin font in DrawingML, not to a renderer default
+                        // (issue #461).
+                        if style.font_family.is_none() {
+                            style.font_family = theme_fonts.minor_latin.clone();
+                        }
                         para.runs.push(Run {
                             text: text.to_string(),
-                            style: current_style.clone(),
+                            style,
                             href: None,
                             footnote: None,
                         });
@@ -1025,19 +1043,24 @@ pub(super) fn parse_drawing_text_boxes(
     result
 }
 
-/// Read the workbook theme palette (`xl/theme/theme1.xml` or the
-/// rels-declared target). Missing or unreadable themes yield an empty map,
-/// which downgrades scheme resolution to the legacy light/dark fallback.
-fn workbook_theme_colors(
+/// Read the workbook theme's color palette and Latin font scheme
+/// (`xl/theme/theme1.xml`, or the rels-declared target). A missing or
+/// unreadable theme yields an empty palette, which downgrades scheme
+/// resolution to the legacy light/dark fallback, and an empty font scheme,
+/// which leaves font selection to the renderer.
+fn workbook_theme(
     archive: &mut zip::ZipArchive<std::io::Cursor<&[u8]>>,
     workbook_rels_xml: &str,
-) -> HashMap<String, crate::ir::Color> {
+) -> (HashMap<String, crate::ir::Color>, ThemeFontScheme) {
     let theme_path = parse_rels_by_type(workbook_rels_xml, "theme")
         .first()
         .map(|target| resolve_relative_xl_path("xl", target))
         .unwrap_or_else(|| "xl/theme/theme1.xml".to_string());
     let theme_xml = read_zip_entry_string(archive, &theme_path);
-    crate::parser::drawingml::parse_theme_color_scheme(&theme_xml)
+    (
+        crate::parser::drawingml::parse_theme_color_scheme(&theme_xml),
+        crate::parser::drawingml::parse_theme_font_scheme(&theme_xml),
+    )
 }
 
 #[cfg(test)]
