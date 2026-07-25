@@ -70,11 +70,16 @@ mod text;
 /// Parser for DOCX (Office Open XML Word) documents.
 pub struct DocxParser;
 
-/// Word supplies this built-in paragraph spacing when neither a paragraph
-/// nor its style hierarchy specifies an override. Line height is left to the
-/// renderer, which derives Word's single-spacing pitch from the actual font
-/// metrics (issue #354).
-pub(super) const WORD_COMPATIBLE_PARAGRAPH_SPACE_AFTER_PT: f64 = 8.0;
+/// The paragraph spacing Word applies when neither a paragraph nor its
+/// style hierarchy specifies `w:spacing w:after`: ECMA-376 leaves the gap
+/// at zero, and a Word PDF export of a document whose `styles.xml` defines
+/// no `Normal` spacing confirms it. Recording it explicitly (rather than
+/// leaving `space_after` unset) also pins the paragraph block's `below`, so
+/// Typst's own 1.2em default block spacing cannot leak into the gap.
+///
+/// Line height is left to the renderer, which derives Word's single-spacing
+/// pitch from the actual font metrics (issues #354, #452).
+pub(super) const WORD_COMPATIBLE_PARAGRAPH_SPACE_AFTER_PT: f64 = 0.0;
 
 fn apply_word_compatible_paragraph_defaults(style: &mut ParagraphStyle) {
     style

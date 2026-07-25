@@ -236,8 +236,10 @@ fn acceptance_pr_187_contributor_acceptance_table_row_metrics() {
             .expect("fixture table cells should contain a paragraph");
         // Line height stays unset in the IR: the renderer derives Word's
         // single-spacing pitch from the actual font metrics (issue #354).
+        // The fixture sets no `w:spacing w:after`, which Word reads as zero
+        // (issue #452).
         assert_eq!(paragraph.style.line_box, None);
-        assert_eq!(paragraph.style.space_after, Some(8.0));
+        assert_eq!(paragraph.style.space_after, Some(0.0));
     }
 }
 
@@ -283,7 +285,7 @@ fn acceptance_pr_187_contributor_acceptance_style_inherited_numbering() {
             let style = &item.content[0].style;
             assert_eq!(style.indent_left, Some(36.0));
             assert_eq!(style.indent_first_line, Some(-18.0));
-            assert_eq!(style.space_after, Some(8.0));
+            assert_eq!(style.space_after, Some(0.0));
         }
     }
 }

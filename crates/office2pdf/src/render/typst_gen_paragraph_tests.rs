@@ -652,11 +652,9 @@ fn test_document_grid_pitch_snaps_line_height() {
     // line cannot inflate its advance past the grid (issue #398); the
     // baseline splits the box by the font's ascender/descender ratio. Uses
     // a font from Typst's embedded set so the test is environment-free.
-    let Some((ascender, descender, _)) =
-        crate::render::pdf::font_line_metrics_em("Libertinus Serif")
-    else {
+    if crate::render::pdf::font_line_metrics_em("Libertinus Serif").is_none() {
         return; // no font book available (e.g. exotic CI sandbox)
-    };
+    }
     let mut page = match make_flow_page(vec![Block::Paragraph(Paragraph {
         style: ParagraphStyle::default(),
         runs: vec![Run {
@@ -677,18 +675,10 @@ fn test_document_grid_pitch_snaps_line_height() {
     let doc = make_doc(vec![Page::Flow(page)]);
     let result = generate_typst(&doc).unwrap().source;
 
-    let expected_leading = 18.0 - (ascender + descender) * 10.0;
+    assert_line_advance(&result, "Libertinus Serif", 10.0, 18.0);
     assert!(
-        result.contains(&format!(
-            "top-edge: {}em, bottom-edge: -{}em",
-            format_f64(ascender),
-            format_f64(descender)
-        )),
-        "fixed nominal-metric em edges expected (clamps fallback glyphs): {result}"
-    );
-    assert!(
-        result.contains(&format!("leading: {}pt", format_f64(expected_leading))),
-        "grid leading {expected_leading} unchanged from the metric-edge model: {result}"
+        result.contains("leading: 0pt"),
+        "the grid advance is carried by the box, not by leading: {result}"
     );
 }
 
@@ -717,23 +707,18 @@ fn test_latin_paragraph_ignores_document_grid() {
     let doc = make_doc(vec![Page::Flow(page)]);
     let result = generate_typst(&doc).unwrap().source;
 
-    // The paragraph keeps Word's metric single-spacing leading; the 18pt
-    // grid top-up (leading = 18 - line box) must not appear.
+    // The paragraph keeps Word's hhea single-spacing advance; the 18pt grid
+    // pitch must not appear in its line box.
     let Some((ascender, descender, word_pitch)) =
         crate::render::pdf::font_line_metrics_em("Libertinus Serif")
     else {
         return;
     };
-    let box_pt = (ascender + descender) * 10.0;
-    let single_leading = (word_pitch * 10.0 - box_pt).max(0.0);
-    let grid_leading = 18.0 - box_pt;
+    let single_pt: f64 = (word_pitch * 10.0).max((ascender + descender) * 10.0);
+    assert_line_advance(&result, "Libertinus Serif", 10.0, single_pt);
     assert!(
-        result.contains(&format!("leading: {}pt", format_f64(single_leading))),
-        "Latin paragraphs keep Word single spacing: {result}"
-    );
-    assert!(
-        !result.contains(&format!("leading: {}pt", format_f64(grid_leading))),
-        "Latin paragraphs must not snap to the grid: {result}"
+        (single_pt - 18.0).abs() > 0.01,
+        "the fixture only proves anything if the grid pitch differs from single spacing"
     );
 }
 
@@ -760,18 +745,11 @@ fn test_no_document_grid_uses_word_single_spacing() {
     else {
         return;
     };
-    let single_leading = (word_pitch * 10.0 - (ascender + descender) * 10.0).max(0.0);
+    let single_pt: f64 = (word_pitch * 10.0).max((ascender + descender) * 10.0);
+    assert_line_advance(&result, "Libertinus Serif", 10.0, single_pt);
     assert!(
-        result.contains(&format!(
-            "top-edge: {}em, bottom-edge: -{}em",
-            format_f64(ascender),
-            format_f64(descender)
-        )),
-        "fixed nominal-metric em edges expected: {result}"
-    );
-    assert!(
-        result.contains(&format!("leading: {}pt", format_f64(single_leading))),
-        "Word single-spacing leading expected: {result}"
+        result.contains("leading: 0pt"),
+        "the advance is carried by the box, not by leading: {result}"
     );
 }
 
@@ -922,10 +900,9 @@ fn test_tab_advance_defaults_to_36pt_without_grid() {
 
 #[test]
 fn test_latin_paragraph_space_after_stays_raw_gap() {
-    // Latin single-spacing paragraphs (no document grid) keep their raw
-    // w:spacing w:after: Word places that gap directly below the metric
-    // box, so adding the hhea leading here overshoots (issue #394 is scoped
-    // to grid paragraphs; measured Western fixtures confirm the raw gap).
+    // Word places `w:spacing w:after` directly below the full line box,
+    // which the paragraph's own line box already spans, so the gap reaches
+    // the block unchanged and needs no leading top-up (issues #394, #452).
     let make_para = |text: &str| {
         Block::Paragraph(Paragraph {
             style: ParagraphStyle {
@@ -957,14 +934,74 @@ fn test_latin_paragraph_space_after_stays_raw_gap() {
 }
 
 #[test]
-fn test_grid_paragraph_space_after_extends_grid_advance() {
-    // Grid variant: the after-gap sits below the snapped grid line box, so
-    // the block's `below` is the grid top-up leading plus the gap.
-    let Some((ascender, descender, _)) =
-        crate::render::pdf::font_line_metrics_em("Libertinus Serif")
-    else {
+fn test_consecutive_paragraphs_each_advance_by_the_full_font_line() {
+    // The shaded command lines of a technical manual are separate 9pt
+    // Courier New paragraphs with `w:spacing w:after="0"`. Word advances
+    // each by the font's full single-spacing line; Typst only inserts
+    // `par(leading:)` *between* the lines of one paragraph, so recovering
+    // the advance that way left every paragraph one leading short and
+    // consecutive command lines packed 28% tighter than Word (issue #452).
+    // The line box must therefore span the whole advance on its own.
+    let Some(advance_pt) = single_spacing_advance_pt(LINE_GAP_FONT, 9.0) else {
         return;
     };
+    let make_code_line = |text: &str| {
+        Block::Paragraph(Paragraph {
+            style: ParagraphStyle {
+                space_after: Some(0.0),
+                ..ParagraphStyle::default()
+            },
+            runs: vec![Run {
+                text: text.to_string(),
+                style: TextStyle {
+                    font_family: Some(LINE_GAP_FONT.to_string()),
+                    font_size: Some(9.0),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })
+    };
+    let doc = make_doc(vec![make_flow_page(vec![
+        make_code_line("$ cargo install office2pdf-cli"),
+        make_code_line("$ office2pdf --version"),
+    ])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert_line_advance(&result, LINE_GAP_FONT, 9.0, advance_pt);
+    assert!(
+        result.contains("leading: 0pt"),
+        "the advance belongs to the box, not to leading: {result}"
+    );
+    assert!(
+        result.contains("below: 0pt"),
+        "a zero w:spacing w:after stays zero: {result}"
+    );
+}
+
+/// A Typst-embedded font whose hhea line is taller than its typographic
+/// metric box, so the single-spacing advance is strictly larger than the
+/// metric box. Libertinus Serif - the default test font here - has no line
+/// gap at all, which would make the assertions above pass vacuously.
+const LINE_GAP_FONT: &str = "DejaVu Sans Mono";
+
+/// Word's single-spacing advance for `family` at `font_size`, or `None`
+/// when the font is unavailable or its hhea line adds no gap over the
+/// typographic metric box (which would make the assertion vacuous).
+fn single_spacing_advance_pt(family: &str, font_size: f64) -> Option<f64> {
+    let (ascender, descender, word_pitch) = crate::render::pdf::font_line_metrics_em(family)?;
+    (word_pitch - (ascender + descender) > 0.001).then_some(word_pitch * font_size)
+}
+
+#[test]
+fn test_grid_paragraph_space_after_stays_raw_gap() {
+    // Grid variant: the snapped line box already spans the full grid pitch,
+    // so Word's after-gap sits directly below it and reaches the block
+    // unchanged (issues #394, #452).
+    if crate::render::pdf::font_line_metrics_em("Libertinus Serif").is_none() {
+        return;
+    }
     let mut page = match make_flow_page(vec![Block::Paragraph(Paragraph {
         style: ParagraphStyle {
             space_after: Some(4.0),
@@ -988,10 +1025,8 @@ fn test_grid_paragraph_space_after_extends_grid_advance() {
     let doc = make_doc(vec![Page::Flow(page)]);
     let result = generate_typst(&doc).unwrap().source;
 
-    let grid_leading = 18.0 - (ascender + descender) * 10.0;
-    let expected = format!("below: {}pt", format_f64(grid_leading + 4.0));
     assert!(
-        result.contains(&expected),
-        "expected grid paragraph {expected} in: {result}"
+        result.contains("below: 4pt"),
+        "grid paragraph keeps the raw 4pt gap: {result}"
     );
 }

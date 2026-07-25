@@ -595,9 +595,11 @@ fn test_paragraph_uses_word_default_spacing_when_unspecified() {
     let paragraph = first_paragraph(&doc);
 
     // Line height stays unset in the IR: the renderer derives Word's
-    // single-spacing pitch from the actual font metrics (issue #354).
+    // single-spacing pitch from the actual font metrics (issue #354). The
+    // gap below is zero, because neither the paragraph nor the style
+    // hierarchy sets `w:spacing w:after` (issue #452).
     assert_eq!(paragraph.style.line_box, None);
-    assert_eq!(paragraph.style.space_after, Some(8.0));
+    assert_eq!(paragraph.style.space_after, Some(0.0));
 }
 
 #[test]

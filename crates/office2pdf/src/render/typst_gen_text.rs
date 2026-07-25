@@ -37,25 +37,14 @@ pub(super) fn generate_paragraph(
         word_line_height_settings(&para.runs, style, line_grid_pitch);
     let has_para_style = needs_block_wrapper(style) || line_height_settings.is_some();
 
-    // Word measures w:spacing w:before/w:after from the bottom of the full
-    // grid line box, while the metric text edges end at the descender: a
-    // grid-snapped paragraph must carry the grid top-up leading on its
-    // block above/below or every paragraph boundary loses it and the page
-    // rhythm drifts (issue #394).
-    let mut boundary_style = std::borrow::Cow::Borrowed(style);
-    if let Some(leading) = word_grid_boundary_leading_pt(&para.runs, style, line_grid_pitch)
-        && (style.space_before.is_some() || style.space_after.is_some())
-    {
-        let adjusted = boundary_style.to_mut();
-        adjusted.space_before = style.space_before.map(|gap| gap.max(0.0) + leading);
-        adjusted.space_after = style.space_after.map(|gap| gap.max(0.0) + leading);
-    }
-
     if has_para_style {
         // The wrapper must span the full line width: Typst blocks shrink to
         // their content by default, which would defeat the inner #align.
+        // Word measures `w:spacing w:before/w:after` from the edges of the
+        // full line box, which `word_line_height_settings` spans directly,
+        // so those gaps reach the block unmodified (issues #394, #452).
         out.push_str("#block(width: 100%");
-        write_block_params_continuation(out, &boundary_style);
+        write_block_params_continuation(out, style);
         out.push_str(")[\n");
         write_paragraph_double_border_overlays(out, &style.border);
         write_line_box_settings(out, style.line_box);
@@ -120,37 +109,47 @@ pub(super) fn needs_block_wrapper(style: &ParagraphStyle) -> bool {
         || matches!(style.direction, Some(TextDirection::Rtl))
 }
 
-/// Word snaps body lines to the section's document grid (`w:docGrid`
-/// `w:linePitch`); Typst's glyph-tight default renders such documents
-/// 20-30% shorter and shifts every page break. When the section carries a
-/// grid pitch, the paragraph has no explicit line spacing, and the font's
-/// metrics are known, emit metric line edges plus leading that tops the
-/// line box up to the next grid multiple.
+/// Line-box settings for a body paragraph: a fixed box spanning Word's full
+/// line advance — the font's hhea line, or the document grid pitch for East
+/// Asian text under a `w:docGrid` — split by the ascender/descender ratio,
+/// with zero leading. Typst's glyph-tight default renders grid documents
+/// 20-30% shorter and shifts every page break (issue #354).
+///
+/// Carrying the advance inside the box, rather than recovering the
+/// remainder as `par(leading:)`, is what makes a paragraph's height match
+/// Word's. Typst inserts `leading` only *between* the lines of one
+/// paragraph, so an n-line paragraph came out one whole leading short
+/// however many lines it had, and consecutive 9pt Courier New paragraphs
+/// advanced 28% tighter than Word (issue #452). It also lets `w:spacing
+/// w:before/w:after` reach the block unchanged, because the block edges now
+/// sit exactly where Word measures those gaps from (issue #394).
 pub(super) fn word_line_height_settings(
     runs: &[Run],
     style: &ParagraphStyle,
     line_grid_pitch: Option<f64>,
 ) -> Option<String> {
-    let (ascender_em, descender_em, leading_pt) =
+    let (ascender_em, descender_em, leading_em) =
         word_line_box_and_leading(runs, style, line_grid_pitch)?;
+    let metric_em: f64 = ascender_em + descender_em;
+    if metric_em <= 0.0 {
+        return None;
+    }
+    let pitch_em: f64 = metric_em + leading_em;
     // Pin the line box to the nominal font's own metric edges as fixed em
     // values rather than the "ascender"/"descender" keywords. The keywords
     // let Typst resolve the box against the tallest font on each line, so a
     // bullet marker or em dash pulled from a taller fallback font inflated
     // that one line's advance past the grid/single-spacing (issue #398).
-    // Fixed nominal-metric edges keep every normal line identical to before
-    // (same baseline, same leading) while clamping the fallback-glyph line.
     Some(format!(
-        "#set text(top-edge: {}em, bottom-edge: -{}em)\n#set par(leading: {}pt)\n",
-        format_f64(ascender_em),
-        format_f64(descender_em),
-        format_f64(leading_pt)
+        "#set text(top-edge: {}em, bottom-edge: -{}em)\n#set par(leading: 0pt)\n",
+        format_f64(pitch_em * ascender_em / metric_em),
+        format_f64(pitch_em * descender_em / metric_em)
     ))
 }
 
 /// The nominal font's `(ascender_em, descender_em)` metric edges plus the
-/// leading that tops the line box up to Word's single-spacing or grid
-/// advance. `None` when the metric-edge treatment does not apply.
+/// leading, in em, that tops the line box up to Word's single-spacing or
+/// grid advance. `None` when the metric-edge treatment does not apply.
 fn word_line_box_and_leading(
     runs: &[Run],
     style: &ParagraphStyle,
@@ -162,7 +161,18 @@ fn word_line_box_and_leading(
         .find_map(|run| run.style.font_family.as_deref())?;
     let (ascender_em, descender_em, _word_pitch_em) =
         crate::render::pdf::font_line_metrics_em(family)?;
-    Some((ascender_em, descender_em, leading_pt))
+    let font_size: f64 = paragraph_font_size_pt(runs);
+    Some((ascender_em, descender_em, leading_pt / font_size))
+}
+
+/// The font size Word resolves a paragraph's line box against: the largest
+/// size among its runs, falling back to the Word default when unset.
+fn paragraph_font_size_pt(runs: &[Run]) -> f64 {
+    let largest: f64 = runs
+        .iter()
+        .filter_map(|run| run.style.font_size)
+        .fold(f64::NAN, f64::max);
+    if largest.is_nan() { 11.0 } else { largest }
 }
 
 /// Line-box settings for a table cell: a fixed box spanning the font's
@@ -193,11 +203,15 @@ pub(super) fn word_cell_line_box_settings(runs: &[Run], style: &ParagraphStyle) 
     ))
 }
 
-/// The leading that accompanies Word metric text edges: the whitespace
-/// Typst must insert between metric line boxes so consecutive lines land at
-/// Word's single-space advance (or the document grid pitch). `None` when
-/// the paragraph carries explicit line spacing or the font's metrics are
-/// unknown — the metric-edge treatment does not apply then.
+/// The top-up that raises the font's typographic metric box to Word's line
+/// advance — its hhea single-space line, or the document grid pitch for East
+/// Asian text under a `w:docGrid`. `word_line_height_settings` folds this
+/// into the fixed line-box height rather than emitting it as `par(leading:)`
+/// whitespace between boxes, because Typst inserts that only *between* the
+/// lines of one paragraph and every paragraph then came up one top-up short
+/// (issues #354, #452). `None` when the paragraph carries explicit line
+/// spacing or the font's metrics are unknown — the treatment does not apply
+/// then.
 pub(super) fn word_line_leading_pt(
     runs: &[Run],
     style: &ParagraphStyle,
@@ -239,26 +253,6 @@ pub(super) fn word_line_leading_pt(
         _ => (word_pitch_em * font_size - line_box_pt).max(0.0),
     };
     Some(leading_pt)
-}
-
-/// The grid top-up leading a paragraph carries only when its lines snap to
-/// the document grid (East Asian text under a `w:docGrid`). Word measures
-/// `w:spacing w:before/w:after` from the bottom of the full grid line box,
-/// so a metric-edge paragraph must add this leading to its block
-/// above/below or every paragraph boundary loses it and the page rhythm
-/// drifts (issue #394). Latin single-spacing paragraphs are excluded:
-/// their `w:spacing` sits directly below the metric box in Word, so adding
-/// the hhea leading there overshoots (measured on Western fixtures).
-pub(super) fn word_grid_boundary_leading_pt(
-    runs: &[Run],
-    style: &ParagraphStyle,
-    line_grid_pitch: Option<f64>,
-) -> Option<f64> {
-    let pitch: f64 = line_grid_pitch.filter(|pitch| *pitch > 0.0)?;
-    if !runs.iter().any(|run| run.text.chars().any(is_cjk_like)) {
-        return None;
-    }
-    word_line_leading_pt(runs, style, Some(pitch))
 }
 
 pub(super) fn write_block_params(out: &mut String, style: &ParagraphStyle) {

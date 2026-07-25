@@ -400,9 +400,10 @@ fn test_table_cell_paragraph_uses_word_default_line_box_and_spacing() {
         other => panic!("expected table cell paragraph, got {other:?}"),
     };
 
-    // Line height stays unset in the IR (issue #354).
+    // Line height stays unset in the IR (issue #354); an unspecified
+    // `w:spacing w:after` is zero (issue #452).
     assert_eq!(paragraph(0).style.line_box, None);
-    assert_eq!(paragraph(0).style.space_after, Some(8.0));
+    assert_eq!(paragraph(0).style.space_after, Some(0.0));
 
     assert_eq!(paragraph(1).style.line_box, None);
     assert_eq!(paragraph(1).style.space_after, Some(6.0));
