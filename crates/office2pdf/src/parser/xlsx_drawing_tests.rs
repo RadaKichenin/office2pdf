@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use super::*;
 use crate::ir::Color;
+use crate::parser::drawingml::ThemeFontScheme;
 
 fn accent_theme() -> HashMap<String, Color> {
     // Office default theme slots a workbook actually ships in theme1.xml.
@@ -36,7 +37,11 @@ fn drawing_with_fill(color_markup: &str) -> String {
 }
 
 fn fill_of(color_markup: &str, theme: &HashMap<String, Color>) -> Option<Color> {
-    let boxes = parse_drawing_text_boxes(&drawing_with_fill(color_markup), theme);
+    let boxes = parse_drawing_text_boxes(
+        &drawing_with_fill(color_markup),
+        theme,
+        &ThemeFontScheme::default(),
+    );
     assert_eq!(boxes.len(), 1, "fixture should yield one text box");
     boxes[0].fill
 }
@@ -130,4 +135,129 @@ fn theme_color_scheme_parses_from_theme_xml() {
     assert_eq!(colors.get("accent1"), Some(&Color::new(0x44, 0x72, 0xC4)));
     assert_eq!(colors.get("hlink"), Some(&Color::new(0x05, 0x63, 0xC1)));
     assert_eq!(colors.get("accent2"), None);
+}
+
+fn office_theme_fonts() -> ThemeFontScheme {
+    // The font scheme an Excel-saved workbook ships in theme1.xml.
+    ThemeFontScheme {
+        major_latin: Some("Calibri Light".to_string()),
+        minor_latin: Some("Calibri".to_string()),
+    }
+}
+
+fn drawing_with_run_properties(run_properties: &str) -> String {
+    format!(
+        r#"<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <xdr:twoCellAnchor>
+    <xdr:from><xdr:col>1</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>1</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>
+    <xdr:to><xdr:col>4</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>4</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>
+    <xdr:sp>
+      <xdr:txBody>
+        <a:bodyPr/>
+        <a:p><a:r>{run_properties}<a:t>accent1</a:t></a:r></a:p>
+      </xdr:txBody>
+    </xdr:sp>
+    <xdr:clientData/>
+  </xdr:twoCellAnchor>
+</xdr:wsDr>"#
+    )
+}
+
+fn font_of(run_properties: &str, fonts: &ThemeFontScheme) -> Option<String> {
+    let boxes = parse_drawing_text_boxes(
+        &drawing_with_run_properties(run_properties),
+        &HashMap::new(),
+        fonts,
+    );
+    assert_eq!(boxes.len(), 1, "fixture should yield one text box");
+    boxes[0].paragraphs[0].runs[0].style.font_family.clone()
+}
+
+#[test]
+fn drawing_run_without_a_typeface_inherits_the_theme_minor_font() {
+    // Excel writes shape labels as `<a:rPr lang="en-US" sz="1100"/>` with no
+    // typeface at all; DrawingML resolves that to the theme's minor Latin
+    // font, not to the renderer's serif default (issue #461).
+    assert_eq!(
+        font_of(r#"<a:rPr lang="en-US" sz="1100"/>"#, &office_theme_fonts()),
+        Some("Calibri".to_string())
+    );
+}
+
+#[test]
+fn drawing_run_without_run_properties_inherits_the_theme_minor_font() {
+    assert_eq!(
+        font_of("", &office_theme_fonts()),
+        Some("Calibri".to_string())
+    );
+}
+
+#[test]
+fn drawing_run_uses_its_explicit_latin_typeface() {
+    assert_eq!(
+        font_of(
+            r#"<a:rPr lang="en-US" sz="1100"><a:latin typeface="Georgia"/></a:rPr>"#,
+            &office_theme_fonts()
+        ),
+        Some("Georgia".to_string())
+    );
+}
+
+#[test]
+fn drawing_run_resolves_theme_typeface_placeholders() {
+    // `+mj-lt` and `+mn-lt` name the theme's major and minor Latin fonts.
+    assert_eq!(
+        font_of(
+            r#"<a:rPr lang="en-US"><a:latin typeface="+mj-lt"/></a:rPr>"#,
+            &office_theme_fonts()
+        ),
+        Some("Calibri Light".to_string())
+    );
+    assert_eq!(
+        font_of(
+            r#"<a:rPr lang="en-US"><a:latin typeface="+mn-lt"/></a:rPr>"#,
+            &office_theme_fonts()
+        ),
+        Some("Calibri".to_string())
+    );
+}
+
+#[test]
+fn drawing_run_font_stays_unset_without_a_theme_font_scheme() {
+    // A workbook with no readable theme part leaves font selection to the
+    // renderer's existing fallback rather than inventing a family.
+    assert_eq!(
+        font_of(r#"<a:rPr lang="en-US"/>"#, &ThemeFontScheme::default()),
+        None
+    );
+}
+
+#[test]
+fn theme_font_scheme_parses_from_theme_xml() {
+    let theme_xml = r#"<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <a:themeElements>
+    <a:fontScheme name="Office">
+      <a:majorFont><a:latin typeface="Calibri Light"/><a:ea typeface=""/></a:majorFont>
+      <a:minorFont><a:latin typeface="Calibri"/><a:ea typeface=""/></a:minorFont>
+    </a:fontScheme>
+  </a:themeElements>
+</a:theme>"#;
+    let fonts = crate::parser::drawingml::parse_theme_font_scheme(theme_xml);
+    assert_eq!(fonts.major_latin.as_deref(), Some("Calibri Light"));
+    assert_eq!(fonts.minor_latin.as_deref(), Some("Calibri"));
+}
+
+#[test]
+fn theme_font_scheme_ignores_empty_typefaces() {
+    // Themes spell "inherit" as an empty typeface; it must not become a font.
+    let theme_xml = r#"<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <a:themeElements>
+    <a:fontScheme name="Office">
+      <a:majorFont><a:latin typeface=""/></a:majorFont>
+      <a:minorFont><a:latin typeface=""/></a:minorFont>
+    </a:fontScheme>
+  </a:themeElements>
+</a:theme>"#;
+    let fonts = crate::parser::drawingml::parse_theme_font_scheme(theme_xml);
+    assert_eq!(fonts, ThemeFontScheme::default());
 }

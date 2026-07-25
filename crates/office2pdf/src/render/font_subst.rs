@@ -515,6 +515,11 @@ fn collect_document_font_families(doc: &Document) -> BTreeSet<String> {
                     collect_header_footer_fonts(footer, &mut fonts);
                 }
                 collect_table_fonts(&page.table, &mut fonts);
+                for text_box in &page.text_boxes {
+                    for paragraph in &text_box.paragraphs {
+                        collect_block_fonts(&Block::Paragraph(paragraph.clone()), &mut fonts);
+                    }
+                }
             }
         }
     }
@@ -553,8 +558,20 @@ pub(crate) fn document_requests_font_families(doc: &Document) -> bool {
                     .as_ref()
                     .is_some_and(header_footer_requests_font_family)
                 || table_requests_font_family(&page.table)
+                // Worksheet drawings carry their own runs; a workbook whose
+                // only font request comes from a shape label still needs the
+                // font search context, or the compiler never sees the
+                // directories that hold the requested face (issue #461).
+                || page.text_boxes.iter().any(sheet_text_box_requests_font_family)
         }
     })
+}
+
+fn sheet_text_box_requests_font_family(text_box: &crate::ir::SheetTextBox) -> bool {
+    text_box
+        .paragraphs
+        .iter()
+        .any(|paragraph| block_requests_font_family(&Block::Paragraph(paragraph.clone())))
 }
 
 fn resolve_available_fallback(font_family: &str, context: &FontSearchContext) -> Option<String> {

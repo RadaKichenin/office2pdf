@@ -297,6 +297,72 @@ pub(crate) fn parse_theme_color_scheme(xml: &str) -> HashMap<String, Color> {
     colors
 }
 
+/// The Latin typefaces a theme part's `<a:fontScheme>` declares. A slot the
+/// theme leaves empty stays `None`, because DrawingML spells "inherit" as an
+/// empty `typeface` and an empty family would select nothing.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub(crate) struct ThemeFontScheme {
+    pub(crate) major_latin: Option<String>,
+    pub(crate) minor_latin: Option<String>,
+}
+
+impl ThemeFontScheme {
+    /// Resolve a DrawingML `typeface` attribute. The placeholders `+mj-lt`
+    /// and `+mn-lt` name this scheme's major and minor Latin fonts; any
+    /// other value is a literal family name.
+    pub(crate) fn resolve_typeface(&self, typeface: &str) -> Option<String> {
+        match typeface {
+            "" => None,
+            "+mj-lt" => self.major_latin.clone(),
+            "+mn-lt" => self.minor_latin.clone(),
+            literal => Some(literal.to_string()),
+        }
+    }
+}
+
+/// Parse just the `<a:fontScheme>` Latin typefaces out of a theme part
+/// (`theme1.xml`).
+///
+/// The pptx parser keeps its own combined single-pass reader because it
+/// also collects colors and fill styles from the same document.
+pub(crate) fn parse_theme_font_scheme(xml: &str) -> ThemeFontScheme {
+    let mut fonts = ThemeFontScheme::default();
+    let mut reader = Reader::from_str(xml);
+    let mut in_major: bool = false;
+    let mut in_minor: bool = false;
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(ref e)) => match e.local_name().as_ref() {
+                b"majorFont" => in_major = true,
+                b"minorFont" => in_minor = true,
+                _ => {}
+            },
+            Ok(Event::End(ref e)) => match e.local_name().as_ref() {
+                b"majorFont" => in_major = false,
+                b"minorFont" => in_minor = false,
+                _ => {}
+            },
+            Ok(Event::Empty(ref e)) if e.local_name().as_ref() == b"latin" => {
+                let typeface: Option<String> =
+                    get_attr_str(e, b"typeface").filter(|typeface| !typeface.is_empty());
+                // Only a slot's first `<a:latin>` is its Latin face; the
+                // script-specific `<a:font>` entries that follow are not.
+                if in_major {
+                    fonts.major_latin = fonts.major_latin.take().or(typeface);
+                } else if in_minor {
+                    fonts.minor_latin = fonts.minor_latin.take().or(typeface);
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(_) => break,
+            _ => {}
+        }
+    }
+
+    fonts
+}
+
 #[cfg(test)]
 #[path = "drawingml_tests.rs"]
 mod tests;
