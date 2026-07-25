@@ -46,6 +46,47 @@ fn build_docx_with_page_number_footer() -> Vec<u8> {
     cursor.into_inner()
 }
 
+/// Word applies the containing run's properties to the field result, so the
+/// parsed field must carry that run's style.
+#[test]
+fn test_page_number_field_carries_its_run_style() {
+    let footer = docx_rs::Footer::new().add_paragraph(
+        docx_rs::Paragraph::new().add_run(
+            docx_rs::Run::new()
+                .size(16)
+                .color("888888")
+                .add_text("- ")
+                .add_field_char(docx_rs::FieldCharType::Begin, false)
+                .add_instr_text(docx_rs::InstrText::PAGE(docx_rs::InstrPAGE::new()))
+                .add_field_char(docx_rs::FieldCharType::Separate, false)
+                .add_field_char(docx_rs::FieldCharType::End, false),
+        ),
+    );
+    let docx = docx_rs::Docx::new().footer(footer).add_paragraph(
+        docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text("Body text")),
+    );
+    let mut cursor = Cursor::new(Vec::new());
+    docx.build().pack(&mut cursor).unwrap();
+    let data = cursor.into_inner();
+
+    let parser = DocxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let flow = match &doc.pages[0] {
+        Page::Flow(flow) => flow,
+        _ => panic!("Expected FlowPage"),
+    };
+    let elements = &flow.footer.as_ref().expect("footer").paragraphs[0].elements;
+    let style = elements
+        .iter()
+        .find_map(|element| match element {
+            crate::ir::HFInline::PageNumber(style) => Some(style),
+            _ => None,
+        })
+        .expect("page number field parsed");
+    assert_eq!(style.font_size, Some(8.0), "w:sz 16 half-points is 8pt");
+    assert_eq!(style.color, Some(Color::new(0x88, 0x88, 0x88)));
+}
+
 fn build_docx_with_total_pages_footer() -> Vec<u8> {
     let footer = docx_rs::Footer::new().add_paragraph(
         docx_rs::Paragraph::new()
@@ -137,7 +178,7 @@ fn test_parse_docx_with_page_number_in_footer() {
         paragraph
             .elements
             .iter()
-            .any(|element| matches!(element, crate::ir::HFInline::PageNumber))
+            .any(|element| matches!(element, crate::ir::HFInline::PageNumber(_)))
     });
     assert!(has_page_num, "Footer should contain a PageNumber field");
 
@@ -169,7 +210,7 @@ fn test_parse_docx_with_total_pages_in_footer() {
         paragraph
             .elements
             .iter()
-            .any(|element| matches!(element, crate::ir::HFInline::TotalPages))
+            .any(|element| matches!(element, crate::ir::HFInline::TotalPages(_)))
     });
     assert!(has_total_pages, "Footer should contain a TotalPages field");
 }

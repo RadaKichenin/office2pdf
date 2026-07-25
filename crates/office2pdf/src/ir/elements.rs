@@ -71,10 +71,11 @@ pub enum HFInline {
     Run(Run),
     /// An inline image embedded in the header or footer part.
     Image(ImageData),
-    /// Current page number field.
-    PageNumber,
-    /// Total page count field.
-    TotalPages,
+    /// Current page number field, carrying the run properties of the `w:r`
+    /// that holds it so the number matches the surrounding literals.
+    PageNumber(TextStyle),
+    /// Total page count field, styled like [`HFInline::PageNumber(TextStyle::default())`].
+    TotalPages(TextStyle),
     /// Alignment tab positioned relative to the paragraph indent or page margin.
     PositionedTab(PositionedTab),
 }

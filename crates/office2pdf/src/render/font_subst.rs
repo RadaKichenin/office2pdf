@@ -428,8 +428,8 @@ fn visit_header_footer_fonts(
                 .filter(|f| !f.is_empty())
                 .is_none_or(&mut *visitor),
             HFInline::Image(_)
-            | HFInline::PageNumber
-            | HFInline::TotalPages
+            | HFInline::PageNumber(_)
+            | HFInline::TotalPages(_)
             | HFInline::PositionedTab(_) => true,
         })
     })

@@ -1011,7 +1011,7 @@ fn structure_fancy_foot_preserves_text_and_simple_page_field() {
     assert!(
         elements
             .iter()
-            .any(|element| matches!(element, HFInline::PageNumber)),
+            .any(|element| matches!(element, HFInline::PageNumber(_))),
         "the real-world fldSimple PAGE field should survive parsing"
     );
     let top_border = first_paragraph

@@ -143,7 +143,7 @@ pub(super) fn build_hf_elements(section: &str) -> Vec<HFInline> {
                         footnote: None,
                     }));
                 }
-                elements.push(HFInline::PageNumber);
+                elements.push(HFInline::PageNumber(TextStyle::default()));
             }
             '\x02' => {
                 // Total pages sentinel
@@ -155,7 +155,7 @@ pub(super) fn build_hf_elements(section: &str) -> Vec<HFInline> {
                         footnote: None,
                     }));
                 }
-                elements.push(HFInline::TotalPages);
+                elements.push(HFInline::TotalPages(TextStyle::default()));
             }
             _ => {
                 current_text.push(ch);

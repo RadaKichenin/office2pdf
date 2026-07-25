@@ -604,7 +604,7 @@ fn test_render_document_with_page_number_footer() {
                             href: None,
                             footnote: None,
                         }),
-                        HFInline::PageNumber,
+                        HFInline::PageNumber(TextStyle::default()),
                     ],
                     border: None,
                     border_space: None,
