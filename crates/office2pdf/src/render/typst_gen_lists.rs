@@ -347,11 +347,21 @@ fn common_list_line_box(list: &List) -> Option<LineBox> {
         .then_some(first)
 }
 
+/// Emit a list, wrapped in a single block that carries both the Word line
+/// box (`line_height_settings`, when the paragraphs use one) and the list's
+/// own `w:spacing` edge gaps.
+///
+/// The two used to be separate blocks, with the gaps on the inner one. Typst
+/// does not apply block spacing at a container's edges, so the gaps never
+/// reached the boundary and the outer wrapper fell back to Typst's own 1.2em
+/// `block.spacing` — about 10pt too much after a one-item numbered list
+/// (issue #463).
 pub(super) fn generate_list(
     out: &mut String,
     list: &List,
-    wrapper_spans_full_line: bool,
+    line_height_settings: Option<&str>,
 ) -> Result<(), ConvertError> {
+    let wrapper_spans_full_line: bool = line_height_settings.is_some();
     let root_level: u32 = list_root_level(list);
     let style = list_style_for_level(list, root_level);
     let fallback_marker_style = common_list_level_text_style(&list.items, root_level);
@@ -360,17 +370,22 @@ pub(super) fn generate_list(
     let (space_before, space_after) = list_edge_spacing(list, root_level, wrapper_spans_full_line);
     let line_box = common_list_line_box(list);
     let start_at = list.items.first().and_then(|item| item.start_at);
-    if space_before.is_some() || space_after.is_some() {
-        out.push_str("#block(");
-        write_block_params(
-            out,
-            &ParagraphStyle {
-                space_before,
-                space_after,
-                ..ParagraphStyle::default()
-            },
-        );
+    let needs_wrapper: bool =
+        space_before.is_some() || space_after.is_some() || line_height_settings.is_some();
+    if needs_wrapper {
+        // The wrapper must span the full line width: Typst blocks shrink to
+        // their content by default, which would strand a wide list item.
+        out.push_str("#block(width: 100%");
+        if let Some(above) = space_before {
+            let _ = write!(out, ", above: {}pt", format_f64(above));
+        }
+        if let Some(below) = space_after {
+            let _ = write!(out, ", below: {}pt", format_f64(below));
+        }
         out.push_str(")[\n");
+        if let Some(settings) = line_height_settings {
+            out.push_str(settings);
+        }
         write_line_box_settings(out, line_box);
     }
     write_list_open(
@@ -384,7 +399,7 @@ pub(super) fn generate_list(
     );
     generate_list_items(out, list, &list.items, root_level, wrapper_spans_full_line)?;
     out.push_str(")\n");
-    if space_before.is_some() || space_after.is_some() {
+    if needs_wrapper {
         out.push_str("]\n");
     }
     Ok(())
