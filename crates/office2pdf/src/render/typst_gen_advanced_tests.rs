@@ -1046,3 +1046,101 @@ fn test_vert_text_box_remaps_insets() {
         output.source,
     );
 }
+
+/// Rows above a print-title range lead the table but must not repeat, so they
+/// go into their own `repeat: false` header ahead of the repeating one.
+#[test]
+fn test_non_repeating_header_rows_emit_a_separate_header_block() {
+    let row = |text: &str| TableRow {
+        cells: vec![TableCell {
+            content: vec![Block::Paragraph(Paragraph {
+                style: ParagraphStyle::default(),
+                runs: vec![Run {
+                    text: text.to_string(),
+                    style: TextStyle::default(),
+                    href: None,
+                    footnote: None,
+                }],
+            })],
+            ..TableCell::default()
+        }],
+        height: Some(14.0),
+    };
+    let table = Table {
+        rows: vec![row("Title"), row("Spacer"), row("SKU"), row("SKU-1000")],
+        column_widths: vec![100.0],
+        header_row_count: 1,
+        non_repeating_header_row_count: 2,
+        ..Table::default()
+    };
+    let page = Page::Sheet(SheetPage {
+        name: "Sheet1".to_string(),
+        size: PageSize::default(),
+        margins: Margins::default(),
+        table,
+        header: None,
+        footer: None,
+        charts: vec![],
+        images: Vec::new(),
+        text_boxes: Vec::new(),
+    });
+    let doc = make_doc(vec![page]);
+    let output = generate_typst(&doc).unwrap();
+
+    let lead = output
+        .source
+        .find("table.header(repeat: false,")
+        .expect("non-repeating header emitted");
+    let repeating = output
+        .source
+        .find("table.header(level: 2,")
+        .expect("repeating header emitted at a higher level");
+    assert!(lead < repeating, "the non-repeating block comes first");
+    let title = output.source.find("Title").expect("title row present");
+    // Typst escapes the hyphen, so match on the numeric part.
+    let sku = output.source.find("1000").expect("data row present");
+    assert!(lead < title && title < repeating && repeating < sku);
+}
+
+/// Without non-repeating rows the header keeps its plain form.
+#[test]
+fn test_header_without_non_repeating_rows_stays_a_single_block() {
+    let row = |text: &str| TableRow {
+        cells: vec![TableCell {
+            content: vec![Block::Paragraph(Paragraph {
+                style: ParagraphStyle::default(),
+                runs: vec![Run {
+                    text: text.to_string(),
+                    style: TextStyle::default(),
+                    href: None,
+                    footnote: None,
+                }],
+            })],
+            ..TableCell::default()
+        }],
+        height: Some(14.0),
+    };
+    let table = Table {
+        rows: vec![row("SKU"), row("SKU-1000")],
+        column_widths: vec![100.0],
+        header_row_count: 1,
+        non_repeating_header_row_count: 0,
+        ..Table::default()
+    };
+    let page = Page::Sheet(SheetPage {
+        name: "Sheet1".to_string(),
+        size: PageSize::default(),
+        margins: Margins::default(),
+        table,
+        header: None,
+        footer: None,
+        charts: vec![],
+        images: Vec::new(),
+        text_boxes: Vec::new(),
+    });
+    let doc = make_doc(vec![page]);
+    let output = generate_typst(&doc).unwrap();
+    assert!(output.source.contains("table.header(\n"));
+    assert!(!output.source.contains("repeat: false"));
+    assert!(!output.source.contains("level: 2"));
+}

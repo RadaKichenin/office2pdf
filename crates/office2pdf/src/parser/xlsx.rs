@@ -346,6 +346,9 @@ impl XlsxParser {
 
                 let mut rows = build_rows_for_range(sheet, &ctx, chunk_start, chunk_end);
                 let mut header_row_count: usize = 0;
+                // Rows above the print-title range print once; only the title
+                // rows themselves repeat.
+                let mut non_repeating_header_row_count: usize = 0;
                 if let Some((title_start, title_end)) = print_titles.rows
                     && title_end < chunk_start
                 {
@@ -354,11 +357,14 @@ impl XlsxParser {
                     header_row_count = title_rows.len();
                     title_rows.append(&mut rows);
                     rows = title_rows;
-                } else if let Some((_, title_end)) = print_titles.rows
+                } else if let Some((title_start, title_end)) = print_titles.rows
                     && title_end >= chunk_start
                     && title_end <= chunk_end
                 {
-                    header_row_count = (title_end - chunk_start + 1) as usize;
+                    non_repeating_header_row_count =
+                        title_start.saturating_sub(chunk_start) as usize;
+                    header_row_count =
+                        (title_end + 1).saturating_sub(title_start.max(chunk_start)) as usize;
                 }
 
                 let doc = Document {
@@ -372,6 +378,7 @@ impl XlsxParser {
                                 rows,
                                 column_widths: ctx.column_widths.clone(),
                                 header_row_count,
+                                non_repeating_header_row_count,
                                 alignment: None,
                                 default_cell_padding: Some(xlsx_cells::XLSX_CELL_PADDING),
                                 use_content_driven_row_heights: false,
@@ -492,16 +499,20 @@ impl Parser for XlsxParser {
 
             let print_titles = find_print_titles(&book, sheet);
             let title_columns: Option<(usize, usize)> = title_column_indices(print_titles, &ctx);
-            // Rows from the sheet top through the end of the title range
-            // repeat as the table header on every page. Excel repeats only
-            // the title rows themselves; when they don't start at the top
-            // this over-repeats the few rows above them, which reads better
-            // than not repeating at all.
-            let header_row_count: usize = print_titles
+            // Only the rows named by `_xlnm.Print_Titles` repeat on later
+            // pages. Rows above them still lead the table, but print once, so
+            // they go into a non-repeating header block.
+            let (non_repeating_header_row_count, header_row_count): (usize, usize) = print_titles
                 .rows
                 .filter(|(_, title_end)| *title_end >= row_start)
-                .map(|(_, title_end)| (title_end.min(row_end) - row_start + 1) as usize)
-                .unwrap_or(0);
+                .map(|(title_start, title_end)| {
+                    let lead: usize = title_start.saturating_sub(row_start) as usize;
+                    let repeat: usize = (title_end.min(row_end) + 1)
+                        .saturating_sub(title_start.max(row_start))
+                        as usize;
+                    (lead, repeat)
+                })
+                .unwrap_or((0, 0));
 
             // Collect row page breaks and split rows into page segments
             let row_breaks = collect_row_breaks(sheet);
@@ -551,6 +562,7 @@ impl Parser for XlsxParser {
                                 rows,
                                 column_widths: ctx.column_widths,
                                 header_row_count,
+                                non_repeating_header_row_count,
                                 alignment: None,
                                 default_cell_padding: Some(xlsx_cells::XLSX_CELL_PADDING),
                                 use_content_driven_row_heights: false,
@@ -593,8 +605,11 @@ impl Parser for XlsxParser {
                 let mut first_segment = true;
                 for mut segment in segments {
                     let mut segment_header_rows: usize = 0;
+                    let mut segment_lead_rows: usize = 0;
                     if first_segment {
-                        segment_header_rows = header_row_count.min(segment.len());
+                        segment_lead_rows = non_repeating_header_row_count.min(segment.len());
+                        segment_header_rows =
+                            header_row_count.min(segment.len() - segment_lead_rows);
                     } else if let Some((title_start, title_end)) = print_titles.rows
                         && title_end >= row_start
                     {
@@ -619,6 +634,7 @@ impl Parser for XlsxParser {
                                     rows: segment,
                                     column_widths: ctx.column_widths.clone(),
                                     header_row_count: segment_header_rows,
+                                    non_repeating_header_row_count: segment_lead_rows,
                                     alignment: None,
                                     default_cell_padding: Some(xlsx_cells::XLSX_CELL_PADDING),
                                     use_content_driven_row_heights: false,

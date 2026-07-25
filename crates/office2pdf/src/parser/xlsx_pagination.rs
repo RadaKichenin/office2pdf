@@ -198,6 +198,7 @@ fn slice_table_columns(table: &Table, start: usize, end: usize) -> Table {
         rows,
         column_widths: table.column_widths[start..end].to_vec(),
         header_row_count: table.header_row_count,
+        non_repeating_header_row_count: table.non_repeating_header_row_count,
         alignment: table.alignment,
         default_cell_padding: table.default_cell_padding,
         use_content_driven_row_heights: table.use_content_driven_row_heights,

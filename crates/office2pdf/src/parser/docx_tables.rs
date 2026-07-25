@@ -171,6 +171,7 @@ pub(super) fn convert_table(
         rows,
         column_widths,
         header_row_count: header_info.repeat_rows.min(table.rows.len()),
+        non_repeating_header_row_count: 0,
         alignment,
         default_cell_padding,
         use_content_driven_row_heights: false,
