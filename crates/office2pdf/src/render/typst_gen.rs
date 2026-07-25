@@ -1250,19 +1250,27 @@ fn generate_hf_paragraph(
                     && tab.relative_to == PositionedTabRelativeTo::Margin
         )
     });
-    let has_top_border = paragraph
+    let top_border = paragraph
         .border
         .as_ref()
         .and_then(|border| border.top.as_ref());
+    // Word letterheads put the rule under the header text (`w:pBdr/w:bottom`)
+    // just as often as above it, so both sides stack around the content.
+    let bottom_border = paragraph
+        .border
+        .as_ref()
+        .and_then(|border| border.bottom.as_ref());
+    let stacks_rules: bool = top_border.is_some() || bottom_border.is_some();
 
-    if let Some(border) = has_top_border {
+    if stacks_rules {
         out.push_str("#stack(dir: ttb, spacing: 0.5pt, ");
-        write_hf_border_line(out, border, border.style == BorderLineStyle::Double);
-        if border.style == BorderLineStyle::Double {
-            out.push_str(", ");
-            write_hf_border_line(out, border, false);
-        }
-        out.push_str(", [");
+    }
+    if let Some(border) = top_border {
+        write_hf_border_rules(out, border);
+        out.push_str(", ");
+    }
+    if stacks_rules {
+        out.push('[');
     }
 
     if let Some(index) = right_tab {
@@ -1275,8 +1283,25 @@ fn generate_hf_paragraph(
         generate_hf_elements(out, &paragraph.elements, ctx);
     }
 
-    if has_top_border.is_some() {
-        out.push_str("])");
+    if stacks_rules {
+        out.push(']');
+    }
+    if let Some(border) = bottom_border {
+        out.push_str(", ");
+        write_hf_border_rules(out, border);
+    }
+    if stacks_rules {
+        out.push(')');
+    }
+}
+
+/// Emit the one or two `line()` blocks a single paragraph-border side needs.
+/// Word draws a `double` side as two thin rules, so it takes two blocks.
+fn write_hf_border_rules(out: &mut String, border: &BorderSide) {
+    write_hf_border_line(out, border, border.style == BorderLineStyle::Double);
+    if border.style == BorderLineStyle::Double {
+        out.push_str(", ");
+        write_hf_border_line(out, border, false);
     }
 }
 
