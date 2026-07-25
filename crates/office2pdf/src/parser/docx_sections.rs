@@ -4,7 +4,7 @@ use std::io::{Cursor, Read, Seek};
 use crate::error::ConvertWarning;
 use crate::ir::{
     Block, BorderLineStyle, BorderSide, CellBorder, Color, ColumnLayout, FlowPage, FrameAnchor,
-    HFInline, HeaderFooter, HeaderFooterFrame, HeaderFooterParagraph, Margins, PageSize,
+    HFInline, HeaderFooter, HeaderFooterFrame, HeaderFooterParagraph, Insets, Margins, PageSize,
     PositionedTab, PositionedTabAlignment, PositionedTabRelativeTo, Run, TabLeader, TextDirection,
     TextStyle,
 };
@@ -628,8 +628,30 @@ fn convert_hf_paragraph(
         style,
         elements,
         border: extract_hf_paragraph_border(&paragraph.property),
+        border_space: extract_hf_paragraph_border_space(&paragraph.property),
         frame: extract_hf_frame(&paragraph.property),
     }
+}
+
+/// `w:pBdr` sides carry a `w:space` attribute in points that sets the gap Word
+/// leaves between the paragraph text and the rule.
+fn extract_hf_paragraph_border_space(property: &docx_rs::ParagraphProperty) -> Option<Insets> {
+    let borders = serde_json::to_value(property.borders.as_ref()?).ok()?;
+    let side_space = |key: &str| -> f64 {
+        borders
+            .get(key)
+            .and_then(|side| side.get("space"))
+            .and_then(serde_json::Value::as_f64)
+            .unwrap_or(0.0)
+    };
+    let insets = Insets {
+        top: side_space("top"),
+        right: side_space("right"),
+        bottom: side_space("bottom"),
+        left: side_space("left"),
+    };
+    (insets.top > 0.0 || insets.right > 0.0 || insets.bottom > 0.0 || insets.left > 0.0)
+        .then_some(insets)
 }
 
 fn extract_hf_paragraph_border(property: &docx_rs::ParagraphProperty) -> Option<CellBorder> {

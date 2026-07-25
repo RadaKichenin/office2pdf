@@ -16,6 +16,9 @@ pub struct HeaderFooterParagraph {
     pub style: ParagraphStyle,
     pub elements: Vec<HFInline>,
     pub border: Option<CellBorder>,
+    /// `w:pBdr` per-side `w:space` offsets in points, which set the gap Word
+    /// leaves between the paragraph text and each rule.
+    pub border_space: Option<Insets>,
     pub frame: Option<HeaderFooterFrame>,
 }
 

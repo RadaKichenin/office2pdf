@@ -19,6 +19,7 @@ fn test_generate_flow_page_with_text_header() {
                     footnote: None,
                 })],
                 border: None,
+                border_space: None,
                 frame: None,
             }],
         }),
@@ -54,6 +55,7 @@ fn test_generate_flow_page_with_page_number_footer() {
                     HFInline::PageNumber,
                 ],
                 border: None,
+                border_space: None,
                 frame: None,
             }],
         }),
@@ -116,6 +118,7 @@ fn test_generate_footer_with_compound_border_and_right_positioned_tab() {
                     left: None,
                     right: None,
                 }),
+                border_space: None,
                 frame: None,
             }],
         }),
@@ -151,6 +154,7 @@ fn test_generate_page_anchored_footer_frame_in_foreground() {
                     footnote: None,
                 })],
                 border: None,
+                border_space: None,
                 frame: Some(HeaderFooterFrame {
                     x: Some(71.8),
                     y: Some(198.5),
@@ -194,6 +198,7 @@ fn test_generate_flow_page_with_header_and_footer() {
                     footnote: None,
                 })],
                 border: None,
+                border_space: None,
                 frame: None,
             }],
         }),
@@ -203,6 +208,7 @@ fn test_generate_flow_page_with_header_and_footer() {
                 style: ParagraphStyle::default(),
                 elements: vec![HFInline::PageNumber],
                 border: None,
+                border_space: None,
                 frame: None,
             }],
         }),
@@ -511,6 +517,7 @@ fn test_table_page_with_header() {
                     footnote: None,
                 })],
                 border: None,
+                border_space: None,
                 frame: None,
             }],
         }),
@@ -557,6 +564,7 @@ fn test_table_page_with_page_number_footer() {
                     HFInline::TotalPages,
                 ],
                 border: None,
+                border_space: None,
                 frame: None,
             }],
         }),
@@ -756,6 +764,7 @@ fn test_generate_header_with_bottom_border_draws_rule_below_text() {
                     left: None,
                     right: None,
                 }),
+                border_space: None,
                 frame: None,
             }],
         }),
@@ -821,6 +830,7 @@ fn test_generate_header_with_top_and_bottom_borders_draws_both_rules() {
                     left: None,
                     right: None,
                 }),
+                border_space: None,
                 frame: None,
             }],
         }),
@@ -865,6 +875,7 @@ fn test_flow_page_footer_is_pinned_to_the_word_edge_distance() {
                     footnote: None,
                 })],
                 border: None,
+                border_space: None,
                 frame: None,
             }],
         }),
@@ -920,6 +931,7 @@ fn test_flow_page_footer_without_edge_distance_keeps_default_placement() {
                     footnote: None,
                 })],
                 border: None,
+                border_space: None,
                 frame: None,
             }],
         }),
@@ -959,6 +971,7 @@ fn test_flow_page_footer_distance_beyond_margin_falls_back() {
                     footnote: None,
                 })],
                 border: None,
+                border_space: None,
                 frame: None,
             }],
         }),
@@ -1039,4 +1052,192 @@ fn test_later_paragraph_space_before_stays_block_spacing() {
         "later paragraphs keep block spacing"
     );
     assert!(output.source.contains("above: 21pt"));
+}
+
+/// `w:pBdr` sides declare a `w:space` gap in points between the text and the
+/// rule; a header rule must sit that far below its text.
+#[test]
+fn test_generate_header_border_uses_declared_pbdr_space() {
+    use crate::ir::{
+        BorderSide, CellBorder, HFInline, HeaderFooter, HeaderFooterParagraph, Insets,
+    };
+
+    let doc = make_doc(vec![Page::Flow(FlowPage {
+        size: PageSize::default(),
+        margins: Margins::default(),
+        content: vec![make_paragraph("Body")],
+        header: Some(HeaderFooter {
+            distance_from_edge: None,
+            paragraphs: vec![HeaderFooterParagraph {
+                style: ParagraphStyle::default(),
+                elements: vec![HFInline::Run(Run {
+                    text: "Manual v0.6".to_string(),
+                    style: TextStyle::default(),
+                    href: None,
+                    footnote: None,
+                })],
+                border: Some(CellBorder {
+                    top: None,
+                    bottom: Some(BorderSide {
+                        width: 0.5,
+                        color: Color::new(0xCC, 0xCC, 0xCC),
+                        style: BorderLineStyle::Solid,
+                    }),
+                    left: None,
+                    right: None,
+                }),
+                border_space: Some(Insets {
+                    top: 0.0,
+                    right: 0.0,
+                    bottom: 4.0,
+                    left: 0.0,
+                }),
+                frame: None,
+            }],
+        }),
+        footer: None,
+        columns: None,
+        line_grid_pitch: None,
+    })]);
+
+    let output = generate_typst(&doc).unwrap();
+    assert!(
+        output.source.contains("block(height: 4pt)[]"),
+        "the declared 4pt gap must separate text and rule, got: {}",
+        output.source
+    );
+    assert!(
+        output.source.contains("bottom-edge: \"descender\""),
+        "Word measures the gap from the descender line"
+    );
+}
+
+/// Without `w:space` the rule keeps the previous hairline clearance.
+#[test]
+fn test_generate_header_border_without_space_keeps_hairline_gap() {
+    use crate::ir::{BorderSide, CellBorder, HFInline, HeaderFooter, HeaderFooterParagraph};
+
+    let doc = make_doc(vec![Page::Flow(FlowPage {
+        size: PageSize::default(),
+        margins: Margins::default(),
+        content: vec![make_paragraph("Body")],
+        header: Some(HeaderFooter {
+            distance_from_edge: None,
+            paragraphs: vec![HeaderFooterParagraph {
+                style: ParagraphStyle::default(),
+                elements: vec![HFInline::Run(Run {
+                    text: "Plain".to_string(),
+                    style: TextStyle::default(),
+                    href: None,
+                    footnote: None,
+                })],
+                border: Some(CellBorder {
+                    top: None,
+                    bottom: Some(BorderSide {
+                        width: 0.5,
+                        color: Color::black(),
+                        style: BorderLineStyle::Solid,
+                    }),
+                    left: None,
+                    right: None,
+                }),
+                border_space: None,
+                frame: None,
+            }],
+        }),
+        footer: None,
+        columns: None,
+        line_grid_pitch: None,
+    })]);
+
+    let output = generate_typst(&doc).unwrap();
+    assert!(output.source.contains("block(height: 0.5pt)[]"));
+}
+
+/// Word measures `w:pgMar/@w:header` from the top page edge to the top of the
+/// header, which then grows downward. Typst anchors headers by their bottom, so
+/// the band has to hold the content against the header top.
+#[test]
+fn test_flow_page_header_is_pinned_to_the_word_edge_distance() {
+    use crate::ir::{HFInline, HeaderFooter, HeaderFooterParagraph};
+
+    let doc = make_doc(vec![Page::Flow(FlowPage {
+        size: PageSize::default(),
+        margins: Margins {
+            top: 62.35,
+            bottom: 62.35,
+            left: 70.85,
+            right: 70.85,
+        },
+        content: vec![make_paragraph("Body")],
+        header: Some(HeaderFooter {
+            distance_from_edge: Some(35.4),
+            paragraphs: vec![HeaderFooterParagraph {
+                style: ParagraphStyle::default(),
+                elements: vec![HFInline::Run(Run {
+                    text: "Manual v0.6".to_string(),
+                    style: TextStyle::default(),
+                    href: None,
+                    footnote: None,
+                })],
+                border: None,
+                border_space: None,
+                frame: None,
+            }],
+        }),
+        footer: None,
+        columns: None,
+        line_grid_pitch: None,
+    })]);
+
+    let output = generate_typst(&doc).unwrap();
+    assert!(
+        output.source.contains("header-ascent: 0pt"),
+        "the header origin must sit on the top margin line"
+    );
+    assert!(
+        output
+            .source
+            .contains("block(width: 100%, height: 26.95pt)"),
+        "the band must span top margin minus header distance, got: {}",
+        output.source
+    );
+    assert!(
+        output.source.contains("place(top"),
+        "the header grows downward from the pinned top"
+    );
+}
+
+/// Without a declared header distance the previous placement is kept.
+#[test]
+fn test_flow_page_header_without_edge_distance_keeps_default_placement() {
+    use crate::ir::{HFInline, HeaderFooter, HeaderFooterParagraph};
+
+    let doc = make_doc(vec![Page::Flow(FlowPage {
+        size: PageSize::default(),
+        margins: Margins::default(),
+        content: vec![make_paragraph("Body")],
+        header: Some(HeaderFooter {
+            distance_from_edge: None,
+            paragraphs: vec![HeaderFooterParagraph {
+                style: ParagraphStyle::default(),
+                elements: vec![HFInline::Run(Run {
+                    text: "Plain header".to_string(),
+                    style: TextStyle::default(),
+                    href: None,
+                    footnote: None,
+                })],
+                border: None,
+                border_space: None,
+                frame: None,
+            }],
+        }),
+        footer: None,
+        columns: None,
+        line_grid_pitch: None,
+    })]);
+
+    let output = generate_typst(&doc).unwrap();
+    assert!(output.source.contains("header: ["));
+    assert!(!output.source.contains("header-ascent"));
 }
