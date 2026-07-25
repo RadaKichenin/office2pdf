@@ -183,6 +183,7 @@ fn empty_sheet_context() -> SheetContext {
         merge_tops: std::collections::HashMap::new(),
         merge_skips: std::collections::HashSet::new(),
         cond_fmt_overrides: std::collections::HashMap::new(),
+        normal_font: None,
     }
 }
 
@@ -239,10 +240,7 @@ impl XlsxParser {
 
         let metadata = extract_xlsx_metadata(&book);
         let cond_fmt_hints = cond_fmt_raw::extract_cond_fmt_hints(data);
-        // Excel derives every column print metric from the workbook Normal
-        // font; cell fonts do not participate (issue #366).
-        let normal_font_mdw: Option<f64> = extract_normal_font(data)
-            .map(|(family, size)| max_digit_width_px_for_normal_font(&family, size));
+        let normal_font = extract_normal_font(data);
 
         let mut chart_map = extract_charts_with_anchors(data);
         let mut image_map = extract_images_with_anchors(data);
@@ -259,9 +257,11 @@ impl XlsxParser {
                 continue;
             }
 
-            let Some((ctx, row_start, row_end)) =
-                prepare_sheet_context(sheet, normal_font_mdw, cond_fmt_hints.get(sheet.get_name()))
-            else {
+            let Some((ctx, row_start, row_end)) = prepare_sheet_context(
+                sheet,
+                normal_font.as_ref(),
+                cond_fmt_hints.get(sheet.get_name()),
+            ) else {
                 // A sheet without used cells can still carry drawings; give
                 // its images a page instead of dropping them.
                 let sheet_name = sheet.get_name().to_string();
@@ -434,10 +434,7 @@ impl Parser for XlsxParser {
         // Extract metadata from umya-spreadsheet properties
         let metadata = extract_xlsx_metadata(&book);
         let cond_fmt_hints = cond_fmt_raw::extract_cond_fmt_hints(data);
-        // Excel derives every column print metric from the workbook Normal
-        // font; cell fonts do not participate (issue #366).
-        let normal_font_mdw: Option<f64> = extract_normal_font(data)
-            .map(|(family, size)| max_digit_width_px_for_normal_font(&family, size));
+        let normal_font = extract_normal_font(data);
 
         // Extract charts with anchor positions per sheet
         let mut chart_map = extract_charts_with_anchors(data);
@@ -456,9 +453,11 @@ impl Parser for XlsxParser {
                 continue;
             }
 
-            let Some((ctx, row_start, row_end)) =
-                prepare_sheet_context(sheet, normal_font_mdw, cond_fmt_hints.get(sheet.get_name()))
-            else {
+            let Some((ctx, row_start, row_end)) = prepare_sheet_context(
+                sheet,
+                normal_font.as_ref(),
+                cond_fmt_hints.get(sheet.get_name()),
+            ) else {
                 // A sheet without used cells can still carry drawings; give
                 // its images a page instead of dropping them.
                 let sheet_name = sheet.get_name().to_string();
