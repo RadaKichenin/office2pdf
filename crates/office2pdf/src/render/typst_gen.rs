@@ -569,10 +569,19 @@ fn generate_table_with_anchors(
                 out.push('\n');
                 row_start = row_end + 1;
             }
-            // Emit the anchored element
-            generate_sheet_anchor(out, &sorted_charts[chart_idx].1, ctx);
-            out.push('\n');
-            chart_idx += 1;
+            // Emit every drawing anchored to this row together, so same-row
+            // shapes overlay rather than stack (issue #459).
+            let row_end_idx: usize = sorted_charts[chart_idx..]
+                .iter()
+                .take_while(|(row, _)| *row == sorted_charts[chart_idx].0)
+                .count()
+                + chart_idx;
+            let row_anchors: Vec<&SheetAnchor> = sorted_charts[chart_idx..row_end_idx]
+                .iter()
+                .map(|(_, anchor)| anchor)
+                .collect();
+            generate_sheet_anchor_row(out, &row_anchors, ctx);
+            chart_idx = row_end_idx;
         }
     }
 
@@ -596,24 +605,81 @@ fn generate_table_with_anchors(
         out.push('\n');
     }
 
-    // Emit any remaining anchors (anchored beyond last row, e.g., u32::MAX)
+    // Emit any remaining anchors (anchored beyond last row, e.g., u32::MAX),
+    // still grouped by the row they share.
     while chart_idx < sorted_charts.len() {
-        generate_sheet_anchor(out, &sorted_charts[chart_idx].1, ctx);
-        out.push('\n');
-        chart_idx += 1;
+        let row_end_idx: usize = sorted_charts[chart_idx..]
+            .iter()
+            .take_while(|(row, _)| *row == sorted_charts[chart_idx].0)
+            .count()
+            + chart_idx;
+        let row_anchors: Vec<&SheetAnchor> = sorted_charts[chart_idx..row_end_idx]
+            .iter()
+            .map(|(_, anchor)| anchor)
+            .collect();
+        generate_sheet_anchor_row(out, &row_anchors, ctx);
+        chart_idx = row_end_idx;
     }
 
     Ok(())
 }
 
-fn generate_sheet_anchor(out: &mut String, anchor: &SheetAnchor, ctx: &mut GenCtx) {
+/// Emit every drawing anchored to one worksheet row.
+///
+/// Excel lays same-row shapes out side by side over the grid. Reserving a
+/// flow box per shape advanced the flow between them, so three shapes on row
+/// 3 formed a diagonal stack and reserved three times the height, spilling
+/// onto a blank second page (issue #459). One reserved box, as tall as the
+/// tallest shape, holds them all; each keeps its own horizontal offset.
+///
+/// Charts are ordinary flow content and keep their own placement.
+fn generate_sheet_anchor_row(out: &mut String, anchors: &[&SheetAnchor], ctx: &mut GenCtx) {
+    for anchor in anchors.iter() {
+        if let SheetAnchor::Chart(chart) = anchor {
+            generate_chart(out, chart);
+            out.push('\n');
+        }
+    }
+
+    let placed: Vec<&&SheetAnchor> = anchors
+        .iter()
+        .filter(|anchor| !matches!(anchor, SheetAnchor::Chart(_)))
+        .collect();
+    if placed.is_empty() {
+        return;
+    }
+    let reserved_height_pt: f64 = placed
+        .iter()
+        .map(|anchor| sheet_anchor_height_pt(anchor))
+        .fold(0.0, f64::max);
+    let _ = write!(
+        out,
+        "#box(width: 100%, height: {}pt)[",
+        format_f64(reserved_height_pt)
+    );
+    for anchor in placed {
+        write_placed_sheet_anchor(out, anchor, ctx);
+    }
+    out.push_str("]\n");
+}
+
+/// The flow height a placed drawing occupies.
+fn sheet_anchor_height_pt(anchor: &SheetAnchor) -> f64 {
     match anchor {
-        SheetAnchor::Chart(chart) => generate_chart(out, chart),
+        SheetAnchor::TextBox(text_box) => text_box.height,
+        SheetAnchor::Image(sheet_image) => sheet_image.image.height.unwrap_or(100.0),
+        SheetAnchor::Chart(_) => 0.0,
+    }
+}
+
+/// Place one drawing at its horizontal offset inside the row's reserved box.
+fn write_placed_sheet_anchor(out: &mut String, anchor: &SheetAnchor, ctx: &mut GenCtx) {
+    match anchor {
+        SheetAnchor::Chart(_) => {}
         SheetAnchor::TextBox(text_box) => {
             let _ = write!(
                 out,
-                "#box(width: 100%, height: {}pt)[#place(top + left, dx: {}pt)[#box(width: {}pt, height: {}pt",
-                format_f64(text_box.height),
+                "#place(top + left, dx: {}pt)[#box(width: {}pt, height: {}pt",
                 format_f64(text_box.x_offset_pt),
                 format_f64(text_box.width),
                 format_f64(text_box.height),
@@ -639,20 +705,16 @@ fn generate_sheet_anchor(out: &mut String, anchor: &SheetAnchor, ctx: &mut GenCt
             if text_box.vertical_center {
                 out.push(']');
             }
-            out.push_str("]]]\n");
+            out.push_str("]]");
         }
         SheetAnchor::Image(sheet_image) => {
-            // Keep the anchor's horizontal position: reserve the image height
-            // in the flow and place the image at its column offset.
-            let height: f64 = sheet_image.image.height.unwrap_or(100.0);
             let _ = write!(
                 out,
-                "#box(width: 100%, height: {}pt)[#place(top + left, dx: {}pt)[",
-                format_f64(height),
+                "#place(top + left, dx: {}pt)[",
                 format_f64(sheet_image.x_offset_pt),
             );
             generate_image(out, &sheet_image.image, ctx);
-            out.push_str("]]\n");
+            out.push(']');
         }
     }
 }
