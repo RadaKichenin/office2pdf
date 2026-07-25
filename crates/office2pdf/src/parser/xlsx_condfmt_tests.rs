@@ -763,3 +763,182 @@ fn test_cond_fmt_icon_set_num_thresholds_from_start_end_cfvos() {
         Some(Color::new(104, 164, 144))
     );
 }
+
+/// Excel inventory sheets flag restock rows with `cellIs equal "REORDER"`, whose
+/// operand is a quoted string rather than a number.
+#[test]
+fn test_cond_fmt_cell_is_equal_text_applies_differential_style() {
+    let data = build_xlsx_with_cond_fmt(|sheet| {
+        sheet.get_cell_mut("A1").set_value_string("REORDER");
+        sheet.get_cell_mut("A2").set_value_string("OK");
+        sheet.get_cell_mut("A3").set_value_string("REORDER");
+
+        let mut rule = umya_spreadsheet::ConditionalFormattingRule::default();
+        rule.set_type(umya_spreadsheet::ConditionalFormatValues::CellIs);
+        rule.set_operator(umya_spreadsheet::ConditionalFormattingOperatorValues::Equal);
+        rule.set_priority(1);
+        let mut style = umya_spreadsheet::Style::default();
+        style.set_background_color("FFFFC7CE");
+        style.get_font_mut().set_bold(true);
+        style.get_font_mut().get_color_mut().set_argb("FF9C0006");
+        rule.set_style(style);
+        let mut formula = umya_spreadsheet::Formula::default();
+        formula.set_string_value("\"REORDER\"");
+        rule.set_formula(formula);
+
+        let mut seq = umya_spreadsheet::SequenceOfReferences::default();
+        seq.set_sqref("A1:A3");
+        let mut cf = umya_spreadsheet::ConditionalFormatting::default();
+        cf.set_sequence_of_references(seq);
+        cf.add_conditional_collection(rule);
+        sheet.set_conditional_formatting_collection(vec![cf]);
+    });
+
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let tp = get_sheet_page(&doc, 0);
+
+    assert_eq!(
+        tp.table.rows[0].cells[0].background,
+        Some(Color::new(255, 199, 206)),
+        "A1 (REORDER) should get the differential fill"
+    );
+    let style_a1 = first_run_style(&tp.table.rows[0].cells[0]);
+    assert_eq!(
+        style_a1.color,
+        Some(Color::new(156, 0, 6)),
+        "A1 (REORDER) should get the differential font color"
+    );
+    assert_eq!(style_a1.bold, Some(true), "A1 (REORDER) should be bold");
+    assert!(
+        tp.table.rows[1].cells[0].background.is_none(),
+        "A2 (OK) must not match"
+    );
+    assert_eq!(
+        tp.table.rows[2].cells[0].background,
+        Some(Color::new(255, 199, 206)),
+        "A3 (REORDER) should get the differential fill"
+    );
+}
+
+/// Excel string comparison is case-insensitive, so `equal "reorder"` must also
+/// match a cell holding `REORDER`.
+#[test]
+fn test_cond_fmt_cell_is_text_equality_is_case_insensitive() {
+    let data = build_xlsx_with_cond_fmt(|sheet| {
+        sheet.get_cell_mut("A1").set_value_string("REORDER");
+        sheet.get_cell_mut("A2").set_value_string("Backorder");
+
+        let mut rule = umya_spreadsheet::ConditionalFormattingRule::default();
+        rule.set_type(umya_spreadsheet::ConditionalFormatValues::CellIs);
+        rule.set_operator(umya_spreadsheet::ConditionalFormattingOperatorValues::Equal);
+        rule.set_priority(1);
+        let mut style = umya_spreadsheet::Style::default();
+        style.set_background_color("FF00FF00");
+        rule.set_style(style);
+        let mut formula = umya_spreadsheet::Formula::default();
+        formula.set_string_value("\"reorder\"");
+        rule.set_formula(formula);
+
+        let mut seq = umya_spreadsheet::SequenceOfReferences::default();
+        seq.set_sqref("A1:A2");
+        let mut cf = umya_spreadsheet::ConditionalFormatting::default();
+        cf.set_sequence_of_references(seq);
+        cf.add_conditional_collection(rule);
+        sheet.set_conditional_formatting_collection(vec![cf]);
+    });
+
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let tp = get_sheet_page(&doc, 0);
+
+    assert_eq!(
+        tp.table.rows[0].cells[0].background,
+        Some(Color::new(0, 255, 0)),
+        "case-insensitive match expected"
+    );
+    assert!(tp.table.rows[1].cells[0].background.is_none());
+}
+
+/// `notEqual` against a quoted string must style every non-matching cell.
+#[test]
+fn test_cond_fmt_cell_is_not_equal_text() {
+    let data = build_xlsx_with_cond_fmt(|sheet| {
+        sheet.get_cell_mut("A1").set_value_string("OK");
+        sheet.get_cell_mut("A2").set_value_string("REORDER");
+
+        let mut rule = umya_spreadsheet::ConditionalFormattingRule::default();
+        rule.set_type(umya_spreadsheet::ConditionalFormatValues::CellIs);
+        rule.set_operator(umya_spreadsheet::ConditionalFormattingOperatorValues::NotEqual);
+        rule.set_priority(1);
+        let mut style = umya_spreadsheet::Style::default();
+        style.set_background_color("FF0000FF");
+        rule.set_style(style);
+        let mut formula = umya_spreadsheet::Formula::default();
+        formula.set_string_value("\"OK\"");
+        rule.set_formula(formula);
+
+        let mut seq = umya_spreadsheet::SequenceOfReferences::default();
+        seq.set_sqref("A1:A2");
+        let mut cf = umya_spreadsheet::ConditionalFormatting::default();
+        cf.set_sequence_of_references(seq);
+        cf.add_conditional_collection(rule);
+        sheet.set_conditional_formatting_collection(vec![cf]);
+    });
+
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let tp = get_sheet_page(&doc, 0);
+
+    assert!(
+        tp.table.rows[0].cells[0].background.is_none(),
+        "A1 (OK) equals the operand, so notEqual must not match"
+    );
+    assert_eq!(
+        tp.table.rows[1].cells[0].background,
+        Some(Color::new(0, 0, 255)),
+        "A2 (REORDER) differs from the operand"
+    );
+}
+
+/// A numeric operand must never match a text cell that merely looks similar,
+/// and a quoted operand must not hijack numeric rules.
+#[test]
+fn test_cond_fmt_cell_is_text_operand_does_not_affect_numeric_cells() {
+    let data = build_xlsx_with_cond_fmt(|sheet| {
+        sheet.get_cell_mut("A1").set_value_number(5.0);
+        sheet.get_cell_mut("A2").set_value_string("5");
+
+        let mut rule = umya_spreadsheet::ConditionalFormattingRule::default();
+        rule.set_type(umya_spreadsheet::ConditionalFormatValues::CellIs);
+        rule.set_operator(umya_spreadsheet::ConditionalFormattingOperatorValues::Equal);
+        rule.set_priority(1);
+        let mut style = umya_spreadsheet::Style::default();
+        style.set_background_color("FFFF00FF");
+        rule.set_style(style);
+        let mut formula = umya_spreadsheet::Formula::default();
+        formula.set_string_value("\"5\"");
+        rule.set_formula(formula);
+
+        let mut seq = umya_spreadsheet::SequenceOfReferences::default();
+        seq.set_sqref("A1:A2");
+        let mut cf = umya_spreadsheet::ConditionalFormatting::default();
+        cf.set_sequence_of_references(seq);
+        cf.add_conditional_collection(rule);
+        sheet.set_conditional_formatting_collection(vec![cf]);
+    });
+
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let tp = get_sheet_page(&doc, 0);
+
+    assert!(
+        tp.table.rows[0].cells[0].background.is_none(),
+        "numeric 5 must not match the text operand \"5\""
+    );
+    assert_eq!(
+        tp.table.rows[1].cells[0].background,
+        Some(Color::new(255, 0, 255)),
+        "text \"5\" must match the text operand"
+    );
+}

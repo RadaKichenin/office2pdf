@@ -54,22 +54,62 @@ fn cell_numeric_value(cell: &umya_spreadsheet::Cell) -> Option<f64> {
     cell.get_value().to_string().parse::<f64>().ok()
 }
 
-/// Evaluate a CellIs conditional formatting rule against a cell value.
+/// Text value of a cell, or `None` when the cell is not a string cell.
+///
+/// Excel keeps numbers and text as distinct comparison domains: a `cellIs` rule
+/// whose operand is a quoted literal only ever matches string cells, so a
+/// numeric cell holding `5` must not match the operand `"5"`.
+fn cell_text_value(cell: &umya_spreadsheet::Cell) -> Option<String> {
+    if cell.get_data_type() != "s" {
+        return None;
+    }
+    let text = cell.get_value().to_string();
+    if text.is_empty() {
+        return None;
+    }
+    Some(text)
+}
+
+/// The right-hand operand of a `cellIs` rule.
+///
+/// Excel stores it as a formula string. A quoted literal (`"REORDER"`) selects
+/// text comparison; anything else that parses as a number selects numeric
+/// comparison.
+enum CellIsOperand {
+    Number(f64),
+    Text(String),
+}
+
+/// Unquote an Excel string literal, collapsing the doubled `""` escape.
+fn parse_quoted_literal(raw: &str) -> Option<String> {
+    let inner: &str = raw.strip_prefix('"')?.strip_suffix('"')?;
+    // A lone `"` inside would have terminated the literal early, so anything
+    // that still contains an unescaped quote is not a single string literal.
+    if inner.replace("\"\"", "").contains('"') {
+        return None;
+    }
+    Some(inner.replace("\"\"", "\""))
+}
+
+/// Parse the operand of a `cellIs` rule from its formula.
+fn parse_cell_is_operand(
+    rule: &umya_spreadsheet::ConditionalFormattingRule,
+) -> Option<CellIsOperand> {
+    let raw: String = rule.get_formula()?.get_address_str();
+    let trimmed: &str = raw.trim();
+    if let Some(text) = parse_quoted_literal(trimmed) {
+        return Some(CellIsOperand::Text(text));
+    }
+    trimmed.parse::<f64>().ok().map(CellIsOperand::Number)
+}
+
+/// Evaluate a CellIs conditional formatting rule against a numeric cell value.
 fn evaluate_cell_is_rule(
     cell_val: f64,
     operator: &umya_spreadsheet::ConditionalFormattingOperatorValues,
-    rule: &umya_spreadsheet::ConditionalFormattingRule,
+    threshold: f64,
 ) -> bool {
     use umya_spreadsheet::ConditionalFormattingOperatorValues::*;
-
-    let formula_val = rule.get_formula().and_then(|f| {
-        let s = f.get_address_str();
-        s.trim().parse::<f64>().ok()
-    });
-
-    let Some(threshold) = formula_val else {
-        return false;
-    };
 
     match operator {
         GreaterThan => cell_val > threshold,
@@ -80,6 +120,32 @@ fn evaluate_cell_is_rule(
         NotEqual => (cell_val - threshold).abs() >= f64::EPSILON,
         Between => cell_val >= threshold,
         NotBetween => cell_val < threshold,
+        _ => false,
+    }
+}
+
+/// Evaluate a CellIs rule against a text cell value.
+///
+/// Excel compares strings case-insensitively and orders them lexicographically.
+fn evaluate_cell_is_text_rule(
+    cell_text: &str,
+    operator: &umya_spreadsheet::ConditionalFormattingOperatorValues,
+    operand: &str,
+) -> bool {
+    use umya_spreadsheet::ConditionalFormattingOperatorValues::*;
+
+    let lhs: String = cell_text.to_lowercase();
+    let rhs: String = operand.to_lowercase();
+
+    match operator {
+        Equal => lhs == rhs,
+        NotEqual => lhs != rhs,
+        GreaterThan => lhs > rhs,
+        GreaterThanOrEqual => lhs >= rhs,
+        LessThan => lhs < rhs,
+        LessThanOrEqual => lhs <= rhs,
+        // Between/NotBetween need both operands; umya keeps only the last
+        // formula, so the lower bound is unavailable for text ranges.
         _ => false,
     }
 }
@@ -219,15 +285,24 @@ fn apply_cell_is_rule(
     overrides: &mut HashMap<CellPos, CondFmtOverride>,
 ) {
     let operator = rule.get_operator();
+    let Some(operand) = parse_cell_is_operand(rule) else {
+        return;
+    };
     let fmt = extract_cond_fmt_style(rule);
 
     for range in ranges {
         for row in range.start_row..=range.end_row {
             for col in range.start_col..=range.end_col {
-                if let Some(cell) = sheet.get_cell((col, row))
-                    && let Some(val) = cell_numeric_value(cell)
-                    && evaluate_cell_is_rule(val, operator, rule)
-                {
+                let Some(cell) = sheet.get_cell((col, row)) else {
+                    continue;
+                };
+                let matched: bool = match &operand {
+                    CellIsOperand::Number(threshold) => cell_numeric_value(cell)
+                        .is_some_and(|val| evaluate_cell_is_rule(val, operator, *threshold)),
+                    CellIsOperand::Text(text) => cell_text_value(cell)
+                        .is_some_and(|val| evaluate_cell_is_text_rule(&val, operator, text)),
+                };
+                if matched {
                     let entry = overrides.entry((col, row)).or_default();
                     if fmt.background.is_some() {
                         entry.background = fmt.background;
