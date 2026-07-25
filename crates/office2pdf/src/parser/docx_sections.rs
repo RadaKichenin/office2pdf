@@ -589,8 +589,12 @@ fn convert_hf_paragraph(
     let mut elements: Vec<HFInline> = Vec::new();
 
     let mut processed_runs: usize = 0;
-    let mut cached_runs_to_skip: usize =
-        append_simple_fields(&mut elements, simple_fields, processed_runs);
+    let mut cached_runs_to_skip: usize = append_simple_fields(
+        &mut elements,
+        simple_fields,
+        processed_runs,
+        &TextStyle::default(),
+    );
     for child in &paragraph.children {
         match child {
             docx_rs::ParagraphChild::Run(run) => {
@@ -616,10 +620,14 @@ fn convert_hf_paragraph(
                 }
                 processed_runs += 1;
                 cached_runs_to_skip +=
-                    append_simple_fields(&mut elements, simple_fields, processed_runs);
+                    append_simple_fields(&mut elements, simple_fields, processed_runs, &run_style);
             }
-            docx_rs::ParagraphChild::PageNum(_) => elements.push(HFInline::PageNumber),
-            docx_rs::ParagraphChild::NumPages(_) => elements.push(HFInline::TotalPages),
+            docx_rs::ParagraphChild::PageNum(_) => {
+                elements.push(HFInline::PageNumber(TextStyle::default()))
+            }
+            docx_rs::ParagraphChild::NumPages(_) => {
+                elements.push(HFInline::TotalPages(TextStyle::default()))
+            }
             _ => {}
         }
     }
@@ -729,18 +737,22 @@ fn frame_anchor(value: Option<&str>) -> FrameAnchor {
     }
 }
 
+/// `w:fldSimple` keeps its run properties inside the element rather than on the
+/// surrounding run, which docx-rs does not surface here. The adjacent run's
+/// style is the closest available match and is what these headers declare.
 fn append_simple_fields(
     elements: &mut Vec<HFInline>,
     simple_fields: &[SimpleFieldMarker],
     processed_runs: usize,
+    style: &TextStyle,
 ) -> usize {
     simple_fields
         .iter()
         .filter(|field| field.preceding_runs == processed_runs)
         .map(|field| {
             elements.push(match field.kind {
-                SimpleFieldKind::PageNumber => HFInline::PageNumber,
-                SimpleFieldKind::TotalPages => HFInline::TotalPages,
+                SimpleFieldKind::PageNumber => HFInline::PageNumber(style.clone()),
+                SimpleFieldKind::TotalPages => HFInline::TotalPages(style.clone()),
             });
             field.cached_runs
         })
@@ -783,8 +795,8 @@ fn extract_hf_run_elements(
                     continue;
                 }
                 field_inline = match instruction.as_ref() {
-                    docx_rs::InstrText::PAGE(_) => Some(HFInline::PageNumber),
-                    docx_rs::InstrText::NUMPAGES(_) => Some(HFInline::TotalPages),
+                    docx_rs::InstrText::PAGE(_) => Some(HFInline::PageNumber(style.clone())),
+                    docx_rs::InstrText::NUMPAGES(_) => Some(HFInline::TotalPages(style.clone())),
                     _ => field_inline,
                 };
             }
@@ -794,9 +806,9 @@ fn extract_hf_run_elements(
                 }
                 let trimmed = value.trim();
                 if trimmed.eq_ignore_ascii_case("page") {
-                    field_inline = Some(HFInline::PageNumber);
+                    field_inline = Some(HFInline::PageNumber(style.clone()));
                 } else if trimmed.eq_ignore_ascii_case("numpages") {
-                    field_inline = Some(HFInline::TotalPages);
+                    field_inline = Some(HFInline::TotalPages(style.clone()));
                 }
             }
             docx_rs::RunChild::Text(text) => {

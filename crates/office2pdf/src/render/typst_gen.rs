@@ -1223,7 +1223,7 @@ fn hf_needs_context(hf: &HeaderFooter) -> bool {
     hf.paragraphs.iter().any(|p| {
         p.elements
             .iter()
-            .any(|e| matches!(e, HFInline::PageNumber | HFInline::TotalPages))
+            .any(|e| matches!(e, HFInline::PageNumber(_) | HFInline::TotalPages(_)))
     })
 }
 
@@ -1408,13 +1408,30 @@ fn write_hf_border_line(out: &mut String, border: &BorderSide, is_primary_double
     );
 }
 
+/// Emit a header/footer field result under its run's text properties.
+fn write_hf_field(out: &mut String, style: &TextStyle, field: &str) {
+    if has_text_properties(style) {
+        out.push_str("#text(");
+        write_text_params(out, style);
+        let _ = write!(out, ")[{field}]");
+    } else {
+        out.push_str(field);
+    }
+}
+
 fn generate_hf_elements(out: &mut String, elements: &[HFInline], ctx: &mut GenCtx) {
     for element in elements {
         match element {
             HFInline::Run(run) => generate_run(out, run),
             HFInline::Image(image) => generate_image(out, image, ctx),
-            HFInline::PageNumber => out.push_str("#counter(page).display()"),
-            HFInline::TotalPages => out.push_str("#counter(page).final().first()"),
+            // Word applies the containing run's properties to the field
+            // result, so the number matches the literals around it.
+            HFInline::PageNumber(style) => {
+                write_hf_field(out, style, "#counter(page).display()");
+            }
+            HFInline::TotalPages(style) => {
+                write_hf_field(out, style, "#counter(page).final().first()");
+            }
             HFInline::PositionedTab(_) => out.push_str("#h(1em)"),
         }
     }

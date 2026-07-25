@@ -222,7 +222,7 @@ fn test_header_footer_with_page_number() {
                     href: None,
                     footnote: None,
                 }),
-                HFInline::PageNumber,
+                HFInline::PageNumber(TextStyle::default()),
             ],
             border: None,
             border_space: None,
@@ -230,5 +230,8 @@ fn test_header_footer_with_page_number() {
         }],
     };
     assert_eq!(hf.paragraphs[0].elements.len(), 2);
-    assert!(matches!(hf.paragraphs[0].elements[1], HFInline::PageNumber));
+    assert!(matches!(
+        hf.paragraphs[0].elements[1],
+        HFInline::PageNumber(_)
+    ));
 }

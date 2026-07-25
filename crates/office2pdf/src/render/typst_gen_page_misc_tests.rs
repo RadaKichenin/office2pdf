@@ -52,7 +52,7 @@ fn test_generate_flow_page_with_page_number_footer() {
                         href: None,
                         footnote: None,
                     }),
-                    HFInline::PageNumber,
+                    HFInline::PageNumber(TextStyle::default()),
                 ],
                 border: None,
                 border_space: None,
@@ -106,7 +106,7 @@ fn test_generate_footer_with_compound_border_and_right_positioned_tab() {
                         href: None,
                         footnote: None,
                     }),
-                    HFInline::PageNumber,
+                    HFInline::PageNumber(TextStyle::default()),
                 ],
                 border: Some(CellBorder {
                     top: Some(BorderSide {
@@ -206,7 +206,7 @@ fn test_generate_flow_page_with_header_and_footer() {
             distance_from_edge: None,
             paragraphs: vec![HeaderFooterParagraph {
                 style: ParagraphStyle::default(),
-                elements: vec![HFInline::PageNumber],
+                elements: vec![HFInline::PageNumber(TextStyle::default())],
                 border: None,
                 border_space: None,
                 frame: None,
@@ -554,14 +554,14 @@ fn test_table_page_with_page_number_footer() {
                         href: None,
                         footnote: None,
                     }),
-                    HFInline::PageNumber,
+                    HFInline::PageNumber(TextStyle::default()),
                     HFInline::Run(Run {
                         text: " of ".to_string(),
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
                     }),
-                    HFInline::TotalPages,
+                    HFInline::TotalPages(TextStyle::default()),
                 ],
                 border: None,
                 border_space: None,
@@ -1240,4 +1240,96 @@ fn test_flow_page_header_without_edge_distance_keeps_default_placement() {
     let output = generate_typst(&doc).unwrap();
     assert!(output.source.contains("header: ["));
     assert!(!output.source.contains("header-ascent"));
+}
+
+/// Word applies the containing run's properties to a `PAGE` field result, so
+/// the number must render in the run's font, size, and color rather than the
+/// document default.
+#[test]
+fn test_page_number_field_uses_its_run_style() {
+    use crate::ir::{HFInline, HeaderFooter, HeaderFooterParagraph};
+
+    let field_style = TextStyle {
+        font_size: Some(8.0),
+        color: Some(Color::new(0x88, 0x88, 0x88)),
+        ..TextStyle::default()
+    };
+    let doc = make_doc(vec![Page::Flow(FlowPage {
+        size: PageSize::default(),
+        margins: Margins::default(),
+        content: vec![make_paragraph("Body")],
+        header: None,
+        footer: Some(HeaderFooter {
+            distance_from_edge: None,
+            paragraphs: vec![HeaderFooterParagraph {
+                style: ParagraphStyle::default(),
+                elements: vec![
+                    HFInline::Run(Run {
+                        text: "- ".to_string(),
+                        style: field_style.clone(),
+                        href: None,
+                        footnote: None,
+                    }),
+                    HFInline::PageNumber(field_style.clone()),
+                ],
+                border: None,
+                border_space: None,
+                frame: None,
+            }],
+        }),
+        columns: None,
+        line_grid_pitch: None,
+    })]);
+
+    let output = generate_typst(&doc).unwrap();
+    let counter = output
+        .source
+        .find("#counter(page).display()")
+        .expect("page counter emitted");
+    let prefix = &output.source[..counter];
+    let wrapper = prefix
+        .rfind("#text(")
+        .expect("the counter is wrapped in its run's text properties");
+    assert!(
+        prefix[wrapper..].contains("size: 8pt"),
+        "the field keeps the run's size, got: {}",
+        &prefix[wrapper..]
+    );
+    assert!(
+        prefix[wrapper..].contains("rgb(136, 136, 136)"),
+        "the field keeps the run's color"
+    );
+}
+
+/// An unstyled field stays a bare counter, so documents that never style their
+/// page numbers are unchanged.
+#[test]
+fn test_unstyled_page_number_field_stays_bare() {
+    use crate::ir::{HFInline, HeaderFooter, HeaderFooterParagraph};
+
+    let doc = make_doc(vec![Page::Flow(FlowPage {
+        size: PageSize::default(),
+        margins: Margins::default(),
+        content: vec![make_paragraph("Body")],
+        header: None,
+        footer: Some(HeaderFooter {
+            distance_from_edge: None,
+            paragraphs: vec![HeaderFooterParagraph {
+                style: ParagraphStyle::default(),
+                elements: vec![HFInline::PageNumber(TextStyle::default())],
+                border: None,
+                border_space: None,
+                frame: None,
+            }],
+        }),
+        columns: None,
+        line_grid_pitch: None,
+    })]);
+
+    let output = generate_typst(&doc).unwrap();
+    assert!(output.source.contains("#counter(page).display()"));
+    assert!(
+        !output.source.contains("#text()[#counter"),
+        "no empty text wrapper"
+    );
 }

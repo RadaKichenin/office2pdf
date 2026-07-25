@@ -317,12 +317,12 @@ fn test_parse_hf_format_string_page_numbers() {
         HFInline::Run(r) => assert_eq!(r.text, "Page "),
         _ => panic!("Expected Run"),
     }
-    assert!(matches!(elems[1], HFInline::PageNumber));
+    assert!(matches!(elems[1], HFInline::PageNumber(_)));
     match &elems[2] {
         HFInline::Run(r) => assert_eq!(r.text, " of "),
         _ => panic!("Expected Run"),
     }
-    assert!(matches!(elems[3], HFInline::TotalPages));
+    assert!(matches!(elems[3], HFInline::TotalPages(_)));
 }
 
 #[test]
@@ -407,8 +407,8 @@ fn test_xlsx_sheet_with_page_number_footer() {
     assert_eq!(footer.paragraphs.len(), 1);
     let elems = &footer.paragraphs[0].elements;
     assert_eq!(elems.len(), 4);
-    assert!(matches!(elems[1], HFInline::PageNumber));
-    assert!(matches!(elems[3], HFInline::TotalPages));
+    assert!(matches!(elems[1], HFInline::PageNumber(_)));
+    assert!(matches!(elems[3], HFInline::TotalPages(_)));
 }
 
 // ── Metadata extraction tests ──────────────────────────────────────
