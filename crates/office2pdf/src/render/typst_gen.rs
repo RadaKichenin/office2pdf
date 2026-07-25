@@ -955,23 +955,34 @@ fn write_flow_page_setup(out: &mut String, page: &FlowPage, size: &PageSize, ctx
     if let Some(footer) = &page.footer
         && hf_has_flow_content(footer)
     {
-        let edge_offset = footer
+        // `w:sectPr/w:pgMar/@w:footer` is the distance from the bottom page
+        // edge to the *bottom* of the footer, which then grows upward.
+        // `footer-descent: 0pt` puts Typst's footer origin on the bottom margin
+        // line, so a block spanning exactly that gap ends where Word's footer
+        // ends; bottom-aligning the content inside it reproduces the upward
+        // growth without having to measure the content. Word measures down to
+        // the descender line, so the band's text bottom edge must match.
+        let footer_band: Option<f64> = footer
             .distance_from_edge
-            .map(|distance| (page.margins.bottom - distance).max(0.0))
-            .unwrap_or(0.0);
-        if hf_needs_stack_offset(footer) || edge_offset > 0.0 {
+            // Keep float noise (62.35 - 35.4) out of the emitted source.
+            .map(|distance| ((page.margins.bottom - distance) * 100.0).round() / 100.0)
+            .filter(|band| *band > 0.0);
+        if let Some(band) = footer_band {
+            out.push_str(", footer-descent: 0pt, footer: ");
+            if hf_needs_context(footer) {
+                out.push_str("context ");
+            }
+            let _ = write!(
+                out,
+                "block(width: 100%, height: {}pt)[#set text(bottom-edge: \"descender\"); #place(bottom, block(width: 100%)[",
+                format_f64(band)
+            );
+            generate_flow_hf_content(out, footer, ctx);
+            out.push_str("])]");
+        } else if hf_needs_stack_offset(footer) {
             out.push_str(", footer: context { let footer_content = block(width: 100%)[");
             generate_flow_hf_content(out, footer, ctx);
-            out.push_str("]; move(dy: ");
-            if hf_needs_stack_offset(footer) {
-                out.push_str("-measure(footer_content).height / 2");
-                if edge_offset > 0.0 {
-                    let _ = write!(out, " - {}pt", format_f64(edge_offset));
-                }
-            } else {
-                let _ = write!(out, "-{}pt", format_f64(edge_offset));
-            }
-            out.push_str(")[#footer_content] }");
+            out.push_str("]; move(dy: -measure(footer_content).height / 2)[#footer_content] }");
         } else if hf_needs_context(footer) {
             out.push_str(", footer: context [");
             generate_flow_hf_content(out, footer, ctx);
