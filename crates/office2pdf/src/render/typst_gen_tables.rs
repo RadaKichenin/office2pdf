@@ -96,11 +96,36 @@ fn generate_table_inner(
 
     let fixed_row_heights = !table.use_content_driven_row_heights;
 
-    if header_row_count > 0 {
-        out.push_str("  table.header(\n");
+    // Rows above a print-title range belong to the header block but print only
+    // once, so they go in a `repeat: false` header. The repeating title rows
+    // then need a higher level to keep repeating alongside it.
+    let lead_row_count = table
+        .non_repeating_header_row_count
+        .min(table.rows.len().saturating_sub(header_row_count));
+    if lead_row_count > 0 {
+        out.push_str("  table.header(repeat: false,\n");
         generate_table_rows(
             out,
-            &table.rows[..header_row_count],
+            &table.rows[..lead_row_count],
+            num_cols,
+            &mut rowspan_remaining,
+            "    ",
+            default_cell_padding,
+            fixed_row_heights,
+            ctx,
+        )?;
+        out.push_str("  ),\n");
+    }
+
+    if header_row_count > 0 {
+        if lead_row_count > 0 {
+            out.push_str("  table.header(level: 2,\n");
+        } else {
+            out.push_str("  table.header(\n");
+        }
+        generate_table_rows(
+            out,
+            &table.rows[lead_row_count..lead_row_count + header_row_count],
             num_cols,
             &mut rowspan_remaining,
             "    ",
@@ -113,7 +138,7 @@ fn generate_table_inner(
 
     generate_table_rows(
         out,
-        &table.rows[header_row_count..],
+        &table.rows[lead_row_count + header_row_count..],
         num_cols,
         &mut rowspan_remaining,
         "  ",

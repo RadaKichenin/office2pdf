@@ -55,6 +55,7 @@ fn test_table_with_default_cell_padding() {
         }],
         column_widths: vec![100.0],
         header_row_count: 0,
+        non_repeating_header_row_count: 0,
         alignment: None,
         default_cell_padding: Some(Insets {
             top: 2.0,
@@ -101,6 +102,7 @@ fn test_table_cell_with_padding_override() {
         }],
         column_widths: vec![100.0],
         header_row_count: 0,
+        non_repeating_header_row_count: 0,
         alignment: None,
         default_cell_padding: Some(Insets {
             top: 1.0,
@@ -129,6 +131,7 @@ fn test_table_alignment_center_wraps_table() {
         }],
         column_widths: vec![100.0],
         header_row_count: 0,
+        non_repeating_header_row_count: 0,
         alignment: Some(Alignment::Center),
         default_cell_padding: None,
         use_content_driven_row_heights: false,
@@ -162,6 +165,7 @@ fn test_table_with_repeating_header_rows_uses_table_header() {
         ],
         column_widths: vec![100.0, 100.0],
         header_row_count: 1,
+        non_repeating_header_row_count: 0,
         ..Table::default()
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);

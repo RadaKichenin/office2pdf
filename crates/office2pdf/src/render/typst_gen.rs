@@ -559,6 +559,7 @@ fn generate_table_with_anchors(
                     } else {
                         0
                     },
+                    non_repeating_header_row_count: 0,
                     alignment: table.alignment,
                     default_cell_padding: table.default_cell_padding,
                     use_content_driven_row_heights: table.use_content_driven_row_heights,
@@ -585,6 +586,7 @@ fn generate_table_with_anchors(
             } else {
                 0
             },
+            non_repeating_header_row_count: 0,
             alignment: table.alignment,
             default_cell_padding: table.default_cell_padding,
             use_content_driven_row_heights: table.use_content_driven_row_heights,

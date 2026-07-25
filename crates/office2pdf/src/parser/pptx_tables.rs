@@ -399,6 +399,7 @@ impl<'a> PptxTableParser<'a> {
             rows: self.rows,
             column_widths: self.column_widths,
             header_row_count,
+            non_repeating_header_row_count: 0,
             alignment: None,
             default_cell_padding: Some(default_pptx_table_cell_padding()),
             use_content_driven_row_heights: true,

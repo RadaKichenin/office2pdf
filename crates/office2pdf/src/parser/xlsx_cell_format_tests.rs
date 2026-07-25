@@ -1216,6 +1216,45 @@ fn test_print_title_rows_become_repeating_header() {
     );
 }
 
+/// Excel repeats only the rows named by `_xlnm.Print_Titles`. When the range
+/// starts below the sheet top, the rows above it print once.
+#[test]
+fn test_print_titles_below_sheet_top_do_not_repeat_the_rows_above() {
+    let data = build_xlsx_with_print_titles("Sheet1!$3:$3", |sheet| {
+        sheet
+            .get_cell_mut("A1")
+            .set_value("Warehouse Inventory Snapshot");
+        sheet.get_cell_mut("A3").set_value("SKU");
+        sheet.get_cell_mut("A4").set_value("SKU-1000");
+    });
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let tp = get_sheet_page(&doc, 0);
+    assert_eq!(
+        tp.table.header_row_count, 1,
+        "only row 3 repeats on later pages"
+    );
+    assert_eq!(
+        tp.table.non_repeating_header_row_count, 2,
+        "rows 1-2 lead the table but must not repeat"
+    );
+}
+
+/// A title range starting at the sheet top has nothing above it to hold back.
+#[test]
+fn test_print_titles_at_sheet_top_have_no_non_repeating_rows() {
+    let data = build_xlsx_with_print_titles("Sheet1!$1:$2", |sheet| {
+        sheet.get_cell_mut("A1").set_value("Title");
+        sheet.get_cell_mut("A2").set_value("Header");
+        sheet.get_cell_mut("A3").set_value("Data");
+    });
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let tp = get_sheet_page(&doc, 0);
+    assert_eq!(tp.table.header_row_count, 2);
+    assert_eq!(tp.table.non_repeating_header_row_count, 0);
+}
+
 #[test]
 fn test_no_print_titles_means_no_header() {
     let data = build_xlsx_formatted(|sheet| {

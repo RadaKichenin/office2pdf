@@ -297,6 +297,10 @@ pub struct Table {
     pub column_widths: Vec<f64>,
     /// Number of leading rows that should repeat as the table header.
     pub header_row_count: usize,
+    /// Number of rows above the repeating header that belong to the header
+    /// block but must not repeat. Excel's `_xlnm.Print_Titles` can name a row
+    /// below the sheet top; the rows above it print once, on the first page.
+    pub non_repeating_header_row_count: usize,
     /// Optional block alignment for the table within the flow.
     pub alignment: Option<Alignment>,
     /// Default cell padding applied by the table when cells don't override it.
