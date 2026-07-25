@@ -37,6 +37,18 @@ pub(super) fn generate_paragraph(
         word_line_height_settings(&para.runs, style, line_grid_pitch);
     let has_para_style = needs_block_wrapper(style) || line_height_settings.is_some();
 
+    // Word's `w:ind` offsets the paragraph's whole column, and paints
+    // `w:shd` and `w:pBdr` from the indent rather than the margin, so the
+    // indent goes on an outer block as an inset and the fill and border stay
+    // on an inner block that spans only the inset content area (issue #464).
+    let indent = paragraph_indent_pt(style);
+    if indent.is_some() {
+        out.push_str("#block(width: 100%");
+        write_block_spacing_params(out, style);
+        write_paragraph_indent_inset(out, indent);
+        out.push_str(")[\n");
+    }
+
     if has_para_style {
         // The wrapper must span the full line width: Typst blocks shrink to
         // their content by default, which would defeat the inner #align.
@@ -44,7 +56,10 @@ pub(super) fn generate_paragraph(
         // full line box, which `word_line_height_settings` spans directly,
         // so those gaps reach the block unmodified (issues #394, #452).
         out.push_str("#block(width: 100%");
-        write_block_params_continuation(out, style);
+        if indent.is_none() {
+            write_block_spacing_params(out, style);
+        }
+        write_block_decoration_params(out, style);
         out.push_str(")[\n");
         write_paragraph_double_border_overlays(out, &style.border);
         write_line_box_settings(out, style.line_box);
@@ -93,11 +108,39 @@ pub(super) fn generate_paragraph(
     if has_para_style {
         out.push_str("\n]");
     }
+    if indent.is_some() {
+        out.push_str("\n]");
+    }
 
     out.push('\n');
     Ok(())
 }
 
+/// The paragraph's `(left, right)` indent in points, or `None` when it has
+/// neither. Negative indents — Word lets a paragraph hang into the margin —
+/// are clamped to zero, because a Typst inset cannot be negative.
+fn paragraph_indent_pt(style: &ParagraphStyle) -> Option<(f64, f64)> {
+    let left: f64 = style.indent_left.unwrap_or(0.0).max(0.0);
+    let right: f64 = style.indent_right.unwrap_or(0.0).max(0.0);
+    (left > 0.0 || right > 0.0).then_some((left, right))
+}
+
+fn write_paragraph_indent_inset(out: &mut String, indent: Option<(f64, f64)>) {
+    if let Some((left, right)) = indent {
+        let _ = write!(
+            out,
+            ", inset: (left: {}pt, right: {}pt)",
+            format_f64(left),
+            format_f64(right)
+        );
+    }
+}
+
+/// Whether the paragraph needs its own block to carry style. The indent is
+/// deliberately absent: `generate_paragraph` wraps indented paragraphs in
+/// their own block, and the fixed-text paths that share this predicate emit
+/// no inset, so counting the indent here would open a bare wrapper that only
+/// leaks Typst's default block spacing.
 pub(super) fn needs_block_wrapper(style: &ParagraphStyle) -> bool {
     style.space_before.is_some()
         || style.space_after.is_some()
@@ -266,17 +309,24 @@ pub(super) fn write_block_params(out: &mut String, style: &ParagraphStyle) {
     }
 }
 
-/// Like `write_block_params`, but for a parameter list that already has a
-/// first entry (every parameter is prefixed with a comma).
-fn write_block_params_continuation(out: &mut String, style: &ParagraphStyle) {
+/// The paragraph's `w:spacing` gaps, for a parameter list that already has a
+/// first entry (every parameter is prefixed with a comma). They belong to
+/// the outermost block, so an indent wrapper does not separate them from the
+/// neighbouring paragraphs they collapse against.
+fn write_block_spacing_params(out: &mut String, style: &ParagraphStyle) {
     if let Some(above) = style.space_before {
         let _ = write!(out, ", above: {}pt", format_f64(above));
     }
     if let Some(below) = style.space_after {
         let _ = write!(out, ", below: {}pt", format_f64(below));
     }
+}
+
+/// The paragraph's shading and borders, which Word paints across the
+/// paragraph's own column — from the left indent to the right indent — so
+/// they belong to the innermost block (issue #464).
+fn write_block_decoration_params(out: &mut String, style: &ParagraphStyle) {
     if let Some(background) = style.background {
-        // Word paints w:pPr/w:shd across the full paragraph width.
         let _ = write!(out, ", fill: {}", rgb(&background));
     }
     if let Some(border) = &style.border {
