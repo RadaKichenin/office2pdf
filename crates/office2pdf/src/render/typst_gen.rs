@@ -78,6 +78,10 @@ struct GenCtx {
     document_default_tab_stop_pt: Option<f64>,
     /// Effective default tab stop interval, in points, for the active page.
     default_tab_width_pt: f64,
+    /// True until the document's first page has been generated. Word keeps
+    /// `w:spacing w:before` on the very first body paragraph, unlike the top of
+    /// pages reached by a break.
+    at_document_start: bool,
 }
 
 impl GenCtx {
@@ -90,6 +94,7 @@ impl GenCtx {
             line_grid_pitch: None,
             document_default_tab_stop_pt: None,
             default_tab_width_pt: DEFAULT_TAB_WIDTH_PT,
+            at_document_start: true,
         }
     }
 
@@ -301,6 +306,7 @@ pub(crate) fn generate_typst_with_options_and_font_context(
                     generate_table_page(&mut out, sheet_page, &mut ctx, options)?;
                 }
             }
+            ctx.at_document_start = false;
         }
         Ok(TypstOutput {
             source: out,
@@ -330,7 +336,36 @@ fn generate_flow_page(
                 DEFAULT_TAB_WIDTH_PT
             });
 
-    if let Some(ref cols) = page.columns {
+    // Word keeps `w:spacing w:before` on the document's first body paragraph,
+    // but Typst collapses leading block spacing at a page boundary, pulling the
+    // first heading up to the top margin. Emit that gap as explicit vertical
+    // space instead, and drop the block's own `above` so it is not counted
+    // twice. Later page tops keep collapsing spacing, which is what Word does
+    // after a page break.
+    let leading_gap: Option<f64> = if ctx.at_document_start && page.columns.is_none() {
+        match page.content.first() {
+            Some(Block::Paragraph(paragraph)) => {
+                paragraph.style.space_before.filter(|gap| *gap > 0.0)
+            }
+            _ => None,
+        }
+    } else {
+        None
+    };
+
+    if let Some(gap) = leading_gap {
+        let _ = writeln!(out, "#v({}pt, weak: false)", format_f64(gap));
+        let Some(Block::Paragraph(first)) = page.content.first() else {
+            unreachable!("leading_gap is only set for a leading paragraph")
+        };
+        let mut adjusted = first.clone();
+        adjusted.style.space_before = None;
+        generate_block(out, &Block::Paragraph(adjusted), ctx)?;
+        if page.content.len() > 1 {
+            out.push('\n');
+            generate_blocks(out, &page.content[1..], ctx)?;
+        }
+    } else if let Some(ref cols) = page.columns {
         generate_flow_page_columns(out, &page.content, cols, ctx)?;
     } else {
         generate_blocks(out, &page.content, ctx)?;

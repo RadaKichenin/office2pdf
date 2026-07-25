@@ -970,3 +970,73 @@ fn test_flow_page_footer_distance_beyond_margin_falls_back() {
     assert!(!output.source.contains("footer-descent"));
     assert!(output.source.contains("Deep footer"));
 }
+
+/// Word keeps `w:spacing w:before` on the very first body paragraph, while
+/// Typst drops leading block spacing at a page boundary. The gap has to be
+/// emitted as explicit vertical space so the first heading is not pulled up to
+/// the top margin.
+#[test]
+fn test_first_document_paragraph_keeps_its_space_before() {
+    let mut heading = make_paragraph("Research Report");
+    if let Block::Paragraph(ref mut paragraph) = heading {
+        paragraph.style.space_before = Some(14.0);
+        paragraph.style.space_after = Some(7.0);
+    }
+
+    let doc = make_doc(vec![Page::Flow(FlowPage {
+        size: PageSize::default(),
+        margins: Margins::default(),
+        content: vec![heading, make_paragraph("Body")],
+        header: None,
+        footer: None,
+        columns: None,
+        line_grid_pitch: None,
+    })]);
+
+    let output = generate_typst(&doc).unwrap();
+    let spacer = output
+        .source
+        .find("#v(14pt")
+        .expect("explicit leading space emitted");
+    let heading_pos = output
+        .source
+        .find("Research Report")
+        .expect("heading present");
+    assert!(
+        spacer < heading_pos,
+        "the space must precede the heading, got: {}",
+        output.source
+    );
+    assert!(
+        !output.source[spacer..heading_pos].contains("above: 14pt"),
+        "the collapsed block spacing must not be emitted twice"
+    );
+}
+
+/// Only the document's first paragraph gets the explicit gap. Word suppresses
+/// space-before at the top of a page reached by a break, so later paragraphs
+/// keep ordinary collapsing block spacing.
+#[test]
+fn test_later_paragraph_space_before_stays_block_spacing() {
+    let mut second = make_paragraph("Second");
+    if let Block::Paragraph(ref mut paragraph) = second {
+        paragraph.style.space_before = Some(21.0);
+    }
+
+    let doc = make_doc(vec![Page::Flow(FlowPage {
+        size: PageSize::default(),
+        margins: Margins::default(),
+        content: vec![make_paragraph("First"), second],
+        header: None,
+        footer: None,
+        columns: None,
+        line_grid_pitch: None,
+    })]);
+
+    let output = generate_typst(&doc).unwrap();
+    assert!(
+        !output.source.contains("#v(21pt"),
+        "later paragraphs keep block spacing"
+    );
+    assert!(output.source.contains("above: 21pt"));
+}
