@@ -261,3 +261,47 @@ fn theme_font_scheme_ignores_empty_typefaces() {
     let fonts = crate::parser::drawingml::parse_theme_font_scheme(theme_xml);
     assert_eq!(fonts, ThemeFontScheme::default());
 }
+
+/// `(font_size, bold, italic)` of the single run the fixture produces.
+fn run_emphasis(run_properties: &str) -> (Option<f64>, Option<bool>, Option<bool>) {
+    let boxes = parse_drawing_text_boxes(
+        &drawing_with_run_properties(run_properties),
+        &HashMap::new(),
+        &ThemeFontScheme::default(),
+    );
+    assert_eq!(boxes.len(), 1, "fixture should yield one text box");
+    let style = &boxes[0].paragraphs[0].runs[0].style;
+    (style.font_size, style.bold, style.italic)
+}
+
+#[test]
+fn self_closing_run_properties_still_carry_size_and_emphasis() {
+    // Excel writes shape-label run properties as a self-closing element,
+    // which quick-xml reports as `Event::Empty`; reading them only on
+    // `Event::Start` dropped every attribute (issue #466).
+    assert_eq!(
+        run_emphasis(r#"<a:rPr lang="en-US" sz="1400" b="1" i="1"/>"#),
+        (Some(14.0), Some(true), Some(true))
+    );
+}
+
+#[test]
+fn run_properties_with_children_keep_working() {
+    // Triangulation: the same attributes on an element that has children
+    // must resolve identically, so the fix cannot special-case one spelling.
+    assert_eq!(
+        run_emphasis(
+            r#"<a:rPr lang="en-US" sz="1400" b="1" i="1"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:rPr>"#
+        ),
+        (Some(14.0), Some(true), Some(true))
+    );
+}
+
+#[test]
+fn run_properties_omit_emphasis_when_disabled() {
+    // `b="0"`/`i="0"` mean "not bold"/"not italic"; they must not set the flag.
+    assert_eq!(
+        run_emphasis(r#"<a:rPr lang="en-US" sz="900" b="0" i="0"/>"#),
+        (Some(9.0), None, None)
+    );
+}
