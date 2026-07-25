@@ -722,3 +722,114 @@ fn test_no_override_uses_original_size() {
     let output = generate_typst_with_options(&doc, &options).unwrap();
     assert!(output.source.contains("width: 595.28pt"));
 }
+
+/// Word letterhead headers commonly carry a `w:pBdr/w:bottom` rule under the
+/// header text. The rule must render below the content, not be dropped.
+#[test]
+fn test_generate_header_with_bottom_border_draws_rule_below_text() {
+    use crate::ir::{BorderSide, CellBorder, HFInline, HeaderFooter, HeaderFooterParagraph};
+
+    let doc = make_doc(vec![Page::Flow(FlowPage {
+        size: PageSize::default(),
+        margins: Margins::default(),
+        content: vec![make_paragraph("Body")],
+        header: Some(HeaderFooter {
+            distance_from_edge: None,
+            paragraphs: vec![HeaderFooterParagraph {
+                style: ParagraphStyle::default(),
+                elements: vec![HFInline::Run(Run {
+                    text: "Manual v0.6".to_string(),
+                    style: TextStyle::default(),
+                    href: None,
+                    footnote: None,
+                })],
+                border: Some(CellBorder {
+                    top: None,
+                    bottom: Some(BorderSide {
+                        width: 0.5,
+                        color: Color::new(0xCC, 0xCC, 0xCC),
+                        style: BorderLineStyle::Solid,
+                    }),
+                    left: None,
+                    right: None,
+                }),
+                frame: None,
+            }],
+        }),
+        footer: None,
+        columns: None,
+        line_grid_pitch: None,
+    })]);
+
+    let output = generate_typst(&doc).unwrap();
+    assert_eq!(
+        output.source.matches("line(length: 100%").count(),
+        1,
+        "the bottom rule must be emitted"
+    );
+    assert!(
+        output.source.contains("rgb(204, 204, 204)"),
+        "the rule keeps the pBdr color"
+    );
+    let text_pos = output
+        .source
+        .find("Manual v0.6")
+        .expect("header text present");
+    let rule_pos = output
+        .source
+        .find("line(length: 100%")
+        .expect("rule present");
+    assert!(
+        rule_pos > text_pos,
+        "a bottom rule must be drawn after the header text"
+    );
+}
+
+/// A paragraph carrying both a top and a bottom rule must draw both.
+#[test]
+fn test_generate_header_with_top_and_bottom_borders_draws_both_rules() {
+    use crate::ir::{BorderSide, CellBorder, HFInline, HeaderFooter, HeaderFooterParagraph};
+
+    let rule = |width: f64| {
+        Some(BorderSide {
+            width,
+            color: Color::new(0x33, 0x66, 0x99),
+            style: BorderLineStyle::Solid,
+        })
+    };
+
+    let doc = make_doc(vec![Page::Flow(FlowPage {
+        size: PageSize::default(),
+        margins: Margins::default(),
+        content: vec![make_paragraph("Body")],
+        header: Some(HeaderFooter {
+            distance_from_edge: None,
+            paragraphs: vec![HeaderFooterParagraph {
+                style: ParagraphStyle::default(),
+                elements: vec![HFInline::Run(Run {
+                    text: "Framed".to_string(),
+                    style: TextStyle::default(),
+                    href: None,
+                    footnote: None,
+                })],
+                border: Some(CellBorder {
+                    top: rule(1.0),
+                    bottom: rule(1.0),
+                    left: None,
+                    right: None,
+                }),
+                frame: None,
+            }],
+        }),
+        footer: None,
+        columns: None,
+        line_grid_pitch: None,
+    })]);
+
+    let output = generate_typst(&doc).unwrap();
+    assert_eq!(
+        output.source.matches("line(length: 100%").count(),
+        2,
+        "both rules must be emitted"
+    );
+}
