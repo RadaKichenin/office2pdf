@@ -224,6 +224,64 @@ const DATA_BAR_VERTICAL_INSET_PT: f64 = 2.0;
 
 /// Floor for rows shorter than the inset, so a bar never vanishes or inverts.
 const DATA_BAR_MIN_HEIGHT_PT: f64 = 1.0;
+/// Excel's arrow icon sets are drawn shapes, not characters. Native Excel PDFs
+/// print an arrow about 10 pt tall in a 14 pt row, filled in the band color and
+/// outlined a shade darker.
+const ARROW_ICON_LENGTH_PT: f64 = 10.0;
+/// Across the shaft the arrow is narrower than it is long.
+const ARROW_ICON_BREADTH_PT: f64 = 8.0;
+
+/// Build the Typst `polygon` for one of the arrow icon-set glyphs, or `None`
+/// for icon sets that are not arrows (traffic lights, flags, symbols).
+fn arrow_icon_polygon(glyph: &str, color: Option<Color>) -> Option<String> {
+    // Head half-width, shaft half-width, and where the head meets the shaft,
+    // as fractions of the arrow's breadth and length.
+    let breadth: f64 = ARROW_ICON_BREADTH_PT;
+    let length: f64 = ARROW_ICON_LENGTH_PT;
+    let shaft: f64 = breadth * 0.28;
+    let neck: f64 = length * 0.45;
+
+    // Points of an up arrow, clockwise from the tip.
+    let up: Vec<(f64, f64)> = vec![
+        (breadth / 2.0, 0.0),
+        (breadth, neck),
+        (breadth / 2.0 + shaft, neck),
+        (breadth / 2.0 + shaft, length),
+        (breadth / 2.0 - shaft, length),
+        (breadth / 2.0 - shaft, neck),
+        (0.0, neck),
+    ];
+    let flip_y = |points: &[(f64, f64)]| -> Vec<(f64, f64)> {
+        points.iter().map(|(x, y)| (*x, length - *y)).collect()
+    };
+    let transpose = |points: &[(f64, f64)]| -> Vec<(f64, f64)> {
+        points.iter().map(|(x, y)| (length - *y, *x)).collect()
+    };
+
+    let (points, rotation): (Vec<(f64, f64)>, Option<i32>) = match glyph {
+        crate::ir::ICON_ARROW_UP => (up, None),
+        crate::ir::ICON_ARROW_DOWN => (flip_y(&up), None),
+        crate::ir::ICON_ARROW_RIGHT => (transpose(&up), None),
+        crate::ir::ICON_ARROW_UP_RIGHT => (up, Some(45)),
+        crate::ir::ICON_ARROW_DOWN_RIGHT => (flip_y(&up), Some(-45)),
+        _ => return None,
+    };
+
+    let coordinates: String = points
+        .iter()
+        .map(|(x, y)| format!("({}pt, {}pt)", format_f64(*x), format_f64(*y)))
+        .collect::<Vec<String>>()
+        .join(", ");
+    let paint: String = color
+        .map(|c| rgb(&c))
+        .unwrap_or_else(|| "black".to_string());
+    let shape: String =
+        format!("polygon(fill: {paint}, stroke: 0.4pt + {paint}.darken(30%), {coordinates})");
+    Some(match rotation {
+        Some(degrees) => format!("rotate({degrees}deg, {shape})"),
+        None => shape,
+    })
+}
 
 fn generate_table_cell(
     out: &mut String,
@@ -289,8 +347,15 @@ fn generate_table_cell(
         // value's own line. Placing the icon out of layout keeps narrow
         // cells from wrapping the value onto a second line, which doubled
         // the row height (issue #367).
-        match cell.icon_color {
-            Some(color) => {
+        // Excel's arrow sets are drawn shapes rather than characters: a shaft
+        // with a triangular head, outlined and filling most of the row. The
+        // triangle characters the parser records are only a third that size,
+        // so arrows are re-drawn as polygons.
+        match (arrow_icon_polygon(icon, cell.icon_color), cell.icon_color) {
+            (Some(polygon), _) => {
+                let _ = write!(out, "#place(left + horizon, {polygon})");
+            }
+            (None, Some(color)) => {
                 let _ = write!(
                     out,
                     "#place(left + horizon, text(fill: {}, weight: \"bold\")[{}])",
@@ -298,7 +363,7 @@ fn generate_table_cell(
                     icon
                 );
             }
-            None => {
+            (None, None) => {
                 let _ = write!(
                     out,
                     "#place(left + horizon, text(weight: \"bold\")[{icon}])"

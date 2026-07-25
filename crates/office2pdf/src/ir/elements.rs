@@ -324,6 +324,15 @@ pub struct TableRow {
     pub height: Option<f64>,
 }
 
+/// Glyphs the parser records in [`TableCell::icon_text`] for Excel's arrow
+/// icon sets. The renderer recognizes them to draw Excel's filled arrow shapes
+/// instead of a character.
+pub const ICON_ARROW_UP: &str = "\u{25B2}"; // ▲ black up-pointing triangle
+pub const ICON_ARROW_DOWN: &str = "\u{25BC}"; // ▼ black down-pointing triangle
+pub const ICON_ARROW_RIGHT: &str = "\u{25B6}"; // ▶ black right-pointing triangle
+pub const ICON_ARROW_UP_RIGHT: &str = "\u{25E5}"; // ◥ black upper-right triangle
+pub const ICON_ARROW_DOWN_RIGHT: &str = "\u{25E2}"; // ◢ black lower-right triangle
+
 /// A data bar rendering within a cell (conditional formatting).
 #[derive(Debug, Clone)]
 pub struct DataBarInfo {

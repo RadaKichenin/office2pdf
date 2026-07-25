@@ -1244,3 +1244,98 @@ fn test_data_bar_in_a_short_row_keeps_a_visible_height() {
     );
     assert!(!output.source.contains("height: -"));
 }
+
+fn icon_cell(icon: &str, color: Color) -> TableCell {
+    TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: "107%".to_string(),
+                style: TextStyle::default(),
+                href: None,
+                footnote: None,
+            }],
+        })],
+        icon_text: Some(icon.to_string()),
+        icon_color: Some(color),
+        ..TableCell::default()
+    }
+}
+
+fn icon_sheet(cell: TableCell) -> Page {
+    Page::Sheet(SheetPage {
+        name: "Sheet1".to_string(),
+        size: PageSize::default(),
+        margins: Margins::default(),
+        table: Table {
+            rows: vec![TableRow {
+                cells: vec![cell],
+                height: Some(14.0),
+            }],
+            column_widths: vec![100.0],
+            ..Table::default()
+        },
+        header: None,
+        footer: None,
+        charts: vec![],
+        images: Vec::new(),
+        text_boxes: Vec::new(),
+    })
+}
+
+/// Excel's arrow icon sets are drawn shapes, not characters, so an arrow icon
+/// must render as a filled polygon in its band color.
+#[test]
+fn test_arrow_icon_set_renders_as_a_filled_polygon() {
+    let doc = make_doc(vec![icon_sheet(icon_cell(
+        crate::ir::ICON_ARROW_UP,
+        Color::new(0x68, 0xA4, 0x90),
+    ))]);
+    let output = generate_typst(&doc).unwrap();
+    assert!(
+        output.source.contains("polygon(fill: rgb(104, 164, 144)"),
+        "the arrow must be a polygon in the band color. Got: {}",
+        output.source,
+    );
+    assert!(
+        output.source.contains("darken(30%)"),
+        "Excel outlines the arrow a shade darker"
+    );
+    assert!(
+        !output.source.contains(crate::ir::ICON_ARROW_UP),
+        "the triangle character must not also be drawn"
+    );
+}
+
+/// A down arrow points the other way, so its tip sits at the bottom.
+#[test]
+fn test_down_arrow_icon_is_flipped() {
+    let up = generate_typst(&make_doc(vec![icon_sheet(icon_cell(
+        crate::ir::ICON_ARROW_UP,
+        Color::new(0x68, 0xA4, 0x90),
+    ))]))
+    .unwrap();
+    let down = generate_typst(&make_doc(vec![icon_sheet(icon_cell(
+        crate::ir::ICON_ARROW_DOWN,
+        Color::new(0xD6, 0x55, 0x32),
+    ))]))
+    .unwrap();
+    assert!(up.source.contains("(4pt, 0pt)"), "up arrow tip at the top");
+    assert!(
+        down.source.contains("(4pt, 10pt)"),
+        "down arrow tip at the bottom. Got: {}",
+        down.source
+    );
+}
+
+/// Icon sets that are not arrows keep their character rendering.
+#[test]
+fn test_non_arrow_icon_set_still_renders_as_text() {
+    let doc = make_doc(vec![icon_sheet(icon_cell(
+        "●",
+        Color::new(0xD6, 0x55, 0x32),
+    ))]);
+    let output = generate_typst(&doc).unwrap();
+    assert!(output.source.contains("text(fill: rgb(214, 85, 50)"));
+    assert!(!output.source.contains("polygon("));
+}
