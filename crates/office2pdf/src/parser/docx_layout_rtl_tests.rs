@@ -609,3 +609,105 @@ fn test_highlight_parsing_from_docx() {
         "Yellow highlight should map to (255, 255, 0)"
     );
 }
+
+/// Word uses a paragraph holding only `<w:br w:type="page"/>` to force a page
+/// break; it contributes no line box, so the next block starts at the top of
+/// the new page.
+#[test]
+fn test_parse_docx_page_break_carrier_paragraph_adds_no_blank_line() {
+    let data = build_docx_bytes(vec![
+        docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text("Page one body")),
+        docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_break(docx_rs::BreakType::Page)),
+        docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text("Appendix A. Exit Codes")),
+    ]);
+    let parser = DocxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let flow = match &doc.pages[0] {
+        Page::Flow(flow) => flow,
+        _ => panic!("Expected FlowPage"),
+    };
+
+    let break_index = flow
+        .content
+        .iter()
+        .position(|block| matches!(block, Block::PageBreak))
+        .expect("the carrier paragraph still forces a page break");
+    match flow.content.get(break_index + 1) {
+        Some(Block::Paragraph(paragraph)) => {
+            let text: String = paragraph.runs.iter().map(|run| run.text.as_str()).collect();
+            assert_eq!(
+                text, "Appendix A. Exit Codes",
+                "the next-page content must follow the break directly"
+            );
+        }
+        other => panic!("expected the next-page paragraph after the break, got {other:?}"),
+    }
+}
+
+/// An intentionally empty paragraph is a real blank line in Word and must be
+/// kept; only break carriers collapse.
+#[test]
+fn test_parse_docx_empty_paragraph_without_break_is_kept() {
+    let data = build_docx_bytes(vec![
+        docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text("First")),
+        docx_rs::Paragraph::new(),
+        docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text("Second")),
+    ]);
+    let parser = DocxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let flow = match &doc.pages[0] {
+        Page::Flow(flow) => flow,
+        _ => panic!("Expected FlowPage"),
+    };
+
+    let paragraphs: Vec<&crate::ir::Paragraph> = flow
+        .content
+        .iter()
+        .filter_map(|block| match block {
+            Block::Paragraph(paragraph) => Some(paragraph),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        paragraphs.len(),
+        3,
+        "the blank spacer paragraph must survive"
+    );
+    assert!(
+        paragraphs[1].runs.iter().all(|run| run.text.is_empty()),
+        "the middle paragraph stays empty"
+    );
+}
+
+/// Text placed after an in-paragraph page break still forms a paragraph on the
+/// new page.
+#[test]
+fn test_parse_docx_text_after_run_page_break_still_renders() {
+    let data = build_docx_bytes(vec![
+        docx_rs::Paragraph::new()
+            .add_run(docx_rs::Run::new().add_break(docx_rs::BreakType::Page))
+            .add_run(docx_rs::Run::new().add_text("Second page text")),
+    ]);
+    let parser = DocxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let flow = match &doc.pages[0] {
+        Page::Flow(flow) => flow,
+        _ => panic!("Expected FlowPage"),
+    };
+
+    let break_index = flow
+        .content
+        .iter()
+        .position(|block| matches!(block, Block::PageBreak))
+        .expect("page break present");
+    match flow.content.get(break_index + 1) {
+        Some(Block::Paragraph(paragraph)) => {
+            let text: String = paragraph.runs.iter().map(|run| run.text.as_str()).collect();
+            assert_eq!(text, "Second page text");
+        }
+        other => panic!("expected the trailing text paragraph, got {other:?}"),
+    }
+}
