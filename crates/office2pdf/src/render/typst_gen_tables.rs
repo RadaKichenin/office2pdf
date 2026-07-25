@@ -217,6 +217,14 @@ fn generate_table_rows(
     Ok(())
 }
 
+/// Excel does not fill the cell with a data bar: it insets the bar from the
+/// row's top and bottom edges. Native Excel PDF exports of the business corpus
+/// print a 10 pt bar in every 14 pt row, which is 2 pt of clearance per side.
+const DATA_BAR_VERTICAL_INSET_PT: f64 = 2.0;
+
+/// Floor for rows shorter than the inset, so a bar never vanishes or inverts.
+const DATA_BAR_MIN_HEIGHT_PT: f64 = 1.0;
+
 fn generate_table_cell(
     out: &mut String,
     cell: &TableCell,
@@ -255,15 +263,15 @@ fn generate_table_cell(
         // no cell frame to resolve against and blows up to the page height,
         // smearing over neighboring rows (issue #362).
         let pct = db.fill_pct.clamp(0.0, 100.0);
-        let padding = cell.padding.unwrap_or(default_cell_padding);
         let bar_height: String = match row_height {
             Some(height) => {
-                let content_height = (height - padding.top - padding.bottom).max(1.0);
-                format!("{}pt", format_f64(content_height))
+                let inset_height =
+                    (height - 2.0 * DATA_BAR_VERTICAL_INSET_PT).max(DATA_BAR_MIN_HEIGHT_PT);
+                format!("{}pt", format_f64(inset_height))
             }
             // Excel sizes default rows to the font's line box; 1.2em tracks
-            // that for single-line numeric cells.
-            None => "1.2em".to_string(),
+            // that for single-line numeric cells, less the same inset.
+            None => format!("1.2em - {}pt", format_f64(2.0 * DATA_BAR_VERTICAL_INSET_PT)),
         };
         let _ = write!(
             out,
