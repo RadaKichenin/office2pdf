@@ -64,7 +64,10 @@ fn test_generate_flow_page_with_page_number_footer() {
     assert!(output.source.contains("footer:"));
     assert!(output.source.contains("counter(page).display()"));
     assert!(output.source.contains("Page "));
-    assert!(output.source.contains("move(dy: -36.6pt)"));
+    // Word pins the footer's bottom `w:footer` points above the page edge.
+    assert!(output.source.contains("footer-descent: 0pt"));
+    assert!(output.source.contains("block(width: 100%, height: 36.6pt)"));
+    assert!(output.source.contains("place(bottom"));
 }
 
 #[test]
@@ -832,4 +835,138 @@ fn test_generate_header_with_top_and_bottom_borders_draws_both_rules() {
         2,
         "both rules must be emitted"
     );
+}
+
+/// Word measures `w:pgMar/@w:footer` from the bottom page edge to the bottom of
+/// the footer, so the footer must be pinned to that line and grow upward — not
+/// pushed further away from the edge.
+#[test]
+fn test_flow_page_footer_is_pinned_to_the_word_edge_distance() {
+    use crate::ir::{HFInline, HeaderFooter, HeaderFooterParagraph};
+
+    let doc = make_doc(vec![Page::Flow(FlowPage {
+        size: PageSize::default(),
+        margins: Margins {
+            top: 62.35,
+            bottom: 62.35,
+            left: 70.85,
+            right: 70.85,
+        },
+        content: vec![make_paragraph("Body")],
+        header: None,
+        footer: Some(HeaderFooter {
+            distance_from_edge: Some(35.4),
+            paragraphs: vec![HeaderFooterParagraph {
+                style: ParagraphStyle::default(),
+                elements: vec![HFInline::Run(Run {
+                    text: "- 1 -".to_string(),
+                    style: TextStyle::default(),
+                    href: None,
+                    footnote: None,
+                })],
+                border: None,
+                frame: None,
+            }],
+        }),
+        columns: None,
+        line_grid_pitch: None,
+    })]);
+
+    let output = generate_typst(&doc).unwrap();
+    assert!(
+        output.source.contains("footer-descent: 0pt"),
+        "the footer origin must sit on the bottom margin line"
+    );
+    assert!(
+        output
+            .source
+            .contains("block(width: 100%, height: 26.95pt)"),
+        "the band must span bottom margin minus footer distance, got: {}",
+        output.source
+    );
+    assert!(
+        output.source.contains("bottom-edge: \"descender\""),
+        "Word measures to the descender line"
+    );
+    assert!(
+        output.source.contains("place(bottom"),
+        "the footer grows upward from the pinned bottom"
+    );
+    assert!(
+        !output.source.contains("move(dy: -26.95pt)"),
+        "the footer must not be shifted away from the page edge"
+    );
+}
+
+/// Without a declared footer distance the previous placement is kept, so
+/// formats that do not carry the attribute are unaffected.
+#[test]
+fn test_flow_page_footer_without_edge_distance_keeps_default_placement() {
+    use crate::ir::{HFInline, HeaderFooter, HeaderFooterParagraph};
+
+    let doc = make_doc(vec![Page::Flow(FlowPage {
+        size: PageSize::default(),
+        margins: Margins::default(),
+        content: vec![make_paragraph("Body")],
+        header: None,
+        footer: Some(HeaderFooter {
+            distance_from_edge: None,
+            paragraphs: vec![HeaderFooterParagraph {
+                style: ParagraphStyle::default(),
+                elements: vec![HFInline::Run(Run {
+                    text: "Plain footer".to_string(),
+                    style: TextStyle::default(),
+                    href: None,
+                    footnote: None,
+                })],
+                border: None,
+                frame: None,
+            }],
+        }),
+        columns: None,
+        line_grid_pitch: None,
+    })]);
+
+    let output = generate_typst(&doc).unwrap();
+    assert!(output.source.contains("footer: ["));
+    assert!(!output.source.contains("footer-descent"));
+}
+
+/// A footer distance at or beyond the bottom margin leaves no band to draw, so
+/// the default placement is used instead of a zero or negative height block.
+#[test]
+fn test_flow_page_footer_distance_beyond_margin_falls_back() {
+    use crate::ir::{HFInline, HeaderFooter, HeaderFooterParagraph};
+
+    let doc = make_doc(vec![Page::Flow(FlowPage {
+        size: PageSize::default(),
+        margins: Margins {
+            top: 72.0,
+            bottom: 30.0,
+            left: 72.0,
+            right: 72.0,
+        },
+        content: vec![make_paragraph("Body")],
+        header: None,
+        footer: Some(HeaderFooter {
+            distance_from_edge: Some(48.0),
+            paragraphs: vec![HeaderFooterParagraph {
+                style: ParagraphStyle::default(),
+                elements: vec![HFInline::Run(Run {
+                    text: "Deep footer".to_string(),
+                    style: TextStyle::default(),
+                    href: None,
+                    footnote: None,
+                })],
+                border: None,
+                frame: None,
+            }],
+        }),
+        columns: None,
+        line_grid_pitch: None,
+    })]);
+
+    let output = generate_typst(&doc).unwrap();
+    assert!(!output.source.contains("footer-descent"));
+    assert!(output.source.contains("Deep footer"));
 }
