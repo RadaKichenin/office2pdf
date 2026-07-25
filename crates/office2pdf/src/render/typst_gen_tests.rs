@@ -40,6 +40,37 @@ fn make_paragraph(text: &str) -> Block {
     })
 }
 
+/// The `(top_edge_em, bottom_edge_em)` of the first line box the generator
+/// emits, or `None` when the source declares no fixed text edges.
+fn emitted_line_box_em(source: &str) -> Option<(f64, f64)> {
+    let after_top: &str = source.split_once("top-edge: ")?.1;
+    let (top, rest) = after_top.split_once("em")?;
+    let after_bottom: &str = rest.split_once("bottom-edge: -")?.1;
+    let (bottom, _) = after_bottom.split_once("em")?;
+    Some((top.parse().ok()?, bottom.parse().ok()?))
+}
+
+/// Assert the generated line box spans `expected_pt` and splits it by the
+/// font's own ascender-to-descender ratio, which is where Word places the
+/// baseline inside the line. Compared numerically rather than as a
+/// formatted string so float noise in the em split cannot break the
+/// assertion.
+fn assert_line_advance(source: &str, family: &str, font_size: f64, expected_pt: f64) {
+    let (top, bottom) =
+        emitted_line_box_em(source).unwrap_or_else(|| panic!("no line box emitted in: {source}"));
+    let advance_pt: f64 = (top + bottom) * font_size;
+    assert!(
+        (advance_pt - expected_pt).abs() < 0.01,
+        "line advance {advance_pt}pt should be {expected_pt}pt in: {source}"
+    );
+    let (ascender, descender, _) =
+        crate::render::pdf::font_line_metrics_em(family).expect("font metrics should resolve");
+    assert!(
+        (top / bottom - ascender / descender).abs() < 0.01,
+        "baseline should split the box by the font's ascender/descender ratio: {source}"
+    );
+}
+
 #[path = "typst_gen_paragraph_tests.rs"]
 mod paragraph_tests;
 

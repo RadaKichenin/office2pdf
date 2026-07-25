@@ -839,12 +839,13 @@ fn test_generate_list_uses_first_item_level_marker_when_list_starts_nested() {
 }
 
 #[test]
-fn test_generate_list_metric_spacing_adds_gap_to_single_space_leading() {
+fn test_generate_list_metric_spacing_is_the_raw_paragraph_gap() {
     // Word adds `w:spacing w:after` directly to the single-space line
     // advance between list items: next item top = previous line advance +
-    // after. Under metric text edges that whitespace is the single-space
-    // leading plus the paragraph gap; adding a whole line height instead
-    // stretched every list block by ~8pt per item (issue #384).
+    // after. The wrapper's line box already spans that advance, so the
+    // Typst list `spacing` that replaces the automatic leading is the raw
+    // paragraph gap — adding a whole line height instead stretched every
+    // list block by ~8pt per item (issues #384, #452).
     use crate::ir::List;
 
     let Some((ascender, descender, word_pitch_em)) =
@@ -853,8 +854,7 @@ fn test_generate_list_metric_spacing_adds_gap_to_single_space_leading() {
         return; // no font book available (e.g. exotic CI sandbox)
     };
     let font_size: f64 = 10.0;
-    let single_space_leading_pt: f64 =
-        ((word_pitch_em - (ascender + descender)) * font_size).max(0.0);
+    let metric_em: f64 = ascender + descender;
 
     let make_item = |text: &str| ListItem {
         content: vec![Paragraph {
@@ -886,21 +886,14 @@ fn test_generate_list_metric_spacing_adds_gap_to_single_space_leading() {
         .unwrap()
         .source;
 
+    let advance_pt: f64 = (word_pitch_em * font_size).max(metric_em * font_size);
+    assert_line_advance(&source, "Libertinus Serif", font_size, advance_pt);
     assert!(
-        source.contains(&format!(
-            "top-edge: {}em, bottom-edge: -{}em",
-            format_f64(ascender),
-            format_f64(descender)
-        )),
-        "fixed nominal-metric em edges expected in: {source}"
-    );
-    let expected = format_f64(single_space_leading_pt + 4.0);
-    assert!(
-        source.contains(&format!("spacing: {expected}pt")),
-        "expected inter-item spacing {expected}pt (leading + gap) in: {source}"
+        source.contains("spacing: 4pt"),
+        "expected inter-item spacing to be the raw 4pt gap in: {source}"
     );
     assert!(
-        source.contains(&format!("below: {expected}pt")),
-        "expected list below spacing {expected}pt (leading + gap) in: {source}"
+        source.contains("below: 4pt"),
+        "expected list below spacing to be the raw 4pt gap in: {source}"
     );
 }

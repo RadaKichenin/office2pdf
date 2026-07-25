@@ -304,7 +304,7 @@ fn test_list_paragraphs_use_word_compatible_spacing_when_unspecified() {
         })
         .expect("numbered paragraphs should become a list");
 
-    assert_eq!(list.items[0].content[0].style.space_after, Some(8.0));
+    assert_eq!(list.items[0].content[0].style.space_after, Some(0.0));
     assert_eq!(list.items[1].content[0].style.space_after, Some(6.0));
 }
 

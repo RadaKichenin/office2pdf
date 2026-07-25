@@ -242,7 +242,7 @@ fn paragraph_line_height(paragraph: &Paragraph) -> f64 {
 fn list_boundary_spacing(
     previous: &crate::ir::ListItem,
     next: &crate::ir::ListItem,
-    metric_leading_pt: Option<f64>,
+    wrapper_spans_full_line: bool,
 ) -> Option<f64> {
     let previous_paragraph = previous.content.last()?;
     let next_paragraph = next.content.first()?;
@@ -256,16 +256,16 @@ fn list_boundary_spacing(
     if previous_paragraph.style.line_box.is_some() && next_paragraph.style.line_box.is_some() {
         return Some(paragraph_gap);
     }
-    // Under Word metric text edges the enclosing wrapper's leading already
-    // tops each line box up to the single-space (or grid) advance; Word adds
-    // w:spacing before/after on top of that advance, so the item gap is the
-    // leading plus the paragraph gap. Adding a whole line height instead
-    // stretched every spaced list by roughly a line per item (issue #384).
-    if let Some(leading) = metric_leading_pt
-        && paragraph_uses_metric_edges(previous_paragraph)
-        && paragraph_uses_metric_edges(next_paragraph)
+    // The enclosing wrapper's line box already spans Word's full single-space
+    // (or grid) advance, and Word adds w:spacing before/after on top of that
+    // advance, so the item gap is exactly the paragraph gap. Adding a whole
+    // line height instead stretched every spaced list by roughly a line per
+    // item (issues #384, #452).
+    if wrapper_spans_full_line
+        && paragraph_uses_full_line_box(previous_paragraph)
+        && paragraph_uses_full_line_box(next_paragraph)
     {
-        return Some(leading + paragraph_gap);
+        return Some(paragraph_gap);
     }
 
     // An explicit Typst list spacing replaces its automatic paragraph
@@ -276,16 +276,16 @@ fn list_boundary_spacing(
     Some(line_height + paragraph_gap)
 }
 
-/// Whether the paragraph renders under the wrapper's metric text edges
+/// Whether the paragraph renders under the wrapper's full-advance line box
 /// (no explicit line spacing or fixed line box of its own).
-fn paragraph_uses_metric_edges(paragraph: &Paragraph) -> bool {
+fn paragraph_uses_full_line_box(paragraph: &Paragraph) -> bool {
     paragraph.style.line_spacing.is_none() && paragraph.style.line_box.is_none()
 }
 
 fn common_list_level_spacing(
     items: &[crate::ir::ListItem],
     level: u32,
-    metric_leading_pt: Option<f64>,
+    wrapper_spans_full_line: bool,
 ) -> Option<f64> {
     let level_items = items
         .iter()
@@ -293,7 +293,7 @@ fn common_list_level_spacing(
         .collect::<Vec<_>>();
     let mut boundaries = level_items
         .windows(2)
-        .map(|pair| list_boundary_spacing(pair[0], pair[1], metric_leading_pt));
+        .map(|pair| list_boundary_spacing(pair[0], pair[1], wrapper_spans_full_line));
     let first = boundaries.next()??;
 
     (first > 0.0001
@@ -304,7 +304,7 @@ fn common_list_level_spacing(
 fn list_edge_spacing(
     list: &List,
     level: u32,
-    metric_leading_pt: Option<f64>,
+    wrapper_spans_full_line: bool,
 ) -> (Option<f64>, Option<f64>) {
     let first = list.items.iter().find(|item| item.level == level);
     let last = list.items.iter().rev().find(|item| item.level == level);
@@ -313,13 +313,11 @@ fn list_edge_spacing(
             return Some(spacing.unwrap_or(0.0).max(0.0));
         }
         // Same Word semantics as the item boundaries: before/after extends
-        // the line advance, so under metric edges the whitespace is the
-        // wrapper leading plus the gap (issue #384).
-        if let Some(leading) = metric_leading_pt
-            && paragraph_uses_metric_edges(paragraph)
-        {
+        // the line advance, which the wrapper's line box already spans, so
+        // the whitespace is the gap alone (issues #384, #452).
+        if wrapper_spans_full_line && paragraph_uses_full_line_box(paragraph) {
             return spacing
-                .map(|spacing| leading + spacing.max(0.0))
+                .map(|spacing| spacing.max(0.0))
                 .filter(|spacing| *spacing > 0.0001);
         }
         spacing
@@ -352,14 +350,14 @@ fn common_list_line_box(list: &List) -> Option<LineBox> {
 pub(super) fn generate_list(
     out: &mut String,
     list: &List,
-    metric_leading_pt: Option<f64>,
+    wrapper_spans_full_line: bool,
 ) -> Result<(), ConvertError> {
     let root_level: u32 = list_root_level(list);
     let style = list_style_for_level(list, root_level);
     let fallback_marker_style = common_list_level_text_style(&list.items, root_level);
     let indent = common_list_level_indent(&list.items, root_level);
-    let spacing_pt = common_list_level_spacing(&list.items, root_level, metric_leading_pt);
-    let (space_before, space_after) = list_edge_spacing(list, root_level, metric_leading_pt);
+    let spacing_pt = common_list_level_spacing(&list.items, root_level, wrapper_spans_full_line);
+    let (space_before, space_after) = list_edge_spacing(list, root_level, wrapper_spans_full_line);
     let line_box = common_list_line_box(list);
     let start_at = list.items.first().and_then(|item| item.start_at);
     if space_before.is_some() || space_after.is_some() {
@@ -384,7 +382,7 @@ pub(super) fn generate_list(
         spacing_pt,
         start_at,
     );
-    generate_list_items(out, list, &list.items, root_level, metric_leading_pt)?;
+    generate_list_items(out, list, &list.items, root_level, wrapper_spans_full_line)?;
     out.push_str(")\n");
     if space_before.is_some() || space_after.is_some() {
         out.push_str("]\n");
@@ -1155,7 +1153,7 @@ fn generate_list_items(
     list: &List,
     items: &[crate::ir::ListItem],
     base_level: u32,
-    metric_leading_pt: Option<f64>,
+    wrapper_spans_full_line: bool,
 ) -> Result<(), ConvertError> {
     let style = list_style_for_level(list, base_level);
     let (_, item_func) = list_funcs(style.kind);
@@ -1202,7 +1200,7 @@ fn generate_list_items(
                 let spacing_pt = common_list_level_spacing(
                     &items[nested_start..nested_end],
                     base_level + 1,
-                    metric_leading_pt,
+                    wrapper_spans_full_line,
                 );
                 let nested_start_at = items[nested_start].start_at;
                 write_list_open(
@@ -1219,7 +1217,7 @@ fn generate_list_items(
                     list,
                     &items[nested_start..nested_end],
                     base_level + 1,
-                    metric_leading_pt,
+                    wrapper_spans_full_line,
                 )?;
                 out.push(')');
                 i = nested_end;
