@@ -43,7 +43,7 @@
       "features": ["logo images", "billing metadata", "fixed-width item table", "currency totals", "preserved spaces"],
       "closest_existing_fixtures": ["docx/table.docx", "docx/image.docx", "docx/header_footer.docx"],
       "new_coverage": "Combines images, address metadata, deliberate spacing, item rows, and right-aligned financial totals in one print-ready invoice.",
-      "related_issues": [352, 354, 355]
+      "related_issues": [352, 354, 355, 404, 420]
     },
     {
       "id": "docx-contract-ko",
@@ -61,7 +61,7 @@
       "features": ["document grid", "large title", "numbered clauses", "suffix tabs", "signature table", "Korean typography"],
       "closest_existing_fixtures": ["docx/numberings.docx", "docx/ComplexNumberedLists.docx", "docx/WithTabs.docx"],
       "new_coverage": "Exercises Korean Word grid metrics, locale-dependent tab stops, clause numbering, and formal signature layout together.",
-      "related_issues": [357, 393, 394, 402]
+      "related_issues": [357, 393, 394, 402, 420]
     },
     {
       "id": "docx-meeting-minutes-ko",
@@ -79,7 +79,7 @@
       "features": ["metadata table", "action-item table", "nested bullets", "contextual list spacing", "Korean table text"],
       "closest_existing_fixtures": ["docx/unit_test_lists.docx", "docx/word_tables.docx", "docx/HeaderFooterUnicode.docx"],
       "new_coverage": "Combines nested Korean list markers, mixed punctuation, grid-snapped body text, and natural-height table cells.",
-      "related_issues": [356, 384, 385, 398, 404]
+      "related_issues": [356, 384, 385, 398, 404, 420]
     },
     {
       "id": "docx-resume-en",
@@ -115,7 +115,7 @@
       "features": ["shaded code blocks", "monospace text", "literal symbols", "manual page break", "commands", "troubleshooting table"],
       "closest_existing_fixtures": ["docx/styles_en.docx", "docx/FieldCodes.docx", "docx/heading123.docx"],
       "new_coverage": "Combines code-like literal content, paragraph shading, monospace fallback, hierarchy, and an intentional page transition.",
-      "related_issues": [351, 353]
+      "related_issues": [351, 353, 404, 420, 436, 437]
     },
     {
       "id": "docx-official-letter-ko",
@@ -133,7 +133,7 @@
       "features": ["paragraph borders", "aligned labels", "preserved spaces", "numbered body", "formal closing", "Korean typography"],
       "closest_existing_fixtures": ["docx/header_footer.docx", "docx/WithTabs.docx", "docx/unit_test_lists.docx"],
       "new_coverage": "Models the spacing-sensitive labels, rules, numbered paragraphs, attachments, and closing used in Korean official correspondence.",
-      "related_issues": [352, 368]
+      "related_issues": [352, 368, 420]
     },
     {
       "id": "docx-product-spec-en",
@@ -151,7 +151,7 @@
       "features": ["landscape section", "explicit unequal columns", "merged table headers", "fills", "borders", "numeric alignment"],
       "closest_existing_fixtures": ["docx/table.docx", "docx/word_tables.docx", "docx/oxp_complex_table.docx"],
       "new_coverage": "Adds a wide, landscape comparison table whose deliberate column geometry must survive with surrounding explanatory text.",
-      "related_issues": [355]
+      "related_issues": [355, 404, 420]
     },
     {
       "id": "docx-newsletter-en",
@@ -169,7 +169,7 @@
       "features": ["images", "callout table", "paragraph border", "bullets", "section hierarchy", "mixed visual and text content"],
       "closest_existing_fixtures": ["docx/VariousPictures.docx", "docx/unit_test_lists.docx", "docx/styles_en.docx"],
       "new_coverage": "Combines multiple images, compact editorial sections, callouts, borders, and list content on a single newsletter page.",
-      "related_issues": [368]
+      "related_issues": [368, 420]
     },
     {
       "id": "docx-offer-letter-en",
@@ -205,7 +205,7 @@
       "features": ["long multi-page table", "repeating header", "percentages", "source note", "Korean typography"],
       "closest_existing_fixtures": ["docx/10-pages.docx", "docx/table.docx", "docx/HeaderFooterUnicode.docx"],
       "new_coverage": "Adds a realistic 30-month Korean analytical table that naturally crosses a page boundary and must repeat its header.",
-      "related_issues": []
+      "related_issues": [404, 420]
     },
     {
       "id": "pptx-startup-pitch-en",
@@ -223,7 +223,7 @@
       "features": ["hero image", "KPI shapes", "rounded cards", "bullets", "outer shadows", "16:9 slides"],
       "closest_existing_fixtures": ["pptx/shapes.pptx", "pptx/powerpoint_with_image.pptx", "pptx/present1.pptx"],
       "new_coverage": "Combines investor narrative, large media, KPI cards, shadows, and sparse slide pacing across a coherent three-slide pitch.",
-      "related_issues": []
+      "related_issues": [390]
     },
     {
       "id": "pptx-quarterly-review-ko",
@@ -241,7 +241,7 @@
       "features": ["Korean text", "metric card", "native table", "adjustable rounded corner", "picture shadow"],
       "closest_existing_fixtures": ["pptx/table-with-theme.pptx", "pptx/picture-transparency.pptx", "pptx/shapes.pptx"],
       "new_coverage": "Places Korean executive metrics, a dense business table, adjusted round-rectangle geometry, and a shadowed image in one deck.",
-      "related_issues": [360, 361]
+      "related_issues": [360, 361, 390]
     },
     {
       "id": "pptx-product-launch-en",
@@ -277,7 +277,7 @@
       "features": ["Korean text", "nested bullets", "paragraph spacing", "rounded callouts", "shadows", "literal quotes"],
       "closest_existing_fixtures": ["pptx/test_slides.pptx", "pptx/highlight-test-case.pptx", "pptx/shapes.pptx"],
       "new_coverage": "Combines Korean instructional hierarchy, nested bullet rhythm, quote punctuation, and shadowed callouts across a short training flow.",
-      "related_issues": [353, 359]
+      "related_issues": [353, 359, 390]
     },
     {
       "id": "pptx-company-intro-en",
@@ -295,7 +295,7 @@
       "features": ["image composition", "value markers", "KPI cards", "ellipses", "rounded shapes", "shadows"],
       "closest_existing_fixtures": ["pptx/shapes.pptx", "pptx/powerpoint_with_image.pptx", "pptx/layouts.pptx"],
       "new_coverage": "Tests a polished company narrative with image crops, repeated value markers, KPI cards, and varied shape geometry.",
-      "related_issues": []
+      "related_issues": [390]
     },
     {
       "id": "pptx-project-status-ko",
@@ -349,7 +349,7 @@
       "features": ["KPI cards", "image", "bullets", "currency and percentages", "shadows"],
       "closest_existing_fixtures": ["pptx/shapes.pptx", "pptx/powerpoint_with_image.pptx", "pptx/themes.pptx"],
       "new_coverage": "Combines business metrics, signs and punctuation, image support, learning bullets, and forward action in a coherent report.",
-      "related_issues": [353]
+      "related_issues": [353, 390]
     },
     {
       "id": "pptx-lecture-ko",
@@ -367,7 +367,7 @@
       "features": ["Korean text", "question callout", "definition paragraph", "bullets", "literal quotes"],
       "closest_existing_fixtures": ["pptx/with_japanese.pptx", "pptx/test_slides.pptx", "pptx/highlight-test-case.pptx"],
       "new_coverage": "Adds Korean academic typography with a misconception question, definition, quoted text, and carefully spaced learning bullets.",
-      "related_issues": [353, 359]
+      "related_issues": [353, 359, 438]
     },
     {
       "id": "pptx-sales-proposal-en",
@@ -385,7 +385,7 @@
       "features": ["three-tier pricing", "bullet lists", "recommendation highlight", "image", "rounded cards", "shadows"],
       "closest_existing_fixtures": ["pptx/shapes.pptx", "pptx/table_test.pptx", "pptx/powerpoint_with_image.pptx"],
       "new_coverage": "Uses repeated pricing cards with different emphasis, dense bullets, a recommended center tier, and a closing proposal page.",
-      "related_issues": []
+      "related_issues": [390]
     },
     {
       "id": "xlsx-quotation-ko",
@@ -439,7 +439,7 @@
       "features": ["60-row dataset", "status formulas", "conditional fill", "data bars", "decimal currency", "four-page print"],
       "closest_existing_fixtures": ["xlsx/100-customers.xlsx", "xlsx/poi/WithConditionalFormatting.xlsx", "xlsx/poi/ConditionalFormattingSamples.xlsx"],
       "new_coverage": "Combines a realistic long inventory table, formula-derived reorder state, in-cell data bars, decimals, and vertical/horizontal print pagination.",
-      "related_issues": [362, 364, 366]
+      "related_issues": [362, 364, 366, 417, 418, 419, 439]
     },
     {
       "id": "xlsx-payroll-ko",
@@ -493,7 +493,7 @@
       "features": ["monthly totals", "color scale", "data bars", "custom row heights", "print geometry"],
       "closest_existing_fixtures": ["xlsx/poi/WithConditionalFormatting.xlsx", "xlsx/poi/WidthsAndHeights.xlsx", "xlsx/simple-monthly-budget.xlsx"],
       "new_coverage": "Places multiple conditional-format types, formulas, totals, and tightly measured row/column geometry on one dashboard page.",
-      "related_issues": [362, 371, 396, 411]
+      "related_issues": [362, 371, 396, 411, 418]
     },
     {
       "id": "xlsx-attendance-ko",

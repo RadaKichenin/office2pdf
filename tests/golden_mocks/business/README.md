@@ -27,6 +27,7 @@ The cases also balance English and Korean content, formulas and calculated displ
 ```text
 tests/golden_mocks/business/
 ├── manifest.json
+├── VISUAL_AUDIT.md  # Current full-corpus visual disposition and issue ledger
 ├── sources/
 │   ├── docx/    # 10 synthetic Word documents
 │   ├── pptx/    # 10 synthetic PowerPoint decks
@@ -36,10 +37,14 @@ tests/golden_mocks/business/
 │   ├── pptx/    # Native Microsoft PowerPoint PDF exports
 │   └── xlsx/    # Native Microsoft Excel PDF exports
 ├── baselines/   # Conversion status and page-count baseline by tested commit
-└── audits/      # 150-DPI visual metrics and human review ledger
+└── audits/      # Historical per-run visual metrics and review snapshots
 ```
 
-`manifest.json` is the source of truth for case IDs, paths, locales, expected page counts, feature coverage, and related regression issues.
+`manifest.json` is the source of truth for case IDs, paths, locales, expected
+page counts, feature coverage, and related regression issues.
+[`VISUAL_AUDIT.md`](VISUAL_AUDIT.md) is the source of truth for the latest
+full-corpus visual disposition, per-page review results, and current root-cause
+issue mapping. Files under `audits/` retain historical per-run snapshots.
 
 ## DOCX cases
 
