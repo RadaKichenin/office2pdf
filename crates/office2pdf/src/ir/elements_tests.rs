@@ -197,6 +197,7 @@ fn test_header_footer_with_text() {
                 footnote: None,
             })],
             border: None,
+            border_space: None,
             frame: None,
         }],
     };
@@ -224,6 +225,7 @@ fn test_header_footer_with_page_number() {
                 HFInline::PageNumber,
             ],
             border: None,
+            border_space: None,
             frame: None,
         }],
     };

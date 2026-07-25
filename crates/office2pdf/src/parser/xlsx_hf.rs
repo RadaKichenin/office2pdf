@@ -110,6 +110,7 @@ pub(super) fn parse_hf_format_string(format_str: &str) -> Option<HeaderFooter> {
                 },
                 elements,
                 border: None,
+                border_space: None,
                 frame: None,
             });
         }

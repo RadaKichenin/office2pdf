@@ -978,13 +978,38 @@ fn write_flow_page_setup(out: &mut String, page: &FlowPage, size: &PageSize, ctx
     if let Some(header) = &page.header
         && hf_has_flow_content(header)
     {
-        if hf_needs_context(header) {
-            out.push_str(", header: context [");
+        // `w:sectPr/w:pgMar/@w:header` is the distance from the top page edge to
+        // the *top* of the header, which then grows downward. Typst anchors
+        // header content by its bottom, so anything added below the text — a
+        // `w:pBdr` rule and its `w:space` gap — would otherwise push the text
+        // up. `header-ascent: 0pt` puts the origin on the top margin line, and a
+        // band of exactly that gap holds the content against Word's header top.
+        let header_band: Option<f64> = header
+            .distance_from_edge
+            // Keep float noise out of the emitted source.
+            .map(|distance| ((page.margins.top - distance) * 100.0).round() / 100.0)
+            .filter(|band| *band > 0.0);
+        if let Some(band) = header_band {
+            out.push_str(", header-ascent: 0pt, header: ");
+            if hf_needs_context(header) {
+                out.push_str("context ");
+            }
+            let _ = write!(
+                out,
+                "block(width: 100%, height: {}pt)[#place(top, block(width: 100%)[",
+                format_f64(band)
+            );
+            generate_flow_hf_content(out, header, ctx);
+            out.push_str("])]");
         } else {
-            out.push_str(", header: [");
+            if hf_needs_context(header) {
+                out.push_str(", header: context [");
+            } else {
+                out.push_str(", header: [");
+            }
+            generate_flow_hf_content(out, header, ctx);
+            out.push(']');
         }
-        generate_flow_hf_content(out, header, ctx);
-        out.push(']');
     }
 
     if let Some(footer) = &page.footer
@@ -1307,16 +1332,23 @@ fn generate_hf_paragraph(
         .as_ref()
         .and_then(|border| border.bottom.as_ref());
     let stacks_rules: bool = top_border.is_some() || bottom_border.is_some();
+    // `w:pBdr` sides declare their own `w:space` gap in points. Without one,
+    // Word still leaves a hairline of clearance, which the 0.5 pt fallback
+    // reproduces. Word measures the gap from the text's descender line, so the
+    // stack pins the text bottom edge there.
+    let space = |declared: Option<f64>| -> f64 { declared.filter(|gap| *gap > 0.0).unwrap_or(0.5) };
+    let top_space: f64 = space(paragraph.border_space.map(|insets| insets.top));
+    let bottom_space: f64 = space(paragraph.border_space.map(|insets| insets.bottom));
 
     if stacks_rules {
-        out.push_str("#stack(dir: ttb, spacing: 0.5pt, ");
+        out.push_str("#stack(dir: ttb, spacing: 0pt, ");
     }
     if let Some(border) = top_border {
         write_hf_border_rules(out, border);
-        out.push_str(", ");
+        let _ = write!(out, ", block(height: {}pt)[], ", format_f64(top_space));
     }
     if stacks_rules {
-        out.push('[');
+        out.push_str("[#set text(bottom-edge: \"descender\");");
     }
 
     if let Some(index) = right_tab {
@@ -1333,7 +1365,7 @@ fn generate_hf_paragraph(
         out.push(']');
     }
     if let Some(border) = bottom_border {
-        out.push_str(", ");
+        let _ = write!(out, ", block(height: {}pt)[], ", format_f64(bottom_space));
         write_hf_border_rules(out, border);
     }
     if stacks_rules {

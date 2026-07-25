@@ -457,3 +457,41 @@ fn test_extract_page_size_no_orient_keeps_dimensions() {
         result.height
     );
 }
+
+/// Word letterhead headers declare the gap between text and rule with
+/// `w:pBdr/<side>/@w:space`, in points.
+#[test]
+fn test_parse_docx_header_paragraph_border_space() {
+    let mut paragraph =
+        docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text("Manual v0.6"));
+    paragraph.property = paragraph.property.set_borders(
+        docx_rs::ParagraphBorders::with_empty().set(
+            docx_rs::ParagraphBorder::new(docx_rs::ParagraphBorderPosition::Bottom)
+                .val(docx_rs::BorderType::Single)
+                .size(4)
+                .space(4)
+                .color("CCCCCC"),
+        ),
+    );
+    let header = docx_rs::Header::new().add_paragraph(paragraph);
+    let docx = docx_rs::Docx::new().header(header).add_paragraph(
+        docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text("Body text")),
+    );
+    let mut cursor = Cursor::new(Vec::new());
+    docx.build().pack(&mut cursor).unwrap();
+    let data = cursor.into_inner();
+
+    let parser = DocxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let flow = match &doc.pages[0] {
+        Page::Flow(flow) => flow,
+        _ => panic!("Expected FlowPage"),
+    };
+    let paragraph = &flow.header.as_ref().expect("header").paragraphs[0];
+
+    let border = paragraph.border.as_ref().expect("bottom rule parsed");
+    assert!(border.bottom.is_some());
+    let space = paragraph.border_space.expect("w:space parsed");
+    assert_eq!(space.bottom, 4.0);
+    assert_eq!(space.top, 0.0);
+}
