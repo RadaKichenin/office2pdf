@@ -799,6 +799,7 @@ fn convert_paragraph_blocks(
     let mut emitted_paragraph: bool = false;
     let mut emitted_media_blocks: bool = false;
     let mut emitted_floating_anchor: bool = false;
+    let mut emitted_layout_break: bool = false;
 
     for child in &para.children {
         match child {
@@ -869,6 +870,7 @@ fn convert_paragraph_blocks(
                     } else {
                         Block::ColumnBreak
                     });
+                    emitted_layout_break = true;
 
                     // Still extract any text from this run (after the break)
                     let text: String = extract_run_text_skip_layout_breaks(run);
@@ -912,7 +914,16 @@ fn convert_paragraph_blocks(
 
     push_inline_images(out, &mut inline_images, paragraph_alignment(para));
 
-    if !runs.is_empty() || !emitted_media_blocks || (emitted_floating_anchor && !emitted_paragraph)
+    // A paragraph whose remaining content is just the mark left behind by a
+    // page or column break is a break carrier: Word uses it only to force the
+    // break, so it must not add a line box on the new page. An empty paragraph
+    // with no break is a deliberate blank line and is still kept.
+    let is_layout_break_carrier: bool = emitted_layout_break && runs.is_empty();
+
+    if !is_layout_break_carrier
+        && (!runs.is_empty()
+            || !emitted_media_blocks
+            || (emitted_floating_anchor && !emitted_paragraph))
     {
         // Keep paragraph marks for floating drawing anchors. The drawing itself
         // is positioned by offsets, but the source paragraph still contributes
