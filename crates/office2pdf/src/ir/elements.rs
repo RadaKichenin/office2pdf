@@ -464,6 +464,20 @@ pub struct ImageData {
     pub clip_shape: Option<ImageClipShape>,
     /// Outer shadow effect (`a:effectLst/a:outerShdw` on `p:pic`).
     pub shadow: Option<Shadow>,
+    /// Vertical gaps declared by the containing paragraph's `w:spacing`
+    /// (flow documents). Word advances a picture paragraph by the picture
+    /// plus these, so they have to survive the paragraph being dropped.
+    pub paragraph_spacing: Option<ImageParagraphSpacing>,
+}
+
+/// The `w:spacing` of the paragraph that held an inline picture, in points.
+///
+/// Kept apart from [`ImageData::alignment`] because a group of pictures in one
+/// paragraph shares a single gap above and below rather than one per picture.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct ImageParagraphSpacing {
+    pub before: Option<f64>,
+    pub after: Option<f64>,
 }
 
 /// Supported picture clip geometries (PowerPoint "crop to shape").

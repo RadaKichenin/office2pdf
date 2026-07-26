@@ -9,9 +9,10 @@ use crate::error::{ConvertError, ConvertWarning};
 const MAX_TABLE_DEPTH: usize = 64;
 use crate::ir::{
     Alignment, Block, BorderLineStyle, BorderSide, CellBorder, CellVerticalAlign, Color,
-    ColumnLayout, Document, FloatingImage, FloatingTextBox, ImageData, ImageFormat, Insets,
-    LineSpacing, Page, Paragraph, ParagraphStyle, Run, StyleSheet, TabAlignment, TabLeader,
-    TabStop, Table, TableCell, TableRow, TextDirection, TextStyle, VerticalTextAlign,
+    ColumnLayout, Document, FloatingImage, FloatingTextBox, ImageData, ImageFormat,
+    ImageParagraphSpacing, Insets, LineSpacing, Page, Paragraph, ParagraphStyle, Run, StyleSheet,
+    TabAlignment, TabLeader, TabStop, Table, TableCell, TableRow, TextDirection, TextStyle,
+    VerticalTextAlign,
 };
 use crate::parser::Parser;
 
@@ -847,7 +848,12 @@ fn convert_paragraph_blocks(
                         matches!(block, Block::FloatingShape(_) | Block::FloatingTextBox(_))
                     });
                     if !runs.is_empty() {
-                        push_inline_images(out, &mut inline_images, paragraph_alignment(para));
+                        push_inline_images(
+                            out,
+                            &mut inline_images,
+                            paragraph_alignment(para),
+                            paragraph_image_spacing(para, resolved_style),
+                        );
                         push_paragraph_from_runs(
                             out,
                             para,
@@ -858,7 +864,12 @@ fn convert_paragraph_blocks(
                         );
                         emitted_paragraph = true;
                     } else if !inline_images.is_empty() {
-                        push_inline_images(out, &mut inline_images, paragraph_alignment(para));
+                        push_inline_images(
+                            out,
+                            &mut inline_images,
+                            paragraph_alignment(para),
+                            paragraph_image_spacing(para, resolved_style),
+                        );
                     }
                     out.extend(media.text_box_blocks);
                 }
@@ -866,7 +877,12 @@ fn convert_paragraph_blocks(
                 if media.has_page_break || media.has_column_break {
                     // Flush current runs as a paragraph before the layout break.
                     if !runs.is_empty() {
-                        push_inline_images(out, &mut inline_images, paragraph_alignment(para));
+                        push_inline_images(
+                            out,
+                            &mut inline_images,
+                            paragraph_alignment(para),
+                            paragraph_image_spacing(para, resolved_style),
+                        );
                         push_paragraph_from_runs(
                             out,
                             para,
@@ -924,7 +940,12 @@ fn convert_paragraph_blocks(
         }
     }
 
-    push_inline_images(out, &mut inline_images, paragraph_alignment(para));
+    push_inline_images(
+        out,
+        &mut inline_images,
+        paragraph_alignment(para),
+        paragraph_image_spacing(para, resolved_style),
+    );
 
     // A paragraph whose remaining content is just the mark left behind by a
     // page or column break is a break carrier: Word uses it only to force the
@@ -955,15 +976,22 @@ fn push_inline_images(
     out: &mut Vec<Block>,
     inline_images: &mut Vec<Block>,
     alignment: Option<Alignment>,
+    spacing: Option<ImageParagraphSpacing>,
 ) {
     let mut grouped: Vec<ImageData> = Vec::new();
 
     for block in inline_images.drain(..) {
         match block {
             Block::Image(mut image) => {
-                // Inline images inherit the containing paragraph's alignment.
+                // Inline images inherit the containing paragraph's alignment
+                // and its `w:spacing`: the picture consumes the paragraph, so
+                // the gaps Word draws around it have to travel with the
+                // picture instead (issue #499).
                 if image.alignment.is_none() {
                     image.alignment = alignment;
+                }
+                if image.paragraph_spacing.is_none() {
+                    image.paragraph_spacing = spacing;
                 }
                 grouped.push(image)
             }
@@ -987,6 +1015,26 @@ fn flush_inline_image_group(out: &mut Vec<Block>, grouped: &mut Vec<ImageData>) 
 /// The paragraph's explicit horizontal alignment, if any.
 fn paragraph_alignment(para: &docx_rs::Paragraph) -> Option<Alignment> {
     extract_paragraph_style(&para.property).alignment
+}
+
+/// The `w:spacing` a picture paragraph contributes to the flow.
+///
+/// Resolved through the same style merge a text paragraph uses, so spacing
+/// inherited from `styles.xml` counts as well as direct formatting.
+fn paragraph_image_spacing(
+    para: &docx_rs::Paragraph,
+    resolved_style: Option<&ResolvedStyle>,
+) -> Option<ImageParagraphSpacing> {
+    let style: ParagraphStyle = merge_paragraph_style(
+        &extract_paragraph_style(&para.property),
+        None,
+        resolved_style,
+    );
+    let spacing = ImageParagraphSpacing {
+        before: style.space_before,
+        after: style.space_after,
+    };
+    (spacing != ImageParagraphSpacing::default()).then_some(spacing)
 }
 
 fn push_paragraph_from_runs(

@@ -561,6 +561,7 @@ fn build_background_image_element<R: Read + std::io::Seek>(
             alignment: None,
             clip_shape: None,
             shadow: None,
+            paragraph_spacing: None,
         }),
     })
 }
@@ -1155,6 +1156,7 @@ fn finalize_picture(
                     alignment: None,
                     clip_shape,
                     shadow: pic.shadow.clone(),
+                    paragraph_spacing: None,
                 }),
             }
         })

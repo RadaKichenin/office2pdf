@@ -1,5 +1,5 @@
 use super::*;
-use crate::ir::ImageCrop;
+use crate::ir::{ImageCrop, ImageParagraphSpacing};
 
 /// Minimal valid 1x1 red pixel PNG for testing.
 const MINIMAL_PNG: &[u8] = &[
@@ -35,7 +35,55 @@ fn make_image(format: ImageFormat, width: Option<f64>, height: Option<f64>) -> B
         alignment: None,
         clip_shape: None,
         shadow: None,
+        paragraph_spacing: None,
     })
+}
+
+/// Word advances a picture paragraph by the picture plus the paragraph's own
+/// `w:spacing`. Zeroing both gaps to keep Typst's 1.2em default away also
+/// discarded the declared gap, so content below a figure sat one `w:after`
+/// too high (issue #499).
+#[test]
+fn picture_paragraph_spacing_becomes_block_gaps() {
+    let doc = make_doc(vec![make_flow_page(vec![Block::Image(ImageData {
+        data: MINIMAL_PNG.to_vec(),
+        format: ImageFormat::Png,
+        width: None,
+        height: None,
+        crop: None,
+        stroke: None,
+        alignment: None,
+        clip_shape: None,
+        shadow: None,
+        paragraph_spacing: Some(ImageParagraphSpacing {
+            before: Some(6.0),
+            after: Some(3.0),
+        }),
+    })])]);
+    let output = generate_typst(&doc).unwrap();
+    assert!(
+        output.source.contains("above: 6pt") && output.source.contains("below: 3pt"),
+        "declared picture paragraph spacing should reach the block: {}",
+        output.source
+    );
+}
+
+/// Triangulation for [`picture_paragraph_spacing_becomes_block_gaps`]: a
+/// picture with no declared spacing must still pin both gaps to zero, or
+/// Typst's 1.2em default reopens ~24pt around the figure (issues #463, #491).
+#[test]
+fn picture_without_declared_spacing_keeps_zero_gaps() {
+    let doc = make_doc(vec![make_flow_page(vec![make_image(
+        ImageFormat::Png,
+        None,
+        None,
+    )])]);
+    let output = generate_typst(&doc).unwrap();
+    assert!(
+        output.source.contains("above: 0pt") && output.source.contains("below: 0pt"),
+        "an unspaced picture should keep both gaps at zero: {}",
+        output.source
+    );
 }
 
 #[test]
@@ -70,6 +118,7 @@ fn test_image_crop_preprocesses_raster_asset() {
         alignment: None,
         clip_shape: None,
         shadow: None,
+        paragraph_spacing: None,
     })])]);
     let output = generate_typst(&doc).unwrap();
     assert!(
@@ -245,6 +294,7 @@ fn test_image_with_border_renders_box_stroke() {
         alignment: None,
         clip_shape: None,
         shadow: None,
+        paragraph_spacing: None,
     })])]);
     let output = generate_typst(&doc).unwrap();
     assert!(
@@ -287,6 +337,7 @@ fn test_fixed_image_with_border_uses_rect_overlay() {
                 alignment: None,
                 clip_shape: None,
                 shadow: None,
+                paragraph_spacing: None,
             }),
         }],
     )]);
