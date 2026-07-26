@@ -25,3 +25,11 @@ scripts/ralph/
 .DS_Store
 __pycache__/
 *.py[cod]
+
+# Bulk third-party fixture corpus, fetched from the fixtures-v1 release rather than
+# committed. Git LFS bandwidth is billed to this repository's owner for every clone and
+# fork, including forks we do not control; release asset downloads are not metered.
+# The 187-file subset the default test suite reads is tracked normally and is unaffected
+# by these patterns, because .gitignore does not apply to already-tracked files.
+tests/fixtures/*/libreoffice/*
+tests/fixtures/*/poi/*

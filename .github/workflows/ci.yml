@@ -120,12 +120,9 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
+      # No fixture fetch: every fixture the default suite reads is tracked in git.
+      # Only the #[ignore]d bulk gate needs the full corpus, and it runs in bulk-test.
       - uses: actions/checkout@v4
-        with:
-          lfs: false
-        env:
-          GIT_LFS_SKIP_SMUDGE: "1"
-      - uses: ./.github/actions/lfs-fixtures
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Install qpdf
@@ -185,11 +182,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-        with:
-          lfs: false
-        env:
-          GIT_LFS_SKIP_SMUDGE: "1"
-      - uses: ./.github/actions/lfs-fixtures
+      - uses: ./.github/actions/bulk-fixtures
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Compare fixture outcomes with baseline

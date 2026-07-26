@@ -22,13 +22,16 @@
 - If full test suite exceeds 30 seconds, investigate: split slow integration tests from fast unit tests, run unit tests first for quick feedback.
 - **Skip tests when no runtime impact.** In CI/CD, use path filters to trigger tests only when source code, test files, or runtime config files are modified. Non-runtime changes (docs, README, `.md`, CI pipeline config) should not trigger test runs.
 
-## Git LFS Cost
+## Test Fixture Storage
 
-- **IMPORTANT: Run the `lfs-cost-advisor` agent and follow its recommendation before adding files to Git LFS, adding `lfs: true` or `git lfs pull` to a workflow job, or widening the matrix of a job that fetches fixtures.**
-- Every `lfs: true` checkout downloads the full LFS payload, multiplied by that job's matrix breadth. Fork clones and fork-PR CI bill this repo's owner.
-- A job needing fixtures must use `.github/actions/lfs-fixtures`, which restores the corpus from the Actions cache and fails if any object stays a pointer. Never reintroduce `lfs: true`.
-- Prefer unmetered GitHub Release assets over LFS for **new** bulk test data. Migrating the existing corpus is not worth it while caching keeps usage inside the included quota.
-- On LFS `HTTP 403` or a budget nearing its limit, run `lfs-cost-advisor` before raising the budget — raising the ceiling defers the cost, it does not reduce it.
+**This repository uses no Git LFS.** LFS bandwidth is billed to the repo owner for every clone and fork — including forks we do not control and cannot rate-limit — so the corpus was moved off it. Release asset downloads are not metered.
+
+- **IMPORTANT: Run the `lfs-cost-advisor` agent and follow its recommendation before adding any file to Git LFS, or adding `lfs: true` / `git lfs pull` to a workflow job.** Reintroducing LFS restores the fork-billing exposure this split removed.
+- Fixtures the default `cargo test` suite reads are **tracked in git normally**. Ordinary git objects are not metered, so a new fixture under a few MB just gets committed.
+- The bulk corpus (2,695 files) lives in the `fixtures-v1` release asset and is fetched by `.github/actions/bulk-fixtures`, which verifies the archive checksum and that every archived file survived extraction. Only the `#[ignore]`d gate in `bulk_conversion.rs` needs it.
+- `.gitignore` covers `tests/fixtures/*/libreoffice/*` and `tests/fixtures/*/poi/*` so extracted bulk files stay untracked. Committing a fixture there needs `git add -f`, which is the intended friction — confirm the default suite actually reads it first.
+- Regenerate the corpus with `scripts/download-third-party-fixtures.sh`, then publish a new `fixtures-vN` release and bump the `tag`, `sha256`, and `min-files` inputs in `.github/actions/bulk-fixtures/action.yml`. Build the archive with `COPYFILE_DISABLE=1 tar czf` on macOS, or it gains `._` xattr members that macOS `tar` hides from listings but Linux extracts as bogus `.docx` fixtures.
+- A fixture referenced anywhere outside `tests/bulk_conversion_baseline.json` — including `tests/golden_mocks/**` and `tests/visual_audits/**`, which non-`#[ignore]`d tests read — must be tracked, not left to the release asset.
 
 ## Logging
 

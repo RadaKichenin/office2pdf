@@ -1,0 +1,109 @@
+name: Fetch bulk fixture corpus
+description: >-
+  Download and extract the third-party fixture corpus published as a release asset.
+  Only the bulk regression gate needs it; the default test suite reads the tracked subset.
+
+inputs:
+  tag:
+    description: Release tag holding the corpus archive.
+    required: false
+    default: fixtures-v1
+  sha256:
+    description: Expected SHA-256 of the archive, so a replaced asset cannot silently change the corpus.
+    required: false
+    default: 71dc0e53f331b06ad6085cb6c41973d9ca2ab0b0b7694709fdbeb6852d003bf8
+  min-files:
+    description: Lower bound on archive contents, so a truncated or wrong asset is caught before extraction.
+    required: false
+    default: "2695"
+
+runs:
+  using: composite
+  steps:
+    # Release asset downloads are not metered, so this deliberately does not cache: a
+    # cache of `tests/fixtures` would also cover the tracked subset and could overwrite
+    # it on restore. The download costs seconds against a 45-minute job and bills nobody.
+    - name: Download and extract corpus
+      shell: bash
+      env:
+        ARCHIVE_URL: https://github.com/${{ github.repository }}/releases/download/${{ inputs.tag }}/third-party-fixtures.tar.gz
+        EXPECTED_SHA: ${{ inputs.sha256 }}
+        MIN_FILES: ${{ inputs.min-files }}
+      run: |
+        set -euo pipefail
+        archive="${RUNNER_TEMP}/corpus.tar.gz"
+        curl -fsSL --retry 3 --retry-delay 5 -o "${archive}" "${ARCHIVE_URL}"
+
+        if command -v sha256sum >/dev/null 2>&1; then
+          actual_sha="$(sha256sum "${archive}" | cut -d' ' -f1)"
+        else
+          actual_sha="$(shasum -a 256 "${archive}" | cut -d' ' -f1)"
+        fi
+        if [ "${actual_sha}" != "${EXPECTED_SHA}" ]; then
+          echo "::error::corpus checksum mismatch: expected ${EXPECTED_SHA}, got ${actual_sha}"
+          exit 1
+        fi
+
+        # Keep the archive's file list; the completeness check below compares against it
+        # rather than a hardcoded total, which would otherwise have to change every time
+        # a fixture is promoted into the tracked subset.
+        tar tzf "${archive}" | grep -v '/$' | sort > "${RUNNER_TEMP}/corpus-manifest.txt"
+        archived="$(wc -l < "${RUNNER_TEMP}/corpus-manifest.txt" | tr -d ' ')"
+        if [ "${archived}" -lt "${MIN_FILES}" ]; then
+          echo "::error::archive carries ${archived} files, expected at least ${MIN_FILES}"
+          exit 1
+        fi
+
+        # An archive built on macOS without COPYFILE_DISABLE=1 carries a `._name` xattr
+        # member beside any file that has extended attributes. macOS tar hides those when
+        # listing, so the mistake is invisible on the machine that made the archive, but
+        # GNU tar extracts them as literal files — and `._foo.docx` still ends in .docx,
+        # so discover_files() would count it as a fixture that cannot be converted.
+        applesingle="$(grep -c '/\._' "${RUNNER_TEMP}/corpus-manifest.txt" || true)"
+        if [ "${applesingle}" -ne 0 ]; then
+          echo "::error::archive carries ${applesingle} AppleDouble (._) member(s); rebuild it with COPYFILE_DISABLE=1"
+          grep '/\._' "${RUNNER_TEMP}/corpus-manifest.txt" | head -10
+          exit 1
+        fi
+
+        tar xzf "${archive}"
+        rm -f "${archive}"
+
+    # The bulk gate walks the corpus with read_dir and drops unreadable directories
+    # silently, so a short extraction would present as a smaller corpus rather than an
+    # error, and compare_against_baseline only catches files the baseline recorded as
+    # successes. Fail here instead — the same reason the Git LFS path used to assert
+    # every object had materialized.
+    #
+    # Only missing files are fatal. Extra files on disk are reported for diagnosis:
+    # the checkout carries the tracked subset, and the gate treats an unknown fixture as
+    # new coverage rather than a regression.
+    - name: Verify corpus completeness
+      shell: bash
+      run: |
+        set -euo pipefail
+        manifest="${RUNNER_TEMP}/corpus-manifest.txt"
+        missing=0
+        while IFS= read -r entry; do
+          if [ ! -f "${entry}" ]; then
+            echo "::error::missing after extraction: ${entry}"
+            missing=$((missing + 1))
+            if [ "${missing}" -ge 20 ]; then
+              echo "::error::(further missing files suppressed)"
+              break
+            fi
+          fi
+        done < "${manifest}"
+        if [ "${missing}" -ne 0 ]; then
+          echo "::error::${missing} archived fixture(s) absent after extraction"
+          exit 1
+        fi
+
+        archived="$(wc -l < "${manifest}" | tr -d ' ')"
+        on_disk="$(find tests/fixtures/*/libreoffice tests/fixtures/*/poi -type f | wc -l | tr -d ' ')"
+        echo "Bulk fixture corpus: ${archived} archived, ${on_disk} on disk"
+        if [ "${on_disk}" -ne "${archived}" ]; then
+          echo "On disk but not in the archive:"
+          find tests/fixtures/*/libreoffice tests/fixtures/*/poi -type f | sort \
+            | comm -13 "${manifest}" - | head -20
+        fi
