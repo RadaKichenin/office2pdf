@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -40,6 +41,13 @@ WORD_RE = re.compile(
     r'<word xMin="([\d.-]+)" yMin="([\d.-]+)" xMax="([\d.-]+)" yMax="([\d.-]+)">(.*?)</word>',
     re.S,
 )
+FILL_TEXT_RE = re.compile(
+    r'<fill_text[^>]*transform="([-0-9.]+) [-0-9.]+ [-0-9.]+ ([-0-9.]+) '
+    r'([-0-9.]+) ([-0-9.]+)"[^>]*>(.*?)</fill_text>',
+    re.S,
+)
+TRACE_PAGE_RE = re.compile(r'<page number="\d+')
+GLYPH_RE = re.compile(r'<g unicode="([^"]*)" glyph="[^"]*" x="([-0-9.]+)" y="([-0-9.]+)"')
 HISTOGRAM_BINS = 32
 
 
@@ -72,11 +80,62 @@ def render_page(pdf: Path, page: int, dpi: int, out_dir: Path, role: str) -> Pat
     return pages[0]
 
 
-def text_lines(pdf: Path) -> list[TextLine]:
-    """Text lines with their top-left corner, grouped from word boxes.
+def has_mutool() -> bool:
+    """Whether `mutool` is on PATH (it ships in `mupdf-tools`)."""
+    return shutil.which("mutool") is not None
 
-    Word baselines jitter by fractions of a point inside one visual line, so
-    the rows are bucketed to 1pt before being joined.
+
+def baseline_lines(pdf: Path) -> list[TextLine]:
+    """Text lines positioned by their true baseline, via `mutool draw -F trace`.
+
+    A `<fill_text>` carries the text-space matrix, so a glyph's baseline is
+    `ty + d * gy` and its x is `a * gx + tx`. Office exports on macOS place
+    text in a scaled space (`transform=".24 0 0 -.24 0 201.8"` with `trm="92"`
+    for 22pt text) while ours are plain translations; one formula covers both.
+
+    Baselines jitter by fractions of a point inside one visual line, so rows
+    are bucketed to 1pt before being joined.
+    """
+    trace = subprocess.run(
+        ["mutool", "draw", "-F", "trace", "-o", "-", str(pdf)],
+        capture_output=True,
+        text=True,
+    )
+    if trace.returncode != 0:
+        return []
+    lines: list[TextLine] = []
+    for page_index, page in enumerate(TRACE_PAGE_RE.split(trace.stdout)[1:]):
+        rows: dict[int, list[tuple[float, str]]] = {}
+        for match in FILL_TEXT_RE.finditer(page):
+            scale_x, scale_y = float(match.group(1)), float(match.group(2))
+            translate_x, translate_y = float(match.group(3)), float(match.group(4))
+            for glyph in GLYPH_RE.finditer(match.group(5)):
+                char = glyph.group(1)
+                if not char.strip():
+                    continue
+                baseline = translate_y + scale_y * float(glyph.group(3))
+                rows.setdefault(round(baseline), []).append(
+                    (translate_x + scale_x * float(glyph.group(2)), char)
+                )
+        for key in sorted(rows):
+            glyphs = sorted(rows[key])
+            text = re.sub(r"\s+", " ", "".join(glyph[1] for glyph in glyphs)).strip()
+            if text:
+                lines.append(
+                    TextLine(page_index, min(g[0] for g in glyphs), float(key), text)
+                )
+    return lines
+
+
+def descriptor_box_lines(pdf: Path) -> list[TextLine]:
+    """Fallback line tops from `pdftotext -bbox`, used only without `mutool`.
+
+    `yMin` is each glyph's *font-descriptor box*, not its ink or its baseline.
+    The two PDFs always embed different subsets, so the drift this yields
+    carries an error proportional to font size — on the newsletter mock it
+    reported +2.90pt for a 22pt heading whose baseline is really 1.07pt the
+    other way, which is how #501 came to be filed against a defect that did
+    not exist (issue #505).
     """
     xml = subprocess.run(
         ["pdftotext", "-bbox", str(pdf), "-"],
@@ -99,6 +158,15 @@ def text_lines(pdf: Path) -> list[TextLine]:
                              min(w[1] for w in words), text)
                 )
     return lines
+
+
+def text_lines(pdf: Path) -> list[TextLine]:
+    """Lines for the geometry axis, by true baseline where `mutool` allows."""
+    if has_mutool():
+        lines = baseline_lines(pdf)
+        if lines:
+            return lines
+    return descriptor_box_lines(pdf)
 
 
 def report_geometry(gt: Path, other: Path) -> dict[str, float]:
@@ -124,6 +192,10 @@ def report_geometry(gt: Path, other: Path) -> dict[str, float]:
         dx.append(candidate.x_min - reference.x_min)
 
     print("## Geometry — position, size, pitch")
+    if not has_mutool():
+        print("  APPROXIMATE: mutool absent, so positions come from font-descriptor")
+        print("  boxes rather than baselines. The error scales with font size and can")
+        print("  invert the sign. Install mupdf-tools before trusting these numbers.")
     if not dy:
         print("  no lines matched by unique text; compare pages manually")
         return {}

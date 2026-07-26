@@ -137,11 +137,20 @@ Run `python3 scripts/compare_render.py <GT.pdf> <output.pdf> [--page N]` before
 judging a rendered difference. It reports geometry, colour histogram, and pixel
 difference together, then states what the combination means.
 
+**Install `mupdf-tools` first** (`brew install mupdf-tools`). Without `mutool`
+the geometry axis falls back to `pdftotext -bbox`, whose `yMin` is each glyph's
+font-descriptor box rather than its baseline. The two PDFs always embed
+different subsets, so that fallback carries an error proportional to font size —
+on the newsletter mock it reported +2.90pt for a 22pt heading whose baseline is
+really 1.07pt the other way, and issue #501 was filed against a defect that did
+not exist. The report labels itself APPROXIMATE when it falls back; do not quote
+those numbers in an issue or PR.
+
 No single measure is reliable, and each one's blind spot is another's strength:
 
 | Axis | Catches | Blind to |
 | --- | --- | --- |
-| Geometry (`pdftotext -bbox`) | position, size, row pitch, pagination | colour, missing elements |
+| Geometry (`mutool draw -F trace`) | position, size, row pitch, pagination | colour, missing elements |
 | Colour histogram | fill colour, recolouring, missing elements, ink coverage | position, size, font |
 
 Judge the colour axis on the reported **colour shift**, not on the bin-wise
