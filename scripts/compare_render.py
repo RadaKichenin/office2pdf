@@ -51,16 +51,22 @@ class TextLine:
     text: str
 
 
-def render_page(pdf: Path, page: int, dpi: int, out_dir: Path) -> Path:
-    """Rasterise one page, returning the PNG path."""
-    prefix = out_dir / pdf.stem
+def render_page(pdf: Path, page: int, dpi: int, out_dir: Path, role: str) -> Path:
+    """Rasterise one page, returning the PNG path.
+
+    `role` names the output, because the GT and the candidate usually share
+    a file stem: rendering both under that stem made the second overwrite
+    the first, and every comparison then ran an image against itself and
+    reported a perfect match.
+    """
+    prefix = out_dir / role
     subprocess.run(
         ["pdftoppm", "-r", str(dpi), "-png", "-f", str(page), "-l", str(page),
          str(pdf), str(prefix)],
         check=True,
         capture_output=True,
     )
-    pages = sorted(out_dir.glob(f"{pdf.stem}-*.png"))
+    pages = sorted(out_dir.glob(f"{role}-*.png"))
     if not pages:
         raise SystemExit(f"{pdf}: page {page} did not render")
     return pages[0]
@@ -315,8 +321,8 @@ def main() -> None:
     print()
     with tempfile.TemporaryDirectory() as raw_dir:
         out_dir = Path(raw_dir)
-        gt_png = render_page(args.gt, args.page, args.dpi, out_dir)
-        other_png = render_page(args.output, args.page, args.dpi, out_dir)
+        gt_png = render_page(args.gt, args.page, args.dpi, out_dir, "gt")
+        other_png = render_page(args.output, args.page, args.dpi, out_dir, "candidate")
         histogram_result = report_histogram(gt_png, other_png)
         print()
         report_pixels(gt_png, other_png, out_dir)
