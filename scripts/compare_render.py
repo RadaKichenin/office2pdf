@@ -178,15 +178,22 @@ def text_lines(pdf: Path) -> list[TextLine]:
     return descriptor_box_lines(pdf)
 
 
+def unique_lines(lines: list[TextLine]) -> dict[str, TextLine]:
+    """Lines keyed by their text, keeping only texts that occur exactly once.
+
+    A repeated string cannot be paired between two renderings without guessing
+    which occurrence is which, so repeats are dropped rather than mismatched.
+    """
+    seen: dict[str, list[TextLine]] = {}
+    for line in lines:
+        seen.setdefault(line.text, []).append(line)
+    return {text: found[0] for text, found in seen.items() if len(found) == 1}
+
+
 def report_geometry(gt: Path, other: Path) -> dict[str, float]:
     """Vertical and horizontal drift of every line matched by unique text."""
-    def unique(lines: list[TextLine]) -> dict[str, TextLine]:
-        seen: dict[str, list[TextLine]] = {}
-        for line in lines:
-            seen.setdefault(line.text, []).append(line)
-        return {text: found[0] for text, found in seen.items() if len(found) == 1}
-
-    gt_lines, other_lines = unique(text_lines(gt)), unique(text_lines(other))
+    gt_lines = unique_lines(text_lines(gt))
+    other_lines = unique_lines(text_lines(other))
     dy: list[float] = []
     dx: list[float] = []
     page_mismatch = 0
@@ -440,12 +447,51 @@ def diagnose(geometry: dict[str, float], histogram_result: dict[str, float]) -> 
         print("  toward its true size overlaps GT less, not more.")
 
 
+def report_matched_lines(gt: Path, other: Path) -> None:
+    """Per-line baselines for every line matched by unique text.
+
+    Aggregate drift says a page is wrong; this says which line. Pairing the two
+    PDFs by hand — taking the topmost line, or grepping for a prefix — silently
+    matches the wrong line and produces impossible numbers, so the pairing here
+    is the same unique-text match the geometry axis already trusts.
+    """
+    gt_lines = unique_lines(text_lines(gt))
+    other_lines = unique_lines(text_lines(other))
+    rows: list[tuple[TextLine, TextLine]] = [
+        (reference, other_lines[text])
+        for text, reference in gt_lines.items()
+        if text in other_lines and other_lines[text].page == reference.page
+    ]
+    rows.sort(key=lambda pair: (pair[0].page, pair[0].y_min))
+
+    print("## Matched lines — baseline of each, and the pitch between them")
+    if not rows:
+        print("  none matched by unique text")
+        return
+    print(f"  {'page':>4} {'GT':>9} {'output':>9} {'delta':>8} "
+          f"{'GT pitch':>9} {'out pitch':>9}  text")
+    previous: tuple[float, float] | None = None
+    for reference, candidate in rows:
+        gt_pitch = "" if previous is None else f"{reference.y_min - previous[0]:9.2f}"
+        out_pitch = "" if previous is None else f"{candidate.y_min - previous[1]:9.2f}"
+        print(f"  {reference.page + 1:>4} {reference.y_min:9.2f} {candidate.y_min:9.2f} "
+              f"{candidate.y_min - reference.y_min:+8.2f} {gt_pitch:>9} {out_pitch:>9}  "
+              f"{reference.text[:44]}")
+        previous = (reference.y_min, candidate.y_min)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("gt", type=Path, help="native Office export")
     parser.add_argument("output", type=Path, help="office2pdf output")
     parser.add_argument("--page", type=int, default=1)
     parser.add_argument("--dpi", type=int, default=150, help="at least 150")
+    parser.add_argument(
+        "--lines",
+        action="store_true",
+        help="list every matched line's baselines, so a single paragraph can be "
+        "inspected without hand-pairing text between the two PDFs",
+    )
     args = parser.parse_args()
 
     if args.dpi < 150:
@@ -457,6 +503,9 @@ def main() -> None:
 
     geometry = report_geometry(args.gt, args.output)
     print()
+    if args.lines:
+        report_matched_lines(args.gt, args.output)
+        print()
     with tempfile.TemporaryDirectory() as raw_dir:
         out_dir = Path(raw_dir)
         gt_png = render_page(args.gt, args.page, args.dpi, out_dir, "gt")
