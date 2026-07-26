@@ -1583,6 +1583,12 @@ fn generate_block(out: &mut String, block: &Block, ctx: &mut GenCtx) -> Result<(
         }
         Block::Table(table) => generate_table(out, table, ctx),
         Block::Image(img) => {
+            // Word advances a picture paragraph by the picture alone; any
+            // gap comes from its own `w:spacing`. Leaving the element bare
+            // let Typst's 1.2em default block spacing apply above and below
+            // instead, opening ~24pt around an inline figure and pushing
+            // every later line down by that much (issues #463, #491).
+            out.push_str("#block(width: 100%, above: 0pt, below: 0pt)[");
             let align_str: Option<&str> = match img.alignment {
                 Some(Alignment::Center) => Some("center"),
                 Some(Alignment::Right) => Some("right"),
@@ -1603,7 +1609,7 @@ fn generate_block(out: &mut String, block: &Block, ctx: &mut GenCtx) -> Result<(
             if align_str.is_some() {
                 out.push(']');
             }
-            out.push('\n');
+            out.push_str("]\n");
             Ok(())
         }
         Block::InlineImages(images) => {
