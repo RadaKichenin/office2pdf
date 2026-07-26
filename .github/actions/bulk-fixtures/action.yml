@@ -11,7 +11,7 @@ inputs:
   sha256:
     description: Expected SHA-256 of the archive, so a replaced asset cannot silently change the corpus.
     required: false
-    default: b1c82e1f42a3e3f9c01e081c1ab425a26f7cf14cb1356d311b9434630efd2332
+    default: 71dc0e53f331b06ad6085cb6c41973d9ca2ab0b0b7694709fdbeb6852d003bf8
   min-files:
     description: Lower bound on archive contents, so a truncated or wrong asset is caught before extraction.
     required: false
@@ -51,6 +51,18 @@ runs:
         archived="$(wc -l < "${RUNNER_TEMP}/corpus-manifest.txt" | tr -d ' ')"
         if [ "${archived}" -lt "${MIN_FILES}" ]; then
           echo "::error::archive carries ${archived} files, expected at least ${MIN_FILES}"
+          exit 1
+        fi
+
+        # An archive built on macOS without COPYFILE_DISABLE=1 carries a `._name` xattr
+        # member beside any file that has extended attributes. macOS tar hides those when
+        # listing, so the mistake is invisible on the machine that made the archive, but
+        # GNU tar extracts them as literal files — and `._foo.docx` still ends in .docx,
+        # so discover_files() would count it as a fixture that cannot be converted.
+        applesingle="$(grep -c '/\._' "${RUNNER_TEMP}/corpus-manifest.txt" || true)"
+        if [ "${applesingle}" -ne 0 ]; then
+          echo "::error::archive carries ${applesingle} AppleDouble (._) member(s); rebuild it with COPYFILE_DISABLE=1"
+          grep '/\._' "${RUNNER_TEMP}/corpus-manifest.txt" | head -10
           exit 1
         fi
 
