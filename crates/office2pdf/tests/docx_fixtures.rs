@@ -1456,3 +1456,50 @@ docx_fixture_tests!(external_entity_in_text, "poi/ExternalEntityInText.docx");
 
 // Deeply nested tables (5000+ levels) — clean error after depth-limit fix (not stack overflow)
 docx_fixture_tests!(deep_table_cell, "poi/deep-table-cell.docx");
+
+// ---------------------------------------------------------------------------
+// Auto-layout tables reconcile per-row w:tcW against the grid (issue #355)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn invoice_auto_layout_table_widens_the_amount_column() {
+    // The invoice's item rows declare 700/4200/1200/1450/1476 twips, but its
+    // Subtotal/VAT/Total rows put a 4200-twip value cell in the last column
+    // and a 700-twip label spanning the first four. With no
+    // `<w:tblLayout w:type="fixed"/>` Word uses auto layout and reconciles
+    // those preferences against the grid, landing near
+    // 27.9/156.9/47.6/59.0/159.8 pt. Taking `w:tblGrid` verbatim left the
+    // Amount column at 73.8 pt, less than half Word's (issue #355).
+    let pages = flow_pages("../../golden_mocks/business/sources/docx/01_invoice_en.docx");
+    let table = pages
+        .iter()
+        .flat_map(|page| page.content.iter())
+        .find_map(|block| match block {
+            Block::Table(table) if table.column_widths.len() == 5 => Some(table),
+            _ => None,
+        })
+        .expect("the invoice has a five-column item table");
+
+    let widths = &table.column_widths;
+    let total: f64 = widths.iter().sum();
+    assert!(
+        (total - 451.3).abs() < 1.0,
+        "the table keeps its declared total width, got {total}"
+    );
+    // The Amount column must be comparable to Description, not to Qty.
+    assert!(
+        widths[4] > 140.0,
+        "Amount should widen toward Word's 159.8pt, got {:?}",
+        widths
+    );
+    assert!(
+        widths[1] > 140.0,
+        "Description stays wide, got {:?}",
+        widths
+    );
+    assert!(
+        widths[0] < 40.0 && widths[2] < 60.0,
+        "the narrow columns stay narrow, got {:?}",
+        widths
+    );
+}
