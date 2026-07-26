@@ -1339,3 +1339,107 @@ fn test_non_arrow_icon_set_still_renders_as_text() {
     assert!(output.source.contains("text(fill: rgb(214, 85, 50)"));
     assert!(!output.source.contains("polygon("));
 }
+
+/// A worksheet text box anchored after `anchor_row` at `x_offset_pt`.
+fn make_sheet_text_box(anchor_row: u32, x_offset_pt: f64, height: f64) -> crate::ir::SheetTextBox {
+    crate::ir::SheetTextBox {
+        anchor_row,
+        x_offset_pt,
+        width: 100.0,
+        height,
+        paragraphs: vec![Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: format!("shape at {x_offset_pt}"),
+                style: TextStyle::default(),
+                href: None,
+                footnote: None,
+            }],
+        }],
+        fill: None,
+        border: None,
+        vertical_center: false,
+    }
+}
+
+fn sheet_page_with_text_boxes(text_boxes: Vec<crate::ir::SheetTextBox>) -> Page {
+    Page::Sheet(SheetPage {
+        name: "Sheet1".to_string(),
+        size: PageSize::default(),
+        margins: Margins::default(),
+        table: Table {
+            rows: vec![TableRow {
+                cells: vec![TableCell::default()],
+                height: None,
+            }],
+            column_widths: vec![100.0],
+            ..Table::default()
+        },
+        header: None,
+        footer: None,
+        charts: vec![],
+        images: Vec::new(),
+        text_boxes,
+    })
+}
+
+#[test]
+fn test_same_row_sheet_drawings_share_one_reserved_box() {
+    // Excel draws shapes anchored to the same row side by side. Emitting one
+    // reserved flow box each stacked them diagonally and reserved three
+    // times the height, which spilled onto a blank second page (issue #459).
+    let doc = make_doc(vec![sheet_page_with_text_boxes(vec![
+        make_sheet_text_box(1, 0.0, 60.0),
+        make_sheet_text_box(1, 200.0, 60.0),
+        make_sheet_text_box(1, 400.0, 60.0),
+    ])]);
+    let source = generate_typst(&doc).unwrap().source;
+
+    assert_eq!(
+        source.matches("#box(width: 100%, height: 60pt)").count(),
+        1,
+        "same-row drawings share one reserved box: {source}"
+    );
+    for dx in ["dx: 0pt", "dx: 200pt", "dx: 400pt"] {
+        assert!(
+            source.contains(dx),
+            "each drawing keeps its own horizontal offset ({dx}): {source}"
+        );
+    }
+}
+
+#[test]
+fn test_same_row_sheet_drawings_reserve_the_tallest_height() {
+    // The row's reserved height is the tallest shape on it, not the sum.
+    let doc = make_doc(vec![sheet_page_with_text_boxes(vec![
+        make_sheet_text_box(1, 0.0, 40.0),
+        make_sheet_text_box(1, 200.0, 90.0),
+    ])]);
+    let source = generate_typst(&doc).unwrap().source;
+
+    assert_eq!(
+        source.matches("#box(width: 100%, height: ").count(),
+        1,
+        "the row reserves a single box: {source}"
+    );
+    assert!(
+        source.contains("#box(width: 100%, height: 90pt)"),
+        "the reserved height is the tallest shape, not the sum: {source}"
+    );
+}
+
+#[test]
+fn test_drawings_on_different_rows_keep_separate_boxes() {
+    // Triangulation: shapes on different rows still advance the flow.
+    let doc = make_doc(vec![sheet_page_with_text_boxes(vec![
+        make_sheet_text_box(1, 0.0, 60.0),
+        make_sheet_text_box(5, 0.0, 60.0),
+    ])]);
+    let source = generate_typst(&doc).unwrap().source;
+
+    assert_eq!(
+        source.matches("#box(width: 100%, height: 60pt)").count(),
+        2,
+        "different rows reserve their own boxes: {source}"
+    );
+}
