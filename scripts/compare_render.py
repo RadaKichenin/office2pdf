@@ -105,7 +105,7 @@ def baseline_lines(pdf: Path) -> list[TextLine]:
         return []
     lines: list[TextLine] = []
     for page_index, page in enumerate(TRACE_PAGE_RE.split(trace.stdout)[1:]):
-        rows: dict[int, list[tuple[float, str]]] = {}
+        rows: dict[int, list[tuple[float, float, str]]] = {}
         for match in FILL_TEXT_RE.finditer(page):
             scale_x, scale_y = float(match.group(1)), float(match.group(2))
             translate_x, translate_y = float(match.group(3)), float(match.group(4))
@@ -115,14 +115,23 @@ def baseline_lines(pdf: Path) -> list[TextLine]:
                     continue
                 baseline = translate_y + scale_y * float(glyph.group(3))
                 rows.setdefault(round(baseline), []).append(
-                    (translate_x + scale_x * float(glyph.group(2)), char)
+                    (translate_x + scale_x * float(glyph.group(2)), baseline, char)
                 )
         for key in sorted(rows):
             glyphs = sorted(rows[key])
-            text = re.sub(r"\s+", " ", "".join(glyph[1] for glyph in glyphs)).strip()
+            text = re.sub(r"\s+", " ", "".join(glyph[2] for glyph in glyphs)).strip()
             if text:
+                # The 1pt bucket only groups glyphs into a line; reporting its
+                # key as the position would quantise every measurement to 1pt
+                # and hide the sub-point row-pitch differences this axis exists
+                # to find. Report the line's own baseline instead.
                 lines.append(
-                    TextLine(page_index, min(g[0] for g in glyphs), float(key), text)
+                    TextLine(
+                        page_index,
+                        min(g[0] for g in glyphs),
+                        min(g[1] for g in glyphs),
+                        text,
+                    )
                 )
     return lines
 
