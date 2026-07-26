@@ -1,0 +1,60 @@
+name: Fetch bulk fixture corpus
+description: >-
+  Download and extract the third-party fixture corpus published as a release asset.
+  Only the bulk regression gate needs it; the default test suite reads the tracked subset.
+
+inputs:
+  tag:
+    description: Release tag holding the corpus archive.
+    required: false
+    default: fixtures-v1
+  sha256:
+    description: Expected SHA-256 of the archive, so a replaced asset cannot silently change the corpus.
+    required: false
+    default: b1c82e1f42a3e3f9c01e081c1ab425a26f7cf14cb1356d311b9434630efd2332
+  expected-files:
+    description: Number of files the archive must contain once extracted.
+    required: false
+    default: "2695"
+
+runs:
+  using: composite
+  steps:
+    # Release asset downloads are not metered, so this deliberately does not cache: a
+    # cache of `tests/fixtures` would also cover the tracked subset and could overwrite
+    # it on restore. The download costs seconds against a 45-minute job and bills nobody.
+    - name: Download corpus
+      shell: bash
+      env:
+        ARCHIVE_URL: https://github.com/${{ github.repository }}/releases/download/${{ inputs.tag }}/third-party-fixtures.tar.gz
+        EXPECTED_SHA: ${{ inputs.sha256 }}
+      run: |
+        set -euo pipefail
+        curl -fsSL --retry 3 --retry-delay 5 -o "${RUNNER_TEMP}/corpus.tar.gz" "${ARCHIVE_URL}"
+        if command -v sha256sum >/dev/null 2>&1; then
+          actual="$(sha256sum "${RUNNER_TEMP}/corpus.tar.gz" | cut -d' ' -f1)"
+        else
+          actual="$(shasum -a 256 "${RUNNER_TEMP}/corpus.tar.gz" | cut -d' ' -f1)"
+        fi
+        if [ "${actual}" != "${EXPECTED_SHA}" ]; then
+          echo "::error::corpus checksum mismatch: expected ${EXPECTED_SHA}, got ${actual}"
+          exit 1
+        fi
+        tar xzf "${RUNNER_TEMP}/corpus.tar.gz"
+        rm -f "${RUNNER_TEMP}/corpus.tar.gz"
+
+    # The bulk gate walks the corpus with read_dir, so a short extraction would look like
+    # a smaller corpus rather than an error. Fail here instead, the same reason the Git
+    # LFS path used to assert every object had materialized.
+    - name: Verify corpus completeness
+      shell: bash
+      env:
+        EXPECTED_FILES: ${{ inputs.expected-files }}
+      run: |
+        set -euo pipefail
+        actual="$(find tests/fixtures/*/libreoffice tests/fixtures/*/poi -type f | wc -l | tr -d ' ')"
+        if [ "${actual}" -ne "${EXPECTED_FILES}" ]; then
+          echo "::error::corpus has ${actual} files, expected ${EXPECTED_FILES}"
+          exit 1
+        fi
+        echo "Bulk fixture corpus: ${actual} files extracted"
