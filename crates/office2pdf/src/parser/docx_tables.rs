@@ -155,7 +155,8 @@ pub(super) fn convert_table(
     let mut column_widths: Vec<f64> = if table.grid.is_empty() {
         derive_column_widths_from_cells(&raw_rows).unwrap_or_default()
     } else {
-        table.grid.iter().map(|&w| twips_to_pt(w as f64)).collect()
+        let grid: Vec<f64> = table.grid.iter().map(|&w| twips_to_pt(w as f64)).collect();
+        reconcile_auto_layout_widths(&grid, &raw_rows)
     };
 
     if header_info.is_visual_rtl {
@@ -336,6 +337,37 @@ fn apply_conditional_table_style(raw_rows: &mut [RawRow], table_style: &Resolved
             apply_table_text_style(&mut cell.content, &style);
         }
     }
+}
+
+/// Reconcile a table's `w:tblGrid` with the per-row `w:tcW` preferences its
+/// cells declare, the way Word's auto table layout does.
+///
+/// `w:tblGrid` is only a starting point: without `<w:tblLayout
+/// w:type="fixed"/>` Word treats the per-cell widths as preferences and
+/// resolves them across every row, which can contradict the grid outright.
+/// The invoice fixture's item rows ask for `700/4200/1200/1450/1476` twips
+/// while its Subtotal/VAT/Total rows put a 4200-twip value cell in the last
+/// column, so Word widens Amount from the grid's 73.8pt to 159.8pt. Taking
+/// the grid verbatim left it less than half Word's (issue #355).
+///
+/// Each column takes the widest preference any cell expresses for it, then
+/// the set is scaled to the grid's total so the table keeps its declared
+/// width. Falls back to the grid when no cell states a preference, and when
+/// the preferences cover fewer columns than the grid.
+fn reconcile_auto_layout_widths(grid: &[f64], raw_rows: &[RawRow]) -> Vec<f64> {
+    let Some(preferred) = derive_column_widths_from_cells(raw_rows) else {
+        return grid.to_vec();
+    };
+    if preferred.len() != grid.len() {
+        return grid.to_vec();
+    }
+    let preferred_total: f64 = preferred.iter().sum();
+    let grid_total: f64 = grid.iter().sum();
+    if preferred_total <= 0.0 || grid_total <= 0.0 || preferred.iter().any(|width| *width <= 0.0) {
+        return grid.to_vec();
+    }
+    let scale: f64 = grid_total / preferred_total;
+    preferred.iter().map(|width| width * scale).collect()
 }
 
 fn derive_column_widths_from_cells(raw_rows: &[RawRow]) -> Option<Vec<f64>> {
