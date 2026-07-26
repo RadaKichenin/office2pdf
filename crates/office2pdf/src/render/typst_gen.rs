@@ -1629,17 +1629,9 @@ fn generate_block(out: &mut String, block: &Block, ctx: &mut GenCtx) -> Result<(
             let settings: Option<String> = first_paragraph.and_then(|paragraph| {
                 word_line_height_settings(&paragraph.runs, &paragraph.style, ctx.line_grid_pitch)
             });
-            if let Some(settings) = settings {
-                out.push_str("#block(width: 100%)[\n");
-                out.push_str(&settings);
-                // The wrapper's line box spans Word's full line advance, so
-                // the item gaps are the raw `w:spacing` values.
-                generate_list(out, list, true)?;
-                out.push_str("]\n");
-                Ok(())
-            } else {
-                generate_list(out, list, false)
-            }
+            // `generate_list` emits the wrapper itself, so the line box and
+            // the list's own `w:spacing` gaps share one block (issue #463).
+            generate_list(out, list, settings.as_deref())
         }
         Block::MathEquation(math) => {
             generate_math_equation(out, math);

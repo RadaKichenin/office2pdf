@@ -219,7 +219,7 @@ fn test_generate_list_preserves_paragraph_spacing_between_items() {
 
     assert!(output.source.contains("spacing: 19pt"), "{}", output.source);
     assert!(
-        output.source.contains("#block(below: 19pt)"),
+        output.source.contains("#block(width: 100%, below: 19pt)"),
         "{}",
         output.source
     );
@@ -269,7 +269,7 @@ fn test_generate_list_uses_word_line_box_and_boundary_spacing() {
     assert!(source.contains("#set par(leading: 0pt)"), "{source}");
     assert!(source.contains("spacing: 8pt"), "{source}");
     assert!(
-        source.contains("#block(above: 0pt, below: 8pt)"),
+        source.contains("#block(width: 100%, above: 0pt, below: 8pt)"),
         "{source}"
     );
 }
@@ -308,7 +308,7 @@ fn test_generate_list_combines_exact_line_height_with_paragraph_spacing() {
 
     assert!(output.source.contains("spacing: 24pt"), "{}", output.source);
     assert!(
-        output.source.contains("#block(below: 24pt)"),
+        output.source.contains("#block(width: 100%, below: 24pt)"),
         "{}",
         output.source
     );
@@ -895,5 +895,61 @@ fn test_generate_list_metric_spacing_is_the_raw_paragraph_gap() {
     assert!(
         source.contains("below: 4pt"),
         "expected list below spacing to be the raw 4pt gap in: {source}"
+    );
+}
+
+#[test]
+fn test_list_wrapper_block_carries_the_edge_spacing() {
+    // The line-height wrapper used to leave `above`/`below` unset, so
+    // Typst's own 1.2em default block spacing governed the gap between a
+    // list and its neighbours while the computed gap sat on an inner block
+    // where it could not reach the boundary. A numbered item followed by a
+    // shaded code paragraph opened ~10pt too far (issue #463).
+    use crate::ir::List;
+
+    let make_item = |text: &str| ListItem {
+        content: vec![Paragraph {
+            style: ParagraphStyle {
+                space_after: Some(4.0),
+                ..ParagraphStyle::default()
+            },
+            runs: vec![Run {
+                text: text.to_string(),
+                style: TextStyle {
+                    font_family: Some("Libertinus Serif".to_string()),
+                    font_size: Some(10.0),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        }],
+        level: 0,
+        start_at: None,
+    };
+    let list = List {
+        kind: ListKind::Ordered,
+        items: vec![
+            make_item("Convert a single file."),
+            make_item("Batch convert."),
+        ],
+        level_styles: BTreeMap::new(),
+    };
+    let source = generate_typst(&make_doc(vec![make_flow_page(vec![Block::List(list)])]))
+        .unwrap()
+        .source;
+
+    assert!(
+        !source.contains("#block(width: 100%)["),
+        "the list wrapper must pin its own spacing, not inherit Typst's default: {source}"
+    );
+    let wrapper_start = source
+        .find("#block(width: 100%")
+        .expect("the list is wrapped in a full-width block");
+    let wrapper_params =
+        &source[wrapper_start..source[wrapper_start..].find(")[").unwrap() + wrapper_start];
+    assert!(
+        wrapper_params.contains("below: 4pt"),
+        "the outermost list block carries the item gap: {wrapper_params}"
     );
 }
