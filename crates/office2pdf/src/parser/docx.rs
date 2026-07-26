@@ -834,6 +834,13 @@ fn convert_paragraph_blocks(
                     &mut inline_images,
                 );
 
+                // A picture is the paragraph's content, so its paragraph mark
+                // belongs to the picture rather than to a blank line. Counting
+                // only text boxes here left a picture-only paragraph emitting an
+                // empty paragraph as well, adding a full line box below every
+                // figure (issue #496).
+                emitted_media_blocks |= !inline_images.is_empty();
+
                 if !media.text_box_blocks.is_empty() {
                     emitted_media_blocks = true;
                     emitted_floating_anchor |= media.text_box_blocks.iter().any(|block| {
