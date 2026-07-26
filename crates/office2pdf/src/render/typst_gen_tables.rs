@@ -162,12 +162,20 @@ fn generate_table_rows(
     fixed_row_heights: bool,
     ctx: &mut GenCtx,
 ) -> Result<(), ConvertError> {
+    // A nested table decides its own rows; restore the enclosing row's answer
+    // so the outer cells that follow keep sharing their baseline.
+    let enclosing_row_snaps_to_grid: bool = ctx.row_snaps_to_grid;
     for row in rows {
         for rs in rowspan_remaining.iter_mut() {
             if *rs > 0 {
                 *rs -= 1;
             }
         }
+
+        // Word snaps a row to the document grid when the row holds East Asian
+        // text, and applies the result to the whole row. Asking each cell
+        // separately split mixed-script rows across two baselines (issue #498).
+        ctx.row_snaps_to_grid = row_has_east_asian_text(row);
 
         let mut col_pos: usize = 0;
         for cell in &row.cells {
@@ -213,8 +221,41 @@ fn generate_table_rows(
             col_pos += 1;
         }
     }
+    ctx.row_snaps_to_grid = enclosing_row_snaps_to_grid;
 
     Ok(())
+}
+
+/// Whether any cell in the row carries East Asian text.
+///
+/// Nested tables are excluded: they run their own row loop and decide each of
+/// their rows on their own content.
+fn row_has_east_asian_text(row: &TableRow) -> bool {
+    row.cells
+        .iter()
+        .flat_map(|cell| cell.content.iter())
+        .any(block_has_east_asian_text)
+}
+
+fn block_has_east_asian_text(block: &Block) -> bool {
+    match block {
+        Block::Paragraph(paragraph) => paragraph
+            .runs
+            .iter()
+            .any(|run| run.text.chars().any(is_cjk_like)),
+        Block::List(list) => {
+            list.items
+                .iter()
+                .flat_map(|item| item.content.iter())
+                .any(|paragraph| {
+                    paragraph
+                        .runs
+                        .iter()
+                        .any(|run| run.text.chars().any(is_cjk_like))
+                })
+        }
+        _ => false,
+    }
 }
 
 /// Excel does not fill the cell with a data bar: it insets the bar from the
@@ -577,9 +618,13 @@ fn generate_cell_content(
             out.push('\n');
         }
         match block {
-            Block::Paragraph(para) => {
-                generate_cell_paragraph(out, para, ctx.default_tab_width_pt, ctx.line_grid_pitch)
-            }
+            Block::Paragraph(para) => generate_cell_paragraph(
+                out,
+                para,
+                ctx.default_tab_width_pt,
+                ctx.line_grid_pitch,
+                ctx.row_snaps_to_grid,
+            ),
             Block::Table(table) => {
                 if ctx.table_depth < MAX_TABLE_DEPTH {
                     generate_table(out, table, ctx)?;
@@ -614,6 +659,7 @@ fn generate_cell_paragraph(
     para: &Paragraph,
     default_tab_width_pt: f64,
     line_grid_pitch: Option<f64>,
+    row_snaps_to_grid: bool,
 ) {
     let style: &ParagraphStyle = &para.style;
     let alignment = style.alignment;
@@ -626,12 +672,14 @@ fn generate_cell_paragraph(
     // Table-cell text occupies the font's full single-spacing (hhea) line
     // as a fixed box: a single-line cell must fill the whole line height
     // Word gives it rather than only the tighter metric box, or auto-height
-    // rows come out short (issue #396). East Asian cells take the section's
-    // grid pitch, like body text — #385 concluded otherwise, but on the
-    // premise that the residual gap was font substitution, which #404
+    // rows come out short (issue #396). A cell whose *row* holds East Asian
+    // text takes the section's grid pitch instead, like body text — decided
+    // once per row so every cell in it shares a baseline, the numeric ones
+    // included (issue #498). #385 concluded the grid does not apply, but on
+    // the premise that the residual gap was font substitution, which #404
     // disproved (Malgun is embedded and its advances match Word's).
     let line_height_settings: Option<String> =
-        word_cell_line_box_settings(&para.runs, style, line_grid_pitch);
+        word_cell_line_box_settings(&para.runs, style, line_grid_pitch, row_snaps_to_grid);
     let has_block_wrapper = cell_paragraph_needs_block_wrapper(style)
         || align_str.is_some()
         || line_height_settings.is_some();

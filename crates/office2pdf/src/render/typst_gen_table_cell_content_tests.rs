@@ -361,3 +361,125 @@ fn test_latin_table_cell_uses_natural_line_height() {
         "Latin cell must fill the full hhea line box: {result}"
     );
 }
+
+/// Word puts every cell in a table row on one baseline. Choosing the
+/// grid-snapped line box per cell, from that cell's own text, gave a Korean
+/// label a taller box than its numeric neighbours and split the row across two
+/// baselines 4.29pt apart (issue #498). The grid is a property of the section,
+/// not of a cell's content.
+#[test]
+fn mixed_script_row_shares_one_line_box() {
+    let Some((ascender, descender, _word_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+    let font_size: f64 = 10.0;
+    let metric_em: f64 = ascender + descender;
+    let grid_em: f64 = 18.0 / font_size;
+    let top_em: f64 = grid_em * ascender / metric_em;
+    let bottom_em: f64 = grid_em * descender / metric_em;
+    let make_cell = |text: &str| TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: text.to_string(),
+                style: TextStyle {
+                    font_family: Some("Libertinus Serif".to_string()),
+                    font_size: Some(font_size),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })],
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            // A Korean month label beside a numeric column, as in the research
+            // report fixture.
+            cells: vec![make_cell("2024년 1월"), make_cell("380")],
+            height: None,
+        }],
+        column_widths: vec![120.0, 80.0],
+        ..Table::default()
+    };
+    let mut page = match make_flow_page(vec![Block::Table(table)]) {
+        Page::Flow(flow) => flow,
+        _ => unreachable!(),
+    };
+    page.line_grid_pitch = Some(18.0);
+    let doc = make_doc(vec![Page::Flow(page)]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    let grid_box = format!(
+        "top-edge: {}em, bottom-edge: -{}em",
+        format_f64(top_em),
+        format_f64(bottom_em)
+    );
+    assert_eq!(
+        result.matches(&grid_box).count(),
+        2,
+        "both cells in the row must take the same grid line box: {result}"
+    );
+}
+
+/// Triangulation for [`mixed_script_row_shares_one_line_box`]: the rule is
+/// "the row decides", not "always snap". A row with no East Asian text keeps
+/// the font's own hhea line even when the section declares a grid.
+#[test]
+fn latin_only_row_under_a_grid_keeps_the_font_line() {
+    let Some((ascender, descender, word_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
+        return;
+    };
+    let font_size: f64 = 10.0;
+    let metric_em: f64 = ascender + descender;
+    let hhea_top_em: f64 = word_pitch_em * ascender / metric_em;
+    let hhea_bottom_em: f64 = word_pitch_em * descender / metric_em;
+    let make_cell = |text: &str| TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: text.to_string(),
+                style: TextStyle {
+                    font_family: Some("Libertinus Serif".to_string()),
+                    font_size: Some(font_size),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })],
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            cells: vec![make_cell("Aug 3"), make_cell("380")],
+            height: None,
+        }],
+        column_widths: vec![120.0, 80.0],
+        ..Table::default()
+    };
+    let mut page = match make_flow_page(vec![Block::Table(table)]) {
+        Page::Flow(flow) => flow,
+        _ => unreachable!(),
+    };
+    page.line_grid_pitch = Some(18.0);
+    let doc = make_doc(vec![Page::Flow(page)]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert_eq!(
+        result
+            .matches(&format!(
+                "top-edge: {}em, bottom-edge: -{}em",
+                format_f64(hhea_top_em),
+                format_f64(hhea_bottom_em)
+            ))
+            .count(),
+        2,
+        "a Latin-only row must keep the font's hhea line under a grid: {result}"
+    );
+}
