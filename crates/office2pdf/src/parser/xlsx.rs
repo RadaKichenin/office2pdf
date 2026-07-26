@@ -157,6 +157,12 @@ fn anchored_image(
 
     let x_offset_pt: f64 = (0..anchor.from_col).map(column_width_at).sum::<f64>()
         + anchor.from_col_off_emu as f64 / EMU_PER_PT;
+    // Excel places a drawing at absolute worksheet coordinates, so the
+    // vertical origin is the summed height of every row above the anchor
+    // row plus its `xdr:rowOff` - the same geometry the width and height
+    // already use (issue #474).
+    let y_offset_pt: f64 = (0..anchor.from_row).map(row_height_at).sum::<f64>()
+        + anchor.from_row_off_emu as f64 / EMU_PER_PT;
 
     let image = ImageData {
         data: anchor.data,
@@ -172,6 +178,7 @@ fn anchored_image(
     crate::ir::SheetImage {
         anchor_row: anchor.from_row + 1,
         x_offset_pt,
+        y_offset_pt,
         image,
     }
 }
@@ -215,6 +222,7 @@ fn anchored_text_box(
     crate::ir::SheetTextBox {
         anchor_row: placed.anchor_row,
         x_offset_pt: placed.x_offset_pt,
+        y_offset_pt: placed.y_offset_pt,
         width: placed.image.width.unwrap_or(100.0),
         height: placed.image.height.unwrap_or(50.0),
         paragraphs: anchor.paragraphs,

@@ -1345,6 +1345,9 @@ fn make_sheet_text_box(anchor_row: u32, x_offset_pt: f64, height: f64) -> crate:
     crate::ir::SheetTextBox {
         anchor_row,
         x_offset_pt,
+        // Rows are 20pt in these fixtures, so the anchor row's top edge is
+        // the summed height of the rows above it.
+        y_offset_pt: f64::from(anchor_row - 1) * 20.0,
         width: 100.0,
         height,
         paragraphs: vec![Paragraph {
@@ -1384,21 +1387,35 @@ fn sheet_page_with_text_boxes(text_boxes: Vec<crate::ir::SheetTextBox>) -> Page 
 }
 
 #[test]
-fn test_same_row_sheet_drawings_share_one_reserved_box() {
-    // Excel draws shapes anchored to the same row side by side. Emitting one
-    // reserved flow box each stacked them diagonally and reserved three
-    // times the height, which spilled onto a blank second page (issue #459).
+fn test_sheet_drawings_overlay_the_grid_at_absolute_offsets() {
+    // Excel floats drawings over the cells at absolute worksheet
+    // coordinates. Reserving flow height per drawing stacked same-row shapes
+    // diagonally and spilled the sheet onto a blank page (issue #459), and
+    // even one reserved box per row could not match Excel's vertical
+    // placement because our printed row heights differ from its print grid
+    // (issue #474). All drawings are placed from the sheet's content origin
+    // inside a zero-height box instead.
     let doc = make_doc(vec![sheet_page_with_text_boxes(vec![
-        make_sheet_text_box(1, 0.0, 60.0),
-        make_sheet_text_box(1, 200.0, 60.0),
-        make_sheet_text_box(1, 400.0, 60.0),
+        make_sheet_text_box(3, 0.0, 60.0),
+        make_sheet_text_box(3, 200.0, 60.0),
+        make_sheet_text_box(3, 400.0, 60.0),
     ])]);
     let source = generate_typst(&doc).unwrap().source;
 
     assert_eq!(
-        source.matches("#box(width: 100%, height: 60pt)").count(),
+        source.matches("#box(width: 100%, height: 0pt)").count(),
         1,
-        "same-row drawings share one reserved box: {source}"
+        "drawings share one zero-height overlay: {source}"
+    );
+    assert!(
+        !source.contains("#box(width: 100%, height: 60pt)"),
+        "no drawing may reserve flow height: {source}"
+    );
+    // Row 3's top edge is two 20pt rows down.
+    assert_eq!(
+        source.matches("dy: 40pt").count(),
+        3,
+        "same-row drawings share one vertical origin: {source}"
     );
     for dx in ["dx: 0pt", "dx: 200pt", "dx: 400pt"] {
         assert!(
@@ -1406,40 +1423,4 @@ fn test_same_row_sheet_drawings_share_one_reserved_box() {
             "each drawing keeps its own horizontal offset ({dx}): {source}"
         );
     }
-}
-
-#[test]
-fn test_same_row_sheet_drawings_reserve_the_tallest_height() {
-    // The row's reserved height is the tallest shape on it, not the sum.
-    let doc = make_doc(vec![sheet_page_with_text_boxes(vec![
-        make_sheet_text_box(1, 0.0, 40.0),
-        make_sheet_text_box(1, 200.0, 90.0),
-    ])]);
-    let source = generate_typst(&doc).unwrap().source;
-
-    assert_eq!(
-        source.matches("#box(width: 100%, height: ").count(),
-        1,
-        "the row reserves a single box: {source}"
-    );
-    assert!(
-        source.contains("#box(width: 100%, height: 90pt)"),
-        "the reserved height is the tallest shape, not the sum: {source}"
-    );
-}
-
-#[test]
-fn test_drawings_on_different_rows_keep_separate_boxes() {
-    // Triangulation: shapes on different rows still advance the flow.
-    let doc = make_doc(vec![sheet_page_with_text_boxes(vec![
-        make_sheet_text_box(1, 0.0, 60.0),
-        make_sheet_text_box(5, 0.0, 60.0),
-    ])]);
-    let source = generate_typst(&doc).unwrap().source;
-
-    assert_eq!(
-        source.matches("#box(width: 100%, height: 60pt)").count(),
-        2,
-        "different rows reserve their own boxes: {source}"
-    );
 }

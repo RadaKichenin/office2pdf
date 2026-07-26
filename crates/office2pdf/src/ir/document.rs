@@ -153,10 +153,14 @@ pub struct SheetPage {
 /// A worksheet text box anchored to a sheet row.
 #[derive(Debug, Clone)]
 pub struct SheetTextBox {
-    /// 1-indexed row number after which the box is rendered (like charts).
+    /// 1-indexed anchor row. Used only to order drawings deterministically;
+    /// placement comes from `x_offset_pt`/`y_offset_pt` (issue #474).
     pub anchor_row: u32,
     /// Horizontal offset of the anchor from the sheet's left edge, points.
     pub x_offset_pt: f64,
+    /// Vertical offset of the anchor from the sheet's content top, points
+    /// (issue #474).
+    pub y_offset_pt: f64,
     pub width: f64,
     pub height: f64,
     pub paragraphs: Vec<super::elements::Paragraph>,
@@ -171,10 +175,15 @@ pub struct SheetTextBox {
 /// A worksheet drawing image anchored to a sheet row.
 #[derive(Debug, Clone)]
 pub struct SheetImage {
-    /// 1-indexed row number after which the image is rendered (like charts).
+    /// 1-indexed anchor row. Used only to order drawings deterministically;
+    /// placement comes from `x_offset_pt`/`y_offset_pt` (issue #474).
     pub anchor_row: u32,
     /// Horizontal offset of the anchor from the sheet's left edge, points.
     pub x_offset_pt: f64,
+    /// Vertical offset of the anchor from the sheet's content top, points.
+    /// Excel overlays drawings on the grid at absolute worksheet
+    /// coordinates rather than placing them between rows (issue #474).
+    pub y_offset_pt: f64,
     pub image: super::elements::ImageData,
 }
 

@@ -523,19 +523,19 @@ fn generate_table_with_anchors(
 ) -> Result<(), ConvertError> {
     use crate::ir::Table;
 
+    // Excel overlays drawings on the grid at absolute worksheet
+    // coordinates. Threading them through the row flow could never match
+    // that, because our printed row heights are not Excel's: on the
+    // regression fixture the two rows above the anchor occupy 47.3pt here
+    // against Excel's 36pt, leaving the shapes 11pt low however carefully
+    // they were sequenced (issue #474). Place them from the sheet's content
+    // origin instead, reserving no flow height, and leave charts - which are
+    // ordinary flow content - in the row walk.
+    write_sheet_drawing_overlay(out, images, text_boxes, ctx);
+
     let mut sorted_charts: Vec<(u32, SheetAnchor)> = charts
         .iter()
         .map(|(row, chart)| (*row, SheetAnchor::Chart(chart)))
-        .chain(
-            images
-                .iter()
-                .map(|sheet_image| (sheet_image.anchor_row, SheetAnchor::Image(sheet_image))),
-        )
-        .chain(
-            text_boxes
-                .iter()
-                .map(|text_box| (text_box.anchor_row, SheetAnchor::TextBox(text_box))),
-        )
         .collect();
     sorted_charts.sort_by_key(|(row, _)| *row);
 
@@ -583,7 +583,7 @@ fn generate_table_with_anchors(
                 .iter()
                 .map(|(_, anchor)| anchor)
                 .collect();
-            generate_sheet_anchor_row(out, &row_anchors, ctx);
+            generate_sheet_anchor_row(out, &row_anchors);
             chart_idx = row_end_idx;
         }
     }
@@ -620,62 +620,66 @@ fn generate_table_with_anchors(
             .iter()
             .map(|(_, anchor)| anchor)
             .collect();
-        generate_sheet_anchor_row(out, &row_anchors, ctx);
+        generate_sheet_anchor_row(out, &row_anchors);
         chart_idx = row_end_idx;
     }
 
     Ok(())
 }
 
-/// Emit every drawing anchored to one worksheet row.
+/// Overlay every worksheet drawing at its absolute sheet coordinates.
 ///
-/// Excel lays same-row shapes out side by side over the grid. Reserving a
-/// flow box per shape advanced the flow between them, so three shapes on row
-/// 3 formed a diagonal stack and reserved three times the height, spilling
-/// onto a blank second page (issue #459). One reserved box, as tall as the
-/// tallest shape, holds them all; each keeps its own horizontal offset.
+/// Emitted as a zero-height box at the top of the sheet content so the grid
+/// below is untouched, matching Excel, where a drawing floats over the cells
+/// rather than displacing them (issues #459, #474).
+fn write_sheet_drawing_overlay(
+    out: &mut String,
+    images: &[crate::ir::SheetImage],
+    text_boxes: &[crate::ir::SheetTextBox],
+    ctx: &mut GenCtx,
+) {
+    if images.is_empty() && text_boxes.is_empty() {
+        return;
+    }
+    out.push_str("#box(width: 100%, height: 0pt)[");
+    for sheet_image in images {
+        let _ = write!(
+            out,
+            "#place(top + left, dy: {}pt)[",
+            format_f64(sheet_image.y_offset_pt)
+        );
+        write_placed_sheet_anchor(out, &SheetAnchor::Image(sheet_image), ctx);
+        out.push(']');
+    }
+    for text_box in text_boxes {
+        let _ = write!(
+            out,
+            "#place(top + left, dy: {}pt)[",
+            format_f64(text_box.y_offset_pt)
+        );
+        write_placed_sheet_anchor(out, &SheetAnchor::TextBox(text_box), ctx);
+        out.push(']');
+    }
+    out.push_str("]\n");
+}
+
+/// Emit the chart anchors that belong after one worksheet row.
 ///
-/// Charts are ordinary flow content and keep their own placement.
-fn generate_sheet_anchor_row(out: &mut String, anchors: &[&SheetAnchor], ctx: &mut GenCtx) {
-    for anchor in anchors.iter() {
+/// Only charts reach here: they are ordinary flow content. Images and text
+/// boxes are overlaid at absolute sheet coordinates by
+/// `write_sheet_drawing_overlay` instead (issues #459, #474).
+fn generate_sheet_anchor_row(out: &mut String, anchors: &[&SheetAnchor]) {
+    for anchor in anchors {
         if let SheetAnchor::Chart(chart) = anchor {
             generate_chart(out, chart);
             out.push('\n');
         }
     }
-
-    let placed: Vec<&&SheetAnchor> = anchors
-        .iter()
-        .filter(|anchor| !matches!(anchor, SheetAnchor::Chart(_)))
-        .collect();
-    if placed.is_empty() {
-        return;
-    }
-    let reserved_height_pt: f64 = placed
-        .iter()
-        .map(|anchor| sheet_anchor_height_pt(anchor))
-        .fold(0.0, f64::max);
-    let _ = write!(
-        out,
-        "#box(width: 100%, height: {}pt)[",
-        format_f64(reserved_height_pt)
-    );
-    for anchor in placed {
-        write_placed_sheet_anchor(out, anchor, ctx);
-    }
-    out.push_str("]\n");
 }
 
-/// The flow height a placed drawing occupies.
-fn sheet_anchor_height_pt(anchor: &SheetAnchor) -> f64 {
-    match anchor {
-        SheetAnchor::TextBox(text_box) => text_box.height,
-        SheetAnchor::Image(sheet_image) => sheet_image.image.height.unwrap_or(100.0),
-        SheetAnchor::Chart(_) => 0.0,
-    }
-}
-
-/// Place one drawing at its horizontal offset inside the row's reserved box.
+/// Place one drawing at its horizontal offset, inside whichever container
+/// the caller opened: the absolute overlay for images and text boxes, or a
+/// chart row's reserved box.
 fn write_placed_sheet_anchor(out: &mut String, anchor: &SheetAnchor, ctx: &mut GenCtx) {
     match anchor {
         SheetAnchor::Chart(_) => {}
