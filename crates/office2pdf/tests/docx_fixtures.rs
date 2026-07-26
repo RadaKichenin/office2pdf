@@ -533,9 +533,9 @@ fn blank_paragraphs_without_a_picture_are_kept() {
         "blank paragraphs carrying no drawing are deliberate blank lines and must survive"
     );
     assert!(
-        blocks
-            .iter()
-            .any(|block| matches!(block, Block::Paragraph(paragraph) if !paragraph.runs.is_empty())),
+        blocks.iter().any(
+            |block| matches!(block, Block::Paragraph(paragraph) if !paragraph.runs.is_empty())
+        ),
         "paragraphs carrying text must survive alongside pictures"
     );
 }
