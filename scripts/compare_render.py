@@ -1,0 +1,328 @@
+#!/usr/bin/env python3
+"""Compare a rendered PDF against a native Office export on three axes.
+
+No single measure is trustworthy alone, and each one's blind spot is
+another's strength:
+
+- **Geometry** catches position, size, and pitch. It is what actually
+  changes when a layout bug is fixed, and it is the only axis that can
+  distinguish "moved to the right place" from "moved somewhere else".
+  Blind to colour and to elements that are absent entirely.
+- **Histogram** catches fill colour, recolouring, and missing elements,
+  because it counts what is drawn without caring where. Blind to position,
+  size, and font: those keep the ink total the same.
+- **Pixel difference** is the catch-all that notices what the other two
+  were not looking for. It is the weakest signal of the three: `AE` counts
+  differing pixels without weighing how different they are, so it scores a
+  layout shift and a colour inversion alike, and it can *rise* when a fix is
+  correct but the element is still displaced by an unrelated defect.
+
+Read them together. A fix that improves geometry while leaving the
+histogram flat has moved something without changing what is drawn, which is
+usually exactly what a positioning fix should do.
+
+Usage:
+    compare_render.py GT.pdf OUTPUT.pdf [--page N] [--dpi 150]
+"""
+
+from __future__ import annotations
+
+import argparse
+import re
+import subprocess
+import sys
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+
+PAGE_RE = re.compile(r'<page width="[\d.]+" height="[\d.]+">(.*?)</page>', re.S)
+WORD_RE = re.compile(
+    r'<word xMin="([\d.-]+)" yMin="([\d.-]+)" xMax="([\d.-]+)" yMax="([\d.-]+)">(.*?)</word>',
+    re.S,
+)
+HISTOGRAM_BINS = 32
+
+
+@dataclass(frozen=True)
+class TextLine:
+    page: int
+    x_min: float
+    y_min: float
+    text: str
+
+
+def render_page(pdf: Path, page: int, dpi: int, out_dir: Path) -> Path:
+    """Rasterise one page, returning the PNG path."""
+    prefix = out_dir / pdf.stem
+    subprocess.run(
+        ["pdftoppm", "-r", str(dpi), "-png", "-f", str(page), "-l", str(page),
+         str(pdf), str(prefix)],
+        check=True,
+        capture_output=True,
+    )
+    pages = sorted(out_dir.glob(f"{pdf.stem}-*.png"))
+    if not pages:
+        raise SystemExit(f"{pdf}: page {page} did not render")
+    return pages[0]
+
+
+def text_lines(pdf: Path) -> list[TextLine]:
+    """Text lines with their top-left corner, grouped from word boxes.
+
+    Word baselines jitter by fractions of a point inside one visual line, so
+    the rows are bucketed to 1pt before being joined.
+    """
+    xml = subprocess.run(
+        ["pdftotext", "-bbox", str(pdf), "-"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    lines: list[TextLine] = []
+    for page_index, page in enumerate(PAGE_RE.findall(xml)):
+        rows: dict[int, list[tuple[float, float, str]]] = {}
+        for match in WORD_RE.finditer(page):
+            x_min, y_min = float(match.group(1)), float(match.group(2))
+            rows.setdefault(round(y_min), []).append((x_min, y_min, match.group(5)))
+        for key in sorted(rows):
+            words = sorted(rows[key])
+            text = re.sub(r"\s+", " ", " ".join(word[2] for word in words)).strip()
+            if text:
+                lines.append(
+                    TextLine(page_index, min(w[0] for w in words),
+                             min(w[1] for w in words), text)
+                )
+    return lines
+
+
+def report_geometry(gt: Path, other: Path) -> dict[str, float]:
+    """Vertical and horizontal drift of every line matched by unique text."""
+    def unique(lines: list[TextLine]) -> dict[str, TextLine]:
+        seen: dict[str, list[TextLine]] = {}
+        for line in lines:
+            seen.setdefault(line.text, []).append(line)
+        return {text: found[0] for text, found in seen.items() if len(found) == 1}
+
+    gt_lines, other_lines = unique(text_lines(gt)), unique(text_lines(other))
+    dy: list[float] = []
+    dx: list[float] = []
+    page_mismatch = 0
+    for text, reference in gt_lines.items():
+        candidate = other_lines.get(text)
+        if candidate is None:
+            continue
+        if candidate.page != reference.page:
+            page_mismatch += 1
+            continue
+        dy.append(candidate.y_min - reference.y_min)
+        dx.append(candidate.x_min - reference.x_min)
+
+    print("## Geometry — position, size, pitch")
+    if not dy:
+        print("  no lines matched by unique text; compare pages manually")
+        return {}
+    mad_y = sum(abs(value) for value in dy) / len(dy)
+    mad_x = sum(abs(value) for value in dx) / len(dx)
+    print(f"  matched lines      {len(dy)}")
+    print(f"  vertical   MAD {mad_y:7.2f}pt   worst {max(dy, key=abs):+8.2f}pt")
+    print(f"  horizontal MAD {mad_x:7.2f}pt   worst {max(dx, key=abs):+8.2f}pt")
+    if page_mismatch:
+        print(f"  on a different page: {page_mismatch} line(s) — pagination differs")
+    return {"mad_y": mad_y, "mad_x": mad_x, "page_mismatch": float(page_mismatch)}
+
+
+def histogram(png: Path) -> tuple[list[int], int]:
+    """Per-channel binned colour counts, flattened R|G|B, and the pixel total."""
+    txt = subprocess.run(
+        ["magick", str(png), "-depth", "8", "txt:-"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    counts = [0] * (3 * HISTOGRAM_BINS)
+    total = 0
+    step = 256 // HISTOGRAM_BINS
+    for line in txt.splitlines():
+        head, _, rest = line.partition("#")
+        if not head or len(rest) < 6:
+            continue
+        try:
+            channels = [int(rest[i : i + 2], 16) for i in (0, 2, 4)]
+        except ValueError:
+            continue
+        for index, value in enumerate(channels):
+            counts[index * HISTOGRAM_BINS + min(value // step, HISTOGRAM_BINS - 1)] += 1
+        total += 1
+    return counts, total
+
+
+def ink_fraction(counts: list[int], total: int) -> float:
+    """Share of pixels that are not near-white, averaged over the channels."""
+    if total == 0:
+        return 0.0
+    dark = sum(
+        counts[channel * HISTOGRAM_BINS + b]
+        for channel in range(3)
+        for b in range(HISTOGRAM_BINS - 2)
+    )
+    return dark / (3.0 * total)
+
+
+def report_histogram(gt_png: Path, other_png: Path) -> dict[str, float]:
+    """Colour-distribution agreement, independent of where the pixels sit."""
+    gt_counts, gt_total = histogram(gt_png)
+    counts, total = histogram(other_png)
+    gt_sum = sum(gt_counts) or 1
+    other_sum = sum(counts) or 1
+    reference = [value / gt_sum for value in gt_counts]
+    candidate = [value / other_sum for value in counts]
+    intersection = sum(min(a, b) for a, b in zip(reference, candidate))
+    chi_square = sum(
+        (a - b) ** 2 / (a + b) for a, b in zip(reference, candidate) if (a + b) > 0
+    )
+    gt_ink = ink_fraction(gt_counts, gt_total)
+    ink = ink_fraction(counts, total)
+
+    print("## Histogram — fill colour, recolouring, missing elements")
+    print(f"  intersection       {intersection:.4f}   (1.0000 = identical distribution)")
+    print(f"  chi-square         {chi_square:.4f}   (0.0000 = identical)")
+    print(f"  ink coverage       {ink * 100:6.3f}%  against GT {gt_ink * 100:6.3f}%"
+          f"   ({(ink - gt_ink) * 100:+.3f}%)")
+    return {"intersection": intersection, "ink_delta": (ink - gt_ink) * 100.0}
+
+
+def report_pixels(gt_png: Path, other_png: Path, out_dir: Path) -> None:
+    """Whole-page difference, as a coarse catch-all."""
+    normalised = out_dir / "gt-normalised.png"
+    size = subprocess.run(
+        ["magick", "identify", "-format", "%wx%h", str(other_png)],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    # pdftoppm can differ by a pixel between two PDFs of the same paper size,
+    # which would otherwise make every comparison fail outright.
+    subprocess.run(
+        ["magick", str(gt_png), "-background", "white", "-extent", size, str(normalised)],
+        check=True, capture_output=True,
+    )
+
+    print("## Pixel difference — coarse catch-all, read last")
+    for label, args in (
+        ("AE  5% fuzz", ["-metric", "AE", "-fuzz", "5%"]),
+        ("AE  1% fuzz", ["-metric", "AE", "-fuzz", "1%"]),
+        ("RMSE       ", ["-metric", "RMSE"]),
+    ):
+        result = subprocess.run(
+            ["magick", "compare", *args, str(normalised), str(other_png), "null:"],
+            capture_output=True, text=True,
+        )
+        print(f"  {label}      {result.stderr.strip()}")
+
+
+def diagnose(geometry: dict[str, float], histogram_result: dict[str, float]) -> None:
+    """Say what the combination of axes means, and what to look at next.
+
+    This is the point of running all three: a single number invites the
+    wrong conclusion. A pixel count that rises can accompany a correct fix,
+    and one that does not move at all can hide a large geometric
+    improvement. The pattern across axes is what identifies the defect
+    class.
+    """
+    print("## Reading")
+    if not geometry:
+        print("  Geometry could not be measured, so the other axes stand alone.")
+        print("  Compare the pages by eye before trusting them.")
+        return
+
+    mad_y: float = geometry["mad_y"]
+    mad_x: float = geometry["mad_x"]
+    pages_differ: bool = geometry["page_mismatch"] > 0
+    intersection: float = histogram_result.get("intersection", 1.0)
+    ink_delta: float = histogram_result.get("ink_delta", 0.0)
+
+    # Thresholds are deliberately loose: they route attention, they do not
+    # decide correctness. A point of drift is invisible; ten is not.
+    drifts_vertically: bool = mad_y > 2.0
+    drifts_horizontally: bool = mad_x > 1.0
+    colour_differs: bool = intersection < 0.99
+    ink_differs: bool = abs(ink_delta) > 0.2
+
+    findings: list[str] = []
+    if pages_differ:
+        findings.append(
+            "Pagination differs — content sits on the wrong page. Fix this "
+            "first: every per-line measurement below it is contaminated by "
+            "the accumulated drift that pushed it over."
+        )
+    if drifts_vertically:
+        findings.append(
+            f"Vertical drift {mad_y:.2f}pt — line advance, paragraph spacing, "
+            "or row height. Compare consecutive-line pitch against the GT "
+            "rather than absolute positions, so a constant offset near the "
+            "top does not read as a spacing bug."
+        )
+    if drifts_horizontally:
+        findings.append(
+            f"Horizontal drift {mad_x:.2f}pt — indent, column width, or "
+            "margin. If it grows across the page it is per-column and "
+            "cumulative; if it is constant it is an indent or margin."
+        )
+    if colour_differs:
+        findings.append(
+            f"Colour distribution differs (intersection {intersection:.4f}) — "
+            "a fill, theme colour, or shading is wrong, or an element is "
+            "missing entirely. Position measurements will not show this."
+        )
+    if ink_differs and not colour_differs:
+        findings.append(
+            f"Ink coverage is off by {ink_delta:+.3f}% while the colour "
+            "distribution matches — the right things are drawn in the right "
+            "colours but at the wrong size, or a font renders at a different "
+            "weight."
+        )
+
+    if not findings:
+        print("  No axis shows a material difference. What remains is font")
+        print("  rasterisation and antialiasing; inspect crops at full")
+        print("  resolution before concluding anything is wrong.")
+        return
+    for index, finding in enumerate(findings, start=1):
+        print(f"  {index}. {finding}")
+
+    if not colour_differs and not ink_differs and (drifts_vertically or drifts_horizontally):
+        print()
+        print("  Colour and ink are unchanged while geometry moves: this is a")
+        print("  pure layout difference. A pixel count may rise even as the")
+        print("  fix is correct, because a displaced element that grows")
+        print("  toward its true size overlaps GT less, not more.")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    parser.add_argument("gt", type=Path, help="native Office export")
+    parser.add_argument("output", type=Path, help="office2pdf output")
+    parser.add_argument("--page", type=int, default=1)
+    parser.add_argument("--dpi", type=int, default=150, help="at least 150")
+    args = parser.parse_args()
+
+    if args.dpi < 150:
+        raise SystemExit("--dpi must be at least 150; hairlines vanish below that")
+
+    print(f"GT     {args.gt}")
+    print(f"output {args.output}")
+    print(f"page {args.page} at {args.dpi} DPI\n")
+
+    geometry = report_geometry(args.gt, args.output)
+    print()
+    with tempfile.TemporaryDirectory() as raw_dir:
+        out_dir = Path(raw_dir)
+        gt_png = render_page(args.gt, args.page, args.dpi, out_dir)
+        other_png = render_page(args.output, args.page, args.dpi, out_dir)
+        histogram_result = report_histogram(gt_png, other_png)
+        print()
+        report_pixels(gt_png, other_png, out_dir)
+    print()
+    diagnose(geometry, histogram_result)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
