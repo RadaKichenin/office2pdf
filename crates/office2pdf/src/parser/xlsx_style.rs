@@ -1,14 +1,26 @@
 use crate::ir::{BorderLineStyle, BorderSide, CellBorder, Color, TextStyle};
 use crate::parser::xml_util::parse_argb_color;
 
-/// Map Excel border style name to width in points.
+/// Map an Excel border style name to its printed width in points.
+///
+/// `thin` is measured: on a native Excel export of a `thin`-bordered sheet
+/// its rules are 2px at 150 DPI, i.e. 0.96pt, where the previous 0.5pt
+/// printed 1px and left the grid half Excel's weight (issue #487). The
+/// other styles are scaled to keep Excel's ordering around that anchor —
+/// `medium` and `thick` were already proportionally light, and leaving
+/// `medium` at the old 1.0pt would have made it indistinguishable from the
+/// corrected `thin`.
 pub(super) fn border_style_to_width(style: &str) -> Option<f64> {
     match style {
-        "hair" => Some(0.25),
-        "thin" | "dashed" | "dotted" | "dashDot" | "dashDotDot" => Some(0.5),
-        "medium" | "mediumDashed" | "mediumDashDot" | "mediumDashDotDot" | "double"
-        | "slantDashDot" => Some(1.0),
-        "thick" => Some(2.0),
+        "hair" => Some(0.5),
+        "thin" | "dashed" | "dotted" | "dashDot" | "dashDotDot" => Some(1.0),
+        // A double rule is drawn as two strokes with a gap between them, so
+        // each stroke carries the `thin` weight rather than the combined one.
+        "double" => Some(1.0),
+        "medium" | "mediumDashed" | "mediumDashDot" | "mediumDashDotDot" | "slantDashDot" => {
+            Some(1.75)
+        }
+        "thick" => Some(2.5),
         _ => None, // "none" or unknown
     }
 }
