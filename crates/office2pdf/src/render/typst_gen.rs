@@ -549,13 +549,16 @@ fn generate_table_with_anchors(
 
         // Emit all charts anchored at or before this row
         while chart_idx < sorted_charts.len() && sorted_charts[chart_idx].0 <= row_num {
-            // Emit table segment up to and including this row
-            if row_start <= row_end {
+            // Emit the table segment up to but NOT including the anchor row:
+            // a drawing starts at its `xdr:from` row's top edge, so emitting
+            // the anchor row first pushed every shape a whole row band lower
+            // than Excel (issue #474).
+            if row_start < row_end {
                 let segment = Table {
-                    rows: table.rows[row_start..=row_end].to_vec(),
+                    rows: table.rows[row_start..row_end].to_vec(),
                     column_widths: table.column_widths.clone(),
                     header_row_count: if row_start == 0 {
-                        table.header_row_count.min(row_end + 1)
+                        table.header_row_count.min(row_end)
                     } else {
                         0
                     },
@@ -567,7 +570,7 @@ fn generate_table_with_anchors(
                 };
                 generate_table(out, &segment, ctx)?;
                 out.push('\n');
-                row_start = row_end + 1;
+                row_start = row_end;
             }
             // Emit every drawing anchored to this row together, so same-row
             // shapes overlay rather than stack (issue #459).
