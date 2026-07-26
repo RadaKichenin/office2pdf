@@ -1030,3 +1030,140 @@ fn test_grid_paragraph_space_after_stays_raw_gap() {
         "grid paragraph keeps the raw 4pt gap: {result}"
     );
 }
+
+#[test]
+fn test_paragraph_left_indent_offsets_the_text_column() {
+    // Word's `w:ind w:left` moves the whole paragraph right; only the list
+    // path ever read it, so indented body paragraphs started at the margin
+    // (issue #464).
+    let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
+        style: ParagraphStyle {
+            indent_left: Some(12.0),
+            ..ParagraphStyle::default()
+        },
+        runs: vec![Run {
+            text: "$ cargo install office2pdf-cli".to_string(),
+            style: TextStyle::default(),
+            href: None,
+            footnote: None,
+        }],
+    })])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains("inset: (left: 12pt, right: 0pt)"),
+        "left indent should inset the paragraph block: {result}"
+    );
+}
+
+#[test]
+fn test_paragraph_right_indent_narrows_the_text_column() {
+    let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
+        style: ParagraphStyle {
+            indent_right: Some(18.0),
+            ..ParagraphStyle::default()
+        },
+        runs: vec![Run {
+            text: "narrowed".to_string(),
+            style: TextStyle::default(),
+            href: None,
+            footnote: None,
+        }],
+    })])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains("inset: (left: 0pt, right: 18pt)"),
+        "right indent should inset the paragraph block: {result}"
+    );
+}
+
+#[test]
+fn test_indented_paragraph_shading_starts_at_the_indent() {
+    // Word paints `w:pPr/w:shd` from the left indent to the right indent,
+    // not across the whole text column: measured on a Word export, the
+    // shaded band of a 12pt-indented code line starts at the indent, 12pt
+    // right of the margin (issue #464). The fill therefore belongs to an
+    // inner block that spans only the inset content area.
+    let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
+        style: ParagraphStyle {
+            indent_left: Some(12.0),
+            background: Some(Color::new(0xF4, 0xF4, 0xF4)),
+            ..ParagraphStyle::default()
+        },
+        runs: vec![Run {
+            text: "$ office2pdf --version".to_string(),
+            style: TextStyle::default(),
+            href: None,
+            footnote: None,
+        }],
+    })])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    let inset_at = result
+        .find("inset: (left: 12pt, right: 0pt)")
+        .expect("indent should inset the outer block");
+    let fill_at = result
+        .find("fill: rgb(244, 244, 244)")
+        .expect("shading should still be emitted");
+    assert!(
+        fill_at > inset_at,
+        "the fill belongs to a block nested inside the indent: {result}"
+    );
+}
+
+#[test]
+fn test_unindented_paragraph_keeps_a_single_block() {
+    // A paragraph with no indent must not gain an inset or a nested block.
+    let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
+        style: ParagraphStyle {
+            background: Some(Color::new(0xF4, 0xF4, 0xF4)),
+            ..ParagraphStyle::default()
+        },
+        runs: vec![Run {
+            text: "flush left".to_string(),
+            style: TextStyle::default(),
+            href: None,
+            footnote: None,
+        }],
+    })])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        !result.contains("inset: (left:"),
+        "an unindented paragraph needs no inset: {result}"
+    );
+    assert!(
+        result.contains("fill: rgb(244, 244, 244)"),
+        "shading is still emitted: {result}"
+    );
+}
+
+#[test]
+fn test_empty_indented_paragraph_closes_its_block() {
+    // An indented paragraph with no runs takes the early-return path. Leaving
+    // its indent wrapper open produced "unclosed delimiter" and failed 73
+    // third-party fixtures outright (regression caught on #464).
+    let doc = make_doc(vec![make_flow_page(vec![
+        Block::Paragraph(Paragraph {
+            style: ParagraphStyle {
+                indent_left: Some(24.0),
+                ..ParagraphStyle::default()
+            },
+            runs: Vec::new(),
+        }),
+        make_paragraph("after the empty paragraph"),
+    ])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    let opened: usize = result.matches('[').count();
+    let closed: usize = result.matches(']').count();
+    assert_eq!(
+        opened, closed,
+        "every content block opened must be closed: {result}"
+    );
+    assert!(
+        result.contains("after the empty paragraph"),
+        "the following paragraph must not be swallowed: {result}"
+    );
+}
