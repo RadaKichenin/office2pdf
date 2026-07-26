@@ -231,6 +231,7 @@ pub(super) fn word_cell_line_box_settings(
     runs: &[Run],
     style: &ParagraphStyle,
     line_grid_pitch: Option<f64>,
+    row_snaps_to_grid: bool,
 ) -> Option<String> {
     if style.line_spacing.is_some() || style.line_box.is_some() {
         return None;
@@ -250,8 +251,13 @@ pub(super) fn word_cell_line_box_settings(
     // around 3.5pt margins, leaving an 18.44pt line where the font's own
     // hhea line is 12.64pt - no Malgun metric is near 1.78em, so the row is
     // sized from the 18pt grid, not the font (issue #404).
+    //
+    // The caller decides from the whole row, not from this cell: reading each
+    // cell's own text put a Korean label and its numeric neighbours on line
+    // boxes of different heights, splitting one row across two baselines
+    // 4.29pt apart (issue #498).
     let advance_em: f64 = match line_grid_pitch.filter(|pitch| *pitch > 0.0) {
-        Some(pitch) if runs.iter().any(|run| run.text.chars().any(is_cjk_like)) => {
+        Some(pitch) if row_snaps_to_grid => {
             let natural_pt: f64 = metric_em * font_size;
             let grid_lines: f64 = (natural_pt / pitch).ceil().max(1.0);
             grid_lines * pitch / font_size
@@ -642,7 +648,7 @@ fn needs_no_wrap_joiner(previous: char, current: char) -> bool {
     !previous.is_whitespace() && !current.is_whitespace()
 }
 
-fn is_cjk_like(ch: char) -> bool {
+pub(super) fn is_cjk_like(ch: char) -> bool {
     matches!(
         ch as u32,
         0x1100..=0x11FF

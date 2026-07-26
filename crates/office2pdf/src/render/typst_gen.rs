@@ -82,6 +82,10 @@ struct GenCtx {
     /// `w:spacing w:before` on the very first body paragraph, unlike the top of
     /// pages reached by a break.
     at_document_start: bool,
+    /// Whether the table row being generated takes the section's grid-snapped
+    /// line box. Decided once per row so every cell in it shares a baseline,
+    /// which reading each cell's own text could not guarantee (issue #498).
+    row_snaps_to_grid: bool,
 }
 
 impl GenCtx {
@@ -92,6 +96,7 @@ impl GenCtx {
             next_text_box_id: 0,
             table_depth: 0,
             line_grid_pitch: None,
+            row_snaps_to_grid: false,
             document_default_tab_stop_pt: None,
             default_tab_width_pt: DEFAULT_TAB_WIDTH_PT,
             at_document_start: true,
