@@ -746,6 +746,35 @@ fn resolved_or_legacy(
     })
 }
 
+/// Apply an `<a:rPr>` element's size and emphasis attributes to a run
+/// style. Called from both the `Start` and `Empty` arms of the drawing
+/// reader: Excel writes shape-label run properties as a self-closing
+/// element, which quick-xml reports as `Empty`, and reading them on `Start`
+/// alone dropped every attribute (issue #466).
+fn apply_run_properties(
+    style: &mut crate::ir::TextStyle,
+    element: &quick_xml::events::BytesStart<'_>,
+) {
+    for attr in element.attributes().flatten() {
+        match attr.key.local_name().as_ref() {
+            b"sz" => {
+                if let Ok(value) = attr.unescape_value()
+                    && let Ok(hundredths_pt) = value.parse::<f64>()
+                {
+                    style.font_size = Some(hundredths_pt / 100.0);
+                }
+            }
+            b"b" if attr.unescape_value().ok().as_deref() == Some("1") => {
+                style.bold = Some(true);
+            }
+            b"i" if attr.unescape_value().ok().as_deref() == Some("1") => {
+                style.italic = Some(true);
+            }
+            _ => {}
+        }
+    }
+}
+
 /// Parse `<xdr:sp>` text boxes from a worksheet drawing, resolving scheme
 /// colors against the workbook theme palette and run typefaces against its
 /// font scheme.
@@ -846,26 +875,7 @@ pub(super) fn parse_drawing_text_boxes(
                         in_run = true;
                         current_style = TextStyle::default();
                     }
-                    b"rPr" if in_run => {
-                        for attr in e.attributes().flatten() {
-                            match attr.key.local_name().as_ref() {
-                                b"sz" => {
-                                    if let Ok(v) = attr.unescape_value()
-                                        && let Ok(sz) = v.parse::<f64>()
-                                    {
-                                        current_style.font_size = Some(sz / 100.0);
-                                    }
-                                }
-                                b"b" if attr.unescape_value().ok().as_deref() == Some("1") => {
-                                    current_style.bold = Some(true);
-                                }
-                                b"i" if attr.unescape_value().ok().as_deref() == Some("1") => {
-                                    current_style.italic = Some(true);
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
+                    b"rPr" if in_run => apply_run_properties(&mut current_style, e),
                     b"t" if in_run => in_text = true,
                     b"srgbClr" | b"schemeClr" => {
                         let parsed =
@@ -905,6 +915,7 @@ pub(super) fn parse_drawing_text_boxes(
                             current_style.font_family = Some(family);
                         }
                     }
+                    b"rPr" if in_run => apply_run_properties(&mut current_style, e),
                     b"pPr" if current_para.is_some() => {
                         for attr in e.attributes().flatten() {
                             if attr.key.local_name().as_ref() == b"algn"
