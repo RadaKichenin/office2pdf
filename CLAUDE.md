@@ -28,9 +28,10 @@
 
 - **IMPORTANT: Run the `lfs-cost-advisor` agent and follow its recommendation before adding any file to Git LFS, or adding `lfs: true` / `git lfs pull` to a workflow job.** Reintroducing LFS restores the fork-billing exposure this split removed.
 - Fixtures the default `cargo test` suite reads are **tracked in git normally**. Ordinary git objects are not metered, so a new fixture under a few MB just gets committed.
-- The bulk corpus (2,695 files) lives in the `fixtures-v1` release asset and is fetched by `.github/actions/bulk-fixtures`, which verifies the archive checksum and file count. Only the `#[ignore]`d gate in `bulk_conversion.rs` needs it.
+- The bulk corpus (2,695 files) lives in the `fixtures-v1` release asset and is fetched by `.github/actions/bulk-fixtures`, which verifies the archive checksum and that every archived file survived extraction. Only the `#[ignore]`d gate in `bulk_conversion.rs` needs it.
 - `.gitignore` covers `tests/fixtures/*/libreoffice/*` and `tests/fixtures/*/poi/*` so extracted bulk files stay untracked. Committing a fixture there needs `git add -f`, which is the intended friction — confirm the default suite actually reads it first.
-- Regenerate the corpus with `scripts/download-third-party-fixtures.sh`, then publish a new `fixtures-vN` release and bump the tag, checksum, and file count in `.github/actions/bulk-fixtures/action.yml`.
+- Regenerate the corpus with `scripts/download-third-party-fixtures.sh`, then publish a new `fixtures-vN` release and bump the `tag`, `sha256`, and `min-files` inputs in `.github/actions/bulk-fixtures/action.yml`.
+- A fixture referenced anywhere outside `tests/bulk_conversion_baseline.json` — including `tests/golden_mocks/**` and `tests/visual_audits/**`, which non-`#[ignore]`d tests read — must be tracked, not left to the release asset.
 
 ## Logging
 
