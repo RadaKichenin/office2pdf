@@ -122,7 +122,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          lfs: true
+          lfs: false
+        env:
+          GIT_LFS_SKIP_SMUDGE: "1"
+      - uses: ./.github/actions/lfs-fixtures
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Install qpdf
@@ -183,7 +186,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          lfs: true
+          lfs: false
+        env:
+          GIT_LFS_SKIP_SMUDGE: "1"
+      - uses: ./.github/actions/lfs-fixtures
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Compare fixture outcomes with baseline
