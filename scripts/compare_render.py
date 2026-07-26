@@ -129,12 +129,20 @@ def report_geometry(gt: Path, other: Path) -> dict[str, float]:
         return {}
     mad_y = sum(abs(value) for value in dy) / len(dy)
     mad_x = sum(abs(value) for value in dx) / len(dx)
-    print(f"  matched lines      {len(dy)}")
+    coverage = len(dy) / len(gt_lines) if gt_lines else 0.0
+    print(f"  matched lines      {len(dy)} of {len(gt_lines)} "
+          f"({coverage * 100:.0f}% of the GT's unique lines)")
     print(f"  vertical   MAD {mad_y:7.2f}pt   worst {max(dy, key=abs):+8.2f}pt")
     print(f"  horizontal MAD {mad_x:7.2f}pt   worst {max(dx, key=abs):+8.2f}pt")
     if page_mismatch:
         print(f"  on a different page: {page_mismatch} line(s) — pagination differs")
-    return {"mad_y": mad_y, "mad_x": mad_x, "page_mismatch": float(page_mismatch)}
+    return {
+        "mad_y": mad_y,
+        "mad_x": mad_x,
+        "page_mismatch": float(page_mismatch),
+        "matched": float(len(dy)),
+        "coverage": coverage,
+    }
 
 
 def histogram(png: Path) -> tuple[list[int], int]:
@@ -238,6 +246,21 @@ def diagnose(geometry: dict[str, float], histogram_result: dict[str, float]) -> 
         print("  Geometry could not be measured, so the other axes stand alone.")
         print("  Compare the pages by eye before trusting them.")
         return
+
+    # A drift figure averaged over a handful of lines is noise. Korean
+    # sheets match poorly because word segmentation differs between the two
+    # PDFs, and one such page reported 4.11pt of "drift" from nine matched
+    # lines out of sixty — a number with no meaning that would have sent the
+    # next investigation chasing a row-height bug that is not there.
+    matched: float = geometry.get("matched", 0.0)
+    coverage: float = geometry.get("coverage", 0.0)
+    if matched < 10 or coverage < 0.25:
+        print(f"  Only {matched:.0f} lines matched ({coverage * 100:.0f}% of the GT).")
+        print("  Treat the geometry figures as unreliable: too few samples, and")
+        print("  the ones that matched are not a random selection. Compare the")
+        print("  pages by eye, or measure a specific element directly, before")
+        print("  drawing any conclusion from the drift above.")
+        print()
 
     mad_y: float = geometry["mad_y"]
     mad_x: float = geometry["mad_x"]
