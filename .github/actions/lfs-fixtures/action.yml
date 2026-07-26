@@ -1,0 +1,49 @@
+name: Fetch LFS fixtures
+description: >-
+  Restore the Git LFS fixture corpus from the Actions cache and pull only the
+  objects the cache does not already hold.
+
+runs:
+  using: composite
+  steps:
+    # Key the cache on the LFS object manifest rather than a commit SHA: the corpus is
+    # immutable third-party data, so the key changes only when a fixture is actually
+    # added or replaced, not on every push.
+    - name: Resolve LFS object manifest
+      shell: bash
+      run: git lfs ls-files -l | cut -d' ' -f1 | sort > .lfs-assets-id
+
+    # restore-keys lets a manifest change reuse the previous corpus and pull only the
+    # delta, so adding one fixture costs one fixture of bandwidth, not the whole corpus.
+    - name: Restore LFS object cache
+      uses: actions/cache@v4
+      with:
+        path: .git/lfs
+        key: lfs-${{ runner.os }}-${{ hashFiles('.lfs-assets-id') }}
+        restore-keys: lfs-${{ runner.os }}-
+
+    # Reports cache-vs-network bytes so LFS bandwidth regressions are visible in the job
+    # log instead of only surfacing later as a billing block.
+    - name: Fetch missing LFS objects
+      shell: bash
+      run: |
+        set -euo pipefail
+        restored_kib="$(du -sk .git/lfs/objects 2>/dev/null | cut -f1 || echo 0)"
+        git lfs pull
+        final_kib="$(du -sk .git/lfs/objects | cut -f1)"
+        echo "LFS objects: ${restored_kib} KiB restored from cache, ${final_kib} KiB total, $((final_kib - restored_kib)) KiB downloaded from the LFS endpoint"
+
+    # Fixture tests call is_lfs_pointer() and silently `return` on an unfetched pointer
+    # (crates/office2pdf/tests/docx_fixtures.rs, xlsx_fixtures.rs), so an incomplete
+    # restore would turn real coverage into skipped tests behind a green check. Fail
+    # loudly here instead: `git lfs ls-files` marks a pointer-only entry with `-`.
+    - name: Verify every LFS object materialized
+      shell: bash
+      run: |
+        set -euo pipefail
+        unfetched="$(git lfs ls-files | awk '$2 == "-"' | wc -l | tr -d ' ')"
+        if [ "${unfetched}" -ne 0 ]; then
+          echo "::error::${unfetched} LFS object(s) still unfetched after pull; fixture tests would silently skip"
+          exit 1
+        fi
+        echo "All $(git lfs ls-files | wc -l | tr -d ' ') LFS objects materialized"
