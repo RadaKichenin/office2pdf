@@ -191,18 +191,47 @@ def report_histogram(gt_png: Path, other_png: Path) -> dict[str, float]:
     reference = [value / gt_sum for value in gt_counts]
     candidate = [value / other_sum for value in counts]
     intersection = sum(min(a, b) for a, b in zip(reference, candidate))
-    chi_square = sum(
-        (a - b) ** 2 / (a + b) for a, b in zip(reference, candidate) if (a + b) > 0
-    )
+    # Bin-wise agreement punishes a one-level shift as hard as a recolour: a
+    # smooth gradient dithers by a channel step or two between renderers, and
+    # every one of those pixels lands in a neighbouring bin. Three decks
+    # scored 0.9745-0.9860 on intersection with their gradients pixel-identical
+    # to within +-2 per channel. Comparing the *cumulative* distributions
+    # instead measures how far colour has to move, so a one-bin shift costs
+    # almost nothing while a genuine recolour still shows.
+    shift = cumulative_distance(reference, candidate)
     gt_ink = ink_fraction(gt_counts, gt_total)
     ink = ink_fraction(counts, total)
 
     print("## Histogram — fill colour, recolouring, missing elements")
     print(f"  intersection       {intersection:.4f}   (1.0000 = identical distribution)")
-    print(f"  chi-square         {chi_square:.4f}   (0.0000 = identical)")
+    print(f"  colour shift       {shift:.4f}   (0.0000 = identical; tolerates dithering)")
     print(f"  ink coverage       {ink * 100:6.3f}%  against GT {gt_ink * 100:6.3f}%"
           f"   ({(ink - gt_ink) * 100:+.3f}%)")
-    return {"intersection": intersection, "ink_delta": (ink - gt_ink) * 100.0}
+    return {
+        "intersection": intersection,
+        "shift": shift,
+        "ink_delta": (ink - gt_ink) * 100.0,
+    }
+
+
+def cumulative_distance(reference: list[float], candidate: list[float]) -> float:
+    """Mean per-channel distance between the cumulative distributions.
+
+    Insensitive to a colour landing one bin either side of where it did in
+    the reference, which is what renderer dithering produces, while still
+    growing with a real change in what colour is present.
+    """
+    channels = 3
+    total = 0.0
+    for channel in range(channels):
+        start = channel * HISTOGRAM_BINS
+        run_reference = 0.0
+        run_candidate = 0.0
+        for index in range(start, start + HISTOGRAM_BINS):
+            run_reference += reference[index]
+            run_candidate += candidate[index]
+            total += abs(run_reference - run_candidate)
+    return total / (channels * HISTOGRAM_BINS)
 
 
 def report_pixels(gt_png: Path, other_png: Path, out_dir: Path) -> None:
@@ -272,7 +301,12 @@ def diagnose(geometry: dict[str, float], histogram_result: dict[str, float]) -> 
     # decide correctness. A point of drift is invisible; ten is not.
     drifts_vertically: bool = mad_y > 2.0
     drifts_horizontally: bool = mad_x > 1.0
-    colour_differs: bool = intersection < 0.99
+    # Judge colour on the shift, not the bin-wise intersection: the latter
+    # flags smooth gradients that are pixel-identical to within dithering.
+    # Measured separation on this corpus: renderer dithering across a smooth
+    # gradient reaches 0.0003, and the half-width cell borders of #487
+    # reached 0.0016 before the fix and 0.0004 after it.
+    colour_differs: bool = histogram_result.get("shift", 0.0) > 0.001
     ink_differs: bool = abs(ink_delta) > 0.2
 
     findings: list[str] = []
@@ -297,7 +331,7 @@ def diagnose(geometry: dict[str, float], histogram_result: dict[str, float]) -> 
         )
     if colour_differs:
         findings.append(
-            f"Colour distribution differs (intersection {intersection:.4f}) — "
+            f"Colour distribution differs (shift {histogram_result.get('shift', 0.0):.4f}) — "
             "a fill, theme colour, or shading is wrong, or an element is "
             "missing entirely. Position measurements will not show this."
         )

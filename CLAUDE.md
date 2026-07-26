@@ -143,6 +143,13 @@ No single measure is reliable, and each one's blind spot is another's strength:
 | --- | --- | --- |
 | Geometry (`pdftotext -bbox`) | position, size, row pitch, pagination | colour, missing elements |
 | Colour histogram | fill colour, recolouring, missing elements, ink coverage | position, size, font |
+
+Judge the colour axis on the reported **colour shift**, not on the bin-wise
+intersection printed beside it. Intersection punishes a one-level shift as hard
+as a recolour, and renderers dither smooth gradients by a channel step or two:
+three PPTX decks score 0.9745-0.9860 there while being pixel-identical to
+within +-2 per channel. The shift compares cumulative distributions, so that
+noise reaches 0.0003 while the half-width borders of #487 reached 0.0016.
 | Pixel difference (`AE`, `RMSE`) | whatever the other two were not watching | see below |
 
 **Never conclude from the pixel count alone.** Measured on this corpus: two
