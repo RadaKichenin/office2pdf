@@ -255,10 +255,12 @@ fn test_cell_borders() {
     let cell = &tp.table.rows[0].cells[0];
     let border = cell.border.as_ref().expect("Expected border");
     let bottom = border.bottom.as_ref().expect("Expected bottom border");
-    assert!((bottom.width - 1.0).abs() < 0.01);
+    // `medium`, against the measured `thin` of 1.0pt (issue #487).
+    assert!((bottom.width - 1.75).abs() < 0.01);
     assert_eq!(bottom.color, Color::new(0, 0, 0));
     let top = border.top.as_ref().expect("Expected top border");
-    assert!((top.width - 0.5).abs() < 0.01);
+    // `thin`: 2px at 150 DPI on a native Excel export.
+    assert!((top.width - 1.0).abs() < 0.01);
     assert_eq!(top.color, Color::new(255, 0, 0));
 }
 
@@ -339,7 +341,8 @@ fn test_cell_border_medium_dashed() {
     let border = cell.border.as_ref().expect("Expected border");
     let top = border.top.as_ref().expect("Expected top border");
     assert_eq!(top.style, BorderLineStyle::Dashed);
-    assert!((top.width - 1.0).abs() < 0.01);
+    // `mediumDashed` shares the `medium` weight (issue #487).
+    assert!((top.width - 1.75).abs() < 0.01);
 }
 
 #[test]
@@ -623,7 +626,8 @@ fn test_cell_combined_formatting() {
     assert_eq!(cell.background, Some(Color::new(255, 204, 0)));
     let border = cell.border.as_ref().expect("Expected border");
     let left = border.left.as_ref().expect("Expected left border");
-    assert!((left.width - 2.0).abs() < 0.01);
+    // `thick` (issue #487).
+    assert!((left.width - 2.5).abs() < 0.01);
     assert_eq!(left.color, Color::new(0, 255, 0));
 }
 
