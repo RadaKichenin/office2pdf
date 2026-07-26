@@ -74,6 +74,9 @@ pub(super) fn generate_paragraph(
         if has_para_style {
             out.push_str("\n]");
         }
+        if indent.is_some() {
+            out.push_str("\n]");
+        }
         out.push('\n');
         return Ok(());
     }

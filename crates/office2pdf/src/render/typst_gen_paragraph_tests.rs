@@ -1138,3 +1138,32 @@ fn test_unindented_paragraph_keeps_a_single_block() {
         "shading is still emitted: {result}"
     );
 }
+
+#[test]
+fn test_empty_indented_paragraph_closes_its_block() {
+    // An indented paragraph with no runs takes the early-return path. Leaving
+    // its indent wrapper open produced "unclosed delimiter" and failed 73
+    // third-party fixtures outright (regression caught on #464).
+    let doc = make_doc(vec![make_flow_page(vec![
+        Block::Paragraph(Paragraph {
+            style: ParagraphStyle {
+                indent_left: Some(24.0),
+                ..ParagraphStyle::default()
+            },
+            runs: Vec::new(),
+        }),
+        make_paragraph("after the empty paragraph"),
+    ])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    let opened: usize = result.matches('[').count();
+    let closed: usize = result.matches(']').count();
+    assert_eq!(
+        opened, closed,
+        "every content block opened must be closed: {result}"
+    );
+    assert!(
+        result.contains("after the empty paragraph"),
+        "the following paragraph must not be swallowed: {result}"
+    );
+}
