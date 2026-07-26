@@ -16,22 +16,29 @@ runs:
     # restore-keys lets a manifest change reuse the previous corpus and pull only the
     # delta, so adding one fixture costs one fixture of bandwidth, not the whole corpus.
     - name: Restore LFS object cache
+      id: lfs-cache
       uses: actions/cache@v4
       with:
         path: .git/lfs
         key: lfs-${{ runner.os }}-${{ hashFiles('.lfs-assets-id') }}
         restore-keys: lfs-${{ runner.os }}-
 
-    # Reports cache-vs-network bytes so LFS bandwidth regressions are visible in the job
-    # log instead of only surfacing later as a billing block.
+    # Reports bytes actually pulled over the network so LFS bandwidth regressions are
+    # visible in the job log instead of only surfacing later as a billing block. The
+    # pre-pull figure is whatever is on disk, which is not the same as what the cache
+    # supplied — checkout can leave objects behind even on a miss — so it is labelled as
+    # such rather than attributed to the cache.
     - name: Fetch missing LFS objects
       shell: bash
+      env:
+        EXACT_CACHE_HIT: ${{ steps.lfs-cache.outputs.cache-hit }}
       run: |
         set -euo pipefail
-        restored_kib="$(du -sk .git/lfs/objects 2>/dev/null | cut -f1 || echo 0)"
+        before_kib="$(du -sk .git/lfs/objects 2>/dev/null | cut -f1 || echo 0)"
         git lfs pull
-        final_kib="$(du -sk .git/lfs/objects | cut -f1)"
-        echo "LFS objects: ${restored_kib} KiB restored from cache, ${final_kib} KiB total, $((final_kib - restored_kib)) KiB downloaded from the LFS endpoint"
+        after_kib="$(du -sk .git/lfs/objects | cut -f1)"
+        echo "LFS cache: exact key hit=${EXACT_CACHE_HIT:-false}"
+        echo "LFS objects: ${before_kib} KiB on disk before pull, ${after_kib} KiB after, $((after_kib - before_kib)) KiB downloaded from the LFS endpoint"
 
     # Fixture tests call is_lfs_pointer() and silently `return` on an unfetched pointer
     # (crates/office2pdf/tests/docx_fixtures.rs, xlsx_fixtures.rs), so an incomplete
