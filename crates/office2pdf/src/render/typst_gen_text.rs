@@ -227,7 +227,11 @@ fn paragraph_font_size_pt(runs: &[Run]) -> f64 {
 /// height Word gives it, rather than only the tighter metric box (which
 /// left auto-height rows too short, issue #396). `None` when the font's
 /// metrics are unknown or the paragraph carries its own line spacing/box.
-pub(super) fn word_cell_line_box_settings(runs: &[Run], style: &ParagraphStyle) -> Option<String> {
+pub(super) fn word_cell_line_box_settings(
+    runs: &[Run],
+    style: &ParagraphStyle,
+    line_grid_pitch: Option<f64>,
+) -> Option<String> {
     if style.line_spacing.is_some() || style.line_box.is_some() {
         return None;
     }
@@ -240,8 +244,22 @@ pub(super) fn word_cell_line_box_settings(runs: &[Run], style: &ParagraphStyle) 
     if metric_em <= 0.0 || word_pitch_em <= 0.0 {
         return None;
     }
-    let top_em: f64 = word_pitch_em * ascender_em / metric_em;
-    let bottom_em: f64 = word_pitch_em * descender_em / metric_em;
+    let font_size: f64 = paragraph_font_size_pt(runs);
+    // East Asian cell text snaps to the section's document grid exactly as
+    // body text does. A Word export of the research table puts a 25.44pt row
+    // around 3.5pt margins, leaving an 18.44pt line where the font's own
+    // hhea line is 12.64pt - no Malgun metric is near 1.78em, so the row is
+    // sized from the 18pt grid, not the font (issue #404).
+    let advance_em: f64 = match line_grid_pitch.filter(|pitch| *pitch > 0.0) {
+        Some(pitch) if runs.iter().any(|run| run.text.chars().any(is_cjk_like)) => {
+            let natural_pt: f64 = metric_em * font_size;
+            let grid_lines: f64 = (natural_pt / pitch).ceil().max(1.0);
+            grid_lines * pitch / font_size
+        }
+        _ => word_pitch_em,
+    };
+    let top_em: f64 = advance_em * ascender_em / metric_em;
+    let bottom_em: f64 = advance_em * descender_em / metric_em;
     Some(format!(
         "#set text(top-edge: {}em, bottom-edge: -{}em)\n#set par(leading: 0pt)\n",
         format_f64(top_em),
