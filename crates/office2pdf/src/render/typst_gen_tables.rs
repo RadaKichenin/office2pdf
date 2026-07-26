@@ -343,7 +343,7 @@ fn generate_table_cell(
     if needs_cell_fn {
         out.push_str(indent);
         out.push_str("table.cell(");
-        write_cell_params(out, cell, clamped_colspan);
+        write_cell_params(out, cell, clamped_colspan, default_cell_padding);
         out.push_str(")[");
     } else {
         out.push_str(indent);
@@ -538,7 +538,31 @@ fn format_geometry(value: f64) -> String {
     format_f64(if rounded == -0.0 { 0.0 } else { rounded })
 }
 
-fn write_cell_params(out: &mut String, cell: &TableCell, clamped_colspan: u32) {
+/// The cell's inset, with the layout space its horizontal borders occupy.
+///
+/// Typst draws our per-cell strokes without reserving room for them, but Word
+/// counts a border's width in the row height. Each horizontal border is shared
+/// between the rows above and below it, so each cell takes half (issues #500,
+/// #503).
+fn cell_inset_with_border(cell: &TableCell, default_cell_padding: Insets) -> Insets {
+    let padding: Insets = cell.padding.unwrap_or(default_cell_padding);
+    let Some(border) = &cell.border else {
+        return padding;
+    };
+    let half = |side: &Option<BorderSide>| side.as_ref().map_or(0.0, |s| s.width / 2.0);
+    Insets {
+        top: padding.top + half(&border.top),
+        bottom: padding.bottom + half(&border.bottom),
+        ..padding
+    }
+}
+
+fn write_cell_params(
+    out: &mut String,
+    cell: &TableCell,
+    clamped_colspan: u32,
+    default_cell_padding: Insets,
+) {
     let mut first = true;
 
     if clamped_colspan > 1 {
@@ -550,11 +574,12 @@ fn write_cell_params(out: &mut String, cell: &TableCell, clamped_colspan: u32) {
     if let Some(ref bg) = cell.background {
         write_param(out, &mut first, &format_color(bg));
     }
-    if let Some(ref padding) = cell.padding {
+    let inset: Insets = cell_inset_with_border(cell, default_cell_padding);
+    if cell.padding.is_some() || cell.border.is_some() {
         write_param(
             out,
             &mut first,
-            &format!("inset: {}", format_insets(padding)),
+            &format!("inset: {}", format_insets(&inset)),
         );
     }
     if let Some(ref border) = cell.border {
@@ -709,7 +734,11 @@ fn generate_cell_paragraph(
         default_tab_width_pt,
     );
 
-    if let Some(space_after) = style.space_after {
+    // Suppressed when the grid-snapped line box already contains it, or the
+    // gap would be counted twice (issues #500, #503).
+    if let Some(space_after) = style.space_after
+        && !cell_grid_absorbs_space_after(style, line_grid_pitch, row_snaps_to_grid)
+    {
         let _ = write!(out, "\n#v({}pt)", format_f64(space_after));
     }
 

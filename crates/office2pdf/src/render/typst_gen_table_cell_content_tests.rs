@@ -483,3 +483,162 @@ fn latin_only_row_under_a_grid_keeps_the_font_line() {
         "a Latin-only row must keep the font's hhea line under a grid: {result}"
     );
 }
+
+/// Word snaps a grid row's line *plus* the paragraph's `w:spacing w:after`,
+/// so the gap lives inside the line box and must not also be emitted after the
+/// runs. Adding it outside made every grid-scoped row 1.06pt too tall
+/// (issues #500, #503).
+#[test]
+fn grid_cell_absorbs_space_after_into_the_line_box() {
+    let Some((ascender, descender, _)) =
+        crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+    let font_size: f64 = 10.0;
+    let metric_em: f64 = ascender + descender;
+    // 10pt of metric box plus a 1.5pt gap still fits one 18pt grid line.
+    let grid_em: f64 = 18.0 / font_size;
+    let cell = TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle {
+                space_after: Some(1.5),
+                ..ParagraphStyle::default()
+            },
+            runs: vec![Run {
+                text: "2024년 1월".to_string(),
+                style: TextStyle {
+                    font_family: Some("Libertinus Serif".to_string()),
+                    font_size: Some(font_size),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })],
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            cells: vec![cell],
+            height: None,
+        }],
+        column_widths: vec![160.0],
+        ..Table::default()
+    };
+    let mut page = match make_flow_page(vec![Block::Table(table)]) {
+        Page::Flow(flow) => flow,
+        _ => unreachable!(),
+    };
+    page.line_grid_pitch = Some(18.0);
+    let doc = make_doc(vec![Page::Flow(page)]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains(&format!(
+            "top-edge: {}em, bottom-edge: -{}em",
+            format_f64(grid_em * ascender / metric_em),
+            format_f64(grid_em * descender / metric_em)
+        )),
+        "line plus w:after should snap to one 18pt grid line: {result}"
+    );
+    assert!(
+        !result.contains("#v(1.5pt)"),
+        "the absorbed gap must not also be emitted after the runs: {result}"
+    );
+}
+
+/// Triangulation: without a grid there is no snap to absorb the gap into, so
+/// the paragraph's `w:spacing w:after` must still be emitted.
+#[test]
+fn ungridded_cell_still_emits_space_after() {
+    let cell = TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle {
+                space_after: Some(1.5),
+                ..ParagraphStyle::default()
+            },
+            runs: vec![Run {
+                text: "Aug 3".to_string(),
+                style: TextStyle {
+                    font_family: Some("Libertinus Serif".to_string()),
+                    font_size: Some(10.0),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })],
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            cells: vec![cell],
+            height: None,
+        }],
+        column_widths: vec![160.0],
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains("#v(1.5pt)"),
+        "an unsnapped cell keeps its declared gap: {result}"
+    );
+}
+
+/// Word counts a border's width in the row height; Typst draws our per-cell
+/// strokes without reserving space for them. Each horizontal border is shared
+/// between the rows either side, so a cell takes half (issues #500, #503).
+#[test]
+fn cell_border_width_joins_the_inset() {
+    let border = CellBorder {
+        top: Some(BorderSide {
+            width: 0.5,
+            color: Color::new(0, 0, 0),
+            style: BorderLineStyle::Solid,
+        }),
+        bottom: Some(BorderSide {
+            width: 0.5,
+            color: Color::new(0, 0, 0),
+            style: BorderLineStyle::Solid,
+        }),
+        left: None,
+        right: None,
+    };
+    let cell = TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: "Aug 3".to_string(),
+                style: TextStyle::default(),
+                href: None,
+                footnote: None,
+            }],
+        })],
+        border: Some(border),
+        padding: Some(Insets {
+            top: 3.5,
+            right: 5.0,
+            bottom: 3.5,
+            left: 5.0,
+        }),
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            cells: vec![cell],
+            height: None,
+        }],
+        column_widths: vec![160.0],
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains("top: 3.75pt") && result.contains("bottom: 3.75pt"),
+        "half of each 0.5pt border should join the 3.5pt inset: {result}"
+    );
+}

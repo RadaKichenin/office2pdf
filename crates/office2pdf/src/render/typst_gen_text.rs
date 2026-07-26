@@ -221,12 +221,33 @@ fn paragraph_font_size_pt(runs: &[Run]) -> f64 {
     if largest.is_nan() { 11.0 } else { largest }
 }
 
+/// Whether a cell's grid-snapped line box already contains the paragraph's
+/// `w:spacing w:after`, so the caller must not emit it a second time.
+///
+/// Mirrors the guard inside [`word_cell_line_box_settings`] exactly, including
+/// its early return for paragraphs that carry their own line spacing or box —
+/// gating on `row_snaps_to_grid` alone would strip the gap from those.
+pub(super) fn cell_grid_absorbs_space_after(
+    style: &ParagraphStyle,
+    line_grid_pitch: Option<f64>,
+    row_snaps_to_grid: bool,
+) -> bool {
+    row_snaps_to_grid
+        && style.line_spacing.is_none()
+        && style.line_box.is_none()
+        && line_grid_pitch.is_some_and(|pitch| pitch > 0.0)
+}
+
 /// Line-box settings for a table cell: a fixed box spanning the font's
 /// full single-spacing (hhea) line, split by the ascender/descender ratio,
 /// with zero leading. A single-line cell then occupies the whole line
 /// height Word gives it, rather than only the tighter metric box (which
 /// left auto-height rows too short, issue #396). `None` when the font's
 /// metrics are unknown or the paragraph carries its own line spacing/box.
+///
+/// The box also carries the paragraph's `w:spacing w:after` when the row snaps
+/// to the grid, because Word snaps the line and that gap together (issues
+/// #500, #503).
 pub(super) fn word_cell_line_box_settings(
     runs: &[Run],
     style: &ParagraphStyle,
@@ -256,9 +277,15 @@ pub(super) fn word_cell_line_box_settings(
     // cell's own text put a Korean label and its numeric neighbours on line
     // boxes of different heights, splitting one row across two baselines
     // 4.29pt apart (issue #498).
+    // Word snaps the line *plus* the paragraph's own `w:spacing w:after`, not
+    // the line alone. Snapping the bare line and then adding the gap outside
+    // it made every grid-scoped row 1.06pt too tall, because 12.64pt of Malgun
+    // and a 1.5pt gap both fit inside one 18pt line where 18 + 1.5 does not
+    // (issues #500, #503). `cell_grid_absorbs_space_after` gates the caller's
+    // matching suppression of the trailing gap; the two must agree.
     let advance_em: f64 = match line_grid_pitch.filter(|pitch| *pitch > 0.0) {
         Some(pitch) if row_snaps_to_grid => {
-            let natural_pt: f64 = metric_em * font_size;
+            let natural_pt: f64 = metric_em * font_size + style.space_after.unwrap_or(0.0);
             let grid_lines: f64 = (natural_pt / pitch).ceil().max(1.0);
             grid_lines * pitch / font_size
         }
