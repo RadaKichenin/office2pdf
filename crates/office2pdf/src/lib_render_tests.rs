@@ -210,6 +210,7 @@ fn test_render_document_with_image() {
                 alignment: None,
                 clip_shape: None,
                 shadow: None,
+                paragraph_spacing: None,
             })],
             header: None,
             footer: None,
@@ -250,6 +251,7 @@ fn test_render_document_image_mixed_with_text() {
                     alignment: None,
                     clip_shape: None,
                     shadow: None,
+                    paragraph_spacing: None,
                 }),
                 Block::Paragraph(Paragraph {
                     style: ParagraphStyle::default(),

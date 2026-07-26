@@ -196,6 +196,7 @@ fn make_fixed_image(x: f64, y: f64, w: f64, h: f64, format: ImageFormat) -> Fixe
             alignment: None,
             clip_shape: None,
             shadow: None,
+            paragraph_spacing: None,
         }),
     }
 }

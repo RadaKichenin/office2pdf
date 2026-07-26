@@ -9,11 +9,11 @@ use crate::ir::{
     Alignment, ArrowHead, Block, BorderLineStyle, BorderSide, CellBorder, CellVerticalAlign, Chart,
     ChartType, Color, ColumnLayout, Document, FixedElement, FixedElementKind, FixedPage,
     FloatingImage, FloatingShape, FloatingTextBox, FlowPage, FrameAnchor, GradientFill, HFInline,
-    HeaderFooter, HeaderFooterFrame, ImageCrop, ImageData, ImageFormat, Insets, LineBox,
-    LineSpacing, List, ListKind, Margins, MathEquation, Metadata, Page, PageSize, Paragraph,
-    ParagraphStyle, PositionedTabAlignment, PositionedTabRelativeTo, Run, Shadow, Shape, ShapeKind,
-    SheetPage, SmartArt, TabAlignment, TabLeader, TabStop, Table, TableCell, TableRow, TextBoxData,
-    TextBoxVerticalAlign, TextDirection, TextStyle, VerticalTextAlign, WrapMode,
+    HeaderFooter, HeaderFooterFrame, ImageCrop, ImageData, ImageFormat, ImageParagraphSpacing,
+    Insets, LineBox, LineSpacing, List, ListKind, Margins, MathEquation, Metadata, Page, PageSize,
+    Paragraph, ParagraphStyle, PositionedTabAlignment, PositionedTabRelativeTo, Run, Shadow, Shape,
+    ShapeKind, SheetPage, SmartArt, TabAlignment, TabLeader, TabStop, Table, TableCell, TableRow,
+    TextBoxData, TextBoxVerticalAlign, TextDirection, TextStyle, VerticalTextAlign, WrapMode,
 };
 
 use self::diagrams::{generate_chart, generate_smartart};
@@ -1583,12 +1583,13 @@ fn generate_block(out: &mut String, block: &Block, ctx: &mut GenCtx) -> Result<(
         }
         Block::Table(table) => generate_table(out, table, ctx),
         Block::Image(img) => {
-            // Word advances a picture paragraph by the picture alone; any
-            // gap comes from its own `w:spacing`. Leaving the element bare
-            // let Typst's 1.2em default block spacing apply above and below
-            // instead, opening ~24pt around an inline figure and pushing
-            // every later line down by that much (issues #463, #491).
-            out.push_str("#block(width: 100%, above: 0pt, below: 0pt)[");
+            // Word advances a picture paragraph by the picture plus its own
+            // `w:spacing`. Leaving the element bare let Typst's 1.2em default
+            // block spacing apply above and below instead, opening ~24pt
+            // around an inline figure (issues #463, #491) - so both gaps stay
+            // pinned, but to the declared spacing rather than to zero, which
+            // dropped the gap Word actually draws (issue #499).
+            write_image_block_open(out, img.paragraph_spacing);
             let align_str: Option<&str> = match img.alignment {
                 Some(Alignment::Center) => Some("center"),
                 Some(Alignment::Right) => Some("right"),
@@ -1613,7 +1614,20 @@ fn generate_block(out: &mut String, block: &Block, ctx: &mut GenCtx) -> Result<(
             Ok(())
         }
         Block::InlineImages(images) => {
-            out.push_str("#block(width: 100%)[\n");
+            // One paragraph, so one gap above and below the whole group: the
+            // first picture carries the `before`, the last the `after`.
+            let spacing: Option<ImageParagraphSpacing> = images
+                .first()
+                .and_then(|first| first.paragraph_spacing)
+                .map(|first| ImageParagraphSpacing {
+                    before: first.before,
+                    after: images
+                        .last()
+                        .and_then(|last| last.paragraph_spacing)
+                        .and_then(|last| last.after),
+                });
+            write_image_block_open(out, spacing);
+            out.push('\n');
             for (index, image) in images.iter().enumerate() {
                 if index > 0 {
                     out.push(' ');
@@ -1693,6 +1707,21 @@ fn border_line_style_to_typst(style: BorderLineStyle) -> &'static str {
         BorderLineStyle::Double => "solid",
         BorderLineStyle::None => "solid",
     }
+}
+
+/// Opens the block that wraps a flow picture, pinning both vertical gaps.
+///
+/// Both are always written. An absent `w:spacing` means Word draws no gap, not
+/// that Typst should fall back to its 1.2em default, so `None` maps to `0pt`.
+fn write_image_block_open(out: &mut String, spacing: Option<ImageParagraphSpacing>) {
+    let above: f64 = spacing.and_then(|gap| gap.before).unwrap_or(0.0);
+    let below: f64 = spacing.and_then(|gap| gap.after).unwrap_or(0.0);
+    let _ = write!(
+        out,
+        "#block(width: 100%, above: {}pt, below: {}pt)[",
+        format_f64(above),
+        format_f64(below)
+    );
 }
 
 fn generate_image(out: &mut String, img: &ImageData, ctx: &mut GenCtx) {
