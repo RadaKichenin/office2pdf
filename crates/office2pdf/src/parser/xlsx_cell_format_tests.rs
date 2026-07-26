@@ -832,7 +832,9 @@ fn test_rich_text_runs_keep_per_run_formatting() {
     let plain_run = &paragraph.runs[1];
     assert_eq!(plain_run.text, "(최근 3년)");
     assert_eq!(plain_run.style.bold, None, "unstyled run stays regular");
-    assert_eq!(plain_run.style.font_size, None);
+    // The run keeps the cell's inherited workbook Normal font rather than the
+    // styled run's 14pt; that font is now carried explicitly (issue #462).
+    assert_eq!(plain_run.style.font_size, Some(11.0));
 }
 
 #[test]

@@ -14,10 +14,19 @@ pub(super) fn border_style_to_width(style: &str) -> Option<f64> {
 }
 
 /// Extract font styling from a cell's style into an IR TextStyle.
-pub(super) fn extract_cell_text_style(cell: &umya_spreadsheet::Cell) -> TextStyle {
+///
+/// A cell with no style of its own uses `cellXfs[0]`, whose font is the
+/// workbook Normal font; umya reports no font for such a cell, so
+/// `normal_font` carries it in from `styles.xml` directly. Without it the
+/// renderer picks its own default family and size, and a spreadsheet in a
+/// sans-serif Normal font rendered serif (issue #462).
+pub(super) fn extract_cell_text_style(
+    cell: &umya_spreadsheet::Cell,
+    normal_font: Option<&super::xlsx_cells::NormalFont>,
+) -> TextStyle {
     let style = cell.get_style();
     let Some(font) = style.get_font() else {
-        return TextStyle::default();
+        return normal_font_text_style(normal_font);
     };
 
     let bold = if *font.get_bold() { Some(true) } else { None };
@@ -35,20 +44,22 @@ pub(super) fn extract_cell_text_style(cell: &umya_spreadsheet::Cell) -> TextStyl
         None
     };
 
-    // Font name: skip default "Calibri" (Excel default) — only set if explicitly customized
-    let font_name = font.get_name();
-    let font_family = if font_name.is_empty() || font_name == "Calibri" {
-        None
+    // A font the cell style names wins; otherwise the cell inherits the
+    // workbook Normal font. Calibri is not special-cased: it is the most
+    // common Normal font, and dropping it left those workbooks to the
+    // renderer's serif default (issue #462).
+    let font_name: &str = font.get_name();
+    let font_family: Option<String> = if font_name.is_empty() {
+        normal_font.map(|normal| normal.family.clone())
     } else {
         Some(font_name.to_string())
     };
 
-    // Font size: skip default 11.0 (Excel default)
-    let raw_size = *font.get_size();
-    let font_size = if (raw_size - 11.0).abs() < 0.01 {
-        None
-    } else {
+    let raw_size: f64 = *font.get_size();
+    let font_size: Option<f64> = if raw_size > 0.0 {
         Some(raw_size)
+    } else {
+        normal_font.map(|normal| normal.size_pt)
     };
 
     // Font color
@@ -76,6 +87,18 @@ pub(super) fn extract_cell_text_style(cell: &umya_spreadsheet::Cell) -> TextStyl
     }
 }
 
+/// The text style a cell inherits when its own style names no font at all.
+fn normal_font_text_style(normal_font: Option<&super::xlsx_cells::NormalFont>) -> TextStyle {
+    let Some(normal) = normal_font else {
+        return TextStyle::default();
+    };
+    TextStyle {
+        font_family: Some(normal.family.clone()),
+        font_size: Some(normal.size_pt),
+        ..TextStyle::default()
+    }
+}
+
 /// Overlay a rich-text run's own font properties onto the cell-level style.
 /// Excel writes only the properties a run changes into its `<rPr>`, so
 /// unspecified properties (empty name, zero size, absent color) must keep the
@@ -84,7 +107,7 @@ pub(super) fn apply_rich_run_font(base: &TextStyle, font: &umya_spreadsheet::Fon
     let mut style = base.clone();
 
     let font_name: &str = font.get_name();
-    if !font_name.is_empty() && font_name != "Calibri" {
+    if !font_name.is_empty() {
         style.font_family = Some(font_name.to_string());
     }
 

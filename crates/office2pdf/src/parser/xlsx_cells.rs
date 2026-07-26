@@ -42,7 +42,7 @@ pub(super) fn column_width_to_pt(char_width: f64, max_digit_width_px: f64) -> f6
 /// Read the workbook's Normal font (the first `<font>` in `xl/styles.xml`)
 /// straight from the archive; umya does not expose the stylesheet. Excel
 /// derives all column print metrics from this font, not from cell fonts.
-pub(super) fn extract_normal_font(data: &[u8]) -> Option<(String, f64)> {
+pub(super) fn extract_normal_font(data: &[u8]) -> Option<NormalFont> {
     use quick_xml::events::Event;
     use std::io::Read;
 
@@ -77,7 +77,19 @@ pub(super) fn extract_normal_font(data: &[u8]) -> Option<(String, f64)> {
             _ => {}
         }
     }
-    Some((name?, size.unwrap_or(11.0)))
+    Some(NormalFont {
+        family: name?,
+        size_pt: size.unwrap_or(11.0),
+    })
+}
+
+/// The workbook's Normal font: the `xl/styles.xml` font that cells with no
+/// style of their own inherit, and the font Excel derives every column
+/// print metric from.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct NormalFont {
+    pub(super) family: String,
+    pub(super) size_pt: f64,
 }
 
 /// Excel pixel-ceils the Normal font's max digit width at 96 DPI to derive
@@ -318,6 +330,9 @@ pub(super) struct SheetContext {
     pub(super) merge_tops: HashMap<(u32, u32), MergeInfo>,
     pub(super) merge_skips: HashSet<(u32, u32)>,
     pub(super) cond_fmt_overrides: HashMap<(u32, u32), crate::parser::cond_fmt::CondFmtOverride>,
+    /// The workbook Normal font, which every cell without its own font
+    /// inherits (issue #462). `None` when `styles.xml` is unreadable.
+    pub(super) normal_font: Option<NormalFont>,
 }
 
 /// First strong bidi direction of a character: Some(true) for right-to-left
@@ -573,7 +588,9 @@ pub(super) fn build_rows_for_range(
             }
 
             // Extract formatting from the cell
-            let mut text_style = umya_cell.map(extract_cell_text_style).unwrap_or_default();
+            let mut text_style = umya_cell
+                .map(|cell| extract_cell_text_style(cell, ctx.normal_font.as_ref()))
+                .unwrap_or_default();
             let (cell_alignment, cell_vertical_align) = umya_cell
                 .map(extract_cell_alignment)
                 .unwrap_or((None, None));
@@ -710,7 +727,7 @@ pub(super) fn build_rows_for_range(
 /// Returns (SheetContext, row_start, row_end) or None if the sheet is empty.
 pub(super) fn prepare_sheet_context(
     sheet: &umya_spreadsheet::Worksheet,
-    normal_font_mdw: Option<f64>,
+    normal_font: Option<&NormalFont>,
     raw_cond_fmt_hints: Option<&super::cond_fmt_raw::RawCondFmtHints>,
 ) -> Option<(SheetContext, u32, u32)> {
     let (mut max_col, mut max_row) = sheet.get_highest_column_and_row();
@@ -736,7 +753,11 @@ pub(super) fn prepare_sheet_context(
         (1, max_col, 1, max_row)
     };
 
-    let max_digit_width_px = normal_font_mdw.unwrap_or_else(|| sheet_max_digit_width_px(sheet));
+    // Excel derives every column print metric from the workbook Normal
+    // font; cell fonts do not participate (issue #366).
+    let max_digit_width_px = normal_font
+        .map(|font| max_digit_width_px_for_normal_font(&font.family, font.size_pt))
+        .unwrap_or_else(|| sheet_max_digit_width_px(sheet));
     let column_widths: Vec<f64> = (col_start..=col_end)
         .map(|col| {
             sheet
@@ -760,6 +781,7 @@ pub(super) fn prepare_sheet_context(
             merge_tops,
             merge_skips,
             cond_fmt_overrides,
+            normal_font: normal_font.cloned(),
         },
         row_start,
         row_end,

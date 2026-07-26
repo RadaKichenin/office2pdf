@@ -252,9 +252,9 @@ fn test_extract_normal_font_reads_first_styles_font() {
     umya_spreadsheet::writer::xlsx::write_writer(&book, &mut cursor).unwrap();
     let data = cursor.into_inner();
 
-    let (family, size) = extract_normal_font(&data).expect("styles.xml has a Normal font");
-    assert_eq!(family, "Calibri");
-    assert_eq!(size, 11.0);
+    let normal_font = extract_normal_font(&data).expect("styles.xml has a Normal font");
+    assert_eq!(normal_font.family, "Calibri");
+    assert_eq!(normal_font.size_pt, 11.0);
 }
 
 #[test]
@@ -409,3 +409,111 @@ mod chart_tests;
 
 #[path = "xlsx_streaming_tests.rs"]
 mod streaming_tests;
+
+/// The style of the first run of the first cell a parsed workbook produces.
+fn first_cell_text_style(data: &[u8]) -> crate::ir::TextStyle {
+    let (doc, _warnings) = XlsxParser
+        .parse(data, &ConvertOptions::default())
+        .expect("workbook should parse");
+    let Page::Sheet(sheet) = &doc.pages[0] else {
+        panic!("expected a sheet page");
+    };
+    for row in &sheet.table.rows {
+        for cell in &row.cells {
+            for block in &cell.content {
+                if let Block::Paragraph(paragraph) = block
+                    && let Some(run) = paragraph.runs.first()
+                {
+                    return run.style.clone();
+                }
+            }
+        }
+    }
+    panic!("expected a cell run");
+}
+
+#[test]
+fn test_unstyled_cell_carries_the_workbook_normal_font() {
+    // A cell with no `s` attribute uses cellXfs[0], whose font is the
+    // workbook's Normal font. umya reports no font for such a cell, so the
+    // style path has to fall back to styles.xml itself or the renderer picks
+    // its own default family and size (issue #462).
+    let data = build_xlsx_with_normal_font("Malgun Gothic", 12.0);
+    let style = first_cell_text_style(&data);
+    assert_eq!(style.font_family.as_deref(), Some("Malgun Gothic"));
+    assert_eq!(style.font_size, Some(12.0));
+}
+
+#[test]
+fn test_unstyled_cell_keeps_a_calibri_normal_font() {
+    // Triangulation: Calibri is the most common Normal font and used to be
+    // dropped on the grounds that it was "the default". It has to survive
+    // like any other family, or Calibri workbooks render in the renderer's
+    // serif default (issue #462).
+    let data = build_xlsx_with_normal_font("Calibri", 11.0);
+    let style = first_cell_text_style(&data);
+    assert_eq!(style.font_family.as_deref(), Some("Calibri"));
+    assert_eq!(style.font_size, Some(11.0));
+}
+
+#[test]
+fn test_explicit_cell_font_overrides_the_workbook_normal_font() {
+    let mut book = umya_spreadsheet::new_file();
+    {
+        let sheet = book.get_sheet_mut(&0).unwrap();
+        let cell = sheet.get_cell_mut("A1");
+        cell.set_value("styled");
+        cell.get_style_mut().get_font_mut().set_name("Georgia");
+        cell.get_style_mut().get_font_mut().set_size(20.0);
+    }
+    let mut cursor = Cursor::new(Vec::new());
+    umya_spreadsheet::writer::xlsx::write_writer(&book, &mut cursor).unwrap();
+    let style = first_cell_text_style(&cursor.into_inner());
+    assert_eq!(style.font_family.as_deref(), Some("Georgia"));
+    assert_eq!(style.font_size, Some(20.0));
+}
+
+/// A one-cell workbook whose Normal font (styles.xml font 0) is `family` at
+/// `size_pt`, with the cell itself left unstyled.
+fn build_xlsx_with_normal_font(family: &str, size_pt: f64) -> Vec<u8> {
+    let mut book = umya_spreadsheet::new_file();
+    {
+        let sheet = book.get_sheet_mut(&0).unwrap();
+        sheet.get_cell_mut("A1").set_value("title");
+    }
+    let mut cursor = Cursor::new(Vec::new());
+    umya_spreadsheet::writer::xlsx::write_writer(&book, &mut cursor).unwrap();
+    rewrite_first_styles_font(&cursor.into_inner(), family, size_pt)
+}
+
+/// Rewrite the first `<font>` of `xl/styles.xml` in place. umya always
+/// writes Calibri 11 there, so the fixture has to patch the part directly to
+/// exercise a different Normal font.
+fn rewrite_first_styles_font(data: &[u8], family: &str, size_pt: f64) -> Vec<u8> {
+    let mut archive = zip::ZipArchive::new(Cursor::new(data)).expect("readable zip");
+    let mut out = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index).expect("readable entry");
+        let name = entry.name().to_string();
+        let mut bytes = Vec::new();
+        std::io::Read::read_to_end(&mut entry, &mut bytes).expect("readable entry body");
+        if name == "xl/styles.xml" {
+            let xml = String::from_utf8(bytes).expect("styles.xml is utf-8");
+            let start = xml.find("<font>").expect("styles.xml has a font");
+            let end = xml[start..].find("</font>").expect("font is closed") + start;
+            let replacement =
+                format!("<font><sz val=\"{size_pt}\"/><name val=\"{family}\"/></font>");
+            bytes = format!(
+                "{}{}{}",
+                &xml[..start],
+                replacement,
+                &xml[end + "</font>".len()..]
+            )
+            .into_bytes();
+        }
+        out.start_file(name, zip::write::FileOptions::default())
+            .expect("writable entry");
+        std::io::Write::write_all(&mut out, &bytes).expect("writable entry body");
+    }
+    out.finish().expect("finished zip").into_inner()
+}
