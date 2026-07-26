@@ -577,7 +577,9 @@ fn generate_cell_content(
             out.push('\n');
         }
         match block {
-            Block::Paragraph(para) => generate_cell_paragraph(out, para, ctx.default_tab_width_pt),
+            Block::Paragraph(para) => {
+                generate_cell_paragraph(out, para, ctx.default_tab_width_pt, ctx.line_grid_pitch)
+            }
             Block::Table(table) => {
                 if ctx.table_depth < MAX_TABLE_DEPTH {
                     generate_table(out, table, ctx)?;
@@ -607,7 +609,12 @@ fn generate_cell_content(
     Ok(())
 }
 
-fn generate_cell_paragraph(out: &mut String, para: &Paragraph, default_tab_width_pt: f64) {
+fn generate_cell_paragraph(
+    out: &mut String,
+    para: &Paragraph,
+    default_tab_width_pt: f64,
+    line_grid_pitch: Option<f64>,
+) {
     let style: &ParagraphStyle = &para.style;
     let alignment = style.alignment;
     let align_str: Option<&str> = match alignment {
@@ -617,12 +624,14 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, default_tab_width
         _ => None,
     };
     // Table-cell text occupies the font's full single-spacing (hhea) line
-    // as a fixed box: Word does not snap cell content to the document grid
-    // (measured Korean cells sit at the font's full line, not a grid
-    // multiple, issue #385), and a single-line cell must fill the whole
-    // line height Word gives it rather than only the tighter metric box —
-    // otherwise auto-height rows come out short (issue #396).
-    let line_height_settings: Option<String> = word_cell_line_box_settings(&para.runs, style);
+    // as a fixed box: a single-line cell must fill the whole line height
+    // Word gives it rather than only the tighter metric box, or auto-height
+    // rows come out short (issue #396). East Asian cells take the section's
+    // grid pitch, like body text — #385 concluded otherwise, but on the
+    // premise that the residual gap was font substitution, which #404
+    // disproved (Malgun is embedded and its advances match Word's).
+    let line_height_settings: Option<String> =
+        word_cell_line_box_settings(&para.runs, style, line_grid_pitch);
     let has_block_wrapper = cell_paragraph_needs_block_wrapper(style)
         || align_str.is_some()
         || line_height_settings.is_some();

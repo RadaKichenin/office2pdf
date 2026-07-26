@@ -240,13 +240,16 @@ fn test_table_cell_compact_list_adds_inter_item_spacing_from_line_spacing() {
 }
 
 #[test]
-fn test_east_asian_table_cell_uses_natural_line_height_not_grid() {
-    // Word does not snap table-cell text to the document grid (measured
-    // Korean cells sit at the font's full line, not a grid multiple), and a
-    // single-line cell occupies the whole hhea line — emitted as a fixed
-    // box split by the ascender/descender ratio with zero leading, so
-    // auto-height rows are not left short (issues #385, #396). Uses a
-    // Typst-embedded font so the test is environment-free.
+fn test_east_asian_table_cell_snaps_to_the_document_grid() {
+    // East Asian cell text snaps to the section's grid exactly as body
+    // text does. #385 concluded otherwise, but on the premise that the
+    // residual gap to Word was font substitution; #404 disproved that
+    // (Malgun is embedded and its advances match Word's) and measured a
+    // 25.44pt Word row as 3.5pt margins around an 18.44pt line, where the
+    // font's own hhea line is only 12.64pt. The box is still emitted as a
+    // fixed box with zero leading so auto-height rows are not left short
+    // (issue #396). Uses a Typst-embedded font so the test is
+    // environment-free.
     let Some((ascender, descender, word_pitch_em)) =
         crate::render::pdf::font_line_metrics_em("Libertinus Serif")
     else {
@@ -254,9 +257,11 @@ fn test_east_asian_table_cell_uses_natural_line_height_not_grid() {
     };
     let font_size: f64 = 10.0;
     let metric_em: f64 = ascender + descender;
-    let top_em: f64 = word_pitch_em * ascender / metric_em;
-    let bottom_em: f64 = word_pitch_em * descender / metric_em;
-    let grid_leading = 18.0 - metric_em * font_size;
+    // One 18pt grid line, since the 10pt metric box fits inside it.
+    let grid_em: f64 = 18.0 / font_size;
+    let top_em: f64 = grid_em * ascender / metric_em;
+    let bottom_em: f64 = grid_em * descender / metric_em;
+    let hhea_top_em: f64 = word_pitch_em * ascender / metric_em;
     let cell = TableCell {
         content: vec![Block::Paragraph(Paragraph {
             style: ParagraphStyle::default(),
@@ -285,7 +290,6 @@ fn test_east_asian_table_cell_uses_natural_line_height_not_grid() {
         Page::Flow(flow) => flow,
         _ => unreachable!(),
     };
-    // A section grid is present, but cells must ignore it.
     page.line_grid_pitch = Some(18.0);
     let doc = make_doc(vec![Page::Flow(page)]);
     let result = generate_typst(&doc).unwrap().source;
@@ -296,15 +300,15 @@ fn test_east_asian_table_cell_uses_natural_line_height_not_grid() {
             format_f64(top_em),
             format_f64(bottom_em)
         )),
-        "Korean cell must fill the full hhea line box: {result}"
+        "Korean cell must fill the 18pt grid line box: {result}"
     );
     assert!(
         result.contains("#set par(leading: 0pt)"),
         "cell line box uses zero leading (box already equals the full line): {result}"
     );
     assert!(
-        !result.contains(&format!("leading: {}pt", format_f64(grid_leading))),
-        "Korean cell must NOT snap to the grid pitch: {result}"
+        !result.contains(&format!("top-edge: {}em", format_f64(hhea_top_em))),
+        "Korean cell must not fall back to the font's own hhea line: {result}"
     );
 }
 
