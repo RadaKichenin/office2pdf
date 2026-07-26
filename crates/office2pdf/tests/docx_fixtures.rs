@@ -490,6 +490,56 @@ fn structure_image() {
     assert!(image_data_non_empty, "image data should not be empty");
 }
 
+/// Word advances a picture-only paragraph by the picture alone — the paragraph
+/// mark is the picture's, not a blank line of its own. Emitting a paragraph
+/// block for the leftover mark adds a full line box and pushes everything below
+/// the picture down by one line (issue #496).
+#[test]
+fn picture_only_paragraph_adds_no_empty_line() {
+    let pages = flow_pages("image.docx");
+    let blocks = all_blocks(&pages);
+
+    let empty_paragraphs: usize = blocks
+        .iter()
+        .filter(|block| match block {
+            Block::Paragraph(paragraph) => paragraph.runs.is_empty(),
+            _ => false,
+        })
+        .count();
+
+    assert_eq!(
+        empty_paragraphs, 0,
+        "the sole paragraph holds only a picture, so no empty paragraph should survive: {blocks:#?}"
+    );
+}
+
+/// Triangulation for [`picture_only_paragraph_adds_no_empty_line`]: the rule is
+/// "the picture consumed the paragraph mark", not "drop every empty paragraph".
+/// This fixture mixes picture-only paragraphs with blank paragraphs that carry
+/// no drawing at all — those are deliberate blank lines and must survive.
+#[test]
+fn blank_paragraphs_without_a_picture_are_kept() {
+    let pages = flow_pages("drawing.docx");
+    let blocks = all_blocks(&pages);
+
+    assert!(
+        has_image_block(&blocks),
+        "fixture should still yield pictures"
+    );
+    assert!(
+        blocks
+            .iter()
+            .any(|block| matches!(block, Block::Paragraph(paragraph) if paragraph.runs.is_empty())),
+        "blank paragraphs carrying no drawing are deliberate blank lines and must survive"
+    );
+    assert!(
+        blocks.iter().any(
+            |block| matches!(block, Block::Paragraph(paragraph) if !paragraph.runs.is_empty())
+        ),
+        "paragraphs carrying text must survive alongside pictures"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // numberings.docx
 // ---------------------------------------------------------------------------
