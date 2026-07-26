@@ -308,8 +308,15 @@ pub(super) fn word_line_leading_pt(
 
     let leading_pt: f64 = match line_grid_pitch {
         Some(pitch) if pitch > 0.0 && has_east_asian_text => {
+            // A grid line never compresses text below the height its font
+            // needs. Malgun Gothic's typographic box is about 1.0em, so a
+            // 17pt title measured 17pt and "fitted" one 18pt grid line -
+            // but its real line is 1.33em = 22.6pt, and Word gives it that.
+            // Snapping to the grid alone made the title 4.6pt short, which
+            // is the whole title-to-body shortfall (issue #402).
             let grid_lines: f64 = (line_box_pt / pitch).ceil().max(1.0);
-            grid_lines * pitch - line_box_pt
+            let natural_line_pt: f64 = word_pitch_em * font_size;
+            (grid_lines * pitch).max(natural_line_pt) - line_box_pt
         }
         // Word's single spacing is the font's full hhea line (ascender +
         // descender + line gap); Typst's metric edges resolve the typo
