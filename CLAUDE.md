@@ -128,6 +128,33 @@ This project follows a **6-month rolling MSRV policy** (aligned with [tokio](htt
 - **Closing condition.** An issue may be closed only when a fresh GT comparison shows its specific defect gone. Every remaining visible deviation on that comparison must already have its own open issue — file the missing ones before closing.
 - **After images are re-audited.** When posting an after image, re-run the checklist on it; each still-visible deviation gets an issue reference in the PR body ("remaining, tracked in #N").
 
+### Three-axis comparison (`scripts/compare_render.py`)
+
+Run `python3 scripts/compare_render.py <GT.pdf> <output.pdf> [--page N]` before
+judging a rendered difference. It reports geometry, colour histogram, and pixel
+difference together, then states what the combination means.
+
+No single measure is reliable, and each one's blind spot is another's strength:
+
+| Axis | Catches | Blind to |
+| --- | --- | --- |
+| Geometry (`pdftotext -bbox`) | position, size, row pitch, pagination | colour, missing elements |
+| Colour histogram | fill colour, recolouring, missing elements, ink coverage | position, size, font |
+| Pixel difference (`AE`, `RMSE`) | whatever the other two were not watching | see below |
+
+**Never conclude from the pixel count alone.** Measured on this corpus: two
+shadow variants that look plainly different both scored an identical 173,524
+at `AE -fuzz 5%`; a correct anchor-height fix made the count *rise* because the
+shape was still displaced by an unrelated defect; and a column-width fix that
+cut the error from 86pt to 4.4pt barely moved it, because re-proportioning
+columns changes where pixels are, not how many differ. Use `RMSE` or
+`AE -fuzz 1%` when magnitude matters, and treat all of them as a regression
+tripwire rather than evidence.
+
+The tool's `## Reading` section is the part to act on — it routes attention to
+the defect class (pagination, line advance, indent, fill, size) instead of
+leaving a bare number to be over-interpreted.
+
 ### Fine-detail analysis (thin and small elements)
 
 Whole-page thumbnails at 80 DPI hide hairlines, dash patterns, font weight, and sub-pixel offsets. For every compared page:
