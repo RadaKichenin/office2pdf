@@ -20,7 +20,8 @@ use self::diagrams::{generate_chart, generate_smartart};
 use self::fmt::*;
 use self::lists::{
     can_render_fixed_text_list_inline, common_text_style, generate_fixed_text_list, generate_list,
-    write_common_text_settings, write_fixed_text_default_par_settings,
+    generate_list_with_spacing_model, write_common_text_settings,
+    write_fixed_text_default_par_settings,
 };
 use self::shapes::{
     generate_shape, shadow_blur_layers, write_fill_color, write_gradient_fill, write_shape_stroke,
@@ -2136,7 +2137,7 @@ fn generate_fixed_text_box_block(
                 .and_then(|paragraph| {
                     powerpoint_line_height_settings(&paragraph.runs, &paragraph.style)
                 });
-            generate_list(out, list, settings.as_deref())
+            generate_list_with_spacing_model(out, list, settings.as_deref(), true)
         }
         _ => generate_block(out, block, ctx),
     }

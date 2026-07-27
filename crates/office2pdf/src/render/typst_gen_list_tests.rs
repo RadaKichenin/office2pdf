@@ -957,3 +957,96 @@ fn test_list_wrapper_block_carries_the_edge_spacing() {
         "the outermost list block carries the item gap: {wrapper_params}"
     );
 }
+
+// ----- PowerPoint's per-item list spacing (issue #524) -----
+
+/// A slide text box holding one bullet list whose items declare the given
+/// `a:spcAft` gaps, in points.
+fn slide_bullet_list_source(gaps: &[f64]) -> String {
+    let items: Vec<ListItem> = gaps
+        .iter()
+        .enumerate()
+        .map(|(index, gap)| ListItem {
+            content: vec![Paragraph {
+                style: ParagraphStyle {
+                    space_after: Some(*gap),
+                    ..ParagraphStyle::default()
+                },
+                runs: vec![Run {
+                    text: format!("Bullet {index}"),
+                    style: TextStyle {
+                        font_family: Some("Libertinus Serif".to_string()),
+                        font_size: Some(17.0),
+                        ..TextStyle::default()
+                    },
+                    href: None,
+                    footnote: None,
+                }],
+            }],
+            level: 0,
+            start_at: None,
+        })
+        .collect();
+    let list = List {
+        kind: ListKind::Unordered,
+        items,
+        level_styles: BTreeMap::new(),
+    };
+    let doc = make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![make_fixed_text_box(
+            50.0,
+            50.0,
+            600.0,
+            400.0,
+            Insets::default(),
+            crate::ir::TextBoxVerticalAlign::Top,
+            vec![Block::List(list)],
+        )],
+    )]);
+    generate_typst(&doc).unwrap().source
+}
+
+#[test]
+fn slide_list_items_keep_their_own_gaps_when_they_differ() {
+    // `list(spacing:)` carries one value for the whole level, so a list whose
+    // items declare different `a:spcAft` could not use it and got *no* spacing
+    // at all. 04_training_deck_ko's outline alternates 6pt and 10pt and lost
+    // every one, drifting up to 18.8pt by the last bullet (issue #524).
+    let source = slide_bullet_list_source(&[6.0, 10.0, 6.0, 0.0]);
+
+    assert!(
+        source.contains("#v(6pt)") && source.contains("#v(10pt)"),
+        "each item keeps the gap it declares: {source}"
+    );
+}
+
+#[test]
+fn a_slide_list_with_one_shared_gap_still_hoists_it() {
+    // Triangulation: the per-item fallback exists only for lists that cannot
+    // share one value. When they can, the gap is already carried once — by
+    // `list(spacing:)` or, for single-paragraph items, by each block's
+    // `below:` — and the items must not also emit their own on top.
+    let source = slide_bullet_list_source(&[8.0, 8.0, 8.0]);
+
+    assert!(
+        source.contains("spacing: 8pt") || source.contains("below: 8pt"),
+        "a uniform gap is carried once, by the list or by the block: {source}"
+    );
+    assert!(
+        !source.contains("#v(8pt)"),
+        "and must not be counted a second time per item: {source}"
+    );
+}
+
+#[test]
+fn an_item_declaring_no_gap_emits_none() {
+    // Zero is zero, not a house value: a trailing `#v(0pt)` would be noise.
+    let source = slide_bullet_list_source(&[6.0, 0.0, 6.0]);
+
+    assert!(
+        !source.contains("#v(0pt)"),
+        "an item with no gap emits nothing: {source}"
+    );
+}
