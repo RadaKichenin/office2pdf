@@ -251,8 +251,9 @@ by the project's own license:
 `test_python_docx.docx`, `unit_test_formatting.docx`, `unit_test_headers.docx`,
 `unit_test_lists.docx`, `word_tables.docx`
 
-**PPTX:** `minimal.pptx`, `no-slides.pptx`, `powerpoint_sample.pptx`,
-`powerpoint_with_image.pptx`, `test_slides.pptx`, `test.pptx`
+**PPTX:** `minimal.pptx`, `no-slides.pptx`, `office2pdf_introduction_ko.pptx`,
+`powerpoint_sample.pptx`, `powerpoint_with_image.pptx`, `test_slides.pptx`,
+`test.pptx`
 
 **XLSX:** `any_sheets.xlsx`, `date.xlsx`, `merge_cells.xlsx`,
 `office2pdf_repository_workbook.xlsx`, `SH001-Table.xlsx`,
