@@ -361,6 +361,19 @@ pub(super) fn generate_list(
     list: &List,
     line_height_settings: Option<&str>,
 ) -> Result<(), ConvertError> {
+    generate_list_with_spacing_model(out, list, line_height_settings, false)
+}
+
+/// `per_item_gaps` selects PowerPoint's paragraph spacing model over Word's:
+/// a slide item's `a:spcAft` belongs to that item and does not collapse
+/// against its neighbour's `a:spcBef`, so items declaring different gaps each
+/// keep their own (issue #524).
+pub(super) fn generate_list_with_spacing_model(
+    out: &mut String,
+    list: &List,
+    line_height_settings: Option<&str>,
+    per_item_gaps: bool,
+) -> Result<(), ConvertError> {
     let wrapper_spans_full_line: bool = line_height_settings.is_some();
     let root_level: u32 = list_root_level(list);
     let style = list_style_for_level(list, root_level);
@@ -397,7 +410,15 @@ pub(super) fn generate_list(
         spacing_pt,
         start_at,
     );
-    generate_list_items(out, list, &list.items, root_level, wrapper_spans_full_line)?;
+    generate_list_items(
+        out,
+        list,
+        &list.items,
+        root_level,
+        wrapper_spans_full_line,
+        spacing_pt.is_some() || !per_item_gaps,
+        per_item_gaps,
+    )?;
     out.push_str(")\n");
     if needs_wrapper {
         out.push_str("]\n");
@@ -1154,6 +1175,37 @@ fn roman_marker(mut number: u32, uppercase: bool) -> String {
     }
 }
 
+/// The gap an item carries after itself, when the list could not hoist one
+/// shared value onto `list(spacing:)`.
+///
+/// `common_list_level_spacing` only returns a value when *every* boundary at
+/// the level agrees, so a list whose items declare different gaps got none at
+/// all — 04_training_deck_ko's outline alternates 6pt and 10pt `a:spcAft` and
+/// lost every one of them, which cost up to 18.8pt by the last bullet
+/// (issue #524). Emitting the gap inside the item that owns it also survives
+/// nesting, where a shared `spacing:` cannot reach.
+fn write_list_item_trailing_gap(
+    out: &mut String,
+    item: &crate::ir::ListItem,
+    has_uniform_spacing: bool,
+    wrapper_spans_full_line: bool,
+) {
+    if has_uniform_spacing {
+        return;
+    }
+    // Without a full-line box the item's own line height is not inside the
+    // box, and the existing boundary rule adds it to the gap; that path still
+    // belongs to `common_list_level_spacing`, so leave it alone.
+    if !wrapper_spans_full_line {
+        return;
+    }
+    let gap: f64 = paragraph_space_after(item);
+    if gap <= 0.0001 {
+        return;
+    }
+    let _ = write!(out, "#v({}pt)", format_f64(gap));
+}
+
 fn write_list_item_content(out: &mut String, item: &crate::ir::ListItem) {
     for para in &item.content {
         for run in &para.runs {
@@ -1169,6 +1221,8 @@ fn generate_list_items(
     items: &[crate::ir::ListItem],
     base_level: u32,
     wrapper_spans_full_line: bool,
+    has_uniform_spacing: bool,
+    per_item_gaps: bool,
 ) -> Result<(), ConvertError> {
     let style = list_style_for_level(list, base_level);
     let (_, item_func) = list_funcs(style.kind);
@@ -1184,6 +1238,7 @@ fn generate_list_items(
         }
         out.push('[');
         write_list_item_content(out, item);
+        write_list_item_trailing_gap(out, item, has_uniform_spacing, wrapper_spans_full_line);
 
         if item.level == base_level {
             let nested_start = i + 1;
@@ -1233,6 +1288,8 @@ fn generate_list_items(
                     &items[nested_start..nested_end],
                     base_level + 1,
                     wrapper_spans_full_line,
+                    spacing_pt.is_some() || !per_item_gaps,
+                    per_item_gaps,
                 )?;
                 out.push(')');
                 i = nested_end;
