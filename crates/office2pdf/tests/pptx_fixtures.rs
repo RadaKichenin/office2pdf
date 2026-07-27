@@ -481,3 +481,35 @@ fn kinsoku_break_marker_becomes_inline_box() {
         "no break frame in the #438 replica"
     );
 }
+
+// ---------------------------------------------------------------------------
+// shadow_blur_radii.pptx — outer shadows at blurRad 6/12/24pt plus the #390
+// reproduction (9pt), authored and exported by Windows PowerPoint. The GT
+// profile behind the ring constants was measured from that export.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn shadow_blur_renders_gaussian_ring_stack() {
+    let data = load_fixture("shadow_blur_radii.pptx");
+    let parser = PptxParser;
+    let (document, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let output = generate_typst(&document).unwrap();
+    // Opacity 40000 (alpha 0.4) solves to this exact ring ladder; one
+    // stack per shadowed rectangle, largest blur spans +-2 sigma = 14.4pt.
+    for alpha in [9, 23, 37, 32, 16, 6] {
+        assert_eq!(
+            output
+                .source
+                .matches(&format!("rgb(0, 0, 0, {alpha})"))
+                .count(),
+            4,
+            "each of the four shadows carries one ring at alpha {alpha}"
+        );
+    }
+    // blur 24pt: sigma 7.2pt, outermost ring outsets 14.4pt each side of
+    // the 220x130pt shape.
+    assert!(
+        output.source.contains("width: 248.8pt, height: 158.8pt"),
+        "24pt blur must span +2 sigma"
+    );
+}

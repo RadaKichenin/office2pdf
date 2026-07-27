@@ -659,3 +659,95 @@ fn test_explicit_bold_still_emitted_when_font_unavailable() {
         "Should use bold, not extrabold (from unavailable font name). Got: {result}"
     );
 }
+
+// ── Shadow blur ring stack (issue #390) ──────────────────────────────
+//
+// PowerPoint renders `blurRad` as a stepped alpha ramp whose compound
+// coverage follows a Gaussian CDF centred on the shadow silhouette with
+// a std-dev of about 0.3 * blurRad (measured from native exports at
+// blur 6/9/12/24pt). The ring stack must reproduce that: full opacity
+// inside, ~5% of it at the rim, monotonic in between.
+
+fn shadow_with(blur_radius: f64, opacity: f64) -> Shadow {
+    Shadow {
+        blur_radius,
+        distance: 3.0,
+        direction: 90.0,
+        color: Color { r: 0, g: 0, b: 0 },
+        opacity,
+    }
+}
+
+/// Compound coverage of all rings whose expansion is >= the given one:
+/// the coverage an observer measures in that band of the shadow.
+fn compound_coverage_at(layers: &[(f64, u8)], expansion: f64) -> f64 {
+    let mut keep = 1.0;
+    for (ring_expansion, alpha) in layers {
+        if *ring_expansion >= expansion - 1e-9 {
+            keep *= 1.0 - f64::from(*alpha) / 255.0;
+        }
+    }
+    1.0 - keep
+}
+
+#[test]
+fn test_zero_blur_shadow_keeps_single_crisp_layer() {
+    let layers = shadow_blur_layers(&shadow_with(0.0, 0.4));
+    assert_eq!(layers, vec![(0.0, 102)]);
+}
+
+#[test]
+fn test_blur_rings_span_two_sigma_each_side() {
+    let layers = shadow_blur_layers(&shadow_with(9.0, 0.4));
+    assert_eq!(layers.len(), 6);
+    let innermost = layers.iter().map(|(e, _)| *e).fold(f64::INFINITY, f64::min);
+    let outermost = layers
+        .iter()
+        .map(|(e, _)| *e)
+        .fold(f64::NEG_INFINITY, f64::max);
+    // sigma = 0.3 * 9pt = 2.7pt; rings run from -2 sigma to +2 sigma.
+    assert!((innermost - -5.4).abs() < 1e-9, "innermost {innermost}");
+    assert!((outermost - 5.4).abs() < 1e-9, "outermost {outermost}");
+}
+
+#[test]
+fn test_blur_ring_coverage_follows_gaussian_cdf() {
+    let opacity = 0.4;
+    let layers = shadow_blur_layers(&shadow_with(9.0, opacity));
+    // Inside every ring the stack compounds to the shadow's own opacity.
+    let core = compound_coverage_at(&layers, -5.4);
+    assert!((core - opacity).abs() < 0.02, "core coverage {core}");
+    // At the silhouette edge the Gaussian is at 50%.
+    let sigma = 2.7;
+    let at_edge = compound_coverage_at(&layers, 0.4 * sigma);
+    assert!(
+        (at_edge - opacity * 0.5).abs() < 0.03,
+        "edge-band coverage {at_edge}"
+    );
+    // The rim band carries only the far tail, well under a tenth of the core.
+    let rim = compound_coverage_at(&layers, 2.0 * sigma);
+    assert!(rim < opacity * 0.1, "rim coverage {rim}");
+    assert!(rim > 0.0, "rim must still be visible");
+}
+
+#[test]
+fn test_blur_ring_coverage_is_monotonic_outward() {
+    let layers = shadow_blur_layers(&shadow_with(24.0, 0.6));
+    let mut expansions: Vec<f64> = layers.iter().map(|(e, _)| *e).collect();
+    expansions.sort_by(f64::total_cmp);
+    let coverages: Vec<f64> = expansions
+        .iter()
+        .map(|e| compound_coverage_at(&layers, *e))
+        .collect();
+    for pair in coverages.windows(2) {
+        assert!(
+            pair[0] > pair[1],
+            "coverage must fall outward: {coverages:?}"
+        );
+    }
+    // Triangulation at a second blur/opacity: the core still compounds
+    // to the opacity and the geometry scales with the radius.
+    let core = compound_coverage_at(&layers, -14.4);
+    assert!((core - 0.6).abs() < 0.02, "core coverage {core}");
+    assert!((expansions[5] - 14.4).abs() < 1e-9);
+}

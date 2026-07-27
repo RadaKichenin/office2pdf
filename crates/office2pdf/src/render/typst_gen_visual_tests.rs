@@ -555,11 +555,11 @@ fn test_shape_shadow_codegen() {
     };
     let doc = make_doc(vec![make_fixed_page(720.0, 540.0, vec![elem])]);
     let output = generate_typst(&doc).unwrap();
-    // Blurred shadows stack 4 layers whose alphas compound to the shadow
-    // opacity (1-(1-0.5)^(1/4) = 0.159 -> 41 per layer).
+    // Blurred shadows stack six CDF-solved rings; for opacity 0.5 the
+    // ladder is [13, 33, 49, 41, 21, 7], and 41 is its fourth ring.
     assert!(
         output.source.contains("rgb(0, 0, 0, 41)"),
-        "Shadow layers should use rgb with per-layer alpha. Got: {}",
+        "Shadow layers should use rgb with per-ring alpha. Got: {}",
         output.source,
     );
     let shadow_pos = output.source.find("rgb(0, 0, 0, 41)");
@@ -680,9 +680,10 @@ fn test_gradient_unsorted_stops_rendered_in_sorted_order() {
 #[test]
 fn test_shape_shadow_blur_renders_layered_rings() {
     // PowerPoint blurs outer shadows over `blurRad`; a single crisp offset
-    // duplicate reads as a second shape. The approximation stacks
-    // concentric layers from B/2 inset to B/2 outset whose alphas compound
-    // to the shadow opacity at the core and fade at the rim (issue #390).
+    // duplicate reads as a second shape. The approximation stacks six
+    // concentric rings across the measured Gaussian (sigma = 0.3 * blurRad,
+    // rings at +-2 sigma) whose compounded alphas step down the CDF from
+    // the full opacity inside to ~5% of it at the rim (issue #390).
     use crate::ir::Shadow;
 
     let elem = FixedElement {
@@ -709,18 +710,25 @@ fn test_shape_shadow_blur_renders_layered_rings() {
     let doc = make_doc(vec![make_fixed_page(720.0, 540.0, vec![elem])]);
     let source = generate_typst(&doc).unwrap().source;
 
-    // 4 layers, each with alpha 1-(1-0.5)^(1/4) = 0.159 -> 41.
-    let layer_alpha = source.matches("rgb(0, 0, 0, 41)").count();
-    assert_eq!(layer_alpha, 4, "expected 4 shadow layers in: {source}");
-    // Outermost layer: expanded by B/2 - B/8 = 3pt each side.
+    // Six rings whose own alphas solve the CDF steps for opacity 0.5:
+    // compounded outward coverage 0.5, 0.473, 0.394, 0.25, 0.106, 0.027.
+    for alpha in [13, 33, 49, 41, 21, 7] {
+        let needle = format!("rgb(0, 0, 0, {alpha})");
+        assert_eq!(
+            source.matches(&needle).count(),
+            1,
+            "expected one ring at alpha {alpha} in: {source}"
+        );
+    }
+    // Outermost ring: +2 sigma = 0.6 * 8pt = 4.8pt outset each side.
     assert!(
-        source.contains("width: 206pt, height: 156pt"),
-        "outermost ring must outset the shape by 3pt: {source}"
+        source.contains("width: 209.6pt, height: 159.6pt"),
+        "outermost ring must outset the shape by 4.8pt: {source}"
     );
-    // Innermost layer: inset by 3pt each side.
+    // Innermost ring: -2 sigma inset each side.
     assert!(
-        source.contains("width: 194pt, height: 144pt"),
-        "innermost ring must inset the shape by 3pt: {source}"
+        source.contains("width: 190.4pt, height: 140.4pt"),
+        "innermost ring must inset the shape by 4.8pt: {source}"
     );
 }
 

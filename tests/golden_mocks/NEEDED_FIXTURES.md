@@ -2,8 +2,9 @@
 
 Some issues can only move once a native Microsoft Office export isolates
 one variable — reasoning about our own metrics has repeatedly produced
-fixes that measured worse. This file lists the exports still missing.
-Producing them needs a machine where Office automation works;
+fixes that measured worse. This file lists the exports still missing;
+right now every recorded need is settled. Producing new ones needs a
+machine where Office automation works;
 `scripts/macos/export_excel_pdfs.applescript` timed out and then failed
 `-50` on the machine where the early entries were investigated. Windows
 Office COM automation (Excel/PowerPoint/Word) is the working alternative.
@@ -12,23 +13,16 @@ For each fixture: author it in the named app, save the source under
 `tests/golden_mocks/business/sources/<type>/`, and export a PDF to
 `tests/golden_mocks/business/expected/<type>/` with the same stem.
 
-## 1. A shadowed shape at a known blur radius — #390
-
-**PowerPoint.** One slide, three rectangles with a solid fill and an
-`outerShdw`, each at a different `blurRad` — say 6pt, 12pt and 24pt — with
-`dist` and `dir` held constant. Leave a wide margin of empty slide around
-each so the shadow is not clipped or overlapped.
-
-**What it settles.** Our shadow is a stack of concentric translucent rings.
-Replacing the uniform alphas with a graduated ramp looks obviously softer but
-scores *worse* on RMSE and `AE -fuzz 1%`, because PowerPoint's shadow is
-**tighter** than ours: the gradient was not the only thing wrong, the extent
-is too. Varying `blurRad` alone gives the mapping from that value to the
-visible spread, which is the term currently being guessed.
-
 ## Settled entries
 
-Three earlier entries in this file were fulfilled and their issues resolved:
+Earlier entries in this file were fulfilled and their issues resolved:
+
+- **A shadowed shape at a known blur radius** (#390): the fixture exists at
+  `tests/fixtures/pptx/shadow_blur_radii.pptx` (Windows-PowerPoint-authored,
+  blurRad 6/12/24pt plus the issue's 9pt case at constant dist/dir). Its
+  export showed PowerPoint's ramp is itself a stepped ring stack following
+  a Gaussian CDF with sigma about 0.3 x blurRad — the constants now in
+  `shadow_blur_layers`. Measuring it also surfaced #516.
 
 - **Vertically centred text at several sizes and scripts** (#485, closed):
   a Windows-PowerPoint-authored centring fixture showed the filed 6.4/10.8pt
