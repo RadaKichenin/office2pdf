@@ -385,11 +385,16 @@ impl World for MinimalWorld {
 mod tests;
 
 /// Line metrics of the best face for `family`, in em units:
-/// (Typst-resolved ascender, descender magnitude, Word single-line pitch).
-/// The first two match what the layout engine produces with metric text
-/// edges; the third is the hhea ascender + descender + line gap sum that
-/// Word uses for "single" line spacing, which the typo-based metric edges
-/// undershoot (issue #354).
+/// `(above baseline, below baseline, Word single-line pitch)`.
+///
+/// The first two split the third at the point Word puts the baseline —
+/// `hhea` ascender plus line gap — so they always sum to the pitch. Typst's
+/// own `metrics.ascender`/`descender` pair cannot express that split: it is
+/// normalised, summing to exactly 1.0 for faces like Malgun Gothic, which put
+/// the baseline 0.2em off where Word does (issue #508).
+///
+/// The pitch itself is the `hhea` ascender + descender + line gap sum that
+/// Word uses for "single" line spacing (issue #354).
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn font_line_metrics_em(family: &str) -> Option<(f64, f64, f64)> {
     use std::collections::HashMap;
@@ -425,11 +430,19 @@ pub(crate) fn font_line_metrics_em(family: &str) -> Option<(f64, f64, f64)> {
             let hhea_pitch_em = (f64::from(ttf.ascender()) - f64::from(ttf.descender())
                 + f64::from(ttf.line_gap()))
                 / upem;
-            (
-                metrics.ascender.get(),
-                -metrics.descender.get(),
-                hhea_pitch_em,
-            )
+            // Word seats the baseline `hhea ascender + lineGap` below the top
+            // of the line, not at the font's ascender/descender proportion of
+            // the box — measured to 0.0005em on Arial (issue #508). Typst's
+            // `metrics` pair is normalised (Malgun Gothic's sums to exactly
+            // 1.0) and cannot express that, so the split comes from `hhea`.
+            //
+            // Safe to change only since #512: the document-grid arms used to
+            // derive their line count from this pair, so altering it silently
+            // repaginated. They now choose between the grid pitch and the
+            // natural line without consulting it.
+            let top_em: f64 = (f64::from(ttf.ascender()) + f64::from(ttf.line_gap())) / upem;
+            let _ = metrics;
+            (top_em, hhea_pitch_em - top_em, hhea_pitch_em)
         });
     cache
         .lock()
