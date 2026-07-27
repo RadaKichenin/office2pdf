@@ -254,6 +254,7 @@ by the project's own license:
 **PPTX:** `minimal.pptx`, `no-slides.pptx`, `powerpoint_sample.pptx`,
 `powerpoint_with_image.pptx`, `test_slides.pptx`, `test.pptx`
 
-**XLSX:** `any_sheets.xlsx`, `date.xlsx`, `merge_cells.xlsx`, `SH001-Table.xlsx`,
+**XLSX:** `any_sheets.xlsx`, `date.xlsx`, `merge_cells.xlsx`,
+`office2pdf_repository_workbook.xlsx`, `SH001-Table.xlsx`,
 `SH002-TwoTablesTwoSheets.xlsx`, `SH106-Formatted.xlsx`, `SH109-CellWithBorder.xlsx`,
 `temperature.xlsx`

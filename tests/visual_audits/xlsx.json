@@ -50,6 +50,11 @@
       "id": "text-boxes",
       "fixture": "xlsx/poi/WithTextBox.xlsx",
       "focus": "text boxes"
+    },
+    {
+      "id": "repository-workbook",
+      "fixture": "xlsx/office2pdf_repository_workbook.xlsx",
+      "focus": "print scaling"
     }
   ]
 }
