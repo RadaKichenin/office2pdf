@@ -47,6 +47,13 @@ pub struct ParagraphStyle {
     /// width like Word's heading rules and letterhead frames. Boxed to keep
     /// paragraph-carrying enum variants compact.
     pub border: Option<Box<super::elements::CellBorder>>,
+    /// Each border side's `w:space`, in points: the gap Word leaves between
+    /// the paragraph text and that rule. `None` when the paragraph has no
+    /// border at all; a present border with no `w:space` yields zeros, which
+    /// is the attribute's own default (issue #520). Boxed for the same reason
+    /// `border` is — four more `f64` inline push the paragraph-carrying enum
+    /// variants past clippy's size threshold.
+    pub border_space: Option<Box<super::elements::Insets>>,
 }
 
 /// A custom tab stop definition.

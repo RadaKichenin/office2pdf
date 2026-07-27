@@ -1293,3 +1293,99 @@ fn the_east_asian_bonus_scales_with_the_font_size_not_with_the_text() {
          {small_top}/{small_bottom} vs {large_top}/{large_bottom}"
     );
 }
+
+/// One paragraph with a bottom rule of `style` at `width`pt and `space`pt of
+/// `w:pBdr` gap.
+fn bordered_paragraph_source(width: f64, style: BorderLineStyle, space: f64) -> String {
+    let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
+        style: ParagraphStyle {
+            border: Some(Box::new(CellBorder {
+                bottom: Some(BorderSide {
+                    width,
+                    color: Color::black(),
+                    style,
+                }),
+                ..CellBorder::default()
+            })),
+            border_space: Some(Box::new(Insets {
+                top: 0.0,
+                right: 0.0,
+                bottom: space,
+                left: 0.0,
+            })),
+            ..ParagraphStyle::default()
+        },
+        runs: vec![Run {
+            text: "서울특별시 강남구".to_string(),
+            style: TextStyle::default(),
+            href: None,
+            footnote: None,
+        }],
+    })])]);
+    generate_typst(&doc).unwrap().source
+}
+
+#[test]
+fn a_paragraph_rule_reserves_its_own_declared_space() {
+    // `w:pBdr` carries `w:space` per side, in points. A fixed 4pt stood in for
+    // it until #520, which displaced every line below a bordered paragraph by
+    // the difference — 06_official_letter_ko declares 8pt and lost 4pt of it,
+    // as a step that survived to the bottom of the page.
+    let source = bordered_paragraph_source(0.75, BorderLineStyle::Solid, 8.0);
+
+    assert!(
+        source.contains("inset: (bottom: 8.75pt)"),
+        "the rule reserves its declared 8pt plus its own 0.75pt width: {source}"
+    );
+}
+
+#[test]
+fn a_rule_that_declares_no_space_sits_against_the_text() {
+    // Triangulation, and the attribute's own default: `w:space` omitted means
+    // zero, not a house value.
+    let source = bordered_paragraph_source(0.75, BorderLineStyle::Solid, 0.0);
+
+    assert!(
+        source.contains("inset: (bottom: 0.75pt)"),
+        "with no declared space only the rule's width is reserved: {source}"
+    );
+}
+
+#[test]
+fn a_double_rule_reserves_its_space_plus_all_three_widths() {
+    // A Word double rule is two lines of the declared width separated by a gap
+    // of the same width, and it is drawn as two placed hairlines because Typst
+    // strokes have no double style. Both the reserved height and the placement
+    // of each hairline hang off the declared space (issue #520).
+    let source = bordered_paragraph_source(1.0, BorderLineStyle::Double, 8.0);
+
+    assert!(
+        source.contains("inset: (bottom: 11pt)"),
+        "8pt of space plus three 1pt widths: {source}"
+    );
+    assert!(
+        source.contains("#place(bottom, dy: 9pt,") && source.contains("#place(bottom, dy: 11pt,"),
+        "both hairlines are placed from the declared space: {source}"
+    );
+    assert!(
+        !source.contains("stroke: (bottom:"),
+        "a double rule is drawn as overlays, not as a block stroke: {source}"
+    );
+}
+
+#[test]
+fn every_declared_space_reaches_the_output_unchanged() {
+    // Triangulation across values, so no single measured constant can pass.
+    for (space, expected) in [
+        (0.0, "0.75pt"),
+        (2.0, "2.75pt"),
+        (8.0, "8.75pt"),
+        (14.0, "14.75pt"),
+    ] {
+        let source = bordered_paragraph_source(0.75, BorderLineStyle::Solid, space);
+        assert!(
+            source.contains(&format!("inset: (bottom: {expected})")),
+            "{space}pt of declared space should reserve {expected}: {source}"
+        );
+    }
+}

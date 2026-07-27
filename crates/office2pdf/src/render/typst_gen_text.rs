@@ -64,7 +64,11 @@ pub(super) fn generate_paragraph(
         }
         write_block_decoration_params(out, style);
         out.push_str(")[\n");
-        write_paragraph_double_border_overlays(out, &style.border);
+        write_paragraph_double_border_overlays(
+            out,
+            &style.border,
+            style.border_space.as_deref().copied().unwrap_or_default(),
+        );
         write_line_box_settings(out, style.line_box);
         write_par_settings(out, style);
         if let Some(ref settings) = line_height_settings {
@@ -471,13 +475,13 @@ fn write_block_decoration_params(out: &mut String, style: &ParagraphStyle) {
         let _ = write!(out, ", fill: {}", rgb(&background));
     }
     if let Some(border) = &style.border {
-        write_paragraph_border_params(out, border);
+        write_paragraph_border_params(
+            out,
+            border,
+            style.border_space.as_deref().copied().unwrap_or_default(),
+        );
     }
 }
-
-/// Word offsets paragraph border rules slightly from the text; `w:space` is
-/// not carried per side, so a fixed 4pt gap approximates typical documents.
-const PARAGRAPH_BORDER_GAP_PT: f64 = 4.0;
 
 fn stroke_literal(side: &BorderSide) -> String {
     // Callers skip Double sides (drawn as overlays), so for every reachable
@@ -488,26 +492,31 @@ fn stroke_literal(side: &BorderSide) -> String {
 /// Emit `stroke:`/`inset:` block parameters for the paragraph's borders.
 /// Double rules are drawn as overlays (Typst strokes have no double style),
 /// so those sides only reserve inset space here.
-fn write_paragraph_border_params(out: &mut String, border: &CellBorder) {
+///
+/// Each side reserves its own `w:space` plus the rule's own thickness. A fixed
+/// 4pt stood in for `w:space` until #520: a letterhead declaring 8pt then
+/// pulled every line below it up by the difference, and the error is a step,
+/// not a drift, so it survives to the bottom of the page.
+fn write_paragraph_border_params(out: &mut String, border: &CellBorder, space: Insets) {
     let mut strokes: Vec<String> = Vec::new();
     let mut insets: Vec<String> = Vec::new();
 
-    let mut push_side = |name: &str, side: &Option<BorderSide>| {
+    let mut push_side = |name: &str, side: &Option<BorderSide>, gap: f64| {
         let Some(side) = side else {
             return;
         };
         let reserved = if side.style == BorderLineStyle::Double {
-            PARAGRAPH_BORDER_GAP_PT + side.width * 3.0
+            gap + double_rule_thickness(side.width)
         } else {
             strokes.push(format!("{name}: {}", stroke_literal(side)));
-            PARAGRAPH_BORDER_GAP_PT + side.width
+            gap + side.width
         };
         insets.push(format!("{name}: {}pt", format_f64(reserved)));
     };
-    push_side("top", &border.top);
-    push_side("bottom", &border.bottom);
-    push_side("left", &border.left);
-    push_side("right", &border.right);
+    push_side("top", &border.top, space.top);
+    push_side("bottom", &border.bottom, space.bottom);
+    push_side("left", &border.left, space.left);
+    push_side("right", &border.right, space.right);
 
     if !strokes.is_empty() {
         let _ = write!(out, ", stroke: ({})", strokes.join(", "));
@@ -517,15 +526,30 @@ fn write_paragraph_border_params(out: &mut String, border: &CellBorder) {
     }
 }
 
+/// A Word double rule draws two lines of the declared width separated by a gap
+/// of the same width, so it stands three widths tall in total. Measured on
+/// 06_official_letter_ko's `w:sz="8"` letterhead rule: 3pt, against the GT's
+/// 2.93pt gap between the paragraph below it and the rule's far edge.
+fn double_rule_thickness(width: f64) -> f64 {
+    width * 3.0
+}
+
 /// Draw double-rule paragraph borders as two placed hairlines; Typst strokes
 /// cannot render Word's double style. Only horizontal doubles occur in
 /// practice (letterhead rules); vertical doubles fall back to a single
 /// stroke drawn by `write_paragraph_border_params`.
-fn write_paragraph_double_border_overlays(out: &mut String, border: &Option<Box<CellBorder>>) {
+fn write_paragraph_double_border_overlays(
+    out: &mut String,
+    border: &Option<Box<CellBorder>>,
+    space: Insets,
+) {
     let Some(border) = border else {
         return;
     };
-    for (name, side) in [("top", &border.top), ("bottom", &border.bottom)] {
+    for (name, side, gap) in [
+        ("top", &border.top, space.top),
+        ("bottom", &border.bottom, space.bottom),
+    ] {
         let Some(side) = side else {
             continue;
         };
@@ -533,8 +557,8 @@ fn write_paragraph_double_border_overlays(out: &mut String, border: &Option<Box<
             continue;
         }
         let w = side.width;
-        let near_dy = PARAGRAPH_BORDER_GAP_PT + w;
-        let far_dy = PARAGRAPH_BORDER_GAP_PT + w * 3.0;
+        let near_dy = gap + w;
+        let far_dy = gap + double_rule_thickness(w);
         let (align, sign) = if name == "top" {
             ("top", -1.0)
         } else {
