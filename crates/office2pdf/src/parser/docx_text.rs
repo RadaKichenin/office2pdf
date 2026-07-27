@@ -2,7 +2,7 @@ use super::{
     Alignment, Color, HyperlinkMap, LineSpacing, ParagraphStyle, TabAlignment, TabLeader, TabStop,
     TabStopOverride, TextStyle, VerticalTextAlign, apply_tab_stop_overrides,
 };
-use crate::ir::{BorderLineStyle, BorderSide, CellBorder};
+use crate::ir::{BorderLineStyle, BorderSide, CellBorder, Insets};
 use crate::parser::units::{half_points_to_pt, twips_to_pt};
 use crate::parser::xml_util;
 
@@ -23,6 +23,9 @@ pub(super) fn extract_paragraph_style(prop: &docx_rs::ParagraphProperty) -> Para
     let (line_spacing, space_before, space_after) = extract_line_spacing(&prop.line_spacing);
     let tab_stops = extract_tab_stops(&prop.tabs);
     let border = extract_paragraph_borders(&prop.borders);
+    let border_space = border
+        .as_ref()
+        .and_then(|_| extract_paragraph_border_space(&prop.borders));
 
     ParagraphStyle {
         alignment,
@@ -38,7 +41,31 @@ pub(super) fn extract_paragraph_style(prop: &docx_rs::ParagraphProperty) -> Para
         tab_stops,
         background: None,
         border,
+        border_space,
     }
+}
+
+/// Each `w:pBdr` side's `w:space`, in points — the gap Word leaves between the
+/// paragraph text and that rule. The attribute's own default is 0, so a border
+/// that omits it gets no gap; substituting a fixed 4pt for every document
+/// displaced everything below a bordered paragraph by the difference
+/// (issue #520).
+fn extract_paragraph_border_space(
+    borders: &Option<docx_rs::ParagraphBorders>,
+) -> Option<Box<Insets>> {
+    let json = serde_json::to_value(borders.as_ref()?).ok()?;
+    let side_space = |name: &str| -> f64 {
+        json.get(name)
+            .and_then(|side| side.get("space"))
+            .and_then(serde_json::Value::as_f64)
+            .unwrap_or(0.0)
+    };
+    Some(Box::new(Insets {
+        top: side_space("top"),
+        right: side_space("right"),
+        bottom: side_space("bottom"),
+        left: side_space("left"),
+    }))
 }
 
 /// Word draws `w:pPr/w:pBdr` rules around the full paragraph width (heading

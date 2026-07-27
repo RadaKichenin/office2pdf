@@ -238,6 +238,14 @@ pub(super) fn merge_paragraph_style(
             .border
             .clone()
             .or_else(|| style_paragraph.and_then(|style| style.border.clone())),
+        // Follows the border it measures from rather than merging separately:
+        // a paragraph that inherits its rules inherits their gaps with them,
+        // and one that overrides them overrides the gaps too (issue #520).
+        border_space: if explicit.border.is_some() {
+            explicit.border_space.clone()
+        } else {
+            style_paragraph.and_then(|style| style.border_space.clone())
+        },
     }
 }
 

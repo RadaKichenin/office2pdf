@@ -646,3 +646,76 @@ fn a_section_without_a_doc_grid_has_no_pitch_at_all() {
     assert_eq!(page.line_grid_pitch, None);
     assert!(!page.line_grid_snaps_lines);
 }
+
+// ----- Body paragraph `w:pBdr w:space` parsing (issue #520) -----
+
+/// A one-paragraph document whose only paragraph carries a bottom rule with
+/// the given `w:space`, in points.
+fn build_docx_with_paragraph_rule(space: Option<usize>) -> Vec<u8> {
+    let mut border = docx_rs::ParagraphBorder::new(docx_rs::ParagraphBorderPosition::Bottom)
+        .val(docx_rs::BorderType::Double)
+        .size(8)
+        .color("000000");
+    if let Some(space) = space {
+        border = border.space(space);
+    }
+    let mut paragraph =
+        docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text("Letterhead"));
+    paragraph.property = paragraph
+        .property
+        .set_borders(docx_rs::ParagraphBorders::with_empty().set(border));
+
+    let docx = docx_rs::Docx::new().add_paragraph(paragraph);
+    let mut cursor = Cursor::new(Vec::new());
+    docx.build().pack(&mut cursor).unwrap();
+    cursor.into_inner()
+}
+
+fn first_body_paragraph_style(data: &[u8]) -> ParagraphStyle {
+    let (doc, _warnings) = DocxParser
+        .parse(data, &ConvertOptions::default())
+        .expect("document parses");
+    let flow = match &doc.pages[0] {
+        Page::Flow(flow) => flow,
+        _ => panic!("Expected FlowPage"),
+    };
+    match &flow.content[0] {
+        Block::Paragraph(paragraph) => paragraph.style.clone(),
+        other => panic!("Expected a paragraph, got {other:?}"),
+    }
+}
+
+#[test]
+fn body_paragraph_rule_carries_its_declared_space() {
+    // The gap between a paragraph's text and its rule is the paragraph's own
+    // `w:space`, in points. Substituting a fixed 4pt displaced everything
+    // below a bordered paragraph by the difference (issue #520).
+    let style = first_body_paragraph_style(&build_docx_with_paragraph_rule(Some(8)));
+
+    let space = style.border_space.expect("w:space parsed");
+    assert_eq!(space.bottom, 8.0);
+    assert_eq!((space.top, space.left, space.right), (0.0, 0.0, 0.0));
+}
+
+#[test]
+fn a_rule_without_w_space_yields_no_gap() {
+    // Triangulation: the attribute's own default is 0, so an omitted `w:space`
+    // must not resurrect a house value.
+    let style = first_body_paragraph_style(&build_docx_with_paragraph_rule(None));
+
+    assert!(style.border.is_some(), "the rule itself is still parsed");
+    assert_eq!(style.border_space.map(|space| space.bottom), Some(0.0));
+}
+
+#[test]
+fn a_paragraph_without_a_rule_has_no_border_space() {
+    let docx = docx_rs::Docx::new()
+        .add_paragraph(docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text("Body")));
+    let mut cursor = Cursor::new(Vec::new());
+    docx.build().pack(&mut cursor).unwrap();
+
+    let style = first_body_paragraph_style(&cursor.into_inner());
+
+    assert!(style.border.is_none());
+    assert!(style.border_space.is_none());
+}
