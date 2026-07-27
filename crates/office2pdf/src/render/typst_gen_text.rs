@@ -15,6 +15,23 @@ const PPTX_SOFT_LINE_BREAK_CHAR: char = '\u{000B}';
 /// In-text marker the PPTX parser places between a Hangul syllable and
 /// following terminal punctuation (issue #438); never emitted literally.
 const HANGUL_KINSOKU_BREAK_CHAR: char = '\u{200B}';
+/// In-text marker the DOCX parser places at an East Asian/Latin boundary that
+/// carries no literal space (issue #521); never emitted literally.
+const EAST_ASIAN_AUTO_SPACE_CHAR: char = '\u{E001}';
+/// Word's automatic space at such a boundary, as a fraction of the run's font
+/// size. Measured as exactly a quarter em on a native export at two sizes.
+const EAST_ASIAN_AUTO_SPACE_EM: f64 = 0.25;
+
+/// The auto space sized against the *run*, not the paragraph. It is emitted
+/// between the run's `#text(size:)` calls rather than inside one, so an `em`
+/// there would resolve against the paragraph's default size instead — 11pt
+/// where the run is 10.5pt, which is 0.12pt too wide at every boundary.
+fn east_asian_auto_space(run: &Run) -> String {
+    match run.style.font_size {
+        Some(size) => format!("#h({}pt)", format_f64(size * EAST_ASIAN_AUTO_SPACE_EM)),
+        None => format!("#h({EAST_ASIAN_AUTO_SPACE_EM}em)"),
+    }
+}
 
 pub(super) fn generate_paragraph(
     out: &mut String,
@@ -1078,7 +1095,9 @@ pub(super) fn generate_run(out: &mut String, run: &Run) {
         return;
     }
 
-    if run.text.contains(PPTX_SOFT_LINE_BREAK_CHAR) || run.text.contains(HANGUL_KINSOKU_BREAK_CHAR)
+    if run.text.contains(PPTX_SOFT_LINE_BREAK_CHAR)
+        || run.text.contains(HANGUL_KINSOKU_BREAK_CHAR)
+        || run.text.contains(EAST_ASIAN_AUTO_SPACE_CHAR)
     {
         write_run_with_break_markers(out, run);
         return;
@@ -1099,9 +1118,14 @@ fn write_run_with_break_markers(out: &mut String, run: &Run) {
     let mut segment_start: usize = 0;
 
     for (offset, ch) in run.text.char_indices() {
-        let replacement = match ch {
+        let auto_space: String;
+        let replacement: &str = match ch {
             PPTX_SOFT_LINE_BREAK_CHAR => "#linebreak()",
             HANGUL_KINSOKU_BREAK_CHAR => "#box[]",
+            EAST_ASIAN_AUTO_SPACE_CHAR => {
+                auto_space = east_asian_auto_space(run);
+                &auto_space
+            }
             _ => continue,
         };
         if segment_start < offset {

@@ -2,7 +2,7 @@ use super::{
     Alignment, Color, HyperlinkMap, LineSpacing, ParagraphStyle, TabAlignment, TabLeader, TabStop,
     TabStopOverride, TextStyle, VerticalTextAlign, apply_tab_stop_overrides,
 };
-use crate::ir::{BorderLineStyle, BorderSide, CellBorder, Insets};
+use crate::ir::{BorderLineStyle, BorderSide, CellBorder, Insets, Run};
 use crate::parser::units::{half_points_to_pt, twips_to_pt};
 use crate::parser::xml_util;
 
@@ -461,4 +461,76 @@ pub(super) fn extract_run_style_id(run_property: &docx_rs::RunProperty) -> Optio
         .get("style")?
         .as_str()
         .map(String::from)
+}
+
+/// In-text marker for Word's automatic space between East Asian text and
+/// adjacent Latin letters or digits. The renderer expands it to a quarter em
+/// and it is never emitted literally; see the matching constant there.
+const EAST_ASIAN_AUTO_SPACE_CHAR: char = '\u{E001}';
+
+/// Insert Word's automatic space at every East Asian/Latin boundary in the
+/// paragraph that does not already carry a literal space.
+///
+/// `w:autoSpaceDE` and `w:autoSpaceDN` are on unless a paragraph turns them
+/// off, and the space they add is exactly a quarter em. Measured on a native
+/// Word export of a ten-case probe that varies one factor at a time: the same
+/// sentence gets 2.625pt at 10.5pt and 2.375pt at 9.5pt as a plain paragraph, a
+/// `w:numPr` list item, a justified paragraph, a `ListParagraph`-styled
+/// paragraph, and a table cell alike, on both sides of a Latin island
+/// (`제3자` widens at `제→3` and at `3→자`). Only setting the two properties to
+/// `false` suppresses it, and then completely (issue #521).
+///
+/// The boundary can fall between two runs, so the scan carries the previous
+/// character across the run break rather than restarting at each run.
+///
+/// TODO(docx-rs models neither `w:autoSpaceDE` nor `w:autoSpaceDN`, so a
+/// paragraph that explicitly turns them off still gets the space; both default
+/// to on, which is what every file in the corpus relies on).
+pub(super) fn insert_east_asian_auto_space(runs: &mut [Run]) {
+    let mut previous: Option<char> = None;
+    for run in runs.iter_mut() {
+        if run.footnote.is_some() {
+            previous = None;
+            continue;
+        }
+        let mut spaced = String::with_capacity(run.text.len());
+        for ch in run.text.chars() {
+            // Never trust the marker from the input: it is ours to place.
+            if ch == EAST_ASIAN_AUTO_SPACE_CHAR {
+                continue;
+            }
+            if previous.is_some_and(|previous| needs_auto_space_between(previous, ch)) {
+                spaced.push(EAST_ASIAN_AUTO_SPACE_CHAR);
+            }
+            spaced.push(ch);
+            previous = Some(ch);
+        }
+        run.text = spaced;
+    }
+}
+
+fn needs_auto_space_between(left: char, right: char) -> bool {
+    (is_east_asian_text(left) && is_western_alphanumeric(right))
+        || (is_western_alphanumeric(left) && is_east_asian_text(right))
+}
+
+/// East Asian *text*, deliberately narrower than the renderer's `is_cjk_like`:
+/// CJK symbols and punctuation and the fullwidth forms are already full-width
+/// and Word adds nothing beside them, so widening a boundary at `、` or `．`
+/// would be over-applying the rule.
+fn is_east_asian_text(ch: char) -> bool {
+    matches!(
+        ch as u32,
+        0x1100..=0x11FF   // Hangul Jamo
+            | 0x3040..=0x30FF // Hiragana and Katakana
+            | 0x3130..=0x318F // Hangul Compatibility Jamo
+            | 0x3400..=0x4DBF // CJK Unified Ideographs Extension A
+            | 0x4E00..=0x9FFF // CJK Unified Ideographs
+            | 0xAC00..=0xD7AF // Hangul Syllables
+            | 0xF900..=0xFAFF // CJK Compatibility Ideographs
+    )
+}
+
+fn is_western_alphanumeric(ch: char) -> bool {
+    ch.is_ascii_alphanumeric()
 }
