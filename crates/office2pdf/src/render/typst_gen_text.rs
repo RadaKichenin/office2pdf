@@ -193,9 +193,14 @@ pub(super) fn word_line_height_settings(
     ))
 }
 
-/// The nominal font's `(ascender_em, descender_em)` metric edges plus the
-/// leading, in em, that tops the line box up to Word's single-spacing or
-/// grid advance. `None` when the metric-edge treatment does not apply.
+/// The nominal font's `(above baseline, below baseline)` split plus the
+/// leading, in em, that tops the line box up to Word's grid advance. `None`
+/// when the metric-edge treatment does not apply.
+///
+/// Since #508 the pair already sums to the font's single-spacing pitch, so the
+/// leading is zero outside the document-grid path — the box total is unchanged
+/// either way, and what the pair now decides is where inside it the baseline
+/// falls.
 fn word_line_box_and_leading(
     runs: &[Run],
     style: &ParagraphStyle,
@@ -379,9 +384,10 @@ pub(super) fn word_line_leading_pt(
             };
             advance_pt - line_box_pt
         }
-        // Word's single spacing is the font's full hhea line (ascender +
-        // descender + line gap); Typst's metric edges resolve the typo
-        // values, so the leading bridges the difference.
+        // Word's single spacing is the font's full hhea line, which the
+        // metric pair now sums to directly (issue #508), so this yields zero.
+        // Kept as the guard it is: a face whose reported pitch exceeds its own
+        // ascent-plus-descent would still need topping up here.
         _ => (word_pitch_em * font_size - line_box_pt).max(0.0),
     };
     Some(leading_pt)
