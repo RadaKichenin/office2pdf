@@ -536,3 +536,113 @@ fn test_parse_docx_header_paragraph_border_space() {
     assert_eq!(space.bottom, 4.0);
     assert_eq!(space.top, 0.0);
 }
+
+// ----- Document grid (`w:docGrid`) parsing tests (issue #518) -----
+
+/// A one-paragraph document whose section carries `<w:docGrid w:linePitch="360"
+/// {type_attribute}>`, written as raw XML because docx-rs's builder cannot
+/// place a `w:docGrid` on the body section.
+fn build_docx_with_doc_grid(type_attribute: &str) -> Vec<u8> {
+    use std::io::Write;
+    use zip::ZipWriter;
+    use zip::write::FileOptions;
+
+    let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+    let opts = FileOptions::default();
+
+    zip.start_file("[Content_Types].xml", opts).unwrap();
+    zip.write_all(
+        br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>"#,
+    )
+    .unwrap();
+
+    zip.start_file("_rels/.rels", opts).unwrap();
+    zip.write_all(
+        br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>"#,
+    )
+    .unwrap();
+
+    zip.start_file("word/document.xml", opts).unwrap();
+    let document_xml = format!(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p><w:r><w:t xml:space="preserve">본문 한 줄</w:t></w:r></w:p>
+    <w:sectPr>
+      <w:pgSz w:w="11906" w:h="16838"/>
+      <w:docGrid w:linePitch="360"{type_attribute}/>
+    </w:sectPr>
+  </w:body>
+</w:document>"#
+    );
+    zip.write_all(document_xml.as_bytes()).unwrap();
+
+    zip.finish().unwrap().into_inner()
+}
+
+fn parse_flow_page(data: &[u8]) -> FlowPage {
+    let (doc, _warnings) = DocxParser
+        .parse(data, &ConvertOptions::default())
+        .expect("document parses");
+    match &doc.pages[0] {
+        Page::Flow(flow) => flow.clone(),
+        _ => panic!("Expected FlowPage"),
+    }
+}
+
+#[test]
+fn doc_grid_without_a_type_declares_a_pitch_that_does_not_snap() {
+    // Word writes a bare `<w:docGrid w:linePitch="360"/>` into ordinary Korean
+    // documents. `w:type` then takes its default value `default`, which is
+    // ECMA-376's name for *no* grid, and Word lays the file out with none —
+    // every Korean fixture in the business corpus is like this and none of
+    // their line advances is a multiple of 18pt (issue #518).
+    let page = parse_flow_page(&build_docx_with_doc_grid(""));
+
+    assert_eq!(
+        page.line_grid_pitch,
+        Some(18.0),
+        "the declared pitch is still read: it marks an East Asian edition"
+    );
+    assert!(
+        !page.line_grid_snaps_lines,
+        "a `default` grid must not snap lines to that pitch"
+    );
+}
+
+#[test]
+fn doc_grid_typed_lines_snaps_lines_to_the_pitch() {
+    // Triangulation: the author turning the grid on is what makes it real.
+    for grid_type in ["lines", "linesAndChars", "snapToChars"] {
+        let page = parse_flow_page(&build_docx_with_doc_grid(&format!(
+            r#" w:type="{grid_type}""#
+        )));
+
+        assert_eq!(page.line_grid_pitch, Some(18.0));
+        assert!(
+            page.line_grid_snaps_lines,
+            "w:type=\"{grid_type}\" snaps lines to the grid"
+        );
+    }
+}
+
+#[test]
+fn a_section_without_a_doc_grid_has_no_pitch_at_all() {
+    let docx = docx_rs::Docx::new()
+        .add_paragraph(docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text("Body")));
+    let mut cursor = Cursor::new(Vec::new());
+    docx.build().pack(&mut cursor).unwrap();
+
+    let page = parse_flow_page(&cursor.into_inner());
+
+    assert_eq!(page.line_grid_pitch, None);
+    assert!(!page.line_grid_snaps_lines);
+}

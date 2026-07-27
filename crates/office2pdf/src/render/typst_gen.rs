@@ -85,7 +85,7 @@ struct GenCtx {
     /// Whether the table row being generated takes the section's grid-snapped
     /// line box. Decided once per row so every cell in it shares a baseline,
     /// which reading each cell's own text could not guarantee (issue #498).
-    row_snaps_to_grid: bool,
+    row_has_east_asian_text: bool,
 }
 
 impl GenCtx {
@@ -96,7 +96,7 @@ impl GenCtx {
             next_text_box_id: 0,
             table_depth: 0,
             line_grid_pitch: None,
-            row_snaps_to_grid: false,
+            row_has_east_asian_text: false,
             document_default_tab_stop_pt: None,
             default_tab_width_pt: DEFAULT_TAB_WIDTH_PT,
             at_document_start: true,
@@ -329,7 +329,11 @@ fn generate_flow_page(
     let size = resolve_page_size(&page.size, options);
     write_flow_page_setup(out, page, &size, ctx);
     out.push('\n');
-    ctx.line_grid_pitch = page.line_grid_pitch;
+    // Only a snapping grid reaches the line model: a `w:docGrid` whose type is
+    // `default` declares a pitch Word ignores for layout (issue #518). The bare
+    // presence of the element still marks an East Asian edition for the tab
+    // default below, which is a different question.
+    ctx.line_grid_pitch = page.line_grid_pitch.filter(|_| page.line_grid_snaps_lines);
     // Absent w:defaultTabStop: East Asian Word editions (signalled by the
     // section's w:docGrid) default to 800 twips = 40pt where Western
     // editions use the ECMA 720 twips = 36pt (issue #393).

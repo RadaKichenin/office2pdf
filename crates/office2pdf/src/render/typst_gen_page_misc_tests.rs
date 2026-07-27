@@ -26,6 +26,7 @@ fn test_generate_flow_page_with_text_header() {
         footer: None,
         columns: None,
         line_grid_pitch: None,
+        line_grid_snaps_lines: false,
     })]);
     let output = generate_typst(&doc).unwrap();
     assert!(output.source.contains("header:"));
@@ -61,6 +62,7 @@ fn test_generate_flow_page_with_page_number_footer() {
         }),
         columns: None,
         line_grid_pitch: None,
+        line_grid_snaps_lines: false,
     })]);
     let output = generate_typst(&doc).unwrap();
     assert!(output.source.contains("footer:"));
@@ -124,6 +126,7 @@ fn test_generate_footer_with_compound_border_and_right_positioned_tab() {
         }),
         columns: None,
         line_grid_pitch: None,
+        line_grid_snaps_lines: false,
     })]);
 
     let output = generate_typst(&doc).unwrap();
@@ -167,6 +170,7 @@ fn test_generate_page_anchored_footer_frame_in_foreground() {
         }),
         columns: None,
         line_grid_pitch: None,
+        line_grid_snaps_lines: false,
     })]);
 
     let output = generate_typst(&doc).unwrap();
@@ -214,6 +218,7 @@ fn test_generate_flow_page_with_header_and_footer() {
         }),
         columns: None,
         line_grid_pitch: None,
+        line_grid_snaps_lines: false,
     })]);
     let output = generate_typst(&doc).unwrap();
     assert!(output.source.contains("header:") && output.source.contains("footer:"));
@@ -237,6 +242,7 @@ fn test_generate_typst_inserts_pagebreak_between_flow_pages() {
         footer: None,
         columns: None,
         line_grid_pitch: None,
+        line_grid_snaps_lines: false,
     });
     let second = Page::Flow(FlowPage {
         size: PageSize::default(),
@@ -246,6 +252,7 @@ fn test_generate_typst_inserts_pagebreak_between_flow_pages() {
         footer: None,
         columns: None,
         line_grid_pitch: None,
+        line_grid_snaps_lines: false,
     });
 
     let output = generate_typst(&make_doc(vec![first, second])).unwrap();
@@ -771,6 +778,7 @@ fn test_generate_header_with_bottom_border_draws_rule_below_text() {
         footer: None,
         columns: None,
         line_grid_pitch: None,
+        line_grid_snaps_lines: false,
     })]);
 
     let output = generate_typst(&doc).unwrap();
@@ -837,6 +845,7 @@ fn test_generate_header_with_top_and_bottom_borders_draws_both_rules() {
         footer: None,
         columns: None,
         line_grid_pitch: None,
+        line_grid_snaps_lines: false,
     })]);
 
     let output = generate_typst(&doc).unwrap();
@@ -881,6 +890,7 @@ fn test_flow_page_footer_is_pinned_to_the_word_edge_distance() {
         }),
         columns: None,
         line_grid_pitch: None,
+        line_grid_snaps_lines: false,
     })]);
 
     let output = generate_typst(&doc).unwrap();
@@ -937,6 +947,7 @@ fn test_flow_page_footer_without_edge_distance_keeps_default_placement() {
         }),
         columns: None,
         line_grid_pitch: None,
+        line_grid_snaps_lines: false,
     })]);
 
     let output = generate_typst(&doc).unwrap();
@@ -977,6 +988,7 @@ fn test_flow_page_footer_distance_beyond_margin_falls_back() {
         }),
         columns: None,
         line_grid_pitch: None,
+        line_grid_snaps_lines: false,
     })]);
 
     let output = generate_typst(&doc).unwrap();
@@ -1004,6 +1016,7 @@ fn test_first_document_paragraph_keeps_its_space_before() {
         footer: None,
         columns: None,
         line_grid_pitch: None,
+        line_grid_snaps_lines: false,
     })]);
 
     let output = generate_typst(&doc).unwrap();
@@ -1044,6 +1057,7 @@ fn test_later_paragraph_space_before_stays_block_spacing() {
         footer: None,
         columns: None,
         line_grid_pitch: None,
+        line_grid_snaps_lines: false,
     })]);
 
     let output = generate_typst(&doc).unwrap();
@@ -1098,6 +1112,7 @@ fn test_generate_header_border_uses_declared_pbdr_space() {
         footer: None,
         columns: None,
         line_grid_pitch: None,
+        line_grid_snaps_lines: false,
     })]);
 
     let output = generate_typst(&doc).unwrap();
@@ -1148,6 +1163,7 @@ fn test_generate_header_border_without_space_keeps_hairline_gap() {
         footer: None,
         columns: None,
         line_grid_pitch: None,
+        line_grid_snaps_lines: false,
     })]);
 
     let output = generate_typst(&doc).unwrap();
@@ -1188,6 +1204,7 @@ fn test_flow_page_header_is_pinned_to_the_word_edge_distance() {
         footer: None,
         columns: None,
         line_grid_pitch: None,
+        line_grid_snaps_lines: false,
     })]);
 
     let output = generate_typst(&doc).unwrap();
@@ -1235,6 +1252,7 @@ fn test_flow_page_header_without_edge_distance_keeps_default_placement() {
         footer: None,
         columns: None,
         line_grid_pitch: None,
+        line_grid_snaps_lines: false,
     })]);
 
     let output = generate_typst(&doc).unwrap();
@@ -1279,6 +1297,7 @@ fn test_page_number_field_uses_its_run_style() {
         }),
         columns: None,
         line_grid_pitch: None,
+        line_grid_snaps_lines: false,
     })]);
 
     let output = generate_typst(&doc).unwrap();
@@ -1324,6 +1343,7 @@ fn test_unstyled_page_number_field_stays_bare() {
         }),
         columns: None,
         line_grid_pitch: None,
+        line_grid_snaps_lines: false,
     })]);
 
     let output = generate_typst(&doc).unwrap();

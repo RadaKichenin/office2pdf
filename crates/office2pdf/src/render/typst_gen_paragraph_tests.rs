@@ -39,6 +39,7 @@ fn test_generate_page_setup() {
         footer: None,
         columns: None,
         line_grid_pitch: None,
+        line_grid_snaps_lines: false,
     })]);
     let result = generate_typst(&doc).unwrap().source;
     assert!(result.contains("612pt"));
@@ -646,15 +647,17 @@ fn test_centered_paragraph_with_spacing_keeps_full_width_block() {
 
 #[test]
 fn test_document_grid_pitch_snaps_line_height() {
-    // A Korean Word section with <w:docGrid w:linePitch="360"> snaps body
-    // lines to an 18pt grid. The line box is clamped to a fixed em height
-    // equal to the grid pitch (leading 0) so a taller fallback glyph on a
-    // line cannot inflate its advance past the grid (issue #398); the
-    // baseline splits the box by the font's ascender/descender ratio. Uses
-    // a font from Typst's embedded set so the test is environment-free.
-    if crate::render::pdf::font_line_metrics_em("Libertinus Serif").is_none() {
+    // A Korean Word section whose <w:docGrid> snaps lines puts body lines on
+    // an 18pt grid. The line box is clamped to a fixed em height equal to the
+    // grid pitch (leading 0) so a taller fallback glyph on a line cannot
+    // inflate its advance past the grid (issue #398). The baseline keeps its
+    // constant ascent inside that box: the slot's slack accrues below it, not
+    // around it (issue #518). Uses a font from Typst's embedded set so the
+    // test is environment-free.
+    let Some((_, _, word_pitch_em)) = crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
         return; // no font book available (e.g. exotic CI sandbox)
-    }
+    };
     let mut page = match make_flow_page(vec![Block::Paragraph(Paragraph {
         style: ParagraphStyle::default(),
         runs: vec![Run {
@@ -672,10 +675,17 @@ fn test_document_grid_pitch_snaps_line_height() {
         _ => unreachable!(),
     };
     page.line_grid_pitch = Some(18.0);
+    page.line_grid_snaps_lines = true;
     let doc = make_doc(vec![Page::Flow(page)]);
     let result = generate_typst(&doc).unwrap().source;
 
-    assert_line_advance(&result, "Libertinus Serif", 10.0, 18.0);
+    assert_line_advance(
+        &result,
+        "Libertinus Serif",
+        10.0,
+        18.0,
+        0.15 * word_pitch_em,
+    );
     assert!(
         result.contains("leading: 0pt"),
         "the grid advance is carried by the box, not by leading: {result}"
@@ -704,6 +714,7 @@ fn test_latin_paragraph_ignores_document_grid() {
         _ => unreachable!(),
     };
     page.line_grid_pitch = Some(18.0);
+    page.line_grid_snaps_lines = true;
     let doc = make_doc(vec![Page::Flow(page)]);
     let result = generate_typst(&doc).unwrap().source;
 
@@ -715,7 +726,7 @@ fn test_latin_paragraph_ignores_document_grid() {
         return;
     };
     let single_pt: f64 = (word_pitch * 10.0).max((ascender + descender) * 10.0);
-    assert_line_advance(&result, "Libertinus Serif", 10.0, single_pt);
+    assert_line_advance(&result, "Libertinus Serif", 10.0, single_pt, 0.0);
     assert!(
         (single_pt - 18.0).abs() > 0.01,
         "the fixture only proves anything if the grid pitch differs from single spacing"
@@ -746,7 +757,7 @@ fn test_no_document_grid_uses_word_single_spacing() {
         return;
     };
     let single_pt: f64 = (word_pitch * 10.0).max((ascender + descender) * 10.0);
-    assert_line_advance(&result, "Libertinus Serif", 10.0, single_pt);
+    assert_line_advance(&result, "Libertinus Serif", 10.0, single_pt, 0.0);
     assert!(
         result.contains("leading: 0pt"),
         "the advance is carried by the box, not by leading: {result}"
@@ -880,6 +891,7 @@ fn test_tab_advance_defaults_to_40pt_under_document_grid() {
         _ => unreachable!(),
     };
     page.line_grid_pitch = Some(18.0);
+    page.line_grid_snaps_lines = true;
     let doc = make_doc(vec![Page::Flow(page)]);
     let result = generate_typst(&doc).unwrap().source;
     assert!(
@@ -969,7 +981,7 @@ fn test_consecutive_paragraphs_each_advance_by_the_full_font_line() {
     ])]);
     let result = generate_typst(&doc).unwrap().source;
 
-    assert_line_advance(&result, LINE_GAP_FONT, 9.0, advance_pt);
+    assert_line_advance(&result, LINE_GAP_FONT, 9.0, advance_pt, 0.0);
     assert!(
         result.contains("leading: 0pt"),
         "the advance belongs to the box, not to leading: {result}"
@@ -1022,6 +1034,7 @@ fn test_grid_paragraph_space_after_stays_raw_gap() {
         _ => unreachable!(),
     };
     page.line_grid_pitch = Some(18.0);
+    page.line_grid_snaps_lines = true;
     let doc = make_doc(vec![Page::Flow(page)]);
     let result = generate_typst(&doc).unwrap().source;
 
@@ -1165,5 +1178,118 @@ fn test_empty_indented_paragraph_closes_its_block() {
     assert!(
         result.contains("after the empty paragraph"),
         "the following paragraph must not be swallowed: {result}"
+    );
+}
+
+/// One paragraph of `text` in `family` at `font_size`, with no grid.
+fn line_box_for_text(text: &str, family: &str, font_size: f64) -> Option<(f64, f64)> {
+    crate::render::pdf::font_line_metrics_em(family)?;
+    let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
+        style: ParagraphStyle::default(),
+        runs: vec![Run {
+            text: text.to_string(),
+            style: TextStyle {
+                font_family: Some(family.to_string()),
+                font_size: Some(font_size),
+                ..TextStyle::default()
+            },
+            href: None,
+            footnote: None,
+        }],
+    })])]);
+    emitted_line_box_em(&generate_typst(&doc).unwrap().source)
+}
+
+#[test]
+fn east_asian_line_advances_130_percent_of_the_font_line() {
+    // Word gives a line carrying East Asian text 130% of the font's own hhea
+    // line. Measured across the business corpus: 10.5pt Malgun Gothic paces its
+    // wrapped lines at 18.00-18.24pt against 18.156 predicted, and
+    // 06_official_letter_ko's 9.5pt paragraphs advance 16.43pt where the bare
+    // hhea line is 12.64pt (issue #518).
+    let Some((ascender, descender, word_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+    let _ = (ascender, descender);
+    let Some((top, bottom)) = line_box_for_text("본문 한 줄", "Libertinus Serif", 10.0) else {
+        return;
+    };
+
+    assert!(
+        (top + bottom - 1.3 * word_pitch_em).abs() < 0.001,
+        "East Asian advance {}em should be 1.3 x the {word_pitch_em}em hhea line",
+        top + bottom
+    );
+}
+
+#[test]
+fn east_asian_bonus_is_centred_on_the_baseline() {
+    // Half of the 30% lands above the baseline and half below: an Arial first
+    // baseline sits at `hhea ascender + lineGap` while a Malgun Gothic one at
+    // the same settings sits 0.15 x pitch lower, and the descent gap grows by
+    // the same amount (issue #518).
+    let Some((ascender, _descender, word_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
+        return;
+    };
+    let Some((top, bottom)) = line_box_for_text("본문 한 줄", "Libertinus Serif", 10.0) else {
+        return;
+    };
+
+    assert!(
+        (top - (ascender + 0.15 * word_pitch_em)).abs() < 0.001,
+        "the baseline should sit 0.15 x pitch below the Latin seat, got {top}em"
+    );
+    assert!(
+        (bottom - (word_pitch_em - ascender + 0.15 * word_pitch_em)).abs() < 0.001,
+        "the other half of the bonus belongs below the baseline, got {bottom}em"
+    );
+}
+
+#[test]
+fn a_latin_line_keeps_the_plain_hhea_line_and_seat() {
+    // Triangulation for both rules above: the bonus is a property of the
+    // line's script, not of the renderer. Inflating Latin lines too made every
+    // Western document 30-50% taller (issue #354).
+    let Some((ascender, _descender, word_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
+        return;
+    };
+    let Some((top, bottom)) = line_box_for_text("plain body text", "Libertinus Serif", 10.0) else {
+        return;
+    };
+
+    assert!(
+        (top + bottom - word_pitch_em).abs() < 0.001,
+        "a Latin line advances the bare hhea line, got {}em",
+        top + bottom
+    );
+    assert!(
+        (top - ascender).abs() < 0.001,
+        "a Latin baseline keeps the `hhea ascender + lineGap` seat, got {top}em"
+    );
+}
+
+#[test]
+fn the_east_asian_bonus_scales_with_the_font_size_not_with_the_text() {
+    // The rule is a factor on the font's line, so doubling the size doubles
+    // both edges exactly - a fake that returned one measured pair would not.
+    let Some((small_top, small_bottom)) = line_box_for_text("표", "Libertinus Serif", 9.0) else {
+        return;
+    };
+    let (large_top, large_bottom) =
+        line_box_for_text("전혀 다른 한국어 문장", "Libertinus Serif", 21.0)
+            .expect("the same font resolves at any size");
+
+    // The box is emitted in em, so the em split must be identical at both
+    // sizes and for unrelated text.
+    assert!(
+        (small_top - large_top).abs() < 0.001 && (small_bottom - large_bottom).abs() < 0.001,
+        "the split is a property of the font, not of the size or the text: \
+         {small_top}/{small_bottom} vs {large_top}/{large_bottom}"
     );
 }

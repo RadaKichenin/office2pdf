@@ -30,6 +30,7 @@ fn test_floating_image_square_wrap_codegen() {
             footer: None,
             columns: None,
             line_grid_pitch: None,
+            line_grid_snaps_lines: false,
         })],
         styles: StyleSheet::default(),
     };
@@ -80,6 +81,7 @@ fn test_floating_image_top_and_bottom_codegen() {
             footer: None,
             columns: None,
             line_grid_pitch: None,
+            line_grid_snaps_lines: false,
         })],
         styles: StyleSheet::default(),
     };
@@ -125,6 +127,7 @@ fn test_floating_image_behind_codegen() {
             footer: None,
             columns: None,
             line_grid_pitch: None,
+            line_grid_snaps_lines: false,
         })],
         styles: StyleSheet::default(),
     };

@@ -159,10 +159,16 @@ pub(super) fn needs_block_wrapper(style: &ParagraphStyle) -> bool {
 }
 
 /// Line-box settings for a body paragraph: a fixed box spanning Word's full
-/// line advance — the font's hhea line, or the document grid pitch for East
-/// Asian text under a `w:docGrid` — split by the ascender/descender ratio,
-/// with zero leading. Typst's glyph-tight default renders grid documents
-/// 20-30% shorter and shifts every page break (issue #354).
+/// line advance — the font's hhea line, 1.3 times it when the line carries
+/// East Asian text, or a snapping document grid's pitch — with zero leading.
+/// Typst's glyph-tight default renders such documents 20-30% shorter and
+/// shifts every page break (issue #354).
+///
+/// The baseline sits at a constant `hhea ascender + lineGap` below the box
+/// top, never at the font's ascender/descender proportion of it: whatever
+/// height the line gains over the font's own — the East Asian bonus's lower
+/// half, or a grid slot's slack — accrues below the baseline, not around it
+/// (issues #508, #518).
 ///
 /// Carrying the advance inside the box, rather than recovering the
 /// remainder as `par(leading:)`, is what makes a paragraph's height match
@@ -184,6 +190,7 @@ pub(super) fn word_line_height_settings(
         return None;
     }
     let pitch_em: f64 = metric_em + leading_em;
+    let top_em: f64 = ascender_em + east_asian_ascent_excess_em(runs, metric_em);
     // Pin the line box to the nominal font's own metric edges as fixed em
     // values rather than the "ascender"/"descender" keywords. The keywords
     // let Typst resolve the box against the tallest font on each line, so a
@@ -191,19 +198,18 @@ pub(super) fn word_line_height_settings(
     // that one line's advance past the grid/single-spacing (issue #398).
     Some(format!(
         "#set text(top-edge: {}em, bottom-edge: -{}em)\n#set par(leading: 0pt)\n",
-        format_f64(pitch_em * ascender_em / metric_em),
-        format_f64(pitch_em * descender_em / metric_em)
+        format_f64(top_em),
+        format_f64(pitch_em - top_em)
     ))
 }
 
 /// The nominal font's `(above baseline, below baseline)` split plus the
-/// leading, in em, that tops the line box up to Word's grid advance. `None`
+/// leading, in em, that tops the line box up to Word's line advance. `None`
 /// when the metric-edge treatment does not apply.
 ///
 /// Since #508 the pair already sums to the font's single-spacing pitch, so the
-/// leading is zero outside the document-grid path — the box total is unchanged
-/// either way, and what the pair now decides is where inside it the baseline
-/// falls.
+/// leading is zero for a Latin line with no grid; it carries the East Asian
+/// bonus and any grid slack (issue #518).
 fn word_line_box_and_leading(
     runs: &[Run],
     style: &ParagraphStyle,
@@ -217,6 +223,57 @@ fn word_line_box_and_leading(
         crate::render::pdf::font_line_metrics_em(family)?;
     let font_size: f64 = paragraph_font_size_pt(runs);
     Some((ascender_em, descender_em, leading_pt / font_size))
+}
+
+/// Word gives a line carrying East Asian text 130% of the font's own hhea
+/// line, and centres the bonus on the baseline: half above, half below.
+///
+/// Both halves are measured, not assumed. Against native Word exports an Arial
+/// first baseline sits at `hhea ascender + lineGap` = 0.937988em below the text
+/// top while a Malgun Gothic one at the same settings sits at 1.28786em, and
+/// the difference is exactly `0.15 x` Malgun's 1.330078em hhea pitch — the term
+/// #508 could not attribute to any font table. The matching lower half shows up
+/// as the advance: every Korean fixture in the business corpus paces its
+/// wrapped lines at `1.3 x` the hhea pitch (10.5pt Malgun measures 18.00-18.24
+/// against 18.156 predicted), and 06_official_letter_ko's 9.5pt paragraphs
+/// advance 16.43pt where the font's bare hhea line is 12.64pt (issue #518).
+const EAST_ASIAN_LINE_HEIGHT_FACTOR: f64 = 1.3;
+
+/// The half of that bonus which lands above the baseline.
+const EAST_ASIAN_ASCENT_EXCESS: f64 = (EAST_ASIAN_LINE_HEIGHT_FACTOR - 1.0) / 2.0;
+
+/// Whether Word treats this paragraph's lines as East Asian.
+///
+/// Word only gives the bonus to lines that actually carry East Asian
+/// characters: in a native Korean export the Arial runs of the same document
+/// keep their plain hhea line, and inflating them too made every Western
+/// document 30-50% taller (issue #354).
+fn has_east_asian_text(runs: &[Run]) -> bool {
+    runs.iter().any(|run| run.text.chars().any(is_cjk_like))
+}
+
+/// The extra ascent, in em, that Word gives a line carrying East Asian text.
+///
+/// `pitch_em` is the font's own hhea pitch, never the line's advance: under a
+/// document grid the slot's extra height accrues entirely below the baseline,
+/// so this term must not scale with the slot (issue #518).
+fn east_asian_ascent_excess_em(runs: &[Run], pitch_em: f64) -> f64 {
+    if has_east_asian_text(runs) {
+        EAST_ASIAN_ASCENT_EXCESS * pitch_em
+    } else {
+        0.0
+    }
+}
+
+/// The line advance Word gives this paragraph before any grid is consulted:
+/// the font's hhea line, or 1.3 times it when the line carries East Asian
+/// text (issue #518).
+fn word_natural_line_em(runs: &[Run], word_pitch_em: f64) -> f64 {
+    if has_east_asian_text(runs) {
+        EAST_ASIAN_LINE_HEIGHT_FACTOR * word_pitch_em
+    } else {
+        word_pitch_em
+    }
 }
 
 /// The font size Word resolves a paragraph's line box against: the largest
@@ -234,33 +291,34 @@ fn paragraph_font_size_pt(runs: &[Run]) -> f64 {
 ///
 /// Mirrors the guard inside [`word_cell_line_box_settings`] exactly, including
 /// its early return for paragraphs that carry their own line spacing or box —
-/// gating on `row_snaps_to_grid` alone would strip the gap from those.
+/// gating on `row_has_east_asian_text` alone would strip the gap from those.
 pub(super) fn cell_grid_absorbs_space_after(
     style: &ParagraphStyle,
     line_grid_pitch: Option<f64>,
-    row_snaps_to_grid: bool,
+    row_has_east_asian_text: bool,
 ) -> bool {
-    row_snaps_to_grid
+    row_has_east_asian_text
         && style.line_spacing.is_none()
         && style.line_box.is_none()
         && line_grid_pitch.is_some_and(|pitch| pitch > 0.0)
 }
 
-/// Line-box settings for a table cell: a fixed box spanning the font's
-/// full single-spacing (hhea) line, split by the ascender/descender ratio,
-/// with zero leading. A single-line cell then occupies the whole line
-/// height Word gives it, rather than only the tighter metric box (which
-/// left auto-height rows too short, issue #396). `None` when the font's
-/// metrics are unknown or the paragraph carries its own line spacing/box.
+/// Line-box settings for a table cell: a fixed box spanning the font's full
+/// single-spacing (hhea) line — 1.3 times it for an East Asian row — seated at
+/// the same constant ascent the body path uses, with zero leading. A
+/// single-line cell then occupies the whole line height Word gives it, rather
+/// than only the tighter metric box (which left auto-height rows too short,
+/// issue #396). `None` when the font's metrics are unknown or the paragraph
+/// carries its own line spacing/box.
 ///
-/// The box also carries the paragraph's `w:spacing w:after` when the row snaps
-/// to the grid, because Word snaps the line and that gap together (issues
+/// The box also carries the paragraph's `w:spacing w:after` when a snapping
+/// grid is in force, because Word snaps the line and that gap together (issues
 /// #500, #503).
 pub(super) fn word_cell_line_box_settings(
     runs: &[Run],
     style: &ParagraphStyle,
     line_grid_pitch: Option<f64>,
-    row_snaps_to_grid: bool,
+    row_has_east_asian_text: bool,
 ) -> Option<String> {
     if style.line_spacing.is_some() || style.line_box.is_some() {
         return None;
@@ -275,28 +333,28 @@ pub(super) fn word_cell_line_box_settings(
         return None;
     }
     let font_size: f64 = paragraph_font_size_pt(runs);
-    // East Asian cell text snaps to the section's document grid exactly as
-    // body text does. A Word export of the research table puts a 25.44pt row
-    // around 3.5pt margins, leaving an 18.44pt line where the font's own
-    // hhea line is 12.64pt - no Malgun metric is near 1.78em, so the row is
-    // sized from the 18pt grid, not the font (issue #404).
-    //
-    // The caller decides from the whole row, not from this cell: reading each
-    // cell's own text put a Korean label and its numeric neighbours on line
-    // boxes of different heights, splitting one row across two baselines
-    // 4.29pt apart (issue #498).
-    // Word snaps the line *plus* the paragraph's own `w:spacing w:after`, not
-    // the line alone. Snapping the bare line and then adding the gap outside
-    // it made every grid-scoped row 1.06pt too tall, because 12.64pt of Malgun
-    // and a 1.5pt gap both fit inside one 18pt line where 18 + 1.5 does not
-    // (issues #500, #503). `cell_grid_absorbs_space_after` gates the caller's
-    // matching suppression of the trailing gap; the two must agree.
+    // The row decides whether its lines are East Asian, not this cell: reading
+    // each cell's own text put a Korean label and its numeric neighbours on
+    // line boxes of different heights, splitting one row across two baselines
+    // 4.29pt apart (issue #498). So both the 1.3 line-height bonus and the
+    // ascent excess it implies key on the row's answer.
+    let natural_em: f64 = if row_has_east_asian_text {
+        EAST_ASIAN_LINE_HEIGHT_FACTOR * word_pitch_em
+    } else {
+        word_pitch_em
+    };
+    // A grid-snapped row snaps the line *plus* the paragraph's own `w:spacing
+    // w:after`, not the line alone. Snapping the bare line and then adding the
+    // gap outside it made every grid-scoped row 1.06pt too tall, because
+    // 12.64pt of Malgun and a 1.5pt gap both fit inside one 18pt line where
+    // 18 + 1.5 does not (issues #500, #503). `cell_grid_absorbs_space_after`
+    // gates the caller's matching suppression of the trailing gap; the two must
+    // agree.
     let advance_em: f64 = match line_grid_pitch.filter(|pitch| *pitch > 0.0) {
-        Some(pitch) if row_snaps_to_grid => {
+        Some(pitch) if row_has_east_asian_text => {
             // Same two-way choice as the body path (issue #508), with the
-            // paragraph's `w:after` inside the quantity being compared, since
-            // Word snaps the line and that gap together (issues #500, #503).
-            let natural_pt: f64 = word_pitch_em * font_size + style.space_after.unwrap_or(0.0);
+            // paragraph's `w:after` inside the quantity being compared.
+            let natural_pt: f64 = natural_em * font_size + style.space_after.unwrap_or(0.0);
             let advance_pt: f64 = if natural_pt <= pitch {
                 pitch
             } else {
@@ -304,10 +362,15 @@ pub(super) fn word_cell_line_box_settings(
             };
             advance_pt / font_size
         }
-        _ => word_pitch_em,
+        _ => natural_em,
     };
-    let top_em: f64 = advance_em * ascender_em / metric_em;
-    let bottom_em: f64 = advance_em * descender_em / metric_em;
+    let excess_em: f64 = if row_has_east_asian_text {
+        EAST_ASIAN_ASCENT_EXCESS * word_pitch_em
+    } else {
+        0.0
+    };
+    let top_em: f64 = ascender_em + excess_em;
+    let bottom_em: f64 = advance_em - top_em;
     Some(format!(
         "#set text(top-edge: {}em, bottom-edge: -{}em)\n#set par(leading: 0pt)\n",
         format_f64(top_em),
@@ -347,53 +410,33 @@ pub(super) fn word_line_leading_pt(
         return None;
     }
 
-    // Word only snaps East Asian text to the document grid: with the
-    // default grid type, Latin-only paragraphs keep their hhea line height
-    // (native Word GT: Arial 10.5 lines are 12pt while Korean lines in the
-    // same document snap to the 18pt grid). Snapping Latin paragraphs
-    // inflated every Western document by 30-50% (issue #354).
-    let has_east_asian_text: bool = runs.iter().any(|run| run.text.chars().any(is_cjk_like));
+    // Word's single spacing is the font's full hhea line, which the metric pair
+    // sums to directly (issue #508) - so for Latin text this top-up is zero and
+    // the subtraction below is just a guard for a face whose reported pitch
+    // exceeds its own ascent-plus-descent. East Asian lines get 30% more
+    // (issue #518).
+    let natural_line_pt: f64 = word_natural_line_em(runs, word_pitch_em) * font_size;
 
-    let leading_pt: f64 = match line_grid_pitch {
-        Some(pitch) if pitch > 0.0 && has_east_asian_text => {
+    // Word only snaps East Asian text to the document grid: Latin-only
+    // paragraphs keep their hhea line height even under one (native Word GT:
+    // Arial 10.5 lines stay 12pt in a Korean document). Snapping Latin
+    // paragraphs inflated every Western document by 30-50% (issue #354).
+    let advance_pt: f64 = match line_grid_pitch {
+        Some(pitch) if pitch > 0.0 && has_east_asian_text(runs) => {
             // A grid line never compresses text below the height its font
-            // needs. Malgun Gothic's typographic box is about 1.0em, so a
-            // 17pt title measured 17pt and "fitted" one 18pt grid line -
-            // but its real line is 1.33em = 22.6pt, and Word gives it that.
-            // Snapping to the grid alone made the title 4.6pt short, which
-            // is the whole title-to-body shortfall (issue #402).
-            // Word chooses between exactly two advances, never a multiple:
-            // the grid pitch when the font's natural line fits inside one grid
-            // line, otherwise the natural line untouched.
-            //
-            // Measured as baseline-to-baseline pitch in the Word exports, which
-            // quantise every coordinate to 0.24pt. 13pt Malgun has a 17.29pt
-            // natural line and advances 18.24pt, i.e. the 18pt grid. 16pt
-            // Malgun has a 21.28pt natural line and advances 21.12pt - the
-            // natural line to within one quantum, not the 36pt two grid lines
-            // a ceiling would give (issue #508).
-            //
-            // A `ceil()` over the metric box reached the same answer only
-            // because Typst reports a normalised metric sum for Malgun that is
-            // small enough to always land on one line, leaving the natural-line
-            // floor to supply the other branch. Stating the choice directly
-            // removes that dependence on the metric pair, which the baseline
-            // split needs to change independently.
-            let natural_line_pt: f64 = word_pitch_em * font_size;
-            let advance_pt: f64 = if natural_line_pt <= pitch {
+            // needs, and Word chooses between exactly two advances, never a
+            // multiple: the grid pitch when the natural line fits inside one
+            // grid line, otherwise the natural line untouched (issues #402,
+            // #508).
+            if natural_line_pt <= pitch {
                 pitch
             } else {
                 natural_line_pt
-            };
-            advance_pt - line_box_pt
+            }
         }
-        // Word's single spacing is the font's full hhea line, which the
-        // metric pair now sums to directly (issue #508), so this yields zero.
-        // Kept as the guard it is: a face whose reported pitch exceeds its own
-        // ascent-plus-descent would still need topping up here.
-        _ => (word_pitch_em * font_size - line_box_pt).max(0.0),
+        _ => natural_line_pt,
     };
-    Some(leading_pt)
+    Some((advance_pt - line_box_pt).max(0.0))
 }
 
 pub(super) fn write_block_params(out: &mut String, style: &ParagraphStyle) {

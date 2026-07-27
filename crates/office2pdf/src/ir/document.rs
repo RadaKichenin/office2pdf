@@ -90,9 +90,16 @@ pub struct FlowPage {
     pub footer: Option<super::elements::HeaderFooter>,
     /// Optional multi-column layout for the page.
     pub columns: Option<ColumnLayout>,
-    /// Word document-grid line pitch in points (`w:docGrid w:linePitch`).
-    /// When set, body lines snap to multiples of this pitch.
+    /// Word document-grid line pitch in points (`w:docGrid w:linePitch`),
+    /// present whenever the section carries a `w:docGrid` at all. That bare
+    /// presence marks the file as authored in an East Asian Word edition,
+    /// which is what decides the default tab stop (issue #393).
     pub line_grid_pitch: Option<f64>,
+    /// Whether that grid snaps body lines to the pitch. Only a `w:docGrid
+    /// w:type` of `lines`, `linesAndChars`, or `snapToChars` does; the
+    /// `default` type an omitted attribute implies declares a pitch that Word
+    /// then ignores for layout (issue #518).
+    pub line_grid_snaps_lines: bool,
 }
 
 /// A fixed-layout page (PPTX slides).

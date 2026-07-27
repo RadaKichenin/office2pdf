@@ -45,6 +45,7 @@ fn test_generate_bulleted_list() {
         footer: None,
         columns: None,
         line_grid_pitch: None,
+        line_grid_snaps_lines: false,
     })]);
     let output = generate_typst(&doc).unwrap();
     assert!(output.source.contains("#list("));
@@ -105,6 +106,7 @@ fn test_generate_numbered_list() {
         footer: None,
         columns: None,
         line_grid_pitch: None,
+        line_grid_snaps_lines: false,
     })]);
     let output = generate_typst(&doc).unwrap();
     assert!(output.source.contains("#enum("));
@@ -521,6 +523,7 @@ fn test_generate_nested_list() {
         footer: None,
         columns: None,
         line_grid_pitch: None,
+        line_grid_snaps_lines: false,
     })]);
     let output = generate_typst(&doc).unwrap();
     assert!(output.source.contains("Parent"));
@@ -574,6 +577,7 @@ fn test_nested_list_single_content_block() {
         footer: None,
         columns: None,
         line_grid_pitch: None,
+        line_grid_snaps_lines: false,
     })]);
     let output = generate_typst(&doc).unwrap();
     assert!(!output.source.contains("][#list"));
@@ -887,7 +891,7 @@ fn test_generate_list_metric_spacing_is_the_raw_paragraph_gap() {
         .source;
 
     let advance_pt: f64 = (word_pitch_em * font_size).max(metric_em * font_size);
-    assert_line_advance(&source, "Libertinus Serif", font_size, advance_pt);
+    assert_line_advance(&source, "Libertinus Serif", font_size, advance_pt, 0.0);
     assert!(
         source.contains("spacing: 4pt"),
         "expected inter-item spacing to be the raw 4pt gap in: {source}"

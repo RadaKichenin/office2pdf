@@ -164,7 +164,7 @@ fn generate_table_rows(
 ) -> Result<(), ConvertError> {
     // A nested table decides its own rows; restore the enclosing row's answer
     // so the outer cells that follow keep sharing their baseline.
-    let enclosing_row_snaps_to_grid: bool = ctx.row_snaps_to_grid;
+    let enclosing_row_has_east_asian_text: bool = ctx.row_has_east_asian_text;
     for row in rows {
         for rs in rowspan_remaining.iter_mut() {
             if *rs > 0 {
@@ -172,10 +172,11 @@ fn generate_table_rows(
             }
         }
 
-        // Word snaps a row to the document grid when the row holds East Asian
-        // text, and applies the result to the whole row. Asking each cell
-        // separately split mixed-script rows across two baselines (issue #498).
-        ctx.row_snaps_to_grid = row_has_east_asian_text(row);
+        // Word sizes a row's lines from the whole row: if any cell holds East
+        // Asian text, every cell in it takes the East Asian line height, and a
+        // snapping grid applies to all of them. Asking each cell separately
+        // split mixed-script rows across two baselines (issue #498).
+        ctx.row_has_east_asian_text = row_has_east_asian_text(row);
 
         let mut col_pos: usize = 0;
         for cell in &row.cells {
@@ -221,7 +222,7 @@ fn generate_table_rows(
             col_pos += 1;
         }
     }
-    ctx.row_snaps_to_grid = enclosing_row_snaps_to_grid;
+    ctx.row_has_east_asian_text = enclosing_row_has_east_asian_text;
 
     Ok(())
 }
@@ -648,7 +649,7 @@ fn generate_cell_content(
                 para,
                 ctx.default_tab_width_pt,
                 ctx.line_grid_pitch,
-                ctx.row_snaps_to_grid,
+                ctx.row_has_east_asian_text,
             ),
             Block::Table(table) => {
                 if ctx.table_depth < MAX_TABLE_DEPTH {
@@ -684,7 +685,7 @@ fn generate_cell_paragraph(
     para: &Paragraph,
     default_tab_width_pt: f64,
     line_grid_pitch: Option<f64>,
-    row_snaps_to_grid: bool,
+    row_has_east_asian_text: bool,
 ) {
     let style: &ParagraphStyle = &para.style;
     let alignment = style.alignment;
@@ -698,13 +699,11 @@ fn generate_cell_paragraph(
     // as a fixed box: a single-line cell must fill the whole line height
     // Word gives it rather than only the tighter metric box, or auto-height
     // rows come out short (issue #396). A cell whose *row* holds East Asian
-    // text takes the section's grid pitch instead, like body text — decided
-    // once per row so every cell in it shares a baseline, the numeric ones
-    // included (issue #498). #385 concluded the grid does not apply, but on
-    // the premise that the residual gap was font substitution, which #404
-    // disproved (Malgun is embedded and its advances match Word's).
+    // text takes 1.3 times that line, like body text, and a snapping grid's
+    // pitch above it — decided once per row so every cell in it shares a
+    // baseline, the numeric ones included (issues #498, #518).
     let line_height_settings: Option<String> =
-        word_cell_line_box_settings(&para.runs, style, line_grid_pitch, row_snaps_to_grid);
+        word_cell_line_box_settings(&para.runs, style, line_grid_pitch, row_has_east_asian_text);
     let has_block_wrapper = cell_paragraph_needs_block_wrapper(style)
         || align_str.is_some()
         || line_height_settings.is_some();
@@ -737,7 +736,7 @@ fn generate_cell_paragraph(
     // Suppressed when the grid-snapped line box already contains it, or the
     // gap would be counted twice (issues #500, #503).
     if let Some(space_after) = style.space_after
-        && !cell_grid_absorbs_space_after(style, line_grid_pitch, row_snaps_to_grid)
+        && !cell_grid_absorbs_space_after(style, line_grid_pitch, row_has_east_asian_text)
     {
         let _ = write!(out, "\n#v({}pt)", format_f64(space_after));
     }
