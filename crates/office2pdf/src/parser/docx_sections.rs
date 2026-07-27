@@ -399,18 +399,39 @@ pub(super) fn build_flow_page_from_section(
         columns: column_layout
             .or_else(|| extract_column_layout_from_section_property(section_prop)),
         line_grid_pitch: extract_line_grid_pitch(section_prop),
+        line_grid_snaps_lines: line_grid_snaps_lines(section_prop),
     }
 }
 
-/// Word snaps body lines to the section's document grid; the pitch is the
-/// effective single-spacing line height for grid-aligned paragraphs
-/// (`<w:docGrid w:linePitch>`, in twips). docx-rs keeps the fields private,
-/// so read them through the type's serde representation.
+/// The section's document-grid line pitch in points (`<w:docGrid
+/// w:linePitch>`, in twips). docx-rs keeps the fields private, so read them
+/// through the type's serde representation.
 fn extract_line_grid_pitch(section_prop: &docx_rs::SectionProperty) -> Option<f64> {
     let grid = section_prop.doc_grid.as_ref()?;
     let value = serde_json::to_value(grid).ok()?;
     let pitch_twips = value.get("linePitch")?.as_f64()?;
     (pitch_twips > 0.0).then(|| twips_to_pt(pitch_twips as i32))
+}
+
+/// Whether the section's grid snaps body lines to that pitch.
+///
+/// `w:type` decides, and its default value — what an omitted attribute means —
+/// is `default`, which is ECMA-376's name for *no* grid. Word writes a bare
+/// `<w:docGrid w:linePitch="360"/>` into ordinary Korean documents and then
+/// lays them out with no grid at all: every Korean fixture in the business
+/// corpus carries that element, and none of their line advances is a multiple
+/// of 18pt (issue #518).
+fn line_grid_snaps_lines(section_prop: &docx_rs::SectionProperty) -> bool {
+    let Some(grid) = section_prop.doc_grid.as_ref() else {
+        return false;
+    };
+    let Ok(value) = serde_json::to_value(grid) else {
+        return false;
+    };
+    matches!(
+        value.get("gridType").and_then(serde_json::Value::as_str),
+        Some("lines" | "linesAndChars" | "snapToChars")
+    )
 }
 
 fn convert_docx_header(

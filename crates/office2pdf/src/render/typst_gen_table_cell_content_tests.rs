@@ -241,27 +241,30 @@ fn test_table_cell_compact_list_adds_inter_item_spacing_from_line_spacing() {
 
 #[test]
 fn test_east_asian_table_cell_snaps_to_the_document_grid() {
-    // East Asian cell text snaps to the section's grid exactly as body
-    // text does. #385 concluded otherwise, but on the premise that the
-    // residual gap to Word was font substitution; #404 disproved that
-    // (Malgun is embedded and its advances match Word's) and measured a
-    // 25.44pt Word row as 3.5pt margins around an 18.44pt line, where the
-    // font's own hhea line is only 12.64pt. The box is still emitted as a
-    // fixed box with zero leading so auto-height rows are not left short
-    // (issue #396). Uses a Typst-embedded font so the test is
-    // environment-free.
-    let Some((ascender, descender, word_pitch_em)) =
+    // Under a grid the author actually turned on, East Asian cell text snaps
+    // to it exactly as body text does. The box is still emitted as a fixed box
+    // with zero leading so auto-height rows are not left short (issue #396).
+    //
+    // No fixture in the business corpus reaches this branch: their `w:docGrid`
+    // elements carry the `default` type, so their rows are sized from the East
+    // Asian line alone — 03_meeting_minutes_ko's 25.44pt rows decompose to
+    // 3.5pt cell margins, a 16.43pt line for 9.5pt Malgun, its 1.5pt `w:after`
+    // and a 0.5pt border, with no 18pt slot anywhere (issue #518). Uses a
+    // Typst-embedded font so the test is environment-free.
+    let Some((ascender, _descender, word_pitch_em)) =
         crate::render::pdf::font_line_metrics_em("Libertinus Serif")
     else {
         return; // no font book available (e.g. exotic CI sandbox)
     };
     let font_size: f64 = 10.0;
-    let metric_em: f64 = ascender + descender;
-    // One 18pt grid line, since the 10pt metric box fits inside it.
+    // One 18pt grid line, since the East Asian line fits inside it.
     let grid_em: f64 = 18.0 / font_size;
-    let top_em: f64 = grid_em * ascender / metric_em;
-    let bottom_em: f64 = grid_em * descender / metric_em;
-    let hhea_top_em: f64 = word_pitch_em * ascender / metric_em;
+    // The slot's slack accrues below the baseline: the ascent stays the
+    // constant it would be without a grid (issue #518).
+    let top_em: f64 = ascender + 0.15 * word_pitch_em;
+    let bottom_em: f64 = grid_em - top_em;
+    // What the same cell would emit with no grid in force.
+    let ungridded_bottom_em: f64 = 1.3 * word_pitch_em - top_em;
     let cell = TableCell {
         content: vec![Block::Paragraph(Paragraph {
             style: ParagraphStyle::default(),
@@ -291,6 +294,7 @@ fn test_east_asian_table_cell_snaps_to_the_document_grid() {
         _ => unreachable!(),
     };
     page.line_grid_pitch = Some(18.0);
+    page.line_grid_snaps_lines = true;
     let doc = make_doc(vec![Page::Flow(page)]);
     let result = generate_typst(&doc).unwrap().source;
 
@@ -307,8 +311,11 @@ fn test_east_asian_table_cell_snaps_to_the_document_grid() {
         "cell line box uses zero leading (box already equals the full line): {result}"
     );
     assert!(
-        !result.contains(&format!("top-edge: {}em", format_f64(hhea_top_em))),
-        "Korean cell must not fall back to the font's own hhea line: {result}"
+        !result.contains(&format!(
+            "bottom-edge: -{}em",
+            format_f64(ungridded_bottom_em)
+        )),
+        "Korean cell must take the grid slot, not its own East Asian line: {result}"
     );
 }
 
@@ -317,15 +324,14 @@ fn test_latin_table_cell_uses_natural_line_height() {
     // Latin cells likewise fill the font's full hhea line box (Word single
     // spacing = hhea line), not Typst's glyph-tight default (issues #385,
     // #396).
-    let Some((ascender, descender, word_pitch_em)) =
+    let Some((ascender, _descender, word_pitch_em)) =
         crate::render::pdf::font_line_metrics_em("Libertinus Serif")
     else {
         return;
     };
     let font_size: f64 = 10.0;
-    let metric_em: f64 = ascender + descender;
-    let top_em: f64 = word_pitch_em * ascender / metric_em;
-    let bottom_em: f64 = word_pitch_em * descender / metric_em;
+    let top_em: f64 = ascender;
+    let bottom_em: f64 = word_pitch_em - top_em;
     let cell = TableCell {
         content: vec![Block::Paragraph(Paragraph {
             style: ParagraphStyle::default(),
@@ -369,16 +375,15 @@ fn test_latin_table_cell_uses_natural_line_height() {
 /// not of a cell's content.
 #[test]
 fn mixed_script_row_shares_one_line_box() {
-    let Some((ascender, descender, _word_pitch_em)) =
+    let Some((ascender, _descender, word_pitch_em)) =
         crate::render::pdf::font_line_metrics_em("Libertinus Serif")
     else {
         return; // no font book available (e.g. exotic CI sandbox)
     };
     let font_size: f64 = 10.0;
-    let metric_em: f64 = ascender + descender;
     let grid_em: f64 = 18.0 / font_size;
-    let top_em: f64 = grid_em * ascender / metric_em;
-    let bottom_em: f64 = grid_em * descender / metric_em;
+    let top_em: f64 = ascender + 0.15 * word_pitch_em;
+    let bottom_em: f64 = grid_em - top_em;
     let make_cell = |text: &str| TableCell {
         content: vec![Block::Paragraph(Paragraph {
             style: ParagraphStyle::default(),
@@ -410,6 +415,7 @@ fn mixed_script_row_shares_one_line_box() {
         _ => unreachable!(),
     };
     page.line_grid_pitch = Some(18.0);
+    page.line_grid_snaps_lines = true;
     let doc = make_doc(vec![Page::Flow(page)]);
     let result = generate_typst(&doc).unwrap().source;
 
@@ -430,15 +436,14 @@ fn mixed_script_row_shares_one_line_box() {
 /// the font's own hhea line even when the section declares a grid.
 #[test]
 fn latin_only_row_under_a_grid_keeps_the_font_line() {
-    let Some((ascender, descender, word_pitch_em)) =
+    let Some((ascender, _descender, word_pitch_em)) =
         crate::render::pdf::font_line_metrics_em("Libertinus Serif")
     else {
         return;
     };
     let font_size: f64 = 10.0;
-    let metric_em: f64 = ascender + descender;
-    let hhea_top_em: f64 = word_pitch_em * ascender / metric_em;
-    let hhea_bottom_em: f64 = word_pitch_em * descender / metric_em;
+    let hhea_top_em: f64 = ascender;
+    let hhea_bottom_em: f64 = word_pitch_em - hhea_top_em;
     let make_cell = |text: &str| TableCell {
         content: vec![Block::Paragraph(Paragraph {
             style: ParagraphStyle::default(),
@@ -468,6 +473,7 @@ fn latin_only_row_under_a_grid_keeps_the_font_line() {
         _ => unreachable!(),
     };
     page.line_grid_pitch = Some(18.0);
+    page.line_grid_snaps_lines = true;
     let doc = make_doc(vec![Page::Flow(page)]);
     let result = generate_typst(&doc).unwrap().source;
 
@@ -490,15 +496,15 @@ fn latin_only_row_under_a_grid_keeps_the_font_line() {
 /// (issues #500, #503).
 #[test]
 fn grid_cell_absorbs_space_after_into_the_line_box() {
-    let Some((ascender, descender, _)) =
+    let Some((ascender, _descender, word_pitch_em)) =
         crate::render::pdf::font_line_metrics_em("Libertinus Serif")
     else {
         return; // no font book available (e.g. exotic CI sandbox)
     };
     let font_size: f64 = 10.0;
-    let metric_em: f64 = ascender + descender;
-    // 10pt of metric box plus a 1.5pt gap still fits one 18pt grid line.
+    // The East Asian line plus a 1.5pt gap still fits one 18pt grid line.
     let grid_em: f64 = 18.0 / font_size;
+    let top_em: f64 = ascender + 0.15 * word_pitch_em;
     let cell = TableCell {
         content: vec![Block::Paragraph(Paragraph {
             style: ParagraphStyle {
@@ -531,14 +537,15 @@ fn grid_cell_absorbs_space_after_into_the_line_box() {
         _ => unreachable!(),
     };
     page.line_grid_pitch = Some(18.0);
+    page.line_grid_snaps_lines = true;
     let doc = make_doc(vec![Page::Flow(page)]);
     let result = generate_typst(&doc).unwrap().source;
 
     assert!(
         result.contains(&format!(
             "top-edge: {}em, bottom-edge: -{}em",
-            format_f64(grid_em * ascender / metric_em),
-            format_f64(grid_em * descender / metric_em)
+            format_f64(top_em),
+            format_f64(grid_em - top_em)
         )),
         "line plus w:after should snap to one 18pt grid line: {result}"
     );

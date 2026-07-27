@@ -24,6 +24,7 @@ fn make_flow_page(content: Vec<Block>) -> Page {
         footer: None,
         columns: None,
         line_grid_pitch: None,
+        line_grid_snaps_lines: false,
     })
 }
 
@@ -50,12 +51,20 @@ fn emitted_line_box_em(source: &str) -> Option<(f64, f64)> {
     Some((top.parse().ok()?, bottom.parse().ok()?))
 }
 
-/// Assert the generated line box spans `expected_pt` and splits it by the
-/// font's own ascender-to-descender ratio, which is where Word places the
-/// baseline inside the line. Compared numerically rather than as a
-/// formatted string so float noise in the em split cannot break the
-/// assertion.
-fn assert_line_advance(source: &str, family: &str, font_size: f64, expected_pt: f64) {
+/// Assert the generated line box spans `expected_pt` and seats the baseline
+/// `hhea ascender + lineGap` below its top — a constant that does not scale
+/// with the box, so every point the line gains over the font's own metric line
+/// falls below the baseline (issues #508, #518). `east_asian_excess_em` is the
+/// extra ascent Word adds for a line carrying East Asian text; pass 0 for a
+/// Latin line. Compared numerically rather than as a formatted string so float
+/// noise in the em split cannot break the assertion.
+fn assert_line_advance(
+    source: &str,
+    family: &str,
+    font_size: f64,
+    expected_pt: f64,
+    east_asian_excess_em: f64,
+) {
     let (top, bottom) =
         emitted_line_box_em(source).unwrap_or_else(|| panic!("no line box emitted in: {source}"));
     let advance_pt: f64 = (top + bottom) * font_size;
@@ -63,11 +72,12 @@ fn assert_line_advance(source: &str, family: &str, font_size: f64, expected_pt: 
         (advance_pt - expected_pt).abs() < 0.01,
         "line advance {advance_pt}pt should be {expected_pt}pt in: {source}"
     );
-    let (ascender, descender, _) =
+    let (ascender, _descender, _) =
         crate::render::pdf::font_line_metrics_em(family).expect("font metrics should resolve");
+    let expected_top: f64 = ascender + east_asian_excess_em;
     assert!(
-        (top / bottom - ascender / descender).abs() < 0.01,
-        "baseline should split the box by the font's ascender/descender ratio: {source}"
+        (top - expected_top).abs() < 0.001,
+        "baseline should sit {expected_top}em below the box top, not {top}em: {source}"
     );
 }
 
