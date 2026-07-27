@@ -513,3 +513,118 @@ fn shadow_blur_renders_gaussian_ring_stack() {
         "24pt blur must span +2 sigma"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Repository introduction deck — thirty-slide Korean presentation
+// ---------------------------------------------------------------------------
+
+/// Thirty-slide 16:9 Korean deck introducing this repository. The focused
+/// fixtures above each isolate one feature; this one puts the features a real
+/// deck combines on the same slide: a gradient title slide, sectioned body
+/// layouts, native tables, 71 raster icons, monospaced code blocks,
+/// `a:fld` slide numbers, character tracking, per-paragraph line spacing, and
+/// stacked bar, radar, and doughnut charts.
+const INTRODUCTION_DECK_FIXTURE: &str = "office2pdf_introduction_ko.pptx";
+
+/// Converting all thirty slides costs ~80s in a debug build, too much for the
+/// default suite to pay on every platform. The fast path renders the three
+/// slides that carry the deck's hardest content — the gradient title slide, the
+/// stacked bar chart, and the monospaced code blocks — and the whole deck is
+/// covered by the `#[ignore]`d test below.
+#[test]
+fn smoke_introduction_deck_representative_slides() {
+    let path = fixture_path(INTRODUCTION_DECK_FIXTURE);
+    for slide in [1u32, 17, 20] {
+        let options = ConvertOptions {
+            slide_range: Some(office2pdf::config::SlideRange::new(slide, slide)),
+            ..ConvertOptions::default()
+        };
+        let result = office2pdf::convert_with_options(&path, &options)
+            .unwrap_or_else(|error| panic!("slide {slide} must convert: {error}"));
+        assert!(
+            result.pdf.starts_with(b"%PDF"),
+            "slide {slide} output should start with PDF magic bytes"
+        );
+        common::validate_pdf_with_qpdf(&result.pdf);
+    }
+}
+
+// Converting all 30 slides costs ~80s in a debug build, so the whole-deck run
+// is opt-in via `--ignored` rather than part of the default suite.
+#[test]
+#[ignore]
+fn smoke_introduction_deck_full_fixture() {
+    assert_produces_valid_pdf(INTRODUCTION_DECK_FIXTURE);
+}
+
+#[test]
+fn structure_introduction_deck_keeps_one_page_per_slide() {
+    let pages = fixed_pages(INTRODUCTION_DECK_FIXTURE);
+
+    assert_eq!(pages.len(), 30, "PowerPoint prints one page per slide");
+    for (index, page) in pages.iter().enumerate() {
+        assert!(
+            (page.size.width - 960.0).abs() < 0.5 && (page.size.height - 540.0).abs() < 0.5,
+            "slide {} must keep the deck's 16:9 stage, got {}x{}",
+            index + 1,
+            page.size.width,
+            page.size.height
+        );
+    }
+}
+
+#[test]
+fn structure_introduction_deck_carries_slide_text_in_order() {
+    let pages = fixed_pages(INTRODUCTION_DECK_FIXTURE);
+
+    let slide_text = |index: usize| -> String {
+        pages[index]
+            .elements
+            .iter()
+            .filter_map(|element| match &element.kind {
+                FixedElementKind::TextBox(text_box) => Some(text_box),
+                _ => None,
+            })
+            .flat_map(|text_box| text_box.content.iter())
+            .filter_map(|block| match block {
+                Block::Paragraph(paragraph) => Some(paragraph),
+                _ => None,
+            })
+            .flat_map(|paragraph| paragraph.runs.iter())
+            .map(|run| run.text.as_str())
+            .collect::<String>()
+    };
+
+    assert!(
+        slide_text(0).contains("office2pdf"),
+        "the title slide keeps its wordmark"
+    );
+    assert!(
+        slide_text(0).contains("DOCX"),
+        "the title slide keeps its format list"
+    );
+    assert!(
+        slide_text(19).contains("ConvertOptions"),
+        "slide 20 keeps its code block"
+    );
+}
+
+#[test]
+fn structure_introduction_deck_places_raster_icons_on_slides() {
+    let pages = fixed_pages(INTRODUCTION_DECK_FIXTURE);
+
+    let images: usize = pages
+        .iter()
+        .flat_map(|page| page.elements.iter())
+        .filter(|element| matches!(element.kind, FixedElementKind::Image(_)))
+        .count();
+
+    // The slides carry 71 `<p:pic>` shapes between them, and slide layout 3
+    // contributes one more wherever it is applied. Asserting the slide-level
+    // floor keeps the test from breaking when a slide is re-authored, while
+    // still failing if image extraction regresses.
+    assert!(
+        images >= 71,
+        "the deck's raster icons must survive parsing, got {images}"
+    );
+}

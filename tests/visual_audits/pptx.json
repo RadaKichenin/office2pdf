@@ -40,6 +40,11 @@
       "id": "shape-text-rotation",
       "fixture": "pptx/libreoffice/shape-text-rotate.pptx",
       "focus": "text rotation"
+    },
+    {
+      "id": "introduction-deck",
+      "fixture": "pptx/office2pdf_introduction_ko.pptx",
+      "focus": "slide fields and line spacing"
     }
   ]
 }
