@@ -1601,3 +1601,153 @@ fn test_fixed_page_text_box_ordered_grid_normalizes_marker_spacing() {
     assert!(output.source.contains("#text(size: 20pt)[2\\. ]"));
     assert!(!output.source.contains("#text(size: 20pt)[ Alpha]"));
 }
+
+// ----- PowerPoint's line model (issue #513) -----
+
+/// A slide text box holding one paragraph of `text` in `family` at `size`.
+fn slide_text_box_source(family: &str, size: f64, style: ParagraphStyle) -> Option<String> {
+    crate::render::pdf::powerpoint_line_box_em(family)?;
+    let doc = make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![make_fixed_text_box(
+            100.0,
+            100.0,
+            400.0,
+            200.0,
+            Insets::default(),
+            crate::ir::TextBoxVerticalAlign::Top,
+            vec![Block::Paragraph(Paragraph {
+                style,
+                runs: vec![Run {
+                    text: text_for(family),
+                    style: TextStyle {
+                        font_family: Some(family.to_string()),
+                        font_size: Some(size),
+                        ..TextStyle::default()
+                    },
+                    href: None,
+                    footnote: None,
+                }],
+            })],
+        )],
+    )]);
+    Some(generate_typst(&doc).unwrap().source)
+}
+
+fn text_for(family: &str) -> String {
+    format!("Slide body set in {family}")
+}
+
+#[test]
+fn slide_text_takes_powerpoints_flat_1_2em_line() {
+    // PowerPoint gives every line 1.2 times the font size whatever the font's
+    // own metrics say. Measured on native exports from both platforms: one
+    // wrapped Arial paragraph advances 20.3657pt over 14 gaps at 17pt
+    // (1.1980em) and 28.8400pt over 18 at 24pt (1.2017em). Slide text used to
+    // take Word's hhea pitch, which is up to 4% short per line (issue #513).
+    let Some(source) = slide_text_box_source("Libertinus Serif", 18.0, ParagraphStyle::default())
+    else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+    let (top, bottom) =
+        emitted_line_box_em(&source).unwrap_or_else(|| panic!("no line box emitted: {source}"));
+
+    assert!(
+        (top + bottom - 1.2).abs() < 0.001,
+        "a slide line spans 1.2em, got {}em: {source}",
+        top + bottom
+    );
+    assert!(
+        source.contains("leading: 0pt"),
+        "the advance is carried by the box, not by leading: {source}"
+    );
+}
+
+#[test]
+fn slide_baseline_splits_the_line_at_the_win_ascent_proportion() {
+    // The baseline divides that 1.2em in the proportion of OS/2 usWinAscent to
+    // usWinAscent + usWinDescent — not the hhea pair, and not Typst's
+    // normalised one. Native exports put Arial's first baseline at 0.9718em
+    // against 1854/2288 x 1.2 = 0.9724 predicted (issue #513).
+    let Some(source) = slide_text_box_source("Libertinus Serif", 18.0, ParagraphStyle::default())
+    else {
+        return;
+    };
+    let (top, bottom) = emitted_line_box_em(&source).expect("line box emitted");
+    let (expected_top, expected_bottom) =
+        crate::render::pdf::powerpoint_line_box_em("Libertinus Serif").expect("metrics resolve");
+
+    assert!(
+        (top - expected_top).abs() < 0.001 && (bottom - expected_bottom).abs() < 0.001,
+        "expected {expected_top}/{expected_bottom}em, got {top}/{bottom}em: {source}"
+    );
+    assert!(
+        bottom > 0.01,
+        "the descent gap must be real: a bottom-anchored box keeps it below its \
+         last baseline, and we used to drop it entirely: {source}"
+    );
+}
+
+#[test]
+fn the_split_differs_between_fonts_while_the_line_does_not() {
+    // Triangulation: the height is a property of PowerPoint and the split is a
+    // property of the font, so two faces must agree on 1.2em and disagree on
+    // where the baseline sits inside it.
+    let Some(serif) = crate::render::pdf::powerpoint_line_box_em("Libertinus Serif") else {
+        return;
+    };
+    let Some(mono) = crate::render::pdf::powerpoint_line_box_em("DejaVu Sans Mono") else {
+        return;
+    };
+
+    assert!((serif.0 + serif.1 - 1.2).abs() < 0.000_001);
+    assert!((mono.0 + mono.1 - 1.2).abs() < 0.000_001);
+    assert!(
+        (serif.0 - mono.0).abs() > 0.001,
+        "two faces with different usWinAscent ratios should seat the baseline \
+         differently: {serif:?} vs {mono:?}"
+    );
+    assert!(
+        serif.0 > 0.0 && serif.1 > 0.0 && mono.0 > 0.0 && mono.1 > 0.0,
+        "both edges are positive distances: {serif:?} {mono:?}"
+    );
+}
+
+#[test]
+fn a_slide_paragraph_with_its_own_line_spacing_keeps_it() {
+    // `a:lnSpc` is explicit and outranks the default, so the 1.2em box must
+    // not be emitted over it.
+    let Some(source) = slide_text_box_source(
+        "Libertinus Serif",
+        18.0,
+        ParagraphStyle {
+            line_spacing: Some(LineSpacing::Proportional(1.5)),
+            ..ParagraphStyle::default()
+        },
+    ) else {
+        return;
+    };
+
+    assert!(
+        emitted_line_box_em(&source).is_none(),
+        "an explicit line spacing must not be overridden by the default line: {source}"
+    );
+}
+
+#[test]
+fn a_slide_paragraph_declares_its_own_block_spacing() {
+    // A slide paragraph's gaps are its own `a:spcBef`/`a:spcAft` and nothing
+    // else. Leaving them unset let Typst's 1.2em `block.spacing` default in,
+    // which put 13pt between the lines of a code block declaring no spacing
+    // (issue #513).
+    let Some(source) = slide_text_box_source("Libertinus Serif", 11.0, ParagraphStyle::default())
+    else {
+        return;
+    };
+
+    assert!(
+        source.contains("above: 0pt, below: 0pt"),
+        "an unspaced slide paragraph pins both gaps to zero: {source}"
+    );
+}

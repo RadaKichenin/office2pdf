@@ -2125,6 +2125,19 @@ fn generate_fixed_text_box_block(
             generate_fixed_text_list(out, list, true, available_width_pt)
         }
         Block::Paragraph(para) => generate_fixed_text_paragraph(out, para, no_wrap),
+        // A slide's bullet list paces on PowerPoint's line, not Word's. Routing
+        // it through `generate_block` gave it the font's hhea pitch, which is up
+        // to 4% short per line and accumulates down the list (issue #513).
+        Block::List(list) => {
+            let settings: Option<String> = list
+                .items
+                .first()
+                .and_then(|item| item.content.first())
+                .and_then(|paragraph| {
+                    powerpoint_line_height_settings(&paragraph.runs, &paragraph.style)
+                });
+            generate_list(out, list, settings.as_deref())
+        }
         _ => generate_block(out, block, ctx),
     }
 }
@@ -2135,16 +2148,32 @@ fn generate_fixed_text_paragraph(
     no_wrap: bool,
 ) -> Result<(), ConvertError> {
     let style: &ParagraphStyle = &para.style;
+    // PowerPoint's own line, which supersedes the `size * 0.65` leading this
+    // path used to guess with (issue #513).
+    let line_height_settings: Option<String> = powerpoint_line_height_settings(&para.runs, style);
     let needs_text_scope: bool = common_text_style(&para.runs).is_some();
-    let has_para_style: bool = needs_block_wrapper(style) || needs_text_scope;
+    let has_para_style: bool =
+        needs_block_wrapper(style) || needs_text_scope || line_height_settings.is_some();
 
     if has_para_style {
         out.push_str("#block(");
-        write_block_params(out, style);
+        // A slide paragraph's gaps are its own `a:spcBef`/`a:spcAft` and
+        // nothing else. Leaving them unset let Typst's 1.2em `block.spacing`
+        // default in, which put 13pt between the lines of a code block that
+        // declares no spacing at all (issue #513).
+        let _ = write!(
+            out,
+            "above: {}pt, below: {}pt",
+            format_f64(style.space_before.unwrap_or(0.0)),
+            format_f64(style.space_after.unwrap_or(0.0)),
+        );
         out.push_str(")[\n");
         write_par_settings(out, style);
         write_common_text_settings(out, &para.runs, "  ");
-        write_fixed_text_default_par_settings(out, style, &para.runs, "  ");
+        match line_height_settings {
+            Some(ref settings) => out.push_str(settings),
+            None => write_fixed_text_default_par_settings(out, style, &para.runs, "  "),
+        }
     }
 
     let alignment = style.alignment;
