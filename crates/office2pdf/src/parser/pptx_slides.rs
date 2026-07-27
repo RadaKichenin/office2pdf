@@ -879,6 +879,9 @@ struct ShapeState {
     style_font_color: Option<Color>,
     /// True when `<a:noFill/>` is explicitly set in `<p:spPr>`, preventing style fallback.
     explicit_no_fill: bool,
+    /// True when `<a:noFill/>` sits inside `<a:ln>`: PowerPoint's "No line",
+    /// which must also defeat the `<p:style><a:lnRef>` fallback (issue #516).
+    explicit_no_line: bool,
 }
 
 impl Default for ShapeState {
@@ -915,6 +918,7 @@ impl Default for ShapeState {
             style_fill_color: None,
             style_font_color: None,
             explicit_no_fill: false,
+            explicit_no_line: false,
         }
     }
 }
@@ -963,8 +967,13 @@ fn finalize_shape(
 
     if has_text {
         let blocks: Vec<Block> = group_pptx_text_blocks(std::mem::take(paragraphs));
-        // Use explicit line color, falling back to style-based color from <p:style><a:lnRef>.
-        let effective_ln_color: Option<Color> = shape.ln_color.or(shape.style_ln_color);
+        // Use explicit line color, falling back to style-based color from
+        // <p:style><a:lnRef> - unless <a:ln><a:noFill/> disabled the line.
+        let effective_ln_color: Option<Color> = if shape.explicit_no_line {
+            None
+        } else {
+            shape.ln_color.or(shape.style_ln_color)
+        };
         let stroke: Option<BorderSide> = effective_ln_color.map(|color| BorderSide {
             width: effective_ln_width_pt,
             color,
@@ -1072,8 +1081,13 @@ fn finalize_shape(
             shape.tail_end,
             &shape.adj_values,
         );
-        // Use explicit line color, falling back to style-based color from <p:style><a:lnRef>.
-        let effective_ln_color: Option<Color> = shape.ln_color.or(shape.style_ln_color);
+        // Use explicit line color, falling back to style-based color from
+        // <p:style><a:lnRef> - unless <a:ln><a:noFill/> disabled the line.
+        let effective_ln_color: Option<Color> = if shape.explicit_no_line {
+            None
+        } else {
+            shape.ln_color.or(shape.style_ln_color)
+        };
         let stroke: Option<BorderSide> = effective_ln_color.map(|color| BorderSide {
             width: effective_ln_width_pt,
             color,
@@ -1515,6 +1529,9 @@ impl<'a> SlideXmlParser<'a> {
             }
             b"noFill" if self.shape.in_sp_pr && !self.shape.in_ln && !self.in_rpr => {
                 self.shape.explicit_no_fill = true;
+            }
+            b"noFill" if self.shape.in_ln && !self.in_rpr => {
+                self.shape.explicit_no_line = true;
             }
             b"solidFill" if self.shape.in_sp_pr && !self.shape.in_ln && !self.in_rpr => {
                 self.solid_fill_ctx = SolidFillCtx::ShapeFill;
@@ -2002,6 +2019,9 @@ impl<'a> SlideXmlParser<'a> {
             // `<a:noFill/>` inside `<p:spPr>` (not inside `<a:ln>`) explicitly disables fill.
             b"noFill" if self.shape.in_sp_pr && !self.shape.in_ln => {
                 self.shape.explicit_no_fill = true;
+            }
+            b"noFill" if self.shape.in_ln => {
+                self.shape.explicit_no_line = true;
             }
             _ => return false,
         }

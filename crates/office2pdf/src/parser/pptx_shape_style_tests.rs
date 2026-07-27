@@ -654,3 +654,39 @@ fn test_shape_style_lnref_outline_resolves_width_and_shaded_color() {
     // accent1 (4472C4) shaded 50% ≈ half each channel.
     assert_eq!(stroke.color, Color::new(0x22, 0x39, 0x62));
 }
+
+// ── `<a:ln><a:noFill/></a:ln>` disables the outline (issue #516) ─────
+
+#[test]
+fn test_no_fill_line_suppresses_style_outline_fallback() {
+    // PowerPoint writes this exact construct for "No line"; the
+    // `<p:style><a:lnRef>` fallback must not repaint the outline.
+    let shape = concat!(
+        r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="Rect"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>"#,
+        r#"<p:spPr><a:xfrm><a:off x="914400" y="914400"/><a:ext cx="2794000" cy="1651000"/></a:xfrm>"#,
+        r#"<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>"#,
+        r#"<a:solidFill><a:srgbClr val="80B0D8"/></a:solidFill>"#,
+        r#"<a:ln w="19050" cap="flat"><a:noFill/><a:prstDash val="solid"/></a:ln></p:spPr>"#,
+        r#"<p:style><a:lnRef idx="2"><a:srgbClr val="000000"/></a:lnRef>"#,
+        r#"<a:fillRef idx="1"><a:schemeClr val="accent1"/></a:fillRef>"#,
+        r#"<a:effectRef idx="0"><a:schemeClr val="accent1"/></a:effectRef>"#,
+        r#"<a:fontRef idx="minor"><a:schemeClr val="lt1"/></a:fontRef></p:style></p:sp>"#
+    )
+    .to_string();
+    let slide = make_slide_xml(&[shape]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = first_fixed_page(&doc);
+    let shape = match &page.elements[0].kind {
+        FixedElementKind::Shape(s) => s,
+        other => panic!("Expected shape, got {other:?}"),
+    };
+    assert!(
+        shape.stroke.is_none(),
+        "a:noFill inside a:ln must suppress the outline, got {:?}",
+        shape.stroke
+    );
+    assert!(shape.fill.is_some(), "the shape fill must be unaffected");
+}
