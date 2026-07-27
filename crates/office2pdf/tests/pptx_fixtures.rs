@@ -430,6 +430,11 @@ fn smart_art_renders_cached_drawing_shapes() {
 // box, plus one trailing mark, so the mark alone overflows the line.
 // ---------------------------------------------------------------------------
 
+/// Runs only where Malgun Gothic exists (the Windows CI runner): without
+/// a Hangul-capable font the glyphs never reach the PDF text layer at
+/// all, which would vacuously pass the ZWSP check and fail the content
+/// check.
+#[cfg(target_os = "windows")]
 #[test]
 fn kinsoku_fixture_text_layer_has_no_zero_width_space() {
     // The break opportunity is carried as U+200B inside the IR, and must
