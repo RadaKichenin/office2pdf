@@ -285,9 +285,16 @@ pub(super) fn word_cell_line_box_settings(
     // matching suppression of the trailing gap; the two must agree.
     let advance_em: f64 = match line_grid_pitch.filter(|pitch| *pitch > 0.0) {
         Some(pitch) if row_snaps_to_grid => {
-            let natural_pt: f64 = metric_em * font_size + style.space_after.unwrap_or(0.0);
-            let grid_lines: f64 = (natural_pt / pitch).ceil().max(1.0);
-            grid_lines * pitch / font_size
+            // Same two-way choice as the body path (issue #508), with the
+            // paragraph's `w:after` inside the quantity being compared, since
+            // Word snaps the line and that gap together (issues #500, #503).
+            let natural_pt: f64 = word_pitch_em * font_size + style.space_after.unwrap_or(0.0);
+            let advance_pt: f64 = if natural_pt <= pitch {
+                pitch
+            } else {
+                natural_pt
+            };
+            advance_pt / font_size
         }
         _ => word_pitch_em,
     };
@@ -347,9 +354,30 @@ pub(super) fn word_line_leading_pt(
             // but its real line is 1.33em = 22.6pt, and Word gives it that.
             // Snapping to the grid alone made the title 4.6pt short, which
             // is the whole title-to-body shortfall (issue #402).
-            let grid_lines: f64 = (line_box_pt / pitch).ceil().max(1.0);
+            // Word chooses between exactly two advances, never a multiple:
+            // the grid pitch when the font's natural line fits inside one grid
+            // line, otherwise the natural line untouched.
+            //
+            // Measured as baseline-to-baseline pitch in the Word exports, which
+            // quantise every coordinate to 0.24pt. 13pt Malgun has a 17.29pt
+            // natural line and advances 18.24pt, i.e. the 18pt grid. 16pt
+            // Malgun has a 21.28pt natural line and advances 21.12pt - the
+            // natural line to within one quantum, not the 36pt two grid lines
+            // a ceiling would give (issue #508).
+            //
+            // A `ceil()` over the metric box reached the same answer only
+            // because Typst reports a normalised metric sum for Malgun that is
+            // small enough to always land on one line, leaving the natural-line
+            // floor to supply the other branch. Stating the choice directly
+            // removes that dependence on the metric pair, which the baseline
+            // split needs to change independently.
             let natural_line_pt: f64 = word_pitch_em * font_size;
-            (grid_lines * pitch).max(natural_line_pt) - line_box_pt
+            let advance_pt: f64 = if natural_line_pt <= pitch {
+                pitch
+            } else {
+                natural_line_pt
+            };
+            advance_pt - line_box_pt
         }
         // Word's single spacing is the font's full hhea line (ascender +
         // descender + line gap); Typst's metric edges resolve the typo
