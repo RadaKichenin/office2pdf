@@ -455,3 +455,75 @@ pub(crate) fn font_line_metrics_em(family: &str) -> Option<(f64, f64, f64)> {
 pub(crate) fn font_line_metrics_em(_family: &str) -> Option<(f64, f64, f64)> {
     None
 }
+
+/// PowerPoint's line height factor: it gives every line 1.2 times the font
+/// size, whatever the font's own metrics say.
+///
+/// Measured on native exports from both platforms. On macOS PowerPoint, one
+/// wrapped Arial paragraph advances `(last baseline - first) / 14 = 20.3657pt`
+/// at 17pt (1.1980em) and `/ 18 = 28.8400pt` at 24pt (1.2017em) — the division
+/// cancels the export's 0.24pt position grid, which is what made small samples
+/// look font-dependent. Windows PowerPoint measures the same 1.2000em flat for
+/// Arial, Calibri, and Malgun Gothic (issues #485, #513).
+pub(crate) const POWERPOINT_LINE_HEIGHT_FACTOR: f64 = 1.2;
+
+/// PowerPoint's `(above baseline, below baseline)` split of that line, in em.
+///
+/// The baseline divides the 1.2em line in the proportion of the font's OS/2
+/// `usWinAscent` to `usWinAscent + usWinDescent` — not its hhea metrics, and
+/// not Typst's normalised pair. Measured against native exports with zero
+/// insets: Arial seats its first baseline 0.9718em below the box top against
+/// `1854/2288 x 1.2 = 0.9724` predicted, and Calibri 0.9343em against
+/// `1950/2500 x 1.2 = 0.9360`. The remainder is the descent gap a bottom
+/// anchored box keeps below its last baseline, which we used to drop entirely
+/// (issue #513).
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn powerpoint_line_box_em(family: &str) -> Option<(f64, f64)> {
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+    type LineBoxEm = Option<(f64, f64)>;
+    static CACHE: OnceLock<Mutex<HashMap<String, LineBoxEm>>> = OnceLock::new();
+
+    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    let key: String = family.to_lowercase();
+    if let Some(cached) = cache
+        .lock()
+        .expect("metrics cache mutex should not be poisoned")
+        .get(&key)
+    {
+        return *cached;
+    }
+
+    let search_context = super::font_context::resolve_font_search_context(&[]);
+    let data = get_fonts_for_extra_paths(search_context.search_paths());
+    let split: Option<(f64, f64)> = data
+        .book
+        .select(&key, typst::text::FontVariant::default())
+        .and_then(|index| data.fonts.get(index))
+        .and_then(|slot| slot.get())
+        .and_then(|font| {
+            let table = font.ttf().tables().os2?;
+            // `usWinDescent` is an unsigned distance *below* the baseline in
+            // the spec, but ttf-parser hands it back signed, so Arial's 434
+            // arrives as -434. Adding it raw shrank the denominator from 2288
+            // to 1420 and put the baseline at 1.57em, past the bottom of a
+            // 1.2em line.
+            let ascent = f64::from(table.windows_ascender()).abs();
+            let descent = f64::from(table.windows_descender()).abs();
+            let total = ascent + descent;
+            (total > 0.0 && ascent > 0.0).then(|| {
+                let above = POWERPOINT_LINE_HEIGHT_FACTOR * ascent / total;
+                (above, POWERPOINT_LINE_HEIGHT_FACTOR - above)
+            })
+        });
+    cache
+        .lock()
+        .expect("metrics cache mutex should not be poisoned")
+        .insert(key, split);
+    split
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn powerpoint_line_box_em(_family: &str) -> Option<(f64, f64)> {
+    None
+}

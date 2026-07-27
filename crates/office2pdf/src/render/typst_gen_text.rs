@@ -207,6 +207,38 @@ pub(super) fn word_line_height_settings(
     ))
 }
 
+/// Line-box settings for a slide's text: PowerPoint's flat 1.2em line, split
+/// at the font's OS/2 `usWinAscent` proportion, with zero leading.
+///
+/// This is the PPTX counterpart of [`word_line_height_settings`], and the two
+/// models genuinely differ. Word's line is the font's own hhea pitch;
+/// PowerPoint's ignores the font's metrics for the height and consults them
+/// only for where inside it the baseline sits. Slide text used to take the Word
+/// treatment, which is up to 4% short per line and accumulates down a bullet
+/// list, and it seated the baseline by Typst's normalised ascender, which put
+/// a bottom-anchored box's last baseline flat on the inset with no descent gap
+/// at all (issue #513).
+///
+/// `None` when the paragraph carries its own line spacing or box — those are
+/// explicit and outrank the default — or when the font's metrics are unknown.
+pub(super) fn powerpoint_line_height_settings(
+    runs: &[Run],
+    style: &ParagraphStyle,
+) -> Option<String> {
+    if style.line_spacing.is_some() || style.line_box.is_some() {
+        return None;
+    }
+    let family: &str = runs
+        .iter()
+        .find_map(|run| run.style.font_family.as_deref())?;
+    let (ascent_em, descent_em) = crate::render::pdf::powerpoint_line_box_em(family)?;
+    Some(format!(
+        "#set text(top-edge: {}em, bottom-edge: -{}em)\n#set par(leading: 0pt)\n",
+        format_f64(ascent_em),
+        format_f64(descent_em)
+    ))
+}
+
 /// The nominal font's `(above baseline, below baseline)` split plus the
 /// leading, in em, that tops the line box up to Word's line advance. `None`
 /// when the metric-edge treatment does not apply.
