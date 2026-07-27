@@ -160,27 +160,47 @@ fn rotate_point(
     )
 }
 
-/// Number of concentric layers approximating the Gaussian blur of an
-/// outer shadow. Typst has no blur primitive; stacked translucent rings
-/// whose alphas compound to the shadow opacity read as a soft edge.
-const SHADOW_BLUR_LAYERS: usize = 4;
+/// The blur's standard deviation as a fraction of `blurRad`, measured
+/// from native PowerPoint exports at blur 6/9/12/24pt (issue #390): the
+/// exported ramp is a Gaussian CDF centred on the shadow silhouette
+/// whose sigma tracks 0.23–0.35 of the radius across those samples.
+const SHADOW_BLUR_SIGMA_PER_RADIUS: f64 = 0.3;
 
-/// Per-layer (outward expansion, alpha) pairs for a shadow. Layers span
-/// from `blur_radius/2` inset to `blur_radius/2` outset of the nominal
-/// silhouette, matching PowerPoint's blur that straddles the edge. A
-/// zero-blur shadow keeps the single crisp duplicate.
+/// Ring boundaries in sigma units, and the Gaussian CDF value at each
+/// band's midpoint. Six rings from -2 sigma (inset) to +2 sigma (outset):
+/// the band between boundary k-1 and k is covered by rings k.. and must
+/// compound to `opacity * PHI[k]`; inside the innermost ring the stack
+/// compounds to the full opacity. PowerPoint's own export is a stepped
+/// ramp of six-to-eight rings, so six is not visibly coarser than GT.
+const SHADOW_RING_BOUNDS_SIGMA: [f64; 6] = [-2.0, -1.2, -0.4, 0.4, 1.2, 2.0];
+const SHADOW_RING_MIDPOINT_CDF: [f64; 6] = [1.0, 0.9452, 0.7881, 0.5, 0.2119, 0.0548];
+
+/// Per-layer (outward expansion, alpha) pairs for a shadow. The alphas
+/// are solved so the compounded coverage of the overlapping rings steps
+/// down along the Gaussian CDF: full opacity inside, half at the
+/// silhouette edge, ~5% at the rim. A zero-blur shadow keeps the single
+/// crisp duplicate.
 pub(super) fn shadow_blur_layers(shadow: &Shadow) -> Vec<(f64, u8)> {
     let opacity = shadow.opacity.clamp(0.0, 1.0);
     if shadow.blur_radius <= 0.0 {
         return vec![(0.0, (opacity * 255.0).round() as u8)];
     }
-    let layer_count = SHADOW_BLUR_LAYERS;
-    let layer_opacity = 1.0 - (1.0 - opacity).powf(1.0 / layer_count as f64);
-    let alpha = (layer_opacity * 255.0).round() as u8;
-    (0..layer_count)
-        .map(|layer| {
-            let expansion = shadow.blur_radius * ((layer as f64 + 0.5) / layer_count as f64 - 0.5);
-            (expansion, alpha)
+    let sigma: f64 = SHADOW_BLUR_SIGMA_PER_RADIUS * shadow.blur_radius;
+    // Coverage target for the region covered by rings k.. is
+    // `opacity * CDF[k]`; solving outermost-in, ring k's own alpha is
+    // 1 - (1 - target_k) / (1 - target_{k+1}).
+    let ring_count = SHADOW_RING_BOUNDS_SIGMA.len();
+    (0..ring_count)
+        .map(|ring| {
+            let target = opacity * SHADOW_RING_MIDPOINT_CDF[ring];
+            let outer_target = if ring + 1 < ring_count {
+                opacity * SHADOW_RING_MIDPOINT_CDF[ring + 1]
+            } else {
+                0.0
+            };
+            let alpha = 1.0 - (1.0 - target) / (1.0 - outer_target);
+            let expansion = sigma * SHADOW_RING_BOUNDS_SIGMA[ring];
+            (expansion, (alpha * 255.0).round() as u8)
         })
         .collect()
 }
