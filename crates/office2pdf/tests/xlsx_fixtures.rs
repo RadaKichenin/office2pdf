@@ -863,3 +863,93 @@ fn with_chart_renders_embedded_chart() {
         "chart must carry its series data"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Repository workbook — multi-sheet Korean analysis workbook
+// ---------------------------------------------------------------------------
+
+/// Ten-sheet Korean workbook describing this repository. Unlike the focused
+/// fixtures above it combines the XLSX features that co-occur in real reporting
+/// documents on the same printed page: merged banner rows, an Excel table with
+/// `tableStyleInfo` stripes, data bars, colour scales, icon sets, hyperlinks,
+/// three chart kinds, cell comments, mixed portrait/landscape print setup, and
+/// `fitToPage` print scaling.
+const REPOSITORY_WORKBOOK_FIXTURE: &str = "office2pdf_repository_workbook.xlsx";
+
+#[test]
+fn smoke_repository_workbook_fixture() {
+    assert_produces_valid_pdf(REPOSITORY_WORKBOOK_FIXTURE);
+}
+
+#[test]
+fn structure_repository_workbook_keeps_every_sheet_in_workbook_order() {
+    let pages = sheet_pages(REPOSITORY_WORKBOOK_FIXTURE);
+
+    let mut names: Vec<&str> = Vec::new();
+    for page in &pages {
+        if names.last() != Some(&page.name.as_str()) {
+            names.push(page.name.as_str());
+        }
+    }
+
+    assert_eq!(
+        names,
+        [
+            "00_개요",
+            "01_대시보드",
+            "02_기능_매트릭스",
+            "03_CLI_옵션",
+            "04_라이브러리_API",
+            "05_모듈_인벤토리",
+            "06_릴리스_이력",
+            "07_검증_품질게이트",
+            "08_의존성",
+            "09_리스크_로드맵",
+        ],
+        "every worksheet must survive parsing, in workbook order"
+    );
+}
+
+#[test]
+fn structure_repository_workbook_preserves_print_orientation_per_sheet() {
+    let pages = sheet_pages(REPOSITORY_WORKBOOK_FIXTURE);
+
+    let is_landscape = |sheet: &str| -> bool {
+        let page = sheet_page_named(&pages, sheet);
+        page.size.width > page.size.height
+    };
+
+    // The overview, dashboard, and library-API sheets print portrait; the wide
+    // inventory and matrix sheets print landscape.
+    assert!(!is_landscape("00_개요"));
+    assert!(!is_landscape("01_대시보드"));
+    assert!(!is_landscape("04_라이브러리_API"));
+    assert!(is_landscape("02_기능_매트릭스"));
+    assert!(is_landscape("05_모듈_인벤토리"));
+    assert!(is_landscape("09_리스크_로드맵"));
+}
+
+#[test]
+fn structure_repository_workbook_extracts_every_dashboard_chart_with_data() {
+    let pages = sheet_pages(REPOSITORY_WORKBOOK_FIXTURE);
+
+    let charts: Vec<&office2pdf::ir::Chart> = pages
+        .iter()
+        .filter(|page| page.name == "01_대시보드")
+        .flat_map(|page| page.charts.iter().map(|(_, chart)| chart))
+        .collect();
+
+    assert_eq!(charts.len(), 3, "the dashboard anchors three charts");
+
+    for chart in &charts {
+        let title: &str = chart.title.as_deref().unwrap_or_default();
+        assert!(
+            !chart.categories.is_empty(),
+            "chart {title:?} must carry its category labels"
+        );
+        assert!(
+            chart.series.iter().any(|series| !series.values.is_empty()),
+            "chart {title:?} must carry its cached series values"
+        );
+    }
+}
