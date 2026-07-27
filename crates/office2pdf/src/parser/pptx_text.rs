@@ -632,6 +632,78 @@ pub(super) fn push_pptx_run(runs: &mut Vec<Run>, run: Run) {
     runs.push(run);
 }
 
+/// IR-only sentinel between a Hangul syllable and the terminal
+/// punctuation that follows it (issue #438). UAX #14 LB13 forbids a break
+/// before such a mark, so an overflowing mark drags the syllable onto the
+/// next line; PowerPoint instead keeps the syllable in place and either
+/// hangs the mark past the margin (Windows) or breaks before it (macOS).
+/// The renderer converts the sentinel to an empty `#box[]` — a Contingent
+/// Break in UAX #14, which restores the break opportunity — or drops it in
+/// no-wrap runs; it never reaches the Typst source or the PDF text layer.
+const HANGUL_KINSOKU_BREAK_CHAR: char = '\u{200B}';
+
+fn is_hangul_syllable(character: char) -> bool {
+    matches!(character, '\u{AC00}'..='\u{D7A3}')
+}
+
+/// Terminal marks PowerPoint refuses to push down with a preceding Hangul
+/// syllable, measured against native exports in issue #438. `%` is
+/// deliberately absent: PowerPoint keeps it glued to the syllable.
+fn is_hangul_terminal_punct(character: char) -> bool {
+    matches!(
+        character,
+        '?' | '!'
+            | '.'
+            | ','
+            | ':'
+            | ')'
+            | '\u{201D}'
+            | '\u{2026}'
+            | '\u{FF1F}'
+            | '\u{FF01}'
+            | '\u{3002}'
+            | '\u{3001}'
+            | '\u{FF0E}'
+            | '\u{FF0C}'
+            | '\u{FF1A}'
+            | '\u{FF09}'
+    )
+}
+
+/// Grant a line-break opportunity between each Hangul syllable and the
+/// terminal punctuation that follows it, including across run boundaries.
+pub(super) fn insert_hangul_kinsoku_break_markers(runs: &mut [Run]) {
+    let mut previous_character: Option<char> = None;
+    for run in runs {
+        if run.footnote.is_some() {
+            previous_character = None;
+            continue;
+        }
+        let needs_marker = {
+            let mut previous = previous_character;
+            run.text.chars().any(|character| {
+                let pair =
+                    previous.is_some_and(is_hangul_syllable) && is_hangul_terminal_punct(character);
+                previous = Some(character);
+                pair
+            })
+        };
+        if needs_marker {
+            let mut marked = String::with_capacity(run.text.len() + 8);
+            let mut previous = previous_character;
+            for character in run.text.chars() {
+                if previous.is_some_and(is_hangul_syllable) && is_hangul_terminal_punct(character) {
+                    marked.push(HANGUL_KINSOKU_BREAK_CHAR);
+                }
+                marked.push(character);
+                previous = Some(character);
+            }
+            run.text = marked;
+        }
+        previous_character = run.text.chars().last().or(previous_character);
+    }
+}
+
 pub(super) fn push_pptx_soft_line_break(runs: &mut Vec<Run>, style: &TextStyle) {
     push_pptx_run(
         runs,

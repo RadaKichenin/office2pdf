@@ -535,7 +535,8 @@ impl<'a> PptxTableParser<'a> {
             &self.paragraph_end_run_style,
             &self.paragraph_default_run_style,
         );
-        let paragraph_runs: Vec<Run> = std::mem::take(&mut self.runs);
+        let mut paragraph_runs: Vec<Run> = std::mem::take(&mut self.runs);
+        insert_hangul_kinsoku_break_markers(&mut paragraph_runs);
         self.cell_text_entries.push(PptxParagraphEntry {
             paragraph: Paragraph {
                 style: self.paragraph_style.clone(),

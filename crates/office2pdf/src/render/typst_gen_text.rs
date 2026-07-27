@@ -12,6 +12,9 @@ pub(super) const DEFAULT_TAB_WIDTH_PT: f64 = 36.0;
 /// `w:defaultTabStop`.
 pub(super) const EAST_ASIAN_DEFAULT_TAB_WIDTH_PT: f64 = 40.0;
 const PPTX_SOFT_LINE_BREAK_CHAR: char = '\u{000B}';
+/// In-text marker the PPTX parser places between a Hangul syllable and
+/// following terminal punctuation (issue #438); never emitted literally.
+const HANGUL_KINSOKU_BREAK_CHAR: char = '\u{200B}';
 
 pub(super) fn generate_paragraph(
     out: &mut String,
@@ -683,6 +686,12 @@ fn no_wrap_text(text: &str, preserve_cjk_no_wrap: bool, state: &mut NoWrapState)
             continue;
         }
 
+        // A no-wrap box never takes the kinsoku break, so drop its marker
+        // instead of letting the zero-width space reach the text layer.
+        if ch == HANGUL_KINSOKU_BREAK_CHAR {
+            continue;
+        }
+
         if ch == ' ' {
             out.push('\u{00A0}');
             state.previous_visible_char = None;
@@ -970,26 +979,36 @@ pub(super) fn generate_run(out: &mut String, run: &Run) {
         return;
     }
 
-    if run.text.contains(PPTX_SOFT_LINE_BREAK_CHAR) {
-        write_run_with_soft_line_breaks(out, run);
+    if run.text.contains(PPTX_SOFT_LINE_BREAK_CHAR) || run.text.contains(HANGUL_KINSOKU_BREAK_CHAR)
+    {
+        write_run_with_break_markers(out, run);
         return;
     }
 
     write_run_segment(out, run, &run.text);
 }
 
-fn write_run_with_soft_line_breaks(out: &mut String, run: &Run) {
+/// Expands the PPTX in-text markers: a soft line break becomes
+/// `#linebreak()`, and a kinsoku break marker (issue #438) becomes an
+/// empty `#box[]`. An inline frame is a Contingent Break in UAX #14
+/// (U+FFFC), so the line may end between a Hangul syllable and its
+/// trailing punctuation — which LB13 otherwise forbids. LB13 still glues
+/// the mark to the frame, so the two move to the next line together, and
+/// the zero-size frame neither disturbs line metrics nor leaves a
+/// zero-width space in the PDF text layer.
+fn write_run_with_break_markers(out: &mut String, run: &Run) {
     let mut segment_start: usize = 0;
 
     for (offset, ch) in run.text.char_indices() {
-        if ch != PPTX_SOFT_LINE_BREAK_CHAR {
-            continue;
-        }
-
+        let replacement = match ch {
+            PPTX_SOFT_LINE_BREAK_CHAR => "#linebreak()",
+            HANGUL_KINSOKU_BREAK_CHAR => "#box[]",
+            _ => continue,
+        };
         if segment_start < offset {
             write_run_segment(out, run, &run.text[segment_start..offset]);
         }
-        out.push_str("#linebreak()");
+        out.push_str(replacement);
         segment_start = offset + ch.len_utf8();
     }
 

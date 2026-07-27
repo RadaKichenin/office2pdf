@@ -422,3 +422,62 @@ fn smart_art_renders_cached_drawing_shapes() {
         .any(|e| matches!(&e.kind, FixedElementKind::Shape(s) if s.fill.is_some()));
     assert!(filled, "SmartArt shapes must carry their fill color");
 }
+
+// ---------------------------------------------------------------------------
+// hangul_kinsoku_terminal_punct.pptx — Hangul + trailing punctuation at a
+// line boundary (issue #438). Authored and exported by Windows PowerPoint:
+// each box holds ten 18pt Malgun Gothic syllables (180pt) in a 183pt-usable
+// box, plus one trailing mark, so the mark alone overflows the line.
+// ---------------------------------------------------------------------------
+
+/// Runs only where Malgun Gothic exists (the Windows CI runner): without
+/// a Hangul-capable font the glyphs never reach the PDF text layer at
+/// all, which would vacuously pass the ZWSP check and fail the content
+/// check.
+#[cfg(target_os = "windows")]
+#[test]
+fn kinsoku_fixture_text_layer_has_no_zero_width_space() {
+    // The break opportunity is carried as U+200B inside the IR, and must
+    // never surface in the PDF text layer.
+    let text = pdf_text("hangul_kinsoku_terminal_punct.pptx");
+    assert!(
+        !text.contains('\u{200B}'),
+        "zero-width space leaked into the PDF text layer"
+    );
+    assert!(
+        text.contains("가나다라마바사아자차"),
+        "fixture text lost during conversion"
+    );
+}
+
+#[test]
+fn kinsoku_break_marker_becomes_inline_box() {
+    let data = load_fixture("hangul_kinsoku_terminal_punct.pptx");
+    let parser = PptxParser;
+    let (document, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let output = generate_typst(&document).unwrap();
+    // Ten syllables, then the boxed mark: an inline box is a Contingent
+    // Break in UAX #14, so the mark may start the next line instead of
+    // dragging the syllable down with it (LB13). Verified against native
+    // PowerPoint exports in #438.
+    assert!(
+        output.source.contains("자차]#box[]"),
+        "no break frame before the terminal mark"
+    );
+    // '%' is the counter-case: PowerPoint keeps it glued to the syllable,
+    // so it must never be boxed away from it.
+    assert!(
+        output.source.contains("차%]"),
+        "'%' must stay glued to the syllable, with no break frame between"
+    );
+    assert!(
+        !output.source.contains('\u{200B}'),
+        "kinsoku marker leaked into the Typst source"
+    );
+    // The 09_lecture_ko card replica: the break lands before '?', not
+    // between the last two syllables.
+    assert!(
+        output.source.contains("뜻인가]#box[]"),
+        "no break frame in the #438 replica"
+    );
+}
