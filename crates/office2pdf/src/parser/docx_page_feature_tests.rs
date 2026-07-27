@@ -719,3 +719,108 @@ fn a_paragraph_without_a_rule_has_no_border_space() {
     assert!(style.border.is_none());
     assert!(style.border_space.is_none());
 }
+
+// ----- Word's East Asian/Latin auto space (issue #521) -----
+
+/// The in-text marker the parser places at such a boundary. Duplicated from
+/// the parser so the test pins the wire format rather than the constant.
+const AUTO_SPACE_MARKER: char = '\u{E001}';
+
+/// A one-paragraph document whose only run holds `text`, optionally justified.
+fn build_docx_with_korean_text(text: &str, justified: bool) -> Vec<u8> {
+    let mut paragraph = docx_rs::Paragraph::new().add_run(
+        docx_rs::Run::new()
+            .add_text(text)
+            .fonts(docx_rs::RunFonts::new().east_asia("Malgun Gothic"))
+            .size(21),
+    );
+    if justified {
+        paragraph = paragraph.align(docx_rs::AlignmentType::Both);
+    }
+    let docx = docx_rs::Docx::new().add_paragraph(paragraph);
+    let mut cursor = Cursor::new(Vec::new());
+    docx.build().pack(&mut cursor).unwrap();
+    cursor.into_inner()
+}
+
+fn first_paragraph_text(data: &[u8]) -> String {
+    let (doc, _warnings) = DocxParser
+        .parse(data, &ConvertOptions::default())
+        .expect("document parses");
+    let flow = match &doc.pages[0] {
+        Page::Flow(flow) => flow,
+        _ => panic!("Expected FlowPage"),
+    };
+    match &flow.content[0] {
+        Block::Paragraph(paragraph) => paragraph.runs.iter().map(|run| run.text.as_str()).collect(),
+        other => panic!("Expected a paragraph, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_boundary_between_east_asian_text_and_a_number_carries_the_auto_space() {
+    // Word inserts a quarter em where East Asian text meets a Latin letter or
+    // digit with no literal space between, on both sides of the island. A
+    // native export measures 2.625pt at 10.5pt and 2.375pt at 9.5pt, and our
+    // output was that much narrower at every such boundary (issue #521).
+    let text = first_paragraph_text(&build_docx_with_korean_text("2026년 제3자", false));
+
+    assert_eq!(
+        text,
+        format!("2026{AUTO_SPACE_MARKER}년 제{AUTO_SPACE_MARKER}3{AUTO_SPACE_MARKER}자"),
+        "both sides of a digit island widen, and only boundaries without a \
+         literal space do"
+    );
+}
+
+#[test]
+fn a_boundary_that_already_has_a_space_gets_nothing() {
+    // Triangulation: Word adds nothing where the author already typed a space,
+    // which is why `은 2026` measures the same in the GT as in our output.
+    let text = first_paragraph_text(&build_docx_with_korean_text("유효기간은 2026", false));
+
+    assert!(
+        !text.contains(AUTO_SPACE_MARKER),
+        "a literal space already separates the two scripts: {text:?}"
+    );
+}
+
+#[test]
+fn a_justified_paragraph_keeps_its_lines_as_authored() {
+    // Word treats the space as compressible and justification absorbs it:
+    // every boundary that lacks it in the corpus GT is on a line Word is
+    // actively stretching or compressing. Adding a rigid one there re-wrapped
+    // the line instead (issue #521).
+    let text = first_paragraph_text(&build_docx_with_korean_text("2026년 제3자", true));
+
+    assert!(
+        !text.contains(AUTO_SPACE_MARKER),
+        "a justified paragraph absorbs the space rather than showing it: {text:?}"
+    );
+}
+
+#[test]
+fn latin_only_and_east_asian_only_text_are_untouched() {
+    // Triangulation on both sides of the predicate: the rule needs one of each
+    // script, so neither a pure Latin run nor a pure Korean one may widen.
+    for text in ["Version 2026 release 3", "계약서를 작성하여 보관한다"] {
+        let parsed = first_paragraph_text(&build_docx_with_korean_text(text, false));
+        assert!(
+            !parsed.contains(AUTO_SPACE_MARKER),
+            "single-script text needs no auto space: {parsed:?}"
+        );
+    }
+}
+
+#[test]
+fn cjk_punctuation_is_not_a_boundary() {
+    // `is_east_asian_text` is deliberately narrower than the renderer's
+    // `is_cjk_like`: CJK punctuation and the fullwidth forms are already
+    // full-width, and Word adds nothing beside them.
+    let text = first_paragraph_text(&build_docx_with_korean_text("、2026", false));
+
+    assert!(
+        !text.contains(AUTO_SPACE_MARKER),
+        "an ideographic comma is already full-width: {text:?}"
+    );
+}

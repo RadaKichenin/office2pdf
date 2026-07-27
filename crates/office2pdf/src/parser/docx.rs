@@ -47,8 +47,8 @@ use self::tables::convert_table;
 use self::text::{
     ThemeFonts, extract_doc_default_text_style_with_theme, extract_paragraph_style,
     extract_run_style, extract_run_style_id, extract_run_text, extract_run_text_skip_layout_breaks,
-    extract_tab_stop_overrides, is_column_break, is_page_break, parse_hex_color, parse_theme_fonts,
-    resolve_hyperlink_url, resolve_theme_font_family,
+    extract_tab_stop_overrides, insert_east_asian_auto_space, is_column_break, is_page_break,
+    parse_hex_color, parse_theme_fonts, resolve_hyperlink_url, resolve_theme_font_family,
 };
 #[cfg(test)]
 use self::text::{extract_tab_stops, resolve_highlight_color};
@@ -1057,6 +1057,14 @@ fn push_paragraph_from_runs(
         style.direction = Some(TextDirection::Rtl);
     }
     apply_word_compatible_paragraph_defaults(&mut style);
+    // Word's automatic East Asian/Latin space, applied once per paragraph so a
+    // boundary falling between two runs is caught too. Justified paragraphs are
+    // left alone: Word treats the space as compressible and absorbs it into the
+    // justification, which is why every boundary that lacks it in the corpus GT
+    // is on a line Word is actively stretching or compressing (issue #521).
+    if !matches!(style.alignment, Some(Alignment::Justify)) {
+        insert_east_asian_auto_space(runs);
+    }
     out.push(Block::Paragraph(Paragraph {
         style,
         runs: std::mem::take(runs),

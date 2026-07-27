@@ -663,3 +663,62 @@ fn test_escape_typst_keeps_hyphen_before_digits() {
         "hyphen before digits must stay a hyphen-minus: {result}"
     );
 }
+
+/// Word's East Asian/Latin auto space becomes a quarter of the *run's* size.
+///
+/// Sized in points rather than `em` because the spacing is emitted between the
+/// run's `#text(size:)` calls: an `em` there resolves against the paragraph's
+/// default size, which put 2.75pt at every boundary of a 10.5pt run and made a
+/// line wide enough to re-wrap (issue #521).
+#[test]
+fn the_auto_space_marker_becomes_a_quarter_of_the_runs_size() {
+    let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
+        style: ParagraphStyle::default(),
+        runs: vec![Run {
+            text: "2026\u{E001}년".to_string(),
+            style: TextStyle {
+                font_family: Some("Malgun Gothic".to_string()),
+                font_size: Some(10.5),
+                ..TextStyle::default()
+            },
+            href: None,
+            footnote: None,
+        }],
+    })])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains("#h(2.625pt)"),
+        "0.25 x 10.5pt should reach the output as points: {result}"
+    );
+    assert!(
+        !result.contains('\u{E001}'),
+        "the marker must never be emitted literally: {result}"
+    );
+}
+
+#[test]
+fn the_auto_space_scales_with_the_run_not_the_document() {
+    // Triangulation: a different run size must produce a different gap, so a
+    // single measured constant cannot pass.
+    for (size, expected) in [(9.5, "#h(2.375pt)"), (16.0, "#h(4pt)")] {
+        let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: "3\u{E001}자".to_string(),
+                style: TextStyle {
+                    font_family: Some("Malgun Gothic".to_string()),
+                    font_size: Some(size),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })])]);
+        let result = generate_typst(&doc).unwrap().source;
+        assert!(
+            result.contains(expected),
+            "a {size}pt run should emit {expected}: {result}"
+        );
+    }
+}
