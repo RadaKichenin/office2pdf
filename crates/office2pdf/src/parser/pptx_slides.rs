@@ -2245,7 +2245,8 @@ impl<'a> SlideXmlParser<'a> {
                     &self.para_end_run_style,
                     &self.para_default_run_style,
                 );
-                let paragraph_runs = std::mem::take(&mut self.runs);
+                let mut paragraph_runs = std::mem::take(&mut self.runs);
+                insert_hangul_kinsoku_break_markers(&mut paragraph_runs);
                 self.paragraphs.push(PptxParagraphEntry {
                     paragraph: Paragraph {
                         style: self.para_style.clone(),

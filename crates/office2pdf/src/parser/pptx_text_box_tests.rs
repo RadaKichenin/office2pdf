@@ -345,3 +345,70 @@ fn test_text_box_paragraph_before_after_spacing() {
     assert_eq!(para.style.space_before, Some(4.0));
     assert_eq!(para.style.space_after, Some(6.0));
 }
+
+// ── Hangul kinsoku break markers (issue #438) ────────────────────────
+//
+// PowerPoint keeps a Hangul syllable on the line when the following
+// terminal punctuation overflows: it hangs the mark past the margin
+// (Windows) or breaks before it (macOS). UAX #14 LB13 instead glues the
+// mark to the syllable, wrapping both. The parser marks the position
+// with an IR-only sentinel that the renderer turns into an empty
+// `#box[]` (a UAX #14 Contingent Break), restoring the opportunity
+// without touching the PDF text layer.
+
+fn parse_single_paragraph(runs_xml: &str) -> Paragraph {
+    let shape = make_formatted_text_box(0, 0, 4_000_000, 1_000_000, runs_xml);
+    let slide = make_slide_xml(&[shape]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let page = first_fixed_page(&doc);
+    let blocks = text_box_blocks(&page.elements[0]);
+    match &blocks[0] {
+        Block::Paragraph(p) => p.clone(),
+        _ => panic!("Expected Paragraph"),
+    }
+}
+
+#[test]
+fn test_hangul_terminal_punct_gets_break_marker() {
+    let para = parse_single_paragraph(r#"<a:r><a:rPr lang="ko-KR"/><a:t>라는 뜻인가?</a:t></a:r>"#);
+    assert_eq!(para.runs[0].text, "라는 뜻인가\u{200B}?");
+}
+
+#[test]
+fn test_hangul_terminal_punct_marker_spans_run_boundary() {
+    // The syllable and the mark can arrive in differently-styled runs.
+    let para = parse_single_paragraph(
+        r#"<a:r><a:rPr lang="ko-KR" b="1"/><a:t>뜻인가</a:t></a:r><a:r><a:rPr lang="ko-KR"/><a:t>?</a:t></a:r>"#,
+    );
+    assert_eq!(para.runs[0].text, "뜻인가");
+    assert_eq!(para.runs[1].text, "\u{200B}?");
+}
+
+#[test]
+fn test_hangul_break_marker_covers_fullwidth_and_ellipsis() {
+    let para = parse_single_paragraph(
+        r#"<a:r><a:rPr lang="ko-KR"/><a:t>질문？최고！끝。쉼、다음…</a:t></a:r>"#,
+    );
+    assert_eq!(
+        para.runs[0].text,
+        "질문\u{200B}？최고\u{200B}！끝\u{200B}。쉼\u{200B}、다음\u{200B}…"
+    );
+}
+
+#[test]
+fn test_no_break_marker_for_percent_or_latin_context() {
+    // '%' glues to the syllable in PowerPoint (measured in #438), and a
+    // Latin letter before the mark is outside the rule entirely.
+    let para = parse_single_paragraph(
+        r#"<a:r><a:rPr lang="ko-KR"/><a:t>확률이 3%라는 것. OK?</a:t></a:r>"#,
+    );
+    assert_eq!(para.runs[0].text, "확률이 3%라는 것\u{200B}. OK?");
+}
+
+#[test]
+fn test_no_break_marker_between_hangul_syllables() {
+    let para = parse_single_paragraph(r#"<a:r><a:rPr lang="ko-KR"/><a:t>가나다라마</a:t></a:r>"#);
+    assert_eq!(para.runs[0].text, "가나다라마");
+}
