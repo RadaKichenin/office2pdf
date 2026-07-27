@@ -224,6 +224,8 @@ fn test_parse_docx_with_bar_chart() {
     <c:title><c:tx><c:rich><a:p><a:r><a:t>Sales</a:t></a:r></a:p></c:rich></c:tx></c:title>
     <c:plotArea>
       <c:barChart>
+        <c:barDir val="col"/>
+        <c:grouping val="clustered"/>
         <c:ser>
           <c:idx val="0"/>
           <c:tx><c:strRef><c:strCache><c:pt idx="0"><c:v>Revenue</c:v></c:pt></c:strCache></c:strRef></c:tx>
@@ -260,7 +262,7 @@ fn test_parse_docx_with_bar_chart() {
         .collect();
 
     assert_eq!(chart_blocks.len(), 1);
-    assert_eq!(chart_blocks[0].chart_type, ChartType::Bar);
+    assert_eq!(chart_blocks[0].chart_type, ChartType::Column);
     assert_eq!(chart_blocks[0].title.as_deref(), Some("Sales"));
     assert_eq!(chart_blocks[0].categories, vec!["Q1", "Q2"]);
     assert_eq!(chart_blocks[0].series.len(), 1);

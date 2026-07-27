@@ -11,9 +11,14 @@ use crate::ir::{Chart, ChartSeries, ChartType};
 
 /// Mapping from XML chart element tag names to their corresponding `ChartType`.
 /// Both 2-D and 3-D variants map to the same logical type.
+///
+/// The bar family maps to `Column` because that is the orientation ECMA-376
+/// gives `ST_BarDir`'s `val` attribute by default, and the one Excel and
+/// PowerPoint write for their default clustered chart. `<c:barDir val="bar"/>`
+/// overrides it; see [`bar_direction_chart_type`].
 const CHART_TAG_TYPES: &[(&[u8], ChartType)] = &[
-    (b"barChart", ChartType::Bar),
-    (b"bar3DChart", ChartType::Bar),
+    (b"barChart", ChartType::Column),
+    (b"bar3DChart", ChartType::Column),
     (b"lineChart", ChartType::Line),
     (b"line3DChart", ChartType::Line),
     (b"pieChart", ChartType::Pie),
@@ -28,6 +33,18 @@ fn chart_type_for_tag(tag: &[u8]) -> Option<ChartType> {
         .iter()
         .find(|(name, _)| *name == tag)
         .map(|(_, ct)| ct.clone())
+}
+
+/// Resolve a `<c:barDir>` value to the chart orientation it selects.
+///
+/// `<c:barDir>` is exclusive to the bar family, so `None` — either an absent
+/// element or a non-bar chart — leaves the tag's own mapping in place.
+fn bar_direction_chart_type(direction: Option<&str>) -> Option<ChartType> {
+    match direction? {
+        "bar" => Some(ChartType::Bar),
+        "col" => Some(ChartType::Column),
+        _ => None,
+    }
 }
 
 /// Parse a chart XML file (e.g., `word/charts/chart1.xml`) into a `Chart` IR.
@@ -46,8 +63,16 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
                 if tag == b"title" && title.is_none() {
                     title = parse_chart_title(&mut reader);
                 } else if let Some(ct) = chart_type_for_tag(tag) {
-                    chart_type = Some(ct);
-                    parse_chart_series(&mut reader, tag, &mut categories, &mut series);
+                    let mut bar_direction: Option<String> = None;
+                    parse_chart_series(
+                        &mut reader,
+                        tag,
+                        &mut categories,
+                        &mut series,
+                        &mut bar_direction,
+                    );
+                    chart_type =
+                        Some(bar_direction_chart_type(bar_direction.as_deref()).unwrap_or(ct));
                 }
             }
             Ok(Event::Eof) => break,
@@ -119,11 +144,15 @@ fn parse_chart_title(reader: &mut Reader<&[u8]>) -> Option<String> {
 }
 
 /// Parse series data from within a chart type element (e.g., `<c:barChart>`).
+///
+/// `bar_direction` receives the `<c:barDir>` value when the element carries one.
+/// Office writes it self-closing, so it arrives as an `Empty` event.
 fn parse_chart_series(
     reader: &mut Reader<&[u8]>,
     end_tag: &[u8],
     categories: &mut Vec<String>,
     series: &mut Vec<ChartSeries>,
+    bar_direction: &mut Option<String>,
 ) {
     loop {
         match reader.read_event() {
@@ -135,7 +164,12 @@ fn parse_chart_series(
                         *categories = cats;
                     }
                     series.push(ser);
+                } else if e.local_name().as_ref() == b"barDir" {
+                    *bar_direction = xml_util::get_attr_str(e, b"val");
                 }
+            }
+            Ok(Event::Empty(ref e)) if e.local_name().as_ref() == b"barDir" => {
+                *bar_direction = xml_util::get_attr_str(e, b"val");
             }
             Ok(Event::End(ref e)) if e.local_name().as_ref() == end_tag => break,
             Ok(Event::Eof) | Err(_) => break,
