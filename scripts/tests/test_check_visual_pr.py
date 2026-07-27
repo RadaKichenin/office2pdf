@@ -169,6 +169,15 @@ class PullRequestBodyTests(unittest.TestCase):
         errors = validate_pr_body(body, ["assets/bugfixes/issue-186/after.jpg"])
         self.assertTrue(any("assets/bugfixes changes require" in error for error in errors))
 
+    def test_evidence_documentation_is_not_a_rendered_change(self):
+        body = """## Visual impact
+
+- [x] No rendered PDF change
+- [ ] Rendered PDF change or visual evidence added
+- Reason: Documents the evidence convention
+"""
+        self.assertEqual(validate_pr_body(body, ["assets/bugfixes/README.md"]), [])
+
 
 class EvidenceTests(unittest.TestCase):
     def test_repository_evidence_is_progressive_150_dpi_jpeg(self):
@@ -191,6 +200,19 @@ class EvidenceTests(unittest.TestCase):
             ROOT,
         )
         self.assertTrue(any(".jpg extension" in error for error in errors))
+
+    def test_evidence_readme_is_not_evidence(self):
+        self.assertEqual(validate_evidence(["assets/bugfixes/README.md"], ROOT), [])
+
+    def test_issue_directory_notes_are_not_evidence(self):
+        self.assertEqual(
+            validate_evidence(["assets/bugfixes/issue-186/notes.txt"], ROOT),
+            [],
+        )
+
+    def test_unnamed_image_is_still_rejected(self):
+        errors = validate_evidence(["assets/bugfixes/issue-186/extra.jpg"], ROOT)
+        self.assertTrue(any("visual evidence must be" in error for error in errors))
 
 
 class OpenIssueTests(unittest.TestCase):

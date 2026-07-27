@@ -13,13 +13,18 @@ import sys
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 
 VISUAL_ROOT = Path("assets/bugfixes")
 EVIDENCE_PATH = re.compile(
     r"^assets/bugfixes/issue-(?P<issue>\d+)/(?P<name>gt|before|after|compare)\.(?P<ext>[^/]+)$"
 )
+# Prose living under assets/bugfixes/ carries no pixels, so it is neither evidence
+# to validate nor a rendered change to audit. Without this the file documenting the
+# evidence convention could never be edited (#539). Image suffixes stay outside the
+# set so a stray screenshot is still rejected rather than silently waved through.
+BOOKKEEPING_SUFFIXES = frozenset({".md", ".txt"})
 AUDIT_ROWS = (
     "Page count/order",
     "Element presence",
@@ -104,12 +109,19 @@ def rendered_preview_urls(section: str, labels: tuple[str, ...]) -> dict[str, st
     return urls
 
 
+def is_visual_asset(path: str) -> bool:
+    """Report whether a changed path is an image under the visual evidence root."""
+    if not path.startswith(f"{VISUAL_ROOT.as_posix()}/"):
+        return False
+    return PurePosixPath(path).suffix.lower() not in BOOKKEEPING_SUFFIXES
+
+
 def validate_pr_body(body: str, changed_paths: list[str]) -> list[str]:
     errors: list[str] = []
     impact = extract_section(body, "## Visual impact")
     no_change = checked(impact, "No rendered PDF change")
     visual = checked(impact, "Rendered PDF change or visual evidence added")
-    visual_assets_changed = any(path.startswith(f"{VISUAL_ROOT.as_posix()}/") for path in changed_paths)
+    visual_assets_changed = any(is_visual_asset(path) for path in changed_paths)
 
     if no_change == visual:
         errors.append("Select exactly one Visual impact checkbox.")
@@ -332,7 +344,7 @@ def validate_evidence(changed_paths: list[str], root: Path) -> list[str]:
     touched: dict[str, set[str]] = {}
 
     for raw_path in changed_paths:
-        if not raw_path.startswith(f"{VISUAL_ROOT.as_posix()}/"):
+        if not is_visual_asset(raw_path):
             continue
         match = EVIDENCE_PATH.fullmatch(raw_path)
         if not match:
