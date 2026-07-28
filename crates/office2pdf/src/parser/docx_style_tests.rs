@@ -1019,3 +1019,36 @@ fn test_east_asian_font_family_survives_beside_the_latin_one() {
         "the East Asian family survives beside it"
     );
 }
+
+#[test]
+fn test_dirty_toc_field_becomes_a_contents_block() {
+    // A generated document ships its TOC field empty for Word to fill on
+    // open, so the paragraph holding it has no text and the contents page
+    // came out blank (issue #576).
+    let data = std::fs::read(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/docx/office2pdf_technical_brief_ko.docx"
+    ))
+    .expect("fixture");
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let contents: Vec<&crate::ir::TableOfContents> = doc
+        .pages
+        .iter()
+        .filter_map(|page| match page {
+            Page::Flow(flow) => Some(flow),
+            _ => None,
+        })
+        .flat_map(|flow| flow.content.iter())
+        .filter_map(|block| match block {
+            Block::TableOfContents(contents) => Some(contents),
+            _ => None,
+        })
+        .collect();
+
+    assert_eq!(
+        contents,
+        vec![&crate::ir::TableOfContents::Headings { depth: 3 }],
+        "the brief's `TOC \\h \\o \"1-3\"` becomes a three-level contents block"
+    );
+}

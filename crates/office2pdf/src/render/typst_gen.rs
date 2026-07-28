@@ -13,8 +13,8 @@ use crate::ir::{
     ImageParagraphSpacing, Insets, LegendPosition, LineBox, LineSpacing, List, ListKind, Margins,
     MathEquation, Metadata, Page, PageNumberFormat, PageSize, Paragraph, ParagraphStyle,
     PositionedTabAlignment, PositionedTabRelativeTo, Run, Shadow, Shape, ShapeKind, SheetPage,
-    SmartArt, TabAlignment, TabLeader, TabStop, Table, TableCell, TableRow, TextBoxData,
-    TextBoxVerticalAlign, TextDirection, TextStyle, VerticalTextAlign, WrapMode,
+    SmartArt, TabAlignment, TabLeader, TabStop, Table, TableCell, TableOfContents, TableRow,
+    TextBoxData, TextBoxVerticalAlign, TextDirection, TextStyle, VerticalTextAlign, WrapMode,
 };
 
 use self::diagrams::{generate_chart, generate_chart_in, generate_smartart};
@@ -1672,10 +1672,33 @@ fn generate_floating_anchor_group(
     Ok(consumed)
 }
 
+/// Emit a `TOC` field's result.
+///
+/// Word recomputes the field when the document is opened, which is why a
+/// generated document ships it empty; the entries, their page numbers, and the
+/// dot leaders between them all come from where the headings actually land.
+/// Typst's own outline resolves exactly that, against the `#heading` elements
+/// the body already emits, so the entries stay correct as the layout moves
+/// (issue #576).
+///
+/// The heading paragraph above the field carries the document's own title, so
+/// the outline contributes none.
+fn generate_table_of_contents(out: &mut String, contents: &TableOfContents) {
+    match contents {
+        TableOfContents::Headings { depth } => {
+            let _ = writeln!(out, "#outline(title: none, depth: {depth})");
+        }
+    }
+}
+
 fn generate_block(out: &mut String, block: &Block, ctx: &mut GenCtx) -> Result<(), ConvertError> {
     match block {
         Block::Paragraph(para) => {
             generate_paragraph(out, para, ctx.line_grid_pitch, ctx.default_tab_width_pt)
+        }
+        Block::TableOfContents(contents) => {
+            generate_table_of_contents(out, contents);
+            Ok(())
         }
         Block::PageBreak => {
             out.push_str("#pagebreak()\n");

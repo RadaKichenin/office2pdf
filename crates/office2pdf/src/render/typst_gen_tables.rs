@@ -668,6 +668,8 @@ fn generate_cell_content(
             out.push('\n');
         }
         match block {
+            // A `TOC` field inside a table cell is not a shape Word produces.
+            Block::TableOfContents(_) => {}
             Block::Paragraph(para) => generate_cell_paragraph(
                 out,
                 para,

@@ -42,6 +42,41 @@ pub(in super::super) fn seq_identifier(instruction: &str) -> Option<&str> {
     (!identifier.starts_with('\\')).then_some(identifier)
 }
 
+/// The outline depth a `TOC` field collects, if it is one.
+///
+/// `TOC \o "1-3"` takes headings of outline level 1 through 3. The upper bound
+/// is what Typst's outline depth means, and Word's own default when the range
+/// is absent is the whole outline. A `\a` list collects captions rather than
+/// headings, so it reads as `None` here.
+pub(in super::super) fn toc_heading_depth(instruction: &str) -> Option<u8> {
+    let rest = instruction.trim().strip_prefix("TOC")?;
+    if !rest.is_empty() && !rest.starts_with(char::is_whitespace) {
+        return None;
+    }
+    if rest.contains("\\a") {
+        return None;
+    }
+    let Some(after) = rest.split("\\o").nth(1) else {
+        return Some(FULL_OUTLINE_DEPTH);
+    };
+    let range = after
+        .trim()
+        .trim_start_matches('"')
+        .split('"')
+        .next()
+        .unwrap_or_default();
+    let upper = range.split('-').nth(1).unwrap_or(range).trim();
+    Some(
+        upper
+            .parse::<u8>()
+            .unwrap_or(FULL_OUTLINE_DEPTH)
+            .clamp(1, FULL_OUTLINE_DEPTH),
+    )
+}
+
+/// Word's outline runs from level 1 to level 9.
+const FULL_OUTLINE_DEPTH: u8 = 9;
+
 #[cfg(test)]
 #[path = "docx_context_fields_tests.rs"]
 mod tests;

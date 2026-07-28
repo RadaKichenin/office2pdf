@@ -94,8 +94,23 @@ pub enum Block {
     List(List),
     MathEquation(MathEquation),
     Chart(Chart),
+    /// A `TOC` field's result, computed at render time from the document's own
+    /// headings.
+    TableOfContents(TableOfContents),
     PageBreak,
     ColumnBreak,
+}
+
+/// What a `TOC` field collects.
+///
+/// Word stores the entries it last computed inside the field. A generated
+/// document leaves the field dirty and empty for Word to fill on open, so the
+/// entries have to be computed rather than read (issue #576).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TableOfContents {
+    /// `TOC \o "1-3"`: paragraphs whose style carries `w:outlineLvl`, to this
+    /// depth.
+    Headings { depth: u8 },
 }
 
 /// A chart extracted from an embedded chart object.
