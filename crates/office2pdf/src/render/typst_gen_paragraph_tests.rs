@@ -1469,3 +1469,115 @@ fn test_generate_undecorated_heading_keeps_its_bare_form() {
         "an undecorated heading needs no block wrapper: {result}"
     );
 }
+
+/// Build a header paragraph in Word's running-head shape: segments separated
+/// by `<w:tab/>` runs, with the stops that place them declared on the
+/// paragraph.
+fn running_head(texts: &[&str], stops: Vec<TabStop>) -> crate::ir::HeaderFooterParagraph {
+    let mut elements: Vec<HFInline> = Vec::new();
+    for (index, text) in texts.iter().enumerate() {
+        if index > 0 {
+            elements.push(HFInline::Run(Run {
+                text: "\t".to_string(),
+                style: TextStyle::default(),
+                href: None,
+                footnote: None,
+            }));
+        }
+        elements.push(HFInline::Run(Run {
+            text: (*text).to_string(),
+            style: TextStyle::default(),
+            href: None,
+            footnote: None,
+        }));
+    }
+    crate::ir::HeaderFooterParagraph {
+        style: ParagraphStyle {
+            tab_stops: Some(stops),
+            ..ParagraphStyle::default()
+        },
+        elements,
+        border: None,
+        border_space: None,
+        frame: None,
+    }
+}
+
+fn page_with_header(header: crate::ir::HeaderFooter) -> Page {
+    let Page::Flow(mut flow) = make_flow_page(vec![]) else {
+        unreachable!()
+    };
+    flow.header = Some(header);
+    Page::Flow(flow)
+}
+
+fn stop(position: f64, alignment: TabAlignment) -> TabStop {
+    TabStop {
+        position,
+        alignment,
+        leader: TabLeader::None,
+    }
+}
+
+#[test]
+fn test_header_right_tab_stop_pushes_its_segment_to_the_margin() {
+    // A `<w:tab/>` was advanced by a fixed 1em however the paragraph's stops
+    // were declared, so the segment a right stop should have pushed to the
+    // right margin sat beside the left one (issue #579).
+    let doc = make_doc(vec![page_with_header(crate::ir::HeaderFooter {
+        paragraphs: vec![running_head(
+            &["office2pdf 기술 소개서", "본문"],
+            vec![stop(465.3, TabAlignment::Right)],
+        )],
+        distance_from_edge: None,
+    })]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains("#grid(columns: (1fr, auto)"),
+        "a right stop lays the two segments out against the margins: {result}"
+    );
+    assert!(
+        !result.contains("#h(1em)"),
+        "the tab must not fall back to a fixed advance: {result}"
+    );
+}
+
+#[test]
+fn test_header_center_and_right_tab_stops_lay_out_three_segments() {
+    let doc = make_doc(vec![page_with_header(crate::ir::HeaderFooter {
+        paragraphs: vec![running_head(
+            &["left", "middle", "right"],
+            vec![
+                stop(232.6, TabAlignment::Center),
+                stop(465.3, TabAlignment::Right),
+            ],
+        )],
+        distance_from_edge: None,
+    })]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains("#grid(columns: (1fr, auto, 1fr), align: (left, center, right)"),
+        "a centre and a right stop give three placed segments: {result}"
+    );
+}
+
+#[test]
+fn test_header_tab_without_a_matching_stop_keeps_the_plain_advance() {
+    // Only the two running-head shapes are laid out; a header that tabs for
+    // some other reason keeps the behaviour it had.
+    let doc = make_doc(vec![page_with_header(crate::ir::HeaderFooter {
+        paragraphs: vec![running_head(
+            &["a", "b"],
+            vec![stop(72.0, TabAlignment::Left)],
+        )],
+        distance_from_edge: None,
+    })]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains("#h(1em)") || !result.contains("#grid(columns: (1fr, auto)"),
+        "a left stop is not the running-head idiom: {result}"
+    );
+}
