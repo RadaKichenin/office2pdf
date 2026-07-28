@@ -7,7 +7,7 @@ use quick_xml::Reader;
 use quick_xml::events::Event;
 
 use super::xml_util;
-use crate::ir::{Chart, ChartGrouping, ChartSeries, ChartType, LegendPosition};
+use crate::ir::{Chart, ChartGrouping, ChartSeries, ChartType, Color, LegendPosition};
 
 /// Mapping from XML chart element tag names to their corresponding `ChartType`.
 /// Both 2-D and 3-D variants map to the same logical type.
@@ -230,6 +230,11 @@ fn parse_single_series(reader: &mut Reader<&[u8]>) -> (ChartSeries, Vec<String>)
     let mut name = None;
     let mut values = Vec::new();
     let mut categories = Vec::new();
+    let mut fill: Option<Color> = None;
+    // Keyed by `<c:idx>` because `<c:dPt>` entries are written only for the
+    // points that override the series, and not necessarily in order.
+    let mut point_fills: std::collections::BTreeMap<usize, Color> =
+        std::collections::BTreeMap::new();
 
     loop {
         match reader.read_event() {
@@ -237,6 +242,19 @@ fn parse_single_series(reader: &mut Reader<&[u8]>) -> (ChartSeries, Vec<String>)
                 b"tx" => name = parse_series_text(reader),
                 b"cat" => categories = parse_category_data(reader),
                 b"val" | b"yVal" => values = parse_value_data(reader),
+                // The series' own fill. This match is flat, so it would also
+                // see a `<c:spPr>` nested inside a sibling element; every
+                // element that can carry one is consumed by its own branch
+                // first, leaving only the series-level fill here.
+                b"spPr" => fill = fill.or(parse_solid_fill(reader, b"spPr")),
+                b"dPt" => {
+                    if let Some((index, color)) = parse_data_point(reader) {
+                        point_fills.insert(index, color);
+                    }
+                }
+                // `<c:dLbls>` carries an `<c:spPr>` of its own for the label
+                // box, which would otherwise be read as the series fill.
+                b"dLbls" => xml_util::skip_element(reader, b"dLbls"),
                 b"xVal" => {
                     // For scatter charts, xVal contains category-like data
                     if categories.is_empty() {
@@ -253,7 +271,78 @@ fn parse_single_series(reader: &mut Reader<&[u8]>) -> (ChartSeries, Vec<String>)
         }
     }
 
-    (ChartSeries { name, values }, categories)
+    let point_count: usize = point_fills.keys().last().map_or(0, |last| last + 1);
+    let point_fills: Vec<Option<Color>> = (0..point_count)
+        .map(|index| point_fills.get(&index).copied())
+        .collect();
+
+    (
+        ChartSeries {
+            name,
+            values,
+            fill,
+            point_fills,
+        },
+        categories,
+    )
+}
+
+/// Parse a `<c:dPt>` into its `(point index, fill)`.
+fn parse_data_point(reader: &mut Reader<&[u8]>) -> Option<(usize, Color)> {
+    let mut index: Option<usize> = None;
+    let mut fill: Option<Color> = None;
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"spPr" => {
+                fill = fill.or(parse_solid_fill(reader, b"spPr"));
+            }
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))
+                if e.local_name().as_ref() == b"idx" =>
+            {
+                index = xml_util::get_attr_str(e, b"val").and_then(|val| val.parse().ok());
+            }
+            Ok(Event::End(ref e)) if e.local_name().as_ref() == b"dPt" => break,
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+
+    Some((index?, fill?))
+}
+
+/// Read the `<a:srgbClr>` of a solid fill, consuming up to `end_tag`.
+///
+/// Theme colours (`<a:schemeClr>`) need the chart part's own theme, which the
+/// parser does not resolve, so they fall through to the palette.
+fn parse_solid_fill(reader: &mut Reader<&[u8]>, end_tag: &[u8]) -> Option<Color> {
+    let mut in_solid_fill: bool = false;
+    let mut color: Option<Color> = None;
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"solidFill" => {
+                in_solid_fill = true;
+            }
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))
+                if in_solid_fill && e.local_name().as_ref() == b"srgbClr" =>
+            {
+                color = color.or_else(|| {
+                    xml_util::get_attr_str(e, b"val")
+                        .as_deref()
+                        .and_then(xml_util::parse_hex_color)
+                });
+            }
+            Ok(Event::End(ref e)) if e.local_name().as_ref() == b"solidFill" => {
+                in_solid_fill = false;
+            }
+            Ok(Event::End(ref e)) if e.local_name().as_ref() == end_tag => break,
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+
+    color
 }
 
 /// Parse series name from `<c:tx>`.

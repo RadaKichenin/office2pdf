@@ -451,3 +451,112 @@ fn test_chart_without_a_legend_element_keeps_the_default() {
 
     assert_eq!(chart.legend_position, LegendPosition::Right);
 }
+
+// ----- Series and data-point fills (issue #535) -----
+
+/// The audited workbook's column chart: one series with an explicit fill.
+#[test]
+fn test_series_sppr_fill_is_read() {
+    let xml = bar_chart_xml(
+        r#"<c:barDir val="col"/><c:grouping val="clustered"/>"#,
+    )
+    .replace(
+        "<c:tx>",
+        r#"<c:spPr><a:solidFill><a:srgbClr val="4f81bd"/></a:solidFill><a:ln w="9360"><a:solidFill><a:srgbClr val="f9f9f9"/></a:solidFill></a:ln></c:spPr><c:tx>"#,
+    );
+
+    let chart = parse_chart_xml(&xml).unwrap();
+
+    assert_eq!(chart.series[0].fill, Some(Color::new(0x4f, 0x81, 0xbd)));
+}
+
+#[test]
+fn test_data_point_fills_override_the_series() {
+    // The audited pie's three <c:dPt> entries. The third is what exposed the
+    // palette: its declared green landed as the palette's yellow.
+    let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+        <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+            <c:chart>
+                <c:plotArea>
+                    <c:pieChart>
+                        <c:ser>
+                            <c:idx val="0"/>
+                            <c:spPr><a:solidFill><a:srgbClr val="111111"/></a:solidFill></c:spPr>
+                            <c:dPt><c:idx val="0"/><c:bubble3D val="0"/><c:spPr><a:solidFill><a:srgbClr val="4f81bd"/></a:solidFill></c:spPr></c:dPt>
+                            <c:dPt><c:idx val="1"/><c:bubble3D val="0"/><c:spPr><a:solidFill><a:srgbClr val="c0504d"/></a:solidFill></c:spPr></c:dPt>
+                            <c:dPt><c:idx val="2"/><c:bubble3D val="0"/><c:spPr><a:solidFill><a:srgbClr val="9bbb59"/></a:solidFill></c:spPr></c:dPt>
+                            <c:cat><c:strLit><c:pt idx="0"><c:v>DOCX</c:v></c:pt><c:pt idx="1"><c:v>PPTX</c:v></c:pt><c:pt idx="2"><c:v>XLSX</c:v></c:pt></c:strLit></c:cat>
+                            <c:val><c:numLit><c:pt idx="0"><c:v>115</c:v></c:pt><c:pt idx="1"><c:v>92</c:v></c:pt><c:pt idx="2"><c:v>138</c:v></c:pt></c:numLit></c:val>
+                        </c:ser>
+                    </c:pieChart>
+                </c:plotArea>
+            </c:chart>
+        </c:chartSpace>"#;
+
+    let chart = parse_chart_xml(xml).unwrap();
+    let series = &chart.series[0];
+
+    assert_eq!(series.fill_for_point(0), Some(Color::new(0x4f, 0x81, 0xbd)));
+    assert_eq!(series.fill_for_point(1), Some(Color::new(0xc0, 0x50, 0x4d)));
+    assert_eq!(series.fill_for_point(2), Some(Color::new(0x9b, 0xbb, 0x59)));
+    // A point past the declared ones falls back to the series' own fill.
+    assert_eq!(series.fill_for_point(3), Some(Color::new(0x11, 0x11, 0x11)));
+}
+
+#[test]
+fn test_a_series_without_a_fill_leaves_the_palette_to_decide() {
+    let xml = bar_chart_xml(r#"<c:barDir val="col"/>"#);
+
+    let chart = parse_chart_xml(&xml).unwrap();
+
+    assert_eq!(chart.series[0].fill, None);
+    assert_eq!(chart.series[0].fill_for_point(0), None);
+}
+
+#[test]
+fn test_a_theme_colour_fill_falls_through_to_the_palette() {
+    // `<a:schemeClr>` needs the chart part's own theme, which this parser does
+    // not resolve, so it must not be mistaken for an explicit colour.
+    let xml = bar_chart_xml(r#"<c:barDir val="col"/>"#).replace(
+        "<c:tx>",
+        r#"<c:spPr><a:solidFill><a:schemeClr val="accent1"/></a:solidFill></c:spPr><c:tx>"#,
+    );
+
+    let chart = parse_chart_xml(&xml).unwrap();
+
+    assert_eq!(chart.series[0].fill, None);
+}
+
+#[test]
+fn test_a_data_label_fill_is_not_mistaken_for_the_series_fill() {
+    // `<c:dLbls>` carries an `<c:spPr>` for the label box. The series-level
+    // match is flat, so without consuming the element that fill would be read
+    // as the series' own — and this series declares none of its own.
+    let xml = bar_chart_xml(r#"<c:barDir val="col"/>"#).replace(
+        "<c:cat>",
+        r#"<c:dLbls><c:spPr><a:solidFill><a:srgbClr val="ff0000"/></a:solidFill></c:spPr><c:showVal val="1"/></c:dLbls><c:cat>"#,
+    );
+
+    let chart = parse_chart_xml(&xml).unwrap();
+
+    assert_eq!(chart.series[0].fill, None);
+    assert_eq!(chart.series[0].values, vec![23334.0, 8331.0, 4120.0]);
+}
+
+#[test]
+fn test_a_data_label_fill_does_not_shadow_a_declared_series_fill() {
+    let xml = bar_chart_xml(r#"<c:barDir val="col"/>"#)
+        .replace(
+            "<c:tx>",
+            r#"<c:spPr><a:solidFill><a:srgbClr val="4f81bd"/></a:solidFill></c:spPr><c:tx>"#,
+        )
+        .replace(
+            "<c:cat>",
+            r#"<c:dLbls><c:spPr><a:solidFill><a:srgbClr val="ff0000"/></a:solidFill></c:spPr></c:dLbls><c:cat>"#,
+        );
+
+    let chart = parse_chart_xml(&xml).unwrap();
+
+    assert_eq!(chart.series[0].fill, Some(Color::new(0x4f, 0x81, 0xbd)));
+}
