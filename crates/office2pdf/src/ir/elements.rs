@@ -95,8 +95,13 @@ pub enum Block {
     MathEquation(MathEquation),
     Chart(Chart),
     /// A `TOC` field's result, computed at render time from the document's own
-    /// headings.
+    /// headings or captions.
     TableOfContents(TableOfContents),
+    /// A paragraph numbered by a `SEQ` field — a figure or table caption.
+    ///
+    /// It renders exactly like the paragraph it wraps; the wrapper exists so a
+    /// `TOC \a` list can collect it (issue #576).
+    Caption(Caption),
     PageBreak,
     ColumnBreak,
 }
@@ -111,6 +116,19 @@ pub enum TableOfContents {
     /// `TOC \o "1-3"`: paragraphs whose style carries `w:outlineLvl`, to this
     /// depth.
     Headings { depth: u8 },
+    /// `TOC \a "Figure"`: the captions counted by that `SEQ` identifier.
+    Captions { identifier: String },
+}
+
+/// A caption paragraph and the `SEQ` identifier numbering it.
+#[derive(Debug, Clone)]
+pub struct Caption {
+    /// The `SEQ` identifier — `Figure`, `Table` — whose list collects this.
+    pub identifier: String,
+    /// The text a `TOC \a` list shows: the caption without the label and the
+    /// field's number, which Word leaves out of the list.
+    pub entry_text: String,
+    pub paragraph: Paragraph,
 }
 
 /// A chart extracted from an embedded chart object.

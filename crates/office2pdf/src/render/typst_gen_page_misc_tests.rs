@@ -1462,3 +1462,69 @@ fn test_contents_block_emits_an_outline_at_its_declared_depth() {
         output.source
     );
 }
+
+#[test]
+fn test_caption_list_queries_the_captions_it_collects() {
+    // A caption is not a heading, so Typst's outline cannot reach it. Each one
+    // drops an invisible marker as it is laid out and the list queries those,
+    // so both the entries and their page numbers come from the layout
+    // (issue #576).
+    let doc = make_doc(vec![make_flow_page(vec![
+        Block::TableOfContents(crate::ir::TableOfContents::Captions {
+            identifier: "Figure".to_string(),
+        }),
+        Block::Caption(crate::ir::Caption {
+            identifier: "Figure".to_string(),
+            entry_text: "변환 파이프라인".to_string(),
+            paragraph: Paragraph {
+                style: ParagraphStyle::default(),
+                runs: vec![Run {
+                    text: "그림 1  변환 파이프라인".to_string(),
+                    style: TextStyle::default(),
+                    href: None,
+                    footnote: None,
+                }],
+            },
+        }),
+    ])]);
+
+    let output = generate_typst(&doc).unwrap();
+    assert!(
+        output
+            .source
+            .contains("#metadata[변환 파이프라인]<o2p-seq-Figure>"),
+        "the caption carries the marker its list queries: {}",
+        output.source
+    );
+    assert!(
+        output.source.contains("query(<o2p-seq-Figure>)")
+            && output.source.contains("counter(page).at(entry.location())"),
+        "the list resolves each entry's page from where it landed: {}",
+        output.source
+    );
+    // The caption's own runs still render; the auto-space marker sits between
+    // its number and the Korean that follows, which is why this looks for the
+    // two halves rather than the joined string.
+    assert!(
+        output.source.contains("그림 1") && output.source.matches("변환 파이프라인").count() >= 2,
+        "the caption still renders as itself, beside its list entry: {}",
+        output.source
+    );
+}
+
+#[test]
+fn test_a_caption_identifier_outside_ascii_still_labels() {
+    // A `SEQ` name may be written in any script; a Typst label may not.
+    let doc = make_doc(vec![make_flow_page(vec![Block::TableOfContents(
+        crate::ir::TableOfContents::Captions {
+            identifier: "표".to_string(),
+        },
+    )])]);
+
+    let output = generate_typst(&doc).unwrap();
+    assert!(
+        output.source.contains("query(<o2p-seq--d45c>)"),
+        "the identifier reduces to label characters: {}",
+        output.source
+    );
+}
