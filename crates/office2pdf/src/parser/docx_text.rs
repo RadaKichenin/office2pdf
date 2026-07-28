@@ -266,6 +266,16 @@ pub(super) fn extract_run_style_from_json(rp: &serde_json::Value) -> TextStyle {
                 .and_then(serde_json::Value::as_str)
                 .map(String::from)
         }),
+        // Word shapes East Asian codepoints with `w:eastAsia` and Latin ones
+        // with `w:ascii` in the same run. Collapsing the two into one family
+        // dropped whichever came second, so Hangul was shaped by falling back
+        // from the Latin family instead (issue #575).
+        east_asian_font_family: rp.get("fonts").and_then(|fonts| {
+            fonts
+                .get("eastAsia")
+                .and_then(serde_json::Value::as_str)
+                .map(String::from)
+        }),
         highlight: rp
             .get("highlight")
             .and_then(serde_json::Value::as_str)

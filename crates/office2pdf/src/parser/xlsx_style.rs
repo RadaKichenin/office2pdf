@@ -85,6 +85,8 @@ pub(super) fn extract_cell_text_style(
 
     TextStyle {
         font_family,
+        // A workbook states one font per cell; XLSX has no per-script slot.
+        east_asian_font_family: None,
         font_size,
         bold,
         italic,
