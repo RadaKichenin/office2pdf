@@ -11,6 +11,7 @@ fn test_codegen_chart_bar_visual_bars() {
             values: vec![100.0, 250.0],
         }],
         grouping: ChartGrouping::Clustered,
+        legend_position: LegendPosition::Right,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -54,6 +55,7 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
             values: vec![8.200000000000001, 3.2],
         }],
         grouping: ChartGrouping::Clustered,
+        legend_position: LegendPosition::Right,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -85,6 +87,7 @@ fn test_codegen_chart_pie_percentages() {
             values: vec![60.0, 40.0],
         }],
         grouping: ChartGrouping::Clustered,
+        legend_position: LegendPosition::Right,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -116,6 +119,7 @@ fn test_codegen_chart_line_trend_indicators() {
             values: vec![10.0, 20.0, 15.0],
         }],
         grouping: ChartGrouping::Clustered,
+        legend_position: LegendPosition::Right,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -146,6 +150,7 @@ fn test_codegen_chart_empty_series() {
         categories: vec![],
         series: vec![],
         grouping: ChartGrouping::Clustered,
+        legend_position: LegendPosition::Right,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -206,6 +211,7 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
             values: vec![23334.0, 8331.0, 2727.0],
         }],
         grouping: ChartGrouping::Clustered,
+        legend_position: LegendPosition::Right,
     }));
     let doc = make_doc(vec![make_flow_page(content)]);
 
@@ -235,6 +241,7 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
             values: vec![115.0, 92.0, 138.0],
         }],
         grouping: ChartGrouping::Clustered,
+        legend_position: LegendPosition::Right,
     }));
     let doc = make_doc(vec![make_flow_page(content)]);
 
@@ -413,6 +420,7 @@ fn test_codegen_chart_line_plot() {
             },
         ],
         grouping: ChartGrouping::Clustered,
+        legend_position: LegendPosition::Right,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -447,6 +455,7 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
             values: (1..=60).map(|value| value as f64).collect(),
         }],
         grouping: ChartGrouping::Clustered,
+        legend_position: LegendPosition::Right,
     })])]);
 
     let pages = page_texts(&doc);
@@ -491,6 +500,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
             },
         ],
         grouping,
+        legend_position: LegendPosition::Right,
     }
 }
 
@@ -573,5 +583,138 @@ fn a_percent_stacked_column_normalises_every_stack() {
     assert!(
         (axis_max - 100.0).abs() < f64::EPSILON,
         "a percent-stacked axis runs to 100, got {axis_max} from {ticks:?}"
+    );
+}
+
+// ----- Legend position (issue #546) -----
+
+fn legend_chart(position: LegendPosition) -> Chart {
+    Chart {
+        chart_type: ChartType::Column,
+        title: Some("Supported elements by format".to_string()),
+        categories: vec!["DOCX".to_string(), "PPTX".to_string(), "XLSX".to_string()],
+        series: vec![
+            ChartSeries {
+                name: Some("Text".to_string()),
+                values: vec![4.0, 2.0, 2.0],
+            },
+            ChartSeries {
+                name: Some("Tables".to_string()),
+                values: vec![1.0, 1.0, 1.0],
+            },
+        ],
+        grouping: ChartGrouping::Stacked,
+        legend_position: position,
+    }
+}
+
+/// The `(x, y)` of every legend entry the generator placed, in emit order.
+fn emitted_legend_entries(source: &str) -> Vec<(f64, f64)> {
+    source
+        .lines()
+        .filter(|line| line.contains("box[#box(width: 9pt, height: 9pt"))
+        .filter_map(|line| {
+            let x = line
+                .split_once("dx: ")?
+                .1
+                .split_once("pt")?
+                .0
+                .parse()
+                .ok()?;
+            let y = line
+                .split_once("dy: ")?
+                .1
+                .split_once("pt")?
+                .0
+                .parse()
+                .ok()?;
+            Some((x, y))
+        })
+        .collect()
+}
+
+#[test]
+fn a_bottom_legend_lays_its_entries_out_side_by_side() {
+    // A legend runs along the edge it sits on, so `val="b"` must spread the
+    // entries left to right instead of stacking them (#546).
+    let entries = emitted_legend_entries(&chart_source(legend_chart(LegendPosition::Bottom)));
+
+    assert_eq!(
+        entries.len(),
+        2,
+        "expected one entry per series: {entries:?}"
+    );
+    assert!(
+        entries[1].0 > entries[0].0,
+        "entries must advance across the page: {entries:?}"
+    );
+    assert!(
+        (entries[0].1 - entries[1].1).abs() < 0.01,
+        "entries must share one row: {entries:?}"
+    );
+}
+
+#[test]
+fn a_right_legend_still_stacks_its_entries() {
+    // Control: the default position keeps the vertical stack, so the bottom
+    // branch cannot be a blanket change to legend layout.
+    let entries = emitted_legend_entries(&chart_source(legend_chart(LegendPosition::Right)));
+
+    assert_eq!(entries.len(), 2);
+    assert!(
+        (entries[0].0 - entries[1].0).abs() < 0.01,
+        "entries must share one column: {entries:?}"
+    );
+    assert!(
+        entries[1].1 > entries[0].1,
+        "entries must advance down the page: {entries:?}"
+    );
+}
+
+#[test]
+fn a_bottom_legend_leaves_the_plot_the_full_frame_width() {
+    // The right-hand legend stole about 84pt of plot width from a chart that
+    // asked for the legend underneath.
+    let bottom = chart_source(legend_chart(LegendPosition::Bottom));
+    let right = chart_source(legend_chart(LegendPosition::Right));
+
+    let width_of = |source: &str| -> f64 {
+        source
+            .lines()
+            .find(|line| line.starts_with("#box(width:"))
+            .and_then(|line| {
+                line.split_once("width: ")?
+                    .1
+                    .split_once("pt")?
+                    .0
+                    .parse()
+                    .ok()
+            })
+            .expect("a plot box is emitted")
+    };
+
+    assert!(
+        width_of(&bottom) < width_of(&right),
+        "a bottom legend must not reserve a column beside the plot: {} vs {}",
+        width_of(&bottom),
+        width_of(&right)
+    );
+}
+
+#[test]
+fn a_left_legend_shifts_the_plot_clear_of_it() {
+    // The plot must move right by what the legend reserves, or the two overlap.
+    let left = chart_source(legend_chart(LegendPosition::Left));
+    let entries = emitted_legend_entries(&left);
+    let first_bar_x: f64 = left
+        .lines()
+        .find(|line| line.contains("rect(width:"))
+        .and_then(|line| line.split_once("dx: ")?.1.split_once("pt")?.0.parse().ok())
+        .expect("a bar is emitted");
+
+    assert!(
+        entries[0].0 < first_bar_x,
+        "a left legend sits clear of the plot: legend at {}, first bar at {first_bar_x}",
+        entries[0].0
     );
 }

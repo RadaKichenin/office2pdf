@@ -198,7 +198,87 @@ const ROW: f64 = 34.0; // per-category thickness
 const LABEL_W: f64 = 62.0; // category label gutter
 const TICK_GAP: f64 = 22.0; // value tick label gutter
 const GAP: f64 = 6.0;
-const LEGEND_W: f64 = 78.0;
+const LEGEND_ROW_H: f64 = 14.0; // per-entry height when the legend stacks
+const LEGEND_ENTRY_W: f64 = 78.0; // per-entry width when the legend runs across
+
+/// Space a legend reserves around the plot, and the direction its entries run.
+///
+/// A legend on an edge runs along that edge, so a bottom or top one lays its
+/// entries out left to right and leaves the plot the full frame width — which
+/// is the difference `<c:legendPos val="b"/>` asks for (#546).
+struct LegendBox {
+    left: f64,
+    right: f64,
+    top: f64,
+    bottom: f64,
+    horizontal: bool,
+}
+
+impl LegendBox {
+    /// Reserve space at `position`, given one stacked entry's height and one
+    /// across-the-edge entry's width. A vertical legend is one column wide and
+    /// a horizontal one is one row tall whatever the entry count, so the count
+    /// only matters when laying the entries out.
+    fn new(position: LegendPosition, row_h: f64, entry_w: f64) -> Self {
+        let horizontal: bool = position.is_horizontal();
+        let side_w: f64 = entry_w + GAP;
+        let edge_h: f64 = row_h + GAP;
+        let mut placement = LegendBox {
+            left: 0.0,
+            right: 0.0,
+            top: 0.0,
+            bottom: 0.0,
+            horizontal,
+        };
+        match position {
+            LegendPosition::Left => placement.left = side_w,
+            LegendPosition::Right | LegendPosition::TopRight => placement.right = side_w,
+            LegendPosition::Top => placement.top = edge_h,
+            LegendPosition::Bottom => placement.bottom = edge_h,
+        }
+        placement
+    }
+
+    /// Top-left of the `index`-th entry.
+    ///
+    /// `content` is the plot *plus* its axis-label gutters, not the bare
+    /// plotting rectangle: a legend under a column chart has to clear the
+    /// category labels, or the two land in the same band.
+    fn entry_origin(
+        &self,
+        position: LegendPosition,
+        index: usize,
+        entries: usize,
+        content: (f64, f64, f64, f64),
+        row_h: f64,
+        entry_w: f64,
+    ) -> (f64, f64) {
+        let (content_x, content_y, content_w, content_h) = content;
+        if self.horizontal {
+            // Centre the row of entries under (or over) the content.
+            let row_w: f64 = entries as f64 * entry_w;
+            let start_x: f64 = content_x + (content_w - row_w).max(0.0) / 2.0;
+            let y: f64 = match position {
+                LegendPosition::Top => (content_y - self.top).max(0.0),
+                _ => content_y + content_h + GAP,
+            };
+            (start_x + index as f64 * entry_w, y)
+        } else {
+            let stack_h: f64 = entries as f64 * row_h;
+            let x: f64 = match position {
+                LegendPosition::Left => (content_x - self.left).max(0.0),
+                _ => content_x + content_w + GAP,
+            };
+            let y: f64 = match position {
+                // PowerPoint pins a top-right legend to the top edge rather
+                // than centring it.
+                LegendPosition::TopRight => content_y,
+                _ => content_y + (content_h - stack_h).max(0.0) / 2.0,
+            };
+            (x, y + index as f64 * row_h)
+        }
+    }
+}
 
 /// Sum of every series' value in one category — the length of its stacked bar.
 fn category_total(series: &[crate::ir::ChartSeries], category_index: usize) -> f64 {
@@ -216,17 +296,28 @@ fn category_total(series: &[crate::ir::ChartSeries], category_index: usize) -> f
 /// the box is actually drawn with.
 fn chart_axis_extent(chart: &Chart) -> (f64, f64) {
     let plot_cross: f64 = chart.categories.len() as f64 * ROW;
-    if matches!(chart.chart_type, ChartType::Bar) {
-        (
-            LABEL_W + GAP + PLOT_MAIN + GAP + LEGEND_W,
-            plot_cross + TICK_GAP,
-        )
+    let legend: LegendBox = axis_legend_box(chart);
+    let (plot_w, plot_h) = if matches!(chart.chart_type, ChartType::Bar) {
+        (PLOT_MAIN, plot_cross)
     } else {
-        (
-            TICK_GAP + GAP + plot_cross + GAP + LEGEND_W,
-            PLOT_MAIN + ROW,
-        )
-    }
+        (plot_cross, PLOT_MAIN)
+    };
+    // Gutters for the category labels and the value tick labels sit inside the
+    // box alongside whatever the legend reserves.
+    let (label_gutter_w, label_gutter_h) = if matches!(chart.chart_type, ChartType::Bar) {
+        (LABEL_W + GAP, TICK_GAP)
+    } else {
+        (TICK_GAP + GAP, ROW)
+    };
+    (
+        label_gutter_w + plot_w + legend.left + legend.right,
+        plot_h + label_gutter_h + legend.top + legend.bottom,
+    )
+}
+
+/// Space the axis plot's legend reserves.
+fn axis_legend_box(chart: &Chart) -> LegendBox {
+    LegendBox::new(chart.legend_position, LEGEND_ROW_H, LEGEND_ENTRY_W)
 }
 
 /// Render a bar (horizontal) or column (vertical) chart as an axis-scaled
@@ -289,11 +380,23 @@ fn generate_chart_axis(out: &mut String, chart: &Chart) {
         format_f64(total_h)
     );
 
-    // Plot-area origin (top-left of the plotting rectangle).
+    // Plot-area origin (top-left of the plotting rectangle), shifted by
+    // whatever the legend reserves on the left or above.
+    let legend: LegendBox = axis_legend_box(chart);
     let (plot_x, plot_y, plot_w, plot_h) = if horizontal {
-        (LABEL_W + GAP, 0.0, PLOT_MAIN, plot_cross)
+        (
+            legend.left + LABEL_W + GAP,
+            legend.top,
+            PLOT_MAIN,
+            plot_cross,
+        )
     } else {
-        (TICK_GAP + GAP, 0.0, plot_cross, PLOT_MAIN)
+        (
+            legend.left + TICK_GAP + GAP,
+            legend.top,
+            plot_cross,
+            PLOT_MAIN,
+        )
     };
 
     // Gridlines + value tick labels.
@@ -440,19 +543,36 @@ fn generate_chart_axis(out: &mut String, chart: &Chart) {
         );
     }
 
-    // Legend on the right, vertically centered.
-    let legend_x: f64 = plot_x + plot_w + GAP;
-    let legend_h: f64 = series_count as f64 * 14.0;
-    let legend_y: f64 = (plot_h - legend_h).max(0.0) / 2.0;
+    // Legend on the edge `<c:legendPos>` asks for.
     for (s_index, s) in series.iter().enumerate() {
         let color: &str = CHART_SERIES_COLORS[s_index % CHART_SERIES_COLORS.len()];
         let default_name: String = format!("Series {}", s_index + 1);
         let name: &str = s.name.as_deref().unwrap_or(&default_name);
+        // The content the legend sits beside spans the plot and both label
+        // gutters, so a bottom legend clears the category labels.
+        let (gutter_w, gutter_h) = if horizontal {
+            (LABEL_W + GAP, TICK_GAP)
+        } else {
+            (TICK_GAP + GAP, ROW)
+        };
+        let (entry_x, entry_y) = legend.entry_origin(
+            chart.legend_position,
+            s_index,
+            series_count,
+            (
+                plot_x - gutter_w,
+                plot_y,
+                gutter_w + plot_w,
+                plot_h + gutter_h,
+            ),
+            LEGEND_ROW_H,
+            LEGEND_ENTRY_W,
+        );
         let _ = writeln!(
             out,
             "#place(top + left, dx: {}pt, dy: {}pt, box[#box(width: 9pt, height: 9pt, fill: {}) #text(size: 9pt)[{}]])",
-            format_f64(legend_x),
-            format_f64(legend_y + s_index as f64 * 14.0),
+            format_f64(entry_x),
+            format_f64(entry_y),
             color,
             escape_typst(name)
         );
@@ -511,6 +631,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart) {
     const VALUE_GAP: f64 = 24.0; // value tick label gutter (left)
     const CAT_GAP: f64 = 18.0; // category label gutter (bottom)
     const LEGEND_W: f64 = 88.0;
+    const LINE_LEGEND_ROW_H: f64 = 16.0;
     const INSET: f64 = 10.0; // keep first/last points off the axes
     const GAP: f64 = 6.0;
 
@@ -533,10 +654,11 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart) {
         out.push_str("#v(4pt)\n");
     }
 
-    let plot_x: f64 = VALUE_GAP + GAP;
-    let plot_y: f64 = 0.0;
-    let total_w: f64 = plot_x + PLOT_W + GAP + LEGEND_W;
-    let total_h: f64 = PLOT_H + CAT_GAP;
+    let legend: LegendBox = LegendBox::new(chart.legend_position, LINE_LEGEND_ROW_H, LEGEND_W);
+    let plot_x: f64 = legend.left + VALUE_GAP + GAP;
+    let plot_y: f64 = legend.top;
+    let total_w: f64 = legend.left + VALUE_GAP + GAP + PLOT_W + legend.right;
+    let total_h: f64 = legend.top + PLOT_H + CAT_GAP + legend.bottom;
     let _ = writeln!(
         out,
         "#box(width: {}pt, height: {}pt)[",
@@ -634,19 +756,29 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart) {
         format_f64(PLOT_W)
     );
 
-    // Legend on the right.
-    let legend_x: f64 = plot_x + PLOT_W + GAP;
-    let legend_h: f64 = series.len() as f64 * 16.0;
-    let legend_y: f64 = (PLOT_H - legend_h).max(0.0) / 2.0;
+    // Legend on the edge `<c:legendPos>` asks for.
     for (s_index, s) in series.iter().enumerate() {
         let color: &str = CHART_SERIES_COLORS[s_index % CHART_SERIES_COLORS.len()];
         let default_name: String = format!("Series {}", s_index + 1);
         let name: &str = s.name.as_deref().unwrap_or(&default_name);
+        let (entry_x, entry_y) = legend.entry_origin(
+            chart.legend_position,
+            s_index,
+            series.len().max(1),
+            (
+                plot_x - (VALUE_GAP + GAP),
+                plot_y,
+                VALUE_GAP + GAP + PLOT_W,
+                PLOT_H + CAT_GAP,
+            ),
+            LINE_LEGEND_ROW_H,
+            LEGEND_W,
+        );
         let _ = writeln!(
             out,
             "#place(top + left, dx: {}pt, dy: {}pt, box[#box(width: 12pt, height: 3pt, fill: {color}, baseline: -3pt) #text(size: 9pt)[{}]])",
-            format_f64(legend_x),
-            format_f64(legend_y + s_index as f64 * 16.0),
+            format_f64(entry_x),
+            format_f64(entry_y),
             escape_typst(name)
         );
     }

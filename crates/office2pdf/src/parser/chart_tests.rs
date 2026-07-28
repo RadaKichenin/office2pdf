@@ -376,3 +376,78 @@ fn test_scan_chart_rels() {
     assert_eq!(rels.get("rId4").unwrap(), "word/charts/chart1.xml");
     assert_eq!(rels.get("rId5").unwrap(), "word/charts/chart2.xml");
 }
+
+// ----- Legend position (issue #546) -----
+
+/// Wrap a bar chart in a chartSpace carrying `legend_xml` beside the plot area.
+fn bar_chart_with_legend(legend_xml: &str) -> String {
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+        <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+            <c:chart>
+                <c:plotArea>
+                    <c:barChart>
+                        <c:barDir val="col"/>
+                        <c:ser>
+                            <c:idx val="0"/>
+                            <c:cat><c:strLit><c:pt idx="0"><c:v>DOCX</c:v></c:pt></c:strLit></c:cat>
+                            <c:val><c:numLit><c:pt idx="0"><c:v>9</c:v></c:pt></c:numLit></c:val>
+                        </c:ser>
+                    </c:barChart>
+                </c:plotArea>
+                {legend_xml}
+            </c:chart>
+        </c:chartSpace>"#
+    )
+}
+
+#[test]
+fn test_legend_pos_bottom_is_read() {
+    let xml =
+        bar_chart_with_legend(r#"<c:legend><c:legendPos val="b"/><c:overlay val="0"/></c:legend>"#);
+
+    let chart = parse_chart_xml(&xml).unwrap();
+
+    assert_eq!(chart.legend_position, LegendPosition::Bottom);
+    assert!(chart.legend_position.is_horizontal());
+}
+
+#[test]
+fn test_every_legend_pos_value_is_mapped() {
+    for (val, expected) in [
+        ("b", LegendPosition::Bottom),
+        ("l", LegendPosition::Left),
+        ("r", LegendPosition::Right),
+        ("t", LegendPosition::Top),
+        ("tr", LegendPosition::TopRight),
+    ] {
+        let xml = bar_chart_with_legend(&format!(
+            r#"<c:legend><c:legendPos val="{val}"/></c:legend>"#
+        ));
+
+        let chart = parse_chart_xml(&xml).unwrap();
+
+        assert_eq!(chart.legend_position, expected, "legendPos val=\"{val}\"");
+    }
+}
+
+#[test]
+fn test_legend_pos_defaults_to_right_when_absent() {
+    // ECMA-376 gives ST_LegendPos a default of `r`, which is also where every
+    // legend was drawn before the element was read.
+    let xml = bar_chart_with_legend(r#"<c:legend><c:overlay val="0"/></c:legend>"#);
+
+    let chart = parse_chart_xml(&xml).unwrap();
+
+    assert_eq!(chart.legend_position, LegendPosition::Right);
+    assert!(!chart.legend_position.is_horizontal());
+}
+
+#[test]
+fn test_chart_without_a_legend_element_keeps_the_default() {
+    let xml = bar_chart_with_legend("");
+
+    let chart = parse_chart_xml(&xml).unwrap();
+
+    assert_eq!(chart.legend_position, LegendPosition::Right);
+}
