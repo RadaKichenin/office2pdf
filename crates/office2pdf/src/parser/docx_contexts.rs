@@ -8,6 +8,8 @@ mod columns;
 mod docx_context_shape;
 #[path = "docx_context_drawing.rs"]
 mod drawing;
+#[path = "docx_context_fields.rs"]
+mod fields;
 #[path = "docx_context_math.rs"]
 mod math;
 #[path = "docx_context_notes.rs"]
@@ -32,6 +34,7 @@ pub(super) use chart::{ChartContext, build_chart_context_from_xml};
 pub(super) use columns::{extract_column_layout_from_section_property, scan_column_layouts};
 pub(super) use docx_context_shape::{DrawingShapeContext, WpgDrawingInfo};
 pub(super) use drawing::{DrawingTextBoxContext, DrawingTextBoxInfo};
+pub(super) use fields::{FieldContext, seq_identifier};
 pub(super) use math::{MathContext, build_math_context_from_xml};
 pub(super) use notes::{
     NoteContent, NoteContext, build_note_context_from_xml, is_note_reference_run, read_zip_text,
@@ -61,4 +64,5 @@ pub(super) struct DocxConversionContext {
     pub(super) bidi: BidiContext,
     pub(super) small_caps: SmallCapsContext,
     pub(super) paragraph_shading: ParagraphShadingContext,
+    pub(super) fields: FieldContext,
 }

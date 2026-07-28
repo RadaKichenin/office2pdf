@@ -20,12 +20,12 @@ use crate::parser::Parser;
 use self::contexts::scan_table_headers;
 use self::contexts::{
     BidiContext, ChartContext, DocxConversionContext, DrawingShapeContext, DrawingTextBoxContext,
-    DrawingTextBoxInfo, MathContext, NoteContent, NoteContext, ParagraphShadingContext,
-    SmallCapsContext, TableHeaderContext, TableStyleContext, VmlTextBoxContext, VmlTextBoxInfo,
-    WpgDrawingInfo, WrapContext, build_chart_context_from_xml, build_math_context_from_xml,
-    build_note_context_from_xml, build_wrap_context_from_xml,
+    DrawingTextBoxInfo, FieldContext, MathContext, NoteContent, NoteContext,
+    ParagraphShadingContext, SmallCapsContext, TableHeaderContext, TableStyleContext,
+    VmlTextBoxContext, VmlTextBoxInfo, WpgDrawingInfo, WrapContext, build_chart_context_from_xml,
+    build_math_context_from_xml, build_note_context_from_xml, build_wrap_context_from_xml,
     extract_column_layout_from_section_property, is_note_reference_run, read_zip_text,
-    scan_column_layouts, scan_page_numbering, scan_style_paragraph_shading,
+    scan_column_layouts, scan_page_numbering, scan_style_paragraph_shading, seq_identifier,
 };
 use self::lists::{
     NumberingMap, TaggedElement, build_numbering_map, extract_num_info, group_into_lists,
@@ -253,6 +253,7 @@ fn build_zip_preparse_assets(data: &[u8]) -> ZipPreParseAssets {
                 bidi,
                 small_caps,
                 paragraph_shading: ParagraphShadingContext::from_xml(doc_xml.as_deref()),
+                fields: FieldContext::default(),
             };
             ZipPreParseAssets {
                 metadata,
@@ -284,6 +285,7 @@ fn build_zip_preparse_assets(data: &[u8]) -> ZipPreParseAssets {
                 bidi: BidiContext::from_xml(None),
                 small_caps: SmallCapsContext::from_xml(None),
                 paragraph_shading: ParagraphShadingContext::from_xml(None),
+                fields: FieldContext::default(),
             },
             math: MathContext::empty(),
             chart_ctx: ChartContext::empty(),
@@ -762,6 +764,35 @@ fn apply_default_text_color(blocks: &mut [Block], color: Color) {
     }
 }
 
+/// The number a run's `SEQ` field renders, if it carries one.
+///
+/// Word stores a caption number in the field, not in the text, so a run that
+/// holds `SEQ Table` contributes the counter's next value. Text between the
+/// field's `separate` and `end` is its cached result — what Word last
+/// computed — and is replaced by the value computed here rather than added to
+/// it (issue #577).
+fn seq_field_text(run: &docx_rs::Run, fields: &FieldContext) -> Option<String> {
+    let mut identifier: Option<String> = None;
+    for child in &run.children {
+        match child {
+            docx_rs::RunChild::InstrText(instruction) => {
+                if let docx_rs::InstrText::Unsupported(text) = instruction.as_ref()
+                    && let Some(found) = seq_identifier(text)
+                {
+                    identifier = Some(found.to_string());
+                }
+            }
+            docx_rs::RunChild::InstrTextString(text) => {
+                if let Some(found) = seq_identifier(text) {
+                    identifier = Some(found.to_string());
+                }
+            }
+            _ => {}
+        }
+    }
+    identifier.map(|identifier| fields.next_in_sequence(&identifier).to_string())
+}
+
 /// Resolve a note's runs against the style it names.
 ///
 /// A note is read from `footnotes.xml` before the stylesheet is, so its runs
@@ -995,7 +1026,8 @@ fn convert_paragraph_blocks(
                     emitted_layout_break = true;
 
                     // Still extract any text from this run (after the break)
-                    let text: String = extract_run_text_skip_layout_breaks(run);
+                    let text: String = seq_field_text(run, &ctx.fields)
+                        .unwrap_or_else(|| extract_run_text_skip_layout_breaks(run));
                     if let Some(ir_run) = build_text_run(
                         text,
                         &run.run_property,
@@ -1007,7 +1039,8 @@ fn convert_paragraph_blocks(
                         runs.push(ir_run);
                     }
                 } else {
-                    let text: String = extract_run_text(run);
+                    let text: String =
+                        seq_field_text(run, &ctx.fields).unwrap_or_else(|| extract_run_text(run));
                     if let Some(ir_run) = build_text_run(
                         text,
                         &run.run_property,

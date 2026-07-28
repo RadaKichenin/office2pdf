@@ -917,3 +917,64 @@ fn test_section_page_numbering_restarts_and_picks_its_numerals() {
         "the restart is no longer a fallback: {warnings:?}"
     );
 }
+
+#[test]
+fn test_seq_fields_number_captions_in_document_order() {
+    // Word keeps a caption's number in a SEQ field, not in its text. Dropping
+    // the field left every caption in the brief without one (issue #577).
+    let data = std::fs::read(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/docx/office2pdf_technical_brief_ko.docx"
+    ))
+    .expect("fixture");
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let caption_text = |lead: &str| -> Vec<String> {
+        doc.pages
+            .iter()
+            .filter_map(|page| match page {
+                Page::Flow(flow) => Some(flow),
+                _ => None,
+            })
+            .flat_map(|flow| flow.content.iter())
+            .filter_map(|block| match block {
+                Block::Paragraph(paragraph) => Some(paragraph),
+                _ => None,
+            })
+            .map(|paragraph| {
+                paragraph
+                    .runs
+                    .iter()
+                    .map(|run| run.text.as_str())
+                    .collect::<String>()
+            })
+            // A caption leads with the label and the field's number; the
+            // contents-page headings share the label but not a number.
+            .filter(|text| {
+                text.strip_prefix(lead)
+                    .is_some_and(|rest| rest.starts_with(|c: char| c.is_ascii_digit()))
+            })
+            .collect()
+    };
+
+    let tables = caption_text("표 ");
+    let figures = caption_text("그림 ");
+    assert_eq!(tables.len(), 33, "every table caption: {tables:?}");
+    assert_eq!(figures.len(), 5, "every figure caption: {figures:?}");
+
+    // Each identifier counts from one, independently, in document order.
+    for (index, caption) in tables.iter().enumerate() {
+        assert!(
+            caption.starts_with(&format!("표 {}", index + 1)),
+            "table caption {} reads {caption:?}",
+            index + 1
+        );
+    }
+    for (index, caption) in figures.iter().enumerate() {
+        assert!(
+            caption.starts_with(&format!("그림 {}", index + 1)),
+            "figure caption {} reads {caption:?}",
+            index + 1
+        );
+    }
+}
