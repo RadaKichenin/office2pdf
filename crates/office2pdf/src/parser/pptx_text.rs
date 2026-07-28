@@ -621,7 +621,9 @@ pub(super) fn push_pptx_run(runs: &mut Vec<Run>, run: Run) {
     if let Some(previous) = runs.last_mut()
         && previous.style == run.style
         && previous.href == run.href
-        && previous.footnote == run.footnote
+        // Slides carry no notes, so both sides are `None` here; comparing
+              // presence keeps the merge total without requiring `Run: PartialEq`.
+        && previous.footnote.is_none() == run.footnote.is_none()
     {
         previous.text.push_str(&run.text);
         return;

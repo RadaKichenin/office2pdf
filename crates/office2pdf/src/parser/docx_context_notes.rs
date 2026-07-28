@@ -3,6 +3,9 @@ use std::collections::{HashMap, HashSet};
 use std::io::{Read, Seek};
 
 use super::super::extract_run_text;
+use crate::ir::TextStyle;
+use crate::parser::units::half_points_to_pt;
+use crate::parser::xml_util::parse_hex_color;
 
 // ── Footnote / Endnote support ──────────────────────────────────────────
 
@@ -12,11 +15,28 @@ enum NoteKind {
     Endnote,
 }
 
+/// One run of a note's text, carrying only what its own `w:rPr` states.
+///
+/// The style it resolves against is not known here: notes are read from the
+/// archive before the stylesheet is, so the cascade runs at reference time.
+#[derive(Debug, Clone, Default)]
+pub(in super::super) struct NoteRun {
+    pub(in super::super) text: String,
+    pub(in super::super) explicit: TextStyle,
+}
+
+/// A note's content: the paragraph style it names, and its runs.
+#[derive(Debug, Clone, Default)]
+pub(in super::super) struct NoteContent {
+    pub(in super::super) style_id: Option<String>,
+    pub(in super::super) runs: Vec<NoteRun>,
+}
+
 /// Context for resolving footnote/endnote references during parsing.
 /// The `cursor` is advanced each time a note reference run is encountered.
 pub(in super::super) struct NoteContext {
-    footnote_content: HashMap<usize, String>,
-    endnote_content: HashMap<usize, String>,
+    footnote_content: HashMap<usize, NoteContent>,
+    endnote_content: HashMap<usize, NoteContent>,
     note_refs: Vec<(NoteKind, usize)>,
     cursor: Cell<usize>,
     note_style_ids: HashSet<String>,
@@ -37,7 +57,7 @@ impl NoteContext {
         }
     }
 
-    pub(in super::super) fn consume_next(&self) -> Option<String> {
+    pub(in super::super) fn consume_next(&self) -> Option<NoteContent> {
         let index = self.cursor.get();
         if index >= self.note_refs.len() {
             return None;
@@ -91,12 +111,45 @@ pub(in super::super) fn read_zip_text(
     Some(contents)
 }
 
-fn parse_notes_xml(xml: &str) -> HashMap<usize, String> {
-    let mut map: HashMap<usize, String> = HashMap::new();
+/// Read `footnotes.xml` or `endnotes.xml` into per-note styled runs.
+///
+/// The note's `w:pStyle` and each run's `w:rPr` are what Word styles the text
+/// with; flattening the part to one unstyled string left every note at the
+/// rendering engine's own footnote size and face — 9.35pt Libertinus Serif
+/// against the 8pt Calibri the document asks for (issue #580).
+///
+/// docx-rs does not read these parts, so this stays a scan; it reads the run
+/// properties the cascade needs — weight, slant, size, colour, and family —
+/// and leaves the rest to the style the note names.
+fn parse_notes_xml(xml: &str) -> HashMap<usize, NoteContent> {
+    let mut map: HashMap<usize, NoteContent> = HashMap::new();
     let mut reader = quick_xml::Reader::from_str(xml);
     let mut current_id: Option<usize> = None;
-    let mut current_text = String::new();
+    let mut current: NoteContent = NoteContent::default();
+    let mut run: NoteRun = NoteRun::default();
     let mut in_text = false;
+    let mut in_run_property = false;
+
+    let attribute_value =
+        |element: &quick_xml::events::BytesStart, name: &[u8]| -> Option<String> {
+            element.attributes().flatten().find_map(|attribute| {
+                (attribute.key.local_name().as_ref() == name)
+                    .then(|| {
+                        attribute
+                            .unescape_value()
+                            .ok()
+                            .map(|value| value.to_string())
+                    })
+                    .flatten()
+            })
+        };
+    // `w:b`, `w:i`, and the rest are on when present unless they say `w:val="0"`.
+    let toggle_on = |element: &quick_xml::events::BytesStart| -> bool {
+        !matches!(
+            attribute_value(element, b"val").as_deref(),
+            Some("0") | Some("false")
+        )
+    };
 
     loop {
         match reader.read_event() {
@@ -105,19 +158,35 @@ fn parse_notes_xml(xml: &str) -> HashMap<usize, String> {
                 match element.local_name().as_ref() {
                     b"footnote" | b"endnote" => {
                         if let Some(id) = current_id.take() {
-                            let text = current_text.trim().to_string();
-                            if !text.is_empty() {
-                                map.insert(id, text);
-                            }
+                            finish_note(&mut map, id, std::mem::take(&mut current));
                         }
-                        current_text.clear();
-                        for attribute in element.attributes().flatten() {
-                            if attribute.key.local_name().as_ref() == b"id"
-                                && let Ok(value) = attribute.unescape_value()
-                            {
-                                current_id = value.parse::<usize>().ok();
-                            }
+                        current = NoteContent::default();
+                        run = NoteRun::default();
+                        current_id = attribute_value(element, b"id")
+                            .and_then(|value| value.parse::<usize>().ok());
+                    }
+                    b"pStyle" => {
+                        if current.style_id.is_none() {
+                            current.style_id = attribute_value(element, b"val");
                         }
+                    }
+                    b"rPr" => in_run_property = true,
+                    b"b" if in_run_property => run.explicit.bold = Some(toggle_on(element)),
+                    b"i" if in_run_property => run.explicit.italic = Some(toggle_on(element)),
+                    b"sz" if in_run_property => {
+                        run.explicit.font_size = attribute_value(element, b"val")
+                            .and_then(|value| value.parse::<f64>().ok())
+                            .map(half_points_to_pt);
+                    }
+                    b"color" if in_run_property => {
+                        run.explicit.color = attribute_value(element, b"val")
+                            .as_deref()
+                            .and_then(parse_hex_color);
+                    }
+                    b"rFonts" if in_run_property => {
+                        run.explicit.font_family = attribute_value(element, b"ascii")
+                            .or_else(|| attribute_value(element, b"hAnsi"))
+                            .or_else(|| attribute_value(element, b"eastAsia"));
                     }
                     b"t" => in_text = true,
                     _ => {}
@@ -125,23 +194,25 @@ fn parse_notes_xml(xml: &str) -> HashMap<usize, String> {
             }
             Ok(quick_xml::events::Event::End(ref element)) => match element.local_name().as_ref() {
                 b"t" => in_text = false,
+                b"rPr" => in_run_property = false,
+                b"r" => {
+                    let finished = std::mem::take(&mut run);
+                    if !finished.text.is_empty() {
+                        current.runs.push(finished);
+                    }
+                }
                 b"footnote" | b"endnote" => {
                     if let Some(id) = current_id.take() {
-                        let text = current_text.trim().to_string();
-                        if !text.is_empty() {
-                            map.insert(id, text);
-                        }
+                        finish_note(&mut map, id, std::mem::take(&mut current));
                     }
-                    current_text.clear();
+                    current = NoteContent::default();
+                    run = NoteRun::default();
                 }
                 _ => {}
             },
             Ok(quick_xml::events::Event::Text(ref element)) => {
                 if in_text && let Ok(text) = element.xml_content() {
-                    if !current_text.is_empty() {
-                        current_text.push(' ');
-                    }
-                    current_text.push_str(&text);
+                    run.text.push_str(&text);
                 }
             }
             Ok(quick_xml::events::Event::Eof) => break,
@@ -151,6 +222,24 @@ fn parse_notes_xml(xml: &str) -> HashMap<usize, String> {
     }
 
     map
+}
+
+/// Record a note, dropping one whose runs carry no text at all.
+///
+/// The leading run of a Word note holds only the reference mark
+/// (`w:footnoteRef`), so a note that separates cleanly and a note that is
+/// genuinely empty both arrive here with nothing but that run.
+fn finish_note(map: &mut HashMap<usize, NoteContent>, id: usize, mut content: NoteContent) {
+    if let Some(last) = content.runs.last_mut() {
+        last.text = last.text.trim_end().to_string();
+    }
+    if let Some(first) = content.runs.first_mut() {
+        first.text = first.text.trim_start().to_string();
+    }
+    content.runs.retain(|run| !run.text.is_empty());
+    if !content.runs.is_empty() {
+        map.insert(id, content);
+    }
 }
 
 fn scan_note_refs(xml: &str) -> Vec<(NoteKind, usize)> {

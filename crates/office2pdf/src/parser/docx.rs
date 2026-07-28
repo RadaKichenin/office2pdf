@@ -20,9 +20,9 @@ use crate::parser::Parser;
 use self::contexts::scan_table_headers;
 use self::contexts::{
     BidiContext, ChartContext, DocxConversionContext, DrawingShapeContext, DrawingTextBoxContext,
-    DrawingTextBoxInfo, MathContext, NoteContext, ParagraphShadingContext, SmallCapsContext,
-    TableHeaderContext, TableStyleContext, VmlTextBoxContext, VmlTextBoxInfo, WpgDrawingInfo,
-    WrapContext, build_chart_context_from_xml, build_math_context_from_xml,
+    DrawingTextBoxInfo, MathContext, NoteContent, NoteContext, ParagraphShadingContext,
+    SmallCapsContext, TableHeaderContext, TableStyleContext, VmlTextBoxContext, VmlTextBoxInfo,
+    WpgDrawingInfo, WrapContext, build_chart_context_from_xml, build_math_context_from_xml,
     build_note_context_from_xml, build_wrap_context_from_xml,
     extract_column_layout_from_section_property, is_note_reference_run, read_zip_text,
     scan_column_layouts, scan_style_paragraph_shading,
@@ -748,6 +748,32 @@ fn apply_default_text_color(blocks: &mut [Block], color: Color) {
     }
 }
 
+/// Resolve a note's runs against the style it names.
+///
+/// A note is read from `footnotes.xml` before the stylesheet is, so its runs
+/// arrive carrying only their own `w:rPr`. Word resolves them through the same
+/// cascade as the body: the note's `w:pStyle` — `FootnoteText` and friends —
+/// supplies the size, colour, and family the runs leave unstated, and falls
+/// back to the document defaults when the note names no style (issue #580).
+fn resolve_note_runs(content: &NoteContent, style_map: &StyleMap) -> Vec<Run> {
+    let note_style = content
+        .style_id
+        .as_deref()
+        .and_then(|style_id| style_map.get(style_id))
+        .or_else(|| style_map.get(DOC_DEFAULT_STYLE_ID));
+
+    content
+        .runs
+        .iter()
+        .map(|note_run| Run {
+            text: note_run.text.clone(),
+            style: merge_text_style(&note_run.explicit, note_style),
+            href: None,
+            footnote: None,
+        })
+        .collect()
+}
+
 /// A paragraph child once tracked changes have been resolved away.
 ///
 /// Callers match only the variants they render; a header paragraph ignores
@@ -874,7 +900,7 @@ fn convert_paragraph_blocks(
                             text: String::new(),
                             style: TextStyle::default(),
                             href: None,
-                            footnote: Some(content),
+                            footnote: Some(resolve_note_runs(&content, style_map)),
                         });
                     }
                     continue;

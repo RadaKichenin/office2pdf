@@ -32,7 +32,7 @@ pub(super) use docx_context_shape::{DrawingShapeContext, WpgDrawingInfo};
 pub(super) use drawing::{DrawingTextBoxContext, DrawingTextBoxInfo};
 pub(super) use math::{MathContext, build_math_context_from_xml};
 pub(super) use notes::{
-    NoteContext, build_note_context_from_xml, is_note_reference_run, read_zip_text,
+    NoteContent, NoteContext, build_note_context_from_xml, is_note_reference_run, read_zip_text,
 };
 pub(super) use paragraph_shading::{ParagraphShadingContext, scan_style_paragraph_shading};
 pub(super) use small_caps::SmallCapsContext;

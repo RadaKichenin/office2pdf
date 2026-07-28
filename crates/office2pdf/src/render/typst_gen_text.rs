@@ -1127,8 +1127,12 @@ fn tab_alignment_offset_expr(
 
 pub(super) fn generate_run(out: &mut String, run: &Run) {
     if let Some(ref content) = run.footnote {
-        let escaped_content = escape_typst(content);
-        let _ = write!(out, "#footnote[{escaped_content}]");
+        // The note's runs carry the style its `w:pStyle` and `w:rPr` resolved
+        // to, so they emit through the ordinary run path rather than as a bare
+        // string that would take the engine's own footnote styling (#580).
+        out.push_str("#footnote[");
+        generate_runs(out, content);
+        out.push(']');
         return;
     }
 
