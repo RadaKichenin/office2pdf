@@ -1577,7 +1577,11 @@ fn test_header_tab_without_a_matching_stop_keeps_the_plain_advance() {
     let result = generate_typst(&doc).unwrap().source;
 
     assert!(
-        result.contains("#h(1em)") || !result.contains("#grid(columns: (1fr, auto)"),
+        !result.contains("#grid(columns: (1fr, auto)"),
         "a left stop is not the running-head idiom: {result}"
+    );
+    assert!(
+        result.contains('\t'),
+        "the tab stays a literal tab for Typst to collapse: {result}"
     );
 }
