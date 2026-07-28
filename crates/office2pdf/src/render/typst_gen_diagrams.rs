@@ -228,21 +228,27 @@ fn nice_axis(max_value: f64) -> (f64, f64) {
     if max_value <= 0.0 {
         return (1.0, 1.0);
     }
-    let magnitude: f64 = 10f64.powf(max_value.log10().floor());
-    let normalized: f64 = max_value / magnitude;
-    let nice_norm: f64 = if normalized <= 1.0 {
-        1.0
-    } else if normalized <= 2.0 {
-        2.0
-    } else if normalized <= 5.0 {
-        5.0
-    } else {
-        10.0
-    };
-    let nice_max: f64 = nice_norm * magnitude;
-    let step: f64 = nice_max / 5.0;
+    // Excel rounds the *step*, then takes the smallest whole number of steps
+    // that covers the data — it does not round the maximum itself. Rounding
+    // the maximum put 23,334 against a 50,000 axis, so every column drew at
+    // half the height Excel gives it (#553).
+    let target_step: f64 = max_value / MAJOR_UNITS;
+    let magnitude: f64 = 10f64.powf(target_step.log10().floor());
+    let normalized: f64 = target_step / magnitude;
+    let nice_norm: f64 = *NICE_STEPS
+        .iter()
+        .find(|candidate| **candidate >= normalized - 1e-9)
+        .unwrap_or(&10.0);
+    let step: f64 = nice_norm * magnitude;
+    let nice_max: f64 = (max_value / step).ceil() * step;
     (nice_max, step)
 }
+
+/// Major units Excel aims for on an auto-scaled value axis.
+const MAJOR_UNITS: f64 = 5.0;
+
+/// Step sizes Excel will choose, as multiples of a power of ten.
+const NICE_STEPS: [f64; 5] = [1.0, 2.0, 2.5, 5.0, 10.0];
 
 const PLOT_MAIN: f64 = 300.0; // value-axis length in points
 const ROW: f64 = 34.0; // per-category thickness
@@ -1097,8 +1103,52 @@ mod chart_value_label_tests {
     #[test]
     fn nice_axis_rounds_up() {
         assert_eq!(nice_axis(8.2), (10.0, 2.0));
-        assert_eq!(nice_axis(3.2), (5.0, 1.0));
+        assert_eq!(nice_axis(3.2), (4.0, 1.0));
         assert_eq!(nice_axis(45.0), (50.0, 10.0));
         assert_eq!(nice_axis(0.0), (1.0, 1.0));
+    }
+
+    #[test]
+    fn nice_axis_matches_excels_auto_scale() {
+        // Measured from native Excel and PowerPoint exports of the audited
+        // fixtures. Rounding the maximum itself to 1/2/5x10^n put 23,334
+        // against a 50,000 axis, drawing every column at half height (#553).
+        assert_eq!(nice_axis(23334.0), (25000.0, 5000.0), "01_대시보드 LOC");
+        assert_eq!(nice_axis(9.0), (10.0, 2.0), "slide 17 stack totals");
+        assert_eq!(nice_axis(78.0), (80.0, 20.0), "release intervals");
+    }
+
+    #[test]
+    fn nice_axis_leaves_no_more_than_one_step_of_headroom() {
+        // The property that makes a chart readable: the tallest bar always
+        // reaches within one major unit of the top.
+        for value in [
+            1.0,
+            2.0,
+            3.7,
+            9.0,
+            23.0,
+            45.0,
+            78.0,
+            99.0,
+            100.0,
+            250.0,
+            4999.0,
+            23334.0,
+            1_000_001.0,
+        ] {
+            let (max, step) = nice_axis(value);
+
+            assert!(max >= value, "axis {max} must cover {value}");
+            assert!(
+                max - value < step,
+                "axis {max} leaves {} of headroom over {value}, more than one {step} step",
+                max - value
+            );
+            assert!(
+                step > 0.0 && (max / step - (max / step).round()).abs() < 1e-9,
+                "{max} must divide into whole {step} steps"
+            );
+        }
     }
 }
