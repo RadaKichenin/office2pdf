@@ -1407,10 +1407,15 @@ enum HeaderFooterTabLayout {
 
 /// Resolve a header or footer paragraph's tabs against its own tab stops.
 ///
-/// `generate_hf_elements` advanced every `<w:tab/>` by a fixed `#h(1em)`, so
-/// the segment a right stop should have pushed to the right margin sat next to
-/// the left one instead — on every page of a document that uses the idiom
-/// (issue #579).
+/// `generate_hf_elements` passed every `<w:tab/>` straight to `generate_run`,
+/// which writes the tab into the Typst source as a literal tab character.
+/// Typst's markup lexer treats that exactly as it treats a space, so the two
+/// segments ended up one space apart and the one a right stop should have
+/// pushed to the right margin sat beside the left one — on every page of a
+/// document that uses the idiom (issue #579).
+///
+/// The `#h(1em)` advance below is a different element: `w:ptab`, which states
+/// its own alignment rather than referring to a stop.
 fn header_footer_tab_layout(
     paragraph: &crate::ir::HeaderFooterParagraph,
 ) -> Option<HeaderFooterTabLayout> {
