@@ -8,7 +8,7 @@ use crate::error::{ConvertError, ConvertWarning};
 /// truncated to prevent stack overflow on pathological documents.
 const MAX_TABLE_DEPTH: usize = 64;
 use crate::ir::{
-    Alignment, Block, BorderLineStyle, BorderSide, CellBorder, CellVerticalAlign, Color,
+    Alignment, Block, BorderLineStyle, BorderSide, Caption, CellBorder, CellVerticalAlign, Color,
     ColumnLayout, Document, FloatingImage, FloatingTextBox, ImageData, ImageFormat,
     ImageParagraphSpacing, Insets, LineSpacing, Page, PageNumbering, Paragraph, ParagraphStyle,
     Run, StyleSheet, TabAlignment, TabLeader, TabStop, Table, TableCell, TableOfContents, TableRow,
@@ -26,7 +26,7 @@ use self::contexts::{
     build_math_context_from_xml, build_note_context_from_xml, build_wrap_context_from_xml,
     extract_column_layout_from_section_property, is_note_reference_run, read_zip_text,
     scan_column_layouts, scan_page_numbering, scan_style_paragraph_shading, seq_identifier,
-    toc_heading_depth,
+    toc_caption_identifier, toc_heading_depth,
 };
 use self::lists::{
     NumberingMap, TaggedElement, build_numbering_map, extract_num_info, group_into_lists,
@@ -765,13 +765,14 @@ fn apply_default_text_color(blocks: &mut [Block], color: Color) {
     }
 }
 
-/// The outline depth a paragraph's `TOC` field collects, if it carries one.
+/// The list a paragraph's `TOC` field produces, if it carries one.
 ///
 /// A dirty `TOC` field is stored as its instruction and nothing else, so the
 /// paragraph holding it has no text to render and the contents page came out
 /// blank. The field becomes a block the renderer resolves against the
-/// document's own headings instead (issue #576).
-fn toc_field_depth(para: &docx_rs::Paragraph) -> Option<u8> {
+/// document itself instead — `\o` against its headings, `\a` against the
+/// captions of one `SEQ` sequence (issue #576).
+fn toc_field(para: &docx_rs::Paragraph) -> Option<TableOfContents> {
     para.children
         .iter()
         .filter_map(|child| match child {
@@ -779,13 +780,20 @@ fn toc_field_depth(para: &docx_rs::Paragraph) -> Option<u8> {
             _ => None,
         })
         .flat_map(|run| run.children.iter())
-        .find_map(|child| match child {
-            docx_rs::RunChild::InstrText(instruction) => match instruction.as_ref() {
-                docx_rs::InstrText::Unsupported(text) => toc_heading_depth(text),
-                _ => None,
-            },
-            docx_rs::RunChild::InstrTextString(text) => toc_heading_depth(text),
-            _ => None,
+        .find_map(|child| {
+            let instruction: &str = match child {
+                docx_rs::RunChild::InstrText(instruction) => match instruction.as_ref() {
+                    docx_rs::InstrText::Unsupported(text) => text,
+                    _ => return None,
+                },
+                docx_rs::RunChild::InstrTextString(text) => text,
+                _ => return None,
+            };
+            toc_caption_identifier(instruction)
+                .map(|identifier| TableOfContents::Captions { identifier })
+                .or_else(|| {
+                    toc_heading_depth(instruction).map(|depth| TableOfContents::Headings { depth })
+                })
         })
 }
 
@@ -796,7 +804,11 @@ fn toc_field_depth(para: &docx_rs::Paragraph) -> Option<u8> {
 /// field's `separate` and `end` is its cached result — what Word last
 /// computed — and is replaced by the value computed here rather than added to
 /// it (issue #577).
-fn seq_field_text(run: &docx_rs::Run, fields: &FieldContext) -> Option<String> {
+fn seq_field_text(
+    run: &docx_rs::Run,
+    fields: &FieldContext,
+    seen: &mut Option<String>,
+) -> Option<String> {
     let mut identifier: Option<String> = None;
     for child in &run.children {
         match child {
@@ -815,7 +827,11 @@ fn seq_field_text(run: &docx_rs::Run, fields: &FieldContext) -> Option<String> {
             _ => {}
         }
     }
-    identifier.map(|identifier| fields.next_in_sequence(&identifier).to_string())
+    identifier.map(|identifier| {
+        let number = fields.next_in_sequence(&identifier).to_string();
+        *seen = Some(identifier);
+        number
+    })
 }
 
 /// Resolve a note's runs against the style it names.
@@ -949,7 +965,7 @@ fn convert_paragraph_blocks(
     // A field Word has already computed keeps its cached entries instead:
     // those are the result, and recomputing over them would drop the numbers
     // the document shipped.
-    if let Some(depth) = toc_field_depth(para)
+    if let Some(contents) = toc_field(para)
         && para
             .children
             .iter()
@@ -959,7 +975,7 @@ fn convert_paragraph_blocks(
             })
             .all(|run| extract_run_text(run).trim().is_empty())
     {
-        out.push(Block::TableOfContents(TableOfContents::Headings { depth }));
+        out.push(Block::TableOfContents(contents));
         return;
     }
 
@@ -975,6 +991,9 @@ fn convert_paragraph_blocks(
     let mut emitted_media_blocks: bool = false;
     let mut emitted_floating_anchor: bool = false;
     let mut emitted_layout_break: bool = false;
+    // Set by the run carrying a `SEQ` field, so the finished paragraph can be
+    // wrapped as the caption a `TOC \a` list collects (issue #576).
+    let mut caption_identifier: Option<String> = None;
 
     for child in flatten_tracked_changes(&para.children) {
         match child {
@@ -1030,6 +1049,7 @@ fn convert_paragraph_blocks(
                             is_rtl,
                             paragraph_background,
                             &mut runs,
+                            caption_identifier.as_deref(),
                         );
                         emitted_paragraph = true;
                     } else if !inline_images.is_empty() {
@@ -1059,6 +1079,7 @@ fn convert_paragraph_blocks(
                             is_rtl,
                             paragraph_background,
                             &mut runs,
+                            caption_identifier.as_deref(),
                         );
                         emitted_paragraph = true;
                     }
@@ -1070,7 +1091,7 @@ fn convert_paragraph_blocks(
                     emitted_layout_break = true;
 
                     // Still extract any text from this run (after the break)
-                    let text: String = seq_field_text(run, &ctx.fields)
+                    let text: String = seq_field_text(run, &ctx.fields, &mut caption_identifier)
                         .unwrap_or_else(|| extract_run_text_skip_layout_breaks(run));
                     if let Some(ir_run) = build_text_run(
                         text,
@@ -1083,8 +1104,8 @@ fn convert_paragraph_blocks(
                         runs.push(ir_run);
                     }
                 } else {
-                    let text: String =
-                        seq_field_text(run, &ctx.fields).unwrap_or_else(|| extract_run_text(run));
+                    let text: String = seq_field_text(run, &ctx.fields, &mut caption_identifier)
+                        .unwrap_or_else(|| extract_run_text(run));
                     if let Some(ir_run) = build_text_run(
                         text,
                         &run.run_property,
@@ -1141,6 +1162,7 @@ fn convert_paragraph_blocks(
             is_rtl,
             paragraph_background,
             &mut runs,
+            caption_identifier.as_deref(),
         );
     }
 }
@@ -1217,6 +1239,7 @@ fn push_paragraph_from_runs(
     is_rtl: bool,
     background: Option<Color>,
     runs: &mut Vec<Run>,
+    caption_identifier: Option<&str>,
 ) {
     let mut explicit_para_style = extract_paragraph_style(&para.property);
     explicit_para_style.background = background;
@@ -1235,13 +1258,47 @@ fn push_paragraph_from_runs(
     // left alone: Word treats the space as compressible and absorbs it into the
     // justification, which is why every boundary that lacks it in the corpus GT
     // is on a line Word is actively stretching or compressing (issue #521).
+    let entry_text: Option<String> = caption_identifier.map(|_| caption_entry_text(runs));
     if !matches!(style.alignment, Some(Alignment::Justify)) {
         insert_east_asian_auto_space(runs);
     }
-    out.push(Block::Paragraph(Paragraph {
+    let paragraph = Paragraph {
         style,
         runs: std::mem::take(runs),
-    }));
+    };
+    match (caption_identifier, entry_text) {
+        (Some(identifier), Some(entry_text)) => out.push(Block::Caption(Caption {
+            identifier: identifier.to_string(),
+            entry_text,
+            paragraph,
+        })),
+        _ => out.push(Block::Paragraph(paragraph)),
+    }
+}
+
+/// The text a `TOC \a` list shows for a caption.
+///
+/// Word lists the caption without the label and the number that precede it —
+/// `종전 헤드리스 변환 스택과 …`, not `그림 1  종전 헤드리스 변환 스택과 …`.
+/// The number is its own run, produced by the `SEQ` field, so everything from
+/// the run after it onward is the caption proper.
+///
+/// Read before `insert_east_asian_auto_space` rewrites the runs: those markers
+/// are an instruction about the caption's own layout, and the list entry is a
+/// separate piece of text that gets its own. Taking the text afterwards
+/// carried them into the entry, where they rendered as stray glyphs.
+fn caption_entry_text(runs: &[Run]) -> String {
+    let after_number = runs
+        .iter()
+        .position(|run| !run.text.is_empty() && run.text.chars().all(|c| c.is_ascii_digit()))
+        .map(|index| index + 1)
+        .unwrap_or(0);
+    runs[after_number..]
+        .iter()
+        .map(|run| run.text.as_str())
+        .collect::<String>()
+        .trim()
+        .to_string()
 }
 
 #[cfg(test)]

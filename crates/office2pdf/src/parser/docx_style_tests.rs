@@ -939,6 +939,7 @@ fn test_seq_fields_number_captions_in_document_order() {
             .flat_map(|flow| flow.content.iter())
             .filter_map(|block| match block {
                 Block::Paragraph(paragraph) => Some(paragraph),
+                Block::Caption(caption) => Some(&caption.paragraph),
                 _ => None,
             })
             .map(|paragraph| {
@@ -1048,7 +1049,68 @@ fn test_dirty_toc_field_becomes_a_contents_block() {
 
     assert_eq!(
         contents,
-        vec![&crate::ir::TableOfContents::Headings { depth: 3 }],
-        "the brief's `TOC \\h \\o \"1-3\"` becomes a three-level contents block"
+        vec![
+            &crate::ir::TableOfContents::Headings { depth: 3 },
+            &crate::ir::TableOfContents::Captions {
+                identifier: "Figure".to_string()
+            },
+            &crate::ir::TableOfContents::Captions {
+                identifier: "Table".to_string()
+            },
+        ],
+        "the brief's three dirty fields each become the list they name"
+    );
+}
+
+#[test]
+fn test_seq_captions_become_caption_blocks_a_list_can_collect() {
+    // A `TOC \a` list collects the paragraphs a `SEQ` identifier numbers, so
+    // those paragraphs are marked as they are parsed rather than matched by
+    // their text afterwards (issue #576).
+    let data = std::fs::read(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/docx/office2pdf_technical_brief_ko.docx"
+    ))
+    .expect("fixture");
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let captions: Vec<&crate::ir::Caption> = doc
+        .pages
+        .iter()
+        .filter_map(|page| match page {
+            Page::Flow(flow) => Some(flow),
+            _ => None,
+        })
+        .flat_map(|flow| flow.content.iter())
+        .filter_map(|block| match block {
+            Block::Caption(caption) => Some(caption),
+            _ => None,
+        })
+        .collect();
+
+    let figures: Vec<&crate::ir::Caption> = captions
+        .iter()
+        .copied()
+        .filter(|caption| caption.identifier == "Figure")
+        .collect();
+    let tables: Vec<&crate::ir::Caption> = captions
+        .iter()
+        .copied()
+        .filter(|caption| caption.identifier == "Table")
+        .collect();
+
+    assert_eq!(figures.len(), 5, "every figure caption is collectable");
+    assert_eq!(tables.len(), 33, "every table caption is collectable");
+
+    // Word lists a caption without the label and number that precede it.
+    assert_eq!(tables[0].entry_text, "문서 서지 정보");
+    assert!(
+        !tables[0].entry_text.starts_with("표"),
+        "the list entry drops the label and the field's number: {:?}",
+        tables[0].entry_text
+    );
+    assert!(
+        tables[0].paragraph.runs.iter().any(|run| run.text == "1"),
+        "the caption itself keeps its number"
     );
 }

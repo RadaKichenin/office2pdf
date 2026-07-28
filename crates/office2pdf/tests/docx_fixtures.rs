@@ -84,8 +84,9 @@ fn collect_runs_from_block<'a>(block: &'a Block, out: &mut Vec<&'a Run>) {
     match block {
         Block::Paragraph(p) => out.extend(p.runs.iter()),
         // A contents block carries no runs of its own: its entries are
-        // resolved from the headings it points at.
+        // resolved from what it points at.
         Block::TableOfContents(_) => {}
+        Block::Caption(caption) => out.extend(caption.paragraph.runs.iter()),
         Block::List(list) => {
             for item in &list.items {
                 for para in &item.content {
@@ -126,6 +127,7 @@ fn block_text(block: &Block) -> String {
     match block {
         Block::Paragraph(paragraph) => paragraph_text(paragraph),
         Block::TableOfContents(_) => String::new(),
+        Block::Caption(caption) => paragraph_text(&caption.paragraph),
         Block::List(list) => list
             .items
             .iter()

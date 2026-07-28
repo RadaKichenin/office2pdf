@@ -77,6 +77,28 @@ pub(in super::super) fn toc_heading_depth(instruction: &str) -> Option<u8> {
 /// Word's outline runs from level 1 to level 9.
 const FULL_OUTLINE_DEPTH: u8 = 9;
 
+/// The `SEQ` identifier a `TOC \a` field lists, if it is one.
+///
+/// `TOC \a "Figure"` collects the paragraphs `SEQ Figure` numbers — the
+/// document's figure contents — rather than its headings.
+pub(in super::super) fn toc_caption_identifier(instruction: &str) -> Option<String> {
+    let rest = instruction.trim().strip_prefix("TOC")?;
+    if !rest.is_empty() && !rest.starts_with(char::is_whitespace) {
+        return None;
+    }
+    let after = rest.split("\\a").nth(1)?;
+    let identifier = after
+        .trim_start()
+        .trim_start_matches('"')
+        .split('"')
+        .next()
+        .unwrap_or_default()
+        .split_whitespace()
+        .next()
+        .unwrap_or_default();
+    (!identifier.is_empty()).then(|| identifier.to_string())
+}
+
 #[cfg(test)]
 #[path = "docx_context_fields_tests.rs"]
 mod tests;

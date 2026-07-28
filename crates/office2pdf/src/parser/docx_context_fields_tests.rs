@@ -49,3 +49,29 @@ fn ignores_an_instruction_that_is_not_a_contents_field() {
     assert_eq!(toc_heading_depth("SEQ Table"), None);
     assert_eq!(toc_heading_depth("TOCX"), None);
 }
+
+#[test]
+fn reads_the_sequence_a_caption_list_collects() {
+    assert_eq!(
+        toc_caption_identifier(r#"TOC \a "Figure" \h"#).as_deref(),
+        Some("Figure")
+    );
+    assert_eq!(
+        toc_caption_identifier(r#"TOC \a "Table" \h"#).as_deref(),
+        Some("Table")
+    );
+    // The quotes are conventional, not required.
+    assert_eq!(
+        toc_caption_identifier(r"TOC \a Figure").as_deref(),
+        Some("Figure")
+    );
+}
+
+#[test]
+fn a_heading_outline_is_not_a_caption_list() {
+    assert_eq!(toc_caption_identifier(r#"TOC \h \o "1-3""#), None);
+    assert_eq!(toc_caption_identifier("TOC"), None);
+    assert_eq!(toc_caption_identifier("SEQ Table"), None);
+    // `\a` with no identifier lists nothing.
+    assert_eq!(toc_caption_identifier(r"TOC \a"), None);
+}

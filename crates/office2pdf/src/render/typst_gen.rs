@@ -1688,7 +1688,40 @@ fn generate_table_of_contents(out: &mut String, contents: &TableOfContents) {
         TableOfContents::Headings { depth } => {
             let _ = writeln!(out, "#outline(title: none, depth: {depth})");
         }
+        // A caption is not a heading, so Typst's outline cannot reach it. Each
+        // one drops an invisible `#metadata` under a per-identifier label as it
+        // is laid out; the list queries those, and asks the page counter where
+        // each landed. Both halves of the answer therefore come from the
+        // layout, as they do for the heading outline.
+        TableOfContents::Captions { identifier } => {
+            let label = caption_label(identifier);
+            let _ = writeln!(
+                out,
+                "#context {{ for entry in query(<{label}>) {{ \
+                 let entry_page = counter(page).at(entry.location()).first(); \
+                 block(below: 0.65em)[#entry.value #box(width: 1fr, repeat[.]) #entry_page] }} }}"
+            );
+        }
     }
+}
+
+/// The Typst label a `SEQ` identifier's captions carry.
+///
+/// A label is an identifier, so the `SEQ` name — which a document may write in
+/// any script — is reduced to the characters a label allows. Distinct
+/// identifiers that reduce to the same label would share a list, which is why
+/// the prefix keeps them away from any label the document's own content might
+/// produce.
+fn caption_label(identifier: &str) -> String {
+    let mut label = String::from("o2p-seq-");
+    for character in identifier.chars() {
+        if character.is_ascii_alphanumeric() {
+            label.push(character);
+        } else {
+            let _ = write!(label, "-{:x}", character as u32);
+        }
+    }
+    label
 }
 
 fn generate_block(out: &mut String, block: &Block, ctx: &mut GenCtx) -> Result<(), ConvertError> {
@@ -1699,6 +1732,20 @@ fn generate_block(out: &mut String, block: &Block, ctx: &mut GenCtx) -> Result<(
         Block::TableOfContents(contents) => {
             generate_table_of_contents(out, contents);
             Ok(())
+        }
+        Block::Caption(caption) => {
+            let _ = writeln!(
+                out,
+                "#metadata[{}]<{}>",
+                escape_typst(&caption.entry_text),
+                caption_label(&caption.identifier)
+            );
+            generate_paragraph(
+                out,
+                &caption.paragraph,
+                ctx.line_grid_pitch,
+                ctx.default_tab_width_pt,
+            )
         }
         Block::PageBreak => {
             out.push_str("#pagebreak()\n");
