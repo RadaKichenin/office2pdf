@@ -68,6 +68,14 @@ const MAX_TABLE_DEPTH: usize = 64;
 /// Typst's line box leaves more top leading than Word/LibreOffice text frames.
 const FLOATING_TEXT_BOX_TOP_LEADING_COMPENSATION_PT: f64 = 6.0;
 
+/// The Typst state carrying the section's `w:pgNumType w:fmt`.
+///
+/// A `PAGE` field can take the format straight from `GenCtx`, because codegen
+/// already knows which section wrote the field. A contents entry cannot: which
+/// section an entry points into is only settled by the layout, so the format
+/// has to travel with it (issue #605).
+const PAGE_FORMAT_STATE: &str = "o2p-page-format";
+
 /// Internal context for tracking image assets during code generation.
 struct GenCtx {
     images: Vec<ImageAsset>,
@@ -305,6 +313,7 @@ pub(crate) fn generate_typst_with_options_and_font_context(
 
         // Emit document metadata (title/author) if present
         generate_document_metadata(&mut out, &doc.metadata);
+        write_page_format_state(&mut out);
 
         let mut ctx = GenCtx::new();
         ctx.document_default_tab_stop_pt = doc.styles.default_tab_stop_pt;
@@ -346,6 +355,18 @@ fn generate_flow_page(
     // from the document start, so the section states its own first number.
     if let Some(start) = page.page_numbering.and_then(|numbering| numbering.start) {
         let _ = writeln!(out, "#counter(page).update({start})");
+    }
+    // A `PAGE` field takes the format from `ctx` at codegen time, but a
+    // contents entry cannot: which section an entry lands in is only known
+    // once the document is laid out. Record the format in a Typst state so the
+    // outline can read back whatever was in force where each entry resolved
+    // (issue #605).
+    if let Some(numbering) = page.page_numbering {
+        let _ = writeln!(
+            out,
+            "#{PAGE_FORMAT_STATE}.update(\"{}\")",
+            numbering.format.typst_pattern()
+        );
     }
     // Only a snapping grid reaches the line model: a `w:docGrid` whose type is
     // `default` declares a pitch Word ignores for layout (issue #518). The bare
@@ -1672,6 +1693,30 @@ fn generate_floating_anchor_group(
     Ok(consumed)
 }
 
+/// Declare the page-format state and teach the outline to read it back.
+///
+/// Typst numbers an outline entry from the page counter alone, which renders
+/// the arabic count whatever the section it points into declared. The show
+/// rule rebuilds the entry with its number run through the format recorded at
+/// the entry's own location, so an entry pointing into roman-numbered front
+/// matter reads `i` rather than the arabic `1` the page counter alone would
+/// print (issue #605). Entry indentation and the leader stay Typst's, because the
+/// entry's *styling* is a separate defect (issue #610).
+fn write_page_format_state(out: &mut String) {
+    let _ = writeln!(
+        out,
+        "#let {PAGE_FORMAT_STATE} = state(\"{PAGE_FORMAT_STATE}\", \"1\")"
+    );
+    let _ = writeln!(
+        out,
+        "#show outline.entry: it => context {{ \
+         let target = it.element.location(); \
+         let shown = numbering({PAGE_FORMAT_STATE}.at(target), ..counter(page).at(target)); \
+         link(target, it.indented(it.prefix(), \
+         it.body() + box(width: 1fr, repeat[.]) + shown)) }}"
+    );
+}
+
 /// Emit a `TOC` field's result.
 ///
 /// Word recomputes the field when the document is opened, which is why a
@@ -1683,6 +1728,11 @@ fn generate_floating_anchor_group(
 ///
 /// The heading paragraph above the field carries the document's own title, so
 /// the outline contributes none.
+///
+/// Both kinds of list number an entry through the format the entry's own
+/// section declared: the heading outline through the `show` rule
+/// [`write_page_format_state`] installs, the caption list through the same
+/// lookup written into the row it builds here (issue #605).
 fn generate_table_of_contents(out: &mut String, contents: &TableOfContents) {
     match contents {
         TableOfContents::Headings { depth } => {
@@ -1698,8 +1748,10 @@ fn generate_table_of_contents(out: &mut String, contents: &TableOfContents) {
             let _ = writeln!(
                 out,
                 "#context {{ for entry in query(<{label}>) {{ \
-                 let entry_page = counter(page).at(entry.location()).first(); \
-                 block(below: 0.65em)[#entry.value #box(width: 1fr, repeat[.]) #entry_page] }} }}"
+                 let target = entry.location(); \
+                 let shown = numbering({PAGE_FORMAT_STATE}.at(target), \
+                 ..counter(page).at(target)); \
+                 block(below: 0.65em)[#entry.value #box(width: 1fr, repeat[.]) #shown] }} }}"
             );
         }
     }

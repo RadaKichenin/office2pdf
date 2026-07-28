@@ -1498,7 +1498,8 @@ fn test_caption_list_queries_the_captions_it_collects() {
     );
     assert!(
         output.source.contains("query(<o2p-seq-Figure>)")
-            && output.source.contains("counter(page).at(entry.location())"),
+            && output.source.contains("let target = entry.location()")
+            && output.source.contains("counter(page).at(target)"),
         "the list resolves each entry's page from where it landed: {}",
         output.source
     );
@@ -1525,6 +1526,146 @@ fn test_a_caption_identifier_outside_ascii_still_labels() {
     assert!(
         output.source.contains("query(<o2p-seq--d45c>)"),
         "the identifier reduces to label characters: {}",
+        output.source
+    );
+}
+
+/// Word numbers a contents entry the way the section it points into numbers
+/// its pages, so an entry landing in roman-numbered front matter reads `i`
+/// rather than `1` (issue #605). The format travels with the layout, because
+/// only the layout knows which section an entry resolved into.
+#[test]
+fn test_contents_entries_number_in_the_target_sections_format() {
+    use crate::ir::{PageNumberFormat, PageNumbering};
+
+    let front_matter = Page::Flow(FlowPage {
+        size: PageSize::default(),
+        margins: Margins::default(),
+        content: vec![
+            Block::TableOfContents(crate::ir::TableOfContents::Headings { depth: 3 }),
+            Block::Paragraph(Paragraph {
+                style: ParagraphStyle {
+                    heading_level: Some(1),
+                    ..ParagraphStyle::default()
+                },
+                runs: vec![Run {
+                    text: "적용 범위".to_string(),
+                    style: TextStyle::default(),
+                    href: None,
+                    footnote: None,
+                }],
+            }),
+        ],
+        header: None,
+        footer: None,
+        columns: None,
+        line_grid_pitch: None,
+        line_grid_snaps_lines: false,
+        page_numbering: Some(PageNumbering {
+            start: Some(1),
+            format: PageNumberFormat::LowerRoman,
+        }),
+    });
+    let body = Page::Flow(FlowPage {
+        size: PageSize::default(),
+        margins: Margins::default(),
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle {
+                heading_level: Some(1),
+                ..ParagraphStyle::default()
+            },
+            runs: vec![Run {
+                text: "1. 개요".to_string(),
+                style: TextStyle::default(),
+                href: None,
+                footnote: None,
+            }],
+        })],
+        header: None,
+        footer: None,
+        columns: None,
+        line_grid_pitch: None,
+        line_grid_snaps_lines: false,
+        page_numbering: Some(PageNumbering {
+            start: Some(1),
+            format: PageNumberFormat::Decimal,
+        }),
+    });
+
+    let output = generate_typst(&make_doc(vec![front_matter, body])).unwrap();
+
+    assert!(
+        output.source.contains("state(\"o2p-page-format\""),
+        "the section's numeral format is recorded where the layout can read it back: {}",
+        output.source
+    );
+    assert!(
+        output.source.contains("o2p-page-format.update(\"i\")"),
+        "the roman front matter records its format: {}",
+        output.source
+    );
+    assert!(
+        output.source.contains("o2p-page-format.update(\"1\")"),
+        "the decimal body records its own: {}",
+        output.source
+    );
+    assert!(
+        output.source.contains("show outline.entry"),
+        "the outline renders each entry's number through the recorded format: {}",
+        output.source
+    );
+}
+
+/// A caption list is numbered the same way a heading outline is: an entry
+/// pointing at a table in roman-numbered front matter reads `i`, not `1`
+/// (issue #605). The list builds its own rows, so it has to read the format
+/// back at the entry's location just as the outline rule does.
+#[test]
+fn test_caption_list_numbers_in_the_target_sections_format() {
+    use crate::ir::{Caption, PageNumberFormat, PageNumbering};
+
+    let page = Page::Flow(FlowPage {
+        size: PageSize::default(),
+        margins: Margins::default(),
+        content: vec![
+            Block::TableOfContents(crate::ir::TableOfContents::Captions {
+                identifier: "표".to_string(),
+            }),
+            Block::Caption(Caption {
+                identifier: "표".to_string(),
+                entry_text: "문서 서지 정보".to_string(),
+                paragraph: Paragraph {
+                    style: ParagraphStyle::default(),
+                    runs: vec![Run {
+                        text: "표 1 문서 서지 정보".to_string(),
+                        style: TextStyle::default(),
+                        href: None,
+                        footnote: None,
+                    }],
+                },
+            }),
+        ],
+        header: None,
+        footer: None,
+        columns: None,
+        line_grid_pitch: None,
+        line_grid_snaps_lines: false,
+        page_numbering: Some(PageNumbering {
+            start: Some(1),
+            format: PageNumberFormat::LowerRoman,
+        }),
+    });
+
+    let output = generate_typst(&make_doc(vec![page])).unwrap();
+
+    assert!(
+        output.source.contains("o2p-page-format.at(target)"),
+        "the caption list reads the format back at each entry's location: {}",
+        output.source
+    );
+    assert!(
+        !output.source.contains("#entry_page]"),
+        "the raw page count no longer reaches the row: {}",
         output.source
     );
 }
