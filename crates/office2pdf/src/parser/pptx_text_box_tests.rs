@@ -120,6 +120,46 @@ fn test_text_box_font_size() {
     assert_eq!(para.runs[0].style.font_size, Some(24.0));
 }
 
+/// Parse a single formatted run and return its resolved style.
+fn run_style_for(runs_xml: &str) -> TextStyle {
+    let shape = make_formatted_text_box(0, 0, 6_000_000, 500_000, runs_xml);
+    let slide = make_slide_xml(&[shape]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = first_fixed_page(&doc);
+    let blocks = text_box_blocks(&page.elements[0]);
+    match &blocks[0] {
+        Block::Paragraph(p) => p.runs[0].style.clone(),
+        _ => panic!("Expected Paragraph"),
+    }
+}
+
+#[test]
+fn test_text_box_positive_character_tracking() {
+    // DrawingML `spc` is hundredths of a point, like `sz`. The eyebrow run on
+    // the introduction deck's title slide declares spc="220" — 2.2pt per gap.
+    let runs_xml = r#"<a:r><a:rPr sz="1150" b="1" spc="220"/><a:t>OPEN SOURCE · RUST</a:t></a:r>"#;
+
+    assert_eq!(run_style_for(runs_xml).letter_spacing, Some(2.2));
+}
+
+#[test]
+fn test_text_box_negative_character_tracking() {
+    // The same deck's hero wordmark tightens with spc="-100".
+    let runs_xml = r#"<a:r><a:rPr sz="6800" b="1" spc="-100"/><a:t>office2pdf</a:t></a:r>"#;
+
+    assert_eq!(run_style_for(runs_xml).letter_spacing, Some(-1.0));
+}
+
+#[test]
+fn test_text_box_without_spc_has_no_tracking() {
+    let runs_xml = r#"<a:r><a:rPr sz="1800"/><a:t>Untracked</a:t></a:r>"#;
+
+    assert_eq!(run_style_for(runs_xml).letter_spacing, None);
+}
+
 #[test]
 fn test_text_box_combined_formatting() {
     let runs_xml = r#"<a:r><a:rPr b="1" i="1" u="sng" strike="sngStrike" sz="1800"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill><a:latin typeface="Arial"/></a:rPr><a:t>Styled text</a:t></a:r>"#;
