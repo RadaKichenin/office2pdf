@@ -1392,6 +1392,47 @@ fn generate_hf_styled_paragraph(
     }
 }
 
+/// Where a header or footer paragraph's `<w:tab/>` runs place their segments.
+///
+/// Word's running-head idiom declares a right-aligned tab stop at the text
+/// edge, or a centre stop and a right stop, and separates the segments with
+/// tabs. Those two shapes are what `w:tabs` is used for in a header; anything
+/// else keeps the plain advance below.
+enum HeaderFooterTabLayout {
+    /// `left`, tab, `right`.
+    LeftRight(usize),
+    /// `left`, tab, `centre`, tab, `right`.
+    LeftCenterRight(usize, usize),
+}
+
+/// Resolve a header or footer paragraph's tabs against its own tab stops.
+///
+/// `generate_hf_elements` advanced every `<w:tab/>` by a fixed `#h(1em)`, so
+/// the segment a right stop should have pushed to the right margin sat next to
+/// the left one instead — on every page of a document that uses the idiom
+/// (issue #579).
+fn header_footer_tab_layout(
+    paragraph: &crate::ir::HeaderFooterParagraph,
+) -> Option<HeaderFooterTabLayout> {
+    let tabs: Vec<usize> = paragraph
+        .elements
+        .iter()
+        .enumerate()
+        .filter(|(_, element)| matches!(element, HFInline::Run(run) if run.text == "\t"))
+        .map(|(index, _)| index)
+        .collect();
+    let stops = paragraph.style.tab_stops.as_deref()?;
+    let alignments: Vec<TabAlignment> = stops.iter().map(|stop| stop.alignment).collect();
+
+    match (tabs.as_slice(), alignments.as_slice()) {
+        ([tab], [.., TabAlignment::Right]) => Some(HeaderFooterTabLayout::LeftRight(*tab)),
+        ([first, second], [TabAlignment::Center, .., TabAlignment::Right]) => {
+            Some(HeaderFooterTabLayout::LeftCenterRight(*first, *second))
+        }
+        _ => None,
+    }
+}
+
 fn generate_hf_paragraph(
     out: &mut String,
     paragraph: &crate::ir::HeaderFooterParagraph,
@@ -1442,7 +1483,25 @@ fn generate_hf_paragraph(
         generate_hf_elements(out, &paragraph.elements[index + 1..], ctx);
         out.push_str("])");
     } else {
-        generate_hf_elements(out, &paragraph.elements, ctx);
+        match header_footer_tab_layout(paragraph) {
+            Some(HeaderFooterTabLayout::LeftRight(index)) => {
+                out.push_str("#grid(columns: (1fr, auto), [");
+                generate_hf_elements(out, &paragraph.elements[..index], ctx);
+                out.push_str("], [");
+                generate_hf_elements(out, &paragraph.elements[index + 1..], ctx);
+                out.push_str("])");
+            }
+            Some(HeaderFooterTabLayout::LeftCenterRight(first, second)) => {
+                out.push_str("#grid(columns: (1fr, auto, 1fr), align: (left, center, right), [");
+                generate_hf_elements(out, &paragraph.elements[..first], ctx);
+                out.push_str("], [");
+                generate_hf_elements(out, &paragraph.elements[first + 1..second], ctx);
+                out.push_str("], [");
+                generate_hf_elements(out, &paragraph.elements[second + 1..], ctx);
+                out.push_str("])");
+            }
+            None => generate_hf_elements(out, &paragraph.elements, ctx),
+        }
     }
 
     if stacks_rules {
