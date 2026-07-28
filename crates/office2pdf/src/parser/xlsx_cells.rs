@@ -7,7 +7,7 @@ use super::xlsx_style::{
     apply_rich_run_font, extract_cell_alignment, extract_cell_background, extract_cell_borders,
     extract_cell_text_style,
 };
-use crate::ir::TableCell;
+use crate::ir::{Color, TableCell};
 
 /// A cell range within a sheet (1-indexed, inclusive).
 #[derive(Debug, Clone, Copy)]
@@ -333,6 +333,8 @@ pub(super) struct SheetContext {
     /// The workbook Normal font, which every cell without its own font
     /// inherits (issue #462). `None` when `styles.xml` is unreadable.
     pub(super) normal_font: Option<NormalFont>,
+    /// Banded-row shading declared by the sheet's tables (issue #532).
+    pub(super) row_stripes: Vec<crate::parser::xlsx::tables::RowStripes>,
 }
 
 /// First strong bidi direction of a character: Some(true) for right-to-left
@@ -692,6 +694,14 @@ pub(super) fn build_rows_for_range(
                 })]
             };
 
+            // An explicit cell fill wins; the table's banding only shows
+            // through where the cell declares none (issue #532).
+            let background: Option<Color> = background.or_else(|| {
+                ctx.row_stripes
+                    .iter()
+                    .find_map(|stripes| stripes.fill_at(col_idx, row_idx))
+            });
+
             cells.push(TableCell {
                 content,
                 col_span,
@@ -729,6 +739,7 @@ pub(super) fn prepare_sheet_context(
     sheet: &umya_spreadsheet::Worksheet,
     normal_font: Option<&NormalFont>,
     raw_cond_fmt_hints: Option<&super::cond_fmt_raw::RawCondFmtHints>,
+    row_stripes: Vec<crate::parser::xlsx::tables::RowStripes>,
 ) -> Option<(SheetContext, u32, u32)> {
     let (mut max_col, mut max_row) = sheet.get_highest_column_and_row();
     if max_col == 0 || max_row == 0 {
@@ -782,6 +793,7 @@ pub(super) fn prepare_sheet_context(
             merge_skips,
             cond_fmt_overrides,
             normal_font: normal_font.cloned(),
+            row_stripes,
         },
         row_start,
         row_end,
