@@ -1152,3 +1152,57 @@ fn wedge_colours_follow_the_declared_data_point_fills() {
         );
     }
 }
+
+// ----- Pie data labels (issue #570) -----
+
+#[test]
+fn a_pie_draws_a_label_on_each_wedge() {
+    let mut chart = pie_chart(vec![115.0, 92.0, 138.0]);
+    chart.series[0].data_labels = DataLabels {
+        show_value: true,
+        show_category: true,
+        show_percent: true,
+        separator: "; ".to_string(),
+        ..DataLabels::default()
+    };
+
+    let source = chart_source(chart);
+
+    assert_eq!(
+        source.matches("weight: \"bold\", fill: white").count(),
+        3,
+        "one label per wedge, got:\n{source}"
+    );
+    assert!(
+        source.contains("DOCX; 115; 33%"),
+        "category, value and share, joined by the separator, got:\n{source}"
+    );
+}
+
+#[test]
+fn a_pie_without_dlbls_draws_no_wedge_labels() {
+    // Control: the labels are driven by the file, as on the axis plot.
+    let source = chart_source(pie_chart(vec![115.0, 92.0, 138.0]));
+
+    assert!(
+        !source.contains("weight: \"bold\", fill: white"),
+        "no labels without dLbls, got:\n{source}"
+    );
+}
+
+#[test]
+fn a_zero_slice_carries_no_label() {
+    let mut chart = pie_chart(vec![115.0, 0.0, 138.0]);
+    chart.series[0].data_labels = DataLabels {
+        show_value: true,
+        ..DataLabels::default()
+    };
+
+    let source = chart_source(chart);
+
+    assert_eq!(
+        source.matches("weight: \"bold\", fill: white").count(),
+        2,
+        "a slice with no wedge has nothing to label, got:\n{source}"
+    );
+}
