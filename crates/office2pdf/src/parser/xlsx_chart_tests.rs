@@ -40,6 +40,8 @@ fn make_bar_chart_xml() -> String {
                 <c:title><c:tx><c:rich><a:p><a:r><a:t>Sales</a:t></a:r></a:p></c:rich></c:tx></c:title>
                 <c:plotArea>
                     <c:barChart>
+                        <c:barDir val="col"/>
+                        <c:grouping val="clustered"/>
                         <c:ser>
                             <c:idx val="0"/>
                             <c:tx><c:strRef><c:strCache><c:pt idx="0"><c:v>Revenue</c:v></c:pt></c:strCache></c:strRef></c:tx>
@@ -80,7 +82,7 @@ fn test_xlsx_with_chart_embeds_in_table_page() {
     assert!(!tp.charts.is_empty(), "Expected charts in table page");
 
     let chart = &tp.charts[0].1;
-    assert_eq!(chart.chart_type, ChartType::Bar);
+    assert_eq!(chart.chart_type, ChartType::Column);
     assert_eq!(chart.title.as_deref(), Some("Sales"));
     assert_eq!(chart.categories, vec!["Q1", "Q2"]);
     assert_eq!(chart.series[0].values, vec![100.0, 200.0]);
@@ -276,7 +278,7 @@ fn test_xlsx_chart_anchored_at_row_5() {
     let tp = get_sheet_page(&doc, 0);
     assert_eq!(tp.charts.len(), 1, "Expected 1 anchored chart");
     assert_eq!(tp.charts[0].0, 5, "Chart should be anchored at row 5");
-    assert_eq!(tp.charts[0].1.chart_type, ChartType::Bar);
+    assert_eq!(tp.charts[0].1.chart_type, ChartType::Column);
     assert_eq!(tp.charts[0].1.title.as_deref(), Some("Sales"));
 }
 
