@@ -109,6 +109,22 @@ pub struct Chart {
     pub categories: Vec<String>,
     /// Data series.
     pub series: Vec<ChartSeries>,
+    /// How a category's series share one bar.
+    pub grouping: ChartGrouping,
+}
+
+/// How the series of one category are combined, from `<c:grouping>`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ChartGrouping {
+    /// Each series gets its own mark side by side, and so the shape a chart
+    /// without `<c:grouping>` takes: ECMA-376 defaults `CT_BarGrouping` to
+    /// `clustered` and `CT_Grouping` to `standard`, which both mean unstacked.
+    #[default]
+    Clustered,
+    /// A category's series stack into one bar whose length is their total.
+    Stacked,
+    /// As `Stacked`, with every stack normalised to 100%.
+    PercentStacked,
 }
 
 /// The type of chart.

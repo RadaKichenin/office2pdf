@@ -7,7 +7,7 @@ use quick_xml::Reader;
 use quick_xml::events::Event;
 
 use super::xml_util;
-use crate::ir::{Chart, ChartSeries, ChartType};
+use crate::ir::{Chart, ChartGrouping, ChartSeries, ChartType};
 
 /// Mapping from XML chart element tag names to their corresponding `ChartType`.
 /// Both 2-D and 3-D variants map to the same logical type.
@@ -35,6 +35,18 @@ fn chart_type_for_tag(tag: &[u8]) -> Option<ChartType> {
         .map(|(_, ct)| ct.clone())
 }
 
+/// Resolve a `<c:grouping>` value to the way a category's series combine.
+///
+/// Line and area charts spell their unstacked form `standard` where the bar
+/// family spells it `clustered`; both mean one mark per series.
+fn chart_grouping_for(value: &str) -> ChartGrouping {
+    match value {
+        "stacked" => ChartGrouping::Stacked,
+        "percentStacked" => ChartGrouping::PercentStacked,
+        _ => ChartGrouping::Clustered,
+    }
+}
+
 /// Resolve a `<c:barDir>` value to the chart orientation it selects.
 ///
 /// `<c:barDir>` is exclusive to the bar family, so `None` — either an absent
@@ -54,6 +66,7 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
     let mut title = None;
     let mut categories: Vec<String> = Vec::new();
     let mut series: Vec<ChartSeries> = Vec::new();
+    let mut grouping: Option<ChartGrouping> = None;
 
     loop {
         match reader.read_event() {
@@ -63,16 +76,11 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
                 if tag == b"title" && title.is_none() {
                     title = parse_chart_title(&mut reader);
                 } else if let Some(ct) = chart_type_for_tag(tag) {
-                    let mut bar_direction: Option<String> = None;
-                    parse_chart_series(
-                        &mut reader,
-                        tag,
-                        &mut categories,
-                        &mut series,
-                        &mut bar_direction,
-                    );
+                    let mut plot: PlotAreaProps = PlotAreaProps::default();
+                    parse_chart_series(&mut reader, tag, &mut categories, &mut series, &mut plot);
                     chart_type =
-                        Some(bar_direction_chart_type(bar_direction.as_deref()).unwrap_or(ct));
+                        Some(bar_direction_chart_type(plot.bar_direction.as_deref()).unwrap_or(ct));
+                    grouping = plot.grouping.as_deref().map(chart_grouping_for);
                 }
             }
             Ok(Event::Eof) => break,
@@ -95,6 +103,7 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
         title,
         categories,
         series,
+        grouping: grouping.unwrap_or_default(),
     })
 }
 
@@ -143,16 +152,36 @@ fn parse_chart_title(reader: &mut Reader<&[u8]>) -> Option<String> {
     }
 }
 
-/// Parse series data from within a chart type element (e.g., `<c:barChart>`).
+/// Plot-area settings that sit beside `<c:ser>` inside a chart type element.
 ///
-/// `bar_direction` receives the `<c:barDir>` value when the element carries one.
-/// Office writes it self-closing, so it arrives as an `Empty` event.
+/// Office writes both self-closing, so they arrive as `Empty` events.
+#[derive(Debug, Default)]
+struct PlotAreaProps {
+    /// `<c:barDir>`, exclusive to the bar family.
+    bar_direction: Option<String>,
+    /// `<c:grouping>`.
+    grouping: Option<String>,
+}
+
+impl PlotAreaProps {
+    /// Record `e` when it is one of the settings this struct carries.
+    fn absorb(&mut self, e: &quick_xml::events::BytesStart) -> bool {
+        match e.local_name().as_ref() {
+            b"barDir" => self.bar_direction = xml_util::get_attr_str(e, b"val"),
+            b"grouping" => self.grouping = xml_util::get_attr_str(e, b"val"),
+            _ => return false,
+        }
+        true
+    }
+}
+
+/// Parse series data from within a chart type element (e.g., `<c:barChart>`).
 fn parse_chart_series(
     reader: &mut Reader<&[u8]>,
     end_tag: &[u8],
     categories: &mut Vec<String>,
     series: &mut Vec<ChartSeries>,
-    bar_direction: &mut Option<String>,
+    plot: &mut PlotAreaProps,
 ) {
     loop {
         match reader.read_event() {
@@ -164,12 +193,12 @@ fn parse_chart_series(
                         *categories = cats;
                     }
                     series.push(ser);
-                } else if e.local_name().as_ref() == b"barDir" {
-                    *bar_direction = xml_util::get_attr_str(e, b"val");
+                } else {
+                    plot.absorb(e);
                 }
             }
-            Ok(Event::Empty(ref e)) if e.local_name().as_ref() == b"barDir" => {
-                *bar_direction = xml_util::get_attr_str(e, b"val");
+            Ok(Event::Empty(ref e)) => {
+                plot.absorb(e);
             }
             Ok(Event::End(ref e)) if e.local_name().as_ref() == end_tag => break,
             Ok(Event::Eof) | Err(_) => break,

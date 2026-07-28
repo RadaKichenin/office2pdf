@@ -200,6 +200,14 @@ const TICK_GAP: f64 = 22.0; // value tick label gutter
 const GAP: f64 = 6.0;
 const LEGEND_W: f64 = 78.0;
 
+/// Sum of every series' value in one category — the length of its stacked bar.
+fn category_total(series: &[crate::ir::ChartSeries], category_index: usize) -> f64 {
+    series
+        .iter()
+        .filter_map(|s| s.values.get(category_index))
+        .sum()
+}
+
 /// Outer size of the axis plot box, in points.
 ///
 /// A bar chart grows along the category axis, so its height rises with the
@@ -228,13 +236,30 @@ fn generate_chart_axis(out: &mut String, chart: &Chart) {
     let categories: usize = chart.categories.len();
     let series: &[crate::ir::ChartSeries] = &chart.series;
     let series_count: usize = series.len().max(1);
+    let stacked: bool = matches!(
+        chart.grouping,
+        ChartGrouping::Stacked | ChartGrouping::PercentStacked
+    );
 
-    let max_value: f64 = series
-        .iter()
-        .flat_map(|s| s.values.iter())
-        .copied()
-        .fold(0.0_f64, f64::max);
-    let (nice_max, step) = nice_axis(max_value);
+    // A stacked bar is read against its category's total, so the axis must
+    // cover the tallest stack rather than the largest single segment.
+    let (nice_max, step) = match chart.grouping {
+        // Every stack fills the plot, so the axis is the percentage scale
+        // itself and needs no rounding.
+        ChartGrouping::PercentStacked => (100.0, 20.0),
+        ChartGrouping::Stacked => nice_axis(
+            (0..categories)
+                .map(|index| category_total(series, index))
+                .fold(0.0_f64, f64::max),
+        ),
+        ChartGrouping::Clustered => nice_axis(
+            series
+                .iter()
+                .flat_map(|s| s.values.iter())
+                .copied()
+                .fold(0.0_f64, f64::max),
+        ),
+    };
     let plot_cross: f64 = categories as f64 * ROW; // category-axis length
 
     // Chart-area title: the explicit chart title, else the single series
@@ -314,12 +339,35 @@ fn generate_chart_axis(out: &mut String, chart: &Chart) {
     // Bars, grouped per category when multiple series are present.
     for (cat_index, category) in chart.categories.iter().enumerate() {
         let group_start: f64 = cat_index as f64 * ROW;
-        let sub: f64 = (ROW * 0.7) / series_count as f64;
+        // A stacked category is one bar, so every segment takes the full
+        // thickness a clustered chart would split between the series.
+        let sub: f64 = if stacked {
+            ROW * 0.7
+        } else {
+            (ROW * 0.7) / series_count as f64
+        };
+        // Fraction of the axis already consumed by the segments below.
+        let mut stack_base: f64 = 0.0;
+        let category_total: f64 = category_total(series, cat_index);
         for (s_index, s) in series.iter().enumerate() {
             let value: f64 = s.values.get(cat_index).copied().unwrap_or(0.0);
+            // Percent stacking rescales each stack to fill the axis, so an
+            // XLSX column totalling 6 reads the same height as a DOCX one
+            // totalling 9.
+            let value: f64 = match chart.grouping {
+                ChartGrouping::PercentStacked if category_total > 0.0 => {
+                    value / category_total * 100.0
+                }
+                ChartGrouping::PercentStacked => 0.0,
+                _ => value,
+            };
             let frac: f64 = (value / nice_max).clamp(0.0, 1.0);
             let color: &str = CHART_SERIES_COLORS[s_index % CHART_SERIES_COLORS.len()];
-            let offset: f64 = ROW * 0.15 + s_index as f64 * sub;
+            let offset: f64 = if stacked {
+                ROW * 0.15
+            } else {
+                ROW * 0.15 + s_index as f64 * sub
+            };
             if horizontal {
                 // Bar charts stack categories bottom-up.
                 let row_top: f64 = plot_h - (cat_index as f64 + 1.0) * ROW;
@@ -327,7 +375,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart) {
                 let _ = writeln!(
                     out,
                     "#place(top + left, dx: {}pt, dy: {}pt, rect(width: {}pt, height: {}pt, fill: {}, stroke: none))",
-                    format_f64(plot_x),
+                    format_f64(plot_x + stack_base * plot_w),
                     format_f64(row_top + offset),
                     format_f64(bar_w.max(0.0)),
                     format_f64(sub),
@@ -339,11 +387,14 @@ fn generate_chart_axis(out: &mut String, chart: &Chart) {
                     out,
                     "#place(top + left, dx: {}pt, dy: {}pt, rect(width: {}pt, height: {}pt, fill: {}, stroke: none))",
                     format_f64(plot_x + group_start + offset),
-                    format_f64(plot_y + plot_h - bar_h),
+                    format_f64(plot_y + plot_h - bar_h - stack_base * plot_h),
                     format_f64(sub),
                     format_f64(bar_h.max(0.0)),
                     color
                 );
+            }
+            if stacked {
+                stack_base += frac;
             }
         }
         // Category label.

@@ -202,6 +202,67 @@ fn test_bar_dir_col_is_a_column_chart() {
 }
 
 #[test]
+fn test_grouping_stacked_is_read() {
+    let xml = bar_chart_xml(r#"<c:barDir val="col"/><c:grouping val="stacked"/>"#);
+
+    let chart = parse_chart_xml(&xml).unwrap();
+
+    assert_eq!(chart.grouping, ChartGrouping::Stacked);
+}
+
+#[test]
+fn test_grouping_percent_stacked_is_read() {
+    let xml = bar_chart_xml(r#"<c:barDir val="col"/><c:grouping val="percentStacked"/>"#);
+
+    let chart = parse_chart_xml(&xml).unwrap();
+
+    assert_eq!(chart.grouping, ChartGrouping::PercentStacked);
+}
+
+#[test]
+fn test_grouping_clustered_is_read() {
+    let xml = bar_chart_xml(r#"<c:barDir val="col"/><c:grouping val="clustered"/>"#);
+
+    let chart = parse_chart_xml(&xml).unwrap();
+
+    assert_eq!(chart.grouping, ChartGrouping::Clustered);
+}
+
+#[test]
+fn test_grouping_defaults_to_clustered_when_absent() {
+    let xml = bar_chart_xml(r#"<c:barDir val="col"/>"#);
+
+    let chart = parse_chart_xml(&xml).unwrap();
+
+    assert_eq!(chart.grouping, ChartGrouping::Clustered);
+}
+
+#[test]
+fn test_line_chart_standard_grouping_is_not_stacked() {
+    // Line and area charts spell their unstacked form `standard`, which must
+    // not fall through to a stacked reading.
+    let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+        <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+            <c:chart>
+                <c:plotArea>
+                    <c:lineChart>
+                        <c:grouping val="standard"/>
+                        <c:ser>
+                            <c:idx val="0"/>
+                            <c:cat><c:strLit><c:pt idx="0"><c:v>Jan</c:v></c:pt><c:pt idx="1"><c:v>Feb</c:v></c:pt></c:strLit></c:cat>
+                            <c:val><c:numLit><c:pt idx="0"><c:v>3</c:v></c:pt><c:pt idx="1"><c:v>5</c:v></c:pt></c:numLit></c:val>
+                        </c:ser>
+                    </c:lineChart>
+                </c:plotArea>
+            </c:chart>
+        </c:chartSpace>"#;
+
+    let chart = parse_chart_xml(xml).unwrap();
+
+    assert_eq!(chart.grouping, ChartGrouping::Clustered);
+}
+
+#[test]
 fn test_bar_dir_bar_is_a_bar_chart() {
     let xml = bar_chart_xml(r#"<c:barDir val="bar"/><c:grouping val="clustered"/>"#);
 
