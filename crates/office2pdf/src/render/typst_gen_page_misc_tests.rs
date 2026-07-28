@@ -621,6 +621,8 @@ fn test_table_page_with_chart_at_row() {
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
+        category_axis_title: None,
+        value_axis_title: None,
     };
 
     let page = Page::Sheet(SheetPage {
@@ -665,6 +667,8 @@ fn test_table_page_with_chart_at_end() {
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
+        category_axis_title: None,
+        value_axis_title: None,
     };
 
     let page = Page::Sheet(SheetPage {

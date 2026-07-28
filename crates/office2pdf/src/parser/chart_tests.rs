@@ -700,3 +700,89 @@ fn test_of_pie_names_the_shape_its_ofpietype_asks_for() {
         );
     }
 }
+
+// ----- Axis titles (issue #552) -----
+
+/// The audited workbook's column chart, with the axis titles Excel writes.
+fn chart_with_axes(cat_ax_title: &str, val_ax_title: &str) -> String {
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+        <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+            <c:chart>
+                <c:title><c:tx><c:rich><a:p><a:r><a:t>계층별 프로덕션 LOC</a:t></a:r></a:p></c:rich></c:tx></c:title>
+                <c:plotArea>
+                    <c:barChart>
+                        <c:barDir val="col"/>
+                        <c:ser>
+                            <c:idx val="0"/>
+                            <c:cat><c:strLit><c:pt idx="0"><c:v>parser</c:v></c:pt></c:strLit></c:cat>
+                            <c:val><c:numLit><c:pt idx="0"><c:v>23334</c:v></c:pt></c:numLit></c:val>
+                        </c:ser>
+                    </c:barChart>
+                    <c:catAx>
+                        <c:axId val="59291440"/>
+                        <c:axPos val="b"/>
+                        {cat_ax_title}
+                        <c:tickLblPos val="nextTo"/>
+                    </c:catAx>
+                    <c:valAx>
+                        <c:axId val="21056836"/>
+                        <c:axPos val="l"/>
+                        {val_ax_title}
+                        <c:tickLblPos val="nextTo"/>
+                    </c:valAx>
+                </c:plotArea>
+            </c:chart>
+        </c:chartSpace>"#
+    )
+}
+
+/// A `<c:title>` as Excel writes it inside an axis.
+fn axis_title(text: &str, rotation: &str) -> String {
+    format!(
+        r#"<c:title><c:tx><c:rich><a:bodyPr rot="{rotation}"/><a:lstStyle/><a:p><a:r><a:rPr b="1" sz="1000"/><a:t>{text}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>"#
+    )
+}
+
+#[test]
+fn test_axis_titles_are_read() {
+    let xml = chart_with_axes(&axis_title("계층", "0"), &axis_title("LOC", "-5400000"));
+
+    let chart = parse_chart_xml(&xml).unwrap();
+
+    assert_eq!(chart.category_axis_title.as_deref(), Some("계층"));
+    assert_eq!(chart.value_axis_title.as_deref(), Some("LOC"));
+}
+
+#[test]
+fn test_an_axis_title_does_not_displace_the_chart_title() {
+    // The chart title is the first `<c:title>` in the part; the axis ones come
+    // later and must not be mistaken for it, nor it for them.
+    let xml = chart_with_axes(&axis_title("계층", "0"), &axis_title("LOC", "-5400000"));
+
+    let chart = parse_chart_xml(&xml).unwrap();
+
+    assert_eq!(chart.title.as_deref(), Some("계층별 프로덕션 LOC"));
+}
+
+#[test]
+fn test_axes_without_titles_report_none() {
+    let xml = chart_with_axes("", "");
+
+    let chart = parse_chart_xml(&xml).unwrap();
+
+    assert_eq!(chart.category_axis_title, None);
+    assert_eq!(chart.value_axis_title, None);
+    assert_eq!(chart.title.as_deref(), Some("계층별 프로덕션 LOC"));
+}
+
+#[test]
+fn test_one_titled_axis_does_not_borrow_the_others_title() {
+    let xml = chart_with_axes("", &axis_title("LOC", "-5400000"));
+
+    let chart = parse_chart_xml(&xml).unwrap();
+
+    assert_eq!(chart.category_axis_title, None);
+    assert_eq!(chart.value_axis_title.as_deref(), Some("LOC"));
+}

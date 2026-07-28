@@ -113,6 +113,11 @@ pub struct Chart {
     pub grouping: ChartGrouping,
     /// Where the legend sits, from `<c:legendPos>`.
     pub legend_position: LegendPosition,
+    /// Title of the category axis, from `<c:catAx><c:title>`.
+    pub category_axis_title: Option<String>,
+    /// Title of the value axis, from `<c:valAx><c:title>`. Office writes it
+    /// rotated a quarter turn anticlockwise along the axis.
+    pub value_axis_title: Option<String>,
 }
 
 /// Where a chart's legend sits relative to its plot, from `<c:legendPos>`.

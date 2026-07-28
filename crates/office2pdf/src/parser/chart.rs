@@ -133,6 +133,8 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
     let mut series: Vec<ChartSeries> = Vec::new();
     let mut grouping: Option<ChartGrouping> = None;
     let mut legend_position: Option<LegendPosition> = None;
+    let mut category_axis_title: Option<String> = None;
+    let mut value_axis_title: Option<String> = None;
 
     loop {
         match reader.read_event() {
@@ -141,6 +143,10 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
                 let tag: &[u8] = local.as_ref();
                 if tag == b"title" && title.is_none() {
                     title = parse_chart_title(&mut reader);
+                } else if tag == b"catAx" {
+                    category_axis_title = parse_axis_title(&mut reader, b"catAx");
+                } else if tag == b"valAx" {
+                    value_axis_title = parse_axis_title(&mut reader, b"valAx");
                 } else if let Some(ct) = chart_type_for_tag(tag) {
                     let mut plot: PlotAreaProps = PlotAreaProps::default();
                     parse_chart_series(&mut reader, tag, &mut categories, &mut series, &mut plot);
@@ -184,7 +190,28 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
         series,
         grouping: grouping.unwrap_or_default(),
         legend_position: legend_position.unwrap_or_default(),
+        category_axis_title,
+        value_axis_title,
     })
+}
+
+/// Read an axis element's own `<c:title>`, consuming it to `end_tag`.
+///
+/// Axis titles sit after the plot-area family element, so they never reach the
+/// `<c:title>` branch that captures the chart's own title.
+fn parse_axis_title(reader: &mut Reader<&[u8]>, end_tag: &[u8]) -> Option<String> {
+    let mut title: Option<String> = None;
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"title" => {
+                title = title.or_else(|| parse_chart_title(reader));
+            }
+            Ok(Event::End(ref e)) if e.local_name().as_ref() == end_tag => break,
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+    title
 }
 
 /// Parse the chart title text from `<c:title>`.

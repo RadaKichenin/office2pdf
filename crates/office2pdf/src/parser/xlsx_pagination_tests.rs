@@ -154,6 +154,8 @@ fn test_charts_stay_on_first_column_group() {
             series: vec![],
             grouping: crate::ir::ChartGrouping::Clustered,
             legend_position: crate::ir::LegendPosition::Right,
+            category_axis_title: None,
+            value_axis_title: None,
         },
     )];
     let pages = split_sheet_page_by_width(page, None);

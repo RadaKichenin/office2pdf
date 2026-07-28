@@ -14,6 +14,8 @@ fn test_codegen_chart_bar_visual_bars() {
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
+        category_axis_title: None,
+        value_axis_title: None,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -60,6 +62,8 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
+        category_axis_title: None,
+        value_axis_title: None,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -94,6 +98,8 @@ fn test_codegen_chart_pie_percentages() {
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
+        category_axis_title: None,
+        value_axis_title: None,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -128,6 +134,8 @@ fn test_codegen_chart_line_trend_indicators() {
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
+        category_axis_title: None,
+        value_axis_title: None,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -159,6 +167,8 @@ fn test_codegen_chart_empty_series() {
         series: vec![],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
+        category_axis_title: None,
+        value_axis_title: None,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -222,6 +232,8 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
+        category_axis_title: None,
+        value_axis_title: None,
     }));
     let doc = make_doc(vec![make_flow_page(content)]);
 
@@ -254,6 +266,8 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
+        category_axis_title: None,
+        value_axis_title: None,
     }));
     let doc = make_doc(vec![make_flow_page(content)]);
 
@@ -437,6 +451,8 @@ fn test_codegen_chart_line_plot() {
         ],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
+        category_axis_title: None,
+        value_axis_title: None,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -474,6 +490,8 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
+        category_axis_title: None,
+        value_axis_title: None,
     })])]);
 
     let pages = page_texts(&doc);
@@ -527,6 +545,8 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
         ],
         grouping,
         legend_position: LegendPosition::Right,
+        category_axis_title: None,
+        value_axis_title: None,
     }
 }
 
@@ -635,6 +655,8 @@ fn legend_chart(position: LegendPosition) -> Chart {
         ],
         grouping: ChartGrouping::Stacked,
         legend_position: position,
+        category_axis_title: None,
+        value_axis_title: None,
     }
 }
 
@@ -766,6 +788,8 @@ fn a_declared_series_fill_reaches_the_bars() {
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
+        category_axis_title: None,
+        value_axis_title: None,
     };
 
     let source = chart_source(chart);
@@ -796,6 +820,8 @@ fn a_series_without_a_fill_still_takes_the_palette() {
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
+        category_axis_title: None,
+        value_axis_title: None,
     };
 
     let source = chart_source(chart);
@@ -824,6 +850,8 @@ fn per_point_fills_colour_each_bar_separately() {
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
+        category_axis_title: None,
+        value_axis_title: None,
     };
 
     let source = chart_source(chart);
@@ -834,4 +862,83 @@ fn per_point_fills_colour_each_bar_separately() {
             "each point paints its own fill; {expected} missing from:\n{source}"
         );
     }
+}
+
+// ----- Axis titles (issue #552) -----
+
+fn axis_titled_chart(category: Option<&str>, value: Option<&str>) -> Chart {
+    Chart {
+        chart_type: ChartType::Column,
+        title: Some("Production LOC by layer".to_string()),
+        categories: vec!["parser".to_string(), "render".to_string()],
+        series: vec![ChartSeries {
+            name: Some("LOC".to_string()),
+            values: vec![23334.0, 8331.0],
+            fill: None,
+            point_fills: Vec::new(),
+        }],
+        grouping: ChartGrouping::Clustered,
+        legend_position: LegendPosition::Right,
+        category_axis_title: category.map(str::to_string),
+        value_axis_title: value.map(str::to_string),
+    }
+}
+
+#[test]
+fn axis_titles_are_drawn() {
+    let source = chart_source(axis_titled_chart(Some("계층"), Some("LOC")));
+
+    assert!(
+        source.contains("계층"),
+        "the category axis title must be drawn: {source}"
+    );
+    assert!(
+        source.contains("rotate(-90deg"),
+        "the value axis title runs down the left edge: {source}"
+    );
+}
+
+#[test]
+fn an_untitled_axis_reserves_no_band() {
+    // Control: a chart with no axis titles keeps its old geometry, so the
+    // gutters are spent only when there is something to put in them.
+    let titled = chart_source(axis_titled_chart(Some("계층"), Some("LOC")));
+    let untitled = chart_source(axis_titled_chart(None, None));
+
+    let box_width = |source: &str| -> f64 {
+        source
+            .lines()
+            .find(|line| line.starts_with("#box(width:"))
+            .and_then(|line| {
+                line.split_once("width: ")?
+                    .1
+                    .split_once("pt")?
+                    .0
+                    .parse()
+                    .ok()
+            })
+            .expect("a plot box is emitted")
+    };
+
+    assert!(
+        box_width(&titled) > box_width(&untitled),
+        "the value axis title widens the box: {} vs {}",
+        box_width(&titled),
+        box_width(&untitled)
+    );
+    assert!(
+        !untitled.contains("rotate(-90deg"),
+        "nothing is rotated when no axis is titled: {untitled}"
+    );
+}
+
+#[test]
+fn each_axis_title_is_independent() {
+    let value_only = chart_source(axis_titled_chart(None, Some("LOC")));
+
+    assert!(value_only.contains("rotate(-90deg"));
+    assert!(
+        !value_only.contains("계층"),
+        "an untitled category axis draws nothing: {value_only}"
+    );
 }
