@@ -151,6 +151,95 @@ fn test_codegen_chart_empty_series() {
     );
 }
 
+/// Render `doc` and return the visible text of each PDF page separately.
+fn page_texts(doc: &Document) -> Vec<String> {
+    let pdf: Vec<u8> = crate::render_document(doc).unwrap();
+    pdf_extract::extract_text_from_mem_by_pages(&pdf).unwrap()
+}
+
+/// Fill most of a page so the chart that follows cannot fit in what is left.
+fn page_filler(lines: usize) -> Vec<Block> {
+    (1..=lines)
+        .map(|line| {
+            make_paragraph(&format!(
+                "Line {line} of the quarterly commentary preceding the chart."
+            ))
+        })
+        .collect()
+}
+
+/// Report the index of the single page carrying `marker`, or panic with the
+/// page breakdown when it is missing or duplicated.
+fn page_holding(pages: &[String], marker: &str) -> usize {
+    let hits: Vec<usize> = pages
+        .iter()
+        .enumerate()
+        .filter(|(_, text)| text.contains(marker))
+        .map(|(index, _)| index)
+        .collect();
+    assert_eq!(
+        hits.len(),
+        1,
+        "expected {marker:?} on exactly one page, found it on {hits:?}; pages:\n{pages:#?}"
+    );
+    hits[0]
+}
+
+#[test]
+fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
+    let mut content: Vec<Block> = page_filler(30);
+    content.push(Block::Chart(Chart {
+        chart_type: ChartType::Column,
+        title: Some("Quarterly Units Shipped".to_string()),
+        categories: vec![
+            "Northlake".to_string(),
+            "Eastport".to_string(),
+            "Southgate".to_string(),
+        ],
+        series: vec![ChartSeries {
+            name: Some("Units".to_string()),
+            values: vec![23334.0, 8331.0, 2727.0],
+        }],
+    }));
+    let doc = make_doc(vec![make_flow_page(content)]);
+
+    let pages = page_texts(&doc);
+
+    // Excel treats a chart as one floating graphic: the title and the plot it
+    // labels never land on opposite sides of a page break.
+    assert_eq!(
+        page_holding(&pages, "Quarterly Units Shipped"),
+        page_holding(&pages, "Southgate"),
+        "chart title and category labels split across pages; pages:\n{pages:#?}"
+    );
+}
+
+#[test]
+fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
+    // The pie fallback draws a bordered box; a breakable one closes with a
+    // bottom border at the page end and re-opens with a fresh top border, so
+    // one chart reads as two.
+    let mut content: Vec<Block> = page_filler(30);
+    content.push(Block::Chart(Chart {
+        chart_type: ChartType::Pie,
+        title: Some("Fixture Documents by Format".to_string()),
+        categories: vec!["DOCX".to_string(), "PPTX".to_string(), "XLSX".to_string()],
+        series: vec![ChartSeries {
+            name: None,
+            values: vec![115.0, 92.0, 138.0],
+        }],
+    }));
+    let doc = make_doc(vec![make_flow_page(content)]);
+
+    let pages = page_texts(&doc);
+
+    assert_eq!(
+        page_holding(&pages, "Fixture Documents by Format"),
+        page_holding(&pages, "XLSX"),
+        "chart box split across pages; pages:\n{pages:#?}"
+    );
+}
+
 fn sa_node(text: &str, depth: usize) -> SmartArtNode {
     SmartArtNode {
         text: text.to_string(),
@@ -333,4 +422,34 @@ fn test_codegen_chart_line_plot() {
     assert!(output.source.contains("[A]") && output.source.contains("[B]"));
     // Category labels 1..3 present.
     assert!(output.source.contains("[1]") && output.source.contains("[3]"));
+}
+
+#[test]
+fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
+    // Keeping an over-tall chart atomic does not move it to the next page —
+    // Typst runs it off the page edge and the overflow is never drawn. Such a
+    // chart stays breakable so every row survives.
+    let categories: Vec<String> = (1..=60).map(|i| format!("Category{i:03}")).collect();
+    let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Chart {
+        chart_type: ChartType::Scatter,
+        title: Some("Sixty Sample Sites".to_string()),
+        categories: categories.clone(),
+        series: vec![ChartSeries {
+            name: Some("Reading".to_string()),
+            values: (1..=60).map(|value| value as f64).collect(),
+        }],
+    })])]);
+
+    let pages = page_texts(&doc);
+
+    assert!(
+        pages.len() > 1,
+        "a 60-row chart cannot fit one page; it must break instead of overflowing: {pages:#?}"
+    );
+    for category in [&categories[0], &categories[59]] {
+        assert!(
+            pages.iter().any(|page| page.contains(category)),
+            "{category} was dropped; pages:\n{pages:#?}"
+        );
+    }
 }
