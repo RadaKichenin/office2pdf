@@ -7,7 +7,7 @@ use quick_xml::Reader;
 use quick_xml::events::Event;
 
 use super::xml_util;
-use crate::ir::{Chart, ChartGrouping, ChartSeries, ChartType};
+use crate::ir::{Chart, ChartGrouping, ChartSeries, ChartType, LegendPosition};
 
 /// Mapping from XML chart element tag names to their corresponding `ChartType`.
 /// Both 2-D and 3-D variants map to the same logical type.
@@ -33,6 +33,17 @@ fn chart_type_for_tag(tag: &[u8]) -> Option<ChartType> {
         .iter()
         .find(|(name, _)| *name == tag)
         .map(|(_, ct)| ct.clone())
+}
+
+/// Resolve a `<c:legendPos>` value to the edge the legend sits on.
+fn legend_position_for(value: &str) -> LegendPosition {
+    match value {
+        "b" => LegendPosition::Bottom,
+        "l" => LegendPosition::Left,
+        "t" => LegendPosition::Top,
+        "tr" => LegendPosition::TopRight,
+        _ => LegendPosition::Right,
+    }
 }
 
 /// Resolve a `<c:grouping>` value to the way a category's series combine.
@@ -67,6 +78,7 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
     let mut categories: Vec<String> = Vec::new();
     let mut series: Vec<ChartSeries> = Vec::new();
     let mut grouping: Option<ChartGrouping> = None;
+    let mut legend_position: Option<LegendPosition> = None;
 
     loop {
         match reader.read_event() {
@@ -82,6 +94,11 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
                         Some(bar_direction_chart_type(plot.bar_direction.as_deref()).unwrap_or(ct));
                     grouping = plot.grouping.as_deref().map(chart_grouping_for);
                 }
+            }
+            Ok(Event::Empty(ref e)) if e.local_name().as_ref() == b"legendPos" => {
+                legend_position = xml_util::get_attr_str(e, b"val")
+                    .as_deref()
+                    .map(legend_position_for);
             }
             Ok(Event::Eof) => break,
             Err(_) => break,
@@ -104,6 +121,7 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
         categories,
         series,
         grouping: grouping.unwrap_or_default(),
+        legend_position: legend_position.unwrap_or_default(),
     })
 }
 

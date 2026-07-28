@@ -111,6 +111,30 @@ pub struct Chart {
     pub series: Vec<ChartSeries>,
     /// How a category's series share one bar.
     pub grouping: ChartGrouping,
+    /// Where the legend sits, from `<c:legendPos>`.
+    pub legend_position: LegendPosition,
+}
+
+/// Where a chart's legend sits relative to its plot, from `<c:legendPos>`.
+///
+/// ECMA-376 gives `ST_LegendPos` a default of `r`, which is also where every
+/// legend used to be drawn.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum LegendPosition {
+    Bottom,
+    Left,
+    #[default]
+    Right,
+    Top,
+    TopRight,
+}
+
+impl LegendPosition {
+    /// Whether entries flow left to right rather than stacking downward.
+    /// PowerPoint lays a legend out along the edge it sits on.
+    pub fn is_horizontal(self) -> bool {
+        matches!(self, LegendPosition::Bottom | LegendPosition::Top)
+    }
 }
 
 /// How the series of one category are combined, from `<c:grouping>`.

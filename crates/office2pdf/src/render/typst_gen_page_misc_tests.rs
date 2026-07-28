@@ -607,7 +607,7 @@ fn test_table_page_no_header_footer() {
 
 #[test]
 fn test_table_page_with_chart_at_row() {
-    use crate::ir::{Chart, ChartGrouping, ChartSeries, ChartType};
+    use crate::ir::{Chart, ChartGrouping, ChartSeries, ChartType, LegendPosition};
 
     let chart = Chart {
         chart_type: ChartType::Bar,
@@ -618,6 +618,7 @@ fn test_table_page_with_chart_at_row() {
             values: vec![100.0, 200.0],
         }],
         grouping: ChartGrouping::Clustered,
+        legend_position: LegendPosition::Right,
     };
 
     let page = Page::Sheet(SheetPage {
@@ -648,7 +649,7 @@ fn test_table_page_with_chart_at_row() {
 
 #[test]
 fn test_table_page_with_chart_at_end() {
-    use crate::ir::{Chart, ChartGrouping, ChartSeries, ChartType};
+    use crate::ir::{Chart, ChartGrouping, ChartSeries, ChartType, LegendPosition};
 
     let chart = Chart {
         chart_type: ChartType::Pie,
@@ -659,6 +660,7 @@ fn test_table_page_with_chart_at_end() {
             values: vec![100.0],
         }],
         grouping: ChartGrouping::Clustered,
+        legend_position: LegendPosition::Right,
     };
 
     let page = Page::Sheet(SheetPage {
