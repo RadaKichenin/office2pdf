@@ -3,8 +3,9 @@ use std::collections::HashMap;
 use crate::ir::{Color, ParagraphStyle, TabStop, TextStyle};
 
 use super::{
-    ThemeFonts, extract_doc_default_text_style_with_theme, extract_paragraph_style,
-    extract_run_style, extract_tab_stop_overrides, resolve_theme_font_family,
+    ThemeFonts, extract_doc_default_paragraph_style, extract_doc_default_text_style_with_theme,
+    extract_paragraph_style, extract_run_style, extract_tab_stop_overrides,
+    resolve_theme_font_family,
 };
 
 /// Resolved style formatting extracted from a document style definition.
@@ -76,12 +77,13 @@ pub(super) fn build_style_map(
 ) -> StyleMap {
     let mut map = StyleMap::new();
     let default_text: TextStyle = extract_doc_default_text_style_with_theme(styles, theme_fonts);
+    let default_paragraph: ParagraphStyle = extract_doc_default_paragraph_style(styles);
 
     map.insert(
         DOC_DEFAULT_STYLE_ID.to_string(),
         ResolvedStyle {
             text: default_text,
-            paragraph: ParagraphStyle::default(),
+            paragraph: default_paragraph.clone(),
             paragraph_tab_overrides: None,
             heading_level: None,
         },
@@ -98,7 +100,13 @@ pub(super) fn build_style_map(
                         resolve_theme_font_family(&run_property_json, theme_fonts);
                 }
                 let text = merge_text_style(&own_text, map.get(DOC_DEFAULT_STYLE_ID));
-                let mut paragraph = extract_paragraph_style(&style.paragraph_property);
+                // A named style states only what it changes; everything else
+                // falls through to `w:pPrDefault`, exactly as its run
+                // properties fall through to `w:rPrDefault` above (issue #574).
+                let mut paragraph = fill_paragraph_defaults(
+                    extract_paragraph_style(&style.paragraph_property),
+                    &default_paragraph,
+                );
                 paragraph.background = paragraph_backgrounds.get(&style.style_id).copied();
                 let paragraph_tab_overrides =
                     extract_tab_stop_overrides(&style.paragraph_property.tabs);
@@ -156,6 +164,24 @@ pub(super) fn build_style_map(
     }
 
     map
+}
+
+/// Fill a style's unstated paragraph properties from the document default.
+///
+/// Only the properties Word actually inherits through `w:pPrDefault` are
+/// filled. `heading_level`, `tab_stops`, `background`, and the borders are
+/// deliberately absent: the first three are resolved from the style's own
+/// `w:outlineLvl`, `w:tabs`, and `w:shd`, and a document default never carries
+/// a `w:pBdr` that should frame every paragraph in the file.
+fn fill_paragraph_defaults(mut style: ParagraphStyle, defaults: &ParagraphStyle) -> ParagraphStyle {
+    style.alignment = style.alignment.or(defaults.alignment);
+    style.indent_left = style.indent_left.or(defaults.indent_left);
+    style.indent_right = style.indent_right.or(defaults.indent_right);
+    style.indent_first_line = style.indent_first_line.or(defaults.indent_first_line);
+    style.line_spacing = style.line_spacing.or(defaults.line_spacing);
+    style.space_before = style.space_before.or(defaults.space_before);
+    style.space_after = style.space_after.or(defaults.space_after);
+    style
 }
 
 /// Merge style text formatting with explicit run formatting.
