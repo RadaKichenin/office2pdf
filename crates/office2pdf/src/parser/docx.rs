@@ -11,8 +11,8 @@ use crate::ir::{
     Alignment, Block, BorderLineStyle, BorderSide, CellBorder, CellVerticalAlign, Color,
     ColumnLayout, Document, FloatingImage, FloatingTextBox, ImageData, ImageFormat,
     ImageParagraphSpacing, Insets, LineSpacing, Page, PageNumbering, Paragraph, ParagraphStyle,
-    Run, StyleSheet, TabAlignment, TabLeader, TabStop, Table, TableCell, TableRow, TextDirection,
-    TextStyle, VerticalTextAlign,
+    Run, StyleSheet, TabAlignment, TabLeader, TabStop, Table, TableCell, TableOfContents, TableRow,
+    TextDirection, TextStyle, VerticalTextAlign,
 };
 use crate::parser::Parser;
 
@@ -26,6 +26,7 @@ use self::contexts::{
     build_math_context_from_xml, build_note_context_from_xml, build_wrap_context_from_xml,
     extract_column_layout_from_section_property, is_note_reference_run, read_zip_text,
     scan_column_layouts, scan_page_numbering, scan_style_paragraph_shading, seq_identifier,
+    toc_heading_depth,
 };
 use self::lists::{
     NumberingMap, TaggedElement, build_numbering_map, extract_num_info, group_into_lists,
@@ -764,6 +765,30 @@ fn apply_default_text_color(blocks: &mut [Block], color: Color) {
     }
 }
 
+/// The outline depth a paragraph's `TOC` field collects, if it carries one.
+///
+/// A dirty `TOC` field is stored as its instruction and nothing else, so the
+/// paragraph holding it has no text to render and the contents page came out
+/// blank. The field becomes a block the renderer resolves against the
+/// document's own headings instead (issue #576).
+fn toc_field_depth(para: &docx_rs::Paragraph) -> Option<u8> {
+    para.children
+        .iter()
+        .filter_map(|child| match child {
+            docx_rs::ParagraphChild::Run(run) => Some(run),
+            _ => None,
+        })
+        .flat_map(|run| run.children.iter())
+        .find_map(|child| match child {
+            docx_rs::RunChild::InstrText(instruction) => match instruction.as_ref() {
+                docx_rs::InstrText::Unsupported(text) => toc_heading_depth(text),
+                _ => None,
+            },
+            docx_rs::RunChild::InstrTextString(text) => toc_heading_depth(text),
+            _ => None,
+        })
+}
+
 /// The number a run's `SEQ` field renders, if it carries one.
 ///
 /// Word stores a caption number in the field, not in the text, so a run that
@@ -917,6 +942,25 @@ fn convert_paragraph_blocks(
     // Emit page break before the paragraph if requested
     if para.property.page_break_before == Some(true) {
         out.push(Block::PageBreak);
+    }
+
+    // A dirty `TOC` field is stored as its instruction and nothing else, so
+    // the paragraph carrying it has no text of its own to render (issue #576).
+    // A field Word has already computed keeps its cached entries instead:
+    // those are the result, and recomputing over them would drop the numbers
+    // the document shipped.
+    if let Some(depth) = toc_field_depth(para)
+        && para
+            .children
+            .iter()
+            .filter_map(|child| match child {
+                docx_rs::ParagraphChild::Run(run) => Some(run),
+                _ => None,
+            })
+            .all(|run| extract_run_text(run).trim().is_empty())
+    {
+        out.push(Block::TableOfContents(TableOfContents::Headings { depth }));
+        return;
     }
 
     // Look up the paragraph's referenced style

@@ -430,6 +430,9 @@ pub(crate) fn with_font_search_context<T>(
 fn visit_block_fonts(block: &Block, visitor: &mut impl FnMut(&str) -> bool) -> bool {
     match block {
         Block::Paragraph(paragraph) => visit_paragraph_fonts(paragraph, visitor),
+        // A contents page's entries are built from the headings it points at,
+        // so it names no font of its own.
+        Block::TableOfContents(_) => true,
         Block::Table(table) => visit_table_fonts(table, visitor),
         Block::FloatingTextBox(text_box) => visit_blocks_fonts(&text_box.content, visitor),
         Block::List(list) => list.items.iter().all(|item| {

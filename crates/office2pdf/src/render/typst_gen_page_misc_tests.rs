@@ -1434,3 +1434,31 @@ fn test_section_page_numbering_updates_the_counter_and_its_numerals() {
         output.source
     );
 }
+
+#[test]
+fn test_contents_block_emits_an_outline_at_its_declared_depth() {
+    // The entries, their page numbers, and the leaders between them all come
+    // from where the headings land, which only the layout knows (issue #576).
+    let doc = make_doc(vec![make_flow_page(vec![
+        Block::TableOfContents(crate::ir::TableOfContents::Headings { depth: 3 }),
+        Block::Paragraph(Paragraph {
+            style: ParagraphStyle {
+                heading_level: Some(1),
+                ..ParagraphStyle::default()
+            },
+            runs: vec![Run {
+                text: "1. 개요".to_string(),
+                style: TextStyle::default(),
+                href: None,
+                footnote: None,
+            }],
+        }),
+    ])]);
+
+    let output = generate_typst(&doc).unwrap();
+    assert!(
+        output.source.contains("#outline(title: none, depth: 3)"),
+        "the contents block resolves against the document's headings: {}",
+        output.source
+    );
+}

@@ -34,7 +34,7 @@ pub(super) use chart::{ChartContext, build_chart_context_from_xml};
 pub(super) use columns::{extract_column_layout_from_section_property, scan_column_layouts};
 pub(super) use docx_context_shape::{DrawingShapeContext, WpgDrawingInfo};
 pub(super) use drawing::{DrawingTextBoxContext, DrawingTextBoxInfo};
-pub(super) use fields::{FieldContext, seq_identifier};
+pub(super) use fields::{FieldContext, seq_identifier, toc_heading_depth};
 pub(super) use math::{MathContext, build_math_context_from_xml};
 pub(super) use notes::{
     NoteContent, NoteContext, build_note_context_from_xml, is_note_reference_run, read_zip_text,
