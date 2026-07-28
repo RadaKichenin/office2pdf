@@ -485,7 +485,7 @@ fn test_cond_fmt_icon_set() {
     assert_eq!(cell3.icon_text.as_deref(), Some("●"));
     assert_eq!(
         cell3.icon_color,
-        Some(Color::new(104, 164, 144)),
+        Some(Color::new(98, 193, 122)),
         "High value circle should be green"
     );
 }
@@ -531,7 +531,7 @@ fn test_cond_fmt_icon_set_traffic_lights_explicit() {
 
     let cell3 = &tp.table.rows[2].cells[0];
     assert_eq!(cell3.icon_text.as_deref(), Some("●"));
-    assert_eq!(cell3.icon_color, Some(Color::new(104, 164, 144)));
+    assert_eq!(cell3.icon_color, Some(Color::new(98, 193, 122)));
 }
 
 #[test]
@@ -555,7 +555,7 @@ fn test_cond_fmt_icon_set_arrows_explicit() {
         Some("\u{25B2}"),
         "3Arrows uses a solid up-triangle for the high band (issue #377)"
     );
-    assert_eq!(cell3.icon_color, Some(Color::new(104, 164, 144)));
+    assert_eq!(cell3.icon_color, Some(Color::new(98, 193, 122)));
 }
 
 #[test]
@@ -760,7 +760,7 @@ fn test_cond_fmt_icon_set_num_thresholds_from_start_end_cfvos() {
     // 1.07 >= 1.0 -> high band (green up)
     assert_eq!(
         tp.table.rows[2].cells[0].icon_color,
-        Some(Color::new(104, 164, 144))
+        Some(Color::new(98, 193, 122))
     );
 }
 
