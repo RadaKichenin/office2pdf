@@ -1542,3 +1542,113 @@ fn invoice_auto_layout_table_widens_the_amount_column() {
         widths
     );
 }
+
+// ---------------------------------------------------------------------------
+// Repository technical brief — a full-length sectioned Korean report
+// ---------------------------------------------------------------------------
+
+/// Thirty-nine page Korean technical brief describing this repository. The
+/// focused fixtures above isolate one feature each and the business golden
+/// mocks are short synthetic documents; neither reaches a report where seven
+/// section breaks, a landscape section, a two-column appendix, per-section
+/// headers and footers, roman-then-decimal page numbering, `TOC` and `SEQ`
+/// fields, footnotes, endnotes, comments, tracked changes, 33 tables, and six
+/// raster figures all appear in one file.
+///
+/// Its Microsoft Word export is the ground truth for the DOCX visual audit:
+///
+/// ```sh
+/// osascript scripts/macos/export_word_pdfs.applescript \
+///     "$PWD/target/visual-audit/docx/ground-truth-pdf" \
+///     technical-brief "$PWD/tests/fixtures/docx/office2pdf_technical_brief_ko.docx"
+/// ```
+const TECHNICAL_BRIEF_FIXTURE: &str = "office2pdf_technical_brief_ko.docx";
+
+/// Converting all thirty-nine pages costs far more than the focused fixtures,
+/// so the whole-document conversion stays out of the default suite; the
+/// structure tests below parse the same file in well under a second.
+#[test]
+#[ignore]
+fn smoke_technical_brief() {
+    assert_produces_valid_pdf(TECHNICAL_BRIEF_FIXTURE);
+}
+
+#[test]
+fn structure_technical_brief_keeps_every_section_with_its_own_page_geometry() {
+    let pages = flow_pages(TECHNICAL_BRIEF_FIXTURE);
+
+    assert_eq!(pages.len(), 7, "the brief declares seven section breaks");
+
+    // Section four prints landscape so the comparison table fits; the rest are
+    // A4 portrait.
+    let landscape: Vec<usize> = pages
+        .iter()
+        .enumerate()
+        .filter(|(_, page)| page.size.width > page.size.height)
+        .map(|(index, _)| index)
+        .collect();
+    assert_eq!(landscape, [3], "only the comparison section is landscape");
+
+    for (index, page) in pages.iter().enumerate() {
+        let (width, height) = if index == 3 {
+            (page.size.height, page.size.width)
+        } else {
+            (page.size.width, page.size.height)
+        };
+        assert!(
+            (width - 595.3).abs() < 1.0 && (height - 841.9).abs() < 1.0,
+            "section {index} keeps A4 dimensions, got {width}x{height}"
+        );
+    }
+}
+
+#[test]
+fn structure_technical_brief_lays_the_glossary_out_in_two_columns() {
+    let pages = flow_pages(TECHNICAL_BRIEF_FIXTURE);
+
+    let columned: Vec<(usize, u32)> = pages
+        .iter()
+        .enumerate()
+        .filter_map(|(index, page)| page.columns.as_ref().map(|cols| (index, cols.num_columns)))
+        .collect();
+
+    assert_eq!(
+        columned,
+        [(5, 2)],
+        "only the glossary appendix declares `w:cols w:num=\"2\"`"
+    );
+}
+
+#[test]
+fn structure_technical_brief_gives_every_section_but_the_cover_a_header_and_footer() {
+    let pages = flow_pages(TECHNICAL_BRIEF_FIXTURE);
+
+    let with_header_and_footer: Vec<usize> = pages
+        .iter()
+        .enumerate()
+        .filter(|(_, page)| page.header.is_some() && page.footer.is_some())
+        .map(|(index, _)| index)
+        .collect();
+
+    // The cover section references neither part; the other six each reference
+    // their own header and footer relationship.
+    assert_eq!(with_header_and_footer, [1, 2, 3, 4, 5, 6]);
+}
+
+#[test]
+fn structure_technical_brief_keeps_every_table_and_figure() {
+    let pages = flow_pages(TECHNICAL_BRIEF_FIXTURE);
+    let blocks = all_blocks(&pages);
+
+    let tables = blocks
+        .iter()
+        .filter(|block| matches!(block, Block::Table(_)))
+        .count();
+    assert_eq!(tables, 33, "every `w:tbl` in the brief survives parsing");
+
+    let images = blocks
+        .iter()
+        .filter(|block| matches!(block, Block::Image(_)))
+        .count();
+    assert_eq!(images, 6, "every `w:drawing` figure survives parsing");
+}

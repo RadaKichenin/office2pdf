@@ -247,9 +247,10 @@ The following files were created by this project's contributors and are covered
 by the project's own license:
 
 **DOCX:** `equations.docx`, `footnote.docx`, `header_footer.docx`, `hyperlinks.docx`,
-`image.docx`, `numberings.docx`, `styles_en.docx`, `table.docx`,
-`test_python_docx.docx`, `unit_test_formatting.docx`, `unit_test_headers.docx`,
-`unit_test_lists.docx`, `word_tables.docx`
+`image.docx`, `numberings.docx`, `office2pdf_technical_brief_ko.docx`,
+`styles_en.docx`, `table.docx`, `test_python_docx.docx`,
+`unit_test_formatting.docx`, `unit_test_headers.docx`, `unit_test_lists.docx`,
+`word_tables.docx`
 
 **PPTX:** `minimal.pptx`, `no-slides.pptx`, `office2pdf_introduction_ko.pptx`,
 `powerpoint_sample.pptx`, `powerpoint_with_image.pptx`, `test_slides.pptx`,
