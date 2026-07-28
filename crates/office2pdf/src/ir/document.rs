@@ -100,6 +100,43 @@ pub struct FlowPage {
     /// `default` type an omitted attribute implies declares a pitch that Word
     /// then ignores for layout (issue #518).
     pub line_grid_snaps_lines: bool,
+    /// Section page numbering (`w:sectPr/w:pgNumType`): where the counter
+    /// restarts, and which numerals a `PAGE` field renders. `None` when the
+    /// section declares nothing and simply continues.
+    pub page_numbering: Option<PageNumbering>,
+}
+
+/// A section's `w:pgNumType`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PageNumbering {
+    /// `w:start`: the number this section's first page takes. `None` continues
+    /// from the previous section.
+    pub start: Option<u32>,
+    /// `w:fmt`: the numerals a `PAGE` field renders in.
+    pub format: PageNumberFormat,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PageNumberFormat {
+    #[default]
+    Decimal,
+    LowerRoman,
+    UpperRoman,
+    LowerLetter,
+    UpperLetter,
+}
+
+impl PageNumberFormat {
+    /// The Typst numbering pattern that renders this format.
+    pub fn typst_pattern(self) -> &'static str {
+        match self {
+            PageNumberFormat::Decimal => "1",
+            PageNumberFormat::LowerRoman => "i",
+            PageNumberFormat::UpperRoman => "I",
+            PageNumberFormat::LowerLetter => "a",
+            PageNumberFormat::UpperLetter => "A",
+        }
+    }
 }
 
 /// A fixed-layout page (PPTX slides).

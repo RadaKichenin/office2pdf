@@ -27,6 +27,7 @@ fn test_generate_flow_page_with_text_header() {
         columns: None,
         line_grid_pitch: None,
         line_grid_snaps_lines: false,
+        page_numbering: None,
     })]);
     let output = generate_typst(&doc).unwrap();
     assert!(output.source.contains("header:"));
@@ -63,10 +64,11 @@ fn test_generate_flow_page_with_page_number_footer() {
         columns: None,
         line_grid_pitch: None,
         line_grid_snaps_lines: false,
+        page_numbering: None,
     })]);
     let output = generate_typst(&doc).unwrap();
     assert!(output.source.contains("footer:"));
-    assert!(output.source.contains("counter(page).display()"));
+    assert!(output.source.contains(r#"counter(page).display("1")"#));
     assert!(output.source.contains("Page "));
     // Word pins the footer's bottom `w:footer` points above the page edge.
     assert!(output.source.contains("footer-descent: 0pt"));
@@ -127,6 +129,7 @@ fn test_generate_footer_with_compound_border_and_right_positioned_tab() {
         columns: None,
         line_grid_pitch: None,
         line_grid_snaps_lines: false,
+        page_numbering: None,
     })]);
 
     let output = generate_typst(&doc).unwrap();
@@ -171,6 +174,7 @@ fn test_generate_page_anchored_footer_frame_in_foreground() {
         columns: None,
         line_grid_pitch: None,
         line_grid_snaps_lines: false,
+        page_numbering: None,
     })]);
 
     let output = generate_typst(&doc).unwrap();
@@ -219,6 +223,7 @@ fn test_generate_flow_page_with_header_and_footer() {
         columns: None,
         line_grid_pitch: None,
         line_grid_snaps_lines: false,
+        page_numbering: None,
     })]);
     let output = generate_typst(&doc).unwrap();
     assert!(output.source.contains("header:") && output.source.contains("footer:"));
@@ -243,6 +248,7 @@ fn test_generate_typst_inserts_pagebreak_between_flow_pages() {
         columns: None,
         line_grid_pitch: None,
         line_grid_snaps_lines: false,
+        page_numbering: None,
     });
     let second = Page::Flow(FlowPage {
         size: PageSize::default(),
@@ -253,6 +259,7 @@ fn test_generate_typst_inserts_pagebreak_between_flow_pages() {
         columns: None,
         line_grid_pitch: None,
         line_grid_snaps_lines: false,
+        page_numbering: None,
     });
 
     let output = generate_typst(&make_doc(vec![first, second])).unwrap();
@@ -592,7 +599,7 @@ fn test_table_page_with_page_number_footer() {
     let doc = make_doc(vec![page]);
     let output = generate_typst(&doc).unwrap();
     assert!(output.source.contains("footer: context ["));
-    assert!(output.source.contains("#counter(page).display()"));
+    assert!(output.source.contains(r#"#counter(page).display("1")"#));
     assert!(output.source.contains("#counter(page).final().first()"));
 }
 
@@ -803,6 +810,7 @@ fn test_generate_header_with_bottom_border_draws_rule_below_text() {
         columns: None,
         line_grid_pitch: None,
         line_grid_snaps_lines: false,
+        page_numbering: None,
     })]);
 
     let output = generate_typst(&doc).unwrap();
@@ -870,6 +878,7 @@ fn test_generate_header_with_top_and_bottom_borders_draws_both_rules() {
         columns: None,
         line_grid_pitch: None,
         line_grid_snaps_lines: false,
+        page_numbering: None,
     })]);
 
     let output = generate_typst(&doc).unwrap();
@@ -915,6 +924,7 @@ fn test_flow_page_footer_is_pinned_to_the_word_edge_distance() {
         columns: None,
         line_grid_pitch: None,
         line_grid_snaps_lines: false,
+        page_numbering: None,
     })]);
 
     let output = generate_typst(&doc).unwrap();
@@ -972,6 +982,7 @@ fn test_flow_page_footer_without_edge_distance_keeps_default_placement() {
         columns: None,
         line_grid_pitch: None,
         line_grid_snaps_lines: false,
+        page_numbering: None,
     })]);
 
     let output = generate_typst(&doc).unwrap();
@@ -1013,6 +1024,7 @@ fn test_flow_page_footer_distance_beyond_margin_falls_back() {
         columns: None,
         line_grid_pitch: None,
         line_grid_snaps_lines: false,
+        page_numbering: None,
     })]);
 
     let output = generate_typst(&doc).unwrap();
@@ -1041,6 +1053,7 @@ fn test_first_document_paragraph_keeps_its_space_before() {
         columns: None,
         line_grid_pitch: None,
         line_grid_snaps_lines: false,
+        page_numbering: None,
     })]);
 
     let output = generate_typst(&doc).unwrap();
@@ -1082,6 +1095,7 @@ fn test_later_paragraph_space_before_stays_block_spacing() {
         columns: None,
         line_grid_pitch: None,
         line_grid_snaps_lines: false,
+        page_numbering: None,
     })]);
 
     let output = generate_typst(&doc).unwrap();
@@ -1137,6 +1151,7 @@ fn test_generate_header_border_uses_declared_pbdr_space() {
         columns: None,
         line_grid_pitch: None,
         line_grid_snaps_lines: false,
+        page_numbering: None,
     })]);
 
     let output = generate_typst(&doc).unwrap();
@@ -1188,6 +1203,7 @@ fn test_generate_header_border_without_space_keeps_hairline_gap() {
         columns: None,
         line_grid_pitch: None,
         line_grid_snaps_lines: false,
+        page_numbering: None,
     })]);
 
     let output = generate_typst(&doc).unwrap();
@@ -1229,6 +1245,7 @@ fn test_flow_page_header_is_pinned_to_the_word_edge_distance() {
         columns: None,
         line_grid_pitch: None,
         line_grid_snaps_lines: false,
+        page_numbering: None,
     })]);
 
     let output = generate_typst(&doc).unwrap();
@@ -1277,6 +1294,7 @@ fn test_flow_page_header_without_edge_distance_keeps_default_placement() {
         columns: None,
         line_grid_pitch: None,
         line_grid_snaps_lines: false,
+        page_numbering: None,
     })]);
 
     let output = generate_typst(&doc).unwrap();
@@ -1322,12 +1340,13 @@ fn test_page_number_field_uses_its_run_style() {
         columns: None,
         line_grid_pitch: None,
         line_grid_snaps_lines: false,
+        page_numbering: None,
     })]);
 
     let output = generate_typst(&doc).unwrap();
     let counter = output
         .source
-        .find("#counter(page).display()")
+        .find(r#"#counter(page).display("1")"#)
         .expect("page counter emitted");
     let prefix = &output.source[..counter];
     let wrapper = prefix
@@ -1368,12 +1387,50 @@ fn test_unstyled_page_number_field_stays_bare() {
         columns: None,
         line_grid_pitch: None,
         line_grid_snaps_lines: false,
+        page_numbering: None,
     })]);
 
     let output = generate_typst(&doc).unwrap();
-    assert!(output.source.contains("#counter(page).display()"));
+    assert!(output.source.contains(r#"#counter(page).display("1")"#));
     assert!(
         !output.source.contains("#text()[#counter"),
         "no empty text wrapper"
+    );
+}
+
+#[test]
+fn test_section_page_numbering_updates_the_counter_and_its_numerals() {
+    // Word restarts the counter at the section boundary and renders the
+    // numerals w:fmt names; Typst counts from the document start in decimal
+    // unless told otherwise (issue #582).
+    let Page::Flow(mut flow) = make_flow_page(vec![make_paragraph("front matter")]) else {
+        unreachable!()
+    };
+    flow.footer = Some(crate::ir::HeaderFooter {
+        paragraphs: vec![crate::ir::HeaderFooterParagraph {
+            style: ParagraphStyle::default(),
+            elements: vec![HFInline::PageNumber(TextStyle::default())],
+            border: None,
+            border_space: None,
+            frame: None,
+        }],
+        distance_from_edge: None,
+    });
+    flow.page_numbering = Some(crate::ir::PageNumbering {
+        start: Some(1),
+        format: crate::ir::PageNumberFormat::LowerRoman,
+    });
+
+    let output = generate_typst(&make_doc(vec![Page::Flow(flow)])).unwrap();
+
+    assert!(
+        output.source.contains("#counter(page).update(1)"),
+        "the section restarts the counter: {}",
+        output.source
+    );
+    assert!(
+        output.source.contains(r#"#counter(page).display("i")"#),
+        "the PAGE field renders the section's numerals: {}",
+        output.source
     );
 }

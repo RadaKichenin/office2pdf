@@ -10,9 +10,9 @@ const MAX_TABLE_DEPTH: usize = 64;
 use crate::ir::{
     Alignment, Block, BorderLineStyle, BorderSide, CellBorder, CellVerticalAlign, Color,
     ColumnLayout, Document, FloatingImage, FloatingTextBox, ImageData, ImageFormat,
-    ImageParagraphSpacing, Insets, LineSpacing, Page, Paragraph, ParagraphStyle, Run, StyleSheet,
-    TabAlignment, TabLeader, TabStop, Table, TableCell, TableRow, TextDirection, TextStyle,
-    VerticalTextAlign,
+    ImageParagraphSpacing, Insets, LineSpacing, Page, PageNumbering, Paragraph, ParagraphStyle,
+    Run, StyleSheet, TabAlignment, TabLeader, TabStop, Table, TableCell, TableRow, TextDirection,
+    TextStyle, VerticalTextAlign,
 };
 use crate::parser::Parser;
 
@@ -25,7 +25,7 @@ use self::contexts::{
     WpgDrawingInfo, WrapContext, build_chart_context_from_xml, build_math_context_from_xml,
     build_note_context_from_xml, build_wrap_context_from_xml,
     extract_column_layout_from_section_property, is_note_reference_run, read_zip_text,
-    scan_column_layouts, scan_style_paragraph_shading,
+    scan_column_layouts, scan_page_numbering, scan_style_paragraph_shading,
 };
 use self::lists::{
     NumberingMap, TaggedElement, build_numbering_map, extract_num_info, group_into_lists,
@@ -37,7 +37,7 @@ use self::media::{
 #[cfg(test)]
 use self::sections::extract_page_size;
 use self::sections::{
-    HeaderFooterAssets, build_flow_page_from_section, build_header_footer_assets,
+    HeaderFooterAssets, SectionOverrides, build_flow_page_from_section, build_header_footer_assets,
 };
 use self::styles::{
     DOC_DEFAULT_STYLE_ID, ResolvedStyle, StyleMap, TabStopOverride, apply_tab_stop_overrides,
@@ -197,6 +197,7 @@ struct ZipPreParseAssets {
     math: MathContext,
     chart_ctx: ChartContext,
     column_layouts: Vec<Option<ColumnLayout>>,
+    page_numbering: Vec<Option<PageNumbering>>,
     header_footer_assets: HeaderFooterAssets,
     metafile_images: ImageMap,
     theme_fonts: ThemeFonts,
@@ -233,6 +234,10 @@ fn build_zip_preparse_assets(data: &[u8]) -> ZipPreParseAssets {
                 .as_deref()
                 .map(scan_column_layouts)
                 .unwrap_or_default();
+            let page_numbering = doc_xml
+                .as_deref()
+                .map(scan_page_numbering)
+                .unwrap_or_default();
             let bidi = BidiContext::from_xml(doc_xml.as_deref());
             let small_caps = SmallCapsContext::from_xml(doc_xml.as_deref());
             let header_footer_assets = build_header_footer_assets(&mut archive);
@@ -255,6 +260,7 @@ fn build_zip_preparse_assets(data: &[u8]) -> ZipPreParseAssets {
                 math,
                 chart_ctx,
                 column_layouts,
+                page_numbering,
                 header_footer_assets,
                 metafile_images,
                 theme_fonts: theme_xml
@@ -282,6 +288,7 @@ fn build_zip_preparse_assets(data: &[u8]) -> ZipPreParseAssets {
             math: MathContext::empty(),
             chart_ctx: ChartContext::empty(),
             column_layouts: Vec::new(),
+            page_numbering: Vec::new(),
             header_footer_assets: HeaderFooterAssets::default(),
             metafile_images: ImageMap::new(),
             theme_fonts: ThemeFonts::default(),
@@ -304,6 +311,7 @@ impl Parser for DocxParser {
             mut math,
             mut chart_ctx,
             column_layouts,
+            page_numbering,
             header_footer_assets,
             metafile_images,
             theme_fonts,
@@ -403,7 +411,10 @@ impl Parser for DocxParser {
                     std::mem::take(&mut elements),
                     &numberings,
                     &header_footer_assets,
-                    column_layout,
+                    SectionOverrides {
+                        column_layout,
+                        page_numbering: page_numbering.get(section_layout_index).copied().flatten(),
+                    },
                     style_map.get(DOC_DEFAULT_STYLE_ID),
                     &mut warnings,
                 )));
@@ -420,7 +431,10 @@ impl Parser for DocxParser {
             elements,
             &numberings,
             &header_footer_assets,
-            final_column_layout,
+            SectionOverrides {
+                column_layout: final_column_layout,
+                page_numbering: page_numbering.get(section_layout_index).copied().flatten(),
+            },
             style_map.get(DOC_DEFAULT_STYLE_ID),
             &mut warnings,
         )));
