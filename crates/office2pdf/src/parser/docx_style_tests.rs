@@ -691,3 +691,67 @@ fn test_tracked_changes_resolve_the_same_way_in_a_footer() {
         "every section's footer keeps its PAGE and NUMPAGES fields, got {footer_fields}"
     );
 }
+
+#[test]
+fn test_header_and_footer_runs_inherit_the_document_default_run_style() {
+    // Header and footer parts are read before the stylesheet is, so their runs
+    // were left with only what they state themselves and fell through to the
+    // renderer's own family and size. Word resolves them through the same run
+    // cascade as the body (issue #578).
+    let data = std::fs::read(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/docx/office2pdf_technical_brief_ko.docx"
+    ))
+    .expect("fixture");
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let Page::Flow(flow) = doc
+        .pages
+        .iter()
+        .find(|page| matches!(page, Page::Flow(flow) if flow.header.is_some()))
+        .expect("a section with a header")
+    else {
+        unreachable!()
+    };
+    let header = flow.header.as_ref().expect("header");
+
+    // The brief's `w:rPrDefault` names Calibri at 10pt. The header's first run
+    // states a colour, a weight, and 8pt, but no family.
+    let styled_run = header
+        .paragraphs
+        .iter()
+        .flat_map(|paragraph| paragraph.elements.iter())
+        .find_map(|element| match element {
+            crate::ir::HFInline::Run(run) if !run.text.trim().is_empty() => Some(&run.style),
+            _ => None,
+        })
+        .expect("a header text run");
+
+    assert_eq!(
+        styled_run.font_family.as_deref(),
+        Some("Calibri"),
+        "the family the run does not state comes from w:rPrDefault"
+    );
+    assert_eq!(
+        styled_run.font_size,
+        Some(8.0),
+        "the size the run does state still wins"
+    );
+
+    let footer = flow.footer.as_ref().expect("footer");
+    let page_number_style = footer
+        .paragraphs
+        .iter()
+        .flat_map(|paragraph| paragraph.elements.iter())
+        .find_map(|element| match element {
+            crate::ir::HFInline::PageNumber(style) => Some(style),
+            _ => None,
+        })
+        .expect("a PAGE field");
+
+    assert_eq!(
+        page_number_style.font_family.as_deref(),
+        Some("Calibri"),
+        "a PAGE field resolves through the same cascade as the literals beside it"
+    );
+}
