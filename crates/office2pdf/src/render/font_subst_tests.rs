@@ -162,11 +162,12 @@ fn test_pretendard_substitutes() {
     assert!(subs.contains(&"Malgun Gothic"));
 }
 
-// --- font_with_fallbacks() tests ---
+// --- font_with_fallbacks_for_text() tests ---
+// Latin-only text, so these exercise the family chain alone.
 
 #[test]
 fn test_font_with_fallbacks_known_font() {
-    let result = font_with_fallbacks("Calibri");
+    let result = font_with_fallbacks_for_text("Calibri", "");
     assert_eq!(
         result, r#"("Calibri", "Carlito", "Liberation Sans")"#,
         "Known font should produce Typst array with original + substitutes"
@@ -175,7 +176,7 @@ fn test_font_with_fallbacks_known_font() {
 
 #[test]
 fn test_carlito_font_with_fallbacks_emits_sans_chain() {
-    let result = font_with_fallbacks("Carlito");
+    let result = font_with_fallbacks_for_text("Carlito", "");
     assert_eq!(
         result,
         r#"("Carlito", "Calibri", "Liberation Sans", "Arimo", "Arial")"#
@@ -185,7 +186,9 @@ fn test_carlito_font_with_fallbacks_emits_sans_chain() {
 #[test]
 fn test_carlito_installed_system_fallback_is_ranked_first() {
     let context = FontSearchContext::for_test(Vec::new(), &["Arial"], &[], &[]);
-    let result = with_font_search_context(Some(&context), || font_with_fallbacks("Carlito"));
+    let result = with_font_search_context(Some(&context), || {
+        font_with_fallbacks_for_text("Carlito", "")
+    });
     let arial_index = result
         .find("\"Arial\"")
         .expect("Arial should remain in the fallback list");
@@ -200,7 +203,7 @@ fn test_carlito_installed_system_fallback_is_ranked_first() {
 
 #[test]
 fn test_font_with_fallbacks_unknown_font() {
-    let result = font_with_fallbacks("Helvetica");
+    let result = font_with_fallbacks_for_text("Helvetica", "");
     assert_eq!(
         result, "\"Helvetica\"",
         "Unknown font should produce simple quoted string"
@@ -209,7 +212,7 @@ fn test_font_with_fallbacks_unknown_font() {
 
 #[test]
 fn test_font_with_fallbacks_single_substitute() {
-    let result = font_with_fallbacks("Comic Sans MS");
+    let result = font_with_fallbacks_for_text("Comic Sans MS", "");
     assert_eq!(result, r#"("Comic Sans MS", "Comic Neue")"#);
 }
 
@@ -219,13 +222,13 @@ fn test_font_with_fallbacks_single_substitute() {
 
 #[test]
 fn test_font_with_fallbacks_escapes_quotes_in_family_name() {
-    let result = font_with_fallbacks(r#"Weird "Quoted" Font"#);
+    let result = font_with_fallbacks_for_text(r#"Weird "Quoted" Font"#, "");
     assert_eq!(result, r#""Weird \"Quoted\" Font""#);
 }
 
 #[test]
 fn test_font_with_fallbacks_escapes_backslashes_in_family_name() {
-    let result = font_with_fallbacks(r"Fonts\Custom");
+    let result = font_with_fallbacks_for_text(r"Fonts\Custom", "");
     assert_eq!(result, r#""Fonts\\Custom""#);
 }
 
@@ -233,7 +236,7 @@ fn test_font_with_fallbacks_escapes_backslashes_in_family_name() {
 fn test_font_with_fallbacks_escapes_quotes_in_fallback_array_head() {
     // "Pretendard <anything>" resolves to the Pretendard substitute chain, so
     // the raw (quote-carrying) name lands at the head of a Typst array literal.
-    let result = font_with_fallbacks(r#"Pretendard "Display""#);
+    let result = font_with_fallbacks_for_text(r#"Pretendard "Display""#, "");
     assert!(
         result.starts_with(r#"("Pretendard \"Display\"""#),
         "array head must escape document-supplied quotes: {result}"
@@ -243,7 +246,7 @@ fn test_font_with_fallbacks_escapes_quotes_in_fallback_array_head() {
 #[test]
 fn test_font_with_fallbacks_preserves_original_case() {
     // The original font name should appear as-is (not lowercased)
-    let result = font_with_fallbacks("CALIBRI");
+    let result = font_with_fallbacks_for_text("CALIBRI", "");
     assert!(
         result.starts_with("(\"CALIBRI\""),
         "Original case should be preserved: {result}"
@@ -252,7 +255,7 @@ fn test_font_with_fallbacks_preserves_original_case() {
 
 #[test]
 fn test_font_with_fallbacks_pretendard_variant_includes_base_family() {
-    let result = font_with_fallbacks("Pretendard SemiBold");
+    let result = font_with_fallbacks_for_text("Pretendard SemiBold", "");
     assert!(
         result.contains("\"Pretendard\""),
         "Pretendard variants should fall back to the base family: {result}"
@@ -279,7 +282,9 @@ fn test_font_with_fallbacks_prefers_office_source_rank_over_static_substitute_or
         &["Malgun Gothic"],
         &[],
     );
-    let result = with_font_search_context(Some(&context), || font_with_fallbacks("Pretendard"));
+    let result = with_font_search_context(Some(&context), || {
+        font_with_fallbacks_for_text("Pretendard", "")
+    });
     let apple_index = result
         .find("\"Apple SD Gothic Neo\"")
         .expect("Apple SD Gothic Neo should appear in fallback list");
@@ -446,7 +451,7 @@ fn test_korean_gulim_name_has_substitutes() {
 
 #[test]
 fn test_font_with_fallbacks_korean_malgun_gothic_includes_english_name() {
-    let result = font_with_fallbacks("맑은 고딕");
+    let result = font_with_fallbacks_for_text("맑은 고딕", "");
     assert!(
         result.contains("\"Malgun Gothic\""),
         "Should include English name in fallback list: {result}"
@@ -551,7 +556,7 @@ fn east_asian_family_follows_the_latin_one_in_the_font_list() {
     // and the East Asian family straight after reproduces Word's split: a
     // Latin face has no Hangul, so the Hangul lands on the declared East
     // Asian face (issue #575).
-    let list = font_with_east_asian_fallbacks("Calibri", "맑은 고딕");
+    let list = font_with_east_asian_fallbacks("Calibri", "맑은 고딕", "본문");
 
     let latin = list.find("\"Calibri\"").expect("the Latin family leads");
     let east_asian = list
@@ -566,6 +571,64 @@ fn east_asian_family_follows_the_latin_one_in_the_font_list() {
 
 #[test]
 fn a_run_naming_the_same_family_twice_does_not_repeat_it() {
-    let list = font_with_east_asian_fallbacks("Batang", "Batang");
+    let list = font_with_east_asian_fallbacks("Batang", "Batang", "본문");
     assert_eq!(list.matches("\"Batang\"").count(), 1, "{list}");
+}
+
+#[test]
+fn a_run_whose_family_cannot_write_its_script_reaches_a_face_that_can() {
+    // A PowerPoint run may declare `<a:ea typeface="Calibri"/>` over Hangul,
+    // and a workbook a Simplified Chinese family over Korean text. Neither
+    // declared family has the glyphs, and neither carries a chain that does
+    // (issues #537, #543).
+    let latin_over_hangul = font_with_fallbacks_for_text("Calibri", "클라우드 변환");
+    assert!(
+        latin_over_hangul.contains("\"Malgun Gothic\""),
+        "Hangul reaches a Korean face: {latin_over_hangul}"
+    );
+    assert!(
+        latin_over_hangul.starts_with("(\"Calibri\""),
+        "the declared family still leads, so Latin keeps it: {latin_over_hangul}"
+    );
+
+    let chinese_family_over_hangul = font_with_fallbacks_for_text("Noto Sans CJK SC", "구현 완료");
+    let korean = chinese_family_over_hangul
+        .find("\"Malgun Gothic\"")
+        .expect("a Korean face is offered");
+    for chinese in ["\"Microsoft YaHei\"", "\"PingFang SC\"", "\"SimSun\""] {
+        if let Some(position) = chinese_family_over_hangul.find(chinese) {
+            assert!(
+                korean < position,
+                "the script outranks the family's metric substitutes: {chinese_family_over_hangul}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_run_whose_family_can_write_its_script_keeps_it() {
+    // The script chain must not preempt a family that is already right.
+    let list = font_with_fallbacks_for_text("Batang", "구현 완료");
+    assert!(list.starts_with("(\"Batang\""), "{list}");
+}
+
+#[test]
+fn latin_only_text_is_offered_no_east_asian_face() {
+    let list = font_with_fallbacks_for_text("Calibri", "Introduction");
+    assert!(!list.contains("Malgun Gothic"), "{list}");
+    assert!(!list.contains("Yu Gothic"), "{list}");
+    assert!(!list.contains("Microsoft YaHei"), "{list}");
+}
+
+#[test]
+fn kana_and_han_pick_their_own_scripts() {
+    let kana = font_with_fallbacks_for_text("Calibri", "テキスト");
+    assert!(kana.contains("\"Yu Gothic\""), "{kana}");
+    // Han alone is ambiguous between the three, and is only decisive when no
+    // script-specific character appears.
+    let han = font_with_fallbacks_for_text("Calibri", "文書");
+    assert!(han.contains("\"Microsoft YaHei\""), "{han}");
+    // Korean text that also carries Han stays Korean.
+    let mixed = font_with_fallbacks_for_text("Calibri", "文書 변환");
+    assert!(mixed.contains("\"Malgun Gothic\""), "{mixed}");
 }

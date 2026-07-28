@@ -307,15 +307,103 @@ pub fn is_primary_font_available(font_family: &str) -> bool {
     })
 }
 
-/// Build a Typst font fallback list string for the given font family.
+/// Faces that cover a script, in the order Word and PowerPoint reach for them.
 ///
-/// If substitutions exist, returns a Typst array literal like
-/// `("Calibri", "Carlito", "Liberation Sans")`.
-/// If no substitutions exist, returns a simple quoted name like `"Helvetica"`.
-pub fn font_with_fallbacks(font_family: &str) -> String {
+/// A run states a family; the text states a script, and the two need not agree.
+/// A PowerPoint run can declare `<a:ea typeface="Calibri"/>` over Hangul, and a
+/// workbook can declare a Simplified Chinese family over Korean text. In both
+/// cases the declared family has no glyph for what the run actually holds, and
+/// the chain it carries has none either, so the text landed on whatever the
+/// font book happened to offer first — Gulim, which has no bold member at all
+/// (#543), or a Chinese face 13.5% narrower than the one Excel picks (#537).
+///
+/// Appending the script's own faces lets the per-glyph fallback answer the
+/// question the text asks rather than the one its family name asks.
+fn script_fallbacks(text: &str) -> &'static [&'static str] {
+    const KOREAN: &[&str] = &[
+        "Malgun Gothic",
+        "Apple SD Gothic Neo",
+        "Noto Sans CJK KR",
+        "Arial Unicode MS",
+    ];
+    const JAPANESE: &[&str] = &[
+        "Yu Gothic",
+        "Hiragino Sans",
+        "Noto Sans CJK JP",
+        "MS Gothic",
+    ];
+    const CHINESE: &[&str] = &[
+        "Microsoft YaHei",
+        "PingFang SC",
+        "Noto Sans CJK SC",
+        "SimSun",
+    ];
+
+    let mut has_han = false;
+    for character in text.chars() {
+        match character as u32 {
+            // Hangul syllables, Jamo, and compatibility Jamo.
+            0xAC00..=0xD7AF | 0x1100..=0x11FF | 0x3130..=0x318F => return KOREAN,
+            // Hiragana and Katakana.
+            0x3040..=0x30FF => return JAPANESE,
+            // Han, which Korean and Japanese also use — only decisive when no
+            // script-specific character appears anywhere in the run.
+            0x4E00..=0x9FFF | 0x3400..=0x4DBF => has_han = true,
+            _ => {}
+        }
+    }
+    if has_han { CHINESE } else { &[] }
+}
+
+/// The font list for `family` covering the script `text` is written in.
+///
+/// The declared family leads, so a run naming a face that does cover its own
+/// text keeps it. The script's faces come next, ahead of the declared family's
+/// metric-compatible substitutes: those substitutes answer "what else looks
+/// like this family", which is the wrong question for a glyph the family does
+/// not have. Placing them first is what sent Korean text through a Chinese
+/// face that happens to carry some Hangul (issue #537).
+pub fn font_with_fallbacks_for_text(font_family: &str, text: &str) -> String {
     ACTIVE_FONT_CONTEXT.with(|active_context| {
-        font_with_fallbacks_for_context(font_family, active_context.borrow().as_ref())
+        let context = active_context.borrow();
+        let mut families: Vec<String> = vec![font_family.to_string()];
+        families.extend(
+            script_fallbacks(text)
+                .iter()
+                .map(|face| (*face).to_string()),
+        );
+        families.extend(fallback_candidates(font_family, context.as_ref()));
+        join_font_list(families)
     })
+}
+
+/// Render a candidate list as a Typst font value, dropping repeats.
+///
+/// A lone family stays a bare string rather than a one-element list: that is
+/// what a document naming a face with nothing to fall back to should emit, and
+/// it keeps the generated source readable.
+fn join_font_list(families: Vec<String>) -> String {
+    let mut kept: Vec<String> = Vec::with_capacity(families.len());
+    for family in families {
+        if !kept.iter().any(|seen| seen.eq_ignore_ascii_case(&family)) {
+            kept.push(family);
+        }
+    }
+    if let [only] = kept.as_slice() {
+        return format!("\"{}\"", escape_typst_string(only));
+    }
+    let mut result = String::with_capacity(64);
+    result.push('(');
+    for (index, family) in kept.iter().enumerate() {
+        if index > 0 {
+            result.push_str(", ");
+        }
+        result.push('"');
+        result.push_str(&escape_typst_string(family));
+        result.push('"');
+    }
+    result.push(')');
+    result
 }
 
 /// The families to try, in order, when resolving a declared family to a real
@@ -345,68 +433,32 @@ pub(crate) fn family_candidates(font_family: &str) -> Vec<String> {
 /// the declared East Asian face rather than on whatever the Latin family's own
 /// substitutes happen to cover (issue #575).
 ///
-/// The East Asian family's own substitutes follow it, then the Latin family's,
-/// so a document naming a face the system does not have still degrades the way
-/// each family's chain says it should.
-pub fn font_with_east_asian_fallbacks(latin_family: &str, east_asian_family: &str) -> String {
+/// The script's own faces come next, then the East Asian family's substitutes
+/// and the Latin family's, so a document naming a face the system does not
+/// have still degrades the way each family's chain says it should. The script
+/// outranks those substitutes for the reason given on
+/// [`font_with_fallbacks_for_text`]: a metric substitute answers "what else
+/// looks like this family", which is the wrong question for a glyph the family
+/// does not have.
+pub fn font_with_east_asian_fallbacks(
+    latin_family: &str,
+    east_asian_family: &str,
+    text: &str,
+) -> String {
     ACTIVE_FONT_CONTEXT.with(|active_context| {
         let context = active_context.borrow();
         let context = context.as_ref();
         let mut families: Vec<String> = vec![latin_family.to_string()];
         families.push(east_asian_family.to_string());
+        families.extend(
+            script_fallbacks(text)
+                .iter()
+                .map(|face| (*face).to_string()),
+        );
         families.extend(fallback_candidates(east_asian_family, context));
         families.extend(fallback_candidates(latin_family, context));
-
-        let mut seen: Vec<String> = Vec::with_capacity(families.len());
-        for family in families {
-            if !seen.iter().any(|kept| kept.eq_ignore_ascii_case(&family)) {
-                seen.push(family);
-            }
-        }
-
-        let mut result = String::with_capacity(64);
-        result.push('(');
-        for (index, family) in seen.iter().enumerate() {
-            if index > 0 {
-                result.push_str(", ");
-            }
-            result.push('"');
-            result.push_str(&escape_typst_string(family));
-            result.push('"');
-        }
-        result.push(')');
-        result
+        join_font_list(families)
     })
-}
-
-fn font_with_fallbacks_for_context(
-    font_family: &str,
-    context: Option<&FontSearchContext>,
-) -> String {
-    let fallbacks = fallback_candidates(font_family, context);
-    // Family names originate from parsed OOXML (document-controlled); escape
-    // them so `"` or `\` cannot break out of the Typst string literal.
-    let family = escape_typst_string(font_family);
-    if fallbacks.is_empty() {
-        let mut result = String::with_capacity(family.len() + 2);
-        result.push('"');
-        result.push_str(&family);
-        result.push('"');
-        return result;
-    }
-
-    let mut result = String::with_capacity(64);
-    result.push('(');
-    result.push('"');
-    result.push_str(&family);
-    result.push('"');
-    for sub in fallbacks {
-        result.push_str(", \"");
-        result.push_str(&escape_typst_string(&sub));
-        result.push('"');
-    }
-    result.push(')');
-    result
 }
 
 pub(crate) fn with_font_search_context<T>(
