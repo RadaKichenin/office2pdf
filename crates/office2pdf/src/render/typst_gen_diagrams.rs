@@ -362,14 +362,38 @@ fn chart_axis_extent(chart: &Chart) -> (f64, f64) {
 }
 
 /// Gutters the category labels and the value tick labels take inside the box,
-/// alongside whatever the legend reserves.
+/// alongside whatever the legend and the axis titles reserve.
 fn axis_label_gutters(chart: &Chart) -> (f64, f64) {
+    let (title_left, title_bottom) = axis_title_gutters(chart);
     if matches!(chart.chart_type, ChartType::Bar) {
-        (LABEL_W + GAP, TICK_GAP)
+        (LABEL_W + GAP + title_left, TICK_GAP + title_bottom)
     } else {
-        (TICK_GAP + GAP, ROW)
+        (TICK_GAP + GAP + title_left, ROW + title_bottom)
     }
 }
+
+/// Space the axis titles reserve, as `(left, bottom)` in points.
+///
+/// The value-axis title runs a quarter turn anticlockwise down the left edge,
+/// so it costs width; the category-axis title sits flat under the tick labels
+/// and costs height (issue #552).
+fn axis_title_gutters(chart: &Chart) -> (f64, f64) {
+    (
+        if chart.value_axis_title.is_some() {
+            AXIS_TITLE_H
+        } else {
+            0.0
+        },
+        if chart.category_axis_title.is_some() {
+            AXIS_TITLE_H
+        } else {
+            0.0
+        },
+    )
+}
+
+/// Thickness of an axis-title band: a 9pt line plus breathing room.
+const AXIS_TITLE_H: f64 = 15.0;
 
 /// Size of the plotting rectangle itself.
 ///
@@ -639,6 +663,31 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
             format_f64(plot_x),
             format_f64(plot_y + plot_h),
             format_f64(plot_w)
+        );
+    }
+
+    // Axis titles, in the bands `axis_title_gutters` reserved for them.
+    if let Some(title) = chart.value_axis_title.as_deref() {
+        let _ = writeln!(
+            out,
+            "#place(top + left, dx: {}pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(center + horizon)[#rotate(-90deg, reflow: false)[#text(size: 9pt, weight: \"bold\")[{}]]]])",
+            format_f64(legend.left),
+            format_f64(plot_y),
+            format_f64(AXIS_TITLE_H),
+            format_f64(plot_h),
+            escape_typst(title)
+        );
+    }
+    if let Some(title) = chart.category_axis_title.as_deref() {
+        let (_, gutter_h) = axis_label_gutters(chart);
+        let _ = writeln!(
+            out,
+            "#place(top + left, dx: {}pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(center + horizon)[#text(size: 9pt, weight: \"bold\")[{}]]])",
+            format_f64(plot_x),
+            format_f64(plot_y + plot_h + 2.0 + gutter_h - AXIS_TITLE_H),
+            format_f64(plot_w),
+            format_f64(AXIS_TITLE_H),
+            escape_typst(title)
         );
     }
 
