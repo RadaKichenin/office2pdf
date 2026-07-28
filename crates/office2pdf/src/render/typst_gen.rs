@@ -17,7 +17,7 @@ use crate::ir::{
     TextDirection, TextStyle, VerticalTextAlign, WrapMode,
 };
 
-use self::diagrams::{generate_chart, generate_smartart};
+use self::diagrams::{generate_chart, generate_chart_in, generate_smartart};
 use self::fmt::*;
 use self::lists::{
     can_render_fixed_text_list_inline, common_text_style, generate_fixed_text_list, generate_list,
@@ -806,7 +806,9 @@ fn generate_fixed_element(
             generate_smartart(out, smartart, elem.width, elem.height);
         }
         FixedElementKind::Chart(chart) => {
-            generate_chart(out, chart);
+            // A slide chart is laid out at its `<p:graphicFrame>` extent, the
+            // way every other fixed element already honours its own.
+            generate_chart_in(out, chart, Some((elem.width, elem.height)));
         }
     }
 

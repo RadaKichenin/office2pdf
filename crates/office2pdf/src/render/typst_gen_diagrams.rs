@@ -69,21 +69,34 @@ fn chart_fits_on_one_page(chart: &Chart) -> bool {
 /// sub-renderer repeating the flag. Charts too tall to fit on any page stay
 /// breakable — see [`MAX_ATOMIC_CHART_HEIGHT_PT`].
 pub(super) fn generate_chart(out: &mut String, chart: &Chart) {
-    let atomic: bool = chart_fits_on_one_page(chart);
+    generate_chart_in(out, chart, None);
+}
+
+/// Render a chart into a frame of a known size.
+///
+/// PowerPoint lays a chart out at its `<p:graphicFrame>` extent, so a chart
+/// authored to fill the left half of a slide is that size. Rendering at an
+/// intrinsic size instead left it at 44% of the frame height with a band of
+/// empty slide underneath (issue #548). Flowed charts have no frame and keep
+/// the intrinsic size.
+pub(super) fn generate_chart_in(out: &mut String, chart: &Chart, frame: Option<(f64, f64)>) {
+    // A framed chart is already bounded by its frame, so the page-break guard
+    // only concerns the flowed case.
+    let atomic: bool = frame.is_none() && chart_fits_on_one_page(chart);
     if atomic {
         out.push_str("#block(breakable: false)[\n");
     }
-    generate_chart_body(out, chart);
+    generate_chart_body(out, chart, frame);
     if atomic {
         out.push_str("]\n");
     }
 }
 
 /// Emit the chart's own markup, without the atomicity wrapper.
-fn generate_chart_body(out: &mut String, chart: &Chart) {
+fn generate_chart_body(out: &mut String, chart: &Chart, frame: Option<(f64, f64)>) {
     match chart_variant(chart) {
-        ChartVariant::AxisPlot => return generate_chart_axis(out, chart),
-        ChartVariant::LinePlot => return generate_chart_line_plot(out, chart),
+        ChartVariant::AxisPlot => return generate_chart_axis(out, chart, frame),
+        ChartVariant::LinePlot => return generate_chart_line_plot(out, chart, frame),
         ChartVariant::BorderedTable => {}
     }
 
@@ -320,25 +333,58 @@ fn category_total(series: &[crate::ir::ChartSeries], category_index: usize) -> f
 /// [`chart_fits_on_one_page`] so the atomicity decision uses the same geometry
 /// the box is actually drawn with.
 fn chart_axis_extent(chart: &Chart) -> (f64, f64) {
-    let plot_cross: f64 = chart.categories.len() as f64 * ROW;
+    let (plot_w, plot_h) = axis_plot_size(chart, None);
     let legend: LegendBox = axis_legend_box(chart);
-    let (plot_w, plot_h) = if matches!(chart.chart_type, ChartType::Bar) {
-        (PLOT_MAIN, plot_cross)
-    } else {
-        (plot_cross, PLOT_MAIN)
-    };
-    // Gutters for the category labels and the value tick labels sit inside the
-    // box alongside whatever the legend reserves.
-    let (label_gutter_w, label_gutter_h) = if matches!(chart.chart_type, ChartType::Bar) {
-        (LABEL_W + GAP, TICK_GAP)
-    } else {
-        (TICK_GAP + GAP, ROW)
-    };
+    let (label_gutter_w, label_gutter_h) = axis_label_gutters(chart);
     (
         label_gutter_w + plot_w + legend.left + legend.right,
         plot_h + label_gutter_h + legend.top + legend.bottom,
     )
 }
+
+/// Gutters the category labels and the value tick labels take inside the box,
+/// alongside whatever the legend reserves.
+fn axis_label_gutters(chart: &Chart) -> (f64, f64) {
+    if matches!(chart.chart_type, ChartType::Bar) {
+        (LABEL_W + GAP, TICK_GAP)
+    } else {
+        (TICK_GAP + GAP, ROW)
+    }
+}
+
+/// Size of the plotting rectangle itself.
+///
+/// Given a frame, the plot takes whatever is left of it after the label gutters
+/// and the legend, so the chart fills its `<p:graphicFrame>` the way PowerPoint
+/// lays it out. Without one it keeps the intrinsic size: `PLOT_MAIN` along the
+/// value axis, one `ROW` per category across it.
+fn axis_plot_size(chart: &Chart, frame: Option<(f64, f64)>) -> (f64, f64) {
+    let plot_cross: f64 = chart.categories.len() as f64 * ROW;
+    let (intrinsic_w, intrinsic_h) = if matches!(chart.chart_type, ChartType::Bar) {
+        (PLOT_MAIN, plot_cross)
+    } else {
+        (plot_cross, PLOT_MAIN)
+    };
+    let Some((frame_w, frame_h)) = frame else {
+        return (intrinsic_w, intrinsic_h);
+    };
+    let legend: LegendBox = axis_legend_box(chart);
+    let (gutter_w, gutter_h) = axis_label_gutters(chart);
+    // A frame too small for the chrome would give a negative plot, so the
+    // intrinsic size is the floor rather than a source of inverted geometry.
+    (
+        (frame_w - gutter_w - legend.left - legend.right).max(MIN_PLOT_PT),
+        (frame_h - gutter_h - legend.top - legend.bottom).max(MIN_PLOT_PT),
+    )
+}
+
+/// Smallest plotting rectangle worth drawing, in points.
+const MIN_PLOT_PT: f64 = 24.0;
+
+/// Height the chart-area title block takes above the plot box: an 11pt line
+/// plus the 4pt gap under it. A framed chart spends this out of its frame
+/// rather than on top of it, or the plot runs past the frame's bottom edge.
+const AREA_TITLE_H: f64 = 19.0;
 
 /// Space the axis plot's legend reserves.
 fn axis_legend_box(chart: &Chart) -> LegendBox {
@@ -347,7 +393,7 @@ fn axis_legend_box(chart: &Chart) -> LegendBox {
 
 /// Render a bar (horizontal) or column (vertical) chart as an axis-scaled
 /// plot with gridlines, tick labels, and a legend.
-fn generate_chart_axis(out: &mut String, chart: &Chart) {
+fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)>) {
     let horizontal: bool = matches!(chart.chart_type, ChartType::Bar);
     let categories: usize = chart.categories.len();
     let series: &[crate::ir::ChartSeries] = &chart.series;
@@ -376,7 +422,6 @@ fn generate_chart_axis(out: &mut String, chart: &Chart) {
                 .fold(0.0_f64, f64::max),
         ),
     };
-    let plot_cross: f64 = categories as f64 * ROW; // category-axis length
 
     // Chart-area title: the explicit chart title, else the single series
     // name (which is what the audited fixture carries).
@@ -396,7 +441,19 @@ fn generate_chart_axis(out: &mut String, chart: &Chart) {
         out.push_str("#v(4pt)\n");
     }
 
-    let (total_w, total_h) = chart_axis_extent(chart);
+    // The title is emitted above the box, so a framed chart's box gets what is
+    // left of the frame beneath it.
+    let title_h: f64 = if area_title.is_some() {
+        AREA_TITLE_H
+    } else {
+        0.0
+    };
+    let frame: Option<(f64, f64)> =
+        frame.map(|(width, height)| (width, (height - title_h).max(MIN_PLOT_PT)));
+    let (total_w, total_h) = match frame {
+        Some(extent) => extent,
+        None => chart_axis_extent(chart),
+    };
 
     let _ = writeln!(
         out,
@@ -408,20 +465,18 @@ fn generate_chart_axis(out: &mut String, chart: &Chart) {
     // Plot-area origin (top-left of the plotting rectangle), shifted by
     // whatever the legend reserves on the left or above.
     let legend: LegendBox = axis_legend_box(chart);
-    let (plot_x, plot_y, plot_w, plot_h) = if horizontal {
-        (
-            legend.left + LABEL_W + GAP,
-            legend.top,
-            PLOT_MAIN,
-            plot_cross,
-        )
+    let (plot_w, plot_h) = axis_plot_size(chart, frame);
+    let (gutter_w, _) = axis_label_gutters(chart);
+    let (plot_x, plot_y) = (legend.left + gutter_w, legend.top);
+    // Pitch of one category along the category axis. `ROW` is the intrinsic
+    // value; a framed chart divides the axis it actually got, so widening the
+    // frame widens the bars rather than leaving them stranded at one end.
+    let row: f64 = if categories == 0 {
+        ROW
+    } else if horizontal {
+        plot_h / categories as f64
     } else {
-        (
-            legend.left + TICK_GAP + GAP,
-            legend.top,
-            plot_cross,
-            PLOT_MAIN,
-        )
+        plot_w / categories as f64
     };
 
     // Gridlines + value tick labels.
@@ -466,13 +521,13 @@ fn generate_chart_axis(out: &mut String, chart: &Chart) {
 
     // Bars, grouped per category when multiple series are present.
     for (cat_index, category) in chart.categories.iter().enumerate() {
-        let group_start: f64 = cat_index as f64 * ROW;
+        let group_start: f64 = cat_index as f64 * row;
         // A stacked category is one bar, so every segment takes the full
         // thickness a clustered chart would split between the series.
         let sub: f64 = if stacked {
-            ROW * 0.7
+            row * 0.7
         } else {
-            (ROW * 0.7) / series_count as f64
+            (row * 0.7) / series_count as f64
         };
         // Fraction of the axis already consumed by the segments below.
         let mut stack_base: f64 = 0.0;
@@ -492,13 +547,13 @@ fn generate_chart_axis(out: &mut String, chart: &Chart) {
             let frac: f64 = (value / nice_max).clamp(0.0, 1.0);
             let color: String = series_color(s, s_index, cat_index);
             let offset: f64 = if stacked {
-                ROW * 0.15
+                row * 0.15
             } else {
-                ROW * 0.15 + s_index as f64 * sub
+                row * 0.15 + s_index as f64 * sub
             };
             if horizontal {
                 // Bar charts stack categories bottom-up.
-                let row_top: f64 = plot_h - (cat_index as f64 + 1.0) * ROW;
+                let row_top: f64 = plot_h - (cat_index as f64 + 1.0) * row;
                 let bar_w: f64 = frac * plot_w;
                 let _ = writeln!(
                     out,
@@ -527,13 +582,13 @@ fn generate_chart_axis(out: &mut String, chart: &Chart) {
         }
         // Category label.
         if horizontal {
-            let row_top: f64 = plot_h - (cat_index as f64 + 1.0) * ROW;
+            let row_top: f64 = plot_h - (cat_index as f64 + 1.0) * row;
             let _ = writeln!(
                 out,
                 "#place(top + left, dx: 0pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(right + horizon)[#text(size: 9pt)[{}]]])",
                 format_f64(row_top),
                 format_f64(LABEL_W),
-                format_f64(ROW),
+                format_f64(row),
                 escape_typst(category)
             );
         } else {
@@ -542,7 +597,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart) {
                 "#place(top + left, dx: {}pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(center + horizon)[#text(size: 9pt)[{}]]])",
                 format_f64(plot_x + group_start),
                 format_f64(plot_y + plot_h + 2.0),
-                format_f64(ROW),
+                format_f64(row),
                 format_f64(ROW),
                 escape_typst(category)
             );
@@ -655,7 +710,7 @@ fn generate_chart_bar(out: &mut String, chart: &Chart) {
 /// Render a line/area chart as a polyline plot over a value axis, matching
 /// the native Excel/PowerPoint composition (gridlines, tick labels, category
 /// axis, markers, legend).
-fn generate_chart_line_plot(out: &mut String, chart: &Chart) {
+fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64, f64)>) {
     const PLOT_W: f64 = 320.0;
     const PLOT_H: f64 = 210.0;
     const VALUE_GAP: f64 = 24.0; // value tick label gutter (left)
@@ -683,12 +738,36 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart) {
         );
         out.push_str("#v(4pt)\n");
     }
+    // As in `generate_chart_axis`: the title sits above the box, so a framed
+    // chart spends its height out of the frame rather than on top of it.
+    let frame: Option<(f64, f64)> = frame.map(|(width, height)| {
+        let title_h: f64 = if chart.title.is_some() {
+            AREA_TITLE_H
+        } else {
+            0.0
+        };
+        (width, (height - title_h).max(MIN_PLOT_PT))
+    });
 
     let legend: LegendBox = LegendBox::new(chart.legend_position, LINE_LEGEND_ROW_H, LEGEND_W);
+    // A framed chart fills its `<p:graphicFrame>`; a flowed one keeps the
+    // intrinsic plot size (issue #548).
+    let (plot_w, plot_h) = match frame {
+        Some((frame_w, frame_h)) => (
+            (frame_w - (VALUE_GAP + GAP) - legend.left - legend.right).max(MIN_PLOT_PT),
+            (frame_h - CAT_GAP - legend.top - legend.bottom).max(MIN_PLOT_PT),
+        ),
+        None => (PLOT_W, PLOT_H),
+    };
     let plot_x: f64 = legend.left + VALUE_GAP + GAP;
     let plot_y: f64 = legend.top;
-    let total_w: f64 = legend.left + VALUE_GAP + GAP + PLOT_W + legend.right;
-    let total_h: f64 = legend.top + PLOT_H + CAT_GAP + legend.bottom;
+    let (total_w, total_h) = match frame {
+        Some(extent) => extent,
+        None => (
+            legend.left + VALUE_GAP + GAP + PLOT_W + legend.right,
+            legend.top + PLOT_H + CAT_GAP + legend.bottom,
+        ),
+    };
     let _ = writeln!(
         out,
         "#box(width: {}pt, height: {}pt)[",
@@ -699,13 +778,13 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart) {
     // Horizontal gridlines + value tick labels.
     let mut tick: f64 = 0.0;
     while tick <= nice_max + step * 1e-6 {
-        let y: f64 = plot_y + (1.0 - tick / nice_max) * PLOT_H;
+        let y: f64 = plot_y + (1.0 - tick / nice_max) * plot_h;
         let _ = writeln!(
             out,
             "#place(top + left, dx: {}pt, dy: {}pt, line(end: ({}pt, 0pt), stroke: 0.6pt + rgb(200, 200, 200)))",
             format_f64(plot_x),
             format_f64(y),
-            format_f64(PLOT_W)
+            format_f64(plot_w)
         );
         let _ = writeln!(
             out,
@@ -719,13 +798,13 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart) {
 
     let point_x = |index: usize| -> f64 {
         if categories <= 1 {
-            plot_x + PLOT_W / 2.0
+            plot_x + plot_w / 2.0
         } else {
-            plot_x + INSET + (index as f64 / (categories as f64 - 1.0)) * (PLOT_W - 2.0 * INSET)
+            plot_x + INSET + (index as f64 / (categories as f64 - 1.0)) * (plot_w - 2.0 * INSET)
         }
     };
     let point_y =
-        |value: f64| -> f64 { plot_y + (1.0 - (value / nice_max).clamp(0.0, 1.0)) * PLOT_H };
+        |value: f64| -> f64 { plot_y + (1.0 - (value / nice_max).clamp(0.0, 1.0)) * plot_h };
 
     // Category axis labels.
     for (index, category) in chart.categories.iter().enumerate() {
@@ -734,7 +813,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart) {
             out,
             "#place(top + left, dx: {}pt, dy: {}pt, box(width: 24pt)[#align(center)[#text(size: 8pt)[{}]]])",
             format_f64(x - 12.0),
-            format_f64(plot_y + PLOT_H + 3.0),
+            format_f64(plot_y + plot_h + 3.0),
             escape_typst(category)
         );
     }
@@ -776,14 +855,14 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart) {
         "#place(top + left, dx: {}pt, dy: {}pt, line(end: (0pt, {}pt), stroke: 0.8pt + rgb(120, 120, 120)))",
         format_f64(plot_x),
         format_f64(plot_y),
-        format_f64(PLOT_H)
+        format_f64(plot_h)
     );
     let _ = writeln!(
         out,
         "#place(top + left, dx: {}pt, dy: {}pt, line(end: ({}pt, 0pt), stroke: 0.8pt + rgb(120, 120, 120)))",
         format_f64(plot_x),
-        format_f64(plot_y + PLOT_H),
-        format_f64(PLOT_W)
+        format_f64(plot_y + plot_h),
+        format_f64(plot_w)
     );
 
     // Legend on the edge `<c:legendPos>` asks for.
@@ -798,8 +877,8 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart) {
             (
                 plot_x - (VALUE_GAP + GAP),
                 plot_y,
-                VALUE_GAP + GAP + PLOT_W,
-                PLOT_H + CAT_GAP,
+                VALUE_GAP + GAP + plot_w,
+                plot_h + CAT_GAP,
             ),
             LINE_LEGEND_ROW_H,
             LEGEND_W,
