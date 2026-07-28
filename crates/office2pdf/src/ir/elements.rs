@@ -436,6 +436,11 @@ pub const ICON_ARROW_RIGHT: &str = "\u{25B6}"; // ▶ black right-pointing trian
 pub const ICON_ARROW_UP_RIGHT: &str = "\u{25E5}"; // ◥ black upper-right triangle
 pub const ICON_ARROW_DOWN_RIGHT: &str = "\u{25E2}"; // ◢ black lower-right triangle
 
+/// Glyph the parser records for the circular icon sets — traffic lights and
+/// signs. Excel draws these as filled discs rather than characters, so the
+/// renderer recognizes this marker the same way it does the arrows (#536).
+pub const ICON_CIRCLE: &str = "\u{25CF}"; // ● black circle
+
 /// A data bar rendering within a cell (conditional formatting).
 #[derive(Debug, Clone)]
 pub struct DataBarInfo {

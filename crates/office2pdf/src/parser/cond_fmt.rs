@@ -548,10 +548,12 @@ const ICON_YELLOW: Color = Color {
     g: 191,
     b: 87,
 };
+/// Sampled from Excel's own export of the audited workbook: the traffic-light
+/// green reads `#62C17A`, not the desaturated teal recorded before (#536).
 const ICON_GREEN: Color = Color {
-    r: 104,
-    g: 164,
-    b: 144,
+    r: 98,
+    g: 193,
+    b: 122,
 };
 const ICON_GRAY: Color = Color {
     r: 128,
@@ -560,16 +562,16 @@ const ICON_GRAY: Color = Color {
 };
 const ICON_BLACK: Color = Color { r: 0, g: 0, b: 0 };
 
-// The arrow bands are recorded as these shared codepoints so the renderer can
-// recognize them and draw Excel's filled arrow shapes instead of a character
-// (issue #377). Icon sets that stay characters — traffic lights, flags,
-// symbols — use solid glyphs that keep text presentation and take the icon
-// fill color, which the heavy "black arrow" codepoints do not: those resolve
-// to color emoji.
+// The arrow and circle bands are recorded as these shared codepoints so the
+// renderer can recognize them and draw Excel's own shapes — filled arrows
+// (issue #377), filled discs (issue #536) — instead of a character. The sets
+// that stay characters, flags and symbols and stars, use solid glyphs that
+// keep text presentation and take the icon fill color, which the heavy "black
+// arrow" codepoints do not: those resolve to color emoji.
 use crate::ir::{
     ICON_ARROW_DOWN as ARROW_DOWN, ICON_ARROW_DOWN_RIGHT as ARROW_DOWN_RIGHT,
     ICON_ARROW_RIGHT as ARROW_RIGHT, ICON_ARROW_UP as ARROW_UP,
-    ICON_ARROW_UP_RIGHT as ARROW_UP_RIGHT,
+    ICON_ARROW_UP_RIGHT as ARROW_UP_RIGHT, ICON_CIRCLE as CIRCLE,
 };
 
 /// Map an OOXML iconSet type to per-band (glyph, color) pairs, low band first.
@@ -583,15 +585,15 @@ fn icon_set_glyphs(set_type: &str, band_count: usize) -> Vec<(&'static str, Opti
     };
     match effective_type {
         "3TrafficLights1" | "3TrafficLights2" | "3Signs" => vec![
-            ("●", Some(ICON_RED)),
-            ("●", Some(ICON_YELLOW)),
-            ("●", Some(ICON_GREEN)),
+            (CIRCLE, Some(ICON_RED)),
+            (CIRCLE, Some(ICON_YELLOW)),
+            (CIRCLE, Some(ICON_GREEN)),
         ],
         "4TrafficLights" => vec![
-            ("●", Some(ICON_BLACK)),
-            ("●", Some(ICON_RED)),
-            ("●", Some(ICON_YELLOW)),
-            ("●", Some(ICON_GREEN)),
+            (CIRCLE, Some(ICON_BLACK)),
+            (CIRCLE, Some(ICON_RED)),
+            (CIRCLE, Some(ICON_YELLOW)),
+            (CIRCLE, Some(ICON_GREEN)),
         ],
         "3Symbols" | "3Symbols2" => vec![
             ("✗", Some(ICON_RED)),

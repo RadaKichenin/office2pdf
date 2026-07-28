@@ -1331,13 +1331,38 @@ fn test_down_arrow_icon_is_flipped() {
 /// Icon sets that are not arrows keep their character rendering.
 #[test]
 fn test_non_arrow_icon_set_still_renders_as_text() {
+    // Symbols, flags and stars have no drawn shape and stay characters; the
+    // circles left this group when they became discs (#536).
     let doc = make_doc(vec![icon_sheet(icon_cell(
-        "●",
+        "✓",
         Color::new(0xD6, 0x55, 0x32),
     ))]);
     let output = generate_typst(&doc).unwrap();
     assert!(output.source.contains("text(fill: rgb(214, 85, 50)"));
     assert!(!output.source.contains("polygon("));
+    assert!(!output.source.contains("circle("));
+}
+
+/// Excel draws the traffic-light sets as filled discs, not a `●` character
+/// at roughly half the diameter (issue #536).
+#[test]
+fn test_circle_icon_set_renders_as_a_filled_disc() {
+    let doc = make_doc(vec![icon_sheet(icon_cell(
+        crate::ir::ICON_CIRCLE,
+        Color::new(0x62, 0xC1, 0x7A),
+    ))]);
+    let output = generate_typst(&doc).unwrap();
+    assert!(
+        output
+            .source
+            .contains("circle(radius: 4.48pt, fill: rgb(98, 193, 122)"),
+        "the disc spans Excel's 8.96pt icon box in the band colour. Got: {}",
+        output.source,
+    );
+    assert!(
+        !output.source.contains(crate::ir::ICON_CIRCLE),
+        "the character must not also be drawn"
+    );
 }
 
 /// A worksheet text box anchored after `anchor_row` at `x_offset_pt`.

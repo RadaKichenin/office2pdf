@@ -273,8 +273,31 @@ const ARROW_ICON_LENGTH_PT: f64 = 10.0;
 /// Across the shaft the arrow is narrower than it is long.
 const ARROW_ICON_BREADTH_PT: f64 = 8.0;
 
+/// Diameter of a circular icon-set icon, in points.
+///
+/// Measured from Excel's export of the audited workbook: 6.72pt printed at
+/// that sheet's 75% scale, so 8.96pt at 100%. The `●` character it used to
+/// print is a little over half that (#536).
+const CIRCLE_ICON_DIAMETER_PT: f64 = 8.96;
+
+/// The drawn shape for an icon-set glyph, or `None` for the sets that stay
+/// characters — symbols, flags, stars.
+fn icon_shape(glyph: &str, color: Option<Color>) -> Option<String> {
+    if glyph == crate::ir::ICON_CIRCLE {
+        let radius: f64 = CIRCLE_ICON_DIAMETER_PT / 2.0;
+        let paint: String = color
+            .map(|c| rgb(&c))
+            .unwrap_or_else(|| "black".to_string());
+        return Some(format!(
+            "circle(radius: {}pt, fill: {paint}, stroke: none)",
+            format_f64(radius)
+        ));
+    }
+    arrow_icon_polygon(glyph, color)
+}
+
 /// Build the Typst `polygon` for one of the arrow icon-set glyphs, or `None`
-/// for icon sets that are not arrows (traffic lights, flags, symbols).
+/// for any other glyph.
 fn arrow_icon_polygon(glyph: &str, color: Option<Color>) -> Option<String> {
     // Head half-width, shaft half-width, and where the head meets the shaft,
     // as fractions of the arrow's breadth and length.
@@ -393,7 +416,8 @@ fn generate_table_cell(
         // with a triangular head, outlined and filling most of the row. The
         // triangle characters the parser records are only a third that size,
         // so arrows are re-drawn as polygons.
-        match (arrow_icon_polygon(icon, cell.icon_color), cell.icon_color) {
+        // The circle sets are drawn discs for the same reason (#536).
+        match (icon_shape(icon, cell.icon_color), cell.icon_color) {
             (Some(polygon), _) => {
                 let _ = write!(out, "#place(left + horizon, {polygon})");
             }
