@@ -404,6 +404,7 @@ impl Parser for DocxParser {
                     &numberings,
                     &header_footer_assets,
                     column_layout,
+                    style_map.get(DOC_DEFAULT_STYLE_ID),
                     &mut warnings,
                 )));
                 section_layout_index += 1;
@@ -420,6 +421,7 @@ impl Parser for DocxParser {
             &numberings,
             &header_footer_assets,
             final_column_layout,
+            style_map.get(DOC_DEFAULT_STYLE_ID),
             &mut warnings,
         )));
 

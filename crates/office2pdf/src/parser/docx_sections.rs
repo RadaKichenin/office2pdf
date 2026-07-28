@@ -12,10 +12,10 @@ use crate::ir::{
 use super::contexts::WrapContext;
 use super::media::extract_drawing_image;
 use super::{
-    ImageMap, NumberingMap, ParagraphItem, TaggedElement,
+    ImageMap, NumberingMap, ParagraphItem, ResolvedStyle, TaggedElement,
     extract_column_layout_from_section_property, extract_paragraph_style, extract_run_style,
     extract_tab_stop_overrides, flatten_tracked_changes, group_into_lists, merge_paragraph_style,
-    read_zip_text,
+    merge_text_style, read_zip_text,
 };
 use crate::parser::units::twips_to_pt;
 use crate::parser::xml_util::parse_hex_color;
@@ -326,6 +326,7 @@ pub(super) fn build_flow_page_from_section(
     numberings: &NumberingMap,
     header_footer_assets: &HeaderFooterAssets,
     column_layout: Option<ColumnLayout>,
+    doc_default_style: Option<&ResolvedStyle>,
     warnings: &mut Vec<ConvertWarning>,
 ) -> FlowPage {
     let (size, margins) = extract_page_setup(section_prop);
@@ -385,10 +386,12 @@ pub(super) fn build_flow_page_from_section(
     let mut header = extract_docx_header(section_prop, header_footer_assets);
     if let Some(header) = &mut header {
         header.distance_from_edge = Some(twips_to_pt(section_prop.page_margin.header));
+        apply_doc_default_text_style(header, doc_default_style);
     }
     let mut footer = extract_docx_footer(section_prop, header_footer_assets);
     if let Some(footer) = &mut footer {
         footer.distance_from_edge = Some(twips_to_pt(section_prop.page_margin.footer));
+        apply_doc_default_text_style(footer, doc_default_style);
     }
 
     FlowPage {
@@ -592,6 +595,40 @@ fn extract_docx_footer(
                     convert_docx_footer(footer, &ImageMap::new(), &[], &[])
                 })
         })
+}
+
+/// Resolve a header or footer's runs against `w:docDefaults/w:rPrDefault`.
+///
+/// Header and footer parts are read from the archive before the stylesheet is,
+/// so their runs were left with only the properties they state themselves and
+/// fell through to the renderer's own defaults for everything else — Libertinus
+/// Serif at 11pt where the document says Calibri at 10pt. Word resolves them
+/// through the same run cascade as the body: a run that names a colour and a
+/// size still takes the document's family, and the run holding nothing but a
+/// tab still takes its size (issue #578).
+///
+/// This runs at page-build time rather than at parse time because that is the
+/// first point where the style map exists.
+fn apply_doc_default_text_style(
+    header_footer: &mut HeaderFooter,
+    doc_default_style: Option<&ResolvedStyle>,
+) {
+    let Some(doc_default_style) = doc_default_style else {
+        return;
+    };
+    for paragraph in &mut header_footer.paragraphs {
+        for element in &mut paragraph.elements {
+            match element {
+                HFInline::Run(run) => {
+                    run.style = merge_text_style(&run.style, Some(doc_default_style));
+                }
+                HFInline::PageNumber(style) | HFInline::TotalPages(style) => {
+                    *style = merge_text_style(style, Some(doc_default_style));
+                }
+                HFInline::Image(_) | HFInline::PositionedTab(_) => {}
+            }
+        }
+    }
 }
 
 /// Convert a docx-rs Paragraph into a HeaderFooterParagraph.
