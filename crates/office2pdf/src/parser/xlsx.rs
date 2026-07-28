@@ -544,7 +544,8 @@ impl Parser for XlsxParser {
 
             let print_titles = find_print_titles(&book, sheet);
             let title_columns: Option<(usize, usize)> = title_column_indices(print_titles, &ctx);
-            let fit_to_width: Option<u32> = sheet_fit_to_width(sheet, sheet.get_name(), &fitting_sheets);
+            let fit_to_width: Option<u32> =
+                sheet_fit_to_width(sheet, sheet.get_name(), &fitting_sheets);
             // Only the rows named by `_xlnm.Print_Titles` repeat on later
             // pages. Rows above them still lead the table, but print once, so
             // they go into a non-repeating header block.
