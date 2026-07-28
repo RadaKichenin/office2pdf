@@ -7,7 +7,7 @@ use quick_xml::Reader;
 use quick_xml::events::Event;
 
 use super::xml_util;
-use crate::ir::{Chart, ChartGrouping, ChartSeries, ChartType, Color, LegendPosition};
+use crate::ir::{Chart, ChartGrouping, ChartSeries, ChartType, Color, DataLabels, LegendPosition};
 
 /// Mapping from XML chart element tag names to their corresponding `ChartType`.
 /// Both 2-D and 3-D variants map to the same logical type.
@@ -323,6 +323,7 @@ fn parse_single_series(reader: &mut Reader<&[u8]>) -> (ChartSeries, Vec<String>)
     let mut values = Vec::new();
     let mut categories = Vec::new();
     let mut fill: Option<Color> = None;
+    let mut data_labels: DataLabels = DataLabels::default();
     // Keyed by `<c:idx>` because `<c:dPt>` entries are written only for the
     // points that override the series, and not necessarily in order.
     let mut point_fills: std::collections::BTreeMap<usize, Color> =
@@ -344,9 +345,10 @@ fn parse_single_series(reader: &mut Reader<&[u8]>) -> (ChartSeries, Vec<String>)
                         point_fills.insert(index, color);
                     }
                 }
-                // `<c:dLbls>` carries an `<c:spPr>` of its own for the label
-                // box, which would otherwise be read as the series fill.
-                b"dLbls" => xml_util::skip_element(reader, b"dLbls"),
+                // Consumed whole: `<c:dLbls>` carries an `<c:spPr>` of its
+                // own for the label box, which would otherwise be read as the
+                // series fill.
+                b"dLbls" => data_labels = parse_data_labels(reader),
                 b"xVal" => {
                     // For scatter charts, xVal contains category-like data
                     if categories.is_empty() {
@@ -374,9 +376,64 @@ fn parse_single_series(reader: &mut Reader<&[u8]>) -> (ChartSeries, Vec<String>)
             values,
             fill,
             point_fills,
+            data_labels,
         },
         categories,
     )
+}
+
+/// Read a `<c:dLbls>` element, consuming it whole.
+///
+/// `CT_DLbls` is `dLbl*` followed by the group-level settings, and a per-point
+/// `<c:dLbl>` repeats the same `showVal`/`showCatName`/… names. This loop
+/// matches on local name alone, so each `<c:dLbl>` is skipped whole; reading
+/// them would let a single point's override become the series default whenever
+/// the group-level settings are absent.
+fn parse_data_labels(reader: &mut Reader<&[u8]>) -> DataLabels {
+    let mut labels = DataLabels::default();
+    let mut in_separator: bool = false;
+    let mut separator = String::new();
+
+    loop {
+        let event = reader.read_event();
+        match event {
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
+                let flag = |element: &quick_xml::events::BytesStart| -> bool {
+                    // ECMA-376 defaults every `CT_Boolean` to true, so a bare
+                    // `<c:showVal/>` turns the part on.
+                    xml_util::get_attr_str(element, b"val")
+                        .map(|value| value == "1" || value == "true")
+                        .unwrap_or(true)
+                };
+                match e.local_name().as_ref() {
+                    b"dLbl" => xml_util::skip_element(reader, b"dLbl"),
+                    b"showVal" => labels.show_value = flag(e),
+                    b"showCatName" => labels.show_category = flag(e),
+                    b"showSerName" => labels.show_series = flag(e),
+                    b"showPercent" => labels.show_percent = flag(e),
+                    b"separator" => in_separator = true,
+                    _ => {}
+                }
+            }
+            Ok(Event::Text(ref text)) if in_separator => {
+                if let Ok(value) = text.xml_content() {
+                    separator.push_str(value.as_ref());
+                }
+            }
+            Ok(Event::End(ref e)) => match e.local_name().as_ref() {
+                b"separator" => in_separator = false,
+                b"dLbls" => break,
+                _ => {}
+            },
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+
+    if !separator.is_empty() {
+        labels.separator = separator;
+    }
+    labels
 }
 
 /// Parse a `<c:dPt>` into its `(point index, fill)`.

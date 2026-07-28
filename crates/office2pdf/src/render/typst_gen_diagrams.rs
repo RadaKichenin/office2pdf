@@ -337,6 +337,47 @@ impl LegendBox {
     }
 }
 
+/// The text one data label prints, or `None` when the series prints none.
+///
+/// Office joins the enabled parts with the series' separator in the order
+/// series, category, value, percent. Excel prints the audited workbook's pie
+/// labels as `커밋 픽스처 수; DOCX; 115; 33%`, which fixes that order.
+fn data_label_text(
+    chart: &Chart,
+    series: &crate::ir::ChartSeries,
+    category_index: usize,
+) -> Option<String> {
+    let labels = &series.data_labels;
+    if labels.is_empty() {
+        return None;
+    }
+    let value: f64 = series.values.get(category_index).copied()?;
+    let mut parts: Vec<String> = Vec::new();
+    if labels.show_series
+        && let Some(name) = series.name.as_deref()
+    {
+        parts.push(name.to_string());
+    }
+    if labels.show_category
+        && let Some(category) = chart.categories.get(category_index)
+    {
+        parts.push(category.clone());
+    }
+    if labels.show_value {
+        parts.push(chart_value_label(value));
+    }
+    if labels.show_percent {
+        let total: f64 = category_total(&chart.series, category_index);
+        let percent: f64 = if total == 0.0 {
+            0.0
+        } else {
+            value / total * 100.0
+        };
+        parts.push(format!("{}%", chart_value_label(percent.round())));
+    }
+    (!parts.is_empty()).then(|| parts.join(&labels.separator))
+}
+
 /// Sum of every series' value in one category — the length of its stacked bar.
 fn category_total(series: &[crate::ir::ChartSeries], category_index: usize) -> f64 {
     series
@@ -394,6 +435,9 @@ fn axis_title_gutters(chart: &Chart) -> (f64, f64) {
 
 /// Thickness of an axis-title band: a 9pt line plus breathing room.
 const AXIS_TITLE_H: f64 = 15.0;
+
+/// Height of one data-label line, for centring it on its segment.
+const LABEL_LINE_H: f64 = 10.0;
 
 /// Size of the plotting rectangle itself.
 ///
@@ -617,6 +661,37 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                     format_f64(sub),
                     format_f64(bar_h.max(0.0)),
                     color
+                );
+            }
+            if let Some(label) = data_label_text(chart, s, cat_index) {
+                // Centred on the segment, as `<c:dLblPos val="ctr"/>` asks and
+                // as a stacked bar needs — an outside label would sit on the
+                // segment above it.
+                let (label_x, label_y, label_w) = if horizontal {
+                    let row_top: f64 = plot_h - (cat_index as f64 + 1.0) * row;
+                    (
+                        plot_x + stack_base * plot_w,
+                        row_top + offset + sub / 2.0 - LABEL_LINE_H / 2.0,
+                        frac * plot_w,
+                    )
+                } else {
+                    (
+                        plot_x + group_start + offset,
+                        plot_y + plot_h
+                            - stack_base * plot_h
+                            - frac * plot_h / 2.0
+                            - LABEL_LINE_H / 2.0,
+                        sub,
+                    )
+                };
+                let _ = writeln!(
+                    out,
+                    "#place(top + left, dx: {}pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(center + horizon)[#text(size: 8pt, weight: \"bold\", fill: white)[{}]]])",
+                    format_f64(label_x),
+                    format_f64(label_y),
+                    format_f64(label_w.max(0.0)),
+                    format_f64(LABEL_LINE_H),
+                    escape_typst(&label)
                 );
             }
             if stacked {
