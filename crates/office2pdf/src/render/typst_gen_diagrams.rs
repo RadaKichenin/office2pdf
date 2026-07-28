@@ -7,6 +7,8 @@ enum ChartVariant {
     AxisPlot,
     /// Polyline plot over a value axis, for line and area charts.
     LinePlot,
+    /// Circular plot whose wedges are each point's share of the total.
+    PiePlot,
     /// Bordered box holding a title, a type label, and a data table.
     BorderedTable,
 }
@@ -23,6 +25,14 @@ fn chart_variant(chart: &Chart) -> ChartVariant {
         && chart.categories.len() >= 2
     {
         return ChartVariant::LinePlot;
+    }
+    if matches!(chart.chart_type, ChartType::Pie)
+        && chart
+            .series
+            .first()
+            .is_some_and(|series| series.values.iter().any(|value| *value > 0.0))
+    {
+        return ChartVariant::PiePlot;
     }
     ChartVariant::BorderedTable
 }
@@ -47,8 +57,9 @@ fn chart_fits_on_one_page(chart: &Chart) -> bool {
     let height: f64 = match chart_variant(chart) {
         // The plot box plus the title block above it.
         ChartVariant::AxisPlot => chart_axis_extent(chart).1 + 24.0,
-        // The polyline plot's box is a fixed size regardless of point count.
-        ChartVariant::LinePlot => return true,
+        // The polyline and pie plots are a fixed size regardless of how many
+        // points they carry.
+        ChartVariant::LinePlot | ChartVariant::PiePlot => return true,
         ChartVariant::BorderedTable => {
             BORDERED_TABLE_CHROME_PT + chart.categories.len() as f64 * BORDERED_TABLE_ROW_PT
         }
@@ -97,6 +108,7 @@ fn generate_chart_body(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
     match chart_variant(chart) {
         ChartVariant::AxisPlot => return generate_chart_axis(out, chart, frame),
         ChartVariant::LinePlot => return generate_chart_line_plot(out, chart, frame),
+        ChartVariant::PiePlot => return generate_chart_pie_plot(out, chart, frame),
         ChartVariant::BorderedTable => {}
     }
 
@@ -1036,6 +1048,166 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
     }
 
     out.push_str("]\n");
+}
+
+/// Render a pie chart as a circle of wedges, each sized by its share of the
+/// series total, with the legend on the edge `<c:legendPos>` asks for.
+fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, f64)>) {
+    const PIE_DIAMETER: f64 = 200.0;
+    const PIE_LEGEND_ROW_H: f64 = 14.0;
+
+    let Some(series) = chart.series.first() else {
+        return;
+    };
+    let total: f64 = series.values.iter().filter(|value| **value > 0.0).sum();
+    if total <= 0.0 {
+        return;
+    }
+
+    if let Some(title) = chart.title.as_deref() {
+        let _ = writeln!(
+            out,
+            "#align(center)[#text(size: 11pt, weight: \"bold\")[{}]]",
+            escape_typst(title)
+        );
+        out.push_str("#v(4pt)\n");
+    }
+
+    let legend: LegendBox = LegendBox::new(chart.legend_position, PIE_LEGEND_ROW_H, LEGEND_ENTRY_W);
+    // As elsewhere: the title is drawn above the box, so a framed chart takes
+    // its height out of the frame.
+    let frame: Option<(f64, f64)> = frame.map(|(width, height)| {
+        let title_h: f64 = if chart.title.is_some() {
+            AREA_TITLE_H
+        } else {
+            0.0
+        };
+        (width, (height - title_h).max(MIN_PLOT_PT))
+    });
+    let (total_w, total_h) = match frame {
+        Some(extent) => extent,
+        None => (
+            legend.left + PIE_DIAMETER + legend.right,
+            legend.top + PIE_DIAMETER + legend.bottom,
+        ),
+    };
+    // The pie stays circular, so it takes the smaller of the two axes.
+    let diameter: f64 = (total_w - legend.left - legend.right)
+        .min(total_h - legend.top - legend.bottom)
+        .max(MIN_PLOT_PT);
+    let radius: f64 = diameter / 2.0;
+    let centre_x: f64 = legend.left + (total_w - legend.left - legend.right) / 2.0;
+    let centre_y: f64 = legend.top + (total_h - legend.top - legend.bottom) / 2.0;
+
+    let _ = writeln!(
+        out,
+        "#box(width: {}pt, height: {}pt)[",
+        format_f64(total_w),
+        format_f64(total_h)
+    );
+
+    // Office starts the first wedge at twelve o'clock and sweeps clockwise.
+    let mut start: f64 = -std::f64::consts::FRAC_PI_2;
+    for (index, value) in series.values.iter().enumerate() {
+        if *value <= 0.0 {
+            continue;
+        }
+        let sweep: f64 = value / total * std::f64::consts::TAU;
+        let color: String = category_color(series, index, &CHART_CATEGORY_COLORS);
+        write_pie_wedge(out, centre_x, centre_y, radius, start, sweep, &color);
+        start += sweep;
+    }
+
+    // Legend entries, one per slice, at the position the chart asks for.
+    let entries: usize = chart.categories.len().max(series.values.len());
+    for (index, category) in chart.categories.iter().enumerate() {
+        let color: String = category_color(series, index, &CHART_CATEGORY_COLORS);
+        let (entry_x, entry_y) = legend.entry_origin(
+            chart.legend_position,
+            index,
+            entries,
+            (centre_x - radius, centre_y - radius, diameter, diameter),
+            PIE_LEGEND_ROW_H,
+            LEGEND_ENTRY_W,
+        );
+        let _ = writeln!(
+            out,
+            "#place(top + left, dx: {}pt, dy: {}pt, box[#box(width: 9pt, height: 9pt, fill: {}) #text(size: 9pt)[{}]])",
+            format_f64(entry_x),
+            format_f64(entry_y),
+            color,
+            escape_typst(category)
+        );
+    }
+
+    out.push_str("]\n");
+}
+
+/// Emit one filled wedge from `start` through `sweep` radians.
+///
+/// A cubic Bézier tracks a circular arc closely up to a quarter turn, so the
+/// sweep is split into at most quarter-turn segments. Each arc vertex carries
+/// handles of `4/3 * tan(step/4) * radius` along the tangent — the standard
+/// construction — as Typst's `(point, control-in, control-out)` triple, both
+/// controls relative to the vertex.
+fn write_pie_wedge(
+    out: &mut String,
+    centre_x: f64,
+    centre_y: f64,
+    radius: f64,
+    start: f64,
+    sweep: f64,
+    color: &str,
+) {
+    let segments: usize = (sweep / std::f64::consts::FRAC_PI_2).ceil().max(1.0) as usize;
+    let step: f64 = sweep / segments as f64;
+    let handle: f64 = 4.0 / 3.0 * (step / 4.0).tan() * radius;
+
+    let point = |angle: f64| -> (f64, f64) {
+        (
+            centre_x + radius * angle.cos(),
+            centre_y + radius * angle.sin(),
+        )
+    };
+    // Unit tangent in the sweep direction, which the handles run along.
+    let tangent = |angle: f64| -> (f64, f64) { (-angle.sin(), angle.cos()) };
+
+    // The wedge starts at the centre; `closed: true` draws the final radius
+    // back to it, so the last vertex leaves no outgoing handle to curve it.
+    let mut path = format!(
+        "#place(top + left, path(fill: {color}, stroke: none, closed: true, ({}pt, {}pt)",
+        format_f64(centre_x),
+        format_f64(centre_y)
+    );
+    for segment in 0..=segments {
+        let angle: f64 = start + step * segment as f64;
+        let (x, y) = point(angle);
+        let (tx, ty) = tangent(angle);
+        // The first vertex has nothing arriving at it and the last nothing
+        // leaving, so their unused handles stay zero.
+        let (in_dx, in_dy) = if segment == 0 {
+            (0.0, 0.0)
+        } else {
+            (-tx * handle, -ty * handle)
+        };
+        let (out_dx, out_dy) = if segment == segments {
+            (0.0, 0.0)
+        } else {
+            (tx * handle, ty * handle)
+        };
+        let _ = write!(
+            path,
+            ", (({}pt, {}pt), ({}pt, {}pt), ({}pt, {}pt))",
+            format_f64(x),
+            format_f64(y),
+            format_f64(in_dx),
+            format_f64(in_dy),
+            format_f64(out_dx),
+            format_f64(out_dy)
+        );
+    }
+    path.push_str("))");
+    let _ = writeln!(out, "{path}");
 }
 
 fn generate_chart_pie(out: &mut String, chart: &Chart) {

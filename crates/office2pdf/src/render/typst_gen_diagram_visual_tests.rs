@@ -88,7 +88,7 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
 }
 
 #[test]
-fn test_codegen_chart_pie_percentages() {
+fn test_codegen_chart_pie_draws_a_pie() {
     let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Chart {
         chart_type: ChartType::Pie,
         title: Some("Market Share".to_string()),
@@ -107,21 +107,26 @@ fn test_codegen_chart_pie_percentages() {
     })])]);
 
     let output = generate_typst(&doc).unwrap();
+
+    // A pie is a pie, not the `Slice | Value | %` table it used to be (#533).
     assert!(
-        output.source.contains("Pie Chart"),
-        "Expected pie chart label, got:\n{}",
+        output.source.contains("Market Share"),
+        "Expected chart title, got:\n{}",
         output.source
     );
-    assert!(
-        output.source.contains("60") && output.source.contains("%"),
-        "Expected percentage in pie chart, got:\n{}",
+    assert_eq!(
+        output.source.matches("path(fill:").count(),
+        2,
+        "one wedge per slice, got:\n{}",
         output.source
     );
-    assert!(
-        output.source.contains("40") && output.source.contains("%"),
-        "Expected percentage in pie chart, got:\n{}",
-        output.source
-    );
+    for category in ["A", "B"] {
+        assert!(
+            output.source.contains(category),
+            "Expected {category} in the legend, got:\n{}",
+            output.source
+        );
+    }
 }
 
 #[test]
@@ -1034,4 +1039,116 @@ fn percent_labels_are_a_share_of_the_category() {
         source.contains("100%"),
         "the only series in a category is all of it, got:\n{source}"
     );
+}
+
+// ----- Pie geometry (issue #533) -----
+
+fn pie_chart(values: Vec<f64>) -> Chart {
+    Chart {
+        chart_type: ChartType::Pie,
+        title: Some("Fixture documents by format".to_string()),
+        categories: vec!["DOCX".to_string(), "PPTX".to_string(), "XLSX".to_string()],
+        series: vec![ChartSeries {
+            name: None,
+            values,
+            fill: None,
+            point_fills: Vec::new(),
+            data_labels: DataLabels::default(),
+        }],
+        grouping: ChartGrouping::Clustered,
+        legend_position: LegendPosition::Right,
+        category_axis_title: None,
+        value_axis_title: None,
+    }
+}
+
+#[test]
+fn a_pie_chart_draws_wedges_not_a_table() {
+    let source = chart_source(pie_chart(vec![115.0, 92.0, 138.0]));
+
+    assert_eq!(
+        source.matches("path(fill:").count(),
+        3,
+        "one wedge per slice, got:\n{source}"
+    );
+    assert!(
+        !source.contains("Pie Chart"),
+        "the type-label fallback is gone, got:\n{source}"
+    );
+}
+
+#[test]
+fn a_pie_skips_slices_with_no_value() {
+    // A zero slice has no wedge to draw, but keeps its legend entry.
+    let source = chart_source(pie_chart(vec![115.0, 0.0, 138.0]));
+
+    assert_eq!(source.matches("path(fill:").count(), 2);
+    assert!(source.contains("PPTX"), "the legend still lists it");
+}
+
+#[test]
+fn an_empty_pie_falls_back_to_the_table() {
+    // Control: with nothing to apportion there is no pie, so the data table
+    // still carries the categories.
+    let source = chart_source(pie_chart(vec![0.0, 0.0, 0.0]));
+
+    assert!(
+        !source.contains("path(fill:"),
+        "no wedges without values, got:\n{source}"
+    );
+    assert!(source.contains("Pie Chart"), "the fallback still runs");
+}
+
+#[test]
+fn the_first_wedge_starts_at_twelve_oclock() {
+    // Office sweeps clockwise from the top; the first arc vertex is therefore
+    // directly above the centre.
+    let source = chart_source(pie_chart(vec![115.0, 92.0, 138.0]));
+    let first_path: &str = source
+        .lines()
+        .find(|line| line.contains("path(fill:"))
+        .expect("a wedge is drawn");
+
+    // `closed: true, (cx, cy), ((cx, cy - r), …` — the centre, then the top.
+    let after_centre: &str = first_path.split_once("closed: true, (").unwrap().1;
+    let (centre, rest) = after_centre.split_once("), ((").unwrap();
+    let centre: Vec<f64> = centre
+        .split(", ")
+        .map(|value| value.trim_end_matches("pt").parse().unwrap())
+        .collect();
+    let start: Vec<f64> = rest
+        .split_once(')')
+        .unwrap()
+        .0
+        .split(", ")
+        .map(|value| value.trim_end_matches("pt").parse().unwrap())
+        .collect();
+
+    assert!(
+        (start[0] - centre[0]).abs() < 0.01,
+        "the first vertex sits directly above the centre: {start:?} vs {centre:?}"
+    );
+    assert!(
+        start[1] < centre[1],
+        "and above it, not below: {start:?} vs {centre:?}"
+    );
+}
+
+#[test]
+fn wedge_colours_follow_the_declared_data_point_fills() {
+    let mut chart = pie_chart(vec![115.0, 92.0, 138.0]);
+    chart.series[0].point_fills = vec![
+        Some(Color::new(0x4f, 0x81, 0xbd)),
+        Some(Color::new(0xc0, 0x50, 0x4d)),
+        Some(Color::new(0x9b, 0xbb, 0x59)),
+    ];
+
+    let source = chart_source(chart);
+
+    for expected in ["rgb(79, 129, 189)", "rgb(192, 80, 77)", "rgb(155, 187, 89)"] {
+        assert!(
+            source.contains(expected),
+            "wedge colour {expected} missing from:\n{source}"
+        );
+    }
 }
