@@ -438,6 +438,7 @@ impl Parser for PptxParser {
                 match parse_single_slide(
                     &slide_path,
                     &slide_label,
+                    slide_number,
                     slide_size,
                     &theme,
                     &table_styles,

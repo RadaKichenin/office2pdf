@@ -64,29 +64,36 @@ fn resolve_inheritance_chain<R: Read + std::io::Seek>(
     })
 }
 
+/// One inheritance layer (master or layout) to pull elements from.
+struct SlideLayer<'a> {
+    path: &'a str,
+    xml: &'a str,
+    color_map: &'a ColorMapData,
+    label: &'a str,
+    text_style_defaults: &'a PptxTextBodyStyleDefaults,
+}
+
 /// Parse elements from a single inheritance layer (master or layout).
 /// Broken layers are non-fatal and silently return empty results.
 fn parse_layer_elements<R: Read + std::io::Seek>(
-    layer_path: &str,
-    layer_xml: &str,
-    color_map: &ColorMapData,
+    layer: SlideLayer<'_>,
     theme: &ThemeData,
-    label: &str,
-    text_style_defaults: &PptxTextBodyStyleDefaults,
+    slide_number: u32,
     archive: &mut ZipArchive<R>,
 ) -> (Vec<FixedElement>, Vec<ConvertWarning>) {
-    let images: SlideImageMap = load_slide_images(layer_path, archive);
+    let images: SlideImageMap = load_slide_images(layer.path, archive);
     let empty_table_styles: table_styles::TableStyleMap = table_styles::TableStyleMap::new();
     let ctx = SlideParseContext {
         images: &images,
+        slide_number,
         theme,
-        color_map,
-        warning_context: label,
-        inherited_text_body_defaults: text_style_defaults,
+        color_map: layer.color_map,
+        warning_context: layer.label,
+        inherited_text_body_defaults: layer.text_style_defaults,
         table_styles: &empty_table_styles,
     };
     // Skip placeholder shapes in master/layout layers.
-    parse_slide_xml_inner(layer_xml, &ctx, true, None).unwrap_or_default()
+    parse_slide_xml_inner(layer.xml, &ctx, true, None).unwrap_or_default()
 }
 
 // ── Embedded object helpers ─────────────────────────────────────────────
@@ -593,6 +600,7 @@ fn is_hidden_slide(slide_xml: &str) -> bool {
 pub(super) fn parse_single_slide<R: Read + std::io::Seek>(
     slide_path: &str,
     slide_label: &str,
+    slide_number: u32,
     slide_size: PageSize,
     theme: &ThemeData,
     table_styles: &table_styles::TableStyleMap,
@@ -622,6 +630,7 @@ pub(super) fn parse_single_slide<R: Read + std::io::Seek>(
 
     let slide_ctx = SlideParseContext {
         images: &slide_images,
+        slide_number,
         theme,
         color_map: &chain.slide_color_map,
         warning_context: slide_label,
@@ -640,12 +649,15 @@ pub(super) fn parse_single_slide<R: Read + std::io::Seek>(
     {
         let master_label: String = format!("{slide_label} master");
         let (master_elems, master_warnings) = parse_layer_elements(
-            path,
-            xml,
-            &chain.master_color_map,
+            SlideLayer {
+                path,
+                xml,
+                color_map: &chain.master_color_map,
+                label: &master_label,
+                text_style_defaults: &chain.master_text_styles.other,
+            },
             theme,
-            &master_label,
-            &chain.master_text_styles.other,
+            slide_number,
             archive,
         );
         elements.extend(master_elems);
@@ -659,12 +671,15 @@ pub(super) fn parse_single_slide<R: Read + std::io::Seek>(
     {
         let layout_label: String = format!("{slide_label} layout");
         let (layout_elems, layout_warnings) = parse_layer_elements(
-            path,
-            xml,
-            color_map,
+            SlideLayer {
+                path,
+                xml,
+                color_map,
+                label: &layout_label,
+                text_style_defaults: &chain.master_text_styles.other,
+            },
             theme,
-            &layout_label,
-            &chain.master_text_styles.other,
+            slide_number,
             archive,
         );
         elements.extend(layout_elems);
@@ -1267,6 +1282,8 @@ fn apply_solid_fill_color(
 #[derive(Clone, Copy)]
 pub(super) struct SlideParseContext<'a> {
     pub(super) images: &'a SlideImageMap,
+    /// The slide's 1-based position in the deck, for `<a:fld type="slidenum">`.
+    pub(super) slide_number: u32,
     pub(super) theme: &'a ThemeData,
     pub(super) color_map: &'a ColorMapData,
     pub(super) warning_context: &'a str,
@@ -1320,10 +1337,12 @@ struct SlideXmlParser<'a> {
     in_spc_aft: bool,
     runs: Vec<Run>,
 
-    // ── Run state (`<a:r>`) ─────────────────────────────────────────
+    // ── Run state (`<a:r>`, `<a:fld>`) ──────────────────────────────
     in_run: bool,
     run_style: TextStyle,
     run_text: String,
+    /// `<a:fld type>` of the run being read; `None` for a literal `<a:r>`.
+    run_field_type: Option<String>,
 
     // ── Inline tracking flags ───────────────────────────────────────
     in_text: bool,
@@ -1382,6 +1401,7 @@ impl<'a> SlideXmlParser<'a> {
             runs: Vec::new(),
 
             in_run: false,
+            run_field_type: None,
             run_style: TextStyle::default(),
             run_text: String::new(),
 
@@ -1728,6 +1748,22 @@ impl<'a> SlideXmlParser<'a> {
             }
             b"r" if self.in_para => {
                 self.in_run = true;
+                self.run_field_type = None;
+                self.run_style = self.para_default_run_style.clone();
+                self.run_text.clear();
+            }
+            // `<a:fld>` carries an optional `<a:rPr>` and `<a:t>` the way
+            // `<a:r>` does, so it is read as a run whose text may be
+            // substituted on close. `CT_TextField` also permits an `<a:pPr>`
+            // that `CT_RegularTextRun` does not, and makes `<a:t>` optional;
+            // neither matters here, since paragraph properties are read from
+            // the enclosing `<a:p>` and an empty run is dropped.
+            //
+            // Leaving the element unparsed dropped the text and left the shape
+            // empty, which then printed as a bare outlined rectangle (#540).
+            b"fld" if self.in_para => {
+                self.in_run = true;
+                self.run_field_type = get_attr_str(e, b"type");
                 self.run_style = self.para_default_run_style.clone();
                 self.run_text.clear();
             }
@@ -2276,7 +2312,15 @@ impl<'a> SlideXmlParser<'a> {
                 });
                 self.in_para = false;
             }
-            b"r" if self.in_run => {
+            b"r" | b"fld" if self.in_run => {
+                if self.run_field_type.as_deref() == Some("slidenum") {
+                    // The cached `<a:t>` is whatever PowerPoint last drew, so
+                    // it goes stale when slides are reordered. Every other
+                    // field type keeps its cache, which is both PowerPoint's
+                    // own fallback and the only deterministic reading of a
+                    // date field.
+                    self.run_text = self.ctx.slide_number.to_string();
+                }
                 if !self.run_text.is_empty() {
                     push_pptx_run(
                         &mut self.runs,
@@ -2289,6 +2333,7 @@ impl<'a> SlideXmlParser<'a> {
                     );
                 }
                 self.in_run = false;
+                self.run_field_type = None;
             }
             b"rPr" if self.in_rpr => {
                 self.in_rpr = false;
