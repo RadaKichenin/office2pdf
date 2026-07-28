@@ -152,6 +152,7 @@ fn test_charts_stay_on_first_column_group() {
             title: None,
             categories: vec![],
             series: vec![],
+            grouping: crate::ir::ChartGrouping::Clustered,
         },
     )];
     let pages = split_sheet_page_by_width(page, None);

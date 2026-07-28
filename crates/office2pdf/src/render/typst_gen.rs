@@ -7,13 +7,14 @@ use crate::config::ConvertOptions;
 use crate::error::ConvertError;
 use crate::ir::{
     Alignment, ArrowHead, Block, BorderLineStyle, BorderSide, CellBorder, CellVerticalAlign, Chart,
-    ChartType, Color, ColumnLayout, Document, FixedElement, FixedElementKind, FixedPage,
-    FloatingImage, FloatingShape, FloatingTextBox, FlowPage, FrameAnchor, GradientFill, HFInline,
-    HeaderFooter, HeaderFooterFrame, ImageCrop, ImageData, ImageFormat, ImageParagraphSpacing,
-    Insets, LineBox, LineSpacing, List, ListKind, Margins, MathEquation, Metadata, Page, PageSize,
-    Paragraph, ParagraphStyle, PositionedTabAlignment, PositionedTabRelativeTo, Run, Shadow, Shape,
-    ShapeKind, SheetPage, SmartArt, TabAlignment, TabLeader, TabStop, Table, TableCell, TableRow,
-    TextBoxData, TextBoxVerticalAlign, TextDirection, TextStyle, VerticalTextAlign, WrapMode,
+    ChartGrouping, ChartType, Color, ColumnLayout, Document, FixedElement, FixedElementKind,
+    FixedPage, FloatingImage, FloatingShape, FloatingTextBox, FlowPage, FrameAnchor, GradientFill,
+    HFInline, HeaderFooter, HeaderFooterFrame, ImageCrop, ImageData, ImageFormat,
+    ImageParagraphSpacing, Insets, LineBox, LineSpacing, List, ListKind, Margins, MathEquation,
+    Metadata, Page, PageSize, Paragraph, ParagraphStyle, PositionedTabAlignment,
+    PositionedTabRelativeTo, Run, Shadow, Shape, ShapeKind, SheetPage, SmartArt, TabAlignment,
+    TabLeader, TabStop, Table, TableCell, TableRow, TextBoxData, TextBoxVerticalAlign,
+    TextDirection, TextStyle, VerticalTextAlign, WrapMode,
 };
 
 use self::diagrams::{generate_chart, generate_smartart};

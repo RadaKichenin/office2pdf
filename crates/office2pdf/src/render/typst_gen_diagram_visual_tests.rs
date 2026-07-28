@@ -10,6 +10,7 @@ fn test_codegen_chart_bar_visual_bars() {
             name: Some("Revenue".to_string()),
             values: vec![100.0, 250.0],
         }],
+        grouping: ChartGrouping::Clustered,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -52,6 +53,7 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
             name: Some("Sales".to_string()),
             values: vec![8.200000000000001, 3.2],
         }],
+        grouping: ChartGrouping::Clustered,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -82,6 +84,7 @@ fn test_codegen_chart_pie_percentages() {
             name: None,
             values: vec![60.0, 40.0],
         }],
+        grouping: ChartGrouping::Clustered,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -112,6 +115,7 @@ fn test_codegen_chart_line_trend_indicators() {
             name: Some("Sales".to_string()),
             values: vec![10.0, 20.0, 15.0],
         }],
+        grouping: ChartGrouping::Clustered,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -141,6 +145,7 @@ fn test_codegen_chart_empty_series() {
         title: Some("Empty".to_string()),
         categories: vec![],
         series: vec![],
+        grouping: ChartGrouping::Clustered,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -200,6 +205,7 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
             name: Some("Units".to_string()),
             values: vec![23334.0, 8331.0, 2727.0],
         }],
+        grouping: ChartGrouping::Clustered,
     }));
     let doc = make_doc(vec![make_flow_page(content)]);
 
@@ -228,6 +234,7 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
             name: None,
             values: vec![115.0, 92.0, 138.0],
         }],
+        grouping: ChartGrouping::Clustered,
     }));
     let doc = make_doc(vec![make_flow_page(content)]);
 
@@ -405,6 +412,7 @@ fn test_codegen_chart_line_plot() {
                 values: vec![10.0, 9.0, 14.0],
             },
         ],
+        grouping: ChartGrouping::Clustered,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -438,6 +446,7 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
             name: Some("Reading".to_string()),
             values: (1..=60).map(|value| value as f64).collect(),
         }],
+        grouping: ChartGrouping::Clustered,
     })])]);
 
     let pages = page_texts(&doc);
@@ -452,4 +461,117 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
             "{category} was dropped; pages:\n{pages:#?}"
         );
     }
+}
+
+// ----- Stacked grouping (issue #545) -----
+
+/// The introduction deck's slide 17 chart: three formats, four support areas
+/// stacked per format. Stack totals are 9, 9, and 6.
+fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
+    Chart {
+        chart_type: ChartType::Column,
+        title: Some("Supported elements by format".to_string()),
+        categories: vec!["DOCX".to_string(), "PPTX".to_string(), "XLSX".to_string()],
+        series: vec![
+            ChartSeries {
+                name: Some("Text".to_string()),
+                values: vec![4.0, 2.0, 2.0],
+            },
+            ChartSeries {
+                name: Some("Tables".to_string()),
+                values: vec![1.0, 1.0, 1.0],
+            },
+            ChartSeries {
+                name: Some("Graphics".to_string()),
+                values: vec![2.0, 4.0, 0.0],
+            },
+            ChartSeries {
+                name: Some("Structure".to_string()),
+                values: vec![2.0, 2.0, 3.0],
+            },
+        ],
+        grouping,
+    }
+}
+
+fn chart_source(chart: Chart) -> String {
+    let doc = make_doc(vec![make_flow_page(vec![Block::Chart(chart)])]);
+    generate_typst(&doc).unwrap().source
+}
+
+/// The axis tick labels the generator emitted, in the order written.
+fn emitted_axis_ticks(source: &str) -> Vec<f64> {
+    source
+        .lines()
+        .filter(|line| line.contains("#place") && line.contains("text(size: 8pt)"))
+        .filter_map(|line| {
+            let after = line.rsplit_once("text(size: 8pt)[")?.1;
+            after.split_once(']')?.0.parse::<f64>().ok()
+        })
+        .collect()
+}
+
+#[test]
+fn a_stacked_column_scales_its_axis_to_the_stack_total() {
+    // Rendering a stacked chart clustered does not merely look different, it
+    // reports different numbers: the axis topped out at the largest single
+    // segment (4) instead of the largest stack (9), so no bar could be read as
+    // its category's total (#545).
+    let ticks = emitted_axis_ticks(&chart_source(stacked_support_chart(ChartGrouping::Stacked)));
+
+    let axis_max: f64 = ticks.iter().copied().fold(0.0, f64::max);
+    assert!(
+        axis_max >= 9.0,
+        "the axis must reach the tallest stack of 9, got {axis_max} from {ticks:?}"
+    );
+}
+
+#[test]
+fn a_clustered_column_still_scales_to_the_largest_segment() {
+    // Control: the same data clustered keeps today's axis, so the stacked
+    // branch cannot be a blanket change to axis scaling.
+    let ticks = emitted_axis_ticks(&chart_source(stacked_support_chart(
+        ChartGrouping::Clustered,
+    )));
+
+    let axis_max: f64 = ticks.iter().copied().fold(0.0, f64::max);
+    assert!(
+        (4.0..9.0).contains(&axis_max),
+        "a clustered axis covers the largest segment of 4, got {axis_max} from {ticks:?}"
+    );
+}
+
+#[test]
+fn a_stacked_column_draws_one_bar_per_category() {
+    // Four series over three categories: clustered draws 12 rects, stacked
+    // draws 12 segments too, but they share three x positions instead of
+    // spreading across twelve.
+    let source = chart_source(stacked_support_chart(ChartGrouping::Stacked));
+    let x_positions: std::collections::BTreeSet<String> = source
+        .lines()
+        .filter(|line| line.contains("rect(width:"))
+        .filter_map(|line| {
+            let after = line.split_once("dx: ")?.1;
+            Some(after.split_once("pt")?.0.to_string())
+        })
+        .collect();
+
+    assert_eq!(
+        x_positions.len(),
+        3,
+        "a stacked column puts every series at its category's x, got {x_positions:?}"
+    );
+}
+
+#[test]
+fn a_percent_stacked_column_normalises_every_stack() {
+    // XLSX totals 6 against DOCX's 9, but both fill the plot completely.
+    let source = chart_source(stacked_support_chart(ChartGrouping::PercentStacked));
+    let ticks = emitted_axis_ticks(&source);
+
+    let axis_max: f64 = ticks.iter().copied().fold(0.0, f64::max);
+    assert!(
+        (axis_max - 100.0).abs() < f64::EPSILON,
+        "a percent-stacked axis runs to 100, got {axis_max} from {ticks:?}"
+    );
 }
