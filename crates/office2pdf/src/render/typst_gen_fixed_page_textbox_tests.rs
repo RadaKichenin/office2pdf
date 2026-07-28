@@ -1714,10 +1714,63 @@ fn the_split_differs_between_fonts_while_the_line_does_not() {
     );
 }
 
+/// The line advance, in em, the generator emits for `percent` line spacing.
+fn slide_line_advance_em(percent: f64) -> Option<f64> {
+    let source = slide_text_box_source(
+        "Libertinus Serif",
+        18.0,
+        ParagraphStyle {
+            line_spacing: Some(LineSpacing::Proportional(percent)),
+            ..ParagraphStyle::default()
+        },
+    )?;
+    let (top, bottom) =
+        emitted_line_box_em(&source).unwrap_or_else(|| panic!("no line box emitted: {source}"));
+    Some(top + bottom)
+}
+
 #[test]
-fn a_slide_paragraph_with_its_own_line_spacing_keeps_it() {
-    // `a:lnSpc` is explicit and outranks the default, so the 1.2em box must
-    // not be emitted over it.
+fn a_slide_paragraph_scales_the_1_2em_line_by_its_own_line_spacing() {
+    // `a:lnSpc` scales PowerPoint's line rather than replacing it: the advance
+    // is `percent x 1.2em`. Carrying it as `par(leading)` instead did nothing
+    // between single-line paragraphs — a slide's code block is one `<a:p>` per
+    // line — so eight lines of Rust stacked into the height of three (#541).
+    let Some(advance) = slide_line_advance_em(1.18) else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+
+    assert!(
+        (advance - 1.18 * 1.2).abs() < 0.001,
+        "118% line spacing spans {}em, expected {}em",
+        advance,
+        1.18 * 1.2
+    );
+}
+
+#[test]
+fn slide_line_spacing_scales_proportionally() {
+    // Triangulation: a second percentage must land on its own multiple of
+    // 1.2em, so the advance cannot be a constant that happens to fit 118%.
+    let (Some(at_118), Some(at_125), Some(at_100)) = (
+        slide_line_advance_em(1.18),
+        slide_line_advance_em(1.25),
+        slide_line_advance_em(1.0),
+    ) else {
+        return;
+    };
+
+    assert!((at_125 - 1.25 * 1.2).abs() < 0.001, "125% spans {at_125}em");
+    assert!((at_100 - 1.2).abs() < 0.001, "100% spans {at_100}em");
+    assert!(
+        at_125 > at_118 && at_118 > at_100,
+        "advance must rise with the percentage: {at_100} / {at_118} / {at_125}"
+    );
+}
+
+#[test]
+fn slide_line_spacing_keeps_the_fonts_baseline_split() {
+    // Scaling the line must not move the baseline within it: the ascent keeps
+    // the font's usWinAscent share of the taller box.
     let Some(source) = slide_text_box_source(
         "Libertinus Serif",
         18.0,
@@ -1728,10 +1781,17 @@ fn a_slide_paragraph_with_its_own_line_spacing_keeps_it() {
     ) else {
         return;
     };
+    let (top, bottom) = emitted_line_box_em(&source).expect("line box emitted");
+    let (unscaled_top, unscaled_bottom) =
+        crate::render::pdf::powerpoint_line_box_em("Libertinus Serif").expect("metrics resolve");
 
     assert!(
-        emitted_line_box_em(&source).is_none(),
-        "an explicit line spacing must not be overridden by the default line: {source}"
+        (top / (top + bottom) - unscaled_top / (unscaled_top + unscaled_bottom)).abs() < 0.001,
+        "the baseline split moved: {top}/{bottom} against {unscaled_top}/{unscaled_bottom}"
+    );
+    assert!(
+        source.contains("leading: 0pt"),
+        "the advance is carried by the box, not by leading: {source}"
     );
 }
 

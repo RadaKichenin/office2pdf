@@ -2169,11 +2169,26 @@ fn generate_fixed_text_paragraph(
             format_f64(style.space_after.unwrap_or(0.0)),
         );
         out.push_str(")[\n");
-        write_par_settings(out, style);
-        write_common_text_settings(out, &para.runs, "  ");
         match line_height_settings {
-            Some(ref settings) => out.push_str(settings),
-            None => write_fixed_text_default_par_settings(out, style, &para.runs, "  "),
+            // The line box carries the whole advance and pins leading to zero,
+            // so the leading `write_par_settings` derives from the same spacing
+            // would only be a contradictory rule the box then overrides.
+            Some(ref settings) => {
+                write_par_settings(
+                    out,
+                    &ParagraphStyle {
+                        line_spacing: None,
+                        ..style.clone()
+                    },
+                );
+                write_common_text_settings(out, &para.runs, "  ");
+                out.push_str(settings);
+            }
+            None => {
+                write_par_settings(out, style);
+                write_common_text_settings(out, &para.runs, "  ");
+                write_fixed_text_default_par_settings(out, style, &para.runs, "  ");
+            }
         }
     }
 
