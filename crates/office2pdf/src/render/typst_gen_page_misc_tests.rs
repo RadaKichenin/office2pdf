@@ -616,6 +616,8 @@ fn test_table_page_with_chart_at_row() {
         series: vec![ChartSeries {
             name: Some("Revenue".to_string()),
             values: vec![100.0, 200.0],
+            fill: None,
+            point_fills: Vec::new(),
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -658,6 +660,8 @@ fn test_table_page_with_chart_at_end() {
         series: vec![ChartSeries {
             name: None,
             values: vec![100.0],
+            fill: None,
+            point_fills: Vec::new(),
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,

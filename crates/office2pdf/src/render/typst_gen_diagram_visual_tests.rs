@@ -9,6 +9,8 @@ fn test_codegen_chart_bar_visual_bars() {
         series: vec![ChartSeries {
             name: Some("Revenue".to_string()),
             values: vec![100.0, 250.0],
+            fill: None,
+            point_fills: Vec::new(),
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -53,6 +55,8 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
         series: vec![ChartSeries {
             name: Some("Sales".to_string()),
             values: vec![8.200000000000001, 3.2],
+            fill: None,
+            point_fills: Vec::new(),
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -85,6 +89,8 @@ fn test_codegen_chart_pie_percentages() {
         series: vec![ChartSeries {
             name: None,
             values: vec![60.0, 40.0],
+            fill: None,
+            point_fills: Vec::new(),
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -117,6 +123,8 @@ fn test_codegen_chart_line_trend_indicators() {
         series: vec![ChartSeries {
             name: Some("Sales".to_string()),
             values: vec![10.0, 20.0, 15.0],
+            fill: None,
+            point_fills: Vec::new(),
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -209,6 +217,8 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
         series: vec![ChartSeries {
             name: Some("Units".to_string()),
             values: vec![23334.0, 8331.0, 2727.0],
+            fill: None,
+            point_fills: Vec::new(),
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -239,6 +249,8 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
         series: vec![ChartSeries {
             name: None,
             values: vec![115.0, 92.0, 138.0],
+            fill: None,
+            point_fills: Vec::new(),
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -413,10 +425,14 @@ fn test_codegen_chart_line_plot() {
             ChartSeries {
                 name: Some("A".to_string()),
                 values: vec![1.0, 2.0, 3.0],
+                fill: None,
+                point_fills: Vec::new(),
             },
             ChartSeries {
                 name: Some("B".to_string()),
                 values: vec![10.0, 9.0, 14.0],
+                fill: None,
+                point_fills: Vec::new(),
             },
         ],
         grouping: ChartGrouping::Clustered,
@@ -453,6 +469,8 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
         series: vec![ChartSeries {
             name: Some("Reading".to_string()),
             values: (1..=60).map(|value| value as f64).collect(),
+            fill: None,
+            point_fills: Vec::new(),
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -485,18 +503,26 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
             ChartSeries {
                 name: Some("Text".to_string()),
                 values: vec![4.0, 2.0, 2.0],
+                fill: None,
+                point_fills: Vec::new(),
             },
             ChartSeries {
                 name: Some("Tables".to_string()),
                 values: vec![1.0, 1.0, 1.0],
+                fill: None,
+                point_fills: Vec::new(),
             },
             ChartSeries {
                 name: Some("Graphics".to_string()),
                 values: vec![2.0, 4.0, 0.0],
+                fill: None,
+                point_fills: Vec::new(),
             },
             ChartSeries {
                 name: Some("Structure".to_string()),
                 values: vec![2.0, 2.0, 3.0],
+                fill: None,
+                point_fills: Vec::new(),
             },
         ],
         grouping,
@@ -597,10 +623,14 @@ fn legend_chart(position: LegendPosition) -> Chart {
             ChartSeries {
                 name: Some("Text".to_string()),
                 values: vec![4.0, 2.0, 2.0],
+                fill: None,
+                point_fills: Vec::new(),
             },
             ChartSeries {
                 name: Some("Tables".to_string()),
                 values: vec![1.0, 1.0, 1.0],
+                fill: None,
+                point_fills: Vec::new(),
             },
         ],
         grouping: ChartGrouping::Stacked,
@@ -717,4 +747,91 @@ fn a_left_legend_shifts_the_plot_clear_of_it() {
         "a left legend sits clear of the plot: legend at {}, first bar at {first_bar_x}",
         entries[0].0
     );
+}
+
+// ----- Declared series and point fills (issue #535) -----
+
+#[test]
+fn a_declared_series_fill_reaches_the_bars() {
+    // The palette's first entry is rgb(68, 114, 196); the file says 4F81BD.
+    let chart = Chart {
+        chart_type: ChartType::Column,
+        title: Some("Production LOC by layer".to_string()),
+        categories: vec!["parser".to_string(), "render".to_string()],
+        series: vec![ChartSeries {
+            name: Some("LOC".to_string()),
+            values: vec![23334.0, 8331.0],
+            fill: Some(Color::new(0x4f, 0x81, 0xbd)),
+            point_fills: Vec::new(),
+        }],
+        grouping: ChartGrouping::Clustered,
+        legend_position: LegendPosition::Right,
+    };
+
+    let source = chart_source(chart);
+
+    assert!(
+        source.contains("rgb(79, 129, 189)"),
+        "the declared 4F81BD must reach the bars, got:\n{source}"
+    );
+    assert!(
+        !source.contains("rgb(68, 114, 196)"),
+        "the palette must not override a declared fill, got:\n{source}"
+    );
+}
+
+#[test]
+fn a_series_without_a_fill_still_takes_the_palette() {
+    // Control: the palette remains the fallback, so this is not a blanket
+    // change to how charts are coloured.
+    let chart = Chart {
+        chart_type: ChartType::Column,
+        title: None,
+        categories: vec!["parser".to_string(), "render".to_string()],
+        series: vec![ChartSeries {
+            name: Some("LOC".to_string()),
+            values: vec![23334.0, 8331.0],
+            fill: None,
+            point_fills: Vec::new(),
+        }],
+        grouping: ChartGrouping::Clustered,
+        legend_position: LegendPosition::Right,
+    };
+
+    let source = chart_source(chart);
+
+    assert!(
+        source.contains("rgb(68, 114, 196)"),
+        "an undeclared series keeps the palette, got:\n{source}"
+    );
+}
+
+#[test]
+fn per_point_fills_colour_each_bar_separately() {
+    let chart = Chart {
+        chart_type: ChartType::Column,
+        title: None,
+        categories: vec!["DOCX".to_string(), "PPTX".to_string(), "XLSX".to_string()],
+        series: vec![ChartSeries {
+            name: Some("Fixtures".to_string()),
+            values: vec![115.0, 92.0, 138.0],
+            fill: Some(Color::new(0x11, 0x11, 0x11)),
+            point_fills: vec![
+                Some(Color::new(0x4f, 0x81, 0xbd)),
+                Some(Color::new(0xc0, 0x50, 0x4d)),
+                Some(Color::new(0x9b, 0xbb, 0x59)),
+            ],
+        }],
+        grouping: ChartGrouping::Clustered,
+        legend_position: LegendPosition::Right,
+    };
+
+    let source = chart_source(chart);
+
+    for expected in ["rgb(79, 129, 189)", "rgb(192, 80, 77)", "rgb(155, 187, 89)"] {
+        assert!(
+            source.contains(expected),
+            "each point paints its own fill; {expected} missing from:\n{source}"
+        );
+    }
 }

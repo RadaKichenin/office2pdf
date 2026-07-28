@@ -170,6 +170,25 @@ pub struct ChartSeries {
     pub name: Option<String>,
     /// Data values for this series.
     pub values: Vec<f64>,
+    /// Fill declared by the series' own `<c:spPr>`. `None` falls back to the
+    /// built-in palette.
+    pub fill: Option<Color>,
+    /// Per-point fills from `<c:dPt>`, indexed by data point. A point's own
+    /// fill outranks the series'; entries are `None` where the point declares
+    /// none, and the vector may be shorter than `values`.
+    pub point_fills: Vec<Option<Color>>,
+}
+
+impl ChartSeries {
+    /// The fill for one data point: its own, else the series', else `None` for
+    /// the caller to take from the palette.
+    pub fn fill_for_point(&self, point_index: usize) -> Option<Color> {
+        self.point_fills
+            .get(point_index)
+            .copied()
+            .flatten()
+            .or(self.fill)
+    }
 }
 
 /// A math equation (from OMML or similar).

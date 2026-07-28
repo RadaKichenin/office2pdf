@@ -139,6 +139,31 @@ const CHART_SERIES_COLORS: [&str; 6] = [
     "rgb(112, 173, 71)",
 ];
 
+/// The Typst colour for one plotted point.
+///
+/// A point's own `<c:dPt>` fill outranks its series' `<c:spPr>` fill, and the
+/// built-in palette is a fallback for charts that declare neither — not a
+/// replacement for what the file states (issue #535).
+fn series_color(
+    series: &crate::ir::ChartSeries,
+    series_index: usize,
+    point_index: usize,
+) -> String {
+    match series.fill_for_point(point_index) {
+        Some(color) => rgb(&color),
+        None => CHART_SERIES_COLORS[series_index % CHART_SERIES_COLORS.len()].to_string(),
+    }
+}
+
+/// As [`series_color`], but falling back to the category palette the pie and
+/// bar fallbacks use.
+fn category_color(series: &crate::ir::ChartSeries, point_index: usize, palette: &[&str]) -> String {
+    match series.fill_for_point(point_index) {
+        Some(color) => rgb(&color),
+        None => palette[point_index % palette.len()].to_string(),
+    }
+}
+
 /// Category palette used by the bar-plot and pie-table fallbacks.
 ///
 /// Intentionally distinct from [`CHART_SERIES_COLORS`]; unifying them would
@@ -465,7 +490,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart) {
                 _ => value,
             };
             let frac: f64 = (value / nice_max).clamp(0.0, 1.0);
-            let color: &str = CHART_SERIES_COLORS[s_index % CHART_SERIES_COLORS.len()];
+            let color: String = series_color(s, s_index, cat_index);
             let offset: f64 = if stacked {
                 ROW * 0.15
             } else {
@@ -545,7 +570,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart) {
 
     // Legend on the edge `<c:legendPos>` asks for.
     for (s_index, s) in series.iter().enumerate() {
-        let color: &str = CHART_SERIES_COLORS[s_index % CHART_SERIES_COLORS.len()];
+        let color: String = series_color(s, s_index, 0);
         let default_name: String = format!("Series {}", s_index + 1);
         let name: &str = s.name.as_deref().unwrap_or(&default_name);
         // The content the legend sits beside spans the plot and both label
@@ -598,7 +623,12 @@ fn generate_chart_bar(out: &mut String, chart: &Chart) {
         for (series_index, series) in chart.series.iter().enumerate() {
             let value: f64 = series.values.get(row_index).copied().unwrap_or(0.0);
             let percent: u32 = (value / max_value * 100.0).round().min(100.0) as u32;
-            let color: &str = colors[series_index % colors.len()];
+            // The fallback here indexes by series, not by point, because each
+            // row of this table is one category across all series.
+            let color: String = match series.fill_for_point(row_index) {
+                Some(declared) => rgb(&declared),
+                None => colors[series_index % colors.len()].to_string(),
+            };
             let _ = writeln!(
                 out,
                 "#box(width: {percent}%, height: 14pt, fill: {color}, radius: 2pt)[#text(size: 8pt, fill: white)[ {}]]",
@@ -711,7 +741,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart) {
 
     // Series polylines + markers.
     for (s_index, s) in series.iter().enumerate() {
-        let color: &str = CHART_SERIES_COLORS[s_index % CHART_SERIES_COLORS.len()];
+        let color: String = series_color(s, s_index, 0);
         let points: Vec<(f64, f64)> = s
             .values
             .iter()
@@ -758,7 +788,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart) {
 
     // Legend on the edge `<c:legendPos>` asks for.
     for (s_index, s) in series.iter().enumerate() {
-        let color: &str = CHART_SERIES_COLORS[s_index % CHART_SERIES_COLORS.len()];
+        let color: String = series_color(s, s_index, 0);
         let default_name: String = format!("Series {}", s_index + 1);
         let name: &str = s.name.as_deref().unwrap_or(&default_name);
         let (entry_x, entry_y) = legend.entry_origin(
@@ -804,7 +834,9 @@ fn generate_chart_pie(out: &mut String, chart: &Chart) {
         let value: f64 = series.values.get(index).copied().unwrap_or(0.0);
         let percent: f64 = value / total * 100.0;
         let escaped_category: String = escape_typst(category);
-        let color: &str = colors[index % colors.len()];
+        // Each pie slice is one data point of the single series, so a
+        // `<c:dPt>` fill names the wedge's colour directly.
+        let color: String = category_color(series, index, colors);
         let _ = writeln!(
             out,
             "  [#box(width: 8pt, height: 8pt, fill: {color}) {escaped_category}], [{}], [{:.1}%],",
