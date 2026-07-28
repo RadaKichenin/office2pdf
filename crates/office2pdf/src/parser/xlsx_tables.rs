@@ -100,12 +100,12 @@ fn parse_table_part(xml: &str, accents: &[Color]) -> Option<RowStripes> {
                     // ECMA-376 defaults headerRowCount to 1.
                     .unwrap_or(1);
             }
-            b"tableStyleInfo" => {
-                if get_attr_str(&element, b"showRowStripes").as_deref() == Some("1") {
-                    fill = get_attr_str(&element, b"name")
-                        .as_deref()
-                        .and_then(|name| stripe_fill_for_style(name, accents));
-                }
+            b"tableStyleInfo"
+                if get_attr_str(&element, b"showRowStripes").as_deref() == Some("1") =>
+            {
+                fill = get_attr_str(&element, b"name")
+                    .as_deref()
+                    .and_then(|name| stripe_fill_for_style(name, accents));
             }
             _ => {}
         }
