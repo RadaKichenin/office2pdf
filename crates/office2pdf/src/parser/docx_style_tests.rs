@@ -436,3 +436,126 @@ fn test_paragraph_bottom_border_extracted() {
     assert_eq!(bottom.style, BorderLineStyle::Solid);
     assert!(border.top.is_none());
 }
+
+/// `w:docDefaults` carrying the justification, line spacing, and space-after a
+/// generated document states once for its whole body.
+const DOC_DEFAULT_STYLES_XML: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:docDefaults>
+    <w:pPrDefault>
+      <w:pPr>
+        <w:spacing w:after="100" w:line="278" w:lineRule="auto"/>
+        <w:jc w:val="both"/>
+      </w:pPr>
+    </w:pPrDefault>
+  </w:docDefaults>
+  <w:style w:type="paragraph" w:styleId="Heading1">
+    <w:name w:val="Heading 1"/>
+    <w:pPr><w:spacing w:after="150"/><w:jc w:val="left"/><w:outlineLvl w:val="0"/></w:pPr>
+  </w:style>
+</w:styles>"#;
+
+fn doc_default_paragraph(document_xml: &str) -> Paragraph {
+    let data = build_docx_with_styles_xml(document_xml, DOC_DEFAULT_STYLES_XML);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let Page::Flow(flow) = &doc.pages[0] else {
+        panic!("expected flow page");
+    };
+    let Block::Paragraph(paragraph) = flow
+        .content
+        .iter()
+        .find(|block| matches!(block, Block::Paragraph(_)))
+        .expect("paragraph")
+    else {
+        unreachable!()
+    };
+    paragraph.clone()
+}
+
+fn proportional_line_spacing(style: &ParagraphStyle) -> Option<f64> {
+    match style.line_spacing {
+        Some(LineSpacing::Proportional(factor)) => Some(factor),
+        _ => None,
+    }
+}
+
+#[test]
+fn test_doc_default_paragraph_properties_reach_a_paragraph_without_a_style() {
+    // w:docDefaults/w:pPrDefault sits below every named style and below the
+    // w:default="1" style. Reading only w:rPrDefault left a document that
+    // states its body layout there ragged, single-spaced, and gapless, which
+    // repaginated the technical brief from 39 pages to 31 (issue #574).
+    let paragraph = doc_default_paragraph(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body><w:p><w:r><w:t>본문 문단</w:t></w:r></w:p></w:body>
+</w:document>"#,
+    );
+
+    assert_eq!(
+        paragraph.style.alignment,
+        Some(Alignment::Justify),
+        "w:pPrDefault w:jc=both must reach a paragraph with no pStyle"
+    );
+    assert_eq!(
+        paragraph.style.space_after,
+        Some(5.0),
+        "w:pPrDefault w:after=100 twips must reach a paragraph with no pStyle"
+    );
+    assert_eq!(
+        proportional_line_spacing(&paragraph.style),
+        Some(278.0 / 240.0),
+        "w:pPrDefault w:line=278 auto must reach a paragraph with no pStyle"
+    );
+}
+
+#[test]
+fn test_named_style_overrides_doc_defaults_but_inherits_what_it_does_not_state() {
+    // A named style states only what it changes. Heading1 here sets its own
+    // alignment and space-after, so those win, but it states no line spacing
+    // and must still inherit the document default's (issue #574).
+    let paragraph = doc_default_paragraph(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>1. 개요</w:t></w:r></w:p>
+  </w:body>
+</w:document>"#,
+    );
+
+    assert_eq!(
+        paragraph.style.alignment,
+        Some(Alignment::Left),
+        "the style's own w:jc must win over the document default"
+    );
+    assert_eq!(
+        paragraph.style.space_after,
+        Some(7.5),
+        "the style's own 150 twips must win over the document default's 100"
+    );
+    assert_eq!(
+        proportional_line_spacing(&paragraph.style),
+        Some(278.0 / 240.0),
+        "the line spacing the style does not state must come from w:pPrDefault"
+    );
+}
+
+#[test]
+fn test_direct_paragraph_formatting_overrides_doc_defaults() {
+    // Direct w:pPr sits above both the style and the document default.
+    let paragraph = doc_default_paragraph(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p>
+      <w:pPr><w:spacing w:after="240" w:line="480" w:lineRule="auto"/><w:jc w:val="center"/></w:pPr>
+      <w:r><w:t>가운데 문단</w:t></w:r>
+    </w:p>
+  </w:body>
+</w:document>"#,
+    );
+
+    assert_eq!(paragraph.style.alignment, Some(Alignment::Center));
+    assert_eq!(paragraph.style.space_after, Some(12.0));
+    assert_eq!(proportional_line_spacing(&paragraph.style), Some(2.0));
+}

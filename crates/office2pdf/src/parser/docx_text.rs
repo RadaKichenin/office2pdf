@@ -10,14 +10,21 @@ use crate::parser::xml_util;
 // package omits one; Arial gives the parser a stable cross-platform baseline.
 const WORD_COMPATIBLE_DEFAULT_FONT: &str = "Arial";
 
-pub(super) fn extract_paragraph_style(prop: &docx_rs::ParagraphProperty) -> ParagraphStyle {
-    let alignment = prop.alignment.as_ref().and_then(|j| match j.val.as_str() {
+fn parse_alignment(value: &str) -> Option<Alignment> {
+    match value {
         "center" => Some(Alignment::Center),
         "right" | "end" => Some(Alignment::Right),
         "left" | "start" => Some(Alignment::Left),
         "both" | "justified" => Some(Alignment::Justify),
         _ => None,
-    });
+    }
+}
+
+pub(super) fn extract_paragraph_style(prop: &docx_rs::ParagraphProperty) -> ParagraphStyle {
+    let alignment = prop
+        .alignment
+        .as_ref()
+        .and_then(|justification| parse_alignment(justification.val.as_str()));
 
     let (indent_left, indent_right, indent_first_line) = extract_indent(&prop.indent);
     let (line_spacing, space_before, space_after) = extract_line_spacing(&prop.line_spacing);
@@ -148,6 +155,12 @@ fn extract_line_spacing(
         Err(_) => return (None, None, None),
     };
 
+    line_spacing_from_json(&json)
+}
+
+fn line_spacing_from_json(
+    json: &serde_json::Value,
+) -> (Option<LineSpacing>, Option<f64>, Option<f64>) {
     let space_before = json.get("before").and_then(|v| v.as_f64()).map(twips_to_pt);
     let space_after = json.get("after").and_then(|v| v.as_f64()).map(twips_to_pt);
 
@@ -292,6 +305,47 @@ pub(super) fn extract_doc_default_text_style_with_theme(
             .or_else(|| Some(WORD_COMPATIBLE_DEFAULT_FONT.to_string()));
     }
     style
+}
+
+/// The document-wide paragraph default, `w:docDefaults/w:pPrDefault`.
+///
+/// It sits at the bottom of the paragraph cascade — below the `w:default="1"`
+/// paragraph style, below every named style, below direct formatting — and is
+/// where a generated document normally states its body justification, line
+/// spacing, and space-after. Reading only `w:rPrDefault` left every paragraph
+/// that relied on it ragged, single-spaced, and gapless: the technical-brief
+/// fixture set a 15.87pt line advance against Word's 19.92pt and paginated to
+/// 31 pages instead of 39 (issue #574).
+///
+/// docx-rs keeps `DocDefaults`' fields private, so this reads the serialized
+/// form, as `extract_doc_default_text_style_with_theme` does above.
+pub(super) fn extract_doc_default_paragraph_style(styles: &docx_rs::Styles) -> ParagraphStyle {
+    let Ok(json) = serde_json::to_value(&styles.doc_defaults) else {
+        return ParagraphStyle::default();
+    };
+    let Some(paragraph_property) = json
+        .get("paragraphPropertyDefault")
+        .and_then(|value| value.get("paragraphProperty"))
+    else {
+        return ParagraphStyle::default();
+    };
+
+    let alignment = paragraph_property
+        .get("alignment")
+        .and_then(serde_json::Value::as_str)
+        .and_then(parse_alignment);
+    let (line_spacing, space_before, space_after) = paragraph_property
+        .get("lineSpacing")
+        .map(line_spacing_from_json)
+        .unwrap_or((None, None, None));
+
+    ParagraphStyle {
+        alignment,
+        line_spacing,
+        space_before,
+        space_after,
+        ..ParagraphStyle::default()
+    }
 }
 
 /// Latin typefaces of the document theme's minor (body) and major (heading)

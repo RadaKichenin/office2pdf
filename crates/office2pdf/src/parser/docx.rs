@@ -45,10 +45,11 @@ use self::styles::{
 };
 use self::tables::convert_table;
 use self::text::{
-    ThemeFonts, extract_doc_default_text_style_with_theme, extract_paragraph_style,
-    extract_run_style, extract_run_style_id, extract_run_text, extract_run_text_skip_layout_breaks,
-    extract_tab_stop_overrides, insert_east_asian_auto_space, is_column_break, is_page_break,
-    parse_hex_color, parse_theme_fonts, resolve_hyperlink_url, resolve_theme_font_family,
+    ThemeFonts, extract_doc_default_paragraph_style, extract_doc_default_text_style_with_theme,
+    extract_paragraph_style, extract_run_style, extract_run_style_id, extract_run_text,
+    extract_run_text_skip_layout_breaks, extract_tab_stop_overrides, insert_east_asian_auto_space,
+    is_column_break, is_page_break, parse_hex_color, parse_theme_fonts, resolve_hyperlink_url,
+    resolve_theme_font_family,
 };
 #[cfg(test)]
 use self::text::{extract_tab_stops, resolve_highlight_color};
