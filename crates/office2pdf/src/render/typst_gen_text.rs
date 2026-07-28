@@ -42,6 +42,29 @@ pub(super) fn generate_paragraph(
     let style = &para.style;
 
     if let Some(level) = style.heading_level {
+        // A heading is still a paragraph: Word paints its `w:pBdr` and `w:shd`
+        // around it exactly as it does around body copy, and a chapter-rule
+        // heading style is the commonest place a `w:pBdr` appears at all.
+        // Returning here before any decoration was emitted dropped every one
+        // of them — 22 chapter rules in the technical-brief fixture, while the
+        // header rule on the same page, declared directly rather than through
+        // a style, survived (issue #581).
+        //
+        // The wrapper opens only when there is decoration to carry, so an
+        // undecorated heading keeps Typst's own block spacing rather than
+        // inheriting a `#block`'s.
+        let decorated = style.background.is_some() || style.border.is_some();
+        if decorated {
+            out.push_str("#block(width: 100%");
+            write_block_spacing_params(out, style);
+            write_block_decoration_params(out, style);
+            out.push_str(")[\n");
+            write_paragraph_double_border_overlays(
+                out,
+                &style.border,
+                style.border_space.as_deref().copied().unwrap_or_default(),
+            );
+        }
         let _ = write!(out, "#heading(level: {level})[");
         generate_runs_with_tabs(
             out,
@@ -50,6 +73,9 @@ pub(super) fn generate_paragraph(
             default_tab_width_pt,
         );
         out.push_str("]\n");
+        if decorated {
+            out.push_str("]\n");
+        }
         return Ok(());
     }
 

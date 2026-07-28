@@ -1389,3 +1389,83 @@ fn every_declared_space_reaches_the_output_unchanged() {
         );
     }
 }
+
+#[test]
+fn test_generate_heading_with_style_border_rule() {
+    // Word paints a heading's `w:pBdr` around it like any other paragraph, and
+    // a chapter-rule heading style is the commonest place one appears. The
+    // heading branch used to return before any decoration was emitted, so
+    // every styled heading rule was dropped (issue #581).
+    let body = Block::Paragraph(Paragraph {
+        style: ParagraphStyle::default(),
+        runs: vec![Run {
+            text: "본문".to_string(),
+            style: TextStyle::default(),
+            href: None,
+            footnote: None,
+        }],
+    });
+    let heading = Block::Paragraph(Paragraph {
+        style: ParagraphStyle {
+            heading_level: Some(1),
+            space_before: Some(14.0),
+            space_after: Some(7.5),
+            border: Some(Box::new(CellBorder {
+                bottom: Some(BorderSide {
+                    width: 1.5,
+                    color: Color::new(0x2E, 0x74, 0xB5),
+                    style: BorderLineStyle::Solid,
+                }),
+                ..CellBorder::default()
+            })),
+            ..ParagraphStyle::default()
+        },
+        runs: vec![Run {
+            text: "개요".to_string(),
+            style: TextStyle::default(),
+            href: None,
+            footnote: None,
+        }],
+    });
+    let doc = make_doc(vec![make_flow_page(vec![body, heading])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains("stroke: (bottom: 1.5pt + rgb(46, 116, 181))"),
+        "a heading's style border must stroke its wrapper: {result}"
+    );
+    assert!(
+        result.contains("#heading(level: 1)[개요]"),
+        "the heading itself must survive the wrapper: {result}"
+    );
+    assert!(
+        result.contains("above: 14pt") && result.contains("below: 7.5pt"),
+        "the wrapper carries the heading's own spacing, not Typst's: {result}"
+    );
+}
+
+#[test]
+fn test_generate_undecorated_heading_keeps_its_bare_form() {
+    // Only a heading that actually carries decoration gets a wrapper; adding
+    // one unconditionally would swap Typst's heading spacing for a block's on
+    // every document that has headings at all (issue #581).
+    let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
+        style: ParagraphStyle {
+            heading_level: Some(2),
+            ..ParagraphStyle::default()
+        },
+        runs: vec![Run {
+            text: "한 문장 요약".to_string(),
+            style: TextStyle::default(),
+            href: None,
+            footnote: None,
+        }],
+    })])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(result.contains("#heading(level: 2)[한 문장 요약]"));
+    assert!(
+        !result.contains("#block(width: 100%"),
+        "an undecorated heading needs no block wrapper: {result}"
+    );
+}
