@@ -12,9 +12,10 @@ use crate::ir::{
 use super::contexts::WrapContext;
 use super::media::extract_drawing_image;
 use super::{
-    ImageMap, NumberingMap, TaggedElement, extract_column_layout_from_section_property,
-    extract_paragraph_style, extract_run_style, extract_tab_stop_overrides, group_into_lists,
-    merge_paragraph_style, read_zip_text,
+    ImageMap, NumberingMap, ParagraphItem, TaggedElement,
+    extract_column_layout_from_section_property, extract_paragraph_style, extract_run_style,
+    extract_tab_stop_overrides, flatten_tracked_changes, group_into_lists, merge_paragraph_style,
+    read_zip_text,
 };
 use crate::parser::units::twips_to_pt;
 use crate::parser::xml_util::parse_hex_color;
@@ -616,9 +617,9 @@ fn convert_hf_paragraph(
         processed_runs,
         &TextStyle::default(),
     );
-    for child in &paragraph.children {
+    for child in flatten_tracked_changes(&paragraph.children) {
         match child {
-            docx_rs::ParagraphChild::Run(run) => {
+            ParagraphItem::Run(run) => {
                 if cached_runs_to_skip > 0 {
                     cached_runs_to_skip -= 1;
                     continue;
@@ -643,13 +644,11 @@ fn convert_hf_paragraph(
                 cached_runs_to_skip +=
                     append_simple_fields(&mut elements, simple_fields, processed_runs, &run_style);
             }
-            docx_rs::ParagraphChild::PageNum(_) => {
-                elements.push(HFInline::PageNumber(TextStyle::default()))
-            }
-            docx_rs::ParagraphChild::NumPages(_) => {
-                elements.push(HFInline::TotalPages(TextStyle::default()))
-            }
-            _ => {}
+            ParagraphItem::PageNum => elements.push(HFInline::PageNumber(TextStyle::default())),
+            ParagraphItem::NumPages => elements.push(HFInline::TotalPages(TextStyle::default())),
+            // A header rarely carries a hyperlink, and when it does the URL
+            // map lives on the body relationships rather than this part's.
+            ParagraphItem::Hyperlink(_) => {}
         }
     }
 

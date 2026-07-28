@@ -559,3 +559,135 @@ fn test_direct_paragraph_formatting_overrides_doc_defaults() {
     assert_eq!(paragraph.style.space_after, Some(12.0));
     assert_eq!(proportional_line_spacing(&paragraph.style), Some(2.0));
 }
+
+#[test]
+fn test_tracked_insertion_renders_and_tracked_deletion_does_not() {
+    // Word's final view — "No Markup", and what accepting every revision
+    // produces — keeps w:ins content and drops w:del content. Both were
+    // falling through the paragraph child match, so an accepted insertion
+    // vanished from the output along with the deletion (issue #583).
+    let document_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p>
+      <w:r><w:t xml:space="preserve">v0.6.4 기준 </w:t></w:r>
+      <w:del w:id="901" w:author="문서 검토자" w:date="2026-07-26T10:00:00Z">
+        <w:r><w:delText xml:space="preserve">기능 목록 재확인</w:delText></w:r>
+      </w:del>
+      <w:ins w:id="902" w:author="문서 검토자" w:date="2026-07-26T10:05:00Z">
+        <w:r><w:t xml:space="preserve">기능·품질 지표 실측값 반영</w:t></w:r>
+      </w:ins>
+    </w:p>
+  </w:body>
+</w:document>"#;
+
+    let data = build_docx_with_columns(document_xml);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let Page::Flow(flow) = &doc.pages[0] else {
+        panic!("expected flow page");
+    };
+    let Block::Paragraph(paragraph) = flow
+        .content
+        .iter()
+        .find(|block| matches!(block, Block::Paragraph(_)))
+        .expect("paragraph")
+    else {
+        unreachable!()
+    };
+
+    let text: String = paragraph
+        .runs
+        .iter()
+        .map(|run| run.text.as_str())
+        .collect::<String>();
+
+    assert!(
+        text.contains("기능·품질 지표 실측값 반영"),
+        "the tracked insertion is ordinary final-document text: {text:?}"
+    );
+    assert!(
+        !text.contains("기능 목록 재확인"),
+        "the tracked deletion is not in the final document: {text:?}"
+    );
+    assert!(
+        text.starts_with("v0.6.4 기준"),
+        "the untracked run keeps its place: {text:?}"
+    );
+}
+
+#[test]
+fn test_insertion_that_was_later_deleted_is_dropped() {
+    // A w:del nested inside a w:ins is text that was inserted and then
+    // deleted again, so the final document does not contain it (issue #583).
+    let document_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p>
+      <w:r><w:t xml:space="preserve">남는 문장</w:t></w:r>
+      <w:ins w:id="903" w:author="검토자" w:date="2026-07-26T10:05:00Z">
+        <w:del w:id="904" w:author="검토자" w:date="2026-07-26T10:06:00Z">
+          <w:r><w:delText xml:space="preserve">되돌린 문장</w:delText></w:r>
+        </w:del>
+      </w:ins>
+    </w:p>
+  </w:body>
+</w:document>"#;
+
+    let data = build_docx_with_columns(document_xml);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let Page::Flow(flow) = &doc.pages[0] else {
+        panic!("expected flow page");
+    };
+    let Block::Paragraph(paragraph) = flow
+        .content
+        .iter()
+        .find(|block| matches!(block, Block::Paragraph(_)))
+        .expect("paragraph")
+    else {
+        unreachable!()
+    };
+
+    let text: String = paragraph
+        .runs
+        .iter()
+        .map(|run| run.text.as_str())
+        .collect::<String>();
+
+    assert_eq!(text, "남는 문장");
+}
+
+#[test]
+fn test_tracked_changes_resolve_the_same_way_in_a_footer() {
+    // A header or footer resolves to the final view like the body does; the
+    // two loops share one flattening so they cannot drift (issue #583).
+    let data = std::fs::read(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/docx/office2pdf_technical_brief_ko.docx"
+    ))
+    .expect("fixture");
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    // The brief's footers carry a PAGE and a NUMPAGES field, which travel the
+    // same match as the tracked-change variants.
+    let footer_fields: usize = doc
+        .pages
+        .iter()
+        .filter_map(|page| match page {
+            Page::Flow(flow) => flow.footer.as_ref(),
+            _ => None,
+        })
+        .flat_map(|footer| footer.paragraphs.iter())
+        .flat_map(|paragraph| paragraph.elements.iter())
+        .filter(|element| {
+            matches!(
+                element,
+                crate::ir::HFInline::PageNumber(_) | crate::ir::HFInline::TotalPages(_)
+            )
+        })
+        .count();
+
+    assert!(
+        footer_fields >= 12,
+        "every section's footer keeps its PAGE and NUMPAGES fields, got {footer_fields}"
+    );
+}
