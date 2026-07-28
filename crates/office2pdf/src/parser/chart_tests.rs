@@ -560,3 +560,143 @@ fn test_a_data_label_fill_does_not_shadow_a_declared_series_fill() {
 
     assert_eq!(chart.series[0].fill, Some(Color::new(0x4f, 0x81, 0xbd)));
 }
+
+// ----- Unmapped chart families (issue #544) -----
+
+/// Wrap `chart_element` — a whole `<c:fooChart>` — in a chartSpace.
+fn chart_of_type(chart_element: &str, body: &str) -> String {
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+        <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+            <c:chart>
+                <c:plotArea>
+                    <c:{chart_element}>
+                        {body}
+                        <c:ser>
+                            <c:idx val="0"/>
+                            <c:tx><c:strRef><c:strCache><c:pt idx="0"><c:v>Coverage</c:v></c:pt></c:strCache></c:strRef></c:tx>
+                            <c:cat><c:strLit><c:pt idx="0"><c:v>Text</c:v></c:pt><c:pt idx="1"><c:v>Table</c:v></c:pt></c:strLit></c:cat>
+                            <c:val><c:numLit><c:pt idx="0"><c:v>9</c:v></c:pt><c:pt idx="1"><c:v>6</c:v></c:pt></c:numLit></c:val>
+                        </c:ser>
+                    </c:{chart_element}>
+                </c:plotArea>
+            </c:chart>
+        </c:chartSpace>"#
+    )
+}
+
+#[test]
+fn test_a_radar_chart_survives_with_its_data() {
+    // The deck's slide 27 loses its entire left half when this returns None.
+    let xml = chart_of_type("radarChart", r#"<c:radarStyle val="marker"/>"#);
+
+    let chart = parse_chart_xml(&xml).expect("a radar chart must not be dropped");
+
+    assert_eq!(
+        chart.chart_type,
+        ChartType::Other("Radar Chart".to_string())
+    );
+    assert_eq!(chart.categories, vec!["Text", "Table"]);
+    assert_eq!(chart.series[0].values, vec![9.0, 6.0]);
+}
+
+#[test]
+fn test_a_doughnut_chart_survives_with_its_data() {
+    let xml = chart_of_type("doughnutChart", r#"<c:holeSize val="50"/>"#);
+
+    let chart = parse_chart_xml(&xml).expect("a doughnut chart must not be dropped");
+
+    assert_eq!(
+        chart.chart_type,
+        ChartType::Other("Doughnut Chart".to_string())
+    );
+    assert_eq!(chart.series[0].values, vec![9.0, 6.0]);
+}
+
+#[test]
+fn test_every_schema_chart_family_is_recognised() {
+    // ECMA-376's full CT_PlotArea group. None may return None.
+    for element in [
+        "areaChart",
+        "area3DChart",
+        "lineChart",
+        "line3DChart",
+        "stockChart",
+        "radarChart",
+        "scatterChart",
+        "pieChart",
+        "pie3DChart",
+        "doughnutChart",
+        "barChart",
+        "bar3DChart",
+        "ofPieChart",
+        "surfaceChart",
+        "surface3DChart",
+        "bubbleChart",
+    ] {
+        let xml = chart_of_type(element, "");
+
+        let chart =
+            parse_chart_xml(&xml).unwrap_or_else(|| panic!("<c:{element}> must not be dropped"));
+
+        assert_eq!(
+            chart.series[0].values,
+            vec![9.0, 6.0],
+            "<c:{element}> must keep its data"
+        );
+    }
+}
+
+#[test]
+fn test_an_unmapped_family_keeps_a_readable_label() {
+    // The label is what the data-table fallback prints as the chart's kind.
+    for (element, expected) in [
+        ("bubbleChart", "Bubble Chart"),
+        ("stockChart", "Stock Chart"),
+        ("surface3DChart", "Surface Chart"),
+    ] {
+        let xml = chart_of_type(element, "");
+
+        let chart = parse_chart_xml(&xml).unwrap();
+
+        assert_eq!(
+            chart.chart_type,
+            ChartType::Other(expected.to_string()),
+            "<c:{element}>"
+        );
+    }
+}
+
+#[test]
+fn test_a_non_chart_element_is_still_not_a_chart() {
+    // A part with no plot-area family in it yields no chart, so the suffix
+    // rule cannot be opening one on `chartSpace` or `chart` themselves.
+    let xml = r#"<?xml version="1.0"?>
+        <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+            <c:chart><c:plotArea><c:layout/></c:plotArea></c:chart>
+        </c:chartSpace>"#;
+
+    assert!(parse_chart_xml(xml).is_none());
+}
+
+#[test]
+fn test_of_pie_names_the_shape_its_ofpietype_asks_for() {
+    // One element, two shapes. Without reading `<c:ofPieType>` a bar-of-pie
+    // chart would be labelled as its sibling.
+    for (of_pie_type, expected) in [
+        (r#"<c:ofPieType val="bar"/>"#, "Bar of Pie Chart"),
+        (r#"<c:ofPieType val="pie"/>"#, "Pie of Pie Chart"),
+        // ECMA-376 defaults ST_OfPieType to `pie`.
+        ("", "Pie of Pie Chart"),
+    ] {
+        let xml = chart_of_type("ofPieChart", of_pie_type);
+
+        let chart = parse_chart_xml(&xml).unwrap();
+
+        assert_eq!(
+            chart.chart_type,
+            ChartType::Other(expected.to_string()),
+            "ofPieType {of_pie_type:?}"
+        );
+    }
+}

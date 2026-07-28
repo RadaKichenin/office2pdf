@@ -100,10 +100,23 @@ fn generate_chart_body(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
         ChartVariant::BorderedTable => {}
     }
 
-    let _ = writeln!(
-        out,
-        "#block(stroke: 1pt + rgb(100, 100, 100), radius: 4pt, inset: 10pt, width: 100%)["
-    );
+    // A framed chart's box is its frame; `width: 100%` would otherwise take
+    // the whole page and run under whatever sits beside it on the slide.
+    match frame {
+        Some((width, _)) => {
+            let _ = writeln!(
+                out,
+                "#block(stroke: 1pt + rgb(100, 100, 100), radius: 4pt, inset: 10pt, width: {}pt)[",
+                format_f64(width)
+            );
+        }
+        None => {
+            let _ = writeln!(
+                out,
+                "#block(stroke: 1pt + rgb(100, 100, 100), radius: 4pt, inset: 10pt, width: 100%)["
+            );
+        }
+    }
 
     let type_label: &str = match &chart.chart_type {
         ChartType::Bar => "Bar Chart",
