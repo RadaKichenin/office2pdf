@@ -10,6 +10,9 @@ use crate::parser::Parser;
 
 #[path = "xlsx_cond_fmt_raw.rs"]
 pub(crate) mod cond_fmt_raw;
+
+#[path = "xlsx_tables.rs"]
+mod tables;
 #[path = "xlsx_cells.rs"]
 mod xlsx_cells;
 #[path = "xlsx_drawing.rs"]
@@ -197,6 +200,7 @@ fn empty_sheet_context() -> SheetContext {
         merge_skips: std::collections::HashSet::new(),
         cond_fmt_overrides: std::collections::HashMap::new(),
         normal_font: None,
+        row_stripes: Vec::new(),
     }
 }
 
@@ -254,6 +258,7 @@ impl XlsxParser {
 
         let metadata = extract_xlsx_metadata(&book);
         let cond_fmt_hints = cond_fmt_raw::extract_cond_fmt_hints(data);
+        let mut row_stripes = tables::extract_row_stripes(data);
         let normal_font = extract_normal_font(data);
 
         let mut chart_map = extract_charts_with_anchors(data);
@@ -275,6 +280,7 @@ impl XlsxParser {
                 sheet,
                 normal_font.as_ref(),
                 cond_fmt_hints.get(sheet.get_name()),
+                row_stripes.remove(sheet.get_name()).unwrap_or_default(),
             ) else {
                 // A sheet without used cells can still carry drawings; give
                 // its images a page instead of dropping them.
@@ -448,6 +454,7 @@ impl Parser for XlsxParser {
         // Extract metadata from umya-spreadsheet properties
         let metadata = extract_xlsx_metadata(&book);
         let cond_fmt_hints = cond_fmt_raw::extract_cond_fmt_hints(data);
+        let mut row_stripes = tables::extract_row_stripes(data);
         let normal_font = extract_normal_font(data);
 
         // Extract charts with anchor positions per sheet
@@ -471,6 +478,7 @@ impl Parser for XlsxParser {
                 sheet,
                 normal_font.as_ref(),
                 cond_fmt_hints.get(sheet.get_name()),
+                row_stripes.remove(sheet.get_name()).unwrap_or_default(),
             ) else {
                 // A sheet without used cells can still carry drawings; give
                 // its images a page instead of dropping them.
