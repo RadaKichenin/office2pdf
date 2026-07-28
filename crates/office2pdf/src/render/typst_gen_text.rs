@@ -236,23 +236,34 @@ pub(super) fn word_line_height_settings(
 /// a bottom-anchored box's last baseline flat on the inset with no descent gap
 /// at all (issue #513).
 ///
-/// `None` when the paragraph carries its own line spacing or box — those are
-/// explicit and outrank the default — or when the font's metrics are unknown.
+/// `<a:lnSpc><a:spcPct>` scales that line rather than replacing it: the advance
+/// is `percent x 1.2em`, and the baseline keeps the font's share of the taller
+/// box. Carrying the percentage as `par(leading)` instead moved nothing between
+/// single-line paragraphs — a slide's code block is one `<a:p>` per line — so
+/// the lines overlapped (issue #541).
+///
+/// `None` when the paragraph carries its own line box, when its spacing is an
+/// absolute `a:spcPts` advance, or when the font's metrics are unknown.
 pub(super) fn powerpoint_line_height_settings(
     runs: &[Run],
     style: &ParagraphStyle,
 ) -> Option<String> {
-    if style.line_spacing.is_some() || style.line_box.is_some() {
+    if style.line_box.is_some() {
         return None;
     }
+    let percent: f64 = match style.line_spacing {
+        None => 1.0,
+        Some(LineSpacing::Proportional(factor)) if factor > 0.0 => factor,
+        Some(_) => return None,
+    };
     let family: &str = runs
         .iter()
         .find_map(|run| run.style.font_family.as_deref())?;
     let (ascent_em, descent_em) = crate::render::pdf::powerpoint_line_box_em(family)?;
     Some(format!(
         "#set text(top-edge: {}em, bottom-edge: -{}em)\n#set par(leading: 0pt)\n",
-        format_f64(ascent_em),
-        format_f64(descent_em)
+        format_f64(ascent_em * percent),
+        format_f64(descent_em * percent)
     ))
 }
 
