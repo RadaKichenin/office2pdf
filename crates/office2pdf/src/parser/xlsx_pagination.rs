@@ -4,7 +4,7 @@
 //! (default order: down, then over). office2pdf previously clipped them at
 //! the right page edge, silently losing content.
 
-use crate::ir::{SheetPage, Table, TableCell, TableRow};
+use crate::ir::{Block, SheetPage, Table, TableCell, TableRow};
 
 /// Upper bound on overflow pages per sheet chunk. Pathological sheets (used
 /// ranges thousands of columns wide) would otherwise explode into thousands
@@ -19,7 +19,9 @@ const MAX_COLUMN_GROUPS: usize = 12;
 pub(super) fn split_sheet_page_by_width(
     page: SheetPage,
     title_columns: Option<(usize, usize)>,
+    fit_to_width: Option<u32>,
 ) -> Vec<SheetPage> {
+    let page: SheetPage = fit_page_to_width(page, fit_to_width);
     let printable_width: f64 = page.size.width - page.margins.left - page.margins.right;
     let total_width: f64 = page.table.column_widths.iter().sum();
     if total_width <= printable_width || page.table.column_widths.len() <= 1 {
@@ -89,6 +91,91 @@ pub(super) fn split_sheet_page_by_width(
 }
 
 /// Concatenate the repeated title columns before a column group's table.
+/// Shrink a sheet until its columns fit the pages `fitToWidth` allows.
+///
+/// A sheet with `<pageSetUpPr fitToPage="1"/>` and `fitToWidth="1"` asks Excel
+/// to scale it onto one page wide rather than to spill the overflow onto a
+/// second strip. Reading neither attribute printed the repository workbook on
+/// 53 pages where Excel prints 23 (issue #530).
+///
+/// Excel scales the whole sheet, not the columns alone, so the row heights and
+/// the type scale with the widths — the audited sheet's 10pt body text prints
+/// at 7.50pt, the same 0.75 the columns take.
+///
+/// Excel never scales *up* to fill a page, so a sheet that already fits is
+/// left alone.
+fn fit_page_to_width(page: SheetPage, fit_to_width: Option<u32>) -> SheetPage {
+    let Some(pages_wide) = fit_to_width.filter(|pages| *pages > 0) else {
+        return page;
+    };
+    let printable_width: f64 = page.size.width - page.margins.left - page.margins.right;
+    let total_width: f64 = page.table.column_widths.iter().sum();
+    if printable_width <= 0.0 || total_width <= 0.0 {
+        return page;
+    }
+    // Excel's auto-fit scale is a whole percent, truncated rather than rounded
+    // so the content is guaranteed to fit. Keeping the raw ratio leaves every
+    // derived type size a fraction of a point off the printed sheet — the
+    // audited sheet came out at 7.55pt against Excel's 7.50pt.
+    let exact_scale: f64 = (printable_width * f64::from(pages_wide)) / total_width;
+    let scale: f64 = (exact_scale * 100.0).floor() / 100.0;
+    if scale >= 1.0 {
+        return page;
+    }
+    scale_sheet_page(page, scale)
+}
+
+/// Multiply a sheet's widths, heights, type sizes, and cell padding by
+/// `scale`.
+///
+/// Padding has to scale with the rest: it is a fixed per-row overhead, so
+/// leaving it at full size while the rows shrink costs a constant slice of
+/// every row and accumulates into whole extra pages over a long sheet.
+fn scale_sheet_page(mut page: SheetPage, scale: f64) -> SheetPage {
+    for width in &mut page.table.column_widths {
+        *width *= scale;
+    }
+    for row in &mut page.table.rows {
+        if let Some(height) = row.height.as_mut() {
+            *height *= scale;
+        }
+        for cell in &mut row.cells {
+            if let Some(padding) = cell.padding.as_mut() {
+                padding.top *= scale;
+                padding.right *= scale;
+                padding.bottom *= scale;
+                padding.left *= scale;
+            }
+            for block in &mut cell.content {
+                scale_block_font_sizes(block, scale);
+            }
+        }
+    }
+    page
+}
+
+fn scale_block_font_sizes(block: &mut Block, scale: f64) {
+    match block {
+        Block::Paragraph(paragraph) => {
+            for run in &mut paragraph.runs {
+                if let Some(size) = run.style.font_size.as_mut() {
+                    *size *= scale;
+                }
+            }
+        }
+        Block::Table(table) => {
+            for row in &mut table.rows {
+                for cell in &mut row.cells {
+                    for nested in &mut cell.content {
+                        scale_block_font_sizes(nested, scale);
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
 fn prepend_title_columns(title_table: &Table, group_table: Table) -> Table {
     let mut column_widths: Vec<f64> = title_table.column_widths.clone();
     column_widths.extend(group_table.column_widths.iter().copied());

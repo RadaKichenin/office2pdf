@@ -11,6 +11,8 @@ use crate::parser::Parser;
 #[path = "xlsx_cond_fmt_raw.rs"]
 pub(crate) mod cond_fmt_raw;
 
+#[path = "xlsx_fit_to_page.rs"]
+mod fit_to_page;
 #[path = "xlsx_tables.rs"]
 mod tables;
 #[path = "xlsx_cells.rs"]
@@ -74,6 +76,24 @@ fn worksheet_paper_size(code: u32) -> PageSize {
 }
 
 /// Preserve a worksheet's paper size and landscape orientation in the IR.
+/// The number of pages wide a sheet asks to be scaled onto, if it asks.
+///
+/// `fitToWidth` counts for nothing unless `<pageSetUpPr fitToPage="1"/>` is
+/// also set — Excel writes the attribute into sheets that print at 100% too
+/// (issue #530).
+fn sheet_fit_to_width(
+    sheet: &umya_spreadsheet::Worksheet,
+    sheet_name: &str,
+    fitting_sheets: &std::collections::HashSet<String>,
+) -> Option<u32> {
+    if !fitting_sheets.contains(sheet_name) {
+        return None;
+    }
+    // `fitToHeight="0"` leaves the row direction free, which is the shape the
+    // audited workbook uses; only the width bound is modelled here.
+    Some(*sheet.get_page_setup().get_fit_to_width()).filter(|pages| *pages > 0)
+}
+
 fn sheet_page_size(sheet: &umya_spreadsheet::Worksheet) -> PageSize {
     let page_setup = sheet.get_page_setup();
     let size = worksheet_paper_size(*page_setup.get_paper_size());
@@ -258,6 +278,7 @@ impl XlsxParser {
 
         let metadata = extract_xlsx_metadata(&book);
         let cond_fmt_hints = cond_fmt_raw::extract_cond_fmt_hints(data);
+        let fitting_sheets = fit_to_page::sheets_fitting_to_page(data);
         let mut row_stripes = tables::extract_row_stripes(data);
         let normal_font = extract_normal_font(data);
 
@@ -357,6 +378,7 @@ impl XlsxParser {
 
             let print_titles = find_print_titles(&book, sheet);
             let title_columns: Option<(usize, usize)> = title_column_indices(print_titles, &ctx);
+            let fit_to_width: Option<u32> = sheet_fit_to_width(sheet, &sheet_name, &fitting_sheets);
 
             // Process rows in chunks
             let mut chunk_start = row_start;
@@ -424,6 +446,7 @@ impl XlsxParser {
                             },
                         },
                         title_columns,
+                        fit_to_width,
                     )
                     .into_iter()
                     .map(Page::Sheet)
@@ -454,6 +477,7 @@ impl Parser for XlsxParser {
         // Extract metadata from umya-spreadsheet properties
         let metadata = extract_xlsx_metadata(&book);
         let cond_fmt_hints = cond_fmt_raw::extract_cond_fmt_hints(data);
+        let fitting_sheets = fit_to_page::sheets_fitting_to_page(data);
         let mut row_stripes = tables::extract_row_stripes(data);
         let normal_font = extract_normal_font(data);
 
@@ -520,6 +544,8 @@ impl Parser for XlsxParser {
 
             let print_titles = find_print_titles(&book, sheet);
             let title_columns: Option<(usize, usize)> = title_column_indices(print_titles, &ctx);
+            let fit_to_width: Option<u32> =
+                sheet_fit_to_width(sheet, sheet.get_name(), &fitting_sheets);
             // Only the rows named by `_xlnm.Print_Titles` repeat on later
             // pages. Rows above them still lead the table, but print once, so
             // they go into a non-repeating header block.
@@ -596,6 +622,7 @@ impl Parser for XlsxParser {
                             text_boxes: sheet_text_boxes,
                         },
                         title_columns,
+                        fit_to_width,
                     )
                     .into_iter()
                     .map(Page::Sheet),
@@ -683,6 +710,7 @@ impl Parser for XlsxParser {
                                 },
                             },
                             title_columns,
+                            fit_to_width,
                         )
                         .into_iter()
                         .map(Page::Sheet),
