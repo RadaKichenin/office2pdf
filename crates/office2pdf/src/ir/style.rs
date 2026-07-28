@@ -6,6 +6,11 @@ pub struct StyleSheet {
     /// from `word/settings.xml`). `None` when the document does not
     /// declare one.
     pub default_tab_stop_pt: Option<f64>,
+    /// `w:docDefaults/w:rPrDefault` resolved to a run style — the family and
+    /// size body text takes when it states none of its own. A computed
+    /// contents entry is laid out in this rather than in the heading's own
+    /// formatting (issue #610).
+    pub default_text: Option<TextStyle>,
 }
 
 /// A named style that can be referenced by paragraphs/runs.
