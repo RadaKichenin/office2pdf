@@ -11,10 +11,10 @@ use crate::ir::{
     FixedPage, FloatingImage, FloatingShape, FloatingTextBox, FlowPage, FrameAnchor, GradientFill,
     HFInline, HeaderFooter, HeaderFooterFrame, ImageCrop, ImageData, ImageFormat,
     ImageParagraphSpacing, Insets, LegendPosition, LineBox, LineSpacing, List, ListKind, Margins,
-    MathEquation, Metadata, Page, PageSize, Paragraph, ParagraphStyle, PositionedTabAlignment,
-    PositionedTabRelativeTo, Run, Shadow, Shape, ShapeKind, SheetPage, SmartArt, TabAlignment,
-    TabLeader, TabStop, Table, TableCell, TableRow, TextBoxData, TextBoxVerticalAlign,
-    TextDirection, TextStyle, VerticalTextAlign, WrapMode,
+    MathEquation, Metadata, Page, PageNumberFormat, PageSize, Paragraph, ParagraphStyle,
+    PositionedTabAlignment, PositionedTabRelativeTo, Run, Shadow, Shape, ShapeKind, SheetPage,
+    SmartArt, TabAlignment, TabLeader, TabStop, Table, TableCell, TableRow, TextBoxData,
+    TextBoxVerticalAlign, TextDirection, TextStyle, VerticalTextAlign, WrapMode,
 };
 
 use self::diagrams::{generate_chart, generate_chart_in, generate_smartart};
@@ -88,6 +88,11 @@ struct GenCtx {
     /// line box. Decided once per row so every cell in it shares a baseline,
     /// which reading each cell's own text could not guarantee (issue #498).
     row_has_east_asian_text: bool,
+    /// Numerals the active section's `PAGE` fields render in. A header is
+    /// generated as part of its page's setup, so the section's `w:pgNumType
+    /// w:fmt` reaches the field through the context rather than through the
+    /// inline, which carries only the run properties (issue #582).
+    page_number_format: PageNumberFormat,
 }
 
 impl GenCtx {
@@ -99,6 +104,7 @@ impl GenCtx {
             table_depth: 0,
             line_grid_pitch: None,
             row_has_east_asian_text: false,
+            page_number_format: PageNumberFormat::default(),
             document_default_tab_stop_pt: None,
             default_tab_width_pt: DEFAULT_TAB_WIDTH_PT,
             at_document_start: true,
@@ -329,8 +335,18 @@ fn generate_flow_page(
     options: &ConvertOptions,
 ) -> Result<(), ConvertError> {
     let size = resolve_page_size(&page.size, options);
+    // The format has to be in place before the header is written, because the
+    // header is part of the page setup and carries the `PAGE` field.
+    if let Some(numbering) = page.page_numbering {
+        ctx.page_number_format = numbering.format;
+    }
     write_flow_page_setup(out, page, &size, ctx);
     out.push('\n');
+    // Word restarts the counter at the section boundary; Typst counts pages
+    // from the document start, so the section states its own first number.
+    if let Some(start) = page.page_numbering.and_then(|numbering| numbering.start) {
+        let _ = writeln!(out, "#counter(page).update({start})");
+    }
     // Only a snapping grid reaches the line model: a `w:docGrid` whose type is
     // `default` declares a pitch Word ignores for layout (issue #518). The bare
     // presence of the element still marks an East Asian edition for the tab
@@ -1573,7 +1589,14 @@ fn generate_hf_elements(out: &mut String, elements: &[HFInline], ctx: &mut GenCt
             // Word applies the containing run's properties to the field
             // result, so the number matches the literals around it.
             HFInline::PageNumber(style) => {
-                write_hf_field(out, style, "#counter(page).display()");
+                write_hf_field(
+                    out,
+                    style,
+                    &format!(
+                        "#counter(page).display(\"{}\")",
+                        ctx.page_number_format.typst_pattern()
+                    ),
+                );
             }
             HFInline::TotalPages(style) => {
                 write_hf_field(out, style, "#counter(page).final().first()");

@@ -350,6 +350,7 @@ fn test_edge_image_only_docx() {
             columns: None,
             line_grid_pitch: None,
             line_grid_snaps_lines: false,
+            page_numbering: None,
         })],
         styles: StyleSheet::default(),
     };

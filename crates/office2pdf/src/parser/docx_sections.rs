@@ -4,9 +4,9 @@ use std::io::{Cursor, Read, Seek};
 use crate::error::ConvertWarning;
 use crate::ir::{
     Block, BorderLineStyle, BorderSide, CellBorder, Color, ColumnLayout, FlowPage, FrameAnchor,
-    HFInline, HeaderFooter, HeaderFooterFrame, HeaderFooterParagraph, Insets, Margins, PageSize,
-    PositionedTab, PositionedTabAlignment, PositionedTabRelativeTo, Run, TabLeader, TextDirection,
-    TextStyle,
+    HFInline, HeaderFooter, HeaderFooterFrame, HeaderFooterParagraph, Insets, Margins,
+    PageNumbering, PageSize, PositionedTab, PositionedTabAlignment, PositionedTabRelativeTo, Run,
+    TabLeader, TextDirection, TextStyle,
 };
 
 use super::contexts::WrapContext;
@@ -320,12 +320,23 @@ fn resolve_part_target(directory: &str, target: &str) -> String {
     parts.join("/")
 }
 
+/// The per-section values scanned out of `document.xml` directly.
+///
+/// Both are things docx-rs's `SectionProperty` does not carry in the form the
+/// IR needs: the column layout it reports without the separator, and the page
+/// numbering it reports without `w:fmt`.
+#[derive(Debug, Clone, Default)]
+pub(super) struct SectionOverrides {
+    pub(super) column_layout: Option<ColumnLayout>,
+    pub(super) page_numbering: Option<PageNumbering>,
+}
+
 pub(super) fn build_flow_page_from_section(
     section_prop: &docx_rs::SectionProperty,
     elements: Vec<TaggedElement>,
     numberings: &NumberingMap,
     header_footer_assets: &HeaderFooterAssets,
-    column_layout: Option<ColumnLayout>,
+    overrides: SectionOverrides,
     doc_default_style: Option<&ResolvedStyle>,
     warnings: &mut Vec<ConvertWarning>,
 ) -> FlowPage {
@@ -370,19 +381,6 @@ pub(super) fn build_flow_page_from_section(
         });
     }
 
-    if section_prop
-        .page_num_type
-        .as_ref()
-        .and_then(|page_number_type| page_number_type.start)
-        .is_some()
-    {
-        warnings.push(ConvertWarning::FallbackUsed {
-            format: "DOCX".to_string(),
-            from: "section page number restart".to_string(),
-            to: "global page counter".to_string(),
-        });
-    }
-
     let mut header = extract_docx_header(section_prop, header_footer_assets);
     if let Some(header) = &mut header {
         header.distance_from_edge = Some(twips_to_pt(section_prop.page_margin.header));
@@ -400,7 +398,9 @@ pub(super) fn build_flow_page_from_section(
         content,
         header,
         footer,
-        columns: column_layout
+        page_numbering: overrides.page_numbering,
+        columns: overrides
+            .column_layout
             .or_else(|| extract_column_layout_from_section_property(section_prop)),
         line_grid_pitch: extract_line_grid_pitch(section_prop),
         line_grid_snaps_lines: line_grid_snaps_lines(section_prop),

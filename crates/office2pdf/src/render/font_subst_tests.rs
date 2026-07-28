@@ -322,6 +322,7 @@ fn test_detect_missing_font_fallbacks_with_context_prefers_office_font() {
             columns: None,
             line_grid_pitch: None,
             line_grid_snaps_lines: false,
+            page_numbering: None,
         })],
         styles: crate::ir::StyleSheet::default(),
     };
@@ -354,6 +355,7 @@ fn test_document_requests_font_families_false_when_all_runs_use_defaults() {
             columns: None,
             line_grid_pitch: None,
             line_grid_snaps_lines: false,
+            page_numbering: None,
         })],
         styles: crate::ir::StyleSheet::default(),
     };
@@ -385,6 +387,7 @@ fn test_document_requests_font_families_false_for_context_free_arial() {
             columns: None,
             line_grid_pitch: None,
             line_grid_snaps_lines: false,
+            page_numbering: None,
         })],
         styles: crate::ir::StyleSheet::default(),
     };
@@ -416,6 +419,7 @@ fn test_document_requests_font_families_true_when_any_run_sets_family() {
             columns: None,
             line_grid_pitch: None,
             line_grid_snaps_lines: false,
+            page_numbering: None,
         })],
         styles: crate::ir::StyleSheet::default(),
     };

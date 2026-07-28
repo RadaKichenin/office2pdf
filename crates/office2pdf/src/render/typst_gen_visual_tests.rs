@@ -31,6 +31,7 @@ fn test_floating_image_square_wrap_codegen() {
             columns: None,
             line_grid_pitch: None,
             line_grid_snaps_lines: false,
+            page_numbering: None,
         })],
         styles: StyleSheet::default(),
     };
@@ -82,6 +83,7 @@ fn test_floating_image_top_and_bottom_codegen() {
             columns: None,
             line_grid_pitch: None,
             line_grid_snaps_lines: false,
+            page_numbering: None,
         })],
         styles: StyleSheet::default(),
     };
@@ -128,6 +130,7 @@ fn test_floating_image_behind_codegen() {
             columns: None,
             line_grid_pitch: None,
             line_grid_snaps_lines: false,
+            page_numbering: None,
         })],
         styles: StyleSheet::default(),
     };

@@ -867,3 +867,53 @@ fn test_footnote_run_properties_override_the_notes_style() {
     );
     assert_eq!(note[1].style.bold, Some(true), "the run's own weight wins");
 }
+
+#[test]
+fn test_section_page_numbering_restarts_and_picks_its_numerals() {
+    // A front matter that restarts at `i` states both the restart and the
+    // format in w:pgNumType. office2pdf read neither and warned that it was
+    // falling back to one global decimal counter (issue #582).
+    let data = std::fs::read(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/docx/office2pdf_technical_brief_ko.docx"
+    ))
+    .expect("fixture");
+    let (doc, warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let numbering: Vec<Option<crate::ir::PageNumbering>> = doc
+        .pages
+        .iter()
+        .filter_map(|page| match page {
+            Page::Flow(flow) => Some(flow.page_numbering),
+            _ => None,
+        })
+        .collect();
+
+    // The cover states nothing, the front matter restarts at i, the body
+    // restarts at 1 in decimal.
+    assert_eq!(
+        numbering[1],
+        Some(crate::ir::PageNumbering {
+            start: Some(1),
+            format: crate::ir::PageNumberFormat::LowerRoman
+        }),
+        "the front matter restarts at i"
+    );
+    assert_eq!(
+        numbering[2],
+        Some(crate::ir::PageNumbering {
+            start: Some(1),
+            format: crate::ir::PageNumberFormat::Decimal
+        }),
+        "the body restarts at 1 in decimal"
+    );
+
+    assert!(
+        !warnings.iter().any(|warning| matches!(
+            warning,
+            crate::error::ConvertWarning::FallbackUsed { from, .. }
+                if from == "section page number restart"
+        )),
+        "the restart is no longer a fallback: {warnings:?}"
+    );
+}

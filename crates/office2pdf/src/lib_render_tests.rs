@@ -51,6 +51,7 @@ fn test_render_document_with_tab_leader() {
             columns: None,
             line_grid_pitch: None,
             line_grid_snaps_lines: false,
+            page_numbering: None,
         })],
         styles: StyleSheet::default(),
     };
@@ -100,6 +101,7 @@ fn test_render_document_styled_text() {
             columns: None,
             line_grid_pitch: None,
             line_grid_snaps_lines: false,
+            page_numbering: None,
         })],
         styles: StyleSheet::default(),
     };
@@ -130,6 +132,7 @@ fn test_render_document_multiple_flow_pages() {
                 columns: None,
                 line_grid_pitch: None,
                 line_grid_snaps_lines: false,
+                page_numbering: None,
             }),
             Page::Flow(FlowPage {
                 size: PageSize::default(),
@@ -148,6 +151,7 @@ fn test_render_document_multiple_flow_pages() {
                 columns: None,
                 line_grid_pitch: None,
                 line_grid_snaps_lines: false,
+                page_numbering: None,
             }),
         ],
         styles: StyleSheet::default(),
@@ -190,6 +194,7 @@ fn test_render_document_page_break() {
             columns: None,
             line_grid_pitch: None,
             line_grid_snaps_lines: false,
+            page_numbering: None,
         })],
         styles: StyleSheet::default(),
     };
@@ -222,6 +227,7 @@ fn test_render_document_with_image() {
             columns: None,
             line_grid_pitch: None,
             line_grid_snaps_lines: false,
+            page_numbering: None,
         })],
         styles: StyleSheet::default(),
     };
@@ -274,6 +280,7 @@ fn test_render_document_image_mixed_with_text() {
             columns: None,
             line_grid_pitch: None,
             line_grid_snaps_lines: false,
+            page_numbering: None,
         })],
         styles: StyleSheet::default(),
     };
@@ -441,6 +448,7 @@ fn test_render_document_with_system_font_in_ir() {
             columns: None,
             line_grid_pitch: None,
             line_grid_snaps_lines: false,
+            page_numbering: None,
         })],
         styles: StyleSheet::default(),
     };
@@ -484,6 +492,7 @@ fn test_render_document_with_multiple_font_families() {
             columns: None,
             line_grid_pitch: None,
             line_grid_snaps_lines: false,
+            page_numbering: None,
         })],
         styles: StyleSheet::default(),
     };
@@ -536,6 +545,7 @@ fn test_render_document_with_list() {
             columns: None,
             line_grid_pitch: None,
             line_grid_snaps_lines: false,
+            page_numbering: None,
         })],
         styles: StyleSheet::default(),
     };
@@ -581,6 +591,7 @@ fn test_render_document_with_header() {
             columns: None,
             line_grid_pitch: None,
             line_grid_snaps_lines: false,
+            page_numbering: None,
         })],
         styles: StyleSheet::default(),
     };
@@ -627,6 +638,7 @@ fn test_render_document_with_page_number_footer() {
             columns: None,
             line_grid_pitch: None,
             line_grid_snaps_lines: false,
+            page_numbering: None,
         })],
         styles: StyleSheet::default(),
     };
@@ -659,6 +671,7 @@ fn test_render_document_with_landscape_page() {
             columns: None,
             line_grid_pitch: None,
             line_grid_snaps_lines: false,
+            page_numbering: None,
         })],
         styles: StyleSheet::default(),
     };
@@ -713,6 +726,7 @@ fn test_render_multipage_document_size() {
             columns: None,
             line_grid_pitch: None,
             line_grid_snaps_lines: false,
+            page_numbering: None,
         }));
     }
     let doc = Document {
