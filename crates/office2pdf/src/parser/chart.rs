@@ -27,12 +27,66 @@ const CHART_TAG_TYPES: &[(&[u8], ChartType)] = &[
     (b"scatterChart", ChartType::Scatter),
 ];
 
-/// Look up a tag name in [`CHART_TAG_TYPES`] and return the matching `ChartType`.
+/// Display labels for the plot-area families ECMA-376 defines that no plot
+/// implementation covers. They render through the data-table fallback, which
+/// prints this label as the chart's kind.
+///
+/// Dropping them instead made the chart vanish with no diagnostic, taking the
+/// whole graphic frame with it (issue #544).
+const UNPLOTTED_CHART_LABELS: &[(&[u8], &str)] = &[
+    (b"radarChart", "Radar Chart"),
+    (b"doughnutChart", "Doughnut Chart"),
+    (b"bubbleChart", "Bubble Chart"),
+    (b"stockChart", "Stock Chart"),
+    (b"surfaceChart", "Surface Chart"),
+    (b"surface3DChart", "Surface Chart"),
+    (b"area3DChart", "Area Chart"),
+];
+
+/// `<c:ofPieChart>` covers two shapes, told apart by `<c:ofPieType>`. ECMA-376
+/// defaults `ST_OfPieType` to `pie`.
+fn of_pie_label(of_pie_type: Option<&str>) -> &'static str {
+    match of_pie_type {
+        Some("bar") => "Bar of Pie Chart",
+        _ => "Pie of Pie Chart",
+    }
+}
+
+/// Resolve a plot-area element to the chart type it opens.
+///
+/// Families with a plot implementation take it; the rest keep their data and
+/// a readable label so the fallback can draw them. Anything else whose name
+/// ends in `Chart` is a family this list has not caught up with, and is better
+/// rendered as a table than dropped.
 fn chart_type_for_tag(tag: &[u8]) -> Option<ChartType> {
-    CHART_TAG_TYPES
-        .iter()
-        .find(|(name, _)| *name == tag)
-        .map(|(_, ct)| ct.clone())
+    if let Some((_, chart_type)) = CHART_TAG_TYPES.iter().find(|(name, _)| *name == tag) {
+        return Some(chart_type.clone());
+    }
+    if let Some((_, label)) = UNPLOTTED_CHART_LABELS.iter().find(|(name, _)| *name == tag) {
+        return Some(ChartType::Other(label.to_string()));
+    }
+    // The suffix is enough on its own: the part's own `chartSpace` and `chart`
+    // elements differ in case or ending, and every element that does carry it
+    // is a plot-area family.
+    let name: &str = std::str::from_utf8(tag).ok()?;
+    name.ends_with("Chart")
+        .then(|| ChartType::Other(generic_chart_label(name)))
+}
+
+/// Turn an unknown `fooBarChart` element name into `Foo Bar Chart`.
+fn generic_chart_label(element: &str) -> String {
+    let mut label = String::new();
+    for (index, character) in element.char_indices() {
+        if index > 0 && character.is_ascii_uppercase() {
+            label.push(' ');
+        }
+        if index == 0 {
+            label.extend(character.to_uppercase());
+        } else {
+            label.push(character);
+        }
+    }
+    label
 }
 
 /// Resolve a `<c:legendPos>` value to the edge the legend sits on.
@@ -90,8 +144,16 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
                 } else if let Some(ct) = chart_type_for_tag(tag) {
                     let mut plot: PlotAreaProps = PlotAreaProps::default();
                     parse_chart_series(&mut reader, tag, &mut categories, &mut series, &mut plot);
-                    chart_type =
-                        Some(bar_direction_chart_type(plot.bar_direction.as_deref()).unwrap_or(ct));
+                    chart_type = Some(match ct {
+                        // `<c:ofPieChart>` names its shape in a child element,
+                        // so the label waits until the body has been read.
+                        ChartType::Other(_) if tag == b"ofPieChart" => {
+                            ChartType::Other(of_pie_label(plot.of_pie_type.as_deref()).to_string())
+                        }
+                        other => {
+                            bar_direction_chart_type(plot.bar_direction.as_deref()).unwrap_or(other)
+                        }
+                    });
                     grouping = plot.grouping.as_deref().map(chart_grouping_for);
                 }
             }
@@ -179,6 +241,8 @@ struct PlotAreaProps {
     bar_direction: Option<String>,
     /// `<c:grouping>`.
     grouping: Option<String>,
+    /// `<c:ofPieType>`, exclusive to `<c:ofPieChart>`.
+    of_pie_type: Option<String>,
 }
 
 impl PlotAreaProps {
@@ -187,6 +251,7 @@ impl PlotAreaProps {
         match e.local_name().as_ref() {
             b"barDir" => self.bar_direction = xml_util::get_attr_str(e, b"val"),
             b"grouping" => self.grouping = xml_util::get_attr_str(e, b"val"),
+            b"ofPieType" => self.of_pie_type = xml_util::get_attr_str(e, b"val"),
             _ => return false,
         }
         true
