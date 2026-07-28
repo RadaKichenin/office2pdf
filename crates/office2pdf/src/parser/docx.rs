@@ -746,6 +746,57 @@ fn apply_default_text_color(blocks: &mut [Block], color: Color) {
     }
 }
 
+/// A paragraph child once tracked changes have been resolved away.
+///
+/// Callers match only the variants they render; a header paragraph ignores
+/// `Hyperlink`, and the body ignores the two field variants a header uses.
+pub(super) enum ParagraphItem<'a> {
+    Run(&'a docx_rs::Run),
+    Hyperlink(&'a docx_rs::Hyperlink),
+    PageNum,
+    NumPages,
+}
+
+/// Resolve a paragraph's tracked changes to the final document.
+///
+/// Word shows two views of a document with change tracking on. The review
+/// view marks up both sides; the final view — what "No Markup" shows, what
+/// accepting every revision produces, and what a converter is expected to
+/// render — keeps the insertions and drops the deletions.
+///
+/// `w:ins` and `w:del` were both falling through the paragraph child match's
+/// catch-all arm, so both sides vanished. Dropping `w:del` is right; dropping
+/// `w:ins` silently lost ordinary document text whose only distinction was
+/// having been typed while tracking was on (issue #583).
+///
+/// A `w:del` nested inside a `w:ins` is text that was inserted and then
+/// deleted again, so it is absent from the final document too and is dropped
+/// with the rest.
+pub(super) fn flatten_tracked_changes(
+    children: &[docx_rs::ParagraphChild],
+) -> Vec<ParagraphItem<'_>> {
+    let mut items: Vec<ParagraphItem<'_>> = Vec::with_capacity(children.len());
+    for child in children {
+        match child {
+            docx_rs::ParagraphChild::Run(run) => items.push(ParagraphItem::Run(run)),
+            docx_rs::ParagraphChild::Hyperlink(hyperlink) => {
+                items.push(ParagraphItem::Hyperlink(hyperlink))
+            }
+            docx_rs::ParagraphChild::PageNum(_) => items.push(ParagraphItem::PageNum),
+            docx_rs::ParagraphChild::NumPages(_) => items.push(ParagraphItem::NumPages),
+            docx_rs::ParagraphChild::Insert(insert) => {
+                for inserted in &insert.children {
+                    if let docx_rs::InsertChild::Run(run) = inserted {
+                        items.push(ParagraphItem::Run(run));
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    items
+}
+
 /// Process hyperlink children, extracting text runs with the resolved URL.
 fn process_hyperlink_runs(
     hyperlink: &docx_rs::Hyperlink,
@@ -808,9 +859,9 @@ fn convert_paragraph_blocks(
     let mut emitted_floating_anchor: bool = false;
     let mut emitted_layout_break: bool = false;
 
-    for child in &para.children {
+    for child in flatten_tracked_changes(&para.children) {
         match child {
-            docx_rs::ParagraphChild::Run(run) => {
+            ParagraphItem::Run(run) => {
                 // Advance smallCaps cursor for every <w:r> in body
                 let is_small_caps: bool = ctx.small_caps.next_is_small_caps();
 
@@ -927,7 +978,7 @@ fn convert_paragraph_blocks(
                     }
                 }
             }
-            docx_rs::ParagraphChild::Hyperlink(hyperlink) => {
+            ParagraphItem::Hyperlink(hyperlink) => {
                 process_hyperlink_runs(
                     hyperlink,
                     hyperlinks,
@@ -937,7 +988,9 @@ fn convert_paragraph_blocks(
                     &mut runs,
                 );
             }
-            _ => {}
+            // `w:pgNum`/`w:numPages` are header and footer fields; the body
+            // resolves its page numbers through `w:fldSimple` instead.
+            ParagraphItem::PageNum | ParagraphItem::NumPages => {}
         }
     }
 
