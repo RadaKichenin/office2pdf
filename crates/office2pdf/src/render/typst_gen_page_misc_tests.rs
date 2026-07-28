@@ -1498,7 +1498,8 @@ fn test_caption_list_queries_the_captions_it_collects() {
     );
     assert!(
         output.source.contains("query(<o2p-seq-Figure>)")
-            && output.source.contains("counter(page).at(entry.location())"),
+            && output.source.contains("let target = entry.location()")
+            && output.source.contains("counter(page).at(target)"),
         "the list resolves each entry's page from where it landed: {}",
         output.source
     );
@@ -1611,6 +1612,60 @@ fn test_contents_entries_number_in_the_target_sections_format() {
     assert!(
         output.source.contains("show outline.entry"),
         "the outline renders each entry's number through the recorded format: {}",
+        output.source
+    );
+}
+
+/// A caption list is numbered the same way a heading outline is: an entry
+/// pointing at a table in roman-numbered front matter reads `i`, not `1`
+/// (issue #605). The list builds its own rows, so it has to read the format
+/// back at the entry's location just as the outline rule does.
+#[test]
+fn test_caption_list_numbers_in_the_target_sections_format() {
+    use crate::ir::{Caption, PageNumberFormat, PageNumbering};
+
+    let page = Page::Flow(FlowPage {
+        size: PageSize::default(),
+        margins: Margins::default(),
+        content: vec![
+            Block::TableOfContents(crate::ir::TableOfContents::Captions {
+                identifier: "표".to_string(),
+            }),
+            Block::Caption(Caption {
+                identifier: "표".to_string(),
+                entry_text: "문서 서지 정보".to_string(),
+                paragraph: Paragraph {
+                    style: ParagraphStyle::default(),
+                    runs: vec![Run {
+                        text: "표 1 문서 서지 정보".to_string(),
+                        style: TextStyle::default(),
+                        href: None,
+                        footnote: None,
+                    }],
+                },
+            }),
+        ],
+        header: None,
+        footer: None,
+        columns: None,
+        line_grid_pitch: None,
+        line_grid_snaps_lines: false,
+        page_numbering: Some(PageNumbering {
+            start: Some(1),
+            format: PageNumberFormat::LowerRoman,
+        }),
+    });
+
+    let output = generate_typst(&make_doc(vec![page])).unwrap();
+
+    assert!(
+        output.source.contains("o2p-page-format.at(target)"),
+        "the caption list reads the format back at each entry's location: {}",
+        output.source
+    );
+    assert!(
+        !output.source.contains("#entry_page]"),
+        "the raw page count no longer reaches the row: {}",
         output.source
     );
 }

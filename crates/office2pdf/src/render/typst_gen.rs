@@ -1693,25 +1693,14 @@ fn generate_floating_anchor_group(
     Ok(consumed)
 }
 
-/// Emit a `TOC` field's result.
-///
-/// Word recomputes the field when the document is opened, which is why a
-/// generated document ships it empty; the entries, their page numbers, and the
-/// dot leaders between them all come from where the headings actually land.
-/// Typst's own outline resolves exactly that, against the `#heading` elements
-/// the body already emits, so the entries stay correct as the layout moves
-/// (issue #576).
-///
-/// The heading paragraph above the field carries the document's own title, so
-/// the outline contributes none.
-
 /// Declare the page-format state and teach the outline to read it back.
 ///
 /// Typst numbers an outline entry from the page counter alone, which renders
 /// the arabic count whatever the section it points into declared. The show
 /// rule rebuilds the entry with its number run through the format recorded at
-/// the entry's own location, so front matter reads `i` where Word reads `i`
-/// (issue #605). Entry indentation and the leader stay Typst's, because the
+/// the entry's own location, so an entry pointing into roman-numbered front
+/// matter reads `i` rather than the arabic `1` the page counter alone would
+/// print (issue #605). Entry indentation and the leader stay Typst's, because the
 /// entry's *styling* is a separate defect (issue #610).
 fn write_page_format_state(out: &mut String) {
     let _ = writeln!(
@@ -1728,6 +1717,22 @@ fn write_page_format_state(out: &mut String) {
     );
 }
 
+/// Emit a `TOC` field's result.
+///
+/// Word recomputes the field when the document is opened, which is why a
+/// generated document ships it empty; the entries, their page numbers, and the
+/// dot leaders between them all come from where the headings actually land.
+/// Typst's own outline resolves exactly that, against the `#heading` elements
+/// the body already emits, so the entries stay correct as the layout moves
+/// (issue #576).
+///
+/// The heading paragraph above the field carries the document's own title, so
+/// the outline contributes none.
+///
+/// Both kinds of list number an entry through the format the entry's own
+/// section declared: the heading outline through the `show` rule
+/// [`write_page_format_state`] installs, the caption list through the same
+/// lookup written into the row it builds here (issue #605).
 fn generate_table_of_contents(out: &mut String, contents: &TableOfContents) {
     match contents {
         TableOfContents::Headings { depth } => {
@@ -1743,8 +1748,10 @@ fn generate_table_of_contents(out: &mut String, contents: &TableOfContents) {
             let _ = writeln!(
                 out,
                 "#context {{ for entry in query(<{label}>) {{ \
-                 let entry_page = counter(page).at(entry.location()).first(); \
-                 block(below: 0.65em)[#entry.value #box(width: 1fr, repeat[.]) #entry_page] }} }}"
+                 let target = entry.location(); \
+                 let shown = numbering({PAGE_FORMAT_STATE}.at(target), \
+                 ..counter(page).at(target)); \
+                 block(below: 0.65em)[#entry.value #box(width: 1fr, repeat[.]) #shown] }} }}"
             );
         }
     }
