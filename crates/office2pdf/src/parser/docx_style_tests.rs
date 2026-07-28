@@ -755,3 +755,115 @@ fn test_header_and_footer_runs_inherit_the_document_default_run_style() {
         "a PAGE field resolves through the same cascade as the literals beside it"
     );
 }
+
+#[test]
+fn test_footnote_text_resolves_its_paragraph_style_and_run_properties() {
+    // A note is read before the stylesheet is, so its runs used to arrive as
+    // one unstyled string and rendered at the engine's own footnote size and
+    // face. Word resolves them through the same cascade as the body: the
+    // note's w:pStyle supplies what the runs leave unstated (issue #580).
+    let data = std::fs::read(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/docx/office2pdf_technical_brief_ko.docx"
+    ))
+    .expect("fixture");
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let note_runs: Vec<&Run> = doc
+        .pages
+        .iter()
+        .filter_map(|page| match page {
+            Page::Flow(flow) => Some(flow),
+            _ => None,
+        })
+        .flat_map(|flow| flow.content.iter())
+        .filter_map(|block| match block {
+            Block::Paragraph(paragraph) => Some(paragraph),
+            _ => None,
+        })
+        .flat_map(|paragraph| paragraph.runs.iter())
+        .filter_map(|run| run.footnote.as_ref())
+        .flatten()
+        .collect();
+
+    assert!(!note_runs.is_empty(), "the brief carries footnotes");
+
+    // `FootnoteBody` sets `w:sz="16"` and `w:color="404040"`, and inherits the
+    // document default family.
+    for note_run in &note_runs {
+        assert_eq!(
+            note_run.style.font_size,
+            Some(8.0),
+            "the note's style sets 8pt: {:?}",
+            note_run.text
+        );
+        assert_eq!(
+            note_run
+                .style
+                .color
+                .map(|color| (color.r, color.g, color.b)),
+            Some((0x40, 0x40, 0x40)),
+            "the note's style sets #404040: {:?}",
+            note_run.text
+        );
+        assert_eq!(
+            note_run.style.font_family.as_deref(),
+            Some("Calibri"),
+            "the family the note does not state comes from the document default"
+        );
+    }
+}
+
+#[test]
+fn test_footnote_run_properties_override_the_notes_style() {
+    // A run inside a note states its own properties over the note's style.
+    let document_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body><w:p><w:r><w:rPr><w:rStyle w:val="FootnoteReference"/></w:rPr>
+    <w:footnoteReference w:id="2"/></w:r></w:p></w:body>
+</w:document>"#;
+    let footnotes_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:footnote w:id="2">
+    <w:p>
+      <w:pPr><w:pStyle w:val="FootnoteBody"/></w:pPr>
+      <w:r><w:t xml:space="preserve">보통 </w:t></w:r>
+      <w:r><w:rPr><w:b/><w:sz w:val="24"/></w:rPr><w:t xml:space="preserve">강조</w:t></w:r>
+    </w:p>
+  </w:footnote>
+</w:footnotes>"#;
+    let styles_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:style w:type="paragraph" w:styleId="FootnoteBody">
+    <w:name w:val="Footnote Body"/>
+    <w:rPr><w:sz w:val="16"/></w:rPr>
+  </w:style>
+</w:styles>"#;
+
+    let data = build_docx_with_notes_xml(document_xml, styles_xml, footnotes_xml);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let Page::Flow(flow) = &doc.pages[0] else {
+        panic!("expected flow page");
+    };
+    let note: &Vec<Run> = flow
+        .content
+        .iter()
+        .filter_map(|block| match block {
+            Block::Paragraph(paragraph) => Some(paragraph),
+            _ => None,
+        })
+        .flat_map(|paragraph| paragraph.runs.iter())
+        .find_map(|run| run.footnote.as_ref())
+        .expect("a footnote");
+
+    assert_eq!(note.len(), 2, "both runs survive: {note:?}");
+    assert_eq!(note[0].text, "보통 ");
+    assert_eq!(note[0].style.font_size, Some(8.0), "from the note's style");
+    assert_eq!(note[1].text, "강조");
+    assert_eq!(
+        note[1].style.font_size,
+        Some(12.0),
+        "the run's own size wins"
+    );
+    assert_eq!(note[1].style.bold, Some(true), "the run's own weight wins");
+}

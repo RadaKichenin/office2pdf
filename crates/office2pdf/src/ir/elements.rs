@@ -393,7 +393,7 @@ pub struct Run {
     pub href: Option<String>,
     /// Optional footnote/endnote content. When present, a footnote marker is emitted and
     /// the content is rendered at the bottom of the page.
-    pub footnote: Option<String>,
+    pub footnote: Option<Vec<Run>>,
 }
 
 /// A table.

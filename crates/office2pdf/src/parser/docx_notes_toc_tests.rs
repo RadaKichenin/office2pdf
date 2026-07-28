@@ -3,6 +3,20 @@ use std::io::Cursor;
 
 // ── Footnotes and endnotes ──────────────────────────────────────────
 
+/// The note's text, joined across its runs.
+///
+/// A note carries styled runs rather than one string, so its content is read
+/// the same way a paragraph's is.
+fn note_text(run: &Run) -> Option<String> {
+    Some(
+        run.footnote
+            .as_ref()?
+            .iter()
+            .map(|note_run| note_run.text.as_str())
+            .collect(),
+    )
+}
+
 #[test]
 fn test_footnote_single_in_paragraph() {
     let footnote = docx_rs::Footnote::new().add_content(
@@ -32,7 +46,7 @@ fn test_footnote_single_in_paragraph() {
     let note_run = para.runs.iter().find(|r| r.footnote.is_some());
     assert!(note_run.is_some(), "Expected a run with footnote content");
     assert_eq!(
-        note_run.unwrap().footnote.as_deref(),
+        note_text(note_run.unwrap()).as_deref(),
         Some("This is a footnote.")
     );
 }
@@ -69,8 +83,8 @@ fn test_footnote_multiple_in_paragraph() {
 
     let note_runs: Vec<_> = para.runs.iter().filter(|r| r.footnote.is_some()).collect();
     assert_eq!(note_runs.len(), 2);
-    assert_eq!(note_runs[0].footnote.as_deref(), Some("First note."));
-    assert_eq!(note_runs[1].footnote.as_deref(), Some("Second note."));
+    assert_eq!(note_text(note_runs[0]).as_deref(), Some("First note."));
+    assert_eq!(note_text(note_runs[1]).as_deref(), Some("Second note."));
 }
 
 #[test]
@@ -93,7 +107,7 @@ fn test_endnote_parsed_as_footnote() {
     let note_run = para.runs.iter().find(|r| r.footnote.is_some());
     assert!(note_run.is_some(), "Expected a run with endnote content");
     assert_eq!(
-        note_run.unwrap().footnote.as_deref(),
+        note_text(note_run.unwrap()).as_deref(),
         Some("This is an endnote.")
     );
 }

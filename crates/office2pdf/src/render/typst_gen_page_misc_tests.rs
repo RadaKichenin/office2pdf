@@ -459,6 +459,16 @@ fn test_hyperlink_url_with_special_chars_escaped() {
     );
 }
 
+/// A note's content run: a note carries styled runs, not one string.
+fn note_run(text: &str) -> Run {
+    Run {
+        text: text.to_string(),
+        style: TextStyle::default(),
+        href: None,
+        footnote: None,
+    }
+}
+
 #[test]
 fn test_footnote_generates_typst_footnote() {
     let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
@@ -474,7 +484,7 @@ fn test_footnote_generates_typst_footnote() {
                 text: String::new(),
                 style: TextStyle::default(),
                 href: None,
-                footnote: Some("This is a footnote.".to_string()),
+                footnote: Some(vec![note_run("This is a footnote.")]),
             },
         ],
     })])]);
@@ -491,7 +501,7 @@ fn test_footnote_with_special_chars() {
             text: String::new(),
             style: TextStyle::default(),
             href: None,
-            footnote: Some("Note with #special *chars*".to_string()),
+            footnote: Some(vec![note_run("Note with #special *chars*")]),
         }],
     })])]);
 

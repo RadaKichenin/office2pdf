@@ -941,6 +941,60 @@ fn build_docx_with_columns(document_xml: &str) -> Vec<u8> {
     build_docx_with_math(document_xml)
 }
 
+/// Helper: build a DOCX from raw `document.xml`, `styles.xml`, and
+/// `footnotes.xml`.
+fn build_docx_with_notes_xml(document_xml: &str, styles_xml: &str, footnotes_xml: &str) -> Vec<u8> {
+    let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    let options = zip::write::FileOptions::default();
+
+    zip.start_file("[Content_Types].xml", options).unwrap();
+    std::io::Write::write_all(
+            &mut zip,
+            br#"<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+  <Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>
+</Types>"#,
+        )
+        .unwrap();
+
+    zip.start_file("_rels/.rels", options).unwrap();
+    std::io::Write::write_all(
+            &mut zip,
+            br#"<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>"#,
+        )
+        .unwrap();
+
+    zip.start_file("word/_rels/document.xml.rels", options)
+        .unwrap();
+    std::io::Write::write_all(
+            &mut zip,
+            br#"<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footnotes" Target="footnotes.xml"/>
+</Relationships>"#,
+        )
+        .unwrap();
+
+    for (name, contents) in [
+        ("word/document.xml", document_xml),
+        ("word/styles.xml", styles_xml),
+        ("word/footnotes.xml", footnotes_xml),
+    ] {
+        zip.start_file(name, options).unwrap();
+        std::io::Write::write_all(&mut zip, contents.as_bytes()).unwrap();
+    }
+
+    zip.finish().unwrap().into_inner()
+}
+
 /// Helper: build a DOCX from raw `document.xml` and `styles.xml`.
 ///
 /// docx-rs's `Styles` builder keeps `doc_defaults` private, so a test that
