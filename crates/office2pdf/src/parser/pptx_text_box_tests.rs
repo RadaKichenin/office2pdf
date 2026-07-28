@@ -452,3 +452,95 @@ fn test_no_break_marker_between_hangul_syllables() {
     let para = parse_single_paragraph(r#"<a:r><a:rPr lang="ko-KR"/><a:t>가나다라마</a:t></a:r>"#);
     assert_eq!(para.runs[0].text, "가나다라마");
 }
+
+// ----- Text fields, `<a:fld>` (issue #540) -----
+
+/// A slide holding one text box whose paragraph is a single `<a:fld>`.
+fn slide_with_field(field_xml: &str) -> String {
+    make_slide_xml(&[format!(
+        r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="SlideNumber"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="4000000" cy="500000"/></a:xfrm></p:spPr><p:txBody><a:bodyPr/><a:p>{field_xml}</a:p></p:txBody></p:sp>"#
+    )])
+}
+
+/// The text of the first run on `page_index`, or `None` when the slide has none.
+fn field_run_text(slides: &[String], page_index: usize) -> Option<String> {
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, slides);
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let page = match &doc.pages[page_index] {
+        Page::Fixed(page) => page,
+        _ => panic!("expected a fixed page"),
+    };
+    let blocks = text_box_blocks(&page.elements[0]);
+    match blocks.first()? {
+        Block::Paragraph(paragraph) => Some(paragraph.runs.first()?.text.clone()),
+        _ => None,
+    }
+}
+
+#[test]
+fn a_slidenum_field_renders_the_decks_own_position() {
+    // PowerPoint caches the number it last drew inside the field. That cache
+    // goes stale when slides are reordered, so the deck position wins.
+    let slides = vec![
+        slide_with_field(
+            r#"<a:fld id="{F7021451-0000-0000-0000-000000000000}" type="slidenum"><a:rPr lang="en-US"/><a:t>7</a:t></a:fld>"#,
+        ),
+        slide_with_field(
+            r#"<a:fld id="{F7021452-0000-0000-0000-000000000000}" type="slidenum"><a:rPr lang="en-US"/><a:t>7</a:t></a:fld>"#,
+        ),
+    ];
+
+    assert_eq!(field_run_text(&slides, 0).as_deref(), Some("1"));
+    assert_eq!(field_run_text(&slides, 1).as_deref(), Some("2"));
+}
+
+#[test]
+fn an_unhandled_field_type_falls_back_to_its_cached_text() {
+    // PowerPoint's own fallback, and the only deterministic reading of a
+    // date field: the text the authoring application last wrote.
+    let slides = vec![slide_with_field(
+        r#"<a:fld id="{F7021453-0000-0000-0000-000000000000}" type="datetime1"><a:rPr lang="en-US"/><a:t>2026-06-01</a:t></a:fld>"#,
+    )];
+
+    assert_eq!(field_run_text(&slides, 0).as_deref(), Some("2026-06-01"));
+}
+
+#[test]
+fn a_field_carries_its_own_run_properties() {
+    let slides = vec![slide_with_field(
+        r#"<a:fld id="{F7021454-0000-0000-0000-000000000000}" type="slidenum"><a:rPr lang="en-US" b="1" sz="1400"/><a:t>1</a:t></a:fld>"#,
+    )];
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &slides);
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = first_fixed_page(&doc);
+    let blocks = text_box_blocks(&page.elements[0]);
+    let run = match &blocks[0] {
+        Block::Paragraph(paragraph) => &paragraph.runs[0],
+        _ => panic!("expected a paragraph"),
+    };
+
+    assert_eq!(run.style.bold, Some(true));
+    assert_eq!(run.style.font_size, Some(14.0));
+}
+
+#[test]
+fn a_field_beside_literal_runs_keeps_the_reading_order() {
+    let slides = vec![slide_with_field(
+        r#"<a:r><a:rPr lang="en-US"/><a:t>Page </a:t></a:r><a:fld id="{F7021455-0000-0000-0000-000000000000}" type="slidenum"><a:rPr lang="en-US"/><a:t>9</a:t></a:fld><a:r><a:rPr lang="en-US"/><a:t> of 1</a:t></a:r>"#,
+    )];
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &slides);
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = first_fixed_page(&doc);
+    let blocks = text_box_blocks(&page.elements[0]);
+    let text: String = match &blocks[0] {
+        Block::Paragraph(paragraph) => paragraph.runs.iter().map(|run| run.text.as_str()).collect(),
+        _ => panic!("expected a paragraph"),
+    };
+
+    assert_eq!(text, "Page 1 of 1");
+}
