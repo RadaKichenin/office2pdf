@@ -1528,3 +1528,89 @@ fn test_a_caption_identifier_outside_ascii_still_labels() {
         output.source
     );
 }
+
+/// Word numbers a contents entry the way the section it points into numbers
+/// its pages, so an entry landing in roman-numbered front matter reads `i`
+/// rather than `1` (issue #605). The format travels with the layout, because
+/// only the layout knows which section an entry resolved into.
+#[test]
+fn test_contents_entries_number_in_the_target_sections_format() {
+    use crate::ir::{PageNumberFormat, PageNumbering};
+
+    let front_matter = Page::Flow(FlowPage {
+        size: PageSize::default(),
+        margins: Margins::default(),
+        content: vec![
+            Block::TableOfContents(crate::ir::TableOfContents::Headings { depth: 3 }),
+            Block::Paragraph(Paragraph {
+                style: ParagraphStyle {
+                    heading_level: Some(1),
+                    ..ParagraphStyle::default()
+                },
+                runs: vec![Run {
+                    text: "적용 범위".to_string(),
+                    style: TextStyle::default(),
+                    href: None,
+                    footnote: None,
+                }],
+            }),
+        ],
+        header: None,
+        footer: None,
+        columns: None,
+        line_grid_pitch: None,
+        line_grid_snaps_lines: false,
+        page_numbering: Some(PageNumbering {
+            start: Some(1),
+            format: PageNumberFormat::LowerRoman,
+        }),
+    });
+    let body = Page::Flow(FlowPage {
+        size: PageSize::default(),
+        margins: Margins::default(),
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle {
+                heading_level: Some(1),
+                ..ParagraphStyle::default()
+            },
+            runs: vec![Run {
+                text: "1. 개요".to_string(),
+                style: TextStyle::default(),
+                href: None,
+                footnote: None,
+            }],
+        })],
+        header: None,
+        footer: None,
+        columns: None,
+        line_grid_pitch: None,
+        line_grid_snaps_lines: false,
+        page_numbering: Some(PageNumbering {
+            start: Some(1),
+            format: PageNumberFormat::Decimal,
+        }),
+    });
+
+    let output = generate_typst(&make_doc(vec![front_matter, body])).unwrap();
+
+    assert!(
+        output.source.contains("state(\"o2p-page-format\""),
+        "the section's numeral format is recorded where the layout can read it back: {}",
+        output.source
+    );
+    assert!(
+        output.source.contains("o2p-page-format.update(\"i\")"),
+        "the roman front matter records its format: {}",
+        output.source
+    );
+    assert!(
+        output.source.contains("o2p-page-format.update(\"1\")"),
+        "the decimal body records its own: {}",
+        output.source
+    );
+    assert!(
+        output.source.contains("show outline.entry"),
+        "the outline renders each entry's number through the recorded format: {}",
+        output.source
+    );
+}
