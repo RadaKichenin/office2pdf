@@ -786,3 +786,110 @@ fn test_one_titled_axis_does_not_borrow_the_others_title() {
     assert_eq!(chart.category_axis_title, None);
     assert_eq!(chart.value_axis_title.as_deref(), Some("LOC"));
 }
+
+// ----- Data labels (issue #547) -----
+
+/// A bar chart whose series carries `dlbls_xml`.
+fn chart_with_data_labels(dlbls_xml: &str) -> String {
+    bar_chart_xml(r#"<c:barDir val="col"/>"#).replace("<c:cat>", &format!("{dlbls_xml}<c:cat>"))
+}
+
+#[test]
+fn test_show_val_turns_the_value_on() {
+    // Slide 17's series: `<c:showVal val="1"/>` with everything else off.
+    let xml = chart_with_data_labels(
+        r#"<c:dLbls><c:dLblPos val="ctr"/><c:showLegendKey val="0"/><c:showVal val="1"/><c:showCatName val="0"/><c:showSerName val="0"/><c:showPercent val="0"/></c:dLbls>"#,
+    );
+
+    let labels = &parse_chart_xml(&xml).unwrap().series[0].data_labels;
+
+    assert!(labels.show_value);
+    assert!(!labels.show_category && !labels.show_series && !labels.show_percent);
+    assert!(!labels.is_empty());
+}
+
+#[test]
+fn test_a_series_without_dlbls_prints_nothing() {
+    let xml = bar_chart_xml(r#"<c:barDir val="col"/>"#);
+
+    assert!(
+        parse_chart_xml(&xml).unwrap().series[0]
+            .data_labels
+            .is_empty()
+    );
+}
+
+#[test]
+fn test_all_dlbls_parts_and_the_separator_are_read() {
+    // The workbook's charts turn several on at once and set a separator.
+    let xml = chart_with_data_labels(
+        r#"<c:dLbls><c:showVal val="1"/><c:showCatName val="1"/><c:showSerName val="1"/><c:showPercent val="1"/><c:separator>; </c:separator></c:dLbls>"#,
+    );
+
+    let labels = &parse_chart_xml(&xml).unwrap().series[0].data_labels;
+
+    assert!(labels.show_value && labels.show_category && labels.show_series && labels.show_percent);
+    assert_eq!(labels.separator, "; ");
+}
+
+#[test]
+fn test_a_bare_show_flag_defaults_to_on() {
+    // ECMA-376 defaults CT_Boolean's `val` to true, so `<c:showVal/>` counts.
+    let xml = chart_with_data_labels(r#"<c:dLbls><c:showVal/></c:dLbls>"#);
+
+    assert!(
+        parse_chart_xml(&xml).unwrap().series[0]
+            .data_labels
+            .show_value
+    );
+}
+
+#[test]
+fn test_data_labels_do_not_disturb_the_series_fill() {
+    // `<c:dLbls>` is read rather than skipped now, so the guard that keeps its
+    // `<c:spPr>` out of the series fill has to still hold.
+    let xml = bar_chart_xml(r#"<c:barDir val="col"/>"#).replace(
+        "<c:cat>",
+        r#"<c:dLbls><c:spPr><a:solidFill><a:srgbClr val="ff0000"/></a:solidFill></c:spPr><c:showVal val="1"/></c:dLbls><c:cat>"#,
+    );
+
+    let series = &parse_chart_xml(&xml).unwrap().series[0];
+
+    assert_eq!(
+        series.fill, None,
+        "the label box fill is not the series fill"
+    );
+    assert!(series.data_labels.show_value);
+}
+
+#[test]
+fn test_a_per_point_label_override_is_not_the_series_default() {
+    // `CT_DLbls` is `dLbl*` then the group-level settings, and `<c:dLbl>`
+    // repeats the same element names. A block carrying only a per-point
+    // override must leave the series printing nothing.
+    let xml = chart_with_data_labels(
+        r#"<c:dLbls><c:dLbl><c:idx val="0"/><c:showVal val="1"/><c:showCatName val="1"/></c:dLbl></c:dLbls>"#,
+    );
+
+    let labels = &parse_chart_xml(&xml).unwrap().series[0].data_labels;
+
+    assert!(
+        labels.is_empty(),
+        "one point's override is not the series default: {labels:?}"
+    );
+}
+
+#[test]
+fn test_group_settings_still_win_after_per_point_overrides() {
+    let xml = chart_with_data_labels(
+        r#"<c:dLbls><c:dLbl><c:idx val="0"/><c:showCatName val="1"/></c:dLbl><c:showVal val="1"/></c:dLbls>"#,
+    );
+
+    let labels = &parse_chart_xml(&xml).unwrap().series[0].data_labels;
+
+    assert!(labels.show_value, "the group-level showVal applies");
+    assert!(
+        !labels.show_category,
+        "the point's showCatName is not the series default: {labels:?}"
+    );
+}

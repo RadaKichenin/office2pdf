@@ -120,6 +120,42 @@ pub struct Chart {
     pub value_axis_title: Option<String>,
 }
 
+/// What a chart's data labels print, from `<c:dLbls>`.
+///
+/// Office joins the enabled parts with `<c:separator>`, defaulting to `"; "`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DataLabels {
+    /// `<c:showVal>` — the point's own value.
+    pub show_value: bool,
+    /// `<c:showCatName>` — the category it sits over.
+    pub show_category: bool,
+    /// `<c:showSerName>` — the series it belongs to.
+    pub show_series: bool,
+    /// `<c:showPercent>` — its share of the category total.
+    pub show_percent: bool,
+    /// `<c:separator>` between the enabled parts.
+    pub separator: String,
+}
+
+impl Default for DataLabels {
+    fn default() -> Self {
+        Self {
+            show_value: false,
+            show_category: false,
+            show_series: false,
+            show_percent: false,
+            separator: "; ".to_string(),
+        }
+    }
+}
+
+impl DataLabels {
+    /// Whether anything at all is printed.
+    pub fn is_empty(&self) -> bool {
+        !(self.show_value || self.show_category || self.show_series || self.show_percent)
+    }
+}
+
 /// Where a chart's legend sits relative to its plot, from `<c:legendPos>`.
 ///
 /// ECMA-376 gives `ST_LegendPos` a default of `r`, which is also where every
@@ -182,6 +218,8 @@ pub struct ChartSeries {
     /// fill outranks the series'; entries are `None` where the point declares
     /// none, and the vector may be shorter than `values`.
     pub point_fills: Vec<Option<Color>>,
+    /// What this series' `<c:dLbls>` prints beside each point.
+    pub data_labels: DataLabels,
 }
 
 impl ChartSeries {

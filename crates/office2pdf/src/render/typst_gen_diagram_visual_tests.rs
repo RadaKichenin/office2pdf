@@ -1,4 +1,5 @@
 use super::*;
+use crate::ir::DataLabels;
 
 #[test]
 fn test_codegen_chart_bar_visual_bars() {
@@ -11,6 +12,7 @@ fn test_codegen_chart_bar_visual_bars() {
             values: vec![100.0, 250.0],
             fill: None,
             point_fills: Vec::new(),
+            data_labels: DataLabels::default(),
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -59,6 +61,7 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
             values: vec![8.200000000000001, 3.2],
             fill: None,
             point_fills: Vec::new(),
+            data_labels: DataLabels::default(),
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -95,6 +98,7 @@ fn test_codegen_chart_pie_percentages() {
             values: vec![60.0, 40.0],
             fill: None,
             point_fills: Vec::new(),
+            data_labels: DataLabels::default(),
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -131,6 +135,7 @@ fn test_codegen_chart_line_trend_indicators() {
             values: vec![10.0, 20.0, 15.0],
             fill: None,
             point_fills: Vec::new(),
+            data_labels: DataLabels::default(),
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -229,6 +234,7 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
             values: vec![23334.0, 8331.0, 2727.0],
             fill: None,
             point_fills: Vec::new(),
+            data_labels: DataLabels::default(),
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -263,6 +269,7 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
             values: vec![115.0, 92.0, 138.0],
             fill: None,
             point_fills: Vec::new(),
+            data_labels: DataLabels::default(),
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -441,12 +448,14 @@ fn test_codegen_chart_line_plot() {
                 values: vec![1.0, 2.0, 3.0],
                 fill: None,
                 point_fills: Vec::new(),
+                data_labels: DataLabels::default(),
             },
             ChartSeries {
                 name: Some("B".to_string()),
                 values: vec![10.0, 9.0, 14.0],
                 fill: None,
                 point_fills: Vec::new(),
+                data_labels: DataLabels::default(),
             },
         ],
         grouping: ChartGrouping::Clustered,
@@ -487,6 +496,7 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
             values: (1..=60).map(|value| value as f64).collect(),
             fill: None,
             point_fills: Vec::new(),
+            data_labels: DataLabels::default(),
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -523,24 +533,28 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
                 values: vec![4.0, 2.0, 2.0],
                 fill: None,
                 point_fills: Vec::new(),
+                data_labels: DataLabels::default(),
             },
             ChartSeries {
                 name: Some("Tables".to_string()),
                 values: vec![1.0, 1.0, 1.0],
                 fill: None,
                 point_fills: Vec::new(),
+                data_labels: DataLabels::default(),
             },
             ChartSeries {
                 name: Some("Graphics".to_string()),
                 values: vec![2.0, 4.0, 0.0],
                 fill: None,
                 point_fills: Vec::new(),
+                data_labels: DataLabels::default(),
             },
             ChartSeries {
                 name: Some("Structure".to_string()),
                 values: vec![2.0, 2.0, 3.0],
                 fill: None,
                 point_fills: Vec::new(),
+                data_labels: DataLabels::default(),
             },
         ],
         grouping,
@@ -645,12 +659,14 @@ fn legend_chart(position: LegendPosition) -> Chart {
                 values: vec![4.0, 2.0, 2.0],
                 fill: None,
                 point_fills: Vec::new(),
+                data_labels: DataLabels::default(),
             },
             ChartSeries {
                 name: Some("Tables".to_string()),
                 values: vec![1.0, 1.0, 1.0],
                 fill: None,
                 point_fills: Vec::new(),
+                data_labels: DataLabels::default(),
             },
         ],
         grouping: ChartGrouping::Stacked,
@@ -785,6 +801,7 @@ fn a_declared_series_fill_reaches_the_bars() {
             values: vec![23334.0, 8331.0],
             fill: Some(Color::new(0x4f, 0x81, 0xbd)),
             point_fills: Vec::new(),
+            data_labels: DataLabels::default(),
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -817,6 +834,7 @@ fn a_series_without_a_fill_still_takes_the_palette() {
             values: vec![23334.0, 8331.0],
             fill: None,
             point_fills: Vec::new(),
+            data_labels: DataLabels::default(),
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -847,6 +865,7 @@ fn per_point_fills_colour_each_bar_separately() {
                 Some(Color::new(0xc0, 0x50, 0x4d)),
                 Some(Color::new(0x9b, 0xbb, 0x59)),
             ],
+            data_labels: DataLabels::default(),
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -876,6 +895,7 @@ fn axis_titled_chart(category: Option<&str>, value: Option<&str>) -> Chart {
             values: vec![23334.0, 8331.0],
             fill: None,
             point_fills: Vec::new(),
+            data_labels: DataLabels::default(),
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -940,5 +960,78 @@ fn each_axis_title_is_independent() {
     assert!(
         !value_only.contains("계층"),
         "an untitled category axis draws nothing: {value_only}"
+    );
+}
+
+// ----- Data labels (issue #547) -----
+
+fn labelled_chart(labels: DataLabels) -> Chart {
+    Chart {
+        chart_type: ChartType::Column,
+        title: None,
+        categories: vec!["DOCX".to_string(), "PPTX".to_string()],
+        series: vec![ChartSeries {
+            name: Some("Text".to_string()),
+            values: vec![4.0, 2.0],
+            fill: None,
+            point_fills: Vec::new(),
+            data_labels: labels,
+        }],
+        grouping: ChartGrouping::Stacked,
+        legend_position: LegendPosition::Right,
+        category_axis_title: None,
+        value_axis_title: None,
+    }
+}
+
+#[test]
+fn show_val_prints_one_label_per_point() {
+    let source = chart_source(labelled_chart(DataLabels {
+        show_value: true,
+        ..DataLabels::default()
+    }));
+    let labels = source.matches("weight: \"bold\", fill: white").count();
+
+    assert_eq!(labels, 2, "one label per plotted point, got:\n{source}");
+}
+
+#[test]
+fn a_series_without_dlbls_draws_no_labels() {
+    // Control: the label pass is driven by the file, not switched on for all.
+    let source = chart_source(labelled_chart(DataLabels::default()));
+
+    assert!(
+        !source.contains("weight: \"bold\", fill: white"),
+        "no labels without dLbls, got:\n{source}"
+    );
+}
+
+#[test]
+fn the_enabled_parts_are_joined_by_the_separator() {
+    let source = chart_source(labelled_chart(DataLabels {
+        show_value: true,
+        show_category: true,
+        show_series: true,
+        separator: "; ".to_string(),
+        ..DataLabels::default()
+    }));
+
+    assert!(
+        source.contains("Text; DOCX; 4"),
+        "series, category, then value, joined by the separator, got:\n{source}"
+    );
+}
+
+#[test]
+fn percent_labels_are_a_share_of_the_category() {
+    let source = chart_source(labelled_chart(DataLabels {
+        show_percent: true,
+        ..DataLabels::default()
+    }));
+
+    // A lone series takes the whole category.
+    assert!(
+        source.contains("100%"),
+        "the only series in a category is all of it, got:\n{source}"
     );
 }
