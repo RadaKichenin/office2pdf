@@ -416,9 +416,18 @@ pub(crate) fn font_line_metrics_em(family: &str) -> Option<(f64, f64, f64)> {
     // Office font dirs); this also primes the compile-time cache.
     let search_context = super::font_context::resolve_font_search_context(&[]);
     let data = get_fonts_for_extra_paths(search_context.search_paths());
-    let metrics: Option<(f64, f64, f64)> = data
-        .book
-        .select(&key, typst::text::FontVariant::default())
+    // The declared name may be one the book does not register — a localized
+    // East Asian family, or a face the machine does not have — so the same
+    // alias and substitute chain rendering resolves through is walked here
+    // (issue #575).
+    let metrics: Option<(f64, f64, f64)> = super::font_subst::family_candidates(family)
+        .iter()
+        .find_map(|candidate| {
+            data.book.select(
+                &candidate.to_lowercase(),
+                typst::text::FontVariant::default(),
+            )
+        })
         .and_then(|index| data.fonts.get(index))
         .and_then(|slot| slot.get())
         .map(|font| {

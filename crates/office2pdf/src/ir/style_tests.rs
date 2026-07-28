@@ -64,6 +64,7 @@ fn test_text_style_caps() {
 fn text_style_merge_from_all_none_source_preserves_target() {
     let mut target = TextStyle {
         font_family: Some("Arial".to_string()),
+        east_asian_font_family: None,
         font_size: Some(12.0),
         bold: Some(true),
         italic: Some(false),
@@ -88,6 +89,7 @@ fn text_style_merge_from_all_none_source_preserves_target() {
 fn text_style_merge_from_all_some_source_overwrites_target() {
     let mut target = TextStyle {
         font_family: Some("Arial".to_string()),
+        east_asian_font_family: None,
         font_size: Some(12.0),
         bold: Some(true),
         italic: Some(true),
@@ -102,6 +104,7 @@ fn text_style_merge_from_all_some_source_overwrites_target() {
     };
     let source = TextStyle {
         font_family: Some("Times".to_string()),
+        east_asian_font_family: None,
         font_size: Some(24.0),
         bold: Some(false),
         italic: Some(false),
@@ -124,6 +127,7 @@ fn text_style_merge_from_all_some_source_overwrites_target() {
 fn text_style_merge_from_partial_overlap() {
     let mut target = TextStyle {
         font_family: Some("Arial".to_string()),
+        east_asian_font_family: None,
         font_size: Some(12.0),
         bold: None,
         italic: Some(true),
@@ -131,6 +135,7 @@ fn text_style_merge_from_partial_overlap() {
     };
     let source = TextStyle {
         font_family: Some("Helvetica".to_string()),
+        east_asian_font_family: None,
         bold: Some(true),
         italic: None,
         color: Some(Color::new(100, 100, 100)),

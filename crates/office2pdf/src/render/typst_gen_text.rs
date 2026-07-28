@@ -306,9 +306,7 @@ fn word_line_box_and_leading(
     line_grid_pitch: Option<f64>,
 ) -> Option<(f64, f64, f64)> {
     let leading_pt: f64 = word_line_leading_pt(runs, style, line_grid_pitch)?;
-    let family: &str = runs
-        .iter()
-        .find_map(|run| run.style.font_family.as_deref())?;
+    let family: &str = east_asian_aware_metric_family(runs)?;
     let (ascender_em, descender_em, _word_pitch_em) =
         crate::render::pdf::font_line_metrics_em(family)?;
     let font_size: f64 = paragraph_font_size_pt(runs);
@@ -338,6 +336,24 @@ const EAST_ASIAN_ASCENT_EXCESS: f64 = (EAST_ASIAN_LINE_HEIGHT_FACTOR - 1.0) / 2.
 /// characters: in a native Korean export the Arial runs of the same document
 /// keep their plain hhea line, and inflating them too made every Western
 /// document 30-50% taller (issue #354).
+/// The family whose metrics pace these runs' lines.
+///
+/// A line carrying East Asian text is paced by the East Asian face, not by the
+/// Latin one the same runs also name: the 1.3 factor above was measured
+/// against Malgun Gothic's hhea pitch. Reading the Latin family was harmless
+/// only while `w:eastAsia` was being dropped and the Latin family was the one
+/// actually shaping the Hangul (issue #575).
+fn east_asian_aware_metric_family(runs: &[Run]) -> Option<&str> {
+    let latin = || runs.iter().find_map(|run| run.style.font_family.as_deref());
+    if has_east_asian_text(runs) {
+        runs.iter()
+            .find_map(|run| run.style.east_asian_font_family.as_deref())
+            .or_else(latin)
+    } else {
+        latin()
+    }
+}
+
 fn has_east_asian_text(runs: &[Run]) -> bool {
     runs.iter().any(|run| run.text.chars().any(is_cjk_like))
 }
@@ -413,9 +429,7 @@ pub(super) fn word_cell_line_box_settings(
     if style.line_spacing.is_some() || style.line_box.is_some() {
         return None;
     }
-    let family: &str = runs
-        .iter()
-        .find_map(|run| run.style.font_family.as_deref())?;
+    let family: &str = east_asian_aware_metric_family(runs)?;
     let (ascender_em, descender_em, word_pitch_em) =
         crate::render::pdf::font_line_metrics_em(family)?;
     let metric_em: f64 = ascender_em + descender_em;
@@ -474,20 +488,31 @@ pub(super) fn word_cell_line_box_settings(
 /// into the fixed line-box height rather than emitting it as `par(leading:)`
 /// whitespace between boxes, because Typst inserts that only *between* the
 /// lines of one paragraph and every paragraph then came up one top-up short
-/// (issues #354, #452). `None` when the paragraph carries explicit line
-/// spacing or the font's metrics are unknown — the treatment does not apply
+/// (issues #354, #452). A proportional `w:lineRule="auto"` scales the result
+/// rather than replacing it, because that is what Word's own rule means.
+/// `None` when the paragraph states an exact advance, carries its own line
+/// box, or the font's metrics are unknown — the treatment does not apply
 /// then.
 pub(super) fn word_line_leading_pt(
     runs: &[Run],
     style: &ParagraphStyle,
     line_grid_pitch: Option<f64>,
 ) -> Option<f64> {
-    if style.line_spacing.is_some() || style.line_box.is_some() {
+    if style.line_box.is_some() {
         return None;
     }
-    let family: &str = runs
-        .iter()
-        .find_map(|run| run.style.font_family.as_deref())?;
+    // `w:lineRule="auto"` scales Word's own line rather than replacing it:
+    // `w:line="278"` means 1.158 of the line this function computes. Bailing
+    // out on any `w:spacing w:line` left those paragraphs to Typst's default
+    // leading, which knows nothing of the East Asian line — 15.4pt against
+    // Word's 19.9pt on the technical brief (issue #575). An exact rule states
+    // the advance outright and is still handled as a plain `par(leading:)`.
+    let proportion: f64 = match style.line_spacing {
+        None => 1.0,
+        Some(LineSpacing::Proportional(factor)) if factor > 0.0 => factor,
+        Some(_) => return None,
+    };
+    let family: &str = east_asian_aware_metric_family(runs)?;
     let (ascender_em, descender_em, word_pitch_em) =
         crate::render::pdf::font_line_metrics_em(family)?;
     let font_size: f64 = runs
@@ -526,7 +551,7 @@ pub(super) fn word_line_leading_pt(
         }
         _ => natural_line_pt,
     };
-    Some((advance_pt - line_box_pt).max(0.0))
+    Some((advance_pt * proportion - line_box_pt).max(0.0))
 }
 
 pub(super) fn write_block_params(out: &mut String, style: &ParagraphStyle) {
@@ -1330,7 +1355,12 @@ pub(super) fn write_text_params(out: &mut String, style: &TextStyle) {
     let mut first = true;
 
     if let Some(ref family) = style.font_family {
-        let font_value = font_subst::font_with_fallbacks(family);
+        let font_value = match style.east_asian_font_family {
+            Some(ref east_asian) if !east_asian.eq_ignore_ascii_case(family) => {
+                font_subst::font_with_east_asian_fallbacks(family, east_asian)
+            }
+            _ => font_subst::font_with_fallbacks(family),
+        };
         write_param(out, &mut first, &format!("font: {font_value}"));
     }
     if let Some(size) = style.font_size {

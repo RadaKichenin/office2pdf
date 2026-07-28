@@ -544,3 +544,28 @@ fn test_noto_sans_kr_short_name_substitutes() {
     let subs = substitutes("Noto Sans KR").expect("Noto Sans KR should have substitutes");
     assert!(subs.contains(&"Apple SD Gothic Neo"));
 }
+
+#[test]
+fn east_asian_family_follows_the_latin_one_in_the_font_list() {
+    // Typst resolves a font list per glyph, so listing the Latin family first
+    // and the East Asian family straight after reproduces Word's split: a
+    // Latin face has no Hangul, so the Hangul lands on the declared East
+    // Asian face (issue #575).
+    let list = font_with_east_asian_fallbacks("Calibri", "맑은 고딕");
+
+    let latin = list.find("\"Calibri\"").expect("the Latin family leads");
+    let east_asian = list
+        .find("\"Malgun Gothic\"")
+        .expect("the localized name resolves to the English one");
+    assert!(latin < east_asian, "the Latin family comes first: {list}");
+    assert!(
+        list.starts_with('('),
+        "a two-family run emits a list: {list}"
+    );
+}
+
+#[test]
+fn a_run_naming_the_same_family_twice_does_not_repeat_it() {
+    let list = font_with_east_asian_fallbacks("Batang", "Batang");
+    assert_eq!(list.matches("\"Batang\"").count(), 1, "{list}");
+}

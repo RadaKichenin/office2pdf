@@ -134,6 +134,11 @@ pub enum VerticalTextAlign {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct TextStyle {
     pub font_family: Option<String>,
+    /// `w:rFonts w:eastAsia`: the family Word shapes East Asian codepoints
+    /// with, which is a different face from the one it shapes Latin with in
+    /// the same run. Kept beside `font_family` rather than folded into it,
+    /// because a run states both and needs both (issue #575).
+    pub east_asian_font_family: Option<String>,
     pub font_size: Option<f64>,
     pub bold: Option<bool>,
     pub italic: Option<bool>,
@@ -159,6 +164,9 @@ impl TextStyle {
     pub fn merge_from(&mut self, other: &TextStyle) {
         if other.font_family.is_some() {
             self.font_family = other.font_family.clone();
+        }
+        if other.east_asian_font_family.is_some() {
+            self.east_asian_font_family = other.east_asian_font_family.clone();
         }
         if other.font_size.is_some() {
             self.font_size = other.font_size;

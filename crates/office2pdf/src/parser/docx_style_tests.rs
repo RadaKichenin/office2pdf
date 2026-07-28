@@ -978,3 +978,44 @@ fn test_seq_fields_number_captions_in_document_order() {
         );
     }
 }
+
+#[test]
+fn test_east_asian_font_family_survives_beside_the_latin_one() {
+    // Word shapes a run's Latin codepoints with w:ascii and its East Asian
+    // ones with w:eastAsia. Collapsing the two into one family dropped
+    // whichever came second, so Hangul was shaped by falling back from the
+    // Latin family instead (issue #575).
+    let data = std::fs::read(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/docx/office2pdf_technical_brief_ko.docx"
+    ))
+    .expect("fixture");
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let body_run = doc
+        .pages
+        .iter()
+        .filter_map(|page| match page {
+            Page::Flow(flow) => Some(flow),
+            _ => None,
+        })
+        .flat_map(|flow| flow.content.iter())
+        .filter_map(|block| match block {
+            Block::Paragraph(paragraph) => Some(paragraph),
+            _ => None,
+        })
+        .flat_map(|paragraph| paragraph.runs.iter())
+        .find(|run| run.text.contains("문서 변환은"))
+        .expect("a body run");
+
+    assert_eq!(
+        body_run.style.font_family.as_deref(),
+        Some("Calibri"),
+        "the Latin family is unchanged"
+    );
+    assert_eq!(
+        body_run.style.east_asian_font_family.as_deref(),
+        Some("맑은 고딕"),
+        "the East Asian family survives beside it"
+    );
+}

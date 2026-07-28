@@ -318,6 +318,67 @@ pub fn font_with_fallbacks(font_family: &str) -> String {
     })
 }
 
+/// The families to try, in order, when resolving a declared family to a real
+/// face: the family itself, then its alias and substitutes.
+///
+/// A metrics lookup needs this as much as rendering does. Word documents name
+/// East Asian families in their own script — `맑은 고딕` rather than `Malgun
+/// Gothic` — and a font book registers the English name, so selecting on the
+/// declared name alone finds nothing and the caller silently loses the font's
+/// line metrics (issue #575).
+pub(crate) fn family_candidates(font_family: &str) -> Vec<String> {
+    ACTIVE_FONT_CONTEXT.with(|active_context| {
+        let context = active_context.borrow();
+        let mut candidates: Vec<String> = vec![font_family.to_string()];
+        candidates.extend(fallback_candidates(font_family, context.as_ref()));
+        candidates
+    })
+}
+
+/// The font list for a run that states a Latin family and an East Asian one.
+///
+/// Word shapes a run's Latin codepoints with `w:ascii` and its East Asian ones
+/// with `w:eastAsia`. Typst resolves a font list per glyph, falling through to
+/// the next family for a character the current one has no glyph for, so
+/// listing the Latin family first and the East Asian family straight after it
+/// reproduces that split: a Latin face has no Hangul, so the Hangul lands on
+/// the declared East Asian face rather than on whatever the Latin family's own
+/// substitutes happen to cover (issue #575).
+///
+/// The East Asian family's own substitutes follow it, then the Latin family's,
+/// so a document naming a face the system does not have still degrades the way
+/// each family's chain says it should.
+pub fn font_with_east_asian_fallbacks(latin_family: &str, east_asian_family: &str) -> String {
+    ACTIVE_FONT_CONTEXT.with(|active_context| {
+        let context = active_context.borrow();
+        let context = context.as_ref();
+        let mut families: Vec<String> = vec![latin_family.to_string()];
+        families.push(east_asian_family.to_string());
+        families.extend(fallback_candidates(east_asian_family, context));
+        families.extend(fallback_candidates(latin_family, context));
+
+        let mut seen: Vec<String> = Vec::with_capacity(families.len());
+        for family in families {
+            if !seen.iter().any(|kept| kept.eq_ignore_ascii_case(&family)) {
+                seen.push(family);
+            }
+        }
+
+        let mut result = String::with_capacity(64);
+        result.push('(');
+        for (index, family) in seen.iter().enumerate() {
+            if index > 0 {
+                result.push_str(", ");
+            }
+            result.push('"');
+            result.push_str(&escape_typst_string(family));
+            result.push('"');
+        }
+        result.push(')');
+        result
+    })
+}
+
 fn font_with_fallbacks_for_context(
     font_family: &str,
     context: Option<&FontSearchContext>,
