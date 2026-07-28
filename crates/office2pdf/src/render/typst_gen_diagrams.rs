@@ -354,10 +354,17 @@ impl LegendBox {
 /// Office joins the enabled parts with the series' separator in the order
 /// series, category, value, percent. Excel prints the audited workbook's pie
 /// labels as `커밋 픽스처 수; DOCX; 115; 33%`, which fixes that order.
+///
+/// `percent_base` is what `showPercent` measures the point against: the
+/// category total for a stacked bar, where the label answers "how much of this
+/// column", and the series total for a pie, where it answers "how much of the
+/// whole". Measuring a pie against its category would call every slice 100%,
+/// since a pie has one series.
 fn data_label_text(
     chart: &Chart,
     series: &crate::ir::ChartSeries,
     category_index: usize,
+    percent_base: f64,
 ) -> Option<String> {
     let labels = &series.data_labels;
     if labels.is_empty() {
@@ -379,11 +386,10 @@ fn data_label_text(
         parts.push(chart_value_label(value));
     }
     if labels.show_percent {
-        let total: f64 = category_total(&chart.series, category_index);
-        let percent: f64 = if total == 0.0 {
+        let percent: f64 = if percent_base == 0.0 {
             0.0
         } else {
-            value / total * 100.0
+            value / percent_base * 100.0
         };
         parts.push(format!("{}%", chart_value_label(percent.round())));
     }
@@ -675,7 +681,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                     color
                 );
             }
-            if let Some(label) = data_label_text(chart, s, cat_index) {
+            if let Some(label) = data_label_text(chart, s, cat_index, category_total) {
                 // Centred on the segment, as `<c:dLblPos val="ctr"/>` asks and
                 // as a stacked bar needs — an outside label would sit on the
                 // segment above it.
@@ -1115,6 +1121,24 @@ fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, 
         let sweep: f64 = value / total * std::f64::consts::TAU;
         let color: String = category_color(series, index, &CHART_CATEGORY_COLORS);
         write_pie_wedge(out, centre_x, centre_y, radius, start, sweep, &color);
+        if let Some(label) = data_label_text(chart, series, index, total) {
+            // A wedge label sits on the bisector, two thirds of the way out —
+            // clear of the centre where narrow wedges converge, and inside the
+            // circumference where the fill still backs it.
+            let bisector: f64 = start + sweep / 2.0;
+            let label_radius: f64 = radius * 2.0 / 3.0;
+            // The box is centred on that point, so it is placed from its own
+            // top-left corner.
+            let label_w: f64 = radius;
+            let _ = writeln!(
+                out,
+                "#place(top + left, dx: {}pt, dy: {}pt, box(width: {}pt)[#align(center)[#text(size: 8pt, weight: \"bold\", fill: white)[{}]]])",
+                format_f64(centre_x + label_radius * bisector.cos() - label_w / 2.0),
+                format_f64(centre_y + label_radius * bisector.sin() - LABEL_LINE_H / 2.0),
+                format_f64(label_w),
+                escape_typst(&label)
+            );
+        }
         start += sweep;
     }
 
