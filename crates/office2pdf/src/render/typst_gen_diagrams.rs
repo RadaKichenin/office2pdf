@@ -1,30 +1,90 @@
 use super::*;
 
-/// Generate Typst markup for a chart with improved visual representation.
-///
-/// Renders charts in a bordered box with title header and type-specific
-/// visual representation:
-/// - Bar/Column: proportional visual bars
-/// - Pie: percentage legend table
-/// - Line: data table with trend indicators (↑↓→)
-/// - Others: standard data table
-pub(super) fn generate_chart(out: &mut String, chart: &Chart) {
-    // Bar/Column charts render as an axis-scaled plot that mirrors the native
-    // PowerPoint/Excel composition (title, gridlines, tick labels, legend).
+/// How a chart is drawn. Selecting the variant once lets the atomicity decision
+/// and the emitter agree on which geometry applies.
+enum ChartVariant {
+    /// Axis-scaled bar/column plot with gridlines, tick labels, and a legend.
+    AxisPlot,
+    /// Polyline plot over a value axis, for line and area charts.
+    LinePlot,
+    /// Bordered box holding a title, a type label, and a data table.
+    BorderedTable,
+}
+
+fn chart_variant(chart: &Chart) -> ChartVariant {
     if matches!(chart.chart_type, ChartType::Bar | ChartType::Column)
         && !chart.series.is_empty()
         && !chart.categories.is_empty()
     {
-        generate_chart_axis(out, chart);
-        return;
+        return ChartVariant::AxisPlot;
     }
-    // Line/area charts render as a polyline plot over the same axis.
     if matches!(chart.chart_type, ChartType::Line | ChartType::Area)
         && !chart.series.is_empty()
         && chart.categories.len() >= 2
     {
-        generate_chart_line_plot(out, chart);
-        return;
+        return ChartVariant::LinePlot;
+    }
+    ChartVariant::BorderedTable
+}
+
+/// Height budget a chart must stay within to be kept atomic, in points.
+///
+/// Comfortably under the ~700pt text column an A4 page with default margins
+/// offers. An unbreakable block taller than the column does not move to the
+/// next page — it runs off the page edge and the overflow is never drawn — so
+/// a chart that cannot fit anywhere is left breakable instead.
+const MAX_ATOMIC_CHART_HEIGHT_PT: f64 = 620.0;
+
+/// Vertical space one row of the bordered-table fallback occupies, in points.
+const BORDERED_TABLE_ROW_PT: f64 = 16.0;
+
+/// Title, type label, header row, and box insets above the fallback's data
+/// rows, in points.
+const BORDERED_TABLE_CHROME_PT: f64 = 90.0;
+
+/// Report whether a chart is short enough that keeping it whole is safe.
+fn chart_fits_on_one_page(chart: &Chart) -> bool {
+    let height: f64 = match chart_variant(chart) {
+        // The plot box plus the title block above it.
+        ChartVariant::AxisPlot => chart_axis_extent(chart).1 + 24.0,
+        // The polyline plot's box is a fixed size regardless of point count.
+        ChartVariant::LinePlot => return true,
+        ChartVariant::BorderedTable => {
+            BORDERED_TABLE_CHROME_PT + chart.categories.len() as f64 * BORDERED_TABLE_ROW_PT
+        }
+    };
+    height <= MAX_ATOMIC_CHART_HEIGHT_PT
+}
+
+/// Generate Typst markup for a chart.
+///
+/// Bar and column charts render as an axis-scaled plot, line and area charts as
+/// a polyline plot over the same axis, and everything else falls back to a
+/// bordered box holding the title, a type label, and a data table.
+///
+/// Excel and PowerPoint treat a chart as one floating graphic that never splits
+/// at a page boundary: it moves to the next page whole. Typst blocks are
+/// breakable by default, and every variant emits its title as a block separate
+/// from its plot, so the whole chart is wrapped once here rather than each
+/// sub-renderer repeating the flag. Charts too tall to fit on any page stay
+/// breakable — see [`MAX_ATOMIC_CHART_HEIGHT_PT`].
+pub(super) fn generate_chart(out: &mut String, chart: &Chart) {
+    let atomic: bool = chart_fits_on_one_page(chart);
+    if atomic {
+        out.push_str("#block(breakable: false)[\n");
+    }
+    generate_chart_body(out, chart);
+    if atomic {
+        out.push_str("]\n");
+    }
+}
+
+/// Emit the chart's own markup, without the atomicity wrapper.
+fn generate_chart_body(out: &mut String, chart: &Chart) {
+    match chart_variant(chart) {
+        ChartVariant::AxisPlot => return generate_chart_axis(out, chart),
+        ChartVariant::LinePlot => return generate_chart_line_plot(out, chart),
+        ChartVariant::BorderedTable => {}
     }
 
     let _ = writeln!(
@@ -133,15 +193,37 @@ fn nice_axis(max_value: f64) -> (f64, f64) {
     (nice_max, step)
 }
 
+const PLOT_MAIN: f64 = 300.0; // value-axis length in points
+const ROW: f64 = 34.0; // per-category thickness
+const LABEL_W: f64 = 62.0; // category label gutter
+const TICK_GAP: f64 = 22.0; // value tick label gutter
+const GAP: f64 = 6.0;
+const LEGEND_W: f64 = 78.0;
+
+/// Outer size of the axis plot box, in points.
+///
+/// A bar chart grows along the category axis, so its height rises with the
+/// category count; a column chart's height is fixed. Shared with
+/// [`chart_fits_on_one_page`] so the atomicity decision uses the same geometry
+/// the box is actually drawn with.
+fn chart_axis_extent(chart: &Chart) -> (f64, f64) {
+    let plot_cross: f64 = chart.categories.len() as f64 * ROW;
+    if matches!(chart.chart_type, ChartType::Bar) {
+        (
+            LABEL_W + GAP + PLOT_MAIN + GAP + LEGEND_W,
+            plot_cross + TICK_GAP,
+        )
+    } else {
+        (
+            TICK_GAP + GAP + plot_cross + GAP + LEGEND_W,
+            PLOT_MAIN + ROW,
+        )
+    }
+}
+
 /// Render a bar (horizontal) or column (vertical) chart as an axis-scaled
 /// plot with gridlines, tick labels, and a legend.
 fn generate_chart_axis(out: &mut String, chart: &Chart) {
-    const PLOT_MAIN: f64 = 300.0; // value-axis length in points
-    const ROW: f64 = 34.0; // per-category thickness
-    const LABEL_W: f64 = 62.0; // category label gutter
-    const TICK_GAP: f64 = 22.0; // value tick label gutter
-    const GAP: f64 = 6.0;
-
     let horizontal: bool = matches!(chart.chart_type, ChartType::Bar);
     let categories: usize = chart.categories.len();
     let series: &[crate::ir::ChartSeries] = &chart.series;
@@ -173,18 +255,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart) {
         out.push_str("#v(4pt)\n");
     }
 
-    let legend_w: f64 = 78.0;
-    let (total_w, total_h) = if horizontal {
-        (
-            LABEL_W + GAP + PLOT_MAIN + GAP + legend_w,
-            plot_cross + TICK_GAP,
-        )
-    } else {
-        (
-            TICK_GAP + GAP + plot_cross + GAP + legend_w,
-            PLOT_MAIN + ROW,
-        )
-    };
+    let (total_w, total_h) = chart_axis_extent(chart);
 
     let _ = writeln!(
         out,
