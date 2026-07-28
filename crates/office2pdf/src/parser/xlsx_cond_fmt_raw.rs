@@ -31,7 +31,7 @@ fn attr_value(reader: &Reader<&[u8]>, element: &BytesStart<'_>, name: &[u8]) -> 
         })
 }
 
-fn read_zip_text(
+pub(super) fn read_zip_text(
     archive: &mut zip::ZipArchive<std::io::Cursor<&[u8]>>,
     path: &str,
 ) -> Option<String> {
@@ -41,11 +41,11 @@ fn read_zip_text(
     Some(text)
 }
 
-fn parse_relationships(xml: &str) -> HashMap<String, String> {
+pub(super) fn parse_relationships(xml: &str) -> HashMap<String, String> {
     crate::parser::xml_util::parse_rels_id_target(xml)
 }
 
-fn parse_sheet_relationships(xml: &str) -> Vec<(String, String)> {
+pub(super) fn parse_sheet_relationships(xml: &str) -> Vec<(String, String)> {
     let mut sheets = Vec::new();
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
@@ -70,7 +70,7 @@ fn parse_sheet_relationships(xml: &str) -> Vec<(String, String)> {
     sheets
 }
 
-fn worksheet_path(target: &str) -> String {
+pub(super) fn worksheet_path(target: &str) -> String {
     let target = target.trim_start_matches('/');
     if target.starts_with("xl/") {
         target.to_string()
