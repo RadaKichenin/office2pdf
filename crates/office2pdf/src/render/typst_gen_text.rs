@@ -1267,7 +1267,7 @@ fn collect_formatting_wrappers(run: &Run) -> Vec<String> {
 fn write_run_content(out: &mut String, escaped: &str, style: &TextStyle) {
     if has_text_properties(style) {
         out.push_str("#text(");
-        write_text_params(out, style);
+        write_text_params_for_text(out, style, escaped);
         out.push_str(")[");
         out.push_str(escaped);
         out.push(']');
@@ -1352,14 +1352,23 @@ fn effective_font_weight(style: &TextStyle) -> Option<&'static str> {
 }
 
 pub(super) fn write_text_params(out: &mut String, style: &TextStyle) {
+    write_text_params_for_text(out, style, "");
+}
+
+/// As [`write_text_params`], but told what the run holds.
+///
+/// The font list has to answer for the script the text is written in, not only
+/// for the family it names: a run can declare a face that has no glyph for its
+/// own content (issues #537, #543).
+pub(super) fn write_text_params_for_text(out: &mut String, style: &TextStyle, text: &str) {
     let mut first = true;
 
     if let Some(ref family) = style.font_family {
         let font_value = match style.east_asian_font_family {
             Some(ref east_asian) if !east_asian.eq_ignore_ascii_case(family) => {
-                font_subst::font_with_east_asian_fallbacks(family, east_asian)
+                font_subst::font_with_east_asian_fallbacks(family, east_asian, text)
             }
-            _ => font_subst::font_with_fallbacks(family),
+            _ => font_subst::font_with_fallbacks_for_text(family, text),
         };
         write_param(out, &mut first, &format!("font: {font_value}"));
     }
