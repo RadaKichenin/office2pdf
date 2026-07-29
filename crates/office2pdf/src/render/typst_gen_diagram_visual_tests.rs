@@ -18,6 +18,10 @@ fn test_codegen_chart_bar_visual_bars() {
         legend_position: LegendPosition::Right,
         category_axis_title: None,
         value_axis_title: None,
+        category_axis_major_tick_mark: AxisTickMark::Outside,
+        value_axis_major_tick_mark: AxisTickMark::Outside,
+        category_axis_deleted: false,
+        value_axis_deleted: false,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -67,6 +71,10 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
         legend_position: LegendPosition::Right,
         category_axis_title: None,
         value_axis_title: None,
+        category_axis_major_tick_mark: AxisTickMark::Outside,
+        value_axis_major_tick_mark: AxisTickMark::Outside,
+        category_axis_deleted: false,
+        value_axis_deleted: false,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -104,6 +112,10 @@ fn test_codegen_chart_pie_draws_a_pie() {
         legend_position: LegendPosition::Right,
         category_axis_title: None,
         value_axis_title: None,
+        category_axis_major_tick_mark: AxisTickMark::Outside,
+        value_axis_major_tick_mark: AxisTickMark::Outside,
+        category_axis_deleted: false,
+        value_axis_deleted: false,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -146,6 +158,10 @@ fn test_codegen_chart_line_trend_indicators() {
         legend_position: LegendPosition::Right,
         category_axis_title: None,
         value_axis_title: None,
+        category_axis_major_tick_mark: AxisTickMark::Outside,
+        value_axis_major_tick_mark: AxisTickMark::Outside,
+        category_axis_deleted: false,
+        value_axis_deleted: false,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -179,6 +195,10 @@ fn test_codegen_chart_empty_series() {
         legend_position: LegendPosition::Right,
         category_axis_title: None,
         value_axis_title: None,
+        category_axis_major_tick_mark: AxisTickMark::Outside,
+        value_axis_major_tick_mark: AxisTickMark::Outside,
+        category_axis_deleted: false,
+        value_axis_deleted: false,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -245,6 +265,10 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
         legend_position: LegendPosition::Right,
         category_axis_title: None,
         value_axis_title: None,
+        category_axis_major_tick_mark: AxisTickMark::Outside,
+        value_axis_major_tick_mark: AxisTickMark::Outside,
+        category_axis_deleted: false,
+        value_axis_deleted: false,
     }));
     let doc = make_doc(vec![make_flow_page(content)]);
 
@@ -280,6 +304,10 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
         legend_position: LegendPosition::Right,
         category_axis_title: None,
         value_axis_title: None,
+        category_axis_major_tick_mark: AxisTickMark::Outside,
+        value_axis_major_tick_mark: AxisTickMark::Outside,
+        category_axis_deleted: false,
+        value_axis_deleted: false,
     }));
     let doc = make_doc(vec![make_flow_page(content)]);
 
@@ -467,6 +495,10 @@ fn test_codegen_chart_line_plot() {
         legend_position: LegendPosition::Right,
         category_axis_title: None,
         value_axis_title: None,
+        category_axis_major_tick_mark: AxisTickMark::Outside,
+        value_axis_major_tick_mark: AxisTickMark::Outside,
+        category_axis_deleted: false,
+        value_axis_deleted: false,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -507,6 +539,10 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
         legend_position: LegendPosition::Right,
         category_axis_title: None,
         value_axis_title: None,
+        category_axis_major_tick_mark: AxisTickMark::Outside,
+        value_axis_major_tick_mark: AxisTickMark::Outside,
+        category_axis_deleted: false,
+        value_axis_deleted: false,
     })])]);
 
     let pages = page_texts(&doc);
@@ -566,6 +602,10 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
         legend_position: LegendPosition::Right,
         category_axis_title: None,
         value_axis_title: None,
+        category_axis_major_tick_mark: AxisTickMark::Outside,
+        value_axis_major_tick_mark: AxisTickMark::Outside,
+        category_axis_deleted: false,
+        value_axis_deleted: false,
     }
 }
 
@@ -678,6 +718,10 @@ fn legend_chart(position: LegendPosition) -> Chart {
         legend_position: position,
         category_axis_title: None,
         value_axis_title: None,
+        category_axis_major_tick_mark: AxisTickMark::Outside,
+        value_axis_major_tick_mark: AxisTickMark::Outside,
+        category_axis_deleted: false,
+        value_axis_deleted: false,
     }
 }
 
@@ -812,6 +856,10 @@ fn a_declared_series_fill_reaches_the_bars() {
         legend_position: LegendPosition::Right,
         category_axis_title: None,
         value_axis_title: None,
+        category_axis_major_tick_mark: AxisTickMark::Outside,
+        value_axis_major_tick_mark: AxisTickMark::Outside,
+        category_axis_deleted: false,
+        value_axis_deleted: false,
     };
 
     let source = chart_source(chart);
@@ -845,6 +893,10 @@ fn a_series_without_a_fill_still_takes_the_palette() {
         legend_position: LegendPosition::Right,
         category_axis_title: None,
         value_axis_title: None,
+        category_axis_major_tick_mark: AxisTickMark::Outside,
+        value_axis_major_tick_mark: AxisTickMark::Outside,
+        category_axis_deleted: false,
+        value_axis_deleted: false,
     };
 
     let source = chart_source(chart);
@@ -876,6 +928,10 @@ fn per_point_fills_colour_each_bar_separately() {
         legend_position: LegendPosition::Right,
         category_axis_title: None,
         value_axis_title: None,
+        category_axis_major_tick_mark: AxisTickMark::Outside,
+        value_axis_major_tick_mark: AxisTickMark::Outside,
+        category_axis_deleted: false,
+        value_axis_deleted: false,
     };
 
     let source = chart_source(chart);
@@ -906,6 +962,10 @@ fn axis_titled_chart(category: Option<&str>, value: Option<&str>) -> Chart {
         legend_position: LegendPosition::Right,
         category_axis_title: category.map(str::to_string),
         value_axis_title: value.map(str::to_string),
+        category_axis_major_tick_mark: AxisTickMark::Outside,
+        value_axis_major_tick_mark: AxisTickMark::Outside,
+        category_axis_deleted: false,
+        value_axis_deleted: false,
     }
 }
 
@@ -986,6 +1046,10 @@ fn labelled_chart(labels: DataLabels) -> Chart {
         legend_position: LegendPosition::Right,
         category_axis_title: None,
         value_axis_title: None,
+        category_axis_major_tick_mark: AxisTickMark::Outside,
+        value_axis_major_tick_mark: AxisTickMark::Outside,
+        category_axis_deleted: false,
+        value_axis_deleted: false,
     }
 }
 
@@ -1059,6 +1123,10 @@ fn pie_chart(values: Vec<f64>) -> Chart {
         legend_position: LegendPosition::Right,
         category_axis_title: None,
         value_axis_title: None,
+        category_axis_major_tick_mark: AxisTickMark::Outside,
+        value_axis_major_tick_mark: AxisTickMark::Outside,
+        category_axis_deleted: false,
+        value_axis_deleted: false,
     }
 }
 
@@ -1231,6 +1299,10 @@ fn test_chart_default_gridline_matches_powerpoint() {
         legend_position: LegendPosition::Right,
         category_axis_title: None,
         value_axis_title: None,
+        category_axis_major_tick_mark: AxisTickMark::Outside,
+        value_axis_major_tick_mark: AxisTickMark::Outside,
+        category_axis_deleted: false,
+        value_axis_deleted: false,
     })])]);
 
     let source = generate_typst(&doc).unwrap().source;
@@ -1245,5 +1317,599 @@ fn test_chart_default_gridline_matches_powerpoint() {
     assert!(
         !source.contains("rgb(120, 120, 120)"),
         "the old #787878 axis-line default must be gone, got:\n{source}"
+    );
+}
+
+// ----- Axis lines and major tick marks (issue #672) -----
+
+/// One `line(...)` the generator placed: its top-left corner and the offset of
+/// its far end, in points.
+#[derive(Debug, Clone, Copy)]
+struct PlacedLine {
+    dx: f64,
+    dy: f64,
+    end_x: f64,
+    end_y: f64,
+}
+
+/// Read the point measurement a slice starts with: `"12.5pt, …"` becomes 12.5.
+fn leading_pt(text: &str) -> Option<f64> {
+    text.split_once("pt")?.0.trim().parse::<f64>().ok()
+}
+
+/// Every line segment the source places, in the order written.
+fn emitted_lines(source: &str) -> Vec<PlacedLine> {
+    source
+        .lines()
+        .filter_map(|line| {
+            let (placement, end) = line.split_once("line(end: (")?;
+            Some(PlacedLine {
+                dx: leading_pt(placement.split_once("dx: ")?.1)?,
+                dy: leading_pt(placement.split_once("dy: ")?.1)?,
+                end_x: leading_pt(end)?,
+                end_y: leading_pt(end.split_once(", ")?.1)?,
+            })
+        })
+        .collect()
+}
+
+/// Whether two point measurements are the same length.
+fn same_length(left: f64, right: f64) -> bool {
+    (left - right).abs() < 1e-6
+}
+
+/// The plotting rectangle, as `(x, y, width, height)`, read off the segments
+/// the chart drew rather than off the generator's layout constants: the
+/// gridlines and both axis lines each run a whole side of the plot, so the
+/// longest horizontal and vertical segments give its extents and the shorter
+/// tick marks fall out.
+fn plot_rect(lines: &[PlacedLine]) -> (f64, f64, f64, f64) {
+    let width: f64 = lines.iter().map(|line| line.end_x).fold(0.0, f64::max);
+    let height: f64 = lines.iter().map(|line| line.end_y).fold(0.0, f64::max);
+    let x: f64 = lines
+        .iter()
+        .filter(|line| same_length(line.end_x, width))
+        .map(|line| line.dx)
+        .fold(f64::INFINITY, f64::min);
+    let y: f64 = lines
+        .iter()
+        .filter(|line| same_length(line.end_y, height))
+        .map(|line| line.dy)
+        .fold(f64::INFINITY, f64::min);
+    (x, y, width, height)
+}
+
+/// The tick marks crossing the axis line under the plot and the one down its
+/// left edge: every segment too short to be a gridline or an axis line.
+///
+/// Which axis owns which edge depends on the orientation, so the split is by
+/// edge. A column chart's bottom edge is its category axis; a bar chart's is
+/// its value axis.
+fn tick_marks_by_edge(
+    lines: &[PlacedLine],
+    plot: (f64, f64, f64, f64),
+) -> (Vec<PlacedLine>, Vec<PlacedLine>) {
+    let (_, _, width, height) = plot;
+    let under: Vec<PlacedLine> = lines
+        .iter()
+        .filter(|line| same_length(line.end_x, 0.0) && line.end_y < height)
+        .copied()
+        .collect();
+    let beside: Vec<PlacedLine> = lines
+        .iter()
+        .filter(|line| same_length(line.end_y, 0.0) && line.end_x < width)
+        .copied()
+        .collect();
+    (under, beside)
+}
+
+/// The categories `tick_mark_chart` plots, so a test can look their labels up.
+const TICK_MARK_CATEGORIES: [&str; 3] = ["Mon", "Tue", "Wed"];
+
+/// A three-category chart carrying the tick marks each axis asks for.
+fn tick_mark_chart(
+    chart_type: ChartType,
+    category_axis_major_tick_mark: AxisTickMark,
+    value_axis_major_tick_mark: AxisTickMark,
+) -> Chart {
+    Chart {
+        chart_type,
+        title: Some("Weekly Throughput".to_string()),
+        categories: TICK_MARK_CATEGORIES.map(str::to_string).to_vec(),
+        series: vec![ChartSeries {
+            name: Some("Builds".to_string()),
+            values: vec![4.0, 8.0, 6.0],
+            fill: None,
+            point_fills: Vec::new(),
+            data_labels: DataLabels::default(),
+        }],
+        grouping: ChartGrouping::Clustered,
+        legend_position: LegendPosition::Right,
+        category_axis_title: None,
+        value_axis_title: None,
+        category_axis_major_tick_mark,
+        value_axis_major_tick_mark,
+        category_axis_deleted: false,
+        value_axis_deleted: false,
+    }
+}
+
+/// One placed `box(...)`: its top-left corner and the extent it was given, in
+/// points. A box the generator left unsized vertically reports zero height.
+#[derive(Debug, Clone, Copy)]
+struct PlacedBox {
+    dx: f64,
+    dy: f64,
+    width: f64,
+    height: f64,
+}
+
+/// Where the generator placed the box printing `text`.
+fn placed_box_holding(source: &str, text: &str) -> PlacedBox {
+    let needle: String = format!("[{text}]");
+    let line: &str = source
+        .lines()
+        .find(|line| line.contains("box(width: ") && line.contains(&needle))
+        .unwrap_or_else(|| panic!("nothing prints {text} in:\n{source}"));
+    let read = |prefix: &str| -> Option<f64> { leading_pt(line.split_once(prefix)?.1) };
+    PlacedBox {
+        dx: read("dx: ").expect("a placed box carries a dx"),
+        dy: read("dy: ").expect("a placed box carries a dy"),
+        width: read("box(width: ").expect("a placed box carries a width"),
+        height: read("height: ").unwrap_or(0.0),
+    }
+}
+
+/// The offsets in ascending order, with the coincident ones folded together —
+/// the zero gridline and the axis line beside it are drawn as two segments over
+/// the same offset.
+fn sorted_unique(offsets: impl IntoIterator<Item = f64>) -> Vec<f64> {
+    let mut sorted: Vec<f64> = offsets.into_iter().collect();
+    sorted.sort_by(f64::total_cmp);
+    sorted.dedup_by(|left, right| same_length(*left, *right));
+    sorted
+}
+
+/// Where along the value axis each gridline runs, one per major unit.
+///
+/// A column or line chart draws them horizontally across the whole plot, a bar
+/// chart vertically down its whole height.
+fn gridline_offsets(
+    lines: &[PlacedLine],
+    plot: (f64, f64, f64, f64),
+    value_axis_runs_under_the_plot: bool,
+) -> Vec<f64> {
+    let (_, _, width, height) = plot;
+    sorted_unique(lines.iter().filter_map(|line| {
+        if value_axis_runs_under_the_plot {
+            (same_length(line.end_x, 0.0) && same_length(line.end_y, height)).then_some(line.dx)
+        } else {
+            (same_length(line.end_y, 0.0) && same_length(line.end_x, width)).then_some(line.dy)
+        }
+    }))
+}
+
+/// Where along its axis each tick sits. A tick runs across its axis, so the
+/// coordinate that stays put over the tick's own length is the one that places
+/// it along the axis — whichever side of the line the tick reaches from.
+fn tick_offsets(ticks: &[PlacedLine], along_the_bottom_edge: bool) -> Vec<f64> {
+    sorted_unique(ticks.iter().map(|tick| {
+        if along_the_bottom_edge {
+            tick.dx
+        } else {
+            tick.dy
+        }
+    }))
+}
+
+/// A value tick marks the same major unit its gridline does, so the two land on
+/// the same offset along the axis. Counting ticks alone would pass an
+/// implementation that drew the right number of them in the wrong places.
+fn assert_value_ticks_sit_on_their_gridlines(source: &str, value_axis_runs_under_the_plot: bool) {
+    let lines: Vec<PlacedLine> = emitted_lines(source);
+    let plot: (f64, f64, f64, f64) = plot_rect(&lines);
+    let (under, beside) = tick_marks_by_edge(&lines, plot);
+    let value_ticks: &[PlacedLine] = if value_axis_runs_under_the_plot {
+        &under
+    } else {
+        &beside
+    };
+
+    let gridlines: Vec<f64> = gridline_offsets(&lines, plot, value_axis_runs_under_the_plot);
+    let ticks: Vec<f64> = tick_offsets(value_ticks, value_axis_runs_under_the_plot);
+
+    assert!(!gridlines.is_empty(), "no gridlines drawn in:\n{source}");
+    assert_eq!(
+        ticks.len(),
+        gridlines.len(),
+        "one value tick per gridline; ticks at {ticks:?} against gridlines at {gridlines:?}\n{source}"
+    );
+    for (tick, gridline) in ticks.iter().zip(&gridlines) {
+        assert!(
+            same_length(*tick, *gridline),
+            "a value tick at {tick} misses its gridline at {gridline}; ticks {ticks:?} against gridlines {gridlines:?}\n{source}"
+        );
+    }
+}
+
+/// The category ticks are the boundaries of the bands the labels sit in the
+/// middle of: evenly spaced along the axis, with every label's centre exactly
+/// midway between two neighbouring ticks.
+///
+/// This is what `<c:crossBetween val="between"/>` means, and it is what pins the
+/// ticks to the layout: ticks placed by a rule of their own can still come out
+/// evenly spaced and correctly counted while sitting nowhere near a label.
+fn assert_category_ticks_bound_the_labels(
+    source: &str,
+    categories: &[&str],
+    value_axis_runs_under_the_plot: bool,
+) {
+    let lines: Vec<PlacedLine> = emitted_lines(source);
+    let plot: (f64, f64, f64, f64) = plot_rect(&lines);
+    let (under, beside) = tick_marks_by_edge(&lines, plot);
+    // A bar chart's categories run down the left edge; every other orientation
+    // lays them along the bottom.
+    let category_axis_is_the_bottom_edge: bool = !value_axis_runs_under_the_plot;
+    let category_ticks: &[PlacedLine] = if category_axis_is_the_bottom_edge {
+        &under
+    } else {
+        &beside
+    };
+
+    let boundaries: Vec<f64> = tick_offsets(category_ticks, category_axis_is_the_bottom_edge);
+    assert_eq!(
+        boundaries.len(),
+        categories.len() + 1,
+        "one tick per band boundary, so one more than the categories; got {boundaries:?}\n{source}"
+    );
+    let pitch: f64 = boundaries[1] - boundaries[0];
+    for pair in boundaries.windows(2) {
+        assert!(
+            same_length(pair[1] - pair[0], pitch),
+            "the bands the ticks bound must all be the same width; got {boundaries:?}\n{source}"
+        );
+    }
+
+    let band_centres: Vec<f64> = boundaries
+        .windows(2)
+        .map(|pair| (pair[0] + pair[1]) / 2.0)
+        .collect();
+    let label_centres: Vec<f64> = sorted_unique(categories.iter().map(|category| {
+        let label: PlacedBox = placed_box_holding(source, category);
+        if category_axis_is_the_bottom_edge {
+            label.dx + label.width / 2.0
+        } else {
+            label.dy + label.height / 2.0
+        }
+    }));
+    assert_eq!(label_centres.len(), band_centres.len());
+    for (label, band) in label_centres.iter().zip(&band_centres) {
+        assert!(
+            same_length(*label, *band),
+            "a category label centred on {label} is not in the middle of a band; labels {label_centres:?} against bands bounded by {boundaries:?}\n{source}"
+        );
+    }
+}
+
+/// Both sides of the plot carry an axis line. The value axis was never stroked
+/// for a bar or a column chart, whichever edge it owned (issue #672).
+fn assert_both_axis_lines(source: &str) {
+    let lines: Vec<PlacedLine> = emitted_lines(source);
+    let (plot_x, plot_y, plot_w, plot_h) = plot_rect(&lines);
+
+    assert!(
+        lines.iter().any(|line| same_length(line.dx, plot_x)
+            && same_length(line.dy, plot_y)
+            && same_length(line.end_x, 0.0)
+            && same_length(line.end_y, plot_h)),
+        "no axis line down the plot's left edge at x={plot_x}, y={plot_y}..{}; got:\n{source}",
+        plot_y + plot_h
+    );
+    assert!(
+        lines.iter().any(|line| same_length(line.dx, plot_x)
+            && same_length(line.dy, plot_y + plot_h)
+            && same_length(line.end_x, plot_w)
+            && same_length(line.end_y, 0.0)),
+        "no axis line along the plot's bottom edge at y={}, x={plot_x}..{}; got:\n{source}",
+        plot_y + plot_h,
+        plot_x + plot_w
+    );
+}
+
+#[test]
+fn a_column_chart_strokes_both_of_its_axis_lines() {
+    assert_both_axis_lines(&chart_source(tick_mark_chart(
+        ChartType::Column,
+        AxisTickMark::Outside,
+        AxisTickMark::Outside,
+    )));
+}
+
+#[test]
+fn a_horizontal_bar_chart_strokes_both_of_its_axis_lines() {
+    // Triangulation: the orientation swaps which axis owns which edge, so one
+    // hardcoded edge cannot satisfy both charts.
+    assert_both_axis_lines(&chart_source(tick_mark_chart(
+        ChartType::Bar,
+        AxisTickMark::Outside,
+        AxisTickMark::Outside,
+    )));
+}
+
+#[test]
+fn a_line_chart_strokes_both_of_its_axis_lines() {
+    assert_both_axis_lines(&chart_source(tick_mark_chart(
+        ChartType::Line,
+        AxisTickMark::Outside,
+        AxisTickMark::Outside,
+    )));
+}
+
+/// Each axis ticks every major unit, and the category axis ticks every band
+/// boundary — `<c:crossBetween val="between"/>` gives three categories four of
+/// them, as Excel and PowerPoint both draw.
+fn assert_tick_counts(source: &str, value_axis_runs_under_the_plot: bool) {
+    let lines: Vec<PlacedLine> = emitted_lines(source);
+    let plot: (f64, f64, f64, f64) = plot_rect(&lines);
+    let (under, beside) = tick_marks_by_edge(&lines, plot);
+
+    let category_boundaries: usize = TICK_MARK_CATEGORIES.len() + 1;
+    let major_units: usize = emitted_axis_ticks(source).len();
+    assert_eq!(major_units, 5, "values 4/8/6 scale to ticks 0..8 by 2");
+    let (expected_under, expected_beside) = if value_axis_runs_under_the_plot {
+        (major_units, category_boundaries)
+    } else {
+        (category_boundaries, major_units)
+    };
+
+    assert_eq!(
+        under.len(),
+        expected_under,
+        "tick marks under the plot: {under:#?}\n{source}"
+    );
+    assert_eq!(
+        beside.len(),
+        expected_beside,
+        "tick marks left of the plot: {beside:#?}\n{source}"
+    );
+}
+
+#[test]
+fn a_column_chart_ticks_every_major_unit_and_every_category_boundary() {
+    // A column chart's value axis runs down the left edge, so its major-unit
+    // ticks are the ones beside the plot.
+    assert_tick_counts(
+        &chart_source(tick_mark_chart(
+            ChartType::Column,
+            AxisTickMark::Outside,
+            AxisTickMark::Outside,
+        )),
+        false,
+    );
+}
+
+#[test]
+fn a_horizontal_bar_chart_ticks_the_edges_the_other_way_round() {
+    assert_tick_counts(
+        &chart_source(tick_mark_chart(
+            ChartType::Bar,
+            AxisTickMark::Outside,
+            AxisTickMark::Outside,
+        )),
+        true,
+    );
+}
+
+#[test]
+fn a_line_chart_ticks_both_of_its_axes() {
+    assert_tick_counts(
+        &chart_source(tick_mark_chart(
+            ChartType::Line,
+            AxisTickMark::Outside,
+            AxisTickMark::Outside,
+        )),
+        false,
+    );
+}
+
+/// A chart's ticks land on the geometry the same chart drew, on both axes.
+fn assert_ticks_match_the_plot(chart_type: ChartType, value_axis_runs_under_the_plot: bool) {
+    let source: String = chart_source(tick_mark_chart(
+        chart_type,
+        AxisTickMark::Outside,
+        AxisTickMark::Outside,
+    ));
+    assert_value_ticks_sit_on_their_gridlines(&source, value_axis_runs_under_the_plot);
+    assert_category_ticks_bound_the_labels(
+        &source,
+        &TICK_MARK_CATEGORIES,
+        value_axis_runs_under_the_plot,
+    );
+}
+
+#[test]
+fn a_column_chart_puts_every_tick_on_the_geometry_it_marks() {
+    assert_ticks_match_the_plot(ChartType::Column, false);
+}
+
+#[test]
+fn a_horizontal_bar_chart_puts_every_tick_on_the_geometry_it_marks() {
+    assert_ticks_match_the_plot(ChartType::Bar, true);
+}
+
+#[test]
+fn a_line_chart_puts_every_tick_on_the_geometry_it_marks() {
+    // The line plot lays its categories out in bands of its own, so its ticks
+    // have to be read off that layout rather than borrowed from the bar family.
+    assert_ticks_match_the_plot(ChartType::Line, false);
+}
+
+#[test]
+fn an_axis_asking_for_no_tick_marks_gets_none() {
+    // Triangulation against drawing ticks unconditionally, and against reading
+    // one axis' setting for both: only the category axis goes quiet here.
+    let source: String = chart_source(tick_mark_chart(
+        ChartType::Column,
+        AxisTickMark::None,
+        AxisTickMark::Outside,
+    ));
+    let lines: Vec<PlacedLine> = emitted_lines(&source);
+    let plot: (f64, f64, f64, f64) = plot_rect(&lines);
+    let (under, beside) = tick_marks_by_edge(&lines, plot);
+
+    assert!(
+        under.is_empty(),
+        "a category axis asking for no tick marks must draw none, got {under:#?}\n{source}"
+    );
+    assert!(
+        !beside.is_empty(),
+        "the value axis still asked for tick marks, got:\n{source}"
+    );
+}
+
+#[test]
+fn inward_tick_marks_reach_into_the_plot_and_crossing_ones_both_ways() {
+    // `in` and `out` mirror each other about the axis line and `cross` is
+    // both, so the mode has to steer the geometry rather than only decide
+    // whether a segment is drawn at all.
+    let left_edge_ticks = |mark: AxisTickMark| -> (f64, Vec<PlacedLine>) {
+        let source: String =
+            chart_source(tick_mark_chart(ChartType::Column, AxisTickMark::None, mark));
+        let lines: Vec<PlacedLine> = emitted_lines(&source);
+        let plot: (f64, f64, f64, f64) = plot_rect(&lines);
+        (plot.0, tick_marks_by_edge(&lines, plot).1)
+    };
+
+    let (axis_x, outward) = left_edge_ticks(AxisTickMark::Outside);
+    let (_, inward) = left_edge_ticks(AxisTickMark::Inside);
+    let (_, crossing) = left_edge_ticks(AxisTickMark::Cross);
+
+    assert!(!outward.is_empty() && !inward.is_empty() && !crossing.is_empty());
+    assert!(
+        outward
+            .iter()
+            .all(|tick| tick.dx < axis_x && same_length(tick.dx + tick.end_x, axis_x)),
+        "an outward tick ends on the axis line at x={axis_x}, got {outward:#?}"
+    );
+    assert!(
+        inward
+            .iter()
+            .all(|tick| same_length(tick.dx, axis_x) && tick.end_x > 0.0),
+        "an inward tick starts on the axis line at x={axis_x}, got {inward:#?}"
+    );
+    assert!(
+        crossing
+            .iter()
+            .all(|tick| tick.dx < axis_x && tick.dx + tick.end_x > axis_x),
+        "a crossing tick straddles the axis line at x={axis_x}, got {crossing:#?}"
+    );
+    assert_eq!(
+        outward.len(),
+        crossing.len(),
+        "every mode ticks the same major units"
+    );
+    assert!(
+        crossing[0].end_x > outward[0].end_x,
+        "a crossing tick is longer than a one-sided one: {crossing:#?} vs {outward:#?}"
+    );
+}
+
+/// A column chart with one of its axes switched off by `<c:delete val="1"/>`,
+/// both still asking for outward ticks — which is what Office leaves behind
+/// when a user unticks an axis rather than setting its tick marks to `none`.
+fn chart_with_deleted_axis(category_deleted: bool, value_deleted: bool) -> Chart {
+    let mut chart: Chart = tick_mark_chart(
+        ChartType::Column,
+        AxisTickMark::Outside,
+        AxisTickMark::Outside,
+    );
+    chart.category_axis_deleted = category_deleted;
+    chart.value_axis_deleted = value_deleted;
+    chart
+}
+
+#[test]
+fn a_deleted_value_axis_draws_no_line_no_ticks_and_no_labels() {
+    let drawn: String = chart_source(chart_with_deleted_axis(false, false));
+    let hidden: String = chart_source(chart_with_deleted_axis(false, true));
+    // The gutters do not move when an axis goes, so the plot the deleted chart
+    // draws into is the one the drawn chart reports.
+    let plot: (f64, f64, f64, f64) = plot_rect(&emitted_lines(&drawn));
+    let (plot_x, plot_y, _, plot_h) = plot;
+    let lines: Vec<PlacedLine> = emitted_lines(&hidden);
+    let (under, beside) = tick_marks_by_edge(&lines, plot);
+
+    assert!(
+        !lines.iter().any(|line| same_length(line.dx, plot_x)
+            && same_length(line.dy, plot_y)
+            && same_length(line.end_y, plot_h)),
+        "a deleted value axis must not stroke the left edge it owns; got:\n{hidden}"
+    );
+    assert!(
+        beside.is_empty(),
+        "a deleted value axis must not tick, whatever `<c:majorTickMark>` still says; got {beside:#?}\n{hidden}"
+    );
+    assert!(
+        emitted_axis_ticks(&hidden).is_empty(),
+        "a deleted value axis must not label its units; got:\n{hidden}"
+    );
+    // Gridlines are a chart element of their own — deleting the axis leaves
+    // them standing — and the category axis is untouched.
+    assert_eq!(
+        gridline_offsets(&lines, plot, false),
+        gridline_offsets(&emitted_lines(&drawn), plot, false),
+        "the gridlines belong to the chart, not to the axis switched off"
+    );
+    assert_eq!(
+        under.len(),
+        TICK_MARK_CATEGORIES.len() + 1,
+        "the category axis still ticks every band boundary; got {under:#?}\n{hidden}"
+    );
+}
+
+#[test]
+fn a_deleted_category_axis_takes_only_its_own_furniture_with_it() {
+    // Triangulation against one flag standing for both axes, and against the
+    // deletion reaching further than the axis it names.
+    let drawn: String = chart_source(chart_with_deleted_axis(false, false));
+    let hidden: String = chart_source(chart_with_deleted_axis(true, false));
+    let plot: (f64, f64, f64, f64) = plot_rect(&emitted_lines(&drawn));
+    let (plot_x, plot_y, plot_w, plot_h) = plot;
+    let lines: Vec<PlacedLine> = emitted_lines(&hidden);
+    let (under, beside) = tick_marks_by_edge(&lines, plot);
+
+    // The zero gridline runs along the bottom edge too, so the axis line there
+    // is one of two coincident segments rather than the only one.
+    let bottom_edge_strokes = |source: &str| -> usize {
+        emitted_lines(source)
+            .iter()
+            .filter(|line| same_length(line.dy, plot_y + plot_h) && same_length(line.end_x, plot_w))
+            .count()
+    };
+    assert_eq!(
+        bottom_edge_strokes(&hidden),
+        bottom_edge_strokes(&drawn) - 1,
+        "a deleted category axis must stop stroking the bottom edge it owns; got:\n{hidden}"
+    );
+    assert!(
+        under.is_empty(),
+        "a deleted category axis must not tick; got {under:#?}\n{hidden}"
+    );
+    for category in TICK_MARK_CATEGORIES {
+        assert!(
+            !hidden.contains(&format!("[{category}]")),
+            "a deleted category axis must not label its bands, found {category} in:\n{hidden}"
+        );
+    }
+    assert!(
+        lines.iter().any(|line| same_length(line.dx, plot_x)
+            && same_length(line.dy, plot_y)
+            && same_length(line.end_y, plot_h)),
+        "the value axis is still drawn; got:\n{hidden}"
+    );
+    assert_eq!(
+        beside.len(),
+        emitted_axis_ticks(&hidden).len(),
+        "the value axis still ticks every unit it labels; got {beside:#?}\n{hidden}"
     );
 }

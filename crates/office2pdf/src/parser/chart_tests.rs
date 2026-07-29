@@ -703,8 +703,9 @@ fn test_of_pie_names_the_shape_its_ofpietype_asks_for() {
 
 // ----- Axis titles (issue #552) -----
 
-/// The audited workbook's column chart, with the axis titles Excel writes.
-fn chart_with_axes(cat_ax_title: &str, val_ax_title: &str) -> String {
+/// The audited workbook's column chart, with `cat_ax_body` and `val_ax_body`
+/// spliced into the matching axis element.
+fn chart_with_axes(cat_ax_body: &str, val_ax_body: &str) -> String {
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
         <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
@@ -723,13 +724,13 @@ fn chart_with_axes(cat_ax_title: &str, val_ax_title: &str) -> String {
                     <c:catAx>
                         <c:axId val="59291440"/>
                         <c:axPos val="b"/>
-                        {cat_ax_title}
+                        {cat_ax_body}
                         <c:tickLblPos val="nextTo"/>
                     </c:catAx>
                     <c:valAx>
                         <c:axId val="21056836"/>
                         <c:axPos val="l"/>
-                        {val_ax_title}
+                        {val_ax_body}
                         <c:tickLblPos val="nextTo"/>
                     </c:valAx>
                 </c:plotArea>
@@ -785,6 +786,121 @@ fn test_one_titled_axis_does_not_borrow_the_others_title() {
 
     assert_eq!(chart.category_axis_title, None);
     assert_eq!(chart.value_axis_title.as_deref(), Some("LOC"));
+}
+
+// ----- Major tick marks (issue #672) -----
+
+#[test]
+fn test_outward_major_tick_marks_are_read() {
+    // Both fixtures in issue #672 spell it this way, and it is what Office
+    // writes for a default chart.
+    let xml = chart_with_axes(
+        r#"<c:majorTickMark val="out"/>"#,
+        r#"<c:majorTickMark val="out"/>"#,
+    );
+
+    let chart = parse_chart_xml(&xml).unwrap();
+
+    assert_eq!(chart.category_axis_major_tick_mark, AxisTickMark::Outside);
+    assert_eq!(chart.value_axis_major_tick_mark, AxisTickMark::Outside);
+}
+
+#[test]
+fn test_each_axis_keeps_its_own_major_tick_mark() {
+    // Triangulation: the two axes are independent, and neither `none` nor `in`
+    // may collapse onto the `out` the common case uses.
+    let xml = chart_with_axes(
+        r#"<c:majorTickMark val="none"/>"#,
+        r#"<c:majorTickMark val="in"/>"#,
+    );
+
+    let chart = parse_chart_xml(&xml).unwrap();
+
+    assert_eq!(chart.category_axis_major_tick_mark, AxisTickMark::None);
+    assert_eq!(chart.value_axis_major_tick_mark, AxisTickMark::Inside);
+}
+
+#[test]
+fn test_crossing_major_tick_marks_are_read() {
+    let xml = chart_with_axes(
+        r#"<c:majorTickMark val="cross"/>"#,
+        r#"<c:majorTickMark val="cross"/>"#,
+    );
+
+    let chart = parse_chart_xml(&xml).unwrap();
+
+    assert_eq!(chart.category_axis_major_tick_mark, AxisTickMark::Cross);
+    assert_eq!(chart.value_axis_major_tick_mark, AxisTickMark::Cross);
+}
+
+#[test]
+fn test_an_axis_without_the_element_still_ticks_outward() {
+    // Excel 16.0 exports `tests/fixtures/xlsx/WithChart.xlsx` — written by
+    // Apache POI without a single `<c:majorTickMark>` — with 3.17pt outward
+    // ticks on both axes, so the rendered default is `out`, not the `cross`
+    // ECMA-376 gives the attribute.
+    let xml = chart_with_axes("", "");
+
+    let chart = parse_chart_xml(&xml).unwrap();
+
+    assert_eq!(chart.category_axis_major_tick_mark, AxisTickMark::Outside);
+    assert_eq!(chart.value_axis_major_tick_mark, AxisTickMark::Outside);
+}
+
+// ----- Switched-off axes (issue #672) -----
+
+/// A `<c:delete>` element in the state `on` describes.
+fn axis_delete(on: bool) -> String {
+    format!(r#"<c:delete val="{}"/>"#, u8::from(on))
+}
+
+#[test]
+fn test_a_switched_off_axis_is_read_as_deleted() {
+    // Office leaves the rest of a switched-off axis' settings in place, tick
+    // marks included, so the flag is the only thing that says it is gone.
+    let xml = chart_with_axes(
+        &format!(r#"{}<c:majorTickMark val="out"/>"#, axis_delete(true)),
+        &format!(r#"{}<c:majorTickMark val="out"/>"#, axis_delete(false)),
+    );
+
+    let chart = parse_chart_xml(&xml).unwrap();
+
+    assert!(chart.category_axis_deleted);
+    assert!(!chart.value_axis_deleted);
+    assert_eq!(chart.category_axis_major_tick_mark, AxisTickMark::Outside);
+}
+
+#[test]
+fn test_the_value_axis_switches_off_independently_of_the_category_one() {
+    // Triangulation: a bar chart with only the value axis switched off is the
+    // common authoring pattern, so neither flag may stand for both.
+    let xml = chart_with_axes(&axis_delete(false), &axis_delete(true));
+
+    let chart = parse_chart_xml(&xml).unwrap();
+
+    assert!(!chart.category_axis_deleted);
+    assert!(chart.value_axis_deleted);
+}
+
+#[test]
+fn test_an_axis_without_the_element_stays_on() {
+    let xml = chart_with_axes("", "");
+
+    let chart = parse_chart_xml(&xml).unwrap();
+
+    assert!(!chart.category_axis_deleted);
+    assert!(!chart.value_axis_deleted);
+}
+
+#[test]
+fn test_the_element_without_its_attribute_switches_the_axis_off() {
+    // `CT_Boolean/@val` defaults to true, so the attribute is optional.
+    let xml = chart_with_axes("<c:delete/>", "");
+
+    let chart = parse_chart_xml(&xml).unwrap();
+
+    assert!(chart.category_axis_deleted);
+    assert!(!chart.value_axis_deleted);
 }
 
 // ----- Data labels (issue #547) -----

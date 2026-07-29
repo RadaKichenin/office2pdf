@@ -1,5 +1,7 @@
 use super::*;
-use crate::ir::{Block, Margins, PageSize, Paragraph, ParagraphStyle, Run, TextStyle};
+use crate::ir::{
+    AxisTickMark, Block, Margins, PageSize, Paragraph, ParagraphStyle, Run, TextStyle,
+};
 
 fn cell(text: &str) -> TableCell {
     TableCell {
@@ -156,6 +158,10 @@ fn test_charts_stay_on_first_column_group() {
             legend_position: crate::ir::LegendPosition::Right,
             category_axis_title: None,
             value_axis_title: None,
+            category_axis_major_tick_mark: AxisTickMark::Outside,
+            value_axis_major_tick_mark: AxisTickMark::Outside,
+            category_axis_deleted: false,
+            value_axis_deleted: false,
         },
     )];
     let pages = split_sheet_page_by_width(page, None, None);
