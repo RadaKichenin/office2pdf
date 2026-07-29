@@ -514,9 +514,15 @@ pub struct TableCell {
     pub icon_text: Option<String>,
     /// Fill color of the IconSet symbol (Excel draws icons in band colors).
     pub icon_color: Option<Color>,
-    /// Excel text spill: total width in points the content may paint across
-    /// (own column plus consecutive empty columns to the right). Content is
-    /// laid out on one line and clipped to this width instead of wrapping.
+    /// Width in points that an unwrapped cell's single line paints across
+    /// before it is clipped. `None` when the text fits its column and needs no
+    /// clip box.
+    ///
+    /// Excel never moves a `wrapText="false"` cell's text to a second line, so
+    /// this is what varies instead of the line count. A general/left cell paints
+    /// on across consecutive empty columns to its right, giving its own column
+    /// plus those; a centred or right-aligned cell, and any cell whose neighbour
+    /// is occupied, gets its own column width alone and is clipped at its edge.
     pub spill_width: Option<f64>,
     /// Vertical alignment of cell content.
     pub vertical_align: Option<CellVerticalAlign>,

@@ -955,8 +955,13 @@ fn test_wrap_text_disables_spill() {
     );
 }
 
+// ----- Unwrapped text clips rather than wraps (issue #615) -----
+
+/// An occupied neighbour leaves nowhere to paint, so the line is clipped at the
+/// cell's own edge. It still does not wrap: `wrapText="false"` means the text
+/// never moves to a second line, whatever is beside it (issue #615).
 #[test]
-fn test_occupied_neighbor_blocks_spill() {
+fn test_occupied_neighbor_clips_at_the_cell_edge_instead_of_wrapping() {
     let data = build_xlsx_formatted(|sheet| {
         sheet.get_cell_mut("A1").set_value(
             "전 직원 통일 방식으로 운영 시, 최소 주 2회 이상의 수업을 제공하는 기관과 제휴",
@@ -966,10 +971,89 @@ fn test_occupied_neighbor_blocks_spill() {
     let parser = XlsxParser;
     let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
     let tp = get_sheet_page(&doc, 0);
-    assert_eq!(
-        tp.table.rows[0].cells[0].spill_width, None,
-        "an occupied right neighbor leaves nothing to spill into"
+
+    let own_width = tp.table.column_widths[0];
+    let spill_width = tp.table.rows[0].cells[0]
+        .spill_width
+        .expect("an unwrapped cell stays on one line even with nowhere to spill");
+    assert!(
+        (spill_width - own_width).abs() < 0.5,
+        "clip width should be the cell's own {own_width}pt, got {spill_width}pt"
     );
+}
+
+/// A centred cell whose text overruns its column is clipped on one line, the
+/// way Excel prints it — it must not fall through to wrapping.
+///
+/// Probed against Excel 16.0: a centred `wrapText="false"` cell with occupied
+/// cells on both sides prints one clipped line. This is the shape that made
+/// `코드 근거 미확인` wrap to two lines on the repository workbook (issue #615).
+#[test]
+fn test_centered_overflowing_cell_clips_instead_of_wrapping() {
+    let data = build_xlsx_formatted(|sheet| {
+        sheet.get_cell_mut("A1").set_value("왼쪽");
+        let cell = sheet.get_cell_mut("B1");
+        cell.set_value("전 직원 통일 방식으로 운영 시, 최소 주 2회 이상의 수업을 제공");
+        cell.get_style_mut()
+            .get_alignment_mut()
+            .set_horizontal(umya_spreadsheet::HorizontalAlignmentValues::Center);
+        sheet.get_cell_mut("C1").set_value("오른쪽");
+    });
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let tp = get_sheet_page(&doc, 0);
+
+    let own_width = tp.table.column_widths[1];
+    let spill_width = tp.table.rows[0].cells[1]
+        .spill_width
+        .expect("a centred unwrapped cell stays on one line");
+    assert!(
+        (spill_width - own_width).abs() < 0.5,
+        "a centred cell clips at its own {own_width}pt, got {spill_width}pt"
+    );
+}
+
+/// Triangulation: right alignment behaves the same as centre, so the rule is
+/// "unwrapped never wraps" rather than a special case for one alignment.
+#[test]
+fn test_right_aligned_overflowing_cell_clips_instead_of_wrapping() {
+    let data = build_xlsx_formatted(|sheet| {
+        let cell = sheet.get_cell_mut("B1");
+        cell.set_value("전 직원 통일 방식으로 운영 시, 최소 주 2회 이상의 수업을 제공");
+        cell.get_style_mut()
+            .get_alignment_mut()
+            .set_horizontal(umya_spreadsheet::HorizontalAlignmentValues::Right);
+        sheet.get_cell_mut("C1").set_value("오른쪽");
+    });
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let tp = get_sheet_page(&doc, 0);
+
+    let own_width = tp.table.column_widths[1];
+    let spill_width = tp.table.rows[0].cells[1]
+        .spill_width
+        .expect("a right-aligned unwrapped cell stays on one line");
+    assert!(
+        (spill_width - own_width).abs() < 0.5,
+        "a right-aligned cell clips at its own {own_width}pt, got {spill_width}pt"
+    );
+}
+
+/// A centred cell whose text fits needs no clip box at all, so short centred
+/// text is unaffected by the rule above.
+#[test]
+fn test_short_centered_cell_does_not_clip() {
+    let data = build_xlsx_formatted(|sheet| {
+        let cell = sheet.get_cell_mut("B1");
+        cell.set_value("짧음");
+        cell.get_style_mut()
+            .get_alignment_mut()
+            .set_horizontal(umya_spreadsheet::HorizontalAlignmentValues::Center);
+    });
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let tp = get_sheet_page(&doc, 0);
+    assert_eq!(tp.table.rows[0].cells[1].spill_width, None);
 }
 
 #[test]
@@ -1426,6 +1510,9 @@ fn test_spill_extends_past_used_range_over_virtual_cells() {
     );
 }
 
+/// An occupied neighbour still stops the text painting past column A — the
+/// clip box is the cell's own width, not the width the text wants. The line
+/// stays a line either way (issue #615).
 #[test]
 fn test_spill_still_blocked_by_occupied_neighbor() {
     let data = build_xlsx_formatted(|sheet| {
@@ -1437,8 +1524,13 @@ fn test_spill_still_blocked_by_occupied_neighbor() {
     let parser = XlsxParser;
     let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
     let tp = get_sheet_page(&doc, 0);
-    assert_eq!(
-        tp.table.rows[0].cells[0].spill_width, None,
-        "an occupied neighbor still blocks the spill"
+
+    let own_width = tp.table.column_widths[0];
+    let spill_width = tp.table.rows[0].cells[0]
+        .spill_width
+        .expect("an unwrapped cell still renders one clipped line");
+    assert!(
+        (spill_width - own_width).abs() < 0.5,
+        "an occupied neighbor holds the clip to column A's {own_width}pt, got {spill_width}pt"
     );
 }
