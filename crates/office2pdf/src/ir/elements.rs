@@ -151,6 +151,40 @@ pub struct Chart {
     /// Title of the value axis, from `<c:valAx><c:title>`. Office writes it
     /// rotated a quarter turn anticlockwise along the axis.
     pub value_axis_title: Option<String>,
+    /// Where the category axis puts its major tick marks, from
+    /// `<c:catAx><c:majorTickMark>`.
+    pub category_axis_major_tick_mark: AxisTickMark,
+    /// Where the value axis puts its major tick marks, from
+    /// `<c:valAx><c:majorTickMark>`.
+    pub value_axis_major_tick_mark: AxisTickMark,
+    /// Whether `<c:catAx><c:delete>` switched the category axis off.
+    pub category_axis_deleted: bool,
+    /// Whether `<c:valAx><c:delete>` switched the value axis off.
+    ///
+    /// Office keeps the rest of a switched-off axis' settings — a hidden axis
+    /// usually still carries `<c:majorTickMark val="out"/>` — so the flag is
+    /// what decides whether the axis is drawn, not the settings beside it.
+    pub value_axis_deleted: bool,
+}
+
+/// Which side of an axis line its major tick marks project from, from
+/// `<c:majorTickMark>` (`ST_TickMark`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum AxisTickMark {
+    /// `none` — the axis carries no major tick marks.
+    None,
+    /// `in` — the ticks reach into the plot area.
+    Inside,
+    /// `out` — the ticks reach away from the plot area.
+    ///
+    /// The default is what Office renders for an axis that never mentions tick
+    /// marks, not the `cross` ECMA-376 gives the attribute: Excel 16.0 exports
+    /// `tests/fixtures/xlsx/WithChart.xlsx` — written by Apache POI without a
+    /// single `<c:majorTickMark>` — with outward ticks on both axes.
+    #[default]
+    Outside,
+    /// `cross` — the ticks straddle the axis line, reaching both ways.
+    Cross,
 }
 
 /// What a chart's data labels print, from `<c:dLbls>`.

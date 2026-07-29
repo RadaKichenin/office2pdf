@@ -7,7 +7,9 @@ use quick_xml::Reader;
 use quick_xml::events::Event;
 
 use super::xml_util;
-use crate::ir::{Chart, ChartGrouping, ChartSeries, ChartType, Color, DataLabels, LegendPosition};
+use crate::ir::{
+    AxisTickMark, Chart, ChartGrouping, ChartSeries, ChartType, Color, DataLabels, LegendPosition,
+};
 
 /// Mapping from XML chart element tag names to their corresponding `ChartType`.
 /// Both 2-D and 3-D variants map to the same logical type.
@@ -133,8 +135,8 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
     let mut series: Vec<ChartSeries> = Vec::new();
     let mut grouping: Option<ChartGrouping> = None;
     let mut legend_position: Option<LegendPosition> = None;
-    let mut category_axis_title: Option<String> = None;
-    let mut value_axis_title: Option<String> = None;
+    let mut category_axis: Axis = Axis::default();
+    let mut value_axis: Axis = Axis::default();
 
     loop {
         match reader.read_event() {
@@ -144,9 +146,9 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
                 if tag == b"title" && title.is_none() {
                     title = parse_chart_title(&mut reader);
                 } else if tag == b"catAx" {
-                    category_axis_title = parse_axis_title(&mut reader, b"catAx");
+                    category_axis = parse_axis(&mut reader, b"catAx");
                 } else if tag == b"valAx" {
-                    value_axis_title = parse_axis_title(&mut reader, b"valAx");
+                    value_axis = parse_axis(&mut reader, b"valAx");
                 } else if let Some(ct) = chart_type_for_tag(tag) {
                     let mut plot: PlotAreaProps = PlotAreaProps::default();
                     parse_chart_series(&mut reader, tag, &mut categories, &mut series, &mut plot);
@@ -190,28 +192,75 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
         series,
         grouping: grouping.unwrap_or_default(),
         legend_position: legend_position.unwrap_or_default(),
-        category_axis_title,
-        value_axis_title,
+        category_axis_title: category_axis.title,
+        value_axis_title: value_axis.title,
+        category_axis_major_tick_mark: category_axis.major_tick_mark,
+        value_axis_major_tick_mark: value_axis.major_tick_mark,
+        category_axis_deleted: category_axis.deleted,
+        value_axis_deleted: value_axis.deleted,
     })
 }
 
-/// Read an axis element's own `<c:title>`, consuming it to `end_tag`.
+/// What one `<c:catAx>` or `<c:valAx>` element says about itself.
+#[derive(Default)]
+struct Axis {
+    title: Option<String>,
+    major_tick_mark: AxisTickMark,
+    deleted: bool,
+}
+
+/// Read an axis element, consuming it to `end_tag`.
 ///
 /// Axis titles sit after the plot-area family element, so they never reach the
 /// `<c:title>` branch that captures the chart's own title.
-fn parse_axis_title(reader: &mut Reader<&[u8]>, end_tag: &[u8]) -> Option<String> {
-    let mut title: Option<String> = None;
+fn parse_axis(reader: &mut Reader<&[u8]>, end_tag: &[u8]) -> Axis {
+    let mut axis: Axis = Axis::default();
     loop {
         match reader.read_event() {
             Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"title" => {
-                title = title.or_else(|| parse_chart_title(reader));
+                axis.title = axis.title.or_else(|| parse_chart_title(reader));
+            }
+            // Office writes `<c:majorTickMark val="out"/>` self-closing, so the
+            // `Start` arm alone would never see it.
+            Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e))
+                if e.local_name().as_ref() == b"majorTickMark" =>
+            {
+                axis.major_tick_mark = xml_util::get_attr_str(e, b"val")
+                    .as_deref()
+                    .map(axis_tick_mark_for)
+                    .unwrap_or_default();
+            }
+            Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e))
+                if e.local_name().as_ref() == b"delete" =>
+            {
+                axis.deleted = ct_boolean(e);
             }
             Ok(Event::End(ref e)) if e.local_name().as_ref() == end_tag => break,
             Ok(Event::Eof) | Err(_) => break,
             _ => {}
         }
     }
-    title
+    axis
+}
+
+/// Read a `CT_Boolean` element's own state.
+///
+/// ECMA-376 defaults `val` to true, so a bare `<c:delete/>` or `<c:showVal/>`
+/// turns the flag on.
+fn ct_boolean(element: &quick_xml::events::BytesStart) -> bool {
+    xml_util::get_attr_str(element, b"val")
+        .map(|value| value == "1" || value == "true")
+        .unwrap_or(true)
+}
+
+/// Resolve a `<c:majorTickMark>` value to the side its ticks reach from.
+fn axis_tick_mark_for(value: &str) -> AxisTickMark {
+    match value {
+        "none" => AxisTickMark::None,
+        "in" => AxisTickMark::Inside,
+        "cross" => AxisTickMark::Cross,
+        _ => AxisTickMark::Outside,
+    }
 }
 
 /// Parse the chart title text from `<c:title>`.
@@ -397,24 +446,15 @@ fn parse_data_labels(reader: &mut Reader<&[u8]>) -> DataLabels {
     loop {
         let event = reader.read_event();
         match event {
-            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
-                let flag = |element: &quick_xml::events::BytesStart| -> bool {
-                    // ECMA-376 defaults every `CT_Boolean` to true, so a bare
-                    // `<c:showVal/>` turns the part on.
-                    xml_util::get_attr_str(element, b"val")
-                        .map(|value| value == "1" || value == "true")
-                        .unwrap_or(true)
-                };
-                match e.local_name().as_ref() {
-                    b"dLbl" => xml_util::skip_element(reader, b"dLbl"),
-                    b"showVal" => labels.show_value = flag(e),
-                    b"showCatName" => labels.show_category = flag(e),
-                    b"showSerName" => labels.show_series = flag(e),
-                    b"showPercent" => labels.show_percent = flag(e),
-                    b"separator" => in_separator = true,
-                    _ => {}
-                }
-            }
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => match e.local_name().as_ref() {
+                b"dLbl" => xml_util::skip_element(reader, b"dLbl"),
+                b"showVal" => labels.show_value = ct_boolean(e),
+                b"showCatName" => labels.show_category = ct_boolean(e),
+                b"showSerName" => labels.show_series = ct_boolean(e),
+                b"showPercent" => labels.show_percent = ct_boolean(e),
+                b"separator" => in_separator = true,
+                _ => {}
+            },
             Ok(Event::Text(ref text)) if in_separator => {
                 if let Ok(value) = text.xml_content() {
                     separator.push_str(value.as_ref());

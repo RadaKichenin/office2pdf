@@ -641,6 +641,10 @@ fn test_table_page_with_chart_at_row() {
         legend_position: LegendPosition::Right,
         category_axis_title: None,
         value_axis_title: None,
+        category_axis_major_tick_mark: AxisTickMark::Outside,
+        value_axis_major_tick_mark: AxisTickMark::Outside,
+        category_axis_deleted: false,
+        value_axis_deleted: false,
     };
 
     let page = Page::Sheet(SheetPage {
@@ -688,6 +692,10 @@ fn test_table_page_with_chart_at_end() {
         legend_position: LegendPosition::Right,
         category_axis_title: None,
         value_axis_title: None,
+        category_axis_major_tick_mark: AxisTickMark::Outside,
+        value_axis_major_tick_mark: AxisTickMark::Outside,
+        category_axis_deleted: false,
+        value_axis_deleted: false,
     };
 
     let page = Page::Sheet(SheetPage {

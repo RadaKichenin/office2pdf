@@ -272,6 +272,131 @@ const NICE_STEPS: [f64; 5] = [1.0, 2.0, 2.5, 5.0, 10.0];
 /// (issue #673).
 const CHART_AUTOMATIC_LINE: &str = "0.75pt + rgb(134, 134, 134)";
 
+/// Share of the tick-label font's ascent one major tick mark is long.
+///
+/// Office sizes a tick against the face labelling the axis rather than at a
+/// fixed length. Measured on its own exports: Calibri at 10/12/18/36pt gives
+/// 3.17/3.81/5.71/11.42pt and Arial at 10/18pt gives 3.02/5.43pt, each within
+/// 0.006pt of `size * usWinAscent / unitsPerEm / 3` for that face (issue #672).
+const CHART_TICK_ASCENT_FRACTION: f64 = 1.0 / 3.0;
+
+/// Ascent of Calibri over its em — the face Office labels chart axes with.
+///
+/// The tick labels' own faces are not resolved here, so every axis is measured
+/// against the default one.
+const CHART_LABEL_ASCENT_RATIO: f64 = 1950.0 / 2048.0;
+
+/// Size both plots print their value tick labels at.
+const VALUE_LABEL_PT: f64 = 8.0;
+
+/// Size the bar/column plot prints its category labels at.
+///
+/// The line plot prints its own a point smaller, so the two have separate
+/// constants rather than one shared "category label size" — a tick is measured
+/// against the labels of the plot that draws it.
+const AXIS_PLOT_CATEGORY_LABEL_PT: f64 = 9.0;
+
+/// Size the line/area plot prints its category labels at.
+const LINE_PLOT_CATEGORY_LABEL_PT: f64 = 8.0;
+
+/// The value every major unit of an axis reaching `nice_max` in `step`s sits
+/// on, from zero to the maximum inclusive.
+///
+/// The gridlines, the tick labels, and the tick marks all have to land on the
+/// same units, and stepping a float accumulates error, so they walk one list
+/// rather than each repeating the accumulation.
+fn major_units(nice_max: f64, step: f64) -> Vec<f64> {
+    let mut units: Vec<f64> = Vec::new();
+    let mut unit: f64 = 0.0;
+    // The accumulated error can leave the last unit a hair over `nice_max`,
+    // which would drop the axis' top gridline and label.
+    while unit <= nice_max + step * 1e-6 {
+        units.push(unit);
+        unit += step;
+    }
+    units
+}
+
+/// Length of a major tick mark on an axis labelled at `label_size_pt`.
+fn chart_major_tick_length(label_size_pt: f64) -> f64 {
+    label_size_pt * CHART_LABEL_ASCENT_RATIO * CHART_TICK_ASCENT_FRACTION
+}
+
+/// How far an axis' major ticks reach away from the plot and back into it, or
+/// `None` when the axis asks for no ticks at all.
+///
+/// `in` and `out` are the same length on opposite sides of the axis line, and
+/// `cross` is both at once rather than that length split between them: on
+/// PowerPoint's export of `tests/fixtures/pptx/bar-chart.pptx` the axis sits at
+/// y=390.10 and the ticks run 390.10..395.81 for `out`, 384.39..390.10 for `in`,
+/// and 384.39..395.81 for `cross` — 5.71pt each way, so a crossing tick is twice
+/// as long overall (issue #672).
+fn tick_reach(mark: AxisTickMark, label_size_pt: f64) -> Option<(f64, f64)> {
+    let length: f64 = chart_major_tick_length(label_size_pt);
+    match mark {
+        AxisTickMark::None => None,
+        AxisTickMark::Inside => Some((0.0, length)),
+        AxisTickMark::Outside => Some((length, 0.0)),
+        AxisTickMark::Cross => Some((length, length)),
+    }
+}
+
+/// Stroke the axis line down the plot's left edge.
+///
+/// The bar family used to stroke exactly one of its two edges: the left one
+/// when the bars ran horizontally and the bottom one when they ran vertically.
+/// Both of those are the category axis, so the value axis went unstroked in
+/// either orientation (issue #672).
+fn write_left_axis_line(out: &mut String, plot_x: f64, plot_y: f64, plot_h: f64) {
+    let _ = writeln!(
+        out,
+        "#place(top + left, dx: {}pt, dy: {}pt, line(end: (0pt, {}pt), stroke: {}))",
+        format_f64(plot_x),
+        format_f64(plot_y),
+        format_f64(plot_h),
+        CHART_AUTOMATIC_LINE
+    );
+}
+
+/// Stroke the axis line along the plot's bottom edge, at `axis_y`.
+fn write_bottom_axis_line(out: &mut String, plot_x: f64, axis_y: f64, plot_w: f64) {
+    let _ = writeln!(
+        out,
+        "#place(top + left, dx: {}pt, dy: {}pt, line(end: ({}pt, 0pt), stroke: {}))",
+        format_f64(plot_x),
+        format_f64(axis_y),
+        format_f64(plot_w),
+        CHART_AUTOMATIC_LINE
+    );
+}
+
+/// Stroke one major tick across the axis line running under the plot, at `x`:
+/// `outward` reaches below the axis and `inward` back up into the plot.
+fn write_tick_under_plot(out: &mut String, x: f64, axis_y: f64, (outward, inward): (f64, f64)) {
+    let _ = writeln!(
+        out,
+        "#place(top + left, dx: {}pt, dy: {}pt, line(end: (0pt, {}pt), stroke: {}))",
+        format_f64(x),
+        format_f64(axis_y - inward),
+        format_f64(outward + inward),
+        CHART_AUTOMATIC_LINE
+    );
+}
+
+/// Stroke one major tick across the axis line running down the plot's left
+/// edge, at `y`: `outward` reaches left of the axis and `inward` back into the
+/// plot.
+fn write_tick_left_of_plot(out: &mut String, axis_x: f64, y: f64, (outward, inward): (f64, f64)) {
+    let _ = writeln!(
+        out,
+        "#place(top + left, dx: {}pt, dy: {}pt, line(end: ({}pt, 0pt), stroke: {}))",
+        format_f64(axis_x - outward),
+        format_f64(y),
+        format_f64(outward + inward),
+        CHART_AUTOMATIC_LINE
+    );
+}
+
 const PLOT_MAIN: f64 = 300.0; // value-axis length in points
 const ROW: f64 = 34.0; // per-category thickness
 const LABEL_W: f64 = 62.0; // category label gutter
@@ -594,9 +719,20 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
         plot_w / categories as f64
     };
 
+    // `<c:delete val="1"/>` switches an axis off: Office then draws neither its
+    // line, nor its tick marks, nor its tick labels. Gridlines are a chart
+    // element of their own — switching the axis off leaves them standing — so
+    // only the axis' own furniture answers to this.
+    //
+    // TODO(gutter reflow): `axis_label_gutters` still reserves the band a
+    // switched-off axis' labels would have printed in, so the plot keeps the
+    // size and position it has with them drawn. Office reclaims that space.
+    let value_axis_drawn: bool = !chart.value_axis_deleted;
+    let category_axis_drawn: bool = !chart.category_axis_deleted;
+
     // Gridlines + value tick labels.
-    let mut tick: f64 = 0.0;
-    while tick <= nice_max + step * 1e-6 {
+    let major_units: Vec<f64> = major_units(nice_max, step);
+    for tick in &major_units {
         let frac: f64 = tick / nice_max;
         if horizontal {
             let x: f64 = plot_x + frac * plot_w;
@@ -608,13 +744,16 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 format_f64(plot_h),
                 CHART_AUTOMATIC_LINE
             );
-            let _ = writeln!(
-                out,
-                "#place(top + left, dx: {}pt, dy: {}pt, box(width: 24pt)[#align(center)[#text(size: 8pt)[{}]]])",
-                format_f64(x - 12.0),
-                format_f64(plot_y + plot_h + 4.0),
-                chart_value_label(tick)
-            );
+            if value_axis_drawn {
+                let _ = writeln!(
+                    out,
+                    "#place(top + left, dx: {}pt, dy: {}pt, box(width: 24pt)[#align(center)[#text(size: {}pt)[{}]]])",
+                    format_f64(x - 12.0),
+                    format_f64(plot_y + plot_h + 4.0),
+                    format_f64(VALUE_LABEL_PT),
+                    chart_value_label(*tick)
+                );
+            }
         } else {
             let y: f64 = plot_y + (1.0 - frac) * plot_h;
             let _ = writeln!(
@@ -625,15 +764,17 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 format_f64(plot_w),
                 CHART_AUTOMATIC_LINE
             );
-            let _ = writeln!(
-                out,
-                "#place(top + left, dx: 0pt, dy: {}pt, box(width: {}pt, height: 10pt)[#align(right + horizon)[#text(size: 8pt)[{}]]])",
-                format_f64(y - 5.0),
-                format_f64(TICK_GAP),
-                chart_value_label(tick)
-            );
+            if value_axis_drawn {
+                let _ = writeln!(
+                    out,
+                    "#place(top + left, dx: 0pt, dy: {}pt, box(width: {}pt, height: 10pt)[#align(right + horizon)[#text(size: {}pt)[{}]]])",
+                    format_f64(y - 5.0),
+                    format_f64(TICK_GAP),
+                    format_f64(VALUE_LABEL_PT),
+                    chart_value_label(*tick)
+                );
+            }
         }
-        tick += step;
     }
 
     // Bars, grouped per category when multiple series are present.
@@ -728,49 +869,84 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 stack_base += frac;
             }
         }
-        // Category label.
+        // Category label, which goes with the axis it labels.
+        if !category_axis_drawn {
+            continue;
+        }
         if horizontal {
             let row_top: f64 = plot_h - (cat_index as f64 + 1.0) * row;
             let _ = writeln!(
                 out,
-                "#place(top + left, dx: 0pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(right + horizon)[#text(size: 9pt)[{}]]])",
+                "#place(top + left, dx: 0pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(right + horizon)[#text(size: {}pt)[{}]]])",
                 format_f64(row_top),
                 format_f64(LABEL_W),
                 format_f64(row),
+                format_f64(AXIS_PLOT_CATEGORY_LABEL_PT),
                 escape_typst(category)
             );
         } else {
             let _ = writeln!(
                 out,
-                "#place(top + left, dx: {}pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(center + horizon)[#text(size: 9pt)[{}]]])",
+                "#place(top + left, dx: {}pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(center + horizon)[#text(size: {}pt)[{}]]])",
                 format_f64(plot_x + group_start),
                 format_f64(plot_y + plot_h + 2.0),
                 format_f64(row),
                 format_f64(ROW),
+                format_f64(AXIS_PLOT_CATEGORY_LABEL_PT),
                 escape_typst(category)
             );
         }
     }
 
-    // Axis baseline (value = 0 line).
-    if horizontal {
-        let _ = writeln!(
-            out,
-            "#place(top + left, dx: {}pt, dy: {}pt, line(end: (0pt, {}pt), stroke: {}))",
-            format_f64(plot_x),
-            format_f64(plot_y),
-            format_f64(plot_h),
-            CHART_AUTOMATIC_LINE
-        );
+    // The axis lines and their major tick marks, drawn after the bars so they
+    // paint on top as Office paints them — an inward tick would otherwise
+    // disappear under the bar it crosses.
+    //
+    // A bar chart's value axis runs along the bottom edge and its category axis
+    // down the left one; a column chart's are the other way round.
+    let (left_axis_drawn, bottom_axis_drawn) = if horizontal {
+        (category_axis_drawn, value_axis_drawn)
     } else {
-        let _ = writeln!(
-            out,
-            "#place(top + left, dx: {}pt, dy: {}pt, line(end: ({}pt, 0pt), stroke: {}))",
-            format_f64(plot_x),
-            format_f64(plot_y + plot_h),
-            format_f64(plot_w),
-            CHART_AUTOMATIC_LINE
-        );
+        (value_axis_drawn, category_axis_drawn)
+    };
+    if left_axis_drawn {
+        write_left_axis_line(out, plot_x, plot_y, plot_h);
+    }
+    if bottom_axis_drawn {
+        write_bottom_axis_line(out, plot_x, plot_y + plot_h, plot_w);
+    }
+    if value_axis_drawn
+        && let Some(reach) = tick_reach(chart.value_axis_major_tick_mark, VALUE_LABEL_PT)
+    {
+        // Every value tick sits on its own gridline, both being one major unit.
+        for tick in &major_units {
+            let frac: f64 = tick / nice_max;
+            if horizontal {
+                write_tick_under_plot(out, plot_x + frac * plot_w, plot_y + plot_h, reach);
+            } else {
+                write_tick_left_of_plot(out, plot_x, plot_y + (1.0 - frac) * plot_h, reach);
+            }
+        }
+    }
+    // The category ticks land on band boundaries rather than band centres:
+    // `<c:crossBetween val="between"/>` sits each band between two ticks, so
+    // the bars, which fill the bands, sit between them too and three categories
+    // take four ticks.
+    if categories > 0
+        && category_axis_drawn
+        && let Some(reach) = tick_reach(
+            chart.category_axis_major_tick_mark,
+            AXIS_PLOT_CATEGORY_LABEL_PT,
+        )
+    {
+        for boundary in 0..=categories {
+            let offset: f64 = boundary as f64 * row;
+            if horizontal {
+                write_tick_left_of_plot(out, plot_x, plot_y + offset, reach);
+            } else {
+                write_tick_under_plot(out, plot_x + offset, plot_y + plot_h, reach);
+            }
+        }
     }
 
     // Axis titles, in the bands `axis_title_gutters` reserved for them.
@@ -892,7 +1068,6 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
     const CAT_GAP: f64 = 18.0; // category label gutter (bottom)
     const LEGEND_W: f64 = 88.0;
     const LINE_LEGEND_ROW_H: f64 = 16.0;
-    const INSET: f64 = 10.0; // keep first/last points off the axes
     const GAP: f64 = 6.0;
 
     let categories: usize = chart.categories.len();
@@ -950,9 +1125,13 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
         format_f64(total_h)
     );
 
+    // `<c:delete val="1"/>` switches an axis off; see `generate_chart_axis`.
+    let value_axis_drawn: bool = !chart.value_axis_deleted;
+    let category_axis_drawn: bool = !chart.category_axis_deleted;
+
     // Horizontal gridlines + value tick labels.
-    let mut tick: f64 = 0.0;
-    while tick <= nice_max + step * 1e-6 {
+    let major_units: Vec<f64> = major_units(nice_max, step);
+    for tick in &major_units {
         let y: f64 = plot_y + (1.0 - tick / nice_max) * plot_h;
         let _ = writeln!(
             out,
@@ -962,36 +1141,50 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
             format_f64(plot_w),
             CHART_AUTOMATIC_LINE
         );
-        let _ = writeln!(
-            out,
-            "#place(top + left, dx: 0pt, dy: {}pt, box(width: {}pt, height: 10pt)[#align(right + horizon)[#text(size: 8pt)[{}]]])",
-            format_f64(y - 5.0),
-            format_f64(VALUE_GAP),
-            chart_value_label(tick)
-        );
-        tick += step;
+        if value_axis_drawn {
+            let _ = writeln!(
+                out,
+                "#place(top + left, dx: 0pt, dy: {}pt, box(width: {}pt, height: 10pt)[#align(right + horizon)[#text(size: {}pt)[{}]]])",
+                format_f64(y - 5.0),
+                format_f64(VALUE_GAP),
+                format_f64(VALUE_LABEL_PT),
+                chart_value_label(*tick)
+            );
+        }
     }
 
-    let point_x = |index: usize| -> f64 {
-        if categories <= 1 {
-            plot_x + plot_w / 2.0
-        } else {
-            plot_x + INSET + (index as f64 / (categories as f64 - 1.0)) * (plot_w - 2.0 * INSET)
-        }
-    };
+    // The category axis is split into one band per category, and both the point
+    // and its label sit at their band's centre — `<c:crossBetween val="between"/>`,
+    // which is what every category axis in the fixture corpus asks for and what
+    // the category tick marks below are the boundaries of. PowerPoint's own
+    // export of `tests/fixtures/pptx/line-chart.pptx` spaces its four points
+    // 90.91pt apart over a 363.65pt axis, the first of them half a band in
+    // (issue #672).
+    //
+    // TODO(crossBetween): the element itself is not parsed, so an axis asking
+    // for `midCat` — points on the boundaries, the series spanning the plot
+    // edge to edge — is laid out as `between` as well.
+    //
+    // `chart_variant` only routes a chart with two categories or more here, but
+    // the band width still has to be safe if that ever changes.
+    let band_w: f64 = plot_w / categories.max(1) as f64;
+    let point_x = |index: usize| -> f64 { plot_x + (index as f64 + 0.5) * band_w };
     let point_y =
         |value: f64| -> f64 { plot_y + (1.0 - (value / nice_max).clamp(0.0, 1.0)) * plot_h };
 
     // Category axis labels.
-    for (index, category) in chart.categories.iter().enumerate() {
-        let x: f64 = point_x(index);
-        let _ = writeln!(
-            out,
-            "#place(top + left, dx: {}pt, dy: {}pt, box(width: 24pt)[#align(center)[#text(size: 8pt)[{}]]])",
-            format_f64(x - 12.0),
-            format_f64(plot_y + plot_h + 3.0),
-            escape_typst(category)
-        );
+    if category_axis_drawn {
+        for (index, category) in chart.categories.iter().enumerate() {
+            let x: f64 = point_x(index);
+            let _ = writeln!(
+                out,
+                "#place(top + left, dx: {}pt, dy: {}pt, box(width: 24pt)[#align(center)[#text(size: {}pt)[{}]]])",
+                format_f64(x - 12.0),
+                format_f64(plot_y + plot_h + 3.0),
+                format_f64(LINE_PLOT_CATEGORY_LABEL_PT),
+                escape_typst(category)
+            );
+        }
     }
 
     // Series polylines + markers.
@@ -1025,23 +1218,42 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
         }
     }
 
-    // Value/category axis lines.
-    let _ = writeln!(
-        out,
-        "#place(top + left, dx: {}pt, dy: {}pt, line(end: (0pt, {}pt), stroke: {}))",
-        format_f64(plot_x),
-        format_f64(plot_y),
-        format_f64(plot_h),
-        CHART_AUTOMATIC_LINE
-    );
-    let _ = writeln!(
-        out,
-        "#place(top + left, dx: {}pt, dy: {}pt, line(end: ({}pt, 0pt), stroke: {}))",
-        format_f64(plot_x),
-        format_f64(plot_y + plot_h),
-        format_f64(plot_w),
-        CHART_AUTOMATIC_LINE
-    );
+    // Value/category axis lines and their major tick marks. The value axis
+    // always runs down the left edge here and the category axis along the
+    // bottom, whatever shape the series take.
+    if value_axis_drawn {
+        write_left_axis_line(out, plot_x, plot_y, plot_h);
+    }
+    if category_axis_drawn {
+        write_bottom_axis_line(out, plot_x, plot_y + plot_h, plot_w);
+    }
+    if value_axis_drawn
+        && let Some(reach) = tick_reach(chart.value_axis_major_tick_mark, VALUE_LABEL_PT)
+    {
+        // Every value tick sits on its own gridline, both being one major unit.
+        for tick in &major_units {
+            let y: f64 = plot_y + (1.0 - tick / nice_max) * plot_h;
+            write_tick_left_of_plot(out, plot_x, y, reach);
+        }
+    }
+    // The boundaries of the bands `point_x` centres each category in, so every
+    // category label sits midway between two ticks.
+    if categories > 0
+        && category_axis_drawn
+        && let Some(reach) = tick_reach(
+            chart.category_axis_major_tick_mark,
+            LINE_PLOT_CATEGORY_LABEL_PT,
+        )
+    {
+        for boundary in 0..=categories {
+            write_tick_under_plot(
+                out,
+                plot_x + boundary as f64 * band_w,
+                plot_y + plot_h,
+                reach,
+            );
+        }
+    }
 
     // Legend on the edge `<c:legendPos>` asks for.
     for (s_index, s) in series.iter().enumerate() {
