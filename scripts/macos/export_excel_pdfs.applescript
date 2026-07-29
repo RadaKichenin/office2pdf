@@ -26,8 +26,13 @@ on run argv
                             set visibleSheetCount to visibleSheetCount + 1
                             set outputPath to outputDirectory & "/" & outputId & "-sheet-" & my paddedIndex(sheetIndex) & ".pdf"
                             set outputFile to my createEmptyFile(outputPath)
+                            -- Excel's PDF save as always exports every visible sheet of the
+                            -- workbook, so hiding the others is the only way to scope the
+                            -- export to just this worksheet.
+                            set hiddenSheetNames to my hideOtherVisibleSheets(openedWorkbook, name of currentSheet)
                             save as currentSheet filename outputFile file format PDF file format
                             my waitForNonEmptyFile(outputPath)
+                            my restoreSheetVisibility(openedWorkbook, hiddenSheetNames)
                         end if
                     end repeat
 
@@ -48,6 +53,35 @@ on run argv
 
     if (count failures) > 0 then error my joinLines(failures)
 end run
+
+on hideOtherVisibleSheets(openedWorkbook, currentSheetName)
+    set hiddenSheetNames to {}
+    tell application "Microsoft Excel"
+        -- Iterate every sheet (not just worksheets) so chart sheets are hidden
+        -- too; match by name because object-specifier equality is unreliable.
+        -- The explicit `get` materializes the list before iterating: a bare
+        -- `repeat with x in (every sheet of wb)` re-resolves `item N of
+        -- (every sheet ...)` per iteration, which Excel rejects with
+        -- parameter error -50 even though `get every sheet` succeeds.
+        repeat with candidateSheet in (get every sheet of openedWorkbook)
+            if (name of candidateSheet) is not currentSheetName then
+                if visible of candidateSheet is sheet visible then
+                    set visible of candidateSheet to sheet hidden
+                    set end of hiddenSheetNames to (name of candidateSheet)
+                end if
+            end if
+        end repeat
+    end tell
+    return hiddenSheetNames
+end hideOtherVisibleSheets
+
+on restoreSheetVisibility(openedWorkbook, hiddenSheetNames)
+    tell application "Microsoft Excel"
+        repeat with hiddenSheetName in hiddenSheetNames
+            set visible of sheet (hiddenSheetName as text) of openedWorkbook to sheet visible
+        end repeat
+    end tell
+end restoreSheetVisibility
 
 on removePreviousSheetPdfs(outputDirectory, outputId)
     set filePattern to outputId & "-sheet-*.pdf"
