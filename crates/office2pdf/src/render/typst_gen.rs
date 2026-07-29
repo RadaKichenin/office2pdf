@@ -76,6 +76,17 @@ const FLOATING_TEXT_BOX_TOP_LEADING_COMPENSATION_PT: f64 = 6.0;
 /// has to travel with it (issue #605).
 const PAGE_FORMAT_STATE: &str = "o2p-page-format";
 
+/// The indent a contents entry takes per level below the first.
+///
+/// Word's built-in `TOC<n>` styles step the left indent by a flat amount; a
+/// native export of the technical brief puts level 1 on the left margin at
+/// 65.04pt and level 2 exactly 20pt in (issue #610).
+const TOC_LEVEL_INDENT_PT: f64 = 20.0;
+
+/// The gap Word leaves below a contents entry. The same export prints a
+/// 24.96pt entry pitch on 10.08pt text, which is this gap plus the line.
+const TOC_ENTRY_SPACING_PT: f64 = 17.8;
+
 /// Internal context for tracking image assets during code generation.
 struct GenCtx {
     images: Vec<ImageAsset>,
@@ -101,6 +112,9 @@ struct GenCtx {
     /// w:fmt` reaches the field through the context rather than through the
     /// inline, which carries only the run properties (issue #582).
     page_number_format: PageNumberFormat,
+    /// `w:docDefaults/w:rPrDefault` — the family and size a computed contents
+    /// entry is laid out in, rather than the heading's own (issue #610).
+    document_default_text: Option<crate::ir::TextStyle>,
 }
 
 impl GenCtx {
@@ -113,6 +127,7 @@ impl GenCtx {
             line_grid_pitch: None,
             row_has_east_asian_text: false,
             page_number_format: PageNumberFormat::default(),
+            document_default_text: None,
             document_default_tab_stop_pt: None,
             default_tab_width_pt: DEFAULT_TAB_WIDTH_PT,
             at_document_start: true,
@@ -317,6 +332,7 @@ pub(crate) fn generate_typst_with_options_and_font_context(
 
         let mut ctx = GenCtx::new();
         ctx.document_default_tab_stop_pt = doc.styles.default_tab_stop_pt;
+        ctx.document_default_text = doc.styles.default_text.clone();
         for (index, page) in doc.pages.iter().enumerate() {
             if index > 0 {
                 out.push_str("\n#pagebreak()\n");
@@ -1693,6 +1709,23 @@ fn generate_floating_anchor_group(
     Ok(consumed)
 }
 
+/// The `#set text(...)` a contents entry is laid out in.
+///
+/// Word lays every entry out in body text — the document default family and
+/// size — whatever the heading it points at looks like. Without this the
+/// entries fall back to Typst's own 11pt Libertinus Serif, because the entry
+/// text is a bare string carrying no formatting of its own (issue #610).
+fn toc_entry_text_settings(default_text: Option<&crate::ir::TextStyle>) -> String {
+    let Some(default_text) = default_text else {
+        return String::new();
+    };
+    let mut settings = String::new();
+    if let Some(size) = default_text.font_size {
+        let _ = write!(settings, "set text(size: {}pt); ", format_f64(size));
+    }
+    settings
+}
+
 /// Declare the page-format state and teach the outline to read it back.
 ///
 /// Typst numbers an outline entry from the page counter alone, which renders
@@ -1733,10 +1766,22 @@ fn write_page_format_state(out: &mut String) {
 /// section declared: the heading outline through the `show` rule
 /// [`write_page_format_state`] installs, the caption list through the same
 /// lookup written into the row it builds here (issue #605).
-fn generate_table_of_contents(out: &mut String, contents: &TableOfContents) {
+fn generate_table_of_contents(out: &mut String, contents: &TableOfContents, ctx: &GenCtx) {
     match contents {
         TableOfContents::Headings { depth } => {
-            let _ = writeln!(out, "#outline(title: none, depth: {depth})");
+            // Word lays a contents entry out as body text indented by its
+            // level, not as a copy of the heading. Typst's own outline builds
+            // each entry from the heading's content, which carries the
+            // heading's size and weight as inline markup, so the entries came
+            // out large and bold (issue #610). Build the list from the plain
+            // text each heading drops instead, and style it here.
+            let _ = writeln!(
+                out,
+                "#context {{ {entry_style}for entry in query(<{TOC_ENTRY_LABEL}>) {{                  if entry.value.level <= {depth} {{                  let target = entry.location();                  let shown = numbering({PAGE_FORMAT_STATE}.at(target),                  ..counter(page).at(target));                  block(below: {}pt)[#h({}pt * (entry.value.level - 1))                 #text(font: entry.value.font)[#link(target, entry.value.text)]                  #box(width: 1fr, repeat[.]) #shown] }} }} }}",
+                format_f64(TOC_ENTRY_SPACING_PT),
+                format_f64(TOC_LEVEL_INDENT_PT),
+                entry_style = toc_entry_text_settings(ctx.document_default_text.as_ref()),
+            );
         }
         // A caption is not a heading, so Typst's outline cannot reach it. Each
         // one drops an invisible `#metadata` under a per-identifier label as it
@@ -1782,7 +1827,7 @@ fn generate_block(out: &mut String, block: &Block, ctx: &mut GenCtx) -> Result<(
             generate_paragraph(out, para, ctx.line_grid_pitch, ctx.default_tab_width_pt)
         }
         Block::TableOfContents(contents) => {
-            generate_table_of_contents(out, contents);
+            generate_table_of_contents(out, contents, ctx);
             Ok(())
         }
         Block::Caption(caption) => {

@@ -65,6 +65,23 @@ pub(super) fn generate_paragraph(
                 style.border_space.as_deref().copied().unwrap_or_default(),
             );
         }
+        // A contents entry is laid out as body text, not as a copy of the
+        // heading, so it cannot be built from the heading's rendered content —
+        // the size and weight are inline markup inside it and no enclosing set
+        // rule beats them. Drop the heading's plain text under a label instead
+        // and let the list style it (issue #610), the same shape the caption
+        // lists already use.
+        let plain: String = paragraph_plain_text(&para.runs);
+        let _ = writeln!(
+            out,
+            "#metadata((level: {level}, text: \"{}\", font: {}))<{}>",
+            escape_typst_string(&plain),
+            crate::render::font_subst::font_with_fallbacks_for_text(
+                first_run_family(&para.runs).unwrap_or("Calibri"),
+                &plain,
+            ),
+            TOC_ENTRY_LABEL
+        );
         let _ = write!(out, "#heading(level: {level})[");
         generate_runs_with_tabs(
             out,
@@ -1490,4 +1507,24 @@ pub(super) fn escape_typst(text: &str) -> String {
         char_index += 1;
     }
     result
+}
+
+/// The Typst label a heading's contents-entry marker carries.
+pub(super) const TOC_ENTRY_LABEL: &str = "o2p-toc";
+
+/// A heading's text with no markup, for the contents entry that points at it.
+fn paragraph_plain_text(runs: &[Run]) -> String {
+    runs.iter().map(|run| run.text.as_str()).collect()
+}
+
+/// Escape a Rust string for use inside a Typst double-quoted string literal.
+fn escape_typst_string(text: &str) -> String {
+    text.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+/// The family the heading's first run names, for the contents entry's own
+/// fallback chain — a Korean entry needs the Korean face even though the entry
+/// is laid out at body size (issue #610).
+fn first_run_family(runs: &[Run]) -> Option<&str> {
+    runs.iter().find_map(|run| run.style.font_family.as_deref())
 }

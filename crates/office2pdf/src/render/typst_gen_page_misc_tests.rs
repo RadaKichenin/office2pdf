@@ -1457,8 +1457,15 @@ fn test_contents_block_emits_an_outline_at_its_declared_depth() {
 
     let output = generate_typst(&doc).unwrap();
     assert!(
-        output.source.contains("#outline(title: none, depth: 3)"),
-        "the contents block resolves against the document's headings: {}",
+        output.source.contains("query(<o2p-toc>)") && output.source.contains("level <= 3"),
+        "the contents block resolves against the document's headings, to its          declared depth: {}",
+        output.source
+    );
+    assert!(
+        output
+            .source
+            .contains("#metadata((level: 1, text: \"1. 개요\""),
+        "each heading drops the plain text its entry is built from: {}",
         output.source
     );
 }

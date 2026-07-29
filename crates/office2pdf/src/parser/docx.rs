@@ -448,6 +448,10 @@ impl Parser for DocxParser {
                 pages,
                 styles: StyleSheet {
                     default_tab_stop_pt,
+                    default_text: Some(extract_doc_default_text_style_with_theme(
+                        &docx.styles,
+                        &theme_fonts,
+                    )),
                     ..StyleSheet::default()
                 },
             },
