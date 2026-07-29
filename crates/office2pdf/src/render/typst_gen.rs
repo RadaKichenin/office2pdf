@@ -83,9 +83,21 @@ const PAGE_FORMAT_STATE: &str = "o2p-page-format";
 /// 65.04pt and level 2 exactly 20pt in (issue #610).
 const TOC_LEVEL_INDENT_PT: f64 = 20.0;
 
-/// The gap Word leaves below a contents entry. The same export prints a
-/// 24.96pt entry pitch on 10.08pt text, which is this gap plus the line.
+/// The indent a `TOC \a` caption-list entry takes. The same export puts the
+/// figure and table lists' entries at 105.04pt against a 65.04pt margin — two
+/// of the heading list's level steps (issue #611).
+const CAPTION_LIST_INDENT_PT: f64 = 40.0;
+
+/// The gap below a heading-list entry. Word prints a 24.96pt entry pitch on
+/// the technical brief's contents page; the pitch is this gap plus the line
+/// the entry's own font takes, so it is calibrated against that font.
 const TOC_ENTRY_SPACING_PT: f64 = 17.8;
+
+/// The same gap for a caption list. Word prints the same 24.96pt pitch there,
+/// but its entries are Korean throughout where the contents page mixes
+/// scripts, and the taller Korean line needs 1.4pt less gap to land on it
+/// (issue #611).
+const CAPTION_ENTRY_SPACING_PT: f64 = 16.4;
 
 /// Internal context for tracking image assets during code generation.
 struct GenCtx {
@@ -1792,11 +1804,14 @@ fn generate_table_of_contents(out: &mut String, contents: &TableOfContents, ctx:
             let label = caption_label(identifier);
             let _ = writeln!(
                 out,
-                "#context {{ for entry in query(<{label}>) {{ \
+                "#context {{ {entry_style}for entry in query(<{label}>) {{ \
                  let target = entry.location(); \
                  let shown = numbering({PAGE_FORMAT_STATE}.at(target), \
                  ..counter(page).at(target)); \
-                 block(below: 0.65em)[#entry.value #box(width: 1fr, repeat[.]) #shown] }} }}"
+                 block(below: {}pt)[#h({}pt)#entry.value                  #box(width: 1fr, repeat[.]) #shown] }} }}",
+                format_f64(CAPTION_ENTRY_SPACING_PT),
+                format_f64(CAPTION_LIST_INDENT_PT),
+                entry_style = toc_entry_text_settings(ctx.document_default_text.as_ref()),
             );
         }
     }
