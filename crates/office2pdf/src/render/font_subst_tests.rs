@@ -270,7 +270,7 @@ fn test_font_with_fallbacks_pretendard_variant_includes_base_family() {
 fn test_resolve_available_fallback_prefers_alias_before_system_fallback() {
     let context =
         FontSearchContext::for_test(Vec::new(), &["Pretendard", "Apple SD Gothic Neo"], &[], &[]);
-    let fallback = resolve_available_fallback("Pretendard Medium", &context);
+    let fallback = resolve_available_fallback("Pretendard Medium", TextScript::Latin, &context);
     assert_eq!(fallback.as_deref(), Some("Pretendard"));
 }
 
@@ -337,6 +337,122 @@ fn test_detect_missing_font_fallbacks_with_context_prefers_office_font() {
         fallbacks,
         vec![("Pretendard Medium".to_string(), "Malgun Gothic".to_string())]
     );
+}
+
+/// A Korean workbook whose styles name a Simplified Chinese Latin face must
+/// report the face the text actually lands on.
+///
+/// `Noto Sans CJK SC`'s substitute chain reaches Microsoft YaHei, but the run
+/// holds Hangul, so the renderer's script chain puts Malgun Gothic ahead of it
+/// and that is what the PDF embeds. Reporting the substitute sends anyone
+/// debugging Korean output after a YaHei substitution that never happened
+/// (issue #617).
+#[test]
+fn test_detect_missing_font_fallbacks_reports_script_resolved_face() {
+    let context = FontSearchContext::for_test(
+        Vec::new(),
+        &["Microsoft YaHei", "Malgun Gothic"],
+        &["Microsoft YaHei", "Malgun Gothic"],
+        &[],
+    );
+    let doc = korean_document_requesting("Noto Sans CJK SC", "견적서");
+
+    let fallbacks = detect_missing_font_fallbacks_with_context(&doc, &context);
+    assert_eq!(
+        fallbacks,
+        vec![("Noto Sans CJK SC".to_string(), "Malgun Gothic".to_string())]
+    );
+}
+
+/// The same family over Latin-only text has no script chain to consult, so the
+/// metric substitute is what renders and what the warning must name.
+#[test]
+fn test_detect_missing_font_fallbacks_reports_substitute_for_latin_text() {
+    let context = FontSearchContext::for_test(
+        Vec::new(),
+        &["Microsoft YaHei", "Malgun Gothic"],
+        &["Microsoft YaHei", "Malgun Gothic"],
+        &[],
+    );
+    let doc = korean_document_requesting("Noto Sans CJK SC", "Quotation");
+
+    let fallbacks = detect_missing_font_fallbacks_with_context(&doc, &context);
+    assert_eq!(
+        fallbacks,
+        vec![(
+            "Noto Sans CJK SC".to_string(),
+            "Microsoft YaHei".to_string()
+        )]
+    );
+}
+
+/// One family carrying two scripts resolves differently per script, so both
+/// resolutions are reported rather than one standing in for the other.
+#[test]
+fn test_detect_missing_font_fallbacks_reports_each_script_separately() {
+    let context = FontSearchContext::for_test(
+        Vec::new(),
+        &["Microsoft YaHei", "Malgun Gothic"],
+        &["Microsoft YaHei", "Malgun Gothic"],
+        &[],
+    );
+    let mut doc = korean_document_requesting("Noto Sans CJK SC", "견적서");
+    let Page::Flow(page) = &mut doc.pages[0] else {
+        unreachable!("korean_document_requesting builds a flow page")
+    };
+    page.content.push(Block::Paragraph(Paragraph {
+        style: crate::ir::ParagraphStyle::default(),
+        runs: vec![crate::ir::Run {
+            text: "Quotation".to_string(),
+            style: crate::ir::TextStyle {
+                font_family: Some("Noto Sans CJK SC".to_string()),
+                ..crate::ir::TextStyle::default()
+            },
+            href: None,
+            footnote: None,
+        }],
+    }));
+
+    let fallbacks = detect_missing_font_fallbacks_with_context(&doc, &context);
+    assert_eq!(
+        fallbacks,
+        vec![
+            ("Noto Sans CJK SC".to_string(), "Malgun Gothic".to_string()),
+            (
+                "Noto Sans CJK SC".to_string(),
+                "Microsoft YaHei".to_string()
+            ),
+        ]
+    );
+}
+
+fn korean_document_requesting(font_family: &str, text: &str) -> Document {
+    Document {
+        metadata: crate::ir::Metadata::default(),
+        pages: vec![Page::Flow(crate::ir::FlowPage {
+            size: crate::ir::PageSize::default(),
+            margins: crate::ir::Margins::default(),
+            content: vec![Block::Paragraph(Paragraph {
+                style: crate::ir::ParagraphStyle::default(),
+                runs: vec![crate::ir::Run {
+                    text: text.to_string(),
+                    style: crate::ir::TextStyle {
+                        font_family: Some(font_family.to_string()),
+                        ..crate::ir::TextStyle::default()
+                    },
+                    href: None,
+                    footnote: None,
+                }],
+            })],
+            header: None,
+            footer: None,
+            columns: None,
+            line_grid_pitch: None,
+            line_grid_snaps_lines: false,
+            page_numbering: None,
+        })],
+        styles: crate::ir::StyleSheet::default(),
+    }
 }
 
 #[test]
