@@ -307,7 +307,7 @@ pub fn is_primary_font_available(font_family: &str) -> bool {
     })
 }
 
-/// Faces that cover a script, in the order Word and PowerPoint reach for them.
+/// The East Asian script a run's text is written in, as font selection sees it.
 ///
 /// A run states a family; the text states a script, and the two need not agree.
 /// A PowerPoint run can declare `<a:ea typeface="Calibri"/>` over Hangul, and a
@@ -316,43 +316,70 @@ pub fn is_primary_font_available(font_family: &str) -> bool {
 /// the chain it carries has none either, so the text landed on whatever the
 /// font book happened to offer first — Gulim, which has no bold member at all
 /// (#543), or a Chinese face 13.5% narrower than the one Excel picks (#537).
-///
-/// Appending the script's own faces lets the per-glyph fallback answer the
-/// question the text asks rather than the one its family name asks.
-fn script_fallbacks(text: &str) -> &'static [&'static str] {
-    const KOREAN: &[&str] = &[
-        "Malgun Gothic",
-        "Apple SD Gothic Neo",
-        "Noto Sans CJK KR",
-        "Arial Unicode MS",
-    ];
-    const JAPANESE: &[&str] = &[
-        "Yu Gothic",
-        "Hiragino Sans",
-        "Noto Sans CJK JP",
-        "MS Gothic",
-    ];
-    const CHINESE: &[&str] = &[
-        "Microsoft YaHei",
-        "PingFang SC",
-        "Noto Sans CJK SC",
-        "SimSun",
-    ];
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum TextScript {
+    /// No East Asian character appears, so no script chain applies.
+    Latin,
+    Korean,
+    Japanese,
+    Chinese,
+}
 
+impl TextScript {
+    /// Faces that cover the script, in the order Word and PowerPoint reach for
+    /// them.
+    ///
+    /// Appending these lets the per-glyph fallback answer the question the text
+    /// asks rather than the one its family name asks.
+    fn fallbacks(self) -> &'static [&'static str] {
+        match self {
+            Self::Latin => &[],
+            Self::Korean => &[
+                "Malgun Gothic",
+                "Apple SD Gothic Neo",
+                "Noto Sans CJK KR",
+                "Arial Unicode MS",
+            ],
+            Self::Japanese => &[
+                "Yu Gothic",
+                "Hiragino Sans",
+                "Noto Sans CJK JP",
+                "MS Gothic",
+            ],
+            Self::Chinese => &[
+                "Microsoft YaHei",
+                "PingFang SC",
+                "Noto Sans CJK SC",
+                "SimSun",
+            ],
+        }
+    }
+}
+
+/// Classify `text` by the first script-specific character it carries.
+pub(crate) fn text_script(text: &str) -> TextScript {
     let mut has_han = false;
     for character in text.chars() {
         match character as u32 {
             // Hangul syllables, Jamo, and compatibility Jamo.
-            0xAC00..=0xD7AF | 0x1100..=0x11FF | 0x3130..=0x318F => return KOREAN,
+            0xAC00..=0xD7AF | 0x1100..=0x11FF | 0x3130..=0x318F => return TextScript::Korean,
             // Hiragana and Katakana.
-            0x3040..=0x30FF => return JAPANESE,
+            0x3040..=0x30FF => return TextScript::Japanese,
             // Han, which Korean and Japanese also use — only decisive when no
             // script-specific character appears anywhere in the run.
             0x4E00..=0x9FFF | 0x3400..=0x4DBF => has_han = true,
             _ => {}
         }
     }
-    if has_han { CHINESE } else { &[] }
+    if has_han {
+        TextScript::Chinese
+    } else {
+        TextScript::Latin
+    }
+}
+
+fn script_fallbacks(text: &str) -> &'static [&'static str] {
+    text_script(text).fallbacks()
 }
 
 /// The font list for `family` covering the script `text` is written in.
@@ -476,10 +503,15 @@ pub(crate) fn with_font_search_context<T>(
     })
 }
 
-/// Walk the IR tree rooted at a `Block`, calling `visitor` for each font family
-/// encountered. The visitor returns `true` to continue walking or `false` to
-/// short-circuit. Returns `false` when the visitor short-circuited.
-fn visit_block_fonts(block: &Block, visitor: &mut impl FnMut(&str) -> bool) -> bool {
+/// Walk the IR tree rooted at a `Block`, calling `visitor` with each font
+/// family encountered and the run text it was declared over. The visitor
+/// returns `true` to continue walking or `false` to short-circuit. Returns
+/// `false` when the visitor short-circuited.
+///
+/// The text travels with the family because the face a run ends up in depends
+/// on both: the same family resolves to a different face over Hangul than over
+/// Latin (issue #617).
+fn visit_block_fonts(block: &Block, visitor: &mut impl FnMut(&str, &str) -> bool) -> bool {
     match block {
         Block::Paragraph(paragraph) => visit_paragraph_fonts(paragraph, visitor),
         // A contents page's entries are built from what it points at, so it
@@ -505,24 +537,23 @@ fn visit_block_fonts(block: &Block, visitor: &mut impl FnMut(&str) -> bool) -> b
 }
 
 /// Walk a slice of blocks, calling `visitor` for each font family found.
-fn visit_blocks_fonts(blocks: &[Block], visitor: &mut impl FnMut(&str) -> bool) -> bool {
+fn visit_blocks_fonts(blocks: &[Block], visitor: &mut impl FnMut(&str, &str) -> bool) -> bool {
     blocks.iter().all(|block| visit_block_fonts(block, visitor))
 }
 
 /// Walk a `Paragraph`'s runs, calling `visitor` for each font family.
-fn visit_paragraph_fonts(paragraph: &Paragraph, visitor: &mut impl FnMut(&str) -> bool) -> bool {
+fn visit_paragraph_fonts(
+    paragraph: &Paragraph,
+    visitor: &mut impl FnMut(&str, &str) -> bool,
+) -> bool {
     paragraph.runs.iter().all(|run| {
-        run.style
-            .font_family
-            .as_deref()
-            .map(str::trim)
-            .filter(|f| !f.is_empty())
-            .is_none_or(&mut *visitor)
+        declared_family(run.style.font_family.as_deref())
+            .is_none_or(|family| visitor(family, &run.text))
     })
 }
 
 /// Walk a `Table`'s cells, calling `visitor` for each font family found.
-fn visit_table_fonts(table: &Table, visitor: &mut impl FnMut(&str) -> bool) -> bool {
+fn visit_table_fonts(table: &Table, visitor: &mut impl FnMut(&str, &str) -> bool) -> bool {
     table.rows.iter().all(|row| {
         row.cells
             .iter()
@@ -533,23 +564,25 @@ fn visit_table_fonts(table: &Table, visitor: &mut impl FnMut(&str) -> bool) -> b
 /// Walk a `HeaderFooter`'s paragraphs, calling `visitor` for each font family.
 fn visit_header_footer_fonts(
     header_footer: &HeaderFooter,
-    visitor: &mut impl FnMut(&str) -> bool,
+    visitor: &mut impl FnMut(&str, &str) -> bool,
 ) -> bool {
     header_footer.paragraphs.iter().all(|paragraph| {
         paragraph.elements.iter().all(|inline| match inline {
-            HFInline::Run(run) => run
-                .style
-                .font_family
-                .as_deref()
-                .map(str::trim)
-                .filter(|f| !f.is_empty())
-                .is_none_or(&mut *visitor),
+            HFInline::Run(run) => declared_family(run.style.font_family.as_deref())
+                .is_none_or(|family| visitor(family, &run.text)),
             HFInline::Image(_)
             | HFInline::PageNumber(_)
             | HFInline::TotalPages(_)
             | HFInline::PositionedTab(_) => true,
         })
     })
+}
+
+/// The family a run declares, or `None` when it leaves the choice to defaults.
+fn declared_family(font_family: Option<&str>) -> Option<&str> {
+    font_family
+        .map(str::trim)
+        .filter(|family| !family.is_empty())
 }
 
 fn block_requests_font_family(block: &Block) -> bool {
@@ -564,35 +597,39 @@ fn header_footer_requests_font_family(header_footer: &HeaderFooter) -> bool {
     !visit_header_footer_fonts(header_footer, &mut font_family_uses_context_free_fallbacks)
 }
 
-fn font_family_uses_context_free_fallbacks(font_family: &str) -> bool {
+fn font_family_uses_context_free_fallbacks(font_family: &str, _text: &str) -> bool {
     // Arial's static substitution chain is sufficient for Typst to select the
     // installed face. Avoid the separate availability scan for this ubiquitous
     // family, including the synthetic DOCX default.
     font_family.eq_ignore_ascii_case("Arial")
 }
 
-fn collect_block_fonts(block: &Block, fonts: &mut BTreeSet<String>) {
-    visit_block_fonts(block, &mut |font| {
-        fonts.insert(font.to_string());
+/// A family as declared, paired with the script of the text it was declared
+/// over. Both halves decide which face the run ends up in.
+type FontRequest = (String, TextScript);
+
+fn collect_block_fonts(block: &Block, fonts: &mut BTreeSet<FontRequest>) {
+    visit_block_fonts(block, &mut |font, text| {
+        fonts.insert((font.to_string(), text_script(text)));
         true
     });
 }
 
-fn collect_table_fonts(table: &Table, fonts: &mut BTreeSet<String>) {
-    visit_table_fonts(table, &mut |font| {
-        fonts.insert(font.to_string());
+fn collect_table_fonts(table: &Table, fonts: &mut BTreeSet<FontRequest>) {
+    visit_table_fonts(table, &mut |font, text| {
+        fonts.insert((font.to_string(), text_script(text)));
         true
     });
 }
 
-fn collect_header_footer_fonts(header_footer: &HeaderFooter, fonts: &mut BTreeSet<String>) {
-    visit_header_footer_fonts(header_footer, &mut |font| {
-        fonts.insert(font.to_string());
+fn collect_header_footer_fonts(header_footer: &HeaderFooter, fonts: &mut BTreeSet<FontRequest>) {
+    visit_header_footer_fonts(header_footer, &mut |font, text| {
+        fonts.insert((font.to_string(), text_script(text)));
         true
     });
 }
 
-fn collect_document_font_families(doc: &Document) -> BTreeSet<String> {
+fn collect_document_font_requests(doc: &Document) -> BTreeSet<FontRequest> {
     let mut fonts = BTreeSet::new();
 
     for page in &doc.pages {
@@ -691,13 +728,28 @@ fn sheet_text_box_requests_font_family(text_box: &crate::ir::SheetTextBox) -> bo
         .any(|paragraph| block_requests_font_family(&Block::Paragraph(paragraph.clone())))
 }
 
-fn resolve_available_fallback(font_family: &str, context: &FontSearchContext) -> Option<String> {
+/// The face a run declaring `font_family` over `script` actually renders in, or
+/// `None` when the declared family is installed and nothing is substituted.
+///
+/// The candidate order mirrors [`font_with_fallbacks_for_text`] exactly — the
+/// script's own faces ahead of the family's metric substitutes. Consulting only
+/// the substitutes named a Chinese face for Korean text that renders in Malgun
+/// Gothic, sending anyone reading the log after a substitution that never
+/// happened (issue #617).
+fn resolve_available_fallback(
+    font_family: &str,
+    script: TextScript,
+    context: &FontSearchContext,
+) -> Option<String> {
     if context.has_family(font_family) {
         return None;
     }
 
-    fallback_candidates(font_family, Some(context))
-        .into_iter()
+    script
+        .fallbacks()
+        .iter()
+        .map(|face| (*face).to_string())
+        .chain(fallback_candidates(font_family, Some(context)))
         .find(|candidate| context.has_family(candidate))
 }
 
@@ -706,14 +758,21 @@ pub(crate) fn detect_missing_font_fallbacks_with_context(
     doc: &Document,
     context: &FontSearchContext,
 ) -> Vec<(String, String)> {
-    let requested_fonts = collect_document_font_families(doc);
+    let requested_fonts = collect_document_font_requests(doc);
     if requested_fonts.is_empty() {
         return Vec::new();
     }
 
+    // A family resolving differently per script yields one warning per
+    // resolution; a family used over several scripts that all land on the same
+    // face yields one, hence the set rather than a plain map.
     requested_fonts
         .into_iter()
-        .filter_map(|font| resolve_available_fallback(&font, context).map(|to| (font, to)))
+        .filter_map(|(font, script)| {
+            resolve_available_fallback(&font, script, context).map(|to| (font, to))
+        })
+        .collect::<BTreeSet<(String, String)>>()
+        .into_iter()
         .collect()
 }
 
