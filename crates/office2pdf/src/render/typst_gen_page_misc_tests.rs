@@ -645,6 +645,7 @@ fn test_table_page_with_chart_at_row() {
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
         value_axis_deleted: false,
+        bar_band_layout: BarBandLayout::default(),
     };
 
     let page = Page::Sheet(SheetPage {
@@ -696,6 +697,7 @@ fn test_table_page_with_chart_at_end() {
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
         value_axis_deleted: false,
+        bar_band_layout: BarBandLayout::default(),
     };
 
     let page = Page::Sheet(SheetPage {

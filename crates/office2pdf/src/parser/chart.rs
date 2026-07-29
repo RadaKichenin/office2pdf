@@ -8,7 +8,8 @@ use quick_xml::events::Event;
 
 use super::xml_util;
 use crate::ir::{
-    AxisTickMark, Chart, ChartGrouping, ChartSeries, ChartType, Color, DataLabels, LegendPosition,
+    AxisTickMark, BarBandLayout, Chart, ChartGrouping, ChartSeries, ChartType, Color, DataLabels,
+    LegendPosition,
 };
 
 /// Mapping from XML chart element tag names to their corresponding `ChartType`.
@@ -134,6 +135,8 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
     let mut categories: Vec<String> = Vec::new();
     let mut series: Vec<ChartSeries> = Vec::new();
     let mut grouping: Option<ChartGrouping> = None;
+    let mut gap_width_percent: Option<f64> = None;
+    let mut overlap_percent: Option<f64> = None;
     let mut legend_position: Option<LegendPosition> = None;
     let mut category_axis: Axis = Axis::default();
     let mut value_axis: Axis = Axis::default();
@@ -163,6 +166,12 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
                         }
                     });
                     grouping = plot.grouping.as_deref().map(chart_grouping_for);
+                    // A combo plot area holds one element per chart family and
+                    // only the bar family carries these two, so the family that
+                    // declared them keeps them however many follow it.
+                    let (gap_width, overlap) = plot.bar_band_layout();
+                    gap_width_percent = gap_width_percent.or(gap_width);
+                    overlap_percent = overlap_percent.or(overlap);
                 }
             }
             Ok(Event::Empty(ref e)) if e.local_name().as_ref() == b"legendPos" => {
@@ -177,6 +186,7 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
     }
 
     let chart_type = chart_type?;
+    let default_band_layout: BarBandLayout = BarBandLayout::default();
 
     // Charts may omit <c:cat> entirely; Excel then labels the category axis
     // 1..N (the point count of the longest series).
@@ -198,6 +208,10 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
         value_axis_major_tick_mark: value_axis.major_tick_mark,
         category_axis_deleted: category_axis.deleted,
         value_axis_deleted: value_axis.deleted,
+        bar_band_layout: BarBandLayout {
+            gap_width_percent: gap_width_percent.unwrap_or(default_band_layout.gap_width_percent),
+            overlap_percent: overlap_percent.unwrap_or(default_band_layout.overlap_percent),
+        },
     })
 }
 
@@ -310,7 +324,7 @@ fn parse_chart_title(reader: &mut Reader<&[u8]>) -> Option<String> {
 
 /// Plot-area settings that sit beside `<c:ser>` inside a chart type element.
 ///
-/// Office writes both self-closing, so they arrive as `Empty` events.
+/// Office writes them all self-closing, so they arrive as `Empty` events.
 #[derive(Debug, Default)]
 struct PlotAreaProps {
     /// `<c:barDir>`, exclusive to the bar family.
@@ -319,6 +333,11 @@ struct PlotAreaProps {
     grouping: Option<String>,
     /// `<c:ofPieType>`, exclusive to `<c:ofPieChart>`.
     of_pie_type: Option<String>,
+    /// `<c:gapWidth>`, exclusive to the bar family. Office writes it after the
+    /// last `</c:ser>`, so it lands here rather than on a series.
+    gap_width: Option<String>,
+    /// `<c:overlap>`, exclusive to the bar family, and likewise trailing.
+    overlap: Option<String>,
 }
 
 impl PlotAreaProps {
@@ -328,10 +347,48 @@ impl PlotAreaProps {
             b"barDir" => self.bar_direction = xml_util::get_attr_str(e, b"val"),
             b"grouping" => self.grouping = xml_util::get_attr_str(e, b"val"),
             b"ofPieType" => self.of_pie_type = xml_util::get_attr_str(e, b"val"),
+            b"gapWidth" => self.gap_width = xml_util::get_attr_str(e, b"val"),
+            b"overlap" => self.overlap = xml_util::get_attr_str(e, b"val"),
             _ => return false,
         }
         true
     }
+
+    /// The band layout this element declares, as far as it declares one.
+    ///
+    /// Nothing is substituted for an absent or unreadable element: the caller
+    /// keeps looking, and only a chart that declared nothing anywhere falls
+    /// back to [`BarBandLayout::default`].
+    fn bar_band_layout(&self) -> (Option<f64>, Option<f64>) {
+        (
+            self.gap_width
+                .as_deref()
+                .and_then(|value| bar_percent(value, 0.0, 500.0)),
+            self.overlap
+                .as_deref()
+                .and_then(|value| bar_percent(value, -100.0, 100.0)),
+        )
+    }
+}
+
+/// Read `<c:gapWidth>`'s or `<c:overlap>`'s `val`, held to the range its type
+/// allows.
+///
+/// `ST_GapAmount` and `ST_Overlap` are each a union of a bare integer and a
+/// percentage string, so `"90"` and `"90%"` describe the same chart. Office
+/// enforces the ranges itself — PowerPoint 16.0 refuses to open a file whose
+/// gapWidth reads 1000 while opening 500 happily — so a value outside them
+/// describes no drawable chart and the nearest bound is the closest reading of
+/// what it meant.
+fn bar_percent(value: &str, low: f64, high: f64) -> Option<f64> {
+    value
+        .trim()
+        .trim_end_matches('%')
+        .trim()
+        .parse::<f64>()
+        .ok()
+        .filter(|percent| percent.is_finite())
+        .map(|percent| percent.clamp(low, high))
 }
 
 /// Parse series data from within a chart type element (e.g., `<c:barChart>`).

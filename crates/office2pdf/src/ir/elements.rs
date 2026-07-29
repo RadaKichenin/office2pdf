@@ -165,6 +165,43 @@ pub struct Chart {
     /// usually still carries `<c:majorTickMark val="out"/>` — so the flag is
     /// what decides whether the axis is drawn, not the settings beside it.
     pub value_axis_deleted: bool,
+    /// How the bars of one category share the band it gets, from
+    /// `<c:barChart>`. Charts outside the bar family carry the defaults.
+    pub bar_band_layout: BarBandLayout,
+}
+
+/// How a bar chart's bars divide the band one category gets, from
+/// `<c:barChart><c:gapWidth>` and `<c:barChart><c:overlap>`.
+///
+/// Both are measured in units of ONE bar's thickness rather than of the band,
+/// so the two together decide how thick a bar is: a band holds the cluster its
+/// series form plus a `gap_width_percent` gutter beside it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BarBandLayout {
+    /// `<c:gapWidth>` (`ST_GapAmount`, 0..=500) — the gutter between
+    /// neighbouring category bands, as a percentage of one bar's thickness.
+    /// 100 makes the gutter exactly as wide as a bar.
+    pub gap_width_percent: f64,
+    /// `<c:overlap>` (`ST_Overlap`, -100..=100) — how far each clustered
+    /// series' bar slides over its predecessor, as a percentage of one bar's
+    /// thickness. Negative values push them apart instead.
+    pub overlap_percent: f64,
+}
+
+impl Default for BarBandLayout {
+    /// The values Office draws when a chart declares neither element, which are
+    /// also ECMA-376's attribute defaults.
+    ///
+    /// Measured, not recalled: `tests/fixtures/xlsx/chart_sheet.xlsx` omits both
+    /// elements, and Excel 16.0 exports its two clustered series as touching
+    /// 42.3pt bars on a 148.1pt band — 148.1/42.3 is 2 series + 150%, and
+    /// touching bars are an overlap of 0.
+    fn default() -> Self {
+        Self {
+            gap_width_percent: 150.0,
+            overlap_percent: 0.0,
+        }
+    }
 }
 
 /// Which side of an axis line its major tick marks project from, from
