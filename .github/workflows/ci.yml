@@ -88,6 +88,8 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Test visual PR validator
         run: python3 -m unittest discover -s scripts/tests -p 'test_check_visual_pr.py'
+      - name: Test layout differ
+        run: python3 -m unittest discover -s scripts/tests -p 'test_compare_layout.py'
       - name: Validate visual PR contract
         env:
           GITHUB_TOKEN: ${{ github.token }}

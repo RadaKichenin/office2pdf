@@ -137,6 +137,12 @@ Run `python3 scripts/compare_render.py <GT.pdf> <output.pdf> [--page N]` before
 judging a rendered difference. It reports geometry, colour histogram, and pixel
 difference together, then states what the combination means.
 
+For layout defects, run `python3 scripts/compare_layout.py <GT.pdf> <output.pdf>`
+first: it matches text lines from `mutool` traces and reports missing/extra/
+re-wrapped lines, baseline dy, pitch and width drift, and a rect census, with
+GT noise floors built in (`--noise-floor 0.12` Word, `0.5` Excel). Its numbers
+are assertable; pixel counts are only a tripwire.
+
 **Install `mupdf-tools` first** (`brew install mupdf-tools`). Without `mutool`
 the geometry axis falls back to `pdftotext -bbox`, whose `yMin` is each glyph's
 font-descriptor box rather than its baseline. The two PDFs always embed
