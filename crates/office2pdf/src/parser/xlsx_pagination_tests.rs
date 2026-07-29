@@ -162,6 +162,7 @@ fn test_charts_stay_on_first_column_group() {
             value_axis_major_tick_mark: AxisTickMark::Outside,
             category_axis_deleted: false,
             value_axis_deleted: false,
+            bar_band_layout: crate::ir::BarBandLayout::default(),
         },
     )];
     let pages = split_sheet_page_by_width(page, None, None);

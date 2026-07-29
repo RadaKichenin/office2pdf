@@ -631,6 +631,60 @@ fn axis_legend_box(chart: &Chart) -> LegendBox {
     LegendBox::new(chart.legend_position, LEGEND_ROW_H, LEGEND_ENTRY_W)
 }
 
+/// Where the bars of one category sit inside the band it gets, in points along
+/// the category axis.
+struct BandBars {
+    /// Thickness of one bar.
+    thickness: f64,
+    /// Offset of the first series' bar from the start of the band.
+    lead: f64,
+    /// Distance from one series' bar to the next one's along the category axis.
+    /// Zero only when the two sit exactly on top of each other.
+    step: f64,
+}
+
+/// Divide a category's band between the bars sharing it, the way Office does.
+///
+/// `<c:gapWidth>` and `<c:overlap>` are both measured in units of ONE bar, not
+/// of the band, so the band spans the cluster its series form plus a gutter of
+/// `gap_width_percent`: `bars - (bars - 1) * overlap + gap` bars in all. The
+/// cluster then sits centred, half the gutter on each side.
+///
+/// Measured against PowerPoint 16.0 rather than read off the schema: sweeping
+/// `<c:gapWidth>` from 0 to 500 over `tests/fixtures/pptx/bar-chart.pptx` and
+/// tracing each export put every bar edge within one 1/1200in device quantum of
+/// this, with the band itself never moving, and a two-series sweep of
+/// `<c:overlap>` over -27, 0 and 50 did the same for the step.
+///
+/// The grouping does not enter into it: a stacked chart divides its band by the
+/// same law, with `bars` still the series count. Rewriting `<c:overlap>` on the
+/// four-series stacked chart of `office2pdf_introduction_ko.pptx` (gapWidth 90)
+/// and tracing PowerPoint 16.0's export gave, on a 167.6pt pitch, one 88.2pt
+/// column at 100 (167.64/1.9) but a STAIRCASE of four 34.2pt segments stepping
+/// 34.2pt at 0 (167.52/4.9) — each segment still stacked on the running total,
+/// only slid sideways. Overlaps of 50 and -25 landed on 49.3/24.7pt and
+/// 29.6/37.1pt, both what this predicts. Deleting the element reproduced the 0
+/// case exactly, so an absent `<c:overlap>` is 0 here and not the 100 Office
+/// happens to write beside its own stacked charts.
+fn band_bars(band: f64, series_count: usize, layout: BarBandLayout) -> BandBars {
+    let bars: f64 = series_count.max(1) as f64;
+    let gap: f64 = layout.gap_width_percent / 100.0;
+    let overlap: f64 = layout.overlap_percent / 100.0;
+    // How many bar widths the band is worth. Over the ranges the parser holds
+    // its inputs to this bottoms out at 1 — an overlap of 100% collapses the
+    // cluster to a single bar and the gap only ever adds — so it can neither
+    // vanish nor turn the geometry inside out.
+    let bar_widths_per_band: f64 = (bars - (bars - 1.0) * overlap + gap).max(1.0);
+    let thickness: f64 = band / bar_widths_per_band;
+    let step: f64 = thickness * (1.0 - overlap);
+    let cluster: f64 = thickness + (bars - 1.0) * step;
+    BandBars {
+        thickness,
+        lead: (band - cluster) / 2.0,
+        step,
+    }
+}
+
 /// Render a bar (horizontal) or column (vertical) chart as an axis-scaled
 /// plot with gridlines, tick labels, and a legend.
 fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)>) {
@@ -778,15 +832,10 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
     }
 
     // Bars, grouped per category when multiple series are present.
+    let bars: BandBars = band_bars(row, series_count, chart.bar_band_layout);
+    let bar_thickness: f64 = bars.thickness;
     for (cat_index, category) in chart.categories.iter().enumerate() {
         let group_start: f64 = cat_index as f64 * row;
-        // A stacked category is one bar, so every segment takes the full
-        // thickness a clustered chart would split between the series.
-        let sub: f64 = if stacked {
-            row * 0.7
-        } else {
-            (row * 0.7) / series_count as f64
-        };
         // Fraction of the axis already consumed by the segments below.
         let mut stack_base: f64 = 0.0;
         let category_total: f64 = category_total(series, cat_index);
@@ -804,11 +853,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
             };
             let frac: f64 = (value / nice_max).clamp(0.0, 1.0);
             let color: String = series_color(s, s_index, cat_index);
-            let offset: f64 = if stacked {
-                row * 0.15
-            } else {
-                row * 0.15 + s_index as f64 * sub
-            };
+            let offset: f64 = bars.lead + s_index as f64 * bars.step;
             if horizontal {
                 // Bar charts stack categories bottom-up.
                 let row_top: f64 = plot_h - (cat_index as f64 + 1.0) * row;
@@ -819,7 +864,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                     format_f64(plot_x + stack_base * plot_w),
                     format_f64(row_top + offset),
                     format_f64(bar_w.max(0.0)),
-                    format_f64(sub),
+                    format_f64(bar_thickness),
                     color
                 );
             } else {
@@ -829,7 +874,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                     "#place(top + left, dx: {}pt, dy: {}pt, rect(width: {}pt, height: {}pt, fill: {}, stroke: none))",
                     format_f64(plot_x + group_start + offset),
                     format_f64(plot_y + plot_h - bar_h - stack_base * plot_h),
-                    format_f64(sub),
+                    format_f64(bar_thickness),
                     format_f64(bar_h.max(0.0)),
                     color
                 );
@@ -842,7 +887,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                     let row_top: f64 = plot_h - (cat_index as f64 + 1.0) * row;
                     (
                         plot_x + stack_base * plot_w,
-                        row_top + offset + sub / 2.0 - LABEL_LINE_H / 2.0,
+                        row_top + offset + bar_thickness / 2.0 - LABEL_LINE_H / 2.0,
                         frac * plot_w,
                     )
                 } else {
@@ -852,7 +897,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                             - stack_base * plot_h
                             - frac * plot_h / 2.0
                             - LABEL_LINE_H / 2.0,
-                        sub,
+                        bar_thickness,
                     )
                 };
                 let _ = writeln!(

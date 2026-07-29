@@ -22,6 +22,7 @@ fn test_codegen_chart_bar_visual_bars() {
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
         value_axis_deleted: false,
+        bar_band_layout: BarBandLayout::default(),
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -75,6 +76,7 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
         value_axis_deleted: false,
+        bar_band_layout: BarBandLayout::default(),
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -116,6 +118,7 @@ fn test_codegen_chart_pie_draws_a_pie() {
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
         value_axis_deleted: false,
+        bar_band_layout: BarBandLayout::default(),
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -162,6 +165,7 @@ fn test_codegen_chart_line_trend_indicators() {
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
         value_axis_deleted: false,
+        bar_band_layout: BarBandLayout::default(),
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -199,6 +203,7 @@ fn test_codegen_chart_empty_series() {
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
         value_axis_deleted: false,
+        bar_band_layout: BarBandLayout::default(),
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -269,6 +274,7 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
         value_axis_deleted: false,
+        bar_band_layout: BarBandLayout::default(),
     }));
     let doc = make_doc(vec![make_flow_page(content)]);
 
@@ -308,6 +314,7 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
         value_axis_deleted: false,
+        bar_band_layout: BarBandLayout::default(),
     }));
     let doc = make_doc(vec![make_flow_page(content)]);
 
@@ -499,6 +506,7 @@ fn test_codegen_chart_line_plot() {
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
         value_axis_deleted: false,
+        bar_band_layout: BarBandLayout::default(),
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -543,6 +551,7 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
         value_axis_deleted: false,
+        bar_band_layout: BarBandLayout::default(),
     })])]);
 
     let pages = page_texts(&doc);
@@ -563,6 +572,9 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
 
 /// The introduction deck's slide 17 chart: three formats, four support areas
 /// stacked per format. Stack totals are 9, 9, and 6.
+///
+/// The band layout is the one that slide's `<c:barChart>` declares, so the
+/// geometry these tests read is the geometry the fixture asks for.
 fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
     Chart {
         chart_type: ChartType::Column,
@@ -606,6 +618,10 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
         value_axis_deleted: false,
+        bar_band_layout: BarBandLayout {
+            gap_width_percent: 90.0,
+            overlap_percent: 100.0,
+        },
     }
 }
 
@@ -660,7 +676,10 @@ fn a_clustered_column_still_scales_to_the_largest_segment() {
 fn a_stacked_column_draws_one_bar_per_category() {
     // Four series over three categories: clustered draws 12 rects, stacked
     // draws 12 segments too, but they share three x positions instead of
-    // spreading across twelve.
+    // spreading across twelve. It is the deck's `<c:overlap val="100"/>` that
+    // puts them on one x — grouping alone does not, as
+    // `a_stacked_category_divides_its_band_by_the_same_law_a_clustered_one_does`
+    // pins against PowerPoint.
     let source = chart_source(stacked_support_chart(ChartGrouping::Stacked));
     let x_positions: std::collections::BTreeSet<String> = source
         .lines()
@@ -722,6 +741,7 @@ fn legend_chart(position: LegendPosition) -> Chart {
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
         value_axis_deleted: false,
+        bar_band_layout: BarBandLayout::default(),
     }
 }
 
@@ -860,6 +880,7 @@ fn a_declared_series_fill_reaches_the_bars() {
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
         value_axis_deleted: false,
+        bar_band_layout: BarBandLayout::default(),
     };
 
     let source = chart_source(chart);
@@ -897,6 +918,7 @@ fn a_series_without_a_fill_still_takes_the_palette() {
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
         value_axis_deleted: false,
+        bar_band_layout: BarBandLayout::default(),
     };
 
     let source = chart_source(chart);
@@ -932,6 +954,7 @@ fn per_point_fills_colour_each_bar_separately() {
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
         value_axis_deleted: false,
+        bar_band_layout: BarBandLayout::default(),
     };
 
     let source = chart_source(chart);
@@ -966,6 +989,7 @@ fn axis_titled_chart(category: Option<&str>, value: Option<&str>) -> Chart {
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
         value_axis_deleted: false,
+        bar_band_layout: BarBandLayout::default(),
     }
 }
 
@@ -1050,6 +1074,7 @@ fn labelled_chart(labels: DataLabels) -> Chart {
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
         value_axis_deleted: false,
+        bar_band_layout: BarBandLayout::default(),
     }
 }
 
@@ -1127,6 +1152,7 @@ fn pie_chart(values: Vec<f64>) -> Chart {
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
         value_axis_deleted: false,
+        bar_band_layout: BarBandLayout::default(),
     }
 }
 
@@ -1303,6 +1329,7 @@ fn test_chart_default_gridline_matches_powerpoint() {
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
         value_axis_deleted: false,
+        bar_band_layout: BarBandLayout::default(),
     })])]);
 
     let source = generate_typst(&doc).unwrap().source;
@@ -1431,6 +1458,7 @@ fn tick_mark_chart(
         value_axis_major_tick_mark,
         category_axis_deleted: false,
         value_axis_deleted: false,
+        bar_band_layout: BarBandLayout::default(),
     }
 }
 
@@ -1912,4 +1940,328 @@ fn a_deleted_category_axis_takes_only_its_own_furniture_with_it() {
         emitted_axis_ticks(&hidden).len(),
         "the value axis still ticks every unit it labels; got {beside:#?}\n{hidden}"
     );
+}
+
+// ----- Bar thickness from c:gapWidth and c:overlap (issue #671) -----
+
+/// One `rect(...)` the generator placed: its top-left corner and the extent it
+/// was given, in points.
+#[derive(Debug, Clone, Copy)]
+struct PlacedRect {
+    dx: f64,
+    dy: f64,
+    width: f64,
+    height: f64,
+}
+
+/// Every rectangle the source places, in the order written. A bar or column
+/// chart draws nothing else as a rectangle, so these are exactly its bars.
+fn emitted_rects(source: &str) -> Vec<PlacedRect> {
+    source
+        .lines()
+        .filter_map(|line| {
+            let (placement, extent) = line.split_once("rect(width: ")?;
+            Some(PlacedRect {
+                dx: leading_pt(placement.split_once("dx: ")?.1)?,
+                dy: leading_pt(placement.split_once("dy: ")?.1)?,
+                width: leading_pt(extent)?,
+                height: leading_pt(extent.split_once("height: ")?.1)?,
+            })
+        })
+        .collect()
+}
+
+/// Each bar as `(start, thickness)` along the category axis — the horizontal
+/// axis for a column chart, the vertical one for a horizontal bar chart.
+///
+/// The generator writes one category at a time, every series within it, so the
+/// first `series_count` entries share the first band.
+fn bars_across_the_categories(source: &str, horizontal: bool) -> Vec<(f64, f64)> {
+    emitted_rects(source)
+        .into_iter()
+        .map(|rect| {
+            if horizontal {
+                (rect.dy, rect.height)
+            } else {
+                (rect.dx, rect.width)
+            }
+        })
+        .collect()
+}
+
+/// Where the first category's band starts along the category axis, read off the
+/// plotting rectangle the gridlines and axis lines describe.
+///
+/// A column chart lays its categories out left to right from the plot's left
+/// edge; a horizontal bar chart stacks them bottom-up, so its first band is the
+/// last one down the plot.
+fn first_band_start(source: &str, horizontal: bool, categories: usize) -> f64 {
+    let (plot_x, plot_y, _, plot_h) = plot_rect(&emitted_lines(source));
+    if horizontal {
+        plot_y + plot_h - plot_h / categories as f64
+    } else {
+        plot_x
+    }
+}
+
+/// The three categories every band-layout test plots, with a value per series.
+const BAND_SERIES_VALUES: [[f64; 3]; 4] = [
+    [4.0, 2.0, 2.0],
+    [1.0, 3.0, 1.0],
+    [2.0, 4.0, 3.0],
+    [2.0, 2.0, 3.0],
+];
+
+/// A chart of `series_count` series over three categories, declaring `layout`.
+fn band_layout_chart(
+    chart_type: ChartType,
+    grouping: ChartGrouping,
+    series_count: usize,
+    layout: BarBandLayout,
+) -> Chart {
+    Chart {
+        chart_type,
+        title: Some("Weekly Throughput".to_string()),
+        categories: vec!["Mon".to_string(), "Tue".to_string(), "Wed".to_string()],
+        series: BAND_SERIES_VALUES
+            .iter()
+            .take(series_count)
+            .enumerate()
+            .map(|(index, values)| ChartSeries {
+                name: Some(format!("Line {index}")),
+                values: values.to_vec(),
+                fill: None,
+                point_fills: Vec::new(),
+                data_labels: DataLabels::default(),
+            })
+            .collect(),
+        grouping,
+        legend_position: LegendPosition::Right,
+        category_axis_title: None,
+        value_axis_title: None,
+        category_axis_major_tick_mark: AxisTickMark::Outside,
+        value_axis_major_tick_mark: AxisTickMark::Outside,
+        category_axis_deleted: false,
+        value_axis_deleted: false,
+        bar_band_layout: layout,
+    }
+}
+
+/// A single-series chart's band pitch and bar thickness along the category
+/// axis, in points.
+fn pitch_and_thickness(source: &str, horizontal: bool) -> (f64, f64) {
+    let bars: Vec<(f64, f64)> = bars_across_the_categories(source, horizontal);
+    assert_eq!(bars.len(), 3, "one bar per category expected, got {bars:?}");
+    let pitch: f64 = (bars[1].0 - bars[0].0).abs();
+    assert!(
+        same_length(pitch, (bars[2].0 - bars[1].0).abs()),
+        "the categories must keep an even pitch, got {bars:?}"
+    );
+    (pitch, bars[0].1)
+}
+
+#[test]
+fn a_single_series_bar_leaves_the_gutter_its_gap_width_asks_for() {
+    // `<c:gapWidth>` measures the gutter between neighbouring categories in
+    // units of ONE bar, so the band holds the bar plus that fraction of it.
+    // Rewriting the element in `tests/fixtures/pptx/bar-chart.pptx` and tracing
+    // PowerPoint 16.0's own export put every bar within one 1/1200in device
+    // quantum of band / (1 + gapWidth/100), over the whole 0..500 range, while
+    // the band itself never moved.
+    for gap_width_percent in [0.0, 20.0, 50.0, 100.0, 150.0, 300.0, 500.0] {
+        let source: String = chart_source(band_layout_chart(
+            ChartType::Column,
+            ChartGrouping::Clustered,
+            1,
+            BarBandLayout {
+                gap_width_percent,
+                overlap_percent: 0.0,
+            },
+        ));
+
+        let (pitch, thickness) = pitch_and_thickness(&source, false);
+        let expected: f64 = pitch / (1.0 + gap_width_percent / 100.0);
+        assert!(
+            same_length(thickness, expected),
+            "gapWidth {gap_width_percent} wants a {expected}pt bar in a {pitch}pt band, got {thickness}pt"
+        );
+    }
+}
+
+#[test]
+fn a_horizontal_bar_chart_sizes_its_bars_the_same_way() {
+    // The gap is a property of the category axis, not of the page, so turning
+    // the chart on its side must not change the ratio.
+    for gap_width_percent in [0.0, 90.0, 219.0, 500.0] {
+        let source: String = chart_source(band_layout_chart(
+            ChartType::Bar,
+            ChartGrouping::Clustered,
+            1,
+            BarBandLayout {
+                gap_width_percent,
+                overlap_percent: 0.0,
+            },
+        ));
+
+        let (pitch, thickness) = pitch_and_thickness(&source, true);
+        let expected: f64 = pitch / (1.0 + gap_width_percent / 100.0);
+        assert!(
+            same_length(thickness, expected),
+            "gapWidth {gap_width_percent} wants a {expected}pt bar in a {pitch}pt band, got {thickness}pt"
+        );
+    }
+}
+
+#[test]
+fn a_chart_declaring_no_gap_width_draws_the_office_default() {
+    // Excel 16.0 renders `tests/fixtures/xlsx/chart_sheet.xlsx`, which declares
+    // neither element, at gapWidth 150 — so an absent declaration has to reach
+    // the bars as 150, leaving each bar 1/2.5 of its band.
+    let source: String = chart_source(band_layout_chart(
+        ChartType::Column,
+        ChartGrouping::Clustered,
+        1,
+        BarBandLayout::default(),
+    ));
+
+    let (pitch, thickness) = pitch_and_thickness(&source, false);
+    assert!(
+        same_length(thickness, pitch / 2.5),
+        "the default gap leaves a {}pt bar in a {pitch}pt band, got {thickness}pt",
+        pitch / 2.5
+    );
+}
+
+#[test]
+fn every_bar_sits_centred_in_the_band_its_category_owns() {
+    // PowerPoint splits the gutter evenly on both sides of the bar rather than
+    // pushing it against one edge: on `tests/fixtures/pptx/bar-chart.pptx` the
+    // traced bar centres sat within 0.02pt of their band centres.
+    for (chart_type, horizontal) in [(ChartType::Column, false), (ChartType::Bar, true)] {
+        let source: String = chart_source(band_layout_chart(
+            chart_type.clone(),
+            ChartGrouping::Clustered,
+            1,
+            BarBandLayout {
+                gap_width_percent: 100.0,
+                overlap_percent: 0.0,
+            },
+        ));
+
+        let (pitch, thickness) = pitch_and_thickness(&source, horizontal);
+        let bars: Vec<(f64, f64)> = bars_across_the_categories(&source, horizontal);
+        let lead: f64 = bars[0].0 - first_band_start(&source, horizontal, 3);
+        assert!(
+            same_length(lead, (pitch - thickness) / 2.0),
+            "{chart_type:?} must centre its bar: a {thickness}pt bar in a {pitch}pt band wants a {}pt lead, got {lead}pt",
+            (pitch - thickness) / 2.0
+        );
+    }
+}
+
+#[test]
+fn clustered_series_slide_over_each_other_by_the_declared_overlap() {
+    // `<c:overlap>` moves each series' bar a fraction of a bar over the one
+    // before it, so N series need N - (N-1)*overlap bars of room plus the gap.
+    // Excel 16.0 draws `tests/fixtures/xlsx/any_sheets.xlsx` (219 / -27, two
+    // series) as 52.5pt bars stepping 66.7pt in a 234pt band: 234/4.46 and
+    // 52.47*1.27. Sweeping the sign of the overlap across five shapes leaves no
+    // single ratio that could pass.
+    for (gap_width_percent, overlap_percent, series_count) in [
+        (219.0, -27.0, 2),
+        (150.0, 0.0, 2),
+        (100.0, 50.0, 2),
+        (219.0, -27.0, 3),
+        (90.0, 100.0, 4),
+    ] {
+        let source: String = chart_source(band_layout_chart(
+            ChartType::Column,
+            ChartGrouping::Clustered,
+            series_count,
+            BarBandLayout {
+                gap_width_percent,
+                overlap_percent,
+            },
+        ));
+
+        let bars: Vec<(f64, f64)> = bars_across_the_categories(&source, false);
+        assert_eq!(
+            bars.len(),
+            3 * series_count,
+            "one bar per series per category"
+        );
+        let pitch: f64 = bars[series_count].0 - bars[0].0;
+        let bars_wide: f64 = series_count as f64;
+        let expected: f64 = pitch
+            / (bars_wide - (bars_wide - 1.0) * overlap_percent / 100.0 + gap_width_percent / 100.0);
+        assert!(
+            same_length(bars[0].1, expected),
+            "{series_count} series at {gap_width_percent}/{overlap_percent} want a {expected}pt bar in a {pitch}pt band, got {}pt",
+            bars[0].1
+        );
+
+        let step: f64 = bars[1].0 - bars[0].0;
+        let expected_step: f64 = expected * (1.0 - overlap_percent / 100.0);
+        assert!(
+            same_length(step, expected_step),
+            "an overlap of {overlap_percent} steps {expected_step}pt from one series to the next, got {step}pt"
+        );
+
+        let cluster: f64 = expected + (bars_wide - 1.0) * expected_step;
+        let lead: f64 = bars[0].0 - first_band_start(&source, false, 3);
+        assert!(
+            same_length(lead, (pitch - cluster) / 2.0),
+            "the {cluster}pt cluster sits centred in its {pitch}pt band, got a lead of {lead}pt"
+        );
+    }
+}
+
+#[test]
+fn a_stacked_category_divides_its_band_by_the_same_law_a_clustered_one_does() {
+    // Stacking does not fuse the segments into one bar: `<c:overlap>` still says
+    // how far each slides over the one before it. Rewriting the element on the
+    // introduction deck's four-series stacked chart (gapWidth 90) and tracing
+    // PowerPoint 16.0's export gave, on a 167.6pt pitch, one 88.2pt column at
+    // overlap 100 (167.64/1.9) but four 34.2pt segments stepping 34.2pt at
+    // overlap 0 (167.52/4.9) — a staircase, each segment still stacked on the
+    // running total. Overlap 50 gave 49.3pt stepping 24.7pt and -25 gave 29.6pt
+    // stepping 37.1pt. Deleting `<c:overlap>` drew the overlap-0 geometry
+    // exactly, so an absent element is 0, not the 100 Office writes beside its
+    // own stacked charts.
+    for grouping in [ChartGrouping::Stacked, ChartGrouping::PercentStacked] {
+        for overlap_percent in [100.0, 50.0, 0.0, -25.0] {
+            for gap_width_percent in [90.0, 300.0] {
+                let source: String = chart_source(band_layout_chart(
+                    ChartType::Column,
+                    grouping,
+                    4,
+                    BarBandLayout {
+                        gap_width_percent,
+                        overlap_percent,
+                    },
+                ));
+
+                let bars: Vec<(f64, f64)> = bars_across_the_categories(&source, false);
+                assert_eq!(bars.len(), 12, "four segments over three categories");
+                let pitch: f64 = bars[4].0 - bars[0].0;
+                let overlap: f64 = overlap_percent / 100.0;
+                let expected: f64 = pitch / (4.0 - 3.0 * overlap + gap_width_percent / 100.0);
+                let expected_step: f64 = expected * (1.0 - overlap);
+                for (index, segment) in bars[..4].iter().enumerate() {
+                    assert!(
+                        same_length(segment.1, expected)
+                            && same_length(segment.0, bars[0].0 + index as f64 * expected_step),
+                        "{grouping:?} at {gap_width_percent}/{overlap_percent} wants {expected}pt segments stepping {expected_step}pt, got {bars:?}"
+                    );
+                }
+
+                let cluster: f64 = expected + 3.0 * expected_step;
+                let lead: f64 = bars[0].0 - first_band_start(&source, false, 3);
+                assert!(
+                    same_length(lead, (pitch - cluster) / 2.0),
+                    "the {cluster}pt stack sits centred in its {pitch}pt band, got a lead of {lead}pt"
+                );
+            }
+        }
+    }
 }

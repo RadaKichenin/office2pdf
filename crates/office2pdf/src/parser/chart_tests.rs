@@ -1009,3 +1009,105 @@ fn test_group_settings_still_win_after_per_point_overrides() {
         "the point's showCatName is not the series default: {labels:?}"
     );
 }
+
+// ----- Bar band layout (issue #671) -----
+
+/// A column chart declaring `bar_layout_xml` where Office writes it: after the
+/// last `</c:ser>`, ahead of the axis ids.
+fn chart_with_bar_layout(bar_layout_xml: &str) -> String {
+    bar_chart_xml(r#"<c:barDir val="col"/><c:grouping val="clustered"/>"#).replace(
+        "</c:ser>",
+        &format!("</c:ser>{bar_layout_xml}<c:axId val=\"59291440\"/>"),
+    )
+}
+
+#[test]
+fn test_gap_width_and_overlap_are_read_from_the_bar_chart() {
+    // What Office writes for a modern clustered chart, and what six of this
+    // repository's bar-chart fixtures carry verbatim.
+    let xml = chart_with_bar_layout(r#"<c:gapWidth val="219"/><c:overlap val="-27"/>"#);
+
+    let layout = parse_chart_xml(&xml).unwrap().bar_band_layout;
+
+    assert_eq!(layout.gap_width_percent, 219.0);
+    assert_eq!(layout.overlap_percent, -27.0);
+}
+
+#[test]
+fn test_a_different_declaration_gives_a_different_layout() {
+    // Triangulation against the fixture in the issue: `bar-chart.pptx` declares
+    // a gap of 100 and no overlap at all.
+    let xml = chart_with_bar_layout(r#"<c:gapWidth val="100"/>"#);
+
+    let layout = parse_chart_xml(&xml).unwrap().bar_band_layout;
+
+    assert_eq!(layout.gap_width_percent, 100.0);
+    assert_eq!(layout.overlap_percent, 0.0);
+}
+
+#[test]
+fn test_a_bar_chart_without_the_elements_takes_the_office_defaults() {
+    // `tests/fixtures/xlsx/chart_sheet.xlsx` declares neither element, and
+    // Excel 16.0 exports it at exactly 150 / 0.
+    let xml = chart_with_bar_layout("");
+
+    let layout = parse_chart_xml(&xml).unwrap().bar_band_layout;
+
+    assert_eq!(layout.gap_width_percent, 150.0);
+    assert_eq!(layout.overlap_percent, 0.0);
+}
+
+#[test]
+fn test_a_percent_suffixed_amount_is_the_same_number() {
+    // `ST_GapAmount` and `ST_Overlap` are unions of a bare integer and a
+    // percentage string, so `"90%"` and `"90"` describe the same chart.
+    let xml = chart_with_bar_layout(r#"<c:gapWidth val="90%"/><c:overlap val="100%"/>"#);
+
+    let layout = parse_chart_xml(&xml).unwrap().bar_band_layout;
+
+    assert_eq!(layout.gap_width_percent, 90.0);
+    assert_eq!(layout.overlap_percent, 100.0);
+}
+
+#[test]
+fn test_values_past_the_schema_bounds_are_pulled_back() {
+    // PowerPoint 16.0 refuses to open a file whose gapWidth reads 1000 while
+    // opening 500 happily, so a value outside `ST_GapAmount` describes no
+    // drawable chart and the nearest bound is the honest reading of it.
+    let over = chart_with_bar_layout(r#"<c:gapWidth val="1000"/><c:overlap val="400"/>"#);
+    let under = chart_with_bar_layout(r#"<c:gapWidth val="-40"/><c:overlap val="-500"/>"#);
+
+    let over_layout = parse_chart_xml(&over).unwrap().bar_band_layout;
+    let under_layout = parse_chart_xml(&under).unwrap().bar_band_layout;
+
+    assert_eq!(over_layout.gap_width_percent, 500.0);
+    assert_eq!(over_layout.overlap_percent, 100.0);
+    assert_eq!(under_layout.gap_width_percent, 0.0);
+    assert_eq!(under_layout.overlap_percent, -100.0);
+}
+
+#[test]
+fn test_an_unreadable_amount_leaves_the_default_standing() {
+    let xml = chart_with_bar_layout(r#"<c:gapWidth val="wide"/>"#);
+
+    assert_eq!(
+        parse_chart_xml(&xml).unwrap().bar_band_layout,
+        BarBandLayout::default()
+    );
+}
+
+#[test]
+fn test_a_trailing_line_chart_keeps_the_bar_layout() {
+    // A combo plot area holds one element per chart family, and only the bar
+    // family carries these two. The `<c:lineChart>` that follows must leave
+    // what the bars asked for standing.
+    let xml = chart_with_bar_layout(r#"<c:gapWidth val="90"/><c:overlap val="100"/>"#).replace(
+        "</c:barChart>",
+        r#"</c:barChart><c:lineChart><c:grouping val="standard"/><c:ser><c:idx val="1"/><c:val><c:numLit><c:pt idx="0"><c:v>7</c:v></c:pt></c:numLit></c:val></c:ser></c:lineChart>"#,
+    );
+
+    let layout = parse_chart_xml(&xml).unwrap().bar_band_layout;
+
+    assert_eq!(layout.gap_width_percent, 90.0);
+    assert_eq!(layout.overlap_percent, 100.0);
+}
