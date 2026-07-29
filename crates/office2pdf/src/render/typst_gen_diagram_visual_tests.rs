@@ -1206,3 +1206,44 @@ fn a_zero_slice_carries_no_label() {
         "a slice with no wedge has nothing to label, got:\n{source}"
     );
 }
+
+/// An automatic major gridline is PowerPoint's 0.75pt `#868686`, not a lighter
+/// hairline.
+///
+/// `c:majorGridlines` with no `c:spPr` leaves both sides drawing their own
+/// default. Ours was 0.6pt `#C8C8C8`, which puts roughly a quarter of the ink
+/// on each line and leaves the grid barely visible against a white plot area
+/// (issue #673).
+#[test]
+fn test_chart_default_gridline_matches_powerpoint() {
+    let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Chart {
+        chart_type: ChartType::Bar,
+        title: None,
+        categories: vec!["Q1".to_string(), "Q2".to_string()],
+        series: vec![ChartSeries {
+            name: Some("Revenue".to_string()),
+            values: vec![100.0, 250.0],
+            fill: None,
+            point_fills: Vec::new(),
+            data_labels: DataLabels::default(),
+        }],
+        grouping: ChartGrouping::Clustered,
+        legend_position: LegendPosition::Right,
+        category_axis_title: None,
+        value_axis_title: None,
+    })])]);
+
+    let source = generate_typst(&doc).unwrap().source;
+    assert!(
+        source.contains("stroke: 0.75pt + rgb(134, 134, 134)"),
+        "gridlines should be PowerPoint's 0.75pt #868686, got:\n{source}"
+    );
+    assert!(
+        !source.contains("rgb(200, 200, 200)"),
+        "the old #C8C8C8 gridline default must be gone, got:\n{source}"
+    );
+    assert!(
+        !source.contains("rgb(120, 120, 120)"),
+        "the old #787878 axis-line default must be gone, got:\n{source}"
+    );
+}

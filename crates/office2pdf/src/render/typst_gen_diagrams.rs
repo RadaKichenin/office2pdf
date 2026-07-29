@@ -262,6 +262,16 @@ const MAJOR_UNITS: f64 = 5.0;
 /// Step sizes Excel will choose, as multiples of a power of ten.
 const NICE_STEPS: [f64; 5] = [1.0, 2.0, 2.5, 5.0, 10.0];
 
+/// The stroke PowerPoint draws for an automatic major gridline and for an
+/// automatic axis line: 0.75pt (9525 EMU) in `#868686`.
+///
+/// A `c:majorGridlines` carrying no `c:spPr` leaves the renderer to supply its
+/// own default. Ours was 0.6pt `#C8C8C8`, which puts roughly a quarter of the
+/// ink on each line and left the grid barely visible against a white plot area.
+/// The axis line ran a milder version of the same drift at 0.8pt `#787878`
+/// (issue #673).
+const CHART_AUTOMATIC_LINE: &str = "0.75pt + rgb(134, 134, 134)";
+
 const PLOT_MAIN: f64 = 300.0; // value-axis length in points
 const ROW: f64 = 34.0; // per-category thickness
 const LABEL_W: f64 = 62.0; // category label gutter
@@ -592,10 +602,11 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
             let x: f64 = plot_x + frac * plot_w;
             let _ = writeln!(
                 out,
-                "#place(top + left, dx: {}pt, dy: {}pt, line(end: (0pt, {}pt), stroke: 0.6pt + rgb(200, 200, 200)))",
+                "#place(top + left, dx: {}pt, dy: {}pt, line(end: (0pt, {}pt), stroke: {}))",
                 format_f64(x),
                 format_f64(plot_y),
-                format_f64(plot_h)
+                format_f64(plot_h),
+                CHART_AUTOMATIC_LINE
             );
             let _ = writeln!(
                 out,
@@ -608,10 +619,11 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
             let y: f64 = plot_y + (1.0 - frac) * plot_h;
             let _ = writeln!(
                 out,
-                "#place(top + left, dx: {}pt, dy: {}pt, line(end: ({}pt, 0pt), stroke: 0.6pt + rgb(200, 200, 200)))",
+                "#place(top + left, dx: {}pt, dy: {}pt, line(end: ({}pt, 0pt), stroke: {}))",
                 format_f64(plot_x),
                 format_f64(y),
-                format_f64(plot_w)
+                format_f64(plot_w),
+                CHART_AUTOMATIC_LINE
             );
             let _ = writeln!(
                 out,
@@ -744,18 +756,20 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
     if horizontal {
         let _ = writeln!(
             out,
-            "#place(top + left, dx: {}pt, dy: {}pt, line(end: (0pt, {}pt), stroke: 0.8pt + rgb(120, 120, 120)))",
+            "#place(top + left, dx: {}pt, dy: {}pt, line(end: (0pt, {}pt), stroke: {}))",
             format_f64(plot_x),
             format_f64(plot_y),
-            format_f64(plot_h)
+            format_f64(plot_h),
+            CHART_AUTOMATIC_LINE
         );
     } else {
         let _ = writeln!(
             out,
-            "#place(top + left, dx: {}pt, dy: {}pt, line(end: ({}pt, 0pt), stroke: 0.8pt + rgb(120, 120, 120)))",
+            "#place(top + left, dx: {}pt, dy: {}pt, line(end: ({}pt, 0pt), stroke: {}))",
             format_f64(plot_x),
             format_f64(plot_y + plot_h),
-            format_f64(plot_w)
+            format_f64(plot_w),
+            CHART_AUTOMATIC_LINE
         );
     }
 
@@ -942,10 +956,11 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
         let y: f64 = plot_y + (1.0 - tick / nice_max) * plot_h;
         let _ = writeln!(
             out,
-            "#place(top + left, dx: {}pt, dy: {}pt, line(end: ({}pt, 0pt), stroke: 0.6pt + rgb(200, 200, 200)))",
+            "#place(top + left, dx: {}pt, dy: {}pt, line(end: ({}pt, 0pt), stroke: {}))",
             format_f64(plot_x),
             format_f64(y),
-            format_f64(plot_w)
+            format_f64(plot_w),
+            CHART_AUTOMATIC_LINE
         );
         let _ = writeln!(
             out,
@@ -1013,17 +1028,19 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
     // Value/category axis lines.
     let _ = writeln!(
         out,
-        "#place(top + left, dx: {}pt, dy: {}pt, line(end: (0pt, {}pt), stroke: 0.8pt + rgb(120, 120, 120)))",
+        "#place(top + left, dx: {}pt, dy: {}pt, line(end: (0pt, {}pt), stroke: {}))",
         format_f64(plot_x),
         format_f64(plot_y),
-        format_f64(plot_h)
+        format_f64(plot_h),
+        CHART_AUTOMATIC_LINE
     );
     let _ = writeln!(
         out,
-        "#place(top + left, dx: {}pt, dy: {}pt, line(end: ({}pt, 0pt), stroke: 0.8pt + rgb(120, 120, 120)))",
+        "#place(top + left, dx: {}pt, dy: {}pt, line(end: ({}pt, 0pt), stroke: {}))",
         format_f64(plot_x),
         format_f64(plot_y + plot_h),
-        format_f64(plot_w)
+        format_f64(plot_w),
+        CHART_AUTOMATIC_LINE
     );
 
     // Legend on the edge `<c:legendPos>` asks for.
