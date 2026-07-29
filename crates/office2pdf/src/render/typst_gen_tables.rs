@@ -439,13 +439,23 @@ fn generate_table_cell(
     }
 
     if let Some(spill_width) = cell.spill_width {
-        // Excel paints unwrapped text across empty right neighbors without
-        // growing the row: lay the content out on one clipped line via
-        // #place (out of layout) and hold the row height with a zero-width
-        // strut.
+        // An unwrapped cell keeps its text on one line: lay the content out in
+        // a clipped box via #place (out of layout) and hold the row height with
+        // a zero-width strut, so the line neither wraps nor grows the row.
+        //
+        // The box is anchored where the cell's own alignment puts it. A
+        // general/left cell paints rightwards across empty neighbours from its
+        // left edge; a centred or right-aligned one is clipped at its own edge,
+        // so anchoring it left would slide its text out of the column
+        // (issue #615).
+        let anchor = match cell_horizontal_alignment(cell) {
+            Some(Alignment::Center) => "center",
+            Some(Alignment::Right) => "right",
+            _ => "left",
+        };
         let _ = write!(
             out,
-            "#place(left + horizon, box(width: {}pt, height: 1.3em, clip: true)[",
+            "#place({anchor} + horizon, box(width: {}pt, height: 1.3em, clip: true)[",
             format_f64(spill_width),
         );
         generate_cell_content(out, &cell.content, ctx)?;
@@ -455,6 +465,14 @@ fn generate_table_cell(
     }
     out.push_str("],\n");
     Ok(())
+}
+
+/// The horizontal alignment a cell's own paragraph declares, if any.
+fn cell_horizontal_alignment(cell: &TableCell) -> Option<Alignment> {
+    cell.content.iter().find_map(|block| match block {
+        Block::Paragraph(paragraph) => paragraph.style.alignment,
+        _ => None,
+    })
 }
 
 fn write_double_border_overlays(out: &mut String, border: &CellBorder, padding: Insets) {

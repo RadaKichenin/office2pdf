@@ -402,10 +402,20 @@ fn estimate_text_width_pt(runs: &[Run]) -> f64 {
         .sum()
 }
 
-/// Excel lets an unwrapped left-aligned text overflow into consecutive empty
-/// cells to its right without growing the row. Returns the total width the
-/// content may paint across (own column + empty neighbors), or None when the
-/// text fits, wraps, or has no empty neighbor to spill into.
+/// The width an unwrapped cell's single line may paint across, or `None` when
+/// the text fits its own column and needs no special handling.
+///
+/// `wrapText="false"` means exactly that in Excel: the text never moves to a
+/// second line. What varies is only how far it may paint before being clipped —
+/// a general/left cell paints on across consecutive empty neighbours to its
+/// right, and a cell with nowhere to go is clipped at its own edge. Probed
+/// against Excel 16.0: a centred cell whose text runs well past its column,
+/// with occupied cells on both sides, prints one clipped line; it does not
+/// wrap.
+///
+/// Restricting this to left alignment made every overflowing centred or
+/// right-aligned cell fall through to wrapping, which grew the row and, once
+/// rows take the height Excel recorded, overflowed it (issue #615).
 #[allow(clippy::too_many_arguments)]
 fn compute_spill_width(
     sheet: &umya_spreadsheet::Worksheet,
@@ -418,10 +428,6 @@ fn compute_spill_width(
     umya_cell: Option<&umya_spreadsheet::Cell>,
 ) -> Option<f64> {
     if runs.is_empty() {
-        return None;
-    }
-    // Only Excel's "general"/left horizontal alignment spills to the right.
-    if !matches!(cell_alignment, None | Some(crate::ir::Alignment::Left)) {
         return None;
     }
     // Explicit wrapText wraps inside the cell instead.
@@ -458,6 +464,13 @@ fn compute_spill_width(
     // Leave room for the ~4pt total horizontal cell inset.
     if estimate_text_width_pt(runs) <= own_width - 4.0 {
         return None;
+    }
+
+    // Only a general/left cell paints on into what lies to its right. A centred
+    // or right-aligned one is clipped at its own edge — but still on one line.
+    let spills_right: bool = matches!(cell_alignment, None | Some(crate::ir::Alignment::Left));
+    if !spills_right {
+        return Some(own_width);
     }
 
     let mut total_width: f64 = own_width;
@@ -497,7 +510,12 @@ fn compute_spill_width(
         }
     }
 
-    has_empty_neighbor.then_some(total_width)
+    // Nowhere to spill: the line is clipped at the cell's own edge rather than
+    // wrapped onto a second line, which is what Excel prints.
+    if !has_empty_neighbor {
+        return Some(own_width);
+    }
+    Some(total_width)
 }
 
 /// Excel's fallback row height when the sheet declares none (Calibri 11).
