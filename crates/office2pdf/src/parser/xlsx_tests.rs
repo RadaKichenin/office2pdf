@@ -187,22 +187,25 @@ fn test_column_widths_default() {
 
     let tp = get_sheet_page(&doc, 0);
     assert_eq!(tp.table.column_widths.len(), 2);
-    // Print geometry uses the stored character width and the Normal font's
-    // 8px MDW (Calibri 11, pixel-ceiled) without adding screen-only cell
-    // padding a second time: 8.43 chars × 8px × 0.75 ≈ 50.6pt.
+    // umya's writer auto-emits `<col min="1" max="2" width="8.38"
+    // customWidth="1"/>` for used columns, so this fixture takes the
+    // declared-width path: round(8.38 × 6pt Calibri-11 unit) = 50pt on the
+    // integer point grid (issue #621; the old pixel model printed 50.28pt).
     for w in &tp.table.column_widths {
-        assert!(
-            *w > 50.0 && *w < 51.0,
-            "Expected default print width around 50.6pt, got {w}"
+        assert_eq!(
+            *w, 50.0,
+            "Expected declared 8.38-unit width of 50pt, got {w}"
         );
     }
 }
 
 #[test]
 fn test_carlito_column_widths_match_native_print_metrics() {
-    assert_eq!(column_width_to_pt(26.0, 8.0), 156.0);
-    assert_eq!(column_width_to_pt(20.0, 8.0), 120.0);
-    assert_eq!(column_width_to_pt(24.0, 8.0), 144.0);
+    // Carlito 11 has a 6pt column unit (issue #621), so the pr_186 fixture's
+    // native 26/20/24-unit columns print 156/120/144pt.
+    assert_eq!(column_width_to_pt(26.0, 6.0), 156.0);
+    assert_eq!(column_width_to_pt(20.0, 6.0), 120.0);
+    assert_eq!(column_width_to_pt(24.0, 6.0), 144.0);
 }
 
 #[test]
@@ -222,23 +225,140 @@ fn test_sheet_uses_dominant_carlito_font_for_column_metrics() {
         .get_font_mut()
         .set_name("Carlito");
 
-    assert_eq!(sheet_max_digit_width_px(sheet), 8.0);
+    // Styles-unreadable fallback: the dominant Carlito face at the assumed
+    // 11pt Normal size gives the same 6pt unit as a declared Carlito-11
+    // Normal font (issue #621).
+    assert_eq!(sheet_column_unit_pt(sheet), 6.0);
 }
 
+/// The column character-unit is an INTEGER POINT count: round-half-up of the
+/// Normal font's max digit advance in points. Measured on 17 one-factor
+/// native Excel-for-Mac probes (issue #621): each family/size pair below is a
+/// discriminator — Calibri 10 → 5pt kills every integer-96dpi-pixel model
+/// (the old ceil gave 7px = 5.25pt), Times New Roman 13 (exactly 6.500pt)
+/// rounds UP to 7 (kills half-even), Calibri 9 and Verdana 11 kill
+/// truncation, Calibri 10 and Verdana 10 kill ceiling.
 #[test]
-fn test_normal_font_max_digit_width_pixel_ceils_at_96_dpi() {
-    // Excel pixel-ceils the Normal font's max digit width: Calibri 11 is
-    // 0.5066em × 11pt × 96/72 ≈ 7.43px → 8px, which is what native Excel
-    // print pagination of the audit fixtures requires (issue #366).
-    assert_eq!(max_digit_width_px_for_normal_font("Calibri", 11.0), 8.0);
-    assert_eq!(max_digit_width_px_for_normal_font("Carlito", 11.0), 8.0);
-    assert_eq!(max_digit_width_px_for_normal_font("Arial", 10.0), 8.0);
+fn test_column_unit_pt_is_integer_points_from_digit_advance() {
+    assert_eq!(column_unit_pt("Calibri", 9.0), 5.0);
+    assert_eq!(column_unit_pt("Calibri", 10.0), 5.0);
+    assert_eq!(column_unit_pt("Calibri", 11.0), 6.0);
+    assert_eq!(column_unit_pt("Calibri", 12.0), 6.0);
+    assert_eq!(column_unit_pt("Arial", 10.0), 6.0);
+    assert_eq!(column_unit_pt("Arial", 12.0), 7.0);
+    assert_eq!(column_unit_pt("Verdana", 10.0), 6.0);
+    assert_eq!(column_unit_pt("Verdana", 11.0), 7.0);
+    assert_eq!(column_unit_pt("Times New Roman", 12.0), 6.0);
+    assert_eq!(column_unit_pt("Times New Roman", 13.0), 7.0);
+    assert_eq!(column_unit_pt("Courier New", 10.0), 6.0);
+    assert_eq!(column_unit_pt("Courier New", 12.0), 7.0);
+    assert_eq!(column_unit_pt("Malgun Gothic", 10.0), 6.0);
+    assert_eq!(column_unit_pt("Malgun Gothic", 11.0), 6.0);
+}
+
+/// The reference digit advances are the real `hmtx` maxima over U+0030..=0039
+/// of the faces Excel itself resolves (read from Excel's own DFonts/system
+/// faces by the issue #621 probe tooling). They pin the wasm/font-less arm so
+/// output stays deterministic, and they outrank live font resolution so a
+/// machine substituting a digit-incompatible face (Calibri → Liberation Sans
+/// is 0.556em against Calibri's 0.5068) cannot shift column geometry.
+#[test]
+fn test_reference_digit_advance_em_pins_excel_face_metrics() {
+    let calibri: f64 = reference_digit_advance_em("Calibri").unwrap();
+    assert!((calibri - 0.506836).abs() < 1e-6);
     assert_eq!(
-        max_digit_width_px_for_normal_font("Malgun Gothic", 11.0),
-        8.0
+        reference_digit_advance_em("Carlito"),
+        reference_digit_advance_em("Calibri"),
+        "Carlito is metrically identical to Calibri"
     );
-    // Smaller Normal fonts shrink the metric.
-    assert_eq!(max_digit_width_px_for_normal_font("Calibri", 8.0), 6.0);
+    let arial: f64 = reference_digit_advance_em("Arial").unwrap();
+    assert!((arial - 0.556152).abs() < 1e-6);
+    let verdana: f64 = reference_digit_advance_em("Verdana").unwrap();
+    assert!((verdana - 0.635742).abs() < 1e-6);
+    let times: f64 = reference_digit_advance_em("Times New Roman").unwrap();
+    assert!((times - 0.500000).abs() < 1e-6);
+    let courier: f64 = reference_digit_advance_em("Courier New").unwrap();
+    assert!((courier - 0.600098).abs() < 1e-6);
+    // The repo's previous 0.529em Malgun estimate was wrong: the real face
+    // advances 0.550781em (issue #621 probe artifacts).
+    let malgun: f64 = reference_digit_advance_em("Malgun Gothic").unwrap();
+    assert!((malgun - 0.550781).abs() < 1e-6);
+    assert_eq!(
+        reference_digit_advance_em("맑은 고딕"),
+        reference_digit_advance_em("Malgun Gothic"),
+        "the localized Malgun name must map to the same face"
+    );
+    assert_eq!(
+        reference_digit_advance_em("Definitely Not A Font"),
+        None,
+        "unknown families fall through to live font resolution"
+    );
+}
+
+/// Families outside the reference table resolve their digit advance from the
+/// real face `hmtx`, exactly as Excel measures the face it resolves. The
+/// embedded Libertinus Serif face makes this deterministic on every target:
+/// its digit advance is 465/1000 em.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn test_max_digit_advance_em_reads_real_face_hmtx() {
+    let advance: f64 = crate::render::pdf::max_digit_advance_em("Libertinus Serif")
+        .expect("the embedded Libertinus Serif face must resolve");
+    assert!(
+        (advance - 0.465).abs() < 1e-6,
+        "Libertinus Serif digit advance should be 0.465em, got {advance}"
+    );
+    // And the column metric consumes it: round(0.465 × 11pt) = 5pt.
+    assert_eq!(column_unit_pt("Libertinus Serif", 11.0), 5.0);
+}
+
+/// A declared column width prints as an integer point count: Excel quantizes
+/// `width × unit` per column. Probe calibri11frac (issue #621): width 10.6 at
+/// the 6pt Calibri-11 unit prints 64pt, not 63.6pt.
+#[test]
+fn test_declared_column_width_quantizes_to_integer_points() {
+    assert_eq!(column_width_to_pt(10.6, 6.0), 64.0);
+    // Whole-unit widths land on exact multiples — the pr_186 fixture's
+    // Carlito-11 26/20/24-unit columns stay 156/120/144pt.
+    assert_eq!(column_width_to_pt(26.0, 6.0), 156.0);
+    assert_eq!(column_width_to_pt(20.0, 6.0), 120.0);
+    assert_eq!(column_width_to_pt(24.0, 6.0), 144.0);
+}
+
+/// A column with no `<col>` entry and no declared `defaultColWidth` prints at
+/// `baseColWidth × unit + 5` points — NOT 8.43 character units — where
+/// `baseColWidth` defaults to 8 when `sheetFormatPr` does not declare it.
+/// Verified by the issue #621 probes: at the 6pt Calibri-11 unit,
+/// baseColWidth 10 → 65pt and 12 → 77pt (round-3 probes calibri11base10/12),
+/// absent → 53pt; units 5/7 with no baseColWidth → 45/61pt. A declared
+/// `defaultColWidth` outranks `baseColWidth` and goes through the
+/// declared-units quantization instead.
+#[test]
+fn test_default_column_width_is_base_col_width_units_plus_five_points() {
+    assert_eq!(default_column_width_pt(None, None, 5.0), 45.0);
+    assert_eq!(default_column_width_pt(None, None, 6.0), 53.0);
+    assert_eq!(default_column_width_pt(None, None, 7.0), 61.0);
+    // Measured baseColWidth probes (no defaultColWidth): 10 → 65, 12 → 77.
+    assert_eq!(default_column_width_pt(None, Some(10), 6.0), 65.0);
+    assert_eq!(default_column_width_pt(None, Some(12), 6.0), 77.0);
+    // Declared defaultColWidth quantizes like any declared width and
+    // outranks baseColWidth.
+    assert_eq!(default_column_width_pt(Some(10.6), None, 6.0), 64.0);
+    assert_eq!(default_column_width_pt(Some(10.6), Some(12), 6.0), 64.0);
+}
+
+/// `declared_base_column_width` surfaces `sheetFormatPr@baseColWidth` only
+/// when the file declares one — umya reports 0 for an absent attribute,
+/// a width Excel never writes.
+#[test]
+fn test_declared_base_column_width_reads_sheet_format_pr() {
+    let mut book = umya_spreadsheet::new_file();
+    let sheet = book.get_sheet_mut(&0).unwrap();
+    assert_eq!(declared_base_column_width(sheet), None);
+    sheet
+        .get_sheet_format_properties_mut()
+        .set_base_column_width(10);
+    assert_eq!(declared_base_column_width(sheet), Some(10));
 }
 
 #[test]
@@ -742,9 +862,9 @@ fn splice_picture_drawing(data: &[u8]) -> Vec<u8> {
 
 /// A sheet with no cells must resolve its drawing anchors against the
 /// workbook Normal font, producing the same column metric as a populated
-/// sheet. umya writes Calibri 11 as the Normal font, which the converter's
-/// own model maps to an 8px max digit width -> 50.58pt default columns; the
-/// legacy hardcoded 7px metric produced 44.2575pt (issue #620).
+/// sheet (issue #620). umya writes Calibri 11 as the Normal font, whose 6pt
+/// unit prices an undeclared default column at 8 × 6 + 5 = 53pt (issue #621
+/// probes); the legacy hardcoded 7px metric produced 44.2575pt.
 #[test]
 fn test_drawing_only_sheet_resolves_anchors_with_normal_font_metric() {
     let data = build_drawing_only_sheet_xlsx();
@@ -758,10 +878,10 @@ fn test_drawing_only_sheet_resolves_anchors_with_normal_font_metric() {
     );
     let image: &crate::ir::SheetImage = &page.images[0];
 
-    let column_pt: f64 = column_width_to_pt(DEFAULT_COLUMN_WIDTH, 8.0);
-    assert!(
-        (column_pt - 50.58).abs() < 0.01,
-        "Calibri-11 default column must be 50.58pt, got {column_pt}"
+    let column_pt: f64 = default_column_width_pt(None, None, 6.0);
+    assert_eq!(
+        column_pt, 53.0,
+        "Calibri-11 default column must be 53pt, got {column_pt}"
     );
     // Anchor spans cols 2..5 with zero offsets: x = 2 columns, width = 3.
     assert!(
@@ -774,20 +894,23 @@ fn test_drawing_only_sheet_resolves_anchors_with_normal_font_metric() {
         (width - 3.0 * column_pt).abs() < 0.01,
         "width {width} != 3 x {column_pt}"
     );
-    // Negative: the legacy hardcoded-7px metric must be gone.
-    let legacy_column_pt: f64 = column_width_to_pt(DEFAULT_COLUMN_WIDTH, 7.0);
-    assert!(
-        (width - 3.0 * legacy_column_pt).abs() > 1.0,
-        "width {width} still matches the legacy 44.2575pt column metric"
-    );
+    // Negative: neither the legacy hardcoded-7px metric (44.2575pt columns)
+    // nor the pre-#621 8.43-character model (50.58pt) may resurface.
+    for stale_column_pt in [44.2575_f64, 50.58_f64] {
+        assert!(
+            (width - 3.0 * stale_column_pt).abs() > 1.0,
+            "width {width} still matches the stale {stale_column_pt}pt column metric"
+        );
+    }
 }
 
 /// Triangulation for issue #620: the empty-sheet context must derive its
-/// metric from whatever Normal font it is given — not a hardcoded 8px — and
-/// fall back to the legacy 7px only when no Normal font is readable. The
-/// carried `normal_font` keeps the stub structurally consistent with a
-/// populated-sheet context; nothing on the drawing-only path reads it today
-/// (text boxes take their fonts from DrawingML run properties and the theme).
+/// metric from whatever Normal font it is given — not a hardcoded value —
+/// and fall back to the legacy 5.25pt unit only when no Normal font is
+/// readable. The carried `normal_font` keeps the stub structurally
+/// consistent with a populated-sheet context; nothing on the drawing-only
+/// path reads it today (text boxes take their fonts from DrawingML run
+/// properties and the theme).
 #[test]
 fn test_empty_sheet_context_derives_metric_from_normal_font() {
     let book = umya_spreadsheet::new_file();
@@ -798,22 +921,28 @@ fn test_empty_sheet_context_derives_metric_from_normal_font() {
         size_pt: 11.0,
     };
     let calibri_ctx = empty_sheet_context(sheet, Some(&calibri_11));
-    assert_eq!(calibri_ctx.max_digit_width_px, 8.0);
+    assert_eq!(resolve_column_unit_pt(sheet, Some(&calibri_11)), 6.0);
+    assert_eq!(calibri_ctx.default_column_width_pt, 53.0);
     assert_eq!(calibri_ctx.normal_font, Some(calibri_11));
 
-    // A smaller Normal font must shrink the metric with it.
+    // A smaller Normal font must shrink the metric with it:
+    // round(0.506836 × 8pt) = 4pt unit → 8 × 4 + 5 = 37pt default columns
+    // (issue #621 model).
     let calibri_8 = NormalFont {
         family: "Calibri".to_string(),
         size_pt: 8.0,
     };
+    assert_eq!(resolve_column_unit_pt(sheet, Some(&calibri_8)), 4.0);
     assert_eq!(
-        empty_sheet_context(sheet, Some(&calibri_8)).max_digit_width_px,
-        6.0
+        empty_sheet_context(sheet, Some(&calibri_8)).default_column_width_pt,
+        37.0
     );
 
     // No readable Normal font: the shared cell-font fallback finds no cells
-    // on an empty sheet and keeps the legacy 7px default.
+    // on an empty sheet and keeps the legacy 5.25pt unit (7px × 0.75); the
+    // #621 probes never covered a stylesheet-less workbook.
     let fallback_ctx = empty_sheet_context(sheet, None);
-    assert_eq!(fallback_ctx.max_digit_width_px, 7.0);
+    assert_eq!(resolve_column_unit_pt(sheet, None), 5.25);
+    assert_eq!(fallback_ctx.default_column_width_pt, 8.0 * 5.25 + 5.0);
     assert_eq!(fallback_ctx.normal_font, None);
 }

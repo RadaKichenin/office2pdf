@@ -465,6 +465,71 @@ pub(crate) fn font_line_metrics_em(_family: &str) -> Option<(f64, f64, f64)> {
     None
 }
 
+/// Maximum horizontal advance over the digits U+0030..=U+0039 of the best
+/// face for `family`, in em units.
+///
+/// Excel derives every column print metric from this value of the face it
+/// resolves for the workbook Normal font: 17 one-factor native Excel-for-Mac
+/// probes show the column character-unit is `round_half_up(advance × size)`
+/// integer points, matching each face's real `hmtx` maximum (issue #621).
+/// This resolves families outside the parser's reference table — the same
+/// alias and substitute chain rendering uses, so the metric tracks the face
+/// the glyphs will actually come from.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn max_digit_advance_em(family: &str) -> Option<f64> {
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+    static ADVANCE_CACHE: OnceLock<Mutex<HashMap<String, Option<f64>>>> = OnceLock::new();
+
+    let cache = ADVANCE_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    let key: String = family.to_lowercase();
+    if let Some(cached) = cache
+        .lock()
+        .expect("digit advance cache mutex should not be poisoned")
+        .get(&key)
+    {
+        return *cached;
+    }
+
+    // Use the same font set the compiler will use (system + discovered
+    // Office font dirs); this also primes the compile-time cache.
+    let search_context = super::font_context::resolve_font_search_context(&[]);
+    let data = get_fonts_for_extra_paths(search_context.search_paths());
+    let advance: Option<f64> = super::font_subst::family_candidates(family)
+        .iter()
+        .find_map(|candidate| {
+            data.book.select(
+                &candidate.to_lowercase(),
+                typst::text::FontVariant::default(),
+            )
+        })
+        .and_then(|index| data.fonts.get(index))
+        .and_then(|slot| slot.get())
+        .and_then(|font| {
+            let ttf = font.ttf();
+            let upem: f64 = f64::from(ttf.units_per_em()).max(1.0);
+            ('0'..='9')
+                .filter_map(|digit| {
+                    ttf.glyph_index(digit)
+                        .and_then(|glyph| ttf.glyph_hor_advance(glyph))
+                })
+                .map(|glyph_advance| f64::from(glyph_advance) / upem)
+                .fold(None, |widest: Option<f64>, advance_em: f64| {
+                    Some(widest.map_or(advance_em, |w| w.max(advance_em)))
+                })
+        });
+    cache
+        .lock()
+        .expect("digit advance cache mutex should not be poisoned")
+        .insert(key, advance);
+    advance
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn max_digit_advance_em(_family: &str) -> Option<f64> {
+    None
+}
+
 /// PowerPoint's line height factor: it gives every line 1.2 times the font
 /// size, whatever the font's own metrics say.
 ///

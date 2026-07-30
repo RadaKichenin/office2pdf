@@ -185,7 +185,7 @@ fn anchored_image(
                 .copied()
                 .unwrap_or(0.0)
         } else {
-            column_width_to_pt(DEFAULT_COLUMN_WIDTH, ctx.max_digit_width_px)
+            ctx.default_column_width_pt
         }
     };
     // Excel resolves a drawing's anchor against the worksheet's own row
@@ -256,21 +256,27 @@ fn anchored_image(
 /// still resolve against default column widths and row heights.
 ///
 /// The column metric must come from the workbook Normal font exactly as it
-/// does for populated sheets: hardcoding 7px laid every drawing-only sheet
-/// out on 44.2575pt columns while the workbook's own Calibri-11 metric says
-/// 50.58pt, shrinking anchors 12.5% and distorting picture aspect ratios
-/// (issue #620). Without a readable Normal font the shared fallback inspects
-/// cell fonts, finds none on an empty sheet, and keeps the legacy 7px.
+/// does for populated sheets: hardcoding a 7px digit metric laid every
+/// drawing-only sheet out on 44.2575pt columns while the workbook's own
+/// Calibri-11 metric prices default columns at 53pt, shrinking anchors and
+/// distorting picture aspect ratios (issue #620). Without a readable Normal
+/// font the shared fallback inspects cell fonts, finds none on an empty
+/// sheet, and keeps the legacy 5.25pt unit.
 fn empty_sheet_context(
     sheet: &umya_spreadsheet::Worksheet,
     normal_font: Option<&NormalFont>,
 ) -> SheetContext {
+    let unit_pt: f64 = resolve_column_unit_pt(sheet, normal_font);
     SheetContext {
         col_start: 1,
         col_end: 0,
         num_cols: 0,
         column_widths: Vec::new(),
-        max_digit_width_px: resolve_max_digit_width_px(sheet, normal_font),
+        default_column_width_pt: default_column_width_pt(
+            declared_default_column_width(sheet),
+            declared_base_column_width(sheet),
+            unit_pt,
+        ),
         merge_tops: std::collections::HashMap::new(),
         merge_skips: std::collections::HashSet::new(),
         cond_fmt_overrides: std::collections::HashMap::new(),
