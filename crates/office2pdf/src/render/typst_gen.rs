@@ -120,6 +120,17 @@ struct GenCtx {
     /// line box. Decided once per row so every cell in it shares a baseline,
     /// which reading each cell's own text could not guarantee (issue #498).
     row_has_east_asian_text: bool,
+    /// The enclosing table's default vertical alignment: a cell that declares
+    /// none takes this, and its paragraph codegen must know the effective
+    /// answer to seat the line box (issue #618).
+    table_default_vertical_align: Option<CellVerticalAlign>,
+    /// Whether the enclosing table rests bottom-aligned text on the descender
+    /// line, i.e. is a spreadsheet ([`Table::seats_bottom_aligned_text_on_descender`]).
+    table_seats_bottom_aligned_text_on_descender: bool,
+    /// Whether the cell being generated seats its line box on the descender:
+    /// the enclosing table is a spreadsheet and the cell's effective vertical
+    /// alignment is bottom (issue #618).
+    cell_seats_text_on_descender: bool,
     /// Numerals the active section's `PAGE` fields render in. A header is
     /// generated as part of its page's setup, so the section's `w:pgNumType
     /// w:fmt` reaches the field through the context rather than through the
@@ -139,6 +150,9 @@ impl GenCtx {
             table_depth: 0,
             line_grid_pitch: None,
             row_has_east_asian_text: false,
+            table_default_vertical_align: None,
+            table_seats_bottom_aligned_text_on_descender: false,
+            cell_seats_text_on_descender: false,
             page_number_format: PageNumberFormat::default(),
             document_default_text: None,
             document_default_tab_stop_pt: None,
@@ -644,6 +658,8 @@ fn generate_table_with_anchors(
                     default_cell_padding: table.default_cell_padding,
                     use_content_driven_row_heights: table.use_content_driven_row_heights,
                     default_vertical_align: table.default_vertical_align,
+                    seats_bottom_aligned_text_on_descender: table
+                        .seats_bottom_aligned_text_on_descender,
                 };
                 generate_table(out, &segment, ctx)?;
                 out.push('\n');
@@ -680,6 +696,7 @@ fn generate_table_with_anchors(
             default_cell_padding: table.default_cell_padding,
             use_content_driven_row_heights: table.use_content_driven_row_heights,
             default_vertical_align: table.default_vertical_align,
+            seats_bottom_aligned_text_on_descender: table.seats_bottom_aligned_text_on_descender,
         };
         generate_table(out, &segment, ctx)?;
         out.push('\n');

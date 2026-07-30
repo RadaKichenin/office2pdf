@@ -65,6 +65,7 @@ fn test_table_with_default_cell_padding() {
         }),
         use_content_driven_row_heights: false,
         default_vertical_align: None,
+        seats_bottom_aligned_text_on_descender: false,
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -112,6 +113,7 @@ fn test_table_cell_with_padding_override() {
         }),
         use_content_driven_row_heights: false,
         default_vertical_align: None,
+        seats_bottom_aligned_text_on_descender: false,
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -136,6 +138,7 @@ fn test_table_alignment_center_wraps_table() {
         default_cell_padding: None,
         use_content_driven_row_heights: false,
         default_vertical_align: None,
+        seats_bottom_aligned_text_on_descender: false,
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -765,5 +768,116 @@ fn test_generate_space_before_after() {
     assert!(
         result.contains("12pt") || result.contains("above"),
         "Expected space_before in: {result}"
+    );
+}
+
+/// Excel rests a bottom-aligned cell's last-line descender on the bottom
+/// inset edge. The spill wrapper used to hardcode a `horizon` anchor and an
+/// ambient-sized `1.3em` box, so an unwrapped title in a tall row floated at
+/// the row's vertical centre instead (issue #618). The clip box and the
+/// in-flow strut must both be sized from the paragraph's own line box at the
+/// run's font size, not the ambient text size.
+#[test]
+fn bottom_aligned_spill_cell_anchors_its_line_box_at_the_bottom() {
+    let Some((ascender, descender, _word_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+    let font_size: f64 = 10.0;
+    // With the descender seated on the inset edge, the single line spans
+    // ascent-to-descender at the run's own size.
+    let line_box_height_pt: f64 = (ascender + descender) * font_size;
+    let cell = TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: "Warehouse Inventory".to_string(),
+                style: TextStyle {
+                    font_family: Some("Libertinus Serif".to_string()),
+                    font_size: Some(font_size),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })],
+        spill_width: Some(200.0),
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            cells: vec![cell],
+            height: Some(23.0),
+        }],
+        column_widths: vec![60.0],
+        default_vertical_align: Some(CellVerticalAlign::Bottom),
+        seats_bottom_aligned_text_on_descender: true,
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+    assert!(
+        result.contains(&format!(
+            "#place(left + bottom, box(width: 200pt, height: {}pt, clip: true)[",
+            format_f64(line_box_height_pt)
+        )),
+        "bottom cell's spill box must anchor at the bottom, sized to its own line: {result}"
+    );
+    assert!(
+        result.contains(&format!(
+            "])#box(width: 0pt, height: {}pt)",
+            format_f64(line_box_height_pt)
+        )),
+        "the in-flow strut must hold the same line height in points: {result}"
+    );
+    assert!(
+        !result.contains("horizon"),
+        "a bottom-aligned spill cell must not be vertically centred: {result}"
+    );
+}
+
+/// Triangulation for the spill anchor: an explicitly centred cell measures
+/// correct today, so its emission must stay exactly as it was — a `horizon`
+/// anchor with the ambient-sized box and strut.
+#[test]
+fn center_aligned_spill_cell_keeps_the_centered_wrapper() {
+    let cell = TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: "Centered spill".to_string(),
+                style: TextStyle {
+                    font_family: Some("Libertinus Serif".to_string()),
+                    font_size: Some(10.0),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })],
+        spill_width: Some(200.0),
+        vertical_align: Some(CellVerticalAlign::Center),
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            cells: vec![cell],
+            height: Some(23.0),
+        }],
+        column_widths: vec![60.0],
+        default_vertical_align: Some(CellVerticalAlign::Bottom),
+        seats_bottom_aligned_text_on_descender: true,
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+    assert!(
+        result.contains("#place(left + horizon, box(width: 200pt, height: 1.3em, clip: true)["),
+        "an explicitly centred spill cell keeps its current wrapper: {result}"
+    );
+    assert!(
+        result.contains("])#box(width: 0pt, height: 1.3em)"),
+        "an explicitly centred spill cell keeps its current strut: {result}"
     );
 }

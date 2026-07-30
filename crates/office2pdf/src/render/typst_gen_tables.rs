@@ -6,6 +6,14 @@ pub(super) fn generate_table(
     ctx: &mut GenCtx,
 ) -> Result<(), ConvertError> {
     ctx.table_depth += 1;
+    // A nested table decides its cells' effective vertical alignment from its
+    // own defaults; restore the enclosing table's answers afterwards, like
+    // `row_has_east_asian_text` below.
+    let enclosing_default_vertical_align: Option<CellVerticalAlign> =
+        ctx.table_default_vertical_align;
+    let enclosing_seats_on_descender: bool = ctx.table_seats_bottom_aligned_text_on_descender;
+    ctx.table_default_vertical_align = table.default_vertical_align;
+    ctx.table_seats_bottom_aligned_text_on_descender = table.seats_bottom_aligned_text_on_descender;
     let result = match table.alignment {
         Some(Alignment::Center) => {
             out.push_str("#align(center)[\n");
@@ -21,6 +29,8 @@ pub(super) fn generate_table(
         }
         _ => generate_table_inner(out, table, ctx),
     };
+    ctx.table_default_vertical_align = enclosing_default_vertical_align;
+    ctx.table_seats_bottom_aligned_text_on_descender = enclosing_seats_on_descender;
     ctx.table_depth -= 1;
     result
 }
@@ -364,6 +374,22 @@ fn generate_table_cell(
         || cell.vertical_align.is_some()
         || cell.padding.is_some();
 
+    // The alignment the cell actually renders with: its own, or the table's
+    // default (Excel's bottom). The paragraph codegen needs the effective
+    // answer, not the cell's declaration, because Excel's untouched default
+    // cells are exactly the bottom-aligned ones (issue #618).
+    let effective_vertical_align: Option<CellVerticalAlign> =
+        cell.vertical_align.or(ctx.table_default_vertical_align);
+    let enclosing_cell_seats_on_descender: bool = ctx.cell_seats_text_on_descender;
+    // Descender seating applies only to FIXED-height rows (`row_height` is
+    // `Some` only then). In auto rows the renderer sizes the row from the
+    // content itself, whose intrinsic height was calibrated against Excel GT
+    // (#396/#411/#498) with the symmetric box; only fixed rows have slack for
+    // alignment to distribute, and only they were measured in #618.
+    ctx.cell_seats_text_on_descender = ctx.table_seats_bottom_aligned_text_on_descender
+        && effective_vertical_align == Some(CellVerticalAlign::Bottom)
+        && row_height.is_some();
+
     if needs_cell_fn {
         out.push_str(indent);
         out.push_str("table.cell(");
@@ -453,18 +479,77 @@ fn generate_table_cell(
             Some(Alignment::Right) => "right",
             _ => "left",
         };
-        let _ = write!(
-            out,
-            "#place({anchor} + horizon, box(width: {}pt, height: 1.3em, clip: true)[",
-            format_f64(spill_width),
-        );
-        generate_cell_content(out, &cell.content, ctx)?;
-        out.push_str("])#box(width: 0pt, height: 1.3em)");
+        // `#place` ignores the table's `align:`, so the wrapper must anchor
+        // where the cell's effective vertical alignment puts the line. The
+        // hardcoded `horizon` centred bottom-aligned titles in tall rows
+        // (issue #618). A bottom anchor needs the box and strut sized from
+        // the paragraph's own line box at the run's font size: the `1.3em`
+        // legacy shape resolves at the ambient text size, seating a larger
+        // line wrong even with the right anchor. The bottom anchor applies
+        // only to FIXED-height rows — auto rows are content-sized against the
+        // legacy shape (see the seating gate above). Centred cells keep the
+        // legacy shape (their measured position is correct today), and
+        // top-aligned seating is unverified against Excel GT and out of
+        // #618's measured scope, so Top keeps the legacy wrapper too.
+        let vertical_anchor: &str = match effective_vertical_align {
+            Some(CellVerticalAlign::Bottom) if row_height.is_some() => "bottom",
+            _ => "horizon",
+        };
+        let line_box_height_pt: Option<f64> = if vertical_anchor == "horizon" {
+            None
+        } else {
+            spill_line_box_height_pt(cell, ctx)
+        };
+        match line_box_height_pt {
+            Some(height_pt) => {
+                let _ = write!(
+                    out,
+                    "#place({anchor} + {vertical_anchor}, box(width: {}pt, height: {}pt, clip: true)[",
+                    format_f64(spill_width),
+                    format_f64(height_pt),
+                );
+                generate_cell_content(out, &cell.content, ctx)?;
+                let _ = write!(
+                    out,
+                    "])#box(width: 0pt, height: {}pt)",
+                    format_f64(height_pt)
+                );
+            }
+            // Unknown font metrics: keep the legacy ambient-sized shape.
+            None => {
+                let _ = write!(
+                    out,
+                    "#place({anchor} + {vertical_anchor}, box(width: {}pt, height: 1.3em, clip: true)[",
+                    format_f64(spill_width),
+                );
+                generate_cell_content(out, &cell.content, ctx)?;
+                out.push_str("])#box(width: 0pt, height: 1.3em)");
+            }
+        }
     } else {
         generate_cell_content(out, &cell.content, ctx)?;
     }
+    ctx.cell_seats_text_on_descender = enclosing_cell_seats_on_descender;
     out.push_str("],\n");
     Ok(())
+}
+
+/// Height, in points, of the single line box a spill cell's paragraph emits —
+/// the same metric edges the block carries, times the run's own font size.
+/// `None` when the font's metrics are unknown.
+fn spill_line_box_height_pt(cell: &TableCell, ctx: &GenCtx) -> Option<f64> {
+    let paragraph: &Paragraph = cell.content.iter().find_map(|block| match block {
+        Block::Paragraph(paragraph) => Some(paragraph),
+        _ => None,
+    })?;
+    let line_box: CellLineBox = word_cell_line_box(
+        &paragraph.runs,
+        &paragraph.style,
+        ctx.line_grid_pitch,
+        ctx.row_has_east_asian_text,
+        ctx.cell_seats_text_on_descender,
+    )?;
+    Some((line_box.top_em + line_box.bottom_em) * line_box.font_size_pt)
 }
 
 /// The horizontal alignment a cell's own paragraph declares, if any.
@@ -694,6 +779,7 @@ fn generate_cell_content(
                 ctx.default_tab_width_pt,
                 ctx.line_grid_pitch,
                 ctx.row_has_east_asian_text,
+                ctx.cell_seats_text_on_descender,
             ),
             Block::Paragraph(para) => generate_cell_paragraph(
                 out,
@@ -701,6 +787,7 @@ fn generate_cell_content(
                 ctx.default_tab_width_pt,
                 ctx.line_grid_pitch,
                 ctx.row_has_east_asian_text,
+                ctx.cell_seats_text_on_descender,
             ),
             Block::Table(table) => {
                 if ctx.table_depth < MAX_TABLE_DEPTH {
@@ -737,6 +824,7 @@ fn generate_cell_paragraph(
     default_tab_width_pt: f64,
     line_grid_pitch: Option<f64>,
     row_has_east_asian_text: bool,
+    seats_text_on_descender: bool,
 ) {
     let style: &ParagraphStyle = &para.style;
     let alignment = style.alignment;
@@ -753,8 +841,13 @@ fn generate_cell_paragraph(
     // text takes 1.3 times that line, like body text, and a snapping grid's
     // pitch above it — decided once per row so every cell in it shares a
     // baseline, the numeric ones included (issues #498, #518).
-    let line_height_settings: Option<String> =
-        word_cell_line_box_settings(&para.runs, style, line_grid_pitch, row_has_east_asian_text);
+    let line_height_settings: Option<String> = word_cell_line_box_settings(
+        &para.runs,
+        style,
+        line_grid_pitch,
+        row_has_east_asian_text,
+        seats_text_on_descender,
+    );
     let has_block_wrapper = cell_paragraph_needs_block_wrapper(style)
         || align_str.is_some()
         || line_height_settings.is_some();

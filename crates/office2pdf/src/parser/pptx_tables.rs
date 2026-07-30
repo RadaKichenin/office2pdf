@@ -404,6 +404,9 @@ impl<'a> PptxTableParser<'a> {
             default_cell_padding: Some(default_pptx_table_cell_padding()),
             use_content_driven_row_heights: true,
             default_vertical_align: None,
+            // PowerPoint GT has not verified descender seating for bottom
+            // cells (#618).
+            seats_bottom_aligned_text_on_descender: false,
         };
         table_styles::apply_table_style(&mut table, &self.table_props, self.table_styles);
         table
