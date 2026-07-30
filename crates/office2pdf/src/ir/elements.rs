@@ -527,6 +527,14 @@ pub struct Table {
     /// this: Word's and PowerPoint's bottom-cell seating is unverified against
     /// native GT, so their emission must not change (issue #618).
     pub seats_bottom_aligned_text_on_descender: bool,
+    /// When true, each border paints as a filled band anchored to the nominal
+    /// grid boundary (Excel's printed convention, measured on a native Excel
+    /// 16.111 probe: `thin` fills `[B, B+1]`, `medium` `[B-1, B+1]`, `thick`
+    /// `[B-1, B+2]`) instead of a Typst stroke centred on the boundary
+    /// (issue #619). Only spreadsheet tables set this; Word's and
+    /// PowerPoint's border-painting conventions are unmeasured against
+    /// their native GT, so they keep the centred-stroke path.
+    pub paints_borders_inside_boundary: bool,
 }
 
 /// A table row.

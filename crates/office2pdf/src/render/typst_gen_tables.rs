@@ -112,11 +112,30 @@ fn generate_table_inner(
     let lead_row_count = table
         .non_repeating_header_row_count
         .min(table.rows.len().saturating_sub(header_row_count));
+
+    // The grid boundary between the last repeating header row and the first
+    // body row, when both exist. Border-band ties there must resolve toward
+    // the header, whose cells repeat on every page (issue #619 review,
+    // remediation 2).
+    let repeating_header_boundary: Option<usize> = (header_row_count > 0
+        && lead_row_count + header_row_count < table.rows.len())
+    .then_some(lead_row_count + header_row_count);
+
+    // A boundary-band table (Excel) resolves which cell paints each shared
+    // boundary before emission: the bands are boundary-anchored and
+    // declaration-independent, so a boundary declared by both neighbours must
+    // paint exactly once (issue #619). Resolved separately from
+    // `TableCell::border` so the layout inset of #500/#503 keeps following
+    // each cell's own declaration and no text moves.
+    let painted_borders: Option<Vec<Vec<Option<CellBorder>>>> = table
+        .paints_borders_inside_boundary
+        .then(|| resolve_boundary_painted_borders(table, num_cols, repeating_header_boundary));
     if lead_row_count > 0 {
         out.push_str("  table.header(repeat: false,\n");
         generate_table_rows(
             out,
             &table.rows[..lead_row_count],
+            painted_borders.as_deref().map(|p| &p[..lead_row_count]),
             num_cols,
             &mut rowspan_remaining,
             "    ",
@@ -136,6 +155,9 @@ fn generate_table_inner(
         generate_table_rows(
             out,
             &table.rows[lead_row_count..lead_row_count + header_row_count],
+            painted_borders
+                .as_deref()
+                .map(|p| &p[lead_row_count..lead_row_count + header_row_count]),
             num_cols,
             &mut rowspan_remaining,
             "    ",
@@ -149,6 +171,9 @@ fn generate_table_inner(
     generate_table_rows(
         out,
         &table.rows[lead_row_count + header_row_count..],
+        painted_borders
+            .as_deref()
+            .map(|p| &p[lead_row_count + header_row_count..]),
         num_cols,
         &mut rowspan_remaining,
         "  ",
@@ -165,6 +190,7 @@ fn generate_table_inner(
 fn generate_table_rows(
     out: &mut String,
     rows: &[TableRow],
+    painted_borders: Option<&[Vec<Option<CellBorder>>]>,
     num_cols: usize,
     rowspan_remaining: &mut [usize],
     indent: &str,
@@ -175,7 +201,7 @@ fn generate_table_rows(
     // A nested table decides its own rows; restore the enclosing row's answer
     // so the outer cells that follow keep sharing their baseline.
     let enclosing_row_has_east_asian_text: bool = ctx.row_has_east_asian_text;
-    for row in rows {
+    for (row_index, row) in rows.iter().enumerate() {
         for rs in rowspan_remaining.iter_mut() {
             if *rs > 0 {
                 *rs -= 1;
@@ -188,8 +214,14 @@ fn generate_table_rows(
         // split mixed-script rows across two baselines (issue #498).
         ctx.row_has_east_asian_text = row_has_east_asian_text(row);
 
+        // The auto-row frame estimate walks every cell's font metrics, so
+        // computing it per cell is O(cells²) on wrap-text rows; it depends
+        // only on the row, so it is computed lazily at most once per row and
+        // shared by every cell that needs a vertical band length (issue #619
+        // review, remediation 3).
+        let mut row_frame_estimate_cache: Option<Option<f64>> = None;
         let mut col_pos: usize = 0;
-        for cell in &row.cells {
+        for (cell_index, cell) in row.cells.iter().enumerate() {
             if cell.col_span == 0 || cell.row_span == 0 {
                 continue;
             }
@@ -203,9 +235,25 @@ fn generate_table_rows(
 
             let remaining = num_cols - col_pos;
             let clamped_colspan = (cell.col_span as usize).min(remaining).max(1) as u32;
+            // `Some` selects the boundary-band regime even when this cell
+            // paints nothing; `None` keeps the stroke regime.
+            let boundary_band: Option<BoundaryBandCell> =
+                painted_borders.map(|p| BoundaryBandCell {
+                    painted_border: &p[row_index][cell_index],
+                    vertical_extent: vertical_band_extent(
+                        rows,
+                        row_index,
+                        cell,
+                        fixed_row_heights,
+                        default_cell_padding,
+                        ctx,
+                        &mut row_frame_estimate_cache,
+                    ),
+                });
             generate_table_cell(
                 out,
                 cell,
+                boundary_band,
                 clamped_colspan,
                 indent,
                 default_cell_padding,
@@ -358,9 +406,11 @@ fn arrow_icon_polygon(glyph: &str, color: Option<Color>) -> Option<String> {
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn generate_table_cell(
     out: &mut String,
     cell: &TableCell,
+    boundary_band: Option<BoundaryBandCell>,
     clamped_colspan: u32,
     indent: &str,
     default_cell_padding: Insets,
@@ -390,17 +440,39 @@ fn generate_table_cell(
         && effective_vertical_align == Some(CellVerticalAlign::Bottom)
         && row_height.is_some();
 
+    let paints_boundary_bands: bool = boundary_band.is_some();
+
     if needs_cell_fn {
         out.push_str(indent);
         out.push_str("table.cell(");
-        write_cell_params(out, cell, clamped_colspan, default_cell_padding);
+        write_cell_params(
+            out,
+            cell,
+            clamped_colspan,
+            default_cell_padding,
+            paints_boundary_bands,
+        );
         out.push_str(")[");
     } else {
         out.push_str(indent);
         out.push('[');
     }
 
-    if let Some(border) = &cell.border {
+    if let Some(band) = &boundary_band {
+        // Boundary-band regime (Excel, issue #619): every side — doubles
+        // included — paints as boundary-anchored overlay bands, never as a
+        // cell stroke. Offsets back out the cell's *effective* inset (the
+        // padding plus the half border widths #500/#503 reserve) so the bands
+        // land on the nominal grid boundaries.
+        if let Some(border) = band.painted_border {
+            write_boundary_anchored_border_overlays(
+                out,
+                border,
+                cell_inset_with_border(cell, default_cell_padding),
+                &band.vertical_extent,
+            );
+        }
+    } else if let Some(border) = &cell.border {
         write_double_border_overlays(out, border, cell.padding.unwrap_or(default_cell_padding));
     }
 
@@ -661,7 +733,7 @@ fn write_double_border_line(
     );
 }
 
-fn format_geometry(value: f64) -> String {
+pub(super) fn format_geometry(value: f64) -> String {
     let rounded = (value * 1_000.0).round() / 1_000.0;
     format_f64(if rounded == -0.0 { 0.0 } else { rounded })
 }
@@ -685,11 +757,582 @@ fn cell_inset_with_border(cell: &TableCell, default_cell_padding: Insets) -> Ins
     }
 }
 
+/// Excel extends every border band 1pt past its end boundary — the
+/// `[A_start, A_end + 1]` run rule, measured independent of weight (issue
+/// #619). It is what lets horizontal bands own the corner blocks.
+const BAND_RUN_END_EXTENSION_PT: f64 = 1.0;
+
+/// Total order for Excel's shared-boundary conflict rule (issue #619 review,
+/// remediation 1). Derived `PartialOrd` compares the fields lexicographically
+/// in declaration order.
+///
+/// Heaviness is a style precedence, not the stored stroke width: Excel paints
+/// a double rule on top of every single band — including thick — even though
+/// each of a double's two strokes is stored at the thin 1pt weight (Excel's
+/// double-on-top conflict behaviour). Below double, the total painted band
+/// width decides (thick 3 > medium 2 > thin/hair 1), and at equal width a
+/// solid rule beats a patterned one (hair/dotted/dashed). Exact rank ties
+/// fall back to the caller's positional rule — the lower/right cell's
+/// top/left slot keeps the boundary — which never consults colour, so
+/// ownership is colour-stable: declarations differing only in colour resolve
+/// the same way regardless of which side declares which colour.
+#[derive(Clone, Copy, PartialEq, PartialOrd)]
+struct BoundaryConflictRank {
+    /// Excel's double-on-top rule: any double outranks any single band.
+    is_double: bool,
+    /// Total painted band width in points (thick 3 > medium 2 > thin 1).
+    band_width: f64,
+    /// Solid beats patterned at equal band width.
+    is_solid: bool,
+}
+
+/// Rank one declared side for shared-boundary conflict resolution.
+fn boundary_conflict_rank(side: &BorderSide) -> BoundaryConflictRank {
+    BoundaryConflictRank {
+        is_double: side.style == BorderLineStyle::Double,
+        band_width: side.width,
+        is_solid: side.style == BorderLineStyle::Solid,
+    }
+}
+
+/// Which border sides each cell paints in the boundary-band regime, parallel
+/// to `table.rows[r].cells[c]`.
+///
+/// Excel's printed border belongs to the grid *boundary*, not to the
+/// declaring cell: the band is anchored to the boundary whichever neighbour
+/// declares it, so a boundary declared by both neighbours must paint exactly
+/// once, and Excel resolves conflicting declarations to the heavier style
+/// per [`BoundaryConflictRank`]. Each internal boundary is therefore left on
+/// exactly one declaration — the highest-ranked one, ties going to the
+/// lower/right cell's top/left slot.
+///
+/// Suppression is whole-side: when merged cells overlap a boundary only
+/// partially, both declarations are kept and the equal bands overlap
+/// invisibly. Partial overlaps of *differing* weight would need per-track
+/// resolution (known limitation, deliberately skipped).
+///
+/// `repeating_header_boundary` is the grid boundary between the last
+/// repeating header row and the first body row, when the table has both.
+/// The body row renders once but the header repeats on every page, so a
+/// band left on the body side would vanish under the repeated header on
+/// pages 2+. At that one boundary ties therefore go to the *header's*
+/// declaration, and a strictly heavier body declaration is additionally
+/// adopted into the header cell's bottom slot: both sides then paint the
+/// same boundary-anchored band — coincident and invisible where they
+/// overlap on page 1, while the header's copy repeats with it.
+fn resolve_boundary_painted_borders(
+    table: &Table,
+    num_cols: usize,
+    repeating_header_boundary: Option<usize>,
+) -> Vec<Vec<Option<CellBorder>>> {
+    use std::collections::HashMap;
+
+    /// Grid footprint of one emitted cell.
+    struct CellPlacement {
+        row_index: usize,
+        cell_index: usize,
+        first_col: usize,
+        row_span: usize,
+        col_span: usize,
+    }
+
+    // Mirror the emission walk in `generate_table_rows` exactly, so the
+    // painted set stays parallel to what actually renders.
+    let mut placements: Vec<CellPlacement> = Vec::new();
+    let mut rowspan_remaining: Vec<usize> = vec![0usize; num_cols];
+    for (row_index, row) in table.rows.iter().enumerate() {
+        for rs in rowspan_remaining.iter_mut() {
+            if *rs > 0 {
+                *rs -= 1;
+            }
+        }
+        let mut col_pos: usize = 0;
+        for (cell_index, cell) in row.cells.iter().enumerate() {
+            if cell.col_span == 0 || cell.row_span == 0 {
+                continue;
+            }
+            while col_pos < num_cols && rowspan_remaining[col_pos] > 0 {
+                col_pos += 1;
+            }
+            if col_pos >= num_cols {
+                break;
+            }
+            let remaining: usize = num_cols - col_pos;
+            let col_span: usize = (cell.col_span as usize).min(remaining).max(1);
+            placements.push(CellPlacement {
+                row_index,
+                cell_index,
+                first_col: col_pos,
+                row_span: (cell.row_span as usize).max(1),
+                col_span,
+            });
+            if cell.row_span > 1 {
+                for rs in rowspan_remaining.iter_mut().skip(col_pos).take(col_span) {
+                    *rs = cell.row_span as usize;
+                }
+            }
+            col_pos += col_span;
+        }
+    }
+
+    let cell_of = |placement: &CellPlacement| -> &TableCell {
+        &table.rows[placement.row_index].cells[placement.cell_index]
+    };
+
+    // Declared sides per (grid boundary index, crossing track). A horizontal
+    // boundary `b` separates grid rows `b-1` and `b`; its declarations are
+    // the bottoms of cells ending at `b` and the tops of cells starting
+    // there. Vertical boundaries likewise with columns. Whole sides are kept
+    // (not just widths) because ranking needs the style and the header/body
+    // boundary below adopts the winning side wholesale.
+    let mut bottom_sides: HashMap<(usize, usize), BorderSide> = HashMap::new();
+    let mut top_sides: HashMap<(usize, usize), BorderSide> = HashMap::new();
+    let mut right_sides: HashMap<(usize, usize), BorderSide> = HashMap::new();
+    let mut left_sides: HashMap<(usize, usize), BorderSide> = HashMap::new();
+    for placement in &placements {
+        let Some(border) = &cell_of(placement).border else {
+            continue;
+        };
+        let column_tracks = placement.first_col..placement.first_col + placement.col_span;
+        let row_tracks = placement.row_index..placement.row_index + placement.row_span;
+        if let Some(side) = &border.bottom {
+            for col in column_tracks.clone() {
+                bottom_sides.insert(
+                    (placement.row_index + placement.row_span, col),
+                    side.clone(),
+                );
+            }
+        }
+        if let Some(side) = &border.top {
+            for col in column_tracks {
+                top_sides.insert((placement.row_index, col), side.clone());
+            }
+        }
+        if let Some(side) = &border.right {
+            for row in row_tracks.clone() {
+                right_sides.insert(
+                    (placement.first_col + placement.col_span, row),
+                    side.clone(),
+                );
+            }
+        }
+        if let Some(side) = &border.left {
+            for row in row_tracks {
+                left_sides.insert((placement.first_col, row), side.clone());
+            }
+        }
+    }
+
+    let mut painted: Vec<Vec<Option<CellBorder>>> = table
+        .rows
+        .iter()
+        .map(|row| vec![None; row.cells.len()])
+        .collect();
+    for placement in &placements {
+        let Some(border) = &cell_of(placement).border else {
+            continue;
+        };
+        let column_tracks = placement.first_col..placement.first_col + placement.col_span;
+        let row_tracks = placement.row_index..placement.row_index + placement.row_span;
+        let mut resolved: CellBorder = border.clone();
+        // A bottom/right yields to a neighbour's declaration ranked at least
+        // as heavy (ties keep the top/left owner); a top/left yields only to
+        // a strictly heavier one. Exactly one side survives per fully shared
+        // boundary in every rank combination. The repeating-header boundary
+        // inverts the tie direction (see the function docs).
+        let bottom_boundary: usize = placement.row_index + placement.row_span;
+        let bottom_is_repeating_header_boundary: bool =
+            repeating_header_boundary == Some(bottom_boundary);
+        if let Some(side) = &resolved.bottom
+            && column_tracks.clone().all(|col| {
+                top_sides
+                    .get(&(bottom_boundary, col))
+                    .is_some_and(|neighbour| {
+                        let neighbour_rank = boundary_conflict_rank(neighbour);
+                        let own_rank = boundary_conflict_rank(side);
+                        if bottom_is_repeating_header_boundary {
+                            neighbour_rank > own_rank
+                        } else {
+                            neighbour_rank >= own_rank
+                        }
+                    })
+            })
+        {
+            resolved.bottom = if bottom_is_repeating_header_boundary {
+                // The body's strictly heavier band must also repeat with the
+                // header: adopt the highest-ranked body declaration into this
+                // header cell's bottom slot instead of dropping it.
+                column_tracks
+                    .clone()
+                    .filter_map(|col| top_sides.get(&(bottom_boundary, col)))
+                    .max_by(|a, b| {
+                        boundary_conflict_rank(a)
+                            .partial_cmp(&boundary_conflict_rank(b))
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    })
+                    .cloned()
+            } else {
+                None
+            };
+        }
+        if let Some(side) = &resolved.top
+            && column_tracks.clone().all(|col| {
+                bottom_sides
+                    .get(&(placement.row_index, col))
+                    .is_some_and(|neighbour| {
+                        let neighbour_rank = boundary_conflict_rank(neighbour);
+                        let own_rank = boundary_conflict_rank(side);
+                        if repeating_header_boundary == Some(placement.row_index) {
+                            // Ties at the repeating-header boundary stay with
+                            // the header's bottom declaration.
+                            neighbour_rank >= own_rank
+                        } else {
+                            neighbour_rank > own_rank
+                        }
+                    })
+            })
+        {
+            resolved.top = None;
+        }
+        if let Some(side) = &resolved.right
+            && row_tracks.clone().all(|row| {
+                left_sides
+                    .get(&(placement.first_col + placement.col_span, row))
+                    .is_some_and(|neighbour| {
+                        boundary_conflict_rank(neighbour) >= boundary_conflict_rank(side)
+                    })
+            })
+        {
+            resolved.right = None;
+        }
+        if let Some(side) = &resolved.left
+            && row_tracks.clone().all(|row| {
+                right_sides
+                    .get(&(placement.first_col, row))
+                    .is_some_and(|neighbour| {
+                        boundary_conflict_rank(neighbour) > boundary_conflict_rank(side)
+                    })
+            })
+        {
+            resolved.left = None;
+        }
+        if resolved.top.is_some()
+            || resolved.bottom.is_some()
+            || resolved.left.is_some()
+            || resolved.right.is_some()
+        {
+            painted[placement.row_index][placement.cell_index] = Some(resolved);
+        }
+    }
+    painted
+}
+
+/// One cell's share of the boundary-band regime, threaded from the row walk
+/// into the cell writer.
+struct BoundaryBandCell<'a> {
+    /// The sides this cell paints after shared-boundary resolution. `None`
+    /// paints nothing but still selects the band regime (no cell stroke).
+    painted_border: &'a Option<CellBorder>,
+    /// How far this cell's vertical bands may extend.
+    vertical_extent: VerticalBandExtent,
+}
+
+/// How a cell's vertical border bands obtain their length (issue #619).
+///
+/// A Typst-relative length (`100%`) inside a `#place` resolves against the
+/// measurement region — the remaining page, not the cell — whenever any row
+/// the cell spans is auto-sized (measured on typst 0.14/0.15), painting
+/// page-long spears. Vertical bands therefore always use concrete lengths.
+enum VerticalBandExtent {
+    /// Every spanned row's height is fixed: one top-anchored band of the
+    /// summed frame height covers boundary to boundary exactly.
+    FrameHeight(f64),
+    /// The span includes auto-sized rows, whose final height only the
+    /// renderer knows. Two twin bands anchored at the cell's top and bottom
+    /// edges are painted instead, each sized from the row's tallest
+    /// single-line frame: the twins coincide exactly on single-line rows
+    /// (the row is sized by that same line box) and cover a wrapped row from
+    /// both ends without overshooting, because a row is at least as tall as
+    /// its tallest cell's first line. Rows wrapping past roughly twice the
+    /// estimate keep a mid-row gap (known limitation).
+    TwinBands(f64),
+    /// No cell in the row has usable line metrics: twin bands sized by the
+    /// ambient text size, following the data-bar `1.2em` precedent.
+    TwinBandsEmFallback,
+}
+
+/// Decide [`VerticalBandExtent`] for one cell of a boundary-band table.
+///
+/// `row_frame_estimate_cache` is the calling row-walk's per-row memo for
+/// [`auto_row_frame_height_estimate_pt`]: the estimate is row-wide and
+/// costly (it reads every cell's font metrics), so each row computes it at
+/// most once however many cells land here.
+#[allow(clippy::too_many_arguments)]
+fn vertical_band_extent(
+    rows: &[TableRow],
+    row_index: usize,
+    cell: &TableCell,
+    fixed_row_heights: bool,
+    default_cell_padding: Insets,
+    ctx: &GenCtx,
+    row_frame_estimate_cache: &mut Option<Option<f64>>,
+) -> VerticalBandExtent {
+    let row_span: usize = (cell.row_span as usize).max(1);
+    // A span reaching outside this row group (header/body split) falls back
+    // to the twins below rather than summing a partial height.
+    let spanned_rows: &[TableRow] = &rows[row_index..(row_index + row_span).min(rows.len())];
+    if fixed_row_heights && spanned_rows.len() == row_span {
+        let spanned_height: Option<f64> = spanned_rows
+            .iter()
+            .try_fold(0.0_f64, |sum, row| row.height.map(|height| sum + height));
+        if let Some(frame_height_pt) = spanned_height {
+            return VerticalBandExtent::FrameHeight(frame_height_pt);
+        }
+    }
+    // Estimate from the anchor row only; a multi-row span over auto rows
+    // keeps whatever the twins cover (known limitation).
+    let frame_estimate: Option<f64> = *row_frame_estimate_cache.get_or_insert_with(|| {
+        auto_row_frame_height_estimate_pt(&rows[row_index], default_cell_padding, ctx)
+    });
+    match frame_estimate {
+        Some(frame_estimate_pt) => VerticalBandExtent::TwinBands(frame_estimate_pt),
+        None => VerticalBandExtent::TwinBandsEmFallback,
+    }
+}
+
+// Test-only probe counting `auto_row_frame_height_estimate_pt` calls, so
+// the once-per-row caching contract (issue #619 review, remediation 3) is
+// assertable: the estimate walks every cell's font metrics, and calling it
+// per cell made vertical-band preparation O(cells²) per row. (A regular
+// comment: rustc discards doc comments attached to macro invocations.)
+#[cfg(test)]
+thread_local! {
+    pub(super) static AUTO_ROW_FRAME_ESTIMATE_CALLS: std::cell::Cell<usize> =
+        const { std::cell::Cell::new(0) };
+}
+
+/// The frame height the renderer will give an auto-sized row, estimated as
+/// the tallest cell's single-line box plus that cell's insets — exact when
+/// the sizing cell holds one line (the common spreadsheet case), an
+/// underestimate when it wraps.
+fn auto_row_frame_height_estimate_pt(
+    row: &TableRow,
+    default_cell_padding: Insets,
+    ctx: &GenCtx,
+) -> Option<f64> {
+    #[cfg(test)]
+    AUTO_ROW_FRAME_ESTIMATE_CALLS.with(|calls| calls.set(calls.get() + 1));
+    row.cells
+        .iter()
+        .filter_map(|cell| {
+            let paragraph: &Paragraph = cell.content.iter().find_map(|block| match block {
+                Block::Paragraph(paragraph) => Some(paragraph),
+                _ => None,
+            })?;
+            // Auto rows never seat text on the descender — the seating gate
+            // keys on a fixed row height — so the estimate must not either.
+            let line_box: CellLineBox = word_cell_line_box(
+                &paragraph.runs,
+                &paragraph.style,
+                ctx.line_grid_pitch,
+                ctx.row_has_east_asian_text,
+                false,
+            )?;
+            let inset: Insets = cell_inset_with_border(cell, default_cell_padding);
+            Some(
+                (line_box.top_em + line_box.bottom_em) * line_box.font_size_pt
+                    + inset.top
+                    + inset.bottom,
+            )
+        })
+        .fold(None, |tallest: Option<f64>, height| {
+            Some(tallest.map_or(height, |t| t.max(height)))
+        })
+}
+
+/// Paint a cell's borders as filled bands anchored to the nominal grid
+/// boundaries, as Excel prints them (issue #619; native Excel 16.111
+/// one-factor probe + golden-mock GT traces):
+///
+/// - 1pt styles (`thin`, `hair`, dashes): band `[B, B+1]`, on the +x/+y side
+///   even at the table's outer right/bottom edge;
+/// - `medium` (2pt): `[B-1, B+1]`; `thick` (3pt): `[B-1, B+2]` — an odd
+///   leftover point always lands on the +x/+y side;
+/// - `double`: two 1pt bands `[B-1, B]` and `[B+1, B+2]`, the boundary strip
+///   `[B, B+1]` being the gap.
+///
+/// The `dx`/`dy` offsets back out the cell's effective inset so `B` is the
+/// grid boundary the table already lays out. Horizontal bands run from the
+/// cell's left boundary to 1pt past its right boundary, owning the corner
+/// blocks; verticals span the same extended run instead of Excel's trim to
+/// strictly between the horizontals — the overlap is same-colour in the GT
+/// regimes and therefore invisible. Corners whose crossing rules differ in
+/// colour would need that trim (known limitation, deliberately skipped).
+fn write_boundary_anchored_border_overlays(
+    out: &mut String,
+    border: &CellBorder,
+    inset: Insets,
+    vertical_extent: &VerticalBandExtent,
+) {
+    // Horizontal bands can stay relative: a line's `100%` length resolves
+    // against the cell's width, which the spreadsheet's fixed column tracks
+    // always determine (and colspans span correctly through it).
+    let horizontal_length: String = format!(
+        "100% + {}pt",
+        format_geometry(inset.left + inset.right + BAND_RUN_END_EXTENSION_PT)
+    );
+    if let Some(side) = &border.top {
+        for centre in band_centre_offsets(side) {
+            write_boundary_band_line(
+                out,
+                "top + left",
+                -inset.left,
+                -inset.top + centre,
+                "0deg",
+                &horizontal_length,
+                side,
+            );
+        }
+    }
+    if let Some(side) = &border.bottom {
+        for centre in band_centre_offsets(side) {
+            write_boundary_band_line(
+                out,
+                "bottom + left",
+                -inset.left,
+                inset.bottom + centre,
+                "0deg",
+                &horizontal_length,
+                side,
+            );
+        }
+    }
+    if let Some(side) = &border.left {
+        for centre in band_centre_offsets(side) {
+            write_vertical_boundary_band(
+                out,
+                side,
+                "left",
+                -inset.left + centre,
+                inset,
+                vertical_extent,
+            );
+        }
+    }
+    if let Some(side) = &border.right {
+        for centre in band_centre_offsets(side) {
+            write_vertical_boundary_band(
+                out,
+                side,
+                "right",
+                inset.right + centre,
+                inset,
+                vertical_extent,
+            );
+        }
+    }
+}
+
+/// Paint one vertical band rule at `dx` from the cell's `horizontal_anchor`
+/// edge, spanning from the row's top boundary to 1pt past its bottom boundary
+/// per [`VerticalBandExtent`]'s answer for this cell.
+fn write_vertical_boundary_band(
+    out: &mut String,
+    side: &BorderSide,
+    horizontal_anchor: &str,
+    dx: f64,
+    inset: Insets,
+    vertical_extent: &VerticalBandExtent,
+) {
+    let top_anchor: String = format!("top + {horizontal_anchor}");
+    match *vertical_extent {
+        VerticalBandExtent::FrameHeight(frame_height_pt) => {
+            let length: String = format!(
+                "{}pt",
+                format_geometry(frame_height_pt + BAND_RUN_END_EXTENSION_PT)
+            );
+            write_boundary_band_line(out, &top_anchor, dx, -inset.top, "90deg", &length, side);
+        }
+        VerticalBandExtent::TwinBands(frame_estimate_pt) => {
+            let length: String = format!(
+                "{}pt",
+                format_geometry(frame_estimate_pt + BAND_RUN_END_EXTENSION_PT)
+            );
+            write_vertical_twin_bands(out, side, dx, inset, &top_anchor, &length);
+        }
+        VerticalBandExtent::TwinBandsEmFallback => {
+            let length: String = format!(
+                "1.2em + {}pt",
+                format_geometry(inset.top + inset.bottom + BAND_RUN_END_EXTENSION_PT)
+            );
+            write_vertical_twin_bands(out, side, dx, inset, &top_anchor, &length);
+        }
+    }
+}
+
+/// Two same-length rules: one hanging from the row's top boundary, one rising
+/// from 1pt past its bottom boundary. On a single-line auto row they coincide
+/// exactly; on a wrapped row they cover it from both ends.
+fn write_vertical_twin_bands(
+    out: &mut String,
+    side: &BorderSide,
+    dx: f64,
+    inset: Insets,
+    top_anchor: &str,
+    length: &str,
+) {
+    let bottom_anchor: String = top_anchor.replacen("top", "bottom", 1);
+    write_boundary_band_line(out, top_anchor, dx, -inset.top, "90deg", length, side);
+    write_boundary_band_line(
+        out,
+        &bottom_anchor,
+        dx,
+        inset.bottom + BAND_RUN_END_EXTENSION_PT,
+        "-90deg",
+        length,
+        side,
+    );
+}
+
+/// Offsets of each painted rule's centre line from the boundary `B`, for a
+/// band of the side's width `w`: a single band `[B - floor(w/2), ...]` puts
+/// the centre at `w/2 - floor(w/2)` (0.5 for thin/thick, 0 for medium); a
+/// double paints one rule per band.
+fn band_centre_offsets(side: &BorderSide) -> Vec<f64> {
+    if side.style == BorderLineStyle::Double {
+        vec![-side.width / 2.0, side.width * 1.5]
+    } else {
+        vec![side.width / 2.0 - (side.width / 2.0).floor()]
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn write_boundary_band_line(
+    out: &mut String,
+    align: &str,
+    dx: f64,
+    dy: f64,
+    angle: &str,
+    length: &str,
+    side: &BorderSide,
+) {
+    // `stroke_value` keeps the dash dict of patterned styles (dashed, dotted,
+    // hair) on the overlay line; a double side's two rules are each plain.
+    let _ = write!(
+        out,
+        "#place({align}, dx: {}pt, dy: {}pt, line(length: {length}, angle: {angle}, stroke: {}))",
+        format_geometry(dx),
+        format_geometry(dy),
+        stroke_value(side, true),
+    );
+}
+
 fn write_cell_params(
     out: &mut String,
     cell: &TableCell,
     clamped_colspan: u32,
     default_cell_padding: Insets,
+    paints_boundary_bands: bool,
 ) {
     let mut first = true;
 
@@ -710,7 +1353,11 @@ fn write_cell_params(
             &format!("inset: {}", format_insets(&inset)),
         );
     }
-    if let Some(ref border) = cell.border {
+    // A boundary-band cell paints its borders as overlays instead: a Typst
+    // stroke is centred on the track boundary, half a width off Excel's
+    // boundary-anchored band (issue #619). The `inset` above still reserves
+    // the border's layout space either way.
+    if !paints_boundary_bands && let Some(ref border) = cell.border {
         let stroke = format_cell_stroke(border);
         if !stroke.is_empty() {
             write_param(out, &mut first, &stroke);

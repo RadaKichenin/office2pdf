@@ -66,6 +66,7 @@ fn test_table_with_default_cell_padding() {
         use_content_driven_row_heights: false,
         default_vertical_align: None,
         seats_bottom_aligned_text_on_descender: false,
+        paints_borders_inside_boundary: false,
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -114,6 +115,7 @@ fn test_table_cell_with_padding_override() {
         use_content_driven_row_heights: false,
         default_vertical_align: None,
         seats_bottom_aligned_text_on_descender: false,
+        paints_borders_inside_boundary: false,
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -139,6 +141,7 @@ fn test_table_alignment_center_wraps_table() {
         use_content_driven_row_heights: false,
         default_vertical_align: None,
         seats_bottom_aligned_text_on_descender: false,
+        paints_borders_inside_boundary: false,
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -813,6 +816,7 @@ fn bottom_aligned_spill_cell_anchors_its_line_box_at_the_bottom() {
         column_widths: vec![60.0],
         default_vertical_align: Some(CellVerticalAlign::Bottom),
         seats_bottom_aligned_text_on_descender: true,
+        paints_borders_inside_boundary: false,
         ..Table::default()
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
@@ -868,6 +872,7 @@ fn center_aligned_spill_cell_keeps_the_centered_wrapper() {
         column_widths: vec![60.0],
         default_vertical_align: Some(CellVerticalAlign::Bottom),
         seats_bottom_aligned_text_on_descender: true,
+        paints_borders_inside_boundary: false,
         ..Table::default()
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);

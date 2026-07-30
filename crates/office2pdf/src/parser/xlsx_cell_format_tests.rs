@@ -255,11 +255,13 @@ fn test_cell_borders() {
     let cell = &tp.table.rows[0].cells[0];
     let border = cell.border.as_ref().expect("Expected border");
     let bottom = border.bottom.as_ref().expect("Expected bottom border");
-    // `medium`, against the measured `thin` of 1.0pt (issue #487).
-    assert!((bottom.width - 1.75).abs() < 0.01);
+    // `medium` prints a 2pt boundary-anchored band on a native Excel 16.111
+    // probe (issue #619), superseding the 1.75pt centred-stroke calibration
+    // of #487.
+    assert!((bottom.width - 2.0).abs() < 0.01);
     assert_eq!(bottom.color, Color::new(0, 0, 0));
     let top = border.top.as_ref().expect("Expected top border");
-    // `thin`: 2px at 150 DPI on a native Excel export.
+    // `thin`: a 1pt band, 2px at 150 DPI on a native Excel export.
     assert!((top.width - 1.0).abs() < 0.01);
     assert_eq!(top.color, Color::new(255, 0, 0));
 }
@@ -341,8 +343,43 @@ fn test_cell_border_medium_dashed() {
     let border = cell.border.as_ref().expect("Expected border");
     let top = border.top.as_ref().expect("Expected top border");
     assert_eq!(top.style, BorderLineStyle::Dashed);
-    // `mediumDashed` shares the `medium` weight (issue #487).
-    assert!((top.width - 1.75).abs() < 0.01);
+    // `mediumDashed` shares the `medium` band weight (issues #487, #619).
+    assert!((top.width - 2.0).abs() < 0.01);
+}
+
+#[test]
+fn test_cell_border_hair_and_thick_weights() {
+    let data = build_xlsx_formatted(|sheet| {
+        let cell = sheet.get_cell_mut("A1");
+        cell.set_value("Hair/Thick");
+        let borders = cell.get_style_mut().get_borders_mut();
+        borders
+            .get_top_mut()
+            .set_border_style(umya_spreadsheet::Border::BORDER_HAIR);
+        borders.get_top_mut().get_color_mut().set_argb("FF000000");
+        borders
+            .get_bottom_mut()
+            .set_border_style(umya_spreadsheet::Border::BORDER_THICK);
+        borders
+            .get_bottom_mut()
+            .get_color_mut()
+            .set_argb("FF000000");
+    });
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let tp = get_sheet_page(&doc, 0);
+    let cell = &tp.table.rows[0].cells[0];
+    let border = cell.border.as_ref().expect("Expected border");
+    // `hair` prints the same 1pt band as `thin`, with a dotted texture
+    // (native Excel 16.111 probe, issue #619).
+    let top = border.top.as_ref().expect("Expected top border");
+    assert!((top.width - 1.0).abs() < 0.01);
+    assert_eq!(top.style, BorderLineStyle::Dotted);
+    // `thick` prints a 3pt band on the same probe.
+    let bottom = border.bottom.as_ref().expect("Expected bottom border");
+    assert!((bottom.width - 3.0).abs() < 0.01);
+    assert_eq!(bottom.style, BorderLineStyle::Solid);
 }
 
 #[test]
@@ -626,8 +663,9 @@ fn test_cell_combined_formatting() {
     assert_eq!(cell.background, Some(Color::new(255, 204, 0)));
     let border = cell.border.as_ref().expect("Expected border");
     let left = border.left.as_ref().expect("Expected left border");
-    // `thick` (issue #487).
-    assert!((left.width - 2.5).abs() < 0.01);
+    // `thick` prints a 3pt boundary-anchored band (issue #619 probe),
+    // superseding the 2.5pt centred-stroke calibration of #487.
+    assert!((left.width - 3.0).abs() < 0.01);
     assert_eq!(left.color, Color::new(0, 255, 0));
 }
 
