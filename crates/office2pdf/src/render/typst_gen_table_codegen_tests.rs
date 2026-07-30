@@ -68,6 +68,7 @@ fn test_table_with_default_cell_padding() {
         seats_bottom_aligned_text_on_descender: false,
         paints_borders_inside_boundary: false,
         prints_gridlines: false,
+        prints_headings: false,
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -118,6 +119,7 @@ fn test_table_cell_with_padding_override() {
         seats_bottom_aligned_text_on_descender: false,
         paints_borders_inside_boundary: false,
         prints_gridlines: false,
+        prints_headings: false,
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -145,6 +147,7 @@ fn test_table_alignment_center_wraps_table() {
         seats_bottom_aligned_text_on_descender: false,
         paints_borders_inside_boundary: false,
         prints_gridlines: false,
+        prints_headings: false,
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -821,6 +824,7 @@ fn bottom_aligned_spill_cell_anchors_its_line_box_at_the_bottom() {
         seats_bottom_aligned_text_on_descender: true,
         paints_borders_inside_boundary: false,
         prints_gridlines: false,
+        prints_headings: false,
         ..Table::default()
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
@@ -878,6 +882,7 @@ fn center_aligned_spill_cell_keeps_the_centered_wrapper() {
         seats_bottom_aligned_text_on_descender: true,
         paints_borders_inside_boundary: false,
         prints_gridlines: false,
+        prints_headings: false,
         ..Table::default()
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
@@ -889,5 +894,331 @@ fn center_aligned_spill_cell_keeps_the_centered_wrapper() {
     assert!(
         result.contains("])#box(width: 0pt, height: 1.3em)"),
         "an explicitly centred spill cell keeps its current strut: {result}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Printed headings (issue #623)
+//
+// `<printOptions headings="1"/>` prints the row-number gutter and the
+// column-letter strip on every page. The XLSX parser materializes them in the
+// IR (gutter as the first column, letter strip as `rows[0]`) and sets
+// `prints_headings`; codegen must re-emit that first row as a repeating
+// `table.header` so the letters appear on every paginated page, above any
+// print-title headers.
+// ---------------------------------------------------------------------------
+
+/// The augmented shape the XLSX parser hands codegen: strip row first, gutter
+/// cells at each row's front.
+fn headings_table(extra_rows: Vec<TableRow>) -> Table {
+    let mut rows: Vec<TableRow> = vec![TableRow {
+        cells: vec![
+            TableCell::default(),
+            make_text_cell("A"),
+            make_text_cell("B"),
+        ],
+        height: Some(13.0),
+    }];
+    rows.extend(extra_rows);
+    Table {
+        rows,
+        column_widths: vec![23.0, 120.0, 110.0],
+        prints_headings: true,
+        ..Table::default()
+    }
+}
+
+fn gutter_row(number: &str, first: &str, second: &str) -> TableRow {
+    TableRow {
+        cells: vec![
+            make_text_cell(number),
+            make_text_cell(first),
+            make_text_cell(second),
+        ],
+        height: Some(13.0),
+    }
+}
+
+#[test]
+fn test_prints_headings_emits_the_letter_strip_as_a_repeating_header() {
+    let table = headings_table(vec![gutter_row("1", "x", "y"), gutter_row("2", "z", "w")]);
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    let header_start: usize = result
+        .find("table.header(repeat: true,")
+        .expect("the letter strip must repeat on every page");
+    let header_end: usize = result[header_start..]
+        .find("),")
+        .map(|offset| header_start + offset)
+        .expect("header block must close");
+    let header_block: &str = &result[header_start..header_end];
+    assert!(
+        header_block.contains("[A]") && header_block.contains("[B]"),
+        "the strip header must carry the column letters: {result}"
+    );
+    assert!(
+        !header_block.contains("[1]"),
+        "gutter numbers flow with the body rows, not the strip: {result}"
+    );
+    let body: &str = &result[header_end..];
+    assert!(
+        body.contains("[1]") && body.contains("[2]"),
+        "gutter numbers must follow in the body: {result}"
+    );
+    assert!(
+        result.contains("columns: (23pt, 120pt, 110pt)"),
+        "the gutter track must lead the column list: {result}"
+    );
+    assert!(
+        result.contains("rows: (13pt, 13pt, 13pt)"),
+        "the strip row's track must lead the row list: {result}"
+    );
+}
+
+#[test]
+fn test_prints_headings_keeps_print_title_headers_below_the_strip() {
+    let mut table = headings_table(vec![
+        gutter_row("1", "Title", "Title2"),
+        gutter_row("2", "x", "y"),
+    ]);
+    // One print-title row (counted AFTER the strip row).
+    table.header_row_count = 1;
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    let strip_pos: usize = result
+        .find("table.header(repeat: true,")
+        .expect("strip header must exist");
+    let title_pos: usize = result
+        .find("table.header(level: 2,")
+        .expect("print-title header must sit at the next level");
+    assert!(
+        strip_pos < title_pos,
+        "the strip repeats above the print-title rows: {result}"
+    );
+    assert!(
+        result[title_pos..].contains("Title"),
+        "the title row must live in the level-2 header: {result}"
+    );
+}
+
+#[test]
+fn test_prints_headings_shifts_lead_and_title_header_levels() {
+    let mut table = headings_table(vec![
+        gutter_row("1", "Lead", "Lead2"),
+        gutter_row("2", "Title", "Title2"),
+        gutter_row("3", "x", "y"),
+    ]);
+    // One non-repeating lead row above one print-title row.
+    table.non_repeating_header_row_count = 1;
+    table.header_row_count = 1;
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains("table.header(repeat: true,"),
+        "strip header must exist: {result}"
+    );
+    assert!(
+        result.contains("table.header(repeat: false, level: 2,"),
+        "the lead block must move to level 2 under the strip: {result}"
+    );
+    assert!(
+        result.contains("table.header(level: 3,"),
+        "the print-title block must move to level 3: {result}"
+    );
+}
+
+#[test]
+fn test_prints_headings_off_emits_no_repeating_strip() {
+    let mut table = headings_table(vec![gutter_row("1", "x", "y")]);
+    table.prints_headings = false;
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+    assert!(
+        !result.contains("table.header("),
+        "without the flag no header block may appear: {result}"
+    );
+}
+
+/// The gray of the 1pt rules between heading cells (issue #623 GT model).
+const HEADING_RULE_GRAY: crate::ir::Color = crate::ir::Color {
+    r: 86,
+    g: 86,
+    b: 86,
+};
+
+fn solid_side(width: f64, color: crate::ir::Color) -> BorderSide {
+    BorderSide {
+        width,
+        color,
+        style: crate::ir::BorderLineStyle::Solid,
+    }
+}
+
+/// The bordered shape the XLSX parser's heading augmentation hands codegen:
+/// gray rules between heading cells, black 1pt separators against the data
+/// grid (strip bottom, gutter right), boundary-band border regime.
+fn separator_bordered_headings_table(data_cell: TableCell, prints_gridlines: bool) -> Table {
+    let gray = || solid_side(1.0, HEADING_RULE_GRAY);
+    let black_separator = || solid_side(1.0, crate::ir::Color::black());
+    Table {
+        rows: vec![
+            TableRow {
+                cells: vec![
+                    TableCell {
+                        border: Some(CellBorder {
+                            bottom: Some(gray()),
+                            right: Some(gray()),
+                            ..CellBorder::default()
+                        }),
+                        ..TableCell::default()
+                    },
+                    TableCell {
+                        border: Some(CellBorder {
+                            bottom: Some(black_separator()),
+                            right: Some(gray()),
+                            ..CellBorder::default()
+                        }),
+                        ..make_text_cell("A")
+                    },
+                ],
+                height: Some(13.0),
+            },
+            TableRow {
+                cells: vec![
+                    TableCell {
+                        border: Some(CellBorder {
+                            top: Some(gray()),
+                            bottom: Some(gray()),
+                            right: Some(black_separator()),
+                            ..CellBorder::default()
+                        }),
+                        ..make_text_cell("1")
+                    },
+                    data_cell,
+                ],
+                height: Some(13.0),
+            },
+        ],
+        column_widths: vec![23.0, 120.0],
+        prints_headings: true,
+        prints_gridlines,
+        paints_borders_inside_boundary: true,
+        ..Table::default()
+    }
+}
+
+/// The `table.header(repeat: true, ...)` slice of the generated source.
+fn strip_header_block(result: &str) -> &str {
+    let header_start: usize = result
+        .find("table.header(repeat: true,")
+        .expect("strip header must exist");
+    let header_end: usize = result[header_start..]
+        .find("\n  ),")
+        .map(|offset| header_start + offset)
+        .expect("header block must close");
+    &result[header_start..header_end]
+}
+
+#[test]
+fn test_prints_headings_strip_bottom_separator_repeats_over_a_tying_body_border() {
+    // The first body row declares a 1pt solid black top border — the same
+    // conflict rank as the strip's black separator. The tie must resolve to
+    // the strip side (the #619 repeating-header rule, applied at the strip's
+    // own bottom boundary): a band left on the body row's top would vanish
+    // on pages 2+, where only the header repeats (issue #623 adversarial
+    // review, finding 1).
+    let data_cell = TableCell {
+        border: Some(CellBorder {
+            top: Some(solid_side(1.0, crate::ir::Color::black())),
+            ..CellBorder::default()
+        }),
+        ..make_text_cell("x")
+    };
+    let table = separator_bordered_headings_table(data_cell, false);
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        strip_header_block(&result).contains("#place(bottom + left"),
+        "the strip|data separator band must live inside the repeating header: {result}"
+    );
+}
+
+#[test]
+fn test_prints_headings_strip_adopts_a_heavier_body_border_into_the_repeat() {
+    // A strictly heavier body declaration (2pt medium) outranks the strip's
+    // 1pt separator; the #619 mechanism adopts it into the header side so
+    // the heavier band repeats on every page alongside the body's own copy.
+    let data_cell = TableCell {
+        border: Some(CellBorder {
+            top: Some(solid_side(2.0, crate::ir::Color::black())),
+            ..CellBorder::default()
+        }),
+        ..make_text_cell("x")
+    };
+    let table = separator_bordered_headings_table(data_cell, false);
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        strip_header_block(&result).contains("stroke: 2pt"),
+        "the header must adopt the body's heavier band so repeats carry it: {result}"
+    );
+}
+
+#[test]
+fn test_prints_headings_excludes_the_heading_exterior_from_gridline_seeding() {
+    // gridLines=1 AND headings=1: GT rules the heading exterior — the strip
+    // row's top and the gutter column's left — as the 1pt black print FRAME,
+    // not as gridlines (issue #623 evidence, nft-sheet-0002 trace: black
+    // bands [54,538]x[72,73] and [54,55]x[72,710]). Gridline seeding stays
+    // excluded there; the frame band replaces it rather than stacking, so
+    // every frame boundary carries exactly one band. Data-area seeding
+    // (#622) is unchanged where the frame does not own the boundary.
+    let table = separator_bordered_headings_table(make_text_cell("x"), true);
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains("#place(top + left"),
+        "the strip-top frame band must paint: {result}"
+    );
+    // 10 black bands, each boundary painted once: corner top+left, letter
+    // top+right (frame over the last column's gray rule) + bottom separator,
+    // gutter left + right separator + bottom (frame over the last row's gray
+    // rule), data cell right+bottom (frame replacing the #622 closure seeds).
+    assert_eq!(
+        result.matches("rgb(0, 0, 0)").count(),
+        10,
+        "the frame and separators paint exactly once per boundary — no \
+         doubled bands and no leftover gridline seeds: {result}"
+    );
+}
+
+#[test]
+fn test_prints_headings_paints_the_black_exterior_frame_without_gridlines() {
+    // GT (issue #623): with headings on, a 1pt black frame encloses the
+    // heading bands and the data grid — the corner box's top and left edges
+    // ARE the frame. The frame is gated on prints_headings alone; gridlines
+    // are off here, so every exterior band below is the frame's.
+    let table = separator_bordered_headings_table(make_text_cell("x"), false);
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        strip_header_block(&result).contains("#place(top + left"),
+        "the strip-top frame edge must live inside the repeating header so \
+         pages 2+ carry it: {result}"
+    );
+    // Same 10-band census as the gridlines-on test: the frame does not
+    // depend on gridline seeding.
+    assert_eq!(
+        result.matches("rgb(0, 0, 0)").count(),
+        10,
+        "frame top/left/right/bottom plus the strip and gutter separators \
+         paint exactly once per boundary: {result}"
     );
 }

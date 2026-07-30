@@ -996,3 +996,83 @@ fn test_print_options_grid_lines_flags_the_sheet_table() {
         "a sheet without printOptions must not print gridlines"
     );
 }
+
+#[test]
+fn test_print_options_headings_prepends_gutter_column_and_letter_strip() {
+    let plain = build_xlsx_bytes("Sheet1", &[("A1", "x"), ("B2", "y")]);
+    let flagged = inject_before_worksheet_close(&plain, r#"<printOptions headings="1"/>"#);
+
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&flagged, &ConvertOptions::default()).unwrap();
+    let table = &get_sheet_page(&doc, 0).table;
+    assert!(
+        table.prints_headings,
+        "printOptions headings must set the table's heading flag"
+    );
+    // GT geometry (issue #623): 23pt gutter track, 13pt letter-strip track.
+    assert_eq!(table.column_widths[0], 23.0);
+    assert_eq!(table.rows[0].height, Some(13.0));
+
+    // Strip row: empty corner + letters covering the printed columns.
+    let strip = &table.rows[0];
+    assert!(strip.cells[0].content.is_empty());
+    assert_eq!(cell_text(&strip.cells[1]), "A");
+    assert_eq!(cell_text(&strip.cells[2]), "B");
+
+    // Gutter cells carry the sheet row numbers; data follows one column later.
+    assert_eq!(cell_text(&table.rows[1].cells[0]), "1");
+    assert_eq!(cell_text(&table.rows[2].cells[0]), "2");
+    assert_eq!(cell_text(&table.rows[1].cells[1]), "x");
+    assert_eq!(cell_text(&table.rows[2].cells[2]), "y");
+
+    let (doc, _warnings) = parser.parse(&plain, &ConvertOptions::default()).unwrap();
+    let table = &get_sheet_page(&doc, 0).table;
+    assert!(
+        !table.prints_headings,
+        "a sheet without printOptions must not print headings"
+    );
+    assert_eq!(
+        cell_text(&table.rows[0].cells[0]),
+        "x",
+        "an unflagged sheet must keep its grid unshifted"
+    );
+}
+
+#[test]
+fn test_print_headings_row_numbers_continue_across_manual_page_breaks() {
+    // A row break after row 2 splits the sheet; the second segment's gutter
+    // must continue at the actual sheet row number, not restart at 1.
+    let plain = {
+        let mut book = umya_spreadsheet::new_file();
+        {
+            let sheet = book.get_sheet_mut(&0).unwrap();
+            sheet.set_name("Sheet1");
+            for (coord, value) in [("A1", "r1"), ("A2", "r2"), ("A3", "r3")] {
+                sheet.get_cell_mut(coord).set_value(value);
+            }
+            let mut brk = umya_spreadsheet::Break::default();
+            brk.set_id(2);
+            brk.set_manual_page_break(true);
+            sheet.get_row_breaks_mut().add_break_list(brk);
+        }
+        let mut cursor = Cursor::new(Vec::new());
+        umya_spreadsheet::writer::xlsx::write_writer(&book, &mut cursor).unwrap();
+        cursor.into_inner()
+    };
+    let flagged = inject_before_worksheet_close(&plain, r#"<printOptions headings="1"/>"#);
+
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&flagged, &ConvertOptions::default()).unwrap();
+    assert_eq!(doc.pages.len(), 2);
+
+    let first = &get_sheet_page(&doc, 0).table;
+    assert!(first.prints_headings);
+    assert_eq!(cell_text(&first.rows[1].cells[0]), "1");
+    assert_eq!(cell_text(&first.rows[2].cells[0]), "2");
+
+    let second = &get_sheet_page(&doc, 1).table;
+    assert!(second.prints_headings);
+    assert_eq!(cell_text(&second.rows[0].cells[1]), "A");
+    assert_eq!(cell_text(&second.rows[1].cells[0]), "3");
+    assert_eq!(cell_text(&second.rows[1].cells[1]), "r3");
+}

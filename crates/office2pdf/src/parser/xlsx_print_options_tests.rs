@@ -15,7 +15,7 @@ const NO_PRINT_OPTIONS: &str = r#"<worksheet xmlns="http://schemas.openxmlformat
 </worksheet>"#;
 
 // Excel also writes `printOptions` for centering alone; that must not turn
-// gridlines on.
+// gridlines or headings on.
 const CENTERED_ONLY: &str = r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
   <sheetData/>
   <printOptions horizontalCentered="1"/>
@@ -38,11 +38,11 @@ const CUSTOM_VIEW_THEN_SHEET_LEVEL: &str = r#"<worksheet xmlns="http://schemas.o
   <pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>
 </worksheet>"#;
 
-const CUSTOM_VIEW_GRIDLINES_ONLY: &str = r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+const CUSTOM_VIEW_FLAGS_ONLY: &str = r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
   <sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData>
   <customSheetViews>
     <customSheetView guid="{3C29A897-4F3B-4A0B-9A5C-2D53E1F1F001}" printArea="1">
-      <printOptions gridLines="1"/>
+      <printOptions gridLines="1" headings="1"/>
       <pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>
     </customSheetView>
   </customSheetViews>
@@ -50,46 +50,83 @@ const CUSTOM_VIEW_GRIDLINES_ONLY: &str = r#"<worksheet xmlns="http://schemas.ope
 </worksheet>"#;
 
 #[test]
-fn reads_grid_lines_after_sheet_data() {
-    assert!(worksheet_prints_gridlines(PRINTS_GRIDLINES));
+fn reads_grid_lines_and_headings_after_sheet_data() {
+    let options: SheetPrintOptions = worksheet_print_options(PRINTS_GRIDLINES);
+    assert!(options.prints_gridlines);
+    assert!(options.prints_headings);
 }
 
 #[test]
 fn custom_view_print_options_do_not_shadow_the_sheet_level_element() {
-    assert!(worksheet_prints_gridlines(CUSTOM_VIEW_THEN_SHEET_LEVEL));
+    let options: SheetPrintOptions = worksheet_print_options(CUSTOM_VIEW_THEN_SHEET_LEVEL);
+    assert!(options.prints_gridlines);
+    assert!(options.prints_headings);
 }
 
 #[test]
-fn custom_view_grid_lines_do_not_leak_to_the_sheet() {
-    assert!(!worksheet_prints_gridlines(CUSTOM_VIEW_GRIDLINES_ONLY));
+fn custom_view_flags_do_not_leak_to_the_sheet() {
+    let options: SheetPrintOptions = worksheet_print_options(CUSTOM_VIEW_FLAGS_ONLY);
+    assert!(!options.prints_gridlines);
+    assert!(!options.prints_headings);
 }
 
 #[test]
-fn explicit_grid_lines_set_false_vetoes_grid_lines() {
+fn explicit_grid_lines_set_false_vetoes_grid_lines_but_not_headings() {
     // ECMA-376 §18.3.1.70: gridlines print only when `gridLines` AND
-    // `gridLinesSet` (default true) are both true.
+    // `gridLinesSet` (default true) are both true. `headings` has no such
+    // conjunction attribute in CT_PrintOptions, so the veto must not touch it.
     let vetoed = PRINTS_GRIDLINES.replace(r#"gridLines="1""#, r#"gridLines="1" gridLinesSet="0""#);
-    assert!(!worksheet_prints_gridlines(&vetoed));
+    let options: SheetPrintOptions = worksheet_print_options(&vetoed);
+    assert!(!options.prints_gridlines);
+    assert!(options.prints_headings);
+
     let vetoed_spelt = PRINTS_GRIDLINES.replace(
         r#"gridLines="1""#,
         r#"gridLines="true" gridLinesSet="false""#,
     );
-    assert!(!worksheet_prints_gridlines(&vetoed_spelt));
+    assert!(!worksheet_print_options(&vetoed_spelt).prints_gridlines);
+
     let confirmed =
         PRINTS_GRIDLINES.replace(r#"gridLines="1""#, r#"gridLines="1" gridLinesSet="1""#);
-    assert!(worksheet_prints_gridlines(&confirmed));
+    assert!(worksheet_print_options(&confirmed).prints_gridlines);
 }
 
 #[test]
 fn absent_or_unrelated_print_options_stay_off() {
-    assert!(!worksheet_prints_gridlines(NO_PRINT_OPTIONS));
-    assert!(!worksheet_prints_gridlines(CENTERED_ONLY));
+    assert_eq!(
+        worksheet_print_options(NO_PRINT_OPTIONS),
+        SheetPrintOptions::default()
+    );
+    assert_eq!(
+        worksheet_print_options(CENTERED_ONLY),
+        SheetPrintOptions::default()
+    );
 }
 
 #[test]
 fn accepts_the_boolean_spelt_out() {
-    let spelt = PRINTS_GRIDLINES.replace(r#"gridLines="1""#, r#"gridLines="true""#);
-    assert!(worksheet_prints_gridlines(&spelt));
-    let off = PRINTS_GRIDLINES.replace(r#"gridLines="1""#, r#"gridLines="0""#);
-    assert!(!worksheet_prints_gridlines(&off));
+    let spelt = PRINTS_GRIDLINES
+        .replace(r#"gridLines="1""#, r#"gridLines="true""#)
+        .replace(r#"headings="1""#, r#"headings="true""#);
+    let options: SheetPrintOptions = worksheet_print_options(&spelt);
+    assert!(options.prints_gridlines);
+    assert!(options.prints_headings);
+
+    let off = PRINTS_GRIDLINES
+        .replace(r#"gridLines="1""#, r#"gridLines="0""#)
+        .replace(r#"headings="1""#, r#"headings="0""#);
+    assert_eq!(worksheet_print_options(&off), SheetPrintOptions::default());
+}
+
+#[test]
+fn headings_and_grid_lines_flag_independently() {
+    let headings_only = PRINTS_GRIDLINES.replace(r#"gridLines="1""#, "");
+    let options: SheetPrintOptions = worksheet_print_options(&headings_only);
+    assert!(!options.prints_gridlines);
+    assert!(options.prints_headings);
+
+    let grid_lines_only = PRINTS_GRIDLINES.replace(r#"headings="1""#, "");
+    let options: SheetPrintOptions = worksheet_print_options(&grid_lines_only);
+    assert!(options.prints_gridlines);
+    assert!(!options.prints_headings);
 }

@@ -181,6 +181,7 @@ pub(super) fn convert_table(
         seats_bottom_aligned_text_on_descender: false,
         paints_borders_inside_boundary: false,
         prints_gridlines: false,
+        prints_headings: false,
     }
 }
 

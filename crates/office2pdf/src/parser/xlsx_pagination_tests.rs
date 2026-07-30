@@ -68,6 +68,7 @@ fn make_page(column_widths: Vec<f64>, rows: Vec<TableRow>) -> SheetPage {
             seats_bottom_aligned_text_on_descender: false,
             paints_borders_inside_boundary: false,
             prints_gridlines: false,
+            prints_headings: false,
         },
         header: None,
         footer: None,
@@ -292,4 +293,63 @@ fn test_fit_to_width_scales_cell_padding() {
     assert_eq!(padding.bottom, 1.0);
     assert_eq!(padding.left, 2.0);
     assert_eq!(padding.right, 2.0);
+}
+
+#[test]
+fn test_width_split_repeats_the_heading_gutter_and_keeps_the_flag() {
+    // Printable width 400pt. Gutter (23pt) + three 150pt data columns
+    // overflow; the heading-adjusted title range (0,1) must repeat the gutter
+    // — including its row numbers — on the overflow page, and the letter
+    // cells must follow their own columns there (issue #623).
+    let mut page = make_page(
+        vec![23.0, 150.0, 150.0, 150.0],
+        vec![
+            TableRow {
+                cells: vec![cell(""), cell("A"), cell("B"), cell("C")],
+                height: Some(13.0),
+            },
+            TableRow {
+                cells: vec![cell("1"), cell("a1"), cell("b1"), cell("c1")],
+                height: Some(13.0),
+            },
+        ],
+    );
+    page.table.prints_headings = true;
+
+    let pages = split_sheet_page_by_width(page, Some((0, 1)), None);
+    assert_eq!(pages.len(), 2);
+    for split_page in &pages {
+        assert!(
+            split_page.table.prints_headings,
+            "every column group keeps the heading flag"
+        );
+        assert_eq!(split_page.table.column_widths[0], 23.0);
+        assert_eq!(cell_text(&split_page.table.rows[1].cells[0]), "1");
+    }
+    assert_eq!(cell_text(&pages[0].table.rows[0].cells[1]), "A");
+    assert_eq!(cell_text(&pages[1].table.rows[0].cells[1]), "C");
+    assert_eq!(cell_text(&pages[1].table.rows[1].cells[1]), "c1");
+}
+
+#[test]
+fn test_first_group_packs_against_the_full_printable_width() {
+    // Printable width 400pt. The title columns (here the 23pt heading
+    // gutter) are physically part of the first group, so only overflow
+    // groups — which get them prepended — reserve their width. Packing the
+    // first group at 400-23 pushed a fitting 190pt column onto page 2
+    // (issue #623 adversarial review, finding 3).
+    let page = make_page(
+        vec![23.0, 180.0, 190.0, 200.0],
+        vec![TableRow {
+            cells: vec![cell(""), cell("A"), cell("B"), cell("C")],
+            height: None,
+        }],
+    );
+    let pages = split_sheet_page_by_width(page, Some((0, 1)), None);
+    // 23+180+190 = 393 <= 400 fits page 1; the 200pt column overflows to
+    // page 2 behind the repeated 23pt title column.
+    assert_eq!(pages.len(), 2);
+    assert_eq!(pages[0].table.column_widths, vec![23.0, 180.0, 190.0]);
+    assert_eq!(pages[1].table.column_widths, vec![23.0, 200.0]);
+    assert_eq!(cell_text(&pages[1].table.rows[0].cells[1]), "C");
 }

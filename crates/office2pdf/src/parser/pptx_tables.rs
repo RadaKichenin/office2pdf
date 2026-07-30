@@ -409,6 +409,7 @@ impl<'a> PptxTableParser<'a> {
             seats_bottom_aligned_text_on_descender: false,
             paints_borders_inside_boundary: false,
             prints_gridlines: false,
+            prints_headings: false,
         };
         table_styles::apply_table_style(&mut table, &self.table_props, self.table_styles);
         table
