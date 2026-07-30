@@ -291,6 +291,7 @@ fn slice_table_columns(table: &Table, start: usize, end: usize) -> Table {
         use_content_driven_row_heights: table.use_content_driven_row_heights,
         default_vertical_align: table.default_vertical_align,
         seats_bottom_aligned_text_on_descender: table.seats_bottom_aligned_text_on_descender,
+        paints_borders_inside_boundary: table.paints_borders_inside_boundary,
     }
 }
 

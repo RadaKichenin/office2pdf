@@ -1,26 +1,27 @@
 use crate::ir::{BorderLineStyle, BorderSide, CellBorder, Color, TextStyle};
 use crate::parser::xml_util::parse_argb_color;
 
-/// Map an Excel border style name to its printed width in points.
+/// Map an Excel border style name to its printed band width in points.
 ///
-/// `thin` is measured: on a native Excel export of a `thin`-bordered sheet
-/// its rules are 2px at 150 DPI, i.e. 0.96pt, where the previous 0.5pt
-/// printed 1px and left the grid half Excel's weight (issue #487). The
-/// other styles are scaled to keep Excel's ordering around that anchor —
-/// `medium` and `thick` were already proportionally light, and leaving
-/// `medium` at the old 1.0pt would have made it indistinguishable from the
-/// corrected `thin`.
+/// Measured directly on a native Excel 16.111 one-factor probe against
+/// golden-mock GT traces (issue #619): every border prints as a filled band
+/// anchored to the grid boundary — `thin` and `hair` 1pt, `medium` 2pt,
+/// `thick` 3pt. The earlier 0.5/1.75/2.5 values (issue #487) were calibrated
+/// for Typst strokes centred on the boundary; the direct probe supersedes
+/// that indirect scaling.
 pub(super) fn border_style_to_width(style: &str) -> Option<f64> {
     match style {
-        "hair" => Some(0.5),
+        // `hair` shares `thin`'s 1pt band; only its dotted texture differs.
+        "hair" => Some(1.0),
         "thin" | "dashed" | "dotted" | "dashDot" | "dashDotDot" => Some(1.0),
-        // A double rule is drawn as two strokes with a gap between them, so
-        // each stroke carries the `thin` weight rather than the combined one.
+        // A double rule is drawn as two 1pt bands with a 1pt gap between
+        // them, so each band carries the `thin` weight rather than the
+        // combined one.
         "double" => Some(1.0),
         "medium" | "mediumDashed" | "mediumDashDot" | "mediumDashDotDot" | "slantDashDot" => {
-            Some(1.75)
+            Some(2.0)
         }
-        "thick" => Some(2.5),
+        "thick" => Some(3.0),
         _ => None, // "none" or unknown
     }
 }
@@ -166,7 +167,9 @@ pub(super) fn extract_cell_background(cell: &umya_spreadsheet::Cell) -> Option<C
 pub(super) fn border_style_to_line_style(style: &str) -> BorderLineStyle {
     match style {
         "dashed" | "mediumDashed" => BorderLineStyle::Dashed,
-        "dotted" => BorderLineStyle::Dotted,
+        // Excel prints `hair` as a dot-textured 1pt band (it tiles an 8x8
+        // dot pattern along the rule — issue #619 probe), not a solid line.
+        "dotted" | "hair" => BorderLineStyle::Dotted,
         "dashDot" | "mediumDashDot" | "slantDashDot" => BorderLineStyle::DashDot,
         "dashDotDot" | "mediumDashDotDot" => BorderLineStyle::DashDotDot,
         "double" => BorderLineStyle::Double,

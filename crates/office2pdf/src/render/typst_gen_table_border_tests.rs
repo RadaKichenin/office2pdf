@@ -352,3 +352,734 @@ fn test_solid_border_no_dash_param() {
         "Expected simple solid format in: {result}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Boundary-anchored border bands (issue #619)
+//
+// Excel paints every border as a filled band anchored to the nominal grid
+// boundary B (native Excel 16.111 one-factor probe + golden-mock GT traces):
+// thin/hair fill [B, B+1], medium [B-1, B+1], thick [B-1, B+2], double two
+// 1pt bands [B-1, B] and [B+1, B+2]. Tables flagged
+// `paints_borders_inside_boundary` must realize these bands as offset overlay
+// lines instead of Typst cell strokes, which Typst centres on the boundary.
+// ---------------------------------------------------------------------------
+
+/// One-cell paragraph content for border tests.
+fn bordered_text_cell(text: &str, border: CellBorder) -> TableCell {
+    TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: text.to_string(),
+                style: TextStyle::default(),
+                href: None,
+                footnote: None,
+            }],
+        })],
+        border: Some(border),
+        ..TableCell::default()
+    }
+}
+
+fn solid_side(width: f64) -> BorderSide {
+    BorderSide {
+        width,
+        color: Color::black(),
+        style: BorderLineStyle::Solid,
+    }
+}
+
+fn boundary_band_table(rows: Vec<TableRow>, column_widths: Vec<f64>) -> Table {
+    Table {
+        rows,
+        column_widths,
+        paints_borders_inside_boundary: true,
+        ..Table::default()
+    }
+}
+
+/// A fixed-height row — the spreadsheet default, where the cell frame height
+/// is known at codegen and a vertical band can be a single concrete line.
+fn fixed_row(cells: Vec<TableCell>) -> TableRow {
+    TableRow {
+        cells,
+        height: Some(20.0),
+    }
+}
+
+#[test]
+fn test_boundary_band_thin_borders_emit_offset_overlays_not_strokes() {
+    let border = CellBorder {
+        top: Some(solid_side(1.0)),
+        bottom: Some(solid_side(1.0)),
+        left: Some(solid_side(1.0)),
+        right: Some(solid_side(1.0)),
+    };
+    let table = boundary_band_table(
+        vec![fixed_row(vec![bordered_text_cell("Thin", border)])],
+        vec![100.0],
+    );
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        !result.contains("stroke: ("),
+        "a boundary-band table must not emit per-cell strokes: {result}"
+    );
+    // The layout inset still reserves the half border widths of #500/#503, so
+    // no text moves relative to the stroke regime.
+    assert!(
+        result.contains("inset: (top: 5.5pt, right: 5pt, bottom: 5.5pt, left: 5pt)"),
+        "border layout inset must be unchanged: {result}"
+    );
+    // Thin band [B, B+1]: a 1pt line whose path is centred at B + 0.5. With
+    // the default 5pt padding the top boundary sits at inset.top = 5.5pt above
+    // the content box, so dy = -5.5 + 0.5 = -5. Runs extend 1pt past their end
+    // boundary, so horizontals span inset.left + 100% + inset.right + 1.
+    assert!(
+        result.contains(
+            "#place(top + left, dx: -5pt, dy: -5pt, line(length: 100% + 11pt, angle: 0deg, stroke: 1pt + rgb(0, 0, 0)))"
+        ),
+        "top thin band must fill [B, B+1]: {result}"
+    );
+    assert!(
+        result.contains(
+            "#place(bottom + left, dx: -5pt, dy: 6pt, line(length: 100% + 11pt, angle: 0deg, stroke: 1pt + rgb(0, 0, 0)))"
+        ),
+        "bottom thin band must fill [B, B+1] below the boundary: {result}"
+    );
+    // Vertical bands use the concrete frame height (20pt row) plus the 1pt
+    // run extension: a Typst-relative length inside `#place` resolves against
+    // the page, not the cell, whenever a spanned row is auto-sized.
+    assert!(
+        result.contains(
+            "#place(top + left, dx: -4.5pt, dy: -5.5pt, line(length: 21pt, angle: 90deg, stroke: 1pt + rgb(0, 0, 0)))"
+        ),
+        "left thin band must fill [B, B+1] right of the boundary: {result}"
+    );
+    assert!(
+        result.contains(
+            "#place(top + right, dx: 5.5pt, dy: -5.5pt, line(length: 21pt, angle: 90deg, stroke: 1pt + rgb(0, 0, 0)))"
+        ),
+        "right thin band must lie outside the nominal grid rect: {result}"
+    );
+}
+
+#[test]
+fn test_boundary_band_medium_thick_double_weights() {
+    let single_top = |side: BorderSide| CellBorder {
+        top: Some(side),
+        bottom: None,
+        left: None,
+        right: None,
+    };
+    let medium_table = boundary_band_table(
+        vec![fixed_row(vec![bordered_text_cell(
+            "Med",
+            single_top(solid_side(2.0)),
+        )])],
+        vec![100.0],
+    );
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(medium_table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+    // Medium band [B-1, B+1]: 2pt centred on B; boundary at inset.top = 6pt.
+    assert!(
+        result.contains(
+            "#place(top + left, dx: -5pt, dy: -6pt, line(length: 100% + 11pt, angle: 0deg, stroke: 2pt + rgb(0, 0, 0)))"
+        ),
+        "medium band must fill [B-1, B+1]: {result}"
+    );
+
+    let thick_table = boundary_band_table(
+        vec![fixed_row(vec![bordered_text_cell(
+            "Thick",
+            single_top(solid_side(3.0)),
+        )])],
+        vec![100.0],
+    );
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(thick_table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+    // Thick band [B-1, B+2]: 3pt centred at B + 0.5; boundary at 6.5pt.
+    assert!(
+        result.contains(
+            "#place(top + left, dx: -5pt, dy: -6pt, line(length: 100% + 11pt, angle: 0deg, stroke: 3pt + rgb(0, 0, 0)))"
+        ),
+        "thick band must fill [B-1, B+2]: {result}"
+    );
+
+    let double_table = boundary_band_table(
+        vec![fixed_row(vec![bordered_text_cell(
+            "Double",
+            single_top(BorderSide {
+                width: 1.0,
+                color: Color::black(),
+                style: BorderLineStyle::Double,
+            }),
+        )])],
+        vec![100.0],
+    );
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(double_table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+    // Double: two 1pt bands [B-1, B] and [B+1, B+2] with the boundary strip
+    // [B, B+1] as the gap; boundary at inset.top = 5.5pt.
+    assert!(
+        result.contains(
+            "#place(top + left, dx: -5pt, dy: -6pt, line(length: 100% + 11pt, angle: 0deg, stroke: 1pt + rgb(0, 0, 0)))"
+        ),
+        "outer double band must fill [B-1, B]: {result}"
+    );
+    assert!(
+        result.contains(
+            "#place(top + left, dx: -5pt, dy: -4pt, line(length: 100% + 11pt, angle: 0deg, stroke: 1pt + rgb(0, 0, 0)))"
+        ),
+        "inner double band must fill [B+1, B+2]: {result}"
+    );
+}
+
+#[test]
+fn test_boundary_band_shared_edge_paints_once() {
+    // Both neighbours declare the same internal boundary: it must paint once.
+    let upper = bordered_text_cell(
+        "Upper",
+        CellBorder {
+            top: None,
+            bottom: Some(solid_side(1.0)),
+            left: None,
+            right: None,
+        },
+    );
+    let lower = bordered_text_cell(
+        "Lower",
+        CellBorder {
+            top: Some(solid_side(1.0)),
+            bottom: None,
+            left: None,
+            right: None,
+        },
+    );
+    let table = boundary_band_table(
+        vec![fixed_row(vec![upper]), fixed_row(vec![lower])],
+        vec![100.0],
+    );
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+    assert_eq!(
+        result.matches("angle: 0deg").count(),
+        1,
+        "an edge declared by both neighbours must paint exactly one band: {result}"
+    );
+    assert!(
+        !result.contains("#place(bottom"),
+        "on an equal-weight tie the lower cell's top declaration paints: {result}"
+    );
+}
+
+#[test]
+fn test_boundary_band_shared_edge_heavier_declaration_wins() {
+    // Excel resolves conflicting declarations to the heavier style: a medium
+    // bottom must beat the neighbour's thin top.
+    let upper = bordered_text_cell(
+        "Upper",
+        CellBorder {
+            top: None,
+            bottom: Some(solid_side(2.0)),
+            left: None,
+            right: None,
+        },
+    );
+    let lower = bordered_text_cell(
+        "Lower",
+        CellBorder {
+            top: Some(solid_side(1.0)),
+            bottom: None,
+            left: None,
+            right: None,
+        },
+    );
+    let table = boundary_band_table(
+        vec![fixed_row(vec![upper]), fixed_row(vec![lower])],
+        vec![100.0],
+    );
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+    assert_eq!(
+        result.matches("angle: 0deg").count(),
+        1,
+        "a conflicting edge must still paint exactly one band: {result}"
+    );
+    // Medium bottom boundary sits at inset.bottom = 5 + 1 = 6pt, band centred
+    // on it.
+    assert!(
+        result.contains(
+            "#place(bottom + left, dx: -5pt, dy: 6pt, line(length: 100% + 11pt, angle: 0deg, stroke: 2pt + rgb(0, 0, 0)))"
+        ),
+        "the heavier (medium) declaration must paint the shared edge: {result}"
+    );
+}
+
+#[test]
+fn test_boundary_band_shared_vertical_edge_paints_once() {
+    let left_cell = bordered_text_cell(
+        "L",
+        CellBorder {
+            top: None,
+            bottom: None,
+            left: None,
+            right: Some(solid_side(1.0)),
+        },
+    );
+    let right_cell = bordered_text_cell(
+        "R",
+        CellBorder {
+            top: None,
+            bottom: None,
+            left: Some(solid_side(1.0)),
+            right: None,
+        },
+    );
+    let table = boundary_band_table(
+        vec![fixed_row(vec![left_cell, right_cell])],
+        vec![100.0, 100.0],
+    );
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+    assert_eq!(
+        result.matches("angle: 90deg").count(),
+        1,
+        "a vertical edge declared by both neighbours must paint once: {result}"
+    );
+    assert!(
+        !result.contains("#place(top + right"),
+        "on an equal-weight tie the right cell's left declaration paints: {result}"
+    );
+}
+
+#[test]
+fn test_boundary_band_patterned_style_keeps_dash_dict() {
+    let table = boundary_band_table(
+        vec![fixed_row(vec![bordered_text_cell(
+            "Dashed",
+            CellBorder {
+                top: Some(BorderSide {
+                    width: 1.0,
+                    color: Color::black(),
+                    style: BorderLineStyle::Dashed,
+                }),
+                bottom: None,
+                left: None,
+                right: None,
+            },
+        )])],
+        vec![100.0],
+    );
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+    assert!(
+        result.contains(
+            "#place(top + left, dx: -5pt, dy: -5pt, line(length: 100% + 11pt, angle: 0deg, stroke: (paint: rgb(0, 0, 0), thickness: 1pt, dash: \"dashed\")))"
+        ),
+        "a patterned band must keep its dash dict on the overlay line: {result}"
+    );
+    assert!(
+        !result.contains("stroke: (top"),
+        "a patterned band must not also emit a cell stroke: {result}"
+    );
+}
+
+#[test]
+fn test_word_style_table_keeps_centred_strokes_byte_identically() {
+    // DOCX/PPTX tables (flag unset) keep the exact stroke emission: their
+    // border-painting conventions are unmeasured against native GT, so the
+    // #619 band regime must not leak into them.
+    let border = CellBorder {
+        top: Some(solid_side(1.0)),
+        bottom: Some(solid_side(1.0)),
+        left: Some(solid_side(1.0)),
+        right: Some(solid_side(1.0)),
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            cells: vec![bordered_text_cell("Word", border)],
+            height: None,
+        }],
+        column_widths: vec![100.0],
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+    assert!(
+        result.contains(
+            "stroke: (top: 1pt + rgb(0, 0, 0), bottom: 1pt + rgb(0, 0, 0), left: 1pt + rgb(0, 0, 0), right: 1pt + rgb(0, 0, 0))"
+        ),
+        "unflagged tables must keep the centred cell strokes: {result}"
+    );
+    assert!(
+        !result.contains("#place("),
+        "unflagged solid borders must not paint overlays: {result}"
+    );
+}
+
+/// An auto-sized row's final height only the renderer knows, and a
+/// Typst-relative length inside `#place` resolves against the page there
+/// (issue #619 probe), so vertical bands in auto rows are painted as two
+/// concrete twin bands anchored at the cell's top and bottom edges, sized
+/// from the row's tallest single-line box.
+#[test]
+fn test_boundary_band_auto_row_verticals_paint_concrete_twin_bands() {
+    let Some(line_box) = word_cell_line_box(
+        &[Run {
+            text: "Auto".to_string(),
+            style: TextStyle {
+                font_family: Some("Libertinus Serif".to_string()),
+                font_size: Some(10.0),
+                ..TextStyle::default()
+            },
+            href: None,
+            footnote: None,
+        }],
+        &ParagraphStyle::default(),
+        None,
+        false,
+        false,
+    ) else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+    let cell = TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: "Auto".to_string(),
+                style: TextStyle {
+                    font_family: Some("Libertinus Serif".to_string()),
+                    font_size: Some(10.0),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })],
+        border: Some(CellBorder {
+            top: None,
+            bottom: None,
+            left: Some(solid_side(1.0)),
+            right: None,
+        }),
+        ..TableCell::default()
+    };
+    let table = boundary_band_table(
+        vec![TableRow {
+            cells: vec![cell],
+            height: None,
+        }],
+        vec![100.0],
+    );
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    // The frame estimate is the single-line box plus the cell's insets (5pt
+    // padding each side; no half border on top/bottom for a left-only
+    // border), and the band adds the 1pt run extension.
+    let frame_estimate_pt: f64 =
+        (line_box.top_em + line_box.bottom_em) * line_box.font_size_pt + 5.0 + 5.0;
+    let band_length: String = tables::format_geometry(frame_estimate_pt + 1.0);
+    assert!(
+        result.contains(&format!(
+            "#place(top + left, dx: -4.5pt, dy: -5pt, line(length: {band_length}pt, angle: 90deg, stroke: 1pt + rgb(0, 0, 0)))"
+        )),
+        "the top twin must hang from the top boundary: {result}"
+    );
+    assert!(
+        result.contains(&format!(
+            "#place(bottom + left, dx: -4.5pt, dy: 6pt, line(length: {band_length}pt, angle: -90deg, stroke: 1pt + rgb(0, 0, 0)))"
+        )),
+        "the bottom twin must rise from 1pt past the bottom boundary: {result}"
+    );
+}
+
+/// Without line metrics the twins fall back to the ambient text size,
+/// following the data-bar `1.2em` precedent.
+#[test]
+fn test_boundary_band_auto_row_verticals_em_fallback_without_metrics() {
+    // Default `TextStyle` declares no font family, so no line metrics exist.
+    let cell = bordered_text_cell(
+        "NoMetrics",
+        CellBorder {
+            top: None,
+            bottom: None,
+            left: Some(solid_side(1.0)),
+            right: None,
+        },
+    );
+    let table = boundary_band_table(
+        vec![TableRow {
+            cells: vec![cell],
+            height: None,
+        }],
+        vec![100.0],
+    );
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+    assert!(
+        result.contains(
+            "#place(top + left, dx: -4.5pt, dy: -5pt, line(length: 1.2em + 11pt, angle: 90deg, stroke: 1pt + rgb(0, 0, 0)))"
+        ),
+        "the top twin must fall back to an em-sized band: {result}"
+    );
+    assert!(
+        result.contains(
+            "#place(bottom + left, dx: -4.5pt, dy: 6pt, line(length: 1.2em + 11pt, angle: -90deg, stroke: 1pt + rgb(0, 0, 0)))"
+        ),
+        "the bottom twin must fall back to an em-sized band: {result}"
+    );
+}
+
+#[test]
+fn test_boundary_band_double_declaration_survives_thin_neighbour() {
+    // Excel's conflict rule ranks a double rule above every single band even
+    // though each of its strokes is stored at the thin 1pt weight: A1
+    // bottom=double against A2 top=thin must paint the double's two bands
+    // (issue #619 review, remediation 1).
+    let upper = bordered_text_cell(
+        "Upper",
+        CellBorder {
+            top: None,
+            bottom: Some(BorderSide {
+                width: 1.0,
+                color: Color::black(),
+                style: BorderLineStyle::Double,
+            }),
+            left: None,
+            right: None,
+        },
+    );
+    let lower = bordered_text_cell(
+        "Lower",
+        CellBorder {
+            top: Some(solid_side(1.0)),
+            bottom: None,
+            left: None,
+            right: None,
+        },
+    );
+    let table = boundary_band_table(
+        vec![fixed_row(vec![upper]), fixed_row(vec![lower])],
+        vec![100.0],
+    );
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+    assert_eq!(
+        result.matches("angle: 0deg").count(),
+        2,
+        "the double must paint both of its bands, erasing the thin: {result}"
+    );
+    assert_eq!(
+        result.matches("#place(bottom + left").count(),
+        2,
+        "both bands must come from the upper cell's double bottom: {result}"
+    );
+    assert!(
+        !result.contains("#place(top + left, dx: -5pt, dy: -5pt"),
+        "the lower cell's thin top must yield to the double: {result}"
+    );
+}
+
+#[test]
+fn test_boundary_band_solid_thin_outranks_hair_at_equal_width() {
+    // `hair` shares `thin`'s 1pt band width and differs only in its dotted
+    // texture, so a raw width comparison ties; Excel keeps the solid rule
+    // (issue #619 review, remediation 1).
+    let upper = bordered_text_cell(
+        "Upper",
+        CellBorder {
+            top: None,
+            bottom: Some(solid_side(1.0)),
+            left: None,
+            right: None,
+        },
+    );
+    let lower = bordered_text_cell(
+        "Lower",
+        CellBorder {
+            top: Some(BorderSide {
+                width: 1.0,
+                color: Color::black(),
+                style: BorderLineStyle::Dotted,
+            }),
+            bottom: None,
+            left: None,
+            right: None,
+        },
+    );
+    let table = boundary_band_table(
+        vec![fixed_row(vec![upper]), fixed_row(vec![lower])],
+        vec![100.0],
+    );
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+    assert_eq!(
+        result.matches("angle: 0deg").count(),
+        1,
+        "the conflicting edge must paint exactly one band: {result}"
+    );
+    assert!(
+        result.contains(
+            "#place(bottom + left, dx: -5pt, dy: 6pt, line(length: 100% + 11pt, angle: 0deg, stroke: 1pt + rgb(0, 0, 0)))"
+        ),
+        "the solid thin declaration must paint the shared edge: {result}"
+    );
+    assert!(
+        !result.contains("dash"),
+        "the patterned hair declaration must yield to the solid: {result}"
+    );
+}
+
+#[test]
+fn test_boundary_band_header_body_tie_paints_from_repeating_header() {
+    // A print-title header row repeats on every page while the first body
+    // row renders once. On an equal-rank tie the band must therefore be
+    // emitted from the header's bottom slot — inside `table.header(...)` —
+    // so pages 2+ keep the rule under the repeated header (issue #619
+    // review, remediation 2).
+    let header_cell = bordered_text_cell(
+        "Head",
+        CellBorder {
+            top: None,
+            bottom: Some(solid_side(1.0)),
+            left: None,
+            right: None,
+        },
+    );
+    let body_cell = bordered_text_cell(
+        "Body",
+        CellBorder {
+            top: Some(solid_side(1.0)),
+            bottom: None,
+            left: None,
+            right: None,
+        },
+    );
+    let mut table = boundary_band_table(
+        vec![fixed_row(vec![header_cell]), fixed_row(vec![body_cell])],
+        vec![100.0],
+    );
+    table.header_row_count = 1;
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert_eq!(
+        result.matches("angle: 0deg").count(),
+        1,
+        "the shared header/body edge must still paint exactly once: {result}"
+    );
+    let header_pos: usize = result
+        .find("table.header(")
+        .expect("header block must exist");
+    let band_pos: usize = result.find("angle: 0deg").expect("band must exist");
+    let body_pos: usize = result.find("Body]").expect("body cell must exist");
+    assert!(
+        header_pos < band_pos && band_pos < body_pos,
+        "the tied band must be emitted within the table.header block, \
+         before the first body cell: {result}"
+    );
+}
+
+#[test]
+fn test_boundary_band_header_body_heavier_body_band_repeats_with_header() {
+    // When the first body row declares a strictly heavier rule than the
+    // repeating header above it, the body's band wins — but the header side
+    // must also carry it, or the repeated header instances on pages 2+ would
+    // lose the rule (issue #619 review, remediation 2).
+    let header_cell = bordered_text_cell(
+        "Head",
+        CellBorder {
+            top: None,
+            bottom: Some(solid_side(1.0)),
+            left: None,
+            right: None,
+        },
+    );
+    let body_cell = bordered_text_cell(
+        "Body",
+        CellBorder {
+            top: Some(solid_side(2.0)),
+            bottom: None,
+            left: None,
+            right: None,
+        },
+    );
+    let mut table = boundary_band_table(
+        vec![fixed_row(vec![header_cell]), fixed_row(vec![body_cell])],
+        vec![100.0],
+    );
+    table.header_row_count = 1;
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert_eq!(
+        result.matches("angle: 0deg").count(),
+        2,
+        "the heavier body band must paint from both sides of the boundary: {result}"
+    );
+    assert_eq!(
+        result
+            .matches("angle: 0deg, stroke: 2pt + rgb(0, 0, 0)")
+            .count(),
+        2,
+        "both emissions must carry the body's heavier (medium) style: {result}"
+    );
+    // Each cell's overlays precede its text within the cell bracket, so a
+    // band before "Head]" is the header cell's and one after it is the body
+    // cell's.
+    let head_pos: usize = result.find("Head]").expect("header cell must exist");
+    let first_band_pos: usize = result.find("angle: 0deg").expect("band must exist");
+    let last_band_pos: usize = result.rfind("angle: 0deg").expect("band must exist");
+    assert!(
+        first_band_pos < head_pos && head_pos < last_band_pos,
+        "one emission must sit in the header block and one in the body row: {result}"
+    );
+}
+
+#[test]
+fn test_boundary_band_auto_row_frame_estimate_computed_once_per_row() {
+    // The frame estimate walks every cell in the row; computing it per cell
+    // makes vertical-band preparation O(cells^2) in wide wrap-text rows.
+    // It must be computed at most once per auto-sized row (issue #619
+    // review, remediation 3).
+    let vertical_border = CellBorder {
+        top: None,
+        bottom: None,
+        left: Some(solid_side(1.0)),
+        right: Some(solid_side(1.0)),
+    };
+    let cells: Vec<TableCell> = (0..6)
+        .map(|i| bordered_text_cell(&format!("C{i}"), vertical_border.clone()))
+        .collect();
+    let table = boundary_band_table(
+        vec![
+            TableRow {
+                cells: cells.clone(),
+                height: None,
+            },
+            TableRow {
+                cells,
+                height: None,
+            },
+        ],
+        vec![50.0; 6],
+    );
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+
+    tables::AUTO_ROW_FRAME_ESTIMATE_CALLS.with(|calls| calls.set(0));
+    let result = generate_typst(&doc).unwrap().source;
+    let estimate_calls: usize = tables::AUTO_ROW_FRAME_ESTIMATE_CALLS.with(|calls| calls.get());
+
+    assert!(
+        result.contains("angle: 90deg"),
+        "the rows must actually paint vertical bands: {result}"
+    );
+    assert!(
+        estimate_calls <= 2,
+        "the per-row frame estimate must be computed at most once per row \
+         (2 rows), got {estimate_calls} calls"
+    );
+}
