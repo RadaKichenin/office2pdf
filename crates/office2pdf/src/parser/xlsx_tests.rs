@@ -643,3 +643,177 @@ fn rewrite_first_styles_font(data: &[u8], family: &str, size_pt: f64) -> Vec<u8>
     }
     out.finish().expect("finished zip").into_inner()
 }
+
+// ----- Drawing-only sheets (issue #620) -----
+
+/// A workbook whose only sheet has no cells but carries one picture anchored
+/// C1:F9 (cols 2..5, rows 0..8, zero offsets). umya cannot author drawings,
+/// so the drawing parts are spliced into the zip it writes.
+fn build_drawing_only_sheet_xlsx() -> Vec<u8> {
+    let book = umya_spreadsheet::new_file();
+    let mut cursor = Cursor::new(Vec::new());
+    umya_spreadsheet::writer::xlsx::write_writer(&book, &mut cursor).unwrap();
+    splice_picture_drawing(&cursor.into_inner())
+}
+
+/// Splice `xl/drawings/drawing1.xml` (one twoCellAnchor picture), its rels,
+/// and a 1x1 PNG into a workbook zip, wiring the first worksheet to it.
+fn splice_picture_drawing(data: &[u8]) -> Vec<u8> {
+    const DRAWING_XML: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><xdr:twoCellAnchor><xdr:from><xdr:col>2</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:to><xdr:col>5</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>8</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="2" name="Picture 1"/><xdr:cNvPicPr/></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:twoCellAnchor></xdr:wsDr>"#;
+    const DRAWING_RELS: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/></Relationships>"#;
+    const SHEET_RELS: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdDrawing1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>"#;
+    /// Smallest valid PNG: 1x1 RGBA.
+    const PNG_1X1: &[u8] = &[
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44,
+        0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F,
+        0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x62, 0x00,
+        0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
+        0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+    ];
+
+    let mut archive = zip::ZipArchive::new(Cursor::new(data)).expect("readable zip");
+    let mut out = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    let mut has_sheet_rels = false;
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index).expect("readable entry");
+        let name = entry.name().to_string();
+        let mut bytes = Vec::new();
+        std::io::Read::read_to_end(&mut entry, &mut bytes).expect("readable entry body");
+        match name.as_str() {
+            "xl/worksheets/sheet1.xml" => {
+                let xml = String::from_utf8(bytes).expect("sheet1.xml is utf-8");
+                bytes = xml
+                    .replace(
+                        "</worksheet>",
+                        r#"<drawing r:id="rIdDrawing1"/></worksheet>"#,
+                    )
+                    .into_bytes();
+            }
+            "xl/worksheets/_rels/sheet1.xml.rels" => {
+                has_sheet_rels = true;
+                let xml = String::from_utf8(bytes).expect("sheet rels is utf-8");
+                bytes = xml
+                    .replace(
+                        "</Relationships>",
+                        r#"<Relationship Id="rIdDrawing1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>"#,
+                    )
+                    .into_bytes();
+            }
+            "[Content_Types].xml" => {
+                let xml = String::from_utf8(bytes).expect("content types is utf-8");
+                bytes = xml
+                    .replace(
+                        "</Types>",
+                        r#"<Default Extension="png" ContentType="image/png"/><Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/></Types>"#,
+                    )
+                    .into_bytes();
+            }
+            _ => {}
+        }
+        out.start_file(name, zip::write::FileOptions::default())
+            .expect("writable entry");
+        std::io::Write::write_all(&mut out, &bytes).expect("writable entry body");
+    }
+    if !has_sheet_rels {
+        out.start_file(
+            "xl/worksheets/_rels/sheet1.xml.rels",
+            zip::write::FileOptions::default(),
+        )
+        .expect("writable sheet rels");
+        std::io::Write::write_all(&mut out, SHEET_RELS.as_bytes()).expect("writable sheet rels");
+    }
+    for (path, body) in [
+        ("xl/drawings/drawing1.xml", DRAWING_XML.as_bytes()),
+        (
+            "xl/drawings/_rels/drawing1.xml.rels",
+            DRAWING_RELS.as_bytes(),
+        ),
+        ("xl/media/image1.png", PNG_1X1),
+    ] {
+        out.start_file(path, zip::write::FileOptions::default())
+            .expect("writable drawing part");
+        std::io::Write::write_all(&mut out, body).expect("writable drawing part body");
+    }
+    out.finish().expect("finished zip").into_inner()
+}
+
+/// A sheet with no cells must resolve its drawing anchors against the
+/// workbook Normal font, producing the same column metric as a populated
+/// sheet. umya writes Calibri 11 as the Normal font, which the converter's
+/// own model maps to an 8px max digit width -> 50.58pt default columns; the
+/// legacy hardcoded 7px metric produced 44.2575pt (issue #620).
+#[test]
+fn test_drawing_only_sheet_resolves_anchors_with_normal_font_metric() {
+    let data = build_drawing_only_sheet_xlsx();
+    let (doc, _warnings) = XlsxParser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = get_sheet_page(&doc, 0);
+    assert_eq!(
+        page.images.len(),
+        1,
+        "the spliced picture must survive parse"
+    );
+    let image: &crate::ir::SheetImage = &page.images[0];
+
+    let column_pt: f64 = column_width_to_pt(DEFAULT_COLUMN_WIDTH, 8.0);
+    assert!(
+        (column_pt - 50.58).abs() < 0.01,
+        "Calibri-11 default column must be 50.58pt, got {column_pt}"
+    );
+    // Anchor spans cols 2..5 with zero offsets: x = 2 columns, width = 3.
+    assert!(
+        (image.x_offset_pt - 2.0 * column_pt).abs() < 0.01,
+        "x_offset_pt {} != 2 x {column_pt}",
+        image.x_offset_pt
+    );
+    let width: f64 = image.image.width.expect("twoCellAnchor resolves a width");
+    assert!(
+        (width - 3.0 * column_pt).abs() < 0.01,
+        "width {width} != 3 x {column_pt}"
+    );
+    // Negative: the legacy hardcoded-7px metric must be gone.
+    let legacy_column_pt: f64 = column_width_to_pt(DEFAULT_COLUMN_WIDTH, 7.0);
+    assert!(
+        (width - 3.0 * legacy_column_pt).abs() > 1.0,
+        "width {width} still matches the legacy 44.2575pt column metric"
+    );
+}
+
+/// Triangulation for issue #620: the empty-sheet context must derive its
+/// metric from whatever Normal font it is given — not a hardcoded 8px — and
+/// fall back to the legacy 7px only when no Normal font is readable. The
+/// carried `normal_font` keeps the stub structurally consistent with a
+/// populated-sheet context; nothing on the drawing-only path reads it today
+/// (text boxes take their fonts from DrawingML run properties and the theme).
+#[test]
+fn test_empty_sheet_context_derives_metric_from_normal_font() {
+    let book = umya_spreadsheet::new_file();
+    let sheet: &umya_spreadsheet::Worksheet = book.get_sheet(&0).unwrap();
+
+    let calibri_11 = NormalFont {
+        family: "Calibri".to_string(),
+        size_pt: 11.0,
+    };
+    let calibri_ctx = empty_sheet_context(sheet, Some(&calibri_11));
+    assert_eq!(calibri_ctx.max_digit_width_px, 8.0);
+    assert_eq!(calibri_ctx.normal_font, Some(calibri_11));
+
+    // A smaller Normal font must shrink the metric with it.
+    let calibri_8 = NormalFont {
+        family: "Calibri".to_string(),
+        size_pt: 8.0,
+    };
+    assert_eq!(
+        empty_sheet_context(sheet, Some(&calibri_8)).max_digit_width_px,
+        6.0
+    );
+
+    // No readable Normal font: the shared cell-font fallback finds no cells
+    // on an empty sheet and keeps the legacy 7px default.
+    let fallback_ctx = empty_sheet_context(sheet, None);
+    assert_eq!(fallback_ctx.max_digit_width_px, 7.0);
+    assert_eq!(fallback_ctx.normal_font, None);
+}

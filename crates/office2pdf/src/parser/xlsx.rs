@@ -254,17 +254,27 @@ fn anchored_image(
 
 /// Context stand-in for sheets with no used cells, so drawing anchors can
 /// still resolve against default column widths and row heights.
-fn empty_sheet_context() -> SheetContext {
+///
+/// The column metric must come from the workbook Normal font exactly as it
+/// does for populated sheets: hardcoding 7px laid every drawing-only sheet
+/// out on 44.2575pt columns while the workbook's own Calibri-11 metric says
+/// 50.58pt, shrinking anchors 12.5% and distorting picture aspect ratios
+/// (issue #620). Without a readable Normal font the shared fallback inspects
+/// cell fonts, finds none on an empty sheet, and keeps the legacy 7px.
+fn empty_sheet_context(
+    sheet: &umya_spreadsheet::Worksheet,
+    normal_font: Option<&NormalFont>,
+) -> SheetContext {
     SheetContext {
         col_start: 1,
         col_end: 0,
         num_cols: 0,
         column_widths: Vec::new(),
-        max_digit_width_px: 7.0,
+        max_digit_width_px: resolve_max_digit_width_px(sheet, normal_font),
         merge_tops: std::collections::HashMap::new(),
         merge_skips: std::collections::HashSet::new(),
         cond_fmt_overrides: std::collections::HashMap::new(),
-        normal_font: None,
+        normal_font: normal_font.cloned(),
         row_stripes: Vec::new(),
     }
 }
@@ -355,7 +365,7 @@ impl XlsxParser {
                 let raw_text_boxes = text_box_map.remove(&sheet_name);
                 let raw_charts = chart_map.remove(&sheet_name);
                 if raw_images.is_some() || raw_text_boxes.is_some() || raw_charts.is_some() {
-                    let stub_ctx = empty_sheet_context();
+                    let stub_ctx = empty_sheet_context(sheet, normal_font.as_ref());
                     let images: Vec<crate::ir::SheetImage> = raw_images
                         .unwrap_or_default()
                         .into_iter()
@@ -568,7 +578,7 @@ impl Parser for XlsxParser {
                 let raw_text_boxes = text_box_map.remove(&sheet_name);
                 let raw_charts = chart_map.remove(&sheet_name);
                 if raw_images.is_some() || raw_text_boxes.is_some() || raw_charts.is_some() {
-                    let stub_ctx = empty_sheet_context();
+                    let stub_ctx = empty_sheet_context(sheet, normal_font.as_ref());
                     let images: Vec<crate::ir::SheetImage> = raw_images
                         .unwrap_or_default()
                         .into_iter()
