@@ -292,6 +292,7 @@ fn slice_table_columns(table: &Table, start: usize, end: usize) -> Table {
         default_vertical_align: table.default_vertical_align,
         seats_bottom_aligned_text_on_descender: table.seats_bottom_aligned_text_on_descender,
         paints_borders_inside_boundary: table.paints_borders_inside_boundary,
+        prints_gridlines: table.prints_gridlines,
     }
 }
 

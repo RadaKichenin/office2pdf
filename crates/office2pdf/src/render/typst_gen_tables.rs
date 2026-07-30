@@ -762,6 +762,28 @@ fn cell_inset_with_border(cell: &TableCell, default_cell_padding: Insets) -> Ins
 /// #619). It is what lets horizontal bands own the corner blocks.
 const BAND_RUN_END_EXTENSION_PT: f64 = 1.0;
 
+/// Width of Excel's printed gridline band, in points.
+///
+/// Measured on native Excel exports of NumberFormatTests (issue #622,
+/// /Volumes/T7/scratch/issue-622/nft2-p1.rects.txt and nft2-p2.trace): every
+/// gridline is an axis-aligned fill rect exactly 1.0pt thick filling the
+/// boundary band [B, B+1] — no stroke ops and no fractional hairlines exist
+/// anywhere in the traces.
+const PRINTED_GRIDLINE_WIDTH_PT: f64 = 1.0;
+
+/// The side a printed gridline paints on an unowned boundary.
+///
+/// Pure black, not gray and not a theme colour: the GT traces fill every
+/// gridline with "0 0 0" in ICCBased sRGB (issue #622 measurement — the
+/// common assumption of gray printed gridlines is wrong for Excel GT).
+fn printed_gridline_side() -> BorderSide {
+    BorderSide {
+        width: PRINTED_GRIDLINE_WIDTH_PT,
+        color: Color::black(),
+        style: BorderLineStyle::Solid,
+    }
+}
+
 /// Total order for Excel's shared-boundary conflict rule (issue #619 review,
 /// remediation 1). Derived `PartialOrd` compares the fields lexicographically
 /// in declaration order.
@@ -825,7 +847,7 @@ fn resolve_boundary_painted_borders(
     num_cols: usize,
     repeating_header_boundary: Option<usize>,
 ) -> Vec<Vec<Option<CellBorder>>> {
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
 
     /// Grid footprint of one emitted cell.
     struct CellPlacement {
@@ -1024,6 +1046,101 @@ fn resolve_boundary_painted_borders(
             painted[placement.row_index][placement.cell_index] = Some(resolved);
         }
     }
+
+    // Printed gridlines (issue #622): `<printOptions gridLines="1"/>` rules
+    // every cell boundary of the printed range with Excel's gridline band,
+    // strictly below any explicit declaration — a boundary owned by any
+    // declared side (either neighbour's) keeps that side alone, hair borders
+    // included, which the #619 rank would otherwise wrongly outrank. Every
+    // placement seeds all four of its unowned sides: the two seeds of an
+    // interior boundary are boundary-anchored to the same [B, B+1] strip and
+    // coincide invisibly, and the redundant bottom seed is what closes the
+    // grid at a page break, where GT draws the bottom rule (which row ends a
+    // page only the renderer knows).
+    if table.prints_gridlines {
+        // A cell fill suppresses all four adjacent gridline segments: GT
+        // truncates the interior verticals at a filled row and omits the
+        // horizontal at the fill's bottom boundary (Tests p1 vs the
+        // fill-free p2 control), because fills paint after gridlines.
+        //
+        // TODO(#622 follow-up: a background-filled row that lands as the
+        // first row of a page under natural pagination leaves the previous
+        // page's grid open at that boundary — GT closes it; suppression is
+        // kept because an unsuppressed band would paint over the fill's top
+        // edge on every within-page filled row, the far more common case).
+        let mut fill_suppressed_horizontal: HashSet<(usize, usize)> = HashSet::new();
+        let mut fill_suppressed_vertical: HashSet<(usize, usize)> = HashSet::new();
+        for placement in &placements {
+            if cell_of(placement).background.is_none() {
+                continue;
+            }
+            for col in placement.first_col..placement.first_col + placement.col_span {
+                fill_suppressed_horizontal.insert((placement.row_index, col));
+                fill_suppressed_horizontal.insert((placement.row_index + placement.row_span, col));
+            }
+            for row in placement.row_index..placement.row_index + placement.row_span {
+                fill_suppressed_vertical.insert((placement.first_col, row));
+                fill_suppressed_vertical.insert((placement.first_col + placement.col_span, row));
+            }
+        }
+        let horizontal_boundary_is_free = |boundary: usize, col: usize| -> bool {
+            !top_sides.contains_key(&(boundary, col))
+                && !bottom_sides.contains_key(&(boundary, col))
+                && !fill_suppressed_horizontal.contains(&(boundary, col))
+        };
+        let vertical_boundary_is_free = |boundary: usize, row: usize| -> bool {
+            !left_sides.contains_key(&(boundary, row))
+                && !right_sides.contains_key(&(boundary, row))
+                && !fill_suppressed_vertical.contains(&(boundary, row))
+        };
+        for placement in &placements {
+            let column_tracks = placement.first_col..placement.first_col + placement.col_span;
+            let row_tracks = placement.row_index..placement.row_index + placement.row_span;
+            let mut seeded: CellBorder = painted[placement.row_index][placement.cell_index]
+                .take()
+                .unwrap_or_default();
+            // Whole-side seeding: a side whose boundary is even partially
+            // declared or fill-suppressed stays unseeded — the merged-cell
+            // partial-overlap simplification of #619, erring toward fewer
+            // rules, which is also GT's direction for fills.
+            if seeded.top.is_none()
+                && column_tracks
+                    .clone()
+                    .all(|col| horizontal_boundary_is_free(placement.row_index, col))
+            {
+                seeded.top = Some(printed_gridline_side());
+            }
+            if seeded.bottom.is_none()
+                && column_tracks.clone().all(|col| {
+                    horizontal_boundary_is_free(placement.row_index + placement.row_span, col)
+                })
+            {
+                seeded.bottom = Some(printed_gridline_side());
+            }
+            if seeded.left.is_none()
+                && row_tracks
+                    .clone()
+                    .all(|row| vertical_boundary_is_free(placement.first_col, row))
+            {
+                seeded.left = Some(printed_gridline_side());
+            }
+            if seeded.right.is_none()
+                && row_tracks.clone().all(|row| {
+                    vertical_boundary_is_free(placement.first_col + placement.col_span, row)
+                })
+            {
+                seeded.right = Some(printed_gridline_side());
+            }
+            if seeded.top.is_some()
+                || seeded.bottom.is_some()
+                || seeded.left.is_some()
+                || seeded.right.is_some()
+            {
+                painted[placement.row_index][placement.cell_index] = Some(seeded);
+            }
+        }
+    }
+
     painted
 }
 

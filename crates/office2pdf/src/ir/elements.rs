@@ -535,6 +535,13 @@ pub struct Table {
     /// PowerPoint's border-painting conventions are unmeasured against
     /// their native GT, so they keep the centred-stroke path.
     pub paints_borders_inside_boundary: bool,
+    /// When true, `<printOptions gridLines="1"/>` asks Excel to print its
+    /// gridline hairline on every cell boundary of the printed range, under
+    /// any explicit border styling (issue #622). Only spreadsheet tables set
+    /// this, and it is honoured only together with
+    /// `paints_borders_inside_boundary`, whose boundary-band machinery the
+    /// gridlines reuse; Word/PowerPoint tables never print gridlines.
+    pub prints_gridlines: bool,
 }
 
 /// A table row.

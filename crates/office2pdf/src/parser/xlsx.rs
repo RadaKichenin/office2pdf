@@ -13,6 +13,8 @@ pub(crate) mod cond_fmt_raw;
 
 #[path = "xlsx_fit_to_page.rs"]
 mod fit_to_page;
+#[path = "xlsx_print_options.rs"]
+mod print_options;
 #[path = "xlsx_tables.rs"]
 mod tables;
 #[path = "xlsx_cells.rs"]
@@ -340,6 +342,7 @@ impl XlsxParser {
         let metadata = extract_xlsx_metadata(&book);
         let cond_fmt_hints = cond_fmt_raw::extract_cond_fmt_hints(data);
         let fitting_sheets = fit_to_page::sheets_fitting_to_page(data);
+        let gridline_sheets = print_options::sheets_printing_gridlines(data);
         let mut row_stripes = tables::extract_row_stripes(data);
         let normal_font = extract_normal_font(data);
 
@@ -405,6 +408,7 @@ impl XlsxParser {
             };
 
             let sheet_name = sheet.get_name().to_string();
+            let sheet_prints_gridlines: bool = gridline_sheets.contains(&sheet_name);
 
             // Extract sheet header/footer
             let hf = sheet.get_header_footer();
@@ -488,6 +492,7 @@ impl XlsxParser {
                                 default_vertical_align: Some(crate::ir::CellVerticalAlign::Bottom),
                                 seats_bottom_aligned_text_on_descender: true,
                                 paints_borders_inside_boundary: true,
+                                prints_gridlines: sheet_prints_gridlines,
                             },
                             header: sheet_header.clone(),
                             footer: sheet_footer.clone(),
@@ -551,6 +556,7 @@ impl Parser for XlsxParser {
         let metadata = extract_xlsx_metadata(&book);
         let cond_fmt_hints = cond_fmt_raw::extract_cond_fmt_hints(data);
         let fitting_sheets = fit_to_page::sheets_fitting_to_page(data);
+        let gridline_sheets = print_options::sheets_printing_gridlines(data);
         let mut row_stripes = tables::extract_row_stripes(data);
         let normal_font = extract_normal_font(data);
 
@@ -637,6 +643,7 @@ impl Parser for XlsxParser {
             // Collect row page breaks and split rows into page segments
             let row_breaks = collect_row_breaks(sheet);
             let sheet_name = sheet.get_name().to_string();
+            let sheet_prints_gridlines: bool = gridline_sheets.contains(&sheet_name);
 
             // Extract sheet header/footer
             let hf = sheet.get_header_footer();
@@ -689,6 +696,7 @@ impl Parser for XlsxParser {
                                 default_vertical_align: Some(crate::ir::CellVerticalAlign::Bottom),
                                 seats_bottom_aligned_text_on_descender: true,
                                 paints_borders_inside_boundary: true,
+                                prints_gridlines: sheet_prints_gridlines,
                             },
                             header: sheet_header.clone(),
                             footer: sheet_footer.clone(),
@@ -766,6 +774,7 @@ impl Parser for XlsxParser {
                                     ),
                                     seats_bottom_aligned_text_on_descender: true,
                                     paints_borders_inside_boundary: true,
+                                    prints_gridlines: sheet_prints_gridlines,
                                 },
                                 header: sheet_header.clone(),
                                 footer: sheet_footer.clone(),

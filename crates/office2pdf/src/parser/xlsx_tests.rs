@@ -946,3 +946,53 @@ fn test_empty_sheet_context_derives_metric_from_normal_font() {
     assert_eq!(fallback_ctx.default_column_width_pt, 8.0 * 5.25 + 5.0);
     assert_eq!(fallback_ctx.normal_font, None);
 }
+
+/// Rewrite the workbook's worksheet parts, inserting `insertion` before each
+/// closing `</worksheet>` tag. umya's writer does not model
+/// `printOptions@gridLines`, so the attribute is injected into the archive
+/// the way Excel writes it — after `sheetData`.
+fn inject_before_worksheet_close(xlsx: &[u8], insertion: &str) -> Vec<u8> {
+    let mut archive = zip::ZipArchive::new(Cursor::new(xlsx.to_vec())).unwrap();
+    let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    for index in 0..archive.len() {
+        let mut file = archive.by_index(index).unwrap();
+        let name: String = file.name().to_string();
+        let mut contents: Vec<u8> = Vec::new();
+        std::io::Read::read_to_end(&mut file, &mut contents).unwrap();
+        if name.starts_with("xl/worksheets/") && name.ends_with(".xml") {
+            let text: String = String::from_utf8(contents).unwrap();
+            contents = text
+                .replace("</worksheet>", &format!("{insertion}</worksheet>"))
+                .into_bytes();
+        }
+        writer
+            .start_file(name, zip::write::FileOptions::default())
+            .unwrap();
+        std::io::Write::write_all(&mut writer, &contents).unwrap();
+    }
+    writer.finish().unwrap().into_inner()
+}
+
+#[test]
+fn test_print_options_grid_lines_flags_the_sheet_table() {
+    let plain = build_xlsx_bytes("Sheet1", &[("A1", "x"), ("B2", "y")]);
+    let flagged = inject_before_worksheet_close(&plain, r#"<printOptions gridLines="1"/>"#);
+
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&flagged, &ConvertOptions::default()).unwrap();
+    let table = &get_sheet_page(&doc, 0).table;
+    assert!(
+        table.prints_gridlines,
+        "printOptions gridLines must set the table's gridline flag"
+    );
+    assert!(
+        table.paints_borders_inside_boundary,
+        "the gridline flag rides on the boundary-band regime"
+    );
+
+    let (doc, _warnings) = parser.parse(&plain, &ConvertOptions::default()).unwrap();
+    assert!(
+        !get_sheet_page(&doc, 0).table.prints_gridlines,
+        "a sheet without printOptions must not print gridlines"
+    );
+}

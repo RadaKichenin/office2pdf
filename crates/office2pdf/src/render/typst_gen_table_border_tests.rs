@@ -1083,3 +1083,273 @@ fn test_boundary_band_auto_row_frame_estimate_computed_once_per_row() {
          (2 rows), got {estimate_calls} calls"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Printed gridlines (issue #622)
+//
+// `<printOptions gridLines="1"/>` prints Excel's gridline on every cell
+// boundary of the printed range. Measured on native Excel exports of the
+// NumberFormatTests fixture (/Volumes/T7/scratch/issue-622/nft2-p1.rects.txt,
+// nft2-p2.trace): every gridline is a fill band exactly 1.0pt thick, pure
+// black, boundary-anchored [B, B+1] toward +x/+y — the same convention as the
+// #619 thin border band. Any explicit border outranks the gridline on its
+// boundary (a hair border replaces the black gridline at C337), and a cell
+// fill suppresses all four adjacent gridline segments.
+// ---------------------------------------------------------------------------
+
+/// A borderless text cell, the shape most sheet cells have.
+fn plain_text_cell(text: &str) -> TableCell {
+    TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: text.to_string(),
+                style: TextStyle::default(),
+                href: None,
+                footnote: None,
+            }],
+        })],
+        ..TableCell::default()
+    }
+}
+
+fn gridline_table(rows: Vec<TableRow>, column_widths: Vec<f64>) -> Table {
+    Table {
+        rows,
+        column_widths,
+        paints_borders_inside_boundary: true,
+        prints_gridlines: true,
+        ..Table::default()
+    }
+}
+
+#[test]
+fn test_printed_gridlines_rule_every_boundary_at_measured_geometry() {
+    let table = gridline_table(vec![fixed_row(vec![plain_text_cell("A1")])], vec![100.0]);
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    // Gridline = 1pt pure black band [B, B+1]: with the default 5pt padding
+    // the top boundary sits at inset.top = 5pt, so the band's centre line is
+    // at dy = -5 + 0.5 = -4.5pt, exactly the #619 thin-border geometry.
+    assert!(
+        result.contains(
+            "#place(top + left, dx: -5pt, dy: -4.5pt, line(length: 100% + 11pt, angle: 0deg, stroke: 1pt + rgb(0, 0, 0)))"
+        ),
+        "top gridline must fill [B, B+1] below the top boundary: {result}"
+    );
+    assert!(
+        result.contains(
+            "#place(bottom + left, dx: -5pt, dy: 5.5pt, line(length: 100% + 11pt, angle: 0deg, stroke: 1pt + rgb(0, 0, 0)))"
+        ),
+        "bottom gridline must fill [B, B+1] below the bottom boundary: {result}"
+    );
+    assert!(
+        result.contains(
+            "#place(top + left, dx: -4.5pt, dy: -5pt, line(length: 21pt, angle: 90deg, stroke: 1pt + rgb(0, 0, 0)))"
+        ),
+        "left gridline must fill [B, B+1] right of the left boundary: {result}"
+    );
+    assert!(
+        result.contains(
+            "#place(top + right, dx: 5.5pt, dy: -5pt, line(length: 21pt, angle: 90deg, stroke: 1pt + rgb(0, 0, 0)))"
+        ),
+        "right gridline must fill [B, B+1] right of the right boundary: {result}"
+    );
+}
+
+#[test]
+fn test_printed_gridlines_paint_interior_boundaries_from_both_sides() {
+    // GT closes the grid at every page break: the row above the break draws
+    // the bottom rule. Which row breaks a page only the renderer knows, so
+    // every cell paints its own bottom (and right-columnless top) band; the
+    // two seeds of an interior boundary are boundary-anchored to the same
+    // [B, B+1] strip and coincide invisibly.
+    let table = gridline_table(
+        vec![
+            fixed_row(vec![plain_text_cell("A1"), plain_text_cell("B1")]),
+            fixed_row(vec![plain_text_cell("A2"), plain_text_cell("B2")]),
+        ],
+        vec![100.0, 100.0],
+    );
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert_eq!(
+        result.matches("angle: 0deg").count(),
+        8,
+        "each of the 4 cells must paint its top and bottom gridline: {result}"
+    );
+    assert_eq!(
+        result.matches("angle: 90deg").count(),
+        8,
+        "each of the 4 cells must paint its left and right gridline: {result}"
+    );
+}
+
+#[test]
+fn test_explicit_border_outranks_gridline_on_its_boundary() {
+    // A medium top border owns its boundary: no black 1pt gridline may paint
+    // there, while the other three boundaries keep theirs.
+    let bordered = bordered_text_cell(
+        "Med",
+        CellBorder {
+            top: Some(solid_side(2.0)),
+            bottom: None,
+            left: None,
+            right: None,
+        },
+    );
+    let table = gridline_table(vec![fixed_row(vec![bordered])], vec![100.0]);
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    // Medium band [B-1, B+1] centred on the boundary at inset.top = 6pt.
+    assert!(
+        result.contains(
+            "#place(top + left, dx: -5pt, dy: -6pt, line(length: 100% + 11pt, angle: 0deg, stroke: 2pt + rgb(0, 0, 0)))"
+        ),
+        "the explicit medium border must paint its boundary: {result}"
+    );
+    assert_eq!(
+        result.matches("angle: 0deg").count(),
+        2,
+        "the top boundary must carry only the medium band, the bottom only \
+         its gridline: {result}"
+    );
+    assert!(
+        result.contains(
+            "#place(bottom + left, dx: -5pt, dy: 5.5pt, line(length: 100% + 11pt, angle: 0deg, stroke: 1pt + rgb(0, 0, 0)))"
+        ),
+        "the undeclared bottom boundary must keep its gridline: {result}"
+    );
+}
+
+#[test]
+fn test_hair_border_replaces_gridline_not_the_reverse() {
+    // GT: C337's hair borders replace the black gridline at their boundary
+    // even though a solid rule outranks a patterned one in the #619 conflict
+    // rank — the gridline is below every explicit declaration, not a peer.
+    let haired = bordered_text_cell(
+        "Hair",
+        CellBorder {
+            top: Some(BorderSide {
+                width: 1.0,
+                color: Color::black(),
+                style: BorderLineStyle::Dotted,
+            }),
+            bottom: None,
+            left: None,
+            right: None,
+        },
+    );
+    let table = gridline_table(vec![fixed_row(vec![haired])], vec![100.0]);
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains(
+            "#place(top + left, dx: -5pt, dy: -5pt, line(length: 100% + 11pt, angle: 0deg, stroke: (paint: rgb(0, 0, 0), thickness: 1pt, dash: \"dotted\")))"
+        ),
+        "the hair border must paint its boundary: {result}"
+    );
+    assert_eq!(
+        result.matches("angle: 0deg").count(),
+        2,
+        "no solid gridline may double the hair boundary: {result}"
+    );
+    assert!(
+        !result.contains("dy: -5pt, line(length: 100% + 11pt, angle: 0deg, stroke: 1pt"),
+        "the gridline must yield to the hair border: {result}"
+    );
+}
+
+#[test]
+fn test_cell_fill_suppresses_adjacent_gridlines() {
+    // GT (Tests p1 vs the fill-free p2): a cell fill suppresses all four
+    // adjacent gridline segments — Excel truncates the verticals at the
+    // filled row and omits the horizontal at its bottom boundary.
+    let filled = TableCell {
+        background: Some(Color::new(237, 125, 49)),
+        ..plain_text_cell("Filled")
+    };
+    let table = gridline_table(
+        vec![fixed_row(vec![filled, plain_text_cell("Plain")])],
+        vec![100.0, 100.0],
+    );
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    // Filled cell: no bands at all. Plain cell: its left boundary abuts the
+    // fill and is suppressed too; top, bottom, and right survive.
+    assert_eq!(
+        result.matches("angle: 0deg").count(),
+        2,
+        "only the plain cell's top and bottom gridlines may paint: {result}"
+    );
+    assert_eq!(
+        result.matches("angle: 90deg").count(),
+        1,
+        "only the plain cell's right gridline may paint: {result}"
+    );
+    assert!(
+        result.contains("#place(top + right, dx: 5.5pt"),
+        "the surviving vertical must be the plain cell's right band: {result}"
+    );
+}
+
+#[test]
+fn test_gridlines_repeat_with_the_print_title_header() {
+    // A print-title header repeats on every page; its own top and bottom
+    // gridline seeds must repeat with it so the grid stays closed under the
+    // header on pages 2+.
+    let mut table = gridline_table(
+        vec![
+            fixed_row(vec![plain_text_cell("Head")]),
+            fixed_row(vec![plain_text_cell("Body")]),
+        ],
+        vec![100.0],
+    );
+    table.header_row_count = 1;
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    let header_pos: usize = result
+        .find("table.header(")
+        .expect("header block must exist");
+    let head_text_pos: usize = result.find("Head]").expect("header cell must exist");
+    let header_cell: &str = &result[header_pos..head_text_pos];
+    assert_eq!(
+        header_cell.matches("angle: 0deg").count(),
+        2,
+        "the header cell must carry its top and bottom gridline bands inside \
+         the repeating header block: {result}"
+    );
+}
+
+#[test]
+fn test_gridlines_absent_without_the_flag() {
+    // The same sheet without `printOptions gridLines` prints no gridlines at
+    // all: the native-export probe workbooks measured for the #621 column
+    // model declare no printOptions element and their GT traces carry zero
+    // gridline primitives, so the flag strictly gates printing (#622).
+    let mut unflagged = gridline_table(vec![fixed_row(vec![plain_text_cell("A1")])], vec![100.0]);
+    unflagged.prints_gridlines = false;
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(unflagged)])]);
+    let result = generate_typst(&doc).unwrap().source;
+    assert!(
+        !result.contains("#place("),
+        "a borderless sheet without the flag must paint nothing: {result}"
+    );
+
+    // The gridline convention is measured only for Excel's boundary-band
+    // regime; a table outside it (Word/PowerPoint) must ignore the flag.
+    let mut word_style = gridline_table(vec![fixed_row(vec![plain_text_cell("W")])], vec![100.0]);
+    word_style.paints_borders_inside_boundary = false;
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(word_style)])]);
+    let result = generate_typst(&doc).unwrap().source;
+    assert!(
+        !result.contains("#place("),
+        "gridlines must not leak outside the boundary-band regime: {result}"
+    );
+}
