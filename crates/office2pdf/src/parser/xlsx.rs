@@ -13,6 +13,8 @@ pub(crate) mod cond_fmt_raw;
 
 #[path = "xlsx_fit_to_page.rs"]
 mod fit_to_page;
+#[path = "xlsx_print_headings.rs"]
+mod print_headings;
 #[path = "xlsx_print_options.rs"]
 mod print_options;
 #[path = "xlsx_tables.rs"]
@@ -342,7 +344,7 @@ impl XlsxParser {
         let metadata = extract_xlsx_metadata(&book);
         let cond_fmt_hints = cond_fmt_raw::extract_cond_fmt_hints(data);
         let fitting_sheets = fit_to_page::sheets_fitting_to_page(data);
-        let gridline_sheets = print_options::sheets_printing_gridlines(data);
+        let print_options_by_sheet = print_options::sheets_print_options(data);
         let mut row_stripes = tables::extract_row_stripes(data);
         let normal_font = extract_normal_font(data);
 
@@ -408,7 +410,10 @@ impl XlsxParser {
             };
 
             let sheet_name = sheet.get_name().to_string();
-            let sheet_prints_gridlines: bool = gridline_sheets.contains(&sheet_name);
+            let sheet_print_options: print_options::SheetPrintOptions = print_options_by_sheet
+                .get(&sheet_name)
+                .copied()
+                .unwrap_or_default();
 
             // Extract sheet header/footer
             let hf = sheet.get_header_footer();
@@ -442,7 +447,11 @@ impl XlsxParser {
             sheet_text_boxes.sort_by_key(|text_box| text_box.anchor_row);
 
             let print_titles = find_print_titles(&book, sheet);
-            let title_columns: Option<(usize, usize)> = title_column_indices(print_titles, &ctx);
+            let title_columns: Option<(usize, usize)> =
+                print_headings::heading_adjusted_title_columns(
+                    title_column_indices(print_titles, &ctx),
+                    sheet_print_options.prints_headings,
+                );
             let fit_to_width: Option<u32> = sheet_fit_to_width(sheet, &sheet_name, &fitting_sheets);
 
             // Process rows in chunks
@@ -452,6 +461,11 @@ impl XlsxParser {
                 let chunk_end = (chunk_start + chunk_size as u32 - 1).min(row_end);
 
                 let mut rows = build_rows_for_range(sheet, &ctx, chunk_start, chunk_end);
+                // Worksheet row number of each built row, for the printed
+                // heading gutter (issue #623).
+                let mut sheet_row_numbers: Option<Vec<u32>> = sheet_print_options
+                    .prints_headings
+                    .then(|| (chunk_start..=chunk_end).collect());
                 let mut header_row_count: usize = 0;
                 // Rows above the print-title range print once; only the title
                 // rows themselves repeat.
@@ -464,6 +478,9 @@ impl XlsxParser {
                     header_row_count = title_rows.len();
                     title_rows.append(&mut rows);
                     rows = title_rows;
+                    if let Some(numbers) = sheet_row_numbers.as_mut() {
+                        numbers.splice(0..0, title_start..=title_end);
+                    }
                 } else if let Some((title_start, title_end)) = print_titles.rows
                     && title_end >= chunk_start
                     && title_end <= chunk_end
@@ -474,45 +491,55 @@ impl XlsxParser {
                         (title_end + 1).saturating_sub(title_start.max(chunk_start)) as usize;
                 }
 
+                let mut sheet_page = SheetPage {
+                    name: sheet_name.clone(),
+                    size: sheet_page_size(sheet),
+                    margins: sheet_print_margins(sheet),
+                    table: Table {
+                        rows,
+                        column_widths: ctx.column_widths.clone(),
+                        header_row_count,
+                        non_repeating_header_row_count,
+                        alignment: None,
+                        default_cell_padding: Some(xlsx_cells::XLSX_CELL_PADDING),
+                        use_content_driven_row_heights: false,
+                        default_vertical_align: Some(crate::ir::CellVerticalAlign::Bottom),
+                        seats_bottom_aligned_text_on_descender: true,
+                        paints_borders_inside_boundary: true,
+                        prints_gridlines: sheet_print_options.prints_gridlines,
+                        prints_headings: false,
+                    },
+                    header: sheet_header.clone(),
+                    footer: sheet_footer.clone(),
+                    charts: if first_chunk {
+                        std::mem::take(&mut sheet_charts)
+                    } else {
+                        vec![]
+                    },
+                    images: if first_chunk {
+                        std::mem::take(&mut sheet_images)
+                    } else {
+                        vec![]
+                    },
+                    text_boxes: if first_chunk {
+                        first_chunk = false;
+                        std::mem::take(&mut sheet_text_boxes)
+                    } else {
+                        vec![]
+                    },
+                };
+                if let Some(numbers) = sheet_row_numbers.as_deref() {
+                    print_headings::augment_page_with_print_headings(
+                        &mut sheet_page,
+                        numbers,
+                        ctx.col_start,
+                        normal_font.as_ref(),
+                    );
+                }
                 let doc = Document {
                     metadata: metadata.clone(),
                     pages: xlsx_pagination::split_sheet_page_by_width(
-                        SheetPage {
-                            name: sheet_name.clone(),
-                            size: sheet_page_size(sheet),
-                            margins: sheet_print_margins(sheet),
-                            table: Table {
-                                rows,
-                                column_widths: ctx.column_widths.clone(),
-                                header_row_count,
-                                non_repeating_header_row_count,
-                                alignment: None,
-                                default_cell_padding: Some(xlsx_cells::XLSX_CELL_PADDING),
-                                use_content_driven_row_heights: false,
-                                default_vertical_align: Some(crate::ir::CellVerticalAlign::Bottom),
-                                seats_bottom_aligned_text_on_descender: true,
-                                paints_borders_inside_boundary: true,
-                                prints_gridlines: sheet_prints_gridlines,
-                            },
-                            header: sheet_header.clone(),
-                            footer: sheet_footer.clone(),
-                            charts: if first_chunk {
-                                std::mem::take(&mut sheet_charts)
-                            } else {
-                                vec![]
-                            },
-                            images: if first_chunk {
-                                std::mem::take(&mut sheet_images)
-                            } else {
-                                vec![]
-                            },
-                            text_boxes: if first_chunk {
-                                first_chunk = false;
-                                std::mem::take(&mut sheet_text_boxes)
-                            } else {
-                                vec![]
-                            },
-                        },
+                        sheet_page,
                         title_columns,
                         fit_to_width,
                     )
@@ -556,7 +583,7 @@ impl Parser for XlsxParser {
         let metadata = extract_xlsx_metadata(&book);
         let cond_fmt_hints = cond_fmt_raw::extract_cond_fmt_hints(data);
         let fitting_sheets = fit_to_page::sheets_fitting_to_page(data);
-        let gridline_sheets = print_options::sheets_printing_gridlines(data);
+        let print_options_by_sheet = print_options::sheets_print_options(data);
         let mut row_stripes = tables::extract_row_stripes(data);
         let normal_font = extract_normal_font(data);
 
@@ -621,8 +648,18 @@ impl Parser for XlsxParser {
 
             let rows = build_rows_for_range(sheet, &ctx, row_start, row_end);
 
+            let sheet_name = sheet.get_name().to_string();
+            let sheet_print_options: print_options::SheetPrintOptions = print_options_by_sheet
+                .get(&sheet_name)
+                .copied()
+                .unwrap_or_default();
+
             let print_titles = find_print_titles(&book, sheet);
-            let title_columns: Option<(usize, usize)> = title_column_indices(print_titles, &ctx);
+            let title_columns: Option<(usize, usize)> =
+                print_headings::heading_adjusted_title_columns(
+                    title_column_indices(print_titles, &ctx),
+                    sheet_print_options.prints_headings,
+                );
             let fit_to_width: Option<u32> =
                 sheet_fit_to_width(sheet, sheet.get_name(), &fitting_sheets);
             // Only the rows named by `_xlnm.Print_Titles` repeat on later
@@ -642,8 +679,6 @@ impl Parser for XlsxParser {
 
             // Collect row page breaks and split rows into page segments
             let row_breaks = collect_row_breaks(sheet);
-            let sheet_name = sheet.get_name().to_string();
-            let sheet_prints_gridlines: bool = gridline_sheets.contains(&sheet_name);
 
             // Extract sheet header/footer
             let hf = sheet.get_header_footer();
@@ -679,31 +714,44 @@ impl Parser for XlsxParser {
 
             if row_breaks.is_empty() {
                 // No page breaks — single page
+                let sheet_row_numbers: Option<Vec<u32>> = sheet_print_options
+                    .prints_headings
+                    .then(|| (row_start..=row_end).collect());
+                let mut sheet_page = SheetPage {
+                    name: sheet_name,
+                    size: sheet_page_size(sheet),
+                    margins: sheet_print_margins(sheet),
+                    table: Table {
+                        rows,
+                        column_widths: ctx.column_widths.clone(),
+                        header_row_count,
+                        non_repeating_header_row_count,
+                        alignment: None,
+                        default_cell_padding: Some(xlsx_cells::XLSX_CELL_PADDING),
+                        use_content_driven_row_heights: false,
+                        default_vertical_align: Some(crate::ir::CellVerticalAlign::Bottom),
+                        seats_bottom_aligned_text_on_descender: true,
+                        paints_borders_inside_boundary: true,
+                        prints_gridlines: sheet_print_options.prints_gridlines,
+                        prints_headings: false,
+                    },
+                    header: sheet_header.clone(),
+                    footer: sheet_footer.clone(),
+                    charts: sheet_charts,
+                    images: sheet_images,
+                    text_boxes: sheet_text_boxes,
+                };
+                if let Some(numbers) = sheet_row_numbers.as_deref() {
+                    print_headings::augment_page_with_print_headings(
+                        &mut sheet_page,
+                        numbers,
+                        ctx.col_start,
+                        normal_font.as_ref(),
+                    );
+                }
                 pages.extend(
                     xlsx_pagination::split_sheet_page_by_width(
-                        SheetPage {
-                            name: sheet_name,
-                            size: sheet_page_size(sheet),
-                            margins: sheet_print_margins(sheet),
-                            table: Table {
-                                rows,
-                                column_widths: ctx.column_widths,
-                                header_row_count,
-                                non_repeating_header_row_count,
-                                alignment: None,
-                                default_cell_padding: Some(xlsx_cells::XLSX_CELL_PADDING),
-                                use_content_driven_row_heights: false,
-                                default_vertical_align: Some(crate::ir::CellVerticalAlign::Bottom),
-                                seats_bottom_aligned_text_on_descender: true,
-                                paints_borders_inside_boundary: true,
-                                prints_gridlines: sheet_prints_gridlines,
-                            },
-                            header: sheet_header.clone(),
-                            footer: sheet_footer.clone(),
-                            charts: sheet_charts,
-                            images: sheet_images,
-                            text_boxes: sheet_text_boxes,
-                        },
+                        sheet_page,
                         title_columns,
                         fit_to_width,
                     )
@@ -713,30 +761,38 @@ impl Parser for XlsxParser {
             } else {
                 // Split rows at break points
                 // Breaks are 1-indexed row numbers; break after that row
-                let mut segments: Vec<Vec<TableRow>> = Vec::new();
+                let mut segments: Vec<(u32, Vec<TableRow>)> = Vec::new();
                 let mut current_segment: Vec<TableRow> = Vec::new();
+                let mut current_segment_start: u32 = row_start;
                 let mut break_idx = 0;
 
                 for (i, row) in rows.into_iter().enumerate() {
                     let actual_row = row_start + i as u32; // 1-indexed row number
+                    if current_segment.is_empty() {
+                        current_segment_start = actual_row;
+                    }
                     current_segment.push(row);
 
                     // Check if this row is a break point
                     if break_idx < row_breaks.len() && actual_row == row_breaks[break_idx] {
-                        segments.push(std::mem::take(&mut current_segment));
+                        segments
+                            .push((current_segment_start, std::mem::take(&mut current_segment)));
                         break_idx += 1;
                     }
                 }
                 // Push remaining rows as the last segment
                 if !current_segment.is_empty() {
-                    segments.push(current_segment);
+                    segments.push((current_segment_start, current_segment));
                 }
 
                 // For page-break segments, attach all charts to the first segment
                 let mut first_segment = true;
-                for mut segment in segments {
+                for (segment_start_row, mut segment) in segments {
                     let mut segment_header_rows: usize = 0;
                     let mut segment_lead_rows: usize = 0;
+                    // Title rows a later segment repeats, with their original
+                    // worksheet numbers for the heading gutter.
+                    let mut prepended_title_range: Option<(u32, u32)> = None;
                     if first_segment {
                         segment_lead_rows = non_repeating_header_row_count.min(segment.len());
                         segment_header_rows =
@@ -745,56 +801,75 @@ impl Parser for XlsxParser {
                         && title_end >= row_start
                     {
                         // Later segments don't contain the title rows — prepend.
-                        let mut title_rows = build_rows_for_range(
-                            sheet,
-                            &ctx,
-                            title_start.max(row_start),
-                            title_end,
-                        );
+                        let clamped_title_start: u32 = title_start.max(row_start);
+                        let mut title_rows =
+                            build_rows_for_range(sheet, &ctx, clamped_title_start, title_end);
                         segment_header_rows = title_rows.len();
+                        prepended_title_range = Some((clamped_title_start, title_end));
                         title_rows.append(&mut segment);
                         segment = title_rows;
                     }
+                    let sheet_row_numbers: Option<Vec<u32>> =
+                        sheet_print_options.prints_headings.then(|| {
+                            let prepended_rows: usize = prepended_title_range
+                                .map(|(start, end)| (end - start + 1) as usize)
+                                .unwrap_or(0);
+                            let data_rows: u32 = (segment.len() - prepended_rows) as u32;
+                            prepended_title_range
+                                .map(|(start, end)| (start..=end).collect::<Vec<u32>>())
+                                .unwrap_or_default()
+                                .into_iter()
+                                .chain(segment_start_row..segment_start_row + data_rows)
+                                .collect()
+                        });
+                    let mut sheet_page = SheetPage {
+                        name: sheet_name.clone(),
+                        size: sheet_page_size(sheet),
+                        margins: sheet_print_margins(sheet),
+                        table: Table {
+                            rows: segment,
+                            column_widths: ctx.column_widths.clone(),
+                            header_row_count: segment_header_rows,
+                            non_repeating_header_row_count: segment_lead_rows,
+                            alignment: None,
+                            default_cell_padding: Some(xlsx_cells::XLSX_CELL_PADDING),
+                            use_content_driven_row_heights: false,
+                            default_vertical_align: Some(crate::ir::CellVerticalAlign::Bottom),
+                            seats_bottom_aligned_text_on_descender: true,
+                            paints_borders_inside_boundary: true,
+                            prints_gridlines: sheet_print_options.prints_gridlines,
+                            prints_headings: false,
+                        },
+                        header: sheet_header.clone(),
+                        footer: sheet_footer.clone(),
+                        charts: if first_segment {
+                            std::mem::take(&mut sheet_charts)
+                        } else {
+                            vec![]
+                        },
+                        images: if first_segment {
+                            std::mem::take(&mut sheet_images)
+                        } else {
+                            vec![]
+                        },
+                        text_boxes: if first_segment {
+                            first_segment = false;
+                            std::mem::take(&mut sheet_text_boxes)
+                        } else {
+                            vec![]
+                        },
+                    };
+                    if let Some(numbers) = sheet_row_numbers.as_deref() {
+                        print_headings::augment_page_with_print_headings(
+                            &mut sheet_page,
+                            numbers,
+                            ctx.col_start,
+                            normal_font.as_ref(),
+                        );
+                    }
                     pages.extend(
                         xlsx_pagination::split_sheet_page_by_width(
-                            SheetPage {
-                                name: sheet_name.clone(),
-                                size: sheet_page_size(sheet),
-                                margins: sheet_print_margins(sheet),
-                                table: Table {
-                                    rows: segment,
-                                    column_widths: ctx.column_widths.clone(),
-                                    header_row_count: segment_header_rows,
-                                    non_repeating_header_row_count: segment_lead_rows,
-                                    alignment: None,
-                                    default_cell_padding: Some(xlsx_cells::XLSX_CELL_PADDING),
-                                    use_content_driven_row_heights: false,
-                                    default_vertical_align: Some(
-                                        crate::ir::CellVerticalAlign::Bottom,
-                                    ),
-                                    seats_bottom_aligned_text_on_descender: true,
-                                    paints_borders_inside_boundary: true,
-                                    prints_gridlines: sheet_prints_gridlines,
-                                },
-                                header: sheet_header.clone(),
-                                footer: sheet_footer.clone(),
-                                charts: if first_segment {
-                                    std::mem::take(&mut sheet_charts)
-                                } else {
-                                    vec![]
-                                },
-                                images: if first_segment {
-                                    std::mem::take(&mut sheet_images)
-                                } else {
-                                    vec![]
-                                },
-                                text_boxes: if first_segment {
-                                    first_segment = false;
-                                    std::mem::take(&mut sheet_text_boxes)
-                                } else {
-                                    vec![]
-                                },
-                            },
+                            sheet_page,
                             title_columns,
                             fit_to_width,
                         )

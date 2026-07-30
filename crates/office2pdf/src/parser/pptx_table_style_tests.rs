@@ -201,6 +201,7 @@ fn test_apply_table_style_first_row_gets_header_fill_and_text_color() {
         seats_bottom_aligned_text_on_descender: false,
         paints_borders_inside_boundary: false,
         prints_gridlines: false,
+        prints_headings: false,
     };
 
     table_styles::apply_table_style(&mut table, &props, &styles);
@@ -286,6 +287,7 @@ fn test_apply_table_style_banded_rows_skip_first_row() {
         seats_bottom_aligned_text_on_descender: false,
         paints_borders_inside_boundary: false,
         prints_gridlines: false,
+        prints_headings: false,
     };
 
     table_styles::apply_table_style(&mut table, &props, &styles);
@@ -361,6 +363,7 @@ fn test_apply_table_style_explicit_cell_fill_not_overridden() {
         seats_bottom_aligned_text_on_descender: false,
         paints_borders_inside_boundary: false,
         prints_gridlines: false,
+        prints_headings: false,
     };
 
     table_styles::apply_table_style(&mut table, &props, &styles);
@@ -407,6 +410,7 @@ fn test_apply_table_style_missing_style_id_is_noop() {
         seats_bottom_aligned_text_on_descender: false,
         paints_borders_inside_boundary: false,
         prints_gridlines: false,
+        prints_headings: false,
     };
 
     table_styles::apply_table_style(&mut table, &props, &styles);

@@ -662,6 +662,11 @@ fn generate_table_with_anchors(
                         .seats_bottom_aligned_text_on_descender,
                     paints_borders_inside_boundary: table.paints_borders_inside_boundary,
                     prints_gridlines: table.prints_gridlines,
+                    // Only the segment that still starts with the letter-strip
+                    // row may treat rows[0] as that strip (issue #623); the
+                    // gutter column itself rides along in every segment's
+                    // cells.
+                    prints_headings: table.prints_headings && row_start == 0,
                 };
                 generate_table(out, &segment, ctx)?;
                 out.push('\n');
@@ -701,6 +706,9 @@ fn generate_table_with_anchors(
             seats_bottom_aligned_text_on_descender: table.seats_bottom_aligned_text_on_descender,
             paints_borders_inside_boundary: table.paints_borders_inside_boundary,
             prints_gridlines: table.prints_gridlines,
+            // See the in-loop segment above: the strip row exists only in the
+            // segment beginning at rows[0].
+            prints_headings: table.prints_headings && row_start == 0,
         };
         generate_table(out, &segment, ctx)?;
         out.push('\n');

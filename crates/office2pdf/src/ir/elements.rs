@@ -542,6 +542,17 @@ pub struct Table {
     /// `paints_borders_inside_boundary`, whose boundary-band machinery the
     /// gridlines reuse; Word/PowerPoint tables never print gridlines.
     pub prints_gridlines: bool,
+    /// When true, `<printOptions headings="1"/>` prints Excel's row-number
+    /// gutter and column-letter strip on every page (issue #623). The XLSX
+    /// parser materializes both in the IR — the gutter as a prepended first
+    /// column so the numbers flow with row pagination, and the letter strip
+    /// as `rows[0]` — and codegen re-emits that first row as a
+    /// `table.header(repeat: true)` above any print-title headers and paints
+    /// GT's 1pt black print frame on the table's exterior boundaries.
+    /// `header_row_count` and `non_repeating_header_row_count` keep counting
+    /// from the first row AFTER the strip. Word/PowerPoint tables never set
+    /// this.
+    pub prints_headings: bool,
 }
 
 /// A table row.

@@ -96,7 +96,13 @@ fn generate_table_inner(
     }
 
     let mut rowspan_remaining = vec![0usize; num_cols];
-    let header_row_count = table.header_row_count.min(table.rows.len());
+    // The printed-headings letter strip is `rows[0]` when the XLSX parser
+    // materialized it (issue #623); the print-title header counts below start
+    // after it.
+    let heading_strip_row_count: usize =
+        usize::from(table.prints_headings && !table.rows.is_empty());
+    let countable_rows: usize = table.rows.len() - heading_strip_row_count;
+    let header_row_count = table.header_row_count.min(countable_rows);
     let default_cell_padding = table.default_cell_padding.unwrap_or(Insets {
         top: 5.0,
         right: 5.0,
@@ -111,15 +117,23 @@ fn generate_table_inner(
     // then need a higher level to keep repeating alongside it.
     let lead_row_count = table
         .non_repeating_header_row_count
-        .min(table.rows.len().saturating_sub(header_row_count));
+        .min(countable_rows.saturating_sub(header_row_count));
 
-    // The grid boundary between the last repeating header row and the first
-    // body row, when both exist. Border-band ties there must resolve toward
-    // the header, whose cells repeat on every page (issue #619 review,
-    // remediation 2).
-    let repeating_header_boundary: Option<usize> = (header_row_count > 0
-        && lead_row_count + header_row_count < table.rows.len())
-    .then_some(lead_row_count + header_row_count);
+    // Grid boundaries whose upper side repeats on every page while the lower
+    // side prints once: the printed-headings letter strip's bottom (issue
+    // #623) and the boundary between the last repeating print-title row and
+    // the first body row. Border-band ties there must resolve toward the
+    // repeating side (issue #619 review, remediation 2).
+    let mut repeating_header_boundaries: Vec<usize> = Vec::new();
+    if heading_strip_row_count > 0 && heading_strip_row_count < table.rows.len() {
+        repeating_header_boundaries.push(heading_strip_row_count);
+    }
+    if header_row_count > 0
+        && heading_strip_row_count + lead_row_count + header_row_count < table.rows.len()
+    {
+        repeating_header_boundaries
+            .push(heading_strip_row_count + lead_row_count + header_row_count);
+    }
 
     // A boundary-band table (Excel) resolves which cell paints each shared
     // boundary before emission: the bands are boundary-anchored and
@@ -129,13 +143,17 @@ fn generate_table_inner(
     // each cell's own declaration and no text moves.
     let painted_borders: Option<Vec<Vec<Option<CellBorder>>>> = table
         .paints_borders_inside_boundary
-        .then(|| resolve_boundary_painted_borders(table, num_cols, repeating_header_boundary));
-    if lead_row_count > 0 {
-        out.push_str("  table.header(repeat: false,\n");
+        .then(|| resolve_boundary_painted_borders(table, num_cols, &repeating_header_boundaries));
+    if heading_strip_row_count > 0 {
+        // GT prints the column-letter strip on every page (issue #623); the
+        // outermost header level repeats above the print-title headers below.
+        out.push_str("  table.header(repeat: true,\n");
         generate_table_rows(
             out,
-            &table.rows[..lead_row_count],
-            painted_borders.as_deref().map(|p| &p[..lead_row_count]),
+            &table.rows[..heading_strip_row_count],
+            painted_borders
+                .as_deref()
+                .map(|p| &p[..heading_strip_row_count]),
             num_cols,
             &mut rowspan_remaining,
             "    ",
@@ -146,18 +164,47 @@ fn generate_table_inner(
         out.push_str("  ),\n");
     }
 
+    let lead_start: usize = heading_strip_row_count;
+    if lead_row_count > 0 {
+        if heading_strip_row_count > 0 {
+            out.push_str("  table.header(repeat: false, level: 2,\n");
+        } else {
+            out.push_str("  table.header(repeat: false,\n");
+        }
+        generate_table_rows(
+            out,
+            &table.rows[lead_start..lead_start + lead_row_count],
+            painted_borders
+                .as_deref()
+                .map(|p| &p[lead_start..lead_start + lead_row_count]),
+            num_cols,
+            &mut rowspan_remaining,
+            "    ",
+            default_cell_padding,
+            fixed_row_heights,
+            ctx,
+        )?;
+        out.push_str("  ),\n");
+    }
+
+    let title_start: usize = lead_start + lead_row_count;
     if header_row_count > 0 {
-        if lead_row_count > 0 {
-            out.push_str("  table.header(level: 2,\n");
+        // Consecutive Typst headers need strictly increasing levels: the
+        // strip (when present) takes level 1 and the lead block the next one,
+        // so the print-title header lands below both.
+        let title_header_level: usize =
+            1 + heading_strip_row_count + usize::from(lead_row_count > 0);
+        if title_header_level > 1 {
+            let _ = writeln!(out, "  table.header(level: {title_header_level},");
         } else {
             out.push_str("  table.header(\n");
         }
         generate_table_rows(
             out,
-            &table.rows[lead_row_count..lead_row_count + header_row_count],
+            &table.rows[title_start..title_start + header_row_count],
             painted_borders
                 .as_deref()
-                .map(|p| &p[lead_row_count..lead_row_count + header_row_count]),
+                .map(|p| &p[title_start..title_start + header_row_count]),
             num_cols,
             &mut rowspan_remaining,
             "    ",
@@ -170,10 +217,10 @@ fn generate_table_inner(
 
     generate_table_rows(
         out,
-        &table.rows[lead_row_count + header_row_count..],
+        &table.rows[title_start + header_row_count..],
         painted_borders
             .as_deref()
-            .map(|p| &p[lead_row_count + header_row_count..]),
+            .map(|p| &p[title_start + header_row_count..]),
         num_cols,
         &mut rowspan_remaining,
         "  ",
@@ -784,6 +831,22 @@ fn printed_gridline_side() -> BorderSide {
     }
 }
 
+/// One edge of the black 1pt print frame that `<printOptions headings="1"/>`
+/// draws around the heading bands and the data grid (issue #623).
+///
+/// GT (nft-sheet-0002 trace): the frame is four 1pt pure-black fill bands on
+/// the table's exterior boundaries — [54,538]x[72,73] top, [54,55]x[72,710]
+/// left, [537,538]x[72,710] right, [54,538]x[709,710] bottom — each on the
+/// same [B, B+1] band convention as the #619/#622 rules, and everything else
+/// on the page is clipped to the frame's interior.
+fn print_heading_frame_side() -> BorderSide {
+    BorderSide {
+        width: 1.0,
+        color: Color::black(),
+        style: BorderLineStyle::Solid,
+    }
+}
+
 /// Total order for Excel's shared-boundary conflict rule (issue #619 review,
 /// remediation 1). Derived `PartialOrd` compares the fields lexicographically
 /// in declaration order.
@@ -833,19 +896,20 @@ fn boundary_conflict_rank(side: &BorderSide) -> BoundaryConflictRank {
 /// invisibly. Partial overlaps of *differing* weight would need per-track
 /// resolution (known limitation, deliberately skipped).
 ///
-/// `repeating_header_boundary` is the grid boundary between the last
-/// repeating header row and the first body row, when the table has both.
-/// The body row renders once but the header repeats on every page, so a
-/// band left on the body side would vanish under the repeated header on
-/// pages 2+. At that one boundary ties therefore go to the *header's*
-/// declaration, and a strictly heavier body declaration is additionally
-/// adopted into the header cell's bottom slot: both sides then paint the
-/// same boundary-anchored band — coincident and invisible where they
-/// overlap on page 1, while the header's copy repeats with it.
+/// Each of the `repeating_header_boundaries` is a grid boundary whose upper
+/// side lives in a repeating header block (the #623 letter strip's bottom,
+/// the last print-title row's bottom) while its lower side prints once. The
+/// lower row renders once but the header repeats on every page, so a band
+/// left on the lower side would vanish under the repeated header on pages
+/// 2+. At those boundaries ties therefore go to the *header's* declaration,
+/// and a strictly heavier lower declaration is additionally adopted into the
+/// header cell's bottom slot: both sides then paint the same
+/// boundary-anchored band — coincident and invisible where they overlap on
+/// page 1, while the header's copy repeats with it.
 fn resolve_boundary_painted_borders(
     table: &Table,
     num_cols: usize,
-    repeating_header_boundary: Option<usize>,
+    repeating_header_boundaries: &[usize],
 ) -> Vec<Vec<Option<CellBorder>>> {
     use std::collections::{HashMap, HashSet};
 
@@ -964,7 +1028,7 @@ fn resolve_boundary_painted_borders(
         // inverts the tie direction (see the function docs).
         let bottom_boundary: usize = placement.row_index + placement.row_span;
         let bottom_is_repeating_header_boundary: bool =
-            repeating_header_boundary == Some(bottom_boundary);
+            repeating_header_boundaries.contains(&bottom_boundary);
         if let Some(side) = &resolved.bottom
             && column_tracks.clone().all(|col| {
                 top_sides
@@ -1004,7 +1068,7 @@ fn resolve_boundary_painted_borders(
                     .is_some_and(|neighbour| {
                         let neighbour_rank = boundary_conflict_rank(neighbour);
                         let own_rank = boundary_conflict_rank(side);
-                        if repeating_header_boundary == Some(placement.row_index) {
+                        if repeating_header_boundaries.contains(&placement.row_index) {
                             // Ties at the repeating-header boundary stay with
                             // the header's bottom declaration.
                             neighbour_rank >= own_rank
@@ -1083,13 +1147,23 @@ fn resolve_boundary_painted_borders(
                 fill_suppressed_vertical.insert((placement.first_col + placement.col_span, row));
             }
         }
+        // Printed headings (issue #623): boundary 0 in each direction is the
+        // heading exterior — the strip row's top and the gutter column's
+        // left. GT rules those edges as the black print FRAME, which the
+        // forcing pass below paints; excluding GRIDLINE-styled seeds here
+        // keeps the frame band the boundary's only owner (replace, not
+        // stack). The data area starts at row/column 1, so its seeding is
+        // untouched.
+        let heading_exterior_is_excluded: bool = table.prints_headings;
         let horizontal_boundary_is_free = |boundary: usize, col: usize| -> bool {
-            !top_sides.contains_key(&(boundary, col))
+            !(heading_exterior_is_excluded && boundary == 0)
+                && !top_sides.contains_key(&(boundary, col))
                 && !bottom_sides.contains_key(&(boundary, col))
                 && !fill_suppressed_horizontal.contains(&(boundary, col))
         };
         let vertical_boundary_is_free = |boundary: usize, row: usize| -> bool {
-            !left_sides.contains_key(&(boundary, row))
+            !(heading_exterior_is_excluded && boundary == 0)
+                && !left_sides.contains_key(&(boundary, row))
                 && !right_sides.contains_key(&(boundary, row))
                 && !fill_suppressed_vertical.contains(&(boundary, row))
         };
@@ -1138,6 +1212,63 @@ fn resolve_boundary_painted_borders(
             {
                 painted[placement.row_index][placement.cell_index] = Some(seeded);
             }
+        }
+    }
+
+    // Printed headings (issue #623): GT draws a 1pt black frame enclosing
+    // the heading bands and the data grid, on the table's exterior
+    // boundaries — the corner box's top and left edges ARE the frame. Forced
+    // here, after declaration resolution and gridline seeding, so the frame
+    // band REPLACES whatever landed on a frame boundary (a heading gray
+    // rule, a #622 closure seed) instead of stacking on it; painting is
+    // band-only, so no layout inset moves. The strip-top edge rides the
+    // repeating header block (pages 2+ carry it) and the left/right edges
+    // ride each row, so they close on every rendered page; the bottom edge
+    // exists only on the LAST table row — a Typst page break inside the
+    // table leaves that page's bottom open unless printed gridlines already
+    // close it with their own black band (tracked in #722).
+    // TODO(#623 follow-up: whether a gridLines-only sheet — headings off —
+    // prints this frame is unmeasured; the frame is gated on
+    // prints_headings alone until a GT probe answers it).
+    if table.prints_headings {
+        let frame_rank: BoundaryConflictRank = boundary_conflict_rank(&print_heading_frame_side());
+        // A strictly heavier declared band keeps its boundary (GT for a
+        // heavy cell border meeting the frame is unmeasured; erring toward
+        // the author's declaration); equal-rank sides — the heading gray
+        // rules — yield to the frame, as GT clips them to its interior.
+        let force_frame = |slot: &mut Option<BorderSide>| {
+            if !slot
+                .as_ref()
+                .is_some_and(|side| boundary_conflict_rank(side) > frame_rank)
+            {
+                *slot = Some(print_heading_frame_side());
+            }
+        };
+        for placement in &placements {
+            let on_top_exterior: bool = placement.row_index == 0;
+            let on_left_exterior: bool = placement.first_col == 0;
+            let on_right_exterior: bool = placement.first_col + placement.col_span == num_cols;
+            let on_bottom_exterior: bool =
+                placement.row_index + placement.row_span == table.rows.len();
+            if !(on_top_exterior || on_left_exterior || on_right_exterior || on_bottom_exterior) {
+                continue;
+            }
+            let mut framed: CellBorder = painted[placement.row_index][placement.cell_index]
+                .take()
+                .unwrap_or_default();
+            if on_top_exterior {
+                force_frame(&mut framed.top);
+            }
+            if on_left_exterior {
+                force_frame(&mut framed.left);
+            }
+            if on_right_exterior {
+                force_frame(&mut framed.right);
+            }
+            if on_bottom_exterior {
+                force_frame(&mut framed.bottom);
+            }
+            painted[placement.row_index][placement.cell_index] = Some(framed);
         }
     }
 

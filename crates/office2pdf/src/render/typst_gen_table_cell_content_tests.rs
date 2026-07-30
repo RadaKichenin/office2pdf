@@ -695,6 +695,7 @@ fn bottom_aligned_spreadsheet_cell_seats_its_line_box_on_the_descender() {
         seats_bottom_aligned_text_on_descender: true,
         paints_borders_inside_boundary: false,
         prints_gridlines: false,
+        prints_headings: false,
         ..Table::default()
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
@@ -761,6 +762,7 @@ fn center_aligned_spreadsheet_cell_keeps_the_symmetric_line_box() {
         seats_bottom_aligned_text_on_descender: true,
         paints_borders_inside_boundary: false,
         prints_gridlines: false,
+        prints_headings: false,
         ..Table::default()
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
@@ -826,6 +828,7 @@ fn bottom_aligned_spreadsheet_cell_in_auto_height_row_keeps_the_symmetric_line_b
         seats_bottom_aligned_text_on_descender: true,
         paints_borders_inside_boundary: false,
         prints_gridlines: false,
+        prints_headings: false,
         ..Table::default()
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);

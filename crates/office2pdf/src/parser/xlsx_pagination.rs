@@ -31,14 +31,23 @@ pub(super) fn split_sheet_page_by_width(
     let title_columns: Option<(usize, usize)> = title_columns
         .map(|(start, end)| (start, end.min(page.table.column_widths.len())))
         .filter(|(start, end)| start < end);
-    // Reserve the repeated title width so overflow groups still fit the page.
+    // Reserve the repeated title width so overflow groups still fit the
+    // page. The first group holds the title columns physically (they never
+    // get prepended to it), so it packs against the full printable width —
+    // reserving there too underpacked page 1 by the title width (issue #623
+    // adversarial review, finding 3).
     let title_width: f64 = title_columns
         .map(|(start, end)| page.table.column_widths[start..end].iter().sum())
         .unwrap_or(0.0);
-    let packing_width: f64 = (printable_width - title_width)
-        .max(page.table.column_widths.iter().cloned().fold(0.0, f64::max));
+    let widest_column: f64 = page.table.column_widths.iter().cloned().fold(0.0, f64::max);
+    let first_group_packing_width: f64 = printable_width.max(widest_column);
+    let overflow_packing_width: f64 = (printable_width - title_width).max(widest_column);
 
-    let mut groups: Vec<(usize, usize)> = column_groups(&page.table.column_widths, packing_width);
+    let mut groups: Vec<(usize, usize)> = column_groups(
+        &page.table.column_widths,
+        first_group_packing_width,
+        overflow_packing_width,
+    );
     if groups.len() <= 1 {
         return vec![page];
     }
@@ -202,13 +211,25 @@ fn prepend_title_columns(title_table: &Table, group_table: Table) -> Table {
 }
 
 /// Greedily pack columns left-to-right into groups whose summed width fits
-/// the printable width; every group holds at least one column.
-fn column_groups(column_widths: &[f64], printable_width: f64) -> Vec<(usize, usize)> {
+/// their capacity; every group holds at least one column. The first group
+/// packs against `first_group_width` (the full printable width — it shows
+/// the title columns in place); later groups pack against
+/// `overflow_group_width`, which reserves room for the prepended titles.
+fn column_groups(
+    column_widths: &[f64],
+    first_group_width: f64,
+    overflow_group_width: f64,
+) -> Vec<(usize, usize)> {
     let mut groups: Vec<(usize, usize)> = Vec::new();
     let mut start: usize = 0;
     let mut acc: f64 = 0.0;
     for (index, width) in column_widths.iter().enumerate() {
-        if index > start && acc + width > printable_width {
+        let capacity: f64 = if groups.is_empty() {
+            first_group_width
+        } else {
+            overflow_group_width
+        };
+        if index > start && acc + width > capacity {
             groups.push((start, index));
             start = index;
             acc = 0.0;
@@ -293,6 +314,7 @@ fn slice_table_columns(table: &Table, start: usize, end: usize) -> Table {
         seats_bottom_aligned_text_on_descender: table.seats_bottom_aligned_text_on_descender,
         paints_borders_inside_boundary: table.paints_borders_inside_boundary,
         prints_gridlines: table.prints_gridlines,
+        prints_headings: table.prints_headings,
     }
 }
 
