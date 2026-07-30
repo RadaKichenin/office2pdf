@@ -607,3 +607,34 @@ fn test_tagged_pdf_with_pdfa_combined() {
         "Should contain structure tags"
     );
 }
+
+/// The embedded Libertinus Serif faces make the token measurement
+/// deterministic on every target (like the digit-advance pin for #621).
+/// Ground truth from fontTools `hmtx` sums on the typst-assets faces:
+/// "Total" is 2.138em regular and 2.392em bold at 1000 upem — the bold face
+/// must be selected for bold runs, not the regular one (issue #624).
+#[test]
+fn test_text_advance_em_reads_regular_and_bold_faces() {
+    let regular: f64 = text_advance_em("Libertinus Serif", false, "Total")
+        .expect("the embedded Libertinus Serif regular face must resolve");
+    assert!(
+        (regular - 2.138).abs() < 1e-6,
+        "regular 'Total' should be 2.138em, got {regular}"
+    );
+
+    let bold: f64 = text_advance_em("Libertinus Serif", true, "Total")
+        .expect("the embedded Libertinus Serif bold face must resolve");
+    assert!(
+        (bold - 2.392).abs() < 1e-6,
+        "bold 'Total' should be 2.392em, got {bold}"
+    );
+}
+
+/// A character without a glyph (U+E000 private use) yields `None` so the
+/// caller can degrade to a measurement-free path; an empty string is a valid
+/// zero-width measurement.
+#[test]
+fn test_text_advance_em_is_none_for_missing_glyphs() {
+    assert_eq!(text_advance_em("Libertinus Serif", false, "\u{E000}"), None);
+    assert_eq!(text_advance_em("Libertinus Serif", false, ""), Some(0.0));
+}

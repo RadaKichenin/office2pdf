@@ -143,6 +143,419 @@ fn test_table_column_widths_from_spanned_cell_widths_without_grid() {
     );
 }
 
+/// Helper for the auto-layout redistribution tests: a cell with an optional
+/// `w:tcW`, an optional `w:gridSpan`, and one run in the given font/size.
+/// Not cfg-gated: the degrade-path tests that run on every target use it too.
+fn auto_layout_cell_xml(tcw_dxa: Option<u32>, grid_span: Option<u32>, text: &str) -> String {
+    let mut tc_pr = String::new();
+    if let Some(width) = tcw_dxa {
+        tc_pr.push_str(&format!(r#"<w:tcW w:type="dxa" w:w="{width}"/>"#));
+    }
+    if let Some(span) = grid_span {
+        tc_pr.push_str(&format!(r#"<w:gridSpan w:val="{span}"/>"#));
+    }
+    format!(
+        r#"<w:tc><w:tcPr>{tc_pr}</w:tcPr><w:p><w:r><w:rPr><w:rFonts w:ascii="Libertinus Serif" w:hAnsi="Libertinus Serif"/><w:sz w:val="40"/></w:rPr><w:t xml:space="preserve">{text}</w:t></w:r></w:p></w:tc>"#
+    )
+}
+
+/// Word's auto layout shrinks each over-subscribed column in proportion to
+/// its compressible slack above min-content, not by a uniform scale over the
+/// preferences (issue #624). Grid 100/100/100pt, `w:tblW` 300pt, but one row
+/// prefers 200pt for the last column: Σpref = 400pt > 300pt. Every cell holds
+/// "aa" in embedded Libertinus Serif at 20pt ('a' advance 0.457em, measured
+/// with fontTools on the typst-assets face), so each column's min-content is
+/// 0.914em x 20pt + 2 x 5.4pt default margins = 29.08pt, and
+/// k = (300 - 87.24) / (400 - 87.24) = 0.68027.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn test_auto_layout_conflict_distributes_surplus_by_compressible_slack() {
+    let document_xml = format!(
+        r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:body>
+            <w:tbl>
+                <w:tblPr><w:tblW w:type="dxa" w:w="6000"/></w:tblPr>
+                <w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>
+                <w:tr>{a}{b}{c}</w:tr>
+                <w:tr>{a}{b}{wide}</w:tr>
+            </w:tbl>
+            <w:sectPr/>
+        </w:body>
+    </w:document>"#,
+        a = auto_layout_cell_xml(Some(2000), None, "aa"),
+        b = auto_layout_cell_xml(Some(2000), None, "aa"),
+        c = auto_layout_cell_xml(Some(2000), None, "aa"),
+        wide = auto_layout_cell_xml(Some(4000), None, "aa"),
+    );
+    let data = build_docx_with_columns(&document_xml);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let widths = &first_table(&doc).column_widths;
+
+    let expected: [f64; 3] = [77.32, 77.32, 145.35];
+    for (index, (width, expected_width)) in widths.iter().zip(expected).enumerate() {
+        assert!(
+            (width - expected_width).abs() < 0.05,
+            "column {index}: expected {expected_width}pt, got {width}pt (all: {widths:?})"
+        );
+    }
+    let total: f64 = widths.iter().sum();
+    assert!(
+        (total - 300.0).abs() < 0.01,
+        "total must stay 300pt, got {total}"
+    );
+}
+
+/// A cell that follows a `w:gridSpan` cell occupies the grid column after the
+/// span, and its `w:tcW` claims THAT column; the span cell's own `w:tcW` is
+/// ignored while it stays below the sum of its spanned columns' preferences.
+/// Grid 50/50/200pt; the second row is a span-2 cell (tcW 25pt, ignored) plus
+/// a 400pt-preference cell that must land on grid column 3. Every cell holds
+/// "a" at 20pt: min-content 0.457em x 20pt + 10.8pt = 19.94pt, and
+/// k = (300 - 59.82) / (500 - 59.82) = 0.54564.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn test_auto_layout_tracks_grid_occupancy_through_grid_span() {
+    let document_xml = format!(
+        r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:body>
+            <w:tbl>
+                <w:tblPr/>
+                <w:tblGrid><w:gridCol w:w="1000"/><w:gridCol w:w="1000"/><w:gridCol w:w="4000"/></w:tblGrid>
+                <w:tr>{a}{b}{c}</w:tr>
+                <w:tr>{span}{wide}</w:tr>
+            </w:tbl>
+            <w:sectPr/>
+        </w:body>
+    </w:document>"#,
+        a = auto_layout_cell_xml(Some(1000), None, "a"),
+        b = auto_layout_cell_xml(Some(1000), None, "a"),
+        c = auto_layout_cell_xml(Some(4000), None, "a"),
+        span = auto_layout_cell_xml(Some(500), Some(2), "a"),
+        wide = auto_layout_cell_xml(Some(8000), None, "a"),
+    );
+    let data = build_docx_with_columns(&document_xml);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let widths = &first_table(&doc).column_widths;
+
+    let expected: [f64; 3] = [36.34, 36.34, 227.32];
+    for (index, (width, expected_width)) in widths.iter().zip(expected).enumerate() {
+        assert!(
+            (width - expected_width).abs() < 0.05,
+            "column {index}: expected {expected_width}pt, got {width}pt (all: {widths:?})"
+        );
+    }
+}
+
+/// A column whose min-content exceeds its preference floors at min-content:
+/// its compressible slack is zero, so redistribution cannot shrink it below
+/// the widest unbreakable token. Grid 30/270pt, one row prefers 300pt for
+/// column 2 (Σpref = 330 > 300). Column 1 holds "WWWW" at 20pt
+/// ('W' advance 0.951em): min = 4 x 0.951em x 20pt + 10.8pt = 86.88pt > 30pt.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn test_auto_layout_floors_a_column_at_its_min_content_width() {
+    let document_xml = format!(
+        r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:body>
+            <w:tbl>
+                <w:tblPr><w:tblW w:type="dxa" w:w="6000"/></w:tblPr>
+                <w:tblGrid><w:gridCol w:w="600"/><w:gridCol w:w="5400"/></w:tblGrid>
+                <w:tr>{narrow}{wide}</w:tr>
+                <w:tr>{narrow}{wider}</w:tr>
+            </w:tbl>
+            <w:sectPr/>
+        </w:body>
+    </w:document>"#,
+        narrow = auto_layout_cell_xml(Some(600), None, "WWWW"),
+        wide = auto_layout_cell_xml(Some(5400), None, "a"),
+        wider = auto_layout_cell_xml(Some(6000), None, "a"),
+    );
+    let data = build_docx_with_columns(&document_xml);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let widths = &first_table(&doc).column_widths;
+
+    assert!(
+        (widths[0] - 86.88).abs() < 0.05,
+        "column 1 floors at its min-content 86.88pt, got {widths:?}"
+    );
+    assert!(
+        (widths[1] - 213.12).abs() < 0.05,
+        "column 2 absorbs the remainder, got {widths:?}"
+    );
+}
+
+/// When the cell preferences agree with the fit width (Σpref == W) the grid
+/// is reproduced verbatim — even when a column's min-content exceeds its
+/// preference. No golden mock but the invoice reaches the redistribution
+/// path, and their output must not move (issue #624).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn test_auto_layout_without_conflict_returns_grid_verbatim() {
+    let document_xml = format!(
+        r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:body>
+            <w:tbl>
+                <w:tblPr><w:tblW w:type="dxa" w:w="6000"/></w:tblPr>
+                <w:tblGrid><w:gridCol w:w="500"/><w:gridCol w:w="5500"/></w:tblGrid>
+                <w:tr>{narrow}{wide}</w:tr>
+            </w:tbl>
+            <w:sectPr/>
+        </w:body>
+    </w:document>"#,
+        narrow = auto_layout_cell_xml(Some(500), None, "WWWW"),
+        wide = auto_layout_cell_xml(Some(5500), None, "a"),
+    );
+    let data = build_docx_with_columns(&document_xml);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let widths = &first_table(&doc).column_widths;
+
+    assert!(
+        (widths[0] - 25.0).abs() < 0.01 && (widths[1] - 275.0).abs() < 0.01,
+        "a conflict-free table keeps its declared grid, got {widths:?}"
+    );
+}
+
+/// When any token cannot be measured (here U+E000, which no embedded face
+/// covers) the redistribution degrades to the pre-#624 uniform scale over the
+/// per-column preference maxima, so font-less environments keep today's
+/// output byte-identical. Grid 100/100pt, per-column max preferences
+/// 150/100pt, uniform scale 200/250 = 0.8 → 120/80pt.
+#[test]
+fn test_auto_layout_with_unmeasurable_text_degrades_to_uniform_scale() {
+    let document_xml = format!(
+        r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:body>
+            <w:tbl>
+                <w:tblPr/>
+                <w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>
+                <w:tr>{a}{b}</w:tr>
+                <w:tr>{c}{d}</w:tr>
+            </w:tbl>
+            <w:sectPr/>
+        </w:body>
+    </w:document>"#,
+        a = auto_layout_cell_xml(Some(2000), None, "a"),
+        b = auto_layout_cell_xml(Some(2000), None, "a"),
+        c = auto_layout_cell_xml(Some(3000), None, "\u{E000}"),
+        d = auto_layout_cell_xml(Some(2000), None, "a"),
+    );
+    let data = build_docx_with_columns(&document_xml);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let widths = &first_table(&doc).column_widths;
+
+    assert!(
+        (widths[0] - 120.0).abs() < 0.01 && (widths[1] - 80.0).abs() < 0.01,
+        "unmeasurable content must keep the uniform-scale result, got {widths:?}"
+    );
+}
+
+/// `w:rFonts w:eastAsia` routes only East Asian codepoints; a Latin-only run
+/// beside an unresolvable East Asian family must still measure with its Latin
+/// face and reach the slack-proportional path. Grid 100/100pt, per-column
+/// preferences 150/100pt against W = 200pt, "a" at 20pt in each cell:
+/// min = 19.94pt, k = (200 - 39.88) / (250 - 39.88) = 0.76204.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn test_auto_layout_latin_text_ignores_unresolvable_east_asian_family() {
+    let cell = |tcw: u32| -> String {
+        format!(
+            r#"<w:tc><w:tcPr><w:tcW w:type="dxa" w:w="{tcw}"/></w:tcPr><w:p><w:r><w:rPr><w:rFonts w:ascii="Libertinus Serif" w:hAnsi="Libertinus Serif" w:eastAsia="NoSuchFamily624"/><w:sz w:val="40"/></w:rPr><w:t xml:space="preserve">a</w:t></w:r></w:p></w:tc>"#
+        )
+    };
+    let document_xml = format!(
+        r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:body>
+            <w:tbl>
+                <w:tblPr/>
+                <w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>
+                <w:tr>{a}{b}</w:tr>
+                <w:tr>{c}{d}</w:tr>
+            </w:tbl>
+            <w:sectPr/>
+        </w:body>
+    </w:document>"#,
+        a = cell(2000),
+        b = cell(2000),
+        c = cell(3000),
+        d = cell(2000),
+    );
+    let data = build_docx_with_columns(&document_xml);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let widths = &first_table(&doc).column_widths;
+
+    assert!(
+        (widths[0] - 119.05).abs() < 0.05 && (widths[1] - 80.95).abs() < 0.05,
+        "Latin tokens must measure with the Latin face, got {widths:?}"
+    );
+}
+
+/// Word breaks a line between ANY two CJK characters, so a Korean cell's
+/// min-content is its widest single glyph, not the whole phrase (issue #624
+/// review). Grid 100/100pt, the Korean cell states a conflicting 150pt tcW.
+/// Treating the 13-syllable phrase as one unbreakable token would floor the
+/// column near 250pt and overflow the 200pt fit width; per-character breaking
+/// keeps the slack model close to the uniform 120/80pt split. The exact
+/// widths depend on which Korean face resolves (or on the uniform-scale
+/// degrade when none does), so the pin is a band, not a point.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn test_auto_layout_breaks_cjk_text_between_every_character() {
+    let korean_cell: &str = r#"<w:tc><w:tcPr><w:tcW w:type="dxa" w:w="3000"/></w:tcPr><w:p><w:r><w:rPr><w:rFonts w:ascii="Libertinus Serif" w:hAnsi="Libertinus Serif" w:eastAsia="Malgun Gothic"/><w:sz w:val="40"/></w:rPr><w:t xml:space="preserve">총계약금액은일금오천만원정임</w:t></w:r></w:p></w:tc>"#;
+    let document_xml = format!(
+        r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:body>
+            <w:tbl>
+                <w:tblPr/>
+                <w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>
+                <w:tr>{korean_cell}{latin}</w:tr>
+            </w:tbl>
+            <w:sectPr/>
+        </w:body>
+    </w:document>"#,
+        latin = auto_layout_cell_xml(Some(2000), None, "a"),
+    );
+    let data = build_docx_with_columns(&document_xml);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let widths = &first_table(&doc).column_widths;
+
+    let total: f64 = widths.iter().sum();
+    assert!(
+        (total - 200.0).abs() < 0.01,
+        "the table must not overflow its 200pt fit width, got {widths:?}"
+    );
+    assert!(
+        (115.0..=125.0).contains(&widths[0]) && (75.0..=85.0).contains(&widths[1]),
+        "a CJK cell floors at one glyph, near the 120/80 split, got {widths:?}"
+    );
+}
+
+/// A `w:tblW` beyond the grid total is outside the direction verified against
+/// GT (Word clamps such tables to the content width, which is not modeled),
+/// so the fit target stays the grid total and the conflict still compresses:
+/// grid 100/100pt, prefs 150/100pt, "a" cells at 20pt → min 19.94pt each,
+/// k = (200 - 39.88) / (250 - 39.88) = 0.76204 → 119.05/80.95pt. Extrapolating
+/// toward the 600pt tblW would have ballooned column 1 to 366pt.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn test_auto_layout_ignores_tblw_beyond_the_grid_total() {
+    let document_xml = format!(
+        r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:body>
+            <w:tbl>
+                <w:tblPr><w:tblW w:type="dxa" w:w="12000"/></w:tblPr>
+                <w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>
+                <w:tr>{a}{b}</w:tr>
+            </w:tbl>
+            <w:sectPr/>
+        </w:body>
+    </w:document>"#,
+        a = auto_layout_cell_xml(Some(3000), None, "a"),
+        b = auto_layout_cell_xml(Some(2000), None, "a"),
+    );
+    let data = build_docx_with_columns(&document_xml);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let widths = &first_table(&doc).column_widths;
+
+    assert!(
+        (widths[0] - 119.05).abs() < 0.05 && (widths[1] - 80.95).abs() < 0.05,
+        "an oversized tblW must not stretch the slack model, got {widths:?}"
+    );
+}
+
+/// When the preferences undershoot the fit width (Σpref < W) the slack model
+/// would extrapolate k > 1 beyond every stated preference — a direction never
+/// measured against GT — so the pre-#624 uniform scale is kept: maxima
+/// 50/100pt scaled to the 200pt grid → 66.67/133.33pt.
+#[test]
+fn test_auto_layout_preference_undershoot_keeps_uniform_scale() {
+    let document_xml = format!(
+        r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:body>
+            <w:tbl>
+                <w:tblPr><w:tblW w:type="dxa" w:w="4000"/></w:tblPr>
+                <w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>
+                <w:tr>{a}{b}</w:tr>
+            </w:tbl>
+            <w:sectPr/>
+        </w:body>
+    </w:document>"#,
+        a = auto_layout_cell_xml(Some(1000), None, "a"),
+        b = auto_layout_cell_xml(Some(2000), None, "a"),
+    );
+    let data = build_docx_with_columns(&document_xml);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let widths = &first_table(&doc).column_widths;
+
+    assert!(
+        (widths[0] - 200.0 / 3.0).abs() < 0.01 && (widths[1] - 400.0 / 3.0).abs() < 0.01,
+        "k >= 1 must return the uniform-scale result, got {widths:?}"
+    );
+}
+
+/// A conflicted table whose cells are all empty makes no font measurement at
+/// all, so the slack model has nothing verified to work from: it must degrade
+/// to the uniform-scale result (maxima 150/100 scaled to 200pt → 120/80pt).
+/// This also keeps wasm and native identical on empty form-skeleton tables —
+/// margins-only minima would have produced 119.53/80.47pt on native only.
+#[test]
+fn test_auto_layout_all_empty_cells_keep_uniform_scale() {
+    let document_xml = format!(
+        r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:body>
+            <w:tbl>
+                <w:tblPr/>
+                <w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>
+                <w:tr>{a}{b}</w:tr>
+            </w:tbl>
+            <w:sectPr/>
+        </w:body>
+    </w:document>"#,
+        a = auto_layout_cell_xml(Some(3000), None, ""),
+        b = auto_layout_cell_xml(Some(2000), None, ""),
+    );
+    let data = build_docx_with_columns(&document_xml);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let widths = &first_table(&doc).column_widths;
+
+    assert!(
+        (widths[0] - 120.0).abs() < 0.01 && (widths[1] - 80.0).abs() < 0.01,
+        "an all-empty table must keep the uniform-scale widths, got {widths:?}"
+    );
+}
+
+/// Word does not break at no-break spaces, so "1 240,00" with a U+00A0
+/// thousands separator is ONE token. Libertinus Serif at 20pt: the full
+/// string advances 3.26em → min 76.0pt with margins; splitting at the NBSP
+/// would have measured only "240,00" (2.545em → 61.7pt). Grid 100/100pt,
+/// prefs 150/100pt: k = (200 - 95.94) / (250 - 95.94) = 0.67545 →
+/// 125.98/74.02pt.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn test_auto_layout_no_break_space_stays_inside_a_token() {
+    let document_xml = format!(
+        r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:body>
+            <w:tbl>
+                <w:tblPr/>
+                <w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>
+                <w:tr>{price}{b}</w:tr>
+            </w:tbl>
+            <w:sectPr/>
+        </w:body>
+    </w:document>"#,
+        price = auto_layout_cell_xml(Some(3000), None, "1\u{00A0}240,00"),
+        b = auto_layout_cell_xml(Some(2000), None, "a"),
+    );
+    let data = build_docx_with_columns(&document_xml);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let widths = &first_table(&doc).column_widths;
+
+    assert!(
+        (widths[0] - 125.98).abs() < 0.05 && (widths[1] - 74.02).abs() < 0.05,
+        "a no-break space must not split the token, got {widths:?}"
+    );
+}
+
 #[test]
 fn test_scan_table_headers_counts_only_leading_rows() {
     let document_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
