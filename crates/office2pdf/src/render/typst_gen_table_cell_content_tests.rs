@@ -649,3 +649,257 @@ fn cell_border_width_joins_the_inset() {
         "half of each 0.5pt border should join the 3.5pt inset: {result}"
     );
 }
+
+/// Excel seats a bottom-aligned cell's line box on the descender line: the
+/// last line's descent bottom rests on the row's bottom inset edge, with all
+/// slack above. The East Asian row model splits its 0.3-line bonus evenly
+/// around the baseline, so a bottom-aligned Korean cell floated 0.15 lines
+/// above where Excel prints it (issue #618). The removed surplus moves into
+/// leading so multi-line baseline-to-baseline advance is unchanged.
+#[test]
+fn bottom_aligned_spreadsheet_cell_seats_its_line_box_on_the_descender() {
+    let Some((ascender, descender, word_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+    let font_size: f64 = 10.0;
+    let top_em: f64 = ascender + 0.15 * word_pitch_em;
+    // What the same cell emits when the box stays symmetric.
+    let symmetric_bottom_em: f64 = 1.3 * word_pitch_em - top_em;
+    // The sub-baseline surplus the descender seat removes from the box.
+    let leading_pt: f64 = ((1.3 * word_pitch_em - top_em - descender) * font_size).max(0.0);
+    let cell = TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: "급여 총액".to_string(),
+                style: TextStyle {
+                    font_family: Some("Libertinus Serif".to_string()),
+                    font_size: Some(font_size),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })],
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            cells: vec![cell],
+            height: Some(20.0),
+        }],
+        column_widths: vec![200.0],
+        default_vertical_align: Some(CellVerticalAlign::Bottom),
+        seats_bottom_aligned_text_on_descender: true,
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains(&format!(
+            "top-edge: {}em, bottom-edge: -{}em",
+            format_f64(top_em),
+            format_f64(descender)
+        )),
+        "bottom-aligned spreadsheet cell must end its line box at the descender: {result}"
+    );
+    assert!(
+        result.contains(&format!("#set par(leading: {}pt)", format_f64(leading_pt))),
+        "the removed sub-baseline surplus must move into leading: {result}"
+    );
+    assert!(
+        !result.contains(&format!(
+            "bottom-edge: -{}em",
+            format_f64(symmetric_bottom_em)
+        )),
+        "the symmetric East Asian box must not survive under bottom alignment: {result}"
+    );
+}
+
+/// Triangulation: an explicitly centred cell in the same spreadsheet keeps the
+/// symmetric box — the East Asian surplus is even around the baseline, so
+/// centre alignment already matches Excel and must not move (issue #618).
+#[test]
+fn center_aligned_spreadsheet_cell_keeps_the_symmetric_line_box() {
+    let Some((ascender, descender, word_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
+        return;
+    };
+    let font_size: f64 = 10.0;
+    let top_em: f64 = ascender + 0.15 * word_pitch_em;
+    let symmetric_bottom_em: f64 = 1.3 * word_pitch_em - top_em;
+    let cell = TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: "급여 총액".to_string(),
+                style: TextStyle {
+                    font_family: Some("Libertinus Serif".to_string()),
+                    font_size: Some(font_size),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })],
+        vertical_align: Some(CellVerticalAlign::Center),
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            cells: vec![cell],
+            height: Some(20.0),
+        }],
+        column_widths: vec![200.0],
+        default_vertical_align: Some(CellVerticalAlign::Bottom),
+        seats_bottom_aligned_text_on_descender: true,
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains(&format!(
+            "top-edge: {}em, bottom-edge: -{}em",
+            format_f64(top_em),
+            format_f64(symmetric_bottom_em)
+        )),
+        "a centred spreadsheet cell keeps the symmetric East Asian box: {result}"
+    );
+    assert!(
+        result.contains("#set par(leading: 0pt)"),
+        "a centred spreadsheet cell keeps zero leading: {result}"
+    );
+    assert!(
+        !result.contains(&format!("bottom-edge: -{}em", format_f64(descender))),
+        "a centred spreadsheet cell must not be re-seated on the descender: {result}"
+    );
+}
+
+/// Regression: a bottom-aligned East Asian spreadsheet cell in an AUTO-height
+/// row keeps the symmetric line box and zero leading. In auto rows the
+/// renderer sizes the row from the content, whose intrinsic height was
+/// calibrated against Excel GT (#396/#411/#498) with the symmetric box; only
+/// fixed rows have slack for alignment to distribute, and only they were
+/// measured in #618.
+#[test]
+fn bottom_aligned_spreadsheet_cell_in_auto_height_row_keeps_the_symmetric_line_box() {
+    let Some((ascender, descender, word_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+    let font_size: f64 = 10.0;
+    let top_em: f64 = ascender + 0.15 * word_pitch_em;
+    let symmetric_bottom_em: f64 = 1.3 * word_pitch_em - top_em;
+    let cell = TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: "급여 총액".to_string(),
+                style: TextStyle {
+                    font_family: Some("Libertinus Serif".to_string()),
+                    font_size: Some(font_size),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })],
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            cells: vec![cell],
+            height: None,
+        }],
+        column_widths: vec![200.0],
+        default_vertical_align: Some(CellVerticalAlign::Bottom),
+        seats_bottom_aligned_text_on_descender: true,
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains(&format!(
+            "top-edge: {}em, bottom-edge: -{}em",
+            format_f64(top_em),
+            format_f64(symmetric_bottom_em)
+        )),
+        "an auto-height row keeps the symmetric East Asian box: {result}"
+    );
+    assert!(
+        result.contains("#set par(leading: 0pt)"),
+        "an auto-height row keeps zero leading: {result}"
+    );
+    assert!(
+        !result.contains(&format!("bottom-edge: -{}em", format_f64(descender))),
+        "an auto-height row must not be re-seated on the descender: {result}"
+    );
+}
+
+/// Triangulation: a Word-style table (no descender seating) keeps its current
+/// emission even for bottom-aligned cells — Word GT has not verified that
+/// seating, so DOCX/PPTX output must stay byte-identical (issue #618).
+#[test]
+fn bottom_aligned_word_table_cell_keeps_the_symmetric_line_box() {
+    let Some((ascender, descender, word_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
+        return;
+    };
+    let font_size: f64 = 10.0;
+    let top_em: f64 = ascender + 0.15 * word_pitch_em;
+    let symmetric_bottom_em: f64 = 1.3 * word_pitch_em - top_em;
+    let cell = TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: "회의 안건".to_string(),
+                style: TextStyle {
+                    font_family: Some("Libertinus Serif".to_string()),
+                    font_size: Some(font_size),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })],
+        vertical_align: Some(CellVerticalAlign::Bottom),
+        ..TableCell::default()
+    };
+    // A fixed row height, so this guards the table's seating flag itself
+    // rather than passing trivially through the fixed-row gate.
+    let table = Table {
+        rows: vec![TableRow {
+            cells: vec![cell],
+            height: Some(20.0),
+        }],
+        column_widths: vec![200.0],
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains(&format!(
+            "top-edge: {}em, bottom-edge: -{}em",
+            format_f64(top_em),
+            format_f64(symmetric_bottom_em)
+        )),
+        "a Word table keeps the symmetric East Asian box under bottom alignment: {result}"
+    );
+    assert!(
+        result.contains("#set par(leading: 0pt)"),
+        "a Word table keeps zero leading: {result}"
+    );
+    assert!(
+        !result.contains(&format!("bottom-edge: -{}em", format_f64(descender))),
+        "a Word table cell must not be re-seated on the descender: {result}"
+    );
+}

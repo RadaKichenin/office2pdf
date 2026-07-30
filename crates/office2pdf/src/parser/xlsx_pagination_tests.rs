@@ -65,6 +65,7 @@ fn make_page(column_widths: Vec<f64>, rows: Vec<TableRow>) -> SheetPage {
             default_cell_padding: None,
             use_content_driven_row_heights: false,
             default_vertical_align: None,
+            seats_bottom_aligned_text_on_descender: false,
         },
         header: None,
         footer: None,

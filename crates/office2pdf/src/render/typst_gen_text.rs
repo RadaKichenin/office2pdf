@@ -426,13 +426,31 @@ pub(super) fn cell_grid_absorbs_space_after(
         && line_grid_pitch.is_some_and(|pitch| pitch > 0.0)
 }
 
+/// A table-cell paragraph's fixed line box, resolved at the paragraph's own
+/// font size. `top_em`/`bottom_em` are the metric edges the cell emits;
+/// `leading_pt` is the gap between line boxes.
+pub(super) struct CellLineBox {
+    pub top_em: f64,
+    pub bottom_em: f64,
+    /// Zero except when the box is re-seated on the descender: the surplus
+    /// removed below the baseline moves here, so multi-line
+    /// baseline-to-baseline advance is unchanged (issue #618).
+    pub leading_pt: f64,
+    pub font_size_pt: f64,
+}
+
 /// Line-box settings for a table cell: a fixed box spanning the font's full
 /// single-spacing (hhea) line — 1.3 times it for an East Asian row — seated at
-/// the same constant ascent the body path uses, with zero leading. A
-/// single-line cell then occupies the whole line height Word gives it, rather
-/// than only the tighter metric box (which left auto-height rows too short,
-/// issue #396). `None` when the font's metrics are unknown or the paragraph
-/// carries its own line spacing/box.
+/// the same constant ascent the body path uses. In the default symmetric
+/// emission the box carries the whole line advance below the ascent with zero
+/// leading, so a single-line cell occupies the full line height Word gives it
+/// rather than only the tighter metric box (which left auto-height rows too
+/// short, issue #396). When `seats_text_on_descender` is set (bottom-aligned
+/// spreadsheet cells in fixed-height rows), the box instead ends at the
+/// font's descender and the removed sub-baseline surplus moves into leading,
+/// so the last line's descent rests on the row's bottom inset edge while
+/// multi-line advance is unchanged (issue #618). `None` when the font's
+/// metrics are unknown or the paragraph carries its own line spacing/box.
 ///
 /// The box also carries the paragraph's `w:spacing w:after` when a snapping
 /// grid is in force, because Word snaps the line and that gap together (issues
@@ -442,7 +460,33 @@ pub(super) fn word_cell_line_box_settings(
     style: &ParagraphStyle,
     line_grid_pitch: Option<f64>,
     row_has_east_asian_text: bool,
+    seats_text_on_descender: bool,
 ) -> Option<String> {
+    let line_box: CellLineBox = word_cell_line_box(
+        runs,
+        style,
+        line_grid_pitch,
+        row_has_east_asian_text,
+        seats_text_on_descender,
+    )?;
+    Some(format!(
+        "#set text(top-edge: {}em, bottom-edge: -{}em)\n#set par(leading: {}pt)\n",
+        format_f64(line_box.top_em),
+        format_f64(line_box.bottom_em),
+        format_f64(line_box.leading_pt)
+    ))
+}
+
+/// The line box behind [`word_cell_line_box_settings`], exposed so the spill
+/// wrapper can size its clip box and strut from the same numbers the block
+/// emits (issue #618).
+pub(super) fn word_cell_line_box(
+    runs: &[Run],
+    style: &ParagraphStyle,
+    line_grid_pitch: Option<f64>,
+    row_has_east_asian_text: bool,
+    seats_text_on_descender: bool,
+) -> Option<CellLineBox> {
     if style.line_spacing.is_some() || style.line_box.is_some() {
         return None;
     }
@@ -491,12 +535,32 @@ pub(super) fn word_cell_line_box_settings(
         0.0
     };
     let top_em: f64 = ascender_em + excess_em;
-    let bottom_em: f64 = advance_em - top_em;
-    Some(format!(
-        "#set text(top-edge: {}em, bottom-edge: -{}em)\n#set par(leading: 0pt)\n",
-        format_f64(top_em),
-        format_f64(bottom_em)
-    ))
+    // Excel rests a bottom-aligned cell's last line on its descender: the
+    // descent bottom sits on the row's bottom inset edge with all slack above.
+    // The symmetric box carries the East Asian 0.15-line surplus below the
+    // baseline, which floated bottom-aligned Korean cells above where Excel
+    // prints them (issue #618). Ending the box at the descender and moving the
+    // surplus into leading keeps multi-line advance identical. Word and Excel
+    // both measure a line's bottom down to the descender line — the same rule
+    // the header/footer path already applies with `bottom-edge: "descender"`.
+    // TODO(#618 follow-up: leading is one per-paragraph pt value derived from
+    // the max run size, so mixed-font-size wrapped lines gain
+    // 0.15*pitch*(max-line) advance error; needs per-line seating if a real
+    // sheet exhibits it).
+    let (bottom_em, leading_pt): (f64, f64) = if seats_text_on_descender {
+        (
+            descender_em,
+            ((advance_em - top_em - descender_em) * font_size).max(0.0),
+        )
+    } else {
+        (advance_em - top_em, 0.0)
+    };
+    Some(CellLineBox {
+        top_em,
+        bottom_em,
+        leading_pt,
+        font_size_pt: font_size,
+    })
 }
 
 /// The top-up that raises the font's typographic metric box to Word's line

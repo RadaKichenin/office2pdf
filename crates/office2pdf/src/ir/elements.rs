@@ -522,6 +522,11 @@ pub struct Table {
     /// Excel prints cells bottom-aligned by default; Word/PowerPoint keep
     /// the renderer default (top).
     pub default_vertical_align: Option<CellVerticalAlign>,
+    /// When true, a bottom-aligned cell rests its last line's descender on the
+    /// row's bottom inset edge, as Excel prints. Only spreadsheet tables set
+    /// this: Word's and PowerPoint's bottom-cell seating is unverified against
+    /// native GT, so their emission must not change (issue #618).
+    pub seats_bottom_aligned_text_on_descender: bool,
 }
 
 /// A table row.
