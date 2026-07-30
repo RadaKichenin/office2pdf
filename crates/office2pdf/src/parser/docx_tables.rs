@@ -156,7 +156,12 @@ pub(super) fn convert_table(
         derive_column_widths_from_cells(&raw_rows).unwrap_or_default()
     } else {
         let grid: Vec<f64> = table.grid.iter().map(|&w| twips_to_pt(w as f64)).collect();
-        reconcile_auto_layout_widths(&grid, &raw_rows)
+        // `w:tblW` shares `TableWidth`'s JSON shape with `w:tcW`; docx-rs
+        // serializes an absent element as `{width: 0, widthType: "auto"}`,
+        // which the extractor (auto) and the filter (0) both reject.
+        let declared_table_width_pt: Option<f64> =
+            extract_table_cell_width(table_prop_json.as_ref()).filter(|width| *width > 0.0);
+        reconcile_auto_layout_widths(&grid, &raw_rows, declared_table_width_pt)
     };
 
     if header_info.is_visual_rtl {
@@ -352,27 +357,368 @@ fn apply_conditional_table_style(raw_rows: &mut [RawRow], table_style: &Resolved
 /// resolves them across every row, which can contradict the grid outright.
 /// The invoice fixture's item rows ask for `700/4200/1200/1450/1476` twips
 /// while its Subtotal/VAT/Total rows put a 4200-twip value cell in the last
-/// column, so Word widens Amount from the grid's 73.8pt to 159.8pt. Taking
+/// column, so Word widens Amount from the grid's 73.8pt to 153.3pt. Taking
 /// the grid verbatim left it less than half Word's (issue #355).
 ///
-/// Each column takes the widest preference any cell expresses for it, then
-/// the set is scaled to the grid's total so the table keeps its declared
-/// width. Falls back to the grid when no cell states a preference, and when
-/// the preferences cover fewer columns than the grid.
-fn reconcile_auto_layout_widths(grid: &[f64], raw_rows: &[RawRow]) -> Vec<f64> {
-    let Some(preferred) = derive_column_widths_from_cells(raw_rows) else {
+/// Word resolves the conflict by compressing each column in proportion to
+/// its compressible slack above min-content, not by a uniform scale: with
+/// `pref_i` the widest single-column `w:tcW` on grid column `i`, `min_i` its
+/// widest unbreakable token plus cell side margins, and `W` the fit width,
+///
+/// ```text
+/// k = (W - Σmin) / (Σpref - Σmin);   width_i = min_i + (pref_i - min_i)·k
+/// ```
+///
+/// Derived on the invoice's Word GT (issue #624): the uniform scale put
+/// Description and Amount at an identical 161.32pt where Word prints 156.9
+/// and 153.3, while this rule lands every column within 0.10pt. The model
+/// runs ONLY in the direction that GT verified — `Σpref > W` compression with
+/// `k < 1` — and every other case returns the pre-#624 uniform scale over the
+/// per-column tcW maxima: `Σpref <= W` (conflict-free tables — every other
+/// golden mock — where the scale is ≈1 and the grid comes back verbatim, and
+/// the unverified `k >= 1` extrapolation), any token that cannot be measured
+/// (wasm, missing face or glyph), and tables whose cells are all empty (no
+/// measurement to anchor the minima), so font-less and wasm output is
+/// byte-identical to before.
+fn reconcile_auto_layout_widths(
+    grid: &[f64],
+    raw_rows: &[RawRow],
+    declared_table_width_pt: Option<f64>,
+) -> Vec<f64> {
+    let Some(cell_maxima) = derive_column_widths_from_cells(raw_rows) else {
         return grid.to_vec();
     };
-    if preferred.len() != grid.len() {
+    if cell_maxima.len() != grid.len() {
         return grid.to_vec();
     }
-    let preferred_total: f64 = preferred.iter().sum();
+    let cell_maxima_total: f64 = cell_maxima.iter().sum();
     let grid_total: f64 = grid.iter().sum();
-    if preferred_total <= 0.0 || grid_total <= 0.0 || preferred.iter().any(|width| *width <= 0.0) {
+    if cell_maxima_total <= 0.0
+        || grid_total <= 0.0
+        || cell_maxima.iter().any(|width| *width <= 0.0)
+    {
         return grid.to_vec();
     }
-    let scale: f64 = grid_total / preferred_total;
-    preferred.iter().map(|width| width * scale).collect()
+    // The pre-#624 result: one uniform scale over the per-column tcW maxima.
+    // Kept verbatim as the degrade target so environments that cannot measure
+    // text (wasm, missing fonts) keep producing today's output.
+    let uniform_scale: f64 = grid_total / cell_maxima_total;
+    let uniformly_scaled: Vec<f64> = cell_maxima
+        .iter()
+        .map(|width| width * uniform_scale)
+        .collect();
+
+    // Word fits the table to `w:tblW` when stated, else to the grid total —
+    // but only the SHRINK direction is verified against GT: every #624
+    // measurement (the invoice) has 0 < tblW <= grid total and Σpref > W. A
+    // tblW beyond the grid total is where Word starts clamping to the section
+    // content width, which is not modeled (section geometry is not threaded
+    // into tables), so such tables keep the grid total as their fit target.
+    let fit_width_pt: f64 = match declared_table_width_pt {
+        Some(declared)
+            if declared > 0.0 && declared <= grid_total + AUTO_LAYOUT_WIDTH_EPSILON_PT =>
+        {
+            declared
+        }
+        _ => grid_total,
+    };
+
+    let preferred: Vec<f64> = derive_grid_column_preferences(grid, raw_rows);
+    let preferred_total: f64 = preferred.iter().sum();
+    // Σpref <= W covers both the no-conflict case (Σpref == W: the uniform
+    // scale is ≈1 and the grid comes back verbatim) and the k >= 1 surplus
+    // direction, where the slack model would extrapolate beyond every stated
+    // preference — never measured against GT — so the pre-#624 uniform scale
+    // is kept for both. Only Σpref > W (k < 1 compression) is verified.
+    if preferred_total <= fit_width_pt + AUTO_LAYOUT_WIDTH_EPSILON_PT {
+        return uniformly_scaled;
+    }
+    let Some(min_content) = derive_grid_column_min_content_widths(raw_rows, grid.len()) else {
+        return uniformly_scaled;
+    };
+
+    // A preference below min-content carries no compressible slack: the
+    // column floors at min-content and takes no share of the surplus.
+    let clamped_preferred: Vec<f64> = preferred
+        .iter()
+        .zip(&min_content)
+        .map(|(preference, min)| preference.max(*min))
+        .collect();
+    let min_total: f64 = min_content.iter().sum();
+    let compressible_slack: f64 = clamped_preferred.iter().sum::<f64>() - min_total;
+    if compressible_slack <= AUTO_LAYOUT_WIDTH_EPSILON_PT {
+        // Every column already sits at min-content; how Word grows such a
+        // table to a wider tblW is unmeasured, so keep today's output.
+        return uniformly_scaled;
+    }
+    // k < 1 always holds here (Σpref > W was gated above, so the extrapolating
+    // k >= 1 branch never reaches this point); k clamps at 0 when W < Σmin,
+    // flooring every column at min-content and letting the table overflow W,
+    // which is untested.
+    let slack_share: f64 = ((fit_width_pt - min_total) / compressible_slack).max(0.0);
+    clamped_preferred
+        .iter()
+        .zip(&min_content)
+        .map(|(preference, min)| min + (preference - min) * slack_share)
+        .collect()
+}
+
+/// One twip (0.05pt) — the resolution of every source value. A conflict
+/// smaller than one twip is dxa rounding noise, not an authored disagreement,
+/// so it skips token measurement entirely and keeps the uniform-scale result.
+const AUTO_LAYOUT_WIDTH_EPSILON_PT: f64 = 0.05;
+
+/// The preferred width of each grid column: the widest `w:tcW` any
+/// single-column cell states on it, falling back to the declared `gridCol`.
+///
+/// Occupancy is tracked through `w:gridSpan` — a cell following a span-4 cell
+/// sits on grid column 5 and its `w:tcW` claims that column, which is exactly
+/// how the invoice's Subtotal rows hand their 4200-twip value cell to the
+/// last column. A spanned cell's own `w:tcW` is ignored unless it exceeds the
+/// sum of its spanned columns' preferences (untested by fixtures: the excess
+/// is spread proportionally).
+fn derive_grid_column_preferences(grid: &[f64], raw_rows: &[RawRow]) -> Vec<f64> {
+    let mut stated: Vec<Option<f64>> = vec![None; grid.len()];
+    for row in raw_rows {
+        for cell in &row.cells {
+            if cell.col_span != 1 || cell.col_index >= grid.len() {
+                continue;
+            }
+            let Some(preferred_width) = cell.preferred_width else {
+                continue;
+            };
+            let slot: &mut Option<f64> = &mut stated[cell.col_index];
+            *slot = Some(slot.map_or(preferred_width, |width| width.max(preferred_width)));
+        }
+    }
+    let mut preferred: Vec<f64> = stated
+        .iter()
+        .zip(grid)
+        .map(|(stated_width, grid_width)| stated_width.unwrap_or(*grid_width))
+        .collect();
+    raise_spanned_ranges_to_spanning_cells(&mut preferred, raw_rows, |cell| cell.preferred_width);
+    preferred
+}
+
+/// The min-content width of each grid column: over its single-column cells,
+/// the widest unbreakable token plus the cell's left and right margins.
+///
+/// Word never compresses a column below this in auto layout. Borders are NOT
+/// added — measured on the invoice, adding them degrades the fit. Returns
+/// `None` when any cell's text cannot be measured, and also when NO cell
+/// produced a font measurement at all (every cell empty or whitespace-only):
+/// a margins-only minimum is unverified against GT, and running the slack
+/// model from it would move empty form-skeleton tables away from today's
+/// output on native while wasm — which never measures — kept the uniform
+/// scale. Degrading keeps both targets identical.
+fn derive_grid_column_min_content_widths(
+    raw_rows: &[RawRow],
+    column_count: usize,
+) -> Option<Vec<f64>> {
+    let mut any_token_measured: bool = false;
+
+    let mut min_content: Vec<f64> = vec![0.0; column_count];
+    for row in raw_rows {
+        for cell in &row.cells {
+            if cell.col_span != 1 || cell.col_index >= column_count {
+                continue;
+            }
+            let cell_min: f64 = measured_cell_min_content_pt(cell, &mut any_token_measured)?;
+            min_content[cell.col_index] = min_content[cell.col_index].max(cell_min);
+        }
+    }
+    // Spanned cells' mins are ignored unless exceeding the spanned columns'
+    // min sum (untested by fixtures) — but their text must still be
+    // measurable, or the whole table degrades consistently.
+    let mut spanned_all_measured: bool = true;
+    raise_spanned_ranges_to_spanning_cells(&mut min_content, raw_rows, |cell| {
+        match measured_cell_min_content_pt(cell, &mut any_token_measured) {
+            Some(cell_min) => Some(cell_min),
+            None => {
+                spanned_all_measured = false;
+                None
+            }
+        }
+    });
+    (spanned_all_measured && any_token_measured).then_some(min_content)
+}
+
+/// One cell's min-content: its widest unbreakable token plus its left and
+/// right margins (`w:tcMar` default 108 twips = 5.4pt per writing side when
+/// neither the cell nor the table states one). Sets `any_token_measured`
+/// when at least one real font measurement backed the result.
+fn measured_cell_min_content_pt(cell: &RawCell, any_token_measured: &mut bool) -> Option<f64> {
+    const DEFAULT_CELL_SIDE_MARGIN_PT: f64 = 5.4;
+    let widest_token_pt: f64 = max_unbreakable_token_advance_pt(&cell.content, any_token_measured)?;
+    let (left_margin, right_margin): (f64, f64) = cell.padding.map_or(
+        (DEFAULT_CELL_SIDE_MARGIN_PT, DEFAULT_CELL_SIDE_MARGIN_PT),
+        |padding| (padding.left, padding.right),
+    );
+    Some(widest_token_pt + left_margin + right_margin)
+}
+
+/// Shared spanned-cell rule for preferences and min-content: when a
+/// `w:gridSpan` cell's own requirement exceeds the sum its spanned columns
+/// already carry, raise those columns proportionally to cover it. No fixture
+/// exercises this branch; the invoice's span-4 label cells all require less
+/// than their columns' sums and are ignored here.
+fn raise_spanned_ranges_to_spanning_cells(
+    column_values: &mut [f64],
+    raw_rows: &[RawRow],
+    mut cell_requirement: impl FnMut(&RawCell) -> Option<f64>,
+) {
+    for row in raw_rows {
+        for cell in &row.cells {
+            let span: usize = cell.col_span as usize;
+            if span < 2 {
+                continue;
+            }
+            let range_end: usize = (cell.col_index + span).min(column_values.len());
+            if cell.col_index >= range_end {
+                continue;
+            }
+            let Some(required_width) = cell_requirement(cell) else {
+                continue;
+            };
+            let range = &mut column_values[cell.col_index..range_end];
+            let range_sum: f64 = range.iter().sum();
+            if required_width > range_sum && range_sum > 0.0 {
+                let scale: f64 = required_width / range_sum;
+                for value in range.iter_mut() {
+                    *value *= scale;
+                }
+            }
+        }
+    }
+}
+
+/// Word breaks tokens at ordinary whitespace, but a no-break space (U+00A0),
+/// narrow no-break space (U+202F), or figure space (U+2007) stays inside the
+/// token — "1 240,00" with an NBSP thousands separator is one token.
+fn is_token_breaking_whitespace(character: char) -> bool {
+    character.is_whitespace() && !matches!(character, '\u{00A0}' | '\u{202F}' | '\u{2007}')
+}
+
+/// The advance of the widest unbreakable token in a cell's paragraphs, in
+/// points, measured with each run's resolved family, weight, and size — bold
+/// runs use the bold face, East Asian codepoints the `w:eastAsia` face.
+///
+/// Token boundaries mirror Word's line breaking: breaking whitespace closes a
+/// token (no-break spaces do not — see [`is_token_breaking_whitespace`]), and
+/// a CJK character is ALWAYS a token of its own because Word may break
+/// between any two CJK characters — a Korean phrase's min-content is its
+/// widest single glyph, and "모델A" splits as 모/델/A. Everything else forms
+/// maximal non-CJK segments that accumulate across run boundaries (a price
+/// like "$1,240.00" split over runs is one unbreakable token).
+/// TODO(issue #624): Word also breaks after hyphens, and kinsoku forbids
+/// breaks before CJK closing punctuation / after opening punctuation; no
+/// fixture exercises either, so neither is modeled here.
+///
+/// Each contiguous same-family segment is measured with ONE
+/// `text_advance_em` call, keeping the global face-cache mutex out of the
+/// per-character path. `any_token_measured` is set when at least one call
+/// succeeded, so callers can tell a real measurement from the vacuous 0 of an
+/// empty cell.
+///
+/// Non-paragraph blocks (images, nested tables) also bound Word's
+/// min-content, but no auto-layout fixture carries them, so they contribute
+/// nothing rather than blocking measurement. Returns `None` when a run's
+/// family or size is unresolved or a glyph is missing, so the caller can
+/// degrade to a measurement-free path.
+fn max_unbreakable_token_advance_pt(
+    blocks: &[Block],
+    any_token_measured: &mut bool,
+) -> Option<f64> {
+    let mut widest_token_pt: f64 = 0.0;
+    for block in blocks {
+        let Block::Paragraph(paragraph) = block else {
+            continue;
+        };
+        let mut current_token_pt: f64 = 0.0;
+        for run in &paragraph.runs {
+            if run.text.chars().all(is_token_breaking_whitespace) {
+                if !run.text.is_empty() {
+                    widest_token_pt = widest_token_pt.max(current_token_pt);
+                    current_token_pt = 0.0;
+                }
+                continue;
+            }
+            let font_family: &str = run.style.font_family.as_deref()?;
+            let font_size: f64 = run.style.font_size?;
+            let is_bold: bool = run.style.bold == Some(true);
+
+            let text: &str = &run.text;
+            // Start of the current maximal non-CJK, non-breaking segment.
+            let mut segment_start: Option<usize> = None;
+            for (byte_index, character) in text.char_indices() {
+                if !is_token_breaking_whitespace(character)
+                    && !crate::render::typst_gen::is_cjk_like(character)
+                {
+                    segment_start.get_or_insert(byte_index);
+                    continue;
+                }
+                if let Some(start) = segment_start.take() {
+                    current_token_pt += measured_segment_advance_pt(
+                        font_family,
+                        is_bold,
+                        font_size,
+                        &text[start..byte_index],
+                        any_token_measured,
+                    )?;
+                }
+                if is_token_breaking_whitespace(character) {
+                    widest_token_pt = widest_token_pt.max(current_token_pt);
+                    current_token_pt = 0.0;
+                    continue;
+                }
+                // A CJK character: break before and after, so it is a
+                // singleton token measured with the `w:eastAsia` face.
+                widest_token_pt = widest_token_pt.max(current_token_pt);
+                current_token_pt = 0.0;
+                let cjk_family: &str = run
+                    .style
+                    .east_asian_font_family
+                    .as_deref()
+                    .unwrap_or(font_family);
+                let character_end: usize = byte_index + character.len_utf8();
+                let singleton_pt: f64 = measured_segment_advance_pt(
+                    cjk_family,
+                    is_bold,
+                    font_size,
+                    &text[byte_index..character_end],
+                    any_token_measured,
+                )?;
+                widest_token_pt = widest_token_pt.max(singleton_pt);
+            }
+            if let Some(start) = segment_start.take() {
+                // The token stays open: it may continue into the next run.
+                current_token_pt += measured_segment_advance_pt(
+                    font_family,
+                    is_bold,
+                    font_size,
+                    &text[start..],
+                    any_token_measured,
+                )?;
+            }
+        }
+        widest_token_pt = widest_token_pt.max(current_token_pt);
+    }
+    Some(widest_token_pt)
+}
+
+/// One `text_advance_em` call for a whole token segment, converted to points.
+/// Marks `any_token_measured` on success so callers can tell a real
+/// measurement from the vacuous zero of an empty cell.
+fn measured_segment_advance_pt(
+    family: &str,
+    is_bold: bool,
+    font_size_pt: f64,
+    segment: &str,
+    any_token_measured: &mut bool,
+) -> Option<f64> {
+    let advance_em: f64 = crate::render::pdf::text_advance_em(family, is_bold, segment)?;
+    *any_token_measured = true;
+    Some(advance_em * font_size_pt)
 }
 
 fn derive_column_widths_from_cells(raw_rows: &[RawRow]) -> Option<Vec<f64>> {

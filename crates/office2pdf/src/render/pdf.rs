@@ -530,6 +530,93 @@ pub(crate) fn max_digit_advance_em(_family: &str) -> Option<f64> {
     None
 }
 
+/// Total horizontal advance of `text`, in em units, on the face `family`
+/// resolves to at the requested weight.
+///
+/// Word's auto table layout never compresses a column below its min-content
+/// width — the advance of its widest unbreakable token — so the DOCX parser
+/// needs advances from the same faces the renderer will draw with
+/// (issue #624). The face is resolved once per `(family, weight)` through the
+/// same alias and substitute chain rendering uses and cached; bold runs must
+/// measure against the bold face because its advances differ (Libertinus
+/// Serif's "Total" is 2.392em bold against 2.138em regular).
+///
+/// Kerning and ligatures are deliberately ignored: the per-glyph `hmtx` sum
+/// reproduced Word's invoice column widths within 0.10pt, and callers assert
+/// with tolerances, so the ≲1-2% shaping error is acceptable. Returns `None`
+/// when no face resolves or any character lacks a glyph, so the caller can
+/// degrade to a measurement-free path.
+///
+/// Accepted limitation (shared behavior with `max_digit_advance_em`, whose
+/// resolution chain is identical): resolution sees only the system fonts
+/// plus the discovered Office font dirs —
+/// `ConvertOptions::font_paths` and fonts embedded in the document itself are
+/// not consulted, because the parser has no per-conversion font context to
+/// thread through. A family only such fonts provide simply fails to resolve
+/// here and the caller degrades to its measurement-free path, so the miss is
+/// conservative rather than wrong.
+/// TODO(issue #624): thread the per-conversion font set (options.font_paths +
+/// document-embedded faces) into these measurement helpers once one exists.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn text_advance_em(family: &str, bold: bool, text: &str) -> Option<f64> {
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+    type ResolvedFaceCache = HashMap<(String, bool), Option<typst::text::Font>>;
+    static FACE_CACHE: OnceLock<Mutex<ResolvedFaceCache>> = OnceLock::new();
+
+    let cache = FACE_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    let key: (String, bool) = (family.to_lowercase(), bold);
+    let cached_font: Option<Option<typst::text::Font>> = cache
+        .lock()
+        .expect("resolved face cache mutex should not be poisoned")
+        .get(&key)
+        .cloned();
+    let font: Option<typst::text::Font> = match cached_font {
+        Some(font) => font,
+        None => {
+            // Use the same font set the compiler will use (system + discovered
+            // Office font dirs); this also primes the compile-time cache.
+            let search_context = super::font_context::resolve_font_search_context(&[]);
+            let data = get_fonts_for_extra_paths(search_context.search_paths());
+            let variant = typst::text::FontVariant {
+                weight: if bold {
+                    typst::text::FontWeight::BOLD
+                } else {
+                    typst::text::FontWeight::REGULAR
+                },
+                ..typst::text::FontVariant::default()
+            };
+            let resolved: Option<typst::text::Font> = super::font_subst::family_candidates(family)
+                .iter()
+                .find_map(|candidate| data.book.select(&candidate.to_lowercase(), variant))
+                .and_then(|index| data.fonts.get(index))
+                .and_then(|slot| slot.get());
+            cache
+                .lock()
+                .expect("resolved face cache mutex should not be poisoned")
+                .insert(key, resolved.clone());
+            resolved
+        }
+    };
+
+    let font: typst::text::Font = font?;
+    let ttf = font.ttf();
+    let upem: f64 = f64::from(ttf.units_per_em()).max(1.0);
+    let mut total_em: f64 = 0.0;
+    for character in text.chars() {
+        let glyph_advance: u16 = ttf
+            .glyph_index(character)
+            .and_then(|glyph| ttf.glyph_hor_advance(glyph))?;
+        total_em += f64::from(glyph_advance) / upem;
+    }
+    Some(total_em)
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn text_advance_em(_family: &str, _bold: bool, _text: &str) -> Option<f64> {
+    None
+}
+
 /// PowerPoint's line height factor: it gives every line 1.2 times the font
 /// size, whatever the font's own metrics say.
 ///

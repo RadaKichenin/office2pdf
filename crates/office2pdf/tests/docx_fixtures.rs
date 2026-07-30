@@ -1512,9 +1512,11 @@ fn invoice_auto_layout_table_widens_the_amount_column() {
     // Subtotal/VAT/Total rows put a 4200-twip value cell in the last column
     // and a 700-twip label spanning the first four. With no
     // `<w:tblLayout w:type="fixed"/>` Word uses auto layout and reconciles
-    // those preferences against the grid, landing near
-    // 27.9/156.9/47.6/59.0/159.8 pt. Taking `w:tblGrid` verbatim left the
-    // Amount column at 73.8 pt, less than half Word's (issue #355).
+    // those preferences against the grid, landing at
+    // 27.9/156.9/47.8/65.3/153.3 pt (trace-verified for issue #624; the
+    // 159.8pt Amount figure recorded when #355 was filed was a first-pass
+    // estimate this measurement supersedes). Taking `w:tblGrid` verbatim
+    // left the Amount column at 73.8 pt, less than half Word's (issue #355).
     let pages = flow_pages("../../golden_mocks/business/sources/docx/01_invoice_en.docx");
     let table = pages
         .iter()
@@ -1534,7 +1536,7 @@ fn invoice_auto_layout_table_widens_the_amount_column() {
     // The Amount column must be comparable to Description, not to Qty.
     assert!(
         widths[4] > 140.0,
-        "Amount should widen toward Word's 159.8pt, got {:?}",
+        "Amount should widen toward Word's 153.3pt, got {:?}",
         widths
     );
     assert!(
@@ -1547,6 +1549,32 @@ fn invoice_auto_layout_table_widens_the_amount_column() {
         "the narrow columns stay narrow, got {:?}",
         widths
     );
+
+    // Issue #624: Word distributes the conflict by compressible slack above
+    // min-content, printing 27.9/156.9/47.8/65.3/153.3 pt — the uniform scale
+    // instead flattened Description and Amount to an identical 161.32pt and
+    // starved Unit Price to 55.7pt. The slack model needs token measurement,
+    // which degrades to the equal-share result (its signature: columns 2 and
+    // 5 identical) when no face resolves for Arial or its substitutes.
+    let degraded_to_equal_share: bool = (widths[1] - widths[4]).abs() < 0.01;
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    assert!(
+        !degraded_to_equal_share,
+        "Arial resolves on this platform, so the slack model must run, got {:?}",
+        widths
+    );
+    if !degraded_to_equal_share {
+        assert!(
+            (widths[3] - 65.3).abs() < 2.0,
+            "Unit Price should hold Word's 65.3pt, got {:?}",
+            widths
+        );
+        assert!(
+            widths[4] < widths[1],
+            "Amount (Word 153.3pt) stays narrower than Description (156.9pt), got {:?}",
+            widths
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------

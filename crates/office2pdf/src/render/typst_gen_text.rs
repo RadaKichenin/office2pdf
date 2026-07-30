@@ -977,7 +977,7 @@ fn needs_no_wrap_joiner(previous: char, current: char) -> bool {
     !previous.is_whitespace() && !current.is_whitespace()
 }
 
-pub(super) fn is_cjk_like(ch: char) -> bool {
+pub(crate) fn is_cjk_like(ch: char) -> bool {
     matches!(
         ch as u32,
         0x1100..=0x11FF

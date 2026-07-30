@@ -46,6 +46,10 @@ mod tables;
 #[path = "typst_gen_text.rs"]
 mod text;
 
+// The DOCX table min-content measurement routes East Asian codepoints to the
+// run's `w:eastAsia` face the same way rendering does (issue #624).
+pub(crate) use self::text::is_cjk_like;
+
 /// An image asset to be embedded in the Typst compilation.
 #[derive(Debug, Clone)]
 pub struct ImageAsset {
