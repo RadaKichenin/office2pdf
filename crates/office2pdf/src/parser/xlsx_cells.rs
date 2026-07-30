@@ -27,16 +27,21 @@ pub(super) struct MergeInfo {
     pub(super) row_span: u32,
 }
 
-/// Default column width in Excel character units.
-pub(super) const DEFAULT_COLUMN_WIDTH: f64 = 8.43;
-const DEFAULT_MAX_DIGIT_WIDTH_PX: f64 = 7.0;
-
 /// Convert Excel column width (character units) to points.
-/// OOXML widths are expressed relative to the maximum digit width (MDW) of
-/// the worksheet's Normal font. The stored width already incorporates Excel's
-/// cell padding adjustment, so print geometry must not add another 5 pixels.
-pub(super) fn column_width_to_pt(char_width: f64, max_digit_width_px: f64) -> f64 {
-    char_width * max_digit_width_px * 0.75
+/// OOXML widths are expressed relative to the Normal font's column unit. The
+/// stored width already incorporates Excel's cell padding adjustment, so
+/// print geometry must not add padding again. Excel prints each declared
+/// column at an integer point count: probe calibri11frac (issue #621) shows
+/// width 10.6 at the 6pt Calibri-11 unit printing 64pt, not 63.6pt.
+pub(super) fn column_width_to_pt(char_width: f64, column_unit_pt: f64) -> f64 {
+    round_half_up_pt(char_width * column_unit_pt)
+}
+
+/// Round to the nearest integer point, halves upward. Excel's column metric
+/// rounds half UP, not half-even: the Times New Roman 13 probe lands exactly
+/// on 6.500pt and prints a 7pt unit (issue #621). Inputs are non-negative.
+fn round_half_up_pt(value: f64) -> f64 {
+    (value + 0.5).floor()
 }
 
 /// Read the workbook's Normal font (the first `<font>` in `xl/styles.xml`)
@@ -92,24 +97,92 @@ pub(super) struct NormalFont {
     pub(super) size_pt: f64,
 }
 
-/// Excel pixel-ceils the Normal font's max digit width at 96 DPI to derive
-/// column print metrics. Digit advances: Calibri/Carlito 0.5066 em,
-/// Arial/Helvetica/Liberation Sans 0.556 em, Malgun Gothic ≈0.529 em.
-/// Calibri 11 gives ceil(7.43) = 8 px, which reproduces the native Excel
-/// print pagination of the audit fixtures (issues #330, #366).
-pub(super) fn max_digit_width_px_for_normal_font(family: &str, size_pt: f64) -> f64 {
-    let digit_em: f64 = match family.to_ascii_lowercase().as_str() {
-        "arial" | "helvetica" | "liberation sans" => 0.556,
-        "malgun gothic" | "맑은 고딕" => 0.529,
-        _ => 0.5066,
-    };
-    (digit_em * size_pt * (96.0 / 72.0)).ceil()
+/// Max digit advance of Calibri (and metrically identical Carlito), Excel's
+/// default Normal font — the last-resort metric when a family is unknown to
+/// the reference table and no real face resolves.
+const CALIBRI_DIGIT_ADVANCE_EM: f64 = 0.506836;
+
+/// Reference maximum digit advances (em over U+0030..=U+0039) of the faces
+/// Excel itself ships, read from their `hmtx` tables by the issue #621 probe
+/// tooling. These outrank live font resolution on purpose: the converting
+/// machine may substitute a digit-incompatible face (Calibri → Liberation
+/// Sans advances 0.556em against Calibri's 0.5068), which would shift column
+/// geometry per machine, while Excel's own print metric always comes from the
+/// face Excel resolves. The table also keeps wasm and font-less environments
+/// on the exact native-Excel numbers.
+pub(super) fn reference_digit_advance_em(family: &str) -> Option<f64> {
+    match family.to_ascii_lowercase().as_str() {
+        "calibri" | "carlito" => Some(CALIBRI_DIGIT_ADVANCE_EM),
+        "arial" | "helvetica" | "liberation sans" => Some(0.556152),
+        "verdana" => Some(0.635742),
+        "courier new" => Some(0.600098),
+        "times new roman" => Some(0.500000),
+        "malgun gothic" | "맑은 고딕" => Some(0.550781),
+        _ => None,
+    }
 }
 
-/// Fallback when `xl/styles.xml` is unreadable: infer the metric from the
-/// dominant cell font. umya resolves each cell's effective style while
-/// reading, so the dominant family is a stable approximation.
-pub(super) fn sheet_max_digit_width_px(sheet: &umya_spreadsheet::Worksheet) -> f64 {
+/// Points Excel allots to one column character unit for the given Normal
+/// font: `round_half_up(max digit advance × size)` — an INTEGER point count.
+/// Measured on 17 one-factor native Excel-for-Mac probes (issue #621); the
+/// probe set discriminates this model from every integer-96dpi-pixel model
+/// (Calibri 10 → 5pt, where pixel-ceiling gave 7px = 5.25pt) and from other
+/// rounding modes (Times New Roman 13 = 6.500 → 7 kills half-even; Calibri 9
+/// and Verdana 11 kill truncation; Calibri 10 and Verdana 10 kill ceiling).
+pub(super) fn column_unit_pt(family: &str, size_pt: f64) -> f64 {
+    let digit_advance_em: f64 = reference_digit_advance_em(family)
+        .or_else(|| crate::render::pdf::max_digit_advance_em(family))
+        .unwrap_or(CALIBRI_DIGIT_ADVANCE_EM);
+    round_half_up_pt(digit_advance_em * size_pt)
+}
+
+/// Width in points of a column with no `<col>` entry.
+///
+/// With no declared `defaultColWidth` either, Excel prints
+/// `baseColWidth × unit + 5` points — not 8.43 character units — where
+/// `baseColWidth` defaults to 8 when `sheetFormatPr` omits it too. Measured
+/// by the issue #621 probes: no-baseColWidth workbooks print 45/53/61pt at
+/// unit 5/6/7, and the round-3 probes calibri11base10/calibri11base12
+/// (`<sheetFormatPr baseColWidth="10|12"/>`, no defaultColWidth, 6pt
+/// Calibri-11 unit) print 65pt and 77pt default columns — killing the
+/// ignore-baseColWidth model (53pt). When the sheet does declare
+/// `defaultColWidth`, it outranks `baseColWidth` (ECMA-376 §18.3.1.81) and
+/// is assumed to quantize like any declared width (the probes only covered
+/// the absent case; declared widths quantize this way, so the declared
+/// default is routed through the same rule).
+pub(super) fn default_column_width_pt(
+    declared_width_chars: Option<f64>,
+    base_col_width_chars: Option<u32>,
+    column_unit_pt: f64,
+) -> f64 {
+    match declared_width_chars {
+        Some(width_chars) => round_half_up_pt(width_chars * column_unit_pt),
+        None => f64::from(base_col_width_chars.unwrap_or(8)) * column_unit_pt + 5.0,
+    }
+}
+
+/// The sheet's `defaultColWidth`, only when the file actually declares one.
+/// umya reports 0.0 for an absent attribute, a width Excel never writes.
+pub(super) fn declared_default_column_width(sheet: &umya_spreadsheet::Worksheet) -> Option<f64> {
+    let width_chars: f64 = *sheet
+        .get_sheet_format_properties()
+        .get_default_column_width();
+    (width_chars > 0.0).then_some(width_chars)
+}
+
+/// The sheet's `sheetFormatPr@baseColWidth`, only when the file declares
+/// one. umya reports 0 for an absent attribute, a base width Excel never
+/// writes.
+pub(super) fn declared_base_column_width(sheet: &umya_spreadsheet::Worksheet) -> Option<u32> {
+    let base_width_chars: u32 = *sheet.get_sheet_format_properties().get_base_column_width();
+    (base_width_chars > 0).then_some(base_width_chars)
+}
+
+/// Fallback when `xl/styles.xml` is unreadable: infer the column unit from
+/// the dominant cell font. umya resolves each cell's effective style while
+/// reading, so the dominant family is a stable approximation. The Normal
+/// size is unknown too, so Excel's default of 11pt is assumed.
+pub(super) fn sheet_column_unit_pt(sheet: &umya_spreadsheet::Worksheet) -> f64 {
     let mut family_counts: HashMap<String, usize> = HashMap::new();
     for cell in sheet.get_cell_collection() {
         let Some(font) = cell.get_style().get_font() else {
@@ -123,18 +196,23 @@ pub(super) fn sheet_max_digit_width_px(sheet: &umya_spreadsheet::Worksheet) -> f
         }
     }
 
-    let dominant_family = family_counts
+    let dominant_family: Option<String> = family_counts
         .into_iter()
         .max_by(|(family_a, count_a), (family_b, count_b)| {
             count_a.cmp(count_b).then_with(|| family_b.cmp(family_a))
         })
         .map(|(family, _)| family);
 
-    match dominant_family.as_deref() {
-        // Excel's macOS print output for Carlito 11 uses an 8px MDW. This
-        // yields the fixture's native 26/20/24-char widths of 156/120/144pt.
-        Some("carlito") => 8.0,
-        _ => DEFAULT_MAX_DIGIT_WIDTH_PX,
+    match dominant_family {
+        Some(family) => column_unit_pt(&family, 11.0),
+        // No fonts at all: keep the legacy 7px × 0.75 = 5.25pt UNIT (issue
+        // #716). Only the unit survives from the old model — the widths built
+        // on it still change under #621: default columns move from 44.2575pt
+        // (8.43 × 5.25) to 8 × 5.25 + 5 = 47pt, and declared widths now
+        // quantize to integer points. Those surrounding changes are
+        // extrapolated from the probed model, not measured: the #621 probes
+        // never covered a workbook without a readable stylesheet.
+        None => 5.25,
     }
 }
 
@@ -326,7 +404,9 @@ pub(super) struct SheetContext {
     pub(super) col_end: u32,
     pub(super) num_cols: usize,
     pub(super) column_widths: Vec<f64>,
-    pub(super) max_digit_width_px: f64,
+    /// Printed width of a column with no `<col>` entry, honouring a declared
+    /// `defaultColWidth` (issue #621).
+    pub(super) default_column_width_pt: f64,
     pub(super) merge_tops: HashMap<(u32, u32), MergeInfo>,
     pub(super) merge_skips: HashSet<(u32, u32)>,
     pub(super) cond_fmt_overrides: HashMap<(u32, u32), crate::parser::cond_fmt::CondFmtOverride>,
@@ -751,20 +831,20 @@ pub(super) fn build_rows_for_range(
     rows
 }
 
-/// The pixel metric every column width is scaled by. Excel derives it from
+/// The point metric every column width is scaled by. Excel derives it from
 /// the workbook Normal font; cell fonts do not participate (issue #366).
 /// When `xl/styles.xml` was unreadable, fall back to the dominant cell font
-/// — which on a sheet with no cells lands on the legacy 7px default. Shared
-/// by populated and drawing-only sheets so both scale from the same digit
-/// metric (issue #620); drawing-only sheets still price every column at the
-/// default width because their context carries no `<cols>` overrides.
-pub(super) fn resolve_max_digit_width_px(
+/// — which on a sheet with no cells lands on the legacy 5.25pt default.
+/// Shared by populated and drawing-only sheets so both scale from the same
+/// digit metric (issue #620); drawing-only sheets still price every column at
+/// the default width because their context carries no `<cols>` overrides.
+pub(super) fn resolve_column_unit_pt(
     sheet: &umya_spreadsheet::Worksheet,
     normal_font: Option<&NormalFont>,
 ) -> f64 {
     normal_font
-        .map(|font| max_digit_width_px_for_normal_font(&font.family, font.size_pt))
-        .unwrap_or_else(|| sheet_max_digit_width_px(sheet))
+        .map(|font| column_unit_pt(&font.family, font.size_pt))
+        .unwrap_or_else(|| sheet_column_unit_pt(sheet))
 }
 
 /// Prepare the shared context for processing a sheet (dimensions, merges, styles, etc.).
@@ -798,13 +878,18 @@ pub(super) fn prepare_sheet_context(
         (1, max_col, 1, max_row)
     };
 
-    let max_digit_width_px = resolve_max_digit_width_px(sheet, normal_font);
+    let unit_pt: f64 = resolve_column_unit_pt(sheet, normal_font);
+    let default_width_pt: f64 = default_column_width_pt(
+        declared_default_column_width(sheet),
+        declared_base_column_width(sheet),
+        unit_pt,
+    );
     let column_widths: Vec<f64> = (col_start..=col_end)
         .map(|col| {
             sheet
                 .get_column_dimension_by_number(&col)
-                .map(|c| column_width_to_pt(*c.get_width(), max_digit_width_px))
-                .unwrap_or_else(|| column_width_to_pt(DEFAULT_COLUMN_WIDTH, max_digit_width_px))
+                .map(|c| column_width_to_pt(*c.get_width(), unit_pt))
+                .unwrap_or(default_width_pt)
         })
         .collect();
 
@@ -818,7 +903,7 @@ pub(super) fn prepare_sheet_context(
             col_end,
             num_cols,
             column_widths,
-            max_digit_width_px,
+            default_column_width_pt: default_width_pt,
             merge_tops,
             merge_skips,
             cond_fmt_overrides,
