@@ -751,6 +751,22 @@ pub(super) fn build_rows_for_range(
     rows
 }
 
+/// The pixel metric every column width is scaled by. Excel derives it from
+/// the workbook Normal font; cell fonts do not participate (issue #366).
+/// When `xl/styles.xml` was unreadable, fall back to the dominant cell font
+/// — which on a sheet with no cells lands on the legacy 7px default. Shared
+/// by populated and drawing-only sheets so both scale from the same digit
+/// metric (issue #620); drawing-only sheets still price every column at the
+/// default width because their context carries no `<cols>` overrides.
+pub(super) fn resolve_max_digit_width_px(
+    sheet: &umya_spreadsheet::Worksheet,
+    normal_font: Option<&NormalFont>,
+) -> f64 {
+    normal_font
+        .map(|font| max_digit_width_px_for_normal_font(&font.family, font.size_pt))
+        .unwrap_or_else(|| sheet_max_digit_width_px(sheet))
+}
+
 /// Prepare the shared context for processing a sheet (dimensions, merges, styles, etc.).
 /// Returns (SheetContext, row_start, row_end) or None if the sheet is empty.
 pub(super) fn prepare_sheet_context(
@@ -782,11 +798,7 @@ pub(super) fn prepare_sheet_context(
         (1, max_col, 1, max_row)
     };
 
-    // Excel derives every column print metric from the workbook Normal
-    // font; cell fonts do not participate (issue #366).
-    let max_digit_width_px = normal_font
-        .map(|font| max_digit_width_px_for_normal_font(&font.family, font.size_pt))
-        .unwrap_or_else(|| sheet_max_digit_width_px(sheet));
+    let max_digit_width_px = resolve_max_digit_width_px(sheet, normal_font);
     let column_widths: Vec<f64> = (col_start..=col_end)
         .map(|col| {
             sheet
