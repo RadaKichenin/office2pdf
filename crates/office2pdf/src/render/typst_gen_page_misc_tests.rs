@@ -1310,6 +1310,467 @@ fn test_flow_page_header_without_edge_distance_keeps_default_placement() {
     let output = generate_typst(&doc).unwrap();
     assert!(output.source.contains("header: ["));
     assert!(!output.source.contains("header-ascent"));
+    assert!(
+        !output.source.contains("place(top, dy:"),
+        "an unpinned header has no origin to seat a baseline against: {}",
+        output.source
+    );
+}
+
+/// The faces that carry Arial's metrics: the corpus baselines below are Arial's,
+/// and Liberation Sans and Arimo are metric-compatible clones of it. When the
+/// machine has none of them the substitute chain lands somewhere else and the
+/// absolute numbers no longer apply.
+const ARIAL_METRIC_FACES: [&str; 3] = ["Arial", "Liberation Sans", "Arimo"];
+
+/// Malgun Gothic has no metric-compatible substitute, so only the face itself
+/// can be held to the Korean corpus baselines.
+const MALGUN_METRIC_FACES: [&str; 1] = ["Malgun Gothic"];
+
+/// Build a one-section document whose header holds the given paragraphs.
+fn doc_with_header(
+    header_distance_pt: Option<f64>,
+    top_margin_pt: f64,
+    paragraphs: Vec<crate::ir::HeaderFooterParagraph>,
+) -> Document {
+    use crate::ir::HeaderFooter;
+
+    make_doc(vec![Page::Flow(FlowPage {
+        size: PageSize::default(),
+        margins: Margins {
+            top: top_margin_pt,
+            bottom: 62.35,
+            left: 70.85,
+            right: 70.85,
+        },
+        content: vec![make_paragraph("Body")],
+        header: Some(HeaderFooter {
+            distance_from_edge: header_distance_pt,
+            paragraphs,
+        }),
+        footer: None,
+        columns: None,
+        line_grid_pitch: None,
+        line_grid_snaps_lines: false,
+        page_numbering: None,
+    })])
+}
+
+/// A header paragraph holding one styled run.
+fn header_text_paragraph(text: &str, style: TextStyle) -> crate::ir::HeaderFooterParagraph {
+    use crate::ir::{HFInline, HeaderFooterParagraph};
+
+    HeaderFooterParagraph {
+        style: ParagraphStyle::default(),
+        elements: vec![HFInline::Run(Run {
+            text: text.to_string(),
+            style,
+            href: None,
+            footnote: None,
+        })],
+        border: None,
+        border_space: None,
+        frame: None,
+    }
+}
+
+fn arial(size_pt: f64) -> TextStyle {
+    TextStyle {
+        font_family: Some("Arial".to_string()),
+        font_size: Some(size_pt),
+        ..TextStyle::default()
+    }
+}
+
+/// Build a one-section document whose header holds a single run.
+fn doc_with_header_run(
+    header_distance_pt: Option<f64>,
+    top_margin_pt: f64,
+    text: &str,
+    style: TextStyle,
+) -> Document {
+    doc_with_header(
+        header_distance_pt,
+        top_margin_pt,
+        vec![header_text_paragraph(text, style)],
+    )
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+/// Compile the document and report every text run the layout engine placed on
+/// page 1, ordered down the page.
+///
+/// Placement assertions read these rather than the emitted source: `place`,
+/// `measure` and `top-edge` are all resolved by the layout engine, and the
+/// first attempt at this placement passed every source assertion while moving
+/// each wrapped line of the paragraph it touched (issue #629).
+fn placed_runs(doc: &Document) -> Vec<crate::render::pdf::PlacedTextRun> {
+    let output = generate_typst(doc).expect("document should generate");
+    let mut runs = crate::render::pdf::compiled_text_runs(&output.source, 0)
+        .unwrap_or_else(|error| panic!("compile failed: {error}\n{}", output.source));
+    runs.sort_by(|left, right| {
+        left.baseline_pt
+            .total_cmp(&right.baseline_pt)
+            .then(left.left_pt.total_cmp(&right.left_pt))
+    });
+    runs
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+/// Whether the first run carrying `needle` was shaped by one of `families`.
+///
+/// The corpus baselines are properties of a specific face, and the font chain
+/// silently substitutes: asserting them against whatever the machine happens to
+/// have installed would test the substitute, not the placement.
+fn shaped_by(doc: &Document, needle: &str, families: &[&str]) -> bool {
+    placed_runs(doc)
+        .iter()
+        .find(|run| run.text.contains(needle))
+        .is_some_and(|run| {
+            families
+                .iter()
+                .any(|family| run.family.eq_ignore_ascii_case(family))
+        })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+/// The distinct baselines, top to bottom, of the runs whose text contains
+/// `needle`. Wrapped lines of one paragraph each contribute one entry.
+fn baselines_of(doc: &Document, needle: &str) -> Vec<f64> {
+    let mut baselines: Vec<f64> = Vec::new();
+    for run in placed_runs(doc) {
+        if !run.text.contains(needle) {
+            continue;
+        }
+        if baselines
+            .last()
+            .is_none_or(|last: &f64| (run.baseline_pt - last).abs() > 0.01)
+        {
+            baselines.push(run.baseline_pt);
+        }
+    }
+    baselines
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+/// Word seats the header's first baseline one font ascent below
+/// `w:pgMar/@w:header`, not at a proportion of the top margin.
+///
+/// `05_technical_manual_en` declares `w:top="1247" w:header="708"` — 62.35pt and
+/// 35.40pt — over an 8pt Arial run, and its native export puts that baseline at
+/// 42.72pt on the 0.24pt grid Word quantises to, against `35.40 + 0.9053 x 8 =
+/// 42.64` predicted (issue #629).
+#[test]
+fn test_header_first_baseline_sits_one_font_ascent_below_the_header_distance() {
+    let ascender_em: f64 =
+        crate::render::pdf::font_hhea_ascender_em("Arial").expect("Arial metrics should resolve");
+    let doc = doc_with_header_run(Some(35.4), 62.35, "office2pdf CLI Manual v0.6", arial(8.0));
+
+    let baselines: Vec<f64> = baselines_of(&doc, "office2pdf CLI Manual");
+    assert_eq!(baselines.len(), 1, "the header is one line");
+    let expected_pt: f64 = 35.4 + ascender_em * 8.0;
+    assert!(
+        (baselines[0] - expected_pt).abs() < 0.01,
+        "header baseline {}pt should be {expected_pt}pt",
+        baselines[0]
+    );
+    assert!(
+        !shaped_by(&doc, "office2pdf CLI Manual", &ARIAL_METRIC_FACES)
+            || (baselines[0] - 42.72).abs() < 0.12,
+        "Word's own export measures 42.72pt, not {}pt",
+        baselines[0]
+    );
+
+    // Word keeps the hhea line gap above the header origin, so the header
+    // ascent is not the body line's gap-inclusive one.
+    let (body_ascent_em, _, _) = crate::render::pdf::font_line_metrics_em("Arial")
+        .expect("Arial line metrics should resolve");
+    assert!(
+        (baselines[0] - (35.4 + body_ascent_em * 8.0)).abs() > 0.2,
+        "the body line's ascent would put the header baseline at {}pt",
+        35.4 + body_ascent_em * 8.0
+    );
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+/// The same placement at a different header distance and font size: the ascent
+/// scales with the size and the origin follows `w:header`, so neither term can
+/// be a constant.
+#[test]
+fn test_header_first_baseline_scales_with_font_size_and_header_distance() {
+    let ascender_em: f64 =
+        crate::render::pdf::font_hhea_ascender_em("Arial").expect("Arial metrics should resolve");
+    let doc = doc_with_header_run(Some(56.7), 85.05, "Datasheet", arial(12.0));
+
+    let baselines: Vec<f64> = baselines_of(&doc, "Datasheet");
+    let expected_pt: f64 = 56.7 + ascender_em * 12.0;
+    assert_eq!(baselines.len(), 1, "the header is one line");
+    assert!(
+        (baselines[0] - expected_pt).abs() < 0.01,
+        "header baseline {}pt should be {expected_pt}pt",
+        baselines[0]
+    );
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+/// A header line carrying East Asian text keeps the extra ascent Word gives it:
+/// half of the 30% its line gains over the font's own (issues #518, #629).
+/// `03_meeting_minutes_ko` and `10_research_report_ko` both measure 45.60pt at
+/// the same 35.40pt distance where an 8pt Arial header measures 42.72pt.
+#[test]
+fn test_east_asian_header_baseline_keeps_the_word_line_bonus() {
+    let Some(ascender_em) = crate::render::pdf::font_hhea_ascender_em("Malgun Gothic") else {
+        return;
+    };
+    let (_, _, pitch_em) = crate::render::pdf::font_line_metrics_em("Malgun Gothic")
+        .expect("a resolved face has line metrics");
+    let doc = doc_with_header_run(
+        Some(35.4),
+        62.35,
+        "회의록 | 사내 문서",
+        TextStyle {
+            font_family: Some("Malgun Gothic".to_string()),
+            east_asian_font_family: Some("Malgun Gothic".to_string()),
+            font_size: Some(8.0),
+            ..TextStyle::default()
+        },
+    );
+
+    let baselines: Vec<f64> = baselines_of(&doc, "회의록");
+    let expected_pt: f64 = 35.4 + (ascender_em + 0.15 * pitch_em) * 8.0;
+    assert_eq!(baselines.len(), 1, "the header is one line");
+    assert!(
+        (baselines[0] - expected_pt).abs() < 0.01,
+        "East Asian header baseline {}pt should be {expected_pt}pt",
+        baselines[0]
+    );
+    assert!(
+        (baselines[0] - (35.4 + ascender_em * 8.0)).abs() > 1.0,
+        "the bonus must lift the baseline clear of the bare ascent"
+    );
+    assert!(
+        !shaped_by(&doc, "회의록", &MALGUN_METRIC_FACES) || (baselines[0] - 45.60).abs() < 0.15,
+        "Word's own export measures 45.60pt, not {}pt",
+        baselines[0]
+    );
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+/// Moving the band must not touch the story's own line advance.
+///
+/// The header ascent is a property of where the *first* line sits, not of how
+/// far apart the lines are. Declaring it as a `top-edge` on the paragraph made
+/// Typst widen every wrapped line's box and stretched an 8pt Arial header's
+/// advance from 10.93pt to 12.44pt; shifting the band leaves every box alone
+/// (issue #629).
+#[test]
+fn test_shifting_the_header_band_leaves_the_wrapped_line_advance_alone() {
+    let ascender_em: f64 =
+        crate::render::pdf::font_hhea_ascender_em("Arial").expect("Arial metrics should resolve");
+    // Every line has to carry the marker so both wrapped lines are found.
+    let wrapping: String = "office2pdf ".repeat(20);
+
+    let pinned: Vec<f64> = baselines_of(
+        &doc_with_header_run(Some(35.4), 62.35, &wrapping, arial(8.0)),
+        "office2pdf",
+    );
+    let unpinned: Vec<f64> = baselines_of(
+        &doc_with_header_run(None, 62.35, &wrapping, arial(8.0)),
+        "office2pdf",
+    );
+
+    assert_eq!(
+        pinned.len(),
+        2,
+        "the header paragraph must wrap: {pinned:?}"
+    );
+    assert_eq!(unpinned.len(), 2, "the header paragraph must wrap");
+    let pinned_advance: f64 = pinned[1] - pinned[0];
+    let unpinned_advance: f64 = unpinned[1] - unpinned[0];
+    assert!(
+        (pinned_advance - unpinned_advance).abs() < 0.001,
+        "the band shift changed the wrapped advance: {pinned_advance} vs {unpinned_advance}"
+    );
+    assert!(
+        (pinned[0] - (35.4 + ascender_em * 8.0)).abs() < 0.01,
+        "the first line still has to land on Word's baseline, not {}pt",
+        pinned[0]
+    );
+    assert!(
+        pinned[0] > unpinned[0] + 1.0,
+        "the pinned header must actually have moved"
+    );
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+/// The band is sized by the first paragraph the story *emits*, whatever it is
+/// made of.
+///
+/// A `PAGE` field carries its own run properties, so a header whose first
+/// paragraph is nothing but a page number still has an ascent to seat. Reading
+/// only text runs left the decision unconsumed and handed it to the second
+/// paragraph, which then seated the wrong line (issue #629).
+#[test]
+fn test_header_whose_first_paragraph_is_a_page_field_seats_that_line() {
+    use crate::ir::{HFInline, HeaderFooterParagraph};
+
+    let ascender_em: f64 =
+        crate::render::pdf::font_hhea_ascender_em("Arial").expect("Arial metrics should resolve");
+    let page_field = HeaderFooterParagraph {
+        style: ParagraphStyle::default(),
+        elements: vec![HFInline::PageNumber(arial(8.0))],
+        border: None,
+        border_space: None,
+        frame: None,
+    };
+    let second = header_text_paragraph("office2pdf CLI Manual v0.6", arial(8.0));
+
+    let pinned = doc_with_header(Some(35.4), 62.35, vec![page_field.clone(), second.clone()]);
+    let unpinned = doc_with_header(None, 62.35, vec![page_field, second]);
+
+    let pinned_number: Vec<f64> = baselines_of(&pinned, "1");
+    let expected_pt: f64 = 35.4 + ascender_em * 8.0;
+    assert!(
+        pinned_number
+            .first()
+            .is_some_and(|first| (first - expected_pt).abs() < 0.01),
+        "the page-number line should sit at {expected_pt}pt, not {pinned_number:?}"
+    );
+
+    // The second paragraph rides along; the gap between the two is the story's
+    // own and must survive the shift.
+    let pinned_second: f64 = baselines_of(&pinned, "office2pdf CLI Manual")[0];
+    let unpinned_number: f64 = baselines_of(&unpinned, "1")[0];
+    let unpinned_second: f64 = baselines_of(&unpinned, "office2pdf CLI Manual")[0];
+    assert!(
+        ((pinned_second - pinned_number[0]) - (unpinned_second - unpinned_number)).abs() < 0.001,
+        "the shift changed the story's paragraph advance"
+    );
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+/// The shift can never push header ink past the bottom of its band.
+///
+/// The band is a fixed `w:top - w:header` tall, so an unclamped shift walks the
+/// story into the body's first line: a two-line 12pt Malgun letterhead put its
+/// second baseline 1.995pt past the top margin. Word does not overprint there —
+/// it grows the top margin — so until that is modelled (issue #736) the shift is
+/// clamped to the slack the story leaves.
+#[test]
+fn test_header_band_shift_never_pushes_ink_past_the_band() {
+    if crate::render::pdf::font_hhea_ascender_em("Malgun Gothic").is_none() {
+        return;
+    }
+    let korean = |text: &str| {
+        header_text_paragraph(
+            text,
+            TextStyle {
+                font_family: Some("Malgun Gothic".to_string()),
+                east_asian_font_family: Some("Malgun Gothic".to_string()),
+                font_size: Some(12.0),
+                ..TextStyle::default()
+            },
+        )
+    };
+    let doc = doc_with_header(
+        Some(35.4),
+        62.35,
+        vec![
+            korean("주식회사 오피스투피디에프 기술연구소"),
+            korean("서울특별시 강남구 테헤란로 000, 00층"),
+        ],
+    );
+
+    let last_header_baseline: f64 = *baselines_of(&doc, "서울특별시")
+        .last()
+        .expect("the second header line is placed");
+    assert!(
+        last_header_baseline <= 62.35 + 0.01,
+        "header ink reached {last_header_baseline}pt, past the 62.35pt band bottom"
+    );
+    let body_baseline: f64 = baselines_of(&doc, "Body")[0];
+    assert!(
+        last_header_baseline < body_baseline,
+        "the header overprints the body's first line at {body_baseline}pt"
+    );
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+/// The footer keeps its descender anchor: `w:pgMar/@w:footer` measures to the
+/// bottom of the footer, so no ascent is involved (issue #630 tracks its own
+/// placement). Adding a shifted header must not disturb it.
+#[test]
+fn test_header_band_shift_leaves_the_footer_where_it_was() {
+    use crate::ir::{HeaderFooter, HeaderFooterParagraph};
+
+    let footer_paragraph: HeaderFooterParagraph = header_text_paragraph("- 1 -", arial(8.0));
+    let page = |header: Option<HeaderFooter>| {
+        make_doc(vec![Page::Flow(FlowPage {
+            size: PageSize::default(),
+            margins: Margins {
+                top: 62.35,
+                bottom: 62.35,
+                left: 70.85,
+                right: 70.85,
+            },
+            content: vec![make_paragraph("Body")],
+            header,
+            footer: Some(HeaderFooter {
+                distance_from_edge: Some(35.4),
+                paragraphs: vec![footer_paragraph.clone()],
+            }),
+            columns: None,
+            line_grid_pitch: None,
+            line_grid_snaps_lines: false,
+            page_numbering: None,
+        })])
+    };
+
+    let without_header = page(None);
+    let with_header = page(Some(HeaderFooter {
+        distance_from_edge: Some(35.4),
+        paragraphs: vec![header_text_paragraph("Header", arial(8.0))],
+    }));
+
+    let alone: f64 = baselines_of(&without_header, "- 1 -")[0];
+    let alongside: f64 = baselines_of(&with_header, "- 1 -")[0];
+    assert!(
+        (alone - alongside).abs() < 0.001,
+        "the header shift moved the footer from {alone}pt to {alongside}pt"
+    );
+    let output = generate_typst(&with_header).unwrap();
+    assert!(
+        output.source.contains("footer-descent: 0pt"),
+        "the footer origin must stay on the bottom margin line"
+    );
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+/// A header without `w:pgMar/@w:header` has no origin to measure an ascent
+/// from, so its line stays where the renderer seats it.
+#[test]
+fn test_unpinned_header_keeps_the_renderer_seat() {
+    let ascender_em: f64 =
+        crate::render::pdf::font_hhea_ascender_em("Arial").expect("Arial metrics should resolve");
+    let cap_height_em: f64 =
+        crate::render::pdf::font_cap_height_em("Arial").expect("Arial metrics should resolve");
+    assert!(
+        (ascender_em - cap_height_em).abs() > 0.05,
+        "the two seats must differ for this test to mean anything"
+    );
+
+    let doc = doc_with_header_run(None, 62.35, "Header", arial(8.0));
+    let output = generate_typst(&doc).expect("document should generate");
+    assert!(
+        !output.source.contains("place(top, dy:"),
+        "an unpinned header must not be shifted: {}",
+        output.source
+    );
+    let baseline: f64 = baselines_of(&doc, "Header")[0];
+    assert!(
+        baseline < 62.35,
+        "the unpinned header still sits above the top margin, not at {baseline}pt"
+    );
 }
 
 /// Word applies the containing run's properties to a `PAGE` field result, so

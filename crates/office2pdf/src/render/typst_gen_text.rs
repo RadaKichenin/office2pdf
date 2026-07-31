@@ -425,6 +425,50 @@ fn east_asian_ascent_excess_em(runs: &[Run], pitch_em: f64) -> f64 {
     }
 }
 
+/// Where Word seats a header story's first baseline, in em below the
+/// `w:pgMar/@w:header` line the header is measured from.
+///
+/// That origin is the top of the first line's *ascent*, so the term is the
+/// face's bare hhea ascender — not [`word_line_box_em`]'s top edge, which folds
+/// in the hhea line gap Word keeps above the origin — plus the upper half of
+/// the East Asian bonus when the line carries East Asian text.
+///
+/// Measured against native Word exports of the business corpus, all at
+/// `w:header="708"` = 35.40pt: an 8pt Arial header baseline lands at 42.72pt
+/// against 42.64pt predicted (`0.9053em`), and an 8pt Malgun Gothic one at
+/// 45.60pt against 45.70pt predicted (`1.2879em`), both within the 0.24pt grid
+/// those exports quantise positions to. Taking the gap-inclusive body ascent
+/// instead would predict 42.90pt for the Arial case, a whole grid step past
+/// what Word wrote (issue #629).
+fn word_header_line_ascent_em(runs: &[Run], family: &str) -> Option<f64> {
+    let ascender_em: f64 = crate::render::pdf::font_hhea_ascender_em(family)?;
+    if !has_east_asian_text(runs) {
+        return Some(ascender_em);
+    }
+    let (_, _, pitch_em) = crate::render::pdf::font_line_metrics_em(family)?;
+    Some(ascender_em + EAST_ASIAN_ASCENT_EXCESS * pitch_em)
+}
+
+/// How far a pinned header band must move so its first baseline lands where
+/// Word puts it, in points, positive downward.
+///
+/// The difference between [`word_header_line_ascent_em`] and the ascent the
+/// compiler gives the same line — its default `top-edge` is `"cap-height"` —
+/// resolved at the size that line is set in. Emitting the difference as a band
+/// offset rather than as a `top-edge` is what keeps the story's own line advance
+/// untouched: `top-edge` applies to every line of the paragraph it is set on, so
+/// declaring Word's ascent there stretched a wrapped 8pt Arial header's advance
+/// from 10.93pt to 12.44pt against Word's 9.20pt (issue #629).
+///
+/// Both terms read the same family and the same size — the largest among the
+/// runs, which is the one whose ascent wins the line in either engine.
+pub(super) fn word_header_band_shift_pt(runs: &[Run]) -> Option<f64> {
+    let family: &str = east_asian_aware_metric_family(runs)?;
+    let word_ascent_em: f64 = word_header_line_ascent_em(runs, family)?;
+    let compiler_ascent_em: f64 = crate::render::pdf::font_cap_height_em(family)?;
+    Some((word_ascent_em - compiler_ascent_em) * paragraph_font_size_pt(runs))
+}
+
 /// The line advance Word gives this paragraph before any grid is consulted:
 /// the font's hhea line, or 1.3 times it when the line carries East Asian
 /// text (issue #518).
