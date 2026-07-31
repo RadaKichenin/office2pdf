@@ -99,6 +99,9 @@ pub(super) fn extract_cell_text_style(
         all_caps: None,
         small_caps: None,
         letter_spacing: None,
+        // XLSX has no kerning concept at all, so the renderer's own default
+        // stands (issue #628).
+        pair_kerning: None,
     }
 }
 

@@ -1823,7 +1823,7 @@ fn collect_formatting_wrappers(run: &Run) -> Vec<String> {
 /// when text properties are present, or the escaped text directly (with a
 /// `#[...]` safety wrapper when needed to prevent Typst syntax ambiguity).
 fn write_run_content(out: &mut String, escaped: &str, style: &TextStyle) {
-    if has_text_properties(style) {
+    if has_text_properties(style) || needs_kerning_wrapper(style, escaped) {
         out.push_str("#text(");
         write_text_params_for_text(out, style, escaped);
         out.push_str(")[");
@@ -1909,8 +1909,14 @@ fn effective_font_weight(style: &TextStyle) -> Option<&'static str> {
     }
 }
 
+/// Emit text parameters for content the caller cannot name.
+///
+/// The text matters to two of the parameters — the font fallback list and the
+/// kerning decision — so a caller that cannot name it gets the answer that is
+/// safe for any script: the fallback list of the family alone, and kerning
+/// left on. See [`kerning_param`] for why "on" is the safe side.
 pub(super) fn write_text_params(out: &mut String, style: &TextStyle) {
-    write_text_params_for_text(out, style, "");
+    write_text_params_inner(out, style, KerningText::Unknown);
 }
 
 /// As [`write_text_params`], but told what the run holds.
@@ -1919,7 +1925,47 @@ pub(super) fn write_text_params(out: &mut String, style: &TextStyle) {
 /// for the family it names: a run can declare a face that has no glyph for its
 /// own content (issues #537, #543).
 pub(super) fn write_text_params_for_text(out: &mut String, style: &TextStyle, text: &str) {
+    write_text_params_inner(out, style, KerningText::Known(text));
+}
+
+/// As [`write_text_params`], but for a `#set text(...)` covering known runs.
+///
+/// The runs are what the rule will apply to, so their scripts decide the
+/// kerning answer the same way a single run's own text does.
+pub(super) fn write_text_params_for_runs(out: &mut String, style: &TextStyle, runs: &[Run]) {
+    let covers_rtl: bool = runs.iter().any(|run| keeps_kerning_for_shaping(&run.text));
+    write_text_params_inner(
+        out,
+        style,
+        if covers_rtl {
+            // One RTL run under the rule is enough to make the safe answer the
+            // only one the whole rule may take.
+            KerningText::Unknown
+        } else {
+            // No run is right-to-left, so the rule may state what the document
+            // asks for; the empty text is that answer, not a claim about the
+            // runs' content (the font list is chosen per run).
+            KerningText::Known("")
+        },
+    );
+}
+
+/// What the emitter knows about the text a `#text(...)` will cover.
+#[derive(Clone, Copy)]
+enum KerningText<'a> {
+    /// The exact text, so its script decides.
+    Known(&'a str),
+    /// The emission site cannot name the text — a list marker's numbering
+    /// result, a header field's page number — so the safe answer stands.
+    Unknown,
+}
+
+fn write_text_params_inner(out: &mut String, style: &TextStyle, kerning_text: KerningText<'_>) {
     let mut first = true;
+    let text: &str = match kerning_text {
+        KerningText::Known(text) => text,
+        KerningText::Unknown => "",
+    };
 
     if let Some(ref family) = style.font_family {
         let font_value = match style.east_asian_font_family {
@@ -1949,6 +1995,72 @@ pub(super) fn write_text_params_for_text(out: &mut String, style: &TextStyle, te
             &format!("tracking: {}pt", format_f64(spacing)),
         );
     }
+    if let Some(param) = kerning_param(style, kerning_text) {
+        write_param(out, &mut first, &param);
+    }
+}
+
+/// The `kerning:` parameter this text needs, or `None` when the format states
+/// no rule and the engine's own default stands.
+///
+/// The threshold is resolved here rather than in the parser because it is
+/// compared against the run's *effective* size, which only exists once the
+/// style chain has been merged.
+///
+/// Every emission carries the decision explicitly rather than leaning on an
+/// enclosing rule: the whole point of the RTL exemption below is that some
+/// text must not take the surrounding answer, and a parameter that is merely
+/// omitted takes whatever the nearest `#set text` says.
+fn kerning_param(style: &TextStyle, kerning_text: KerningText<'_>) -> Option<String> {
+    let pair_kerning: PairKerning = style.pair_kerning?;
+    let kerns: bool = pair_kerning.applies_at(style.font_size)
+        || match kerning_text {
+            KerningText::Known(text) => keeps_kerning_for_shaping(text),
+            // Unknown text may be RTL, and switching kerning off there costs
+            // glyphs; switching it on costs a fraction of a point of advance.
+            KerningText::Unknown => true,
+        };
+    Some(format!("kerning: {kerns}"))
+}
+
+/// Whether the renderer must keep the OpenType `kern` feature on for this
+/// text regardless of what the document asks for.
+///
+/// TODO(typst 0.14.2 mis-orders RTL glyph ranges without `kern`; report
+/// upstream): shaping a right-to-left segment of two or more characters with
+/// the feature disabled walks `infos` backwards from index 0 and hands the
+/// first glyph the whole segment's text range, leaving the next glyph an
+/// inverted one. A debug build trips `assert_glyph_ranges_in_order` in
+/// `typst-layout`'s `inline/shaping.rs`; a release build keeps the broken
+/// ranges, which are what krilla writes `ActualText` from, and drops glyphs
+/// from the page. Measured on Arabic and Hebrew at two characters and up; a
+/// single character, Latin, Hangul, Han, Thai and Devanagari all shape
+/// correctly, and every one of them is fine with the feature left on. Word's
+/// own kerning rule is therefore honoured everywhere except RTL, where it
+/// would cost correct text to gain at most a fraction of a point of advance.
+/// The defect is upstream's, not ours — per the reference-project rule it
+/// belongs in a typst issue with this reproduction, and the exemption here
+/// should be removed once a release carries the fix.
+fn keeps_kerning_for_shaping(text: &str) -> bool {
+    // The strong right-to-left blocks, as `xlsx_cells::strong_direction` reads
+    // them: Hebrew, Arabic and its supplements, Syriac, Thaana, and the Arabic
+    // presentation forms.
+    text.chars()
+        .any(|ch| matches!(ch as u32, 0x0590..=0x08FF | 0xFB1D..=0xFDFF | 0xFE70..=0xFEFF))
+}
+
+/// Whether a run needs a `#text(...)` of its own purely to state kerning.
+///
+/// A run that states no other text property is emitted bare, and bare text
+/// takes the engine's default — which kerns. That is the wrong answer for the
+/// body text of a document Word does not kern, so the decision is stated on
+/// the run rather than document-wide: a document-wide `kerning: false` would
+/// also reach the emission sites that cannot name their text, and RTL text
+/// under it loses glyphs (see [`keeps_kerning_for_shaping`]).
+fn needs_kerning_wrapper(style: &TextStyle, text: &str) -> bool {
+    !text.is_empty()
+        && kerning_param(style, KerningText::Known(text))
+            .is_some_and(|param| param.ends_with("false"))
 }
 
 pub(super) fn write_param(out: &mut String, first: &mut bool, param: &str) {

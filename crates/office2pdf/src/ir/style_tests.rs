@@ -76,6 +76,7 @@ fn text_style_merge_from_all_none_source_preserves_target() {
         all_caps: Some(true),
         small_caps: Some(false),
         letter_spacing: Some(1.5),
+        pair_kerning: Some(PairKerning::Never),
     };
     let original: TextStyle = target.clone();
     let source = TextStyle::default();
@@ -101,6 +102,7 @@ fn text_style_merge_from_all_some_source_overwrites_target() {
         all_caps: Some(true),
         small_caps: Some(true),
         letter_spacing: Some(1.5),
+        pair_kerning: Some(PairKerning::Never),
     };
     let source = TextStyle {
         font_family: Some("Times".to_string()),
@@ -116,6 +118,7 @@ fn text_style_merge_from_all_some_source_overwrites_target() {
         all_caps: Some(false),
         small_caps: Some(false),
         letter_spacing: Some(3.0),
+        pair_kerning: Some(PairKerning::AtOrAbovePt(16.0)),
     };
 
     target.merge_from(&source);
@@ -288,4 +291,104 @@ fn paragraph_style_merge_from_partial_overlap() {
     assert_eq!(target.space_before, Some(6.0));
     assert_eq!(target.space_after, Some(12.0));
     assert!(target.heading_level.is_none());
+}
+
+// ----- Pair kerning threshold model (issue #628) -----
+
+#[test]
+fn pair_kerning_never_is_off_at_every_size() {
+    // Word writes no `w:kern` in any of the business mocks, and writes
+    // `w:val="0"` when a user turns kerning off explicitly. Both mean the
+    // same thing: every glyph advances by its nominal width.
+    for size_pt in [8.0_f64, 10.0, 11.0, 20.0, 22.0, 72.0] {
+        assert!(
+            !PairKerning::Never.applies_at(Some(size_pt)),
+            "Never must stay off at {size_pt}pt"
+        );
+    }
+    assert!(!PairKerning::Never.applies_at(None));
+}
+
+#[test]
+fn pair_kerning_threshold_applies_from_its_own_size_up() {
+    // `w:kern w:val="28"` is 28 half-points = 14pt: Word kerns 14pt and
+    // larger, and leaves 13.5pt and smaller alone.
+    let threshold: PairKerning = PairKerning::AtOrAbovePt(14.0);
+
+    assert!(!threshold.applies_at(Some(11.0)));
+    assert!(!threshold.applies_at(Some(13.5)));
+    assert!(
+        threshold.applies_at(Some(14.0)),
+        "inclusive at the threshold"
+    );
+    assert!(threshold.applies_at(Some(20.0)));
+    assert!(threshold.applies_at(Some(22.0)));
+}
+
+#[test]
+fn pair_kerning_threshold_reads_an_unstated_size_as_body_text() {
+    // A run that states no size takes the document default, which Word ships
+    // at 10pt — below every threshold a real document states.
+    assert!(!PairKerning::AtOrAbovePt(14.0).applies_at(None));
+    // A threshold at or below that default still kerns such a run.
+    assert!(PairKerning::AtOrAbovePt(8.0).applies_at(None));
+}
+
+#[test]
+fn text_style_merge_from_lets_only_a_stated_kerning_decision_win() {
+    // Only a level that actually states `w:kern` may change the answer. The
+    // stated cases are a threshold and Word's explicit `w:val="0"`; silence
+    // is inheritance, which is what an absent element means at every level
+    // below `w:docDefaults` (issue #628 review, defect 3).
+    let mut target = TextStyle {
+        pair_kerning: Some(PairKerning::AtOrAbovePt(16.0)),
+        ..TextStyle::default()
+    };
+
+    target.merge_from(&TextStyle::default());
+    assert_eq!(
+        target.pair_kerning,
+        Some(PairKerning::AtOrAbovePt(16.0)),
+        "an unstated run property leaves the inherited threshold in place"
+    );
+
+    target.merge_from(&TextStyle {
+        pair_kerning: Some(PairKerning::Never),
+        ..TextStyle::default()
+    });
+    assert_eq!(
+        target.pair_kerning,
+        Some(PairKerning::Never),
+        "an explicit w:val=\"0\" does turn the inherited threshold off"
+    );
+}
+
+#[test]
+fn text_style_silent_run_keeps_its_styles_kerning_threshold() {
+    // Word's Title style states a 14pt threshold and a 28pt size; a run that
+    // restates only the size must still be kerned.
+    let mut resolved = TextStyle {
+        font_size: Some(28.0),
+        pair_kerning: Some(PairKerning::AtOrAbovePt(14.0)),
+        ..TextStyle::default()
+    };
+    resolved.merge_from(&TextStyle {
+        font_size: Some(28.0),
+        bold: Some(true),
+        ..TextStyle::default()
+    });
+
+    assert_eq!(resolved.pair_kerning, Some(PairKerning::AtOrAbovePt(14.0)));
+    assert!(
+        resolved
+            .pair_kerning
+            .expect("stated")
+            .applies_at(resolved.font_size),
+        "a 28pt run above a 14pt threshold keeps kerning"
+    );
+}
+
+#[test]
+fn text_style_default_states_no_pair_kerning() {
+    assert!(TextStyle::default().pair_kerning.is_none());
 }

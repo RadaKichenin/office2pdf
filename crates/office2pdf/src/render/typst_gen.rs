@@ -11,11 +11,11 @@ use crate::ir::{
     FixedElement, FixedElementKind, FixedPage, FloatingImage, FloatingShape, FloatingTextBox,
     FlowPage, FrameAnchor, GradientFill, HFInline, HeaderFooter, HeaderFooterFrame, ImageCrop,
     ImageData, ImageFormat, ImageParagraphSpacing, Insets, LegendPosition, LineBox, LineSpacing,
-    List, ListKind, Margins, MathEquation, Metadata, Page, PageNumberFormat, PageSize, Paragraph,
-    ParagraphStyle, PositionedTabAlignment, PositionedTabRelativeTo, Run, Shadow, Shape, ShapeKind,
-    SheetPage, SmartArt, TabAlignment, TabLeader, TabStop, Table, TableCell, TableOfContents,
-    TableRow, TextBoxData, TextBoxVerticalAlign, TextDirection, TextStyle, VerticalTextAlign,
-    WrapMode,
+    List, ListKind, Margins, MathEquation, Metadata, Page, PageNumberFormat, PageSize, PairKerning,
+    Paragraph, ParagraphStyle, PositionedTabAlignment, PositionedTabRelativeTo, Run, Shadow, Shape,
+    ShapeKind, SheetPage, SmartArt, TabAlignment, TabLeader, TabStop, Table, TableCell,
+    TableOfContents, TableRow, TextBoxData, TextBoxVerticalAlign, TextDirection, TextStyle,
+    VerticalTextAlign, WrapMode,
 };
 
 use self::diagrams::{generate_chart, generate_chart_in, generate_smartart};
@@ -1689,6 +1689,10 @@ fn write_hf_border_line(out: &mut String, border: &BorderSide, is_primary_double
 }
 
 /// Emit a header/footer field result under its run's text properties.
+///
+/// The field's text is computed by the engine — a page number in whatever
+/// numbering format the section states — so the emitter cannot name it and
+/// `write_text_params` takes the script-safe kerning answer (issue #628).
 fn write_hf_field(out: &mut String, style: &TextStyle, field: &str) {
     if has_text_properties(style) {
         out.push_str("#text(");

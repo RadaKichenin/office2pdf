@@ -1114,3 +1114,243 @@ fn test_seq_captions_become_caption_blocks_a_list_can_collect() {
         "the caption itself keeps its number"
     );
 }
+
+// ----- Pair kerning (issue #628) -----
+
+#[test]
+fn test_run_without_kern_element_resolves_to_never_kerned() {
+    // Word writes no `w:kern` unless the user turns kerning on, and every
+    // English business mock is written that way — so every glyph advances by
+    // its nominal width.
+    let data = build_docx_bytes(vec![
+        docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text("THE MONTHLY RENDER")),
+    ]);
+
+    let parser = DocxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    assert_eq!(
+        first_run(&doc).style.pair_kerning,
+        Some(PairKerning::Never),
+        "an absent w:kern must resolve to 'never kerned', not to 'unstated'"
+    );
+    assert_eq!(
+        doc.styles
+            .default_text
+            .as_ref()
+            .and_then(|text| text.pair_kerning),
+        Some(PairKerning::Never),
+        "the document default carries the same decision for unwrapped runs"
+    );
+}
+
+#[test]
+fn test_kern_element_parses_as_a_half_point_size_threshold() {
+    // `w:kern` is a threshold, not a switch: `w:val` is in half-points, so
+    // `32` means "kern from 16pt up".
+    let with_threshold = serde_json::json!({ "kern": 32 });
+    assert_eq!(
+        extract_pair_kerning(&with_threshold),
+        Some(PairKerning::AtOrAbovePt(16.0))
+    );
+
+    let nested = serde_json::json!({ "kern": { "val": 28 } });
+    assert_eq!(
+        extract_pair_kerning(&nested),
+        Some(PairKerning::AtOrAbovePt(14.0))
+    );
+
+    // Word records "off" as `w:val="0"`, which is not "kern from 0pt up".
+    let explicit_off = serde_json::json!({ "kern": 0 });
+    assert_eq!(
+        extract_pair_kerning(&explicit_off),
+        Some(PairKerning::Never)
+    );
+
+    // Absent properties state nothing at all: at run level that is "inherit",
+    // and only the document default may read absence as a decision.
+    let absent = serde_json::json!({ "sz": 44 });
+    assert_eq!(extract_pair_kerning(&absent), None);
+}
+
+#[test]
+fn test_doc_defaults_kern_is_read_from_the_raw_styles_part() {
+    // docx-rs has no field for `w:kern`, so waiting on its parse reports a
+    // document that asks Word to kern everything as unkerned. Word writes the
+    // "kern everything" case as a 1pt threshold (issue #628 review).
+    let rules = PairKerningRules::from_styles_xml(Some(
+        r#"<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+             <w:docDefaults><w:rPrDefault><w:rPr>
+               <w:kern w:val="2"/><w:sz w:val="22"/>
+             </w:rPr></w:rPrDefault></w:docDefaults>
+           </w:styles>"#,
+    ));
+
+    assert_eq!(rules.document_default(), PairKerning::AtOrAbovePt(1.0));
+}
+
+#[test]
+fn test_absent_doc_defaults_kern_is_a_decision_not_an_inheritance() {
+    let rules = PairKerningRules::from_styles_xml(Some(
+        r#"<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+             <w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="22"/></w:rPr></w:rPrDefault></w:docDefaults>
+           </w:styles>"#,
+    ));
+
+    assert_eq!(rules.document_default(), PairKerning::Never);
+    assert_eq!(
+        PairKerningRules::from_styles_xml(None).document_default(),
+        PairKerning::Never
+    );
+}
+
+#[test]
+fn test_named_style_kern_is_read_and_scoped_to_that_style() {
+    // Word's Title style states its own threshold — 28 half-points, so a 28pt
+    // title kerns while the 11pt body under the same document default does
+    // not (issue #628 review).
+    let rules = PairKerningRules::from_styles_xml(Some(
+        r#"<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+             <w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="22"/></w:rPr></w:rPrDefault></w:docDefaults>
+             <w:style w:type="paragraph" w:styleId="Title">
+               <w:name w:val="Title"/>
+               <w:pPr><w:spacing w:after="80"/></w:pPr>
+               <w:rPr><w:kern w:val="28"/><w:sz w:val="56"/></w:rPr>
+             </w:style>
+             <w:style w:type="paragraph" w:styleId="Normal"><w:name w:val="Normal"/></w:style>
+           </w:styles>"#,
+    ));
+
+    assert_eq!(
+        rules.for_style("Title"),
+        Some(PairKerning::AtOrAbovePt(14.0))
+    );
+    assert_eq!(
+        rules.for_style("Normal"),
+        None,
+        "a style that states nothing inherits rather than deciding"
+    );
+    assert_eq!(rules.for_style("NoSuchStyle"), None);
+}
+
+#[test]
+fn test_word_document_stating_doc_defaults_kern_keeps_kerning() {
+    // 1-page.docx is genuine Word output: `<w:kern w:val="2"/>` in
+    // `w:docDefaults` asks Word to kern from 1pt up, i.e. everything. Reading
+    // it as unkerned re-wrapped its body away from Word's line breaks.
+    let data = std::fs::read(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/docx/1-page.docx"
+    ))
+    .expect("fixture");
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let body_run = first_run(&doc);
+    assert_eq!(
+        body_run.style.pair_kerning,
+        Some(PairKerning::AtOrAbovePt(1.0)),
+        "the document default reaches the body"
+    );
+    assert!(
+        body_run
+            .style
+            .pair_kerning
+            .expect("stated")
+            .applies_at(body_run.style.font_size),
+        "11pt body text is above a 1pt threshold, so Word kerns it"
+    );
+}
+
+#[test]
+fn test_named_style_threshold_reaches_the_paragraphs_that_use_it() {
+    // The brief's Title style states 28 half-points and 56 half-points of
+    // size: the threshold has to survive the cascade for the 28pt title to
+    // keep the kerning Word gives it.
+    let styles_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="22"/></w:rPr></w:rPrDefault></w:docDefaults>
+  <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>
+  <w:style w:type="paragraph" w:styleId="Title">
+    <w:name w:val="Title"/>
+    <w:rPr><w:kern w:val="28"/><w:sz w:val="56"/></w:rPr>
+  </w:style>
+</w:styles>"#;
+    let document_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+  <w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr><w:r><w:t>Quarterly Review</w:t></w:r></w:p>
+  <w:p><w:r><w:t>Body copy that Word leaves unkerned.</w:t></w:r></w:p>
+</w:body></w:document>"#;
+
+    let data = build_docx_with_styles_xml(document_xml, styles_xml);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let paragraphs: Vec<&Paragraph> = collect_paragraphs(&doc);
+
+    let title: &Run = &paragraphs[0].runs[0];
+    assert_eq!(title.style.font_size, Some(28.0));
+    assert_eq!(
+        title.style.pair_kerning,
+        Some(PairKerning::AtOrAbovePt(14.0)),
+        "the Title style's own threshold, not the document default"
+    );
+    assert!(
+        title
+            .style
+            .pair_kerning
+            .expect("stated")
+            .applies_at(title.style.font_size),
+        "a 28pt title is above a 14pt threshold"
+    );
+
+    let body: &Run = &paragraphs[1].runs[0];
+    assert_eq!(
+        body.style.pair_kerning,
+        Some(PairKerning::Never),
+        "a paragraph outside the Title style keeps the document default"
+    );
+}
+
+#[test]
+fn test_run_stating_no_kern_keeps_the_style_threshold() {
+    // An absent `w:kern` in a run's `w:rPr` means "inherit", not "off": the
+    // 28pt Title below states its size and nothing else, and must still be
+    // kerned by its style's 14pt threshold (issue #628 review, defect 3).
+    let styles_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="22"/></w:rPr></w:rPrDefault></w:docDefaults>
+  <w:style w:type="paragraph" w:styleId="Title">
+    <w:name w:val="Title"/>
+    <w:rPr><w:kern w:val="28"/></w:rPr>
+  </w:style>
+</w:styles>"#;
+    let document_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+  <w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr>
+    <w:r><w:rPr><w:sz w:val="56"/><w:b/></w:rPr><w:t>Quarterly Review</w:t></w:r>
+  </w:p>
+</w:body></w:document>"#;
+
+    let data = build_docx_with_styles_xml(document_xml, styles_xml);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let run = first_run(&doc);
+
+    assert_eq!(run.style.font_size, Some(28.0));
+    assert_eq!(
+        run.style.pair_kerning,
+        Some(PairKerning::AtOrAbovePt(14.0)),
+        "a silent run must not overwrite its style's threshold"
+    );
+}
+
+fn collect_paragraphs(doc: &Document) -> Vec<&Paragraph> {
+    doc.pages
+        .iter()
+        .flat_map(|page| match page {
+            Page::Flow(flow) => flow.content.iter(),
+            _ => [].iter(),
+        })
+        .filter_map(|block| match block {
+            Block::Paragraph(paragraph) => Some(paragraph),
+            _ => None,
+        })
+        .collect()
+}

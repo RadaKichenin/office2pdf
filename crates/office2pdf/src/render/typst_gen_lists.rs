@@ -123,6 +123,9 @@ fn write_ordered_list_numbering_function(
     }
     if let Some(marker_style) = marker_style.filter(|style| has_text_properties(style)) {
         out.push_str("#text(");
+        // The marker's text is `#numbering`'s result, which the engine
+        // computes from the pattern and the item's position — unnameable
+        // here, so the kerning answer stays on the safe side (issue #628).
         write_text_params(out, marker_style);
         out.push_str(")[");
     }
@@ -154,7 +157,7 @@ fn write_unordered_list_marker_content(
 ) {
     if let Some(marker_style) = marker_style.filter(|style| has_text_properties(style)) {
         out.push_str("#text(");
-        write_text_params(out, marker_style);
+        write_text_params_for_text(out, marker_style, marker_text);
         out.push_str(")[");
         out.push_str(&escape_typst(marker_text));
         out.push(']');
@@ -832,7 +835,9 @@ pub(super) fn write_common_text_settings(out: &mut String, runs: &[Run], indent:
 
     out.push_str(indent);
     out.push_str("#set text(");
-    write_text_params(out, &style);
+    // The rule covers exactly these runs, so their scripts decide its kerning
+    // the way a single run's own text decides its own (issue #628).
+    write_text_params_for_runs(out, &style, runs);
     out.push_str(")\n");
 }
 
@@ -892,6 +897,9 @@ fn intersect_text_style(left: &TextStyle, right: &TextStyle) -> TextStyle {
         color: (left.color == right.color).then_some(left.color).flatten(),
         letter_spacing: (left.letter_spacing == right.letter_spacing)
             .then_some(left.letter_spacing)
+            .flatten(),
+        pair_kerning: (left.pair_kerning == right.pair_kerning)
+            .then_some(left.pair_kerning)
             .flatten(),
         ..TextStyle::default()
     }

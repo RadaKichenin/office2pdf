@@ -1,6 +1,6 @@
 use super::{
-    Alignment, Color, HyperlinkMap, LineSpacing, ParagraphStyle, TabAlignment, TabLeader, TabStop,
-    TabStopOverride, TextStyle, VerticalTextAlign, apply_tab_stop_overrides,
+    Alignment, Color, HyperlinkMap, LineSpacing, PairKerning, ParagraphStyle, TabAlignment,
+    TabLeader, TabStop, TabStopOverride, TextStyle, VerticalTextAlign, apply_tab_stop_overrides,
 };
 use crate::ir::{BorderLineStyle, BorderSide, CellBorder, Insets, Run};
 use crate::parser::units::{half_points_to_pt, twips_to_pt};
@@ -287,6 +287,43 @@ pub(super) fn extract_run_style_from_json(rp: &serde_json::Value) -> TextStyle {
             .get("characterSpacing")
             .and_then(serde_json::Value::as_i64)
             .map(|twips| twips_to_pt(twips as f64)),
+        pair_kerning: extract_pair_kerning(rp),
+    }
+}
+
+/// Read `w:rPr/w:kern` (ECMA-376 §17.3.2.15) into the IR's kerning model.
+///
+/// The element is a *size threshold* in half-points, not a switch: Word kerns
+/// a run only once its size reaches `w:val`. `None` means the properties state
+/// nothing, which at every level below `w:docDefaults` means *inherit* — only
+/// `PairKerningRules` (in `docx_styles.rs`) turns an absent element into a
+/// decision, and only for the document default, where Word's own answer is
+/// not to kern. Leaving the OpenType feature on where Word does not kern
+/// tightened display headings by up to 2.02pt at 22pt and, because they are
+/// centred, shifted them right (issue #628).
+///
+/// docx-rs drops the element on the way in — its `RunProperty` has no field
+/// for it and its JSON never carries a `kern` key — so a real file reaches
+/// this function only through the raw reader's JSON-shaped tests. The document
+/// default and every named style are read from `word/styles.xml` directly;
+/// see `PairKerningRules` for what that covers and what it does not.
+pub(super) fn extract_pair_kerning(rp: &serde_json::Value) -> Option<PairKerning> {
+    let threshold_half_points: f64 = rp.get("kern").and_then(|kern| {
+        kern.as_f64()
+            .or_else(|| kern.get("val").and_then(serde_json::Value::as_f64))
+    })?;
+    Some(pair_kerning_from_half_points(threshold_half_points))
+}
+
+/// Turn a stated `w:kern w:val` into the IR's kerning model.
+///
+/// `w:val="0"` is how Word records "kerning off" explicitly; it is a stated
+/// decision rather than "kern from 0pt up".
+pub(super) fn pair_kerning_from_half_points(half_points: f64) -> PairKerning {
+    if half_points > 0.0 {
+        PairKerning::AtOrAbovePt(half_points_to_pt(half_points))
+    } else {
+        PairKerning::Never
     }
 }
 
