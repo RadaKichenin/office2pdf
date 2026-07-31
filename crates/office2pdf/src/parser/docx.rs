@@ -10,9 +10,9 @@ const MAX_TABLE_DEPTH: usize = 64;
 use crate::ir::{
     Alignment, Block, BorderLineStyle, BorderSide, Caption, CellBorder, CellVerticalAlign, Color,
     ColumnLayout, Document, FloatingImage, FloatingTextBox, ImageData, ImageFormat,
-    ImageParagraphSpacing, Insets, LineSpacing, Page, PageNumbering, Paragraph, ParagraphStyle,
-    Run, StyleSheet, TabAlignment, TabLeader, TabStop, Table, TableCell, TableOfContents, TableRow,
-    TextDirection, TextStyle, VerticalTextAlign,
+    ImageParagraphSpacing, Insets, LineSpacing, Page, PageNumbering, PairKerning, Paragraph,
+    ParagraphStyle, Run, StyleSheet, TabAlignment, TabLeader, TabStop, Table, TableCell,
+    TableOfContents, TableRow, TextDirection, TextStyle, VerticalTextAlign,
 };
 use crate::parser::Parser;
 
@@ -41,19 +41,20 @@ use self::sections::{
     HeaderFooterAssets, SectionOverrides, build_flow_page_from_section, build_header_footer_assets,
 };
 use self::styles::{
-    DOC_DEFAULT_STYLE_ID, ResolvedStyle, StyleMap, TabStopOverride, apply_tab_stop_overrides,
-    build_style_map, get_paragraph_style_id, merge_paragraph_style, merge_text_style,
+    DOC_DEFAULT_STYLE_ID, PairKerningRules, ResolvedStyle, StyleMap, TabStopOverride,
+    apply_tab_stop_overrides, build_style_map, get_paragraph_style_id, merge_paragraph_style,
+    merge_text_style, resolve_doc_default_text_style,
 };
 use self::tables::convert_table;
 use self::text::{
     ThemeFonts, extract_doc_default_paragraph_style, extract_doc_default_text_style_with_theme,
     extract_paragraph_style, extract_run_style, extract_run_style_id, extract_run_text,
     extract_run_text_skip_layout_breaks, extract_tab_stop_overrides, insert_east_asian_auto_space,
-    is_column_break, is_page_break, parse_hex_color, parse_theme_fonts, resolve_hyperlink_url,
-    resolve_theme_font_family,
+    is_column_break, is_page_break, pair_kerning_from_half_points, parse_hex_color,
+    parse_theme_fonts, resolve_hyperlink_url, resolve_theme_font_family,
 };
 #[cfg(test)]
-use self::text::{extract_tab_stops, resolve_highlight_color};
+use self::text::{extract_pair_kerning, extract_tab_stops, resolve_highlight_color};
 
 #[path = "docx_contexts.rs"]
 mod contexts;
@@ -204,6 +205,9 @@ struct ZipPreParseAssets {
     theme_fonts: ThemeFonts,
     default_paragraph_style_id: Option<String>,
     style_paragraph_backgrounds: HashMap<String, Color>,
+    /// Read from the raw `word/styles.xml` because docx-rs has no field for
+    /// `w:kern` (issue #628).
+    pair_kerning: PairKerningRules,
 }
 
 /// Build all pre-parse contexts from the DOCX ZIP in a single pass.
@@ -271,6 +275,7 @@ fn build_zip_preparse_assets(data: &[u8]) -> ZipPreParseAssets {
                     .unwrap_or_default(),
                 default_paragraph_style_id,
                 style_paragraph_backgrounds,
+                pair_kerning: PairKerningRules::from_styles_xml(styles_xml.as_deref()),
             }
         }
         Err(_) => ZipPreParseAssets {
@@ -297,6 +302,7 @@ fn build_zip_preparse_assets(data: &[u8]) -> ZipPreParseAssets {
             theme_fonts: ThemeFonts::default(),
             default_paragraph_style_id: None,
             style_paragraph_backgrounds: HashMap::new(),
+            pair_kerning: PairKerningRules::default(),
         },
     }
 }
@@ -320,6 +326,7 @@ impl Parser for DocxParser {
             theme_fonts,
             default_paragraph_style_id,
             style_paragraph_backgrounds,
+            pair_kerning,
         } = build_zip_preparse_assets(data);
 
         let docx = docx_rs::read_docx(data).map_err(|e| {
@@ -338,6 +345,7 @@ impl Parser for DocxParser {
             &theme_fonts,
             default_paragraph_style_id.as_deref(),
             &style_paragraph_backgrounds,
+            &pair_kerning,
         );
         let mut warnings: Vec<ConvertWarning> = Vec::new();
 
@@ -448,9 +456,10 @@ impl Parser for DocxParser {
                 pages,
                 styles: StyleSheet {
                     default_tab_stop_pt,
-                    default_text: Some(extract_doc_default_text_style_with_theme(
+                    default_text: Some(resolve_doc_default_text_style(
                         &docx.styles,
                         &theme_fonts,
+                        &pair_kerning,
                     )),
                     ..StyleSheet::default()
                 },

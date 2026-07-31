@@ -135,6 +135,48 @@ pub enum VerticalTextAlign {
     Subscript,
 }
 
+/// Whether the source format asks for OpenType pair kerning, and from which
+/// size up.
+///
+/// This is not a boolean in either Office format. Word's `w:kern`
+/// (ECMA-376 §17.3.2.15) and PowerPoint's `a:rPr/@kern` both carry a *size
+/// threshold*: pair kerning is applied only to text at or above that point
+/// size. Word states it in half-points, PowerPoint in hundredths of a point;
+/// both are normalised to points here so the IR carries one unit.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PairKerning {
+    /// The application never kerns this run — its threshold is zero, which
+    /// Word writes as `w:kern w:val="0"`, or the document states no threshold
+    /// at all, which is Word's own default. Absence resolves to this only at
+    /// the `w:docDefaults` level; below it, absence is inheritance and leaves
+    /// the whole decision `None`.
+    Never,
+    /// The application kerns this run only when its size reaches this many
+    /// points.
+    AtOrAbovePt(f64),
+}
+
+/// The size a run is laid out at when it states none of its own. Word's
+/// `w:docDefaults` ships 10pt, and a threshold comparison needs *some* size to
+/// answer; a run whose size is unknown is body text, which sits below every
+/// threshold a document realistically states.
+const UNSTATED_FONT_SIZE_PT: f64 = 10.0;
+
+impl PairKerning {
+    /// Whether kerning applies to a run set at `font_size_pt`.
+    ///
+    /// The comparison is inclusive: Word kerns text *at* the threshold, so a
+    /// 14pt run under `w:kern w:val="28"` (= 14pt) is kerned.
+    pub fn applies_at(self, font_size_pt: Option<f64>) -> bool {
+        match self {
+            PairKerning::Never => false,
+            PairKerning::AtOrAbovePt(threshold_pt) => {
+                font_size_pt.unwrap_or(UNSTATED_FONT_SIZE_PT) >= threshold_pt
+            }
+        }
+    }
+}
+
 /// Character-level formatting.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct TextStyle {
@@ -160,6 +202,12 @@ pub struct TextStyle {
     pub small_caps: Option<bool>,
     /// Character spacing (letter spacing / tracking) in points.
     pub letter_spacing: Option<f64>,
+    /// Whether the source application kerns this run, and from which size up.
+    ///
+    /// `None` means the format states nothing about kerning and the renderer's
+    /// own default stands. Only the DOCX path resolves this today; PPTX and
+    /// XLSX leave it `None`, so their output is unchanged (issue #628).
+    pub pair_kerning: Option<PairKerning>,
 }
 
 impl TextStyle {
@@ -205,6 +253,9 @@ impl TextStyle {
         }
         if other.letter_spacing.is_some() {
             self.letter_spacing = other.letter_spacing;
+        }
+        if other.pair_kerning.is_some() {
+            self.pair_kerning = other.pair_kerning;
         }
     }
 }

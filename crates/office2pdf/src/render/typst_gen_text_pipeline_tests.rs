@@ -1,4 +1,5 @@
 use super::*;
+use crate::ir::PairKerning;
 
 // ── Unicode NFC normalization tests ──────────────────────────────
 
@@ -1326,5 +1327,529 @@ fn the_same_token_is_framed_when_the_column_can_hold_it() {
     assert!(
         result.contains(&format!("[{long_token}]]")),
         "a token the column can hold keeps its frame: {result}"
+    );
+}
+
+// ----- Pair kerning (issue #628) -----
+
+/// A DOCX-shaped document: `w:docDefaults` resolved to a run style, which
+/// carries the kerning decision every run inherits.
+fn make_doc_with_default_text(pages: Vec<Page>, default_text: TextStyle) -> Document {
+    Document {
+        metadata: Metadata::default(),
+        pages,
+        styles: StyleSheet {
+            default_text: Some(default_text),
+            ..StyleSheet::default()
+        },
+    }
+}
+
+fn styled_paragraph(text: &str, style: TextStyle) -> Block {
+    Block::Paragraph(Paragraph {
+        style: ParagraphStyle::default(),
+        runs: vec![Run {
+            text: text.to_string(),
+            style,
+            href: None,
+            footnote: None,
+        }],
+    })
+}
+
+#[test]
+fn test_unkerned_run_states_the_decision_on_itself_not_document_wide() {
+    // Word writes no `w:kern` in the business mocks, so it sets every glyph at
+    // its nominal advance. The decision travels on the run rather than as a
+    // document-wide `#set text(kerning: false)`: that rule would also reach
+    // the list markers and header fields whose text the emitter cannot name,
+    // and RTL text under it loses glyphs to typst 0.14.2's shaping defect
+    // (issue #628 review, defect 1).
+    let doc = make_doc_with_default_text(
+        vec![make_flow_page(vec![styled_paragraph(
+            "Body text",
+            TextStyle {
+                pair_kerning: Some(PairKerning::Never),
+                ..TextStyle::default()
+            },
+        )])],
+        TextStyle {
+            font_size: Some(11.0),
+            pair_kerning: Some(PairKerning::Never),
+            ..TextStyle::default()
+        },
+    );
+
+    let source = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        !source.contains("#set text(kerning: false)"),
+        "no document-wide kerning rule may be emitted: {source}"
+    );
+    assert!(
+        source.contains("#text(kerning: false)[Body text]"),
+        "a run with no other property still states its own kerning: {source}"
+    );
+}
+
+#[test]
+fn test_run_without_kern_element_emits_kerning_false() {
+    // The masthead of 08_newsletter_en: 22pt Arial Bold, centred, which Word
+    // does not kern. Leaving the OpenType feature on pulled `LY` in by 2.02pt.
+    let doc = make_doc(vec![make_flow_page(vec![styled_paragraph(
+        "THE MONTHLY RENDER",
+        TextStyle {
+            font_family: Some("Arial".to_string()),
+            font_size: Some(22.0),
+            bold: Some(true),
+            pair_kerning: Some(PairKerning::Never),
+            ..TextStyle::default()
+        },
+    )])]);
+
+    let source = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        source.contains("kerning: false"),
+        "an unkerned run must state it on its own #text(): {source}"
+    );
+}
+
+#[test]
+fn test_run_at_or_above_kern_threshold_keeps_kerning() {
+    // `w:kern w:val="32"` is 16pt. A 20pt title is at or above it, so Word
+    // kerns it and the generator must not switch the feature off; the 11pt
+    // body under the same threshold is below it and must be left alone.
+    let doc = make_doc_with_default_text(
+        vec![make_flow_page(vec![
+            styled_paragraph(
+                "JAMIE PARKER",
+                TextStyle {
+                    font_family: Some("Arial".to_string()),
+                    font_size: Some(20.0),
+                    bold: Some(true),
+                    pair_kerning: Some(PairKerning::AtOrAbovePt(16.0)),
+                    ..TextStyle::default()
+                },
+            ),
+            styled_paragraph(
+                "Product designer",
+                TextStyle {
+                    font_family: Some("Arial".to_string()),
+                    font_size: Some(11.0),
+                    pair_kerning: Some(PairKerning::AtOrAbovePt(16.0)),
+                    ..TextStyle::default()
+                },
+            ),
+        ])],
+        TextStyle {
+            font_size: Some(11.0),
+            pair_kerning: Some(PairKerning::AtOrAbovePt(16.0)),
+            ..TextStyle::default()
+        },
+    );
+
+    let source = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        source.contains("size: 20pt, weight: \"bold\", kerning: true"),
+        "a run at or above the threshold keeps kerning: {source}"
+    );
+    assert!(
+        source.contains("size: 11pt, kerning: false"),
+        "body text below the threshold stays unkerned: {source}"
+    );
+}
+
+#[test]
+fn test_run_below_kern_threshold_disables_kerning() {
+    let doc = make_doc(vec![make_flow_page(vec![styled_paragraph(
+        "Body copy",
+        TextStyle {
+            font_family: Some("Arial".to_string()),
+            font_size: Some(11.0),
+            pair_kerning: Some(PairKerning::AtOrAbovePt(16.0)),
+            ..TextStyle::default()
+        },
+    )])]);
+
+    let source = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        source.contains("kerning: false"),
+        "a run below the threshold must not be kerned: {source}"
+    );
+}
+
+#[test]
+fn test_format_without_kerning_model_emits_no_kerning_parameter() {
+    // PPTX and XLSX leave `pair_kerning` unset — this issue is Word's rule
+    // only, so their markup must be untouched.
+    let doc = make_doc(vec![make_flow_page(vec![styled_paragraph(
+        "Slide title",
+        TextStyle {
+            font_family: Some("Arial".to_string()),
+            font_size: Some(28.0),
+            bold: Some(true),
+            ..TextStyle::default()
+        },
+    )])]);
+
+    let source = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        !source.contains("kerning"),
+        "a format that states no kerning rule must emit none: {source}"
+    );
+}
+
+#[test]
+fn test_rtl_run_keeps_kerning_despite_the_word_rule() {
+    // typst 0.14.2 mis-orders RTL glyph ranges when the `kern` feature is
+    // off, so Word's rule is not applied to a document that shapes
+    // right-to-left — see `with_rtl_shaping_exemption`.
+    let doc = make_doc_with_default_text(
+        vec![make_flow_page(vec![styled_paragraph(
+            "مرحبا بالعالم",
+            TextStyle {
+                font_family: Some("Arial".to_string()),
+                pair_kerning: Some(PairKerning::Never),
+                ..TextStyle::default()
+            },
+        )])],
+        TextStyle {
+            font_size: Some(11.0),
+            pair_kerning: Some(PairKerning::Never),
+            ..TextStyle::default()
+        },
+    );
+
+    let source = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        source.contains("kerning: true"),
+        "an RTL run must override the document-wide kerning: false: {source}"
+    );
+}
+
+#[test]
+fn test_bare_rtl_run_is_never_left_under_a_kerning_false() {
+    // A run with no other text property is emitted bare, so nothing may switch
+    // kerning off around it: in a document Word does not kern, the Hebrew run
+    // below must still reach the engine with the feature on.
+    let doc = make_doc_with_default_text(
+        vec![make_flow_page(vec![
+            styled_paragraph(
+                "שלום עולם",
+                TextStyle {
+                    pair_kerning: Some(PairKerning::Never),
+                    ..TextStyle::default()
+                },
+            ),
+            styled_paragraph(
+                "Latin body copy",
+                TextStyle {
+                    pair_kerning: Some(PairKerning::Never),
+                    ..TextStyle::default()
+                },
+            ),
+        ])],
+        TextStyle {
+            font_size: Some(11.0),
+            pair_kerning: Some(PairKerning::Never),
+            ..TextStyle::default()
+        },
+    );
+
+    let source = generate_typst(&doc).unwrap().source;
+
+    let hebrew_line: &str = source
+        .lines()
+        .find(|line| line.contains("שלום"))
+        .expect("the Hebrew run is emitted");
+    assert!(
+        !hebrew_line.contains("kerning: false"),
+        "the RTL run must not be wrapped in kerning: false: {hebrew_line}"
+    );
+    assert!(
+        !source.contains("#set text(kerning: false)"),
+        "and nothing document-wide may switch it off either: {source}"
+    );
+    // The Latin run travels with it: bidi reordering is decided over a whole
+    // shaped paragraph, and a run's own codepoints do not bound the scope the
+    // exemption has to cover. See
+    // `test_neutral_run_beside_an_rtl_run_keeps_kerning`.
+    assert!(
+        !source.contains("kerning: false"),
+        "no run in a document carrying RTL may state kerning: false: {source}"
+    );
+}
+
+/// A paragraph whose runs are given verbatim, so a test can mix scripts inside
+/// one shaped bidi paragraph.
+fn paragraph_of_runs(style: ParagraphStyle, texts: &[(&str, TextStyle)]) -> Block {
+    Block::Paragraph(Paragraph {
+        style,
+        runs: texts
+            .iter()
+            .map(|(text, run_style)| Run {
+                text: (*text).to_string(),
+                style: run_style.clone(),
+                href: None,
+                footnote: None,
+            })
+            .collect(),
+    })
+}
+
+#[test]
+fn test_neutral_run_beside_an_rtl_run_keeps_kerning() {
+    // typst shapes a whole bidi *paragraph*, not a run: the runs around a
+    // right-to-left one are reordered with it, so a run whose own codepoints
+    // are all Latin or neutral still reaches the shaper as a right-to-left
+    // segment. Disabling `kern` there is what inverts the glyph ranges, and
+    // krilla then panics building the text group ("byte range starts at 3 but
+    // ends at 0"). The exemption therefore cannot be decided from one run's
+    // own text (issue #628 follow-up).
+    let unkerned = TextStyle {
+        font_family: Some("Arial".to_string()),
+        font_size: Some(14.0),
+        pair_kerning: Some(PairKerning::Never),
+        ..TextStyle::default()
+    };
+    let doc = make_doc_with_default_text(
+        vec![make_flow_page(vec![paragraph_of_runs(
+            ParagraphStyle::default(),
+            &[
+                ("We met a girl ", unkerned.clone()),
+                ("مرحبا", unkerned.clone()),
+                (" whose father was a diver.", unkerned.clone()),
+            ],
+        )])],
+        TextStyle {
+            font_size: Some(11.0),
+            pair_kerning: Some(PairKerning::Never),
+            ..TextStyle::default()
+        },
+    );
+
+    let source = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        !source.contains("kerning: false"),
+        "no run of a paragraph carrying RTL may state kerning: false: {source}"
+    );
+}
+
+#[test]
+fn test_rtl_paragraph_direction_keeps_kerning_on_neutral_text() {
+    // FDO76312.docx's cells: `w:bidi` makes the paragraph's base direction
+    // right-to-left, so its neutral characters — an ellipsis run, a row of
+    // full stops — take an RTL bidi level even though no strong RTL codepoint
+    // appears anywhere in the file. Two such characters in a row are enough to
+    // trip the shaping defect, so the direction has to be read as well as the
+    // text (issue #628 follow-up).
+    let unkerned = TextStyle {
+        font_family: Some("Arial".to_string()),
+        font_size: Some(14.0),
+        pair_kerning: Some(PairKerning::Never),
+        ..TextStyle::default()
+    };
+    let doc = make_doc_with_default_text(
+        vec![make_flow_page(vec![paragraph_of_runs(
+            ParagraphStyle {
+                direction: Some(TextDirection::Rtl),
+                ..ParagraphStyle::default()
+            },
+            &[("She taught .......... how to use a computer.", unkerned)],
+        )])],
+        TextStyle {
+            font_size: Some(11.0),
+            pair_kerning: Some(PairKerning::Never),
+            ..TextStyle::default()
+        },
+    );
+
+    let source = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        source.contains("dir: rtl"),
+        "the paragraph is emitted right-to-left: {source}"
+    );
+    assert!(
+        !source.contains("kerning: false"),
+        "an RTL-directed paragraph keeps kerning on its neutral text: {source}"
+    );
+}
+
+#[test]
+fn test_latin_run_is_not_exempted_from_the_word_rule() {
+    // The RTL exemption is a shaping workaround, not a licence to keep
+    // kerning: every other script must still follow Word.
+    for text in ["JAMIE PARKER", "안녕하세요 세계", "你好世界", "สวัสดีชาวโลก"]
+    {
+        let doc = make_doc(vec![make_flow_page(vec![styled_paragraph(
+            text,
+            TextStyle {
+                font_family: Some("Arial".to_string()),
+                font_size: Some(20.0),
+                pair_kerning: Some(PairKerning::Never),
+                ..TextStyle::default()
+            },
+        )])]);
+
+        let source = generate_typst(&doc).unwrap().source;
+
+        assert!(
+            source.contains("kerning: false"),
+            "{text} must follow Word's rule: {source}"
+        );
+    }
+}
+
+/// An Arabic list under a document Word does not kern.
+fn arabic_list_source(kind: crate::ir::ListKind, marker_text: Option<&str>) -> String {
+    use crate::ir::{ListItem, ListLevelStyle};
+
+    let item_style = TextStyle {
+        font_family: Some("Arial".to_string()),
+        font_size: Some(11.0),
+        pair_kerning: Some(PairKerning::Never),
+        ..TextStyle::default()
+    };
+    let mut level_styles = std::collections::BTreeMap::new();
+    if let Some(marker_text) = marker_text {
+        level_styles.insert(
+            0,
+            ListLevelStyle {
+                kind,
+                numbering_pattern: None,
+                full_numbering: false,
+                marker_text: Some(marker_text.to_string()),
+                marker_style: Some(item_style.clone()),
+            },
+        );
+    }
+    let doc = make_doc_with_default_text(
+        vec![make_flow_page(vec![Block::List(List {
+            kind,
+            items: vec![ListItem {
+                content: vec![Paragraph {
+                    style: ParagraphStyle::default(),
+                    runs: vec![Run {
+                        text: "بند أول".to_string(),
+                        style: item_style,
+                        href: None,
+                        footnote: None,
+                    }],
+                }],
+                level: 0,
+                start_at: None,
+            }],
+            level_styles,
+        })])],
+        TextStyle {
+            font_size: Some(11.0),
+            pair_kerning: Some(PairKerning::Never),
+            ..TextStyle::default()
+        },
+    );
+
+    generate_typst(&doc).unwrap().source
+}
+
+#[test]
+fn test_ordered_list_marker_takes_the_safe_kerning_answer() {
+    // The marker's text is `#numbering`'s result — the emitter cannot know
+    // which script the pattern produces, so it must not switch kerning off
+    // around it (issue #628 review, defect 1).
+    let source: String = arabic_list_source(crate::ir::ListKind::Ordered, None);
+
+    let marker: &str = source
+        .split_once("numbering: (..nums) => [")
+        .expect("an ordered list emits a numbering function")
+        .1;
+    let marker_params: &str = marker
+        .split_once("#numbering(")
+        .expect("the marker wraps a numbering call")
+        .0;
+    assert!(
+        marker_params.contains("kerning: true"),
+        "the numbering marker keeps kerning: {marker_params}"
+    );
+}
+
+#[test]
+fn test_rtl_list_marker_keeps_kerning() {
+    // A marker whose own text is right-to-left is the case that dropped
+    // glyphs: it has to be read as RTL and left kerned.
+    let source: String = arabic_list_source(crate::ir::ListKind::Unordered, Some("أولاً"));
+
+    assert!(
+        !source.contains("kerning: false"),
+        "nothing in an RTL-marked list may switch kerning off: {source}"
+    );
+    assert!(
+        source.contains("أولاً"),
+        "the marker survives into the source: {source}"
+    );
+}
+
+#[test]
+fn test_list_item_runs_keep_the_rtl_exemption() {
+    let source: String = arabic_list_source(crate::ir::ListKind::Unordered, None);
+
+    let item_line: &str = source
+        .lines()
+        .find(|line| line.contains("بند"))
+        .expect("the item text is emitted");
+    assert!(
+        item_line.contains("kerning: true"),
+        "an RTL list item keeps kerning: {item_line}"
+    );
+}
+
+#[test]
+fn test_header_field_never_states_kerning_false() {
+    // A page-number field's text is the engine's, in whatever numbering format
+    // the section states, so the emitter cannot name it and must not switch
+    // kerning off around it.
+    use crate::ir::{HFInline, HeaderFooter, HeaderFooterParagraph};
+
+    let field_style = TextStyle {
+        font_size: Some(8.0),
+        pair_kerning: Some(PairKerning::Never),
+        ..TextStyle::default()
+    };
+    let doc = make_doc(vec![Page::Flow(FlowPage {
+        size: PageSize::default(),
+        margins: Margins::default(),
+        content: vec![make_paragraph("Body")],
+        header: None,
+        footer: Some(HeaderFooter {
+            distance_from_edge: None,
+            paragraphs: vec![HeaderFooterParagraph {
+                style: ParagraphStyle::default(),
+                elements: vec![HFInline::PageNumber(field_style)],
+                border: None,
+                border_space: None,
+                frame: None,
+            }],
+        }),
+        columns: None,
+        line_grid_pitch: None,
+        line_grid_snaps_lines: false,
+        page_numbering: None,
+    })]);
+
+    let source = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        source.contains("kerning: true"),
+        "the field takes the script-safe answer: {source}"
+    );
+    assert!(
+        !source.contains("kerning: false"),
+        "and never the one that can drop glyphs: {source}"
     );
 }

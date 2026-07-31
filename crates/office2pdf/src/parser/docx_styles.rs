@@ -1,12 +1,157 @@
 use std::collections::HashMap;
 
-use crate::ir::{Color, ParagraphStyle, TabStop, TextStyle};
+use crate::ir::{Color, PairKerning, ParagraphStyle, TabStop, TextStyle};
 
 use super::{
     ThemeFonts, extract_doc_default_paragraph_style, extract_doc_default_text_style_with_theme,
     extract_paragraph_style, extract_run_style, extract_tab_stop_overrides,
-    resolve_theme_font_family,
+    pair_kerning_from_half_points, resolve_theme_font_family,
 };
+
+/// The `w:kern` thresholds a document states outside its runs, read from the
+/// raw `word/styles.xml`.
+///
+/// Read from the raw part for the reason `extract_default_tab_stop_pt` reads
+/// `w:defaultTabStop` from raw `word/settings.xml`: the pinned docx-rs fork
+/// has no field for the element, so waiting on its parse would report every
+/// document as unkerned — including the 21 tracked fixtures that do state
+/// `w:kern`, 9 of them as `<w:kern w:val="2"/>` in `w:docDefaults`, which asks
+/// Word to kern everything (issue #628 review).
+///
+/// Covers the two levels a stated threshold actually reaches text from:
+/// `w:docDefaults/w:rPrDefault/w:rPr/w:kern`, and each named style's
+/// `w:rPr/w:kern`.
+///
+/// TODO(direct run `w:kern` in `word/document.xml` is not read): docx-rs drops
+/// the element from `RunProperty`, and the only way to reattach it without
+/// re-implementing run parsing is a positional cursor over `<w:r>` elements,
+/// the shape `SmallCapsContext` uses. That cursor cannot be trusted here: the
+/// scan counts runs the conversion never consumes — `w:del` runs, which
+/// `flatten_tracked_changes` drops, and text-box runs, which convert through
+/// their own path — so a document mixing those with a direct `w:kern` would
+/// hand the threshold to the wrong run. A document whose runs state `w:kern`
+/// therefore takes its style's answer, not the run's. The only tracked fixture
+/// with direct run `w:kern` states `w:val="0"`, which is what the absent
+/// `w:docDefaults` element already resolves to, so nothing in the corpus
+/// changes. Reading it properly needs the element parsed upstream.
+#[derive(Debug, Clone)]
+pub(super) struct PairKerningRules {
+    /// `w:docDefaults/w:rPrDefault/w:rPr/w:kern`. Absence here is a decision,
+    /// not inheritance: Word ships with font kerning off, which is why the
+    /// English mocks — none of which state the element — set every glyph at
+    /// its nominal advance.
+    document_default: PairKerning,
+    /// `w:style/w:rPr/w:kern`, keyed by `w:styleId`. A style that states
+    /// nothing is absent from the map and inherits.
+    by_style_id: HashMap<String, PairKerning>,
+}
+
+impl Default for PairKerningRules {
+    fn default() -> Self {
+        Self {
+            document_default: PairKerning::Never,
+            by_style_id: HashMap::new(),
+        }
+    }
+}
+
+impl PairKerningRules {
+    pub(super) fn from_styles_xml(xml: Option<&str>) -> Self {
+        let Some(xml) = xml else {
+            return Self::default();
+        };
+        Self::scan(xml)
+    }
+
+    /// The decision every run inherits when neither its style nor its own
+    /// properties state one.
+    pub(super) fn document_default(&self) -> PairKerning {
+        self.document_default
+    }
+
+    /// What a named style states, or `None` when it states nothing and its
+    /// runs inherit the document default.
+    pub(super) fn for_style(&self, style_id: &str) -> Option<PairKerning> {
+        self.by_style_id.get(style_id).copied()
+    }
+
+    fn scan(xml: &str) -> Self {
+        use quick_xml::events::Event;
+
+        let mut rules = Self::default();
+        let mut reader = quick_xml::Reader::from_str(xml);
+        reader.config_mut().trim_text(true);
+
+        let mut in_doc_defaults: bool = false;
+        let mut in_run_property_default: bool = false;
+        // `w:pPr` never carries a `w:rPr` in a style definition (the schema
+        // gives styles `CT_PPrGeneral`, which has no run properties), but a
+        // malformed part must not be allowed to plant a threshold either.
+        let mut in_paragraph_property: bool = false;
+        let mut current_style_id: Option<String> = None;
+
+        loop {
+            match reader.read_event() {
+                Ok(Event::Start(element) | Event::Empty(element)) => {
+                    match element.local_name().as_ref() {
+                        b"docDefaults" => in_doc_defaults = true,
+                        b"rPrDefault" => in_run_property_default = true,
+                        b"pPr" => in_paragraph_property = true,
+                        b"style" => {
+                            current_style_id = element
+                                .attributes()
+                                .flatten()
+                                .find(|attribute| attribute.key.local_name().as_ref() == b"styleId")
+                                .and_then(|attribute| {
+                                    attribute
+                                        .decode_and_unescape_value(reader.decoder())
+                                        .ok()
+                                        .map(|value| value.into_owned())
+                                });
+                        }
+                        b"kern" if !in_paragraph_property => {
+                            let Some(half_points) = read_val_attribute(&element, reader.decoder())
+                            else {
+                                continue;
+                            };
+                            let kerning: PairKerning = pair_kerning_from_half_points(half_points);
+                            if in_doc_defaults && in_run_property_default {
+                                rules.document_default = kerning;
+                            } else if let Some(style_id) = current_style_id.as_ref() {
+                                rules.by_style_id.insert(style_id.clone(), kerning);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                Ok(Event::End(element)) => match element.local_name().as_ref() {
+                    b"docDefaults" => in_doc_defaults = false,
+                    b"rPrDefault" => in_run_property_default = false,
+                    b"pPr" => in_paragraph_property = false,
+                    b"style" => current_style_id = None,
+                    _ => {}
+                },
+                Ok(Event::Eof) | Err(_) => break,
+                _ => {}
+            }
+        }
+
+        rules
+    }
+}
+
+/// `w:val` of an element, as the number `w:kern` states it in: half-points.
+fn read_val_attribute(
+    element: &quick_xml::events::BytesStart<'_>,
+    decoder: quick_xml::Decoder,
+) -> Option<f64> {
+    element
+        .attributes()
+        .flatten()
+        .find(|attribute| attribute.key.local_name().as_ref() == b"val")
+        .and_then(|attribute| attribute.decode_and_unescape_value(decoder).ok())
+        .and_then(|value| value.trim().parse::<f64>().ok())
+}
 
 /// Resolved style formatting extracted from a document style definition.
 /// Contains text and paragraph formatting along with an optional heading level.
@@ -74,9 +219,10 @@ pub(super) fn build_style_map(
     theme_fonts: &ThemeFonts,
     default_paragraph_style_id: Option<&str>,
     paragraph_backgrounds: &HashMap<String, Color>,
+    pair_kerning: &PairKerningRules,
 ) -> StyleMap {
     let mut map = StyleMap::new();
-    let default_text: TextStyle = extract_doc_default_text_style_with_theme(styles, theme_fonts);
+    let default_text: TextStyle = resolve_doc_default_text_style(styles, theme_fonts, pair_kerning);
     let default_paragraph: ParagraphStyle = extract_doc_default_paragraph_style(styles);
 
     map.insert(
@@ -99,6 +245,9 @@ pub(super) fn build_style_map(
                     own_text.font_family =
                         resolve_theme_font_family(&run_property_json, theme_fonts);
                 }
+                // `None` here is "states nothing", so the merge below leaves
+                // the document default's decision standing (issue #628).
+                own_text.pair_kerning = pair_kerning.for_style(&style.style_id);
                 let text = merge_text_style(&own_text, map.get(DOC_DEFAULT_STYLE_ID));
                 // A named style states only what it changes; everything else
                 // falls through to `w:pPrDefault`, exactly as its run
@@ -133,10 +282,12 @@ pub(super) fn build_style_map(
             // overlaying a run's `rStyle` onto its paragraph style changes only
             // the properties the character style actually sets (issue #176).
             docx_rs::StyleType::Character => {
+                let mut text = extract_run_style(&style.run_property);
+                text.pair_kerning = pair_kerning.for_style(&style.style_id);
                 map.insert(
                     style.style_id.clone(),
                     ResolvedStyle {
-                        text: extract_run_style(&style.run_property),
+                        text,
                         paragraph: ParagraphStyle::default(),
                         paragraph_tab_overrides: None,
                         heading_level: None,
@@ -164,6 +315,21 @@ pub(super) fn build_style_map(
     }
 
     map
+}
+
+/// The document-wide run defaults, with the kerning threshold the raw
+/// `word/styles.xml` states folded in.
+///
+/// Kept apart from `extract_doc_default_text_style_with_theme` because that
+/// function reads docx-rs' parse, which has no `w:kern` to give.
+pub(super) fn resolve_doc_default_text_style(
+    styles: &docx_rs::Styles,
+    theme_fonts: &ThemeFonts,
+    pair_kerning: &PairKerningRules,
+) -> TextStyle {
+    let mut text: TextStyle = extract_doc_default_text_style_with_theme(styles, theme_fonts);
+    text.pair_kerning = Some(pair_kerning.document_default());
+    text
 }
 
 /// Fill a style's unstated paragraph properties from the document default.
