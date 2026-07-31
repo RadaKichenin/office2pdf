@@ -1396,6 +1396,7 @@ fn doc_with_header_run(
     )
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Compile the document and report every text run the layout engine placed on
 /// page 1, ordered down the page.
 ///
@@ -1415,6 +1416,7 @@ fn placed_runs(doc: &Document) -> Vec<crate::render::pdf::PlacedTextRun> {
     runs
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Whether the first run carrying `needle` was shaped by one of `families`.
 ///
 /// The corpus baselines are properties of a specific face, and the font chain
@@ -1431,6 +1433,7 @@ fn shaped_by(doc: &Document, needle: &str, families: &[&str]) -> bool {
         })
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// The distinct baselines, top to bottom, of the runs whose text contains
 /// `needle`. Wrapped lines of one paragraph each contribute one entry.
 fn baselines_of(doc: &Document, needle: &str) -> Vec<f64> {
@@ -1449,6 +1452,7 @@ fn baselines_of(doc: &Document, needle: &str) -> Vec<f64> {
     baselines
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Word seats the header's first baseline one font ascent below
 /// `w:pgMar/@w:header`, not at a proportion of the top margin.
 ///
@@ -1488,6 +1492,7 @@ fn test_header_first_baseline_sits_one_font_ascent_below_the_header_distance() {
     );
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// The same placement at a different header distance and font size: the ascent
 /// scales with the size and the origin follows `w:header`, so neither term can
 /// be a constant.
@@ -1507,6 +1512,7 @@ fn test_header_first_baseline_scales_with_font_size_and_header_distance() {
     );
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// A header line carrying East Asian text keeps the extra ascent Word gives it:
 /// half of the 30% its line gains over the font's own (issues #518, #629).
 /// `03_meeting_minutes_ko` and `10_research_report_ko` both measure 45.60pt at
@@ -1549,6 +1555,7 @@ fn test_east_asian_header_baseline_keeps_the_word_line_bonus() {
     );
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Moving the band must not touch the story's own line advance.
 ///
 /// The header ascent is a property of where the *first* line sits, not of how
@@ -1595,6 +1602,7 @@ fn test_shifting_the_header_band_leaves_the_wrapped_line_advance_alone() {
     );
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// The band is sized by the first paragraph the story *emits*, whatever it is
 /// made of.
 ///
@@ -1640,6 +1648,7 @@ fn test_header_whose_first_paragraph_is_a_page_field_seats_that_line() {
     );
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// The shift can never push header ink past the bottom of its band.
 ///
 /// The band is a fixed `w:top - w:header` tall, so an unclamped shift walks the
@@ -1686,6 +1695,7 @@ fn test_header_band_shift_never_pushes_ink_past_the_band() {
     );
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// The footer keeps its descender anchor: `w:pgMar/@w:footer` measures to the
 /// bottom of the footer, so no ascent is involved (issue #630 tracks its own
 /// placement). Adding a shifted header must not disturb it.
@@ -1735,6 +1745,7 @@ fn test_header_band_shift_leaves_the_footer_where_it_was() {
     );
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// A header without `w:pgMar/@w:header` has no origin to measure an ascent
 /// from, so its line stays where the renderer seats it.
 #[test]
