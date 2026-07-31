@@ -824,3 +824,154 @@ fn cjk_punctuation_is_not_a_boundary() {
         "an ideographic comma is already full-width: {text:?}"
     );
 }
+
+// ----- The auto space stops at a table cell (issue #627) -----
+
+/// The same run `build_docx_with_korean_text` produces, wrapped in `nesting`
+/// levels of single-cell table so a cell inside a cell can be exercised too.
+fn build_docx_with_korean_text_in_table_cell(text: &str, nesting: usize) -> Vec<u8> {
+    let paragraph = docx_rs::Paragraph::new().add_run(
+        docx_rs::Run::new()
+            .add_text(text)
+            .fonts(docx_rs::RunFonts::new().east_asia("Malgun Gothic"))
+            .size(21),
+    );
+    let mut table = docx_rs::Table::new(vec![docx_rs::TableRow::new(vec![
+        docx_rs::TableCell::new().add_paragraph(paragraph),
+    ])])
+    .set_grid(vec![4000]);
+    for _ in 1..nesting {
+        table = docx_rs::Table::new(vec![docx_rs::TableRow::new(vec![
+            docx_rs::TableCell::new().add_table(table),
+        ])])
+        .set_grid(vec![4000]);
+    }
+    let docx = docx_rs::Docx::new().add_table(table);
+    let mut cursor = Cursor::new(Vec::new());
+    docx.build().pack(&mut cursor).unwrap();
+    cursor.into_inner()
+}
+
+/// The run text of the first paragraph in the innermost cell, descending
+/// through however many nested tables stand in the way.
+fn innermost_cell_paragraph_text(data: &[u8]) -> String {
+    let (doc, _warnings) = DocxParser
+        .parse(data, &ConvertOptions::default())
+        .expect("document parses");
+    let flow = match &doc.pages[0] {
+        Page::Flow(flow) => flow,
+        other => panic!("Expected FlowPage, got {other:?}"),
+    };
+    fn descend(blocks: &[Block]) -> Option<String> {
+        blocks.iter().find_map(|block| match block {
+            Block::Table(table) => descend(&table.rows[0].cells[0].content),
+            Block::Paragraph(paragraph) => {
+                Some(paragraph.runs.iter().map(|run| run.text.as_str()).collect())
+            }
+            _ => None,
+        })
+    }
+    descend(&flow.content).expect("a paragraph inside the innermost cell")
+}
+
+#[test]
+fn a_table_cell_gets_no_auto_space_at_a_digit_hangul_boundary() {
+    // Word does not apply the East Asian/Latin auto space to cell text. In
+    // 10_research_report_ko's month column every digit-Hangul boundary is
+    // flush (-0.056pt) in the native export while ours opened 2.366pt, taking
+    // the cell text from Word's 48.60pt to 53.25pt (+9.6%) and rendering
+    // `2024년 1월` as `2024 년 1 월` (issue #627).
+    let text =
+        innermost_cell_paragraph_text(&build_docx_with_korean_text_in_table_cell("2024년 1월", 1));
+
+    assert_eq!(
+        text, "2024년 1월",
+        "cell text keeps the boundaries the author typed"
+    );
+}
+
+#[test]
+fn a_body_paragraph_is_left_exactly_as_it_was() {
+    // Triangulation on the other side of the new predicate: the cell rule must
+    // not reach the body flow. This pins TODAY's body emission, not Word's —
+    // the plain-body rule is unsettled and this shape is one of the cases Word
+    // renders flush (issue #732). Rewrite this expectation, do not delete the
+    // test, when that rule is settled.
+    let text = first_paragraph_text(&build_docx_with_korean_text("2024년 1월", false));
+
+    assert_eq!(
+        text,
+        format!("2024{AUTO_SPACE_MARKER}년 1{AUTO_SPACE_MARKER}월"),
+        "the cell predicate must not change body emission"
+    );
+}
+
+#[test]
+fn a_numbered_list_paragraph_keeps_the_auto_space() {
+    // The one body case the corpus GT settles: Word applies the gap in exactly
+    // the `w:pStyle="ListParagraph"` + `w:numPr` paragraphs of 02 and 03
+    // (8.41/8.40pt, matched by us today). The cell fix must not reach it.
+    let abstract_num = docx_rs::AbstractNumbering::new(0).add_level(docx_rs::Level::new(
+        0,
+        docx_rs::Start::new(1),
+        docx_rs::NumberFormat::new("decimal"),
+        docx_rs::LevelText::new("%1."),
+        docx_rs::LevelJc::new("left"),
+    ));
+    let data = build_docx_with_numbering(
+        vec![abstract_num],
+        vec![docx_rs::Numbering::new(1, 0)],
+        vec![
+            docx_rs::Paragraph::new()
+                .add_run(
+                    docx_rs::Run::new()
+                        .add_text("2024년 1월")
+                        .fonts(docx_rs::RunFonts::new().east_asia("Malgun Gothic"))
+                        .size(21),
+                )
+                .style("ListParagraph")
+                .numbering(docx_rs::NumberingId::new(1), docx_rs::IndentLevel::new(0)),
+        ],
+    );
+
+    let (doc, _warnings) = DocxParser
+        .parse(&data, &ConvertOptions::default())
+        .expect("document parses");
+    let flow = match &doc.pages[0] {
+        Page::Flow(flow) => flow,
+        other => panic!("Expected FlowPage, got {other:?}"),
+    };
+    let text: String = flow
+        .content
+        .iter()
+        .find_map(|block| match block {
+            Block::List(list) => Some(
+                list.items[0]
+                    .content
+                    .iter()
+                    .flat_map(|paragraph| paragraph.runs.iter().map(|run| run.text.as_str()))
+                    .collect::<String>(),
+            ),
+            _ => None,
+        })
+        .expect("a list block");
+
+    assert_eq!(
+        text,
+        format!("2024{AUTO_SPACE_MARKER}년 1{AUTO_SPACE_MARKER}월"),
+        "a numbered list item is body text and still widens"
+    );
+}
+
+#[test]
+fn a_cell_inside_a_cell_is_still_a_cell() {
+    // Triangulation on depth: the suppression follows the `<w:tc>` ancestry,
+    // not the outermost container, so a nested table's cells behave the same.
+    let text =
+        innermost_cell_paragraph_text(&build_docx_with_korean_text_in_table_cell("2024년 1월", 2));
+
+    assert_eq!(
+        text, "2024년 1월",
+        "a nested cell suppresses the auto space too"
+    );
+}

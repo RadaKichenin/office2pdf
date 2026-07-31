@@ -524,7 +524,15 @@ fn convert_paragraph_element(
 
     // Build the paragraph IR
     let mut blocks = Vec::new();
-    convert_paragraph_blocks(para, &mut blocks, images, hyperlinks, style_map, ctx);
+    convert_paragraph_blocks(
+        para,
+        &mut blocks,
+        images,
+        hyperlinks,
+        style_map,
+        ctx,
+        ParagraphContainer::Body,
+    );
 
     match num_info {
         Some(info) => {
@@ -704,6 +712,8 @@ fn convert_wpg_drawing_blocks(
         let mut content: Vec<Block> = Vec::new();
         for document_child in &child.content {
             match document_child {
+                // A shape's text frame is its own flow, not the cell's, even
+                // when the shape is anchored inside one.
                 docx_rs::DocumentChild::Paragraph(paragraph) => convert_paragraph_blocks(
                     paragraph,
                     &mut content,
@@ -711,6 +721,7 @@ fn convert_wpg_drawing_blocks(
                     hyperlinks,
                     style_map,
                     ctx,
+                    ParagraphContainer::Body,
                 ),
                 docx_rs::DocumentChild::Table(table) => content.push(Block::Table(convert_table(
                     table, images, hyperlinks, style_map, ctx, 0,
@@ -943,6 +954,38 @@ fn process_hyperlink_runs(
     }
 }
 
+/// Which text flow a paragraph belongs to.
+///
+/// Word's East Asian/Latin auto space is a property of the flow, not of the
+/// paragraph's own formatting: cell text never gets it while body text with
+/// identical run properties does, so the text path has to be told which one it
+/// is building (issue #627).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(super) enum ParagraphContainer {
+    /// The document body, an SDT, a WPG shape's text, or a drawing text
+    /// box's text — the paragraphs that reach `convert_paragraph_blocks`
+    /// from outside a `<w:tc>`. Headers, footers and footnote text convert
+    /// through their own paths and never reach
+    /// `insert_east_asian_auto_space` at all, so this enum does not speak
+    /// for them.
+    Body,
+    /// Inside a `<w:tc>`, at any nesting depth.
+    TableCell,
+}
+
+/// What the surrounding flow contributes to a paragraph, as opposed to the
+/// paragraph's own formatting: the direction `w:bidi` inherits onto it, the
+/// shading its style hierarchy paints behind it, and which flow it is in.
+///
+/// Resolved once per `<w:p>` because the bidi and shading cursors advance on
+/// read, then handed to every paragraph the `<w:p>` splits into.
+#[derive(Clone, Copy)]
+struct ParagraphFlow {
+    is_rtl: bool,
+    background: Option<Color>,
+    container: ParagraphContainer,
+}
+
 /// Convert a docx-rs Paragraph to IR blocks, handling page breaks and inline images.
 /// If the paragraph has `page_break_before`, a `Block::PageBreak` is emitted first.
 /// Consecutive inline images within a paragraph are kept in one wrapping flow container.
@@ -954,10 +997,14 @@ fn convert_paragraph_blocks(
     hyperlinks: &HyperlinkMap,
     style_map: &StyleMap,
     ctx: &DocxConversionContext,
+    container: ParagraphContainer,
 ) {
     // Check bidi direction for this paragraph (must be called once per XML <w:p>)
-    let is_rtl = ctx.bidi.next_is_bidi();
-    let paragraph_background = ctx.paragraph_shading.next_background();
+    let flow = ParagraphFlow {
+        is_rtl: ctx.bidi.next_is_bidi(),
+        background: ctx.paragraph_shading.next_background(),
+        container,
+    };
 
     // Emit page break before the paragraph if requested
     if para.property.page_break_before == Some(true) {
@@ -1050,8 +1097,7 @@ fn convert_paragraph_blocks(
                             out,
                             para,
                             resolved_style,
-                            is_rtl,
-                            paragraph_background,
+                            flow,
                             &mut runs,
                             caption_identifier.as_deref(),
                         );
@@ -1080,8 +1126,7 @@ fn convert_paragraph_blocks(
                             out,
                             para,
                             resolved_style,
-                            is_rtl,
-                            paragraph_background,
+                            flow,
                             &mut runs,
                             caption_identifier.as_deref(),
                         );
@@ -1163,8 +1208,7 @@ fn convert_paragraph_blocks(
             out,
             para,
             resolved_style,
-            is_rtl,
-            paragraph_background,
+            flow,
             &mut runs,
             caption_identifier.as_deref(),
         );
@@ -1240,20 +1284,19 @@ fn push_paragraph_from_runs(
     out: &mut Vec<Block>,
     para: &docx_rs::Paragraph,
     resolved_style: Option<&ResolvedStyle>,
-    is_rtl: bool,
-    background: Option<Color>,
+    flow: ParagraphFlow,
     runs: &mut Vec<Run>,
     caption_identifier: Option<&str>,
 ) {
     let mut explicit_para_style = extract_paragraph_style(&para.property);
-    explicit_para_style.background = background;
+    explicit_para_style.background = flow.background;
     let explicit_tab_overrides = extract_tab_stop_overrides(&para.property.tabs);
     let mut style = merge_paragraph_style(
         &explicit_para_style,
         explicit_tab_overrides.as_deref(),
         resolved_style,
     );
-    if is_rtl {
+    if flow.is_rtl {
         style.direction = Some(TextDirection::Rtl);
     }
     apply_word_compatible_paragraph_defaults(&mut style);
@@ -1262,8 +1305,13 @@ fn push_paragraph_from_runs(
     // left alone: Word treats the space as compressible and absorbs it into the
     // justification, which is why every boundary that lacks it in the corpus GT
     // is on a line Word is actively stretching or compressing (issue #521).
+    //
+    // Table cells are left alone as well: Word applies no auto space to cell
+    // text at all (issue #627).
     let entry_text: Option<String> = caption_identifier.map(|_| caption_entry_text(runs));
-    if !matches!(style.alignment, Some(Alignment::Justify)) {
+    if flow.container == ParagraphContainer::Body
+        && !matches!(style.alignment, Some(Alignment::Justify))
+    {
         insert_east_asian_auto_space(runs);
     }
     let paragraph = Paragraph {
