@@ -154,6 +154,7 @@ fn generate_table_inner(
             painted_borders
                 .as_deref()
                 .map(|p| &p[..heading_strip_row_count]),
+            &table.column_widths,
             num_cols,
             &mut rowspan_remaining,
             "    ",
@@ -177,6 +178,7 @@ fn generate_table_inner(
             painted_borders
                 .as_deref()
                 .map(|p| &p[lead_start..lead_start + lead_row_count]),
+            &table.column_widths,
             num_cols,
             &mut rowspan_remaining,
             "    ",
@@ -205,6 +207,7 @@ fn generate_table_inner(
             painted_borders
                 .as_deref()
                 .map(|p| &p[title_start..title_start + header_row_count]),
+            &table.column_widths,
             num_cols,
             &mut rowspan_remaining,
             "    ",
@@ -221,6 +224,7 @@ fn generate_table_inner(
         painted_borders
             .as_deref()
             .map(|p| &p[title_start + header_row_count..]),
+        &table.column_widths,
         num_cols,
         &mut rowspan_remaining,
         "  ",
@@ -238,6 +242,10 @@ fn generate_table_rows(
     out: &mut String,
     rows: &[TableRow],
     painted_borders: Option<&[Vec<Option<CellBorder>>]>,
+    // The table's declared column widths, in points, so each cell can bound
+    // how wide a framed eojeol may be (issue #626). Empty when the table
+    // declares none.
+    column_widths: &[f64],
     num_cols: usize,
     rowspan_remaining: &mut [usize],
     indent: &str,
@@ -297,6 +305,19 @@ fn generate_table_rows(
                         &mut row_frame_estimate_cache,
                     ),
                 });
+            // A cell's own text column: the columns it spans, less the inset
+            // that keeps its text off the border (issue #626).
+            let enclosing_measure_pt: Option<f64> = ctx.available_measure_pt;
+            if !column_widths.is_empty() {
+                let inset: Insets = cell_inset_with_border(cell, default_cell_padding);
+                let span_width_pt: f64 = column_widths
+                    .iter()
+                    .skip(col_pos)
+                    .take(clamped_colspan as usize)
+                    .sum();
+                ctx.available_measure_pt =
+                    Some(span_width_pt - inset.left - inset.right).filter(|measure| *measure > 0.0);
+            }
             generate_table_cell(
                 out,
                 cell,
@@ -307,6 +328,7 @@ fn generate_table_rows(
                 row.height.filter(|_| fixed_row_heights),
                 ctx,
             )?;
+            ctx.available_measure_pt = enclosing_measure_pt;
 
             if cell.row_span > 1 {
                 for rs in rowspan_remaining
@@ -1695,6 +1717,8 @@ fn generate_cell_content(
                 .is_empty()
                 .then(|| empty_cell_paragraph_metric_runs(blocks, i))
                 .flatten(),
+            breaks_hangul_at_eojeol: ctx.breaks_hangul_at_eojeol,
+            available_measure_pt: ctx.available_measure_pt,
         };
         match block {
             // A `TOC` field inside a table cell is not a shape Word produces.
@@ -1721,7 +1745,18 @@ fn generate_cell_content(
                 if can_render_fixed_text_list_inline(list) {
                     generate_fixed_text_list(out, list, true, None)?;
                 } else {
-                    generate_list(out, list, None)?;
+                    // No wrapper settings reach a cell list, so it has no
+                    // fixed text edges of its own to restore (issue #626).
+                    generate_list(
+                        out,
+                        list,
+                        None,
+                        ListEojeolWrap {
+                            breaks_hangul_at_eojeol: ctx.breaks_hangul_at_eojeol,
+                            line_box_em: None,
+                            available_measure_pt: ctx.available_measure_pt,
+                        },
+                    )?;
                 }
             }
             Block::MathEquation(math) => generate_math_equation(out, math),
@@ -1745,6 +1780,13 @@ struct CellParagraphCtx<'a> {
     /// Runs standing in for the paragraph mark's own font when the paragraph
     /// has none of its own — see [`empty_cell_paragraph_metric_runs`].
     paragraph_mark_metric_runs: Option<&'a [Run]>,
+    /// Whether the enclosing page is a Word flow page, whose Hangul lines
+    /// break only at eojeol boundaries (issue #626). False for a slide or a
+    /// sheet, which keep the engine's syllable breaking.
+    breaks_hangul_at_eojeol: bool,
+    /// The width one line of this cell has, in points: the column width less
+    /// the cell's own inset. Bounds how wide a framed eojeol may be.
+    available_measure_pt: Option<f64>,
 }
 
 /// The runs an empty `<w:p>` in a cell borrows its line box from.
@@ -1806,6 +1848,24 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
         cell.row_has_east_asian_text,
         cell.seats_text_on_descender,
     );
+    // Whichever fixed edges the block wrapper below puts in force — the
+    // computed cell line box, or the paragraph's own `LineBox` — is what a
+    // framed eojeol has to restore inside itself (issue #626). The two are
+    // mutually exclusive: `word_cell_line_box` bails on a paragraph that
+    // declares a `LineBox`.
+    let cell_line_box_em: Option<(f64, f64)> = word_cell_line_box(
+        &para.runs,
+        style,
+        cell.line_grid_pitch,
+        cell.row_has_east_asian_text,
+        cell.seats_text_on_descender,
+    )
+    .map(|line_box| (line_box.top_em, line_box.bottom_em))
+    .or_else(|| {
+        style
+            .line_box
+            .map(|line_box| (line_box.ascent_em, line_box.descent_em))
+    });
     // An empty `<w:p>` has no runs, so it resolves no line box above and would
     // otherwise emit nothing at all — zero height, where Word gives the
     // paragraph mark a full blank line (issue #625). Size that line from the
@@ -1866,6 +1926,12 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
             &para.runs,
             style.tab_stops.as_deref(),
             cell.default_tab_width_pt,
+            paragraph_eojeol_wrap(
+                cell.breaks_hangul_at_eojeol,
+                style,
+                cell_line_box_em,
+                cell.available_measure_pt,
+            ),
         ),
     }
 

@@ -21,8 +21,8 @@ use crate::ir::{
 use self::diagrams::{generate_chart, generate_chart_in, generate_smartart};
 use self::fmt::*;
 use self::lists::{
-    can_render_fixed_text_list_inline, common_text_style, generate_fixed_text_list, generate_list,
-    generate_list_with_spacing_model, write_common_text_settings,
+    ListEojeolWrap, can_render_fixed_text_list_inline, common_text_style, generate_fixed_text_list,
+    generate_list, generate_list_with_spacing_model, write_common_text_settings,
     write_fixed_text_default_par_settings,
 };
 use self::shapes::{
@@ -143,6 +143,30 @@ struct GenCtx {
     /// `w:docDefaults/w:rPrDefault` — the family and size a computed contents
     /// entry is laid out in, rather than the heading's own (issue #610).
     document_default_text: Option<crate::ir::TextStyle>,
+    /// Whether the page being generated is a Word flow page, whose ordinary
+    /// lines break Hangul only at eojeol boundaries (issue #626). Slides and
+    /// sheets keep the engine's syllable breaking, which is what PowerPoint
+    /// and Excel do.
+    ///
+    /// The flag reaches the body, the headers and footers, the tables and the
+    /// lists of a flow page. It deliberately does NOT reach a *floating* text
+    /// box: those go through [`generate_fixed_text_paragraph`], which pins
+    /// `EojeolWrap::Syllable` because that path resolves neither the frame's
+    /// fixed text edges nor the box's inner measure — see the note there.
+    ///
+    /// The flag is unconditional for a flow page: `w:wordWrap`, which is how
+    /// a document asks Word for character-level Hangul breaking, is not
+    /// parsed, so a paragraph declaring `w:val="0"` still gets the word-level
+    /// rule. That is issue #730 — it needs a `docx-rs` field before the value
+    /// can reach the IR.
+    breaks_hangul_at_eojeol: bool,
+    /// The width one line of the current container has, in points, before a
+    /// paragraph's own indents are taken off it: a flow page's text width,
+    /// narrowed to the column width inside a table cell. `None` when no
+    /// measure is known. An eojeol wider than this must not be framed — the
+    /// frame would be pushed onto a line of its own and overflow it
+    /// (issue #626).
+    available_measure_pt: Option<f64>,
 }
 
 impl GenCtx {
@@ -162,6 +186,8 @@ impl GenCtx {
             document_default_tab_stop_pt: None,
             default_tab_width_pt: DEFAULT_TAB_WIDTH_PT,
             at_document_start: true,
+            breaks_hangul_at_eojeol: false,
+            available_measure_pt: None,
         }
     }
 
@@ -396,6 +422,11 @@ fn generate_flow_page(
     if let Some(numbering) = page.page_numbering {
         ctx.page_number_format = numbering.format;
     }
+    ctx.breaks_hangul_at_eojeol = true;
+    // Word's text column: what `#set page(margin:)` below leaves between the
+    // left and right margins.
+    ctx.available_measure_pt =
+        Some(size.width - page.margins.left - page.margins.right).filter(|measure| *measure > 0.0);
     write_flow_page_setup(out, page, &size, ctx);
     out.push('\n');
     // Word restarts the counter at the section boundary; Typst counts pages
@@ -539,6 +570,8 @@ fn generate_fixed_page(
     options: &ConvertOptions,
 ) -> Result<(), ConvertError> {
     let size = resolve_page_size(&page.size, options);
+    ctx.breaks_hangul_at_eojeol = false;
+    ctx.available_measure_pt = None;
     // Slides use zero margins — all positioning is absolute
     if let Some(ref gradient) = page.background_gradient {
         let _ = write!(
@@ -580,6 +613,8 @@ fn generate_table_page(
     options: &ConvertOptions,
 ) -> Result<(), ConvertError> {
     let size = resolve_page_size(&page.size, options);
+    ctx.breaks_hangul_at_eojeol = false;
+    ctx.available_measure_pt = None;
     write_table_page_setup(out, page, &size, ctx);
     out.push('\n');
 
@@ -1872,9 +1907,14 @@ fn caption_label(identifier: &str) -> String {
 
 fn generate_block(out: &mut String, block: &Block, ctx: &mut GenCtx) -> Result<(), ConvertError> {
     match block {
-        Block::Paragraph(para) => {
-            generate_paragraph(out, para, ctx.line_grid_pitch, ctx.default_tab_width_pt)
-        }
+        Block::Paragraph(para) => generate_paragraph(
+            out,
+            para,
+            ctx.line_grid_pitch,
+            ctx.default_tab_width_pt,
+            ctx.breaks_hangul_at_eojeol,
+            ctx.available_measure_pt,
+        ),
         Block::TableOfContents(contents) => {
             generate_table_of_contents(out, contents, ctx);
             Ok(())
@@ -1891,6 +1931,8 @@ fn generate_block(out: &mut String, block: &Block, ctx: &mut GenCtx) -> Result<(
                 &caption.paragraph,
                 ctx.line_grid_pitch,
                 ctx.default_tab_width_pt,
+                ctx.breaks_hangul_at_eojeol,
+                ctx.available_measure_pt,
             )
         }
         Block::PageBreak => {
@@ -1974,7 +2016,19 @@ fn generate_block(out: &mut String, block: &Block, ctx: &mut GenCtx) -> Result<(
             });
             // `generate_list` emits the wrapper itself, so the line box and
             // the list's own `w:spacing` gaps share one block (issue #463).
-            generate_list(out, list, settings.as_deref())
+            let line_box_em: Option<(f64, f64)> = first_paragraph.and_then(|paragraph| {
+                word_line_box_em(&paragraph.runs, &paragraph.style, ctx.line_grid_pitch)
+            });
+            generate_list(
+                out,
+                list,
+                settings.as_deref(),
+                ListEojeolWrap {
+                    breaks_hangul_at_eojeol: ctx.breaks_hangul_at_eojeol,
+                    line_box_em,
+                    available_measure_pt: ctx.available_measure_pt,
+                },
+            )
         }
         Block::MathEquation(math) => {
             generate_math_equation(out, math);
@@ -2443,7 +2497,14 @@ fn generate_fixed_text_box_block(
                 .and_then(|paragraph| {
                     powerpoint_line_height_settings(&paragraph.runs, &paragraph.style)
                 });
-            generate_list_with_spacing_model(out, list, settings.as_deref(), true)
+            // A slide's own breaking; PowerPoint splits Korean mid-word.
+            generate_list_with_spacing_model(
+                out,
+                list,
+                settings.as_deref(),
+                true,
+                ListEojeolWrap::default(),
+            )
         }
         _ => generate_block(out, block, ctx),
     }
@@ -2530,6 +2591,18 @@ fn generate_fixed_text_paragraph(
             &para.runs,
             style.tab_stops.as_deref(),
             DEFAULT_TAB_WIDTH_PT,
+            // PowerPoint splits Korean mid-word, so a slide's text box already
+            // sits on the engine default.
+            //
+            // A Word *floating* text box also lands here, and Word does break
+            // its Hangul at eojeol — but this path resolves neither input a
+            // frame needs: the fixed text edges it would have to restore, and
+            // the box's inner measure that bounds how wide a framed token may
+            // be. Framing without them would shift baselines and overflow
+            // narrow boxes, so a DOCX floating text box is a known gap in
+            // #626 rather than a silently wrong emission. `GenCtx`'s
+            // `breaks_hangul_at_eojeol` documents the same exclusion.
+            EojeolWrap::Syllable,
         );
     }
     if no_wrap {

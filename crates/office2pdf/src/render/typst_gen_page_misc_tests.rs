@@ -1522,9 +1522,14 @@ fn test_caption_list_queries_the_captions_it_collects() {
     );
     // The caption's own runs still render; the auto-space marker sits between
     // its number and the Korean that follows, which is why this looks for the
-    // two halves rather than the joined string.
+    // two halves rather than the joined string. Each Korean eojeol carries the
+    // frame that keeps it whole across a line break (issue #626), so the
+    // rendered halves are matched in that form while the list entry, built
+    // from `#metadata`, keeps the plain string.
     assert!(
-        output.source.contains("그림 1") && output.source.matches("변환 파이프라인").count() >= 2,
+        output.source.contains("#box[그림] 1")
+            && output.source.contains("#box[변환] #box[파이프라인]")
+            && output.source.contains("#metadata[변환 파이프라인]"),
         "the caption still renders as itself, beside its list entry: {}",
         output.source
     );
