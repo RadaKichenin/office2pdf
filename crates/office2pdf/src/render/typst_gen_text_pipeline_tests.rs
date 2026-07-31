@@ -726,3 +726,605 @@ fn the_auto_space_scales_with_the_run_not_the_document() {
         );
     }
 }
+
+// ── Hangul eojeol line breaking (issue #626) ─────────────────────────
+
+/// The Korean sentence the issue measured, cut to the part that fits one
+/// assertion. Word breaks it only at the spaces.
+const EOJEOL_SENTENCE: &str = "본 계약은 갑과 을이";
+
+/// A Korean paragraph, optionally justified, in the given font.
+fn korean_paragraph(text: &str, alignment: Option<Alignment>, family: Option<&str>) -> Block {
+    Block::Paragraph(Paragraph {
+        style: ParagraphStyle {
+            alignment,
+            ..ParagraphStyle::default()
+        },
+        runs: vec![Run {
+            text: text.to_string(),
+            style: TextStyle {
+                font_family: family.map(str::to_string),
+                east_asian_font_family: family.map(str::to_string),
+                font_size: family.map(|_| 10.5),
+                ..TextStyle::default()
+            },
+            href: None,
+            footnote: None,
+        }],
+    })
+}
+
+#[test]
+fn a_docx_paragraph_keeps_each_hangul_eojeol_whole() {
+    let doc = make_doc(vec![make_flow_page(vec![korean_paragraph(
+        EOJEOL_SENTENCE,
+        None,
+        None,
+    )])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    // A one-syllable eojeol needs no frame — nothing can break inside it.
+    assert!(
+        result.contains("본 #box[계약은] #box[갑과] #box[을이]"),
+        "each multi-syllable eojeol should be an unbreakable inline box: {result}"
+    );
+}
+
+#[test]
+fn a_justified_docx_paragraph_keeps_syllable_breaking() {
+    let doc = make_doc(vec![make_flow_page(vec![korean_paragraph(
+        EOJEOL_SENTENCE,
+        Some(Alignment::Justify),
+        None,
+    )])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains(EOJEOL_SENTENCE),
+        "a justified line still breaks between syllables, as Word does: {result}"
+    );
+    assert!(
+        !result.contains("#box["),
+        "no eojeol frame may be emitted on a justified line: {result}"
+    );
+}
+
+#[test]
+fn a_slide_paragraph_keeps_syllable_breaking() {
+    let doc = make_doc(vec![make_fixed_page(
+        720.0,
+        540.0,
+        vec![make_text_box(10.0, 10.0, 300.0, 100.0, EOJEOL_SENTENCE)],
+    )]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains(EOJEOL_SENTENCE),
+        "PowerPoint breaks Korean mid-word, and our slide output matches it: {result}"
+    );
+    assert!(
+        !result.contains("#box["),
+        "no eojeol frame may reach a slide: {result}"
+    );
+}
+
+#[test]
+fn a_sheet_cell_keeps_syllable_breaking() {
+    let doc = make_doc(vec![make_sheet_page(
+        "Sheet1",
+        595.0,
+        842.0,
+        Margins::default(),
+        make_simple_table(vec![vec![EOJEOL_SENTENCE]]),
+    )]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains(EOJEOL_SENTENCE),
+        "a spreadsheet cell keeps Excel's own breaking: {result}"
+    );
+    assert!(
+        !result.contains("#box["),
+        "no eojeol frame may reach a sheet cell: {result}"
+    );
+}
+
+#[test]
+fn a_docx_table_cell_keeps_each_hangul_eojeol_whole() {
+    let table = Table {
+        rows: vec![TableRow {
+            cells: vec![make_text_cell(EOJEOL_SENTENCE)],
+            height: None,
+        }],
+        column_widths: vec![200.0],
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains("본 #box[계약은] #box[갑과] #box[을이]"),
+        "Word breaks a table cell's Korean at eojeol too: {result}"
+    );
+}
+
+#[test]
+fn latin_text_is_untouched() {
+    let doc = make_doc(vec![make_flow_page(vec![make_paragraph(
+        "The parties agree to cooperate",
+    )])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains("The parties agree to cooperate"),
+        "Latin already breaks at spaces and needs no frame: {result}"
+    );
+    assert!(!result.contains("#box["), "no frame for Latin: {result}");
+}
+
+#[test]
+fn only_the_tokens_carrying_hangul_are_framed() {
+    let doc = make_doc(vec![make_flow_page(vec![korean_paragraph(
+        "2026년 VAT 별도 API 연동",
+        None,
+        None,
+    )])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains("#box[2026년] VAT #box[별도] API #box[연동]"),
+        "a Latin/digit token keeps its own break opportunities: {result}"
+    );
+}
+
+/// The auto space of issue #521 marks a boundary *inside* one eojeol, so it
+/// must stay inside the frame — Typst maps every `#h()` to a space in the
+/// paragraph text, which would otherwise reopen a mid-word break opportunity.
+#[test]
+fn the_east_asian_auto_space_stays_inside_the_eojeol() {
+    // The `#box(…)` form this looks for is the frame that restores a *fixed*
+    // line box, which the paragraph only declares when its Korean face
+    // resolves. A machine without one — every CI runner here — emits the bare
+    // `#box[` instead, so the premise cannot hold.
+    if crate::render::pdf::font_line_metrics_em("Malgun Gothic").is_none() {
+        return; // no Korean face available (e.g. a runner with no CJK fonts)
+    }
+    let doc = make_doc(vec![make_flow_page(vec![korean_paragraph(
+        "2026\u{E001}년 계약",
+        None,
+        Some("Malgun Gothic"),
+    )])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    let framed: &str = result
+        .split_once("#box(")
+        .expect("an eojeol frame should be emitted")
+        .1;
+    assert!(
+        framed.contains("#h(2.625pt)"),
+        "the auto space belongs inside the frame: {result}"
+    );
+}
+
+/// A frame seats its baseline on its own bottom edge, so under the fixed text
+/// edges Word's line model needs (issues #354, #508) the framed text would sink
+/// by the descent. The frame restores both edges and shifts its baseline back.
+#[test]
+fn a_framed_eojeol_keeps_the_paragraphs_baseline() {
+    // The correction exists only under a fixed line box, and the paragraph
+    // derives that box from its Korean face's own metrics. Without one — every
+    // CI runner here — there is no box to restore and nothing to assert.
+    if crate::render::pdf::font_line_metrics_em("Malgun Gothic").is_none() {
+        return; // no Korean face available (e.g. a runner with no CJK fonts)
+    }
+    let doc = make_doc(vec![make_flow_page(vec![korean_paragraph(
+        EOJEOL_SENTENCE,
+        None,
+        Some("Malgun Gothic"),
+    )])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    let (top_em, bottom_em) =
+        emitted_line_box_em(&result).expect("a Korean paragraph declares a fixed line box");
+    let top_pt: f64 = top_em * 10.5;
+    let bottom_pt: f64 = bottom_em * 10.5;
+    let expected: String = format!(
+        "#box(baseline: {}pt)[#text(top-edge: {}pt, bottom-edge: -{}pt)[",
+        format_f64(bottom_pt),
+        format_f64(top_pt),
+        format_f64(bottom_pt)
+    );
+    assert!(
+        result.contains(&expected),
+        "the frame should restore the line box and shift the baseline back by the descent\n\
+         expected: {expected}\nin: {result}"
+    );
+    assert_eq!(
+        result.matches(&expected).count(),
+        3,
+        "every multi-syllable eojeol should carry the correction: {result}"
+    );
+}
+
+/// Triangulation: the shift is the paragraph's own descent, not a constant.
+#[test]
+fn the_frames_baseline_shift_scales_with_the_font_size() {
+    // Same premise as the test above: the shift is the fixed line box's own
+    // descent, and that box needs the Korean face's measured metrics.
+    if crate::render::pdf::font_line_metrics_em("Malgun Gothic").is_none() {
+        return; // no Korean face available (e.g. a runner with no CJK fonts)
+    }
+    let mut shifts: Vec<String> = Vec::new();
+    for size in [10.5_f64, 20.0_f64] {
+        let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: EOJEOL_SENTENCE.to_string(),
+                style: TextStyle {
+                    font_family: Some("Malgun Gothic".to_string()),
+                    east_asian_font_family: Some("Malgun Gothic".to_string()),
+                    font_size: Some(size),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })])]);
+        let result = generate_typst(&doc).unwrap().source;
+        let (_top_em, bottom_em) = emitted_line_box_em(&result).expect("fixed line box");
+        let expected: String = format!("#box(baseline: {}pt)", format_f64(bottom_em * size));
+        assert!(
+            result.contains(&expected),
+            "a {size}pt paragraph should shift by {expected}: {result}"
+        );
+        shifts.push(expected);
+    }
+    assert_ne!(
+        shifts[0], shifts[1],
+        "the shift must not be a single measured constant"
+    );
+}
+
+/// Letter spacing crosses a frame boundary by a rule that is not one step per
+/// item — measured on typst 0.14, framing a 13pt tracked heading's words made
+/// it narrower and a 9pt one's wider — so a tracked run keeps today's
+/// emission rather than a guessed correction.
+#[test]
+fn a_letter_spaced_run_is_not_framed() {
+    let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
+        style: ParagraphStyle::default(),
+        runs: vec![Run {
+            text: "활용 설치부터".to_string(),
+            style: TextStyle {
+                letter_spacing: Some(0.5),
+                ..TextStyle::default()
+            },
+            href: None,
+            footnote: None,
+        }],
+    })])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains("#text(tracking: 0.5pt)[활용 설치부터]"),
+        "a tracked run stays one text item: {result}"
+    );
+    assert!(
+        !result.contains("#box["),
+        "no frame for tracked text: {result}"
+    );
+}
+
+#[test]
+fn an_unspaced_eojeol_is_still_framed() {
+    // Triangulation: the exclusion must key on the spacing, not on the words.
+    let doc = make_doc(vec![make_flow_page(vec![korean_paragraph(
+        "활용 설치부터",
+        None,
+        None,
+    )])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains("#box[활용] #box[설치부터]"),
+        "an unspaced paragraph is framed as usual: {result}"
+    );
+}
+
+/// Cutting a run at an eojeol boundary can leave a date at the start of the
+/// next escaping unit, where Typst reads `2026. ` as an enumeration marker and
+/// puts the date on a line of its own — which is what happened to the official
+/// letter's `시행일자: 2026. 7. 17.`.
+#[test]
+fn a_date_after_an_eojeol_is_not_retypeset_as_a_list_item() {
+    let doc = make_doc(vec![make_flow_page(vec![korean_paragraph(
+        "시행일자: 2026. 7. 17.",
+        None,
+        None,
+    )])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains("#box[시행일자:] 2026\\. 7. 17."),
+        "the date's first dot must be escaped once the frame precedes it: {result}"
+    );
+}
+
+/// The same hazard without any frame: whichever way a run is cut, the one
+/// leading space this function emits literally must not hide the marker.
+#[test]
+fn a_leading_space_does_not_hide_an_enum_marker() {
+    assert_eq!(escape_typst(" 2026. 7. 17."), " 2026\\. 7. 17.");
+    assert_eq!(escape_typst("2026. 7. 17."), "2026\\. 7. 17.");
+    assert_eq!(
+        escape_typst(" 2026 7 17"),
+        " 2026 7 17",
+        "a bare number is not a marker and must not gain an escape"
+    );
+    // An indentation run leaves as a code-mode string, which cannot open an
+    // enumeration, so it must not gain an escape it does not need.
+    assert!(
+        escape_typst("      2. indented").ends_with("2. indented"),
+        "an indented number keeps its plain dot"
+    );
+}
+
+/// A token no line could hold would take a frame of its own and start a new
+/// line, costing a line Word does not spend. Such a token is not an eojeol.
+#[test]
+fn a_pathologically_long_token_is_not_framed() {
+    let long_token: String = "가".repeat(40);
+    let doc = make_doc(vec![make_flow_page(vec![korean_paragraph(
+        &format!("계약 {long_token} 종료"),
+        None,
+        None,
+    )])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains(&format!("#box[계약] {long_token} #box[종료]")),
+        "an over-long token keeps today's syllable breaking: {result}"
+    );
+}
+
+/// A table cell whose single paragraph names a family and a size, so the
+/// eojeol width guard has metrics to measure against (issue #626).
+fn make_text_cell_styled(text: &str, family: &str, font_size: f64) -> TableCell {
+    TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: text.to_string(),
+                style: TextStyle {
+                    font_family: Some(family.to_string()),
+                    east_asian_font_family: Some(family.to_string()),
+                    font_size: Some(font_size),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })],
+        ..TableCell::default()
+    }
+}
+
+/// A slide text box whose content is a one-item bullet list.
+fn make_text_box_with_list(x: f64, y: f64, w: f64, h: f64, text: &str) -> FixedElement {
+    let mut element: FixedElement = make_text_box(x, y, w, h, text);
+    if let FixedElementKind::TextBox(ref mut data) = element.kind {
+        data.content = vec![Block::List(List {
+            kind: ListKind::Unordered,
+            items: vec![ListItem {
+                content: vec![Paragraph {
+                    style: ParagraphStyle::default(),
+                    runs: vec![Run {
+                        text: text.to_string(),
+                        style: TextStyle::default(),
+                        href: None,
+                        footnote: None,
+                    }],
+                }],
+                level: 0,
+                start_at: None,
+            }],
+            level_styles: BTreeMap::new(),
+        })];
+    }
+    element
+}
+
+// Typst line-leading markup at an eojeol boundary (issue #626)
+
+/// Cutting a run at an eojeol boundary makes the inter-word text its own
+/// escaping unit, so a bare ` + ` reaches `escape_typst` at the start of a
+/// content block — where Typst reads it as a numbered-list marker, deletes the
+/// `+` from the page and puts a `1.` in the text layer instead.
+#[test]
+fn a_plus_between_two_eojeol_is_not_retypeset_as_a_list_item() {
+    let doc = make_doc(vec![make_flow_page(vec![korean_paragraph(
+        "런타임 초기화 + 프로필 생성",
+        None,
+        None,
+    )])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains("#box[초기화] \\+ #box[프로필]"),
+        "the `+` must be escaped once a frame precedes it: {result}"
+    );
+}
+
+/// The same hazard for `=`, which Typst reads as a heading marker and which
+/// was not in the escape set at all.
+#[test]
+fn an_equals_between_two_eojeol_is_not_retypeset_as_a_heading() {
+    let doc = make_doc(vec![make_flow_page(vec![korean_paragraph(
+        "부하 시험 = 결과 보고",
+        None,
+        None,
+    )])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains("#box[시험] \\= #box[결과]"),
+        "the `=` must be escaped once a frame precedes it: {result}"
+    );
+}
+
+/// The whole set of Typst markup that is only meaningful at a line start,
+/// exercised directly: through one leading space and at index 0, and only when
+/// the marker is really one.
+#[test]
+fn every_line_leading_marker_is_neutralised_through_one_space() {
+    // Bullet, numbered list, heading — the three that need the positional rule.
+    assert_eq!(escape_typst(" + "), " \\+ ");
+    assert_eq!(escape_typst("+ x"), "\\+ x");
+    assert_eq!(escape_typst(" = "), " \\= ");
+    assert_eq!(escape_typst("= x"), "\\= x");
+    assert_eq!(
+        escape_typst(" == "),
+        " \\== ",
+        "escaping the first equals is enough to break a level-2 heading"
+    );
+    assert_eq!(escape_typst(" - "), " \\- ");
+    assert_eq!(escape_typst(" 2. x"), " 2\\. x");
+    // A term list opens with `/`, which is escaped wherever it appears.
+    assert_eq!(escape_typst(" / term: x"), " \\/ term: x");
+
+    // Not markers: no trailing whitespace, or a leading run of two spaces that
+    // leaves as a code-mode string.
+    assert_eq!(escape_typst(" =x"), " =x");
+    assert_eq!(escape_typst("+"), "+");
+    assert_eq!(escape_typst("a = b"), "a = b");
+    assert!(
+        escape_typst("  = x").ends_with("= x"),
+        "an indented equals keeps its plain form: {}",
+        escape_typst("  = x")
+    );
+}
+
+/// A DOCX list item is a Word paragraph like any other, so its Korean breaks
+/// at eojeol too. It used to bypass the whole path by calling `generate_run`
+/// directly.
+#[test]
+fn a_docx_list_item_keeps_each_hangul_eojeol_whole() {
+    let doc = make_doc(vec![make_flow_page(vec![Block::List(List {
+        kind: ListKind::Unordered,
+        items: vec![ListItem {
+            content: vec![Paragraph {
+                style: ParagraphStyle::default(),
+                runs: vec![Run {
+                    text: EOJEOL_SENTENCE.to_string(),
+                    style: TextStyle::default(),
+                    href: None,
+                    footnote: None,
+                }],
+            }],
+            level: 0,
+            start_at: None,
+        }],
+        level_styles: BTreeMap::new(),
+    })])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains("본 #box[계약은] #box[갑과] #box[을이]"),
+        "a list item's Korean should be framed like any other paragraph: {result}"
+    );
+}
+
+/// A slide's list keeps PowerPoint's own mid-word breaking.
+#[test]
+fn a_slide_list_item_keeps_syllable_breaking() {
+    let doc = make_doc(vec![make_fixed_page(
+        720.0,
+        540.0,
+        vec![make_text_box_with_list(
+            10.0,
+            10.0,
+            300.0,
+            100.0,
+            EOJEOL_SENTENCE,
+        )],
+    )]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains(EOJEOL_SENTENCE),
+        "PowerPoint breaks a bullet's Korean mid-word: {result}"
+    );
+    assert!(
+        !result.contains("#box["),
+        "no eojeol frame may reach a slide list: {result}"
+    );
+}
+
+/// A token wider than the column cannot break inside its frame, so the frame
+/// would take a line of its own and still overflow it. Word breaks such a
+/// token at character level, and so must we.
+#[test]
+fn a_token_wider_than_its_column_is_not_framed() {
+    // 20 syllables at 10.5pt Malgun Gothic is 210pt — far wider than the
+    // 150pt column, and short enough that a character ceiling would let it
+    // through.
+    let long_token: String = "가나다라마바사아자차카타파하가나다라마바".to_string();
+    // The premise is that the token *measures* over the column, so the guard
+    // needs the same advance the generator does. Without a Korean face — every
+    // CI runner here — nothing measures and the generator falls back to its
+    // character ceiling, which this deliberately 20-character token clears.
+    if crate::render::pdf::text_advance_em("Malgun Gothic", false, &long_token).is_none() {
+        return; // no Korean face available (e.g. a runner with no CJK fonts)
+    }
+    let table = Table {
+        rows: vec![TableRow {
+            cells: vec![make_text_cell_styled(
+                &format!("주 {long_token}"),
+                "Malgun Gothic",
+                10.5,
+            )],
+            height: None,
+        }],
+        column_widths: vec![150.0],
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        !result.contains(&format!("[{long_token}]]")),
+        "an over-wide token must keep the engine's syllable breaking: {result}"
+    );
+}
+
+/// Triangulation for the guard above: the same token in a column wide enough
+/// to hold it *is* framed, so the rule keys on width and not on the token.
+///
+/// Deliberately unguarded, unlike its partner: without a Korean face the token
+/// is framed by the character ceiling instead of by the width rule, so the
+/// assertion still holds and keeps guarding "a frame is emitted at all" on a
+/// runner with no CJK fonts. Only the *width* half of the triangulation needs
+/// the face, and that half lives in the test above.
+#[test]
+fn the_same_token_is_framed_when_the_column_can_hold_it() {
+    let long_token: String = "가나다라마바사아자차카타파하가나다라마바".to_string();
+    let table = Table {
+        rows: vec![TableRow {
+            cells: vec![make_text_cell_styled(
+                &format!("주 {long_token}"),
+                "Malgun Gothic",
+                10.5,
+            )],
+            height: None,
+        }],
+        column_widths: vec![400.0],
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains(&format!("[{long_token}]]")),
+        "a token the column can hold keeps its frame: {result}"
+    );
+}

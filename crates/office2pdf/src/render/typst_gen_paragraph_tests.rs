@@ -1436,7 +1436,9 @@ fn test_generate_heading_with_style_border_rule() {
         "a heading's style border must stroke its wrapper: {result}"
     );
     assert!(
-        result.contains("#heading(level: 1)[개요]"),
+        // Framed because a heading is a paragraph like any other, and Word
+        // breaks its Korean at eojeol too (issue #626).
+        result.contains("#heading(level: 1)[#box[개요]]"),
         "the heading itself must survive the wrapper: {result}"
     );
     assert!(
@@ -1464,7 +1466,9 @@ fn test_generate_undecorated_heading_keeps_its_bare_form() {
     })])]);
     let result = generate_typst(&doc).unwrap().source;
 
-    assert!(result.contains("#heading(level: 2)[한 문장 요약]"));
+    // One syllable needs no frame; the two-syllable eojeol each get one so a
+    // wrapped heading breaks where Word breaks it (issue #626).
+    assert!(result.contains("#heading(level: 2)[한 #box[문장] #box[요약]]"));
     assert!(
         !result.contains("#block(width: 100%"),
         "an undecorated heading needs no block wrapper: {result}"

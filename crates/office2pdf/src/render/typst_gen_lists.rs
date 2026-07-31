@@ -360,8 +360,9 @@ pub(super) fn generate_list(
     out: &mut String,
     list: &List,
     line_height_settings: Option<&str>,
+    eojeol_wrap: ListEojeolWrap,
 ) -> Result<(), ConvertError> {
-    generate_list_with_spacing_model(out, list, line_height_settings, false)
+    generate_list_with_spacing_model(out, list, line_height_settings, false, eojeol_wrap)
 }
 
 /// `per_item_gaps` selects PowerPoint's paragraph spacing model over Word's:
@@ -373,6 +374,7 @@ pub(super) fn generate_list_with_spacing_model(
     list: &List,
     line_height_settings: Option<&str>,
     per_item_gaps: bool,
+    mut eojeol_wrap: ListEojeolWrap,
 ) -> Result<(), ConvertError> {
     let wrapper_spans_full_line: bool = line_height_settings.is_some();
     let root_level: u32 = list_root_level(list);
@@ -401,6 +403,17 @@ pub(super) fn generate_list_with_spacing_model(
         }
         write_line_box_settings(out, line_box);
     }
+    // A framed eojeol restores exactly the fixed text edges the wrapper just
+    // emitted, and nothing else: `write_line_box_settings` comes last, so a
+    // declared `LineBox` wins over the caller's computed Word line, and
+    // without the wrapper no fixed edges were emitted at all (issue #626).
+    eojeol_wrap.line_box_em = needs_wrapper
+        .then(|| {
+            line_box
+                .map(|line_box| (line_box.ascent_em, line_box.descent_em))
+                .or_else(|| eojeol_wrap.line_box_em.filter(|_| wrapper_spans_full_line))
+        })
+        .flatten();
     write_list_open(
         out,
         "#",
@@ -418,6 +431,7 @@ pub(super) fn generate_list_with_spacing_model(
         wrapper_spans_full_line,
         spacing_pt.is_some() || !per_item_gaps,
         per_item_gaps,
+        &eojeol_wrap,
     )?;
     out.push_str(")\n");
     if needs_wrapper {
@@ -756,7 +770,14 @@ fn write_fixed_text_list_item_paragraph(out: &mut String, style: &ParagraphStyle
         out.push_str("#par[");
     }
 
-    generate_runs_with_tabs(out, runs, tab_stops.as_deref(), DEFAULT_TAB_WIDTH_PT);
+    // A slide's inline list; PowerPoint splits Korean mid-word.
+    generate_runs_with_tabs(
+        out,
+        runs,
+        tab_stops.as_deref(),
+        DEFAULT_TAB_WIDTH_PT,
+        EojeolWrap::Syllable,
+    );
     out.push(']');
 }
 
@@ -1206,15 +1227,42 @@ fn write_list_item_trailing_gap(
     let _ = write!(out, "#v({}pt)", format_f64(gap));
 }
 
-fn write_list_item_content(out: &mut String, item: &crate::ir::ListItem) {
+/// Emits an item's paragraphs.
+///
+/// Each paragraph decides its own Hangul breaking from its own alignment, but
+/// against the *list's* fixed line box: whatever
+/// [`generate_list_with_spacing_model`] put in force on the wrapper is what a
+/// framed eojeol has to restore inside itself (issue #626).
+fn write_list_item_content(out: &mut String, item: &crate::ir::ListItem, wrap: &ListEojeolWrap) {
     for para in &item.content {
-        for run in &para.runs {
-            generate_run(out, run);
-        }
+        generate_runs(
+            out,
+            &para.runs,
+            paragraph_eojeol_wrap(
+                wrap.breaks_hangul_at_eojeol,
+                &para.style,
+                wrap.line_box_em,
+                wrap.available_measure_pt,
+            ),
+        );
     }
 }
 
+/// What a list's items need to decide their Hangul line breaking (issue #626).
+#[derive(Clone, Copy, Default)]
+pub(super) struct ListEojeolWrap {
+    /// Whether the enclosing page is a Word flow page. False for a slide,
+    /// whose list keeps PowerPoint's own mid-word breaking.
+    pub(super) breaks_hangul_at_eojeol: bool,
+    /// The fixed `(top-edge, bottom-edge)` the list wrapper emits, in em.
+    pub(super) line_box_em: Option<(f64, f64)>,
+    /// The width one line of the list has, in points, before the item's own
+    /// indents.
+    pub(super) available_measure_pt: Option<f64>,
+}
+
 /// Recursively generate list items, grouping consecutive items at the same or deeper level.
+#[allow(clippy::too_many_arguments)]
 fn generate_list_items(
     out: &mut String,
     list: &List,
@@ -1223,6 +1271,7 @@ fn generate_list_items(
     wrapper_spans_full_line: bool,
     has_uniform_spacing: bool,
     per_item_gaps: bool,
+    eojeol_wrap: &ListEojeolWrap,
 ) -> Result<(), ConvertError> {
     let style = list_style_for_level(list, base_level);
     let (_, item_func) = list_funcs(style.kind);
@@ -1237,7 +1286,7 @@ fn generate_list_items(
             let _ = write!(out, "({start_at})");
         }
         out.push('[');
-        write_list_item_content(out, item);
+        write_list_item_content(out, item, eojeol_wrap);
         write_list_item_trailing_gap(out, item, has_uniform_spacing, wrapper_spans_full_line);
 
         if item.level == base_level {
@@ -1290,6 +1339,7 @@ fn generate_list_items(
                     wrapper_spans_full_line,
                     spacing_pt.is_some() || !per_item_gaps,
                     per_item_gaps,
+                    eojeol_wrap,
                 )?;
                 out.push(')');
                 i = nested_end;

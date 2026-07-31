@@ -38,6 +38,8 @@ pub(super) fn generate_paragraph(
     para: &Paragraph,
     line_grid_pitch: Option<f64>,
     default_tab_width_pt: f64,
+    breaks_hangul_at_eojeol: bool,
+    available_measure_pt: Option<f64>,
 ) -> Result<(), ConvertError> {
     let style = &para.style;
 
@@ -88,6 +90,9 @@ pub(super) fn generate_paragraph(
             &para.runs,
             style.tab_stops.as_deref(),
             default_tab_width_pt,
+            // A heading emits no fixed text edges of its own, so a frame needs
+            // no correction to sit on the surrounding baseline.
+            paragraph_eojeol_wrap(breaks_hangul_at_eojeol, style, None, available_measure_pt),
         );
         out.push_str("]\n");
         if decorated {
@@ -164,11 +169,31 @@ pub(super) fn generate_paragraph(
         let _ = write!(out, "#align({align_str})[");
     }
 
+    // Whichever fixed line box the wrapper above put in force — the computed
+    // Word line, or the paragraph's own `LineBox` — is what a framed eojeol
+    // has to restore inside itself. The two are mutually exclusive:
+    // `word_line_leading_pt` bails on a paragraph that declares a `LineBox`.
+    let line_box_em: Option<(f64, f64)> = has_para_style
+        .then(|| {
+            word_line_box_em(&para.runs, style, line_grid_pitch).or_else(|| {
+                style
+                    .line_box
+                    .map(|line_box| (line_box.ascent_em, line_box.descent_em))
+            })
+        })
+        .flatten();
+
     generate_runs_with_tabs(
         out,
         &para.runs,
         style.tab_stops.as_deref(),
         default_tab_width_pt,
+        paragraph_eojeol_wrap(
+            breaks_hangul_at_eojeol,
+            style,
+            line_box_em,
+            available_measure_pt,
+        ),
     );
 
     if use_align {
@@ -247,14 +272,7 @@ pub(super) fn word_line_height_settings(
     style: &ParagraphStyle,
     line_grid_pitch: Option<f64>,
 ) -> Option<String> {
-    let (ascender_em, descender_em, leading_em) =
-        word_line_box_and_leading(runs, style, line_grid_pitch)?;
-    let metric_em: f64 = ascender_em + descender_em;
-    if metric_em <= 0.0 {
-        return None;
-    }
-    let pitch_em: f64 = metric_em + leading_em;
-    let top_em: f64 = ascender_em + east_asian_ascent_excess_em(runs, metric_em);
+    let (top_em, bottom_em) = word_line_box_em(runs, style, line_grid_pitch)?;
     // Pin the line box to the nominal font's own metric edges as fixed em
     // values rather than the "ascender"/"descender" keywords. The keywords
     // let Typst resolve the box against the tallest font on each line, so a
@@ -263,8 +281,27 @@ pub(super) fn word_line_height_settings(
     Some(format!(
         "#set text(top-edge: {}em, bottom-edge: -{}em)\n#set par(leading: 0pt)\n",
         format_f64(top_em),
-        format_f64(pitch_em - top_em)
+        format_f64(bottom_em)
     ))
+}
+
+/// The `(top-edge, bottom-edge)` in em behind [`word_line_height_settings`],
+/// exposed so a framed eojeol can restore the same edges inside itself
+/// (issue #626).
+pub(super) fn word_line_box_em(
+    runs: &[Run],
+    style: &ParagraphStyle,
+    line_grid_pitch: Option<f64>,
+) -> Option<(f64, f64)> {
+    let (ascender_em, descender_em, leading_em) =
+        word_line_box_and_leading(runs, style, line_grid_pitch)?;
+    let metric_em: f64 = ascender_em + descender_em;
+    if metric_em <= 0.0 {
+        return None;
+    }
+    let pitch_em: f64 = metric_em + leading_em;
+    let top_em: f64 = ascender_em + east_asian_ascent_excess_em(runs, metric_em);
+    Some((top_em, pitch_em - top_em))
 }
 
 /// Line-box settings for a slide's text: PowerPoint's flat 1.2em line, split
@@ -402,10 +439,14 @@ fn word_natural_line_em(runs: &[Run], word_pitch_em: f64) -> f64 {
 /// The font size Word resolves a paragraph's line box against: the largest
 /// size among its runs, falling back to the Word default when unset.
 fn paragraph_font_size_pt(runs: &[Run]) -> f64 {
-    let largest: f64 = runs
-        .iter()
-        .filter_map(|run| run.style.font_size)
-        .fold(f64::NAN, f64::max);
+    largest_font_size_pt(runs.iter().filter_map(|run| run.style.font_size))
+}
+
+/// The largest declared size, or Word's default when nothing declares one —
+/// which is also what an `em` resolves against, since the generator emits no
+/// document-wide `#set text(size:)`.
+fn largest_font_size_pt(sizes: impl Iterator<Item = f64>) -> f64 {
+    let largest: f64 = sizes.fold(f64::NAN, f64::max);
     if largest.is_nan() { 11.0 } else { largest }
 }
 
@@ -806,9 +847,10 @@ pub(super) fn generate_runs_with_tabs(
     runs: &[Run],
     tab_stops: Option<&[TabStop]>,
     default_tab_width_pt: f64,
+    eojeol_wrap: EojeolWrap,
 ) {
     if !paragraph_contains_tabs(runs) {
-        generate_runs(out, runs);
+        generate_runs(out, runs, eojeol_wrap);
         return;
     }
 
@@ -817,7 +859,7 @@ pub(super) fn generate_runs_with_tabs(
 
     for (index, segment) in segments.iter().enumerate() {
         let _ = write!(out, "  let tab_segment_{index} = [");
-        generate_runs(out, segment);
+        generate_runs(out, segment, eojeol_wrap);
         out.push_str("]\n");
 
         if index == 0 {
@@ -860,7 +902,15 @@ pub(super) fn generate_runs_with_tabs_no_wrap(
         })
         .collect();
 
-    generate_runs_with_tabs(out, &transformed_runs, tab_stops, default_tab_width_pt);
+    // Slide text keeps PowerPoint's own breaking, which splits Korean
+    // mid-word; this path additionally forbids every break outright.
+    generate_runs_with_tabs(
+        out,
+        &transformed_runs,
+        tab_stops,
+        default_tab_width_pt,
+        EojeolWrap::Syllable,
+    );
 }
 
 #[derive(Clone, Copy, Default)]
@@ -891,7 +941,9 @@ fn write_tab_segment_bindings(
 
     if let Some(anchor_runs) = extract_decimal_anchor_runs(segment) {
         let _ = write!(out, "  let tab_decimal_anchor_{index} = [");
-        generate_runs(out, &anchor_runs);
+        // Measured for its width only, which a frame does not change, so the
+        // anchor stays the plain emission.
+        generate_runs(out, &anchor_runs, EojeolWrap::Syllable);
         out.push_str("]\n");
         let _ = writeln!(
             out,
@@ -925,10 +977,433 @@ fn paragraph_contains_tabs(runs: &[Run]) -> bool {
     runs.iter().any(|run| run.text.contains('\t'))
 }
 
-pub(super) fn generate_runs(out: &mut String, runs: &[Run]) {
-    for run in runs {
-        generate_run(out, run);
+/// Whether a run list keeps each Hangul eojeol — a space-delimited Korean
+/// word — whole when a line has to break (issue #626).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(super) enum EojeolWrap {
+    /// Typst's UAX #14 default, which permits a break between any two Hangul
+    /// syllable blocks. PowerPoint and a *justified* Word line both break
+    /// Korean mid-word, and our output already matches them there, so slides,
+    /// sheets and justified paragraphs stay on this.
+    #[default]
+    Syllable,
+    /// Emit each eojeol inside an inline `#box`. A frame is a single object to
+    /// UAX #14, so no break opportunity survives inside it. Typst 0.14 offers
+    /// no other lever: `text(lang: "ko")`, `par(linebreaks:)` and
+    /// `text(costs:)` were each measured to leave the breakpoints untouched,
+    /// because typst-layout builds its ICU4X segmenters with default options
+    /// and never consults `Lang::KOREAN`. The repo already uses the same
+    /// mechanism in the opposite direction, where `#box[]` *creates* a
+    /// contingent break for PowerPoint kinsoku (issue #438).
+    ///
+    /// A no-break marker between the syllables — U+2060 WORD JOINER, the
+    /// obvious alternative and the shape the auto-space and kinsoku markers
+    /// in this file already use — does suppress the breaks, but it lands in
+    /// the PDF text layer and makes the text unsearchable. That is issue
+    /// #664, reproduced from first principles on a probe before this
+    /// mechanism was chosen; a frame leaves the text layer untouched.
+    ///
+    /// `line_box_em` is the paragraph's fixed `(top-edge, bottom-edge)` when
+    /// it declares them, so the frame can restore them; see
+    /// [`write_eojeol_frame_open`]. `measure_pt` is the width one line of the
+    /// paragraph has, which bounds how wide a token may be and still be
+    /// framed; see [`is_framed_eojeol`].
+    Eojeol {
+        line_box_em: Option<(f64, f64)>,
+        measure_pt: Option<f64>,
+    },
+}
+
+/// The longest token still framed when its width cannot be measured, in
+/// characters.
+///
+/// A token wider than the line cannot break inside its frame, so it starts a
+/// line of its own and then overflows it — one line more than Word spends,
+/// plus ink outside the column. [`is_framed_eojeol`] therefore compares the
+/// token's measured advance against the paragraph's own measure. This cap is
+/// only the fallback for when one of the two is unknown: on `wasm32`, where
+/// [`text_advance_em`](crate::render::pdf::text_advance_em) always returns
+/// `None`, for a run that names no family or size, and for a container whose
+/// measure did not reach codegen. An eojeol is a stem plus its particles and
+/// rarely reaches ten syllables, so twenty is a generous ceiling.
+const MAX_UNMEASURED_EOJEOL_CHARS: usize = 20;
+
+/// How a paragraph breaks its Hangul lines.
+///
+/// Word falls back to syllable breaking to keep a *justified* line from going
+/// too loose — measured on the contract fixture, where both Word and this
+/// generator split `보관|한다.` in the two `w:jc="both"` paragraphs — so a
+/// justified paragraph keeps the engine default.
+///
+/// `container_measure_pt` is the width the enclosing container gives a line —
+/// the page's text width, a table column, a text box — before this
+/// paragraph's own indents are taken off it.
+pub(super) fn paragraph_eojeol_wrap(
+    breaks_hangul_at_eojeol: bool,
+    style: &ParagraphStyle,
+    line_box_em: Option<(f64, f64)>,
+    container_measure_pt: Option<f64>,
+) -> EojeolWrap {
+    if !breaks_hangul_at_eojeol || matches!(style.alignment, Some(Alignment::Justify)) {
+        return EojeolWrap::Syllable;
     }
+    // A hanging first line (`indent_first_line < 0`) is wider than the rest,
+    // so the continuation lines — the ones a frame can be pushed onto — are
+    // the binding measure and the negative first-line indent is ignored.
+    let measure_pt: Option<f64> = container_measure_pt
+        .map(|measure| {
+            measure - style.indent_left.unwrap_or(0.0) - style.indent_right.unwrap_or(0.0)
+        })
+        .filter(|measure| *measure > 0.0);
+    EojeolWrap::Eojeol {
+        line_box_em,
+        measure_pt,
+    }
+}
+
+pub(super) fn generate_runs(out: &mut String, runs: &[Run], eojeol_wrap: EojeolWrap) {
+    let EojeolWrap::Eojeol {
+        line_box_em,
+        measure_pt,
+    } = eojeol_wrap
+    else {
+        for run in runs {
+            generate_run(out, run);
+        }
+        return;
+    };
+
+    // Everything between two frames is coalesced and spliced back into whole
+    // runs before it is emitted, so a paragraph in which no eojeol is framed —
+    // every Latin one, and every Korean one whose words are all single
+    // syllables — keeps byte-identical markup.
+    let mut units: Vec<(bool, Vec<EojeolPiece>)> = Vec::new();
+    for token in split_runs_into_eojeol_tokens(runs) {
+        match (is_framed_eojeol(&token, measure_pt), units.last_mut()) {
+            (false, Some((false, unframed))) => unframed.extend(token),
+            (framed, _) => units.push((framed, token)),
+        }
+    }
+
+    for (framed, pieces) in &units {
+        if *framed {
+            write_eojeol_frame_open(out, pieces, line_box_em);
+        }
+        write_eojeol_pieces(out, pieces);
+        if *framed {
+            write_eojeol_frame_close(out, line_box_em);
+        }
+    }
+}
+
+/// A slice of one run, tagged with the run it was cut from.
+///
+/// The tag is what lets [`write_eojeol_pieces`] splice neighbouring slices
+/// back together: `escape_typst` reads its whole input — a run of spaces
+/// becomes a code-mode string, a leading `<digits>.` an escaped enum marker —
+/// so re-joining pieces of *different* runs could change the markup where
+/// concatenating pieces of the same run never can.
+struct EojeolPiece {
+    run_index: usize,
+    run: Run,
+}
+
+/// Emits pieces, re-joining every neighbouring pair cut from the same run.
+fn write_eojeol_pieces(out: &mut String, pieces: &[EojeolPiece]) {
+    let mut pending: Option<(usize, Run)> = None;
+    for piece in pieces {
+        match pending {
+            Some((run_index, ref mut previous)) if run_index == piece.run_index => {
+                previous.text.push_str(&piece.run.text);
+            }
+            _ => {
+                if let Some((_, previous)) = pending.take() {
+                    generate_run(out, &previous);
+                }
+                pending = Some((piece.run_index, piece.run.clone()));
+            }
+        }
+    }
+    if let Some((_, previous)) = pending {
+        generate_run(out, &previous);
+    }
+}
+
+/// The characters a Word line may end at, which therefore close an eojeol.
+///
+/// A tab is among them, so a frame can never straddle a
+/// [`split_runs_on_tabs`] segment. A no-break space cannot host a break at
+/// all, but it still separates words, and treating it as a boundary keeps a
+/// whole run of them out of one token.
+fn is_eojeol_delimiter(ch: char) -> bool {
+    matches!(
+        ch,
+        ' ' | '\u{00A0}' | '\t' | '\n' | PPTX_SOFT_LINE_BREAK_CHAR
+    )
+}
+
+/// Hangul: a precomposed syllable block, a conjoining jamo, or a
+/// compatibility jamo. Han and kana are deliberately absent — Chinese and
+/// Japanese really do break between characters, and framing them would
+/// destroy correct output.
+fn is_hangul(ch: char) -> bool {
+    matches!(ch as u32, 0x1100..=0x11FF | 0x3130..=0x318F | 0xAC00..=0xD7A3)
+}
+
+/// Splits a run list into the tokens Word may break between: maximal stretches
+/// of delimiter-free text, each possibly spanning several runs, alternating
+/// with the delimiters themselves.
+///
+/// Grouping happens here, structurally, rather than through a marker pair in
+/// the text: [`extract_decimal_anchor_runs`] slices a run sub-list for a
+/// decimal tab stop and would sever an open/close pair, emitting unbalanced
+/// markup. Spanning runs matters because a bold or coloured fragment inside a
+/// word would otherwise leave a frame boundary — itself a break opportunity —
+/// in the middle of the word.
+///
+/// A footnote run is a token of its own: the reference is an anchor, not part
+/// of any word.
+fn split_runs_into_eojeol_tokens(runs: &[Run]) -> Vec<Vec<EojeolPiece>> {
+    let mut tokens: Vec<Vec<EojeolPiece>> = Vec::new();
+    let mut token: Vec<EojeolPiece> = Vec::new();
+
+    for (run_index, run) in runs.iter().enumerate() {
+        if run.footnote.is_some() {
+            if !token.is_empty() {
+                tokens.push(std::mem::take(&mut token));
+            }
+            tokens.push(vec![EojeolPiece {
+                run_index,
+                run: run.clone(),
+            }]);
+            continue;
+        }
+        // An empty run still emits its wrappers, so it must survive the split.
+        if run.text.is_empty() {
+            token.push(EojeolPiece {
+                run_index,
+                run: run.clone(),
+            });
+            continue;
+        }
+
+        let mut piece_start: usize = 0;
+        let mut piece_is_delimiter: bool = is_eojeol_delimiter(
+            run.text
+                .chars()
+                .next()
+                .expect("a non-empty run has a first char"),
+        );
+        for (offset, ch) in run.text.char_indices() {
+            let ch_is_delimiter: bool = is_eojeol_delimiter(ch);
+            if ch_is_delimiter == piece_is_delimiter {
+                continue;
+            }
+            push_eojeol_piece(
+                &mut tokens,
+                &mut token,
+                run_index,
+                run,
+                &run.text[piece_start..offset],
+                piece_is_delimiter,
+            );
+            piece_start = offset;
+            piece_is_delimiter = ch_is_delimiter;
+        }
+        push_eojeol_piece(
+            &mut tokens,
+            &mut token,
+            run_index,
+            run,
+            &run.text[piece_start..],
+            piece_is_delimiter,
+        );
+    }
+
+    if !token.is_empty() {
+        tokens.push(token);
+    }
+    tokens
+}
+
+fn push_eojeol_piece(
+    tokens: &mut Vec<Vec<EojeolPiece>>,
+    token: &mut Vec<EojeolPiece>,
+    run_index: usize,
+    run: &Run,
+    text: &str,
+    is_delimiter: bool,
+) {
+    let piece: EojeolPiece = EojeolPiece {
+        run_index,
+        run: Run {
+            text: text.to_string(),
+            style: run.style.clone(),
+            href: run.href.clone(),
+            footnote: None,
+        },
+    };
+    if !is_delimiter {
+        token.push(piece);
+        return;
+    }
+    if !token.is_empty() {
+        tokens.push(std::mem::take(token));
+    }
+    tokens.push(vec![piece]);
+}
+
+/// Whether a token is an eojeol Word would keep whole: it carries Hangul, it
+/// is long enough for a break to fall inside it, and it is narrow enough that
+/// a line can hold it.
+///
+/// `measure_pt` is the width one line of the paragraph has. A frame is opaque
+/// to line breaking, so a token wider than that would be pushed onto a line of
+/// its own and still overflow it — one line more than Word spends, with ink
+/// outside the column. Word itself breaks such a token at character level, so
+/// this returns `false` and the token keeps the engine's syllable breaking.
+fn is_framed_eojeol(token: &[EojeolPiece], measure_pt: Option<f64>) -> bool {
+    if token.iter().any(|piece| piece.run.footnote.is_some()) {
+        return false;
+    }
+    // Letter spacing survives a frame boundary by a rule this generator cannot
+    // predict. Measured on typst 0.14 at `tracking: 0.7pt`: framing the four
+    // Korean words of a 13pt centred heading made it 1.4pt *narrower*, while
+    // framing the four words of a 9pt one made it 3.0pt *wider* — the shaper
+    // does not simply trim one step per item. A tracked run is decorative
+    // display text, short enough that it does not wrap and so has nothing to
+    // gain here, so it keeps today's emission until the rule is measured.
+    if token
+        .iter()
+        .any(|piece| piece.run.style.letter_spacing.is_some_and(|s| s != 0.0))
+    {
+        return false;
+    }
+    let mut visible_chars: usize = 0;
+    let mut has_hangul: bool = false;
+    for ch in token.iter().flat_map(|piece| piece.run.text.chars()) {
+        // The in-text markers stand for spacing and break opportunities, not
+        // glyphs, so they cannot make a one-syllable token breakable.
+        if matches!(ch, EAST_ASIAN_AUTO_SPACE_CHAR | HANGUL_KINSOKU_BREAK_CHAR) {
+            continue;
+        }
+        has_hangul |= is_hangul(ch);
+        visible_chars += 1;
+    }
+    if !has_hangul || visible_chars < 2 {
+        return false;
+    }
+    match (measure_pt, eojeol_advance_pt(token)) {
+        (Some(measure), Some(advance)) => advance <= measure,
+        // Either the container's measure or the token's advance is unknown;
+        // fall back to the character ceiling, which at least keeps a
+        // pathologically long token out of a frame.
+        _ => visible_chars <= MAX_UNMEASURED_EOJEOL_CHARS,
+    }
+}
+
+/// The advance a token takes on a line, in points, measured with the same
+/// machinery the auto-layout column widths use (issue #624): each piece's
+/// resolved family — the `w:eastAsia` face for East Asian codepoints — its
+/// weight, and its own size.
+///
+/// `None` when a piece names no family or no size, or when a glyph is missing
+/// from the resolved face; on `wasm32`
+/// [`text_advance_em`](crate::render::pdf::text_advance_em) is always `None`,
+/// so the whole guard degrades to its character ceiling there.
+///
+/// The in-text markers are skipped: they stand for a `#h()` the shaper never
+/// sees as a glyph. That under-counts an auto-space boundary by a quarter em,
+/// which only matters for a token already within a quarter em of the measure.
+fn eojeol_advance_pt(token: &[EojeolPiece]) -> Option<f64> {
+    let mut advance_pt: f64 = 0.0;
+    for piece in token {
+        let latin_family: &str = piece.run.style.font_family.as_deref()?;
+        let east_asian_family: &str = piece
+            .run
+            .style
+            .east_asian_font_family
+            .as_deref()
+            .unwrap_or(latin_family);
+        let font_size_pt: f64 = piece.run.style.font_size?;
+        let is_bold: bool = effective_font_weight(&piece.run.style)
+            .is_some_and(|weight| weight != "regular" && weight != "light");
+        // One `text_advance_em` call per maximal same-face segment: the call
+        // takes a global face-cache lock, so a per-character loop would be
+        // needlessly hot on long Korean paragraphs.
+        let mut segment: String = String::new();
+        let mut segment_is_east_asian: Option<bool> = None;
+        for character in piece.run.text.chars() {
+            if matches!(
+                character,
+                EAST_ASIAN_AUTO_SPACE_CHAR | HANGUL_KINSOKU_BREAK_CHAR
+            ) {
+                continue;
+            }
+            let is_east_asian: bool = is_cjk_like(character);
+            if segment_is_east_asian != Some(is_east_asian) && !segment.is_empty() {
+                let family: &str = if segment_is_east_asian == Some(true) {
+                    east_asian_family
+                } else {
+                    latin_family
+                };
+                advance_pt +=
+                    crate::render::pdf::text_advance_em(family, is_bold, &segment)? * font_size_pt;
+                segment.clear();
+            }
+            segment_is_east_asian = Some(is_east_asian);
+            segment.push(character);
+        }
+        if !segment.is_empty() {
+            let family: &str = if segment_is_east_asian == Some(true) {
+                east_asian_family
+            } else {
+                latin_family
+            };
+            advance_pt +=
+                crate::render::pdf::text_advance_em(family, is_bold, &segment)? * font_size_pt;
+        }
+    }
+    Some(advance_pt)
+}
+
+/// Opens an eojeol's frame.
+///
+/// Under Word's fixed line box (issues #354, #508) a bare `#box` seats its
+/// baseline on its own *bottom* edge, which would drop the framed text by the
+/// descent while the spaces around it stayed put. The frame therefore restores
+/// the paragraph's edges inside itself and shifts its baseline back up by the
+/// descent.
+///
+/// Those edges are re-emitted in points rather than the `em` the paragraph
+/// declares: an `em` resolves against each run's own size, so a size change
+/// inside one eojeol would leave the frame's height and its baseline shift
+/// disagreeing. Resolving them at the token's own largest size reproduces
+/// exactly what the same text contributes to the line unframed.
+fn write_eojeol_frame_open(
+    out: &mut String,
+    token: &[EojeolPiece],
+    line_box_em: Option<(f64, f64)>,
+) {
+    let Some((top_em, bottom_em)) = line_box_em else {
+        out.push_str("#box[");
+        return;
+    };
+    let font_size_pt: f64 =
+        largest_font_size_pt(token.iter().filter_map(|piece| piece.run.style.font_size));
+    let top_pt: f64 = top_em * font_size_pt;
+    let bottom_pt: f64 = bottom_em * font_size_pt;
+    let _ = write!(
+        out,
+        "#box(baseline: {}pt)[#text(top-edge: {}pt, bottom-edge: -{}pt)[",
+        format_f64(bottom_pt),
+        format_f64(top_pt),
+        format_f64(bottom_pt)
+    );
+}
+
+fn write_eojeol_frame_close(out: &mut String, line_box_em: Option<(f64, f64)>) {
+    out.push_str(if line_box_em.is_some() { "]]" } else { "]" });
 }
 
 fn no_wrap_text(text: &str, preserve_cjk_no_wrap: bool, state: &mut NoWrapState) -> String {
@@ -1237,7 +1712,9 @@ pub(super) fn generate_run(out: &mut String, run: &Run) {
         // to, so they emit through the ordinary run path rather than as a bare
         // string that would take the engine's own footnote styling (#580).
         out.push_str("#footnote[");
-        generate_runs(out, content);
+        // The note's own line box is the engine's, not the referring
+        // paragraph's, so a frame here has no edges to restore.
+        generate_runs(out, content, EojeolWrap::Syllable);
         out.push(']');
         return;
     }
@@ -1486,19 +1963,82 @@ pub(super) fn format_color(color: &Color) -> String {
     format!("fill: {}", rgb(color))
 }
 
+/// The char index Typst reads a *line-leading* markup marker at.
+///
+/// Typst recognises those markers through one leading space, so the scan
+/// steps over one. Which text lands at the start of an escaping unit is the
+/// generator's choice, not the document's: a run is cut at every tab, at
+/// every in-text marker, and since #626 at every eojeol boundary, so a
+/// paragraph's ` + ` or ` = ` reaches [`escape_typst`] as a unit of its own.
+///
+/// Exactly one space, because that is the only leading whitespace
+/// [`escape_typst`] emits as markup. A run of two or more — and any run after
+/// a hard break — leaves as a code-mode string, which cannot open a marker.
+/// Measured on typst: `[ 2026. 7. 17.]`, `[ + x]` and `[ = x]` become an
+/// enumeration, a list item and a heading; `[#"  ";+ x]`, `[#"  ";= x]` and a
+/// leading U+00A0 do not.
+fn line_leading_markup_index(text: &str) -> usize {
+    usize::from(text.starts_with(' ') && !text[1..].starts_with(' '))
+}
+
+/// Whether `text` opens with a Typst line-leading marker whose first
+/// character must be escaped to neutralise it.
+///
+/// The full set of Typst markup that is only meaningful at a line start:
+///
+/// | Marker | Handling |
+/// | --- | --- |
+/// | `- ` bullet list | here, and also escaped everywhere else (`--` ligates) |
+/// | `+ ` numbered list | here — `+` is otherwise a literal |
+/// | `= ` heading (any run of `=`) | here — `=` is otherwise a literal |
+/// | `/ ` term list | already escaped unconditionally below |
+/// | `<digits>. ` enumeration | [`enum_marker_dot`], which escapes the dot |
+///
+/// Every other Typst shorthand (`#`, `*`, `_`, `` ` ``, `$`, `<`, `>`, `@`,
+/// `~`, `\`, `[`, `]`, `{`, `}`, `"`, `'`) is markup wherever it appears and
+/// is escaped unconditionally, so a line start needs no extra rule for it.
+///
+/// A marker also needs trailing whitespace to be one: `[ =x]` and `[+]` stay
+/// literal. Escaping only the *first* character of a `==`-style run is
+/// enough — measured on typst, `[ \== ]` renders ` == ` — because what
+/// remains no longer starts the line.
+fn opens_line_leading_marker(text: &str) -> bool {
+    match text.chars().next() {
+        // A one-byte marker char, so the byte slice is safe.
+        Some('-' | '+') => text[1..].chars().next().is_some_and(char::is_whitespace),
+        Some('=') => text
+            .trim_start_matches('=')
+            .chars()
+            .next()
+            .is_some_and(char::is_whitespace),
+        _ => false,
+    }
+}
+
 pub(super) fn escape_typst(text: &str) -> String {
     let normalized_text: String = text.nfc().collect();
+    let leading_space: usize = line_leading_markup_index(&normalized_text);
+    let after_space: &str = &normalized_text[leading_space..];
+
+    // A leading `-`/`+` bullet or `=` heading run would be re-typeset as that
+    // marker, deleting the character from the page: ` + ` between two Korean
+    // eojeol became an enumeration item and ` = ` an empty heading (#626).
+    let line_leading_marker: Option<usize> =
+        opens_line_leading_marker(after_space).then_some(leading_space);
 
     // A leading "<digits>. " would be re-typeset as a Typst numbered-list
     // marker (e.g. "2026. 07. 17." became "2026. 7. 17."); escape its dot.
+    // `"시행일자: 2026. 7. 17."` reached this function as `" 2026. 7. 17."`
+    // once #626 cut the run at the eojeol boundary, and Typst put the date on
+    // an enumeration line of its own.
     let enum_marker_dot: Option<usize> = {
-        let digit_count = normalized_text
+        let digit_count = after_space
             .chars()
             .take_while(|c| c.is_ascii_digit())
             .count();
-        let rest = &normalized_text[digit_count..];
+        let rest = &after_space[digit_count..];
         if digit_count > 0 && (rest.starts_with(". ") || rest == ".") {
-            Some(digit_count)
+            Some(leading_space + digit_count)
         } else {
             None
         }
@@ -1506,14 +2046,11 @@ pub(super) fn escape_typst(text: &str) -> String {
 
     let mut result = String::with_capacity(normalized_text.len());
     let mut chars = normalized_text.chars().peekable();
-    let mut is_first_char = true;
     let mut char_index: usize = 0;
 
     let mut after_linebreak = false;
     while let Some(ch) = chars.next() {
-        let should_escape_list_prefix: bool = is_first_char
-            && matches!(ch, '-' | '+')
-            && chars.peek().is_some_and(|next| next.is_whitespace());
+        let should_escape_list_prefix: bool = line_leading_marker == Some(char_index);
 
         match ch {
             // A hard line break (`<w:br/>`, carried through the IR as '\n') must
@@ -1567,7 +2104,6 @@ pub(super) fn escape_typst(text: &str) -> String {
         }
 
         after_linebreak = ch == '\n';
-        is_first_char = false;
         char_index += 1;
     }
     result
