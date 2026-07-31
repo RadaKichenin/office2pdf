@@ -912,3 +912,305 @@ fn bottom_aligned_word_table_cell_keeps_the_symmetric_line_box() {
         "a Word table cell must not be re-seated on the descender: {result}"
     );
 }
+
+/// Two stacked `<w:p>` in one `<w:tc>` are separated by the first paragraph's
+/// `w:spacing w:after` alone. Each paragraph's `#block` wrapper must therefore
+/// carry `above: 0pt, below: 0pt`: sibling blocks otherwise pick up Typst's
+/// ambient default block spacing (1.2em at the document size — the +13.2pt of
+/// issue #625), which Word does not have. The gap is then exactly the fixed
+/// line box's advance plus the explicit `#v(1.5pt)`.
+#[test]
+fn stacked_cell_paragraphs_zero_the_default_block_spacing() {
+    if crate::render::pdf::font_line_metrics_em("Libertinus Serif").is_none() {
+        return; // no font book available (e.g. exotic CI sandbox)
+    }
+    let make_para = |text: &str, space_after: Option<f64>| -> Block {
+        Block::Paragraph(Paragraph {
+            style: ParagraphStyle {
+                space_after,
+                ..ParagraphStyle::default()
+            },
+            runs: vec![Run {
+                text: text.to_string(),
+                style: TextStyle {
+                    font_family: Some("Libertinus Serif".to_string()),
+                    font_size: Some(9.5),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })
+    };
+    let cell = TableCell {
+        content: vec![
+            make_para("Hanbit Tech Co., Ltd.", Some(1.5)),
+            make_para("CEO Lee Jun-seo (seal)", None),
+        ],
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            cells: vec![cell],
+            height: None,
+        }],
+        column_widths: vec![225.65],
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert_eq!(
+        result.matches("#block(above: 0pt, below: 0pt)[").count(),
+        2,
+        "both stacked cell paragraphs must zero the default block spacing: {result}"
+    );
+    assert!(
+        !result.contains("#block()["),
+        "no stacked cell paragraph may leave Typst's default block spacing in force: {result}"
+    );
+    assert_eq!(
+        result.matches("#v(1.5pt)").count(),
+        1,
+        "the declared w:after is the only inter-paragraph gap: {result}"
+    );
+}
+
+/// Triangulation: with no `w:spacing w:after` at all, stacked cell paragraphs
+/// stack flush. `space_after: None` here means Word resolves no gap — the
+/// parser already folds `w:docDefaults` and style-chain `w:after` into
+/// `space_after` (docx_styles.rs), so a `None` reaching codegen is a document
+/// whose effective `w:after` is absent, which Word lays out as 0.
+#[test]
+fn stacked_cell_paragraphs_without_w_after_stack_flush() {
+    if crate::render::pdf::font_line_metrics_em("Libertinus Serif").is_none() {
+        return; // no font book available (e.g. exotic CI sandbox)
+    }
+    let make_para = |text: &str| -> Block {
+        Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: text.to_string(),
+                style: TextStyle {
+                    font_family: Some("Libertinus Serif".to_string()),
+                    font_size: Some(9.5),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })
+    };
+    let cell = TableCell {
+        content: vec![make_para("First line"), make_para("Second line")],
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            cells: vec![cell],
+            height: None,
+        }],
+        column_widths: vec![225.65],
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert_eq!(
+        result.matches("#block(above: 0pt, below: 0pt)[").count(),
+        2,
+        "paragraphs without w:after still suppress the default block spacing: {result}"
+    );
+    assert!(
+        !result.contains("#v("),
+        "no gap may be synthesized when the document declares none: {result}"
+    );
+}
+
+/// A single-paragraph cell has no sibling block to leak spacing against, so
+/// its emission must stay byte-identical to before the #625 fix: the plain
+/// `#block()` wrapper, the fixed line box, and the trailing `#v(w:after)`
+/// inside it (which Word counts into the row height — the contract fixture's
+/// header row is exact today and must stay so).
+#[test]
+fn single_paragraph_cell_emission_is_unchanged() {
+    if crate::render::pdf::font_line_metrics_em("Libertinus Serif").is_none() {
+        return; // no font book available (e.g. exotic CI sandbox)
+    }
+    let cell = TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle {
+                space_after: Some(1.5),
+                ..ParagraphStyle::default()
+            },
+            runs: vec![Run {
+                text: "Party A".to_string(),
+                style: TextStyle {
+                    font_family: Some("Libertinus Serif".to_string()),
+                    font_size: Some(9.5),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })],
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            cells: vec![cell],
+            height: None,
+        }],
+        column_widths: vec![225.65],
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains("#block()["),
+        "a lone cell paragraph keeps its exact pre-fix wrapper: {result}"
+    );
+    assert!(
+        !result.contains("above: 0pt"),
+        "a lone cell paragraph gains no spacing parameters: {result}"
+    );
+    assert!(
+        result.contains("#v(1.5pt)"),
+        "the trailing w:after stays inside the block for the row height: {result}"
+    );
+}
+
+/// A cell paragraph carrying its own `w:spacing w:line` gets *no* fixed line
+/// box — `word_cell_line_box` bails on `line_spacing`/`line_box` — so its
+/// height is whatever Typst's own line model produces. Zeroing such a
+/// paragraph's `#block` spacing removes the only vertical separation it has
+/// and collapses the stack onto itself (8.33pt where Word prints ~26.2pt).
+/// The suppression must therefore be gated per paragraph on the fixed line
+/// box actually being emitted, not on the cell merely stacking blocks. The
+/// residual short advance these paragraphs keep is issue #727.
+#[test]
+fn line_spaced_stacked_cell_paragraphs_keep_the_default_block_spacing() {
+    if crate::render::pdf::font_line_metrics_em("Libertinus Serif").is_none() {
+        return; // no font book available (e.g. exotic CI sandbox)
+    }
+    let make_para = |text: &str| -> Block {
+        Block::Paragraph(Paragraph {
+            style: ParagraphStyle {
+                line_spacing: Some(LineSpacing::Proportional(1.5)),
+                ..ParagraphStyle::default()
+            },
+            runs: vec![Run {
+                text: text.to_string(),
+                style: TextStyle {
+                    font_family: Some("Libertinus Serif".to_string()),
+                    font_size: Some(9.5),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })
+    };
+    let cell = TableCell {
+        content: vec![
+            make_para("Hanbit Tech Co., Ltd."),
+            make_para("CEO Lee Jun-seo (seal)"),
+        ],
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            cells: vec![cell],
+            height: None,
+        }],
+        column_widths: vec![225.65],
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert_eq!(
+        result.matches("#block()[").count(),
+        2,
+        "a line-spaced cell paragraph has no fixed line box, so it must keep \
+         the plain wrapper: {result}"
+    );
+    assert!(
+        !result.contains("above: 0pt"),
+        "zeroing a line-spaced paragraph's block spacing collapses the stack: {result}"
+    );
+}
+
+/// Word lays an empty `<w:p>` in a table cell out as one full blank line: the
+/// paragraph mark still occupies its line box. The cell path emitted nothing
+/// at all for it — no wrapper, no line box, no strut — so the spacer had zero
+/// height and the stack only looked right while Typst's ambient block spacing
+/// happened to stand in for it (issue #625). The empty paragraph must hold one
+/// line box of its own, sized like its neighbours'.
+#[test]
+fn an_empty_cell_paragraph_holds_one_full_line_box() {
+    let Some((_ascender, _descender, word_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+    let font_size: f64 = 9.5;
+    let line_box_height_pt: f64 = word_pitch_em * font_size;
+    let make_para = |text: &str| -> Block {
+        Block::Paragraph(Paragraph {
+            style: ParagraphStyle {
+                space_after: Some(1.5),
+                ..ParagraphStyle::default()
+            },
+            runs: vec![Run {
+                text: text.to_string(),
+                style: TextStyle {
+                    font_family: Some("Libertinus Serif".to_string()),
+                    font_size: Some(font_size),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })
+    };
+    let cell = TableCell {
+        content: vec![
+            make_para("Hanbit Tech Co., Ltd."),
+            Block::Paragraph(Paragraph {
+                style: ParagraphStyle {
+                    space_after: Some(1.5),
+                    ..ParagraphStyle::default()
+                },
+                runs: vec![],
+            }),
+            make_para("CEO Lee Jun-seo (seal)"),
+        ],
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            cells: vec![cell],
+            height: None,
+        }],
+        column_widths: vec![225.65],
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains(&format!(
+            "#box(width: 0pt, height: {}pt)",
+            format_f64(line_box_height_pt)
+        )),
+        "the empty spacer paragraph must hold one line box sized like its \
+         neighbours': {result}"
+    );
+    assert_eq!(
+        result.matches("#v(1.5pt)").count(),
+        3,
+        "every paragraph's own w:after still separates it from the next: {result}"
+    );
+}

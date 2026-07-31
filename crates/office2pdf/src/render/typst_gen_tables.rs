@@ -1661,29 +1661,48 @@ fn generate_cell_content(
     blocks: &[Block],
     ctx: &mut GenCtx,
 ) -> Result<(), ConvertError> {
+    // Word separates stacked cell paragraphs only by the resolved
+    // `w:spacing w:after`/`w:before` — the explicit `#v` emissions — but
+    // sibling `#block` wrappers otherwise pick up Typst's ambient default
+    // block spacing (1.2em at the document size), adding ~13pt Word never
+    // shows (issue #625). This counts the stacked blocks; whether a given
+    // paragraph may actually drop that ambient spacing is decided in
+    // `generate_cell_paragraph`, which zeroes it only for paragraphs that
+    // emit a fixed line box of their own. A lone block keeps today's exact
+    // emission, since its boundary spacing vanishes at the cell edge anyway.
+    let rendered_block_count: usize = blocks
+        .iter()
+        .filter(|block| {
+            !matches!(
+                block,
+                Block::TableOfContents(_) | Block::PageBreak | Block::ColumnBreak
+            )
+        })
+        .count();
+    let stacks_multiple_blocks: bool = rendered_block_count > 1;
     for (i, block) in blocks.iter().enumerate() {
         if i > 0 {
             out.push('\n');
         }
+        let paragraph_ctx = |para: &Paragraph| CellParagraphCtx {
+            default_tab_width_pt: ctx.default_tab_width_pt,
+            line_grid_pitch: ctx.line_grid_pitch,
+            row_has_east_asian_text: ctx.row_has_east_asian_text,
+            seats_text_on_descender: ctx.cell_seats_text_on_descender,
+            stacks_multiple_blocks,
+            paragraph_mark_metric_runs: para
+                .runs
+                .is_empty()
+                .then(|| empty_cell_paragraph_metric_runs(blocks, i))
+                .flatten(),
+        };
         match block {
             // A `TOC` field inside a table cell is not a shape Word produces.
             Block::TableOfContents(_) => {}
-            Block::Caption(caption) => generate_cell_paragraph(
-                out,
-                &caption.paragraph,
-                ctx.default_tab_width_pt,
-                ctx.line_grid_pitch,
-                ctx.row_has_east_asian_text,
-                ctx.cell_seats_text_on_descender,
-            ),
-            Block::Paragraph(para) => generate_cell_paragraph(
-                out,
-                para,
-                ctx.default_tab_width_pt,
-                ctx.line_grid_pitch,
-                ctx.row_has_east_asian_text,
-                ctx.cell_seats_text_on_descender,
-            ),
+            Block::Caption(caption) => {
+                generate_cell_paragraph(out, &caption.paragraph, &paragraph_ctx(&caption.paragraph))
+            }
+            Block::Paragraph(para) => generate_cell_paragraph(out, para, &paragraph_ctx(para)),
             Block::Table(table) => {
                 if ctx.table_depth < MAX_TABLE_DEPTH {
                     generate_table(out, table, ctx)?;
@@ -1713,14 +1732,58 @@ fn generate_cell_content(
     Ok(())
 }
 
-fn generate_cell_paragraph(
-    out: &mut String,
-    para: &Paragraph,
+/// The cell-level facts a paragraph's emission needs beyond its own IR.
+struct CellParagraphCtx<'a> {
     default_tab_width_pt: f64,
     line_grid_pitch: Option<f64>,
+    /// Decided once per row so every cell in it shares a baseline (issue #498).
     row_has_east_asian_text: bool,
     seats_text_on_descender: bool,
-) {
+    /// Whether the cell stacks more than one rendered block, so this
+    /// paragraph has a sibling to leak Typst's default block spacing against.
+    stacks_multiple_blocks: bool,
+    /// Runs standing in for the paragraph mark's own font when the paragraph
+    /// has none of its own — see [`empty_cell_paragraph_metric_runs`].
+    paragraph_mark_metric_runs: Option<&'a [Run]>,
+}
+
+/// The runs an empty `<w:p>` in a cell borrows its line box from.
+///
+/// Word lays a blank cell paragraph out on a full line, sized from the
+/// paragraph mark's own `w:rPr`. The IR carries no runs — and so no font or
+/// size — for such a paragraph, so the nearest sibling paragraph in the same
+/// cell stands in: the one above by preference, since a spacer line follows
+/// the text it separates (issue #625).
+///
+/// `None` when the cell holds no other text at all — a wholly blank cell,
+/// whose height Word takes from the row and the cell insets rather than from
+/// any run this codegen could measure.
+/// TODO(#625 follow-up: a wholly blank cell keeps today's zero-height
+/// emission, so a blank auto-height row is still one line short of Word;
+/// sizing it needs the table/style default font, which the IR does not carry
+/// to codegen — measure against a Word GT before inventing one).
+fn empty_cell_paragraph_metric_runs(blocks: &[Block], index: usize) -> Option<&[Run]> {
+    fn paragraph_runs(block: &Block) -> Option<&[Run]> {
+        match block {
+            Block::Paragraph(paragraph) => Some(paragraph.runs.as_slice()),
+            Block::Caption(caption) => Some(caption.paragraph.runs.as_slice()),
+            _ => None,
+        }
+    }
+    let preceding = blocks[..index]
+        .iter()
+        .rev()
+        .filter_map(paragraph_runs)
+        .find(|runs| !runs.is_empty());
+    preceding.or_else(|| {
+        blocks[index + 1..]
+            .iter()
+            .filter_map(paragraph_runs)
+            .find(|runs| !runs.is_empty())
+    })
+}
+
+fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagraphCtx) {
     let style: &ParagraphStyle = &para.style;
     let alignment = style.alignment;
     let align_str: Option<&str> = match alignment {
@@ -1739,17 +1802,46 @@ fn generate_cell_paragraph(
     let line_height_settings: Option<String> = word_cell_line_box_settings(
         &para.runs,
         style,
-        line_grid_pitch,
-        row_has_east_asian_text,
-        seats_text_on_descender,
+        cell.line_grid_pitch,
+        cell.row_has_east_asian_text,
+        cell.seats_text_on_descender,
     );
+    // An empty `<w:p>` has no runs, so it resolves no line box above and would
+    // otherwise emit nothing at all — zero height, where Word gives the
+    // paragraph mark a full blank line (issue #625). Size that line from the
+    // neighbours' metrics and hold it with a zero-width strut, the same shape
+    // the spill wrapper uses. This mirrors the body path's `#v` branch for an
+    // empty paragraph, at the cell's fixed line box instead of a flat 12pt.
+    let paragraph_mark_line_pt: Option<f64> = cell
+        .paragraph_mark_metric_runs
+        .and_then(|runs| {
+            word_cell_line_box(
+                runs,
+                style,
+                cell.line_grid_pitch,
+                cell.row_has_east_asian_text,
+                cell.seats_text_on_descender,
+            )
+        })
+        .map(|line_box| (line_box.top_em + line_box.bottom_em) * line_box.font_size_pt);
+    // Typst's default block spacing may only be dropped where this paragraph
+    // supplies a fixed line box of its own. A paragraph carrying `w:spacing
+    // w:line` gets none (`word_cell_line_box` bails on it), so zeroing its
+    // wrapper would leave it with no vertical separation at all and collapse
+    // the stack onto itself. Such a paragraph already advances short of Word
+    // for want of that box — that is issue #727, a separate defect from this
+    // suppression, which merely declines to make it worse.
+    let emits_fixed_line_box: bool =
+        line_height_settings.is_some() || paragraph_mark_line_pt.is_some();
+    let suppress_default_block_spacing: bool = cell.stacks_multiple_blocks && emits_fixed_line_box;
     let has_block_wrapper = cell_paragraph_needs_block_wrapper(style)
         || align_str.is_some()
-        || line_height_settings.is_some();
+        || line_height_settings.is_some()
+        || suppress_default_block_spacing;
 
     if has_block_wrapper {
         out.push_str("#block(");
-        write_cell_paragraph_block_params(out, align_str.is_some());
+        write_cell_paragraph_block_params(out, align_str.is_some(), suppress_default_block_spacing);
         out.push_str(")[\n");
         write_line_box_settings(out, style.line_box);
         write_par_settings(out, style);
@@ -1765,17 +1857,25 @@ fn generate_cell_paragraph(
         let _ = writeln!(out, "#v({}pt)", format_f64(space_before));
     }
 
-    generate_runs_with_tabs(
-        out,
-        &para.runs,
-        style.tab_stops.as_deref(),
-        default_tab_width_pt,
-    );
+    match paragraph_mark_line_pt {
+        Some(height_pt) => {
+            let _ = write!(out, "#box(width: 0pt, height: {}pt)", format_f64(height_pt));
+        }
+        None => generate_runs_with_tabs(
+            out,
+            &para.runs,
+            style.tab_stops.as_deref(),
+            cell.default_tab_width_pt,
+        ),
+    }
 
     // Suppressed when the grid-snapped line box already contains it, or the
     // gap would be counted twice (issues #500, #503).
+    // TODO(#625 follow-up: cells compose w:after + w:before additively via
+    // strong #v while body flow max-collapses them; Word's in-cell rule is
+    // unmeasured — probe before changing).
     if let Some(space_after) = style.space_after
-        && !cell_grid_absorbs_space_after(style, line_grid_pitch, row_has_east_asian_text)
+        && !cell_grid_absorbs_space_after(style, cell.line_grid_pitch, cell.row_has_east_asian_text)
     {
         let _ = write!(out, "\n#v({}pt)", format_f64(space_after));
     }
@@ -1792,10 +1892,25 @@ fn cell_paragraph_needs_block_wrapper(style: &ParagraphStyle) -> bool {
         || matches!(style.direction, Some(TextDirection::Rtl))
 }
 
-fn write_cell_paragraph_block_params(out: &mut String, needs_full_width: bool) {
+fn write_cell_paragraph_block_params(
+    out: &mut String,
+    needs_full_width: bool,
+    suppress_default_block_spacing: bool,
+) {
     let mut first = true;
 
     if needs_full_width {
         write_param(out, &mut first, "width: 100%");
+    }
+    // Stacked cell paragraphs: the inter-paragraph gap is carried entirely by
+    // the explicit `#v(space_before)`/`#v(space_after)` emissions (which are
+    // the resolved Word values), so the wrapper must contribute nothing —
+    // Typst's default `block` spacing is 1.2em of engine whitespace Word does
+    // not have (issue #625). The trailing `#v(space_after)` stays *inside* the
+    // block rather than becoming a weak `below:`, because Word counts it into
+    // the row height and weak spacing would vanish at the cell's edge.
+    if suppress_default_block_spacing {
+        write_param(out, &mut first, "above: 0pt");
+        write_param(out, &mut first, "below: 0pt");
     }
 }
