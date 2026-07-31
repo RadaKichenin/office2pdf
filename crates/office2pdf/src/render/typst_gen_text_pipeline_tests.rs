@@ -882,6 +882,13 @@ fn only_the_tokens_carrying_hangul_are_framed() {
 /// paragraph text, which would otherwise reopen a mid-word break opportunity.
 #[test]
 fn the_east_asian_auto_space_stays_inside_the_eojeol() {
+    // The `#box(…)` form this looks for is the frame that restores a *fixed*
+    // line box, which the paragraph only declares when its Korean face
+    // resolves. A machine without one — every CI runner here — emits the bare
+    // `#box[` instead, so the premise cannot hold.
+    if crate::render::pdf::font_line_metrics_em("Malgun Gothic").is_none() {
+        return; // no Korean face available (e.g. a runner with no CJK fonts)
+    }
     let doc = make_doc(vec![make_flow_page(vec![korean_paragraph(
         "2026\u{E001}년 계약",
         None,
@@ -904,6 +911,12 @@ fn the_east_asian_auto_space_stays_inside_the_eojeol() {
 /// by the descent. The frame restores both edges and shifts its baseline back.
 #[test]
 fn a_framed_eojeol_keeps_the_paragraphs_baseline() {
+    // The correction exists only under a fixed line box, and the paragraph
+    // derives that box from its Korean face's own metrics. Without one — every
+    // CI runner here — there is no box to restore and nothing to assert.
+    if crate::render::pdf::font_line_metrics_em("Malgun Gothic").is_none() {
+        return; // no Korean face available (e.g. a runner with no CJK fonts)
+    }
     let doc = make_doc(vec![make_flow_page(vec![korean_paragraph(
         EOJEOL_SENTENCE,
         None,
@@ -936,6 +949,11 @@ fn a_framed_eojeol_keeps_the_paragraphs_baseline() {
 /// Triangulation: the shift is the paragraph's own descent, not a constant.
 #[test]
 fn the_frames_baseline_shift_scales_with_the_font_size() {
+    // Same premise as the test above: the shift is the fixed line box's own
+    // descent, and that box needs the Korean face's measured metrics.
+    if crate::render::pdf::font_line_metrics_em("Malgun Gothic").is_none() {
+        return; // no Korean face available (e.g. a runner with no CJK fonts)
+    }
     let mut shifts: Vec<String> = Vec::new();
     for size in [10.5_f64, 20.0_f64] {
         let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
@@ -1251,6 +1269,13 @@ fn a_token_wider_than_its_column_is_not_framed() {
     // 150pt column, and short enough that a character ceiling would let it
     // through.
     let long_token: String = "가나다라마바사아자차카타파하가나다라마바".to_string();
+    // The premise is that the token *measures* over the column, so the guard
+    // needs the same advance the generator does. Without a Korean face — every
+    // CI runner here — nothing measures and the generator falls back to its
+    // character ceiling, which this deliberately 20-character token clears.
+    if crate::render::pdf::text_advance_em("Malgun Gothic", false, &long_token).is_none() {
+        return; // no Korean face available (e.g. a runner with no CJK fonts)
+    }
     let table = Table {
         rows: vec![TableRow {
             cells: vec![make_text_cell_styled(
@@ -1274,6 +1299,12 @@ fn a_token_wider_than_its_column_is_not_framed() {
 
 /// Triangulation for the guard above: the same token in a column wide enough
 /// to hold it *is* framed, so the rule keys on width and not on the token.
+///
+/// Deliberately unguarded, unlike its partner: without a Korean face the token
+/// is framed by the character ceiling instead of by the width rule, so the
+/// assertion still holds and keeps guarding "a frame is emitted at all" on a
+/// runner with no CJK fonts. Only the *width* half of the triangulation needs
+/// the face, and that half lives in the test above.
 #[test]
 fn the_same_token_is_framed_when_the_column_can_hold_it() {
     let long_token: String = "가나다라마바사아자차카타파하가나다라마바".to_string();
