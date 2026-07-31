@@ -544,6 +544,18 @@ const EAST_ASIAN_AUTO_SPACE_CHAR: char = '\u{E001}';
 /// (`제3자` widens at `제→3` and at `3→자`). Only setting the two properties to
 /// `false` suppresses it, and then completely (issue #521).
 ///
+/// The caller decides *whether* a paragraph is eligible; this function only
+/// knows where the boundaries are. Corpus GT then narrowed the probe's reading
+/// twice: justification absorbs the space, and cell text never carries it at
+/// all (issue #627), so neither reaches here.
+///
+/// Those narrowings contradict the #521 probe above, which read the space as
+/// present in a cell and in a plain paragraph alike. The corpus GT wins where
+/// the two disagree — four native exports show cell boundaries flush — but the
+/// disagreement is unresolved for the *plain body* case, which the probe says
+/// widens and the 06_official_letter_ko GT says is flush. Issue #732 tracks
+/// settling it; until then the body arm keeps the probe's reading.
+///
 /// The boundary can fall between two runs, so the scan carries the previous
 /// character across the run break rather than restarting at each run.
 ///
