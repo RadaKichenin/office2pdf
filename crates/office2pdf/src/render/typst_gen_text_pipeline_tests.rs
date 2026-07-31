@@ -1506,8 +1506,8 @@ fn test_format_without_kerning_model_emits_no_kerning_parameter() {
 #[test]
 fn test_rtl_run_keeps_kerning_despite_the_word_rule() {
     // typst 0.14.2 mis-orders RTL glyph ranges when the `kern` feature is
-    // off, so Word's rule is not applied to right-to-left text — see
-    // `keeps_kerning_for_shaping`.
+    // off, so Word's rule is not applied to a document that shapes
+    // right-to-left — see `with_rtl_shaping_exemption`.
     let doc = make_doc_with_default_text(
         vec![make_flow_page(vec![styled_paragraph(
             "مرحبا بالعالم",
@@ -1575,10 +1575,110 @@ fn test_bare_rtl_run_is_never_left_under_a_kerning_false() {
         !source.contains("#set text(kerning: false)"),
         "and nothing document-wide may switch it off either: {source}"
     );
-    // The Latin run in the same document still follows Word.
+    // The Latin run travels with it: bidi reordering is decided over a whole
+    // shaped paragraph, and a run's own codepoints do not bound the scope the
+    // exemption has to cover. See
+    // `test_neutral_run_beside_an_rtl_run_keeps_kerning`.
     assert!(
-        source.contains("#text(kerning: false)[Latin body copy]"),
-        "the rule is scoped per run, not abandoned: {source}"
+        !source.contains("kerning: false"),
+        "no run in a document carrying RTL may state kerning: false: {source}"
+    );
+}
+
+/// A paragraph whose runs are given verbatim, so a test can mix scripts inside
+/// one shaped bidi paragraph.
+fn paragraph_of_runs(style: ParagraphStyle, texts: &[(&str, TextStyle)]) -> Block {
+    Block::Paragraph(Paragraph {
+        style,
+        runs: texts
+            .iter()
+            .map(|(text, run_style)| Run {
+                text: (*text).to_string(),
+                style: run_style.clone(),
+                href: None,
+                footnote: None,
+            })
+            .collect(),
+    })
+}
+
+#[test]
+fn test_neutral_run_beside_an_rtl_run_keeps_kerning() {
+    // typst shapes a whole bidi *paragraph*, not a run: the runs around a
+    // right-to-left one are reordered with it, so a run whose own codepoints
+    // are all Latin or neutral still reaches the shaper as a right-to-left
+    // segment. Disabling `kern` there is what inverts the glyph ranges, and
+    // krilla then panics building the text group ("byte range starts at 3 but
+    // ends at 0"). The exemption therefore cannot be decided from one run's
+    // own text (issue #628 follow-up).
+    let unkerned = TextStyle {
+        font_family: Some("Arial".to_string()),
+        font_size: Some(14.0),
+        pair_kerning: Some(PairKerning::Never),
+        ..TextStyle::default()
+    };
+    let doc = make_doc_with_default_text(
+        vec![make_flow_page(vec![paragraph_of_runs(
+            ParagraphStyle::default(),
+            &[
+                ("We met a girl ", unkerned.clone()),
+                ("مرحبا", unkerned.clone()),
+                (" whose father was a diver.", unkerned.clone()),
+            ],
+        )])],
+        TextStyle {
+            font_size: Some(11.0),
+            pair_kerning: Some(PairKerning::Never),
+            ..TextStyle::default()
+        },
+    );
+
+    let source = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        !source.contains("kerning: false"),
+        "no run of a paragraph carrying RTL may state kerning: false: {source}"
+    );
+}
+
+#[test]
+fn test_rtl_paragraph_direction_keeps_kerning_on_neutral_text() {
+    // FDO76312.docx's cells: `w:bidi` makes the paragraph's base direction
+    // right-to-left, so its neutral characters — an ellipsis run, a row of
+    // full stops — take an RTL bidi level even though no strong RTL codepoint
+    // appears anywhere in the file. Two such characters in a row are enough to
+    // trip the shaping defect, so the direction has to be read as well as the
+    // text (issue #628 follow-up).
+    let unkerned = TextStyle {
+        font_family: Some("Arial".to_string()),
+        font_size: Some(14.0),
+        pair_kerning: Some(PairKerning::Never),
+        ..TextStyle::default()
+    };
+    let doc = make_doc_with_default_text(
+        vec![make_flow_page(vec![paragraph_of_runs(
+            ParagraphStyle {
+                direction: Some(TextDirection::Rtl),
+                ..ParagraphStyle::default()
+            },
+            &[("She taught .......... how to use a computer.", unkerned)],
+        )])],
+        TextStyle {
+            font_size: Some(11.0),
+            pair_kerning: Some(PairKerning::Never),
+            ..TextStyle::default()
+        },
+    );
+
+    let source = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        source.contains("dir: rtl"),
+        "the paragraph is emitted right-to-left: {source}"
+    );
+    assert!(
+        !source.contains("kerning: false"),
+        "an RTL-directed paragraph keeps kerning on its neutral text: {source}"
     );
 }
 

@@ -380,33 +380,46 @@ pub(crate) fn generate_typst_with_options_and_font_context(
     font_context: Option<&FontSearchContext>,
 ) -> Result<TypstOutput, ConvertError> {
     super::font_subst::with_font_search_context(font_context, || {
-        // Pre-allocate output string: ~2KB per page is a reasonable estimate
-        let mut out = String::with_capacity(doc.pages.len() * 2048);
-
-        // Emit document metadata (title/author) if present
-        generate_document_metadata(&mut out, &doc.metadata);
-        write_page_format_state(&mut out);
-
-        let mut ctx = GenCtx::new();
-        ctx.document_default_tab_stop_pt = doc.styles.default_tab_stop_pt;
-        ctx.document_default_text = doc.styles.default_text.clone();
-        for (index, page) in doc.pages.iter().enumerate() {
-            if index > 0 {
-                out.push_str("\n#pagebreak()\n");
-            }
-            match page {
-                Page::Flow(flow) => generate_flow_page(&mut out, flow, &mut ctx, options)?,
-                Page::Fixed(fixed) => generate_fixed_page(&mut out, fixed, &mut ctx, options)?,
-                Page::Sheet(sheet_page) => {
-                    generate_table_page(&mut out, sheet_page, &mut ctx, options)?;
-                }
-            }
-            ctx.at_document_start = false;
+        let first_pass: TypstOutput =
+            text::with_rtl_shaping_exemption(false, || generate_pages(doc, options))?;
+        // Whether the document shapes right-to-left is answered by the markup
+        // itself, so nothing about the IR has to be modelled to find it — see
+        // `with_rtl_shaping_exemption`. The pass costs one more walk of the IR
+        // for the documents that do, and nothing for the ones that do not.
+        if !text::source_shapes_right_to_left(&first_pass.source) {
+            return Ok(first_pass);
         }
-        Ok(TypstOutput {
-            source: out,
-            images: ctx.images,
-        })
+        text::with_rtl_shaping_exemption(true, || generate_pages(doc, options))
+    })
+}
+
+fn generate_pages(doc: &Document, options: &ConvertOptions) -> Result<TypstOutput, ConvertError> {
+    // Pre-allocate output string: ~2KB per page is a reasonable estimate
+    let mut out = String::with_capacity(doc.pages.len() * 2048);
+
+    // Emit document metadata (title/author) if present
+    generate_document_metadata(&mut out, &doc.metadata);
+    write_page_format_state(&mut out);
+
+    let mut ctx = GenCtx::new();
+    ctx.document_default_tab_stop_pt = doc.styles.default_tab_stop_pt;
+    ctx.document_default_text = doc.styles.default_text.clone();
+    for (index, page) in doc.pages.iter().enumerate() {
+        if index > 0 {
+            out.push_str("\n#pagebreak()\n");
+        }
+        match page {
+            Page::Flow(flow) => generate_flow_page(&mut out, flow, &mut ctx, options)?,
+            Page::Fixed(fixed) => generate_fixed_page(&mut out, fixed, &mut ctx, options)?,
+            Page::Sheet(sheet_page) => {
+                generate_table_page(&mut out, sheet_page, &mut ctx, options)?;
+            }
+        }
+        ctx.at_document_start = false;
+    }
+    Ok(TypstOutput {
+        source: out,
+        images: ctx.images,
     })
 }
 

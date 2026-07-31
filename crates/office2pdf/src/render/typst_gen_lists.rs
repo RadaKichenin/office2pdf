@@ -835,9 +835,10 @@ pub(super) fn write_common_text_settings(out: &mut String, runs: &[Run], indent:
 
     out.push_str(indent);
     out.push_str("#set text(");
-    // The rule covers exactly these runs, so their scripts decide its kerning
-    // the way a single run's own text decides its own (issue #628).
-    write_text_params_for_runs(out, &style, runs);
+    // The rule states the document's own kerning decision; the empty text is
+    // that answer rather than a claim about the runs' content, whose font list
+    // is chosen per run (issue #628).
+    write_text_params_for_text(out, &style, "");
     out.push_str(")\n");
 }
 

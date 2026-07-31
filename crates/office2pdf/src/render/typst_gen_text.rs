@@ -1928,28 +1928,6 @@ pub(super) fn write_text_params_for_text(out: &mut String, style: &TextStyle, te
     write_text_params_inner(out, style, KerningText::Known(text));
 }
 
-/// As [`write_text_params`], but for a `#set text(...)` covering known runs.
-///
-/// The runs are what the rule will apply to, so their scripts decide the
-/// kerning answer the same way a single run's own text does.
-pub(super) fn write_text_params_for_runs(out: &mut String, style: &TextStyle, runs: &[Run]) {
-    let covers_rtl: bool = runs.iter().any(|run| keeps_kerning_for_shaping(&run.text));
-    write_text_params_inner(
-        out,
-        style,
-        if covers_rtl {
-            // One RTL run under the rule is enough to make the safe answer the
-            // only one the whole rule may take.
-            KerningText::Unknown
-        } else {
-            // No run is right-to-left, so the rule may state what the document
-            // asks for; the empty text is that answer, not a claim about the
-            // runs' content (the font list is chosen per run).
-            KerningText::Known("")
-        },
-    );
-}
-
 /// What the emitter knows about the text a `#text(...)` will cover.
 #[derive(Clone, Copy)]
 enum KerningText<'a> {
@@ -2014,8 +1992,9 @@ fn write_text_params_inner(out: &mut String, style: &TextStyle, kerning_text: Ke
 fn kerning_param(style: &TextStyle, kerning_text: KerningText<'_>) -> Option<String> {
     let pair_kerning: PairKerning = style.pair_kerning?;
     let kerns: bool = pair_kerning.applies_at(style.font_size)
+        || rtl_shaping_exemption_is_active()
         || match kerning_text {
-            KerningText::Known(text) => keeps_kerning_for_shaping(text),
+            KerningText::Known(_) => false,
             // Unknown text may be RTL, and switching kerning off there costs
             // glyphs; switching it on costs a fraction of a point of advance.
             KerningText::Unknown => true,
@@ -2023,8 +2002,14 @@ fn kerning_param(style: &TextStyle, kerning_text: KerningText<'_>) -> Option<Str
     Some(format!("kerning: {kerns}"))
 }
 
-/// Whether the renderer must keep the OpenType `kern` feature on for this
-/// text regardless of what the document asks for.
+thread_local! {
+    /// Whether the document being generated is one the `kern` feature may not
+    /// be switched off in. See [`with_rtl_shaping_exemption`].
+    static RTL_SHAPING_EXEMPTION: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Run `operation` with the RTL kerning exemption in the given state, then
+/// restore whatever it was.
 ///
 /// TODO(typst 0.14.2 mis-orders RTL glyph ranges without `kern`; report
 /// upstream): shaping a right-to-left segment of two or more characters with
@@ -2032,21 +2017,61 @@ fn kerning_param(style: &TextStyle, kerning_text: KerningText<'_>) -> Option<Str
 /// first glyph the whole segment's text range, leaving the next glyph an
 /// inverted one. A debug build trips `assert_glyph_ranges_in_order` in
 /// `typst-layout`'s `inline/shaping.rs`; a release build keeps the broken
-/// ranges, which are what krilla writes `ActualText` from, and drops glyphs
-/// from the page. Measured on Arabic and Hebrew at two characters and up; a
-/// single character, Latin, Hangul, Han, Thai and Devanagari all shape
-/// correctly, and every one of them is fine with the feature left on. Word's
-/// own kerning rule is therefore honoured everywhere except RTL, where it
-/// would cost correct text to gain at most a fraction of a point of advance.
-/// The defect is upstream's, not ours — per the reference-project rule it
-/// belongs in a typst issue with this reproduction, and the exemption here
-/// should be removed once a release carries the fix.
-fn keeps_kerning_for_shaping(text: &str) -> bool {
+/// ranges, which are what krilla writes `ActualText` from — krilla 0.6.0 then
+/// panics with "byte range starts at 3 but ends at 0", which is how
+/// FDO76312.docx failed the bulk gate. Measured on Arabic and Hebrew at two
+/// characters and up; a single character, Latin, Hangul, Han, Thai and
+/// Devanagari all shape correctly, and every one of them is fine with the
+/// feature left on. Word's own kerning rule is therefore honoured everywhere
+/// except in documents that shape right-to-left, where it would cost correct
+/// text to gain at most a fraction of a point of advance. The defect is
+/// upstream's, not ours — per the reference-project rule it belongs in a typst
+/// issue with this reproduction, and the exemption here should be removed once
+/// a release carries the fix.
+///
+/// The exemption is a *document*-wide switch rather than a per-run one because
+/// bidi reordering is decided over a whole shaped paragraph: the run that
+/// loses its glyph order need carry no right-to-left codepoint at all. It is
+/// enough that a sibling run does (`مرحبا` between two Latin runs), or that
+/// the paragraph's base direction is right-to-left and the run holds two
+/// neutral characters — `w:bidi` plus a row of full stops, which is exactly
+/// FDO76312.docx. Narrower scopes have to model which emissions end up in one
+/// shaped paragraph; this one does not, so no emission site can bypass it.
+pub(super) fn with_rtl_shaping_exemption<T>(active: bool, operation: impl FnOnce() -> T) -> T {
+    RTL_SHAPING_EXEMPTION.with(|exemption| {
+        let previous: bool = exemption.replace(active);
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(operation));
+        exemption.set(previous);
+        match result {
+            Ok(value) => value,
+            Err(panic) => std::panic::resume_unwind(panic),
+        }
+    })
+}
+
+fn rtl_shaping_exemption_is_active() -> bool {
+    RTL_SHAPING_EXEMPTION.with(std::cell::Cell::get)
+}
+
+/// Whether generated Typst markup will be shaped right-to-left anywhere.
+///
+/// This reads the emitted source rather than the IR it came from, because the
+/// source is what the engine shapes: no IR shape, and no future emission site,
+/// can carry a right-to-left segment past it. Both routes to one are visible
+/// there — a `dir: rtl` the emitter wrote for a paragraph whose base direction
+/// is right-to-left, and the strong right-to-left codepoints themselves, which
+/// `escape_typst` passes through unchanged.
+///
+/// Text that merely *reads* `dir: rtl` costs the document its kerning rule and
+/// nothing else, which is the side to be wrong on.
+pub(super) fn source_shapes_right_to_left(source: &str) -> bool {
     // The strong right-to-left blocks, as `xlsx_cells::strong_direction` reads
     // them: Hebrew, Arabic and its supplements, Syriac, Thaana, and the Arabic
     // presentation forms.
-    text.chars()
+    source
+        .chars()
         .any(|ch| matches!(ch as u32, 0x0590..=0x08FF | 0xFB1D..=0xFDFF | 0xFE70..=0xFEFF))
+        || source.contains("dir: rtl")
 }
 
 /// Whether a run needs a `#text(...)` of its own purely to state kerning.
@@ -2055,8 +2080,7 @@ fn keeps_kerning_for_shaping(text: &str) -> bool {
 /// takes the engine's default — which kerns. That is the wrong answer for the
 /// body text of a document Word does not kern, so the decision is stated on
 /// the run rather than document-wide: a document-wide `kerning: false` would
-/// also reach the emission sites that cannot name their text, and RTL text
-/// under it loses glyphs (see [`keeps_kerning_for_shaping`]).
+/// also reach the emission sites that cannot name their text.
 fn needs_kerning_wrapper(style: &TextStyle, text: &str) -> bool {
     !text.is_empty()
         && kerning_param(style, KerningText::Known(text))
