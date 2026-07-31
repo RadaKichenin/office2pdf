@@ -207,6 +207,84 @@ fn compile_to_pdf_inner(
     })
 }
 
+/// One shaped text run as the layout engine actually placed it.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+#[derive(Debug, Clone)]
+pub(crate) struct PlacedTextRun {
+    /// Distance from the page's top edge down to the run's baseline, in points.
+    pub baseline_pt: f64,
+    /// Distance from the page's left edge to the run's origin, in points.
+    pub left_pt: f64,
+    /// The family the run was actually shaped with, which is not always the one
+    /// the source asked for.
+    pub family: String,
+    pub text: String,
+}
+
+/// Every text run the compiled document places on `page_index`, in layout order.
+///
+/// The emitted source cannot show where a line ends up: `top-edge`, `place` and
+/// `measure` are all resolved by the layout engine, and issue #629's first
+/// attempt passed a source-string assertion while moving every wrapped line of
+/// the paragraph it touched. Tests for placement therefore compile the source
+/// and read the frames.
+///
+/// Group transforms are followed by their translation only; nothing in a header
+/// or footer story rotates or scales, and a run inside such a group would be
+/// reported at the wrong place rather than silently skipped.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+pub(crate) fn compiled_text_runs(
+    typst_source: &str,
+    page_index: usize,
+) -> Result<Vec<PlacedTextRun>, ConvertError> {
+    use typst::layout::{Frame, FrameItem, Point};
+
+    fn collect(frame: &Frame, origin: Point, out: &mut Vec<PlacedTextRun>) {
+        for (position, item) in frame.items() {
+            let at: Point = origin + *position;
+            match item {
+                FrameItem::Group(group) => {
+                    let shift = Point::new(group.transform.tx, group.transform.ty);
+                    collect(&group.frame, at + shift, out);
+                }
+                FrameItem::Text(text) => out.push(PlacedTextRun {
+                    baseline_pt: at.y.to_pt(),
+                    left_pt: at.x.to_pt(),
+                    family: text.font.info().family.clone(),
+                    text: text.text.to_string(),
+                }),
+                _ => {}
+            }
+        }
+    }
+
+    // The same font set the conversion pipeline compiles with, so a probe sees
+    // the faces `font_hhea_ascender_em` measured rather than a substitute.
+    // Resolving it rescans the font directories, which dominates a probe's
+    // runtime, so the paths are resolved once for the whole test process.
+    static PROBE_FONT_PATHS: OnceLock<Vec<PathBuf>> = OnceLock::new();
+    let font_paths: &Vec<PathBuf> = PROBE_FONT_PATHS.get_or_init(|| {
+        super::font_context::resolve_font_search_context(&[])
+            .search_paths()
+            .to_vec()
+    });
+    let world = MinimalWorld::new(typst_source, &[], font_paths);
+    let warned = typst::compile::<typst::layout::PagedDocument>(&world);
+    let document = warned.output.map_err(|errors| {
+        let messages: Vec<String> = errors.iter().map(|e| e.message.to_string()).collect();
+        ConvertError::Render(format!("Typst compilation failed: {}", messages.join("; ")))
+    })?;
+    let page = document.pages.get(page_index).ok_or_else(|| {
+        ConvertError::Render(format!(
+            "page {page_index} is past the document's {} pages",
+            document.pages.len()
+        ))
+    })?;
+    let mut runs: Vec<PlacedTextRun> = Vec::new();
+    collect(&page.frame, Point::zero(), &mut runs);
+    Ok(runs)
+}
+
 /// Convert the current system time to a Typst `Datetime` in UTC.
 ///
 /// Uses `std::time::SystemTime` to avoid an external chrono dependency.
@@ -384,6 +462,130 @@ impl World for MinimalWorld {
 #[path = "pdf_tests.rs"]
 mod tests;
 
+/// The face the compiler will shape `family` with.
+///
+/// The declared name may be one the font book does not register — a localized
+/// East Asian family, or a face the machine does not have — so the same alias
+/// and substitute chain rendering resolves through is walked here (issue #575).
+/// Resolving through the same font set the compiler uses also primes the
+/// compile-time cache.
+#[cfg(not(target_arch = "wasm32"))]
+fn best_face(family: &str) -> Option<typst::text::Font> {
+    let search_context = super::font_context::resolve_font_search_context(&[]);
+    let data = get_fonts_for_extra_paths(search_context.search_paths());
+    super::font_subst::family_candidates(family)
+        .iter()
+        .find_map(|candidate| {
+            data.book.select(
+                &candidate.to_lowercase(),
+                typst::text::FontVariant::default(),
+            )
+        })
+        .and_then(|index| data.fonts.get(index))
+        .and_then(|slot| slot.get())
+}
+
+/// Look a per-family `f64` metric up through a process-wide cache.
+///
+/// Font resolution walks the substitute chain and opens the face, so every
+/// caller that asks the same question twice would pay for it twice.
+#[cfg(not(target_arch = "wasm32"))]
+fn cached_family_metric(
+    cache: &OnceLock<Mutex<HashMap<String, Option<f64>>>>,
+    family: &str,
+    compute: impl FnOnce(&typst::text::Font) -> Option<f64>,
+) -> Option<f64> {
+    let cache = cache.get_or_init(|| Mutex::new(HashMap::new()));
+    let key: String = family.to_lowercase();
+    if let Some(cached) = cache
+        .lock()
+        .expect("metrics cache mutex should not be poisoned")
+        .get(&key)
+    {
+        return *cached;
+    }
+
+    let value: Option<f64> = best_face(family).and_then(|font| compute(&font));
+    cache
+        .lock()
+        .expect("metrics cache mutex should not be poisoned")
+        .insert(key, value);
+    value
+}
+
+/// The `hhea` ascender of the best face for `family`, in em units.
+///
+/// This is the ascent Word measures a header story's first baseline by, and it
+/// is deliberately *not* [`font_line_metrics_em`]'s first element: that one
+/// folds in the `hhea` line gap, which Word keeps above the header origin
+/// rather than below it. The 0.0327em difference on Arial is why an 8pt header
+/// baseline lands at 42.64pt below `w:pgMar/@w:header` = 35.40pt instead of
+/// 42.90pt — the native export measures 42.72pt on its 0.24pt grid (issues
+/// #508, #629).
+///
+/// Read out of the `hhea` table directly rather than through
+/// `ttf_parser::Face::ascender`, whose name promises `hhea` but which returns
+/// OS/2 `sTypoAscender` whenever `fsSelection` sets `USE_TYPO_METRICS`: 84 of
+/// the 1109 faces installed on the calibration machine set that bit, and on 8
+/// of them — Cambria Math among them, at 0.9502em against 0.7778em — the two
+/// tables disagree, so the alias silently answers a different question.
+///
+/// Which table Word measures by is *not* settled by the corpus. Both calibrated
+/// faces, Arial (0.9053em) and Malgun Gothic (1.0884em), carry `usWinAscent`
+/// equal to their `hhea` ascender, and no header in the corpus uses a face where
+/// they differ — though 407 of the 1109 local faces do, by up to 0.2275em
+/// (Candara: 0.7246 against 0.9521). `hhea` is chosen because the ground truth
+/// is macOS Word, whose text stack reports a face's ascent from `hhea`, while
+/// `usWinAscent` is the GDI quantity; and because [`font_line_metrics_em`]
+/// builds Word's single-line pitch from `hhea`'s ascender, descender and line
+/// gap, calibrated to 0.0005em on Arial (issue #508) — taking the two halves of
+/// one line box from two different tables would be the odd choice.
+///
+/// TODO(the corpus cannot separate `hhea` from `usWinAscent`): a native macOS
+/// Word export of a Candara header would settle it outright. The attempt in this
+/// session could not — every `save as … format PDF` died with AppleEvent -1712
+/// and wrote a 0-byte file, across seven attempts and a clean relaunch. Note also that `font_line_metrics_em`
+/// still reads its ascender through the alias, so the two disagree on those 8
+/// faces until it is given the same explicit read.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn font_hhea_ascender_em(family: &str) -> Option<f64> {
+    static ASCENDER_CACHE: OnceLock<Mutex<HashMap<String, Option<f64>>>> = OnceLock::new();
+    cached_family_metric(&ASCENDER_CACHE, family, |font| {
+        let ttf = font.ttf();
+        Some(f64::from(ttf.tables().hhea.ascender) / f64::from(ttf.units_per_em()).max(1.0))
+    })
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn font_hhea_ascender_em(_family: &str) -> Option<f64> {
+    None
+}
+
+/// The cap height of the best face for `family`, in em units.
+///
+/// This is the ascent the compiler itself gives a text line: `top-edge` defaults
+/// to `"cap-height"`, and the value is taken from the very `Font` the compile
+/// will shape with, so it tracks Typst's own fallbacks (`OS/2 sCapHeight`, else
+/// the typographic ascender, else `hhea`) instead of restating them. Reading it
+/// is what lets the header band be shifted by the *difference* between Word's
+/// seat and the compiler's, leaving every line box — and therefore the story's
+/// baseline-to-baseline advance — exactly as the compiler would lay it out
+/// (issue #629). That advance is the compiler's, not Word's: header paragraphs
+/// never receive the line-box settings body paragraphs do, which is issue #735
+/// and deliberately untouched here.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn font_cap_height_em(family: &str) -> Option<f64> {
+    static CAP_HEIGHT_CACHE: OnceLock<Mutex<HashMap<String, Option<f64>>>> = OnceLock::new();
+    cached_family_metric(&CAP_HEIGHT_CACHE, family, |font| {
+        Some(font.metrics().cap_height.get())
+    })
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn font_cap_height_em(_family: &str) -> Option<f64> {
+    None
+}
+
 /// Line metrics of the best face for `family`, in em units:
 /// `(above baseline, below baseline, Word single-line pitch)`.
 ///
@@ -412,47 +614,25 @@ pub(crate) fn font_line_metrics_em(family: &str) -> Option<(f64, f64, f64)> {
         return *cached;
     }
 
-    // Use the same font set the compiler will use (system + discovered
-    // Office font dirs); this also primes the compile-time cache.
-    let search_context = super::font_context::resolve_font_search_context(&[]);
-    let data = get_fonts_for_extra_paths(search_context.search_paths());
-    // The declared name may be one the book does not register — a localized
-    // East Asian family, or a face the machine does not have — so the same
-    // alias and substitute chain rendering resolves through is walked here
-    // (issue #575).
-    let metrics: Option<(f64, f64, f64)> = super::font_subst::family_candidates(family)
-        .iter()
-        .find_map(|candidate| {
-            data.book.select(
-                &candidate.to_lowercase(),
-                typst::text::FontVariant::default(),
-            )
-        })
-        .and_then(|index| data.fonts.get(index))
-        .and_then(|slot| slot.get())
-        .map(|font| {
-            // Use Typst's own resolved metrics so the emitted leading matches
-            // exactly what the layout engine will produce with metric edges.
-            let metrics = font.metrics();
-            let ttf = font.ttf();
-            let upem = f64::from(ttf.units_per_em()).max(1.0);
-            let hhea_pitch_em = (f64::from(ttf.ascender()) - f64::from(ttf.descender())
-                + f64::from(ttf.line_gap()))
-                / upem;
-            // Word seats the baseline `hhea ascender + lineGap` below the top
-            // of the line, not at the font's ascender/descender proportion of
-            // the box — measured to 0.0005em on Arial (issue #508). Typst's
-            // `metrics` pair is normalised (Malgun Gothic's sums to exactly
-            // 1.0) and cannot express that, so the split comes from `hhea`.
-            //
-            // Safe to change only since #512: the document-grid arms used to
-            // derive their line count from this pair, so altering it silently
-            // repaginated. They now choose between the grid pitch and the
-            // natural line without consulting it.
-            let top_em: f64 = (f64::from(ttf.ascender()) + f64::from(ttf.line_gap())) / upem;
-            let _ = metrics;
-            (top_em, hhea_pitch_em - top_em, hhea_pitch_em)
-        });
+    let metrics: Option<(f64, f64, f64)> = best_face(family).map(|font| {
+        let ttf = font.ttf();
+        let upem = f64::from(ttf.units_per_em()).max(1.0);
+        let hhea_pitch_em = (f64::from(ttf.ascender()) - f64::from(ttf.descender())
+            + f64::from(ttf.line_gap()))
+            / upem;
+        // Word seats the baseline `hhea ascender + lineGap` below the top
+        // of the line, not at the font's ascender/descender proportion of
+        // the box — measured to 0.0005em on Arial (issue #508). Typst's
+        // `metrics` pair is normalised (Malgun Gothic's sums to exactly
+        // 1.0) and cannot express that, so the split comes from `hhea`.
+        //
+        // Safe to change only since #512: the document-grid arms used to
+        // derive their line count from this pair, so altering it silently
+        // repaginated. They now choose between the grid pitch and the
+        // natural line without consulting it.
+        let top_em: f64 = (f64::from(ttf.ascender()) + f64::from(ttf.line_gap())) / upem;
+        (top_em, hhea_pitch_em - top_em, hhea_pitch_em)
+    });
     cache
         .lock()
         .expect("metrics cache mutex should not be poisoned")

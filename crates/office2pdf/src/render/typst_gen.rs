@@ -1222,16 +1222,21 @@ fn write_flow_page_setup(out: &mut String, page: &FlowPage, size: &PageSize, ctx
             .filter(|band| *band > 0.0);
         if let Some(band) = header_band {
             out.push_str(", header-ascent: 0pt, header: ");
-            if hf_needs_context(header) {
-                out.push_str("context ");
+            match header_band_shift_pt(header) {
+                Some(shift) => write_shifted_header_band(out, header, band, shift, page, size, ctx),
+                None => {
+                    if hf_needs_context(header) {
+                        out.push_str("context ");
+                    }
+                    let _ = write!(
+                        out,
+                        "block(width: 100%, height: {}pt)[#place(top, block(width: 100%)[",
+                        format_f64(band)
+                    );
+                    generate_flow_hf_content(out, header, ctx);
+                    out.push_str("])]");
+                }
             }
-            let _ = write!(
-                out,
-                "block(width: 100%, height: {}pt)[#place(top, block(width: 100%)[",
-                format_f64(band)
-            );
-            generate_flow_hf_content(out, header, ctx);
-            out.push_str("])]");
         } else {
             if hf_needs_context(header) {
                 out.push_str(", header: context [");
@@ -1337,9 +1342,7 @@ fn hf_has_page_anchored_frames(header_footer: &HeaderFooter) -> bool {
 fn generate_flow_hf_content(out: &mut String, hf: &HeaderFooter, ctx: &mut GenCtx) {
     let mut is_first: bool = true;
     for paragraph in &hf.paragraphs {
-        if paragraph.frame.as_ref().is_some_and(is_page_anchored_frame)
-            || !hf_paragraph_has_content(paragraph)
-        {
+        if !hf_paragraph_is_emitted(paragraph) {
             continue;
         }
         if !is_first {
@@ -1348,6 +1351,124 @@ fn generate_flow_hf_content(out: &mut String, hf: &HeaderFooter, ctx: &mut GenCt
         generate_hf_styled_paragraph(out, paragraph, ctx);
         is_first = false;
     }
+}
+
+/// Whether [`generate_flow_hf_content`] writes this paragraph into the story.
+///
+/// Page-anchored frames are drawn separately in the page foreground, and an
+/// empty paragraph carrying neither content nor a border produces nothing.
+/// Shared with the band placement so the two cannot disagree about which
+/// paragraph comes first (issue #629).
+fn hf_paragraph_is_emitted(paragraph: &crate::ir::HeaderFooterParagraph) -> bool {
+    !paragraph.frame.as_ref().is_some_and(is_page_anchored_frame)
+        && hf_paragraph_has_content(paragraph)
+}
+
+/// Below this the shift is not worth an extra `context` block: it is under a
+/// tenth of the 0.24pt grid the native exports this is calibrated against
+/// quantise to, and skipping it keeps the plain band form for faces whose
+/// ascent and cap height happen to coincide.
+const MIN_HEADER_BAND_SHIFT_PT: f64 = 0.02;
+
+/// How far a pinned header band must move for its first baseline to land where
+/// Word puts it, in points, positive downward.
+///
+/// Word seats a header story's first baseline one font ascent below
+/// `w:pgMar/@w:header`; the compiler seats it one cap height below the same
+/// line. Shifting the band by the difference lands that baseline on Word's
+/// without touching a single line box, so the story's own baseline-to-baseline
+/// advance stays exactly what the compiler would produce — declaring the ascent
+/// as a `top-edge` instead would widen *every* wrapped line of the paragraph and
+/// stretch that advance (issue #629). Preserving it is the point: it is the
+/// compiler's advance rather than Word's, which is issue #735, and a placement
+/// fix has no business changing it.
+///
+/// The band is sized by the first paragraph the story actually emits, which is
+/// the one whose top the header distance pins. `None` when that paragraph gives
+/// nothing to measure: no styled text at all, a family that does not resolve,
+/// or an image, whose height rather than the text's would set the compiler's
+/// line ascent.
+fn header_band_shift_pt(hf: &HeaderFooter) -> Option<f64> {
+    let first: &crate::ir::HeaderFooterParagraph =
+        hf.paragraphs.iter().find(|p| hf_paragraph_is_emitted(p))?;
+    if first
+        .elements
+        .iter()
+        .any(|element| matches!(element, HFInline::Image(_)))
+    {
+        return None;
+    }
+    let runs: Vec<Run> = hf_paragraph_metric_runs(first);
+    let shift: f64 = self::text::word_header_band_shift_pt(&runs)?;
+    // Keep float noise out of the emitted source.
+    let shift: f64 = (shift * 10_000.0).round() / 10_000.0;
+    (shift.abs() >= MIN_HEADER_BAND_SHIFT_PT).then_some(shift)
+}
+
+/// The runs a header paragraph's line metrics resolve against.
+///
+/// A `PAGE`/`NUMPAGES` field carries the run properties of the `w:r` holding it
+/// and shapes as digits, so it folds in as a synthetic run: a header whose first
+/// paragraph is nothing but a page number still has an ascent to seat, and
+/// without this the decision would leak onto the second paragraph (issue #629).
+/// Positioned tabs contribute no glyphs.
+fn hf_paragraph_metric_runs(paragraph: &crate::ir::HeaderFooterParagraph) -> Vec<Run> {
+    paragraph
+        .elements
+        .iter()
+        .filter_map(|element| match element {
+            HFInline::Run(run) => Some(run.clone()),
+            HFInline::PageNumber(style) | HFInline::TotalPages(style) => Some(Run {
+                text: "1".to_string(),
+                style: style.clone(),
+                href: None,
+                footnote: None,
+            }),
+            HFInline::Image(_) | HFInline::PositionedTab(_) => None,
+        })
+        .collect()
+}
+
+/// Emit a pinned header band whose content is moved down by `shift` points.
+///
+/// The band itself keeps its fixed height, so an unclamped shift would push
+/// header ink out of the band and onto the body's first line: a two-line 12pt
+/// Malgun letterhead put its second baseline 1.995pt past the top margin. The
+/// shift is therefore capped at the slack the story leaves inside the band, so a
+/// story that already fills it renders exactly where it does without the shift
+/// rather than worse.
+///
+/// TODO(#736: a full band keeps the compiler's cap-height seat instead of
+/// Word's): Word is understood to grow the top margin and push the body down
+/// when the header outgrows `w:top - w:header`, but that was not confirmed here
+/// — every native Word `save as … format PDF` died with AppleEvent -1712 and
+/// wrote a 0-byte file — and modelling it means feeding a measured header
+/// height back into the page margins, which is a larger change than this
+/// placement.
+fn write_shifted_header_band(
+    out: &mut String,
+    header: &HeaderFooter,
+    band: f64,
+    shift: f64,
+    page: &FlowPage,
+    size: &PageSize,
+    ctx: &mut GenCtx,
+) {
+    // `measure` reports the height the story takes in the column it will be
+    // laid out in; without the width it would measure in an infinite region and
+    // report a wrapped story as a single line.
+    let text_width: f64 = (size.width - page.margins.left - page.margins.right).max(0.0);
+    // Keep float noise (595.28 - 70.85 - 70.85) out of the emitted source.
+    let text_width: f64 = (text_width * 100.0).round() / 100.0;
+    out.push_str("context { let header_content = block(width: 100%)[");
+    generate_flow_hf_content(out, header, ctx);
+    let _ = write!(
+        out,
+        "]; block(width: 100%, height: {band}pt)[#place(top, dy: calc.min({shift}pt, calc.max(0pt, {band}pt - measure(header_content, width: {text_width}pt).height)), header_content)] }}",
+        band = format_f64(band),
+        shift = format_f64(shift),
+        text_width = format_f64(text_width),
+    );
 }
 
 fn generate_page_anchored_hf_frames(
