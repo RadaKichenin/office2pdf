@@ -132,6 +132,11 @@ pub struct LineBox {
     pub descent_em: f64,
 }
 
+/// A run's vertical displacement as a fraction of its own font size.
+/// Positive values raise the run; negative values lower it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BaselineShiftEm(pub f64);
+
 /// Vertical alignment for superscript/subscript text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VerticalTextAlign {
@@ -200,6 +205,8 @@ pub struct TextStyle {
     pub highlight: Option<Color>,
     /// Superscript or subscript vertical alignment.
     pub vertical_align: Option<VerticalTextAlign>,
+    /// Font-relative baseline displacement without automatic glyph scaling.
+    pub baseline_shift: Option<BaselineShiftEm>,
     /// All caps: render text in uppercase.
     pub all_caps: Option<bool>,
     /// Small caps: render lowercase letters as smaller uppercase.
@@ -248,6 +255,9 @@ impl TextStyle {
         }
         if other.vertical_align.is_some() {
             self.vertical_align = other.vertical_align;
+        }
+        if other.baseline_shift.is_some() {
+            self.baseline_shift = other.baseline_shift;
         }
         if other.all_caps.is_some() {
             self.all_caps = other.all_caps;

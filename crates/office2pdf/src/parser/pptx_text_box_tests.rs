@@ -161,6 +161,84 @@ fn test_text_box_without_spc_has_no_tracking() {
 }
 
 #[test]
+fn test_text_box_run_baseline_preserves_positive_and_negative_offsets() {
+    let runs_xml = concat!(
+        r#"<a:r><a:rPr sz="1800"/><a:t>Body</a:t></a:r>"#,
+        r#"<a:r><a:rPr sz="1000" baseline="30000"/><a:t>1</a:t></a:r>"#,
+        r#"<a:r><a:rPr sz="1800"/><a:t> H</a:t></a:r>"#,
+        r#"<a:r><a:rPr sz="1000" baseline="-25000"/><a:t>2</a:t></a:r>"#,
+        r#"<a:r><a:rPr sz="1800"/><a:t>O</a:t></a:r>"#,
+    );
+    let shape = make_formatted_text_box(0, 0, 6_000_000, 500_000, runs_xml);
+    let slide = make_slide_xml(&[shape]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = first_fixed_page(&doc);
+    let blocks = text_box_blocks(&page.elements[0]);
+    let paragraph = match &blocks[0] {
+        Block::Paragraph(paragraph) => paragraph,
+        other => panic!("Expected Paragraph, got {other:?}"),
+    };
+
+    assert_eq!(paragraph.runs.len(), 5);
+    assert_eq!(
+        paragraph.runs[1].style.baseline_shift,
+        Some(BaselineShiftEm(0.3))
+    );
+    assert_eq!(
+        paragraph.runs[3].style.baseline_shift,
+        Some(BaselineShiftEm(-0.25))
+    );
+    assert!(paragraph.runs[0].style.baseline_shift.is_none());
+    assert!(paragraph.runs[2].style.baseline_shift.is_none());
+    assert!(paragraph.runs[4].style.baseline_shift.is_none());
+}
+
+#[test]
+fn test_with_master_page_2_keeps_the_raised_ordinal_as_a_separate_run() {
+    let data = include_bytes!("../../../../tests/fixtures/pptx/WithMaster.pptx");
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(data, &ConvertOptions::default()).unwrap();
+    let page = match &doc.pages[1] {
+        Page::Fixed(page) => page,
+        other => panic!("Expected fixed page, got {other:?}"),
+    };
+    let paragraph = page
+        .elements
+        .iter()
+        .filter_map(|element| match &element.kind {
+            FixedElementKind::TextBox(text_box) => Some(text_box.content.as_slice()),
+            _ => None,
+        })
+        .flatten()
+        .filter_map(|block| match block {
+            Block::Paragraph(paragraph) => Some(paragraph),
+            _ => None,
+        })
+        .find(|paragraph| {
+            paragraph
+                .runs
+                .iter()
+                .map(|run| run.text.as_str())
+                .collect::<String>()
+                == "2nd page subtitle"
+        })
+        .expect("Expected the page 2 subtitle");
+
+    assert_eq!(paragraph.runs.len(), 3);
+    assert_eq!(paragraph.runs[0].text, "2");
+    assert_eq!(paragraph.runs[1].text, "nd");
+    assert_eq!(paragraph.runs[1].style.font_size, Some(32.0));
+    assert_eq!(
+        paragraph.runs[1].style.baseline_shift,
+        Some(BaselineShiftEm(0.3))
+    );
+    assert_eq!(paragraph.runs[2].text, " page subtitle");
+}
+
+#[test]
 fn test_text_box_combined_formatting() {
     let runs_xml = r#"<a:r><a:rPr b="1" i="1" u="sng" strike="sngStrike" sz="1800"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill><a:latin typeface="Arial"/></a:rPr><a:t>Styled text</a:t></a:r>"#;
     let shape = make_formatted_text_box(0, 0, 1_000_000, 500_000, runs_xml);

@@ -282,6 +282,7 @@ pub(super) fn extract_run_style_from_json(rp: &serde_json::Value) -> TextStyle {
             .and_then(serde_json::Value::as_str)
             .and_then(resolve_highlight_color),
         vertical_align,
+        baseline_shift: None,
         all_caps,
         small_caps: None,
         letter_spacing: rp

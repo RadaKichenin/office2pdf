@@ -1905,6 +1905,7 @@ pub(super) fn has_text_properties(style: &TextStyle) -> bool {
         || style.color.is_some()
         || style.font_family.is_some()
         || style.letter_spacing.is_some()
+        || style.baseline_shift.is_some()
 }
 
 fn inferred_font_weight(font_family: &str) -> Option<&'static str> {
@@ -2024,6 +2025,15 @@ fn write_text_params_inner(out: &mut String, style: &TextStyle, kerning_text: Ke
             &mut first,
             &format!("tracking: {}pt", format_f64(spacing)),
         );
+    }
+    if let Some(BaselineShiftEm(shift_em)) = style.baseline_shift {
+        // Typst's text baseline parameter is positive downward, opposite to
+        // DrawingML. Resolve against the effective run size when available.
+        let shift: String = match style.font_size {
+            Some(font_size_pt) => format!("{}pt", format_f64(-shift_em * font_size_pt)),
+            None => format!("{}em", format_f64(-shift_em)),
+        };
+        write_param(out, &mut first, &format!("baseline: {shift}"));
     }
     if let Some(param) = kerning_param(style, kerning_text) {
         write_param(out, &mut first, &param);
