@@ -836,25 +836,27 @@ pub(crate) fn powerpoint_line_box_em(family: &str) -> Option<(f64, f64)> {
     }
 
     // Resolve through the same metric-compatible substitute chain Typst sees
-    // in the emitted font list. Otherwise a missing Office face such as
-    // Calibri loses this line box even though the compiler renders it with
-    // Carlito or Liberation Sans, collapsing consecutive slide paragraphs to
+    // in the emitted font list. If none of those faces exists, Typst renders
+    // with its embedded default, so the metrics lookup must end there too.
+    // Otherwise a missing Office face can collapse consecutive paragraphs to
     // the fallback font's glyph height (issue #705).
-    let split: Option<(f64, f64)> = best_face(family).and_then(|font| {
-        let table = font.ttf().tables().os2?;
-        // `usWinDescent` is an unsigned distance *below* the baseline in
-        // the spec, but ttf-parser hands it back signed, so Arial's 434
-        // arrives as -434. Adding it raw shrank the denominator from 2288
-        // to 1420 and put the baseline at 1.57em, past the bottom of a
-        // 1.2em line.
-        let ascent = f64::from(table.windows_ascender()).abs();
-        let descent = f64::from(table.windows_descender()).abs();
-        let total = ascent + descent;
-        (total > 0.0 && ascent > 0.0).then(|| {
-            let above = POWERPOINT_LINE_HEIGHT_FACTOR * ascent / total;
-            (above, POWERPOINT_LINE_HEIGHT_FACTOR - above)
-        })
-    });
+    let split: Option<(f64, f64)> = best_face(family)
+        .or_else(|| best_face(crate::defaults::TYPST_DEFAULT_FONT_FAMILY))
+        .and_then(|font| {
+            let table = font.ttf().tables().os2?;
+            // `usWinDescent` is an unsigned distance *below* the baseline in
+            // the spec, but ttf-parser hands it back signed, so Arial's 434
+            // arrives as -434. Adding it raw shrank the denominator from 2288
+            // to 1420 and put the baseline at 1.57em, past the bottom of a
+            // 1.2em line.
+            let ascent = f64::from(table.windows_ascender()).abs();
+            let descent = f64::from(table.windows_descender()).abs();
+            let total = ascent + descent;
+            (total > 0.0 && ascent > 0.0).then(|| {
+                let above = POWERPOINT_LINE_HEIGHT_FACTOR * ascent / total;
+                (above, POWERPOINT_LINE_HEIGHT_FACTOR - above)
+            })
+        });
     cache
         .lock()
         .expect("metrics cache mutex should not be poisoned")

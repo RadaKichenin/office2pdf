@@ -1828,10 +1828,10 @@ fn a_slide_paragraph_declares_its_own_block_spacing() {
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn consecutive_slide_paragraphs_keep_powerpoints_full_line_advance() {
-    // The unstyled case takes Typst's embedded default. Calibri also verifies
-    // a named Office family: it resolves directly when installed and through
-    // the emitted metric-compatible substitute chain otherwise.
-    for family in [None, Some("Calibri")] {
+    // The unstyled case takes Typst's embedded default. Calibri verifies a
+    // named Office family and the synthetic name forces the final embedded
+    // fallback after every named candidate misses.
+    for family in [None, Some("Calibri"), Some("Office2Pdf Missing Test Face")] {
         let paragraphs = ["Paragraph one", "Paragraph two", "Paragraph three"]
             .into_iter()
             .map(|text| {
