@@ -14,9 +14,10 @@ use crate::ir::{
     Alignment, ArrowHead, BaselineShiftEm, Block, BorderLineStyle, BorderSide, CellBorder,
     CellVerticalAlign, Chart, Color, Document, FixedElement, FixedElementKind, FixedPage,
     GradientFill, ImageClipShape, ImageCrop, ImageData, ImageFormat, Insets, LineSpacing, List,
-    ListItem, ListKind, ListLevelStyle, Page, PageSize, Paragraph, ParagraphStyle, Run, Shadow,
-    Shape, ShapeKind, SmartArt, SmartArtNode, StyleSheet, TabAlignment, TabLeader, TabStop, Table,
-    TableCell, TableRow, TextBoxData, TextBoxVerticalAlign, TextDirection, TextStyle,
+    ListItem, ListKind, ListLevelStyle, Page, PageSize, Paragraph, ParagraphStyle, PatternFill,
+    PatternPreset, Run, Shadow, Shape, ShapeKind, SmartArt, SmartArtNode, StyleSheet, TabAlignment,
+    TabLeader, TabStop, Table, TableCell, TableRow, TextBoxData, TextBoxVerticalAlign,
+    TextDirection, TextStyle,
 };
 use crate::parser::Parser;
 use crate::parser::smartart;
@@ -38,8 +39,9 @@ use self::theme::{
     ColorMapData, ParsedColor, PptxMasterTextStyles, ThemeData, default_color_map,
     parse_background_color, parse_background_gradient, parse_background_image_rid,
     parse_background_ref, parse_color_from_empty, parse_color_from_start, parse_effect_list,
-    parse_master_color_map, parse_master_text_styles, parse_shape_gradient_fill, parse_theme_xml,
-    resolve_effective_color_map, resolve_scheme_color, resolve_theme_font,
+    parse_master_color_map, parse_master_text_styles, parse_shape_gradient_fill,
+    parse_shape_pattern_fill, parse_theme_xml, resolve_effective_color_map, resolve_scheme_color,
+    resolve_theme_font,
 };
 
 #[path = "pptx_package.rs"]

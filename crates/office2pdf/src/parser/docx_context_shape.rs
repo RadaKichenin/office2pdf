@@ -187,6 +187,7 @@ impl ShapeBuilder {
                 kind,
                 fill,
                 gradient_fill: None,
+                pattern_fill: None,
                 stroke,
                 rotation_deg: None,
                 opacity: None,

@@ -383,6 +383,7 @@ fn smartart_shape_to_elements(f: SmartArtShapeFields) -> Vec<FixedElement> {
             kind,
             fill: f.fill,
             gradient_fill: None,
+            pattern_fill: None,
             stroke,
             rotation_deg: None,
             opacity: None,
@@ -872,6 +873,7 @@ struct ShapeState {
     prst_geom: Option<String>,
     fill: Option<Color>,
     gradient_fill: Option<GradientFill>,
+    pattern_fill: Option<PatternFill>,
     in_xfrm: bool,
     in_ln: bool,
     ln_width_emu: i64,
@@ -920,6 +922,7 @@ impl Default for ShapeState {
             prst_geom: None,
             fill: None,
             gradient_fill: None,
+            pattern_fill: None,
             in_xfrm: false,
             in_ln: false,
             ln_width_emu: 0,
@@ -997,6 +1000,7 @@ fn finalize_shape(
         // For non-rectangular shapes with text, emit the shape background first,
         // then overlay a transparent text box. This ensures the geometry is rendered
         // by the proven shape renderer.
+        let needs_shape_background = shape.pattern_fill.is_some();
         let text_shape_kind: Option<ShapeKind> = shape.prst_geom.as_deref().and_then(|geom| {
             let width: f64 = emu_to_pt(shape.cx);
             let height: f64 = emu_to_pt(shape.cy);
@@ -1011,7 +1015,7 @@ fn finalize_shape(
                 &shape.adj_values,
             );
             match kind {
-                ShapeKind::Rectangle => None,
+                ShapeKind::Rectangle if !needs_shape_background => None,
                 other => Some(other),
             }
         });
@@ -1027,6 +1031,7 @@ fn finalize_shape(
                     kind,
                     fill: effective_fill,
                     gradient_fill: shape.gradient_fill.take(),
+                    pattern_fill: shape.pattern_fill.take(),
                     stroke: stroke.clone(),
                     rotation_deg: shape.rotation_deg,
                     opacity: shape.opacity,
@@ -1117,6 +1122,7 @@ fn finalize_shape(
                 kind,
                 fill: effective_fill,
                 gradient_fill: shape.gradient_fill.take(),
+                pattern_fill: shape.pattern_fill.take(),
                 stroke,
                 rotation_deg: shape.rotation_deg,
                 opacity: shape.opacity,
@@ -1564,6 +1570,14 @@ impl<'a> SlideXmlParser<'a> {
                 {
                     self.shape.fill = gradient_fill.stops.first().map(|stop| stop.color);
                 }
+            }
+            b"pattFill" if self.shape.in_sp_pr && !self.shape.in_ln && !self.in_rpr => {
+                self.shape.pattern_fill = get_attr_str(e, b"prst")
+                    .as_deref()
+                    .and_then(PatternPreset::from_ooxml)
+                    .map(|preset| {
+                        parse_shape_pattern_fill(reader, preset, self.ctx.theme, self.ctx.color_map)
+                    });
             }
             b"effectLst" if self.shape.in_sp_pr && !self.shape.in_ln => {
                 self.shape.shadow = parse_effect_list(reader, self.ctx.theme, self.ctx.color_map);
