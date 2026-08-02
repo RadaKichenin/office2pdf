@@ -329,6 +329,82 @@ fn test_generate_run_subscript() {
     );
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn test_generate_run_baseline_shift_moves_text_by_its_run_size() {
+    let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
+        style: ParagraphStyle::default(),
+        runs: vec![
+            Run {
+                text: "A".to_string(),
+                style: TextStyle {
+                    font_size: Some(10.0),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            },
+            Run {
+                text: "1".to_string(),
+                style: TextStyle {
+                    font_size: Some(10.0),
+                    baseline_shift: Some(BaselineShiftEm(0.3)),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            },
+            Run {
+                text: "B".to_string(),
+                style: TextStyle {
+                    font_size: Some(10.0),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            },
+            Run {
+                text: "2".to_string(),
+                style: TextStyle {
+                    font_size: Some(10.0),
+                    baseline_shift: Some(BaselineShiftEm(-0.25)),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            },
+        ],
+    })])]);
+    let output = generate_typst(&doc).unwrap();
+    let placed = crate::render::pdf::compiled_text_runs(&output.source, 0)
+        .unwrap_or_else(|error| panic!("compile failed: {error}\n{}", output.source));
+    let baseline = |needle: &str| -> f64 {
+        placed
+            .iter()
+            .find(|run| run.text == needle)
+            .unwrap_or_else(|| panic!("missing {needle:?} in {placed:?}"))
+            .baseline_pt
+    };
+    let body_baseline = baseline("A");
+
+    let second_body_baseline: f64 = baseline("B");
+    let superscript_baseline: f64 = baseline("1");
+    let subscript_baseline: f64 = baseline("2");
+    assert!(
+        (second_body_baseline - body_baseline).abs() < 0.01,
+        "body baselines differ: {body_baseline} and {second_body_baseline}; {placed:?}\n{}",
+        output.source
+    );
+    assert!(
+        (body_baseline - superscript_baseline - 3.0).abs() < 0.01,
+        "superscript baseline {superscript_baseline} should be 3pt above {body_baseline}; {placed:?}"
+    );
+    assert!(
+        (subscript_baseline - body_baseline - 2.5).abs() < 0.01,
+        "subscript baseline {subscript_baseline} should be 2.5pt below {body_baseline}; {placed:?}"
+    );
+}
+
 #[test]
 fn test_generate_run_small_caps() {
     let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {

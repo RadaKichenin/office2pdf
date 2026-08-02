@@ -1049,6 +1049,11 @@ pub(super) fn extract_rpr_attributes(e: &quick_xml::events::BytesStart, style: &
         // Font size in hundredths of a point (e.g. 1200 = 12pt)
         style.font_size = Some(sz as f64 / 100.0);
     }
+    if let Some(baseline) = get_attr_i64(e, b"baseline") {
+        // DrawingML stores the displacement in thousandths of a percent.
+        // Keeping it font-relative lets inherited run sizes resolve first.
+        style.baseline_shift = Some(BaselineShiftEm(baseline as f64 / 100_000.0));
+    }
     if let Some(spc) = get_attr_i64(e, b"spc") {
         // Character tracking, also in hundredths of a point, added to every
         // character gap in the run. Negative values tighten (e.g. -100 = -1pt).

@@ -25,6 +25,7 @@ fn test_stylesheet_default_is_empty() {
 fn test_text_style_default_has_none_text_effects() {
     let ts = TextStyle::default();
     assert!(ts.vertical_align.is_none());
+    assert!(ts.baseline_shift.is_none());
     assert!(ts.all_caps.is_none());
     assert!(ts.small_caps.is_none());
 }
@@ -73,6 +74,7 @@ fn text_style_merge_from_all_none_source_preserves_target() {
         color: Some(Color::new(255, 0, 0)),
         highlight: Some(Color::new(0, 255, 0)),
         vertical_align: Some(VerticalTextAlign::Superscript),
+        baseline_shift: Some(BaselineShiftEm(0.2)),
         all_caps: Some(true),
         small_caps: Some(false),
         letter_spacing: Some(1.5),
@@ -99,6 +101,7 @@ fn text_style_merge_from_all_some_source_overwrites_target() {
         color: Some(Color::new(255, 0, 0)),
         highlight: Some(Color::new(0, 255, 0)),
         vertical_align: Some(VerticalTextAlign::Superscript),
+        baseline_shift: Some(BaselineShiftEm(0.2)),
         all_caps: Some(true),
         small_caps: Some(true),
         letter_spacing: Some(1.5),
@@ -115,6 +118,7 @@ fn text_style_merge_from_all_some_source_overwrites_target() {
         color: Some(Color::new(0, 0, 255)),
         highlight: Some(Color::new(128, 128, 128)),
         vertical_align: Some(VerticalTextAlign::Subscript),
+        baseline_shift: Some(BaselineShiftEm(-0.25)),
         all_caps: Some(false),
         small_caps: Some(false),
         letter_spacing: Some(3.0),

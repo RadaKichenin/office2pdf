@@ -96,6 +96,7 @@ pub(super) fn extract_cell_text_style(
         color,
         highlight: None,
         vertical_align: None,
+        baseline_shift: None,
         all_caps: None,
         small_caps: None,
         letter_spacing: None,
