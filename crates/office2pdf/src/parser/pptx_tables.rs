@@ -63,6 +63,10 @@ struct PptxTableParser<'a> {
     is_in_run: bool,
     run_style: TextStyle,
     run_text: String,
+    run_has_explicit_color: bool,
+    run_has_explicit_underline: bool,
+    run_marker_style_before_hyperlink: Option<TextStyle>,
+    first_run_marker_style_override: Option<TextStyle>,
     is_in_text: bool,
     is_in_run_properties: bool,
     is_in_end_paragraph_run_properties: bool,
@@ -129,6 +133,10 @@ impl<'a> PptxTableParser<'a> {
             is_in_run: false,
             run_style: TextStyle::default(),
             run_text: String::new(),
+            run_has_explicit_color: false,
+            run_has_explicit_underline: false,
+            run_marker_style_before_hyperlink: None,
+            first_run_marker_style_override: None,
             is_in_text: false,
             is_in_run_properties: false,
             is_in_end_paragraph_run_properties: false,
@@ -275,6 +283,7 @@ impl<'a> PptxTableParser<'a> {
                     .unwrap_or(BorderLineStyle::Solid);
             }
             b"rPr" if self.is_in_run => {
+                self.run_has_explicit_underline = get_attr_str(e, b"u").is_some();
                 extract_rpr_attributes(e, &mut self.run_style);
             }
             b"endParaRPr" if self.is_in_paragraph && !self.is_in_run => {
@@ -310,6 +319,18 @@ impl<'a> PptxTableParser<'a> {
             }
             b"latin" | b"ea" | b"cs" if self.is_in_end_paragraph_run_properties => {
                 apply_typeface_to_style(e, &mut self.paragraph_end_run_style, self.theme);
+            }
+            b"hlinkClick" if self.is_in_run_properties => {
+                if self.run_marker_style_before_hyperlink.is_none() {
+                    self.run_marker_style_before_hyperlink = Some(self.run_style.clone());
+                }
+                apply_pptx_hyperlink_style(
+                    &mut self.run_style,
+                    self.run_has_explicit_color,
+                    self.run_has_explicit_underline,
+                    self.theme,
+                    self.color_map,
+                );
             }
             _ => {}
         }
@@ -516,6 +537,7 @@ impl<'a> PptxTableParser<'a> {
             .bullet_for_level(self.paragraph_level);
         self.is_in_line_spacing = false;
         self.runs.clear();
+        self.first_run_marker_style_override = None;
     }
 
     fn handle_paragraph_properties(&mut self, e: &BytesStart) {
@@ -538,6 +560,7 @@ impl<'a> PptxTableParser<'a> {
             &self.paragraph_bullet_definition,
             self.paragraph_level,
             &self.runs,
+            self.first_run_marker_style_override.as_ref(),
             &self.paragraph_end_run_style,
             &self.paragraph_default_run_style,
         );
@@ -557,6 +580,10 @@ impl<'a> PptxTableParser<'a> {
 
     fn finish_run(&mut self) {
         if !self.run_text.is_empty() {
+            if self.runs.is_empty() {
+                self.first_run_marker_style_override =
+                    self.run_marker_style_before_hyperlink.clone();
+            }
             push_pptx_run(
                 &mut self.runs,
                 Run {
@@ -640,9 +667,13 @@ impl<'a> PptxTableParser<'a> {
                 self.is_in_run = true;
                 self.run_style = self.paragraph_default_run_style.clone();
                 self.run_text.clear();
+                self.run_has_explicit_color = false;
+                self.run_has_explicit_underline = false;
+                self.run_marker_style_before_hyperlink = None;
             }
             b"rPr" if self.is_in_run => {
                 self.is_in_run_properties = true;
+                self.run_has_explicit_underline = get_attr_str(e, b"u").is_some();
                 extract_rpr_attributes(e, &mut self.run_style);
             }
             b"endParaRPr" => {
@@ -651,6 +682,7 @@ impl<'a> PptxTableParser<'a> {
                 extract_rpr_attributes(e, &mut self.paragraph_end_run_style);
             }
             b"solidFill" if self.is_in_run_properties => {
+                self.run_has_explicit_color = true;
                 self.solid_fill_context = SolidFillCtx::RunFill;
             }
             b"solidFill" if self.is_in_end_paragraph_run_properties => {
@@ -663,6 +695,18 @@ impl<'a> PptxTableParser<'a> {
             }
             b"t" if self.is_in_run => {
                 self.is_in_text = true;
+            }
+            b"hlinkClick" if self.is_in_run_properties => {
+                if self.run_marker_style_before_hyperlink.is_none() {
+                    self.run_marker_style_before_hyperlink = Some(self.run_style.clone());
+                }
+                apply_pptx_hyperlink_style(
+                    &mut self.run_style,
+                    self.run_has_explicit_color,
+                    self.run_has_explicit_underline,
+                    self.theme,
+                    self.color_map,
+                );
             }
             _ => {}
         }
@@ -682,9 +726,13 @@ impl<'a> PptxTableParser<'a> {
                 self.is_in_run = true;
                 self.run_style = self.paragraph_default_run_style.clone();
                 self.run_text.clear();
+                self.run_has_explicit_color = false;
+                self.run_has_explicit_underline = false;
+                self.run_marker_style_before_hyperlink = None;
             }
             b"rPr" if self.is_in_run => {
                 self.is_in_run_properties = true;
+                self.run_has_explicit_underline = get_attr_str(e, b"u").is_some();
                 extract_rpr_attributes(e, &mut self.run_style);
             }
             b"endParaRPr" if !self.is_in_run => {
@@ -693,6 +741,7 @@ impl<'a> PptxTableParser<'a> {
                 extract_rpr_attributes(e, &mut self.paragraph_end_run_style);
             }
             b"solidFill" if self.is_in_run_properties => {
+                self.run_has_explicit_color = true;
                 self.solid_fill_context = SolidFillCtx::RunFill;
             }
             b"solidFill" if self.is_in_end_paragraph_run_properties => {
@@ -705,6 +754,18 @@ impl<'a> PptxTableParser<'a> {
             }
             b"t" if self.is_in_run => {
                 self.is_in_text = true;
+            }
+            b"hlinkClick" if self.is_in_run_properties => {
+                if self.run_marker_style_before_hyperlink.is_none() {
+                    self.run_marker_style_before_hyperlink = Some(self.run_style.clone());
+                }
+                apply_pptx_hyperlink_style(
+                    &mut self.run_style,
+                    self.run_has_explicit_color,
+                    self.run_has_explicit_underline,
+                    self.theme,
+                    self.color_map,
+                );
             }
             _ => {}
         }

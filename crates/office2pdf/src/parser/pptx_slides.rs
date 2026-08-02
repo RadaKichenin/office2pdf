@@ -1347,6 +1347,10 @@ struct SlideXmlParser<'a> {
     in_run: bool,
     run_style: TextStyle,
     run_text: String,
+    run_has_explicit_color: bool,
+    run_has_explicit_underline: bool,
+    run_marker_style_before_hyperlink: Option<TextStyle>,
+    first_run_marker_style_override: Option<TextStyle>,
     /// `<a:fld type>` of the run being read; `None` for a literal `<a:r>`.
     run_field_type: Option<String>,
 
@@ -1410,6 +1414,10 @@ impl<'a> SlideXmlParser<'a> {
             run_field_type: None,
             run_style: TextStyle::default(),
             run_text: String::new(),
+            run_has_explicit_color: false,
+            run_has_explicit_underline: false,
+            run_marker_style_before_hyperlink: None,
+            first_run_marker_style_override: None,
 
             in_text: false,
             in_rpr: false,
@@ -1679,6 +1687,7 @@ impl<'a> SlideXmlParser<'a> {
                     .bullet_for_level(self.para_level);
                 self.in_ln_spc = false;
                 self.runs.clear();
+                self.first_run_marker_style_override = None;
             }
             b"pPr" if self.in_para && !self.in_run => {
                 self.para_level = extract_paragraph_level(e);
@@ -1771,6 +1780,9 @@ impl<'a> SlideXmlParser<'a> {
                 self.run_field_type = None;
                 self.run_style = self.para_default_run_style.clone();
                 self.run_text.clear();
+                self.run_has_explicit_color = false;
+                self.run_has_explicit_underline = false;
+                self.run_marker_style_before_hyperlink = None;
             }
             // `<a:fld>` carries an optional `<a:rPr>` and `<a:t>` the way
             // `<a:r>` does, so it is read as a run whose text may be
@@ -1786,10 +1798,14 @@ impl<'a> SlideXmlParser<'a> {
                 self.run_field_type = get_attr_str(e, b"type");
                 self.run_style = self.para_default_run_style.clone();
                 self.run_text.clear();
+                self.run_has_explicit_color = false;
+                self.run_has_explicit_underline = false;
+                self.run_marker_style_before_hyperlink = None;
             }
             b"rPr" if self.in_run => {
                 self.in_rpr = true;
                 self.rpr_applied_typeface = false;
+                self.run_has_explicit_underline = get_attr_str(e, b"u").is_some();
                 extract_rpr_attributes(e, &mut self.run_style);
             }
             b"endParaRPr" if self.in_para && !self.in_run => {
@@ -1802,10 +1818,23 @@ impl<'a> SlideXmlParser<'a> {
                 self.in_text_line = true;
             }
             b"solidFill" if self.in_rpr && !self.in_text_line => {
+                self.run_has_explicit_color = true;
                 self.solid_fill_ctx = SolidFillCtx::RunFill;
             }
             b"solidFill" if self.in_end_para_rpr && !self.in_text_line => {
                 self.solid_fill_ctx = SolidFillCtx::EndParaFill;
+            }
+            b"hlinkClick" if self.in_rpr => {
+                if self.run_marker_style_before_hyperlink.is_none() {
+                    self.run_marker_style_before_hyperlink = Some(self.run_style.clone());
+                }
+                apply_pptx_hyperlink_style(
+                    &mut self.run_style,
+                    self.run_has_explicit_color,
+                    self.run_has_explicit_underline,
+                    self.ctx.theme,
+                    self.ctx.color_map,
+                );
             }
             _ => return false,
         }
@@ -2128,6 +2157,7 @@ impl<'a> SlideXmlParser<'a> {
         let local = e.local_name();
         match local.as_ref() {
             b"rPr" if self.in_run => {
+                self.run_has_explicit_underline = get_attr_str(e, b"u").is_some();
                 extract_rpr_attributes(e, &mut self.run_style);
             }
             b"endParaRPr" if self.in_para && !self.in_run => {
@@ -2222,6 +2252,18 @@ impl<'a> SlideXmlParser<'a> {
             }
             b"br" if self.in_para && !self.in_run => {
                 push_pptx_soft_line_break(&mut self.runs, &self.para_default_run_style);
+            }
+            b"hlinkClick" if self.in_rpr => {
+                if self.run_marker_style_before_hyperlink.is_none() {
+                    self.run_marker_style_before_hyperlink = Some(self.run_style.clone());
+                }
+                apply_pptx_hyperlink_style(
+                    &mut self.run_style,
+                    self.run_has_explicit_color,
+                    self.run_has_explicit_underline,
+                    self.ctx.theme,
+                    self.ctx.color_map,
+                );
             }
             b"latin" | b"ea" | b"cs" if self.in_rpr => {
                 // The rPr's own first typeface must beat the family inherited
@@ -2324,6 +2366,7 @@ impl<'a> SlideXmlParser<'a> {
                     &self.para_bullet_definition,
                     self.para_level,
                     &self.runs,
+                    self.first_run_marker_style_override.as_ref(),
                     &self.para_end_run_style,
                     &self.para_default_run_style,
                 );
@@ -2350,6 +2393,10 @@ impl<'a> SlideXmlParser<'a> {
                     self.run_text = self.ctx.slide_number.to_string();
                 }
                 if !self.run_text.is_empty() {
+                    if self.runs.is_empty() {
+                        self.first_run_marker_style_override =
+                            self.run_marker_style_before_hyperlink.clone();
+                    }
                     push_pptx_run(
                         &mut self.runs,
                         Run {

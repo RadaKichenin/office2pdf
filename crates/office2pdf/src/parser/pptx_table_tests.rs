@@ -262,6 +262,45 @@ fn test_slide_table_coalesces_adjacent_runs_with_same_style() {
 }
 
 #[test]
+fn test_slide_table_hyperlink_run_inherits_theme_style() {
+    let rows_xml = concat!(
+        r#"<a:tr h="370840">"#,
+        r#"<a:tc><a:txBody><a:bodyPr/><a:p>"#,
+        r#"<a:pPr indent="-216000"><a:buChar char="•"/></a:pPr>"#,
+        r#"<a:r><a:rPr lang="en-US"><a:hlinkClick r:id="rId2"/></a:rPr><a:t>Link</a:t></a:r>"#,
+        r#"<a:r><a:rPr lang="en-US"/><a:t> after</a:t></a:r>"#,
+        r#"</a:p></a:txBody><a:tcPr/></a:tc>"#,
+        r#"</a:tr>"#,
+    );
+    let table_frame = make_table_graphic_frame(0, 0, 914_400, 370_840, &[914_400], rows_xml);
+    let slide = make_slide_xml(&[table_frame]);
+    let theme_xml = make_theme_xml(&[("hlink", "778BA2")], "Calibri Light", "Calibri");
+    let data = build_test_pptx_with_theme(SLIDE_CX, SLIDE_CY, &[slide], &theme_xml);
+
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = first_fixed_page(&doc);
+    let table = table_element(&page.elements[0]);
+    let list = match &table.rows[0].cells[0].content[0] {
+        Block::List(list) => list,
+        other => panic!("Expected list, got {other:?}"),
+    };
+    let paragraph = &list.items[0].content[0];
+    assert_eq!(paragraph.runs.len(), 2);
+    assert_eq!(paragraph.runs[0].text, "Link");
+    assert_eq!(
+        paragraph.runs[0].style.color,
+        Some(Color::new(0x77, 0x8B, 0xA2))
+    );
+    assert_eq!(paragraph.runs[0].style.underline, Some(true));
+    let marker_style = list.level_styles[&0].marker_style.as_ref();
+    assert!(marker_style.is_none_or(|style| {
+        style.color != Some(Color::new(0x77, 0x8B, 0xA2)) && style.underline != Some(true)
+    }));
+}
+
+#[test]
 fn test_slide_table_cell_bulleted_paragraphs_group_into_list() {
     let rows_xml = concat!(
         r#"<a:tr h="740000">"#,

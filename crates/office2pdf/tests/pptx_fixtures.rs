@@ -414,6 +414,65 @@ pptx_fixture_tests!(keyframes, "keyframes.pptx");
 pptx_fixture_tests!(layouts, "layouts.pptx");
 pptx_fixture_tests!(shapes, "shapes.pptx");
 pptx_fixture_tests!(custom_geo, "customGeo.pptx");
+
+#[test]
+fn structure_custom_geo_page_31_preserves_theme_hyperlink_runs() {
+    let pages = fixed_pages("customGeo.pptx");
+    let page = &pages[30];
+    let mut runs = Vec::new();
+    let mut marker_styles = Vec::new();
+
+    for element in &page.elements {
+        let FixedElementKind::TextBox(text_box) = &element.kind else {
+            continue;
+        };
+        for block in &text_box.content {
+            match block {
+                Block::Paragraph(paragraph) => runs.extend(paragraph.runs.iter()),
+                Block::List(list) => {
+                    marker_styles.extend(
+                        list.level_styles
+                            .values()
+                            .filter_map(|level| level.marker_style.as_ref()),
+                    );
+                    for item in &list.items {
+                        for paragraph in &item.content {
+                            runs.extend(paragraph.runs.iter());
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let expected_links = [
+        "www.corestandards.org",
+        "www.commoncore.org",
+        "www.education.ohio.gov",
+        "www.achievethecore.org",
+    ];
+    for expected in expected_links {
+        let run = runs
+            .iter()
+            .find(|run| run.text.contains(expected))
+            .unwrap_or_else(|| panic!("missing hyperlink run: {expected}"));
+        assert_eq!(run.style.color, Some(Color::new(0x00, 0x00, 0xFF)));
+        assert_eq!(run.style.underline, Some(true));
+    }
+
+    let control = runs
+        .iter()
+        .find(|run| run.text.contains("Curriculum maps linked to Common Core"))
+        .expect("control text should remain present");
+    assert_ne!(control.style.color, Some(Color::new(0x00, 0x00, 0xFF)));
+    assert_ne!(control.style.underline, Some(true));
+    assert!(
+        marker_styles
+            .iter()
+            .all(|style| style.color != Some(Color::new(0x00, 0x00, 0xFF)))
+    );
+}
 pptx_fixture_tests!(highlight, "highlight-test-case.pptx");
 pptx_fixture_tests!(picture_transparency, "picture-transparency.pptx");
 pptx_fixture_tests!(poi_sample, "poi_sample.pptx");
