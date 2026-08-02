@@ -850,10 +850,13 @@ pub(super) fn first_pptx_visible_run_style(runs: &[Run]) -> Option<TextStyle> {
 
 fn resolve_pptx_marker_base_style(
     runs: &[Run],
+    first_run_style_override: Option<&TextStyle>,
     end_para_run_style: &TextStyle,
     default_run_style: &TextStyle,
 ) -> TextStyle {
-    first_pptx_visible_run_style(runs)
+    first_run_style_override
+        .cloned()
+        .or_else(|| first_pptx_visible_run_style(runs))
         .or_else(|| {
             (end_para_run_style != &TextStyle::default()).then(|| end_para_run_style.clone())
         })
@@ -867,10 +870,16 @@ fn finalize_pptx_marker_style(style: TextStyle) -> Option<TextStyle> {
 pub(super) fn resolve_pptx_marker_style(
     bullet: &PptxBulletDefinition,
     runs: &[Run],
+    first_run_style_override: Option<&TextStyle>,
     end_para_run_style: &TextStyle,
     default_run_style: &TextStyle,
 ) -> Option<TextStyle> {
-    let mut style = resolve_pptx_marker_base_style(runs, end_para_run_style, default_run_style);
+    let mut style = resolve_pptx_marker_base_style(
+        runs,
+        first_run_style_override,
+        end_para_run_style,
+        default_run_style,
+    );
 
     match bullet.font.as_ref() {
         Some(PptxBulletFontSource::FollowText) | None => {}
@@ -903,11 +912,17 @@ pub(super) fn resolve_pptx_list_marker(
     bullet: &PptxBulletDefinition,
     level: u32,
     runs: &[Run],
+    first_run_style_override: Option<&TextStyle>,
     end_para_run_style: &TextStyle,
     default_run_style: &TextStyle,
 ) -> Option<PptxListMarker> {
-    let marker_style =
-        resolve_pptx_marker_style(bullet, runs, end_para_run_style, default_run_style);
+    let marker_style = resolve_pptx_marker_style(
+        bullet,
+        runs,
+        first_run_style_override,
+        end_para_run_style,
+        default_run_style,
+    );
     match bullet.kind.as_ref()? {
         PptxBulletKind::None => None,
         PptxBulletKind::Character(character) => Some(PptxListMarker::Unordered {
@@ -1058,5 +1073,21 @@ pub(super) fn extract_rpr_attributes(e: &quick_xml::events::BytesStart, style: &
         // Character tracking, also in hundredths of a point, added to every
         // character gap in the run. Negative values tighten (e.g. -100 = -1pt).
         style.letter_spacing = Some(spc as f64 / 100.0);
+    }
+}
+
+/// Apply DrawingML's default hyperlink appearance without replacing run-local overrides.
+pub(super) fn apply_pptx_hyperlink_style(
+    style: &mut TextStyle,
+    has_explicit_color: bool,
+    has_explicit_underline: bool,
+    theme: &ThemeData,
+    color_map: &ColorMapData,
+) {
+    if !has_explicit_color && let Some(color) = resolve_scheme_color(theme, color_map, "hlink") {
+        style.color = Some(color);
+    }
+    if !has_explicit_underline {
+        style.underline = Some(true);
     }
 }

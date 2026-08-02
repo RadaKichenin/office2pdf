@@ -443,6 +443,60 @@ fn test_scheme_color_in_text_run() {
 }
 
 #[test]
+fn test_hyperlink_run_inherits_theme_color_underline_and_keeps_boundary() {
+    let runs_xml = concat!(
+        r#"<a:r><a:rPr lang="en-US"/><a:t>Plain text, then </a:t></a:r>"#,
+        r#"<a:r><a:rPr lang="en-US"><a:hlinkClick r:id="rId2"/></a:rPr><a:t>Click here</a:t></a:r>"#,
+        r#"<a:r><a:rPr lang="en-US"/><a:t> after</a:t></a:r>"#,
+    );
+    let shape = make_formatted_text_box(0, 0, 4_000_000, 500_000, runs_xml);
+    let slide = make_slide_xml(&[shape]);
+    let theme_xml = make_theme_xml(&[("hlink", "778BA2")], "Calibri Light", "Calibri");
+    let data = build_test_pptx_with_theme(SLIDE_CX, SLIDE_CY, &[slide], &theme_xml);
+
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = first_fixed_page(&doc);
+    let blocks = text_box_blocks(&page.elements[0]);
+    let para = match &blocks[0] {
+        Block::Paragraph(p) => p,
+        _ => panic!("Expected Paragraph"),
+    };
+    assert_eq!(para.runs.len(), 3);
+    assert_eq!(para.runs[0].text, "Plain text, then ");
+    assert_eq!(para.runs[1].text, "Click here");
+    assert_eq!(para.runs[1].style.color, Some(Color::new(0x77, 0x8B, 0xA2)));
+    assert_eq!(para.runs[1].style.underline, Some(true));
+    assert_eq!(para.runs[2].text, " after");
+}
+
+#[test]
+fn test_hyperlink_run_keeps_explicit_color_and_underline_none() {
+    let runs_xml = concat!(
+        r#"<a:r><a:rPr lang="en-US" u="none">"#,
+        r#"<a:solidFill><a:srgbClr val="CC3300"/></a:solidFill>"#,
+        r#"<a:hlinkClick r:id="rId2"/></a:rPr><a:t>Styled link</a:t></a:r>"#,
+    );
+    let shape = make_formatted_text_box(0, 0, 2_000_000, 500_000, runs_xml);
+    let slide = make_slide_xml(&[shape]);
+    let theme_xml = make_theme_xml(&[("hlink", "778BA2")], "Calibri Light", "Calibri");
+    let data = build_test_pptx_with_theme(SLIDE_CX, SLIDE_CY, &[slide], &theme_xml);
+
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = first_fixed_page(&doc);
+    let blocks = text_box_blocks(&page.elements[0]);
+    let para = match &blocks[0] {
+        Block::Paragraph(p) => p,
+        _ => panic!("Expected Paragraph"),
+    };
+    assert_eq!(para.runs[0].style.color, Some(Color::new(0xCC, 0x33, 0x00)));
+    assert_eq!(para.runs[0].style.underline, Some(false));
+}
+
+#[test]
 fn test_theme_major_font_in_text() {
     let runs_xml = r#"<a:r><a:rPr><a:latin typeface="+mj-lt"/></a:rPr><a:t>Heading</a:t></a:r>"#;
     let shape = make_formatted_text_box(0, 0, 2_000_000, 500_000, runs_xml);
