@@ -196,6 +196,7 @@ fn paragraph_style_merge_from_all_none_source_preserves_target() {
             alignment: TabAlignment::Left,
             leader: TabLeader::None,
         }]),
+        default_tab_stop_pt: Some(40.0),
         background: Some(Color::new(0xEE, 0xEE, 0xEE)),
         border: None,
         border_space: None,
@@ -215,6 +216,7 @@ fn paragraph_style_merge_from_all_none_source_preserves_target() {
     assert_eq!(target.heading_level, original.heading_level);
     assert_eq!(target.direction, original.direction);
     assert_eq!(target.tab_stops, original.tab_stops);
+    assert_eq!(target.default_tab_stop_pt, original.default_tab_stop_pt);
 }
 
 #[test]
@@ -247,6 +249,7 @@ fn paragraph_style_merge_from_all_some_source_overwrites_target() {
             alignment: TabAlignment::Right,
             leader: TabLeader::Dot,
         }]),
+        default_tab_stop_pt: Some(72.0),
     };
 
     target.merge_from(&source);
@@ -260,6 +263,7 @@ fn paragraph_style_merge_from_all_some_source_overwrites_target() {
     assert_eq!(target.space_after, Some(16.0));
     assert_eq!(target.heading_level, Some(1));
     assert_eq!(target.direction, Some(TextDirection::Rtl));
+    assert_eq!(target.default_tab_stop_pt, Some(72.0));
     assert_eq!(
         target.tab_stops,
         Some(vec![TabStop {

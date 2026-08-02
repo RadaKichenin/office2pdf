@@ -1925,7 +1925,7 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
             out,
             &para.runs,
             style.tab_stops.as_deref(),
-            cell.default_tab_width_pt,
+            paragraph_default_tab_width_pt(style, cell.default_tab_width_pt),
             paragraph_eojeol_wrap(
                 cell.breaks_hangul_at_eojeol,
                 style,

@@ -2721,14 +2721,14 @@ fn generate_fixed_text_paragraph(
             out,
             &para.runs,
             style.tab_stops.as_deref(),
-            DEFAULT_TAB_WIDTH_PT,
+            paragraph_default_tab_width_pt(style, DEFAULT_TAB_WIDTH_PT),
         );
     } else {
         generate_runs_with_tabs(
             out,
             &para.runs,
             style.tab_stops.as_deref(),
-            DEFAULT_TAB_WIDTH_PT,
+            paragraph_default_tab_width_pt(style, DEFAULT_TAB_WIDTH_PT),
             // PowerPoint splits Korean mid-word, so a slide's text box already
             // sits on the engine default.
             //

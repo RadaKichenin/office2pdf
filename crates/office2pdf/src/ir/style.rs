@@ -45,6 +45,9 @@ pub struct ParagraphStyle {
     pub direction: Option<TextDirection>,
     /// Custom tab stop positions for this paragraph.
     pub tab_stops: Option<Vec<TabStop>>,
+    /// Paragraph-specific default tab interval in points. DrawingML paragraph
+    /// and inherited list-level `@defTabSz` values override the renderer fallback.
+    pub default_tab_stop_pt: Option<f64>,
     /// Paragraph-wide shading fill (`w:pPr/w:shd`), painted behind the full
     /// paragraph width like Word's code-block backgrounds.
     pub background: Option<Color>,
@@ -64,7 +67,8 @@ pub struct ParagraphStyle {
 /// A custom tab stop definition.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TabStop {
-    /// Position in points from the left margin.
+    /// Position in points from the paragraph's rendered text origin. Parsers
+    /// normalize format-specific coordinate origins before storing the stop.
     pub position: f64,
     /// Alignment of text at this tab stop.
     pub alignment: TabAlignment,
@@ -297,6 +301,9 @@ impl ParagraphStyle {
         }
         if other.tab_stops.is_some() {
             self.tab_stops = other.tab_stops.clone();
+        }
+        if other.default_tab_stop_pt.is_some() {
+            self.default_tab_stop_pt = other.default_tab_stop_pt;
         }
         if other.background.is_some() {
             self.background = other.background;

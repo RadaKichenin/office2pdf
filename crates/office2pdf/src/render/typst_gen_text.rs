@@ -42,6 +42,7 @@ pub(super) fn generate_paragraph(
     available_measure_pt: Option<f64>,
 ) -> Result<(), ConvertError> {
     let style = &para.style;
+    let paragraph_tab_width_pt: f64 = paragraph_default_tab_width_pt(style, default_tab_width_pt);
 
     if let Some(level) = style.heading_level {
         // A heading is still a paragraph: Word paints its `w:pBdr` and `w:shd`
@@ -89,7 +90,7 @@ pub(super) fn generate_paragraph(
             out,
             &para.runs,
             style.tab_stops.as_deref(),
-            default_tab_width_pt,
+            paragraph_tab_width_pt,
             // A heading emits no fixed text edges of its own, so a frame needs
             // no correction to sit on the surrounding baseline.
             paragraph_eojeol_wrap(breaks_hangul_at_eojeol, style, None, available_measure_pt),
@@ -187,7 +188,7 @@ pub(super) fn generate_paragraph(
         out,
         &para.runs,
         style.tab_stops.as_deref(),
-        default_tab_width_pt,
+        paragraph_tab_width_pt,
         paragraph_eojeol_wrap(
             breaks_hangul_at_eojeol,
             style,
@@ -209,6 +210,13 @@ pub(super) fn generate_paragraph(
 
     out.push('\n');
     Ok(())
+}
+
+pub(super) fn paragraph_default_tab_width_pt(style: &ParagraphStyle, fallback_pt: f64) -> f64 {
+    style
+        .default_tab_stop_pt
+        .filter(|width_pt| *width_pt > 0.0)
+        .unwrap_or(fallback_pt)
 }
 
 /// The paragraph's `(left, right)` indent in points, or `None` when it has

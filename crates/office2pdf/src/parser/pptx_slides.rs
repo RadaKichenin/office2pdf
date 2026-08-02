@@ -1683,6 +1683,12 @@ impl<'a> SlideXmlParser<'a> {
             b"lnSpc" if self.in_para && !self.in_run => {
                 self.in_ln_spc = true;
             }
+            b"tabLst" if self.in_para && !self.in_run => {
+                self.para_style.tab_stops = Some(Vec::new());
+            }
+            b"tab" if self.in_para && !self.in_run => {
+                extract_pptx_tab_stop(e, &mut self.para_style);
+            }
             b"spcBef" if self.in_para && !self.in_run => {
                 self.in_spc_bef = true;
             }
@@ -2134,6 +2140,12 @@ impl<'a> SlideXmlParser<'a> {
             b"lnSpc" if self.in_para && !self.in_run => {
                 self.in_ln_spc = true;
             }
+            b"tabLst" if self.in_para && !self.in_run => {
+                self.para_style.tab_stops = Some(Vec::new());
+            }
+            b"tab" if self.in_para && !self.in_run => {
+                extract_pptx_tab_stop(e, &mut self.para_style);
+            }
             b"spcBef" if self.in_para && !self.in_run => {
                 self.in_spc_bef = true;
             }
@@ -2303,9 +2315,11 @@ impl<'a> SlideXmlParser<'a> {
                 );
                 let mut paragraph_runs = std::mem::take(&mut self.runs);
                 insert_hangul_kinsoku_break_markers(&mut paragraph_runs);
+                let mut paragraph_style: ParagraphStyle = self.para_style.clone();
+                normalize_pptx_tab_stops(&mut paragraph_style, self.text_box.padding.left);
                 self.paragraphs.push(PptxParagraphEntry {
                     paragraph: Paragraph {
-                        style: self.para_style.clone(),
+                        style: paragraph_style,
                         runs: paragraph_runs,
                     },
                     list_marker: resolved_list_marker,

@@ -76,6 +76,7 @@ struct ListStyleParseState {
     active_paragraph_target: Option<ParagraphTarget>,
     active_run_target: Option<ParagraphTarget>,
     is_in_line_spacing: bool,
+    is_in_tab_list: bool,
     is_in_run_fill: bool,
     is_in_bullet_fill: bool,
 }
@@ -87,6 +88,7 @@ impl ListStyleParseState {
             active_paragraph_target: None,
             active_run_target: None,
             is_in_line_spacing: false,
+            is_in_tab_list: false,
             is_in_run_fill: false,
             is_in_bullet_fill: false,
         }
@@ -140,6 +142,21 @@ impl ListStyleParseState {
             } else {
                 extract_pptx_line_spacing_pts(e, style);
             }
+        }
+    }
+
+    fn begin_tab_list(&mut self) {
+        if let Some(target) = self.active_paragraph_target {
+            self.paragraph_style_mut(target).tab_stops = Some(Vec::new());
+            self.is_in_tab_list = true;
+        }
+    }
+
+    fn handle_tab_stop(&mut self, e: &quick_xml::events::BytesStart) {
+        if self.is_in_tab_list
+            && let Some(target) = self.active_paragraph_target
+        {
+            extract_pptx_tab_stop(e, self.paragraph_style_mut(target));
         }
     }
 
@@ -328,10 +345,12 @@ impl ListStyleParseState {
             b"defPPr" => {
                 self.active_paragraph_target = None;
                 self.is_in_line_spacing = false;
+                self.is_in_tab_list = false;
             }
             name if parse_pptx_list_style_level(name).is_some() => {
                 self.active_paragraph_target = None;
                 self.is_in_line_spacing = false;
+                self.is_in_tab_list = false;
             }
             b"defRPr" => {
                 self.active_run_target = None;
@@ -345,6 +364,9 @@ impl ListStyleParseState {
             }
             b"lnSpc" if self.is_in_line_spacing => {
                 self.is_in_line_spacing = false;
+            }
+            b"tabLst" if self.is_in_tab_list => {
+                self.is_in_tab_list = false;
             }
             _ => {}
         }
@@ -374,6 +396,12 @@ pub(super) fn parse_pptx_list_style(
                     }
                     b"lnSpc" if state.active_paragraph_target.is_some() => {
                         state.is_in_line_spacing = true;
+                    }
+                    b"tabLst" if state.active_paragraph_target.is_some() => {
+                        state.begin_tab_list();
+                    }
+                    b"tab" if state.is_in_tab_list => {
+                        state.handle_tab_stop(e);
                     }
                     b"spcPct" if state.is_in_line_spacing => {
                         state.handle_line_spacing_element(e, true);
@@ -423,6 +451,13 @@ pub(super) fn parse_pptx_list_style(
                     }
                     b"spcPts" if state.is_in_line_spacing => {
                         state.handle_line_spacing_element(e, false);
+                    }
+                    b"tabLst" if state.active_paragraph_target.is_some() => {
+                        state.begin_tab_list();
+                        state.is_in_tab_list = false;
+                    }
+                    b"tab" if state.is_in_tab_list => {
+                        state.handle_tab_stop(e);
                     }
                     b"buClr" if state.active_paragraph_target.is_some() => {
                         // Empty `<buClr/>` — no color data to extract.
@@ -484,6 +519,40 @@ pub(super) fn extract_paragraph_props(
     }
     if let Some(value) = get_attr_i64(e, b"indent") {
         style.indent_first_line = Some(emu_to_pt(value));
+    }
+    if let Some(value) = get_attr_i64(e, b"defTabSz")
+        && value > 0
+    {
+        style.default_tab_stop_pt = Some(emu_to_pt(value));
+    }
+}
+
+pub(super) fn extract_pptx_tab_stop(e: &quick_xml::events::BytesStart, style: &mut ParagraphStyle) {
+    let Some(position_emu) = get_attr_i64(e, b"pos") else {
+        return;
+    };
+    let alignment: TabAlignment = match get_attr_str(e, b"algn").as_deref() {
+        Some("ctr") => TabAlignment::Center,
+        Some("r") => TabAlignment::Right,
+        Some("dec") => TabAlignment::Decimal,
+        _ => TabAlignment::Left,
+    };
+    let tab_stop: TabStop = TabStop {
+        position: emu_to_pt(position_emu),
+        alignment,
+        leader: TabLeader::None,
+    };
+    let tab_stops: &mut Vec<TabStop> = style.tab_stops.get_or_insert_with(Vec::new);
+    tab_stops.push(tab_stop);
+    tab_stops.sort_by(|left, right| left.position.total_cmp(&right.position));
+}
+
+pub(super) fn normalize_pptx_tab_stops(style: &mut ParagraphStyle, text_inset_left_pt: f64) {
+    let Some(tab_stops) = style.tab_stops.as_mut() else {
+        return;
+    };
+    for tab_stop in tab_stops {
+        tab_stop.position = (tab_stop.position - text_inset_left_pt).max(0.0);
     }
 }
 
