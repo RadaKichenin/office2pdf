@@ -467,6 +467,28 @@ fn test_generate_tab_falls_back_to_next_default_stop_after_explicit_tabs() {
 }
 
 #[test]
+fn test_generate_tab_uses_paragraph_default_stop_interval() {
+    let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
+        style: ParagraphStyle {
+            default_tab_stop_pt: Some(72.0),
+            ..ParagraphStyle::default()
+        },
+        runs: vec![Run {
+            text: "Label\tValue".to_string(),
+            style: TextStyle::default(),
+            href: None,
+            footnote: None,
+        }],
+    })])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains("calc.rem-euclid(tab_prefix_width_1.abs.pt(), 72)"),
+        "Expected the paragraph's default tab interval in: {result}"
+    );
+}
+
+#[test]
 fn test_generate_tab_leader_uses_repeat_fill() {
     use crate::ir::{TabAlignment, TabLeader, TabStop};
 

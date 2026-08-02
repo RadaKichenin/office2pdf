@@ -15,8 +15,8 @@ use crate::ir::{
     Color, Document, FixedElement, FixedElementKind, FixedPage, GradientFill, ImageClipShape,
     ImageCrop, ImageData, ImageFormat, Insets, LineSpacing, List, ListItem, ListKind,
     ListLevelStyle, Page, PageSize, Paragraph, ParagraphStyle, Run, Shadow, Shape, ShapeKind,
-    SmartArt, SmartArtNode, StyleSheet, Table, TableCell, TableRow, TextBoxData,
-    TextBoxVerticalAlign, TextDirection, TextStyle,
+    SmartArt, SmartArtNode, StyleSheet, TabAlignment, TabLeader, TabStop, Table, TableCell,
+    TableRow, TextBoxData, TextBoxVerticalAlign, TextDirection, TextStyle,
 };
 use crate::parser::Parser;
 use crate::parser::smartart;

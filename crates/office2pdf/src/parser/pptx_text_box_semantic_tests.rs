@@ -1,4 +1,5 @@
 use super::*;
+use crate::ir::{TabAlignment, TabLeader, TabStop};
 
 #[test]
 fn test_text_box_auto_numbered_paragraphs_group_into_list() {
@@ -159,6 +160,110 @@ fn test_text_box_paragraph_line_spacing_pct_extracted() {
             assert!((factor - 1.5).abs() < f64::EPSILON);
         }
         other => panic!("Expected proportional line spacing, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_text_box_paragraph_tab_stops_are_extracted() {
+    let paragraphs_xml = concat!(
+        r#"<a:p><a:pPr defTabSz="914400"><a:tabLst>"#,
+        r#"<a:tab pos="914400" algn="l"/>"#,
+        r#"<a:tab pos="1828800" algn="ctr"/>"#,
+        r#"<a:tab pos="2743200" algn="r"/>"#,
+        r#"<a:tab pos="3657600" algn="dec"/>"#,
+        r#"</a:tabLst></a:pPr><a:r><a:t>Label&#9;Value</a:t></a:r></a:p>"#,
+    );
+    let shape = make_multi_para_text_box(0, 0, 6_000_000, 500_000, paragraphs_xml);
+    let slide = make_slide_xml(&[shape]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = first_fixed_page(&doc);
+    let blocks = text_box_blocks(&page.elements[0]);
+    let paragraph = match &blocks[0] {
+        Block::Paragraph(paragraph) => paragraph,
+        other => panic!("Expected Paragraph block, got {other:?}"),
+    };
+
+    assert_eq!(
+        paragraph.style.tab_stops,
+        Some(vec![
+            TabStop {
+                position: 64.8,
+                alignment: TabAlignment::Left,
+                leader: TabLeader::None,
+            },
+            TabStop {
+                position: 136.8,
+                alignment: TabAlignment::Center,
+                leader: TabLeader::None,
+            },
+            TabStop {
+                position: 208.8,
+                alignment: TabAlignment::Right,
+                leader: TabLeader::None,
+            },
+            TabStop {
+                position: 280.8,
+                alignment: TabAlignment::Decimal,
+                leader: TabLeader::None,
+            },
+        ])
+    );
+    assert_eq!(paragraph.style.default_tab_stop_pt, Some(72.0));
+}
+
+#[test]
+fn test_text_box_paragraph_inherits_tab_stops_from_list_style() {
+    let shape = r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="TextBox"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="6000000" cy="500000"/></a:xfrm></p:spPr><p:txBody><a:bodyPr/><a:lstStyle><a:lvl1pPr defTabSz="914400"><a:tabLst><a:tab pos="914400" algn="r"/></a:tabLst></a:lvl1pPr></a:lstStyle><a:p><a:pPr lvl="0"/><a:r><a:t>Label&#9;Value</a:t></a:r></a:p></p:txBody></p:sp>"#.to_string();
+    let slide = make_slide_xml(&[shape]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = first_fixed_page(&doc);
+    let blocks = text_box_blocks(&page.elements[0]);
+    let paragraph = match &blocks[0] {
+        Block::Paragraph(paragraph) => paragraph,
+        other => panic!("Expected Paragraph block, got {other:?}"),
+    };
+
+    assert_eq!(
+        paragraph.style.tab_stops,
+        Some(vec![TabStop {
+            position: 64.8,
+            alignment: TabAlignment::Right,
+            leader: TabLeader::None,
+        }])
+    );
+    assert_eq!(paragraph.style.default_tab_stop_pt, Some(72.0));
+}
+
+#[test]
+fn test_custom_geo_page_46_tabs_are_relative_to_the_inner_text_origin() {
+    let data = include_bytes!("../../../../tests/fixtures/pptx/customGeo.pptx");
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(data, &ConvertOptions::default()).unwrap();
+    let page = match &doc.pages[45] {
+        Page::Fixed(page) => page,
+        other => panic!("Expected fixed page, got {other:?}"),
+    };
+    let blocks = text_box_blocks(&page.elements[1]);
+
+    assert_eq!(blocks.len(), 3);
+    for block in blocks {
+        let paragraph = match block {
+            Block::Paragraph(paragraph) => paragraph,
+            other => panic!("Expected paragraph, got {other:?}"),
+        };
+        let tab_stops = paragraph
+            .style
+            .tab_stops
+            .as_deref()
+            .expect("Expected explicit tab stop");
+        assert_eq!(tab_stops.len(), 1);
+        assert!((tab_stops[0].position - 244.8).abs() < 0.001);
     }
 }
 

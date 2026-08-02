@@ -778,7 +778,7 @@ fn write_fixed_text_list_item_paragraph(out: &mut String, style: &ParagraphStyle
         out,
         runs,
         tab_stops.as_deref(),
-        DEFAULT_TAB_WIDTH_PT,
+        paragraph_default_tab_width_pt(style, DEFAULT_TAB_WIDTH_PT),
         EojeolWrap::Syllable,
     );
     out.push(']');

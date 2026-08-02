@@ -46,6 +46,7 @@ pub(super) fn extract_paragraph_style(prop: &docx_rs::ParagraphProperty) -> Para
         heading_level: None,
         direction: None,
         tab_stops,
+        default_tab_stop_pt: None,
         background: None,
         border,
         border_space,
