@@ -101,7 +101,20 @@ fn test_fixed_page_text_box_multiple_paragraphs_preserve_breaks() {
     let output = generate_typst(&doc).unwrap();
     assert!(output.source.contains("First item"));
     assert!(output.source.contains("Second item"));
-    assert!(output.source.contains("First item\n\n  Second item"));
+    assert!(
+        output.source.find("First item") < output.source.find("Second item"),
+        "paragraph order changed: {}",
+        output.source
+    );
+    assert_eq!(
+        output
+            .source
+            .matches("#block(above: 0pt, below: 0pt)")
+            .count(),
+        2,
+        "each paragraph should retain a separate block: {}",
+        output.source
+    );
 }
 
 #[test]
@@ -1810,4 +1823,70 @@ fn a_slide_paragraph_declares_its_own_block_spacing() {
         source.contains("above: 0pt, below: 0pt"),
         "an unspaced slide paragraph pins both gaps to zero: {source}"
     );
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn consecutive_slide_paragraphs_keep_powerpoints_full_line_advance() {
+    // The unstyled case takes Typst's embedded default. Calibri also verifies
+    // a named Office family: it resolves directly when installed and through
+    // the emitted metric-compatible substitute chain otherwise.
+    for family in [None, Some("Calibri")] {
+        let paragraphs = ["Paragraph one", "Paragraph two", "Paragraph three"]
+            .into_iter()
+            .map(|text| {
+                Block::Paragraph(Paragraph {
+                    style: ParagraphStyle {
+                        line_spacing: Some(LineSpacing::Proportional(1.0)),
+                        ..ParagraphStyle::default()
+                    },
+                    runs: vec![Run {
+                        text: text.to_string(),
+                        style: TextStyle {
+                            font_family: family.map(str::to_string),
+                            font_size: Some(18.0),
+                            ..TextStyle::default()
+                        },
+                        href: None,
+                        footnote: None,
+                    }],
+                })
+            })
+            .collect();
+        let doc = make_doc(vec![make_fixed_page(
+            960.0,
+            540.0,
+            vec![make_fixed_text_box(
+                54.0,
+                54.0,
+                800.0,
+                250.0,
+                Insets::default(),
+                crate::ir::TextBoxVerticalAlign::Top,
+                paragraphs,
+            )],
+        )]);
+        let output = generate_typst(&doc).unwrap();
+        let mut baselines: Vec<f64> = crate::render::pdf::compiled_text_runs(&output.source, 0)
+            .unwrap_or_else(|error| panic!("compile failed: {error}\n{}", output.source))
+            .into_iter()
+            .filter(|run| run.text.starts_with("Paragraph"))
+            .map(|run| run.baseline_pt)
+            .collect();
+        baselines.sort_by(f64::total_cmp);
+
+        assert_eq!(
+            baselines.len(),
+            3,
+            "expected three paragraphs: {baselines:?}"
+        );
+        for gap in baselines.windows(2).map(|pair| pair[1] - pair[0]) {
+            assert!(
+                (gap - 21.6).abs() < 0.01,
+                "18pt slide paragraphs in {family:?} should advance by 1.2em (21.6pt), \
+                 got {gap}pt; baselines={baselines:?}\n{}",
+                output.source
+            );
+        }
+    }
 }
