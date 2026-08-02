@@ -304,6 +304,7 @@ fn test_consecutive_floating_shapes_share_one_anchor_line() {
         kind: ShapeKind::Rectangle,
         fill: Some(Color::new(114, 159, 207)),
         gradient_fill: None,
+        pattern_fill: None,
         stroke: None,
         rotation_deg: None,
         opacity: None,
@@ -507,6 +508,7 @@ fn test_gradient_shape_fill_codegen() {
                 ],
                 angle: 45.0,
             }),
+            pattern_fill: None,
             stroke: None,
             rotation_deg: None,
             opacity: None,
@@ -532,6 +534,87 @@ fn test_gradient_shape_fill_codegen() {
     );
 }
 
+#[test]
+fn test_light_upward_diagonal_pattern_fill_codegen() {
+    let elem = FixedElement {
+        x: 10.0,
+        y: 20.0,
+        width: 200.0,
+        height: 150.0,
+        kind: FixedElementKind::Shape(Shape {
+            kind: ShapeKind::Rectangle,
+            fill: None,
+            gradient_fill: None,
+            pattern_fill: Some(PatternFill {
+                preset: PatternPreset::LightUpwardDiagonal,
+                foreground: Color::new(0, 0, 255),
+                background: Color::new(255, 255, 255),
+            }),
+            stroke: None,
+            rotation_deg: None,
+            opacity: None,
+            shadow: None,
+        }),
+    };
+    let doc = make_doc(vec![make_fixed_page(720.0, 540.0, vec![elem])]);
+    let output = generate_typst(&doc).unwrap();
+
+    assert!(
+        output.source.contains("tiling(size: (2.72pt, 2.72pt))"),
+        "Should emit a repeating DrawingML pattern. Got: {}",
+        output.source,
+    );
+    assert!(
+        output
+            .source
+            .contains("fill: rgb(255, 255, 255), stroke: none"),
+        "Should paint the pattern background without an outline. Got: {}",
+        output.source,
+    );
+    assert!(
+        output.source.contains("stroke: 0.24pt + rgb(0, 0, 255)"),
+        "Should paint the light upward hatch in the foreground color. Got: {}",
+        output.source,
+    );
+}
+
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn test_all_pattern_presets_compile_to_pdf() {
+    let elements: Vec<FixedElement> = PatternPreset::ALL
+        .iter()
+        .copied()
+        .enumerate()
+        .map(|(index, preset)| FixedElement {
+            x: (index % 9) as f64 * 48.0,
+            y: (index / 9) as f64 * 48.0,
+            width: 40.0,
+            height: 40.0,
+            kind: FixedElementKind::Shape(Shape {
+                kind: ShapeKind::Rectangle,
+                fill: None,
+                gradient_fill: None,
+                pattern_fill: Some(PatternFill {
+                    preset,
+                    foreground: Color::new(0, 0, 255),
+                    background: Color::new(255, 255, 255),
+                }),
+                stroke: None,
+                rotation_deg: None,
+                opacity: None,
+                shadow: None,
+            }),
+        })
+        .collect();
+    let doc = make_doc(vec![make_fixed_page(440.0, 300.0, elements)]);
+    let output = generate_typst(&doc).unwrap();
+    let pdf =
+        crate::render::pdf::compile_to_pdf(&output.source, &output.images, None, &[], false, false)
+            .expect("Every DrawingML preset pattern should compile as Typst");
+
+    assert!(pdf.starts_with(b"%PDF"));
+}
+
 // ── Shadow codegen tests ──────────────────────────────────────────
 
 #[test]
@@ -547,6 +630,7 @@ fn test_shape_shadow_codegen() {
             kind: ShapeKind::Rectangle,
             fill: Some(Color::new(255, 0, 0)),
             gradient_fill: None,
+            pattern_fill: None,
             stroke: None,
             rotation_deg: None,
             opacity: None,
@@ -587,6 +671,7 @@ fn test_shape_no_shadow_no_extra_output() {
             kind: ShapeKind::Rectangle,
             fill: Some(Color::new(255, 0, 0)),
             gradient_fill: None,
+            pattern_fill: None,
             stroke: None,
             rotation_deg: None,
             opacity: None,
@@ -701,6 +786,7 @@ fn test_shape_shadow_blur_renders_layered_rings() {
             kind: ShapeKind::Rectangle,
             fill: Some(Color::new(255, 0, 0)),
             gradient_fill: None,
+            pattern_fill: None,
             stroke: None,
             rotation_deg: None,
             opacity: None,
@@ -751,6 +837,7 @@ fn test_shape_shadow_without_blur_keeps_single_duplicate() {
             kind: ShapeKind::Rectangle,
             fill: Some(Color::new(255, 0, 0)),
             gradient_fill: None,
+            pattern_fill: None,
             stroke: None,
             rotation_deg: None,
             opacity: None,

@@ -13,7 +13,7 @@ use office2pdf::config::ConvertOptions;
 use office2pdf::internal::Parser;
 use office2pdf::internal::PptxParser;
 use office2pdf::internal::generate_typst;
-use office2pdf::ir::{Block, Color, FixedElementKind, FixedPage, Page};
+use office2pdf::ir::{Block, Color, FixedElementKind, FixedPage, Page, PatternPreset};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -143,6 +143,36 @@ fn acceptance_pr_188_contributor_acceptance_page_fill_reset() {
     assert_eq!(page_settings.len(), 2);
     assert!(page_settings[0].contains("fill: rgb(192, 0, 0)"));
     assert!(page_settings[1].contains("fill: white"));
+}
+
+// ---------------------------------------------------------------------------
+// pattern-fill.pptx
+// ---------------------------------------------------------------------------
+
+#[test]
+fn smoke_pattern_fill() {
+    assert_produces_valid_pdf("pattern-fill.pptx");
+}
+
+#[test]
+fn structure_pattern_fill_preserves_hatch_and_omits_outline() {
+    let pages = fixed_pages("pattern-fill.pptx");
+    assert_eq!(pages.len(), 1);
+
+    let patterned_shape = pages[0]
+        .elements
+        .iter()
+        .filter_map(|element| match &element.kind {
+            FixedElementKind::Shape(shape) => Some(shape),
+            _ => None,
+        })
+        .find(|shape| shape.pattern_fill.is_some())
+        .expect("fixture should contain a patterned shape");
+    let pattern = patterned_shape.pattern_fill.as_ref().unwrap();
+    assert_eq!(pattern.preset, PatternPreset::LightUpwardDiagonal);
+    assert_eq!(pattern.foreground, Color::new(0, 0, 255));
+    assert_eq!(pattern.background, Color::new(255, 255, 255));
+    assert!(patterned_shape.stroke.is_none());
 }
 
 // ---------------------------------------------------------------------------

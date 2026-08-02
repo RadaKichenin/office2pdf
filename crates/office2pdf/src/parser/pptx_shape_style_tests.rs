@@ -344,6 +344,53 @@ fn test_shape_solid_fill_no_gradient() {
 }
 
 #[test]
+fn test_pattern_shape_fill_preserves_preset_and_colors() {
+    let shape_xml =
+        r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="PatternBox"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="100000" y="200000"/><a:ext cx="500000" cy="300000"/></a:xfrm><a:prstGeom prst="rect"/><a:pattFill prst="ltUpDiag"><a:fgClr><a:srgbClr val="0000FF"/></a:fgClr><a:bgClr><a:srgbClr val="FFFFFF"/></a:bgClr></a:pattFill></p:spPr></p:sp>"#
+            .to_string();
+    let slide_xml = make_slide_xml(&[shape_xml]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide_xml]);
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let page = first_fixed_page(&doc);
+
+    let shape = get_shape(&page.elements[0]);
+    let pattern = shape
+        .pattern_fill
+        .as_ref()
+        .expect("Expected pattern fill on shape");
+    assert_eq!(pattern.preset, PatternPreset::LightUpwardDiagonal);
+    assert_eq!(pattern.foreground, Color::new(0, 0, 255));
+    assert_eq!(pattern.background, Color::new(255, 255, 255));
+    assert!(shape.fill.is_none());
+    assert!(shape.gradient_fill.is_none());
+    assert!(shape.stroke.is_none());
+}
+
+#[test]
+fn test_pattern_filled_rectangle_keeps_text_as_overlay() {
+    let shape_xml =
+        r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="PatternBox"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="100000" y="200000"/><a:ext cx="500000" cy="300000"/></a:xfrm><a:prstGeom prst="rect"/><a:pattFill prst="cross"><a:fgClr><a:srgbClr val="0000FF"/></a:fgClr><a:bgClr><a:srgbClr val="FFFFFF"/></a:bgClr></a:pattFill></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>Pattern text</a:t></a:r></a:p></p:txBody></p:sp>"#
+            .to_string();
+    let slide_xml = make_slide_xml(&[shape_xml]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide_xml]);
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let page = first_fixed_page(&doc);
+
+    assert_eq!(page.elements.len(), 2);
+    let shape = get_shape(&page.elements[0]);
+    assert_eq!(
+        shape.pattern_fill.as_ref().map(|fill| fill.preset),
+        Some(PatternPreset::Cross)
+    );
+    assert!(matches!(
+        page.elements[1].kind,
+        FixedElementKind::TextBox(_)
+    ));
+}
+
+#[test]
 fn test_gradient_background_no_angle() {
     let bg_xml = r#"<p:bg><p:bgPr><a:gradFill><a:gsLst><a:gs pos="0"><a:srgbClr val="FFFFFF"/></a:gs><a:gs pos="100000"><a:srgbClr val="000000"/></a:gs></a:gsLst></a:gradFill></p:bgPr></p:bg>"#;
     let slide_xml = make_slide_xml_with_bg(bg_xml, &[]);

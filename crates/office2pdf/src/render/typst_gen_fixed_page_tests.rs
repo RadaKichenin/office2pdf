@@ -135,6 +135,7 @@ fn test_shape_rotation_codegen() {
                 kind: ShapeKind::Rectangle,
                 fill: Some(Color::new(255, 0, 0)),
                 gradient_fill: None,
+                pattern_fill: None,
                 stroke: None,
                 rotation_deg: Some(90.0),
                 opacity: None,
@@ -161,6 +162,7 @@ fn test_shape_opacity_codegen() {
                 kind: ShapeKind::Rectangle,
                 fill: Some(Color::new(0, 255, 0)),
                 gradient_fill: None,
+                pattern_fill: None,
                 stroke: None,
                 rotation_deg: None,
                 opacity: Some(0.5),
@@ -186,6 +188,7 @@ fn test_shape_rotation_and_opacity_codegen() {
                 kind: ShapeKind::Ellipse,
                 fill: Some(Color::new(0, 0, 255)),
                 gradient_fill: None,
+                pattern_fill: None,
                 stroke: None,
                 rotation_deg: Some(45.0),
                 opacity: Some(0.75),
@@ -266,6 +269,7 @@ fn test_line_arrowhead_uses_place_overlay() {
                 },
                 fill: None,
                 gradient_fill: None,
+                pattern_fill: None,
                 stroke: Some(BorderSide {
                     width: 2.0,
                     color: Color::black(),
@@ -305,6 +309,7 @@ fn test_polyline_segments_use_place_overlay() {
                 },
                 fill: None,
                 gradient_fill: None,
+                pattern_fill: None,
                 stroke: Some(BorderSide {
                     width: 1.5,
                     color: Color::new(0, 0, 255),
@@ -351,6 +356,7 @@ fn test_rotated_polyline_pre_rotates_points_without_typst_rotate_wrapper() {
                 },
                 fill: None,
                 gradient_fill: None,
+                pattern_fill: None,
                 stroke: Some(BorderSide {
                     width: 1.0,
                     color: Color::new(67, 113, 187),

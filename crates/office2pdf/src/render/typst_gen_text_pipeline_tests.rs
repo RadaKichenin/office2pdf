@@ -376,6 +376,7 @@ fn test_generate_shape_shadow_all_kinds() {
                     kind: kind.clone(),
                     fill: Some(Color { r: 255, g: 0, b: 0 }),
                     gradient_fill: None,
+                    pattern_fill: None,
                     stroke: None,
                     opacity: None,
                     shadow: Some(shadow.clone()),

@@ -294,7 +294,10 @@ fn write_shape_params(out: &mut String, shape: &Shape, width: f64, height: f64) 
         format_f64(width),
         format_f64(height),
     );
-    if let Some(gradient) = &shape.gradient_fill {
+    if let Some(pattern) = &shape.pattern_fill {
+        out.push_str(", fill: ");
+        write_pattern_fill(out, pattern);
+    } else if let Some(gradient) = &shape.gradient_fill {
         out.push_str(", fill: ");
         write_gradient_fill(out, gradient);
     } else if let Some(fill) = &shape.fill {
@@ -340,7 +343,10 @@ fn write_polygon(
 ) {
     out.push_str("#polygon(");
     write_polygon_vertices(out, width, height, vertices);
-    if let Some(gradient) = &shape.gradient_fill {
+    if let Some(pattern) = &shape.pattern_fill {
+        out.push_str(", fill: ");
+        write_pattern_fill(out, pattern);
+    } else if let Some(gradient) = &shape.gradient_fill {
         out.push_str(", fill: ");
         write_gradient_fill(out, gradient);
     } else if let Some(fill) = &shape.fill {
@@ -389,6 +395,415 @@ pub(super) fn write_gradient_fill(out: &mut String, gradient: &GradientFill) {
         let _ = write!(out, ", angle: {}deg", format_f64(gradient.angle));
     }
     out.push(')');
+}
+
+/// Write a Typst tiling that approximates a DrawingML preset-pattern fill.
+///
+/// The line-family presets use vector strokes. The remaining presets use
+/// compact vector motifs so they stay resolution-independent in the PDF.
+pub(super) fn write_pattern_fill(out: &mut String, pattern: &PatternFill) {
+    use PatternPreset::*;
+
+    let tile_size = match pattern.preset {
+        LightHorizontal | LightVertical | LightDownwardDiagonal | LightUpwardDiagonal => 2.72,
+        NarrowHorizontal | NarrowVertical => 2.0,
+        WideDownwardDiagonal | WideUpwardDiagonal | LargeCheck | LargeGrid | LargeConfetti
+        | HorizontalBrick | DiagonalBrick | SolidDiamond | OpenDiamond | DottedDiamond | Plaid
+        | Sphere | Weave | Divot | Shingle | Wave | Trellis | ZigZag => 8.0,
+        _ => 4.0,
+    };
+    let size = format_f64(tile_size);
+    let _ = write!(out, "tiling(size: ({size}pt, {size}pt))[");
+    let _ = write!(
+        out,
+        "#place(rect(width: 100%, height: 100%, fill: {}, stroke: none))",
+        rgb(&pattern.background),
+    );
+
+    match pattern.preset {
+        Percent5 => write_percentage_motif(out, &pattern.foreground, 5),
+        Percent10 => write_percentage_motif(out, &pattern.foreground, 10),
+        Percent20 => write_percentage_motif(out, &pattern.foreground, 20),
+        Percent25 => write_percentage_motif(out, &pattern.foreground, 25),
+        Percent30 => write_percentage_motif(out, &pattern.foreground, 30),
+        Percent40 => write_percentage_motif(out, &pattern.foreground, 40),
+        Percent50 => write_percentage_motif(out, &pattern.foreground, 50),
+        Percent60 => write_percentage_motif(out, &pattern.foreground, 60),
+        Percent70 => write_percentage_motif(out, &pattern.foreground, 70),
+        Percent75 => write_percentage_motif(out, &pattern.foreground, 75),
+        Percent80 => write_percentage_motif(out, &pattern.foreground, 80),
+        Percent90 => write_percentage_motif(out, &pattern.foreground, 90),
+        Horizontal => write_pattern_line(
+            out,
+            &pattern.foreground,
+            "(0%, 50%)",
+            "(100%, 50%)",
+            0.75,
+            false,
+        ),
+        Vertical => write_pattern_line(
+            out,
+            &pattern.foreground,
+            "(50%, 0%)",
+            "(50%, 100%)",
+            0.75,
+            false,
+        ),
+        LightHorizontal => write_pattern_line(
+            out,
+            &pattern.foreground,
+            "(0%, 50%)",
+            "(100%, 50%)",
+            0.24,
+            false,
+        ),
+        LightVertical => write_pattern_line(
+            out,
+            &pattern.foreground,
+            "(50%, 0%)",
+            "(50%, 100%)",
+            0.24,
+            false,
+        ),
+        DarkHorizontal => write_pattern_line(
+            out,
+            &pattern.foreground,
+            "(0%, 50%)",
+            "(100%, 50%)",
+            1.5,
+            false,
+        ),
+        DarkVertical => write_pattern_line(
+            out,
+            &pattern.foreground,
+            "(50%, 0%)",
+            "(50%, 100%)",
+            1.5,
+            false,
+        ),
+        NarrowHorizontal => write_pattern_line(
+            out,
+            &pattern.foreground,
+            "(0%, 50%)",
+            "(100%, 50%)",
+            0.75,
+            false,
+        ),
+        NarrowVertical => write_pattern_line(
+            out,
+            &pattern.foreground,
+            "(50%, 0%)",
+            "(50%, 100%)",
+            0.75,
+            false,
+        ),
+        DashedHorizontal => write_pattern_line(
+            out,
+            &pattern.foreground,
+            "(0%, 50%)",
+            "(100%, 50%)",
+            0.75,
+            true,
+        ),
+        DashedVertical => write_pattern_line(
+            out,
+            &pattern.foreground,
+            "(50%, 0%)",
+            "(50%, 100%)",
+            0.75,
+            true,
+        ),
+        Cross | SmallGrid | LargeGrid | Plaid => {
+            write_pattern_line(
+                out,
+                &pattern.foreground,
+                "(0%, 50%)",
+                "(100%, 50%)",
+                0.75,
+                false,
+            );
+            write_pattern_line(
+                out,
+                &pattern.foreground,
+                "(50%, 0%)",
+                "(50%, 100%)",
+                0.75,
+                false,
+            );
+        }
+        DownwardDiagonal => write_pattern_line(
+            out,
+            &pattern.foreground,
+            "(0%, 0%)",
+            "(100%, 100%)",
+            0.75,
+            false,
+        ),
+        UpwardDiagonal => write_pattern_line(
+            out,
+            &pattern.foreground,
+            "(0%, 100%)",
+            "(100%, 0%)",
+            0.75,
+            false,
+        ),
+        LightDownwardDiagonal => write_pattern_line(
+            out,
+            &pattern.foreground,
+            "(0%, 0%)",
+            "(100%, 100%)",
+            0.24,
+            false,
+        ),
+        LightUpwardDiagonal => write_pattern_line(
+            out,
+            &pattern.foreground,
+            "(0%, 100%)",
+            "(100%, 0%)",
+            0.24,
+            false,
+        ),
+        DarkDownwardDiagonal => write_pattern_line(
+            out,
+            &pattern.foreground,
+            "(0%, 0%)",
+            "(100%, 100%)",
+            1.5,
+            false,
+        ),
+        DarkUpwardDiagonal => write_pattern_line(
+            out,
+            &pattern.foreground,
+            "(0%, 100%)",
+            "(100%, 0%)",
+            1.5,
+            false,
+        ),
+        WideDownwardDiagonal => write_pattern_line(
+            out,
+            &pattern.foreground,
+            "(0%, 0%)",
+            "(100%, 100%)",
+            1.0,
+            false,
+        ),
+        WideUpwardDiagonal => write_pattern_line(
+            out,
+            &pattern.foreground,
+            "(0%, 100%)",
+            "(100%, 0%)",
+            1.0,
+            false,
+        ),
+        DashedDownwardDiagonal => write_pattern_line(
+            out,
+            &pattern.foreground,
+            "(0%, 0%)",
+            "(100%, 100%)",
+            0.75,
+            true,
+        ),
+        DashedUpwardDiagonal => write_pattern_line(
+            out,
+            &pattern.foreground,
+            "(0%, 100%)",
+            "(100%, 0%)",
+            0.75,
+            true,
+        ),
+        DiagonalCross | Trellis => {
+            write_pattern_line(
+                out,
+                &pattern.foreground,
+                "(0%, 0%)",
+                "(100%, 100%)",
+                0.75,
+                false,
+            );
+            write_pattern_line(
+                out,
+                &pattern.foreground,
+                "(0%, 100%)",
+                "(100%, 0%)",
+                0.75,
+                false,
+            );
+        }
+        SmallCheck | LargeCheck => write_checker_motif(out, &pattern.foreground, tile_size),
+        DotGrid | SmallConfetti | LargeConfetti | Sphere | Divot => {
+            write_dot_motif(
+                out,
+                &pattern.foreground,
+                tile_size,
+                matches!(pattern.preset, LargeConfetti | Sphere),
+            );
+        }
+        HorizontalBrick => write_brick_motif(out, &pattern.foreground, tile_size),
+        DiagonalBrick => {
+            write_pattern_line(
+                out,
+                &pattern.foreground,
+                "(0%, 0%)",
+                "(100%, 100%)",
+                0.75,
+                false,
+            );
+            write_pattern_line(
+                out,
+                &pattern.foreground,
+                "(50%, 0%)",
+                "(100%, 50%)",
+                0.75,
+                false,
+            );
+        }
+        SolidDiamond => write_diamond_motif(out, &pattern.foreground, tile_size, true),
+        OpenDiamond | DottedDiamond => {
+            write_diamond_motif(out, &pattern.foreground, tile_size, false)
+        }
+        Weave => {
+            write_pattern_line(
+                out,
+                &pattern.foreground,
+                "(0%, 25%)",
+                "(100%, 25%)",
+                1.0,
+                false,
+            );
+            write_pattern_line(
+                out,
+                &pattern.foreground,
+                "(25%, 0%)",
+                "(25%, 100%)",
+                1.0,
+                false,
+            );
+        }
+        Shingle | Wave | ZigZag => write_zigzag_motif(out, &pattern.foreground, tile_size),
+    }
+
+    out.push(']');
+}
+
+fn write_pattern_line(
+    out: &mut String,
+    color: &Color,
+    start: &str,
+    end: &str,
+    thickness: f64,
+    dashed: bool,
+) {
+    if dashed {
+        let _ = write!(
+            out,
+            "#place(line(start: {start}, end: {end}, stroke: (paint: {}, thickness: {}pt, dash: \"dashed\")))",
+            rgb(color),
+            format_f64(thickness),
+        );
+    } else {
+        let _ = write!(
+            out,
+            "#place(line(start: {start}, end: {end}, stroke: {}pt + {}))",
+            format_f64(thickness),
+            rgb(color),
+        );
+    }
+}
+
+fn write_percentage_motif(out: &mut String, color: &Color, percentage: usize) {
+    // A 4x4 Bayer order keeps low and high densities evenly distributed.
+    const BAYER_ORDER: [(usize, usize); 16] = [
+        (0, 0),
+        (2, 2),
+        (2, 0),
+        (0, 2),
+        (1, 1),
+        (3, 3),
+        (3, 1),
+        (1, 3),
+        (1, 0),
+        (3, 2),
+        (3, 0),
+        (1, 2),
+        (0, 1),
+        (2, 3),
+        (2, 1),
+        (0, 3),
+    ];
+    let count = ((percentage * BAYER_ORDER.len() + 50) / 100).clamp(1, BAYER_ORDER.len());
+    for &(x, y) in BAYER_ORDER.iter().take(count) {
+        let _ = write!(
+            out,
+            "#place(dx: {}pt, dy: {}pt, rect(width: 1pt, height: 1pt, fill: {}, stroke: none))",
+            x,
+            y,
+            rgb(color),
+        );
+    }
+}
+
+fn write_checker_motif(out: &mut String, color: &Color, tile_size: f64) {
+    let half = tile_size / 2.0;
+    let half = format_f64(half);
+    for (x, y) in [("0", "0"), (&half, &half)] {
+        let _ = write!(
+            out,
+            "#place(dx: {x}pt, dy: {y}pt, rect(width: {half}pt, height: {half}pt, fill: {}, stroke: none))",
+            rgb(color),
+        );
+    }
+}
+
+fn write_dot_motif(out: &mut String, color: &Color, tile_size: f64, large: bool) {
+    let radius = if large { 1.0 } else { 0.5 };
+    let center = format_f64(tile_size / 2.0 - radius);
+    let _ = write!(
+        out,
+        "#place(dx: {center}pt, dy: {center}pt, circle(radius: {}pt, fill: {}, stroke: none))",
+        format_f64(radius),
+        rgb(color),
+    );
+}
+
+fn write_brick_motif(out: &mut String, color: &Color, tile_size: f64) {
+    write_pattern_line(out, color, "(0%, 0%)", "(100%, 0%)", 0.75, false);
+    write_pattern_line(out, color, "(0%, 50%)", "(100%, 50%)", 0.75, false);
+    let center = format_f64(tile_size / 2.0);
+    let _ = write!(
+        out,
+        "#place(line(start: ({center}pt, 0pt), end: ({center}pt, {}pt), stroke: 0.75pt + {}))",
+        format_f64(tile_size / 2.0),
+        rgb(color),
+    );
+}
+
+fn write_diamond_motif(out: &mut String, color: &Color, tile_size: f64, solid: bool) {
+    let half = format_f64(tile_size / 2.0);
+    let size = format_f64(tile_size);
+    let fill = if solid {
+        rgb(color)
+    } else {
+        "none".to_string()
+    };
+    let stroke = if solid {
+        "none".to_string()
+    } else {
+        format!("0.75pt + {}", rgb(color))
+    };
+    let _ = write!(
+        out,
+        "#place(polygon(({half}pt, 0pt), ({size}pt, {half}pt), ({half}pt, {size}pt), (0pt, {half}pt), fill: {fill}, stroke: {stroke}))",
+    );
+}
+
+fn write_zigzag_motif(out: &mut String, color: &Color, tile_size: f64) {
+    let half = format_f64(tile_size / 2.0);
+    let size = format_f64(tile_size);
+    let _ = write!(
+        out,
+        "#place(path((0pt, {half}pt), ({half}pt, 0pt), ({size}pt, {half}pt), stroke: 0.75pt + {}, fill: none))",
+        rgb(color),
+    );
 }
 
 // ── Polyline & arrowhead rendering ──────────────────────────────────

@@ -701,6 +701,78 @@ pub(super) fn parse_shape_gradient_fill(
     None
 }
 
+/// Parse a DrawingML `<a:pattFill>` after its start event has been read.
+pub(super) fn parse_shape_pattern_fill(
+    reader: &mut Reader<&[u8]>,
+    preset: PatternPreset,
+    theme: &ThemeData,
+    color_map: &ColorMapData,
+) -> PatternFill {
+    #[derive(Clone, Copy)]
+    enum Target {
+        Foreground,
+        Background,
+    }
+
+    let mut target: Option<Target> = None;
+    let mut foreground: Option<Color> = None;
+    let mut background: Option<Color> = None;
+    let mut depth: usize = 1;
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(ref e)) => {
+                depth += 1;
+                match e.local_name().as_ref() {
+                    b"fgClr" => target = Some(Target::Foreground),
+                    b"bgClr" => target = Some(Target::Background),
+                    b"srgbClr" | b"schemeClr" | b"sysClr" if target.is_some() => {
+                        let color = parse_color_from_start(reader, e, theme, color_map).color;
+                        match target {
+                            Some(Target::Foreground) => foreground = color,
+                            Some(Target::Background) => background = color,
+                            None => {}
+                        }
+                        // The color parser consumes the corresponding end tag.
+                        depth = depth.saturating_sub(1);
+                    }
+                    _ => {}
+                }
+            }
+            Ok(Event::Empty(ref e)) => {
+                if matches!(
+                    e.local_name().as_ref(),
+                    b"srgbClr" | b"schemeClr" | b"sysClr"
+                ) {
+                    let color = parse_color_from_empty(e, theme, color_map).color;
+                    match target {
+                        Some(Target::Foreground) => foreground = color,
+                        Some(Target::Background) => background = color,
+                        None => {}
+                    }
+                }
+            }
+            Ok(Event::End(ref e)) => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    break;
+                }
+                if matches!(e.local_name().as_ref(), b"fgClr" | b"bgClr") {
+                    target = None;
+                }
+            }
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+
+    PatternFill {
+        preset,
+        foreground: foreground.unwrap_or_else(Color::black),
+        background: background.unwrap_or_else(Color::white),
+    }
+}
+
 /// Parse `<a:effectLst>` and extract outer shadow if present.
 pub(super) fn parse_effect_list(
     reader: &mut Reader<&[u8]>,

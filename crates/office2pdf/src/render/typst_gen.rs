@@ -12,10 +12,10 @@ use crate::ir::{
     FloatingShape, FloatingTextBox, FlowPage, FrameAnchor, GradientFill, HFInline, HeaderFooter,
     HeaderFooterFrame, ImageCrop, ImageData, ImageFormat, ImageParagraphSpacing, Insets,
     LegendPosition, LineBox, LineSpacing, List, ListKind, Margins, MathEquation, Metadata, Page,
-    PageNumberFormat, PageSize, PairKerning, Paragraph, ParagraphStyle, PositionedTabAlignment,
-    PositionedTabRelativeTo, Run, Shadow, Shape, ShapeKind, SheetPage, SmartArt, TabAlignment,
-    TabLeader, TabStop, Table, TableCell, TableOfContents, TableRow, TextBoxData,
-    TextBoxVerticalAlign, TextDirection, TextStyle, VerticalTextAlign, WrapMode,
+    PageNumberFormat, PageSize, PairKerning, Paragraph, ParagraphStyle, PatternFill, PatternPreset,
+    PositionedTabAlignment, PositionedTabRelativeTo, Run, Shadow, Shape, ShapeKind, SheetPage,
+    SmartArt, TabAlignment, TabLeader, TabStop, Table, TableCell, TableOfContents, TableRow,
+    TextBoxData, TextBoxVerticalAlign, TextDirection, TextStyle, VerticalTextAlign, WrapMode,
 };
 
 use self::diagrams::{generate_chart, generate_chart_in, generate_smartart};
