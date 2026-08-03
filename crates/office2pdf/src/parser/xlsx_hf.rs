@@ -1,3 +1,4 @@
+use crate::error::ConvertWarning;
 use crate::ir::{
     Alignment, HFInline, HeaderFooter, HeaderFooterParagraph, ParagraphStyle, Run, TextStyle,
 };
@@ -5,9 +6,24 @@ use crate::ir::{
 /// Parse an Excel header/footer format string into IR HeaderFooter.
 ///
 /// Excel format strings use `&L`, `&C`, `&R` to define left/center/right sections,
-/// `&P` for current page number, and `&N` for total page count.
+/// `&P` for current page number, `&N` for total page count, and `&A` for the
+/// worksheet name.
+///
+/// `sheet_name` resolves `&A`. It is a component of Excel's built-in "Sheet
+/// name" header, so it turns up in files nobody customised.
+///
+/// Codes naming data this parser does not hold now warn instead of vanishing
+/// (issue #690). `&F` and `&Z` want the workbook's file name and path, which
+/// never reach `Parser::parse` — it takes bytes. `&D` and `&T` are Excel's
+/// *print* date and time, which a deterministic converter has no defensible
+/// value for. `&G` is a picture.
+///
 /// Returns `None` if the format string is empty.
-pub(super) fn parse_hf_format_string(format_str: &str) -> Option<HeaderFooter> {
+pub(super) fn parse_hf_format_string(
+    format_str: &str,
+    sheet_name: &str,
+    warnings: &mut Vec<ConvertWarning>,
+) -> Option<HeaderFooter> {
     let s = format_str.trim();
     if s.is_empty() {
         return None;
@@ -77,8 +93,43 @@ pub(super) fn parse_hf_format_string(format_str: &str) -> Option<HeaderFooter> {
                         consumed += 1;
                     }
                 }
+                'A' => {
+                    // Worksheet name. Excel's built-in "Sheet name" header is
+                    // `&C&A`, so this turns up in files nobody customised; it
+                    // used to fall through the catch-all and, being the whole
+                    // section, took the paragraph with it (issue #690).
+                    current.push_str(sheet_name);
+                    i += 2;
+                }
+                'F' | 'Z' | 'D' | 'T' | 'G' => {
+                    // Codes that name text Excel prints but this parser cannot
+                    // produce. Report them rather than dropping them silently,
+                    // so a missing header is traceable to its cause.
+                    let described = match chars[i + 1] {
+                        // `Parser::parse` takes bytes; no source path reaches it.
+                        'F' => "&F (file name)",
+                        'Z' => "&Z (file path)",
+                        // Excel's *print* date/time. A converter that must be
+                        // deterministic — byte-identical output for identical
+                        // input — has no defensible value to substitute.
+                        'D' => "&D (print date)",
+                        'T' => "&T (print time)",
+                        _ => "&G (picture)",
+                    };
+                    warnings.push(ConvertWarning::UnsupportedElement {
+                        format: "XLSX".to_string(),
+                        element: format!("header/footer field code {described}"),
+                    });
+                    i += 2;
+                }
                 _ => {
-                    // Unknown code — skip it
+                    // The remaining codes are formatting toggles — &B bold,
+                    // &I italic, &U underline, &E double underline, &S strike,
+                    // &X superscript, &Y subscript, &O outline, &H shadow —
+                    // plus section separators this parser does not model. They
+                    // carry no text of their own, so skipping one changes how
+                    // the header looks, never whether it appears. That is why
+                    // they stay silent while the codes above warn.
                     i += 2;
                 }
             }

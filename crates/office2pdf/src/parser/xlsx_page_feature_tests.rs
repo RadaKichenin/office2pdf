@@ -265,15 +265,123 @@ fn test_page_break_column_widths_preserved() {
 
 // --- US-036: Sheet headers and footers ---
 
+/// Parse a header/footer string against a fixed sheet name, discarding
+/// warnings. Tests that care about either pass them explicitly instead.
+fn parse_hf(format_str: &str) -> Option<HeaderFooter> {
+    parse_hf_format_string(format_str, "Sheet1", &mut Vec::new())
+}
+
+/// The concatenated text of every section, in left/center/right order.
+fn hf_section_texts(hf: &HeaderFooter) -> Vec<String> {
+    hf.paragraphs
+        .iter()
+        .map(|p| {
+            p.elements
+                .iter()
+                .filter_map(|e| match e {
+                    HFInline::Run(run) => Some(run.text.clone()),
+                    _ => None,
+                })
+                .collect::<String>()
+        })
+        .collect()
+}
+
+/// `&A` prints the worksheet name (issue #690).
+///
+/// This is the exact `<oddHeader>` of
+/// `tests/fixtures/xlsx/libreoffice/page_scale.xlsx`. `&A` was its only
+/// content, so the catch-all arm left the section empty and the header
+/// paragraph was dropped entirely — Excel prints "Sheet1".
+#[test]
+fn test_sheet_name_code_resolves_to_the_worksheet_name() {
+    let hf = parse_hf_format_string(
+        r#"&C&"Times New Roman,Regular"&12&A"#,
+        "Sheet1",
+        &mut Vec::new(),
+    )
+    .expect("a header whose only content is &A still produces a paragraph");
+
+    assert_eq!(hf_section_texts(&hf), vec!["Sheet1"]);
+    assert_eq!(hf.paragraphs[0].style.alignment, Some(Alignment::Center));
+}
+
+/// Triangulation: the name comes from the sheet, not from a constant.
+#[test]
+fn test_sheet_name_code_uses_the_actual_sheet_name() {
+    let hf = parse_hf_format_string("&C&A", "Q3 Budget", &mut Vec::new()).expect("header parsed");
+
+    assert_eq!(hf_section_texts(&hf), vec!["Q3 Budget"]);
+}
+
+/// `&A` composes with surrounding literal text and with other field codes,
+/// in whichever section it appears.
+#[test]
+fn test_sheet_name_code_composes_with_text_and_other_fields() {
+    let hf = parse_hf_format_string("&LSheet: &A&RPage &P", "Summary", &mut Vec::new())
+        .expect("header parsed");
+
+    assert_eq!(hf_section_texts(&hf), vec!["Sheet: Summary", "Page "]);
+    assert_eq!(hf.paragraphs[0].style.alignment, Some(Alignment::Left));
+    assert_eq!(hf.paragraphs[1].style.alignment, Some(Alignment::Right));
+    assert!(
+        hf.paragraphs[1]
+            .elements
+            .iter()
+            .any(|e| matches!(e, HFInline::PageNumber(_))),
+        "&P must still resolve alongside &A"
+    );
+}
+
+/// Codes naming data the parser does not hold are reported rather than
+/// silently discarded by a catch-all (issue #690).
+///
+/// `&F`/`&Z` need the source path, which never reaches `Parser::parse`; `&D`
+/// and `&T` are Excel's print date/time; `&G` is a picture.
+#[test]
+fn test_unresolvable_field_codes_warn_instead_of_vanishing() {
+    for (code, description) in [
+        ("&F", "&F (file name)"),
+        ("&Z", "&Z (file path)"),
+        ("&D", "&D (print date)"),
+        ("&T", "&T (print time)"),
+        ("&G", "&G (picture)"),
+    ] {
+        let mut warnings: Vec<ConvertWarning> = Vec::new();
+        parse_hf_format_string(&format!("&C{code}"), "Sheet1", &mut warnings);
+
+        assert!(
+            warnings.iter().any(|w| matches!(
+                w,
+                ConvertWarning::UnsupportedElement { format, element }
+                    if format == "XLSX" && element.contains(description)
+            )),
+            "{code} must be reported, got {warnings:?}"
+        );
+    }
+}
+
+/// A code that resolves must not also warn.
+#[test]
+fn test_resolved_field_codes_do_not_warn() {
+    let mut warnings: Vec<ConvertWarning> = Vec::new();
+    parse_hf_format_string("&C&A &P of &N", "Sheet1", &mut warnings);
+
+    assert!(
+        warnings.is_empty(),
+        "expected no warnings, got {warnings:?}"
+    );
+}
+
 #[test]
 fn test_parse_hf_format_string_empty() {
-    assert!(parse_hf_format_string("").is_none());
-    assert!(parse_hf_format_string("   ").is_none());
+    assert!(parse_hf("").is_none());
+    assert!(parse_hf("   ").is_none());
 }
 
 #[test]
 fn test_parse_hf_format_string_center_only() {
-    let hf = parse_hf_format_string("My Report").unwrap();
+    let hf = parse_hf("My Report").unwrap();
     assert_eq!(hf.paragraphs.len(), 1);
     assert_eq!(hf.paragraphs[0].style.alignment, Some(Alignment::Center));
     assert_eq!(hf.paragraphs[0].elements.len(), 1);
@@ -285,7 +393,7 @@ fn test_parse_hf_format_string_center_only() {
 
 #[test]
 fn test_parse_hf_format_string_left_center_right() {
-    let hf = parse_hf_format_string("&LLeft Text&CCenter Text&RRight Text").unwrap();
+    let hf = parse_hf("&LLeft Text&CCenter Text&RRight Text").unwrap();
     assert_eq!(hf.paragraphs.len(), 3);
 
     assert_eq!(hf.paragraphs[0].style.alignment, Some(Alignment::Left));
@@ -309,7 +417,7 @@ fn test_parse_hf_format_string_left_center_right() {
 
 #[test]
 fn test_parse_hf_format_string_page_numbers() {
-    let hf = parse_hf_format_string("&CPage &P of &N").unwrap();
+    let hf = parse_hf("&CPage &P of &N").unwrap();
     assert_eq!(hf.paragraphs.len(), 1);
     let elems = &hf.paragraphs[0].elements;
     assert_eq!(elems.len(), 4);
@@ -327,7 +435,7 @@ fn test_parse_hf_format_string_page_numbers() {
 
 #[test]
 fn test_parse_hf_format_string_escaped_ampersand() {
-    let hf = parse_hf_format_string("&CA && B").unwrap();
+    let hf = parse_hf("&CA && B").unwrap();
     assert_eq!(hf.paragraphs.len(), 1);
     match &hf.paragraphs[0].elements[0] {
         HFInline::Run(r) => assert_eq!(r.text, "A & B"),
@@ -337,7 +445,7 @@ fn test_parse_hf_format_string_escaped_ampersand() {
 
 #[test]
 fn test_parse_hf_format_string_font_codes_skipped() {
-    let hf = parse_hf_format_string(r#"&C&"Arial"&12Hello"#).unwrap();
+    let hf = parse_hf(r#"&C&"Arial"&12Hello"#).unwrap();
     assert_eq!(hf.paragraphs.len(), 1);
     match &hf.paragraphs[0].elements[0] {
         HFInline::Run(r) => assert_eq!(r.text, "Hello"),
@@ -468,7 +576,7 @@ fn test_parse_xlsx_without_metadata_no_crash() {
 fn test_hf_font_color_code_is_stripped() {
     // Excel emits &KRRGGBB for header colors; the six hex digits must not
     // leak into the text ("000000top center").
-    let hf = parse_hf_format_string(
+    let hf = parse_hf(
         r#"&L&"Calibri,Regular"&K000000top left&C&"Calibri,Regular"&K000000top center&R&"Calibri,Regular"&K000000top right"#,
     )
     .expect("header parsed");
