@@ -60,9 +60,20 @@ fn sheet_print_margins(sheet: &umya_spreadsheet::Worksheet) -> Margins {
 }
 
 /// Map an OOXML worksheet paper-size code to portrait dimensions in points.
-/// Unknown or omitted codes keep the renderer's A4 default.
+///
+/// Code 0 is not a paper size — it is the zero umya leaves in an unset
+/// `UInt32Value`, so it means `paperSize` was never written, either because
+/// `<pageSetup>` omits the attribute or because the element is absent
+/// entirely. ECMA-376 defaults `paperSize` to 1, US Letter, and Excel prints
+/// such a sheet on Letter; A4 left it 16.7pt narrow and 49.9pt tall, which
+/// repaginated the whole sheet (issue #717).
+///
+/// An unrecognised *positive* code is a different case: the file names a paper
+/// this table does not model, and nothing in the schema says what to
+/// substitute, so those keep the renderer's A4 default.
 fn worksheet_paper_size(code: u32) -> PageSize {
     let (width, height) = match code {
+        0 => (612.0, 792.0),        // `paperSize` omitted — schema default
         1 | 2 => (612.0, 792.0),    // Letter / Letter Small
         3 => (792.0, 1224.0),       // Tabloid
         4 => (1224.0, 792.0),       // Ledger
