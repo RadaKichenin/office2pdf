@@ -427,16 +427,105 @@ fn test_column_overflow_splits_to_second_page_like_excel() {
 
 // ----- Page size and margins defaults -----
 
+/// A sheet with no `<pageSetup>` element at all prints on the schema default,
+/// Letter — not on the renderer's A4 (issue #717).
+///
+/// ECMA-376 gives `paperSize` a default of 1 (US Letter), and the attribute's
+/// defaults apply whether the element is absent or merely silent about paper.
+/// Confirmed against a native Excel export of a workbook whose first sheet
+/// writes only `<pageMargins>`: Excel prints it 612 x 792.
 #[test]
-fn test_page_size_defaults() {
+fn test_page_size_defaults_to_letter_when_page_setup_is_absent() {
     let data = build_xlsx_bytes("Sheet1", &[("A1", "Test")]);
     let parser = XlsxParser;
     let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
 
     let tp = get_sheet_page(&doc, 0);
-    let default_size = PageSize::default();
-    assert!((tp.size.width - default_size.width).abs() < 0.01);
-    assert!((tp.size.height - default_size.height).abs() < 0.01);
+    assert!(
+        (tp.size.width - 612.0).abs() < 0.01 && (tp.size.height - 792.0).abs() < 0.01,
+        "expected Letter, got {:?}",
+        tp.size
+    );
+}
+
+/// Build a workbook whose only sheet declares `<pageSetup>` with an orientation
+/// but no `paperSize`. This is the exact shape Excel writes for a sheet left on
+/// the default paper, e.g. `<pageSetup orientation="portrait" .../>`.
+fn build_xlsx_with_page_setup_lacking_paper_size(
+    orientation: umya_spreadsheet::structs::OrientationValues,
+) -> Vec<u8> {
+    let mut book = umya_spreadsheet::new_file();
+    {
+        let sheet = book.get_sheet_mut(&0).unwrap();
+        sheet.get_cell_mut("A1").set_value("Test");
+        sheet.get_page_setup_mut().set_orientation(orientation);
+    }
+    let mut cursor = Cursor::new(Vec::new());
+    umya_spreadsheet::writer::xlsx::write_writer(&book, &mut cursor).unwrap();
+    cursor.into_inner()
+}
+
+/// A `<pageSetup>` that omits `paperSize` resolves to the schema default,
+/// Letter, rather than falling through to the renderer's A4 (issue #717).
+///
+/// A4 left such a workbook 16.7pt narrow and 49.9pt tall, which repaginated it:
+/// the audited sheet collapsed from Excel's 8 printed pages to 6.
+#[test]
+fn test_omitted_paper_size_resolves_to_letter() {
+    let data = build_xlsx_with_page_setup_lacking_paper_size(
+        umya_spreadsheet::structs::OrientationValues::Portrait,
+    );
+    let (doc, _warnings) = XlsxParser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = get_sheet_page(&doc, 0);
+    assert!(
+        (page.size.width - 612.0).abs() < 0.01 && (page.size.height - 792.0).abs() < 0.01,
+        "expected Letter, got {:?}",
+        page.size
+    );
+}
+
+/// The omitted-`paperSize` default is still just a default: a sheet that names
+/// its paper keeps it. Triangulation against a hardcoded Letter.
+#[test]
+fn test_declared_a4_paper_size_survives_the_letter_default() {
+    let mut book = umya_spreadsheet::new_file();
+    {
+        let sheet = book.get_sheet_mut(&0).unwrap();
+        sheet.get_cell_mut("A1").set_value("Test");
+        // 9 = A4.
+        sheet.get_page_setup_mut().set_paper_size(9);
+    }
+    let mut cursor = Cursor::new(Vec::new());
+    umya_spreadsheet::writer::xlsx::write_writer(&book, &mut cursor).unwrap();
+
+    let (doc, _warnings) = XlsxParser
+        .parse(&cursor.into_inner(), &ConvertOptions::default())
+        .unwrap();
+
+    let page = get_sheet_page(&doc, 0);
+    assert!(
+        (page.size.width - 595.28).abs() < 0.01 && (page.size.height - 841.89).abs() < 0.01,
+        "expected A4, got {:?}",
+        page.size
+    );
+}
+
+/// The defaulted paper still rotates with `orientation="landscape"`, so the
+/// default feeds the same path a declared code does.
+#[test]
+fn test_omitted_paper_size_still_honours_landscape() {
+    let data = build_xlsx_with_page_setup_lacking_paper_size(
+        umya_spreadsheet::structs::OrientationValues::Landscape,
+    );
+    let (doc, _warnings) = XlsxParser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = get_sheet_page(&doc, 0);
+    assert!(
+        (page.size.width - 792.0).abs() < 0.01 && (page.size.height - 612.0).abs() < 0.01,
+        "expected landscape Letter, got {:?}",
+        page.size
+    );
 }
 
 /// Build a workbook whose only sheet has no cells, carrying a paper size and a
