@@ -1040,3 +1040,32 @@ fn structure_number_format_tests_keeps_preserved_leading_spaces() {
         );
     }
 }
+
+/// A literal-text number format renders its literal, not the raw number
+/// (issue #750).
+///
+/// `check-boolean.xlsx` styles both cells with `numFmt` 165,
+/// `"TRUE";"TRUE";"FALSE"` — sections that carry no numeric placeholder at all.
+/// A1 is `t="b"` and resolves through the cell type; A2 is `t="n"` holding 2
+/// and must take the format's positive section.
+#[test]
+fn structure_check_boolean_renders_literal_text_number_format() {
+    let pages = sheet_pages("libreoffice/check-boolean.xlsx");
+    let texts: Vec<String> = pages
+        .iter()
+        .flat_map(|page| page.table.rows.iter())
+        .flat_map(|row| row.cells.iter())
+        .map(table_cell_text)
+        .filter(|text| !text.is_empty())
+        .collect();
+
+    assert_eq!(
+        texts.iter().filter(|text| *text == "TRUE").count(),
+        2,
+        "both cells carry numFmt 165 and print TRUE; got {texts:?}"
+    );
+    assert!(
+        !texts.iter().any(|text| text == "2"),
+        "the raw number must not leak past the literal format; got {texts:?}"
+    );
+}
