@@ -1177,17 +1177,20 @@ fn resolve_boundary_painted_borders(
         // stack). The data area starts at row/column 1, so its seeding is
         // untouched.
         let heading_exterior_is_excluded: bool = table.prints_headings;
+        // Stated as "no disqualifier applies" rather than as a chain of ANDed
+        // negations: the two are equivalent by De Morgan, but only this form
+        // satisfies clippy::nonminimal_bool.
         let horizontal_boundary_is_free = |boundary: usize, col: usize| -> bool {
-            !(heading_exterior_is_excluded && boundary == 0)
-                && !top_sides.contains_key(&(boundary, col))
-                && !bottom_sides.contains_key(&(boundary, col))
-                && !fill_suppressed_horizontal.contains(&(boundary, col))
+            !((heading_exterior_is_excluded && boundary == 0)
+                || top_sides.contains_key(&(boundary, col))
+                || bottom_sides.contains_key(&(boundary, col))
+                || fill_suppressed_horizontal.contains(&(boundary, col)))
         };
         let vertical_boundary_is_free = |boundary: usize, row: usize| -> bool {
-            !(heading_exterior_is_excluded && boundary == 0)
-                && !left_sides.contains_key(&(boundary, row))
-                && !right_sides.contains_key(&(boundary, row))
-                && !fill_suppressed_vertical.contains(&(boundary, row))
+            !((heading_exterior_is_excluded && boundary == 0)
+                || left_sides.contains_key(&(boundary, row))
+                || right_sides.contains_key(&(boundary, row))
+                || fill_suppressed_vertical.contains(&(boundary, row)))
         };
         for placement in &placements {
             let column_tracks = placement.first_col..placement.first_col + placement.col_span;
