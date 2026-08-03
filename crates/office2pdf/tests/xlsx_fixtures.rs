@@ -1010,3 +1010,33 @@ fn structure_check_boolean_header_prints_the_sheet_name() {
         "the footer's &P must still resolve"
     );
 }
+
+/// A cached formula string keeps the leading spaces `xml:space="preserve"`
+/// protects (issue #719).
+///
+/// Tests rows 44-46 are `t="str"` cells whose cached `<v xml:space="preserve">`
+/// carries 1, 2 and 4 leading spaces — the indent a `?` placeholder reserves,
+/// which Excel bakes into the cached display text and which cannot be
+/// recomputed from the formula.
+///
+/// Every cell is scanned rather than a fixed column index: this sheet prints
+/// headings, so a row-number gutter column is prepended (issue #623) and
+/// column A is not `cells[0]`.
+#[test]
+fn structure_number_format_tests_keeps_preserved_leading_spaces() {
+    let pages = sheet_pages("poi/NumberFormatTests.xlsx");
+    let texts: Vec<String> = pages
+        .iter()
+        .filter(|page| page.name == "Tests")
+        .flat_map(|page| page.table.rows.iter())
+        .flat_map(|row| row.cells.iter())
+        .map(table_cell_text)
+        .collect();
+
+    for expected in [" 1,234,567", "  1,234,567", "    1,234,567"] {
+        assert!(
+            texts.iter().any(|text| text == expected),
+            "expected a cell of exactly {expected:?}; leading spaces were trimmed"
+        );
+    }
+}
