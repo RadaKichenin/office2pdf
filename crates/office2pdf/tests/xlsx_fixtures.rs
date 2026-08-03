@@ -13,7 +13,9 @@ use office2pdf::config::ConvertOptions;
 use office2pdf::internal::Parser;
 use office2pdf::internal::XlsxParser;
 use office2pdf::internal::generate_typst;
-use office2pdf::ir::{Alignment, Block, BorderLineStyle, Color, Page, SheetPage, TableCell};
+use office2pdf::ir::{
+    Alignment, Block, BorderLineStyle, Color, HFInline, Page, SheetPage, TableCell,
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -955,4 +957,56 @@ fn structure_repository_workbook_extracts_every_dashboard_chart_with_data() {
             "chart {title:?} must carry its cached series values"
         );
     }
+}
+
+/// End-to-end: `&A` reaches the rendered header as the worksheet name.
+///
+/// `check-boolean.xlsx` declares `<oddHeader>&C&"Times New Roman,Regular"&12&A`.
+/// `&A` is the section's only content, so while the code was discarded the
+/// section came out empty and the header paragraph was dropped altogether —
+/// the sheet printed with no header at all where Excel prints "Sheet1"
+/// (issue #690). Its footer, `Page &P`, survives throughout because `&P` was
+/// already implemented, and is asserted here to keep the two apart.
+///
+/// Issue #690 cites `libreoffice/page_scale.xlsx`, which carries the very same
+/// header string but has no `<sheetData>` rows. A sheet with no used range
+/// takes the `empty_workbook_page` path, which deliberately carries neither
+/// header nor footer onto the blank page it prints (issue #632) — so that
+/// fixture renders wholly blank and cannot witness this defect either way.
+/// This one has the same header and two data rows.
+#[test]
+fn structure_check_boolean_header_prints_the_sheet_name() {
+    let pages = sheet_pages("libreoffice/check-boolean.xlsx");
+    let page = pages
+        .first()
+        .expect("check-boolean has at least one sheet page");
+    assert_eq!(page.name, "Sheet1");
+
+    let header = page
+        .header
+        .as_ref()
+        .expect("a header whose only content is &A must still be emitted");
+    let header_text: String = header
+        .paragraphs
+        .iter()
+        .flat_map(|paragraph| paragraph.elements.iter())
+        .filter_map(|element| match element {
+            HFInline::Run(run) => Some(run.text.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(header_text, "Sheet1");
+
+    let footer = page
+        .footer
+        .as_ref()
+        .expect("check-boolean declares a footer");
+    assert!(
+        footer
+            .paragraphs
+            .iter()
+            .flat_map(|paragraph| paragraph.elements.iter())
+            .any(|element| matches!(element, HFInline::PageNumber(_))),
+        "the footer's &P must still resolve"
+    );
 }
