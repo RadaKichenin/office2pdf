@@ -252,9 +252,12 @@ fn test_shape_dashed_stroke_codegen() {
         )],
     )]);
     let output = generate_typst(&doc).unwrap();
+    // DrawingML dashes scale with the line width (issue #678): at w=2pt the
+    // `dash` preset's 4w/3w becomes 8pt on, 6pt off. Table borders keep the
+    // named patterns; only shape strokes take this rule.
     assert!(
-        output.source.contains("dash: \"dashed\""),
-        "Expected dashed stroke in: {}",
+        output.source.contains("dash: (8pt, 6pt)"),
+        "Expected width-proportional dashed stroke in: {}",
         output.source
     );
 }
@@ -279,9 +282,10 @@ fn test_shape_dash_dot_stroke_codegen() {
         )],
     )]);
     let output = generate_typst(&doc).unwrap();
+    // At w=1pt the `dashDot` preset's 4w/3w/1w/3w becomes 4pt, 3pt, 1pt, 3pt.
     assert!(
-        output.source.contains("dash: \"dash-dotted\""),
-        "Expected dash-dotted stroke in: {}",
+        output.source.contains("dash: (4pt, 3pt, 1pt, 3pt)"),
+        "Expected width-proportional dash-dotted stroke in: {}",
         output.source
     );
 }
