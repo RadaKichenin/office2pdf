@@ -933,23 +933,12 @@ pub(super) fn generate_runs_with_tabs_no_wrap(
     tab_stops: Option<&[TabStop]>,
     default_tab_width_pt: f64,
 ) {
-    let preserve_cjk_no_wrap: bool = runs
-        .iter()
-        .filter(|run| run.footnote.is_none())
-        .any(|run| run.text.chars().any(is_cjk_like));
-    let mut no_wrap_state: NoWrapState = NoWrapState::default();
     let transformed_runs: Vec<Run> = runs
         .iter()
         .map(|run| {
             let mut transformed_run: Run = run.clone();
             if transformed_run.footnote.is_none() {
-                transformed_run.text = no_wrap_text(
-                    &transformed_run.text,
-                    preserve_cjk_no_wrap,
-                    &mut no_wrap_state,
-                );
-            } else {
-                no_wrap_state = NoWrapState::default();
+                transformed_run.text = no_wrap_text(&transformed_run.text);
             }
             transformed_run
         })
@@ -964,12 +953,6 @@ pub(super) fn generate_runs_with_tabs_no_wrap(
         default_tab_width_pt,
         EojeolWrap::Syllable,
     );
-}
-
-#[derive(Clone, Copy, Default)]
-struct NoWrapState {
-    previous_visible_char: Option<char>,
-    previous_non_breaking_space: bool,
 }
 
 /// Emits Typst variable bindings for a non-first tab segment: measurement,
@@ -1050,11 +1033,15 @@ pub(super) enum EojeolWrap {
     /// contingent break for PowerPoint kinsoku (issue #438).
     ///
     /// A no-break marker between the syllables — U+2060 WORD JOINER, the
-    /// obvious alternative and the shape the auto-space and kinsoku markers
-    /// in this file already use — does suppress the breaks, but it lands in
-    /// the PDF text layer and makes the text unsearchable. That is issue
-    /// #664, reproduced from first principles on a probe before this
-    /// mechanism was chosen; a frame leaves the text layer untouched.
+    /// obvious alternative — does suppress the breaks, but it lands in the PDF
+    /// text layer and makes the text unsearchable. The no-wrap path emitted
+    /// exactly that until issue #664; the marker turned out to be redundant
+    /// there, because the paragraph was already inside a box. A frame leaves
+    /// the text layer untouched, so it is the mechanism here too.
+    ///
+    /// The other two markers this file uses are stripped before emission and
+    /// never reach the text layer: U+E001 for auto-space and U+200B for the
+    /// kinsoku break.
     ///
     /// `line_box_em` is the paragraph's fixed `(top-edge, bottom-edge)` when
     /// it declares them, so the frame can restore them; see
@@ -1459,50 +1446,21 @@ fn write_eojeol_frame_close(out: &mut String, line_box_em: Option<(f64, f64)>) {
     out.push_str(if line_box_em.is_some() { "]]" } else { "]" });
 }
 
-fn no_wrap_text(text: &str, preserve_cjk_no_wrap: bool, state: &mut NoWrapState) -> String {
-    if !preserve_cjk_no_wrap {
-        return text.to_string();
-    }
-
-    let mut out: String = String::new();
-
-    for ch in text.chars() {
-        if matches!(ch, '\t' | PPTX_SOFT_LINE_BREAK_CHAR) {
-            out.push(ch);
-            *state = NoWrapState::default();
-            continue;
-        }
-
-        // A no-wrap box never takes the kinsoku break, so drop its marker
-        // instead of letting the zero-width space reach the text layer.
-        if ch == HANGUL_KINSOKU_BREAK_CHAR {
-            continue;
-        }
-
-        if ch == ' ' {
-            out.push('\u{00A0}');
-            state.previous_visible_char = None;
-            state.previous_non_breaking_space = true;
-            continue;
-        }
-
-        if state.previous_non_breaking_space
-            || state
-                .previous_visible_char
-                .is_some_and(|prev| needs_no_wrap_joiner(prev, ch))
-        {
-            out.push('\u{2060}');
-        }
-        out.push(ch);
-        state.previous_visible_char = Some(ch);
-        state.previous_non_breaking_space = false;
-    }
-
-    out
-}
-
-fn needs_no_wrap_joiner(previous: char, current: char) -> bool {
-    !previous.is_whitespace() && !current.is_whitespace()
+/// Strip the kinsoku break markers from a run bound for a no-wrap box.
+///
+/// The paragraph is already emitted inside a `#box[...]`, and a box is a
+/// single object to UAX #14, so no break opportunity survives inside it. This
+/// therefore has nothing to add to break suppression and only has to keep the
+/// zero-width kinsoku marker out of the text layer.
+///
+/// It used to also replace every space with U+00A0 and insert a U+2060 WORD
+/// JOINER between adjacent characters. Those were redundant with the enclosing
+/// box, and they reached the PDF text layer: slide text came out as
+/// `p<WJ>a<WJ>n<WJ>i<WJ>c`, which no search for `panic` can match (issue #664).
+fn no_wrap_text(text: &str) -> String {
+    text.chars()
+        .filter(|ch| *ch != HANGUL_KINSOKU_BREAK_CHAR)
+        .collect()
 }
 
 pub(crate) fn is_cjk_like(ch: char) -> bool {

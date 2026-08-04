@@ -972,7 +972,110 @@ fn test_fixed_page_text_box_no_wrap_centered_text_uses_inline_box() {
 }
 
 #[test]
-fn test_fixed_page_text_box_no_wrap_inserts_word_joiners_for_cjk_titles() {
+fn test_fixed_page_text_box_no_wrap_keeps_mixed_latin_cjk_searchable() {
+    // The heading issue #664 measured: `panic 안전성` came out with a joiner
+    // between every character and its space swapped for U+00A0, so searching
+    // the PDF for the heading found nothing.
+    let doc = make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![FixedElement {
+            x: 100.0,
+            y: 120.0,
+            width: 180.0,
+            height: 40.0,
+            kind: FixedElementKind::TextBox(crate::ir::TextBoxData {
+                content: vec![Block::Paragraph(Paragraph {
+                    style: ParagraphStyle {
+                        alignment: Some(Alignment::Center),
+                        ..ParagraphStyle::default()
+                    },
+                    runs: vec![Run {
+                        text: "panic 안전성".to_string(),
+                        style: TextStyle {
+                            font_size: Some(28.0),
+                            ..TextStyle::default()
+                        },
+                        href: None,
+                        footnote: None,
+                    }],
+                })],
+                padding: Insets::default(),
+                vertical_align: crate::ir::TextBoxVerticalAlign::Top,
+                fill: None,
+                opacity: None,
+                stroke: None,
+                shape_kind: None,
+                no_wrap: true,
+                auto_fit: false,
+                text_rotation_deg: None,
+            }),
+        }],
+    )]);
+    let output = generate_typst(&doc).unwrap();
+    assert!(
+        output.source.contains("panic 안전성"),
+        "Expected the heading with an ordinary space, got:\n{}",
+        output.source,
+    );
+}
+
+#[test]
+fn test_fixed_page_text_box_no_wrap_still_strips_the_kinsoku_marker() {
+    // Triangulation: the zero-width kinsoku marker must keep being dropped. A
+    // no-wrap box never takes that break, and letting U+200B through would
+    // trade one invisible text-layer character for another.
+    let doc = make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![FixedElement {
+            x: 100.0,
+            y: 120.0,
+            width: 180.0,
+            height: 40.0,
+            kind: FixedElementKind::TextBox(crate::ir::TextBoxData {
+                content: vec![Block::Paragraph(Paragraph {
+                    style: ParagraphStyle {
+                        alignment: Some(Alignment::Center),
+                        ..ParagraphStyle::default()
+                    },
+                    runs: vec![Run {
+                        text: "\u{200B}제안\u{200B}개요".to_string(),
+                        style: TextStyle {
+                            font_size: Some(28.0),
+                            ..TextStyle::default()
+                        },
+                        href: None,
+                        footnote: None,
+                    }],
+                })],
+                padding: Insets::default(),
+                vertical_align: crate::ir::TextBoxVerticalAlign::Top,
+                fill: None,
+                opacity: None,
+                stroke: None,
+                shape_kind: None,
+                no_wrap: true,
+                auto_fit: false,
+                text_rotation_deg: None,
+            }),
+        }],
+    )]);
+    let output = generate_typst(&doc).unwrap();
+    assert!(
+        output.source.contains("제안개요"),
+        "Expected the marker stripped, got:\n{}",
+        output.source,
+    );
+    assert!(
+        !output.source.contains('\u{200B}'),
+        "No U+200B may reach the text layer, got:\n{}",
+        output.source,
+    );
+}
+
+#[test]
+fn test_fixed_page_text_box_no_wrap_keeps_cjk_title_extractable() {
     let doc = make_doc(vec![make_fixed_page(
         960.0,
         540.0,
@@ -1010,9 +1113,27 @@ fn test_fixed_page_text_box_no_wrap_inserts_word_joiners_for_cjk_titles() {
         }],
     )]);
     let output = generate_typst(&doc).unwrap();
+    // The enclosing `#box[` already forbids every break inside the paragraph,
+    // so no joiner is needed — and one here would reach the PDF text layer and
+    // make the title unsearchable (issue #664).
     assert!(
-        output.source.contains("제\u{2060}안\u{2060}개\u{2060}요"),
-        "Expected no-wrap word joiners in output, got:\n{}",
+        output.source.contains("제안개요"),
+        "Expected the title verbatim in output, got:\n{}",
+        output.source,
+    );
+    assert!(
+        !output.source.contains('\u{2060}'),
+        "No U+2060 WORD JOINER may reach the text layer, got:\n{}",
+        output.source,
+    );
+    assert!(
+        !output.source.contains('\u{00A0}'),
+        "No U+00A0 NO-BREAK SPACE may reach the text layer, got:\n{}",
+        output.source,
+    );
+    assert!(
+        output.source.contains("#box["),
+        "The no-wrap box is what suppresses the breaks, got:\n{}",
         output.source,
     );
 }
@@ -1107,12 +1228,21 @@ fn test_fixed_page_text_box_no_wrap_keeps_mixed_script_titles_unbroken() {
         }],
     )]);
     let output = generate_typst(&doc).unwrap();
+    // The heading must stay unbreakable *and* readable: the enclosing `#box[`
+    // supplies the first, so the text itself is emitted verbatim (issue #664).
     assert!(
-        output.source.contains("I\u{2060}I\u{2060}I\u{2060}.")
-            && output
-                .source
-                .contains("\u{00A0}\u{2060}기\u{2060}술\u{2060}부\u{2060}문"),
-        "Expected mixed-script no-wrap title to keep the full heading unbreakable, got:\n{}",
+        output.source.contains("III. 기술부문"),
+        "Expected the mixed-script heading verbatim, got:\n{}",
+        output.source,
+    );
+    assert!(
+        output.source.contains("#box["),
+        "The no-wrap box is what keeps the heading unbroken, got:\n{}",
+        output.source,
+    );
+    assert!(
+        !output.source.contains('\u{2060}') && !output.source.contains('\u{00A0}'),
+        "No invisible joiner may reach the text layer, got:\n{}",
         output.source,
     );
 }
@@ -1167,12 +1297,17 @@ fn test_fixed_page_text_box_no_wrap_preserves_mixed_script_titles_across_runs() 
         }],
     )]);
     let output = generate_typst(&doc).unwrap();
+    // Split across runs, the heading still has to come out as one readable
+    // string rather than a joiner-separated one (issue #664).
     assert!(
-        output.source.contains("I\u{2060}I\u{2060}I\u{2060}.")
-            && output
-                .source
-                .contains("\u{00A0}\u{2060}기\u{2060}술\u{2060}부\u{2060}문"),
-        "Expected mixed-script no-wrap title to stay unbroken across runs, got:\n{}",
+        output.source.contains("III.") && output.source.contains(" 기술부문"),
+        "Expected both runs of the heading verbatim, the second keeping its
+         ordinary leading space, got:\n{}",
+        output.source,
+    );
+    assert!(
+        !output.source.contains('\u{2060}') && !output.source.contains('\u{00A0}'),
+        "No invisible joiner may reach the text layer, got:\n{}",
         output.source,
     );
 }
