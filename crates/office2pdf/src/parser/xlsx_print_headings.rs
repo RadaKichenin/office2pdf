@@ -60,8 +60,8 @@ pub(super) const PRINT_HEADING_RULE_GRAY: Color = Color {
 /// bottom rule, whose half width the renderer folds into the layout inset
 /// (#500/#503), so the stored bottom padding is -0.5pt to cancel it exactly.
 /// Slim 0.5pt horizontal insets: three Verdana-10 digits measure 19.07pt and
-/// would wrap inside the 22pt gutter interior under the default 2pt sides,
-/// while GT centers them on the gutter without shrinking.
+/// would wrap inside the 22pt gutter interior under the default 3pt sides,
+/// which leave 16pt, while GT centers them on the gutter without shrinking.
 const PRINT_HEADING_CELL_PADDING: Insets = Insets {
     top: 1.0,
     right: 0.5,

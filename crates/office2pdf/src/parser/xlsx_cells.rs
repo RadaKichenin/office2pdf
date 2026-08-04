@@ -541,8 +541,12 @@ fn compute_spill_width(
     }
 
     let own_width: f64 = *ctx.column_widths.get((col_idx - ctx.col_start) as usize)?;
-    // Leave room for the ~4pt total horizontal cell inset.
-    if estimate_text_width_pt(runs) <= own_width - 4.0 {
+    // Leave room for the horizontal cell inset. Taken from the constant rather
+    // than written out, so the threshold cannot drift from the padding the
+    // cell is actually laid out with (it did when the sides moved to 3pt for
+    // issue #657).
+    let horizontal_inset: f64 = XLSX_CELL_PADDING.left + XLSX_CELL_PADDING.right;
+    if estimate_text_width_pt(runs) <= own_width - horizontal_inset {
         return None;
     }
 
@@ -616,13 +620,25 @@ pub(super) fn native_excel_pdf_row_height(height: f64) -> f64 {
 /// Cell insets for spreadsheet tables. Excel's native single-line track is
 /// asymmetric around bottom-aligned text: 1pt above and 1.5pt below. Typst's
 /// default 5pt vertical inset overflowed auto-height rows (issue #396), while
-/// a 1pt bottom inset left them about 0.5pt short (issue #411). Horizontal
-/// inset keeps ~2pt/side, the value the column-spill estimate assumes.
+/// a 1pt bottom inset left them about 0.5pt short (issue #411).
+///
+/// The 3pt sides are Excel's documented 4px inset at 96 DPI, and they were
+/// checked against its own exports: with 2pt, the two purely left-aligned text
+/// columns across the business mocks landed exactly 1.00pt left of Excel, and
+/// 3pt puts them exactly on it (issue #657).
+///
+/// Both sides moved together, not just the left. Excel's right inset measures
+/// ~2.4pt in those exports, inside the same quantisation band as 3pt, and
+/// leaving the right at 2pt would make the pair asymmetric — which shifts
+/// every *centred* run by half the difference. Measured over all ten business
+/// mocks, 3/3 improves every workbook and regresses none, taking the mean
+/// absolute x error over 428 text runs from 1.454pt to 1.013pt; 3/2 instead
+/// pushed centred and right-aligned columns further out.
 pub(super) const XLSX_CELL_PADDING: crate::ir::Insets = crate::ir::Insets {
     top: 1.0,
-    right: 2.0,
+    right: 3.0,
     bottom: 1.5,
-    left: 2.0,
+    left: 3.0,
 };
 
 /// The height a row prints at. A recorded `ht` is the current worksheet
