@@ -698,8 +698,8 @@ fn test_shape_style_lnref_outline_resolves_width_and_shaded_color() {
         "outline width from theme lnStyleLst idx 2, got {}",
         stroke.width
     );
-    // accent1 (4472C4) shaded 50% ≈ half each channel.
-    assert_eq!(stroke.color, Color::new(0x22, 0x39, 0x62));
+    // accent1 (4472C4) shaded 50% in linear light (issue #667).
+    assert_eq!(stroke.color, Color::new(0x2F, 0x52, 0x8F));
 }
 
 // ── `<a:ln><a:noFill/></a:ln>` disables the outline (issue #516) ─────

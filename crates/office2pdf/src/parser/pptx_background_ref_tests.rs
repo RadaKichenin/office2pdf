@@ -111,8 +111,8 @@ fn test_bg_ref_applies_color_transforms_from_theme_fill() {
     );
 
     let (color, _gradient) = parse_first_page_bg(&data);
-    // accent1 4472C4 shaded 50% -> 22 39 62.
-    assert_eq!(color, Some(Color::new(0x22, 0x39, 0x62)));
+    // accent1 4472C4 shaded 50% in linear light -> 2F 52 8F (issue #667).
+    assert_eq!(color, Some(Color::new(0x2F, 0x52, 0x8F)));
 }
 
 #[test]
@@ -134,7 +134,7 @@ fn test_bg_ref_gradient_resolves_theme_background_fill() {
     let gradient = gradient.expect("expected gradient background from bgRef");
     assert_eq!(gradient.stops.len(), 2);
     assert_eq!(gradient.stops[0].color, Color::new(0x44, 0x72, 0xC4));
-    assert_eq!(gradient.stops[1].color, Color::new(0x22, 0x39, 0x62));
+    assert_eq!(gradient.stops[1].color, Color::new(0x2F, 0x52, 0x8F));
 }
 
 // ── Layer precedence and regressions ─────────────────────────────────

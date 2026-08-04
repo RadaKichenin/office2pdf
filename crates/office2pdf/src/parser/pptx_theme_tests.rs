@@ -604,7 +604,8 @@ fn test_scheme_color_tint_blends_toward_white() {
 
 #[test]
 fn test_scheme_color_shade_blends_toward_black() {
-    // accent1=#4472C4 with shade 50% → each channel * 0.5 → (34, 57, 98)
+    // accent1=#4472C4 with shade 50% → #2F528F (issue #667: the scale is in
+    // linear light, so it is not each byte * 0.5)
     let shape_xml = r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="Shape"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1000000" cy="1000000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:schemeClr val="accent1"><a:shade val="50000"/></a:schemeClr></a:solidFill></p:spPr></p:sp>"#;
     let slide = make_slide_xml(&[shape_xml.to_string()]);
     let theme_xml = make_theme_xml(&standard_theme_colors(), "Calibri Light", "Calibri");
@@ -616,8 +617,8 @@ fn test_scheme_color_shade_blends_toward_black() {
     let page = first_fixed_page(&doc);
     let shape = get_shape(&page.elements[0]);
     // accent1 = (0x44, 0x72, 0xC4) = (68, 114, 196)
-    // shade 50%: (34, 57, 98) = (0x22, 0x39, 0x62)
-    assert_eq!(shape.fill, Some(Color::new(0x22, 0x39, 0x62)));
+    // shade 50% in linear light: (47, 82, 143) = (0x2F, 0x52, 0x8F)
+    assert_eq!(shape.fill, Some(Color::new(0x2F, 0x52, 0x8F)));
 }
 
 #[test]

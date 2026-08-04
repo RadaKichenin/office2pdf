@@ -79,8 +79,37 @@ pub(crate) fn parse_color_transform(element: &BytesStart<'_>) -> Option<ColorTra
     }
 }
 
+/// Decode one 0-255 sRGB channel to linear light.
+///
+/// `a:shade` scales light, not the encoded byte. Halving the byte of `#4472C4`
+/// gives `#223962`, where PowerPoint renders `#2F528F` — the value this curve
+/// reproduces on all three channels (issue #667).
+fn srgb_channel_to_linear(channel: f64) -> f64 {
+    let normalized: f64 = channel / 255.0;
+    if normalized <= 0.040_45 {
+        normalized / 12.92
+    } else {
+        ((normalized + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+/// Re-encode linear light as a 0-255 sRGB channel, inverting
+/// [`srgb_channel_to_linear`].
+fn linear_to_srgb_channel(linear: f64) -> f64 {
+    let encoded: f64 = if linear <= 0.003_130_8 {
+        linear * 12.92
+    } else {
+        1.055 * linear.powf(1.0 / 2.4) - 0.055
+    };
+    encoded * 255.0
+}
+
 pub(crate) fn apply_color_transforms(color: Color, transforms: &[ColorTransform]) -> Color {
-    // Apply tint/shade in RGB space first (OOXML spec: blend toward white/black).
+    // Tint and shade run before the luminance transforms, but not in the same
+    // space: tint blends toward white across the sRGB bytes, while shade scales
+    // in linear light (decode, multiply, re-encode) because that is what
+    // reproduces PowerPoint's output (issue #667). Tint is left on the bytes
+    // for want of a ground truth saying otherwise.
     let mut r: f64 = color.r as f64;
     let mut g: f64 = color.g as f64;
     let mut b: f64 = color.b as f64;
@@ -93,9 +122,9 @@ pub(crate) fn apply_color_transforms(color: Color, transforms: &[ColorTransform]
                 b = 255.0 - (255.0 - b) * t;
             }
             ColorTransform::Shade(s) => {
-                r *= s;
-                g *= s;
-                b *= s;
+                r = linear_to_srgb_channel(srgb_channel_to_linear(r) * s);
+                g = linear_to_srgb_channel(srgb_channel_to_linear(g) * s);
+                b = linear_to_srgb_channel(srgb_channel_to_linear(b) * s);
             }
             _ => {}
         }

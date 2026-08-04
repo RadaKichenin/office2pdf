@@ -78,7 +78,9 @@ fn srgb_fill_with_shade_still_darkens() {
         r#"<a:srgbClr val="C86432"><a:shade val="50000"/></a:srgbClr>"#,
         &accent_theme(),
     );
-    assert_eq!(fill, Some(Color::new(100, 50, 25)));
+    // 50% of #C86432's light, re-encoded (issue #667). Halving the sRGB bytes
+    // would give (100, 50, 25).
+    assert_eq!(fill, Some(Color::new(146, 71, 34)));
 }
 
 #[test]
