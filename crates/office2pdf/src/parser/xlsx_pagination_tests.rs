@@ -155,6 +155,7 @@ fn test_charts_stay_on_first_column_group() {
         1,
         crate::ir::Chart {
             chart_type: crate::ir::ChartType::Bar,
+            hole_size_percent: None,
             title: None,
             categories: vec![],
             series: vec![],

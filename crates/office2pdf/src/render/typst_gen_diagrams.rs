@@ -26,7 +26,7 @@ fn chart_variant(chart: &Chart) -> ChartVariant {
     {
         return ChartVariant::LinePlot;
     }
-    if matches!(chart.chart_type, ChartType::Pie)
+    if matches!(chart.chart_type, ChartType::Pie | ChartType::Doughnut)
         && chart
             .series
             .first()
@@ -135,6 +135,7 @@ fn generate_chart_body(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
         ChartType::Column => "Column Chart",
         ChartType::Line => "Line Chart",
         ChartType::Pie => "Pie Chart",
+        ChartType::Doughnut => "Doughnut Chart",
         ChartType::Area => "Area Chart",
         ChartType::Scatter => "Scatter Chart",
         ChartType::Other(label) => label.as_str(),
@@ -1394,7 +1395,12 @@ fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, 
         }
         let sweep: f64 = value / total * std::f64::consts::TAU;
         let color: String = category_color(series, index, &CHART_CATEGORY_COLORS);
-        write_pie_wedge(out, centre_x, centre_y, radius, start, sweep, &color);
+        match doughnut_inner_radius(chart, radius) {
+            Some(inner) => {
+                write_doughnut_segment(out, centre_x, centre_y, radius, inner, start, sweep, &color)
+            }
+            None => write_pie_wedge(out, centre_x, centre_y, radius, start, sweep, &color),
+        }
         if let Some(label) = data_label_text(chart, series, index, total) {
             // A wedge label sits on the bisector, two thirds of the way out —
             // clear of the centre where narrow wedges converge, and inside the
@@ -1504,6 +1510,94 @@ fn write_pie_wedge(
             format_f64(out_dy)
         );
     }
+    path.push_str("))");
+    let _ = writeln!(out, "{path}");
+}
+
+/// The inner radius of a doughnut, or `None` for a pie.
+///
+/// `<c:holeSize>` gives the inner radius as a percentage of the outer. The
+/// bounds here are defensive rather than quoted from the schema: at 0 the hole
+/// closes and the ring becomes a pie, and at 100 there is no ring left to
+/// draw, so both ends are clamped away from those degenerate results.
+///
+/// The 50 used when the element is absent is a placeholder, not a measured
+/// default — the audited deck always writes `holeSize`, so no fixture
+/// exercises it. If one ever does, check what the source application draws
+/// before trusting this number.
+fn doughnut_inner_radius(chart: &Chart, outer_radius: f64) -> Option<f64> {
+    if !matches!(chart.chart_type, ChartType::Doughnut) {
+        return None;
+    }
+    let percent: f64 = chart.hole_size_percent.unwrap_or(50) as f64;
+    Some(outer_radius * percent.clamp(1.0, 90.0) / 100.0)
+}
+
+/// A doughnut ring segment: the outer arc swept forward, the inner arc swept
+/// back, closed.
+///
+/// Kept apart from `write_pie_wedge` rather than folded into it: a wedge starts
+/// at the centre, which has no incoming handle to curve, and merging the two
+/// would bury that.
+///
+/// The hole is absent ink, not a background-coloured disc — a chart draws over
+/// whatever the slide puts behind it, so punching with a guessed colour would
+/// be wrong (issue #679).
+#[allow(clippy::too_many_arguments)]
+fn write_doughnut_segment(
+    out: &mut String,
+    centre_x: f64,
+    centre_y: f64,
+    outer_radius: f64,
+    inner_radius: f64,
+    start: f64,
+    sweep: f64,
+    color: &str,
+) {
+    let segments: usize = (sweep / std::f64::consts::FRAC_PI_2).ceil().max(1.0) as usize;
+    let step: f64 = sweep / segments as f64;
+
+    let mut path = format!("#place(top + left, path(fill: {color}, stroke: none, closed: true");
+
+    let mut arc = |radius: f64, forward: bool| {
+        let handle: f64 = 4.0 / 3.0 * (step / 4.0).tan() * radius;
+        for index in 0..=segments {
+            let position = if forward { index } else { segments - index };
+            let angle: f64 = start + step * position as f64;
+            let (x, y) = (
+                centre_x + radius * angle.cos(),
+                centre_y + radius * angle.sin(),
+            );
+            // The return leg reverses the sweep, so its tangent flips.
+            let direction = if forward { 1.0 } else { -1.0 };
+            let (tx, ty) = (-angle.sin() * direction, angle.cos() * direction);
+            // The join between the arcs is a straight radial edge, so the
+            // handles facing it stay zero.
+            let (in_dx, in_dy) = if index == 0 {
+                (0.0, 0.0)
+            } else {
+                (-tx * handle, -ty * handle)
+            };
+            let (out_dx, out_dy) = if index == segments {
+                (0.0, 0.0)
+            } else {
+                (tx * handle, ty * handle)
+            };
+            let _ = write!(
+                path,
+                ", (({}pt, {}pt), ({}pt, {}pt), ({}pt, {}pt))",
+                format_f64(x),
+                format_f64(y),
+                format_f64(in_dx),
+                format_f64(in_dy),
+                format_f64(out_dx),
+                format_f64(out_dy)
+            );
+        }
+    };
+    arc(outer_radius, true);
+    arc(inner_radius, false);
+
     path.push_str("))");
     let _ = writeln!(out, "{path}");
 }

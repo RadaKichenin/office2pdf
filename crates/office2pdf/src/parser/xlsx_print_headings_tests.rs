@@ -328,6 +328,7 @@ fn test_drawings_shift_with_the_inset_grid_and_charts_by_one_row() {
         2,
         crate::ir::Chart {
             chart_type: crate::ir::ChartType::Bar,
+            hole_size_percent: None,
             title: None,
             categories: vec![],
             series: vec![],
