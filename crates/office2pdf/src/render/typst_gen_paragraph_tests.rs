@@ -1612,3 +1612,74 @@ fn test_header_tab_without_a_matching_stop_keeps_the_plain_advance() {
         "the tab stays a literal tab for Typst to collapse: {result}"
     );
 }
+
+/// Letter-spacing disables ligatures (issue #684).
+///
+/// Tracking and ligation are mutually exclusive: a ligature replaces several
+/// glyphs with one and swallows the inter-glyph spacing the tracking should
+/// have added. PowerPoint disables ligatures under `a:rPr/@spc` for that
+/// reason. Leaving `liga` on merged the `ffi` in "office2pdf" into one glyph,
+/// so the text layer extracted as "o ffi c e 2 p d f" and matched no search
+/// for the word.
+#[test]
+fn test_letter_spacing_disables_ligatures() {
+    let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
+        style: ParagraphStyle::default(),
+        runs: vec![Run {
+            text: "office2pdf".to_string(),
+            style: TextStyle {
+                letter_spacing: Some(0.5),
+                ..TextStyle::default()
+            },
+            href: None,
+            footnote: None,
+        }],
+    })])]);
+    let result = generate_typst(&doc).unwrap().source;
+    assert!(
+        result.contains("ligatures: false"),
+        "tracked text must disable ligatures, got: {result}"
+    );
+}
+
+/// Triangulation: a run with no tracking keeps ligatures, so the rule is tied
+/// to letter-spacing rather than applied to every run.
+#[test]
+fn test_untracked_text_keeps_ligatures() {
+    let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
+        style: ParagraphStyle::default(),
+        runs: vec![Run {
+            text: "office2pdf".to_string(),
+            style: TextStyle::default(),
+            href: None,
+            footnote: None,
+        }],
+    })])]);
+    let result = generate_typst(&doc).unwrap().source;
+    assert!(
+        !result.contains("ligatures: false"),
+        "untracked text must not disable ligatures, got: {result}"
+    );
+}
+
+/// An explicit zero tracking is not tracking, so it leaves ligatures alone.
+#[test]
+fn test_zero_letter_spacing_keeps_ligatures() {
+    let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
+        style: ParagraphStyle::default(),
+        runs: vec![Run {
+            text: "office2pdf".to_string(),
+            style: TextStyle {
+                letter_spacing: Some(0.0),
+                ..TextStyle::default()
+            },
+            href: None,
+            footnote: None,
+        }],
+    })])]);
+    let result = generate_typst(&doc).unwrap().source;
+    assert!(
+        !result.contains("ligatures: false"),
+        "zero tracking must not disable ligatures, got: {result}"
+    );
+}
