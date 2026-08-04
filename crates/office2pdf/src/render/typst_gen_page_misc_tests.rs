@@ -647,6 +647,7 @@ fn test_table_page_with_chart_at_row() {
         category_axis_deleted: false,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
+        theme_accent_colors: Vec::new(),
     };
 
     let page = Page::Sheet(SheetPage {
@@ -700,6 +701,7 @@ fn test_table_page_with_chart_at_end() {
         category_axis_deleted: false,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
+        theme_accent_colors: Vec::new(),
     };
 
     let page = Page::Sheet(SheetPage {

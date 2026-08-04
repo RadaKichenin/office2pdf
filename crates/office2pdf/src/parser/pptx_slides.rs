@@ -445,22 +445,30 @@ fn collect_chart_elements<R: Read + std::io::Seek>(
     slide_xml: &str,
     slide_path: &str,
     archive: &mut ZipArchive<R>,
+    theme: &ThemeData,
 ) -> Vec<FixedElement> {
     let chart_refs = scan_chart_refs(slide_xml);
     if chart_refs.is_empty() {
         return Vec::new();
     }
 
+    // A series with no fill of its own takes the deck's theme accents rather
+    // than the renderer's built-in palette (issue #670).
+    let theme_accents: Vec<Color> = crate::parser::drawingml::theme_accent_palette(&theme.colors);
     let chart_data = load_chart_data(slide_path, archive);
     chart_refs
         .iter()
         .filter_map(|c_ref| {
-            chart_data.get(&c_ref.chart_rid).map(|chart| FixedElement {
-                x: emu_to_pt(c_ref.x),
-                y: emu_to_pt(c_ref.y),
-                width: emu_to_pt(c_ref.cx),
-                height: emu_to_pt(c_ref.cy),
-                kind: FixedElementKind::Chart(chart.clone()),
+            chart_data.get(&c_ref.chart_rid).map(|chart| {
+                let mut chart: Chart = chart.clone();
+                chart.theme_accent_colors = theme_accents.clone();
+                FixedElement {
+                    x: emu_to_pt(c_ref.x),
+                    y: emu_to_pt(c_ref.y),
+                    width: emu_to_pt(c_ref.cx),
+                    height: emu_to_pt(c_ref.cy),
+                    kind: FixedElementKind::Chart(chart),
+                }
             })
         })
         .collect()
@@ -712,6 +720,7 @@ pub(super) fn parse_single_slide<R: Read + std::io::Seek>(
         &chain.slide_xml,
         slide_path,
         archive,
+        theme,
     ));
 
     let background: ResolvedBackground = resolve_slide_background(&chain, slide_path, theme);

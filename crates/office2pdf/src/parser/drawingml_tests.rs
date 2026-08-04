@@ -183,3 +183,37 @@ fn parse_sys_color_uses_last_clr() {
     );
     assert_eq!(parsed.color, Some(Color::new(0, 0, 0)));
 }
+
+#[test]
+fn theme_accent_palette_returns_all_six_in_order() {
+    // The Office 2007 palette both audited fixtures declare (issue #670).
+    let colors: ColorsMap = [
+        ("accent1", Color::new(0x4F, 0x81, 0xBD)),
+        ("accent2", Color::new(0xC0, 0x50, 0x4D)),
+        ("accent3", Color::new(0x9B, 0xBB, 0x59)),
+        ("accent4", Color::new(0x80, 0x64, 0xA2)),
+        ("accent5", Color::new(0x4B, 0xAC, 0xC6)),
+        ("accent6", Color::new(0xF7, 0x96, 0x46)),
+        ("dk1", Color::new(0, 0, 0)),
+    ]
+    .into_iter()
+    .map(|(name, color)| (name.to_string(), color))
+    .collect();
+
+    let palette = theme_accent_palette(&colors);
+
+    assert_eq!(palette.len(), 6);
+    assert_eq!(palette[0], Color::new(0x4F, 0x81, 0xBD), "accent1 leads");
+    assert_eq!(palette[5], Color::new(0xF7, 0x96, 0x46), "accent6 trails");
+}
+
+#[test]
+fn theme_accent_palette_is_empty_when_an_accent_is_missing() {
+    // Triangulation: a short list would make the renderer repeat colours the
+    // file never named, so it keeps its own palette instead.
+    let colors: ColorsMap = (1..=5)
+        .map(|index| (format!("accent{index}"), Color::new(1, 2, 3)))
+        .collect();
+
+    assert!(theme_accent_palette(&colors).is_empty());
+}

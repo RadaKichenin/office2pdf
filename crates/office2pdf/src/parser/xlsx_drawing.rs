@@ -25,6 +25,12 @@ pub(super) fn extract_charts_with_anchors(data: &[u8]) -> HashMap<String, Vec<(u
     let workbook_rels_xml = read_zip_entry_string(&mut archive, "xl/_rels/workbook.xml.rels");
     let rid_to_target = parse_rels_targets(&workbook_rels_xml);
 
+    // A series that names no fill takes its colour from the workbook's theme,
+    // not from the renderer's built-in palette (issue #670).
+    let (theme_colors, _) = workbook_theme(&mut archive, &workbook_rels_xml);
+    let theme_accents: Vec<crate::ir::Color> =
+        crate::parser::drawingml::theme_accent_palette(&theme_colors);
+
     // Step 3: For each sheet, find its drawing and extract chart anchors
     let mut result: HashMap<String, Vec<(u32, Chart)>> = HashMap::new();
 
@@ -71,7 +77,8 @@ pub(super) fn extract_charts_with_anchors(data: &[u8]) -> HashMap<String, Vec<(u
                 };
                 let chart_path = resolve_relative_xl_path(drawing_dir, chart_target);
                 let chart_xml = read_zip_entry_string(&mut archive, &chart_path);
-                if let Some(chart) = parse_chart_xml(&chart_xml) {
+                if let Some(mut chart) = parse_chart_xml(&chart_xml) {
+                    chart.theme_accent_colors = theme_accents.clone();
                     result
                         .entry(sheet_name.clone())
                         .or_default()
@@ -120,7 +127,8 @@ pub(super) fn extract_charts_with_anchors(data: &[u8]) -> HashMap<String, Vec<(u
                 continue;
             }
             let chart_xml = read_zip_entry_string(&mut archive, path);
-            if let Some(chart) = parse_chart_xml(&chart_xml) {
+            if let Some(mut chart) = parse_chart_xml(&chart_xml) {
+                chart.theme_accent_colors = theme_accents.clone();
                 result
                     .entry(first_sheet.clone())
                     .or_default()

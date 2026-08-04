@@ -275,6 +275,23 @@ const CLR_SCHEME_SLOTS: &[&str] = &[
     "hlink", "folHlink",
 ];
 
+/// `accent1`..`accent6` of a parsed theme palette, in order.
+///
+/// A chart series that states no fill of its own takes its colour from this
+/// list. The result is empty unless all six are present, so a partial theme
+/// leaves the renderer on its built-in palette rather than cycling through a
+/// short list and repeating colours the file never named (issue #670).
+pub(crate) fn theme_accent_palette(colors: &HashMap<String, Color>) -> Vec<Color> {
+    let accents: Vec<Color> = (1..=6)
+        .filter_map(|index| colors.get(&format!("accent{index}")).copied())
+        .collect();
+    if accents.len() == 6 {
+        accents
+    } else {
+        Vec::new()
+    }
+}
+
 /// Parse just the `<a:clrScheme>` palette out of a theme part
 /// (`theme1.xml`) into a scheme-name → color map.
 ///

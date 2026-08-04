@@ -168,6 +168,7 @@ fn test_charts_stay_on_first_column_group() {
             category_axis_deleted: false,
             value_axis_deleted: false,
             bar_band_layout: crate::ir::BarBandLayout::default(),
+            theme_accent_colors: Vec::new(),
         },
     )];
     let pages = split_sheet_page_by_width(page, None, None);

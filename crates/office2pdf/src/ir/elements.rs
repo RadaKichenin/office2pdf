@@ -171,6 +171,14 @@ pub struct Chart {
     /// How the bars of one category share the band it gets, from
     /// `<c:barChart>`. Charts outside the bar family carry the defaults.
     pub bar_band_layout: BarBandLayout,
+    /// `accent1`..`accent6` of the theme the chart's package declares, in that
+    /// order, for series that state no fill of their own.
+    ///
+    /// Empty when the package has no theme, or names fewer than six accents,
+    /// in which case the renderer keeps its built-in palette. That palette is
+    /// the Office 2013+ one, so a file built on any other theme was recoloured
+    /// by it (issue #670).
+    pub theme_accent_colors: Vec<Color>,
 }
 
 /// How a bar chart's bars divide the band one category gets, from
