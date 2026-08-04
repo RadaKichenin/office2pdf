@@ -167,6 +167,8 @@ within +-2 per channel. The shift compares cumulative distributions, so that
 noise reaches 0.0003 while the half-width borders of #487 reached 0.0016.
 | Pixel difference (`AE`, `RMSE`) | whatever the other two were not watching | see below |
 
+
+
 **Never conclude from the pixel count alone.** Measured on this corpus: two
 shadow variants that look plainly different both scored an identical 173,524
 at `AE -fuzz 5%`; a correct anchor-height fix made the count *rise* because the
@@ -175,6 +177,16 @@ cut the error from 86pt to 4.4pt barely moved it, because re-proportioning
 columns changes where pixels are, not how many differ. Use `RMSE` or
 `AE -fuzz 1%` when magnitude matters, and treat all of them as a regression
 tripwire rather than evidence.
+
+**Text layer (`scripts/compare_text_layer.py`)** is a fourth axis none of the
+three above can see. Some defects change what a reader can select and search
+for while leaving every pixel identical: injected U+2060/U+00A0 (#664), or a
+ligature swallowing letter-spacing so the run extracts as `o ffi c e 2 p d f`
+(#684 — measured 24 occurrences in the pre-fix output, against 0 of the
+`ofce2pdf` that issue's body reports). It reports a codepoint-class census and a normalized-content check
+separately — a class delta with matching content is an encoding difference, a
+content residual is real text loss. Costs milliseconds; run it on any fix that
+touches text.
 
 The tool's `## Reading` section is the part to act on — it routes attention to
 the defect class (pagination, line advance, indent, fill, size) instead of
