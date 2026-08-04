@@ -312,16 +312,16 @@ fn acceptance_pr_186_contributor_acceptance_double_border_rendering() {
     let output = generate_typst(&document).expect("fixture should generate Typst");
 
     assert!(!output.source.contains("dash: \"dashed\""));
-    // Overlay offsets track the cell padding; XLSX cells use ~2pt insets so
-    // Excel auto-rows are not overflowed (issue #396). Since issue #619 the
-    // double paints as two boundary-anchored 1pt bands [B-1, B] and
-    // [B+1, B+2], and each band runs 1pt past its end boundary, so the run
-    // grew from the 4pt padding backout to 5pt.
+    // Overlay offsets track the cell padding, which is 3pt each side since
+    // issue #657 (it was 2pt, and the left inset put every left-aligned run
+    // 1pt left of Excel). Since issue #619 the double paints as two
+    // boundary-anchored 1pt bands [B-1, B] and [B+1, B+2], and each band runs
+    // 1pt past its end boundary, so the run is the 6pt padding backout plus 1.
     assert!(output.source.contains(
-        "#place(top + left, dx: -2pt, dy: -2pt, line(length: 100% + 5pt, angle: 0deg, stroke: 1pt + rgb(0, 0, 0)))"
+        "#place(top + left, dx: -3pt, dy: -2pt, line(length: 100% + 7pt, angle: 0deg, stroke: 1pt + rgb(0, 0, 0)))"
     ));
     assert!(output.source.contains(
-        "#place(top + left, dx: -2pt, dy: 0pt, line(length: 100% + 5pt, angle: 0deg, stroke: 1pt + rgb(0, 0, 0)))"
+        "#place(top + left, dx: -3pt, dy: 0pt, line(length: 100% + 7pt, angle: 0deg, stroke: 1pt + rgb(0, 0, 0)))"
     ));
 }
 
