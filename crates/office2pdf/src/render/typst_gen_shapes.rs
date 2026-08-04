@@ -309,13 +309,18 @@ fn write_shape_params(out: &mut String, shape: &Shape, width: f64, height: f64) 
 /// Write stroke parameter for shapes, handling dash patterns.
 pub(super) fn write_shape_stroke(out: &mut String, stroke: &Option<BorderSide>) {
     if let Some(stroke) = stroke {
-        let _ = write!(out, ", stroke: {}", stroke_value(stroke, false));
+        // DrawingML dashes scale with the line width (issue #678).
+        let _ = write!(out, ", stroke: {}", drawingml_stroke_value(stroke));
     }
 }
 
 /// Write a border stroke value for image box wrapping (no leading comma).
+///
+/// A picture's border comes from its own `a:ln`, whose `a:prstDash` is the
+/// same DrawingML preset a shape's is, so it takes the width-proportional
+/// dashes too (issue #678).
 pub(super) fn write_image_border_stroke(out: &mut String, stroke: &BorderSide) {
-    out.push_str(&stroke_value(stroke, false));
+    out.push_str(&drawingml_stroke_value(stroke));
 }
 
 /// Write polygon vertex coordinates scaled to actual dimensions.
