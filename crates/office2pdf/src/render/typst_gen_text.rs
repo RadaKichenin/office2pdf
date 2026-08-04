@@ -2026,6 +2026,22 @@ fn write_text_params_inner(out: &mut String, style: &TextStyle, kerning_text: Ke
             &mut first,
             &format!("tracking: {}pt", format_f64(spacing)),
         );
+        // Tracking and ligation are mutually exclusive: a ligature replaces
+        // several glyphs with one and swallows the inter-glyph spacing the
+        // tracking should have added. PowerPoint disables ligatures under
+        // `a:rPr/@spc` for that reason, which is also the ordinary
+        // typographic rule. Leaving `liga` on merged the `ffi` of "office2pdf"
+        // into one glyph, so the tracking between those three letters was
+        // never applied and the text layer extracted as "o ffi c e 2 p d f" —
+        // 17 characters instead of 10, matching no search for the word. On the
+        // audited deck that affected 24 of 52 occurrences (issue #684).
+        //
+        // Zero is not tracking. PowerPoint writes `spc="0"` routinely, so
+        // keying this on `is_some()` would strip ligatures from whole decks
+        // that never asked for it.
+        if spacing != 0.0 {
+            write_param(out, &mut first, "ligatures: false");
+        }
     }
     if let Some(BaselineShiftEm(shift_em)) = style.baseline_shift {
         // Typst's text baseline parameter is positive downward, opposite to

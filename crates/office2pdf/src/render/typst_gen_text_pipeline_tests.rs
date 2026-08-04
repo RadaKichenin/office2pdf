@@ -1008,7 +1008,7 @@ fn a_letter_spaced_run_is_not_framed() {
     let result = generate_typst(&doc).unwrap().source;
 
     assert!(
-        result.contains("#text(tracking: 0.5pt)[활용 설치부터]"),
+        result.contains("#text(tracking: 0.5pt, ligatures: false)[활용 설치부터]"),
         "a tracked run stays one text item: {result}"
     );
     assert!(
