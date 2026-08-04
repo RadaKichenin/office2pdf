@@ -421,12 +421,16 @@ fn test_apply_table_style_missing_style_id_is_noop() {
 // ── Integration tests: end-to-end PPTX with table styles ──────────────
 
 /// Build a PPTX with theme and tableStyles.xml included.
+/// `master_xml` is the slide master, or `None` to omit the part entirely.
+/// Only the master carries a `<p:clrMap>`, so a deck built without one cannot
+/// resolve `bg1`/`tx1` in a table style.
 fn build_test_pptx_with_table_styles(
     slide_cx_emu: i64,
     slide_cy_emu: i64,
     slide_xmls: &[String],
     theme_xml: &str,
     table_styles_xml: &str,
+    master_xml: Option<&str>,
 ) -> Vec<u8> {
     let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
     let opts = FileOptions::default();
@@ -479,6 +483,12 @@ fn build_test_pptx_with_table_styles(
             1 + i
         ));
     }
+    if master_xml.is_some() {
+        pres_rels.push_str(&format!(
+            r#"<Relationship Id="rId{}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>"#,
+            2 + slide_xmls.len()
+        ));
+    }
     pres_rels.push_str("</Relationships>");
     zip.start_file("ppt/_rels/presentation.xml.rels", opts)
         .unwrap();
@@ -489,6 +499,12 @@ fn build_test_pptx_with_table_styles(
 
     zip.start_file("ppt/tableStyles.xml", opts).unwrap();
     zip.write_all(table_styles_xml.as_bytes()).unwrap();
+
+    if let Some(master) = master_xml {
+        zip.start_file("ppt/slideMasters/slideMaster1.xml", opts)
+            .unwrap();
+        zip.write_all(master.as_bytes()).unwrap();
+    }
 
     for (i, slide_xml) in slide_xmls.iter().enumerate() {
         zip.start_file(format!("ppt/slides/slide{}.xml", i + 1), opts)
@@ -553,6 +569,7 @@ fn test_pptx_table_with_style_applies_header_fill_and_text_color() {
         &[slide],
         &theme_xml,
         table_styles_xml,
+        None,
     );
 
     let parser = PptxParser;
@@ -769,4 +786,247 @@ fn test_parse_region_borders_from_tc_bdr() {
         Some(Color::new(0, 0, 0xFF)),
         "fill still parsed alongside borders"
     );
+}
+
+// ── Style references: fillRef / lnRef / tcTxStyle color (issue #674) ───
+//
+// The built-in styles PowerPoint ships express a region's fill and border
+// through `<a:fillRef>`/`<a:lnRef>` into the theme's `fmtScheme`, not through
+// the literal `<a:fill>`/`<a:ln>` the tests above use. The XML in this section
+// is copied from `tests/fixtures/pptx/poi/table-with-theme.pptx`.
+
+/// `make_theme_xml` emits no `<a:fmtScheme>`, so `line_style_widths` comes back
+/// empty and no `lnRef` can resolve. The three widths below are the ones the
+/// fixture's own theme declares — 6350, 12700 and 19050 EMU (0.5pt, 1pt,
+/// 1.5pt).
+fn theme_xml_with_line_styles() -> String {
+    let mut color_xml = String::new();
+    for (name, hex) in standard_theme_colors() {
+        if name == "dk1" || name == "lt1" {
+            color_xml.push_str(&format!(
+                r#"<a:{name}><a:sysClr val="windowText" lastClr="{hex}"/></a:{name}>"#
+            ));
+        } else {
+            color_xml.push_str(&format!(r#"<a:{name}><a:srgbClr val="{hex}"/></a:{name}>"#));
+        }
+    }
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?><a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:themeElements><a:clrScheme name="Test">{color_xml}</a:clrScheme><a:fontScheme name="Test"><a:majorFont><a:latin typeface="Calibri Light"/></a:majorFont><a:minorFont><a:latin typeface="Calibri"/></a:minorFont></a:fontScheme><a:fmtScheme name="Test"><a:fillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:fillStyleLst><a:lnStyleLst><a:ln w="6350"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln><a:ln w="12700"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln><a:ln w="19050"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln></a:lnStyleLst></a:fmtScheme></a:themeElements></a:theme>"#
+    )
+}
+
+fn theme_with_line_styles() -> ThemeData {
+    parse_theme_xml(&theme_xml_with_line_styles())
+}
+
+/// `default_color_map` maps every key onto itself, so `bg1` never reaches a
+/// theme color. Real decks get the mapping from the slide master; this mirrors
+/// the `<p:clrMap>` of the fixture these tests are drawn from.
+fn fixture_color_map() -> ColorMapData {
+    let aliases = [
+        ("bg1", "lt1"),
+        ("tx1", "dk1"),
+        ("bg2", "lt2"),
+        ("tx2", "dk2"),
+        ("accent1", "accent1"),
+        ("accent2", "accent2"),
+        ("accent3", "accent3"),
+        ("accent4", "accent4"),
+        ("accent5", "accent5"),
+        ("accent6", "accent6"),
+        ("hlink", "hlink"),
+        ("folHlink", "folHlink"),
+    ]
+    .into_iter()
+    .map(|(key, target)| (key.to_string(), target.to_string()))
+    .collect();
+    ColorMapData { aliases }
+}
+
+fn first_row_of(body: &str) -> TableCellRegionStyle {
+    let xml = make_table_style_xml(&[("{69012ECD-51FC-41F1-AA8D-1B2483CD663E}", body)]);
+    let styles: TableStyleMap =
+        table_styles::parse_table_styles_xml(&xml, &theme_with_line_styles(), &fixture_color_map());
+    styles
+        .get("{69012ECD-51FC-41F1-AA8D-1B2483CD663E}")
+        .expect("style not found")
+        .first_row
+        .clone()
+        .expect("firstRow missing")
+}
+
+#[test]
+fn test_first_row_fill_ref_resolves_against_theme() {
+    // Verbatim from the fixture: the header fill exists only as a fillRef.
+    let first_row = first_row_of(concat!(
+        r#"<a:firstRow><a:tcTxStyle b="on"><a:fontRef idx="minor"><a:scrgbClr r="0" g="0" b="0"/></a:fontRef><a:schemeClr val="bg1"/></a:tcTxStyle>"#,
+        r#"<a:tcStyle><a:tcBdr/><a:fillRef idx="1"><a:schemeClr val="accent1"/></a:fillRef></a:tcStyle></a:firstRow>"#,
+    ));
+
+    assert_eq!(
+        first_row.fill,
+        Some(Color::new(0x44, 0x72, 0xC4)),
+        "fillRef child color (accent1) is the header fill"
+    );
+}
+
+#[test]
+fn test_first_row_text_color_prefers_direct_child_over_font_ref() {
+    // The fontRef carries its own black; the direct child is the real text
+    // color. Taking the fontRef's leaves the header black-on-blue.
+    let first_row = first_row_of(concat!(
+        r#"<a:firstRow><a:tcTxStyle b="on"><a:fontRef idx="minor"><a:scrgbClr r="0" g="0" b="0"/></a:fontRef><a:schemeClr val="bg1"/></a:tcTxStyle>"#,
+        r#"<a:tcStyle><a:tcBdr/><a:fillRef idx="1"><a:schemeClr val="accent1"/></a:fillRef></a:tcStyle></a:firstRow>"#,
+    ));
+
+    assert_eq!(
+        first_row.text_color,
+        Some(Color::new(0xFF, 0xFF, 0xFF)),
+        "bg1 resolves to white, overriding the fontRef color"
+    );
+    assert_eq!(first_row.text_bold, Some(true), "bold still parsed");
+}
+
+#[test]
+fn test_font_ref_color_still_used_when_no_direct_child() {
+    // Triangulation: the fontRef color must remain the fallback, not be dropped.
+    let first_row = first_row_of(concat!(
+        r#"<a:firstRow><a:tcTxStyle b="on"><a:fontRef idx="minor"><a:srgbClr val="00FF00"/></a:fontRef></a:tcTxStyle>"#,
+        r#"<a:tcStyle/></a:firstRow>"#,
+    ));
+
+    assert_eq!(
+        first_row.text_color,
+        Some(Color::new(0, 0xFF, 0)),
+        "fontRef color is the fallback when tcTxStyle has no direct color"
+    );
+}
+
+#[test]
+fn test_border_ln_ref_takes_width_from_theme_line_style() {
+    // lnRef idx=1 → lnStyleLst[0] = 6350 EMU = 0.5pt. Without this the border
+    // falls back to a flat 1pt, twice what PowerPoint draws.
+    let first_row = first_row_of(concat!(
+        r#"<a:firstRow><a:tcStyle><a:tcBdr>"#,
+        r#"<a:left><a:lnRef idx="1"><a:schemeClr val="accent1"/></a:lnRef></a:left>"#,
+        r#"</a:tcBdr></a:tcStyle></a:firstRow>"#,
+    ));
+
+    let left = first_row.borders.left.expect("left border missing");
+    assert_eq!(left.width, 0.5, "6350 EMU is 0.5pt");
+    assert_eq!(left.color, Color::new(0x44, 0x72, 0xC4));
+}
+
+#[test]
+fn test_border_ln_ref_indexes_into_the_line_style_list() {
+    // Triangulation: idx=3 must reach the third entry (19050 EMU = 1.5pt), so
+    // the width cannot be a constant that happens to match idx=1.
+    let first_row = first_row_of(concat!(
+        r#"<a:firstRow><a:tcStyle><a:tcBdr>"#,
+        r#"<a:top><a:lnRef idx="3"><a:schemeClr val="accent2"/></a:lnRef></a:top>"#,
+        r#"</a:tcBdr></a:tcStyle></a:firstRow>"#,
+    ));
+
+    let top = first_row.borders.top.expect("top border missing");
+    assert_eq!(top.width, 1.5, "19050 EMU is 1.5pt");
+    assert_eq!(top.color, Color::new(0xED, 0x7D, 0x31), "accent2");
+}
+
+#[test]
+fn test_explicit_ln_width_still_wins_over_ln_ref_absence() {
+    // Triangulation: a literal <a:ln w=> must keep working unchanged.
+    let first_row = first_row_of(concat!(
+        r#"<a:firstRow><a:tcStyle><a:tcBdr>"#,
+        r#"<a:bottom><a:ln w="25400"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:ln></a:bottom>"#,
+        r#"</a:tcBdr></a:tcStyle></a:firstRow>"#,
+    ));
+
+    let bottom = first_row.borders.bottom.expect("bottom border missing");
+    assert_eq!(bottom.width, 2.0, "25400 EMU is 2pt");
+    assert_eq!(bottom.color, Color::new(0xFF, 0, 0));
+}
+
+#[test]
+fn test_built_in_style_header_resolves_through_the_master_color_map() {
+    // End-to-end for issue #674: the header's fill and text color exist only
+    // as a fillRef and a `bg1` scheme name. `bg1` is not a theme color — it
+    // reaches `lt1` through the master's <p:clrMap>, so a deck parsed without
+    // that map renders the header black on white instead of white on blue.
+    let table_styles_xml = concat!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>"#,
+        r#"<a:tblStyleLst xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" def="{69012ECD-51FC-41F1-AA8D-1B2483CD663E}">"#,
+        r#"<a:tblStyle styleId="{69012ECD-51FC-41F1-AA8D-1B2483CD663E}" styleName="Themed Style">"#,
+        r#"<a:wholeTbl><a:tcStyle><a:tcBdr>"#,
+        r#"<a:left><a:lnRef idx="1"><a:schemeClr val="accent1"/></a:lnRef></a:left>"#,
+        r#"<a:right><a:lnRef idx="1"><a:schemeClr val="accent1"/></a:lnRef></a:right>"#,
+        r#"<a:top><a:lnRef idx="1"><a:schemeClr val="accent1"/></a:lnRef></a:top>"#,
+        r#"<a:bottom><a:lnRef idx="1"><a:schemeClr val="accent1"/></a:lnRef></a:bottom>"#,
+        r#"</a:tcBdr><a:fill><a:noFill/></a:fill></a:tcStyle></a:wholeTbl>"#,
+        r#"<a:firstRow>"#,
+        r#"<a:tcTxStyle b="on"><a:fontRef idx="minor"><a:scrgbClr r="0" g="0" b="0"/></a:fontRef><a:schemeClr val="bg1"/></a:tcTxStyle>"#,
+        r#"<a:tcStyle><a:tcBdr/><a:fillRef idx="1"><a:schemeClr val="accent1"/></a:fillRef></a:tcStyle>"#,
+        r#"</a:firstRow>"#,
+        r#"</a:tblStyle></a:tblStyleLst>"#,
+    );
+
+    let table_xml = concat!(
+        r#"<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="4" name="Table"/>"#,
+        r#"<p:cNvGraphicFramePr><a:graphicFrameLocks noGrp="1"/></p:cNvGraphicFramePr>"#,
+        r#"<p:nvPr/></p:nvGraphicFramePr>"#,
+        r#"<p:xfrm><a:off x="0" y="0"/><a:ext cx="3657600" cy="1828800"/></p:xfrm>"#,
+        r#"<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table">"#,
+        r#"<a:tbl>"#,
+        r#"<a:tblPr firstRow="1"><a:tableStyleId>{69012ECD-51FC-41F1-AA8D-1B2483CD663E}</a:tableStyleId></a:tblPr>"#,
+        r#"<a:tblGrid><a:gridCol w="3657600"/></a:tblGrid>"#,
+        // Neither run states a color; both must come from the style.
+        r#"<a:tr h="370840"><a:tc><a:txBody><a:bodyPr/><a:p><a:r><a:rPr lang="en-US"/><a:t>Abc</a:t></a:r></a:p></a:txBody><a:tcPr/></a:tc></a:tr>"#,
+        r#"<a:tr h="370840"><a:tc><a:txBody><a:bodyPr/><a:p><a:r><a:rPr lang="en-US"/><a:t>Body</a:t></a:r></a:p></a:txBody><a:tcPr/></a:tc></a:tr>"#,
+        r#"</a:tbl></a:graphicData></a:graphic></p:graphicFrame>"#,
+    );
+
+    // The clrMap of the fixture's master: bg1 → lt1.
+    let master_xml = concat!(
+        r#"<?xml version="1.0" encoding="UTF-8"?><p:sldMaster xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">"#,
+        r#"<p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/></p:spTree></p:cSld>"#,
+        r#"<p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/>"#,
+        r#"</p:sldMaster>"#,
+    );
+
+    let slide = make_slide_xml(&[table_xml.to_string()]);
+    let data = build_test_pptx_with_table_styles(
+        SLIDE_CX,
+        SLIDE_CY,
+        &[slide],
+        &theme_xml_with_line_styles(),
+        table_styles_xml,
+        Some(master_xml),
+    );
+
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let page = first_fixed_page(&doc);
+    let table = table_element(&page.elements[0]);
+
+    assert_eq!(
+        table.rows[0].cells[0].background,
+        Some(Color::new(0x44, 0x72, 0xC4)),
+        "header fill comes from the fillRef"
+    );
+    let header_run = match &table.rows[0].cells[0].content[0] {
+        Block::Paragraph(paragraph) => &paragraph.runs[0],
+        other => panic!("Expected paragraph, got {other:?}"),
+    };
+    assert_eq!(
+        header_run.style.color,
+        Some(Color::new(0xFF, 0xFF, 0xFF)),
+        "bg1 reaches white only through the master color map"
+    );
+
+    let border = table.rows[0].cells[0]
+        .border
+        .as_ref()
+        .expect("header cell has no border");
+    let top = border.top.as_ref().expect("no top border");
+    assert_eq!(top.width, 0.5, "lnRef idx=1 is 6350 EMU = 0.5pt");
+    assert_eq!(top.color, Color::new(0x44, 0x72, 0xC4));
 }

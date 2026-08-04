@@ -413,6 +413,45 @@ pub(super) fn load_theme<R: Read + std::io::Seek>(
     parse_theme_xml(&theme_xml)
 }
 
+/// Color map of one of the presentation's slide masters.
+///
+/// `ppt/tableStyles.xml` is a presentation-level part with no master of its
+/// own, yet the scheme names its styles use (`bg1`, `tx1`) only reach a theme
+/// color through a `<p:clrMap>`. Without one, a built-in style's white header
+/// text stays unresolved and the row renders in the default black.
+///
+/// `rel_map` is a `HashMap`, whose iteration order is unspecified, so the
+/// lowest-sorting target is taken rather than whichever the table yields
+/// first — an arbitrary pick would make the chosen master vary between runs.
+///
+/// TODO(multi-master): the table-style map is built once for the whole
+/// presentation, so it cannot hold a per-master mapping. A deck whose masters
+/// disagree on `bg1` needs the map resolved per slide instead; until then one
+/// master's mapping is applied to every table in the deck.
+pub(super) fn load_master_color_map<R: Read + std::io::Seek>(
+    rel_map: &HashMap<String, String>,
+    archive: &mut ZipArchive<R>,
+) -> ColorMapData {
+    let Some(target) = rel_map
+        .values()
+        .filter(|target| target.contains("slideMaster"))
+        .min()
+    else {
+        return default_color_map();
+    };
+
+    let master_path: String = if let Some(stripped) = target.strip_prefix('/') {
+        stripped.to_string()
+    } else {
+        format!("ppt/{target}")
+    };
+
+    match read_zip_entry(archive, &master_path) {
+        Ok(master_xml) => parse_master_color_map(&master_xml),
+        Err(_) => default_color_map(),
+    }
+}
+
 /// Load and parse `ppt/tableStyles.xml` from the archive.
 /// Returns an empty map if the file is missing.
 pub(super) fn load_table_styles<R: Read + std::io::Seek>(

@@ -24,8 +24,8 @@ use crate::parser::smartart;
 use crate::parser::units::emu_to_pt;
 
 use self::package::{
-    load_table_styles, load_theme, parse_default_text_size_pt, parse_presentation_xml,
-    parse_rels_xml, read_zip_entry,
+    load_master_color_map, load_table_styles, load_theme, parse_default_text_size_pt,
+    parse_presentation_xml, parse_rels_xml, read_zip_entry,
 };
 #[cfg(test)]
 use self::package::{resolve_relative_path, scan_chart_refs};
@@ -416,7 +416,7 @@ impl Parser for PptxParser {
         let theme = load_theme(&rel_map, &mut archive);
 
         // Load table styles (uses theme colors for scheme color resolution)
-        let master_color_map: ColorMapData = default_color_map();
+        let master_color_map: ColorMapData = load_master_color_map(&rel_map, &mut archive);
         let table_styles: table_styles::TableStyleMap =
             load_table_styles(&mut archive, &theme, &master_color_map);
 

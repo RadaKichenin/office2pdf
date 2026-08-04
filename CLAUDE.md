@@ -121,7 +121,7 @@ This project follows a **6-month rolling MSRV policy** (aligned with [tokio](htt
 
 ## Visual Comparison Workflow
 
-- For visual bug fixes tied to an issue, commit `assets/bugfixes/issue-<number>/gt.jpg`, `before.jpg`, and `after.jpg` generated from the same fixture, page, resolution, and renderer. Use progressive JPEG quality 86 with metadata stripped, preserve the source pixel dimensions, and verify text and images remain legible for direct GitHub links.
+- For visual bug fixes tied to an issue, commit `assets/bugfixes/issue-<number>/gt.jpg`, `before.jpg`, and `after.jpg` generated from the same fixture, page, resolution, and renderer. Use progressive JPEG quality 86 with metadata stripped, preserve the source pixel dimensions, and verify text and images remain legible for direct GitHub links. Strip first, then re-set the density (`-strip -density 150 -units PixelsPerInch`): the contract check rejects evidence recording under 150 DPI, which stripping alone removes.
 - **When filing a visual defect issue, attach a side-by-side image (GT left, office2pdf output at filing time right)** rendered from the same page and resolution, committed as `assets/bugfixes/issue-<number>/compare.jpg` (same JPEG rules as above) and embedded in the issue body via a commit-pinned raw URL. For classified fixtures, confirm with the user before publishing the image; the surrounding issue text must still follow the Confidentiality rules.
 
 ### Visual check discipline (harness rules)
