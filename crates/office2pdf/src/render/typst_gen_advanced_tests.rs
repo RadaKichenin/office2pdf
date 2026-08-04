@@ -71,6 +71,16 @@ fn test_data_bar_codegen() {
         "DataBar height must not be page-relative in auto-height rows. Got: {}",
         output.source,
     );
+    // The ramp's far end. Not a chosen number and not Excel's own endpoint
+    // either: Excel's export fits a fade to 0.84, and 83% is the value that
+    // reproduces it once our renderer's slightly lighter output is accounted
+    // for. `write_table_cell` in typst_gen_tables.rs records the derivation.
+    // Fading only 70% of the way left short bars reading near-solid (#654).
+    assert!(
+        output.source.contains(".lighten(83%)"),
+        "DataBar gradient must fade to the endpoint that reproduces Excel's. Got: {}",
+        output.source,
+    );
 }
 
 #[test]
