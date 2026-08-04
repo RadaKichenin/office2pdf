@@ -590,7 +590,9 @@ fn generate_table_cell(
         // the cell's font color, anchored at the cell's left edge on the
         // value's own line. Placing the icon out of layout keeps narrow
         // cells from wrapping the value onto a second line, which doubled
-        // the row height (issue #367).
+        // the row height (issue #367). Because it takes no width here, the
+        // cell carries `ICON_SET_VALUE_RESERVE_PT` of extra left inset so the
+        // value still aligns to the icon's right, as Excel does (issue #652).
         // Excel's arrow sets are drawn shapes rather than characters: a shaft
         // with a triangular head, outlined and filling most of the row. The
         // triangle characters the parser records are only a third that size,

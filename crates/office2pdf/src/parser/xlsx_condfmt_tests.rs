@@ -488,6 +488,23 @@ fn test_cond_fmt_icon_set() {
         Some(Color::new(98, 193, 122)),
         "High value circle should be green"
     );
+
+    // The icon is drawn out of layout, so its advance has to be reserved as
+    // padding or the value aligns in the whole cell instead of the space to
+    // the icon's right (issue #652).
+    let icon_padding = cell1
+        .padding
+        .expect("an icon-set cell reserves the icon's advance");
+    assert!(
+        icon_padding.left > XLSX_CELL_PADDING.left,
+        "the icon cell's left inset must exceed the plain one, got {} against {}",
+        icon_padding.left,
+        XLSX_CELL_PADDING.left
+    );
+    assert_eq!(
+        icon_padding.right, XLSX_CELL_PADDING.right,
+        "only the left inset is reserved; the right is unchanged"
+    );
 }
 
 /// Helper: build a 3-band percent icon set rule over A1:A3 with the given type.

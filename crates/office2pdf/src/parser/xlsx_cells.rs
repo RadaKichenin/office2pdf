@@ -7,7 +7,7 @@ use super::xlsx_style::{
     apply_rich_run_font, extract_cell_alignment, extract_cell_background, extract_cell_borders,
     extract_cell_text_style,
 };
-use crate::ir::{Color, TableCell};
+use crate::ir::{Color, Insets, TableCell};
 
 /// A cell range within a sheet (1-indexed, inclusive).
 #[derive(Debug, Clone, Copy)]
@@ -634,6 +634,24 @@ pub(super) fn native_excel_pdf_row_height(height: f64) -> f64 {
 /// mocks, 3/3 improves every workbook and regresses none, taking the mean
 /// absolute x error over 428 text runs from 1.454pt to 1.013pt; 3/2 instead
 /// pushed centred and right-aligned columns further out.
+/// Horizontal space an icon-set icon takes before its cell's value.
+///
+/// Excel reserves the icon's advance and then aligns the value in what is left
+/// to its right; the icon itself is drawn out of layout here, so without this
+/// a centred value centres in the whole cell and lands left of Excel's (#652).
+///
+/// Fitted, not derived. `10_kpi_tracker_en` is the only workbook in the corpus
+/// with icon sets *and* a ground-truth Excel export to measure against: every
+/// value in its icon column sat 4.79-5.01pt left of Excel's, and this reserve
+/// closes that to within 0.4pt.
+///
+/// Its icons are `3Arrows`. Other tracked fixtures carry `3TrafficLights1`,
+/// `3Flags`, `3Symbols`, `4Rating`, `5ArrowsGray` and more, none of which has
+/// a ground truth here, so none was used to derive or check this. A set whose
+/// icons are a different width will want a different advance — the honest
+/// shape of this is per-icon-set, once there is something to measure it on.
+const ICON_SET_VALUE_RESERVE_PT: f64 = 9.6;
+
 pub(super) const XLSX_CELL_PADDING: crate::ir::Insets = crate::ir::Insets {
     top: 1.0,
     right: 3.0,
@@ -823,11 +841,19 @@ pub(super) fn build_rows_for_range(
                 border,
                 background,
                 data_bar,
+                // An icon is drawn out of layout at the cell's left edge, so
+                // it consumes no width and a centred value centres in the
+                // whole cell. Excel reserves the icon's advance first and
+                // aligns the value in what remains to its right, which is
+                // where the extra left inset comes from (issue #652).
+                padding: icon_text.as_ref().map(|_| Insets {
+                    left: XLSX_CELL_PADDING.left + ICON_SET_VALUE_RESERVE_PT,
+                    ..XLSX_CELL_PADDING
+                }),
                 icon_text,
                 icon_color,
                 spill_width,
                 vertical_align: cell_vertical_align,
-                padding: None,
             });
         }
 
