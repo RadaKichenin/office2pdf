@@ -71,9 +71,47 @@ fn tint_blends_toward_white() {
 }
 
 #[test]
-fn shade_scales_toward_black() {
-    let out = apply_color_transforms(Color::new(200, 100, 50), &[ColorTransform::Shade(0.5)]);
-    assert_eq!(out, Color::new(100, 50, 25));
+fn shade_scales_in_linear_light_not_on_srgb_bytes() {
+    // accent1 #4472C4 shaded 50% is #2F528F in PowerPoint (issue #667). Scaling
+    // the sRGB bytes instead gives #223962 — visibly darker on every channel.
+    // The difference is the sRGB transfer curve: the scale belongs in linear
+    // light, so the bytes are decoded, halved, and re-encoded.
+    let out = apply_color_transforms(Color::new(0x44, 0x72, 0xC4), &[ColorTransform::Shade(0.5)]);
+    assert_eq!(out, Color::new(0x2F, 0x52, 0x8F));
+}
+
+#[test]
+fn shade_of_one_is_identity() {
+    // Triangulation: a full-strength shade must round-trip the colour through
+    // the transfer curve unchanged, which a wrong or lossy curve would not.
+    let color = Color::new(200, 100, 50);
+    assert_eq!(
+        apply_color_transforms(color, &[ColorTransform::Shade(1.0)]),
+        color
+    );
+}
+
+#[test]
+fn shade_of_zero_is_black() {
+    // Triangulation at the other end: no light left is black regardless of curve.
+    assert_eq!(
+        apply_color_transforms(Color::new(200, 100, 50), &[ColorTransform::Shade(0.0)]),
+        Color::new(0, 0, 0)
+    );
+}
+
+#[test]
+fn shade_keeps_black_and_white_fixed() {
+    // Triangulation: the curve's endpoints must be exact, or every shaded
+    // colour picks up a bias.
+    assert_eq!(
+        apply_color_transforms(Color::new(0, 0, 0), &[ColorTransform::Shade(0.5)]),
+        Color::new(0, 0, 0)
+    );
+    assert_eq!(
+        apply_color_transforms(Color::new(255, 255, 255), &[ColorTransform::Shade(1.0)]),
+        Color::new(255, 255, 255)
+    );
 }
 
 #[test]
