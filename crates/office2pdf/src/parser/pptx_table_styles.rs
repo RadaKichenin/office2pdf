@@ -149,6 +149,14 @@ fn parse_region_style(
     let mut in_solid_fill = false;
     let mut in_font_ref = false;
     let mut in_tc_bdr = false;
+    let mut in_fill_ref = false;
+    // `a:tcTxStyle` may carry both a `a:fontRef` (which has a color of its own)
+    // and a direct color child. The direct child is the text color; the
+    // fontRef's is only the color that travels with the font reference, so it
+    // serves as a fallback. Kept apart rather than assigned in document order
+    // because the schema does not pin which arrives first.
+    let mut direct_text_color: Option<Color> = None;
+    let mut font_ref_color: Option<Color> = None;
     // Which tcBdr side element we're inside, with the pending line width.
     let mut current_border_side: Option<(Vec<u8>, f64)> = None;
 
@@ -175,6 +183,24 @@ fn parse_region_style(
                         *width = w / 12700.0;
                     }
                 }
+                // A built-in style states the region fill as a reference into
+                // the theme's `fillStyleLst`, with the child color supplying
+                // the entry's `phClr`. The child color is taken as the fill
+                // directly: the referenced entry is solid in the themes this
+                // has been checked against, and a gradient entry could not be
+                // represented anyway, since a region fill is a single `Color`.
+                b"fillRef" if in_tc_style && !in_tc_bdr => in_fill_ref = true,
+                // Likewise `a:lnRef` indexes the theme's `lnStyleLst` for the
+                // border width. Without this the side keeps the 1.0 default —
+                // twice the width in the audited fixture, whose first entry is
+                // 6350 EMU (0.5pt).
+                b"lnRef" => {
+                    if let Some((_, width)) = current_border_side.as_mut()
+                        && let Some(w) = theme_line_width_pt(e, theme)
+                    {
+                        *width = w;
+                    }
+                }
                 b"fill" if in_tc_style && !in_tc_bdr => in_fill = true,
                 b"solidFill" if in_fill || (in_tc_style && !in_tc_bdr) => in_solid_fill = true,
                 b"fontRef" if in_tc_tx_style => in_font_ref = true,
@@ -186,13 +212,17 @@ fn parse_region_style(
                         set_region_border(&mut style.borders, side, *width, color);
                     }
                 }
-                b"srgbClr" | b"schemeClr" | b"sysClr" if in_solid_fill => {
+                b"srgbClr" | b"schemeClr" | b"sysClr" if in_solid_fill || in_fill_ref => {
                     let parsed: ParsedColor = parse_color_from_start(reader, e, theme, color_map);
                     style.fill = parsed.color;
                 }
                 b"srgbClr" | b"schemeClr" | b"sysClr" if in_font_ref => {
                     let parsed: ParsedColor = parse_color_from_start(reader, e, theme, color_map);
-                    style.text_color = parsed.color;
+                    font_ref_color = parsed.color;
+                }
+                b"srgbClr" | b"schemeClr" | b"sysClr" if in_tc_tx_style => {
+                    let parsed: ParsedColor = parse_color_from_start(reader, e, theme, color_map);
+                    direct_text_color = parsed.color;
                 }
                 _ => {}
             },
@@ -205,13 +235,25 @@ fn parse_region_style(
                         set_region_border(&mut style.borders, side, *width, color);
                     }
                 }
-                b"srgbClr" | b"schemeClr" | b"sysClr" if in_solid_fill => {
+                b"srgbClr" | b"schemeClr" | b"sysClr" if in_solid_fill || in_fill_ref => {
                     let parsed: ParsedColor = parse_color_from_empty(e, theme, color_map);
                     style.fill = parsed.color;
                 }
                 b"srgbClr" | b"schemeClr" | b"sysClr" if in_font_ref => {
                     let parsed: ParsedColor = parse_color_from_empty(e, theme, color_map);
-                    style.text_color = parsed.color;
+                    font_ref_color = parsed.color;
+                }
+                b"srgbClr" | b"schemeClr" | b"sysClr" if in_tc_tx_style => {
+                    let parsed: ParsedColor = parse_color_from_empty(e, theme, color_map);
+                    direct_text_color = parsed.color;
+                }
+                // A self-closing `a:lnRef` still sets the side's width.
+                b"lnRef" => {
+                    if let Some((_, width)) = current_border_side.as_mut()
+                        && let Some(w) = theme_line_width_pt(e, theme)
+                    {
+                        *width = w;
+                    }
                 }
                 b"tcTxStyle" => {
                     if let Some(bold) = get_attr_str(e, b"b") {
@@ -235,6 +277,7 @@ fn parse_region_style(
                         current_border_side = None;
                     }
                     b"fill" => in_fill = false,
+                    b"fillRef" => in_fill_ref = false,
                     b"solidFill" => in_solid_fill = false,
                     b"fontRef" => in_font_ref = false,
                     _ => {}
@@ -246,7 +289,18 @@ fn parse_region_style(
         }
     }
 
+    style.text_color = direct_text_color.or(font_ref_color);
     style
+}
+
+/// Width in points of the theme `lnStyleLst` entry an `<a:lnRef idx="N">`
+/// names. `idx` is 1-based, matching how a shape outline's `lnRef` is resolved
+/// in `pptx_slides.rs`. An out-of-range index gives `None` so the caller keeps
+/// its default rather than inventing a width.
+fn theme_line_width_pt(element: &BytesStart<'_>, theme: &ThemeData) -> Option<f64> {
+    let index: usize = get_attr_str(element, b"idx")?.parse::<usize>().ok()?;
+    let emu: i64 = *theme.line_style_widths.get(index.checked_sub(1)?)?;
+    Some(emu as f64 / 12700.0)
 }
 
 /// Record a parsed tcBdr side into the region's borders.
