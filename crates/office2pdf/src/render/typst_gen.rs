@@ -923,7 +923,19 @@ fn generate_fixed_element(
                     );
                 }
             }
+            // `a:xfrm/@rot` on a `p:pic` (issue #682). Typst rotates about
+            // the centre by default, which is what PowerPoint does — the
+            // measured GT keeps the same centre and only grows its drawn
+            // extent to the rotated bounding box. The element is absolutely
+            // placed, so no reflow is needed and the box is left alone.
+            let rotation = img.rotation_deg.filter(|deg| *deg != 0.0);
+            if let Some(deg) = rotation {
+                let _ = write!(out, "#rotate({}deg)[", format_f64(deg));
+            }
             generate_image(out, img, ctx);
+            if rotation.is_some() {
+                out.push(']');
+            }
             // Render image border as a separate overlay so that #image()
             // dimensions are not affected by Typst's #box(stroke:) sizing.
             if let Some(ref stroke) = img.stroke {

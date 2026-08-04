@@ -11,6 +11,7 @@ fn test_floating_image_square_wrap_codegen() {
             margins: Margins::default(),
             content: vec![Block::FloatingImage(FloatingImage {
                 image: ImageData {
+                    rotation_deg: None,
                     data: vec![0x89, 0x50, 0x4E, 0x47],
                     format: ImageFormat::Png,
                     width: Some(200.0),
@@ -63,6 +64,7 @@ fn test_floating_image_top_and_bottom_codegen() {
             margins: Margins::default(),
             content: vec![Block::FloatingImage(FloatingImage {
                 image: ImageData {
+                    rotation_deg: None,
                     data: vec![0x89, 0x50, 0x4E, 0x47],
                     format: ImageFormat::Png,
                     width: Some(150.0),
@@ -110,6 +112,7 @@ fn test_floating_image_behind_codegen() {
             margins: Margins::default(),
             content: vec![Block::FloatingImage(FloatingImage {
                 image: ImageData {
+                    rotation_deg: None,
                     data: vec![0x89, 0x50, 0x4E, 0x47],
                     format: ImageFormat::Png,
                     width: Some(100.0),

@@ -28,6 +28,7 @@ fn fixed_element_positioned_returns_direct_fields() {
 fn floating_image_positioned_maps_offsets_to_xy() {
     let fi = FloatingImage {
         image: ImageData {
+            rotation_deg: None,
             data: vec![],
             format: ImageFormat::Png,
             width: Some(200.0),
@@ -53,6 +54,7 @@ fn floating_image_positioned_maps_offsets_to_xy() {
 fn floating_image_positioned_returns_zero_when_dimensions_absent() {
     let fi = FloatingImage {
         image: ImageData {
+            rotation_deg: None,
             data: vec![],
             format: ImageFormat::Jpeg,
             width: None,

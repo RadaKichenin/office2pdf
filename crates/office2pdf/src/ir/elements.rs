@@ -699,6 +699,9 @@ impl ImageCrop {
 #[derive(Debug, Clone)]
 pub struct ImageData {
     pub data: Vec<u8>,
+    /// Clockwise rotation in degrees from `a:xfrm/@rot`, about the image's
+    /// centre. `None` means upright (issue #682).
+    pub rotation_deg: Option<f64>,
     pub format: ImageFormat,
     pub width: Option<f64>,
     pub height: Option<f64>,

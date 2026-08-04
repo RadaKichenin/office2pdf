@@ -248,6 +248,7 @@ fn anchored_image(
         + anchor.from_row_off_emu as f64 / EMU_PER_PT;
 
     let image = ImageData {
+        rotation_deg: None,
         data: anchor.data,
         format: anchor.format,
         width: Some(width),
