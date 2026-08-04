@@ -1815,7 +1815,12 @@ fn collect_formatting_wrappers(run: &Run) -> Vec<String> {
         wrappers.push("#strike[".to_string());
     }
     if matches!(style.underline, Some(true)) {
-        wrappers.push("#underline[".to_string());
+        // Word draws the rule as one filled rectangle straight through any
+        // descender that crosses it. Typst's `underline` skips ink by default,
+        // which broke a single run's rule into segments: on the audited offer
+        // letter it emitted three pieces totalling 84.49pt where Word draws
+        // one 89.28pt rectangle (issue #641).
+        wrappers.push("#underline(evade: false)[".to_string());
     }
     if matches!(style.vertical_align, Some(VerticalTextAlign::Superscript)) {
         wrappers.push("#super[".to_string());

@@ -109,10 +109,17 @@ fn test_generate_underline_text() {
     })])]);
     let result = generate_typst(&doc).unwrap().source;
     assert!(
-        result.contains("#underline["),
+        result.contains("#underline("),
         "Expected underline wrapper in: {result}"
     );
     assert!(result.contains("Underlined"));
+    // Word draws one continuous rectangle straight through descenders. Typst
+    // skips ink by default, which chopped the rule into segments wherever a
+    // glyph descended through it (issue #641).
+    assert!(
+        result.contains("evade: false"),
+        "The underline must not evade descenders, got: {result}"
+    );
 }
 
 #[test]
