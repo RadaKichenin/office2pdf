@@ -552,6 +552,18 @@ fn generate_table_cell(
         // height must be concrete: in auto-height rows a relative height has
         // no cell frame to resolve against and blows up to the page height,
         // smearing over neighboring rows (issue #362).
+        //
+        // Where Excel's fade ends was read off its own export of
+        // `06_sales_dashboard_en` rather than picked (issue #654). Sampling
+        // along two bars and fitting gives a straight ramp to 0.84 of the way
+        // to white, worst residual under 1.2%.
+        //
+        // 83 rather than 84 because the fit is of the *rendered* page, and our
+        // own rendering reads a little light: the 70% this replaced measured
+        // 0.706 back. 84% was tried and landed about three levels past Excel
+        // at the bar's tail; 83% reproduces every sampled pixel on both bars
+        // to within one level. The earlier 70% stopped short of Excel
+        // altogether and left brief bars reading near-solid.
         let pct = db.fill_pct.clamp(0.0, 100.0);
         let bar_height: String = match row_height {
             Some(height) => {
@@ -565,7 +577,7 @@ fn generate_table_cell(
         };
         let _ = write!(
             out,
-            "#place(left + horizon, box(width: {}%, height: {}, fill: gradient.linear({}, {}.lighten(70%))))",
+            "#place(left + horizon, box(width: {}%, height: {}, fill: gradient.linear({}, {}.lighten(83%))))",
             format_f64(pct),
             bar_height,
             rgb(&db.color),
