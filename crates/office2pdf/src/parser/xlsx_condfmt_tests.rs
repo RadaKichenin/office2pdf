@@ -942,3 +942,111 @@ fn test_cond_fmt_cell_is_text_operand_does_not_affect_numeric_cells() {
         "text \"5\" must match the text operand"
     );
 }
+
+/// Build a 3-colour scale over `values` whose middle stop is the given cfvo.
+///
+/// White at the minimum, green in the middle, red at the maximum, so the
+/// colour a cell gets names its anchor unambiguously.
+fn color_scale_with_middle_cfvo(
+    values: &[f64],
+    middle: umya_spreadsheet::ConditionalFormatValueObjectValues,
+    middle_val: &str,
+) -> Vec<u8> {
+    let values: Vec<f64> = values.to_vec();
+    build_xlsx_with_cond_fmt(move |sheet| {
+        for (index, value) in values.iter().enumerate() {
+            sheet
+                .get_cell_mut(format!("A{}", index + 1).as_str())
+                .set_value_number(*value);
+        }
+
+        let mut rule = umya_spreadsheet::ConditionalFormattingRule::default();
+        rule.set_type(umya_spreadsheet::ConditionalFormatValues::ColorScale);
+        rule.set_priority(1);
+
+        let mut cs = umya_spreadsheet::ColorScale::default();
+
+        let mut cfvo_min = umya_spreadsheet::ConditionalFormatValueObject::default();
+        cfvo_min.set_type(umya_spreadsheet::ConditionalFormatValueObjectValues::Min);
+        cs.add_cfvo_collection(cfvo_min);
+
+        let mut cfvo_mid = umya_spreadsheet::ConditionalFormatValueObject::default();
+        cfvo_mid.set_type(middle.clone());
+        cfvo_mid.set_val(middle_val);
+        cs.add_cfvo_collection(cfvo_mid);
+
+        let mut cfvo_max = umya_spreadsheet::ConditionalFormatValueObject::default();
+        cfvo_max.set_type(umya_spreadsheet::ConditionalFormatValueObjectValues::Max);
+        cs.add_cfvo_collection(cfvo_max);
+
+        for argb in ["FFFFFFFF", "FF00FF00", "FFFF0000"] {
+            let mut color = umya_spreadsheet::Color::default();
+            color.set_argb(argb);
+            cs.add_color_collection(color);
+        }
+
+        rule.set_color_scale(cs);
+
+        let mut seq = umya_spreadsheet::SequenceOfReferences::default();
+        seq.set_sqref(format!("A1:A{}", values.len()).as_str());
+        let mut cf = umya_spreadsheet::ConditionalFormatting::default();
+        cf.set_sequence_of_references(seq);
+        cf.add_conditional_collection(rule);
+        sheet.set_conditional_formatting_collection(vec![cf]);
+    })
+}
+
+fn cell_background(data: &[u8], row_index: usize) -> Color {
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(data, &ConvertOptions::default()).unwrap();
+    get_sheet_page(&doc, 0).table.rows[row_index].cells[0]
+        .background
+        .expect("cell should have a color scale background")
+}
+
+#[test]
+fn test_color_scale_percentile_cfvo_anchors_on_the_data_not_the_midpoint() {
+    // Skewed on purpose: [0, 1, 2, 3, 100] has median 2 but a midpoint of 50.
+    // The 50th percentile IS the value 2, so that cell must land exactly on
+    // the middle colour. Treating the cfvo as a linear position instead puts
+    // the middle stop at 50 and renders the cell almost white (issue #653).
+    let data = color_scale_with_middle_cfvo(
+        &[0.0, 1.0, 2.0, 3.0, 100.0],
+        umya_spreadsheet::ConditionalFormatValueObjectValues::Percentile,
+        "50",
+    );
+
+    assert_eq!(
+        cell_background(&data, 2),
+        Color::new(0, 255, 0),
+        "the 50th percentile of the data is 2, so A3 sits on the middle stop"
+    );
+    assert_eq!(
+        cell_background(&data, 0),
+        Color::new(255, 255, 255),
+        "the minimum keeps the first stop"
+    );
+    assert_eq!(
+        cell_background(&data, 4),
+        Color::new(255, 0, 0),
+        "the maximum keeps the last stop"
+    );
+}
+
+#[test]
+fn test_color_scale_percent_cfvo_stays_a_linear_position() {
+    // Triangulation: `percent` is a fraction of the range, not of the data, so
+    // on the same skewed values the middle stop stays at 50 — which is the
+    // value in A6 here, not the median.
+    let data = color_scale_with_middle_cfvo(
+        &[0.0, 1.0, 2.0, 3.0, 100.0, 50.0],
+        umya_spreadsheet::ConditionalFormatValueObjectValues::Percent,
+        "50",
+    );
+
+    assert_eq!(
+        cell_background(&data, 5),
+        Color::new(0, 255, 0),
+        "50% of the 0..100 range is 50, so A6 sits on the middle stop"
+    );
+}
