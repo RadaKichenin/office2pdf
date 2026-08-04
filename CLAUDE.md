@@ -202,6 +202,15 @@ Whole-page thumbnails at 80 DPI hide hairlines, dash patterns, font weight, and 
 4. **Hairline inventory.** Explicitly enumerate elements ≤1pt (rules, underlines, dashed/dotted lines, borders, tick marks) found in GT and confirm each exists in the output at matching position, width, and dash pattern.
 5. **Weight/emphasis inventory.** Enumerate bold/italic/underlined runs visible in GT (including CJK) and confirm the same emphasis in the output — weight differences must be checked on the high-DPI crops, not thumbnails.
 
+**Validate the GT before deriving anything from it** —
+`python3 scripts/check_gt_integrity.py GT.pdf [--source FILE.xlsx]`. A corrupt
+export poisons every downstream number silently: the workbook-per-sheet
+duplication of #616 survived because nothing checked the GT itself. The gate
+detects page-sequence periodicity (the duplication signature), implausible page
+counts against the source's worksheet count, and GT-side font substitutions —
+the last so an exporter's Arial-to-Liberation swap is never filed as a converter
+defect. Exits non-zero only when the GT cannot be trusted at all.
+
 When comparing PDF output against ground truth (classified fixtures):
 
 1. Run `cargo test -p office2pdf --test artifact_generator -- --ignored --nocapture` to generate artifacts.
