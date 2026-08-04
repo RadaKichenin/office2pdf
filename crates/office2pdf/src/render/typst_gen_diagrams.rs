@@ -168,7 +168,11 @@ fn generate_chart_body(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
     out.push_str("]\n");
 }
 
-/// Series palette matching Office's default accent colors.
+/// Fallback series palette — the Office 2013+ default accents.
+///
+/// Reached only when the file's own theme supplies no usable accent list;
+/// see [`automatic_color`]. A file built on another theme that lands here
+/// is recoloured, which is what issue #670 was.
 const CHART_SERIES_COLORS: [&str; 6] = [
     "rgb(68, 114, 196)",
     "rgb(237, 125, 49)",
@@ -178,32 +182,54 @@ const CHART_SERIES_COLORS: [&str; 6] = [
     "rgb(112, 173, 71)",
 ];
 
+/// The automatic colour for the `index`-th slot, from the file's own theme.
+///
+/// A chart that states no fill takes `accent1`..`accent6` of the theme its
+/// package declares. Only when the package supplies no usable accent list does
+/// the built-in palette stand in — that palette is the Office 2013+ one, so
+/// using it on a file built from another theme recolours the chart (#670).
+fn automatic_color(theme_accents: &[Color], index: usize, fallback: &[&str]) -> String {
+    if theme_accents.is_empty() {
+        return fallback[index % fallback.len()].to_string();
+    }
+    rgb(&theme_accents[index % theme_accents.len()])
+}
+
 /// The Typst colour for one plotted point.
 ///
-/// A point's own `<c:dPt>` fill outranks its series' `<c:spPr>` fill, and the
-/// built-in palette is a fallback for charts that declare neither — not a
+/// A point's own `<c:dPt>` fill outranks its series' `<c:spPr>` fill, and an
+/// automatic colour is the fallback for charts that declare neither — not a
 /// replacement for what the file states (issue #535).
 fn series_color(
     series: &crate::ir::ChartSeries,
     series_index: usize,
     point_index: usize,
+    theme_accents: &[Color],
 ) -> String {
     match series.fill_for_point(point_index) {
         Some(color) => rgb(&color),
-        None => CHART_SERIES_COLORS[series_index % CHART_SERIES_COLORS.len()].to_string(),
+        None => automatic_color(theme_accents, series_index, &CHART_SERIES_COLORS),
     }
 }
 
-/// As [`series_color`], but falling back to the category palette the pie and
-/// bar fallbacks use.
-fn category_color(series: &crate::ir::ChartSeries, point_index: usize, palette: &[&str]) -> String {
+/// As [`series_color`], but for the plots that colour by data point rather
+/// than by series, so the accent advances with the point.
+fn category_color(
+    series: &crate::ir::ChartSeries,
+    point_index: usize,
+    palette: &[&str],
+    theme_accents: &[Color],
+) -> String {
     match series.fill_for_point(point_index) {
         Some(color) => rgb(&color),
-        None => palette[point_index % palette.len()].to_string(),
+        None => automatic_color(theme_accents, point_index, palette),
     }
 }
 
 /// Category palette used by the bar-plot and pie-table fallbacks.
+///
+/// Like [`CHART_SERIES_COLORS`], this now sits behind the file's own theme
+/// accents and is reached only when those are absent.
 ///
 /// Intentionally distinct from [`CHART_SERIES_COLORS`]; unifying them would
 /// change rendered output and needs visual verification.
@@ -853,7 +879,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 _ => value,
             };
             let frac: f64 = (value / nice_max).clamp(0.0, 1.0);
-            let color: String = series_color(s, s_index, cat_index);
+            let color: String = series_color(s, s_index, cat_index, &chart.theme_accent_colors);
             let offset: f64 = bars.lead + s_index as f64 * bars.step;
             if horizontal {
                 // Bar charts stack categories bottom-up.
@@ -1022,7 +1048,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
 
     // Legend on the edge `<c:legendPos>` asks for.
     for (s_index, s) in series.iter().enumerate() {
-        let color: String = series_color(s, s_index, 0);
+        let color: String = series_color(s, s_index, 0, &chart.theme_accent_colors);
         let default_name: String = format!("Series {}", s_index + 1);
         let name: &str = s.name.as_deref().unwrap_or(&default_name);
         // The content the legend sits beside spans the plot and both label
@@ -1235,7 +1261,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
 
     // Series polylines + markers.
     for (s_index, s) in series.iter().enumerate() {
-        let color: String = series_color(s, s_index, 0);
+        let color: String = series_color(s, s_index, 0, &chart.theme_accent_colors);
         let points: Vec<(f64, f64)> = s
             .values
             .iter()
@@ -1303,7 +1329,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
 
     // Legend on the edge `<c:legendPos>` asks for.
     for (s_index, s) in series.iter().enumerate() {
-        let color: String = series_color(s, s_index, 0);
+        let color: String = series_color(s, s_index, 0, &chart.theme_accent_colors);
         let default_name: String = format!("Series {}", s_index + 1);
         let name: &str = s.name.as_deref().unwrap_or(&default_name);
         let (entry_x, entry_y) = legend.entry_origin(
@@ -1394,7 +1420,12 @@ fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, 
             continue;
         }
         let sweep: f64 = value / total * std::f64::consts::TAU;
-        let color: String = category_color(series, index, &CHART_CATEGORY_COLORS);
+        let color: String = category_color(
+            series,
+            index,
+            &CHART_CATEGORY_COLORS,
+            &chart.theme_accent_colors,
+        );
         match doughnut_inner_radius(chart, radius) {
             Some(inner) => {
                 write_doughnut_segment(out, centre_x, centre_y, radius, inner, start, sweep, &color)
@@ -1425,7 +1456,12 @@ fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, 
     // Legend entries, one per slice, at the position the chart asks for.
     let entries: usize = chart.categories.len().max(series.values.len());
     for (index, category) in chart.categories.iter().enumerate() {
-        let color: String = category_color(series, index, &CHART_CATEGORY_COLORS);
+        let color: String = category_color(
+            series,
+            index,
+            &CHART_CATEGORY_COLORS,
+            &chart.theme_accent_colors,
+        );
         let (entry_x, entry_y) = legend.entry_origin(
             chart.legend_position,
             index,
@@ -1622,7 +1658,7 @@ fn generate_chart_pie(out: &mut String, chart: &Chart) {
         let escaped_category: String = escape_typst(category);
         // Each pie slice is one data point of the single series, so a
         // `<c:dPt>` fill names the wedge's colour directly.
-        let color: String = category_color(series, index, colors);
+        let color: String = category_color(series, index, colors, &chart.theme_accent_colors);
         let _ = writeln!(
             out,
             "  [#box(width: 8pt, height: 8pt, fill: {color}) {escaped_category}], [{}], [{:.1}%],",

@@ -218,6 +218,10 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
             gap_width_percent: gap_width_percent.unwrap_or(default_band_layout.gap_width_percent),
             overlap_percent: overlap_percent.unwrap_or(default_band_layout.overlap_percent),
         },
+        // The chart part names no theme of its own; the package that holds it
+        // does. Whoever loaded this XML fills these in, since only they know
+        // which theme part applies.
+        theme_accent_colors: Vec::new(),
     })
 }
 

@@ -38,11 +38,22 @@ pub(in super::super) fn build_chart_context_from_xml(
     let chart_references = chart::scan_chart_references(doc_xml);
     let chart_relationships = chart::scan_chart_rels(&relationships_xml);
 
+    // A series that names no fill takes the document theme's accents rather
+    // than the renderer's built-in palette (issue #670).
+    let theme_accents: Vec<crate::ir::Color> = read_zip_text(archive, "word/theme/theme1.xml")
+        .map(|theme_xml| {
+            crate::parser::drawingml::theme_accent_palette(
+                &crate::parser::drawingml::parse_theme_color_scheme(&theme_xml),
+            )
+        })
+        .unwrap_or_default();
+
     for (body_index, relationship_id) in chart_references {
         if let Some(chart_path) = chart_relationships.get(&relationship_id)
             && let Some(chart_xml) = read_zip_text(archive, chart_path)
-            && let Some(chart) = chart::parse_chart_xml(&chart_xml)
+            && let Some(mut chart) = chart::parse_chart_xml(&chart_xml)
         {
+            chart.theme_accent_colors = theme_accents.clone();
             charts.entry(body_index).or_default().push(chart);
         }
     }

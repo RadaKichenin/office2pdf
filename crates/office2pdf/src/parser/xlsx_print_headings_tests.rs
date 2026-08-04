@@ -341,6 +341,7 @@ fn test_drawings_shift_with_the_inset_grid_and_charts_by_one_row() {
             category_axis_deleted: false,
             value_axis_deleted: false,
             bar_band_layout: crate::ir::BarBandLayout::default(),
+            theme_accent_colors: Vec::new(),
         },
     ));
 

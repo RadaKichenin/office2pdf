@@ -24,6 +24,7 @@ fn test_codegen_chart_bar_visual_bars() {
         category_axis_deleted: false,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
+        theme_accent_colors: Vec::new(),
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -79,6 +80,7 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
         category_axis_deleted: false,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
+        theme_accent_colors: Vec::new(),
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -122,6 +124,7 @@ fn test_codegen_chart_pie_draws_a_pie() {
         category_axis_deleted: false,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
+        theme_accent_colors: Vec::new(),
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -170,6 +173,7 @@ fn test_codegen_chart_line_trend_indicators() {
         category_axis_deleted: false,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
+        theme_accent_colors: Vec::new(),
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -209,6 +213,7 @@ fn test_codegen_chart_empty_series() {
         category_axis_deleted: false,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
+        theme_accent_colors: Vec::new(),
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -281,6 +286,7 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
         category_axis_deleted: false,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
+        theme_accent_colors: Vec::new(),
     }));
     let doc = make_doc(vec![make_flow_page(content)]);
 
@@ -322,6 +328,7 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
         category_axis_deleted: false,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
+        theme_accent_colors: Vec::new(),
     }));
     let doc = make_doc(vec![make_flow_page(content)]);
 
@@ -515,6 +522,7 @@ fn test_codegen_chart_line_plot() {
         category_axis_deleted: false,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
+        theme_accent_colors: Vec::new(),
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -561,6 +569,7 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
         category_axis_deleted: false,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
+        theme_accent_colors: Vec::new(),
     })])]);
 
     let pages = page_texts(&doc);
@@ -632,6 +641,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
             gap_width_percent: 90.0,
             overlap_percent: 100.0,
         },
+        theme_accent_colors: Vec::new(),
     }
 }
 
@@ -753,6 +763,7 @@ fn legend_chart(position: LegendPosition) -> Chart {
         category_axis_deleted: false,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
+        theme_accent_colors: Vec::new(),
     }
 }
 
@@ -893,6 +904,7 @@ fn a_declared_series_fill_reaches_the_bars() {
         category_axis_deleted: false,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
+        theme_accent_colors: Vec::new(),
     };
 
     let source = chart_source(chart);
@@ -932,6 +944,7 @@ fn a_series_without_a_fill_still_takes_the_palette() {
         category_axis_deleted: false,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
+        theme_accent_colors: Vec::new(),
     };
 
     let source = chart_source(chart);
@@ -969,6 +982,7 @@ fn per_point_fills_colour_each_bar_separately() {
         category_axis_deleted: false,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
+        theme_accent_colors: Vec::new(),
     };
 
     let source = chart_source(chart);
@@ -1005,6 +1019,7 @@ fn axis_titled_chart(category: Option<&str>, value: Option<&str>) -> Chart {
         category_axis_deleted: false,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
+        theme_accent_colors: Vec::new(),
     }
 }
 
@@ -1091,6 +1106,7 @@ fn labelled_chart(labels: DataLabels) -> Chart {
         category_axis_deleted: false,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
+        theme_accent_colors: Vec::new(),
     }
 }
 
@@ -1170,6 +1186,7 @@ fn pie_chart(values: Vec<f64>) -> Chart {
         category_axis_deleted: false,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
+        theme_accent_colors: Vec::new(),
     }
 }
 
@@ -1348,6 +1365,7 @@ fn test_chart_default_gridline_matches_powerpoint() {
         category_axis_deleted: false,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
+        theme_accent_colors: Vec::new(),
     })])]);
 
     let source = generate_typst(&doc).unwrap().source;
@@ -1478,6 +1496,7 @@ fn tick_mark_chart(
         category_axis_deleted: false,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
+        theme_accent_colors: Vec::new(),
     }
 }
 
@@ -2064,6 +2083,7 @@ fn band_layout_chart(
         category_axis_deleted: false,
         value_axis_deleted: false,
         bar_band_layout: layout,
+        theme_accent_colors: Vec::new(),
     }
 }
 
@@ -2284,4 +2304,99 @@ fn a_stacked_category_divides_its_band_by_the_same_law_a_clustered_one_does() {
             }
         }
     }
+}
+
+/// The Office 2007 accents both audited fixtures declare (issue #670).
+fn office_2007_accents() -> Vec<crate::ir::Color> {
+    vec![
+        crate::ir::Color::new(0x4F, 0x81, 0xBD),
+        crate::ir::Color::new(0xC0, 0x50, 0x4D),
+        crate::ir::Color::new(0x9B, 0xBB, 0x59),
+        crate::ir::Color::new(0x80, 0x64, 0xA2),
+        crate::ir::Color::new(0x4B, 0xAC, 0xC6),
+        crate::ir::Color::new(0xF7, 0x96, 0x46),
+    ]
+}
+
+fn two_series_bar_chart(theme_accent_colors: Vec<crate::ir::Color>) -> Chart {
+    Chart {
+        chart_type: ChartType::Bar,
+        hole_size_percent: None,
+        title: None,
+        categories: vec!["Q1".to_string()],
+        series: vec![
+            ChartSeries {
+                name: Some("Revenue".to_string()),
+                values: vec![100.0],
+                fill: None,
+                point_fills: Vec::new(),
+                data_labels: DataLabels::default(),
+            },
+            ChartSeries {
+                name: Some("Cost".to_string()),
+                values: vec![60.0],
+                fill: None,
+                point_fills: Vec::new(),
+                data_labels: DataLabels::default(),
+            },
+        ],
+        grouping: ChartGrouping::Clustered,
+        legend_position: LegendPosition::Right,
+        category_axis_title: None,
+        value_axis_title: None,
+        category_axis_major_tick_mark: AxisTickMark::Outside,
+        value_axis_major_tick_mark: AxisTickMark::Outside,
+        category_axis_deleted: false,
+        value_axis_deleted: false,
+        bar_band_layout: BarBandLayout::default(),
+        theme_accent_colors,
+    }
+}
+
+#[test]
+fn test_automatic_series_colors_come_from_the_file_theme() {
+    let source = chart_source(two_series_bar_chart(office_2007_accents()));
+
+    assert!(
+        source.contains("rgb(79, 129, 189)"),
+        "series 1 must take the theme's accent1, got:\n{source}"
+    );
+    assert!(
+        source.contains("rgb(192, 80, 77)"),
+        "series 2 must take the theme's accent2, got:\n{source}"
+    );
+    assert!(
+        !source.contains("rgb(68, 114, 196)"),
+        "the built-in 2013+ accent1 must not appear when the file names its own, got:\n{source}"
+    );
+}
+
+#[test]
+fn test_automatic_series_colors_keep_the_builtin_palette_without_a_theme() {
+    // Triangulation: a file that supplies no accents still renders, on the
+    // built-in palette rather than on nothing.
+    let source = chart_source(two_series_bar_chart(Vec::new()));
+
+    assert!(
+        source.contains("rgb(68, 114, 196)"),
+        "the built-in palette stands in when the package names no accents, got:\n{source}"
+    );
+}
+
+#[test]
+fn test_explicit_series_fill_still_outranks_the_theme() {
+    // Triangulation, and the guarantee #535 established: a fill the file
+    // states wins over any automatic colour.
+    let mut chart = two_series_bar_chart(office_2007_accents());
+    chart.series[0].fill = Some(crate::ir::Color::new(0x11, 0x22, 0x33));
+    let source = chart_source(chart);
+
+    assert!(
+        source.contains("rgb(17, 34, 51)"),
+        "the declared fill must survive, got:\n{source}"
+    );
+    assert!(
+        source.contains("rgb(192, 80, 77)"),
+        "the series that declares none still takes accent2, got:\n{source}"
+    );
 }
