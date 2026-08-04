@@ -628,6 +628,7 @@ fn test_table_page_with_chart_at_row() {
 
     let chart = Chart {
         chart_type: ChartType::Bar,
+        hole_size_percent: None,
         title: Some("Sales".to_string()),
         categories: vec!["Q1".to_string(), "Q2".to_string()],
         series: vec![ChartSeries {
@@ -680,6 +681,7 @@ fn test_table_page_with_chart_at_end() {
 
     let chart = Chart {
         chart_type: ChartType::Pie,
+        hole_size_percent: None,
         title: Some("Pie".to_string()),
         categories: vec!["A".to_string()],
         series: vec![ChartSeries {

@@ -606,11 +606,38 @@ fn test_a_doughnut_chart_survives_with_its_data() {
 
     let chart = parse_chart_xml(&xml).expect("a doughnut chart must not be dropped");
 
-    assert_eq!(
-        chart.chart_type,
-        ChartType::Other("Doughnut Chart".to_string())
-    );
+    // It was `Other("Doughnut Chart")` while the tabular fallback stood in for
+    // it (issue #544). It is a plotted family now, so it carries its own type
+    // and its hole size rather than a caption string (issue #679).
+    assert_eq!(chart.chart_type, ChartType::Doughnut);
+    assert_eq!(chart.hole_size_percent, Some(50));
     assert_eq!(chart.series[0].values, vec![9.0, 6.0]);
+}
+
+/// A doughnut with no `<c:holeSize>` still plots. The parser records the
+/// absence as `None`; the renderer substitutes a placeholder rather than
+/// treating it as zero, which would collapse the ring into a pie. That
+/// placeholder is not a measured default — see `doughnut_inner_radius`.
+#[test]
+fn test_a_doughnut_chart_without_a_hole_size_still_plots() {
+    let xml = chart_of_type("doughnutChart", "");
+
+    let chart = parse_chart_xml(&xml).expect("a doughnut chart must not be dropped");
+
+    assert_eq!(chart.chart_type, ChartType::Doughnut);
+    assert_eq!(chart.hole_size_percent, None);
+}
+
+/// Triangulation: a pie is not a doughnut, so it carries no hole size and the
+/// new field cannot be a constant.
+#[test]
+fn test_a_pie_chart_carries_no_hole_size() {
+    let xml = chart_of_type("pieChart", "");
+
+    let chart = parse_chart_xml(&xml).expect("a pie chart parses");
+
+    assert_eq!(chart.chart_type, ChartType::Pie);
+    assert_eq!(chart.hole_size_percent, None);
 }
 
 #[test]

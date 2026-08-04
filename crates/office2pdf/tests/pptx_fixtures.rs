@@ -854,3 +854,45 @@ fn structure_introduction_ko_keeps_picture_rotation() {
         rotation_on(6)
     );
 }
+
+/// A doughnut chart plots as a ring rather than degrading to a data table
+/// (issue #679).
+///
+/// Page 29's `c:doughnutChart` previously rendered as a bordered rectangle
+/// holding an italic caption and a `Category | <series>` table, which collided
+/// with the separate `99.5%` overlay the deck draws over the real doughnut.
+#[test]
+fn structure_introduction_ko_plots_the_doughnut_chart() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/pptx/office2pdf_introduction_ko.pptx");
+    let data = std::fs::read(&path).expect("fixture");
+    let (doc, _w) = PptxParser
+        .parse(&data, &ConvertOptions::default())
+        .expect("parses");
+
+    let charts: Vec<&office2pdf::ir::Chart> = doc
+        .pages
+        .iter()
+        .filter_map(|page| match page {
+            Page::Fixed(fixed) => Some(fixed),
+            _ => None,
+        })
+        .flat_map(|fixed| fixed.elements.iter())
+        .filter_map(|element| match &element.kind {
+            FixedElementKind::Chart(chart) => Some(chart),
+            _ => None,
+        })
+        .collect();
+
+    let doughnut = charts
+        .iter()
+        .find(|chart| matches!(chart.chart_type, office2pdf::ir::ChartType::Doughnut))
+        .expect("the deck's doughnut is a plotted type, not a caption fallback");
+
+    // `<c:holeSize val="62"/>` in chart3.xml.
+    assert_eq!(doughnut.hole_size_percent, Some(62));
+    assert!(
+        !doughnut.series.is_empty() && doughnut.series[0].values.iter().any(|v| *v > 0.0),
+        "the doughnut carries its plotted values"
+    );
+}

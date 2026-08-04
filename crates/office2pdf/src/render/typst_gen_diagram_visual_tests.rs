@@ -5,6 +5,7 @@ use crate::ir::DataLabels;
 fn test_codegen_chart_bar_visual_bars() {
     let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Chart {
         chart_type: ChartType::Bar,
+        hole_size_percent: None,
         title: Some("Sales Report".to_string()),
         categories: vec!["Q1".to_string(), "Q2".to_string()],
         series: vec![ChartSeries {
@@ -59,6 +60,7 @@ fn test_codegen_chart_bar_visual_bars() {
 fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
     let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Chart {
         chart_type: ChartType::Bar,
+        hole_size_percent: None,
         title: Some("My Bar Chart".to_string()),
         categories: vec!["1st Qtr".to_string(), "2nd Qtr".to_string()],
         series: vec![ChartSeries {
@@ -101,6 +103,7 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
 fn test_codegen_chart_pie_draws_a_pie() {
     let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Chart {
         chart_type: ChartType::Pie,
+        hole_size_percent: None,
         title: Some("Market Share".to_string()),
         categories: vec!["A".to_string(), "B".to_string()],
         series: vec![ChartSeries {
@@ -148,6 +151,7 @@ fn test_codegen_chart_pie_draws_a_pie() {
 fn test_codegen_chart_line_trend_indicators() {
     let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Chart {
         chart_type: ChartType::Line,
+        hole_size_percent: None,
         title: Some("Trends".to_string()),
         categories: vec!["Jan".to_string(), "Feb".to_string(), "Mar".to_string()],
         series: vec![ChartSeries {
@@ -192,6 +196,7 @@ fn test_codegen_chart_line_trend_indicators() {
 fn test_codegen_chart_empty_series() {
     let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Chart {
         chart_type: ChartType::Line,
+        hole_size_percent: None,
         title: Some("Empty".to_string()),
         categories: vec![],
         series: vec![],
@@ -253,6 +258,7 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
     let mut content: Vec<Block> = page_filler(30);
     content.push(Block::Chart(Chart {
         chart_type: ChartType::Column,
+        hole_size_percent: None,
         title: Some("Quarterly Units Shipped".to_string()),
         categories: vec![
             "Northlake".to_string(),
@@ -297,6 +303,7 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
     let mut content: Vec<Block> = page_filler(30);
     content.push(Block::Chart(Chart {
         chart_type: ChartType::Pie,
+        hole_size_percent: None,
         title: Some("Fixture Documents by Format".to_string()),
         categories: vec!["DOCX".to_string(), "PPTX".to_string(), "XLSX".to_string()],
         series: vec![ChartSeries {
@@ -480,6 +487,7 @@ fn test_smartart_codegen_special_chars() {
 fn test_codegen_chart_line_plot() {
     let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Chart {
         chart_type: ChartType::Line,
+        hole_size_percent: None,
         title: None,
         categories: vec!["1".to_string(), "2".to_string(), "3".to_string()],
         series: vec![
@@ -534,6 +542,7 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
     let categories: Vec<String> = (1..=60).map(|i| format!("Category{i:03}")).collect();
     let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Chart {
         chart_type: ChartType::Scatter,
+        hole_size_percent: None,
         title: Some("Sixty Sample Sites".to_string()),
         categories: categories.clone(),
         series: vec![ChartSeries {
@@ -578,6 +587,7 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
 fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
     Chart {
         chart_type: ChartType::Column,
+        hole_size_percent: None,
         title: Some("Supported elements by format".to_string()),
         categories: vec!["DOCX".to_string(), "PPTX".to_string(), "XLSX".to_string()],
         series: vec![
@@ -715,6 +725,7 @@ fn a_percent_stacked_column_normalises_every_stack() {
 fn legend_chart(position: LegendPosition) -> Chart {
     Chart {
         chart_type: ChartType::Column,
+        hole_size_percent: None,
         title: Some("Supported elements by format".to_string()),
         categories: vec!["DOCX".to_string(), "PPTX".to_string(), "XLSX".to_string()],
         series: vec![
@@ -863,6 +874,7 @@ fn a_declared_series_fill_reaches_the_bars() {
     // The palette's first entry is rgb(68, 114, 196); the file says 4F81BD.
     let chart = Chart {
         chart_type: ChartType::Column,
+        hole_size_percent: None,
         title: Some("Production LOC by layer".to_string()),
         categories: vec!["parser".to_string(), "render".to_string()],
         series: vec![ChartSeries {
@@ -901,6 +913,7 @@ fn a_series_without_a_fill_still_takes_the_palette() {
     // change to how charts are coloured.
     let chart = Chart {
         chart_type: ChartType::Column,
+        hole_size_percent: None,
         title: None,
         categories: vec!["parser".to_string(), "render".to_string()],
         series: vec![ChartSeries {
@@ -933,6 +946,7 @@ fn a_series_without_a_fill_still_takes_the_palette() {
 fn per_point_fills_colour_each_bar_separately() {
     let chart = Chart {
         chart_type: ChartType::Column,
+        hole_size_percent: None,
         title: None,
         categories: vec!["DOCX".to_string(), "PPTX".to_string(), "XLSX".to_string()],
         series: vec![ChartSeries {
@@ -972,6 +986,7 @@ fn per_point_fills_colour_each_bar_separately() {
 fn axis_titled_chart(category: Option<&str>, value: Option<&str>) -> Chart {
     Chart {
         chart_type: ChartType::Column,
+        hole_size_percent: None,
         title: Some("Production LOC by layer".to_string()),
         categories: vec!["parser".to_string(), "render".to_string()],
         series: vec![ChartSeries {
@@ -1057,6 +1072,7 @@ fn each_axis_title_is_independent() {
 fn labelled_chart(labels: DataLabels) -> Chart {
     Chart {
         chart_type: ChartType::Column,
+        hole_size_percent: None,
         title: None,
         categories: vec!["DOCX".to_string(), "PPTX".to_string()],
         series: vec![ChartSeries {
@@ -1135,6 +1151,7 @@ fn percent_labels_are_a_share_of_the_category() {
 fn pie_chart(values: Vec<f64>) -> Chart {
     Chart {
         chart_type: ChartType::Pie,
+        hole_size_percent: None,
         title: Some("Fixture documents by format".to_string()),
         categories: vec!["DOCX".to_string(), "PPTX".to_string(), "XLSX".to_string()],
         series: vec![ChartSeries {
@@ -1312,6 +1329,7 @@ fn a_zero_slice_carries_no_label() {
 fn test_chart_default_gridline_matches_powerpoint() {
     let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Chart {
         chart_type: ChartType::Bar,
+        hole_size_percent: None,
         title: None,
         categories: vec!["Q1".to_string(), "Q2".to_string()],
         series: vec![ChartSeries {
@@ -1441,6 +1459,7 @@ fn tick_mark_chart(
 ) -> Chart {
     Chart {
         chart_type,
+        hole_size_percent: None,
         title: Some("Weekly Throughput".to_string()),
         categories: TICK_MARK_CATEGORIES.map(str::to_string).to_vec(),
         series: vec![ChartSeries {
@@ -2021,6 +2040,7 @@ fn band_layout_chart(
 ) -> Chart {
     Chart {
         chart_type,
+        hole_size_percent: None,
         title: Some("Weekly Throughput".to_string()),
         categories: vec!["Mon".to_string(), "Tue".to_string(), "Wed".to_string()],
         series: BAND_SERIES_VALUES

@@ -26,6 +26,7 @@ const CHART_TAG_TYPES: &[(&[u8], ChartType)] = &[
     (b"line3DChart", ChartType::Line),
     (b"pieChart", ChartType::Pie),
     (b"pie3DChart", ChartType::Pie),
+    (b"doughnutChart", ChartType::Doughnut),
     (b"areaChart", ChartType::Area),
     (b"scatterChart", ChartType::Scatter),
 ];
@@ -38,7 +39,6 @@ const CHART_TAG_TYPES: &[(&[u8], ChartType)] = &[
 /// whole graphic frame with it (issue #544).
 const UNPLOTTED_CHART_LABELS: &[(&[u8], &str)] = &[
     (b"radarChart", "Radar Chart"),
-    (b"doughnutChart", "Doughnut Chart"),
     (b"bubbleChart", "Bubble Chart"),
     (b"stockChart", "Stock Chart"),
     (b"surfaceChart", "Surface Chart"),
@@ -131,6 +131,7 @@ fn bar_direction_chart_type(direction: Option<&str>) -> Option<ChartType> {
 pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
     let mut reader = Reader::from_str(xml);
     let mut chart_type = None;
+    let mut hole_size_percent: Option<u32> = None;
     let mut title = None;
     let mut categories: Vec<String> = Vec::new();
     let mut series: Vec<ChartSeries> = Vec::new();
@@ -166,6 +167,10 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
                         }
                     });
                     grouping = plot.grouping.as_deref().map(chart_grouping_for);
+                    // Only the doughnut family writes it.
+                    if matches!(chart_type, Some(ChartType::Doughnut)) {
+                        hole_size_percent = plot.hole_size.as_deref().and_then(|v| v.parse().ok());
+                    }
                     // A combo plot area holds one element per chart family and
                     // only the bar family carries these two, so the family that
                     // declared them keeps them however many follow it.
@@ -197,6 +202,7 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
 
     Some(Chart {
         chart_type,
+        hole_size_percent,
         title,
         categories,
         series,
@@ -338,6 +344,8 @@ struct PlotAreaProps {
     gap_width: Option<String>,
     /// `<c:overlap>`, exclusive to the bar family, and likewise trailing.
     overlap: Option<String>,
+    /// `<c:holeSize>`, exclusive to the doughnut family (issue #679).
+    hole_size: Option<String>,
 }
 
 impl PlotAreaProps {
@@ -349,6 +357,7 @@ impl PlotAreaProps {
             b"ofPieType" => self.of_pie_type = xml_util::get_attr_str(e, b"val"),
             b"gapWidth" => self.gap_width = xml_util::get_attr_str(e, b"val"),
             b"overlap" => self.overlap = xml_util::get_attr_str(e, b"val"),
+            b"holeSize" => self.hole_size = xml_util::get_attr_str(e, b"val"),
             _ => return false,
         }
         true

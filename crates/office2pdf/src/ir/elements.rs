@@ -136,6 +136,9 @@ pub struct Caption {
 pub struct Chart {
     /// The type of chart (bar, line, pie, etc.).
     pub chart_type: ChartType,
+    /// `<c:holeSize val>` for a doughnut, as a percentage of the outer radius.
+    /// `None` for every other type (issue #679).
+    pub hole_size_percent: Option<u32>,
     /// Optional chart title.
     pub title: Option<String>,
     /// Category labels (x-axis or pie slice names).
@@ -303,6 +306,9 @@ pub enum ChartType {
     Column,
     Line,
     Pie,
+    /// A pie with a concentric hole; `Chart::hole_size_percent` carries the
+    /// inner radius as a percentage of the outer (issue #679).
+    Doughnut,
     Area,
     Scatter,
     Other(String),
