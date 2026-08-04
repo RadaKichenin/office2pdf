@@ -79,6 +79,7 @@ fn parse_layer_elements<R: Read + std::io::Seek>(
     layer: SlideLayer<'_>,
     theme: &ThemeData,
     slide_number: u32,
+    default_text_size_pt: Option<f64>,
     archive: &mut ZipArchive<R>,
 ) -> (Vec<FixedElement>, Vec<ConvertWarning>) {
     let images: SlideImageMap = load_slide_images(layer.path, archive);
@@ -91,6 +92,7 @@ fn parse_layer_elements<R: Read + std::io::Seek>(
         warning_context: layer.label,
         inherited_text_body_defaults: layer.text_style_defaults,
         table_styles: &empty_table_styles,
+        default_text_size_pt,
     };
     // Skip placeholder shapes in master/layout layers.
     parse_slide_xml_inner(layer.xml, &ctx, true, None).unwrap_or_default()
@@ -603,10 +605,14 @@ pub(super) fn parse_single_slide<R: Read + std::io::Seek>(
     slide_label: &str,
     slide_number: u32,
     slide_size: PageSize,
-    theme: &ThemeData,
-    table_styles: &table_styles::TableStyleMap,
+    presentation: &PresentationResources<'_>,
     archive: &mut ZipArchive<R>,
 ) -> Result<Option<(Page, Vec<ConvertWarning>)>, ConvertError> {
+    let PresentationResources {
+        theme,
+        table_styles,
+        default_text_size_pt,
+    } = *presentation;
     let chain: SlideInheritanceChain = resolve_inheritance_chain(slide_path, theme, archive)?;
 
     if is_hidden_slide(&chain.slide_xml) {
@@ -637,6 +643,7 @@ pub(super) fn parse_single_slide<R: Read + std::io::Seek>(
         warning_context: slide_label,
         inherited_text_body_defaults: &chain.master_text_styles.other,
         table_styles,
+        default_text_size_pt,
     };
     let (slide_elements, slide_warnings) =
         parse_slide_xml(&chain.slide_xml, &slide_ctx, Some(&placeholder_geometry))?;
@@ -659,6 +666,7 @@ pub(super) fn parse_single_slide<R: Read + std::io::Seek>(
             },
             theme,
             slide_number,
+            default_text_size_pt,
             archive,
         );
         elements.extend(master_elems);
@@ -681,6 +689,7 @@ pub(super) fn parse_single_slide<R: Read + std::io::Seek>(
             },
             theme,
             slide_number,
+            default_text_size_pt,
             archive,
         );
         elements.extend(layout_elems);
@@ -1281,6 +1290,19 @@ fn apply_solid_fill_color(
 
 // ── SlideXmlParser state machine ────────────────────────────────────────
 
+/// Deck-level resources that are identical for every slide.
+///
+/// Bundled so `parse_single_slide` takes them as one value; passing them
+/// separately put it over `clippy::too_many_arguments`.
+#[derive(Clone, Copy)]
+pub(super) struct PresentationResources<'a> {
+    pub(super) theme: &'a ThemeData,
+    pub(super) table_styles: &'a table_styles::TableStyleMap,
+    /// `p:defaultTextStyle/a:lvl1pPr/a:defRPr/@sz`, the size a text body falls
+    /// back to when its own chain declares none (issue #675).
+    pub(super) default_text_size_pt: Option<f64>,
+}
+
 /// Shared read-only inputs for parsing one slide-layer XML part.
 ///
 /// Groups the per-slide references that every sub-parser needs, so they
@@ -1295,6 +1317,9 @@ pub(super) struct SlideParseContext<'a> {
     pub(super) warning_context: &'a str,
     pub(super) inherited_text_body_defaults: &'a PptxTextBodyStyleDefaults,
     pub(super) table_styles: &'a table_styles::TableStyleMap,
+    /// `p:defaultTextStyle/a:lvl1pPr/a:defRPr/@sz`, the size a text body
+    /// falls back to when its own chain declares none (issue #675).
+    pub(super) default_text_size_pt: Option<f64>,
 }
 
 /// Bundles the 20+ mutable state variables of the slide XML event loop
@@ -1472,6 +1497,7 @@ impl<'a> SlideXmlParser<'a> {
                     self.ctx.theme,
                     self.ctx.color_map,
                     self.ctx.table_styles,
+                    self.ctx.default_text_size_pt,
                 ) {
                     scale_pptx_table_geometry_to_frame(
                         &mut table,

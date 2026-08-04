@@ -319,6 +319,56 @@ fn handle_presentation_element(
     }
 }
 
+/// The body text size `p:defaultTextStyle/a:lvl1pPr/a:defRPr/@sz` declares,
+/// in points, if the presentation declares one.
+///
+/// This is the size a text body falls back to when nothing in its own chain
+/// gives one (issue #675). It is read with its own reader and explicit
+/// nesting state rather than through `handle_presentation_element`, which is
+/// flat: `presentation.xml` also carries `p:otherStyle` and usually
+/// `p:notesStyle`, each with their own `a:lvl1pPr/a:defRPr`, so matching
+/// `defRPr` alone would read whichever came last regardless of which style
+/// list it belonged to.
+///
+/// Only level 1 is read. Levels 2-9 exist and would matter for nested list
+/// text; nothing consults them yet, so reading them would add state with no
+/// reader.
+pub(super) fn parse_default_text_size_pt(xml: &str) -> Option<f64> {
+    let mut reader = Reader::from_str(xml);
+    let mut in_default_text_style = false;
+    let mut in_level_one = false;
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(ref element)) => match element.local_name().as_ref() {
+                b"defaultTextStyle" => in_default_text_style = true,
+                b"lvl1pPr" if in_default_text_style => in_level_one = true,
+                b"defRPr" if in_level_one => {
+                    if let Some(hundredths) = get_attr_i64(element, b"sz") {
+                        return Some(hundredths as f64 / 100.0);
+                    }
+                }
+                _ => {}
+            },
+            Ok(Event::Empty(ref element)) => {
+                if element.local_name().as_ref() == b"defRPr"
+                    && in_level_one
+                    && let Some(hundredths) = get_attr_i64(element, b"sz")
+                {
+                    return Some(hundredths as f64 / 100.0);
+                }
+            }
+            Ok(Event::End(ref element)) => match element.local_name().as_ref() {
+                b"lvl1pPr" => in_level_one = false,
+                b"defaultTextStyle" => return None,
+                _ => {}
+            },
+            Ok(Event::Eof) | Err(_) => return None,
+            _ => {}
+        }
+    }
+}
+
 fn parse_relationships_xml(xml: &str) -> HashMap<String, Relationship> {
     crate::parser::xml_util::parse_relationships(xml)
         .into_iter()
