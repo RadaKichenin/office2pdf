@@ -31,6 +31,7 @@ pub(super) fn extract_drawing_image(
     };
 
     let image_data = ImageData {
+        rotation_deg: None,
         data: asset.data.clone(),
         format: asset.format,
         width,
@@ -80,6 +81,7 @@ pub(super) fn extract_shape_image(shape: &docx_rs::Shape, images: &ImageMap) -> 
     let height = extract_vml_style_dimension(shape.style.as_deref(), "height");
 
     Some(Block::Image(ImageData {
+        rotation_deg: None,
         data: asset.data.clone(),
         format: asset.format,
         width,

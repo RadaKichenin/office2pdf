@@ -813,3 +813,44 @@ fn structure_table_with_theme_takes_size_from_default_text_style() {
         "every cell run takes 18pt from p:defaultTextStyle, got {sizes:?}"
     );
 }
+
+/// `a:xfrm/@rot` on a `p:pic` reaches the IR (issue #682).
+///
+/// The shape path read `rot` from its own `a:xfrm`; the picture path set only
+/// the nesting flags and dropped it, so a rotated picture drew upright. Slide
+/// 1's decorative picture declares `rot="360000"` (6 degrees) and slide 7's
+/// declares `rot="480000"` (8 degrees).
+#[test]
+fn structure_introduction_ko_keeps_picture_rotation() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/pptx/office2pdf_introduction_ko.pptx");
+    let data = std::fs::read(&path).expect("fixture");
+    let (doc, _w) = PptxParser
+        .parse(&data, &ConvertOptions::default())
+        .expect("parses");
+
+    let rotation_on = |page_index: usize| -> Vec<Option<f64>> {
+        let Some(Page::Fixed(fixed)) = doc.pages.get(page_index) else {
+            return Vec::new();
+        };
+        fixed
+            .elements
+            .iter()
+            .filter_map(|element| match &element.kind {
+                FixedElementKind::Image(image) => Some(image.rotation_deg),
+                _ => None,
+            })
+            .collect()
+    };
+
+    assert!(
+        rotation_on(0).contains(&Some(6.0)),
+        "slide 1's picture declares rot=360000 (6 deg), got {:?}",
+        rotation_on(0)
+    );
+    assert!(
+        rotation_on(6).contains(&Some(8.0)),
+        "slide 7's picture declares rot=480000 (8 deg), got {:?}",
+        rotation_on(6)
+    );
+}

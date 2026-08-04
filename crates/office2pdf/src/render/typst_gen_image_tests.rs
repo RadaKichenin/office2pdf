@@ -26,6 +26,7 @@ fn make_quadrant_png() -> Vec<u8> {
 
 fn make_image(format: ImageFormat, width: Option<f64>, height: Option<f64>) -> Block {
     Block::Image(ImageData {
+        rotation_deg: None,
         data: MINIMAL_PNG.to_vec(),
         format,
         width,
@@ -46,6 +47,7 @@ fn make_image(format: ImageFormat, width: Option<f64>, height: Option<f64>) -> B
 #[test]
 fn picture_paragraph_spacing_becomes_block_gaps() {
     let doc = make_doc(vec![make_flow_page(vec![Block::Image(ImageData {
+        rotation_deg: None,
         data: MINIMAL_PNG.to_vec(),
         format: ImageFormat::Png,
         width: None,
@@ -104,6 +106,7 @@ fn test_image_basic_no_size() {
 #[test]
 fn test_image_crop_preprocesses_raster_asset() {
     let doc = make_doc(vec![make_flow_page(vec![Block::Image(ImageData {
+        rotation_deg: None,
         data: make_quadrant_png(),
         format: ImageFormat::Png,
         width: Some(20.0),
@@ -281,6 +284,7 @@ fn test_no_images_produces_empty_assets() {
 #[test]
 fn test_image_with_border_renders_box_stroke() {
     let doc = make_doc(vec![make_flow_page(vec![Block::Image(ImageData {
+        rotation_deg: None,
         data: MINIMAL_PNG.to_vec(),
         format: ImageFormat::Png,
         width: Some(127.0),
@@ -320,6 +324,7 @@ fn test_fixed_image_with_border_uses_rect_overlay() {
             width: 96.9,
             height: 226.2,
             kind: FixedElementKind::Image(ImageData {
+                rotation_deg: None,
                 data: MINIMAL_PNG.to_vec(),
                 format: ImageFormat::Png,
                 width: Some(96.9),

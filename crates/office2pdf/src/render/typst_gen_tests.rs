@@ -199,6 +199,7 @@ fn make_fixed_image(x: f64, y: f64, w: f64, h: f64, format: ImageFormat) -> Fixe
         width: w,
         height: h,
         kind: FixedElementKind::Image(ImageData {
+            rotation_deg: None,
             data: vec![0x89, 0x50, 0x4E, 0x47], // PNG header stub
             format,
             width: Some(w),

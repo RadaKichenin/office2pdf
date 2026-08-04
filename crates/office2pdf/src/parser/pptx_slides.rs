@@ -564,6 +564,7 @@ fn build_background_image_element<R: Read + std::io::Seek>(
         kind: FixedElementKind::Image(ImageData {
             data: asset.data.clone(),
             format,
+            rotation_deg: None,
             width: Some(slide_size.width),
             height: Some(slide_size.height),
             crop: None,
@@ -830,6 +831,8 @@ struct PictureState {
     svg_blip_embed: Option<String>,
     img_layer_embeds: Vec<String>,
     crop: Option<ImageCrop>,
+    /// Clockwise rotation from `a:xfrm/@rot` (issue #682).
+    rotation_deg: Option<f64>,
     in_xfrm: bool,
     in_sp_pr: bool,
     in_ln: bool,
@@ -1193,6 +1196,7 @@ fn finalize_picture(
                 kind: FixedElementKind::Image(ImageData {
                     data,
                     format,
+                    rotation_deg: pic.rotation_deg,
                     width: Some(emu_to_pt(pic.cx)),
                     height: Some(emu_to_pt(pic.cy)),
                     crop: pic.crop,
@@ -1947,6 +1951,11 @@ impl<'a> SlideXmlParser<'a> {
             b"xfrm" if self.in_pic && self.pic.in_sp_pr => {
                 self.pic.in_xfrm = true;
                 self.pic.has_explicit_xfrm = true;
+                // The shape path reads this a few arms up; the picture path
+                // never did, so a rotated picture drew upright (issue #682).
+                if let Some(rot) = get_attr_i64(e, b"rot") {
+                    self.pic.rotation_deg = Some(rot as f64 / 60_000.0);
+                }
             }
             b"ln" if self.in_pic && self.pic.in_sp_pr => {
                 self.pic.in_ln = true;
