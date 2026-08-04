@@ -24,7 +24,8 @@ use crate::parser::smartart;
 use crate::parser::units::emu_to_pt;
 
 use self::package::{
-    load_table_styles, load_theme, parse_presentation_xml, parse_rels_xml, read_zip_entry,
+    load_table_styles, load_theme, parse_default_text_size_pt, parse_presentation_xml,
+    parse_rels_xml, read_zip_entry,
 };
 #[cfg(test)]
 use self::package::{resolve_relative_path, scan_chart_refs};
@@ -32,7 +33,7 @@ use self::shapes::{
     parse_arrow_head, parse_group_shape, parse_src_rect, pptx_dash_to_border_style,
     prst_to_shape_kind,
 };
-use self::slides::{SlideParseContext, parse_single_slide, parse_slide_xml};
+use self::slides::{PresentationResources, SlideParseContext, parse_single_slide, parse_slide_xml};
 use self::tables::{parse_pptx_table, scale_pptx_table_geometry_to_frame};
 use self::text::*;
 use self::theme::{
@@ -403,6 +404,9 @@ impl Parser for PptxParser {
         // Read and parse presentation.xml for slide size and slide references
         let pres_xml = read_zip_entry(&mut archive, "ppt/presentation.xml")?;
         let (slide_size, slide_rids) = parse_presentation_xml(&pres_xml)?;
+        // The size a text body falls back to when its own chain declares none
+        // (issue #675). Read from the same XML rather than re-opening it.
+        let default_text_size_pt: Option<f64> = parse_default_text_size_pt(&pres_xml);
 
         // Read and parse presentation.xml.rels for rId → slide path mapping
         let rels_xml = read_zip_entry(&mut archive, "ppt/_rels/presentation.xml.rels")?;
@@ -415,6 +419,12 @@ impl Parser for PptxParser {
         let master_color_map: ColorMapData = default_color_map();
         let table_styles: table_styles::TableStyleMap =
             load_table_styles(&mut archive, &theme, &master_color_map);
+
+        let presentation_resources = PresentationResources {
+            theme: &theme,
+            table_styles: &table_styles,
+            default_text_size_pt,
+        };
 
         let mut warnings = Vec::new();
 
@@ -442,8 +452,7 @@ impl Parser for PptxParser {
                     &slide_label,
                     slide_number,
                     slide_size,
-                    &theme,
-                    &table_styles,
+                    &presentation_resources,
                     &mut archive,
                 ) {
                     // Hidden slide (show="0"): PowerPoint omits it from PDF export.

@@ -767,3 +767,49 @@ fn structure_introduction_deck_places_raster_icons_on_slides() {
         "the deck's raster icons must survive parsing, got {images}"
     );
 }
+
+/// `p:defaultTextStyle` supplies the size for table cell text that declares
+/// none (issue #675).
+///
+/// `table-with-theme.pptx` has no `sz` on any run; `ppt/presentation.xml`
+/// declares `<p:defaultTextStyle><a:lvl1pPr><a:defRPr sz="1800"/>`. Without
+/// consulting it the cells carried no size at all and fell through to Typst's
+/// own 11pt default.
+#[test]
+fn structure_table_with_theme_takes_size_from_default_text_style() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/pptx/poi/table-with-theme.pptx");
+    let data = std::fs::read(&path).expect("fixture");
+    let (doc, _w) = PptxParser
+        .parse(&data, &ConvertOptions::default())
+        .expect("parses");
+
+    let mut sizes: Vec<Option<f64>> = Vec::new();
+    for page in &doc.pages {
+        let Page::Fixed(fixed) = page else { continue };
+        for element in &fixed.elements {
+            let FixedElementKind::Table(table) = &element.kind else {
+                continue;
+            };
+            for row in &table.rows {
+                for cell in &row.cells {
+                    for block in &cell.content {
+                        if let Block::Paragraph(paragraph) = block {
+                            for run in &paragraph.runs {
+                                if !run.text.trim().is_empty() {
+                                    sizes.push(run.style.font_size);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    assert!(!sizes.is_empty(), "the fixture has table cell runs");
+    assert!(
+        sizes.iter().all(|size| *size == Some(18.0)),
+        "every cell run takes 18pt from p:defaultTextStyle, got {sizes:?}"
+    );
+}

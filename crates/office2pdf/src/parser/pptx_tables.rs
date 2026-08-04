@@ -53,6 +53,8 @@ struct PptxTableParser<'a> {
     is_in_paragraph: bool,
     paragraph_style: ParagraphStyle,
     paragraph_level: u32,
+    /// `p:defaultTextStyle` size, applied to any run declaring none.
+    default_text_size_pt: Option<f64>,
     paragraph_default_run_style: TextStyle,
     paragraph_end_run_style: TextStyle,
     paragraph_bullet_definition: PptxBulletDefinition,
@@ -92,8 +94,10 @@ impl<'a> PptxTableParser<'a> {
         theme: &'a ThemeData,
         color_map: &'a ColorMapData,
         table_styles: &'a table_styles::TableStyleMap,
+        default_text_size_pt: Option<f64>,
     ) -> Self {
         Self {
+            default_text_size_pt,
             theme,
             color_map,
             table_styles,
@@ -584,11 +588,19 @@ impl<'a> PptxTableParser<'a> {
                 self.first_run_marker_style_override =
                     self.run_marker_style_before_hyperlink.clone();
             }
+            // A cell run that declares no `sz` anywhere in its own chain
+            // takes the presentation's `p:defaultTextStyle` size. Without it
+            // the run reached codegen with no size at all and Typst's own
+            // 11pt default stood in (issue #675).
+            let mut style: TextStyle = self.run_style.clone();
+            if style.font_size.is_none() {
+                style.font_size = self.default_text_size_pt;
+            }
             push_pptx_run(
                 &mut self.runs,
                 Run {
                     text: std::mem::take(&mut self.run_text),
-                    style: self.run_style.clone(),
+                    style,
                     href: None,
                     footnote: None,
                 },
@@ -853,8 +865,9 @@ pub(super) fn parse_pptx_table(
     theme: &ThemeData,
     color_map: &ColorMapData,
     table_styles: &table_styles::TableStyleMap,
+    default_text_size_pt: Option<f64>,
 ) -> Result<Table, ConvertError> {
-    let mut state = PptxTableParser::new(theme, color_map, table_styles);
+    let mut state = PptxTableParser::new(theme, color_map, table_styles, default_text_size_pt);
 
     loop {
         match reader.read_event() {
