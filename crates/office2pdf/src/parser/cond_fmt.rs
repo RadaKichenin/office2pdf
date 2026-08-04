@@ -341,12 +341,39 @@ fn apply_color_scale_rule(
     }
 
     let numeric_vals: Vec<f64> = collect_numeric_values_in_ranges(sheet, ranges);
-    let Some((min_val, _max_val, val_range)) = compute_min_max(&numeric_vals) else {
+    let Some((min_val, max_val, val_range)) = compute_min_max(&numeric_vals) else {
         return;
     };
 
-    let color_min: Color = colors[0].unwrap_or(Color::white());
-    let color_max: Color = colors[colors.len() - 1].unwrap_or(Color::black());
+    // Each colour stop sits on the value its `<cfvo>` names. A stop with no
+    // resolvable cfvo is spaced evenly between the endpoints, which is what
+    // the whole ramp used to do.
+    let cfvos = cs.get_cfvo_collection();
+    let last_stop: f64 = (colors.len() - 1) as f64;
+    let anchors: Vec<f64> = (0..colors.len())
+        .map(|index| {
+            cfvos
+                .get(index)
+                .and_then(|cfvo| {
+                    resolve_color_scale_cfvo(cfvo, min_val, max_val, val_range, &numeric_vals)
+                })
+                .unwrap_or(min_val + val_range * (index as f64 / last_stop))
+        })
+        .collect();
+
+    let resolved_colors: Vec<Color> = colors
+        .iter()
+        .enumerate()
+        .map(|(index, color)| {
+            color.unwrap_or(if index == 0 {
+                Color::white()
+            } else if index + 1 == colors.len() {
+                Color::black()
+            } else {
+                Color::new(255, 255, 0)
+            })
+        })
+        .collect();
 
     for range in ranges {
         for row in range.start_row..=range.end_row {
@@ -354,22 +381,12 @@ fn apply_color_scale_rule(
                 if let Some(cell) = sheet.get_cell((col, row))
                     && let Some(val) = cell_numeric_value(cell)
                 {
-                    let ratio: f64 = if val_range.abs() < f64::EPSILON {
-                        0.5
-                    } else {
-                        (val - min_val) / val_range
-                    };
-
-                    let color: Color = if colors.len() == 3 {
-                        let color_mid: Color = colors[1].unwrap_or(Color::new(255, 255, 0));
-                        if ratio <= 0.5 {
-                            interpolate_color(color_min, color_mid, ratio * 2.0)
-                        } else {
-                            interpolate_color(color_mid, color_max, (ratio - 0.5) * 2.0)
-                        }
-                    } else {
-                        interpolate_color(color_min, color_max, ratio)
-                    };
+                    let (segment, ratio) = color_scale_position(val, &anchors);
+                    let color: Color = interpolate_color(
+                        resolved_colors[segment],
+                        resolved_colors[segment + 1],
+                        ratio,
+                    );
 
                     let entry = overrides.entry((col, row)).or_default();
                     entry.background = Some(color);
@@ -441,6 +458,61 @@ fn apply_data_bar_rule(
             }
         }
     }
+}
+
+/// Resolve one colorScale `<cfvo>` to the value its colour stop sits on.
+///
+/// A `percentile` stop anchors on the p-th percentile *of the data*, which is
+/// only the same number as a linear position for symmetrically distributed
+/// values. Reading it as a position put the middle stop of a skewed range in
+/// the wrong place and shifted every colour between the endpoints (#653).
+///
+/// `None` for types this cannot resolve (`formula`), leaving the caller to
+/// space that stop evenly.
+fn resolve_color_scale_cfvo(
+    cfvo: &umya_spreadsheet::ConditionalFormatValueObject,
+    min_val: f64,
+    max_val: f64,
+    val_range: f64,
+    values: &[f64],
+) -> Option<f64> {
+    use umya_spreadsheet::ConditionalFormatValueObjectValues as CfvoType;
+    match cfvo.get_type() {
+        CfvoType::Min => Some(min_val),
+        CfvoType::Max => Some(max_val),
+        CfvoType::Number => cfvo.get_val().parse().ok(),
+        CfvoType::Percent => {
+            let pct: f64 = cfvo.get_val().parse().ok()?;
+            Some(min_val + val_range * (pct / 100.0))
+        }
+        CfvoType::Percentile => {
+            let pct: f64 = cfvo.get_val().parse().ok()?;
+            Some(percentile(values, pct))
+        }
+        _ => None,
+    }
+}
+
+/// Where a value sits on a ramp whose stops are pinned to `anchors`.
+///
+/// Returns the index of the segment the value falls in and how far along it
+/// is, so the caller interpolates between that segment's two colours. Anchors
+/// are assumed non-decreasing; a zero-width segment yields its start.
+fn color_scale_position(value: f64, anchors: &[f64]) -> (usize, f64) {
+    let last: usize = anchors.len().saturating_sub(2);
+    for index in 0..anchors.len().saturating_sub(1) {
+        let (low, high) = (anchors[index], anchors[index + 1]);
+        if value <= high || index == last {
+            let width: f64 = high - low;
+            let ratio: f64 = if width.abs() < f64::EPSILON {
+                0.0
+            } else {
+                (value - low) / width
+            };
+            return (index, ratio.clamp(0.0, 1.0));
+        }
+    }
+    (0, 0.0)
 }
 
 /// Resolve a dataBar cfvo to an absolute axis value. Returns None for types
