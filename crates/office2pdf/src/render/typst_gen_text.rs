@@ -1137,8 +1137,8 @@ pub(super) fn generate_runs(out: &mut String, runs: &[Run], eojeol_wrap: EojeolW
         measure_pt,
     } = eojeol_wrap
     else {
-        for run in runs {
-            generate_run(out, run);
+        for (index, run) in runs.iter().enumerate() {
+            generate_run_at(out, run, index == 0);
         }
         return;
     };
@@ -1748,6 +1748,28 @@ fn tab_alignment_offset_expr(
 }
 
 pub(super) fn generate_run(out: &mut String, run: &Run) {
+    generate_run_at(out, run, false);
+}
+
+/// As [`generate_run`], but stating whether this run opens its markup line.
+///
+/// Typst drops a space that opens a line, so a run leading the paragraph with
+/// exactly one loses it (issue #752). A run-leading space further along sits
+/// between siblings, survives literally, and must stay a break opportunity so
+/// the line can still wrap there — hence the flag rather than a blanket rule
+/// inside [`escape_typst`].
+///
+/// Two of the three paths that emit runs carry the flag: the plain loop in
+/// [`generate_runs`], and the segment split around PPTX break markers, where
+/// only the segment starting the run can open the line.
+///
+/// [`write_eojeol_pieces`] deliberately does not. Each eojeol is emitted into
+/// its own frame, so "first piece" there means first-in-frame rather than
+/// first-in-paragraph, and threading the flag through it put a code-mode
+/// space in front of every framed eojeol. A Korean paragraph opening with a
+/// single space therefore still loses it; that path needs a paragraph-level
+/// notion of line start, which this does not add.
+pub(super) fn generate_run_at(out: &mut String, run: &Run, opens_line: bool) {
     if let Some(ref content) = run.footnote {
         // The note's runs carry the style its `w:pStyle` and `w:rPr` resolved
         // to, so they emit through the ordinary run path rather than as a bare
@@ -1764,11 +1786,11 @@ pub(super) fn generate_run(out: &mut String, run: &Run) {
         || run.text.contains(HANGUL_KINSOKU_BREAK_CHAR)
         || run.text.contains(EAST_ASIAN_AUTO_SPACE_CHAR)
     {
-        write_run_with_break_markers(out, run);
+        write_run_with_break_markers(out, run, opens_line);
         return;
     }
 
-    write_run_segment(out, run, &run.text);
+    write_run_segment(out, run, &run.text, opens_line);
 }
 
 /// Expands the PPTX in-text markers: a soft line break becomes
@@ -1779,7 +1801,7 @@ pub(super) fn generate_run(out: &mut String, run: &Run) {
 /// the mark to the frame, so the two move to the next line together, and
 /// the zero-size frame neither disturbs line metrics nor leaves a
 /// zero-width space in the PDF text layer.
-fn write_run_with_break_markers(out: &mut String, run: &Run) {
+fn write_run_with_break_markers(out: &mut String, run: &Run, opens_line: bool) {
     let mut segment_start: usize = 0;
 
     for (offset, ch) in run.text.char_indices() {
@@ -1794,25 +1816,47 @@ fn write_run_with_break_markers(out: &mut String, run: &Run) {
             _ => continue,
         };
         if segment_start < offset {
-            write_run_segment(out, run, &run.text[segment_start..offset]);
+            // Only the segment that starts the run can open the line; the
+            // ones after a marker are mid-line by construction (issue #752).
+            write_run_segment(
+                out,
+                run,
+                &run.text[segment_start..offset],
+                opens_line && segment_start == 0,
+            );
         }
         out.push_str(replacement);
         segment_start = offset + ch.len_utf8();
     }
 
     if segment_start < run.text.len() {
-        write_run_segment(out, run, &run.text[segment_start..]);
+        write_run_segment(
+            out,
+            run,
+            &run.text[segment_start..],
+            opens_line && segment_start == 0,
+        );
     }
 }
 
-fn write_run_segment(out: &mut String, run: &Run, text: &str) {
+fn write_run_segment(out: &mut String, run: &Run, text: &str, opens_line: bool) {
     let style = &run.style;
 
     let needs_all_caps: bool = matches!(style.all_caps, Some(true));
-    let escaped: String = if needs_all_caps {
-        escape_typst(&text.to_uppercase())
+    let source: String = if needs_all_caps {
+        text.to_uppercase()
     } else {
-        escape_typst(text)
+        text.to_string()
+    };
+    // A lone space opening the line has to become a code-mode string here,
+    // inside the run's own `#text(...)`, so it takes the run's font and size —
+    // emitted outside the wrapper it would be set in the ambient face and come
+    // out the wrong width (issue #752).
+    let escaped: String = match source.strip_prefix(' ') {
+        Some(rest) if opens_line && !rest.starts_with(' ') => {
+            format!("#\" \";{}", escape_typst(rest))
+        }
+        _ => escape_typst(&source),
     };
 
     let wrappers: Vec<String> = collect_formatting_wrappers(run);
