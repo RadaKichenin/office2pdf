@@ -2,8 +2,14 @@ use super::*;
 
 // ── Table style data structures ─────────────────────────────────────────
 
-/// Borders a table style region draws. Outer sides apply to boundary cells,
-/// insideH/insideV to shared interior edges.
+/// Borders a table style region draws.
+///
+/// The two kinds of region read this differently. For `wholeTbl` the named
+/// sides are the table's outline and apply to boundary cells only, while
+/// `insideH`/`insideV` fill the shared interior edges. For every other region
+/// — first/last row, first/last column, and the row bands — the named sides
+/// are the covered cell's own edges and apply wherever that cell sits,
+/// interior included; those regions do not use `insideH`/`insideV`.
 #[derive(Debug, Clone, Default)]
 pub(super) struct RegionBorders {
     pub(super) left: Option<BorderSide>,
@@ -357,8 +363,13 @@ pub(super) fn apply_table_style(table: &mut Table, props: &PptxTableProps, style
             let is_first_col: bool = props.first_col && col_idx == 0;
             let is_last_col: bool = props.last_col && total_cols > 0 && col_idx == total_cols - 1;
 
-            // Determine which region style applies (highest priority first)
-            let region_style: Option<&TableCellRegionStyle> = if is_first_row {
+            // The region that covers this cell more specifically than
+            // wholeTbl does, if any (highest priority first). Kept separate
+            // from the wholeTbl fallback below because borders resolve
+            // differently for the two: a specific region states the cell's own
+            // edges, while wholeTbl states a grid whose interior comes from
+            // insideH/insideV.
+            let specific_region: Option<&TableCellRegionStyle> = if is_first_row {
                 style_def.first_row.as_ref()
             } else if is_last_row {
                 style_def.last_row.as_ref()
@@ -375,8 +386,10 @@ pub(super) fn apply_table_style(table: &mut Table, props: &PptxTableProps, style
                     style_def.band2_h.as_ref()
                 }
             } else {
-                style_def.whole_table.as_ref()
+                None
             };
+            let region_style: Option<&TableCellRegionStyle> =
+                specific_region.or(style_def.whole_table.as_ref());
 
             match region_style {
                 Some(region) => apply_region_to_cell(cell, region),
@@ -392,8 +405,7 @@ pub(super) fn apply_table_style(table: &mut Table, props: &PptxTableProps, style
             apply_style_borders(
                 cell,
                 style_def,
-                is_first_row,
-                is_last_row,
+                specific_region,
                 row_idx == 0,
                 row_idx + 1 == total_rows,
                 col_idx == 0,
@@ -406,15 +418,18 @@ pub(super) fn apply_table_style(table: &mut Table, props: &PptxTableProps, style
     let _ = footer_rows;
 }
 
-/// Resolve the borders a cell gets from the style: wholeTbl draws the grid
-/// (outer sides on boundary cells, insideH/V on interior edges), and the
-/// firstRow/lastRow separators override the adjacent edge.
-#[allow(clippy::too_many_arguments)]
+/// Resolve the borders a cell gets from the style.
+///
+/// `wholeTbl` lays down the grid — outer sides on boundary cells, insideH/V on
+/// interior edges — and then the region covering this cell, if there is one,
+/// overrides every side it names, on whichever edge that cell sits. A band
+/// naming top and bottom therefore rules between rows even where the grid's
+/// insideH is off, which is how the stock "Light Style 2" family draws its row
+/// separators (issue #764).
 fn apply_style_borders(
     cell: &mut TableCell,
     style_def: &PptxTableStyleDef,
-    is_first_row: bool,
-    is_last_row: bool,
+    specific_region: Option<&TableCellRegionStyle>,
     at_top: bool,
     at_bottom: bool,
     at_left: bool,
@@ -454,17 +469,26 @@ fn apply_style_borders(
         };
     }
 
-    if is_first_row
-        && let Some(first_row) = style_def.first_row.as_ref()
-        && first_row.borders.bottom.is_some()
-    {
-        bottom = first_row.borders.bottom.clone();
-    }
-    if is_last_row
-        && let Some(last_row) = style_def.last_row.as_ref()
-        && last_row.borders.top.is_some()
-    {
-        top = last_row.borders.top.clone();
+    // A region that covers this cell states the cell's own edges, and it is
+    // more specific than the wholeTbl grid, so it wins on every side it names.
+    // This is the only thing that draws a rule between banded rows when the
+    // style switches insideH off, which the stock "Light Style 2" family does
+    // (issue #764). Sides the region leaves out keep the grid's value, so a
+    // band naming only top and bottom does not touch the vertical edges.
+    if let Some(region) = specific_region {
+        let region_borders = &region.borders;
+        if region_borders.top.is_some() {
+            top = region_borders.top.clone();
+        }
+        if region_borders.bottom.is_some() {
+            bottom = region_borders.bottom.clone();
+        }
+        if region_borders.left.is_some() {
+            left = region_borders.left.clone();
+        }
+        if region_borders.right.is_some() {
+            right = region_borders.right.clone();
+        }
     }
 
     if top.is_some() || bottom.is_some() || left.is_some() || right.is_some() {
