@@ -143,6 +143,13 @@ re-wrapped lines, baseline dy, pitch and width drift, and a rect census, with
 GT noise floors built in (`--noise-floor 0.12` Word, `0.5` Excel). Its numbers
 are assertable; pixel counts are only a tripwire.
 
+**Its width column measures origin-to-origin and so counts invisible trailing
+glyphs.** Word emits a trailing space after a paragraph's last character where
+we emit none, which reads as a width deficit even when every visible glyph
+agrees: a footer's reported "17% narrower" (#725) and a centred line's 79.37pt
+against 68.87pt (#728) were both entirely that one space. Compare per-glyph
+advances before believing a width delta.
+
 **Install `mupdf-tools` first** (`brew install mupdf-tools`). Without `mutool`
 the geometry axis falls back to `pdftotext -bbox`, whose `yMin` is each glyph's
 font-descriptor box rather than its baseline. The two PDFs always embed
@@ -201,6 +208,31 @@ Whole-page thumbnails at 80 DPI hide hairlines, dash patterns, font weight, and 
 3. **Pixel-difference sweep.** Run `magick compare -metric AE -fuzz 5% gt.png out.png diff.png` on size-normalized pages; view `diff.png` and inspect every highlighted cluster. A checklist pass is complete only when each cluster is either explained by an accepted rendering difference (fonts/antialiasing) or captured as an issue.
 4. **Hairline inventory.** Explicitly enumerate elements ≤1pt (rules, underlines, dashed/dotted lines, borders, tick marks) found in GT and confirm each exists in the output at matching position, width, and dash pattern.
 5. **Weight/emphasis inventory.** Enumerate bold/italic/underlined runs visible in GT (including CJK) and confirm the same emphasis in the output — weight differences must be checked on the high-DPI crops, not thumbnails.
+
+**A GT primitive is not always the quantity you want.** Native exports draw
+things we draw differently, and comparing the wrong quantity has produced fixes
+that were exactly backwards:
+
+- **Sprite box vs ink.** Excel prints iconSet icons as `fill_image` sprites. The
+  placement box is 11x11pt; extracting the bitmap and measuring its non-white
+  ink gives 10.08x11.00pt. Sizing our vector glyph to the box oversizes it by a
+  whole sprite's padding (#651).
+- **Rasterised shapes.** PowerPoint flattens shapes carrying shadows to
+  bitmaps, each ~18pt larger than its shape and offset by the blur margin. An
+  image-count comparison then reports phantom missing pictures — three of them
+  on one slide whose XML declares a single `p:pic` (#666).
+- **Filled rects vs strokes.** Word draws table borders as filled rectangles
+  with the outer edge on the cell boundary, emitting no `stroke_path` at all;
+  we stroke a line centred on it. Border geometry has to be compared as fills
+  (#724).
+
+**Charts have no committed ground truth.** No workbook or deck under
+`tests/golden_mocks/business/sources/` contains a `c:lineChart`, `barChart`,
+`pieChart`, `doughnutChart`, `areaChart` or `scatterChart`. Every chart issue
+therefore rests on figures nobody can re-derive from the repo, and at least one
+(#636) points the wrong way when measured: our plot line is 2.0pt against a
+reference's 2.235pt, not "roughly twice" it. Treat a chart GT number as
+unverified until a native export is attached.
 
 **Validate the GT before deriving anything from it** —
 `python3 scripts/check_gt_integrity.py GT.pdf [--source FILE.xlsx]`. A corrupt
