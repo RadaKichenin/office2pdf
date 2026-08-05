@@ -648,14 +648,16 @@ fn test_shape_shadow_codegen() {
     };
     let doc = make_doc(vec![make_fixed_page(720.0, 540.0, vec![elem])]);
     let output = generate_typst(&doc).unwrap();
-    // Blurred shadows stack six CDF-solved rings; for opacity 0.5 the
-    // ladder is [13, 33, 49, 41, 21, 7], and 41 is its fourth ring.
+    // A blurred shadow stacks CDF-solved rings, each a black rect with its
+    // own alpha. Matched on the shape rather than on a particular alpha,
+    // which moves whenever the ramp is retuned (#662); what this test is
+    // really about is that the stack precedes the shape it sits under.
     assert!(
-        output.source.contains("rgb(0, 0, 0, 41)"),
+        output.source.contains("rgb(0, 0, 0, "),
         "Shadow layers should use rgb with per-ring alpha. Got: {}",
         output.source,
     );
-    let shadow_pos = output.source.find("rgb(0, 0, 0, 41)");
+    let shadow_pos = output.source.find("rgb(0, 0, 0, ");
     let main_pos = output.source.find("rgb(255, 0, 0)");
     assert!(
         shadow_pos < main_pos,
@@ -774,10 +776,11 @@ fn test_gradient_unsorted_stops_rendered_in_sorted_order() {
 #[test]
 fn test_shape_shadow_blur_renders_layered_rings() {
     // PowerPoint blurs outer shadows over `blurRad`; a single crisp offset
-    // duplicate reads as a second shape. The approximation stacks six
-    // concentric rings across the measured Gaussian (sigma = 0.3 * blurRad,
-    // rings at +-2 sigma) whose compounded alphas step down the CDF from
-    // the full opacity inside to ~5% of it at the rim (issue #390).
+    // duplicate reads as a second shape. The approximation stacks
+    // `SHADOW_RING_COUNT` concentric rings across the measured Gaussian
+    // (sigma = 0.3 * blurRad, rings out to `SHADOW_RING_EXTENT_SIGMA` each
+    // way) whose compounded alphas step down the CDF from the full opacity
+    // inside to under 1% of it at the rim (issues #390, #662).
     use crate::ir::Shadow;
 
     let elem = FixedElement {
@@ -805,25 +808,37 @@ fn test_shape_shadow_blur_renders_layered_rings() {
     let doc = make_doc(vec![make_fixed_page(720.0, 540.0, vec![elem])]);
     let source = generate_typst(&doc).unwrap().source;
 
-    // Six rings whose own alphas solve the CDF steps for opacity 0.5:
-    // compounded outward coverage 0.5, 0.473, 0.394, 0.25, 0.106, 0.027.
-    for alpha in [13, 33, 49, 41, 21, 7] {
-        let needle = format!("rgb(0, 0, 0, {alpha})");
-        assert_eq!(
-            source.matches(&needle).count(),
-            1,
-            "expected one ring at alpha {alpha} in: {source}"
-        );
-    }
-    // Outermost ring: +2 sigma = 0.6 * 8pt = 4.8pt outset each side.
-    assert!(
-        source.contains("width: 209.6pt, height: 159.6pt"),
-        "outermost ring must outset the shape by 4.8pt: {source}"
+    // One translucent rect per ring. The count is what decides whether the
+    // falloff reads as a ramp or as plateaus, so it is asserted rather than
+    // the individual alphas — those move whenever the ramp is retuned, and
+    // the Gaussian shape they encode is checked in
+    // `test_blur_ring_coverage_follows_gaussian_cdf` (#662).
+    assert_eq!(
+        source.matches("rgb(0, 0, 0, ").count(),
+        SHADOW_RING_COUNT,
+        "expected one rect per ring in: {source}"
     );
-    // Innermost ring: -2 sigma inset each side.
+    // sigma = 0.3 * 8pt = 2.4pt, and the rings reach the declared extent each
+    // way, so the outermost outsets the 200x150 shape by that and the
+    // innermost insets it by the same.
+    let reach = SHADOW_RING_EXTENT_SIGMA * 2.4;
+    let outermost = format!(
+        "width: {}pt, height: {}pt",
+        format_f64(200.0 + 2.0 * reach),
+        format_f64(150.0 + 2.0 * reach)
+    );
     assert!(
-        source.contains("width: 190.4pt, height: 140.4pt"),
-        "innermost ring must inset the shape by 4.8pt: {source}"
+        source.contains(&outermost),
+        "outermost ring must outset the shape by {reach}pt: {source}"
+    );
+    let innermost = format!(
+        "width: {}pt, height: {}pt",
+        format_f64(200.0 - 2.0 * reach),
+        format_f64(150.0 - 2.0 * reach)
+    );
+    assert!(
+        source.contains(&innermost),
+        "innermost ring must inset the shape by {reach}pt: {source}"
     );
 }
 

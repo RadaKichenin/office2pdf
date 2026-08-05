@@ -166,20 +166,66 @@ fn rotate_point(
 /// whose sigma tracks 0.23–0.35 of the radius across those samples.
 const SHADOW_BLUR_SIGMA_PER_RADIUS: f64 = 0.3;
 
-/// Ring boundaries in sigma units, and the Gaussian CDF value at each
-/// band's midpoint. Six rings from -2 sigma (inset) to +2 sigma (outset):
-/// the band between boundary k-1 and k is covered by rings k.. and must
-/// compound to `opacity * PHI[k]`; inside the innermost ring the stack
-/// compounds to the full opacity. PowerPoint's own export is a stepped
-/// ramp of six-to-eight rings, so six is not visibly coarser than GT.
-const SHADOW_RING_BOUNDS_SIGMA: [f64; 6] = [-2.0, -1.2, -0.4, 0.4, 1.2, 2.0];
-const SHADOW_RING_MIDPOINT_CDF: [f64; 6] = [1.0, 0.9452, 0.7881, 0.5, 0.2119, 0.0548];
+/// How many concentric rings approximate the blur, and how far out they
+/// reach in sigma units.
+///
+/// Each ring is one flat-alpha copy, so the count is what decides whether the
+/// falloff reads as a ramp or as plateaus. Six rings to +-2 sigma stepped the
+/// grey level by up to 16 at a time where PowerPoint moves by at most 4, which
+/// is what made the blur read as a hard outline, and truncating at 2 sigma cut
+/// the visible spread short of PowerPoint's (issue #662).
+pub(super) const SHADOW_RING_COUNT: usize = 24;
+pub(super) const SHADOW_RING_EXTENT_SIGMA: f64 = 2.6;
 
-/// Per-layer (outward expansion, alpha) pairs for a shadow. The alphas
-/// are solved so the compounded coverage of the overlapping rings steps
-/// down along the Gaussian CDF: full opacity inside, half at the
-/// silhouette edge, ~5% at the rim. A zero-blur shadow keeps the single
-/// crisp duplicate.
+/// The standard normal CDF, via Zelen & Severo's rational approximation
+/// (Abramowitz & Stegun 26.2.17). Its error is under 8e-8, far below the
+/// 1/255 an alpha byte can carry, and it avoids pulling in a crate for one
+/// function.
+fn standard_normal_cdf(z: f64) -> f64 {
+    if z < 0.0 {
+        return 1.0 - standard_normal_cdf(-z);
+    }
+    const P: f64 = 0.231_641_9;
+    const B: [f64; 5] = [
+        0.319_381_530,
+        -0.356_563_782,
+        1.781_477_937,
+        -1.821_255_978,
+        1.330_274_429,
+    ];
+    let t: f64 = 1.0 / (1.0 + P * z);
+    let density: f64 = (-0.5 * z * z).exp() / (2.0 * std::f64::consts::PI).sqrt();
+    let poly: f64 = B
+        .iter()
+        .enumerate()
+        .map(|(index, coefficient)| coefficient * t.powi(index as i32 + 1))
+        .sum::<f64>();
+    1.0 - density * poly
+}
+
+/// Ring boundaries in sigma units, outermost coverage first, paired with the
+/// coverage each ring's band must compound to.
+///
+/// The band between boundary k-1 and k is covered by rings k.. and has to
+/// reach `opacity * cdf`, where `cdf` is the Gaussian tail at the band's
+/// midpoint; inside the innermost ring the stack compounds to full opacity.
+fn shadow_ring_bands() -> Vec<(f64, f64)> {
+    let extent: f64 = SHADOW_RING_EXTENT_SIGMA;
+    let last: f64 = (SHADOW_RING_COUNT - 1) as f64;
+    (0..SHADOW_RING_COUNT)
+        .map(|ring| {
+            let bound: f64 = -extent + 2.0 * extent * ring as f64 / last;
+            let coverage: f64 = if ring == 0 {
+                1.0
+            } else {
+                let previous: f64 = -extent + 2.0 * extent * (ring - 1) as f64 / last;
+                1.0 - standard_normal_cdf(0.5 * (previous + bound))
+            };
+            (bound, coverage)
+        })
+        .collect()
+}
+
 pub(super) fn shadow_blur_layers(shadow: &Shadow) -> Vec<(f64, u8)> {
     let opacity = shadow.opacity.clamp(0.0, 1.0);
     if shadow.blur_radius <= 0.0 {
@@ -187,19 +233,19 @@ pub(super) fn shadow_blur_layers(shadow: &Shadow) -> Vec<(f64, u8)> {
     }
     let sigma: f64 = SHADOW_BLUR_SIGMA_PER_RADIUS * shadow.blur_radius;
     // Coverage target for the region covered by rings k.. is
-    // `opacity * CDF[k]`; solving outermost-in, ring k's own alpha is
+    // `opacity * cdf_k`; solving outermost-in, ring k's own alpha is
     // 1 - (1 - target_k) / (1 - target_{k+1}).
-    let ring_count = SHADOW_RING_BOUNDS_SIGMA.len();
-    (0..ring_count)
+    let bands: Vec<(f64, f64)> = shadow_ring_bands();
+    (0..bands.len())
         .map(|ring| {
-            let target = opacity * SHADOW_RING_MIDPOINT_CDF[ring];
-            let outer_target = if ring + 1 < ring_count {
-                opacity * SHADOW_RING_MIDPOINT_CDF[ring + 1]
+            let target = opacity * bands[ring].1;
+            let outer_target = if ring + 1 < bands.len() {
+                opacity * bands[ring + 1].1
             } else {
                 0.0
             };
             let alpha = 1.0 - (1.0 - target) / (1.0 - outer_target);
-            let expansion = sigma * SHADOW_RING_BOUNDS_SIGMA[ring];
+            let expansion = sigma * bands[ring].0;
             (expansion, (alpha * 255.0).round() as u8)
         })
         .collect()
