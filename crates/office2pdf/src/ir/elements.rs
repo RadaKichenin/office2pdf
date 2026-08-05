@@ -149,6 +149,13 @@ pub struct Chart {
     pub grouping: ChartGrouping,
     /// Where the legend sits, from `<c:legendPos>`.
     pub legend_position: LegendPosition,
+    /// Whether the chart declares a `<c:legend>` at all, and did not switch it
+    /// off with `<c:delete val="1"/>`.
+    ///
+    /// Separate from `legend_position`, which falls back to a default for
+    /// every chart and so cannot distinguish "no legend" from "legend on the
+    /// right" (issue #762).
+    pub has_legend: bool,
     /// Title of the category axis, from `<c:catAx><c:title>`.
     pub category_axis_title: Option<String>,
     /// Title of the value axis, from `<c:valAx><c:title>`. Office writes it

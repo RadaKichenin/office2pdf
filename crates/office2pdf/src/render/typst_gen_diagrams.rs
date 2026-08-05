@@ -503,6 +503,19 @@ struct LegendBox {
 }
 
 impl LegendBox {
+    /// Reserve nothing, for a chart that declares no legend: the plot then
+    /// gets the whole frame instead of a gutter nothing is drawn in
+    /// (issue #762).
+    fn hidden() -> Self {
+        LegendBox {
+            left: 0.0,
+            right: 0.0,
+            top: 0.0,
+            bottom: 0.0,
+            horizontal: false,
+        }
+    }
+
     /// Reserve space at `position`, given one stacked entry's height and one
     /// across-the-edge entry's width. A vertical legend is one column wide and
     /// a horizontal one is one row tall whatever the entry count, so the count
@@ -712,6 +725,9 @@ const AREA_TITLE_H: f64 = 19.0;
 
 /// Space the axis plot's legend reserves.
 fn axis_legend_box(chart: &Chart) -> LegendBox {
+    if !chart.has_legend {
+        return LegendBox::hidden();
+    }
     LegendBox::new(chart.legend_position, LEGEND_ROW_H, LEGEND_ENTRY_W)
 }
 
@@ -1103,8 +1119,11 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
         );
     }
 
-    // Legend on the edge `<c:legendPos>` asks for.
-    for (s_index, s) in series.iter().enumerate() {
+    // Legend on the edge `<c:legendPos>` asks for — none when the chart
+    // declares no `<c:legend>` (issue #762). Bounded rather than returned
+    // early: the markup's closing delimiter is written after this loop.
+    let legend_entries: usize = if chart.has_legend { series.len() } else { 0 };
+    for (s_index, s) in series.iter().enumerate().take(legend_entries) {
         let color: String = series_color(s, s_index, 0, &chart.theme_accent_colors);
         let default_name: String = format!("Series {}", s_index + 1);
         let name: &str = s.name.as_deref().unwrap_or(&default_name);
@@ -1379,8 +1398,11 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
         }
     }
 
-    // Legend on the edge `<c:legendPos>` asks for.
-    for (s_index, s) in series.iter().enumerate() {
+    // Legend on the edge `<c:legendPos>` asks for — none when the chart
+    // declares no `<c:legend>` (issue #762). Bounded rather than returned
+    // early: the markup's closing delimiter is written after this loop.
+    let legend_entries: usize = if chart.has_legend { series.len() } else { 0 };
+    for (s_index, s) in series.iter().enumerate().take(legend_entries) {
         let color: String = series_color(s, s_index, 0, &chart.theme_accent_colors);
         let default_name: String = format!("Series {}", s_index + 1);
         let name: &str = s.name.as_deref().unwrap_or(&default_name);
@@ -1432,7 +1454,11 @@ fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, 
         out.push_str("#v(4pt)\n");
     }
 
-    let legend: LegendBox = LegendBox::new(chart.legend_position, PIE_LEGEND_ROW_H, LEGEND_ENTRY_W);
+    let legend: LegendBox = if chart.has_legend {
+        LegendBox::new(chart.legend_position, PIE_LEGEND_ROW_H, LEGEND_ENTRY_W)
+    } else {
+        LegendBox::hidden()
+    };
     // As elsewhere: the title is drawn above the box, so a framed chart takes
     // its height out of the frame.
     let frame: Option<(f64, f64)> = frame.map(|(width, height)| {
@@ -1505,9 +1531,13 @@ fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, 
         start += sweep;
     }
 
-    // Legend entries, one per slice, at the position the chart asks for.
+    // Legend entries, one per slice, at the position the chart asks for —
+    // none when the chart declares no `<c:legend>`. A pie's own legend
+    // duplicates the slice labels, so one the file never asked for is doubly
+    // visible (issue #762).
     let entries: usize = chart.categories.len().max(series.values.len());
-    for (index, category) in chart.categories.iter().enumerate() {
+    let legend_entries: usize = if chart.has_legend { entries } else { 0 };
+    for (index, category) in chart.categories.iter().enumerate().take(legend_entries) {
         let color: String = category_color(
             series,
             index,

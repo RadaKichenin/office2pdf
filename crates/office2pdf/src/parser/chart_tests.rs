@@ -1138,3 +1138,54 @@ fn test_a_trailing_line_chart_keeps_the_bar_layout() {
     assert_eq!(layout.gap_width_percent, 90.0);
     assert_eq!(layout.overlap_percent, 100.0);
 }
+
+// ── `<c:legend>` presence (issue #762) ─────────────────────────────────
+
+/// A declared legend is a legend, whatever edge it names.
+#[test]
+fn test_declared_legend_is_recorded() {
+    let xml =
+        bar_chart_with_legend(r#"<c:legend><c:legendPos val="b"/><c:overlay val="0"/></c:legend>"#);
+
+    let chart = parse_chart_xml(&xml).unwrap();
+
+    assert!(chart.has_legend);
+    // The position still arrives: reading the legend body must not swallow it.
+    assert_eq!(chart.legend_position, LegendPosition::Bottom);
+}
+
+/// No `<c:legend>` at all. `legend_position` falls back to its default either
+/// way, which is why the presence flag exists.
+#[test]
+fn test_absent_legend_is_not_recorded() {
+    let chart = parse_chart_xml(&bar_chart_with_legend("")).unwrap();
+
+    assert!(!chart.has_legend);
+    assert_eq!(chart.legend_position, LegendPosition::Right);
+}
+
+/// `<c:delete val="1"/>` switches a declared legend off while keeping its
+/// settings, the same shape the axes use.
+#[test]
+fn test_deleted_legend_is_not_recorded() {
+    let xml =
+        bar_chart_with_legend(r#"<c:legend><c:legendPos val="b"/><c:delete val="1"/></c:legend>"#);
+
+    let chart = parse_chart_xml(&xml).unwrap();
+
+    assert!(!chart.has_legend);
+    // Its settings survive, so switching it back on would not lose the edge.
+    assert_eq!(chart.legend_position, LegendPosition::Bottom);
+}
+
+/// `<c:delete val="0"/>` is an explicit "keep it".
+#[test]
+fn test_undeleted_legend_is_recorded() {
+    let xml =
+        bar_chart_with_legend(r#"<c:legend><c:legendPos val="t"/><c:delete val="0"/></c:legend>"#);
+
+    let chart = parse_chart_xml(&xml).unwrap();
+
+    assert!(chart.has_legend);
+    assert_eq!(chart.legend_position, LegendPosition::Top);
+}

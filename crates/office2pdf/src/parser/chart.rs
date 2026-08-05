@@ -139,6 +139,10 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
     let mut gap_width_percent: Option<f64> = None;
     let mut overlap_percent: Option<f64> = None;
     let mut legend_position: Option<LegendPosition> = None;
+    // `<c:legend>` presence, not its position: a chart that declares no legend
+    // still gets a default position, so the position alone cannot say whether
+    // one was asked for (issue #762).
+    let mut has_legend: bool = false;
     let mut category_axis: Axis = Axis::default();
     let mut value_axis: Axis = Axis::default();
 
@@ -147,7 +151,12 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
             Ok(Event::Start(ref e)) => {
                 let local = e.local_name();
                 let tag: &[u8] = local.as_ref();
-                if tag == b"title" && title.is_none() {
+                if tag == b"legend" {
+                    // Declared, unless the element switches itself off.
+                    let (deleted, position) = parse_legend(&mut reader);
+                    has_legend = !deleted;
+                    legend_position = legend_position.or(position);
+                } else if tag == b"title" && title.is_none() {
                     title = parse_chart_title(&mut reader);
                 } else if tag == b"catAx" {
                     category_axis = parse_axis(&mut reader, b"catAx");
@@ -179,6 +188,9 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
                     overlap_percent = overlap_percent.or(overlap);
                 }
             }
+            Ok(Event::Empty(ref e)) if e.local_name().as_ref() == b"legend" => {
+                has_legend = true;
+            }
             Ok(Event::Empty(ref e)) if e.local_name().as_ref() == b"legendPos" => {
                 legend_position = xml_util::get_attr_str(e, b"val")
                     .as_deref()
@@ -208,6 +220,7 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
         series,
         grouping: grouping.unwrap_or_default(),
         legend_position: legend_position.unwrap_or_default(),
+        has_legend,
         category_axis_title: category_axis.title,
         value_axis_title: value_axis.title,
         category_axis_major_tick_mark: category_axis.major_tick_mark,
@@ -265,6 +278,35 @@ fn parse_axis(reader: &mut Reader<&[u8]>, end_tag: &[u8]) -> Axis {
         }
     }
     axis
+}
+
+/// Consume a `<c:legend>` body, reporting whether it switches itself off and
+/// which edge it names.
+///
+/// `<c:legend><c:delete val="1"/></c:legend>` is how Office records a legend
+/// that was turned off but whose settings were kept, the same shape the axes
+/// use. The position comes back from here too because this consumes the body,
+/// so `<c:legendPos>` never reaches the caller's loop (issue #762).
+fn parse_legend(reader: &mut Reader<&[u8]>) -> (bool, Option<LegendPosition>) {
+    let mut deleted = false;
+    let mut position: Option<LegendPosition> = None;
+    loop {
+        match reader.read_event() {
+            Ok(Event::Empty(ref e)) => match e.local_name().as_ref() {
+                b"delete" => deleted = ct_boolean(e),
+                b"legendPos" => {
+                    position = xml_util::get_attr_str(e, b"val")
+                        .as_deref()
+                        .map(legend_position_for);
+                }
+                _ => {}
+            },
+            Ok(Event::End(ref e)) if e.local_name().as_ref() == b"legend" => break,
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+    (deleted, position)
 }
 
 /// Read a `CT_Boolean` element's own state.

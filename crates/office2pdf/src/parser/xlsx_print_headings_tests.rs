@@ -334,6 +334,7 @@ fn test_drawings_shift_with_the_inset_grid_and_charts_by_one_row() {
             series: vec![],
             grouping: crate::ir::ChartGrouping::Clustered,
             legend_position: crate::ir::LegendPosition::Right,
+            has_legend: true,
             category_axis_title: None,
             value_axis_title: None,
             category_axis_major_tick_mark: crate::ir::AxisTickMark::Outside,
