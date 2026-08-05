@@ -1315,14 +1315,25 @@ fn push_paragraph_from_runs(
     // Word's automatic East Asian/Latin space, applied once per paragraph so a
     // boundary falling between two runs is caught too. Justified paragraphs are
     // left alone: Word treats the space as compressible and absorbs it into the
-    // justification, which is why every boundary that lacks it in the corpus GT
-    // is on a line Word is actively stretching or compressing (issue #521).
+    // justification, which is why every *justified* boundary that lacks it in
+    // the corpus GT is on a line Word is actively stretching or compressing
+    // (issue #521). Centred paragraphs lack it for a different reason — see
+    // below.
     //
     // Table cells are left alone as well: Word applies no auto space to cell
     // text at all (issue #627).
     let entry_text: Option<String> = caption_identifier.map(|_| caption_entry_text(runs));
+    // A centred paragraph gets none either. Measured on `02_contract_ko`
+    // page 1: Word advances 5.78pt at each digit-to-Hangul boundary of the
+    // centred date line and 8.41pt at the same boundaries in the body
+    // paragraph above it, so it applies the space in one and not the other.
+    // 8.41 - 5.78 is 2.63pt, and 0.25em at that line's 10.5pt is 2.625pt
+    // (issue #728). Right alignment is left alone: nothing measured it.
     if flow.container == ParagraphContainer::Body
-        && !matches!(style.alignment, Some(Alignment::Justify))
+        && !matches!(
+            style.alignment,
+            Some(Alignment::Justify) | Some(Alignment::Center)
+        )
     {
         insert_east_asian_auto_space(runs);
     }

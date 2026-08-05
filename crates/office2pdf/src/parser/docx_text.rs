@@ -586,8 +586,9 @@ const EAST_ASIAN_AUTO_SPACE_CHAR: char = '\u{E001}';
 ///
 /// The caller decides *whether* a paragraph is eligible; this function only
 /// knows where the boundaries are. Corpus GT then narrowed the probe's reading
-/// twice: justification absorbs the space, and cell text never carries it at
-/// all (issue #627), so neither reaches here.
+/// three times: justification absorbs the space, cell text never carries it at
+/// all (issue #627), and a centred paragraph takes none either (issue #728),
+/// so none of the three reaches here.
 ///
 /// Those narrowings contradict the #521 probe above, which read the space as
 /// present in a cell and in a plain paragraph alike. The corpus GT wins where

@@ -756,3 +756,58 @@ fn test_explicit_word_wrap_overrides_the_style_chain() {
     let inherited = merge_paragraph_style(&ParagraphStyle::default(), None, Some(&style));
     assert_eq!(inherited.word_wrap, Some(true));
 }
+
+// ── Centred paragraphs take no CJK/Latin auto-space (issue #728) ───────
+
+/// Word applies the 0.25em auto-space in a body paragraph and not in a centred
+/// one. Measured on `02_contract_ko` page 1: every digit-to-Hangul boundary of
+/// the centred date line advances 5.78pt in Word against 8.41pt in the body
+/// paragraph above it, and 8.41 − 5.78 is the 0.25em space at 10.5pt.
+#[test]
+fn test_centred_paragraph_takes_no_east_asian_auto_space() {
+    // Built and parsed for real, so this exercises the parser's own gate
+    // rather than restating the condition.
+    let body_text = |alignment: Option<docx_rs::AlignmentType>| -> String {
+        let mut paragraph =
+            docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text("2026년"));
+        if let Some(a) = alignment {
+            paragraph = paragraph.align(a);
+        }
+        let mut cursor = Cursor::new(Vec::new());
+        docx_rs::Docx::new()
+            .add_paragraph(paragraph)
+            .build()
+            .pack(&mut cursor)
+            .unwrap();
+        let (doc, _warnings) = DocxParser
+            .parse(&cursor.into_inner(), &ConvertOptions::default())
+            .unwrap();
+        let page = match &doc.pages[0] {
+            Page::Flow(page) => page,
+            other => panic!("Expected FlowPage, got {other:?}"),
+        };
+        page.content
+            .iter()
+            .find_map(|block| match block {
+                Block::Paragraph(p) => p.runs.first().map(|r| r.text.clone()),
+                _ => None,
+            })
+            .expect("the paragraph survives parsing")
+    };
+
+    assert_ne!(
+        body_text(None),
+        "2026년",
+        "an unaligned body paragraph still gets the auto-space"
+    );
+    assert_eq!(
+        body_text(Some(docx_rs::AlignmentType::Center)),
+        "2026년",
+        "a centred one does not"
+    );
+    assert_eq!(
+        body_text(Some(docx_rs::AlignmentType::Justified)),
+        "2026년",
+        "nor does a justified one"
+    );
+}
