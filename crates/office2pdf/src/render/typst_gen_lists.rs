@@ -1032,9 +1032,13 @@ fn prepend_fixed_text_list_marker_run(
         list_style.marker_style.cloned()
     };
     if fixed_text_list_hanging_indent_pt(style).is_some() {
+        // The tab carries the whole gap to the indent, so the space
+        // `fixed_text_list_marker` puts after the glyph is a second separator.
+        // It pushed the text 2.59pt past the indent on the audited deck, which
+        // is enough to move a wrap point (issue #685).
         return prepend_marker_run(
             runs,
-            format!("{marker_text}\t"),
+            format!("{}\t", marker_text.trim_end()),
             normalized_marker_style.as_ref(),
         );
     }
