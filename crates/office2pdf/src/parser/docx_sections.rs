@@ -654,6 +654,8 @@ fn convert_hf_paragraph(
         processed_runs,
         &TextStyle::default(),
     );
+    // One field state for the whole paragraph: a w:fldChar field spans runs.
+    let mut field_state = HeaderFieldState::default();
     for child in flatten_tracked_changes(&paragraph.children) {
         match child {
             ParagraphItem::Run(run) => {
@@ -662,7 +664,7 @@ fn convert_hf_paragraph(
                     continue;
                 }
                 let run_style = extract_run_style(&run.run_property);
-                extract_hf_run_elements(&run.children, &run_style, &mut elements);
+                extract_hf_run_elements(&run.children, &run_style, &mut elements, &mut field_state);
                 for run_child in &run.children {
                     if let docx_rs::RunChild::Drawing(drawing) = run_child
                         && let Some(block) =
@@ -816,63 +818,82 @@ fn append_simple_fields(
         .sum()
 }
 
+/// A `w:fldChar` field in flight.
+///
+/// Word writes one across several `w:r` elements — begin, the instruction,
+/// separate, the cached result, end — so this cannot live inside a single
+/// run's scope. Keeping it per-run meant a split PAGE field never resolved
+/// and its cached number fell out as static text (issue #738).
+#[derive(Default)]
+struct HeaderFieldState {
+    in_field: bool,
+    inline: Option<HFInline>,
+    past_separate: bool,
+}
+
 /// Extract inline elements from a run's children for header/footer use.
 /// Recognizes text, tabs, and PAGE/NUMPAGES field codes.
+///
+/// `field` carries the enclosing paragraph's field state, so a field split
+/// across runs resolves as one.
 fn extract_hf_run_elements(
     children: &[docx_rs::RunChild],
     style: &TextStyle,
     elements: &mut Vec<HFInline>,
+    field: &mut HeaderFieldState,
 ) {
-    let mut in_field = false;
-    let mut field_inline: Option<HFInline> = None;
-    let mut past_separate = false;
+    let HeaderFieldState {
+        in_field,
+        inline: field_inline,
+        past_separate,
+    } = field;
 
     for child in children {
         match child {
             docx_rs::RunChild::FieldChar(field_char) => match field_char.field_char_type {
                 docx_rs::FieldCharType::Begin => {
-                    in_field = true;
-                    field_inline = None;
-                    past_separate = false;
+                    *in_field = true;
+                    *field_inline = None;
+                    *past_separate = false;
                 }
                 docx_rs::FieldCharType::Separate => {
-                    past_separate = true;
+                    *past_separate = true;
                 }
                 docx_rs::FieldCharType::End => {
                     if let Some(inline) = field_inline.take() {
                         elements.push(inline);
                     }
-                    in_field = false;
-                    past_separate = false;
+                    *in_field = false;
+                    *past_separate = false;
                 }
                 _ => {}
             },
             docx_rs::RunChild::InstrText(instruction) => {
-                if !in_field {
+                if !*in_field {
                     continue;
                 }
-                field_inline = match instruction.as_ref() {
+                *field_inline = match instruction.as_ref() {
                     docx_rs::InstrText::PAGE(_) => Some(HFInline::PageNumber(style.clone())),
                     docx_rs::InstrText::NUMPAGES(_) => Some(HFInline::TotalPages(style.clone())),
-                    _ => field_inline,
+                    _ => field_inline.take(),
                 };
             }
             docx_rs::RunChild::InstrTextString(value) => {
-                if !in_field {
+                if !*in_field {
                     continue;
                 }
                 let trimmed = value.trim();
                 if trimmed.eq_ignore_ascii_case("page") {
-                    field_inline = Some(HFInline::PageNumber(style.clone()));
+                    *field_inline = Some(HFInline::PageNumber(style.clone()));
                 } else if trimmed.eq_ignore_ascii_case("numpages") {
-                    field_inline = Some(HFInline::TotalPages(style.clone()));
+                    *field_inline = Some(HFInline::TotalPages(style.clone()));
                 }
             }
             docx_rs::RunChild::Text(text) => {
-                if in_field && past_separate {
+                if *in_field && *past_separate {
                     continue;
                 }
-                if !in_field && !text.text.is_empty() {
+                if !*in_field && !text.text.is_empty() {
                     elements.push(HFInline::Run(Run {
                         text: text.text.clone(),
                         style: style.clone(),
@@ -881,7 +902,7 @@ fn extract_hf_run_elements(
                     }));
                 }
             }
-            docx_rs::RunChild::Tab(_) if !in_field => {
+            docx_rs::RunChild::Tab(_) if !*in_field => {
                 elements.push(HFInline::Run(Run {
                     text: "\t".to_string(),
                     style: style.clone(),
@@ -889,7 +910,7 @@ fn extract_hf_run_elements(
                     footnote: None,
                 }));
             }
-            docx_rs::RunChild::PTab(tab) if !in_field => {
+            docx_rs::RunChild::PTab(tab) if !*in_field => {
                 let alignment = match tab.alignment {
                     docx_rs::PositionalTabAlignmentType::Center => PositionedTabAlignment::Center,
                     docx_rs::PositionalTabAlignmentType::Right => PositionedTabAlignment::Right,

@@ -46,6 +46,57 @@ fn build_docx_with_page_number_footer() -> Vec<u8> {
     cursor.into_inner()
 }
 
+/// Word writes a `w:fldChar` field across several runs — one for each of
+/// begin, the instruction, separate, the cached result and end. The field's
+/// state has to span those runs, or the cached result leaks out as static text
+/// and every page shows whatever number was saved (issue #738).
+#[test]
+fn test_page_field_split_across_runs_is_a_page_number() {
+    let footer = docx_rs::Footer::new().add_paragraph(
+        docx_rs::Paragraph::new()
+            .add_run(docx_rs::Run::new().add_field_char(docx_rs::FieldCharType::Begin, false))
+            .add_run(
+                docx_rs::Run::new()
+                    .add_instr_text(docx_rs::InstrText::PAGE(docx_rs::InstrPAGE::new())),
+            )
+            .add_run(docx_rs::Run::new().add_field_char(docx_rs::FieldCharType::Separate, false))
+            // The number cached when the document was last saved.
+            .add_run(docx_rs::Run::new().add_text("7"))
+            .add_run(docx_rs::Run::new().add_field_char(docx_rs::FieldCharType::End, false)),
+    );
+    let docx = docx_rs::Docx::new().footer(footer).add_paragraph(
+        docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text("Body text")),
+    );
+    let mut cursor = Cursor::new(Vec::new());
+    docx.build().pack(&mut cursor).unwrap();
+    let data = cursor.into_inner();
+
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let page = match &doc.pages[0] {
+        Page::Flow(page) => page,
+        other => panic!("Expected FlowPage, got {other:?}"),
+    };
+    let footer = page.footer.as_ref().expect("Should have footer");
+    let elements: Vec<&crate::ir::HFInline> = footer
+        .paragraphs
+        .iter()
+        .flat_map(|paragraph| paragraph.elements.iter())
+        .collect();
+
+    assert!(
+        elements
+            .iter()
+            .any(|element| matches!(element, crate::ir::HFInline::PageNumber(_))),
+        "the split field must resolve to a page number, got {elements:?}"
+    );
+    assert!(
+        !elements.iter().any(
+            |element| matches!(element, crate::ir::HFInline::Run(run) if run.text.contains("7"))
+        ),
+        "the cached result must not survive as static text, got {elements:?}"
+    );
+}
+
 /// Word applies the containing run's properties to the field result, so the
 /// parsed field must carry that run's style.
 #[test]
