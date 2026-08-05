@@ -3,6 +3,63 @@ use crate::ir::{
     Alignment, HFInline, HeaderFooter, HeaderFooterParagraph, ParagraphStyle, Run, TextStyle,
 };
 
+/// One run of header/footer text and the face it takes.
+///
+/// A section's `&"Font,Style"` and `&<n>` codes apply to everything after them,
+/// so a section is a sequence of these rather than one string (issue #633).
+#[derive(Clone, Default)]
+pub(super) struct HfSegment {
+    text: String,
+    family: Option<String>,
+    size_pt: Option<f64>,
+    bold: bool,
+    italic: bool,
+}
+
+impl HfSegment {
+    /// The style this segment's runs carry. `bold`/`italic` stay `None` when
+    /// unset so the renderer's own default survives, rather than being pinned
+    /// to `false` by a section that named no style word.
+    fn text_style(&self) -> TextStyle {
+        TextStyle {
+            font_family: self.family.clone(),
+            east_asian_font_family: self.family.clone(),
+            font_size: self.size_pt,
+            bold: self.bold.then_some(true),
+            italic: self.italic.then_some(true),
+            ..TextStyle::default()
+        }
+    }
+}
+
+/// Append a string to the section's open segment.
+fn push_str(section: &mut [HfSegment], text: &str) {
+    if let Some(last) = section.last_mut() {
+        last.text.push_str(text);
+    }
+}
+
+/// Append a character to the section's open segment.
+fn push_char(section: &mut [HfSegment], ch: char) {
+    if let Some(last) = section.last_mut() {
+        last.text.push(ch);
+    }
+}
+
+/// Start a new segment carrying `style`, reusing the open one while it is still
+/// empty so a run of codes does not leave blanks behind.
+///
+/// `style` is cloned from the previous segment to inherit the face and size a
+/// code did not change, so its text has to be dropped or the new segment
+/// repeats what came before it.
+fn open_segment(section: &mut Vec<HfSegment>, mut style: HfSegment) {
+    style.text.clear();
+    match section.last_mut() {
+        Some(last) if last.text.is_empty() => *last = style,
+        _ => section.push(style),
+    }
+}
+
 /// Parse an Excel header/footer format string into IR HeaderFooter.
 ///
 /// Excel format strings use `&L`, `&C`, `&R` to define left/center/right sections,
@@ -29,10 +86,13 @@ pub(super) fn parse_hf_format_string(
         return None;
     }
 
-    // Split into left/center/right sections
-    let mut left = String::new();
-    let mut center = String::new();
-    let mut right = String::new();
+    // Split into left/center/right sections. Each section is a run of
+    // segments rather than one string, because `&"Font,Style"` and `&<n>`
+    // change the face and size partway through a section and every run after
+    // the code takes the new values (issue #633).
+    let mut left: Vec<HfSegment> = vec![HfSegment::default()];
+    let mut center: Vec<HfSegment> = vec![HfSegment::default()];
+    let mut right: Vec<HfSegment> = vec![HfSegment::default()];
     let mut current = &mut center; // Default section is center if no &L/&C/&R prefix
 
     let chars: Vec<char> = s.chars().collect();
@@ -53,34 +113,62 @@ pub(super) fn parse_hf_format_string(
                     i += 2;
                 }
                 'P' => {
-                    current.push('\x01'); // Sentinel for page number
+                    push_char(current, '\x01'); // Sentinel for page number
                     i += 2;
                 }
                 'N' => {
-                    current.push('\x02'); // Sentinel for total pages
+                    push_char(current, '\x02'); // Sentinel for total pages
                     i += 2;
                 }
                 '&' => {
                     // Escaped ampersand: && → &
-                    current.push('&');
+                    push_char(current, '&');
                     i += 2;
                 }
                 '"' => {
-                    // Font name: &"FontName" — skip to closing quote
+                    // `&"Calibri,Bold"` — the face, and optionally a style
+                    // word, for every run after it. `-` means "keep the
+                    // current face", which Excel writes as `&"-,Bold"`.
                     i += 2; // skip &"
+                    let start = i;
                     while i < chars.len() && chars[i] != '"' {
                         i += 1;
                     }
+                    let spec: String = chars[start..i].iter().collect();
                     if i < chars.len() {
                         i += 1; // skip closing "
                     }
+                    let mut parts = spec.splitn(2, ',');
+                    let family = parts.next().unwrap_or("").trim();
+                    let style = parts.next().unwrap_or("").trim();
+                    let mut next = current.last().cloned().unwrap_or_default();
+                    if !family.is_empty() && family != "-" {
+                        next.family = Some(family.to_string());
+                    }
+                    // A style word replaces both flags: Excel writes
+                    // "Regular" to turn them off again.
+                    if !style.is_empty() {
+                        let lower = style.to_ascii_lowercase();
+                        next.bold = lower.contains("bold");
+                        next.italic = lower.contains("italic");
+                    }
+                    open_segment(current, next);
                 }
                 c if c.is_ascii_digit() => {
-                    // Font size: &NN — skip digits
+                    // `&12` — the point size for every run after it.
                     i += 1; // skip &
+                    let start = i;
                     while i < chars.len() && chars[i].is_ascii_digit() {
                         i += 1;
                     }
+                    let digits: String = chars[start..i].iter().collect();
+                    let mut next = current.last().cloned().unwrap_or_default();
+                    if let Ok(size) = digits.parse::<f64>()
+                        && size > 0.0
+                    {
+                        next.size_pt = Some(size);
+                    }
+                    open_segment(current, next);
                 }
                 'K' => {
                     // Font color: &KRRGGBB (or &KTTSNN theme form) — skip the
@@ -98,7 +186,7 @@ pub(super) fn parse_hf_format_string(
                     // `&C&A`, so this turns up in files nobody customised; it
                     // used to fall through the catch-all and, being the whole
                     // section, took the paragraph with it (issue #690).
-                    current.push_str(sheet_name);
+                    push_str(current, sheet_name);
                     i += 2;
                 }
                 'F' | 'Z' | 'D' | 'T' | 'G' => {
@@ -134,7 +222,7 @@ pub(super) fn parse_hf_format_string(
                 }
             }
         } else {
-            current.push(chars[i]);
+            push_char(current, chars[i]);
             i += 1;
         }
     }
@@ -149,7 +237,7 @@ pub(super) fn parse_hf_format_string(
     ];
 
     for (text, alignment) in &sections {
-        if text.is_empty() {
+        if text.iter().all(|segment| segment.text.is_empty()) {
             continue;
         }
         let elements = build_hf_elements(text);
@@ -178,8 +266,17 @@ pub(super) fn parse_hf_format_string(
 }
 
 /// Build HFInline elements from a section string, replacing sentinel chars.
-pub(super) fn build_hf_elements(section: &str) -> Vec<HFInline> {
+pub(super) fn build_hf_elements(section: &[HfSegment]) -> Vec<HFInline> {
     let mut elements = Vec::new();
+    for segment in section {
+        let style: TextStyle = segment.text_style();
+        build_segment_elements(&mut elements, &segment.text, &style);
+    }
+    elements
+}
+
+/// Turn one segment's text into runs, expanding the page-number sentinels.
+fn build_segment_elements(elements: &mut Vec<HFInline>, section: &str, style: &TextStyle) {
     let mut current_text = String::new();
 
     for ch in section.chars() {
@@ -189,24 +286,24 @@ pub(super) fn build_hf_elements(section: &str) -> Vec<HFInline> {
                 if !current_text.is_empty() {
                     elements.push(HFInline::Run(Run {
                         text: std::mem::take(&mut current_text),
-                        style: TextStyle::default(),
+                        style: style.clone(),
                         href: None,
                         footnote: None,
                     }));
                 }
-                elements.push(HFInline::PageNumber(TextStyle::default()));
+                elements.push(HFInline::PageNumber(style.clone()));
             }
             '\x02' => {
                 // Total pages sentinel
                 if !current_text.is_empty() {
                     elements.push(HFInline::Run(Run {
                         text: std::mem::take(&mut current_text),
-                        style: TextStyle::default(),
+                        style: style.clone(),
                         href: None,
                         footnote: None,
                     }));
                 }
-                elements.push(HFInline::TotalPages(TextStyle::default()));
+                elements.push(HFInline::TotalPages(style.clone()));
             }
             _ => {
                 current_text.push(ch);
@@ -217,11 +314,9 @@ pub(super) fn build_hf_elements(section: &str) -> Vec<HFInline> {
     if !current_text.is_empty() {
         elements.push(HFInline::Run(Run {
             text: current_text,
-            style: TextStyle::default(),
+            style: style.clone(),
             href: None,
             footnote: None,
         }));
     }
-
-    elements
 }
