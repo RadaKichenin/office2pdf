@@ -249,7 +249,16 @@ fn test_custom_geo_page_46_tabs_are_relative_to_the_inner_text_origin() {
         Page::Fixed(page) => page,
         other => panic!("Expected fixed page, got {other:?}"),
     };
-    let blocks = text_box_blocks(&page.elements[1]);
+    // Located by content rather than by index: the page's element order shifts
+    // whenever a shape gains a background element, and this test is about the
+    // body's tab stops, not about where it sits in the vector.
+    let blocks = page
+        .elements
+        .iter()
+        .filter(|element| matches!(element.kind, FixedElementKind::TextBox(_)))
+        .map(text_box_blocks)
+        .find(|blocks| blocks.len() == 3)
+        .expect("the three-paragraph body text box");
 
     assert_eq!(blocks.len(), 3);
     for block in blocks {

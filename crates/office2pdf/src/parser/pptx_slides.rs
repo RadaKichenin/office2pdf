@@ -890,6 +890,14 @@ struct ShapeState {
     flip_v: bool,
     opacity: Option<f64>,
     shadow: Option<Shadow>,
+    /// `<a:effectRef idx>` from `<p:style>`, resolved against the theme once
+    /// the shape closes (issue #740).
+    style_effect_idx: Option<i64>,
+    style_effect_color: Option<Color>,
+    /// Whether `<p:spPr>` stated an `<a:effectLst>` of its own. An empty one
+    /// means "no effect" and must not fall through to the style reference,
+    /// which an absent shadow alone cannot distinguish.
+    has_direct_effect_lst: bool,
     in_sp_pr: bool,
     prst_geom: Option<String>,
     fill: Option<Color>,
@@ -934,6 +942,9 @@ impl Default for ShapeState {
             ph_type: None,
             ph_idx: None,
             has_explicit_xfrm: false,
+            style_effect_idx: None,
+            style_effect_color: None,
+            has_direct_effect_lst: false,
             rotation_deg: None,
             flip_h: false,
             flip_v: false,
@@ -1018,10 +1029,18 @@ fn finalize_shape(
             color,
             style: shape.ln_dash_style,
         });
-        // For non-rectangular shapes with text, emit the shape background first,
-        // then overlay a transparent text box. This ensures the geometry is rendered
-        // by the proven shape renderer.
-        let needs_shape_background = shape.pattern_fill.is_some();
+        // For shapes with text that need a background of their own — a
+        // non-rectangular geometry, a pattern fill, or a shadow — emit the
+        // shape background first, then overlay a transparent text box, so the
+        // geometry goes through the proven shape renderer. A plain rectangle
+        // otherwise skips this and becomes a text box with a background fill,
+        // which is cheaper and lays the text out the same.
+        // A shadow needs something to cast it. A plain rectangle with text is
+        // otherwise drawn as a text box with a background fill, and a text box
+        // has nowhere to put a shadow, so the theme shadow of issue #740 was
+        // resolved and then dropped here. Emitting the shape background makes
+        // the existing shape renderer draw it.
+        let needs_shape_background = shape.pattern_fill.is_some() || shape.shadow.is_some();
         let text_shape_kind: Option<ShapeKind> = shape.prst_geom.as_deref().and_then(|geom| {
             let width: f64 = emu_to_pt(shape.cx);
             let height: f64 = emu_to_pt(shape.cy);
@@ -1405,6 +1424,7 @@ struct SlideXmlParser<'a> {
     in_style_ln_ref: bool,
     /// Inside `<a:fillRef>` within `<p:style>` — for resolving fallback fill color.
     in_style_fill_ref: bool,
+    in_style_effect_ref: bool,
     /// Inside `<a:fontRef>` within `<p:style>` — for resolving fallback text color.
     in_style_font_ref: bool,
 
@@ -1465,6 +1485,7 @@ impl<'a> SlideXmlParser<'a> {
             solid_fill_ctx: SolidFillCtx::None,
             in_style_ln_ref: false,
             in_style_fill_ref: false,
+            in_style_effect_ref: false,
             in_style_font_ref: false,
 
             in_pic: false,
@@ -1627,6 +1648,7 @@ impl<'a> SlideXmlParser<'a> {
                     });
             }
             b"effectLst" if self.shape.in_sp_pr && !self.shape.in_ln => {
+                self.shape.has_direct_effect_lst = true;
                 self.shape.shadow = parse_effect_list(reader, self.ctx.theme, self.ctx.color_map);
             }
             b"extLst" if self.shape.in_sp_pr && !self.in_txbody => {
@@ -1930,6 +1952,12 @@ impl<'a> SlideXmlParser<'a> {
             b"fillRef" if self.in_shape && !self.shape.in_sp_pr && !self.in_txbody => {
                 self.in_style_fill_ref = true;
             }
+            // `<a:effectRef>` inside `<p:style>` names a theme effect style.
+            b"effectRef" if self.in_shape && !self.shape.in_sp_pr && !self.in_txbody => {
+                self.in_style_effect_ref = true;
+                self.shape.style_effect_idx =
+                    get_attr_str(e, b"idx").and_then(|value| value.parse::<i64>().ok());
+            }
             // `<a:fontRef>` inside `<p:style>` provides fallback text color.
             b"fontRef" if self.in_shape && !self.shape.in_sp_pr && !self.in_txbody => {
                 self.in_style_font_ref = true;
@@ -2112,6 +2140,12 @@ impl<'a> SlideXmlParser<'a> {
                     self.pic.prst_adj = Some(value / 100_000.0);
                 }
             }
+            // `<a:effectLst/>` carries no effect, but stating it is how a
+            // shape switches its theme effect off, so it still counts as the
+            // shape having spoken for itself (issue #740).
+            b"effectLst" if self.shape.in_sp_pr && !self.shape.in_ln => {
+                self.shape.has_direct_effect_lst = true;
+            }
             b"prstGeom" if self.shape.in_sp_pr => {
                 if let Some(prst) = get_attr_str(e, b"prst") {
                     self.shape.prst_geom = Some(prst);
@@ -2175,6 +2209,10 @@ impl<'a> SlideXmlParser<'a> {
             b"srgbClr" | b"schemeClr" | b"sysClr" if self.in_style_ln_ref => {
                 let parsed = parse_color_from_empty(e, self.ctx.theme, self.ctx.color_map);
                 self.shape.style_ln_color = parsed.color;
+            }
+            b"srgbClr" | b"schemeClr" | b"sysClr" if self.in_style_effect_ref => {
+                let parsed = parse_color_from_empty(e, self.ctx.theme, self.ctx.color_map);
+                self.shape.style_effect_color = parsed.color;
             }
             b"srgbClr" | b"schemeClr" | b"sysClr" if self.solid_fill_ctx != SolidFillCtx::None => {
                 let parsed = parse_color_from_empty(e, self.ctx.theme, self.ctx.color_map);
@@ -2371,6 +2409,21 @@ impl<'a> SlideXmlParser<'a> {
                         self.shape.cx = geometry.cx;
                         self.shape.cy = geometry.cy;
                     }
+                    // A `<p:style>` effect reference fills in only where the
+                    // shape stated no effect of its own (issue #740). Resolved
+                    // here rather than at the `<a:effectRef>` itself so it does
+                    // not depend on spPr preceding p:style in the file.
+                    if self.shape.shadow.is_none()
+                        && !self.shape.has_direct_effect_lst
+                        && let Some(effect_idx) = self.shape.style_effect_idx.take()
+                    {
+                        self.shape.shadow = resolve_effect_ref(
+                            effect_idx,
+                            self.shape.style_effect_color.take(),
+                            self.ctx.theme,
+                            self.ctx.color_map,
+                        );
+                    }
                     if !(self.skip_placeholders && self.shape.has_placeholder) {
                         self.elements.extend(finalize_shape(
                             &mut self.shape,
@@ -2488,6 +2541,9 @@ impl<'a> SlideXmlParser<'a> {
             }
             b"lnRef" if self.in_style_ln_ref => {
                 self.in_style_ln_ref = false;
+            }
+            b"effectRef" if self.in_style_effect_ref => {
+                self.in_style_effect_ref = false;
             }
             b"fillRef" if self.in_style_fill_ref => {
                 self.in_style_fill_ref = false;
