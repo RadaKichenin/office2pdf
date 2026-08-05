@@ -711,3 +711,48 @@ fn test_parse_docx_text_after_run_page_break_still_renders() {
         other => panic!("expected the trailing text paragraph, got {other:?}"),
     }
 }
+
+// ── w:wordWrap (issue #730) ────────────────────────────────────────────
+
+/// The property reaches the IR from `docx-rs`, with `0` and `1` distinct from
+/// each other and from an absent element.
+#[test]
+fn test_word_wrap_reaches_the_paragraph_style() {
+    let off = extract_paragraph_style(&docx_rs::ParagraphProperty::new().word_wrap(false));
+    assert_eq!(off.word_wrap, Some(false));
+
+    let on = extract_paragraph_style(&docx_rs::ParagraphProperty::new().word_wrap(true));
+    assert_eq!(on.word_wrap, Some(true));
+
+    let absent = extract_paragraph_style(&docx_rs::ParagraphProperty::new());
+    assert_eq!(absent.word_wrap, None);
+}
+
+/// Measured on Word: a paragraph's own `w:wordWrap` beats the one its style
+/// carries. A `ListParagraph` with `w:val="0"` breaks mid-eojeol even though
+/// the style alone keeps eojeol whole.
+#[test]
+fn test_explicit_word_wrap_overrides_the_style_chain() {
+    let explicit_prop = docx_rs::ParagraphProperty::new().word_wrap(false);
+    let explicit = extract_paragraph_style(&explicit_prop);
+    let style = ResolvedStyle {
+        text: TextStyle::default(),
+        paragraph: ParagraphStyle {
+            word_wrap: Some(true),
+            ..ParagraphStyle::default()
+        },
+        paragraph_tab_overrides: None,
+        heading_level: None,
+    };
+
+    let merged = merge_paragraph_style(&explicit, None, Some(&style));
+    assert_eq!(
+        merged.word_wrap,
+        Some(false),
+        "the paragraph's own value wins"
+    );
+
+    // And the style still supplies the value when the paragraph says nothing.
+    let inherited = merge_paragraph_style(&ParagraphStyle::default(), None, Some(&style));
+    assert_eq!(inherited.word_wrap, Some(true));
+}

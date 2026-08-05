@@ -154,11 +154,11 @@ struct GenCtx {
     /// `EojeolWrap::Syllable` because that path resolves neither the frame's
     /// fixed text edges nor the box's inner measure — see the note there.
     ///
-    /// The flag is unconditional for a flow page: `w:wordWrap`, which is how
-    /// a document asks Word for character-level Hangul breaking, is not
-    /// parsed, so a paragraph declaring `w:val="0"` still gets the word-level
-    /// rule. That is issue #730 — it needs a `docx-rs` field before the value
-    /// can reach the IR.
+    /// The flag is the flow page's *default*, not the last word. A paragraph
+    /// carrying `w:wordWrap w:val="0"` — how a document asks Word for
+    /// character-level Hangul breaking — overrides it, and
+    /// [`paragraph_eojeol_wrap`] checks that before anything here (issue
+    /// #730).
     breaks_hangul_at_eojeol: bool,
     /// The width one line of the current container has, in points, before a
     /// paragraph's own indents are taken off it: a flow page's text width,

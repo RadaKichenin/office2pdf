@@ -279,7 +279,14 @@ pub(super) enum TaggedElement {
     /// A regular block (non-list paragraph, table, image, page break, etc.)
     Plain(Vec<Block>),
     /// A list paragraph with its numbering info and the paragraph IR.
-    ListParagraph { info: NumInfo, paragraph: Paragraph },
+    ///
+    /// Boxed because a `Paragraph` is an order of magnitude larger than the
+    /// `Plain` variant's vector, and every element of the stream would
+    /// otherwise be sized for the larger one.
+    ListParagraph {
+        info: NumInfo,
+        paragraph: Box<Paragraph>,
+    },
 }
 
 /// A list item paired with the `numId` of the paragraph it came from, so a
@@ -465,7 +472,7 @@ pub(super) fn group_into_lists(
                             footnote: None,
                         },
                     );
-                    result.push(Block::Paragraph(paragraph));
+                    result.push(Block::Paragraph(*paragraph));
                     continue;
                 }
 
@@ -474,7 +481,7 @@ pub(super) fn group_into_lists(
                     resolved_level.map(|level| &level.paragraph_style),
                 );
                 let mut item = ListItem {
-                    content: vec![paragraph],
+                    content: vec![*paragraph],
                     level: info.level,
                     start_at: None,
                 };

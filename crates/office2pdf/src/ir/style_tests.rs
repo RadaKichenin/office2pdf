@@ -183,6 +183,7 @@ fn text_style_merge_from_into_default_target() {
 fn paragraph_style_merge_from_all_none_source_preserves_target() {
     let mut target = ParagraphStyle {
         alignment: Some(Alignment::Center),
+        word_wrap: None,
         indent_left: Some(10.0),
         indent_right: Some(5.0),
         indent_first_line: Some(20.0),
@@ -233,6 +234,7 @@ fn paragraph_style_merge_from_all_some_source_overwrites_target() {
     };
     let source = ParagraphStyle {
         alignment: Some(Alignment::Right),
+        word_wrap: Some(false),
         indent_left: Some(20.0),
         indent_right: Some(15.0),
         indent_first_line: Some(30.0),

@@ -26,6 +26,12 @@ pub struct NamedStyle {
 #[derive(Debug, Clone, Default)]
 pub struct ParagraphStyle {
     pub alignment: Option<Alignment>,
+    /// Word's `w:wordWrap`: whether a Hangul line breaks between eojeol
+    /// (`Some(true)`) or at any syllable (`Some(false)`). `None` leaves the
+    /// choice to the renderer's default, which is word-level for a
+    /// non-justified paragraph. The property overrides the style chain, so it
+    /// cannot be inferred from `pStyle` (issue #730).
+    pub word_wrap: Option<bool>,
     pub indent_left: Option<f64>,
     pub indent_right: Option<f64>,
     pub indent_first_line: Option<f64>,
@@ -281,6 +287,9 @@ impl ParagraphStyle {
     pub fn merge_from(&mut self, other: &ParagraphStyle) {
         if other.alignment.is_some() {
             self.alignment = other.alignment;
+        }
+        if other.word_wrap.is_some() {
+            self.word_wrap = other.word_wrap;
         }
         if other.indent_left.is_some() {
             self.indent_left = other.indent_left;

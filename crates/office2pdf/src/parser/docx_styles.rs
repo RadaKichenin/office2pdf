@@ -393,6 +393,12 @@ pub(super) fn merge_paragraph_style(
         alignment: explicit
             .alignment
             .or(style_paragraph.and_then(|style| style.alignment)),
+        // Measured on Word: a paragraph's own w:wordWrap beats the one its
+        // style carries — a ListParagraph with w:val="0" breaks mid-eojeol
+        // although the style alone would not (issue #730).
+        word_wrap: explicit
+            .word_wrap
+            .or(style_paragraph.and_then(|style| style.word_wrap)),
         indent_left: explicit
             .indent_left
             .or(style_paragraph.and_then(|style| style.indent_left)),

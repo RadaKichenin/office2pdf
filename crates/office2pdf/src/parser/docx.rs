@@ -576,7 +576,10 @@ fn convert_paragraph_element(
                     .style
                     .space_after
                     .get_or_insert(WORD_COMPATIBLE_PARAGRAPH_SPACE_AFTER_PT);
-                TaggedElement::ListParagraph { info, paragraph }
+                TaggedElement::ListParagraph {
+                    info,
+                    paragraph: Box::new(paragraph),
+                }
             } else {
                 TaggedElement::Plain(vec![])
             }

@@ -772,6 +772,45 @@ fn a_docx_paragraph_keeps_each_hangul_eojeol_whole() {
     );
 }
 
+/// `w:wordWrap w:val="0"` asks Word for character-level breaking of Hangul,
+/// and it overrides the style chain. A paragraph that says so must not get the
+/// eojeol frames #626 gives every other non-justified paragraph (issue #730).
+#[test]
+fn a_docx_paragraph_asking_for_character_breaking_gets_no_eojeol_frames() {
+    let mut paragraph = korean_paragraph(EOJEOL_SENTENCE, None, None);
+    if let Block::Paragraph(ref mut p) = paragraph {
+        p.style.word_wrap = Some(false);
+    }
+    let doc = make_doc(vec![make_flow_page(vec![paragraph])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains(EOJEOL_SENTENCE),
+        "the text stays one run so Typst may break inside an eojeol: {result}"
+    );
+    assert!(
+        !result.contains("#box["),
+        "no eojeol frame may be emitted when wordWrap is off: {result}"
+    );
+}
+
+/// Triangulation: `w:val="1"` is the word-level setting, so it must keep the
+/// frames rather than being treated as "the property is present, back off".
+#[test]
+fn a_docx_paragraph_asking_for_word_breaking_keeps_its_eojeol_frames() {
+    let mut paragraph = korean_paragraph(EOJEOL_SENTENCE, None, None);
+    if let Block::Paragraph(ref mut p) = paragraph {
+        p.style.word_wrap = Some(true);
+    }
+    let doc = make_doc(vec![make_flow_page(vec![paragraph])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains("본 #box[계약은] #box[갑과] #box[을이]"),
+        "wordWrap=1 keeps each eojeol whole: {result}"
+    );
+}
+
 #[test]
 fn a_justified_docx_paragraph_keeps_syllable_breaking() {
     let doc = make_doc(vec![make_flow_page(vec![korean_paragraph(
