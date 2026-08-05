@@ -765,6 +765,97 @@ fn test_builtin_style_borders_applied_to_cells() {
     );
 }
 
+/// A banded row's own `tcBdr` draws the rule between rows (issue #764).
+///
+/// Shape taken from "Light Style 2 - Accent 1": `wholeTbl` outlines the table
+/// and switches the interior off, and `band1H` puts a rule on each banded row's
+/// top and bottom. Only the band region supplies that rule, so dropping region
+/// borders loses it and the rows run together.
+#[test]
+fn band_region_border_draws_the_rule_between_rows() {
+    let rule = BorderSide {
+        width: 0.5,
+        color: Color::new(0x44, 0x72, 0xC4),
+        style: BorderLineStyle::Solid,
+    };
+    let mut styles = TableStyleMap::new();
+    styles.insert(
+        "banded".to_string(),
+        PptxTableStyleDef {
+            whole_table: Some(TableCellRegionStyle {
+                borders: table_styles::RegionBorders {
+                    left: Some(rule.clone()),
+                    right: Some(rule.clone()),
+                    top: Some(rule.clone()),
+                    bottom: Some(rule.clone()),
+                    inside_h: None,
+                    inside_v: None,
+                },
+                ..Default::default()
+            }),
+            band1_h: Some(TableCellRegionStyle {
+                borders: table_styles::RegionBorders {
+                    top: Some(rule.clone()),
+                    bottom: Some(rule.clone()),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+    );
+    // Three rows so the banded row has an interior edge on both sides.
+    let mut table = Table {
+        rows: (0..3)
+            .map(|_| TableRow {
+                cells: vec![TableCell::default(), TableCell::default()],
+                height: None,
+            })
+            .collect(),
+        column_widths: vec![100.0, 100.0],
+        ..Table::default()
+    };
+    let props = PptxTableProps {
+        style_id: Some("banded".to_string()),
+        first_row: true,
+        band_row: true,
+        ..PptxTableProps::default()
+    };
+
+    table_styles::apply_table_style(&mut table, &props, &styles);
+
+    let banded = table.rows[1].cells[0]
+        .border
+        .as_ref()
+        .expect("the banded row is bordered");
+    assert!(
+        banded.top.is_some(),
+        "band1H's top is the rule below the header"
+    );
+    assert_eq!(banded.top.as_ref().unwrap().color, rule.color);
+    assert!(banded.bottom.is_some(), "band1H's bottom is drawn too");
+    // insideV stays off: band1H names no left/right, so the vertical edge
+    // between the two columns keeps wholeTbl's absent insideV. That edge is
+    // the first cell's right and the second cell's left — the outer left and
+    // right stay bordered by the grid, so those are not what this checks.
+    assert!(
+        banded.right.is_none(),
+        "a band's horizontal rule must not switch the interior vertical on"
+    );
+    let banded_second = table.rows[1].cells[1]
+        .border
+        .as_ref()
+        .expect("the second column is bordered too");
+    assert!(
+        banded_second.left.is_none(),
+        "the same interior vertical edge, seen from the other cell"
+    );
+    assert!(
+        banded.left.is_some() && banded_second.right.is_some(),
+        "the table's outer left and right still come from the grid"
+    );
+}
+
 #[test]
 fn test_parse_region_borders_from_tc_bdr() {
     let body = r#"<a:wholeTbl><a:tcStyle><a:tcBdr><a:bottom><a:ln w="25400" cmpd="sng"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:ln></a:bottom><a:insideH><a:ln w="12700"><a:solidFill><a:srgbClr val="00FF00"/></a:solidFill></a:ln></a:insideH></a:tcBdr><a:fill><a:solidFill><a:srgbClr val="0000FF"/></a:solidFill></a:fill></a:tcStyle></a:wholeTbl>"#;
