@@ -161,6 +161,7 @@ fn test_charts_stay_on_first_column_group() {
             series: vec![],
             grouping: crate::ir::ChartGrouping::Clustered,
             legend_position: crate::ir::LegendPosition::Right,
+            has_legend: true,
             category_axis_title: None,
             value_axis_title: None,
             category_axis_major_tick_mark: AxisTickMark::Outside,
