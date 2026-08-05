@@ -1057,6 +1057,30 @@ fn structure_number_format_tests_keeps_preserved_leading_spaces() {
     }
 }
 
+/// A cell's leading spaces must survive *rendering*, not just parsing: Typst
+/// drops a space that opens a markup line, so the single-space cell above
+/// rendered flush left even though its text was intact (issue #752).
+#[test]
+fn number_format_tests_renders_a_single_leading_space_as_an_indent() {
+    let data = load_fixture("poi/NumberFormatTests.xlsx");
+    let (document, _warnings) = XlsxParser
+        .parse(&data, &ConvertOptions::default())
+        .expect("fixture should parse");
+    let source = generate_typst(&document)
+        .expect("fixture should generate Typst")
+        .source;
+
+    // Two- and four-space runs already emitted a code-mode string, which
+    // markup cannot collapse; the lone space fell through to a literal.
+    for spaces in [" ", "  ", "    "] {
+        assert!(
+            source.contains(&format!("[#\"{spaces}\";1,234,567]")),
+            "a {}-space indent must survive as a code-mode string",
+            spaces.len()
+        );
+    }
+}
+
 /// A literal-text number format renders its literal, not the raw number
 /// (issue #750).
 ///
