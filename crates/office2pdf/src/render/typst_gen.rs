@@ -1972,6 +1972,14 @@ fn toc_entry_text_settings(default_text: Option<&crate::ir::TextStyle>) -> Strin
 /// print (issue #605). Entry indentation and the leader stay Typst's, because the
 /// entry's *styling* is a separate defect (issue #610).
 fn write_page_format_state(out: &mut String) {
+    // No Office application hangs punctuation into the margin; Typst does, and
+    // it leaks two ways. In justified text a line ending in a comma pushed the
+    // comma past the right margin (#640), and because a hung glyph leaves the
+    // line's layout box, a centred line opening with a hyphen was measured
+    // narrow and drawn off centre (#645). Set once for the document so header
+    // and footer bands, which do not go through the paragraph settings, are
+    // covered too.
+    let _ = writeln!(out, "#set text(overhang: false)");
     let _ = writeln!(
         out,
         "#let {PAGE_FORMAT_STATE} = state(\"{PAGE_FORMAT_STATE}\", \"1\")"
