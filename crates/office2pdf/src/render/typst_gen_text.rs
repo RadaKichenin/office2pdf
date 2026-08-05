@@ -905,7 +905,17 @@ pub(super) fn write_par_settings(out: &mut String, style: &ParagraphStyle) {
         }
     }
     if matches!(style.alignment, Some(Alignment::Justify)) {
+        // Typst hangs line-final punctuation into the margin when it
+        // justifies; Word keeps it inside the column, so a line ending in a
+        // comma overshot the right margin by about 0.8 of the comma's own
+        // advance (issue #640).
+        //
+        // Emitted beside the justify rather than document-wide because
+        // Typst documents `overhang` as applying "in justified text". Its
+        // layout does hang *leading* punctuation on any line, so if that
+        // ever needs suppressing too, this is the wrong place for it.
         out.push_str("  #set par(justify: true)\n");
+        out.push_str("  #set text(overhang: false)\n");
     }
     if matches!(style.direction, Some(TextDirection::Rtl)) {
         out.push_str("  #set text(dir: rtl)\n");
