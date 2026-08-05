@@ -260,6 +260,37 @@ fn test_generate_alignment_justify() {
 }
 
 #[test]
+fn test_punctuation_never_hangs_regardless_of_alignment() {
+    // The setting is document-wide, not per paragraph, because a hung glyph
+    // leaves the line's layout box: a *centred* line opening with a hyphen was
+    // measured narrow and drawn off centre, and header and footer bands never
+    // pass through the paragraph settings at all (issues #645, #646).
+    let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
+        style: ParagraphStyle {
+            alignment: Some(Alignment::Center),
+            ..ParagraphStyle::default()
+        },
+        runs: vec![Run {
+            text: "- 1 -".to_string(),
+            style: TextStyle::default(),
+            href: None,
+            footnote: None,
+        }],
+    })])]);
+    let result = generate_typst(&doc).unwrap().source;
+    assert_eq!(
+        result.matches("overhang: false").count(),
+        1,
+        "stated once for the document, not per paragraph: {result}"
+    );
+    let preamble_end = result.find("#set page").unwrap_or(result.len());
+    assert!(
+        result[..preamble_end].contains("overhang: false"),
+        "it must precede the first page so header and footer bands inherit it: {result}"
+    );
+}
+
+#[test]
 fn test_generate_line_spacing_proportional() {
     let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
         style: ParagraphStyle {
