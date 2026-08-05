@@ -2230,13 +2230,25 @@ fn format_insets(insets: &Insets) -> String {
     )
 }
 
+/// Collapse a style onto one of Typst's three named dash patterns.
+///
+/// This is the coarse fallback. DrawingML strokes go through
+/// `drawingml_dash_array_pt`, which emits each preset's own rhythm; they reach
+/// this only when the width is unusable, and then the nearest named pattern is
+/// all that is left. Word and Excel borders use it as their normal path.
 fn border_line_style_to_typst(style: BorderLineStyle) -> &'static str {
     match style {
         BorderLineStyle::Solid => "solid",
-        BorderLineStyle::Dashed => "dashed",
-        BorderLineStyle::Dotted => "dotted",
-        BorderLineStyle::DashDot => "dash-dotted",
-        BorderLineStyle::DashDotDot => "dash-dotted",
+        BorderLineStyle::Dashed | BorderLineStyle::SystemDash | BorderLineStyle::LargeDash => {
+            "dashed"
+        }
+        BorderLineStyle::Dotted | BorderLineStyle::SystemDot => "dotted",
+        BorderLineStyle::DashDot
+        | BorderLineStyle::DashDotDot
+        | BorderLineStyle::SystemDashDot
+        | BorderLineStyle::LargeDashDot
+        | BorderLineStyle::SystemDashDotDot
+        | BorderLineStyle::LargeDashDotDot => "dash-dotted",
         BorderLineStyle::Double => "solid",
         BorderLineStyle::None => "solid",
     }

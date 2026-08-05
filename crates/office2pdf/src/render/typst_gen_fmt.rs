@@ -43,34 +43,37 @@ pub(super) fn stroke_value(side: &BorderSide, double_is_plain: bool) -> String {
 
 /// The dash array for a DrawingML stroke, in points, scaled by the line width.
 ///
-/// ECMA-376 states the `a:prstDash` presets as multiples of the line width
-/// `w`, not as absolute lengths, so a thin line takes a proportionally short
-/// dash. Typst's named patterns carry fixed point lengths instead, which made
-/// a 0.5pt stroke's `dash` period 6.0pt against GT's 3.5pt (issue #678).
+/// The `a:prstDash` presets are rhythms in multiples of the line width `w`,
+/// not absolute lengths, so a thin line takes a proportionally short dash.
+/// Typst's named patterns carry fixed point lengths instead, which made a
+/// 0.5pt stroke's `dash` period 6.0pt against GT's 3.5pt (issue #678).
 ///
-/// Only the two ratios measured against GT are applied:
+/// Every multiple below was read off a rendered PDF's `d` operator rather than
+/// quoted from a specification: a deck with one 2pt line per preset, rendered
+/// by LibreOffice 24.2.7.2, emits `2.01256 w` and arrays whose entries divide
+/// by that width to exact integers.
 ///
-/// | preset | multiples | measured at w=0.5pt |
-/// | --- | --- | --- |
-/// | `dash` | 4w, 3w | 2.0, 1.5 |
-/// | `dashDot` | 4w, 3w, 1w, 3w | 2.0, 1.5, 0.5, 1.5 |
+/// | preset | measured array ÷ w |
+/// | --- | --- |
+/// | `dot` | 1, 3 |
+/// | `sysDot` | 1, 1 |
+/// | `dash` | 4, 3 |
+/// | `sysDash` | 3, 1 |
+/// | `lgDash` | 8, 3 |
+/// | `dashDot` | 4, 3, 1, 3 |
+/// | `sysDashDot` | 3, 1, 1, 1 |
+/// | `lgDashDot` | 8, 3, 1, 3 |
+/// | `lgDashDotDot` | 8, 3, 1, 3, 1, 3 |
+/// | `sysDashDotDot` | 3, 1, 1, 1, 1, 1 |
 ///
-/// `Dotted` and `DashDotDot` return `None` and keep the named patterns. Their
-/// ratios are not verified here, and `BorderLineStyle` cannot express them
-/// faithfully in any case: `parser/pptx_shapes.rs` buckets presets with
-/// different ratios into one variant — `dot`, `sysDot` and `lgDashDot` all
-/// become `Dotted`, though `lgDashDot` is not a dot pattern at all. Giving
-/// that bucket a single array would be wrong for two of its three presets.
-/// Tracked in issue #758; this function deliberately leaves it alone.
-///
-/// The same bucketing limits the two arms that *are* applied: `Dashed` also
-/// holds `lgDash` (8w/3w) and `sysDash` (3w/1w), and `DashDot` also holds
-/// `sysDashDot` (3w/1w/1w/1w), so each array is right only for the preset it
-/// was measured on. That is strictly better than the fixed absolute lengths
-/// it replaces, and #758 is what makes it exact.
+/// LibreOffice is a second implementation, not PowerPoint; what it pins down
+/// is the ratio each preset name denotes, which is the part `BorderLineStyle`
+/// has to carry. The `dash` and `dashDot` rows agree with the earlier direct
+/// GT measurement in #678.
 ///
 /// Scoped to DrawingML strokes: Word table borders and Excel cell borders
 /// share `BorderLineStyle` but not this rule, so they keep the named patterns.
+/// `DashDotDot` is theirs alone — no preset maps to it — and has no array.
 pub(super) fn drawingml_dash_array_pt(style: BorderLineStyle, width_pt: f64) -> Option<Vec<f64>> {
     let w = if width_pt > 0.0 {
         width_pt
@@ -78,10 +81,17 @@ pub(super) fn drawingml_dash_array_pt(style: BorderLineStyle, width_pt: f64) -> 
         return None;
     };
     let multiples: &[f64] = match style {
+        BorderLineStyle::Dotted => &[1.0, 3.0],
+        BorderLineStyle::SystemDot => &[1.0, 1.0],
         BorderLineStyle::Dashed => &[4.0, 3.0],
+        BorderLineStyle::SystemDash => &[3.0, 1.0],
+        BorderLineStyle::LargeDash => &[8.0, 3.0],
         BorderLineStyle::DashDot => &[4.0, 3.0, 1.0, 3.0],
-        BorderLineStyle::Dotted
-        | BorderLineStyle::DashDotDot
+        BorderLineStyle::SystemDashDot => &[3.0, 1.0, 1.0, 1.0],
+        BorderLineStyle::LargeDashDot => &[8.0, 3.0, 1.0, 3.0],
+        BorderLineStyle::LargeDashDotDot => &[8.0, 3.0, 1.0, 3.0, 1.0, 3.0],
+        BorderLineStyle::SystemDashDotDot => &[3.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+        BorderLineStyle::DashDotDot
         | BorderLineStyle::Solid
         | BorderLineStyle::Double
         | BorderLineStyle::None => return None,

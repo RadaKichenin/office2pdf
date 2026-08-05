@@ -674,16 +674,41 @@ pub struct CellBorder {
 }
 
 /// Border line style (dash pattern).
+///
+/// The first block is the cross-format set: Word `w:val` and Excel border
+/// styles map onto it, and so do the three DrawingML presets that share its
+/// names. The second block exists because DrawingML has more distinct dash
+/// rhythms than that set can name — `lgDash` (8w on) and `sysDash` (3w on)
+/// are not the same line as `dash` (4w on), and folding them together renders
+/// one preset as another (issue #758). Word and Excel never produce them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BorderLineStyle {
     #[default]
     Solid,
+    /// DrawingML `dash`.
     Dashed,
+    /// DrawingML `dot`.
     Dotted,
+    /// DrawingML `dashDot`.
     DashDot,
+    /// No DrawingML preset maps here; Word `dotDotDash` and its Excel kin do.
     DashDotDot,
     Double,
     None,
+    /// DrawingML `sysDot`.
+    SystemDot,
+    /// DrawingML `sysDash`.
+    SystemDash,
+    /// DrawingML `lgDash`.
+    LargeDash,
+    /// DrawingML `sysDashDot`.
+    SystemDashDot,
+    /// DrawingML `lgDashDot`.
+    LargeDashDot,
+    /// DrawingML `sysDashDotDot`.
+    SystemDashDotDot,
+    /// DrawingML `lgDashDotDot`.
+    LargeDashDotDot,
 }
 
 /// A single border side.

@@ -23,6 +23,63 @@ fn test_shape_outline_dash_style() {
     }
 }
 
+/// Every `a:prstDash` preset survives parsing as its own style (issue #758).
+///
+/// Ten presets used to reach the IR as four styles, so a deck's `lgDash` and
+/// `sysDash` lines became one line. Asserting distinctness rather than naming
+/// each variant keeps this about the observable outcome: whichever styles the
+/// IR grows, two different presets must never arrive as the same one.
+#[test]
+fn each_preset_dash_reaches_the_ir_as_a_distinct_style() {
+    const PRESETS: [&str; 10] = [
+        "dot",
+        "sysDot",
+        "dash",
+        "sysDash",
+        "lgDash",
+        "dashDot",
+        "sysDashDot",
+        "lgDashDot",
+        "lgDashDotDot",
+        "sysDashDotDot",
+    ];
+    let shapes: Vec<String> = PRESETS
+        .iter()
+        .enumerate()
+        .map(|(index, preset)| {
+            format!(
+                r#"<p:sp><p:nvSpPr><p:cNvPr id="{id}" name="{preset}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="{y}"/><a:ext cx="914400" cy="0"/></a:xfrm><a:prstGeom prst="line"><a:avLst/></a:prstGeom><a:ln w="25400"><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:prstDash val="{preset}"/></a:ln></p:spPr></p:sp>"#,
+                id = index + 2,
+                y = index as i64 * 457200,
+            )
+        })
+        .collect();
+    let slide = make_slide_xml(&shapes);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+
+    let (doc, _warnings) = PptxParser
+        .parse(&data, &ConvertOptions::default())
+        .expect("the probe deck parses");
+
+    let page = first_fixed_page(&doc);
+    let styles: Vec<BorderLineStyle> = page
+        .elements
+        .iter()
+        .filter_map(|element| match element.kind {
+            FixedElementKind::Shape(ref shape) => Some(shape.stroke.as_ref()?.style),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(styles.len(), PRESETS.len(), "one stroked line per preset");
+    for (index, style) in styles.iter().enumerate() {
+        assert!(
+            !styles[..index].contains(style),
+            "{} and an earlier preset both parse as {style:?}",
+            PRESETS[index],
+        );
+    }
+}
+
 // ── Shape style (rotation, transparency) test helpers ────────────────
 
 #[allow(clippy::too_many_arguments)]
