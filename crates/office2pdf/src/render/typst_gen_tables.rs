@@ -394,11 +394,18 @@ const DATA_BAR_VERTICAL_INSET_PT: f64 = 2.0;
 /// Floor for rows shorter than the inset, so a bar never vanishes or inverts.
 const DATA_BAR_MIN_HEIGHT_PT: f64 = 1.0;
 /// Excel's arrow icon sets are drawn shapes, not characters. Native Excel PDFs
-/// print an arrow about 10 pt tall in a 14 pt row, filled in the band color and
-/// outlined a shade darker.
-const ARROW_ICON_LENGTH_PT: f64 = 10.0;
+/// print them as sprites, filled with a vertical gradient and outlined a shade
+/// darker; these constants size the flat vector stand-in.
+///
+/// Measured from the Excel export of `10_kpi_tracker_en`: the sheet places six
+/// 11 x 11pt `fill_image` sprites, but that is the placement box. Extracting
+/// them gives 12 x 12px bitmaps whose non-white ink spans 11 x 12px for the up
+/// arrow and 12 x 11px for the right one — 10.08 x 11.00pt of actual arrow,
+/// with about a pixel of padding on the narrow axis. Sizing to the 11 x 11 box
+/// instead would give the ink the size of the whole sprite (issue #651).
+const ARROW_ICON_LENGTH_PT: f64 = 11.0;
 /// Across the shaft the arrow is narrower than it is long.
-const ARROW_ICON_BREADTH_PT: f64 = 8.0;
+const ARROW_ICON_BREADTH_PT: f64 = 10.08;
 
 /// Diameter of a circular icon-set icon, in points.
 ///
