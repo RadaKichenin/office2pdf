@@ -1165,3 +1165,54 @@ fn test_print_headings_row_numbers_continue_across_manual_page_breaks() {
     assert_eq!(cell_text(&second.rows[1].cells[0]), "3");
     assert_eq!(cell_text(&second.rows[1].cells[1]), "r3");
 }
+
+/// A sheet with no used cells can still declare `<cols>`, and a drawing
+/// anchored to those columns is placed against their widths (issue #714).
+///
+/// The window used to be left empty, so every column fell through to the
+/// default and an anchored picture was priced at the 8.43-char width whatever
+/// the file declared.
+#[test]
+fn test_empty_sheet_context_reads_declared_column_widths() {
+    let mut book = umya_spreadsheet::new_file();
+    {
+        let sheet = book.get_sheet_mut(&0).unwrap();
+        for col in 1..=3u32 {
+            sheet
+                .get_column_dimension_by_number_mut(&col)
+                .set_width(20.0);
+        }
+    }
+    let sheet: &umya_spreadsheet::Worksheet = book.get_sheet(&0).unwrap();
+    let calibri_11 = NormalFont {
+        family: "Calibri".to_string(),
+        size_pt: 11.0,
+    };
+
+    let ctx = empty_sheet_context(sheet, Some(&calibri_11));
+
+    assert_eq!((ctx.col_start, ctx.col_end), (1, 3));
+    assert_eq!(ctx.column_widths.len(), 3);
+    for width in &ctx.column_widths {
+        assert!(
+            *width > ctx.default_column_width_pt,
+            "a declared width of 20 is wider than the 8.43-char default, got \
+             {width} against {}",
+            ctx.default_column_width_pt
+        );
+    }
+}
+
+/// A sheet declaring no `<cols>` at all keeps the empty window, so every
+/// column still falls through to the default width.
+#[test]
+fn test_empty_sheet_context_without_cols_keeps_the_default_window() {
+    let book = umya_spreadsheet::new_file();
+    let sheet: &umya_spreadsheet::Worksheet = book.get_sheet(&0).unwrap();
+
+    let ctx = empty_sheet_context(sheet, None);
+
+    assert!(ctx.column_widths.is_empty());
+    assert_eq!(ctx.num_cols, 0);
+    assert!(ctx.col_start > ctx.col_end, "an empty window");
+}

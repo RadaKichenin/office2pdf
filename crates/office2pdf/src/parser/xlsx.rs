@@ -269,7 +269,11 @@ fn anchored_image(
 }
 
 /// Context stand-in for sheets with no used cells, so drawing anchors can
-/// still resolve against default column widths and row heights.
+/// still resolve against the sheet's column widths and row heights.
+///
+/// Such a sheet may still declare `<cols>`, and those widths are read here the
+/// way `prepare_sheet_context` reads them for a populated sheet. Only a sheet
+/// declaring none falls back to the default width for every column.
 ///
 /// The column metric must come from the workbook Normal font exactly as it
 /// does for populated sheets: hardcoding a 7px digit metric laid every
@@ -283,16 +287,46 @@ fn empty_sheet_context(
     normal_font: Option<&NormalFont>,
 ) -> SheetContext {
     let unit_pt: f64 = resolve_column_unit_pt(sheet, normal_font);
+    let default_width_pt: f64 = default_column_width_pt(
+        declared_default_column_width(sheet),
+        declared_base_column_width(sheet),
+        unit_pt,
+    );
+
+    // A sheet with no used cells can still declare `<cols>`, and a drawing
+    // anchored to those columns is placed against their widths. Leaving the
+    // window empty priced every column at the default: on a probe declaring
+    // width=20, an anchored picture came out 141pt wide at x=144.40 where a
+    // reference render puts it 340pt wide at x=280.63 (issue #714).
+    let declared: Vec<(u32, f64)> = sheet
+        .get_column_dimensions()
+        .iter()
+        .map(|column| (*column.get_col_num(), *column.get_width()))
+        .collect();
+    let (col_start, col_end) = match (
+        declared.iter().map(|(col, _)| *col).min(),
+        declared.iter().map(|(col, _)| *col).max(),
+    ) {
+        (Some(first), Some(last)) => (first, last),
+        // No `<cols>` either: keep the empty window, so every column falls
+        // through to the default width as before.
+        _ => (1, 0),
+    };
+    let column_widths: Vec<f64> = (col_start..=col_end)
+        .map(|col| {
+            sheet
+                .get_column_dimension_by_number(&col)
+                .map(|column| column_width_to_pt(*column.get_width(), unit_pt))
+                .unwrap_or(default_width_pt)
+        })
+        .collect();
+
     SheetContext {
-        col_start: 1,
-        col_end: 0,
-        num_cols: 0,
-        column_widths: Vec::new(),
-        default_column_width_pt: default_column_width_pt(
-            declared_default_column_width(sheet),
-            declared_base_column_width(sheet),
-            unit_pt,
-        ),
+        col_start,
+        col_end,
+        num_cols: column_widths.len(),
+        column_widths,
+        default_column_width_pt: default_width_pt,
         merge_tops: std::collections::HashMap::new(),
         merge_skips: std::collections::HashSet::new(),
         cond_fmt_overrides: std::collections::HashMap::new(),
