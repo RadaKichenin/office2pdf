@@ -250,6 +250,13 @@ fn test_generate_alignment_justify() {
         result.contains("par(justify: true") || result.contains("set par(justify: true"),
         "Expected justify in: {result}"
     );
+    // Typst hangs line-final punctuation into the margin when justifying.
+    // Word does not, so a justified line ending in a comma overshot the
+    // right margin by about 0.8 of the comma's advance (issue #640).
+    assert!(
+        result.contains("overhang: false"),
+        "justified text must not hang punctuation past the margin: {result}"
+    );
 }
 
 #[test]
