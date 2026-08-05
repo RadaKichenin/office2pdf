@@ -3,6 +3,7 @@ use crate::ir::{
     ChartSeries, ColumnLayout, GradientStop, HeaderFooterParagraph, ImageData, ListItem, ListKind,
     ListLevelStyle, Metadata, SmartArtNode, StyleSheet,
 };
+use crate::render::typst_gen::shapes::{SHADOW_RING_COUNT, SHADOW_RING_EXTENT_SIGMA};
 use std::collections::BTreeMap;
 
 /// Helper to create a minimal Document with one FlowPage.
@@ -749,13 +750,15 @@ fn test_explicit_bold_still_emitted_when_font_unavailable() {
     );
 }
 
-// ── Shadow blur ring stack (issue #390) ──────────────────────────────
+// ── Shadow blur ring stack (issues #390, #662) ───────────────────────
 //
 // PowerPoint renders `blurRad` as a stepped alpha ramp whose compound
 // coverage follows a Gaussian CDF centred on the shadow silhouette with
 // a std-dev of about 0.3 * blurRad (measured from native exports at
 // blur 6/9/12/24pt). The ring stack must reproduce that: full opacity
-// inside, ~5% of it at the rim, monotonic in between.
+// inside, under 1% of it at the rim, monotonic in between. The rim figure
+// follows the extent — the two-sided tail beyond 2.6 sigma is about 0.9%,
+// where the 2 sigma this used to reach left about 4.6%.
 
 fn shadow_with(blur_radius: f64, opacity: f64) -> Shadow {
     Shadow {
@@ -786,17 +789,20 @@ fn test_zero_blur_shadow_keeps_single_crisp_layer() {
 }
 
 #[test]
-fn test_blur_rings_span_two_sigma_each_side() {
+fn test_blur_rings_span_the_declared_extent_each_side() {
     let layers = shadow_blur_layers(&shadow_with(9.0, 0.4));
-    assert_eq!(layers.len(), 6);
+    assert_eq!(layers.len(), SHADOW_RING_COUNT);
     let innermost = layers.iter().map(|(e, _)| *e).fold(f64::INFINITY, f64::min);
     let outermost = layers
         .iter()
         .map(|(e, _)| *e)
         .fold(f64::NEG_INFINITY, f64::max);
-    // sigma = 0.3 * 9pt = 2.7pt; rings run from -2 sigma to +2 sigma.
-    assert!((innermost - -5.4).abs() < 1e-9, "innermost {innermost}");
-    assert!((outermost - 5.4).abs() < 1e-9, "outermost {outermost}");
+    // sigma = 0.3 * 9pt = 2.7pt, and the rings run the declared extent each
+    // way. Derived from the constants rather than written out, so tuning the
+    // ramp does not require rewriting an arithmetic constant here (#662).
+    let reach = SHADOW_RING_EXTENT_SIGMA * 2.7;
+    assert!((innermost + reach).abs() < 1e-9, "innermost {innermost}");
+    assert!((outermost - reach).abs() < 1e-9, "outermost {outermost}");
 }
 
 #[test]
@@ -806,12 +812,21 @@ fn test_blur_ring_coverage_follows_gaussian_cdf() {
     // Inside every ring the stack compounds to the shadow's own opacity.
     let core = compound_coverage_at(&layers, -5.4);
     assert!((core - opacity).abs() < 0.02, "core coverage {core}");
-    // At the silhouette edge the Gaussian is at 50%.
+    // At the silhouette edge itself the Gaussian is at 50%. The old six-ring
+    // ramp was tested at 0.4 sigma because that was a band boundary; with a
+    // finer ramp the halfway point sits where the Gaussian actually puts it,
+    // at zero (#662).
     let sigma = 2.7;
-    let at_edge = compound_coverage_at(&layers, 0.4 * sigma);
+    let at_edge = compound_coverage_at(&layers, 0.0);
     assert!(
-        (at_edge - opacity * 0.5).abs() < 0.03,
-        "edge-band coverage {at_edge}"
+        (at_edge - opacity * 0.5).abs() < 0.05,
+        "edge coverage {at_edge}"
+    );
+    // And one sigma out it has fallen to the Gaussian's own tail there.
+    let at_one_sigma = compound_coverage_at(&layers, sigma);
+    assert!(
+        (at_one_sigma - opacity * 0.1587).abs() < 0.05,
+        "one-sigma coverage {at_one_sigma}"
     );
     // The rim band carries only the far tail, well under a tenth of the core.
     let rim = compound_coverage_at(&layers, 2.0 * sigma);
@@ -838,5 +853,11 @@ fn test_blur_ring_coverage_is_monotonic_outward() {
     // to the opacity and the geometry scales with the radius.
     let core = compound_coverage_at(&layers, -14.4);
     assert!((core - 0.6).abs() < 0.02, "core coverage {core}");
-    assert!((expansions[5] - 14.4).abs() < 1e-9);
+    // sigma = 0.3 * 24pt = 7.2pt, so the outermost ring reaches the declared
+    // extent times that.
+    let outermost = expansions.last().copied().unwrap();
+    assert!(
+        (outermost - SHADOW_RING_EXTENT_SIGMA * 7.2).abs() < 1e-9,
+        "outermost {outermost}"
+    );
 }
