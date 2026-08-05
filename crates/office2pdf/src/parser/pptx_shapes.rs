@@ -1,12 +1,23 @@
 use super::*;
 
-/// Map OOXML preset dash values to `BorderLineStyle`.
+/// Map an `a:prstDash` preset to `BorderLineStyle`, one variant per preset.
+///
+/// The mapping is injective on purpose. It used to bucket presets by rough
+/// appearance, which merged rhythms that differ by more than a factor of two
+/// (`lgDash` 8w on against `sysDash` 3w on) and put `lgDashDot` — a
+/// long-dash-dot — into the dot bucket, so it rendered as dots (issue #758).
 pub(super) fn pptx_dash_to_border_style(val: &str) -> BorderLineStyle {
     match val {
-        "dash" | "lgDash" | "sysDash" => BorderLineStyle::Dashed,
-        "dot" | "sysDot" | "lgDashDot" => BorderLineStyle::Dotted,
-        "dashDot" | "sysDashDot" => BorderLineStyle::DashDot,
-        "lgDashDotDot" | "sysDashDotDot" => BorderLineStyle::DashDotDot,
+        "dot" => BorderLineStyle::Dotted,
+        "sysDot" => BorderLineStyle::SystemDot,
+        "dash" => BorderLineStyle::Dashed,
+        "sysDash" => BorderLineStyle::SystemDash,
+        "lgDash" => BorderLineStyle::LargeDash,
+        "dashDot" => BorderLineStyle::DashDot,
+        "sysDashDot" => BorderLineStyle::SystemDashDot,
+        "lgDashDot" => BorderLineStyle::LargeDashDot,
+        "sysDashDotDot" => BorderLineStyle::SystemDashDotDot,
+        "lgDashDotDot" => BorderLineStyle::LargeDashDotDot,
         "solid" => BorderLineStyle::Solid,
         _ => BorderLineStyle::Solid,
     }

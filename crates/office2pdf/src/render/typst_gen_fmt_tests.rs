@@ -139,12 +139,79 @@ fn drawingml_dash_array_is_absent_for_undashed_styles() {
     assert_eq!(drawingml_dash_array_pt(BorderLineStyle::Dashed, 0.0), None);
 }
 
-/// `Dotted` and `DashDotDot` keep the named patterns: their ratios are not
-/// measured, and each variant buckets presets whose real ratios differ, so a
-/// single array would be wrong for some of them.
+/// Every `a:prstDash` preset carries its own rhythm (issue #758).
+///
+/// The multiples are the ones measured off a rendered PDF's `d` operator; see
+/// `drawingml_dash_array_pt`. At w=1pt the array *is* the multiples, so a
+/// wrong ratio shows up here as a wrong number rather than a scaled one.
 #[test]
-fn drawingml_dash_array_is_absent_for_unmeasured_buckets() {
-    assert_eq!(drawingml_dash_array_pt(BorderLineStyle::Dotted, 0.5), None);
+fn drawingml_dash_array_differs_between_presets() {
+    let at_1pt = |style| drawingml_dash_array_pt(style, 1.0);
+    assert_eq!(at_1pt(BorderLineStyle::Dotted), Some(vec![1.0, 3.0]));
+    assert_eq!(at_1pt(BorderLineStyle::SystemDot), Some(vec![1.0, 1.0]));
+    assert_eq!(at_1pt(BorderLineStyle::Dashed), Some(vec![4.0, 3.0]));
+    assert_eq!(at_1pt(BorderLineStyle::SystemDash), Some(vec![3.0, 1.0]));
+    assert_eq!(at_1pt(BorderLineStyle::LargeDash), Some(vec![8.0, 3.0]));
+    assert_eq!(
+        at_1pt(BorderLineStyle::DashDot),
+        Some(vec![4.0, 3.0, 1.0, 3.0])
+    );
+    assert_eq!(
+        at_1pt(BorderLineStyle::SystemDashDot),
+        Some(vec![3.0, 1.0, 1.0, 1.0])
+    );
+    assert_eq!(
+        at_1pt(BorderLineStyle::LargeDashDot),
+        Some(vec![8.0, 3.0, 1.0, 3.0])
+    );
+    assert_eq!(
+        at_1pt(BorderLineStyle::LargeDashDotDot),
+        Some(vec![8.0, 3.0, 1.0, 3.0, 1.0, 3.0])
+    );
+    assert_eq!(
+        at_1pt(BorderLineStyle::SystemDashDotDot),
+        Some(vec![3.0, 1.0, 1.0, 1.0, 1.0, 1.0])
+    );
+}
+
+/// The three families are no longer interchangeable within themselves: the
+/// dash-family presets differ, and so do the dash-dot ones. A regression that
+/// re-merged any pair would pass the per-preset table above only if it also
+/// changed the expected numbers, but it would fail here immediately.
+#[test]
+fn drawingml_dash_array_keeps_same_family_presets_distinct() {
+    let arrays = [
+        BorderLineStyle::Dashed,
+        BorderLineStyle::SystemDash,
+        BorderLineStyle::LargeDash,
+        BorderLineStyle::DashDot,
+        BorderLineStyle::SystemDashDot,
+        BorderLineStyle::LargeDashDot,
+        BorderLineStyle::Dotted,
+        BorderLineStyle::SystemDot,
+    ]
+    .map(|style| drawingml_dash_array_pt(style, 1.0));
+    for (i, left) in arrays.iter().enumerate() {
+        for right in arrays.iter().skip(i + 1) {
+            assert_ne!(left, right, "two presets share one dash array");
+        }
+    }
+}
+
+/// `lgDashDot` is a long dash followed by a dot, not a dot pattern. It used to
+/// map to `Dotted` and render as evenly spaced dots (issue #758).
+#[test]
+fn large_dash_dot_is_not_a_dot_pattern() {
+    let dotted = drawingml_dash_array_pt(BorderLineStyle::Dotted, 1.0).unwrap();
+    let large_dash_dot = drawingml_dash_array_pt(BorderLineStyle::LargeDashDot, 1.0).unwrap();
+    assert_eq!(large_dash_dot[0], 8.0 * dotted[0], "its dash is 8w, not 1w");
+    assert_eq!(large_dash_dot.len(), 4, "a dash and a dot, not one dot");
+}
+
+/// `DashDotDot` is Word's and Excel's alone once every preset has its own
+/// variant, and those two formats keep the named patterns.
+#[test]
+fn drawingml_dash_array_is_absent_for_the_word_only_style() {
     assert_eq!(
         drawingml_dash_array_pt(BorderLineStyle::DashDotDot, 0.5),
         None
