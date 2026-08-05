@@ -1054,3 +1054,63 @@ fn an_item_declaring_no_gap_emits_none() {
         "an item with no gap emits nothing: {source}"
     );
 }
+
+/// A hanging-indent bullet separates its glyph from the body with the tab
+/// alone (issue #685).
+///
+/// `fixed_text_list_marker` appends a space after the glyph, and the
+/// hanging-indent branch then appends the tab that carries the gap to the
+/// indent. Both together put the body one space past the indent — 101.60pt
+/// against a reference's 99.01pt on the audited deck, enough to move a wrap
+/// point.
+#[test]
+fn a_hanging_indent_bullet_separates_with_the_tab_alone() {
+    use crate::ir::List;
+
+    let list = List {
+        kind: ListKind::Unordered,
+        items: vec![ListItem {
+            content: vec![Paragraph {
+                style: ParagraphStyle {
+                    indent_left: Some(27.0),
+                    indent_first_line: Some(-27.0),
+                    ..ParagraphStyle::default()
+                },
+                runs: vec![Run {
+                    text: "Bulleted".to_string(),
+                    style: TextStyle::default(),
+                    href: None,
+                    footnote: None,
+                }],
+            }],
+            level: 0,
+            start_at: None,
+        }],
+        level_styles: BTreeMap::new(),
+    };
+    let doc = make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![make_fixed_text_box(
+            50.0,
+            50.0,
+            600.0,
+            400.0,
+            Insets::default(),
+            crate::ir::TextBoxVerticalAlign::Top,
+            vec![Block::List(list)],
+        )],
+    )]);
+
+    let source = generate_typst(&doc).unwrap().source;
+
+    // The tab compiles into segments, so the marker is the first of them.
+    assert!(
+        source.contains("let tab_segment_0 = [•]"),
+        "the glyph is the whole first tab segment: {source}"
+    );
+    assert!(
+        !source.contains("let tab_segment_0 = [• ]"),
+        "no space may trail the glyph before the tab: {source}"
+    );
+}
