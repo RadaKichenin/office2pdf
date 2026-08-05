@@ -41,8 +41,8 @@ use self::theme::{
     parse_background_color, parse_background_gradient, parse_background_image_rid,
     parse_background_ref, parse_color_from_empty, parse_color_from_start, parse_effect_list,
     parse_master_color_map, parse_master_text_styles, parse_shape_gradient_fill,
-    parse_shape_pattern_fill, parse_theme_xml, resolve_effective_color_map, resolve_scheme_color,
-    resolve_theme_font,
+    parse_shape_pattern_fill, parse_theme_xml, resolve_effect_ref, resolve_effective_color_map,
+    resolve_scheme_color, resolve_theme_font,
 };
 
 #[path = "pptx_package.rs"]

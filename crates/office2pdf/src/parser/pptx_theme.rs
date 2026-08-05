@@ -20,6 +20,9 @@ pub(super) struct ThemeData {
     /// Line widths (EMU) of each `<a:fmtScheme>/<a:lnStyleLst>/<a:ln>` entry,
     /// for `<a:lnRef idx="N">` outline width resolution.
     pub(super) line_style_widths: Vec<i64>,
+    /// Raw XML of each `<a:fmtScheme>/<a:effectStyleLst>/<a:effectStyle>`
+    /// entry, for `<a:effectRef idx="N">` resolution.
+    pub(super) effect_styles: Vec<String>,
 }
 
 /// Effective scheme-color aliases for a slide part.
@@ -272,8 +275,9 @@ pub(super) fn parse_theme_xml(xml: &str) -> ThemeData {
         }
     }
 
-    theme.fill_styles = extract_fill_style_entries(xml, b"fillStyleLst");
-    theme.bg_fill_styles = extract_fill_style_entries(xml, b"bgFillStyleLst");
+    theme.fill_styles = extract_style_list_entries(xml, b"fillStyleLst");
+    theme.bg_fill_styles = extract_style_list_entries(xml, b"bgFillStyleLst");
+    theme.effect_styles = extract_style_list_entries(xml, b"effectStyleLst");
     theme.line_style_widths = extract_line_style_widths(xml);
 
     theme
@@ -314,9 +318,14 @@ fn line_width_attr(e: &BytesStart<'_>) -> i64 {
         .unwrap_or(0)
 }
 
-/// Extract the raw XML of each top-level fill entry (`<a:solidFill>`,
-/// `<a:gradFill>`, ...) inside the named `<a:fmtScheme>` list.
-fn extract_fill_style_entries(xml: &str, list_tag: &[u8]) -> Vec<String> {
+/// Extract the raw XML of each top-level entry inside the named
+/// `<a:fmtScheme>` list — a fill (`<a:solidFill>`, `<a:gradFill>`, ...) for the
+/// fill lists, an `<a:effectStyle>` for the effect list.
+///
+/// The entries are kept as XML rather than parsed here so each reference site
+/// can run its own parser over them, with `phClr` bound to whatever color the
+/// reference carries.
+fn extract_style_list_entries(xml: &str, list_tag: &[u8]) -> Vec<String> {
     let mut reader = Reader::from_str(xml);
     let mut entries: Vec<String> = Vec::new();
     let mut in_list = false;
@@ -770,6 +779,49 @@ pub(super) fn parse_shape_pattern_fill(
         preset,
         foreground: foreground.unwrap_or_else(Color::black),
         background: background.unwrap_or_else(Color::white),
+    }
+}
+
+/// Resolve `<a:effectRef idx="N">` into the theme's effect style list.
+///
+/// A shape's `<p:style>` can carry its whole appearance by reference, and the
+/// effect is the one part that used to be dropped: `a:lnRef` and `a:fillRef`
+/// resolved, `a:effectRef` did not, so a shadow that exists only in the theme's
+/// `<a:effectStyleLst>` never reached the renderer (issue #740).
+///
+/// `idx` is 1-based, and `idx="0"` means no effect. The reference's own color
+/// child binds `phClr` for the entry, the same way `<p:bgRef>` binds it for a
+/// fill entry — stock themes state the shadow color literally, so this matters
+/// only for themes that reference the placeholder.
+pub(super) fn resolve_effect_ref(
+    style_index: i64,
+    ref_color: Option<Color>,
+    theme: &ThemeData,
+    color_map: &ColorMapData,
+) -> Option<Shadow> {
+    if style_index < 1 {
+        return None;
+    }
+    let entry: &str = theme.effect_styles.get((style_index - 1) as usize)?;
+
+    let mut theme_with_placeholder: ThemeData = theme.clone();
+    if let Some(color) = ref_color {
+        theme_with_placeholder
+            .colors
+            .insert("phClr".to_string(), color);
+    }
+
+    // Reuse the direct-`a:effectLst` parser by seeking to the entry's own
+    // effectLst, so a themed shadow and a literal one take the same path.
+    let mut reader = Reader::from_str(entry);
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"effectLst" => {
+                return parse_effect_list(&mut reader, &theme_with_placeholder, color_map);
+            }
+            Ok(Event::Eof) | Err(_) => return None,
+            _ => {}
+        }
     }
 }
 

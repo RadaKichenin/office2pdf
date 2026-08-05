@@ -704,3 +704,134 @@ fn test_parse_theme_line_style_widths() {
     let theme = parse_theme_xml(theme_xml);
     assert_eq!(theme.line_style_widths, vec![6350, 12700, 19050]);
 }
+
+// ── `<a:effectRef>` resolution (issue #740) ────────────────────────────
+
+/// Theme carrying three distinct effect styles. The first two are the shadows
+/// PowerPoint's stock themes ship; the third states its color as `phClr` so
+/// the placeholder path is exercised too.
+fn theme_xml_with_effect_styles() -> &'static str {
+    r#"<?xml version="1.0" encoding="UTF-8"?><a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:themeElements><a:clrScheme name="T"><a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1><a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1><a:dk2><a:srgbClr val="44546A"/></a:dk2><a:lt2><a:srgbClr val="E7E6E6"/></a:lt2><a:accent1><a:srgbClr val="4472C4"/></a:accent1><a:accent2><a:srgbClr val="ED7D31"/></a:accent2><a:accent3><a:srgbClr val="A5A5A5"/></a:accent3><a:accent4><a:srgbClr val="FFC000"/></a:accent4><a:accent5><a:srgbClr val="5B9BD5"/></a:accent5><a:accent6><a:srgbClr val="70AD47"/></a:accent6><a:hlink><a:srgbClr val="0563C1"/></a:hlink><a:folHlink><a:srgbClr val="954F72"/></a:folHlink></a:clrScheme><a:fontScheme name="T"><a:majorFont><a:latin typeface="Calibri Light"/></a:majorFont><a:minorFont><a:latin typeface="Calibri"/></a:minorFont></a:fontScheme><a:fmtScheme name="T"><a:fillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:fillStyleLst><a:lnStyleLst><a:ln w="6350"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln></a:lnStyleLst><a:effectStyleLst><a:effectStyle><a:effectLst><a:outerShdw blurRad="40000" dist="20000" dir="5400000" rotWithShape="0"><a:srgbClr val="000000"><a:alpha val="38000"/></a:srgbClr></a:outerShdw></a:effectLst></a:effectStyle><a:effectStyle><a:effectLst><a:outerShdw blurRad="76200" dist="38100" dir="10800000" rotWithShape="0"><a:srgbClr val="FF0000"><a:alpha val="60000"/></a:srgbClr></a:outerShdw></a:effectLst></a:effectStyle><a:effectStyle><a:effectLst><a:outerShdw blurRad="12700" dist="12700" dir="2700000" rotWithShape="0"><a:schemeClr val="phClr"/></a:outerShdw></a:effectLst></a:effectStyle></a:effectStyleLst><a:bgFillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:bgFillStyleLst></a:fmtScheme></a:themeElements></a:theme>"#
+}
+
+/// `idx="1"` picks the first effect style. Values are the ones stock themes
+/// carry: a 40000 EMU blur, a 20000 EMU drop straight down, 38% black.
+#[test]
+fn effect_ref_resolves_the_first_theme_effect_style() {
+    let theme = parse_theme_xml(theme_xml_with_effect_styles());
+    let shadow = resolve_effect_ref(1, None, &theme, &default_color_map())
+        .expect("idx 1 resolves to the first effect style");
+
+    assert!((shadow.blur_radius - emu_to_pt(40000)).abs() < 1e-9);
+    assert!((shadow.distance - emu_to_pt(20000)).abs() < 1e-9);
+    assert!(
+        (shadow.direction - 90.0).abs() < 1e-9,
+        "5400000 is straight down"
+    );
+    assert_eq!(shadow.color, Color::new(0, 0, 0));
+    assert!((shadow.opacity - 0.38).abs() < 1e-6);
+}
+
+/// Triangulation: a different index resolves to that entry's own values, so
+/// the resolution cannot be a fixed shadow.
+#[test]
+fn effect_ref_resolves_each_index_to_its_own_entry() {
+    let theme = parse_theme_xml(theme_xml_with_effect_styles());
+    let shadow = resolve_effect_ref(2, None, &theme, &default_color_map())
+        .expect("idx 2 resolves to the second effect style");
+
+    assert!((shadow.blur_radius - emu_to_pt(76200)).abs() < 1e-9);
+    assert!((shadow.distance - emu_to_pt(38100)).abs() < 1e-9);
+    assert!((shadow.direction - 180.0).abs() < 1e-9);
+    assert_eq!(shadow.color, Color::new(0xFF, 0, 0));
+    assert!((shadow.opacity - 0.60).abs() < 1e-6);
+}
+
+/// The reference's own color binds `phClr` inside the entry, matching how
+/// `<p:bgRef>` binds it for a fill entry.
+#[test]
+fn effect_ref_binds_its_color_to_the_placeholder() {
+    let theme = parse_theme_xml(theme_xml_with_effect_styles());
+    let reference_color = Color::new(0x44, 0x72, 0xC4);
+    let shadow = resolve_effect_ref(3, Some(reference_color), &theme, &default_color_map())
+        .expect("idx 3 resolves to the third effect style");
+
+    assert_eq!(shadow.color, reference_color);
+}
+
+/// `idx="0"` means no effect, and an index past the list resolves to nothing
+/// rather than to the last entry.
+#[test]
+fn effect_ref_index_zero_and_out_of_range_resolve_to_nothing() {
+    let theme = parse_theme_xml(theme_xml_with_effect_styles());
+    assert!(resolve_effect_ref(0, None, &theme, &default_color_map()).is_none());
+    assert!(resolve_effect_ref(4, None, &theme, &default_color_map()).is_none());
+}
+
+/// A shape whose only effect is the `<p:style>` reference gets the theme's
+/// shadow — the end-to-end path issue #740 reported as broken.
+fn slide_with_styled_shape(sp_pr_effect: &str, style_body: &str) -> String {
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?><p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/><p:sp><p:nvSpPr><p:cNvPr id="2" name="Panel"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="914400" y="914400"/><a:ext cx="2743200" cy="914400"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>{sp_pr_effect}</p:spPr><p:style>{style_body}</p:style><p:txBody><a:bodyPr/><a:lstStyle/><a:p/></p:txBody></p:sp></p:spTree></p:cSld></p:sld>"#
+    )
+}
+
+fn first_shape_shadow(slide: &str) -> Option<Shadow> {
+    let data = build_test_pptx_with_theme_layout_master(
+        9144000,
+        6858000,
+        slide,
+        r#"<?xml version="1.0" encoding="UTF-8"?><p:sldLayout xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/></p:spTree></p:cSld></p:sldLayout>"#,
+        r#"<?xml version="1.0" encoding="UTF-8"?><p:sldMaster xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/></p:spTree></p:cSld><p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/></p:sldMaster>"#,
+        theme_xml_with_effect_styles(),
+    );
+    let (doc, _warnings) = PptxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    doc.pages
+        .iter()
+        .flat_map(|page| match page {
+            Page::Fixed(fixed) => fixed.elements.iter().collect::<Vec<_>>(),
+            _ => Vec::new(),
+        })
+        .find_map(|element| match element.kind {
+            FixedElementKind::Shape(ref shape) => shape.shadow.clone(),
+            _ => None,
+        })
+}
+
+#[test]
+fn styled_shape_inherits_the_theme_shadow_through_effect_ref() {
+    let slide = slide_with_styled_shape(
+        "",
+        r#"<a:lnRef idx="2"><a:schemeClr val="accent1"/></a:lnRef><a:fillRef idx="1"><a:schemeClr val="accent1"/></a:fillRef><a:effectRef idx="1"><a:schemeClr val="accent1"/></a:effectRef><a:fontRef idx="minor"><a:schemeClr val="lt1"/></a:fontRef>"#,
+    );
+
+    let shadow = first_shape_shadow(&slide).expect("the theme effect reaches the shape");
+    assert!((shadow.blur_radius - emu_to_pt(40000)).abs() < 1e-9);
+    assert!((shadow.distance - emu_to_pt(20000)).abs() < 1e-9);
+    assert!((shadow.opacity - 0.38).abs() < 1e-6);
+}
+
+/// An `<a:effectLst/>` of the shape's own means "no effect" and must win over
+/// the reference — otherwise every shape that switches its theme shadow off
+/// would get it back.
+#[test]
+fn an_empty_effect_list_on_the_shape_suppresses_the_reference() {
+    let slide = slide_with_styled_shape(
+        "<a:effectLst/>",
+        r#"<a:effectRef idx="1"><a:schemeClr val="accent1"/></a:effectRef>"#,
+    );
+
+    assert!(first_shape_shadow(&slide).is_none());
+}
+
+/// The shape's own shadow wins over the reference when both are present.
+#[test]
+fn a_direct_shadow_wins_over_the_effect_ref() {
+    let slide = slide_with_styled_shape(
+        r#"<a:effectLst><a:outerShdw blurRad="25400" dist="25400" dir="0"><a:srgbClr val="00FF00"/></a:outerShdw></a:effectLst>"#,
+        r#"<a:effectRef idx="1"><a:schemeClr val="accent1"/></a:effectRef>"#,
+    );
+
+    let shadow = first_shape_shadow(&slide).expect("the direct shadow survives");
+    assert_eq!(shadow.color, Color::new(0, 0xFF, 0));
+}
