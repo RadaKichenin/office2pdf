@@ -691,6 +691,16 @@ fn convert_hf_paragraph(
         }
     }
 
+    // A field the paragraph never closed. Per-run state used to make this
+    // unreachable — the next run started clean — so leaving it unflushed would
+    // silently drop text that malformed input previously rendered.
+    if field_state.in_field {
+        match field_state.inline.take() {
+            Some(inline) => elements.push(inline),
+            None => elements.extend(field_state.cached_result.drain(..).map(HFInline::Run)),
+        }
+    }
+
     HeaderFooterParagraph {
         style,
         elements,
@@ -829,6 +839,11 @@ struct HeaderFieldState {
     in_field: bool,
     inline: Option<HFInline>,
     past_separate: bool,
+    /// The field's cached result, kept in case the instruction turns out to be
+    /// one we do not model. Word shows that text, and so did this code before
+    /// the state spanned runs — back then `in_field` was false by the time the
+    /// result's own run was read, so it fell through as ordinary text.
+    cached_result: Vec<Run>,
 }
 
 /// Extract inline elements from a run's children for header/footer use.
@@ -846,6 +861,7 @@ fn extract_hf_run_elements(
         in_field,
         inline: field_inline,
         past_separate,
+        cached_result,
     } = field;
 
     for child in children {
@@ -855,14 +871,19 @@ fn extract_hf_run_elements(
                     *in_field = true;
                     *field_inline = None;
                     *past_separate = false;
+                    cached_result.clear();
                 }
                 docx_rs::FieldCharType::Separate => {
                     *past_separate = true;
                 }
                 docx_rs::FieldCharType::End => {
-                    if let Some(inline) = field_inline.take() {
-                        elements.push(inline);
+                    match field_inline.take() {
+                        Some(inline) => elements.push(inline),
+                        // An instruction we do not model: show what Word
+                        // cached, rather than dropping the field's text.
+                        None => elements.extend(cached_result.drain(..).map(HFInline::Run)),
                     }
+                    cached_result.clear();
                     *in_field = false;
                     *past_separate = false;
                 }
@@ -891,6 +912,14 @@ fn extract_hf_run_elements(
             }
             docx_rs::RunChild::Text(text) => {
                 if *in_field && *past_separate {
+                    if !text.text.is_empty() {
+                        cached_result.push(Run {
+                            text: text.text.clone(),
+                            style: style.clone(),
+                            href: None,
+                            footnote: None,
+                        });
+                    }
                     continue;
                 }
                 if !*in_field && !text.text.is_empty() {

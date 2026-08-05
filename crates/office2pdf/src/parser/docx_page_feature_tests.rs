@@ -97,6 +97,82 @@ fn test_page_field_split_across_runs_is_a_page_number() {
     );
 }
 
+/// A field whose instruction is not one we model still has to show the text
+/// Word cached for it. Before the field state spanned runs this happened by
+/// accident — `in_field` was false again by the time the result's own run was
+/// read — so making the state span runs must not lose it.
+#[test]
+fn test_unmodelled_split_field_keeps_its_cached_text() {
+    let footer = docx_rs::Footer::new().add_paragraph(
+        docx_rs::Paragraph::new()
+            .add_run(docx_rs::Run::new().add_field_char(docx_rs::FieldCharType::Begin, false))
+            .add_run(
+                docx_rs::Run::new().add_instr_text(docx_rs::InstrText::Unsupported(
+                    " STYLEREF 1 \\s ".to_string(),
+                )),
+            )
+            .add_run(docx_rs::Run::new().add_field_char(docx_rs::FieldCharType::Separate, false))
+            .add_run(docx_rs::Run::new().add_text("Chapter Title"))
+            .add_run(docx_rs::Run::new().add_field_char(docx_rs::FieldCharType::End, false)),
+    );
+    let docx = docx_rs::Docx::new().footer(footer).add_paragraph(
+        docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text("Body text")),
+    );
+    let mut cursor = Cursor::new(Vec::new());
+    docx.build().pack(&mut cursor).unwrap();
+    let data = cursor.into_inner();
+
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let page = match &doc.pages[0] {
+        Page::Flow(page) => page,
+        other => panic!("Expected FlowPage, got {other:?}"),
+    };
+    let footer = page.footer.as_ref().expect("Should have footer");
+    let has_cached_text = footer.paragraphs.iter().any(|paragraph| {
+        paragraph.elements.iter().any(
+            |element| matches!(element, crate::ir::HFInline::Run(run) if run.text.contains("Chapter Title")),
+        )
+    });
+    assert!(
+        has_cached_text,
+        "an unmodelled field must still render its cached result"
+    );
+}
+
+/// A field the paragraph never closes must not swallow the text after it.
+#[test]
+fn test_unterminated_split_field_does_not_swallow_its_text() {
+    let footer = docx_rs::Footer::new().add_paragraph(
+        docx_rs::Paragraph::new()
+            .add_run(docx_rs::Run::new().add_field_char(docx_rs::FieldCharType::Begin, false))
+            .add_run(
+                docx_rs::Run::new()
+                    .add_instr_text(docx_rs::InstrText::Unsupported(" STYLEREF 1 ".to_string())),
+            )
+            .add_run(docx_rs::Run::new().add_field_char(docx_rs::FieldCharType::Separate, false))
+            .add_run(docx_rs::Run::new().add_text("Dangling")),
+    );
+    let docx = docx_rs::Docx::new().footer(footer).add_paragraph(
+        docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text("Body text")),
+    );
+    let mut cursor = Cursor::new(Vec::new());
+    docx.build().pack(&mut cursor).unwrap();
+    let data = cursor.into_inner();
+
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let page = match &doc.pages[0] {
+        Page::Flow(page) => page,
+        other => panic!("Expected FlowPage, got {other:?}"),
+    };
+    let footer = page.footer.as_ref().expect("Should have footer");
+    let has_text = footer.paragraphs.iter().any(|paragraph| {
+        paragraph.elements.iter().any(
+            |element| matches!(element, crate::ir::HFInline::Run(run) if run.text.contains("Dangling")),
+        )
+    });
+    assert!(has_text, "text inside an unclosed field must still render");
+}
+
 /// Word applies the containing run's properties to the field result, so the
 /// parsed field must carry that run's style.
 #[test]
