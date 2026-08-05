@@ -1330,11 +1330,45 @@ fn test_down_arrow_icon_is_flipped() {
         Color::new(0xD6, 0x55, 0x32),
     ))]))
     .unwrap();
-    assert!(up.source.contains("(4pt, 0pt)"), "up arrow tip at the top");
+    // Read the polygon back rather than pinning literal coordinates: the arrow
+    // is sized from a GT measurement and those numbers move (issue #651). What
+    // must hold is that flipping puts the tip at the other end of the same
+    // shape.
+    let tip = |source: &str, want_min_y: bool| -> (f64, f64) {
+        // Points are emitted as `(Xpt, Ypt)`; pull them out without a regex
+        // dependency.
+        let points: Vec<(f64, f64)> = source
+            .split('(')
+            .filter_map(|chunk| {
+                let (x, rest) = chunk.split_once("pt, ")?;
+                let (y, _) = rest.split_once("pt)")?;
+                Some((x.parse().ok()?, y.parse().ok()?))
+            })
+            .collect();
+        assert!(!points.is_empty(), "no polygon points in: {source}");
+        let extreme = if want_min_y {
+            points.iter().map(|p| p.1).fold(f64::MAX, f64::min)
+        } else {
+            points.iter().map(|p| p.1).fold(f64::MIN, f64::max)
+        };
+        let row: Vec<(f64, f64)> = points
+            .into_iter()
+            .filter(|p| (p.1 - extreme).abs() < 1e-6)
+            .collect();
+        assert_eq!(row.len(), 1, "the tip is the only point at that end");
+        row[0]
+    };
+
+    let up_tip = tip(&up.source, true);
+    let down_tip = tip(&down.source, false);
+    assert_eq!(up_tip.1, 0.0, "the up arrow's tip is at the top");
     assert!(
-        down.source.contains("(4pt, 10pt)"),
-        "down arrow tip at the bottom. Got: {}",
-        down.source
+        down_tip.1 > up_tip.1,
+        "the down arrow's tip is at the other end: {down_tip:?} against {up_tip:?}"
+    );
+    assert!(
+        (down_tip.0 - up_tip.0).abs() < 1e-6,
+        "and on the same centre line: {down_tip:?} against {up_tip:?}"
     );
 }
 
