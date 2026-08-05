@@ -875,7 +875,17 @@ pub(super) fn parse_drawing_text_boxes(
                     }
                     b"p" if in_tx_body => {
                         current_para = Some(Paragraph {
-                            style: ParagraphStyle::default(),
+                            // A worksheet text box's paragraphs stack with no
+                            // gap of their own unless the body asks for one.
+                            // This parser reads no `a:spcBef`/`a:spcAft`, and
+                            // leaving the fields unset let the renderer's
+                            // default block spacing in on top of the line
+                            // height, roughly doubling the pitch (issue #656).
+                            style: ParagraphStyle {
+                                space_before: Some(0.0),
+                                space_after: Some(0.0),
+                                ..ParagraphStyle::default()
+                            },
                             runs: Vec::new(),
                         });
                     }

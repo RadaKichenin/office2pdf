@@ -819,6 +819,22 @@ fn with_text_box_renders_anchored_text() {
     let para = &text_box.paragraphs[0];
     assert_eq!(para.runs[0].text, "Line 1");
     assert_eq!(para.style.alignment, None, "algn=l maps to default/left");
+    // This `xdr:txBody` declares no `a:spcBef`/`a:spcAft`, so its paragraphs
+    // must carry an explicit zero rather than being left unset — unset lets
+    // the renderer's own default block spacing in, which doubled the pitch
+    // between lines (issue #656).
+    for (index, paragraph) in text_box.paragraphs.iter().enumerate() {
+        assert_eq!(
+            paragraph.style.space_before,
+            Some(0.0),
+            "paragraph {index} must state its space before"
+        );
+        assert_eq!(
+            paragraph.style.space_after,
+            Some(0.0),
+            "paragraph {index} must state its space after"
+        );
+    }
     assert_eq!(para.runs[0].style.color, Some(Color::new(0xFF, 0, 0)));
 
     assert_eq!(
