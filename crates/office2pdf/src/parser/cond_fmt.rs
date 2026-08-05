@@ -627,6 +627,42 @@ const ICON_GREEN: Color = Color {
     g: 193,
     b: 122,
 };
+/// The arrow sets' own fills, which are not the traffic lights'.
+///
+/// Excel draws each arrow as a sprite filled with a vertical gradient under a
+/// dark outline, so a flat stand-in needs one colour to represent that ramp.
+/// Measured from the Excel export of `10_kpi_tracker_en`: extract the sprites,
+/// drop the near-white background, then keep only ink pixels whose four
+/// neighbours are also ink — that peels the outline ring, which a plain
+/// dominant-colour sample returns instead of the fill. The mean of what
+/// remains is the colour whose flat area matches the gradient's, and our own
+/// arrow carries a darkened outline of its own, so interior compares with
+/// interior (issue #651).
+///
+/// | band | gradient | interior mean |
+/// | --- | --- | --- |
+/// | down | `#B9413C` → `#F8A8A9` | `#E77979` |
+/// | right | `#E89A20` → `#FFEDB1` | `#F9D06A` |
+/// | up | `#3B8440` → `#75C68B` | `#59B06D` |
+///
+/// Scoped to `3Arrows`, the only set measured. `4Arrows` and `5Arrows` keep the
+/// shared palette until there is an export to measure them on.
+const ARROW_ICON_RED: Color = Color {
+    r: 231,
+    g: 121,
+    b: 121,
+};
+const ARROW_ICON_YELLOW: Color = Color {
+    r: 249,
+    g: 208,
+    b: 106,
+};
+const ARROW_ICON_GREEN: Color = Color {
+    r: 89,
+    g: 176,
+    b: 109,
+};
+
 const ICON_GRAY: Color = Color {
     r: 128,
     g: 128,
@@ -678,9 +714,9 @@ fn icon_set_glyphs(set_type: &str, band_count: usize) -> Vec<(&'static str, Opti
             ("⚑", Some(ICON_GREEN)),
         ],
         "3Arrows" => vec![
-            (ARROW_DOWN, Some(ICON_RED)),
-            (ARROW_RIGHT, Some(ICON_YELLOW)),
-            (ARROW_UP, Some(ICON_GREEN)),
+            (ARROW_DOWN, Some(ARROW_ICON_RED)),
+            (ARROW_RIGHT, Some(ARROW_ICON_YELLOW)),
+            (ARROW_UP, Some(ARROW_ICON_GREEN)),
         ],
         "3ArrowsGray" => vec![
             (ARROW_DOWN, Some(ICON_GRAY)),

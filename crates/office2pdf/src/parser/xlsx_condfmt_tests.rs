@@ -564,7 +564,7 @@ fn test_cond_fmt_icon_set_arrows_explicit() {
         Some("\u{25BC}"),
         "3Arrows uses a solid down-triangle for the low band (issue #377)"
     );
-    assert_eq!(cell1.icon_color, Some(Color::new(214, 85, 50)));
+    assert_eq!(cell1.icon_color, Some(Color::new(231, 121, 121)));
 
     let cell3 = &tp.table.rows[2].cells[0];
     assert_eq!(
@@ -572,7 +572,7 @@ fn test_cond_fmt_icon_set_arrows_explicit() {
         Some("\u{25B2}"),
         "3Arrows uses a solid up-triangle for the high band (issue #377)"
     );
-    assert_eq!(cell3.icon_color, Some(Color::new(98, 193, 122)));
+    assert_eq!(cell3.icon_color, Some(Color::new(89, 176, 109)));
 }
 
 #[test]
@@ -767,17 +767,17 @@ fn test_cond_fmt_icon_set_num_thresholds_from_start_end_cfvos() {
     // 0.84 < 0.9 -> low band (red down)
     assert_eq!(
         tp.table.rows[0].cells[0].icon_color,
-        Some(Color::new(214, 85, 50))
+        Some(Color::new(231, 121, 121))
     );
     // 0.93 in [0.9, 1.0) -> middle band (yellow)
     assert_eq!(
         tp.table.rows[1].cells[0].icon_color,
-        Some(Color::new(234, 191, 87))
+        Some(Color::new(249, 208, 106))
     );
     // 1.07 >= 1.0 -> high band (green up)
     assert_eq!(
         tp.table.rows[2].cells[0].icon_color,
-        Some(Color::new(98, 193, 122))
+        Some(Color::new(89, 176, 109))
     );
 }
 
@@ -1065,5 +1065,51 @@ fn test_color_scale_percent_cfvo_stays_a_linear_position() {
         cell_background(&data, 5),
         Color::new(0, 255, 0),
         "50% of the 0..100 range is 50, so A6 sits on the middle stop"
+    );
+}
+
+/// The arrow sets carry their own fills, not the traffic lights' (issue #651).
+///
+/// Excel ships different sprite artwork per icon set: `#62C17A` is the
+/// traffic-light green measured in #536, and `#59B06D` is 3Arrows'. Sharing one
+/// palette made whichever set was measured last wrong for the other.
+#[test]
+fn test_arrow_icons_do_not_take_the_traffic_light_palette() {
+    let arrows = build_icon_set_fixture(Some("3Arrows"));
+    let lights = build_icon_set_fixture(Some("3TrafficLights1"));
+    let arrow_doc = XlsxParser
+        .parse(&arrows, &ConvertOptions::default())
+        .unwrap()
+        .0;
+    let light_doc = XlsxParser
+        .parse(&lights, &ConvertOptions::default())
+        .unwrap()
+        .0;
+
+    let arrow_colors: Vec<Option<Color>> = get_sheet_page(&arrow_doc, 0)
+        .table
+        .rows
+        .iter()
+        .filter_map(|row| row.cells.first().map(|cell| cell.icon_color))
+        .collect();
+    let light_colors: Vec<Option<Color>> = get_sheet_page(&light_doc, 0)
+        .table
+        .rows
+        .iter()
+        .filter_map(|row| row.cells.first().map(|cell| cell.icon_color))
+        .collect();
+
+    assert!(
+        arrow_colors.iter().any(|c| c.is_some()),
+        "the arrow fixture carries icon colours at all"
+    );
+    assert_ne!(
+        arrow_colors, light_colors,
+        "the two sets were measured separately and differ"
+    );
+    // The traffic-light green from #536 must survive unchanged.
+    assert!(
+        light_colors.contains(&Some(Color::new(98, 193, 122))),
+        "traffic lights keep their measured green, got {light_colors:?}"
     );
 }
