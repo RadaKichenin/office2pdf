@@ -595,3 +595,96 @@ fn test_hf_font_color_code_is_stripped() {
         .collect();
     assert_eq!(texts, vec!["top left", "top center", "top right"]);
 }
+
+// --- Header/footer font and size codes (issue #633) ---
+
+/// The style of the first run of the first section.
+fn hf_first_style(hf: &HeaderFooter) -> TextStyle {
+    hf.paragraphs
+        .iter()
+        .flat_map(|p| p.elements.iter())
+        .find_map(|element| match element {
+            HFInline::Run(run) => Some(run.style.clone()),
+            _ => None,
+        })
+        .expect("a run in the header")
+}
+
+/// `&"Font,Style"` selects the face for the runs after it, and `&<n>` the size.
+/// Both used to be parsed and discarded, so every header printed in the
+/// fallback face at the document default size.
+#[test]
+fn test_hf_font_and_size_codes_reach_the_runs() {
+    let hf = parse_hf("&L&\"Calibri,Bold\"&12left").expect("header parsed");
+    let style = hf_first_style(&hf);
+
+    assert_eq!(style.font_family.as_deref(), Some("Calibri"));
+    assert_eq!(style.east_asian_font_family.as_deref(), Some("Calibri"));
+    assert_eq!(style.font_size, Some(12.0));
+    assert_eq!(style.bold, Some(true));
+    assert_eq!(
+        style.italic, None,
+        "no italic word, so the default survives"
+    );
+}
+
+/// A section with no codes keeps every field unset, so the renderer's own
+/// defaults apply rather than being pinned by the parser.
+#[test]
+fn test_hf_without_codes_carries_no_style() {
+    let style = hf_first_style(&parse_hf("&Lplain").expect("header parsed"));
+
+    assert_eq!(style.font_family, None);
+    assert_eq!(style.font_size, None);
+    assert_eq!(style.bold, None);
+    assert_eq!(style.italic, None);
+}
+
+/// Excel writes `&"-,Bold"` to change the style while keeping the face, and
+/// `Regular` to turn the flags back off.
+#[test]
+fn test_hf_font_code_dash_keeps_the_face_and_regular_clears_the_style() {
+    let hf = parse_hf("&L&\"Calibri,Bold\"bold&\"-,Regular\"plain").expect("header parsed");
+    let styles: Vec<TextStyle> = hf
+        .paragraphs
+        .iter()
+        .flat_map(|p| p.elements.iter())
+        .filter_map(|element| match element {
+            HFInline::Run(run) => Some(run.style.clone()),
+            _ => None,
+        })
+        .collect();
+
+    assert_eq!(styles.len(), 2, "one run per style change, got {styles:?}");
+    assert_eq!(styles[0].bold, Some(true));
+    assert_eq!(styles[1].bold, None, "Regular turns bold back off");
+    assert_eq!(
+        styles[1].font_family.as_deref(),
+        Some("Calibri"),
+        "`-` keeps the face the previous code set"
+    );
+}
+
+/// A code partway through a section applies only from that point on, so the
+/// text before it keeps the earlier face.
+#[test]
+fn test_hf_code_midway_splits_the_section() {
+    let hf = parse_hf("&Lplain&\"Calibri,Regular\"styled").expect("header parsed");
+    let texts: Vec<(String, Option<String>)> = hf
+        .paragraphs
+        .iter()
+        .flat_map(|p| p.elements.iter())
+        .filter_map(|element| match element {
+            HFInline::Run(run) => Some((run.text.clone(), run.style.font_family.clone())),
+            _ => None,
+        })
+        .collect();
+
+    assert_eq!(
+        texts,
+        vec![
+            ("plain".to_string(), None),
+            ("styled".to_string(), Some("Calibri".to_string())),
+        ]
+    );
+}
