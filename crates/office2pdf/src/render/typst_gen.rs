@@ -1861,18 +1861,22 @@ fn generate_hf_elements(out: &mut String, elements: &[HFInline], ctx: &mut GenCt
             HFInline::Image(image) => generate_image(out, image, ctx),
             // Word applies the containing run's properties to the field
             // result, so the number matches the literals around it.
+            // `context` is explicit because a header or footer paragraph
+            // carrying a frame is emitted as a `#place` at document level,
+            // where the page counter has no context of its own and Typst
+            // refuses it. Inside a real header the value is the same.
             HFInline::PageNumber(style) => {
                 write_hf_field(
                     out,
                     style,
                     &format!(
-                        "#counter(page).display(\"{}\")",
+                        "#context counter(page).display(\"{}\")",
                         ctx.page_number_format.typst_pattern()
                     ),
                 );
             }
             HFInline::TotalPages(style) => {
-                write_hf_field(out, style, "#counter(page).final().first()");
+                write_hf_field(out, style, "#context counter(page).final().first()");
             }
             HFInline::PositionedTab(_) => out.push_str("#h(1em)"),
         }

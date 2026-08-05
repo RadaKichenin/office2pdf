@@ -187,6 +187,62 @@ fn test_generate_page_anchored_footer_frame_in_foreground() {
     assert!(!output.source.contains("footer:"));
 }
 
+/// A page number inside a page-anchored frame has to compile.
+///
+/// The frame is emitted as a `#place` at document level, where the page
+/// counter has no context of its own, so a bare `#counter(page).display()`
+/// makes Typst abort the whole conversion (issue #788).
+#[test]
+fn test_page_anchored_frame_page_number_compiles() {
+    use crate::ir::{
+        FrameAnchor, HFInline, HeaderFooter, HeaderFooterFrame, HeaderFooterParagraph,
+    };
+
+    let doc = make_doc(vec![Page::Flow(FlowPage {
+        size: PageSize::default(),
+        margins: Margins::default(),
+        content: vec![make_paragraph("Body")],
+        header: Some(HeaderFooter {
+            distance_from_edge: None,
+            paragraphs: vec![HeaderFooterParagraph {
+                style: ParagraphStyle::default(),
+                elements: vec![HFInline::PageNumber(TextStyle::default())],
+                border: None,
+                border_space: None,
+                frame: Some(HeaderFooterFrame {
+                    x: Some(50.0),
+                    y: Some(25.0),
+                    width: None,
+                    height: None,
+                    horizontal_anchor: FrameAnchor::Page,
+                    vertical_anchor: FrameAnchor::Page,
+                }),
+            }],
+        }),
+        footer: None,
+        columns: None,
+        line_grid_pitch: None,
+        line_grid_snaps_lines: false,
+        page_numbering: None,
+    })]);
+
+    let output = generate_typst(&doc).unwrap();
+    assert!(
+        output
+            .source
+            .contains("#place(top + left, dx: 50pt, dy: 25pt)"),
+        "the frame is still placed at document level: {}",
+        output.source
+    );
+    assert!(
+        output.source.contains("#context counter(page)"),
+        "the counter needs its own context there: {}",
+        output.source
+    );
+    crate::render::pdf::compile_to_pdf(&output.source, &output.images, None, &[], false, false)
+        .expect("a framed page number must compile");
+}
+
 #[test]
 fn test_generate_flow_page_with_header_and_footer() {
     use crate::ir::{HFInline, HeaderFooter, HeaderFooterParagraph};
@@ -599,8 +655,16 @@ fn test_table_page_with_page_number_footer() {
     let doc = make_doc(vec![page]);
     let output = generate_typst(&doc).unwrap();
     assert!(output.source.contains("footer: context ["));
-    assert!(output.source.contains(r#"#counter(page).display("1")"#));
-    assert!(output.source.contains("#counter(page).final().first()"));
+    assert!(
+        output
+            .source
+            .contains(r#"#context counter(page).display("1")"#)
+    );
+    assert!(
+        output
+            .source
+            .contains("#context counter(page).final().first()")
+    );
 }
 
 #[test]
@@ -1821,7 +1885,7 @@ fn test_page_number_field_uses_its_run_style() {
     let output = generate_typst(&doc).unwrap();
     let counter = output
         .source
-        .find(r#"#counter(page).display("1")"#)
+        .find(r#"#context counter(page).display("1")"#)
         .expect("page counter emitted");
     let prefix = &output.source[..counter];
     let wrapper = prefix
@@ -1866,7 +1930,11 @@ fn test_unstyled_page_number_field_stays_bare() {
     })]);
 
     let output = generate_typst(&doc).unwrap();
-    assert!(output.source.contains(r#"#counter(page).display("1")"#));
+    assert!(
+        output
+            .source
+            .contains(r#"#context counter(page).display("1")"#)
+    );
     assert!(
         !output.source.contains("#text()[#counter"),
         "no empty text wrapper"
@@ -1904,7 +1972,9 @@ fn test_section_page_numbering_updates_the_counter_and_its_numerals() {
         output.source
     );
     assert!(
-        output.source.contains(r#"#counter(page).display("i")"#),
+        output
+            .source
+            .contains(r#"#context counter(page).display("i")"#),
         "the PAGE field renders the section's numerals: {}",
         output.source
     );
