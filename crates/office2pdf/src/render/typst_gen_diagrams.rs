@@ -182,6 +182,63 @@ const CHART_SERIES_COLORS: [&str; 6] = [
     "rgb(112, 173, 71)",
 ];
 
+/// Side of an automatic series marker, in points.
+///
+/// Left at 5pt rather than changed. #635 reports the marker is about twice
+/// Excel's, but the only reference available here is a LibreOffice render of
+/// `WithChart.xlsx`, whose markers measure 5.0 x 5.0pt — the same as ours. That
+/// is not a measurement of Excel, so it does not disprove the report; it means
+/// there was nothing to size against, and guessing would be as likely to move
+/// away from Excel as toward it.
+const SERIES_MARKER_SIZE_PT: f64 = 5.0;
+
+/// Marker shape for the `index`-th series, when the file asks for a default
+/// marker rather than naming a `c:symbol`.
+///
+/// The sequence exists so adjacent series stay apart in monochrome; drawing one
+/// square for every series defeats it (issue #635). That a cycle should exist
+/// at all is corroborated: a LibreOffice render of `WithChart.xlsx` draws its
+/// two series as a square and a diamond, where ours drew two squares.
+///
+/// The *order* below is unverified. It is the one #635 states Excel uses, and
+/// nothing here checks it — the repo holds no Excel export of that workbook,
+/// and LibreOffice cycles in a different order of its own (square, then
+/// diamond). So the reference settles that a cycle exists, not whose order is
+/// right. Confirm against a native export before relying on the order.
+fn write_series_marker(out: &mut String, series_index: usize, x: f64, y: f64, color: &str) {
+    let size: f64 = SERIES_MARKER_SIZE_PT;
+    let half: f64 = size / 2.0;
+    let left: String = format_f64(x - half);
+    let top: String = format_f64(y - half);
+    let full: String = format_f64(size);
+    let mid: String = format_f64(half);
+
+    let shape: String = match series_index % 4 {
+        // Diamond.
+        0 => format!(
+            "polygon(fill: {color}, stroke: none, ({mid}pt, 0pt), ({full}pt, {mid}pt), ({mid}pt, {full}pt), (0pt, {mid}pt))"
+        ),
+        // Square.
+        1 => format!("rect(width: {full}pt, height: {full}pt, fill: {color}, stroke: none)"),
+        // Triangle.
+        2 => format!(
+            "polygon(fill: {color}, stroke: none, ({mid}pt, 0pt), ({full}pt, {full}pt), (0pt, {full}pt))"
+        ),
+        // Cross, as a filled X.
+        _ => {
+            let thin: String = format_f64(size / 3.0);
+            let thick: String = format_f64(size * 2.0 / 3.0);
+            format!(
+                "polygon(fill: {color}, stroke: none, ({thin}pt, 0pt), ({thick}pt, 0pt), ({thick}pt, {thin}pt), ({full}pt, {thin}pt), ({full}pt, {thick}pt), ({thick}pt, {thick}pt), ({thick}pt, {full}pt), ({thin}pt, {full}pt), ({thin}pt, {thick}pt), (0pt, {thick}pt), (0pt, {thin}pt), ({thin}pt, {thin}pt))"
+            )
+        }
+    };
+    let _ = writeln!(
+        out,
+        "#place(top + left, dx: {left}pt, dy: {top}pt, {shape})"
+    );
+}
+
 /// The automatic colour for the `index`-th slot, from the file's own theme.
 ///
 /// A chart that states no fill takes `accent1`..`accent6` of the theme its
@@ -1279,14 +1336,9 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
                 "#place(top + left, path(stroke: 2pt + {color}, {coords}))"
             );
         }
-        // Point markers.
+        // Point markers, cycling by series index.
         for (x, y) in &points {
-            let _ = writeln!(
-                out,
-                "#place(top + left, dx: {}pt, dy: {}pt, rect(width: 5pt, height: 5pt, fill: {color}, stroke: none))",
-                format_f64(x - 2.5),
-                format_f64(y - 2.5)
-            );
+            write_series_marker(out, s_index, *x, *y, &color);
         }
     }
 

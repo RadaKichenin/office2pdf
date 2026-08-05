@@ -2400,3 +2400,30 @@ fn test_explicit_series_fill_still_outranks_the_theme() {
         "the series that declares none still takes accent2, got:\n{source}"
     );
 }
+
+#[test]
+fn test_line_series_markers_cycle_by_series_index() {
+    // `c:marker val="1"` with no `c:symbol` means "the default marker for this
+    // series index", and the point of the sequence is that adjacent series stay
+    // apart in monochrome. Drawing one square for every series defeats that
+    // (issue #635).
+    let mut chart = two_series_bar_chart(Vec::new());
+    chart.chart_type = ChartType::Line;
+    chart.categories = vec!["Q1".to_string(), "Q2".to_string()];
+    chart.series[0].values = vec![100.0, 120.0];
+    chart.series[1].values = vec![60.0, 80.0];
+    let source = chart_source(chart);
+
+    assert!(
+        source.contains("polygon("),
+        "a cycled marker set needs shapes beyond `rect`, got:\n{source}"
+    );
+    // Series 1 and series 2 must not draw the same marker.
+    let squares = source.matches("rect(width: 5pt, height: 5pt").count();
+    let polygons = source.matches("polygon(").count();
+    assert!(
+        squares > 0 && polygons > 0,
+        "the two series must draw different marker shapes, got {squares} squares \
+         and {polygons} polygons in:\n{source}"
+    );
+}
