@@ -757,6 +757,7 @@ fn write_block_spacing_params(out: &mut String, style: &ParagraphStyle) {
 /// paragraph's own column — from the left indent to the right indent — so
 /// they belong to the innermost block (issue #464).
 fn write_block_decoration_params(out: &mut String, style: &ParagraphStyle) {
+    let decorated: bool = style.background.is_some() || style.border.is_some();
     if let Some(background) = style.background {
         let _ = write!(out, ", fill: {}", rgb(&background));
     }
@@ -767,7 +768,31 @@ fn write_block_decoration_params(out: &mut String, style: &ParagraphStyle) {
             style.border_space.as_deref().copied().unwrap_or_default(),
         );
     }
+    if decorated {
+        // `outset` widens what the block paints without moving the text in
+        // it, which is what the overhang needs (issue #644).
+        let _ = write!(
+            out,
+            ", outset: (x: {}pt)",
+            format_f64(TEXT_COLUMN_DECORATION_OVERHANG_PT)
+        );
+    }
 }
+
+/// How far Word paints a rule or a shaded block past each edge of the text
+/// column it belongs to: 0.02in. Applies to `w:pBdr` and `w:shd` on a body
+/// paragraph and to a header or footer rule alike.
+///
+/// Measured, not assumed: across seven golden Word exports the widest rule on
+/// page 1 spans 456.48pt against a 453.60pt text column — 2.88pt wider, or
+/// 1.44pt at each edge — and the landscape file shows the same overhang on its
+/// own wider column. The seven cover both `w:pBdr` rules and `w:shd` blocks,
+/// and body paragraphs as well as header bands.
+///
+/// Whether the overhang is also independent of border weight and style is what
+/// issue #644 reports, and it is consistent with these files all landing on one
+/// value, but the per-style breakdown in that issue was not re-measured here.
+pub(super) const TEXT_COLUMN_DECORATION_OVERHANG_PT: f64 = 1.44;
 
 fn stroke_literal(side: &BorderSide) -> String {
     // Callers skip Double sides (drawn as overlays), so for every reachable
@@ -851,10 +876,15 @@ fn write_paragraph_double_border_overlays(
             ("bottom", 1.0)
         };
         for dy in [near_dy, far_dy] {
+            // A placed line spans the block's layout box, which `outset` does
+            // not widen, so a double rule has to reach past both edges itself
+            // to match the single-stroke case (issue #644).
             let _ = write!(
                 out,
-                "#place({align}, dy: {}pt, line(length: 100%, stroke: {}pt + {}))",
+                "#place({align}, dx: -{}pt, dy: {}pt, line(length: 100% + {}pt, stroke: {}pt + {}))",
+                format_f64(TEXT_COLUMN_DECORATION_OVERHANG_PT),
                 format_f64(sign * dy),
+                format_f64(2.0 * TEXT_COLUMN_DECORATION_OVERHANG_PT),
                 format_f64(w),
                 rgb(&side.color),
             );

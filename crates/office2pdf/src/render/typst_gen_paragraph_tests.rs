@@ -845,6 +845,13 @@ fn test_generate_paragraph_with_bottom_border_rule() {
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
+    // Word inflates the rule 0.02in past each edge of the text column, so it
+    // runs 2.88pt wider than the copy above it. `outset` widens what the block
+    // paints without moving the text inside it (issue #644).
+    assert!(
+        result.contains("outset: (x: 1.44pt)"),
+        "the rule must overhang the text column by 1.44pt each side: {result}"
+    );
     assert!(
         result.contains("stroke: (bottom: 0.75pt + rgb(30, 39, 97))"),
         "bottom border must stroke the wrapper: {result}"
@@ -1394,8 +1401,15 @@ fn a_double_rule_reserves_its_space_plus_all_three_widths() {
         "8pt of space plus three 1pt widths: {source}"
     );
     assert!(
-        source.contains("#place(bottom, dy: 9pt,") && source.contains("#place(bottom, dy: 11pt,"),
+        source.contains("#place(bottom, dx: -1.44pt, dy: 9pt,")
+            && source.contains("#place(bottom, dx: -1.44pt, dy: 11pt,"),
         "both hairlines are placed from the declared space: {source}"
+    );
+    // A placed line spans the block's layout box, which `outset` does not
+    // widen, so each hairline reaches past both edges itself (issue #644).
+    assert!(
+        source.contains("line(length: 100% + 2.88pt"),
+        "a double rule overhangs the column like a single one: {source}"
     );
     assert!(
         !source.contains("stroke: (bottom:"),

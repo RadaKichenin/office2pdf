@@ -1820,10 +1820,15 @@ fn write_hf_border_line(out: &mut String, border: &BorderSide, is_primary_double
         border.width
     };
     let dash = border_line_style_to_typst(border.style);
+    // Word paints a header rule past both edges of the text column, exactly as
+    // it does a body paragraph's. `#move` shifts the line without disturbing
+    // the band's layout (issue #644).
     let _ = write!(
         out,
-        "block(height: {}pt)[#line(length: 100%, stroke: (paint: {}, thickness: {}pt, dash: \"{}\"))]",
+        "block(height: {}pt)[#move(dx: -{}pt)[#line(length: 100% + {}pt, stroke: (paint: {}, thickness: {}pt, dash: \"{}\"))]]",
         format_f64(width),
+        format_f64(TEXT_COLUMN_DECORATION_OVERHANG_PT),
+        format_f64(2.0 * TEXT_COLUMN_DECORATION_OVERHANG_PT),
         rgb(&border.color),
         format_f64(width),
         if border.style == BorderLineStyle::Double {
