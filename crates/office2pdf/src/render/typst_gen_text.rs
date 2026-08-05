@@ -1114,6 +1114,12 @@ pub(super) fn paragraph_eojeol_wrap(
     line_box_em: Option<(f64, f64)>,
     container_measure_pt: Option<f64>,
 ) -> EojeolWrap {
+    // `w:wordWrap w:val="0"` asks for character-level breaking outright, and
+    // it wins over the style chain, so it is checked before anything the
+    // paragraph inherits (issue #730).
+    if style.word_wrap == Some(false) {
+        return EojeolWrap::Syllable;
+    }
     if !breaks_hangul_at_eojeol || matches!(style.alignment, Some(Alignment::Justify)) {
         return EojeolWrap::Syllable;
     }

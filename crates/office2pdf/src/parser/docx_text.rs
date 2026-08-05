@@ -36,6 +36,7 @@ pub(super) fn extract_paragraph_style(prop: &docx_rs::ParagraphProperty) -> Para
 
     ParagraphStyle {
         alignment,
+        word_wrap: prop.word_wrap,
         indent_left,
         indent_right,
         indent_first_line,
