@@ -1,4 +1,5 @@
 use super::*;
+use crate::ir::ChartAreaOutline;
 use crate::ir::{
     Block, BorderLineStyle, Margins, PageSize, Paragraph, ParagraphStyle, Run, SheetImage,
     SheetTextBox, Table, TableCell, TableRow, TextStyle,
@@ -343,6 +344,7 @@ fn test_drawings_shift_with_the_inset_grid_and_charts_by_one_row() {
             value_axis_deleted: false,
             bar_band_layout: crate::ir::BarBandLayout::default(),
             theme_accent_colors: Vec::new(),
+            chart_area_outline: ChartAreaOutline::Default,
         },
     ));
 

@@ -1,4 +1,5 @@
 use super::*;
+use crate::ir::ChartAreaOutline;
 
 #[test]
 fn test_generate_flow_page_with_text_header() {
@@ -713,6 +714,7 @@ fn test_table_page_with_chart_at_row() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_outline: ChartAreaOutline::Default,
     };
 
     let page = Page::Sheet(SheetPage {
@@ -768,6 +770,7 @@ fn test_table_page_with_chart_at_end() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_outline: ChartAreaOutline::Default,
     };
 
     let page = Page::Sheet(SheetPage {

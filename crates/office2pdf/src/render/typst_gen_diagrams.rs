@@ -1,4 +1,5 @@
 use super::*;
+use crate::ir::ChartAreaOutline;
 
 /// How a chart is drawn. Selecting the variant once lets the atomicity decision
 /// and the emitter agree on which geometry applies.
@@ -407,6 +408,47 @@ const MAJOR_UNIT_FRACTIONS: [(f64, f64); 3] = [(2.0, 0.2), (5.0, 0.5), (10.0, 1.
 /// The axis line ran a milder version of the same drift at 0.8pt `#787878`
 /// (issue #673).
 pub(super) const CHART_AUTOMATIC_LINE: &str = "0.75pt + rgb(134, 134, 134)";
+
+/// Outline Office draws around the whole chart area — plot, axis labels and
+/// legend alike — when the file states no `c:chartSpace/c:spPr/a:ln`.
+///
+/// It is the same stroke as the gridlines: the native Excel export of
+/// `WithChart.xlsx` draws the border as a single grey pixel at 150 DPI. In the
+/// committed `assets/bugfixes/issue-637/gt.jpg`, pixel (104, 300) — on the
+/// border's left edge — samples RGB(133,133,133), against the RGB(134,134,134)
+/// of [`CHART_AUTOMATIC_LINE`]; the one-level gap is the JPEG. Without the
+/// outline a chart has no boundary against the sheet behind it (#637).
+pub(super) const CHART_AREA_OUTLINE: &str = CHART_AUTOMATIC_LINE;
+
+/// The Typst `stroke:` argument for a chart's own area outline.
+///
+/// The default is *not* unconditional: chart parts across the corpus declare
+/// `<a:ln><a:noFill/></a:ln>` to suppress the outline, and others declare a line
+/// of their own, so drawing [`CHART_AREA_OUTLINE`] regardless would put a border
+/// on charts that ask for none and the wrong border on charts that ask for
+/// theirs. See [`ChartAreaOutline`] for the fixtures covering each case (#637).
+fn chart_area_stroke(outline: &ChartAreaOutline) -> String {
+    match outline {
+        ChartAreaOutline::Default => CHART_AREA_OUTLINE.to_string(),
+        ChartAreaOutline::Suppressed => "none".to_string(),
+        // A width or colour the file left out, or named in a form this parser
+        // does not resolve, falls back to the automatic one rather than to
+        // nothing: the file did ask for *a* line.
+        ChartAreaOutline::Explicit { width_pt, color } => format!(
+            "{}pt + {}",
+            format_f64(width_pt.unwrap_or(CHART_AUTOMATIC_LINE_PT)),
+            color.map_or_else(
+                || CHART_AUTOMATIC_LINE_RGB.to_string(),
+                |c| format!("rgb({}, {}, {})", c.r, c.g, c.b)
+            )
+        ),
+    }
+}
+
+/// The width and colour [`CHART_AUTOMATIC_LINE`] is built from, for an explicit
+/// line that names only one of them.
+const CHART_AUTOMATIC_LINE_PT: f64 = 0.75;
+const CHART_AUTOMATIC_LINE_RGB: &str = "rgb(134, 134, 134)";
 
 /// Share of the tick-label font's ascent one major tick mark is long.
 ///
@@ -921,9 +963,10 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
 
     let _ = writeln!(
         out,
-        "#box(width: {}pt, height: {}pt)[",
+        "#box(width: {}pt, height: {}pt, stroke: {})[",
         format_f64(total_w),
-        format_f64(total_h)
+        format_f64(total_h),
+        chart_area_stroke(&chart.chart_area_outline)
     );
 
     // Plot-area origin (top-left of the plotting rectangle), shifted by
@@ -1342,9 +1385,10 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
     };
     let _ = writeln!(
         out,
-        "#box(width: {}pt, height: {}pt)[",
+        "#box(width: {}pt, height: {}pt, stroke: {})[",
         format_f64(total_w),
-        format_f64(total_h)
+        format_f64(total_h),
+        chart_area_stroke(&chart.chart_area_outline)
     );
 
     // `<c:delete val="1"/>` switches an axis off; see `generate_chart_axis`.
@@ -1575,9 +1619,10 @@ fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, 
 
     let _ = writeln!(
         out,
-        "#box(width: {}pt, height: {}pt)[",
+        "#box(width: {}pt, height: {}pt, stroke: {})[",
         format_f64(total_w),
-        format_f64(total_h)
+        format_f64(total_h),
+        chart_area_stroke(&chart.chart_area_outline)
     );
 
     // Office starts the first wedge at twelve o'clock and sweeps clockwise.

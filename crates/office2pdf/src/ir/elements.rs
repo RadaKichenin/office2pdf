@@ -131,6 +131,35 @@ pub struct Caption {
     pub paragraph: Paragraph,
 }
 
+/// What `c:chartSpace/c:spPr/a:ln` asks for around the whole chart area.
+///
+/// The three cases are visually opposite and the corpus holds all of them, so
+/// one unconditional default would put a border on charts that ask for none and
+/// the wrong border on charts that ask for their own (#637):
+///
+/// - `xlsx/poi/WithChart.xlsx` declares no `a:ln` at all — [`Self::Default`].
+/// - `xlsx/poi/123233_charts.xlsx` and `pptx/oxp_CU018-Chart-Cached-Data-41.pptx`
+///   declare `<a:ln><a:noFill/></a:ln>` — [`Self::Suppressed`].
+/// - `xlsx/office2pdf_repository_workbook.xlsx` declares a 9360 EMU `#d9d9d9`
+///   line and `pptx/chart-picture-bg.pptx` a 28575 EMU accent one —
+///   [`Self::Explicit`].
+#[derive(Debug, Clone, PartialEq, Default)]
+pub enum ChartAreaOutline {
+    /// No `a:ln` at all — Office draws its default thin outline.
+    #[default]
+    Default,
+    /// `<a:ln><a:noFill/></a:ln>` — the file asks for no outline.
+    Suppressed,
+    /// An explicit line. Either component falls back to the default when the
+    /// file leaves it out, or names a colour this parser cannot resolve.
+    Explicit {
+        /// `a:ln/@w` converted from EMU.
+        width_pt: Option<f64>,
+        /// The line's `a:solidFill/a:srgbClr`.
+        color: Option<Color>,
+    },
+}
+
 /// A chart extracted from an embedded chart object.
 #[derive(Debug, Clone)]
 pub struct Chart {
@@ -186,6 +215,9 @@ pub struct Chart {
     /// the Office 2013+ one, so a file built on any other theme was recoloured
     /// by it (issue #670).
     pub theme_accent_colors: Vec<Color>,
+    /// What the chart area's own outline should be, from
+    /// `c:chartSpace/c:spPr/a:ln` (#637).
+    pub chart_area_outline: ChartAreaOutline,
 }
 
 /// How a bar chart's bars divide the band one category gets, from
