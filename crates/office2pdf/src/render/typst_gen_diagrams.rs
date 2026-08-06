@@ -192,20 +192,42 @@ const CHART_SERIES_COLORS: [&str; 6] = [
 /// away from Excel as toward it.
 const SERIES_MARKER_SIZE_PT: f64 = 5.0;
 
+/// Weight a line series' polyline is stroked at.
+///
+/// Shared with the legend key, which Excel draws as a sample of the line
+/// itself: a key drawn at some other weight stops standing for its series
+/// (#801).
+pub(super) const SERIES_LINE_PT: f64 = 2.0;
+
+/// Length of a line series' legend key.
+///
+/// Measured on the native Excel export of `WithChart.xlsx` at 150 DPI: the two
+/// keys run 20.16pt and 20.64pt, either side of a 20pt nominal.
+pub(super) const LEGEND_KEY_LEN_PT: f64 = 20.0;
+
 /// Marker shape for the `index`-th series, when the file asks for a default
 /// marker rather than naming a `c:symbol`.
 ///
 /// The sequence exists so adjacent series stay apart in monochrome; drawing one
-/// square for every series defeats it (issue #635). That a cycle should exist
-/// at all is corroborated: a LibreOffice render of `WithChart.xlsx` draws its
-/// two series as a square and a diamond, where ours drew two squares.
+/// square for every series defeats it (issue #635).
 ///
-/// The *order* below is unverified. It is the one #635 states Excel uses, and
-/// nothing here checks it — the repo holds no Excel export of that workbook,
-/// and LibreOffice cycles in a different order of its own (square, then
-/// diamond). So the reference settles that a cycle exists, not whose order is
-/// right. Confirm against a native export before relying on the order.
+/// The first two entries are confirmed against the native Excel export of
+/// `WithChart.xlsx`: at 150 DPI its first series carries a diamond and its
+/// second a square, both in the plot and on the legend key. LibreOffice cycles
+/// the same two the other way round on that file, so its render is not evidence
+/// about the order — only the native one is.
+///
+/// Entries beyond the second remain the order #635 states Excel uses, with
+/// nothing here checking them; that workbook has only two series.
 fn write_series_marker(out: &mut String, series_index: usize, x: f64, y: f64, color: &str) {
+    out.push_str(&series_marker_markup(series_index, x, y, color));
+}
+
+/// The `#place`d markup for one series marker centred on (`x`, `y`).
+///
+/// Returned rather than written so the legend key can embed the same marker the
+/// plot draws, instead of restating the shape cycle (#801).
+fn series_marker_markup(series_index: usize, x: f64, y: f64, color: &str) -> String {
     let size: f64 = SERIES_MARKER_SIZE_PT;
     let half: f64 = size / 2.0;
     let left: String = format_f64(x - half);
@@ -233,10 +255,7 @@ fn write_series_marker(out: &mut String, series_index: usize, x: f64, y: f64, co
             )
         }
     };
-    let _ = writeln!(
-        out,
-        "#place(top + left, dx: {left}pt, dy: {top}pt, {shape})"
-    );
+    format!("#place(top + left, dx: {left}pt, dy: {top}pt, {shape})\n")
 }
 
 /// The automatic colour for the `index`-th slot, from the file's own theme.
@@ -375,7 +394,7 @@ const MAJOR_UNIT_FRACTIONS: [(f64, f64); 3] = [(2.0, 0.2), (5.0, 0.5), (10.0, 1.
 /// ink on each line and left the grid barely visible against a white plot area.
 /// The axis line ran a milder version of the same drift at 0.8pt `#787878`
 /// (issue #673).
-const CHART_AUTOMATIC_LINE: &str = "0.75pt + rgb(134, 134, 134)";
+pub(super) const CHART_AUTOMATIC_LINE: &str = "0.75pt + rgb(134, 134, 134)";
 
 /// Share of the tick-label font's ascent one major tick mark is long.
 ///
@@ -1396,7 +1415,8 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
                 .join(", ");
             let _ = writeln!(
                 out,
-                "#place(top + left, path(stroke: 2pt + {color}, {coords}))"
+                "#place(top + left, path(stroke: {}pt + {color}, {coords}))",
+                format_f64(SERIES_LINE_PT)
             );
         }
         // Point markers, cycling by series index.
@@ -1460,9 +1480,24 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
             LINE_LEGEND_ROW_H,
             LEGEND_W,
         );
+        // The key is a sample of the plotted line: the same stroke, carrying the
+        // same marker the series draws on each of its points (#801).
+        let key_mid: f64 = SERIES_MARKER_SIZE_PT / 2.0;
+        let key: String = format!(
+            "#box(width: {}pt, height: {}pt, baseline: {}pt)[\
+             #place(top + left, dx: 0pt, dy: {}pt, line(end: ({}pt, 0pt), stroke: {}pt + {color}))\
+             {}]",
+            format_f64(LEGEND_KEY_LEN_PT),
+            format_f64(SERIES_MARKER_SIZE_PT),
+            format_f64(-SERIES_MARKER_SIZE_PT),
+            format_f64(key_mid),
+            format_f64(LEGEND_KEY_LEN_PT),
+            format_f64(SERIES_LINE_PT),
+            series_marker_markup(s_index, LEGEND_KEY_LEN_PT / 2.0, key_mid, &color).trim_end()
+        );
         let _ = writeln!(
             out,
-            "#place(top + left, dx: {}pt, dy: {}pt, box[#box(width: 12pt, height: 3pt, fill: {color}, baseline: -3pt) #text(size: {}pt)[{}]])",
+            "#place(top + left, dx: {}pt, dy: {}pt, box[{key} #text(size: {}pt)[{}]])",
             format_f64(entry_x),
             format_f64(entry_y),
             format_f64(CHART_DEFAULT_TEXT_PT),
