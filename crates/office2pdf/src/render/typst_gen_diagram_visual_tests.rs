@@ -1,6 +1,8 @@
 use super::*;
 use crate::ir::DataLabels;
-use crate::render::typst_gen::diagrams::CHART_DEFAULT_TEXT_PT;
+use crate::render::typst_gen::diagrams::{
+    CHART_AUTOMATIC_LINE, CHART_DEFAULT_TEXT_PT, LEGEND_KEY_LEN_PT, SERIES_LINE_PT,
+};
 
 #[test]
 fn test_codegen_chart_bar_visual_bars() {
@@ -1420,10 +1422,17 @@ fn leading_pt(text: &str) -> Option<f64> {
     text.split_once("pt")?.0.trim().parse::<f64>().ok()
 }
 
-/// Every line segment the source places, in the order written.
+/// Every plot segment the source places, in the order written.
+///
+/// Only the chart's chrome counts: gridlines, axis lines and tick marks all
+/// take `CHART_AUTOMATIC_LINE`. A line series' legend key is also a `line`, but
+/// it is drawn in the series colour at the series weight and is not plot
+/// geometry, so counting it made every tick census see one tick too many
+/// (#801).
 fn emitted_lines(source: &str) -> Vec<PlacedLine> {
     source
         .lines()
+        .filter(|line| line.contains(CHART_AUTOMATIC_LINE))
         .filter_map(|line| {
             let (placement, end) = line.split_once("line(end: (")?;
             Some(PlacedLine {
@@ -2503,4 +2512,46 @@ fn chart_labels_take_the_default_chart_text_size() {
             }
         }
     }
+}
+
+#[test]
+fn a_line_legend_key_draws_the_series_line_and_its_marker() {
+    // Excel's legend key for a line series is a sample of what the reader sees
+    // in the plot: the series line at its own weight with the series' marker
+    // centred on it. A filled 12x3pt bar carries neither, so the key could not
+    // be matched to its line (issue #801).
+    //
+    // Measured on the native export of `WithChart.xlsx`: the key line is
+    // 20.16pt and 20.64pt long for the two series, and each carries a ~5pt
+    // marker centred on it — a diamond for the first series, a square for the
+    // second.
+    let mut chart = two_series_bar_chart(Vec::new());
+    chart.chart_type = ChartType::Line;
+    chart.categories = vec!["Q1".to_string(), "Q2".to_string(), "Q3".to_string()];
+    chart.series[0].values = vec![4.0, 8.0, 6.0];
+    chart.series[1].values = vec![6.0, 2.0, 5.0];
+    let source = chart_source(chart);
+
+    assert!(
+        !source.contains("height: 3pt, fill:"),
+        "the legend key must not be a flat filled bar; got:\n{source}"
+    );
+    // One marker per data point, plus one on each series' legend key.
+    let points_per_series: usize = 3;
+    for (shape, label) in [("polygon(", "diamond"), ("rect(width: 5pt", "square")] {
+        assert_eq!(
+            source.matches(shape).count(),
+            points_per_series + 1,
+            "the {label} series must draw a marker on its legend key as well as \
+             on each of its {points_per_series} points; got:\n{source}"
+        );
+    }
+    assert!(
+        source.contains(&format!(
+            "line(end: ({}pt, 0pt), stroke: {}pt",
+            format_f64(LEGEND_KEY_LEN_PT),
+            format_f64(SERIES_LINE_PT)
+        )),
+        "the legend key must draw the series line at its own weight; got:\n{source}"
+    );
 }
