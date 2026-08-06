@@ -199,6 +199,18 @@ const SERIES_MARKER_SIZE_PT: f64 = 5.0;
 /// (#801).
 pub(super) const SERIES_LINE_PT: f64 = 2.0;
 
+/// `baseline:` offset that sets the legend key against its label.
+///
+/// The native export puts the key line 2.64pt above its label's baseline, and
+/// -0.5 reproduces that. The previous flat bar sat 4.08pt high, three pixels
+/// out at the 150 DPI this is measured at.
+///
+/// Calibrated rather than derived: raising the box also grows the line's ascent
+/// and carries the baseline with it, so the offset is not a plain translation
+/// of the key. Measured on this fixture, the key rises 2.16pt at an offset of
+/// zero and 4.32pt at -2.
+pub(super) const LEGEND_KEY_BASELINE_PT: f64 = -0.5;
+
 /// Length of a line series' legend key.
 ///
 /// Measured on the native Excel export of `WithChart.xlsx` at 150 DPI: the two
@@ -1489,7 +1501,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
              {}]",
             format_f64(LEGEND_KEY_LEN_PT),
             format_f64(SERIES_MARKER_SIZE_PT),
-            format_f64(-SERIES_MARKER_SIZE_PT),
+            format_f64(LEGEND_KEY_BASELINE_PT),
             format_f64(key_mid),
             format_f64(LEGEND_KEY_LEN_PT),
             format_f64(SERIES_LINE_PT),
