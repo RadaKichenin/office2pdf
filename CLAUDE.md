@@ -234,6 +234,11 @@ therefore rests on figures nobody can re-derive from the repo, and at least one
 reference's 2.235pt, not "roughly twice" it. Treat a chart GT number as
 unverified until a native export is attached.
 
+The auto-scaled value axis is the one exception:
+`python3 scripts/measure_chart_axis.py <data maxima>` rescales `WithChart.xlsx`
+to each maximum and reads the tick labels back off a render, so those figures
+are reproducible without a native export (#634).
+
 **Validate the GT before deriving anything from it** —
 `python3 scripts/check_gt_integrity.py GT.pdf [--source FILE.xlsx]`. A corrupt
 export poisons every downstream number silently: the workbook-per-sheet

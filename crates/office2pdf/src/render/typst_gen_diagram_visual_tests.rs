@@ -93,8 +93,8 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
         "raw float must not leak; got:\n{}",
         output.source
     );
-    // Nice axis for max 8.2 → ticks 0,2,4,6,8,10.
-    for tick in ["[0]", "[2]", "[10]"] {
+    // Nice axis for max 8.2 → ticks 0,1,…,9.
+    for tick in ["[0]", "[1]", "[9]"] {
         assert!(
             output.source.contains(tick),
             "expected axis tick {tick}; got:\n{}",
@@ -1740,7 +1740,7 @@ fn assert_tick_counts(source: &str, value_axis_runs_under_the_plot: bool) {
 
     let category_boundaries: usize = TICK_MARK_CATEGORIES.len() + 1;
     let major_units: usize = emitted_axis_ticks(source).len();
-    assert_eq!(major_units, 5, "values 4/8/6 scale to ticks 0..8 by 2");
+    assert_eq!(major_units, 10, "values 4/8/6 scale to ticks 0..9 by 1");
     let (expected_under, expected_beside) = if value_axis_runs_under_the_plot {
         (major_units, category_boundaries)
     } else {
