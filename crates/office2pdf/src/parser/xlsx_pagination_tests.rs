@@ -1,4 +1,5 @@
 use super::*;
+use crate::ir::ChartAreaOutline;
 use crate::ir::{
     AxisTickMark, Block, Margins, PageSize, Paragraph, ParagraphStyle, Run, TextStyle,
 };
@@ -170,6 +171,7 @@ fn test_charts_stay_on_first_column_group() {
             value_axis_deleted: false,
             bar_band_layout: crate::ir::BarBandLayout::default(),
             theme_accent_colors: Vec::new(),
+            chart_area_outline: ChartAreaOutline::Default,
         },
     )];
     let pages = split_sheet_page_by_width(page, None, None);

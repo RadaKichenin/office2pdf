@@ -1,7 +1,9 @@
 use super::*;
+use crate::ir::ChartAreaOutline;
 use crate::ir::DataLabels;
 use crate::render::typst_gen::diagrams::{
-    CHART_AUTOMATIC_LINE, CHART_DEFAULT_TEXT_PT, LEGEND_KEY_LEN_PT, SERIES_LINE_PT,
+    CHART_AREA_OUTLINE, CHART_AUTOMATIC_LINE, CHART_DEFAULT_TEXT_PT, LEGEND_KEY_LEN_PT,
+    SERIES_LINE_PT,
 };
 
 #[test]
@@ -29,6 +31,7 @@ fn test_codegen_chart_bar_visual_bars() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_outline: ChartAreaOutline::Default,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -86,6 +89,7 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_outline: ChartAreaOutline::Default,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -131,6 +135,7 @@ fn test_codegen_chart_pie_draws_a_pie() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_outline: ChartAreaOutline::Default,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -181,6 +186,7 @@ fn test_codegen_chart_line_trend_indicators() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_outline: ChartAreaOutline::Default,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -222,6 +228,7 @@ fn test_codegen_chart_empty_series() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_outline: ChartAreaOutline::Default,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -296,6 +303,7 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_outline: ChartAreaOutline::Default,
     }));
     let doc = make_doc(vec![make_flow_page(content)]);
 
@@ -339,6 +347,7 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_outline: ChartAreaOutline::Default,
     }));
     let doc = make_doc(vec![make_flow_page(content)]);
 
@@ -534,6 +543,7 @@ fn test_codegen_chart_line_plot() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_outline: ChartAreaOutline::Default,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -582,6 +592,7 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_outline: ChartAreaOutline::Default,
     })])]);
 
     let pages = page_texts(&doc);
@@ -655,6 +666,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
             overlap_percent: 100.0,
         },
         theme_accent_colors: Vec::new(),
+        chart_area_outline: ChartAreaOutline::Default,
     }
 }
 
@@ -779,6 +791,7 @@ fn legend_chart(position: LegendPosition) -> Chart {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_outline: ChartAreaOutline::Default,
     }
 }
 
@@ -921,6 +934,7 @@ fn a_declared_series_fill_reaches_the_bars() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_outline: ChartAreaOutline::Default,
     };
 
     let source = chart_source(chart);
@@ -962,6 +976,7 @@ fn a_series_without_a_fill_still_takes_the_palette() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_outline: ChartAreaOutline::Default,
     };
 
     let source = chart_source(chart);
@@ -1001,6 +1016,7 @@ fn per_point_fills_colour_each_bar_separately() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_outline: ChartAreaOutline::Default,
     };
 
     let source = chart_source(chart);
@@ -1039,6 +1055,7 @@ fn axis_titled_chart(category: Option<&str>, value: Option<&str>) -> Chart {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_outline: ChartAreaOutline::Default,
     }
 }
 
@@ -1127,6 +1144,7 @@ fn labelled_chart(labels: DataLabels) -> Chart {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_outline: ChartAreaOutline::Default,
     }
 }
 
@@ -1208,6 +1226,7 @@ fn pie_chart(values: Vec<f64>) -> Chart {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_outline: ChartAreaOutline::Default,
     }
 }
 
@@ -1388,6 +1407,7 @@ fn test_chart_default_gridline_matches_powerpoint() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_outline: ChartAreaOutline::Default,
     })])]);
 
     let source = generate_typst(&doc).unwrap().source;
@@ -1429,6 +1449,11 @@ fn leading_pt(text: &str) -> Option<f64> {
 /// it is drawn in the series colour at the series weight and is not plot
 /// geometry, so counting it made every tick census see one tick too many
 /// (#801).
+///
+/// The chart-area outline carries the same stroke (#637) and so passes the
+/// substring filter, but it is a `box`, not a `line`, and the `line(end: (`
+/// parse below drops it. Both conditions are load-bearing — neither alone
+/// selects the plot segments.
 fn emitted_lines(source: &str) -> Vec<PlacedLine> {
     source
         .lines()
@@ -1527,6 +1552,7 @@ fn tick_mark_chart(
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_outline: ChartAreaOutline::Default,
     }
 }
 
@@ -2115,6 +2141,7 @@ fn band_layout_chart(
         value_axis_deleted: false,
         bar_band_layout: layout,
         theme_accent_colors: Vec::new(),
+        chart_area_outline: ChartAreaOutline::Default,
     }
 }
 
@@ -2382,6 +2409,7 @@ fn two_series_bar_chart(theme_accent_colors: Vec<crate::ir::Color>) -> Chart {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors,
+        chart_area_outline: ChartAreaOutline::Default,
     }
 }
 
@@ -2553,5 +2581,87 @@ fn a_line_legend_key_draws_the_series_line_and_its_marker() {
             format_f64(SERIES_LINE_PT)
         )),
         "the legend key must draw the series line at its own weight; got:\n{source}"
+    );
+}
+#[test]
+fn every_chart_family_draws_the_default_chart_area_outline() {
+    // A `c:chartSpace` with no `c:spPr/a:ln` still takes Office's default chart-area
+    // outline — a thin rectangle enclosing the plot, the axis labels and the legend — so a
+    // chart drawn without one has no boundary against the sheet behind it (#637).
+    //
+    // Measured on the native Excel export of `WithChart.xlsx` at 150 DPI: the border is a
+    // single pixel of RGB(133,133,133), indistinguishable from the same page's gridlines,
+    // which is `CHART_AUTOMATIC_LINE` — 0.75pt of #868686.
+    for chart_type in [ChartType::Bar, ChartType::Line, ChartType::Pie] {
+        let kind: String = format!("{chart_type:?}");
+        let mut chart = two_series_bar_chart(Vec::new());
+        chart.chart_type = chart_type;
+        chart.categories = vec!["Q1".to_string(), "Q2".to_string()];
+        chart.series[0].values = vec![4.0, 8.0];
+        chart.series[1].values = vec![6.0, 2.0];
+        let source = chart_source(chart);
+
+        let outline: String = format!("stroke: {CHART_AREA_OUTLINE})[");
+        assert!(
+            source.contains(&outline),
+            "{kind}: the chart area must carry the default outline; got:\n{source}"
+        );
+        // Exactly one box takes it — the outermost. A stroke on a nested box would draw a
+        // second rectangle inside the chart.
+        assert_eq!(
+            source.matches(&outline).count(),
+            1,
+            "{kind}: only the chart-area box may carry the outline; got:\n{source}"
+        );
+    }
+}
+
+#[test]
+fn a_chart_that_asks_for_no_outline_gets_none() {
+    // `<a:ln><a:noFill/></a:ln>` on `c:chartSpace/c:spPr` is the file saying it
+    // wants no chart-area border. Drawing the default anyway puts a grey box
+    // around every chart part that deliberately has none — `123233_charts.xlsx`
+    // and `oxp_CU018-Chart-Cached-Data-41.pptx` among them (#637).
+    let mut chart = two_series_bar_chart(Vec::new());
+    chart.chart_type = ChartType::Line;
+    chart.categories = vec!["Q1".to_string(), "Q2".to_string()];
+    chart.series[0].values = vec![4.0, 8.0];
+    chart.series[1].values = vec![6.0, 2.0];
+    chart.chart_area_outline = ChartAreaOutline::Suppressed;
+    let source = chart_source(chart);
+
+    assert!(
+        source.contains("stroke: none)["),
+        "a suppressed outline must draw nothing; got:\n{source}"
+    );
+    assert!(
+        !source.contains(&format!("stroke: {CHART_AREA_OUTLINE})[")),
+        "the default outline must not override an explicit noFill; got:\n{source}"
+    );
+}
+
+#[test]
+fn a_chart_outline_keeps_its_own_width_and_colour() {
+    // Chart parts declare lines of their own that the automatic grey is not:
+    // `xlsx/office2pdf_repository_workbook.xlsx` a 9360 EMU #d9d9d9 one, and
+    // `pptx/chart-picture-bg.pptx` a 28575 EMU accent one (#637).
+    let mut chart = two_series_bar_chart(Vec::new());
+    chart.chart_type = ChartType::Line;
+    chart.categories = vec!["Q1".to_string(), "Q2".to_string()];
+    chart.series[0].values = vec![4.0, 8.0];
+    chart.series[1].values = vec![6.0, 2.0];
+    chart.chart_area_outline = ChartAreaOutline::Explicit {
+        width_pt: Some(0.7370079),
+        color: Some(crate::ir::Color::new(0xd9, 0xd9, 0xd9)),
+    };
+    let source = chart_source(chart);
+
+    assert!(
+        source.contains("rgb(217, 217, 217)"),
+        "the declared colour must reach the outline; got:\n{source}"
+    );
+    assert!(
+        !source.contains(&format!("stroke: {CHART_AREA_OUTLINE})[")),
+        "a declared line must not be replaced by the automatic one; got:\n{source}"
     );
 }

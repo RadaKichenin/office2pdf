@@ -8,8 +8,8 @@ use quick_xml::events::Event;
 
 use super::xml_util;
 use crate::ir::{
-    AxisTickMark, BarBandLayout, Chart, ChartGrouping, ChartSeries, ChartType, Color, DataLabels,
-    LegendPosition,
+    AxisTickMark, BarBandLayout, Chart, ChartAreaOutline, ChartGrouping, ChartSeries, ChartType,
+    Color, DataLabels, LegendPosition,
 };
 
 /// Mapping from XML chart element tag names to their corresponding `ChartType`.
@@ -145,13 +145,21 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
     let mut has_legend: bool = false;
     let mut category_axis: Axis = Axis::default();
     let mut value_axis: Axis = Axis::default();
+    // `c:chartSpace/c:spPr` is a *sibling* of `c:chart`, and the schema puts it
+    // after it. This loop is flat over every Start event, so without that
+    // marker a `c:spPr` belonging to `c:plotArea` would be read as the chart
+    // area's own (#637).
+    let mut chart_element_ended: bool = false;
+    let mut chart_area_outline: ChartAreaOutline = ChartAreaOutline::Default;
 
     loop {
         match reader.read_event() {
             Ok(Event::Start(ref e)) => {
                 let local = e.local_name();
                 let tag: &[u8] = local.as_ref();
-                if tag == b"legend" {
+                if tag == b"spPr" && chart_element_ended {
+                    chart_area_outline = parse_chart_area_outline(&mut reader);
+                } else if tag == b"legend" {
                     // Declared, unless the element switches itself off.
                     let (deleted, position) = parse_legend(&mut reader);
                     has_legend = !deleted;
@@ -196,6 +204,9 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
                     .as_deref()
                     .map(legend_position_for);
             }
+            Ok(Event::End(ref e)) if e.local_name().as_ref() == b"chart" => {
+                chart_element_ended = true;
+            }
             Ok(Event::Eof) => break,
             Err(_) => break,
             _ => {}
@@ -235,8 +246,76 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
         // does. Whoever loaded this XML fills these in, since only they know
         // which theme part applies.
         theme_accent_colors: Vec::new(),
+        chart_area_outline,
     })
 }
+
+/// Read `c:chartSpace/c:spPr` into what it says about the chart-area outline.
+///
+/// Only `a:ln` matters here. Its absence is not the same as `<a:noFill/>`:
+/// absent means Office's default outline, `noFill` means none at all, and an
+/// explicit line means that line (#637).
+fn parse_chart_area_outline(reader: &mut Reader<&[u8]>) -> ChartAreaOutline {
+    let mut in_line: bool = false;
+    let mut saw_line: bool = false;
+    let mut suppressed: bool = false;
+    let mut width_pt: Option<f64> = None;
+    let mut color: Option<Color> = None;
+    let mut in_solid_fill: bool = false;
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))
+                if e.local_name().as_ref() == b"ln" =>
+            {
+                in_line = true;
+                saw_line = true;
+                width_pt = width_pt.or_else(|| {
+                    xml_util::get_attr_str(e, b"w")
+                        .and_then(|w| w.parse::<f64>().ok())
+                        .map(|emu| emu / EMU_PER_POINT)
+                });
+            }
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))
+                if in_line && e.local_name().as_ref() == b"noFill" =>
+            {
+                suppressed = true;
+            }
+            Ok(Event::Start(ref e)) if in_line && e.local_name().as_ref() == b"solidFill" => {
+                in_solid_fill = true;
+            }
+            Ok(Event::End(ref e)) if e.local_name().as_ref() == b"solidFill" => {
+                in_solid_fill = false;
+            }
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))
+                if in_solid_fill && e.local_name().as_ref() == b"srgbClr" =>
+            {
+                color = color.or_else(|| {
+                    xml_util::get_attr_str(e, b"val")
+                        .as_deref()
+                        .and_then(xml_util::parse_hex_color)
+                });
+            }
+            Ok(Event::End(ref e)) if e.local_name().as_ref() == b"ln" => {
+                in_line = false;
+            }
+            Ok(Event::End(ref e)) if e.local_name().as_ref() == b"spPr" => break,
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+
+    if !saw_line {
+        ChartAreaOutline::Default
+    } else if suppressed {
+        ChartAreaOutline::Suppressed
+    } else {
+        ChartAreaOutline::Explicit { width_pt, color }
+    }
+}
+
+/// EMU in one point. `a:ln/@w` is in EMU.
+const EMU_PER_POINT: f64 = 12700.0;
 
 /// What one `<c:catAx>` or `<c:valAx>` element says about itself.
 #[derive(Default)]

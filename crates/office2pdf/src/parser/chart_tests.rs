@@ -1189,3 +1189,69 @@ fn test_undeleted_legend_is_recorded() {
     assert!(chart.has_legend);
     assert_eq!(chart.legend_position, LegendPosition::Top);
 }
+
+/// A minimal chart part, with `body` spliced in after `</c:chart>` — which is
+/// where the schema puts `c:chartSpace/c:spPr`.
+fn chart_space_with(trailing: &str) -> String {
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+        <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+            <c:chart>
+                <c:plotArea>
+                    <c:spPr><a:ln w="76200"><a:solidFill><a:srgbClr val="ff0000"/></a:solidFill></a:ln></c:spPr>
+                    <c:lineChart>
+                        <c:ser>
+                            <c:idx val="0"/>
+                            <c:val><c:numRef><c:numCache>
+                                <c:pt idx="0"><c:v>1</c:v></c:pt>
+                                <c:pt idx="1"><c:v>2</c:v></c:pt>
+                            </c:numCache></c:numRef></c:val>
+                        </c:ser>
+                    </c:lineChart>
+                </c:plotArea>
+            </c:chart>
+            {trailing}
+        </c:chartSpace>"#
+    )
+}
+
+#[test]
+fn a_chart_with_no_chart_space_line_takes_the_default_outline() {
+    // The plot area in the fixture above declares a fat red `a:ln` of its own.
+    // The event loop is flat, so reading the first `c:spPr` it meets would pick
+    // that one up and report the chart area as red (#637).
+    let chart = parse_chart_xml(&chart_space_with("")).expect("chart parses");
+    assert_eq!(chart.chart_area_outline, ChartAreaOutline::Default);
+}
+
+#[test]
+fn a_chart_space_no_fill_suppresses_the_outline() {
+    let chart = parse_chart_xml(&chart_space_with(
+        "<c:spPr><a:ln><a:noFill/></a:ln></c:spPr>",
+    ))
+    .expect("chart parses");
+    assert_eq!(chart.chart_area_outline, ChartAreaOutline::Suppressed);
+}
+
+#[test]
+fn a_chart_space_line_keeps_its_width_and_colour() {
+    // 9360 EMU is the width `office2pdf_repository_workbook.xlsx` declares, and
+    // #d9d9d9 its colour.
+    let chart = parse_chart_xml(&chart_space_with(
+        r#"<c:spPr><a:ln w="9360"><a:solidFill><a:srgbClr val="d9d9d9"/></a:solidFill></a:ln></c:spPr>"#,
+    ))
+    .expect("chart parses");
+    match chart.chart_area_outline {
+        ChartAreaOutline::Explicit { width_pt, color } => {
+            let width = width_pt.expect("a declared width reaches the model");
+            assert!(
+                (width - 9360.0 / 12700.0).abs() < 1e-9,
+                "9360 EMU is {width}pt, expected {}",
+                9360.0 / 12700.0
+            );
+            assert_eq!(color, Some(Color::new(0xd9, 0xd9, 0xd9)));
+        }
+        other => panic!("expected an explicit outline, got {other:?}"),
+    }
+}
