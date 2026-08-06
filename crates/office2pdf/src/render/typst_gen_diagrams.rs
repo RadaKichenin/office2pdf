@@ -318,33 +318,54 @@ pub(super) fn chart_value_label(value: f64) -> String {
     text
 }
 
-/// Choose a "nice" axis maximum and tick step covering `[0, max]`
-/// (e.g. max 8.2 → (10, 2), giving ticks 0,2,4,6,8,10).
+/// Choose Excel's automatic axis maximum and major unit covering `[0, max]`
+/// (e.g. max 8.2 → (10, 1), giving ticks 0,1,…,10).
 fn nice_axis(max_value: f64) -> (f64, f64) {
     if max_value <= 0.0 {
         return (1.0, 1.0);
     }
-    // Excel rounds the *step*, then takes the smallest whole number of steps
-    // that covers the data — it does not round the maximum itself. Rounding
-    // the maximum put 23,334 against a 50,000 axis, so every column drew at
-    // half the height Excel gives it (#553).
-    let target_step: f64 = max_value / MAJOR_UNITS;
-    let magnitude: f64 = 10f64.powf(target_step.log10().floor());
-    let normalized: f64 = target_step / magnitude;
-    let nice_norm: f64 = *NICE_STEPS
+    // Excel clears the data by a twentieth of the range *before* rounding, so
+    // the tallest bar stops short of the top. Rounding the bare maximum put a
+    // 17 maximum under an axis of 18 only by accident of the step, and a
+    // maximum of 100 flush against a 100 axis (#634).
+    let cleared: f64 = max_value + max_value / AXIS_HEADROOM_DIVISOR;
+    let magnitude: f64 = 10f64.powf(cleared.log10().floor());
+    let mantissa: f64 = cleared / magnitude;
+    let step: f64 = MAJOR_UNIT_FRACTIONS
         .iter()
-        .find(|candidate| **candidate >= normalized - 1e-9)
-        .unwrap_or(&10.0);
-    let step: f64 = nice_norm * magnitude;
-    let nice_max: f64 = (max_value / step).ceil() * step;
+        .find(|(upper, _)| mantissa < *upper)
+        .map_or(1.0, |(_, fraction)| *fraction)
+        * magnitude;
+    // The step, not the maximum, carries the rounding: the axis is the fewest
+    // whole steps that cover the cleared data. Rounding the maximum to the
+    // ladder itself put 23,334 against 50,000 (#553).
+    let nice_max: f64 = (cleared / step - 1e-9).ceil() * step;
     (nice_max, step)
 }
 
-/// Major units Excel aims for on an auto-scaled value axis.
-const MAJOR_UNITS: f64 = 5.0;
+/// Share of the plotted range an auto-scaled axis clears the data by before it
+/// rounds up to a whole number of major units.
+///
+/// Excel's documented rule puts the axis maximum at the first major unit above
+/// `Ymax + (Ymax - Ymin)/20`, so the tallest bar never touches the top. Only
+/// the divisor is documented; the major unit itself is not, hence
+/// [`MAJOR_UNIT_FRACTIONS`].
+const AXIS_HEADROOM_DIVISOR: f64 = 20.0;
 
-/// Step sizes Excel will choose, as multiples of a power of ten.
-const NICE_STEPS: [f64; 5] = [1.0, 2.0, 2.5, 5.0, 10.0];
+/// Major unit an auto-scaled axis takes, as a fraction of the power of ten
+/// below the cleared maximum, keyed by the exclusive upper bound of that
+/// maximum's mantissa.
+///
+/// Excel does not document how it picks the unit. Measured across rescalings of
+/// one auto-scaled chart, the unit is a step function of the mantissa: 1.78 and
+/// 2.45 give 0.2 and 0.5 in Excel's own exports (issues #634 and #553), and
+/// every mantissa from 1.0 to 9.9 agrees with these three bands in
+/// LibreOffice's renderings of the same files.
+///
+/// The interval count is therefore not constant — it runs from 4 to 10 across a
+/// decade, and aiming for a fixed five instead is what put a 17 maximum under a
+/// 20 axis in five steps rather than Excel's 18 in nine (#634).
+const MAJOR_UNIT_FRACTIONS: [(f64, f64); 3] = [(2.0, 0.2), (5.0, 0.5), (10.0, 1.0)];
 
 /// The stroke PowerPoint draws for an automatic major gridline and for an
 /// automatic axis line: 0.75pt (9525 EMU) in `#868686`.
@@ -1895,7 +1916,7 @@ fn generate_smartart_steps(out: &mut String, smartart: &SmartArt) {
 
 #[cfg(test)]
 mod chart_value_label_tests {
-    use super::{chart_value_label, nice_axis};
+    use super::{AXIS_HEADROOM_DIVISOR, chart_value_label, nice_axis};
 
     #[test]
     fn formats_without_float_noise() {
@@ -1908,26 +1929,137 @@ mod chart_value_label_tests {
 
     #[test]
     fn nice_axis_rounds_up() {
-        assert_eq!(nice_axis(8.2), (10.0, 2.0));
-        assert_eq!(nice_axis(3.2), (4.0, 1.0));
-        assert_eq!(nice_axis(45.0), (50.0, 10.0));
+        // The first three are entries of MEASURED_AUTO_SCALE, restated here so
+        // the everyday shape of the rule — clear the data, divide into whole
+        // steps — stays readable next to the degenerate guard, which is the
+        // only assertion below that no rendering pins.
+        assert_eq!(nice_axis(8.2), (9.0, 1.0));
+        assert_eq!(nice_axis(3.2), (3.5, 0.5));
+        assert_eq!(nice_axis(45.0), (50.0, 5.0));
         assert_eq!(nice_axis(0.0), (1.0, 1.0));
     }
 
+    /// Axis maxima read off renderings of `WithChart.xlsx` with both series
+    /// scaled by one factor, one file per data maximum, the chart declaring no
+    /// `c:max`/`c:min`/`c:majorUnit` so the axis is entirely auto-scaled.
+    /// `scripts/measure_chart_axis.py` regenerates the whole table.
+    ///
+    /// Excel's own choice is known for only two of these (issue #634's export
+    /// at 17, issue #553's at 23,334); the rest are LibreOffice's, which agrees
+    /// with Excel on both of those and is the widest independent sample of the
+    /// same rule available without Excel.
+    ///
+    /// Eight entries — 0.44, 1.9, 3.2, 5.5, 8.2, 12.5, 45 and 199 — were
+    /// predicted from the rule fitted to the other thirty and only then
+    /// rendered, so they are a held-out check rather than fitted data. They
+    /// also carry the two decades the fitted set never reached, which is what
+    /// stops a table this dense from being satisfied by a lookup.
+    const MEASURED_AUTO_SCALE: [(f64, f64, f64); 38] = [
+        (0.44, 0.5, 0.05),
+        (1.9, 2.0, 0.2),
+        (3.2, 3.5, 0.5),
+        (5.5, 6.0, 1.0),
+        (6.0, 7.0, 1.0),
+        (6.3, 7.0, 1.0),
+        (7.4, 8.0, 1.0),
+        (8.0, 9.0, 1.0),
+        (8.2, 9.0, 1.0),
+        (8.6, 10.0, 1.0),
+        (9.0, 10.0, 1.0),
+        (9.7, 12.0, 2.0),
+        (12.5, 14.0, 2.0),
+        (14.0, 16.0, 2.0),
+        (17.0, 18.0, 2.0),
+        (19.0, 20.0, 2.0),
+        (21.0, 25.0, 5.0),
+        (24.0, 30.0, 5.0),
+        (31.0, 35.0, 5.0),
+        (45.0, 50.0, 5.0),
+        (46.0, 50.0, 5.0),
+        (52.0, 60.0, 10.0),
+        (63.0, 70.0, 10.0),
+        (74.0, 80.0, 10.0),
+        (78.0, 90.0, 10.0),
+        (86.0, 100.0, 10.0),
+        (97.0, 120.0, 20.0),
+        (140.0, 160.0, 20.0),
+        (199.0, 250.0, 50.0),
+        (230.0, 250.0, 50.0),
+        (460.0, 500.0, 50.0),
+        (520.0, 600.0, 100.0),
+        (740.0, 800.0, 100.0),
+        (860.0, 1000.0, 100.0),
+        (970.0, 1200.0, 200.0),
+        (1400.0, 1600.0, 200.0),
+        (2300.0, 2500.0, 500.0),
+        (23334.0, 25000.0, 5000.0),
+    ];
+
     #[test]
-    fn nice_axis_matches_excels_auto_scale() {
-        // Measured from native Excel and PowerPoint exports of the audited
-        // fixtures. Rounding the maximum itself to 1/2/5x10^n put 23,334
-        // against a 50,000 axis, drawing every column at half height (#553).
-        assert_eq!(nice_axis(23334.0), (25000.0, 5000.0), "01_대시보드 LOC");
-        assert_eq!(nice_axis(9.0), (10.0, 2.0), "slide 17 stack totals");
-        assert_eq!(nice_axis(78.0), (80.0, 20.0), "release intervals");
+    fn nice_axis_reproduces_every_measured_auto_scale() {
+        let mut wrong: Vec<String> = Vec::new();
+        for (data_max, want_max, want_step) in MEASURED_AUTO_SCALE {
+            let got: (f64, f64) = nice_axis(data_max);
+            if (got.0 - want_max).abs() > 1e-9 || (got.1 - want_step).abs() > 1e-9 {
+                wrong.push(format!(
+                    "data max {data_max}: got {got:?}, measured ({want_max}, {want_step})"
+                ));
+            }
+        }
+        assert!(
+            wrong.is_empty(),
+            "{} of {} measured axes not reproduced:\n  {}",
+            wrong.len(),
+            MEASURED_AUTO_SCALE.len(),
+            wrong.join("\n  ")
+        );
+    }
+
+    #[test]
+    fn nice_axis_scales_with_the_decimal_exponent() {
+        // The rule reads a mantissa and an exponent, so one measured maximum
+        // implies the whole decade. A rule fitted only to the sampled decades
+        // would pass the table above and fail here.
+        for exponent in [-3i32, -1, 0, 2, 5, 8] {
+            let factor: f64 = 10f64.powi(exponent);
+            for (data_max, want_max, want_step) in MEASURED_AUTO_SCALE {
+                let (got_max, got_step): (f64, f64) = nice_axis(data_max * factor);
+                let scale: f64 = (want_max * factor).abs().max(1e-12);
+                assert!(
+                    ((got_max - want_max * factor) / scale).abs() < 1e-9,
+                    "max {data_max}e{exponent}: got {got_max}, want {}",
+                    want_max * factor
+                );
+                assert!(
+                    ((got_step - want_step * factor) / scale).abs() < 1e-9,
+                    "step for {data_max}e{exponent}: got {got_step}, want {}",
+                    want_step * factor
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn nice_axis_does_not_round_the_maximum_to_the_step_ladder() {
+        // Rounding the maximum itself to 1/2/5x10^n put 23,334 against a
+        // 50,000 axis, drawing every column at half the height Excel gives it
+        // (#553). Its export is one of the two entries in the table above that
+        // Excel itself produced, so keep the symptom pinned by name.
+        let (axis_max, step): (f64, f64) = nice_axis(23334.0);
+        assert_eq!((axis_max, step), (25000.0, 5000.0));
+        assert!(
+            23334.0 / axis_max > 0.9,
+            "the tallest column reaches {:.0}% of the plot; Excel's export reaches 93%",
+            23334.0 / axis_max * 100.0
+        );
     }
 
     #[test]
     fn nice_axis_leaves_no_more_than_one_step_of_headroom() {
-        // The property that makes a chart readable: the tallest bar always
-        // reaches within one major unit of the top.
+        // The property that makes a chart readable: the tallest bar reaches
+        // within one major unit of the top, plus the twentieth of the range
+        // Excel adds before it rounds — so a maximum of 100 sits under a 120
+        // axis rather than touching a 100 one.
         for value in [
             1.0,
             2.0,
@@ -1946,9 +2078,11 @@ mod chart_value_label_tests {
             let (max, step) = nice_axis(value);
 
             assert!(max >= value, "axis {max} must cover {value}");
+            let allowed: f64 = step + value / AXIS_HEADROOM_DIVISOR;
             assert!(
-                max - value < step,
-                "axis {max} leaves {} of headroom over {value}, more than one {step} step",
+                max - value < allowed || (max - value - allowed).abs() < 1e-9,
+                "axis {max} leaves {} of headroom over {value}, more than a {step} step \
+                 plus a twentieth of the range",
                 max - value
             );
             assert!(
