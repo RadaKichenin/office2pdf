@@ -391,18 +391,36 @@ const CHART_TICK_ASCENT_FRACTION: f64 = 1.0 / 3.0;
 /// against the default one.
 const CHART_LABEL_ASCENT_RATIO: f64 = 1950.0 / 2048.0;
 
-/// Size both plots print their value tick labels at.
-const VALUE_LABEL_PT: f64 = 8.0;
-
-/// Size the bar/column plot prints its category labels at.
+/// Size every chart label prints at when the file declares no text properties.
 ///
-/// The line plot prints its own a point smaller, so the two have separate
-/// constants rather than one shared "category label size" — a tick is measured
-/// against the labels of the plot that draws it.
-const AXIS_PLOT_CATEGORY_LABEL_PT: f64 = 9.0;
+/// Office's chart default is 10pt, and it is one size for the whole chart: the
+/// value tick labels, the category labels and the legend entries all take it.
+/// Three separate constants — 8pt for the value labels, 9pt for the bar plot's
+/// categories, 8pt for the line plot's — put the labels at a size no file asked
+/// for and left the two axes of one chart disagreeing with each other (#800).
+///
+/// Both references that can be measured against `WithChart.xlsx`, whose
+/// `chart1.xml` carries no `c:txPr`, agree on 10pt: the native Excel export's
+/// tick labels have a 6.24pt cap height, which is 10pt Calibri, and LibreOffice
+/// writes a 10.0pt text matrix for every run on the page.
+///
+/// TODO(#669): a chart that *does* declare `c:txPr/a:defRPr@sz` must override
+/// this; the attribute is not parsed yet, so every chart currently takes the
+/// default.
+pub(super) const CHART_DEFAULT_TEXT_PT: f64 = 10.0;
 
-/// Size the line/area plot prints its category labels at.
-const LINE_PLOT_CATEGORY_LABEL_PT: f64 = 8.0;
+/// Height of the box that vertically centres one value tick label on its
+/// gridline, as a multiple of the text size.
+///
+/// The box was a flat 10pt around 8pt text; keeping that 1.25x relationship
+/// means the larger text still centres on the gridline instead of the box
+/// clipping it or the label drifting off the tick.
+const CHART_LABEL_BOX_RATIO: f64 = 1.25;
+
+/// Height of the box holding one value tick label.
+const fn chart_label_box_h() -> f64 {
+    CHART_DEFAULT_TEXT_PT * CHART_LABEL_BOX_RATIO
+}
 
 /// The value every major unit of an axis reaching `nice_max` in `step`s sits
 /// on, from zero to the maximum inclusive.
@@ -925,7 +943,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                     "#place(top + left, dx: {}pt, dy: {}pt, box(width: 24pt)[#align(center)[#text(size: {}pt)[{}]]])",
                     format_f64(x - 12.0),
                     format_f64(plot_y + plot_h + 4.0),
-                    format_f64(VALUE_LABEL_PT),
+                    format_f64(CHART_DEFAULT_TEXT_PT),
                     chart_value_label(*tick)
                 );
             }
@@ -942,10 +960,11 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
             if value_axis_drawn {
                 let _ = writeln!(
                     out,
-                    "#place(top + left, dx: 0pt, dy: {}pt, box(width: {}pt, height: 10pt)[#align(right + horizon)[#text(size: {}pt)[{}]]])",
-                    format_f64(y - 5.0),
+                    "#place(top + left, dx: 0pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(right + horizon)[#text(size: {}pt)[{}]]])",
+                    format_f64(y - chart_label_box_h() / 2.0),
                     format_f64(TICK_GAP),
-                    format_f64(VALUE_LABEL_PT),
+                    format_f64(chart_label_box_h()),
+                    format_f64(CHART_DEFAULT_TEXT_PT),
                     chart_value_label(*tick)
                 );
             }
@@ -1047,7 +1066,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 format_f64(row_top),
                 format_f64(LABEL_W),
                 format_f64(row),
-                format_f64(AXIS_PLOT_CATEGORY_LABEL_PT),
+                format_f64(CHART_DEFAULT_TEXT_PT),
                 escape_typst(category)
             );
         } else {
@@ -1058,7 +1077,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 format_f64(plot_y + plot_h + 2.0),
                 format_f64(row),
                 format_f64(ROW),
-                format_f64(AXIS_PLOT_CATEGORY_LABEL_PT),
+                format_f64(CHART_DEFAULT_TEXT_PT),
                 escape_typst(category)
             );
         }
@@ -1082,7 +1101,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
         write_bottom_axis_line(out, plot_x, plot_y + plot_h, plot_w);
     }
     if value_axis_drawn
-        && let Some(reach) = tick_reach(chart.value_axis_major_tick_mark, VALUE_LABEL_PT)
+        && let Some(reach) = tick_reach(chart.value_axis_major_tick_mark, CHART_DEFAULT_TEXT_PT)
     {
         // Every value tick sits on its own gridline, both being one major unit.
         for tick in &major_units {
@@ -1100,10 +1119,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
     // take four ticks.
     if categories > 0
         && category_axis_drawn
-        && let Some(reach) = tick_reach(
-            chart.category_axis_major_tick_mark,
-            AXIS_PLOT_CATEGORY_LABEL_PT,
-        )
+        && let Some(reach) = tick_reach(chart.category_axis_major_tick_mark, CHART_DEFAULT_TEXT_PT)
     {
         for boundary in 0..=categories {
             let offset: f64 = boundary as f64 * row;
@@ -1170,10 +1186,11 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
         );
         let _ = writeln!(
             out,
-            "#place(top + left, dx: {}pt, dy: {}pt, box[#box(width: 9pt, height: 9pt, fill: {}) #text(size: 9pt)[{}]])",
+            "#place(top + left, dx: {}pt, dy: {}pt, box[#box(width: 9pt, height: 9pt, fill: {}) #text(size: {}pt)[{}]])",
             format_f64(entry_x),
             format_f64(entry_y),
             color,
+            format_f64(CHART_DEFAULT_TEXT_PT),
             escape_typst(name)
         );
     }
@@ -1221,7 +1238,8 @@ fn generate_chart_bar(out: &mut String, chart: &Chart) {
             let color: &str = colors[index % colors.len()];
             let _ = writeln!(
                 out,
-                "#box(width: 10pt, height: 10pt, fill: {color}) #text(size: 9pt)[{name}] "
+                "#box(width: 10pt, height: 10pt, fill: {color}) #text(size: {}pt)[{name}] ",
+                format_f64(CHART_DEFAULT_TEXT_PT)
             );
         }
     }
@@ -1236,7 +1254,11 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
     const VALUE_GAP: f64 = 24.0; // value tick label gutter (left)
     const CAT_GAP: f64 = 18.0; // category label gutter (bottom)
     const LEGEND_W: f64 = 88.0;
-    const LINE_LEGEND_ROW_H: f64 = 16.0;
+    // Entry-to-entry pitch, measured between the legend key centres of the
+    // native Excel export of `WithChart.xlsx` at 150 DPI: 37px = 17.76pt for
+    // 10pt entries. LibreOffice puts its own entries 14.07pt apart on the same
+    // file, so this one is Excel's rather than a renderer consensus (#800).
+    const LINE_LEGEND_ROW_H: f64 = 17.76;
     const GAP: f64 = 6.0;
 
     let categories: usize = chart.categories.len();
@@ -1313,10 +1335,11 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
         if value_axis_drawn {
             let _ = writeln!(
                 out,
-                "#place(top + left, dx: 0pt, dy: {}pt, box(width: {}pt, height: 10pt)[#align(right + horizon)[#text(size: {}pt)[{}]]])",
-                format_f64(y - 5.0),
+                "#place(top + left, dx: 0pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(right + horizon)[#text(size: {}pt)[{}]]])",
+                format_f64(y - chart_label_box_h() / 2.0),
                 format_f64(VALUE_GAP),
-                format_f64(VALUE_LABEL_PT),
+                format_f64(chart_label_box_h()),
+                format_f64(CHART_DEFAULT_TEXT_PT),
                 chart_value_label(*tick)
             );
         }
@@ -1350,7 +1373,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
                 "#place(top + left, dx: {}pt, dy: {}pt, box(width: 24pt)[#align(center)[#text(size: {}pt)[{}]]])",
                 format_f64(x - 12.0),
                 format_f64(plot_y + plot_h + 3.0),
-                format_f64(LINE_PLOT_CATEGORY_LABEL_PT),
+                format_f64(CHART_DEFAULT_TEXT_PT),
                 escape_typst(category)
             );
         }
@@ -1392,7 +1415,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
         write_bottom_axis_line(out, plot_x, plot_y + plot_h, plot_w);
     }
     if value_axis_drawn
-        && let Some(reach) = tick_reach(chart.value_axis_major_tick_mark, VALUE_LABEL_PT)
+        && let Some(reach) = tick_reach(chart.value_axis_major_tick_mark, CHART_DEFAULT_TEXT_PT)
     {
         // Every value tick sits on its own gridline, both being one major unit.
         for tick in &major_units {
@@ -1404,10 +1427,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
     // category label sits midway between two ticks.
     if categories > 0
         && category_axis_drawn
-        && let Some(reach) = tick_reach(
-            chart.category_axis_major_tick_mark,
-            LINE_PLOT_CATEGORY_LABEL_PT,
-        )
+        && let Some(reach) = tick_reach(chart.category_axis_major_tick_mark, CHART_DEFAULT_TEXT_PT)
     {
         for boundary in 0..=categories {
             write_tick_under_plot(
@@ -1442,9 +1462,10 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
         );
         let _ = writeln!(
             out,
-            "#place(top + left, dx: {}pt, dy: {}pt, box[#box(width: 12pt, height: 3pt, fill: {color}, baseline: -3pt) #text(size: 9pt)[{}]])",
+            "#place(top + left, dx: {}pt, dy: {}pt, box[#box(width: 12pt, height: 3pt, fill: {color}, baseline: -3pt) #text(size: {}pt)[{}]])",
             format_f64(entry_x),
             format_f64(entry_y),
+            format_f64(CHART_DEFAULT_TEXT_PT),
             escape_typst(name)
         );
     }
@@ -1575,10 +1596,11 @@ fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, 
         );
         let _ = writeln!(
             out,
-            "#place(top + left, dx: {}pt, dy: {}pt, box[#box(width: 9pt, height: 9pt, fill: {}) #text(size: 9pt)[{}]])",
+            "#place(top + left, dx: {}pt, dy: {}pt, box[#box(width: 9pt, height: 9pt, fill: {}) #text(size: {}pt)[{}]])",
             format_f64(entry_x),
             format_f64(entry_y),
             color,
+            format_f64(CHART_DEFAULT_TEXT_PT),
             escape_typst(category)
         );
     }

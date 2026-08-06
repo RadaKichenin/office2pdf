@@ -1,5 +1,6 @@
 use super::*;
 use crate::ir::DataLabels;
+use crate::render::typst_gen::diagrams::CHART_DEFAULT_TEXT_PT;
 
 #[test]
 fn test_codegen_chart_bar_visual_bars() {
@@ -662,11 +663,12 @@ fn chart_source(chart: Chart) -> String {
 
 /// The axis tick labels the generator emitted, in the order written.
 fn emitted_axis_ticks(source: &str) -> Vec<f64> {
+    let marker: String = format!("text(size: {}pt)[", format_f64(CHART_DEFAULT_TEXT_PT));
     source
         .lines()
-        .filter(|line| line.contains("#place") && line.contains("text(size: 8pt)"))
+        .filter(|line| line.contains("#place") && line.contains(&marker))
         .filter_map(|line| {
-            let after = line.rsplit_once("text(size: 8pt)[")?.1;
+            let after = line.rsplit_once(marker.as_str())?.1;
             after.split_once(']')?.0.parse::<f64>().ok()
         })
         .collect()
@@ -2447,4 +2449,58 @@ fn test_line_series_markers_cycle_by_series_index() {
         "the two series must draw different marker shapes, got {squares} squares \
          and {polygons} polygons in:\n{source}"
     );
+}
+
+/// Every size a `#text(size: Npt)[label]` was emitted at, for one label.
+fn emitted_text_sizes(source: &str, label: &str) -> Vec<f64> {
+    let suffix: String = format!(")[{label}]");
+    let mut sizes: Vec<f64> = Vec::new();
+    for (index, _) in source.match_indices(&suffix) {
+        let Some(open) = source[..index].rfind("#text(size: ") else {
+            continue;
+        };
+        let value: &str = &source[open + "#text(size: ".len()..index];
+        if let Ok(size) = value.trim_end_matches("pt").parse::<f64>() {
+            sizes.push(size);
+        }
+    }
+    sizes
+}
+
+#[test]
+fn chart_labels_take_the_default_chart_text_size() {
+    // A chart that declares no `c:txPr` anywhere still has a text size: Excel's
+    // 10pt chart default. The sizes were per-element constants instead — 8pt for
+    // the axis and category labels, 9pt for the legend — so the labels rendered
+    // at a size the file never asks for, and did not even agree with each other
+    // (issue #800).
+    //
+    // Both renderers that can be checked against `WithChart.xlsx` put every run
+    // at 10pt: the native Excel export measures a 6.24pt cap height (10pt
+    // Calibri) and LibreOffice writes a literal 10.0pt text matrix for all 18
+    // runs on the page.
+    for chart_type in [ChartType::Bar, ChartType::Line] {
+        let mut chart = two_series_bar_chart(Vec::new());
+        let kind: String = format!("{chart_type:?}");
+        chart.chart_type = chart_type;
+        chart.categories = vec!["Q1".to_string(), "Q2".to_string()];
+        chart.series[0].values = vec![4.0, 8.0];
+        chart.series[1].values = vec![6.0, 2.0];
+        let source = chart_source(chart);
+
+        for label in ["0", "Q1", "Q2", "Revenue", "Cost"] {
+            let sizes = emitted_text_sizes(&source, label);
+            assert!(
+                !sizes.is_empty(),
+                "{kind}: no #text(size:) wrapped the label {label}; got:\n{source}"
+            );
+            for size in &sizes {
+                assert_eq!(
+                    *size, CHART_DEFAULT_TEXT_PT,
+                    "{kind}: label {label} drew at {size}pt, not the \
+                     {CHART_DEFAULT_TEXT_PT}pt chart default; got:\n{source}"
+                );
+            }
+        }
+    }
 }
