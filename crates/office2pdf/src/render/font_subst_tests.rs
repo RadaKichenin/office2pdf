@@ -859,3 +859,45 @@ fn test_symbol_missing_from_both_declared_families_falls_back_to_a_latin_face() 
         );
     }
 }
+
+/// CJK fallback keeps the requested face's serif/sans class.
+///
+/// PowerPoint substitutes a serif Hangul face for a serif Latin request, to
+/// keep the typographic voice. We reached Malgun Gothic — a geometric sans —
+/// whatever was asked for, so 29 slide titles declaring `<a:ea
+/// typeface="Cambria"/>` read in the wrong voice (issue #687).
+#[test]
+fn test_korean_under_a_serif_family_reaches_a_serif_hangul_face() {
+    let result = font_with_fallbacks_for_text("Cambria", "가나다");
+
+    let serif = ["Batang", "Noto Serif CJK KR", "Apple Myungjo", "Gungsuh"]
+        .iter()
+        .filter_map(|face| result.find(face))
+        .min()
+        .unwrap_or_else(|| panic!("no serif Hangul face for a serif request: {result}"));
+    if let Some(sans) = ["Malgun Gothic", "Noto Sans CJK KR", "Apple SD Gothic Neo"]
+        .iter()
+        .filter_map(|face| result.find(face))
+        .min()
+    {
+        assert!(
+            serif < sans,
+            "a serif request must reach a serif Hangul face first: {result}"
+        );
+    }
+}
+
+/// A sans request keeps the sans chain, so #537's behaviour is unchanged.
+#[test]
+fn test_korean_under_a_sans_family_still_reaches_the_sans_chain() {
+    let result = font_with_fallbacks_for_text("Calibri", "가나다");
+    let sans = result
+        .find("Malgun Gothic")
+        .unwrap_or_else(|| panic!("sans request must keep the sans chain: {result}"));
+    if let Some(serif) = result.find("Noto Serif CJK KR") {
+        assert!(
+            sans < serif,
+            "a sans request must not be routed to a serif Hangul face: {result}"
+        );
+    }
+}

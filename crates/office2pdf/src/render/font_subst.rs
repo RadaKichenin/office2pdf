@@ -349,22 +349,40 @@ impl TextScript {
     ///
     /// Appending these lets the per-glyph fallback answer the question the text
     /// asks rather than the one its family name asks.
-    fn fallbacks(self) -> &'static [&'static str] {
-        match self {
-            Self::Latin => &[],
-            Self::Korean => &[
+    fn fallbacks(self, serif: bool) -> &'static [&'static str] {
+        match (self, serif) {
+            (Self::Latin, _) => &[],
+            // PowerPoint substitutes a serif CJK face for a serif request, to
+            // keep the typographic voice. Reaching the sans chain regardless
+            // put 29 slide titles declaring a serif `a:ea` into a geometric
+            // sans at a much heavier weight (issue #687).
+            (Self::Korean, true) => &[
+                "Batang",
+                "Noto Serif CJK KR",
+                "Apple Myungjo",
+                "Gungsuh",
+                "Arial Unicode MS",
+            ],
+            (Self::Korean, false) => &[
                 "Malgun Gothic",
                 "Apple SD Gothic Neo",
                 "Noto Sans CJK KR",
                 "Arial Unicode MS",
             ],
-            Self::Japanese => &[
+            (Self::Japanese, true) => &[
+                "MS Mincho",
+                "Noto Serif CJK JP",
+                "Hiragino Mincho ProN",
+                "YuMincho",
+            ],
+            (Self::Japanese, false) => &[
                 "Yu Gothic",
                 "Hiragino Sans",
                 "Noto Sans CJK JP",
                 "MS Gothic",
             ],
-            Self::Chinese => &[
+            (Self::Chinese, true) => &["SimSun", "Noto Serif CJK SC", "Songti SC", "STSong"],
+            (Self::Chinese, false) => &[
                 "Microsoft YaHei",
                 "PingFang SC",
                 "Noto Sans CJK SC",
@@ -421,8 +439,41 @@ pub(crate) fn text_script(text: &str) -> TextScript {
     }
 }
 
-fn script_fallbacks(text: &str) -> &'static [&'static str] {
-    text_script(text).fallbacks()
+/// Whether `font_family` names a serif face.
+///
+/// Keyed on the family the document *asks for*, because that is what decides
+/// the voice the substitute has to keep. Recognises the Office serif families
+/// by name and anything that says so in its own name, which covers the
+/// metric-compatible substitutes (`Liberation Serif`, `Tinos`, `Caladea`) and
+/// the CJK serif families whose names do not contain "serif".
+fn family_is_serif(font_family: &str) -> bool {
+    let normalized = normalized_lookup_key(font_family);
+    if matches!(
+        normalized.as_str(),
+        "cambria"
+            | "times new roman"
+            | "georgia"
+            | "garamond"
+            | "book antiqua"
+            | "palatino"
+            | "palatino linotype"
+            | "constantia"
+            | "bookman old style"
+            | "century schoolbook"
+            | "caladea"
+            | "tinos"
+    ) {
+        return true;
+    }
+    ["serif", "batang", "gungsuh", "myungjo", "myeongjo", "mincho", "songti", "simsun"]
+        .iter()
+        .any(|token| normalized.contains(token))
+        // "Sans Serif" and "Noto Sans CJK" are not serif despite the substring.
+        && !normalized.contains("sans")
+}
+
+fn script_fallbacks(font_family: &str, text: &str) -> &'static [&'static str] {
+    text_script(text).fallbacks(family_is_serif(font_family))
 }
 
 /// Latin faces that carry the symbol blocks list markers are drawn from.
@@ -478,7 +529,7 @@ pub fn font_with_fallbacks_for_text(font_family: &str, text: &str) -> String {
         let context = active_context.borrow();
         let mut families: Vec<String> = vec![font_family.to_string()];
         families.extend(
-            script_fallbacks(text)
+            script_fallbacks(font_family, text)
                 .iter()
                 .map(|face| (*face).to_string()),
         );
@@ -565,8 +616,16 @@ pub fn font_with_east_asian_fallbacks(
         let context = context.as_ref();
         let mut families: Vec<String> = vec![latin_family.to_string()];
         families.push(east_asian_family.to_string());
+        // The East Asian slot names the face whose voice must be kept — the
+        // deck in #687 puts a serif Latin family there — and the Latin slot
+        // decides when it says nothing.
+        let serif_source: &str = if family_is_serif(east_asian_family) {
+            east_asian_family
+        } else {
+            latin_family
+        };
         families.extend(
-            script_fallbacks(text)
+            script_fallbacks(serif_source, text)
                 .iter()
                 .map(|face| (*face).to_string()),
         );
@@ -839,7 +898,7 @@ fn resolve_available_fallback(
     }
 
     script
-        .fallbacks()
+        .fallbacks(family_is_serif(font_family))
         .iter()
         .map(|face| (*face).to_string())
         .chain(fallback_candidates(font_family, Some(context)))
