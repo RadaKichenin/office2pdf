@@ -374,6 +374,31 @@ impl TextScript {
     }
 }
 
+/// Whether `font_family` names an East Asian face.
+///
+/// Keyed on the family, not on any text: Word's East Asian line metrics follow
+/// the face a line is set in, and a CJK family shapes its own Latin glyphs.
+/// A run naming `w:eastAsia="Arial"` — which the Latin business fixtures do —
+/// is not East Asian and must not be caught here.
+pub(crate) fn is_east_asian_family(font_family: &str) -> bool {
+    matches!(
+        normalized_lookup_key(font_family).as_str(),
+        "malgun gothic"
+            | "gulim"
+            | "dotum"
+            | "batang"
+            | "gungsuh"
+            | "nanum gothic"
+            | "nanum myeongjo"
+            | "ms gothic"
+            | "ms mincho"
+            | "meiryo"
+            | "yu gothic"
+            | "microsoft yahei"
+            | "simsun"
+    )
+}
+
 /// Classify `text` by the first script-specific character it carries.
 pub(crate) fn text_script(text: &str) -> TextScript {
     let mut has_han = false;

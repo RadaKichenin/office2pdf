@@ -376,8 +376,11 @@ fn word_line_box_and_leading(
     Some((ascender_em, descender_em, leading_pt / font_size))
 }
 
-/// Word gives a line carrying East Asian text 130% of the font's own hhea
+/// Word gives a line set in an East Asian face 130% of the font's own hhea
 /// line, and centres the bonus on the baseline: half above, half below.
+///
+/// The face decides, not the line's characters — see
+/// [`line_takes_east_asian_metrics`] (issue #643).
 ///
 /// Both halves are measured, not assumed. Against native Word exports an Arial
 /// first baseline sits at `hhea ascender + lineGap` = 0.937988em below the text
@@ -393,12 +396,6 @@ const EAST_ASIAN_LINE_HEIGHT_FACTOR: f64 = 1.3;
 /// The half of that bonus which lands above the baseline.
 const EAST_ASIAN_ASCENT_EXCESS: f64 = (EAST_ASIAN_LINE_HEIGHT_FACTOR - 1.0) / 2.0;
 
-/// Whether Word treats this paragraph's lines as East Asian.
-///
-/// Word only gives the bonus to lines that actually carry East Asian
-/// characters: in a native Korean export the Arial runs of the same document
-/// keep their plain hhea line, and inflating them too made every Western
-/// document 30-50% taller (issue #354).
 /// The family whose metrics pace these runs' lines.
 ///
 /// A line carrying East Asian text is paced by the East Asian face, not by the
@@ -421,13 +418,34 @@ fn has_east_asian_text(runs: &[Run]) -> bool {
     runs.iter().any(|run| run.text.chars().any(is_cjk_like))
 }
 
-/// The extra ascent, in em, that Word gives a line carrying East Asian text.
+/// Whether Word measures this line with its East Asian metrics.
+///
+/// Word keys that on the face the line is **set in**, not on the script of its
+/// characters: a CJK family shapes its own Latin glyphs and the line keeps the
+/// East Asian height. Three Heading2 paragraphs in `03_meeting_minutes_ko`
+/// share `w:rPr` naming Malgun Gothic in every `w:rFonts` slot and differ only
+/// in script; Word gives them the same height, and gating on the text left the
+/// Latin-only one 2.37pt short (issue #643).
+///
+/// Reading the resolved metric family rather than `w:eastAsia` directly is what
+/// keeps a Latin line Latin: the business fixtures declare
+/// `w:eastAsia="Arial"`, and [`east_asian_aware_metric_family`] already resolves
+/// a Latin-only line to its Latin family. So an Arial paragraph inside a Korean
+/// document keeps its own line, which is what Word does — snapping those
+/// inflated every Western document by 30-50% (issue #354).
+fn line_takes_east_asian_metrics(runs: &[Run]) -> bool {
+    has_east_asian_text(runs)
+        || east_asian_aware_metric_family(runs)
+            .is_some_and(crate::render::font_subst::is_east_asian_family)
+}
+
+/// The extra ascent, in em, that Word gives a line set in an East Asian face.
 ///
 /// `pitch_em` is the font's own hhea pitch, never the line's advance: under a
 /// document grid the slot's extra height accrues entirely below the baseline,
 /// so this term must not scale with the slot (issue #518).
 fn east_asian_ascent_excess_em(runs: &[Run], pitch_em: f64) -> f64 {
-    if has_east_asian_text(runs) {
+    if line_takes_east_asian_metrics(runs) {
         EAST_ASIAN_ASCENT_EXCESS * pitch_em
     } else {
         0.0
@@ -479,10 +497,10 @@ pub(super) fn word_header_band_shift_pt(runs: &[Run]) -> Option<f64> {
 }
 
 /// The line advance Word gives this paragraph before any grid is consulted:
-/// the font's hhea line, or 1.3 times it when the line carries East Asian
-/// text (issue #518).
+/// the font's hhea line, or 1.3 times it when the line is set in an East Asian
+/// face (issues #518, #643).
 fn word_natural_line_em(runs: &[Run], word_pitch_em: f64) -> f64 {
-    if has_east_asian_text(runs) {
+    if line_takes_east_asian_metrics(runs) {
         EAST_ASIAN_LINE_HEIGHT_FACTOR * word_pitch_em
     } else {
         word_pitch_em
@@ -707,10 +725,16 @@ pub(super) fn word_line_leading_pt(
     // (issue #518).
     let natural_line_pt: f64 = word_natural_line_em(runs, word_pitch_em) * font_size;
 
-    // Word only snaps East Asian text to the document grid: Latin-only
-    // paragraphs keep their hhea line height even under one (native Word GT:
+    // Word only snaps East Asian *text* to the document grid, so this gate
+    // stays keyed on the characters even though the line height above is keyed
+    // on the face: a Latin-only paragraph keeps whatever advance its own line
+    // asks for rather than being stretched to the grid pitch (native Word GT:
     // Arial 10.5 lines stay 12pt in a Korean document). Snapping Latin
     // paragraphs inflated every Western document by 30-50% (issue #354).
+    //
+    // That advance is no longer always the bare hhea line: a Latin-only
+    // paragraph set in a CJK face now carries the 1.3 factor (issue #643). It
+    // still does not snap.
     let advance_pt: f64 = match line_grid_pitch {
         Some(pitch) if pitch > 0.0 && has_east_asian_text(runs) => {
             // A grid line never compresses text below the height its font
