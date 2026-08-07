@@ -242,8 +242,15 @@ fn column_groups(
 
 /// Build a table containing only columns `[start, end)`, truncating cell
 /// spans at the group boundary. A merged cell that starts before the group
-/// keeps its geometry (background/border) but not its content, matching how
-/// Excel prints merge continuations on overflow pages.
+/// keeps its geometry (background/border) but blanks its content.
+///
+/// That blanking is a stopgap, not a match for how a spreadsheet application
+/// prints the continuation. A LibreOffice render of
+/// `tests/fixtures/xlsx/merged_row_overflows_page_column.xlsx` redraws the
+/// merge's line on the following page-column at a negative x so its tail lands
+/// there, rather than leaving the cell empty. Reproducing that is #631; no
+/// native Excel export has been measured yet, so the exact geometry is
+/// corroborated rather than settled.
 fn slice_table_columns(table: &Table, start: usize, end: usize) -> Table {
     let column_count: usize = table.column_widths.len();
     // Tracks rows still covered by a row-spanning cell, per column.
@@ -281,6 +288,15 @@ fn slice_table_columns(table: &Table, start: usize, end: usize) -> Table {
                 if cell_start < start {
                     // Continuation of a merge that began on an earlier page.
                     sliced.content = Vec::new();
+                    sliced.spill_width = None;
+                } else if let Some(spill) = sliced.spill_width {
+                    // The spill width was measured against the whole sheet, so
+                    // it can reach far past the columns this page actually
+                    // carries — on a sheet wide enough to split, past the paper
+                    // edge, losing the ink entirely (#631). Clamp it to what
+                    // remains of the group from this cell's left edge.
+                    let available: f64 = table.column_widths[overlap_start..end].iter().sum();
+                    sliced.spill_width = Some(spill.min(available));
                 }
                 cells.push(sliced);
             }

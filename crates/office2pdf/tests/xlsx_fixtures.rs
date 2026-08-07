@@ -1129,3 +1129,38 @@ fn structure_check_boolean_renders_literal_text_number_format() {
         "the raw number must not leak past the literal format; got {texts:?}"
     );
 }
+
+#[test]
+fn smoke_merged_row_overflows_page_column() {
+    assert_produces_valid_pdf("merged_row_overflows_page_column.xlsx");
+}
+
+/// A merged row spanning a sheet wide enough to split horizontally used to keep
+/// the whole merge's width as its spill width on every page-column, so its text
+/// painted a single line far past the printable edge — off the paper on this
+/// fixture, losing that ink entirely (#631).
+#[test]
+fn structure_merged_row_overflow_clamps_spill_to_its_page_column() {
+    let pages = sheet_pages("merged_row_overflows_page_column.xlsx");
+    assert!(
+        pages.len() >= 2,
+        "the sheet is wider than one page and must split into column groups; got {}",
+        pages.len()
+    );
+
+    for (index, page) in pages.iter().enumerate() {
+        let group_width: f64 = page.table.column_widths.iter().sum();
+        for row in &page.table.rows {
+            for cell in &row.cells {
+                let Some(spill) = cell.spill_width else {
+                    continue;
+                };
+                assert!(
+                    spill <= group_width + 0.001,
+                    "page {index}: spill width {spill}pt exceeds the {group_width}pt \
+                     the page-column actually carries",
+                );
+            }
+        }
+    }
+}

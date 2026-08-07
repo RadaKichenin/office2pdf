@@ -526,8 +526,13 @@ fn compute_spill_width(
     // A merged cell never paints past the merge edge: Excel keeps unwrapped
     // text on one line and clips it at the merged width. Apply this even when
     // the text fits — column pagination may clamp the merge to fewer columns
-    // on a page, and Excel still paints the single line across the page edge
-    // rather than wrapping it.
+    // on a page, and the line is still not wrapped there.
+    //
+    // Two caveats this width alone does not carry. The line is clipped at the
+    // page-column edge and its remainder is redrawn on the next page-column;
+    // we blank that continuation instead (#631). And the renderer lays this
+    // width out as a wrapping box rather than a one-line clip, so the fragment
+    // left visible is the tail of the text, not its head (#811).
     if col_span > 1 {
         let merged_width: f64 = (col_idx..col_idx + col_span)
             .map(|c| {
