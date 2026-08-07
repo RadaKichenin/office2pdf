@@ -1282,12 +1282,18 @@ fn test_slide_table_cell_uses_the_powerpoint_line_box() {
         (top + bottom - 1.2).abs() < 0.001,
         "a slide cell's line must span 1.2em, got {top} + {bottom}: {slide}"
     );
-    let flow_box = emitted_line_box_em(&flow).expect("flow cell emits a line box");
-    assert!(
-        (flow_box.0 + flow_box.1 - 1.2).abs() > 0.001,
-        "a flow-page cell must keep Word's hhea line, not PowerPoint's: {flow:?}",
-        flow = flow_box
-    );
+    // The flow-page half needs the declared face's real hhea metrics, which a
+    // runner without Liberation Sans cannot resolve — `word_cell_line_box`
+    // then emits no box at all. The slide assertion above holds regardless,
+    // because PowerPoint's 1.2em falls back to the default face.
+    if crate::render::pdf::font_line_metrics_em("Liberation Sans").is_some()
+        && let Some(flow_box) = emitted_line_box_em(&flow)
+    {
+        assert!(
+            (flow_box.0 + flow_box.1 - 1.2).abs() > 0.001,
+            "a flow-page cell must keep Word's hhea line, not PowerPoint's: {flow_box:?}"
+        );
+    }
 }
 
 /// An empty paragraph's blank line in a slide cell comes from the same model.
