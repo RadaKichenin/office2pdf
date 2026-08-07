@@ -39,13 +39,10 @@ As a result:
   PowerPoint
 - line wrapping diverged because the effective font metrics were wrong
 
-There was a second issue in fallback selection:
-
-- fallback ordering preferred "font source rank" too aggressively
-- this caused Office-managed fonts such as `Malgun Gothic` to outrank the
-  metric-preferred substitute list for `Pretendard`
-- on this machine, that produced worse wrapping than using
-  `Apple SD Gothic Neo`
+Fallback selection also depends on where an available substitute came from.
+After the requested family, candidates are ranked as Office-managed fonts,
+user-provided font paths, other available fonts, and unavailable names. The
+static substitution-table order breaks ties within the same source rank.
 
 ## Why PowerPoint Looked Correct
 
@@ -81,19 +78,18 @@ Implementation:
 
 This makes text boxes behave much closer to PowerPoint's effective style model.
 
-### 2. Preserve metric fallback order
+### 2. Rank available fallback sources
 
-Fallback selection for known families such as `Pretendard` now preserves the
-substitution table's metric-compatible order first and only uses source rank as
-a secondary tiebreaker.
+Fallback selection for known families such as `Pretendard` ranks available
+substitutes by source first, then preserves the substitution table's order
+within each source rank.
 
 That means:
 
-- preferred substitute family order is stable
-- Office-managed fonts no longer automatically jump ahead of better metric
-  matches just because they were discovered from Office paths
-- the real deck now falls back to `Apple SD Gothic Neo` instead of
-  `Malgun Gothic`
+- Office-managed fonts outrank user-provided and ordinary system fonts
+- user-provided fonts outrank ordinary system fonts
+- preferred substitute order remains stable among candidates from the same
+  source
 
 ## Files Involved
 
@@ -109,16 +105,12 @@ The fix was verified in three ways:
 2. unit tests for fallback ordering under a mixed Office/system font context
 3. reconversion of the real PPTX deck and manual visual inspection
 
-Observed result after the fix:
+Observed result after the text-inheritance fix:
 
 - slide 4 `SKILLS` labels no longer wrap as before
 - badge/title styling is closer to PowerPoint
-- regenerated PDF embeds `Apple SD Gothic Neo` variants instead of
-  `Malgun Gothic` for `Pretendard` fallback
-
-The remaining known gap is unrelated to text inheritance:
-
-- slide 17 still warns for unsupported `hdphoto1.wdp`
+- the resolved fallback now follows the available font source priority rather
+  than assuming one machine-specific family
 
 ## Key Lesson
 

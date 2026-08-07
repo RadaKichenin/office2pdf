@@ -1057,6 +1057,26 @@ fn structure_number_format_tests_keeps_preserved_leading_spaces() {
     }
 }
 
+/// A missing typewriter face must retain fixed pitch through the complete
+/// XLSX-to-Typst path instead of reaching Typst's proportional body default.
+#[test]
+fn number_format_tests_emits_a_monospace_fallback_chain() {
+    let data = load_fixture("poi/NumberFormatTests.xlsx");
+    let (document, _warnings) = XlsxParser
+        .parse(&data, &ConvertOptions::default())
+        .expect("fixture should parse");
+    let source = generate_typst(&document)
+        .expect("fixture should generate Typst")
+        .source;
+
+    assert!(
+        source.contains(
+            r#"font: ("Lucida Sans Typewriter", "DejaVu Sans Mono", "Noto Sans Mono", "Liberation Mono", "Cousine")"#,
+        ),
+        "Lucida Sans Typewriter should keep a monospace fallback chain"
+    );
+}
+
 /// A cell's leading spaces must survive *rendering*, not just parsing: Typst
 /// drops a space that opens a markup line, so the single-space cell above
 /// rendered flush left even though its text was intact (issue #752).
