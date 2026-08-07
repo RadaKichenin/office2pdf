@@ -1813,11 +1813,12 @@ fn slide_text_takes_powerpoints_flat_1_2em_line() {
 }
 
 #[test]
-fn slide_baseline_splits_the_line_at_the_win_ascent_proportion() {
-    // The baseline divides that 1.2em in the proportion of OS/2 usWinAscent to
-    // usWinAscent + usWinDescent — not the hhea pair, and not Typst's
-    // normalised one. Native exports put Arial's first baseline at 0.9718em
-    // against 1854/2288 x 1.2 = 0.9724 predicted (issue #513).
+fn slide_baseline_splits_the_lines_extra_leading_evenly() {
+    // The glyphs take hhea `ascent + descent`; whatever the 1.2em line has
+    // left over is split evenly above and below them, seating the baseline at
+    // `(1.2 + ascent - descent) / 2`. A proportional split on OS/2
+    // `usWinAscent` was tried and measured 0.45-1.12pt low on every frame of
+    // `08_marketing_report_en` (issues #513, #660).
     let Some(source) = slide_text_box_source("Libertinus Serif", 18.0, ParagraphStyle::default())
     else {
         return;
@@ -1853,7 +1854,7 @@ fn the_split_differs_between_fonts_while_the_line_does_not() {
     assert!((mono.0 + mono.1 - 1.2).abs() < 0.000_001);
     assert!(
         (serif.0 - mono.0).abs() > 0.001,
-        "two faces with different usWinAscent ratios should seat the baseline \
+        "two faces with different hhea ascent/descent should seat the baseline \
          differently: {serif:?} vs {mono:?}"
     );
     assert!(
@@ -1917,8 +1918,8 @@ fn slide_line_spacing_scales_proportionally() {
 
 #[test]
 fn slide_line_spacing_keeps_the_fonts_baseline_split() {
-    // Scaling the line must not move the baseline within it: the ascent keeps
-    // the font's usWinAscent share of the taller box.
+    // Scaling the line must not move the baseline within it: the glyphs keep
+    // their half of the taller box's extra leading.
     let Some(source) = slide_text_box_source(
         "Libertinus Serif",
         18.0,

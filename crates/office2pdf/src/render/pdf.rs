@@ -810,14 +810,24 @@ pub(crate) const POWERPOINT_LINE_HEIGHT_FACTOR: f64 = 1.2;
 
 /// PowerPoint's `(above baseline, below baseline)` split of that line, in em.
 ///
-/// The baseline divides the 1.2em line in the proportion of the font's OS/2
-/// `usWinAscent` to `usWinAscent + usWinDescent` — not its hhea metrics, and
-/// not Typst's normalised pair. Measured against native exports with zero
-/// insets: Arial seats its first baseline 0.9718em below the box top against
-/// `1854/2288 x 1.2 = 0.9724` predicted, and Calibri 0.9343em against
-/// `1950/2500 x 1.2 = 0.9360`. The remainder is the descent gap a bottom
-/// anchored box keeps below its last baseline, which we used to drop entirely
-/// (issue #513).
+/// PowerPoint splits the line's **extra leading evenly** above and below the
+/// glyphs: the glyphs take `ascent + descent` and the remainder of the 1.2em
+/// line is halved, seating the baseline at `(1.2 + ascent - descent) / 2`.
+///
+/// This replaced a proportional split, `1.2 x winAscent / (winAscent +
+/// winDescent)`. Both reproduce the line's *height* — they must, since both
+/// span 1.2em — so only the first baseline separates them, and the native
+/// exports side with the even split. On `08_marketing_report_en` p3, a 17pt
+/// top-anchored frame, GT's first baseline is 142.08pt; the even split predicts
+/// 142.09 and the proportional one put us at 142.53, 0.45pt low. Arial's two
+/// predictions are 0.9467em and 0.9724em (issue #660).
+///
+/// The metrics are hhea's, not OS/2's `usWin*` pair: the even split needs the
+/// ascent and descent as em fractions rather than as a ratio, and the two
+/// tables disagree about the denominator.
+///
+/// The below-baseline half is the descent gap a bottom-anchored box keeps under
+/// its last baseline, which we used to drop entirely (issue #513).
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn powerpoint_line_box_em(family: &str) -> Option<(f64, f64)> {
     use std::collections::HashMap;
@@ -843,17 +853,18 @@ pub(crate) fn powerpoint_line_box_em(family: &str) -> Option<(f64, f64)> {
     let split: Option<(f64, f64)> = best_face(family)
         .or_else(|| best_face(crate::defaults::TYPST_DEFAULT_FONT_FAMILY))
         .and_then(|font| {
-            let table = font.ttf().tables().os2?;
-            // `usWinDescent` is an unsigned distance *below* the baseline in
-            // the spec, but ttf-parser hands it back signed, so Arial's 434
-            // arrives as -434. Adding it raw shrank the denominator from 2288
-            // to 1420 and put the baseline at 1.57em, past the bottom of a
-            // 1.2em line.
-            let ascent = f64::from(table.windows_ascender()).abs();
-            let descent = f64::from(table.windows_descender()).abs();
-            let total = ascent + descent;
-            (total > 0.0 && ascent > 0.0).then(|| {
-                let above = POWERPOINT_LINE_HEIGHT_FACTOR * ascent / total;
+            let ttf = font.ttf();
+            let upem = f64::from(ttf.units_per_em()).max(1.0);
+            let ascent = f64::from(ttf.ascender()).abs() / upem;
+            let descent = f64::from(ttf.descender()).abs() / upem;
+            (ascent > 0.0).then(|| {
+                // The glyphs occupy `ascent + descent`; whatever the 1.2em line
+                // has left over is the extra leading, and PowerPoint puts half
+                // of it above the glyphs and half below. So the baseline sits
+                // `ascent + (1.2 - ascent - descent) / 2` below the top, which
+                // is the expression below.
+                let above = (POWERPOINT_LINE_HEIGHT_FACTOR + ascent - descent) / 2.0;
+                let above = above.clamp(0.0, POWERPOINT_LINE_HEIGHT_FACTOR);
                 (above, POWERPOINT_LINE_HEIGHT_FACTOR - above)
             })
         });

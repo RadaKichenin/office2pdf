@@ -638,3 +638,33 @@ fn test_text_advance_em_is_none_for_missing_glyphs() {
     assert_eq!(text_advance_em("Libertinus Serif", false, "\u{E000}"), None);
     assert_eq!(text_advance_em("Libertinus Serif", false, ""), Some(0.0));
 }
+
+/// PowerPoint splits a line's extra leading evenly above and below the glyphs,
+/// not in the proportion of the face's ascent to its descent.
+///
+/// Both models were fitted to native exports and agree to 0.01pt on the box
+/// *height*, so only the first baseline separates them. Measured on
+/// `08_marketing_report_en` p3, a 17pt top-anchored frame: GT's first baseline
+/// is 142.08pt and the proportional model puts ours at 142.53pt, 0.45pt low.
+/// The even split predicts 142.09pt (issue #660).
+///
+/// For Arial (hhea ascender 1854/2048, descender 434/2048):
+///
+/// - even split `(1.2 + 0.9053 - 0.2119) / 2` = **0.9467em**
+/// - proportional `1854/2288 x 1.2` = 0.9724em
+#[test]
+fn test_powerpoint_line_box_splits_leading_evenly() {
+    let Some((above, below)) = powerpoint_line_box_em("Arial") else {
+        return; // no Arial-compatible face on this host
+    };
+
+    assert!(
+        (above + below - POWERPOINT_LINE_HEIGHT_FACTOR).abs() < 1e-9,
+        "the split must still span the 1.2em line, got {above} + {below}"
+    );
+    assert!(
+        (above - 0.9467).abs() < 0.004,
+        "Arial's first baseline must sit 0.9467em below the box top (even split), \
+         not {above}em"
+    );
+}
