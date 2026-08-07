@@ -357,6 +357,20 @@ pub(super) fn powerpoint_line_height_settings(
     ))
 }
 
+/// The height, in points, of one blank PowerPoint line for `runs`.
+///
+/// The empty-paragraph strut in a slide's table cell has to be sized from the
+/// same model as its neighbours, or the blank line keeps Word's hhea height
+/// while the text beside it takes PowerPoint's 1.2em one (issues #625, #663).
+pub(super) fn powerpoint_line_box_pt(runs: &[Run]) -> Option<f64> {
+    let family: &str = runs
+        .iter()
+        .find_map(|run| run.style.font_family.as_deref())
+        .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_FAMILY);
+    let (ascent_em, descent_em) = crate::render::pdf::powerpoint_line_box_em(family)?;
+    Some((ascent_em + descent_em) * paragraph_font_size_pt(runs))
+}
+
 /// The nominal font's `(above baseline, below baseline)` split plus the
 /// leading, in em, that tops the line box up to Word's line advance. `None`
 /// when the metric-edge treatment does not apply.
@@ -552,8 +566,8 @@ pub(super) struct CellLineBox {
     pub font_size_pt: f64,
 }
 
-/// Line-box settings for a table cell: a fixed box spanning the font's full
-/// single-spacing (hhea) line — 1.3 times it for an East Asian row — seated at
+/// Line-box settings for a **Word or sheet** table cell: a fixed box spanning
+/// the font's full single-spacing (hhea) line — 1.3 times it for an East Asian row — seated at
 /// the same constant ascent the body path uses. In the default symmetric
 /// emission the box carries the whole line advance below the ascent with zero
 /// leading, so a single-line cell occupies the full line height Word gives it
@@ -568,6 +582,10 @@ pub(super) struct CellLineBox {
 /// The box also carries the paragraph's `w:spacing w:after` when a snapping
 /// grid is in force, because Word snaps the line and that gap together (issues
 /// #500, #503).
+///
+/// A **slide's** table cell does not come here: it paces on PowerPoint's flat
+/// 1.2em line via [`powerpoint_line_height_settings`], like the slide's own
+/// text boxes (issue #663).
 pub(super) fn word_cell_line_box_settings(
     runs: &[Run],
     style: &ParagraphStyle,
