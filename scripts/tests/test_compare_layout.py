@@ -1,9 +1,10 @@
 """Unit tests for the trace-based layout differ.
 
 All fixtures are synthetic ``mutool draw -F trace`` fragments that mirror the
-real output format (device transform on each op, glyph coordinates in text
-space, sizes in trm units), so the parser is exercised on the same shapes it
-will meet in production without shelling out to mutool.
+real output format (numberless ``<page>`` opening tag, device transform on each
+op, glyph coordinates in text space, sizes in trm units), so the parser is
+exercised on the same shapes it will meet in production without shelling out to
+mutool.
 """
 
 from __future__ import annotations
@@ -17,9 +18,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import compare_layout
 
 
-def trace_document(*pages: str) -> str:
+def trace_document(*pages: str, numbered: bool = False) -> str:
+    """Wrap page bodies in a trace document.
+
+    Defaults to the numberless `<page mediabox="...">` mutool 1.23.x emits, so
+    the shared fixtures exercise the shape the parser actually meets. Pass
+    ``numbered=True`` for the attribute later builds add.
+    """
     body = "\n".join(
-        f'<page number="{i + 1}" mediabox="0 0 595.2 841.92">\n{content}\n</page>'
+        "<page {}mediabox=\"0 0 595.2 841.92\">\n{}\n</page>".format(
+            f'number="{i + 1}" ' if numbered else "", content
+        )
         for i, content in enumerate(pages)
     )
     return f'<?xml version="1.0"?>\n<document filename="x.pdf">\n{body}\n</document>'
@@ -71,6 +80,38 @@ def rect_op(x0: float, y0: float, x1: float, y1: float, kind: str = "fill_path")
         f'<lineto x="{x0}" y="{841.92 - y1}"/>\n'
         f"<closepath/>\n</{kind}>"
     )
+
+
+class PageElementTest(unittest.TestCase):
+    """The ``<page>`` opening tag differs across mutool releases.
+
+    1.23.x emits ``<page mediabox="...">`` with no ``number`` attribute, so a
+    parser that requires one measures nothing at all — and reports that as
+    "no differences" rather than as a failure.
+    """
+
+    def test_page_without_number_attribute_is_parsed(self) -> None:
+        pages = compare_layout.parse_trace(
+            trace_document(text_op([("A", 72.0)], baseline_y=100.0))
+        )
+        self.assertEqual(len(pages), 1)
+        self.assertEqual(pages[0].lines[0].text, "A")
+
+    def test_pages_without_number_keep_document_order(self) -> None:
+        pages = compare_layout.parse_trace(
+            trace_document(
+                text_op([("A", 72.0)], baseline_y=100.0),
+                text_op([("B", 72.0)], baseline_y=100.0),
+            )
+        )
+        self.assertEqual([p.lines[0].text for p in pages], ["A", "B"])
+
+    def test_page_with_number_attribute_still_parses(self) -> None:
+        pages = compare_layout.parse_trace(
+            trace_document(text_op([("A", 72.0)], baseline_y=100.0), numbered=True)
+        )
+        self.assertEqual(len(pages), 1)
+        self.assertEqual(pages[0].lines[0].text, "A")
 
 
 class ParseTraceTest(unittest.TestCase):

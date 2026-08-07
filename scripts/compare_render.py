@@ -46,7 +46,10 @@ FILL_TEXT_RE = re.compile(
     r'([-0-9.]+) ([-0-9.]+)"[^>]*>(.*?)</fill_text>',
     re.S,
 )
-TRACE_PAGE_RE = re.compile(r'<page number="\d+')
+# mutool 1.23.x opens a page as `<page mediabox="...">`; later builds add a
+# `number` attribute. Splitting on the numbered form alone yields zero pages and
+# silently drops the geometry axis.
+TRACE_PAGE_RE = re.compile(r"<page\b")
 GLYPH_RE = re.compile(r'<g unicode="([^"]*)" glyph="[^"]*" x="([-0-9.]+)" y="([-0-9.]+)"')
 HISTOGRAM_BINS = 32
 
