@@ -2543,6 +2543,27 @@ fn chart_labels_take_the_default_chart_text_size() {
 }
 
 #[test]
+fn legend_keys_use_an_explicit_chart_owned_label_gap() {
+    // A plain markup space inherits the document's body font and size. That
+    // leaked an 11pt word-space run between each 10pt chart key and label,
+    // widening the legend independently of the chart's own text (#804).
+    for chart_type in [ChartType::Bar, ChartType::Line, ChartType::Pie] {
+        let mut chart = two_series_bar_chart(Vec::new());
+        let kind = format!("{chart_type:?}");
+        chart.chart_type = chart_type;
+        chart.categories = vec!["Q1".to_string(), "Q2".to_string()];
+        chart.series[0].values = vec![4.0, 8.0];
+        chart.series[1].values = vec![6.0, 2.0];
+        let source = chart_source(chart);
+
+        assert!(
+            source.contains("#h(0pt)#text(size: 10pt)"),
+            "{kind}: the key-to-label gap must be explicit chart layout; got:\n{source}"
+        );
+    }
+}
+
+#[test]
 fn a_line_legend_key_draws_the_series_line_and_its_marker() {
     // Excel's legend key for a line series is a sample of what the reader sees
     // in the plot: the series line at its own weight with the series' marker
