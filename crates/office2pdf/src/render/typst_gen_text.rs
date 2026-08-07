@@ -312,8 +312,9 @@ pub(super) fn word_line_box_em(
     Some((top_em, pitch_em - top_em))
 }
 
-/// Line-box settings for a slide's text: PowerPoint's flat 1.2em line, split
-/// at the font's OS/2 `usWinAscent` proportion, with zero leading.
+/// Line-box settings for a slide's text: PowerPoint's flat 1.2em line, with
+/// its extra leading split evenly above and below the glyphs, and zero
+/// leading between lines.
 ///
 /// This is the PPTX counterpart of [`word_line_height_settings`], and the two
 /// models genuinely differ. Word's line is the font's own hhea pitch;
