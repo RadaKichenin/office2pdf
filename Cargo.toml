@@ -11,3 +11,15 @@ repository = "https://github.com/developer0hye/office2pdf"
 [patch.crates-io]
 umya-spreadsheet = { git = "https://github.com/developer0hye/umya-spreadsheet.git", branch = "fix/panic-safety-v2" }
 docx-rs = { git = "https://github.com/developer0hye/docx-rs.git", branch = "fix/parse-tolerance" }
+# zune-jpeg 0.5.15 on crates.io ends a block with `warn!(…)` and no semicolon,
+# which rustc 1.97 rejects: "macro expansion ends with an incomplete
+# expression". It reaches us through `image`, so every Rust job fails on a cold
+# cache. Upstream fixed it after publishing; the pinned rev is still version
+# 0.5.15, so this satisfies `^0.5` without opting into the 0.5.16-rc1
+# prerelease. Drop this once 0.5.16 is released (issue #816).
+#
+# `zune-core` has to come from the same rev: `zune-jpeg` re-exports its types,
+# and mixing the git copy with the crates.io one leaves two distinct
+# `ZByteReaderTrait`s, so `image` stops satisfying its own bounds.
+zune-jpeg = { git = "https://github.com/etemesi254/zune-image", rev = "0346b875169ed528e206441c97899d99002e17ca" }
+zune-core = { git = "https://github.com/etemesi254/zune-image", rev = "0346b875169ed528e206441c97899d99002e17ca" }
