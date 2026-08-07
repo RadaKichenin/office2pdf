@@ -835,9 +835,9 @@ pub(crate) fn powerpoint_line_box_em(family: &str) -> Option<(f64, f64)> {
         return *cached;
     }
 
-    // Resolve through the same metric-compatible substitute chain Typst sees
-    // in the emitted font list. If none of those faces exists, Typst renders
-    // with its embedded default, so the metrics lookup must end there too.
+    // Resolve through the same substitute chain Typst sees in the emitted font
+    // list. If none exists, Typst uses its embedded default, so the metrics
+    // lookup must end there too.
     // Otherwise a missing Office face can collapse consecutive paragraphs to
     // the fallback font's glyph height (issue #705).
     let split: Option<(f64, f64)> = best_face(family)

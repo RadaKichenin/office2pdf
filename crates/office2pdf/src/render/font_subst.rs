@@ -1,8 +1,8 @@
-//! Metric-compatible font substitution table.
+//! Font substitution and fallback chains.
 //!
-//! Maps common Microsoft fonts to open-source metric-compatible alternatives.
-//! When the requested font is unavailable, the substitutes are tried in order.
-//! Uses a `match` statement for zero-cost static lookup (no runtime allocation).
+//! Explicit family mappings provide preferred alternatives, including
+//! metric-compatible Office substitutes. Names carrying a monospace class token
+//! instead get a fixed-pitch chain. The requested family remains first.
 
 // Font discovery/embedding is native-only; on wasm32 these items are
 // compiled but unreachable (visibility sealing exposed them to dead_code).
@@ -19,6 +19,13 @@ use crate::ir::{
 
 use super::font_context::FontSearchContext;
 use super::typst_gen::escape_typst_string;
+
+const MONOSPACE_SUBSTITUTES: &[&str] = &[
+    "DejaVu Sans Mono",
+    "Noto Sans Mono",
+    "Liberation Mono",
+    "Cousine",
+];
 
 thread_local! {
     static ACTIVE_FONT_CONTEXT: RefCell<Option<FontSearchContext>> = const { RefCell::new(None) };
@@ -116,15 +123,16 @@ fn fallback_candidates(font_family: &str, context: Option<&FontSearchContext>) -
     candidates
 }
 
-/// Return metric-compatible substitute font names for the given font family.
+/// Return metric- or family-class-compatible substitutes for a font family.
 ///
-/// Returns `None` if no substitution is defined for the font (i.e., it is not
-/// a known Microsoft font that has metric-compatible open-source alternatives).
+/// Returns `None` if no substitution is defined and the name provides no
+/// reliable family-class signal.
 ///
-/// The returned slice is ordered by preference — the first entry is the best
-/// metric-compatible match.
+/// The returned slice is ordered by preference. Explicit mappings preserve the
+/// known family's intent; class-derived mappings preserve fixed pitch.
 pub fn substitutes(font_family: &str) -> Option<&'static [&'static str]> {
-    match normalized_lookup_key(font_family).as_str() {
+    let normalized_family = normalized_lookup_key(font_family);
+    match normalized_family.as_str() {
         "calibri" => Some(&["Carlito", "Liberation Sans"]),
         "carlito" => Some(&["Calibri", "Liberation Sans", "Arimo", "Arial"]),
         "cambria" => Some(&["Caladea", "Liberation Serif"]),
@@ -284,8 +292,18 @@ pub fn substitutes(font_family: &str) -> Option<&'static [&'static str]> {
             "Yu Mincho",
             "Arial Unicode MS",
         ]),
+        _ if family_name_declares_monospace(&normalized_family) => Some(MONOSPACE_SUBSTITUTES),
         _ => None,
     }
+}
+
+/// OOXML may provide no usable family class beyond the requested name. A
+/// standalone class token still lets a missing fixed-pitch face avoid Typst's
+/// proportional default without mistaking brand names such as Monotype.
+fn family_name_declares_monospace(normalized_family: &str) -> bool {
+    normalized_family
+        .split(|character: char| !character.is_ascii_alphanumeric())
+        .any(|token| matches!(token, "mono" | "monospace" | "typewriter"))
 }
 
 /// Check whether the given font family (or its alias) is available in the
@@ -386,10 +404,10 @@ fn script_fallbacks(text: &str) -> &'static [&'static str] {
 ///
 /// The declared family leads, so a run naming a face that does cover its own
 /// text keeps it. The script's faces come next, ahead of the declared family's
-/// metric-compatible substitutes: those substitutes answer "what else looks
-/// like this family", which is the wrong question for a glyph the family does
-/// not have. Placing them first is what sent Korean text through a Chinese
-/// face that happens to carry some Hangul (issue #537).
+/// substitute chain: those substitutes preserve the requested family's metrics
+/// or class, which is the wrong priority for a glyph the family does not have.
+/// Placing them first is what sent Korean text through a Chinese face that
+/// happens to carry some Hangul (issue #537).
 pub fn font_with_fallbacks_for_text(font_family: &str, text: &str) -> String {
     ACTIVE_FONT_CONTEXT.with(|active_context| {
         let context = active_context.borrow();
@@ -464,9 +482,8 @@ pub(crate) fn family_candidates(font_family: &str) -> Vec<String> {
 /// and the Latin family's, so a document naming a face the system does not
 /// have still degrades the way each family's chain says it should. The script
 /// outranks those substitutes for the reason given on
-/// [`font_with_fallbacks_for_text`]: a metric substitute answers "what else
-/// looks like this family", which is the wrong question for a glyph the family
-/// does not have.
+/// [`font_with_fallbacks_for_text`]: a family substitute preserves metrics or
+/// class, which is the wrong priority for a glyph the family does not have.
 pub fn font_with_east_asian_fallbacks(
     latin_family: &str,
     east_asian_family: &str,
@@ -732,7 +749,7 @@ fn sheet_text_box_requests_font_family(text_box: &crate::ir::SheetTextBox) -> bo
 /// `None` when the declared family is installed and nothing is substituted.
 ///
 /// The candidate order mirrors [`font_with_fallbacks_for_text`] exactly — the
-/// script's own faces ahead of the family's metric substitutes. Consulting only
+/// script's own faces ahead of the family's substitute chain. Consulting only
 /// the substitutes named a Chinese face for Korean text that renders in Malgun
 /// Gothic, sending anyone reading the log after a substitution that never
 /// happened (issue #617).

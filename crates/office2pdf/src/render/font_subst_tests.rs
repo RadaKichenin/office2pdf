@@ -50,6 +50,29 @@ fn test_courier_new_substitutes() {
 }
 
 #[test]
+fn named_monospace_families_get_a_monospace_fallback_chain() {
+    for family in ["Lucida Sans Typewriter", "JetBrains Mono", "IBM Plex Mono"] {
+        let substitutes = substitutes(family)
+            .unwrap_or_else(|| panic!("{family} should have class-preserving substitutes"));
+        assert_eq!(
+            substitutes,
+            &[
+                "DejaVu Sans Mono",
+                "Noto Sans Mono",
+                "Liberation Mono",
+                "Cousine",
+            ],
+            "{family} must not fall through to a proportional serif"
+        );
+    }
+}
+
+#[test]
+fn monotype_brand_name_is_not_misclassified_as_monospace() {
+    assert_eq!(substitutes("Monotype Corsiva"), None);
+}
+
+#[test]
 fn test_comic_sans_substitutes() {
     let subs = substitutes("Comic Sans MS").expect("Comic Sans MS should have substitutes");
     assert!(subs.contains(&"Comic Neue"));
@@ -199,6 +222,21 @@ fn test_carlito_installed_system_fallback_is_ranked_first() {
         arial_index < calibri_index,
         "an installed system sans font should outrank unavailable candidates: {result}"
     );
+}
+
+#[test]
+fn missing_typewriter_face_resolves_to_an_available_monospace_face() {
+    let context = FontSearchContext::for_test(
+        Vec::new(),
+        &["Libertinus Serif", "DejaVu Sans Mono"],
+        &[],
+        &[],
+    );
+
+    let fallback =
+        resolve_available_fallback("Lucida Sans Typewriter", TextScript::Latin, &context);
+
+    assert_eq!(fallback.as_deref(), Some("DejaVu Sans Mono"));
 }
 
 #[test]
@@ -715,7 +753,7 @@ fn a_run_whose_family_cannot_write_its_script_reaches_a_face_that_can() {
         if let Some(position) = chinese_family_over_hangul.find(chinese) {
             assert!(
                 korean < position,
-                "the script outranks the family's metric substitutes: {chinese_family_over_hangul}"
+                "the script outranks the family's substitute chain: {chinese_family_over_hangul}"
             );
         }
     }
