@@ -400,6 +400,41 @@ fn script_fallbacks(text: &str) -> &'static [&'static str] {
     text_script(text).fallbacks()
 }
 
+/// Latin faces that carry the symbol blocks list markers are drawn from.
+///
+/// Word resolves a marker its declared family lacks to Arial, not to that
+/// family's own substitute chain. Liberation Sans is metric-compatible and
+/// carries U+25E6 at 0.3545em — the advance Word's ArialMT uses.
+const SYMBOL_FALLBACKS: &[&str] = &["Arial", "Liberation Sans", "Arimo", "Helvetica"];
+
+/// Whether `text` carries a symbol a CJK family is likely to be missing.
+///
+/// Restricted to the blocks list bullets actually come from. General
+/// punctuation is deliberately excluded: an em dash or a bullet that the
+/// declared family *does* carry must keep that family's glyph, and widening
+/// this predicate would put a Latin face ahead of the substitute chain for
+/// text that never needed one.
+fn has_symbol_needing_latin_fallback(text: &str) -> bool {
+    text.chars().any(|character| {
+        matches!(character as u32,
+            0x2190..=0x21FF   // Arrows
+            | 0x25A0..=0x25FF // Geometric Shapes — U+25E6 WHITE BULLET
+            | 0x2600..=0x26FF // Miscellaneous Symbols
+            | 0x2700..=0x27BF // Dingbats
+        )
+    })
+}
+
+/// Latin faces to try for `text`, after the declared family and its script's
+/// faces but ahead of the family's own substitute chain.
+fn symbol_fallbacks(text: &str) -> &'static [&'static str] {
+    if has_symbol_needing_latin_fallback(text) {
+        SYMBOL_FALLBACKS
+    } else {
+        &[]
+    }
+}
+
 /// The font list for `family` covering the script `text` is written in.
 ///
 /// The declared family leads, so a run naming a face that does cover its own
@@ -408,12 +443,22 @@ fn script_fallbacks(text: &str) -> &'static [&'static str] {
 /// or class, which is the wrong priority for a glyph the family does not have.
 /// Placing them first is what sent Korean text through a Chinese face that
 /// happens to carry some Hangul (issue #537).
+///
+/// Symbol-block glyphs — arrows, geometric shapes, dingbats — then get a Latin
+/// chain, still ahead of the family's substitutes, because Word resolves a
+/// marker its family lacks to Arial rather than through that family's own
+/// chain. See [`symbol_fallbacks`] (issue #642).
 pub fn font_with_fallbacks_for_text(font_family: &str, text: &str) -> String {
     ACTIVE_FONT_CONTEXT.with(|active_context| {
         let context = active_context.borrow();
         let mut families: Vec<String> = vec![font_family.to_string()];
         families.extend(
             script_fallbacks(text)
+                .iter()
+                .map(|face| (*face).to_string()),
+        );
+        families.extend(
+            symbol_fallbacks(text)
                 .iter()
                 .map(|face| (*face).to_string()),
         );
@@ -478,12 +523,13 @@ pub(crate) fn family_candidates(font_family: &str) -> Vec<String> {
 /// the declared East Asian face rather than on whatever the Latin family's own
 /// substitutes happen to cover (issue #575).
 ///
-/// The script's own faces come next, then the East Asian family's substitutes
-/// and the Latin family's, so a document naming a face the system does not
-/// have still degrades the way each family's chain says it should. The script
-/// outranks those substitutes for the reason given on
-/// [`font_with_fallbacks_for_text`]: a family substitute preserves metrics or
-/// class, which is the wrong priority for a glyph the family does not have.
+/// The script's own faces come next, then a Latin chain for symbol-block
+/// glyphs, then the East Asian family's substitutes and the Latin family's, so
+/// a document naming a face the system does not have still degrades the way
+/// each family's chain says it should. Both outrank those substitutes for the
+/// reason given on [`font_with_fallbacks_for_text`]: a family substitute
+/// preserves metrics or class, which is the wrong priority for a glyph the
+/// family does not have.
 pub fn font_with_east_asian_fallbacks(
     latin_family: &str,
     east_asian_family: &str,
@@ -496,6 +542,11 @@ pub fn font_with_east_asian_fallbacks(
         families.push(east_asian_family.to_string());
         families.extend(
             script_fallbacks(text)
+                .iter()
+                .map(|face| (*face).to_string()),
+        );
+        families.extend(
+            symbol_fallbacks(text)
                 .iter()
                 .map(|face| (*face).to_string()),
         );

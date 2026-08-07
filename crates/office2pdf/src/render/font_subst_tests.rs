@@ -786,3 +786,76 @@ fn kana_and_han_pick_their_own_scripts() {
     let mixed = font_with_fallbacks_for_text("Calibri", "文書 변환");
     assert!(mixed.contains("\"Malgun Gothic\""), "{mixed}");
 }
+
+/// A symbol the declared CJK family does not carry must reach a Latin face
+/// before a CJK one.
+///
+/// U+25E6 WHITE BULLET is absent from Malgun Gothic. Word resolves it to
+/// ArialMT and draws a 0.3545em ring; we resolved it through the family's
+/// Korean substitute chain to a CJK face, whose U+25E6 is a full-width 1.0em
+/// glyph — nearly three times the advance, and legible as a lowercase "o"
+/// rather than a bullet (issue #642).
+#[test]
+fn test_symbol_missing_from_a_korean_family_falls_back_to_a_latin_face() {
+    let result = font_with_fallbacks_for_text("Malgun Gothic", "\u{25E6}");
+
+    let latin = ["Arial", "Liberation Sans", "Helvetica", "Arimo"]
+        .iter()
+        .filter_map(|face| result.find(face))
+        .min()
+        .unwrap_or_else(|| panic!("no Latin face in the chain for U+25E6: {result}"));
+    let cjk = ["Apple SD Gothic Neo", "Noto Sans CJK", "Arial Unicode MS"]
+        .iter()
+        .filter_map(|face| result.find(face))
+        .min();
+
+    if let Some(cjk) = cjk {
+        assert!(
+            latin < cjk,
+            "a Latin face must precede any CJK face for U+25E6: {result}"
+        );
+    }
+}
+
+/// The Latin detour must not displace CJK text's own faces.
+#[test]
+fn test_korean_text_still_reaches_korean_faces_first() {
+    let result = font_with_fallbacks_for_text("Malgun Gothic", "가나");
+    let korean = result
+        .find("Malgun Gothic")
+        .unwrap_or_else(|| panic!("Korean text must keep its declared family: {result}"));
+    if let Some(arial) = result.find("Arial\"") {
+        assert!(
+            korean < arial,
+            "Korean text must not be routed through a Latin face first: {result}"
+        );
+    }
+}
+
+/// The eastAsia path needs the same detour.
+///
+/// A DOCX run that names both `w:ascii` and `w:eastAsia` goes through
+/// [`font_with_east_asian_fallbacks`] instead, and a marker missing from both
+/// declared families fell through the East Asian family's substitutes to a
+/// full-width CJK glyph exactly as the single-family path did (issue #642).
+#[test]
+fn test_symbol_missing_from_both_declared_families_falls_back_to_a_latin_face() {
+    let result = font_with_east_asian_fallbacks("Malgun Gothic", "Malgun Gothic", "\u{25E6}");
+
+    let latin = ["Arial", "Liberation Sans", "Helvetica", "Arimo"]
+        .iter()
+        .filter_map(|face| result.find(face))
+        .min()
+        .unwrap_or_else(|| panic!("no Latin face in the chain for U+25E6: {result}"));
+    let cjk = ["Apple SD Gothic Neo", "Noto Sans CJK", "Arial Unicode MS"]
+        .iter()
+        .filter_map(|face| result.find(face))
+        .min();
+
+    if let Some(cjk) = cjk {
+        assert!(
+            latin < cjk,
+            "a Latin face must precede any CJK face for U+25E6: {result}"
+        );
+    }
+}
