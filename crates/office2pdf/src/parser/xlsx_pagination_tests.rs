@@ -144,6 +144,56 @@ fn test_merge_straddling_boundary_truncates_and_blanks_continuation() {
 }
 
 #[test]
+fn test_merge_spill_width_is_clamped_to_the_column_group() {
+    // A merged cell carries the width of the whole merge as its spill width, so
+    // its text paints one unwrapped line that far. Slicing the merge at a page
+    // break has to clamp that too, or the line keeps the full-sheet width and
+    // paints past the printable edge — off the paper entirely on a wide sheet
+    // (#631).
+    let merged = TableCell {
+        col_span: 4,
+        spill_width: Some(600.0),
+        ..cell("MERGED")
+    };
+    let page = make_page(
+        vec![150.0, 150.0, 150.0, 150.0],
+        vec![TableRow {
+            cells: vec![merged],
+            height: None,
+        }],
+    );
+    let pages = split_sheet_page_by_width(page, None, None);
+    assert_eq!(pages.len(), 2);
+
+    // Page 1 keeps two of the four merged columns, so the line may run 300pt.
+    assert_eq!(pages[0].table.rows[0].cells[0].spill_width, Some(300.0));
+    // The continuation carries no content, so it claims no spill either.
+    assert_eq!(pages[1].table.rows[0].cells[0].spill_width, None);
+}
+
+#[test]
+fn test_unmerged_spill_width_is_clamped_to_the_remaining_group_width() {
+    // A general-aligned cell spills right into empty neighbours. When the group
+    // ends before those neighbours do, the spill has to stop at the group edge.
+    let spilling = TableCell {
+        spill_width: Some(600.0),
+        ..cell("LONG")
+    };
+    let page = make_page(
+        vec![150.0, 150.0, 150.0, 150.0],
+        vec![TableRow {
+            cells: vec![spilling, cell("B"), cell("C"), cell("D")],
+            height: None,
+        }],
+    );
+    let pages = split_sheet_page_by_width(page, None, None);
+    assert_eq!(pages.len(), 2);
+
+    // The cell sits at the group's left edge, so 300pt of the group remain.
+    assert_eq!(pages[0].table.rows[0].cells[0].spill_width, Some(300.0));
+}
+
+#[test]
 fn test_charts_stay_on_first_column_group() {
     let mut page = make_page(
         vec![300.0, 300.0],
