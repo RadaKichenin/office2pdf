@@ -218,6 +218,14 @@ pub(super) const LEGEND_KEY_BASELINE_PT: f64 = -0.5;
 /// keys run 20.16pt and 20.64pt, either side of a 20pt nominal.
 pub(super) const LEGEND_KEY_LEN_PT: f64 = 20.0;
 
+/// Explicit space between a legend key and its label.
+///
+/// Zero removes Typst's implicit document-sized word space while leaving the
+/// label glyph's own side bearing intact. The remaining bearing differs until
+/// chart text resolves its declared theme face (#668), so a compensating
+/// negative gap would overfit the current fallback (#804).
+const LEGEND_KEY_LABEL_GAP_PT: f64 = 0.0;
+
 /// Marker shape for the `index`-th series, when the file asks for a default
 /// marker rather than naming a `c:symbol`.
 ///
@@ -1260,10 +1268,11 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
         );
         let _ = writeln!(
             out,
-            "#place(top + left, dx: {}pt, dy: {}pt, box[#box(width: 9pt, height: 9pt, fill: {}) #text(size: {}pt)[{}]])",
+            "#place(top + left, dx: {}pt, dy: {}pt, box[#box(width: 9pt, height: 9pt, fill: {})#h({}pt)#text(size: {}pt)[{}]])",
             format_f64(entry_x),
             format_f64(entry_y),
             color,
+            format_f64(LEGEND_KEY_LABEL_GAP_PT),
             format_f64(CHART_DEFAULT_TEXT_PT),
             escape_typst(name)
         );
@@ -1553,9 +1562,10 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
         );
         let _ = writeln!(
             out,
-            "#place(top + left, dx: {}pt, dy: {}pt, box[{key} #text(size: {}pt)[{}]])",
+            "#place(top + left, dx: {}pt, dy: {}pt, box[{key}#h({}pt)#text(size: {}pt)[{}]])",
             format_f64(entry_x),
             format_f64(entry_y),
+            format_f64(LEGEND_KEY_LABEL_GAP_PT),
             format_f64(CHART_DEFAULT_TEXT_PT),
             escape_typst(name)
         );
@@ -1688,10 +1698,11 @@ fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, 
         );
         let _ = writeln!(
             out,
-            "#place(top + left, dx: {}pt, dy: {}pt, box[#box(width: 9pt, height: 9pt, fill: {}) #text(size: {}pt)[{}]])",
+            "#place(top + left, dx: {}pt, dy: {}pt, box[#box(width: 9pt, height: 9pt, fill: {})#h({}pt)#text(size: {}pt)[{}]])",
             format_f64(entry_x),
             format_f64(entry_y),
             color,
+            format_f64(LEGEND_KEY_LABEL_GAP_PT),
             format_f64(CHART_DEFAULT_TEXT_PT),
             escape_typst(category)
         );
