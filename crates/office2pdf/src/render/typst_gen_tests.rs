@@ -861,3 +861,53 @@ fn test_blur_ring_coverage_is_monotonic_outward() {
         "outermost {outermost}"
     );
 }
+
+/// Word's East Asian line height follows the face a line is set in, not the
+/// script of its characters.
+///
+/// `03_meeting_minutes_ko` has three Heading2 paragraphs sharing identical
+/// `w:pPr` and `w:rPr` — Malgun Gothic in every `w:rFonts` slot — differing
+/// only in whether their text is Hangul or Latin. Word gives them the same
+/// height (gap from the preceding baseline 29.76 against 29.52); gating the
+/// East Asian line box on the text left the Latin-only heading 2.37pt short
+/// and dragged the table under it 5.47pt up (issue #643).
+#[test]
+fn a_latin_line_set_in_a_cjk_face_keeps_the_east_asian_line_box() {
+    if crate::render::pdf::font_line_metrics_em("Malgun Gothic").is_none() {
+        return; // no Korean face available (e.g. a runner with no CJK fonts)
+    }
+    let line_box = |text: &str, family: &str| {
+        let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: text.to_string(),
+                style: TextStyle {
+                    font_family: Some(family.to_string()),
+                    east_asian_font_family: Some(family.to_string()),
+                    font_size: Some(11.5),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })])]);
+        emitted_line_box_em(&generate_typst(&doc).unwrap().source)
+    };
+
+    let korean = line_box("결정 사항", "Malgun Gothic").expect("a Korean line has a line box");
+    let latin =
+        line_box("Action Items", "Malgun Gothic").expect("a Latin line in a CJK face has one too");
+    assert_eq!(
+        korean, latin,
+        "two lines set in the same face at the same size must share a line box"
+    );
+
+    // The face still decides: Word does not give an Arial paragraph the East
+    // Asian line even inside a Korean document, and snapping those inflated
+    // every Western document by 30-50% (issue #354).
+    assert_ne!(
+        line_box("Action Items", "Arial"),
+        Some(latin),
+        "an Arial line must not take the CJK face's line box"
+    );
+}
