@@ -1222,3 +1222,139 @@ fn test_prints_headings_paints_the_black_exterior_frame_without_gridlines() {
          paint exactly once per boundary: {result}"
     );
 }
+
+/// A slide's table cell paces on PowerPoint's flat 1.2em line, not Word's.
+///
+/// A `<a:tbl>` reaches the shared table codegen, which gave its cells Word's
+/// hhea line box. Measured on `office2pdf_introduction_ko` slide 16: an 11pt
+/// cell advanced 17.46pt (1.587em) against PowerPoint's documented 1.2em, so
+/// multi-line cells grew and the table's bottom border moved down with them.
+/// A LibreOffice render of the same slide advances 13.58pt (1.235em) — a
+/// corroborating reference, not a native export (issue #663).
+#[test]
+fn test_slide_table_cell_uses_the_powerpoint_line_box() {
+    let sized_cell = |text: &str| TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: text.to_string(),
+                style: TextStyle {
+                    font_family: Some("Liberation Sans".to_string()),
+                    font_size: Some(11.0),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })],
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            cells: vec![sized_cell("wrapped cell text")],
+            height: None,
+        }],
+        column_widths: vec![80.0],
+        ..Table::default()
+    };
+
+    let slide = generate_typst(&make_doc(vec![make_fixed_page(
+        720.0,
+        540.0,
+        vec![FixedElement {
+            x: 0.0,
+            y: 0.0,
+            width: 80.0,
+            height: 40.0,
+            kind: FixedElementKind::Table(table.clone()),
+        }],
+    )]))
+    .unwrap()
+    .source;
+    let flow = generate_typst(&make_doc(vec![make_flow_page(vec![Block::Table(table)])]))
+        .unwrap()
+        .source;
+
+    // PowerPoint's line is a flat 1.2em split evenly, so the two edges sum to
+    // 1.2 regardless of the face. Word's is the face's own hhea pitch.
+    let (top, bottom) = emitted_line_box_em(&slide).expect("slide cell emits a line box");
+    assert!(
+        (top + bottom - 1.2).abs() < 0.001,
+        "a slide cell's line must span 1.2em, got {top} + {bottom}: {slide}"
+    );
+    // The flow-page half needs the declared face's real hhea metrics, which a
+    // runner without Liberation Sans cannot resolve — `word_cell_line_box`
+    // then emits no box at all. The slide assertion above holds regardless,
+    // because PowerPoint's 1.2em falls back to the default face.
+    if crate::render::pdf::font_line_metrics_em("Liberation Sans").is_some()
+        && let Some(flow_box) = emitted_line_box_em(&flow)
+    {
+        assert!(
+            (flow_box.0 + flow_box.1 - 1.2).abs() > 0.001,
+            "a flow-page cell must keep Word's hhea line, not PowerPoint's: {flow_box:?}"
+        );
+    }
+}
+
+/// An empty paragraph's blank line in a slide cell comes from the same model.
+///
+/// The strut that holds an empty `<a:p>`'s height was sized by
+/// `word_cell_line_box` unconditionally, so a slide's empty cell would keep
+/// Word's hhea height while the text beside it took PowerPoint's 1.2em one
+/// (issues #625, #663).
+#[test]
+fn test_slide_table_empty_cell_blank_line_uses_the_powerpoint_line_box() {
+    let sized_run = |text: &str| Run {
+        text: text.to_string(),
+        style: TextStyle {
+            font_family: Some("Liberation Sans".to_string()),
+            font_size: Some(20.0),
+            ..TextStyle::default()
+        },
+        href: None,
+        footnote: None,
+    };
+    // A cell stacking a text paragraph and an empty one: the empty paragraph
+    // takes its metrics from the neighbour.
+    let cell = TableCell {
+        content: vec![
+            Block::Paragraph(Paragraph {
+                style: ParagraphStyle::default(),
+                runs: vec![sized_run("text")],
+            }),
+            Block::Paragraph(Paragraph {
+                style: ParagraphStyle::default(),
+                runs: Vec::new(),
+            }),
+        ],
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            cells: vec![cell],
+            height: None,
+        }],
+        column_widths: vec![120.0],
+        ..Table::default()
+    };
+
+    let source = generate_typst(&make_doc(vec![make_fixed_page(
+        720.0,
+        540.0,
+        vec![FixedElement {
+            x: 0.0,
+            y: 0.0,
+            width: 120.0,
+            height: 60.0,
+            kind: FixedElementKind::Table(table),
+        }],
+    )]))
+    .unwrap()
+    .source;
+
+    // PowerPoint's line at 20pt is a flat 1.2em = 24pt, whatever the face.
+    assert!(
+        source.contains("height: 24pt"),
+        "the blank line must be PowerPoint's 1.2em (24pt at 20pt), got: {source}"
+    );
+}

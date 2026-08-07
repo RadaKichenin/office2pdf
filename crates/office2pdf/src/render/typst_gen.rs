@@ -167,6 +167,20 @@ struct GenCtx {
     /// frame would be pushed onto a line of its own and overflow it
     /// (issue #626).
     available_measure_pt: Option<f64>,
+    /// Whether the table being generated is a slide's, and so paces its cell
+    /// text on PowerPoint's flat 1.2em line rather than Word's hhea one.
+    ///
+    /// A slide's own text boxes already route through
+    /// [`powerpoint_line_height_settings`], but a `<a:tbl>` reaches the shared
+    /// table codegen, which gave its cells Word's model: 1.587em measured on
+    /// `office2pdf_introduction_ko` slide 16, so multi-line cells grew and the
+    /// table's bottom border moved down with them (issue #663).
+    ///
+    /// The target is PowerPoint's documented 1.2em, the same factor the slide's
+    /// text boxes already use. No native PowerPoint export of that fixture is
+    /// committed; a **LibreOffice** render of it advances 1.235em, which
+    /// corroborates the direction and magnitude without being ground truth.
+    table_uses_powerpoint_line_box: bool,
 }
 
 impl GenCtx {
@@ -176,6 +190,7 @@ impl GenCtx {
             next_image_id: 0,
             next_text_box_id: 0,
             table_depth: 0,
+            table_uses_powerpoint_line_box: false,
             line_grid_pitch: None,
             row_has_east_asian_text: false,
             table_default_vertical_align: None,
@@ -959,7 +974,11 @@ fn generate_fixed_element(
             generate_shape(out, shape, elem.width, elem.height);
         }
         FixedElementKind::Table(table) => {
-            generate_table(out, table, ctx)?;
+            let enclosing = ctx.table_uses_powerpoint_line_box;
+            ctx.table_uses_powerpoint_line_box = true;
+            let result = generate_table(out, table, ctx);
+            ctx.table_uses_powerpoint_line_box = enclosing;
+            result?;
         }
         FixedElementKind::SmartArt(smartart) => {
             generate_smartart(out, smartart, elem.width, elem.height);

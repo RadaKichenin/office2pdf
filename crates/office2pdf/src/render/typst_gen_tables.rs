@@ -1735,6 +1735,7 @@ fn generate_cell_content(
             line_grid_pitch: ctx.line_grid_pitch,
             row_has_east_asian_text: ctx.row_has_east_asian_text,
             seats_text_on_descender: ctx.cell_seats_text_on_descender,
+            uses_powerpoint_line_box: ctx.table_uses_powerpoint_line_box,
             stacks_multiple_blocks,
             paragraph_mark_metric_runs: para
                 .runs
@@ -1808,6 +1809,10 @@ struct CellParagraphCtx<'a> {
     /// break only at eojeol boundaries (issue #626). False for a slide or a
     /// sheet, which keep the engine's syllable breaking.
     breaks_hangul_at_eojeol: bool,
+    /// Whether this cell paces its lines on PowerPoint's flat 1.2em line
+    /// instead of Word's hhea one — true inside a slide's `<a:tbl>`
+    /// (issue #663).
+    uses_powerpoint_line_box: bool,
     /// The width one line of this cell has, in points: the column width less
     /// the cell's own inset. Bounds how wide a framed eojeol may be.
     available_measure_pt: Option<f64>,
@@ -1858,20 +1863,27 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
         Some(Alignment::Right) => Some("right"),
         _ => None,
     };
-    // Table-cell text occupies the font's full single-spacing (hhea) line
-    // as a fixed box: a single-line cell must fill the whole line height
-    // Word gives it rather than only the tighter metric box, or auto-height
-    // rows come out short (issue #396). A cell whose *row* holds East Asian
-    // text takes 1.3 times that line, like body text, and a snapping grid's
-    // pitch above it — decided once per row so every cell in it shares a
-    // baseline, the numeric ones included (issues #498, #518).
-    let line_height_settings: Option<String> = word_cell_line_box_settings(
-        &para.runs,
-        style,
-        cell.line_grid_pitch,
-        cell.row_has_east_asian_text,
-        cell.seats_text_on_descender,
-    );
+    let line_height_settings: Option<String> = if cell.uses_powerpoint_line_box {
+        // A slide's table cell paces on PowerPoint's flat 1.2em line, the same
+        // model its own text boxes use, not on Word's hhea line (issue #663).
+        powerpoint_line_height_settings(&para.runs, style)
+    } else {
+        // Off-slide, table-cell text occupies the font's full single-spacing
+        // (hhea) line as a fixed box: a single-line cell must fill the whole
+        // line height Word gives it rather than only the tighter metric box,
+        // or auto-height rows come out short (issue #396). A cell whose *row*
+        // holds East Asian text takes 1.3 times that line, like body text, and
+        // a snapping grid's pitch above it — decided once per row so every
+        // cell in it shares a baseline, the numeric ones included
+        // (issues #498, #518).
+        word_cell_line_box_settings(
+            &para.runs,
+            style,
+            cell.line_grid_pitch,
+            cell.row_has_east_asian_text,
+            cell.seats_text_on_descender,
+        )
+    };
     // Whichever fixed edges the block wrapper below puts in force — the
     // computed cell line box, or the paragraph's own `LineBox` — is what a
     // framed eojeol has to restore inside itself (issue #626). The two are
@@ -1896,9 +1908,14 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
     // neighbours' metrics and hold it with a zero-width strut, the same shape
     // the spill wrapper uses. This mirrors the body path's `#v` branch for an
     // empty paragraph, at the cell's fixed line box instead of a flat 12pt.
-    let paragraph_mark_line_pt: Option<f64> = cell
-        .paragraph_mark_metric_runs
-        .and_then(|runs| {
+    //
+    // The blank line has to come from the same model as its neighbours, or a
+    // slide's empty cell keeps Word's hhea height while the cell beside it
+    // takes PowerPoint's 1.2em one (issue #663).
+    let paragraph_mark_line_pt: Option<f64> = cell.paragraph_mark_metric_runs.and_then(|runs| {
+        if cell.uses_powerpoint_line_box {
+            powerpoint_line_box_pt(runs)
+        } else {
             word_cell_line_box(
                 runs,
                 style,
@@ -1906,8 +1923,9 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
                 cell.row_has_east_asian_text,
                 cell.seats_text_on_descender,
             )
-        })
-        .map(|line_box| (line_box.top_em + line_box.bottom_em) * line_box.font_size_pt);
+            .map(|line_box| (line_box.top_em + line_box.bottom_em) * line_box.font_size_pt)
+        }
+    });
     // Typst's default block spacing may only be dropped where this paragraph
     // supplies a fixed line box of its own. A paragraph carrying `w:spacing
     // w:line` gets none (`word_cell_line_box` bails on it), so zeroing its
