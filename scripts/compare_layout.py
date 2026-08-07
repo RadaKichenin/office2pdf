@@ -38,7 +38,10 @@ from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from pathlib import Path
 
-PAGE_RE = re.compile(r'<page number="\d+"[^>]*>(.*?)</page>', re.S)
+# mutool 1.23.x opens a page as `<page mediabox="...">` with no `number`
+# attribute; later builds add one. Requiring it parses zero pages and reports
+# that as "no differences found" instead of as a failure.
+PAGE_RE = re.compile(r"<page\b[^>]*>(.*?)</page>", re.S)
 FILL_TEXT_RE = re.compile(r"<fill_text\b([^>]*)>(.*?)</fill_text>", re.S)
 SPAN_RE = re.compile(r"<span\b([^>]*)>(.*?)</span>", re.S)
 GLYPH_RE = re.compile(
@@ -418,6 +421,13 @@ def main() -> int:
 
     gt_pages = parse_trace(run_mutool(args.gt))
     out_pages = parse_trace(run_mutool(args.output))
+
+    # A trace that yields no pages means the parser did not understand mutool's
+    # output, not that the two files agree. Reporting an empty diff here would
+    # be indistinguishable from a clean comparison.
+    for label, path, pages in (("GT", args.gt, gt_pages), ("output", args.output, out_pages)):
+        if not pages:
+            sys.exit(f"no pages parsed from the {label} trace ({path}) — cannot compare")
 
     if args.page is not None:
         gt_pages = gt_pages[args.page - 1 : args.page]
