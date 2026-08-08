@@ -2,9 +2,9 @@ use super::*;
 use crate::ir::ChartAreaOutline;
 use crate::ir::DataLabels;
 use crate::render::typst_gen::diagrams::{
-    CHART_AREA_OUTLINE, CHART_AUTOMATIC_LINE, CHART_DEFAULT_TEXT_PT, LABEL_W, LEGEND_KEY_LEN_PT,
-    ROW, SERIES_LINE_PT, TICK_GAP, chart_category_band_pt, chart_category_gutter_pt,
-    chart_tick_band_pt,
+    CHART_AREA_OUTLINE, CHART_AUTOMATIC_LINE, CHART_DEFAULT_TEXT_PT, LABEL_W, LEGEND_ENTRY_W,
+    LEGEND_KEY_LEN_PT, ROW, SERIES_LINE_PT, TICK_GAP, chart_category_band_pt,
+    chart_category_gutter_pt, chart_tick_band_pt,
 };
 
 #[test]
@@ -3159,4 +3159,63 @@ fn an_explicit_outline_survives_on_every_host() {
             "on {host:?}"
         );
     }
+}
+
+// ----- A horizontal legend advances by each entry's width (issue #827) -----
+
+fn legend_entry_x(source: &str, label: &str) -> f64 {
+    let marker: String = format!("[{label}]])");
+    let index: usize = source.find(&marker).expect("the entry is drawn");
+    let line_start: usize = source[..index].rfind('\n').map_or(0, |at| at + 1);
+    let line: &str = &source[line_start..index];
+    line.split("dx: ")
+        .nth(1)
+        .and_then(|rest| rest.split("pt").next())
+        .and_then(|value| value.trim().parse::<f64>().ok())
+        .expect("the entry is placed")
+}
+
+fn bottom_legend_chart(names: &[&str]) -> Chart {
+    let mut chart = two_series_bar_chart(Vec::new());
+    chart.chart_type = ChartType::Bar;
+    chart.categories = vec!["Q1".to_string(), "Q2".to_string()];
+    chart.has_legend = true;
+    chart.legend_position = LegendPosition::Bottom;
+    chart.series.truncate(names.len().min(chart.series.len()));
+    for (series, name) in chart.series.iter_mut().zip(names) {
+        series.name = Some((*name).to_string());
+        series.values = vec![4.0, 8.0];
+    }
+    chart
+}
+
+#[test]
+fn a_long_legend_name_pushes_the_next_entry_clear() {
+    // Every entry advanced by a flat 78pt, so a name wider than that ran under
+    // the entry beside it and the two overprinted.
+    let short: String = chart_source(bottom_legend_chart(&["A", "B"]));
+    let long: String = chart_source(bottom_legend_chart(&[
+        "A considerably longer series name",
+        "B",
+    ]));
+    let short_gap: f64 = legend_entry_x(&short, "B") - legend_entry_x(&short, "A");
+    let long_gap: f64 =
+        legend_entry_x(&long, "B") - legend_entry_x(&long, "A considerably longer series name");
+    assert!(
+        long_gap > short_gap,
+        "a wide name must push its neighbour further along: {long_gap} against {short_gap}"
+    );
+}
+
+#[test]
+fn short_legend_names_keep_the_calibrated_pitch() {
+    // The measured width is floored at the old constant, so a legend of short
+    // names lays out exactly where it always did.
+    let source: String = chart_source(bottom_legend_chart(&["A", "B"]));
+    let gap: f64 = legend_entry_x(&source, "B") - legend_entry_x(&source, "A");
+    assert!(
+        (gap - LEGEND_ENTRY_W).abs() < 1e-9,
+        "short names keep the {}pt pitch, got {gap}",
+        format_f64(LEGEND_ENTRY_W)
+    );
 }

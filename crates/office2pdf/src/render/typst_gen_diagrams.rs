@@ -718,7 +718,15 @@ pub(super) const LABEL_W: f64 = 62.0; // category label gutter
 pub(super) const TICK_GAP: f64 = 22.0; // value tick label gutter
 const GAP: f64 = 6.0;
 const LEGEND_ROW_H: f64 = 14.0; // per-entry height when the legend stacks
-const LEGEND_ENTRY_W: f64 = 78.0; // per-entry width when the legend runs across
+/// Floor for one entry's width in a legend that runs across the chart, and the
+/// flat width a legend down the side reserves for its gutter.
+///
+/// It was the horizontal pitch itself until #827: every entry advanced by it,
+/// so a name wider than 78pt ran under its neighbour. A horizontal entry now
+/// takes the greater of this and what its own text measures — see
+/// [`legend_entry_widths`] — which leaves a legend of short names exactly where
+/// it was.
+pub(super) const LEGEND_ENTRY_W: f64 = 78.0;
 
 /// Space a legend reserves around the plot, and the direction its entries run.
 ///
@@ -783,18 +791,22 @@ impl LegendBox {
         entries: usize,
         content: (f64, f64, f64, f64),
         row_h: f64,
-        entry_w: f64,
+        entry_widths: &[f64],
     ) -> (f64, f64) {
         let (content_x, content_y, content_w, content_h) = content;
         if self.horizontal {
-            // Centre the row of entries under (or over) the content.
-            let row_w: f64 = entries as f64 * entry_w;
+            // Centre the row of entries under (or over) the content. Each entry
+            // advances by its own width, not by a flat pitch: a name wider than
+            // the pitch used to run under the entry beside it and the two
+            // overprinted into unreadable text (issue #827).
+            let row_w: f64 = entry_widths.iter().sum();
             let start_x: f64 = content_x + (content_w - row_w).max(0.0) / 2.0;
             let y: f64 = match position {
                 LegendPosition::Top => (content_y - self.top).max(0.0),
                 _ => content_y + content_h + GAP,
             };
-            (start_x + index as f64 * entry_w, y)
+            let offset: f64 = entry_widths.iter().take(index).sum();
+            (start_x + offset, y)
         } else {
             let stack_h: f64 = entries as f64 * row_h;
             let x: f64 = match position {
@@ -1045,6 +1057,33 @@ fn chart_area_title_pt(chart: &Chart) -> f64 {
 /// text's own size here.
 fn chart_area_title_h(chart: &Chart) -> f64 {
     AREA_TITLE_H / CHART_AREA_TITLE_PT * chart_area_title_pt(chart)
+}
+
+/// Width each legend entry occupies when the legend runs across the chart.
+///
+/// The key, the gap to the label, and the label itself measured in the face the
+/// chart sets its text in. [`LEGEND_ENTRY_W`] is the floor, so a legend of short
+/// names lays out exactly where it always did and only a name too wide for the
+/// old flat pitch moves (issue #827).
+///
+/// Falls back to the floor for any name that cannot be measured — wasm has no
+/// font search — so an entry is never narrower than its text.
+fn legend_entry_widths(chart: &Chart, key_len_pt: f64, names: &[String]) -> Vec<f64> {
+    let size_pt: f64 = chart_text_pt(chart);
+    let family: &str = chart
+        .text_font_family
+        .as_deref()
+        .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_FAMILY);
+    names
+        .iter()
+        .map(|name| {
+            let label: f64 = crate::render::pdf::text_advance_em(family, false, name)
+                .map_or(0.0, |advance| advance * size_pt);
+            // A gutter after the label keeps neighbouring entries apart rather
+            // than butting the next key against the last glyph.
+            (key_len_pt + LEGEND_KEY_LABEL_GAP_PT + label + GAP).max(LEGEND_ENTRY_W)
+        })
+        .collect()
 }
 
 /// Space the axis plot's legend reserves.
@@ -1462,6 +1501,16 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
     // Legend on the edge `<c:legendPos>` asks for — none when the chart
     // declares no `<c:legend>` (issue #762). Bounded rather than returned
     // early: the markup's closing delimiter is written after this loop.
+    let legend_names: Vec<String> = series
+        .iter()
+        .enumerate()
+        .map(|(index, s)| {
+            s.name
+                .clone()
+                .unwrap_or_else(|| format!("Series {}", index + 1))
+        })
+        .collect();
+    let entry_widths: Vec<f64> = legend_entry_widths(chart, LEGEND_KEY_LEN_PT, &legend_names);
     let legend_entries: usize = if chart.has_legend { series.len() } else { 0 };
     for (s_index, s) in series.iter().enumerate().take(legend_entries) {
         let color: String = series_color(s, s_index, 0, &chart.theme_accent_colors);
@@ -1491,7 +1540,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 plot_h + gutter_h,
             ),
             LEGEND_ROW_H,
-            LEGEND_ENTRY_W,
+            &entry_widths,
         );
         let _ = writeln!(
             out,
@@ -1768,6 +1817,16 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
     // Legend on the edge `<c:legendPos>` asks for — none when the chart
     // declares no `<c:legend>` (issue #762). Bounded rather than returned
     // early: the markup's closing delimiter is written after this loop.
+    let legend_names: Vec<String> = series
+        .iter()
+        .enumerate()
+        .map(|(index, s)| {
+            s.name
+                .clone()
+                .unwrap_or_else(|| format!("Series {}", index + 1))
+        })
+        .collect();
+    let entry_widths: Vec<f64> = legend_entry_widths(chart, LEGEND_KEY_LEN_PT, &legend_names);
     let legend_entries: usize = if chart.has_legend { series.len() } else { 0 };
     for (s_index, s) in series.iter().enumerate().take(legend_entries) {
         let color: String = series_color(s, s_index, 0, &chart.theme_accent_colors);
@@ -1784,7 +1843,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
                 plot_h + CAT_GAP,
             ),
             LINE_LEGEND_ROW_H,
-            LEGEND_W,
+            &entry_widths,
         );
         // The key is a sample of the plotted line: the same stroke, carrying the
         // same marker the series draws on each of its points (#801).
@@ -2032,6 +2091,18 @@ fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64
 
     // The legend, keyed like the line plot's: a stroke sample carrying the
     // marker the series draws on each vertex.
+    let legend_names: Vec<String> = chart
+        .series
+        .iter()
+        .enumerate()
+        .map(|(index, series)| {
+            series
+                .name
+                .clone()
+                .unwrap_or_else(|| format!("Series {}", index + 1))
+        })
+        .collect();
+    let entry_widths: Vec<f64> = legend_entry_widths(chart, LEGEND_KEY_LEN_PT, &legend_names);
     if chart.has_legend {
         for (series_index, series) in chart.series.iter().enumerate() {
             let color: String = series_color(series, series_index, 0, &chart.theme_accent_colors);
@@ -2043,7 +2114,7 @@ fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64
                 chart.series.len().max(1),
                 (legend.left, legend.top, span_w, span_h),
                 RADAR_LEGEND_ROW_H,
-                LEGEND_ENTRY_W,
+                &entry_widths,
             );
             let key_mid: f64 = SERIES_MARKER_SIZE_PT / 2.0;
             let key: String = format!(
@@ -2181,6 +2252,7 @@ fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, 
     // duplicates the slice labels, so one the file never asked for is doubly
     // visible (issue #762).
     let entries: usize = chart.categories.len().max(series.values.len());
+    let entry_widths: Vec<f64> = legend_entry_widths(chart, LEGEND_KEY_LEN_PT, &chart.categories);
     let legend_entries: usize = if chart.has_legend { entries } else { 0 };
     for (index, category) in chart.categories.iter().enumerate().take(legend_entries) {
         let color: String = category_color(
@@ -2195,7 +2267,7 @@ fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, 
             entries,
             (centre_x - radius, centre_y - radius, diameter, diameter),
             PIE_LEGEND_ROW_H,
-            LEGEND_ENTRY_W,
+            &entry_widths,
         );
         let _ = writeln!(
             out,
