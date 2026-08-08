@@ -616,6 +616,20 @@ const EXCEL_DEFAULT_ROW_HEIGHT_PT: f64 = 15.0;
 /// whole PDF points. Across the ten XLSX audit workbooks, the two repeated
 /// fixed heights map consistently: 15pt -> 14pt and 25.5pt -> 23pt.
 ///
+/// "Consistently" is measured, not assumed: reading the golden exports'
+/// horizontal rules with `mutool draw -F trace` gives 23.00pt for every
+/// `ht=25.5 customHeight="true"` header in all ten, and 14.00pt for every
+/// `ht=15 customHeight="true"` row. Issue #658 reports two of them at
+/// 24.00pt ("50 px @150 DPI"); that reads the band's *outer* extent — a 23pt
+/// track plus the 1pt rule bounding each end is 24pt, or 50px at 150 DPI —
+/// where this maps rule centre to rule centre.
+///
+/// Only fixed tracks go through here. A `customHeight="false"` row is
+/// auto-sized, and Excel prints it at the taller of this track and the height
+/// its own font needs: the same `ht=15` row measures 14.00pt in Arial 10 and
+/// 15.00pt in Malgun Gothic 10 in the golden exports. That font term is not
+/// applied yet (issue #709), so Korean auto rows print 1.00pt short.
+///
 /// Keep this conversion in the XLSX parser rather than the generic table
 /// renderer so DOCX/PPTX table heights retain their native semantics.
 pub(super) fn native_excel_pdf_row_height(height: f64) -> f64 {
@@ -664,22 +678,70 @@ pub(super) const XLSX_CELL_PADDING: crate::ir::Insets = crate::ir::Insets {
     left: 3.0,
 };
 
+/// Whether this cell's wrapped text needs more than the single line its row's
+/// mapped track allows.
+///
+/// `wrapText` only says the cell *may* wrap. What decides is whether the text
+/// fits the width it has — its own column, or the whole merge when it spans
+/// several — after the horizontal inset the cell is laid out with. An explicit
+/// line break always needs a second line.
+fn cell_wraps_past_one_line(
+    ctx: &SheetContext,
+    col_idx: u32,
+    col_span: u32,
+    runs: &[Run],
+    umya_cell: Option<&umya_spreadsheet::Cell>,
+) -> bool {
+    if runs.is_empty() {
+        return false;
+    }
+    let has_wrap_text: bool = umya_cell
+        .and_then(|cell| cell.get_style().get_alignment().cloned())
+        .map(|alignment| *alignment.get_wrap_text())
+        .unwrap_or(false);
+    if !has_wrap_text {
+        return false;
+    }
+    if runs.iter().any(|run| run.text.contains('\n')) {
+        return true;
+    }
+    let available_width: f64 = (col_idx..col_idx + col_span)
+        .map(|col| {
+            ctx.column_widths
+                .get((col - ctx.col_start) as usize)
+                .copied()
+                .unwrap_or(0.0)
+        })
+        .sum::<f64>()
+        - XLSX_CELL_PADDING.left
+        - XLSX_CELL_PADDING.right;
+    estimate_text_width_pt(runs) > available_width
+}
+
 /// The height a row prints at. A recorded `ht` is the current worksheet
 /// height even when `customHeight` is false; rows without one use the sheet's
 /// defaultRowHeight. Fixed tracks are calibrated to native Excel's PDF grid.
-/// Exception: auto-sized rows (customHeight=false) that contain wrapped cells
-/// stay content-driven — our text metrics differ slightly from Excel's and a
-/// fixed height could clip a wrapped line.
+/// Exception: auto-sized rows (customHeight=false) whose wrapped text needs a
+/// second line stay content-driven — our text metrics differ slightly from
+/// Excel's and a fixed height could clip a wrapped line.
+///
+/// The exception is deliberately about the *text*, not about the `wrapText`
+/// flag. Keying it on the flag made it fire on rows that never wrap: the ten
+/// business mocks set `wrapText` on every data cell, so every ht=15 auto row
+/// was sized by its own content box instead of by Excel's track — 15.00pt
+/// against Excel's 14.00pt on the six Latin workbooks (issue #710), and
+/// 22.32pt against 15.00pt on the Korean ones, where the East Asian line
+/// factor compounds it (issue #709).
 fn printed_row_height(
     sheet: &umya_spreadsheet::Worksheet,
     row_idx: u32,
-    row_has_wrapping_cell: &dyn Fn() -> bool,
+    row_wraps_past_one_line: bool,
 ) -> Option<f64> {
     let row_dimension = sheet.get_row_dimension(&row_idx);
     let is_custom_height: bool = row_dimension
         .map(|row| *row.get_custom_height())
         .unwrap_or(false);
-    if !is_custom_height && row_has_wrapping_cell() {
+    if !is_custom_height && row_wraps_past_one_line {
         return None;
     }
     let declared_height: Option<f64> = row_dimension
@@ -708,6 +770,7 @@ pub(super) fn build_rows_for_range(
     let mut rows = Vec::with_capacity(num_rows);
     for row_idx in row_start..=row_end {
         let mut cells = Vec::with_capacity(ctx.num_cols);
+        let mut row_wraps_past_one_line = false;
         for col_idx in ctx.col_start..=ctx.col_end {
             // Skip cells that are part of a merge but not the top-left
             if ctx.merge_skips.contains(&(col_idx, row_idx)) {
@@ -819,6 +882,9 @@ pub(super) fn build_rows_for_range(
                 umya_cell,
             );
 
+            row_wraps_past_one_line |=
+                cell_wraps_past_one_line(ctx, col_idx, col_span, &runs, umya_cell);
+
             let content = if runs.is_empty() {
                 Vec::new()
             } else {
@@ -862,16 +928,7 @@ pub(super) fn build_rows_for_range(
             });
         }
 
-        let row_has_wrapping_cell = || {
-            (ctx.col_start..=ctx.col_end).any(|col| {
-                sheet
-                    .get_cell((col, row_idx))
-                    .and_then(|cell| cell.get_style().get_alignment().cloned())
-                    .map(|alignment| *alignment.get_wrap_text())
-                    .unwrap_or(false)
-            })
-        };
-        let height: Option<f64> = printed_row_height(sheet, row_idx, &row_has_wrapping_cell);
+        let height: Option<f64> = printed_row_height(sheet, row_idx, row_wraps_past_one_line);
 
         rows.push(TableRow { cells, height });
     }
