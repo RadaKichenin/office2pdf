@@ -8,7 +8,7 @@ use quick_xml::events::Event;
 
 use super::xml_util;
 use crate::ir::{
-    AxisTickMark, BarBandLayout, Chart, ChartAreaOutline, ChartGrouping, ChartSeries,
+    AxisTickMark, BarBandLayout, Chart, ChartAreaOutline, ChartGrouping, ChartHost, ChartSeries,
     ChartTextStyle, ChartType, Color, DataLabels, LegendPosition,
 };
 
@@ -256,6 +256,9 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
         // which theme part applies.
         theme_accent_colors: Vec::new(),
         chart_area_outline,
+        // As with the theme, the chart part does not know which application's
+        // package holds it; the loader sets this (issue #823).
+        host: ChartHost::default(),
         // A `+mn-lt` token stays as written for the same reason: resolving it
         // needs the package theme, which only the loader has.
         text_font_family,

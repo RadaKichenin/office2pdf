@@ -33,6 +33,7 @@ fn test_codegen_chart_bar_visual_bars() {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
@@ -95,6 +96,7 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
@@ -145,6 +147,7 @@ fn test_codegen_chart_pie_draws_a_pie() {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
@@ -200,6 +203,7 @@ fn test_codegen_chart_line_trend_indicators() {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
@@ -246,6 +250,7 @@ fn test_codegen_chart_empty_series() {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
@@ -325,6 +330,7 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
@@ -373,6 +379,7 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
@@ -573,6 +580,7 @@ fn test_codegen_chart_line_plot() {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
@@ -626,6 +634,7 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
@@ -704,6 +713,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
         },
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
@@ -833,6 +843,7 @@ fn legend_chart(position: LegendPosition) -> Chart {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
@@ -980,6 +991,7 @@ fn a_declared_series_fill_reaches_the_bars() {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
@@ -1026,6 +1038,7 @@ fn a_series_without_a_fill_still_takes_the_palette() {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
@@ -1070,6 +1083,7 @@ fn per_point_fills_colour_each_bar_separately() {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
@@ -1113,6 +1127,7 @@ fn axis_titled_chart(category: Option<&str>, value: Option<&str>) -> Chart {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
@@ -1206,6 +1221,7 @@ fn labelled_chart(labels: DataLabels) -> Chart {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
@@ -1292,6 +1308,7 @@ fn pie_chart(values: Vec<f64>) -> Chart {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
@@ -1477,6 +1494,7 @@ fn test_chart_default_gridline_matches_powerpoint() {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
@@ -1626,6 +1644,7 @@ fn tick_mark_chart(
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
@@ -2219,6 +2238,7 @@ fn band_layout_chart(
         bar_band_layout: layout,
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
@@ -2491,6 +2511,7 @@ fn two_series_bar_chart(theme_accent_colors: Vec<crate::ir::Color>) -> Chart {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors,
         chart_area_outline: ChartAreaOutline::Default,
+        host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
@@ -3062,4 +3083,80 @@ fn the_category_gutter_grows_with_the_widest_label() {
         long > short,
         "a longer label must widen the gutter: {long} against {short}"
     );
+}
+
+// ----- The automatic chart-area outline is host-dependent (issue #823) -----
+
+/// The `#box(...)` line that opens the chart area, whose `stroke:` is the
+/// chart-area outline. The gridlines below it repeat the same stroke string.
+fn chart_area_box_line(source: &str) -> &str {
+    source
+        .lines()
+        .find(|line| line.starts_with("#box(width:") && line.contains("stroke:"))
+        .expect("the chart opens an area box")
+}
+
+fn framed_bar_chart_on(host: crate::ir::ChartHost) -> Chart {
+    let mut chart = two_series_bar_chart(Vec::new());
+    chart.chart_type = ChartType::Bar;
+    chart.categories = vec!["Q1".to_string(), "Q2".to_string()];
+    chart.series[0].values = vec![4.0, 8.0];
+    chart.series[1].values = vec![2.0, 6.0];
+    chart.host = host;
+    chart
+}
+
+#[test]
+fn a_slide_chart_draws_no_automatic_area_outline() {
+    // PowerPoint draws none. Applying Excel's default everywhere put a
+    // 480 x 301pt rectangle around every chart on a slide.
+    let source: String = chart_source(framed_bar_chart_on(crate::ir::ChartHost::Presentation));
+    // The gridlines carry the same stroke string legitimately, so the box's own
+    // `stroke:` is what has to be read, not the source as a whole.
+    let box_line: &str = chart_area_box_line(&source);
+    assert!(
+        box_line.contains("stroke: none"),
+        "a slide chart must not draw Excel's automatic border, got: {box_line}"
+    );
+}
+
+#[test]
+fn a_workbook_chart_keeps_the_measured_excel_outline() {
+    // #637 measured this against a native Excel export and it must not move.
+    let source: String = chart_source(framed_bar_chart_on(crate::ir::ChartHost::Spreadsheet));
+    let box_line: &str = chart_area_box_line(&source);
+    assert!(
+        box_line.contains(CHART_AREA_OUTLINE),
+        "a workbook chart keeps Excel's automatic border, got: {box_line}"
+    );
+}
+
+#[test]
+fn an_explicit_outline_survives_on_every_host() {
+    // Only the *automatic* default is host-dependent; a chart that states a
+    // line gets it wherever it lives, and `noFill` still suppresses.
+    for host in [
+        crate::ir::ChartHost::Presentation,
+        crate::ir::ChartHost::Spreadsheet,
+        crate::ir::ChartHost::WordProcessing,
+    ] {
+        let mut chart = framed_bar_chart_on(host);
+        chart.chart_area_outline = ChartAreaOutline::Explicit {
+            width_pt: Some(2.0),
+            color: Some(crate::ir::Color::new(0xd9, 0xd9, 0xd9)),
+        };
+        let source: String = chart_source(chart);
+        assert!(
+            chart_area_box_line(&source).contains("2pt + rgb(217, 217, 217)"),
+            "an explicit outline must survive on {host:?}"
+        );
+
+        let mut chart = framed_bar_chart_on(host);
+        chart.chart_area_outline = ChartAreaOutline::Suppressed;
+        let source: String = chart_source(chart);
+        assert!(
+            chart_area_box_line(&source).contains("stroke: none"),
+            "on {host:?}"
+        );
+    }
 }

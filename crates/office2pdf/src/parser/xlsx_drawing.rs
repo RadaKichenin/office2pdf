@@ -81,6 +81,7 @@ pub(super) fn extract_charts_with_anchors(data: &[u8]) -> HashMap<String, Vec<(u
                 let chart_xml = read_zip_entry_string(&mut archive, &chart_path);
                 if let Some(mut chart) = parse_chart_xml(&chart_xml) {
                     chart.theme_accent_colors = theme_accents.clone();
+                    chart.host = crate::ir::ChartHost::Spreadsheet;
                     chart.text_font_family =
                         theme_fonts.resolve_chart_text_typeface(chart.text_font_family.as_deref());
                     result
@@ -133,6 +134,7 @@ pub(super) fn extract_charts_with_anchors(data: &[u8]) -> HashMap<String, Vec<(u
             let chart_xml = read_zip_entry_string(&mut archive, path);
             if let Some(mut chart) = parse_chart_xml(&chart_xml) {
                 chart.theme_accent_colors = theme_accents.clone();
+                chart.host = crate::ir::ChartHost::Spreadsheet;
                 chart.text_font_family =
                     theme_fonts.resolve_chart_text_typeface(chart.text_font_family.as_deref());
                 result

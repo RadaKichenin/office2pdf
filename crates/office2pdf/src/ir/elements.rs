@@ -145,7 +145,9 @@ pub struct Caption {
 ///   [`Self::Explicit`].
 #[derive(Debug, Clone, PartialEq, Default)]
 pub enum ChartAreaOutline {
-    /// No `a:ln` at all — Office draws its default thin outline.
+    /// No `a:ln` at all, so the automatic outline applies — and what that is
+    /// depends on [`Chart::host`]: Excel and Word draw a thin one, PowerPoint
+    /// draws none (issue #823).
     #[default]
     Default,
     /// `<a:ln><a:noFill/></a:ln>` — the file asks for no outline.
@@ -158,6 +160,25 @@ pub enum ChartAreaOutline {
         /// The line's `a:solidFill/a:srgbClr`.
         color: Option<Color>,
     },
+}
+
+/// The application whose package a chart came out of.
+///
+/// Excel and PowerPoint disagree about what "the automatic chart-area outline"
+/// is: Excel draws one and PowerPoint draws none, so the same
+/// [`ChartAreaOutline::Default`] has to resolve differently depending on where
+/// the chart part was found. The chart part itself says nothing about this —
+/// only the loader that opened the package knows (issue #823).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ChartHost {
+    /// A chart in a workbook.
+    Spreadsheet,
+    /// A chart on a slide.
+    Presentation,
+    /// A chart in a document. Its automatic outline is unmeasured, so it keeps
+    /// the spreadsheet's, which is what every chart took before #823.
+    #[default]
+    WordProcessing,
 }
 
 /// The label the parser gives a `<c:radarChart>`.
@@ -235,6 +256,9 @@ pub struct Chart {
     /// which package this came from substitutes the face, exactly as it does
     /// for [`Chart::theme_accent_colors`] (issue #668).
     pub text_font_family: Option<String>,
+    /// Which application's package this chart came out of, which decides what
+    /// its automatic chart-area outline is (issue #823).
+    pub host: ChartHost,
     /// Run properties `c:chartSpace/c:txPr` declares, which govern every string
     /// the chart draws unless a more specific `c:txPr` overrides them.
     pub text_style: ChartTextStyle,
