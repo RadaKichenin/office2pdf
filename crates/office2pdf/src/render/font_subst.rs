@@ -531,20 +531,32 @@ fn symbol_fallbacks(text: &str) -> &'static [&'static str] {
 pub fn font_with_fallbacks_for_text(font_family: &str, text: &str) -> String {
     ACTIVE_FONT_CONTEXT.with(|active_context| {
         let context = active_context.borrow();
-        let mut families: Vec<String> = vec![font_family.to_string()];
-        families.extend(
-            script_fallbacks(font_family, text)
-                .iter()
-                .map(|face| (*face).to_string()),
-        );
-        families.extend(
-            symbol_fallbacks(text)
-                .iter()
-                .map(|face| (*face).to_string()),
-        );
-        families.extend(fallback_candidates(font_family, context.as_ref()));
-        join_font_list(families)
+        join_font_list(latin_family_chain(font_family, text, context.as_ref()))
     })
+}
+
+/// The ordered candidate list behind [`font_with_fallbacks_for_text`], before
+/// it is joined into a Typst value. Shared with
+/// [`needs_synthetic_oblique`], which has to reason about the same chain the
+/// emitter writes out.
+fn latin_family_chain(
+    font_family: &str,
+    text: &str,
+    context: Option<&FontSearchContext>,
+) -> Vec<String> {
+    let mut families: Vec<String> = vec![font_family.to_string()];
+    families.extend(
+        script_fallbacks(font_family, text)
+            .iter()
+            .map(|face| (*face).to_string()),
+    );
+    families.extend(
+        symbol_fallbacks(text)
+            .iter()
+            .map(|face| (*face).to_string()),
+    );
+    families.extend(fallback_candidates(font_family, context));
+    families
 }
 
 /// The font list for one face that has to cover text in several scripts at
@@ -580,6 +592,70 @@ pub(crate) fn font_for_mixed_script_text(font_family: &str, text: &str) -> Strin
         );
         join_font_list(families)
     })
+}
+
+/// Whether `character` is written in an East Asian script, so the font list's
+/// East Asian entries — not its Latin ones — decide the face it lands on.
+///
+/// The ranges are [`text_script`]'s, read one character at a time: a run that
+/// mixes scripts resolves per glyph in Typst, and the synthetic-oblique
+/// decision has to follow it (issue #686).
+pub(crate) fn is_east_asian_char(character: char) -> bool {
+    matches!(character as u32,
+        0xAC00..=0xD7AF | 0x1100..=0x11FF | 0x3130..=0x318F // Hangul
+        | 0x3040..=0x30FF                                   // Kana
+        | 0x4E00..=0x9FFF | 0x3400..=0x4DBF                 // Han
+    )
+}
+
+/// Whether a run marked italic has to be slanted by hand for `script`.
+///
+/// Word and PowerPoint synthesise an oblique when the face they resolve ships
+/// no italic member; Typst has no such fallback and renders the text upright,
+/// dropping the emphasis silently (issue #686). This answers whether that is
+/// about to happen, by naming the family that will actually shape the script
+/// and asking the font context what faces it has.
+///
+/// `false` whenever the answer is not certain — no active font context (WASM),
+/// no declared family, or a family chain the context has never seen. Guessing
+/// the other way would slant text that a real italic face is about to handle.
+pub(crate) fn needs_synthetic_oblique(
+    latin_family: Option<&str>,
+    east_asian_family: Option<&str>,
+    text: &str,
+    script: TextScript,
+) -> bool {
+    let Some(latin_family) = latin_family else {
+        return false;
+    };
+    ACTIVE_FONT_CONTEXT.with(|active_context| {
+        let context = active_context.borrow();
+        let Some(context) = context.as_ref() else {
+            return false;
+        };
+        let families: Vec<String> = match east_asian_family {
+            Some(east_asian) if !east_asian.eq_ignore_ascii_case(latin_family) => {
+                east_asian_family_chain(latin_family, east_asian, text, Some(context))
+            }
+            _ => latin_family_chain(latin_family, text, Some(context)),
+        };
+        families
+            .iter()
+            .find_map(|family| {
+                covers_script_with_alias(context, family, script).then(|| {
+                    !context.has_italic_face(family)
+                        && !alias_family(family).is_some_and(|alias| context.has_italic_face(alias))
+                })
+            })
+            .unwrap_or(false)
+    })
+}
+
+/// [`FontSearchContext::covers_script`] through the alias table, so a family
+/// the context knows only under its substitute's name still answers.
+fn covers_script_with_alias(context: &FontSearchContext, family: &str, script: TextScript) -> bool {
+    context.covers_script(family, script)
+        || alias_family(family).is_some_and(|alias| context.covers_script(alias, script))
 }
 
 /// Render a candidate list as a Typst font value, dropping repeats.
@@ -652,31 +728,46 @@ pub fn font_with_east_asian_fallbacks(
 ) -> String {
     ACTIVE_FONT_CONTEXT.with(|active_context| {
         let context = active_context.borrow();
-        let context = context.as_ref();
-        let mut families: Vec<String> = vec![latin_family.to_string()];
-        families.push(east_asian_family.to_string());
-        // The East Asian slot names the face whose voice must be kept — the
-        // deck in #687 puts a serif Latin family there — and the Latin slot
-        // decides when it says nothing.
-        let serif_source: &str = if family_is_serif(east_asian_family) {
-            east_asian_family
-        } else {
-            latin_family
-        };
-        families.extend(
-            script_fallbacks(serif_source, text)
-                .iter()
-                .map(|face| (*face).to_string()),
-        );
-        families.extend(
-            symbol_fallbacks(text)
-                .iter()
-                .map(|face| (*face).to_string()),
-        );
-        families.extend(fallback_candidates(east_asian_family, context));
-        families.extend(fallback_candidates(latin_family, context));
-        join_font_list(families)
+        join_font_list(east_asian_family_chain(
+            latin_family,
+            east_asian_family,
+            text,
+            context.as_ref(),
+        ))
     })
+}
+
+/// The ordered candidate list behind [`font_with_east_asian_fallbacks`], for
+/// the same reason [`latin_family_chain`] exists.
+fn east_asian_family_chain(
+    latin_family: &str,
+    east_asian_family: &str,
+    text: &str,
+    context: Option<&FontSearchContext>,
+) -> Vec<String> {
+    let mut families: Vec<String> = vec![latin_family.to_string()];
+    families.push(east_asian_family.to_string());
+    // The East Asian slot names the face whose voice must be kept — the
+    // deck in #687 puts a serif Latin family there — and the Latin slot
+    // decides when it says nothing.
+    let serif_source: &str = if family_is_serif(east_asian_family) {
+        east_asian_family
+    } else {
+        latin_family
+    };
+    families.extend(
+        script_fallbacks(serif_source, text)
+            .iter()
+            .map(|face| (*face).to_string()),
+    );
+    families.extend(
+        symbol_fallbacks(text)
+            .iter()
+            .map(|face| (*face).to_string()),
+    );
+    families.extend(fallback_candidates(east_asian_family, context));
+    families.extend(fallback_candidates(latin_family, context));
+    families
 }
 
 pub(crate) fn with_font_search_context<T>(
