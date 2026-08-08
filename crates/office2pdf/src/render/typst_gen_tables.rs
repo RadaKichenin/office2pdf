@@ -629,7 +629,12 @@ fn generate_table_cell(
     if let Some(spill_width) = cell.spill_width {
         // An unwrapped cell keeps its text on one line: lay the content out in
         // a clipped box via #place (out of layout) and hold the row height with
-        // a zero-width strut, so the line neither wraps nor grows the row.
+        // a zero-width strut, so the line does not grow the row.
+        //
+        // The clip box does *not* keep the line unwrapped — a Typst box breaks
+        // its content at the width it states, and this one states one. What
+        // holds the line together is the inner box sized from `measure()`
+        // further down; see the comment there (issue #811).
         //
         // The box is anchored where the cell's own alignment puts it. A
         // general/left cell paints rightwards across empty neighbours from its
@@ -662,32 +667,36 @@ fn generate_table_cell(
         } else {
             spill_line_box_height_pt(cell, ctx)
         };
-        match line_box_height_pt {
-            Some(height_pt) => {
-                let _ = write!(
-                    out,
-                    "#place({anchor} + {vertical_anchor}, box(width: {}pt, height: {}pt, clip: true)[",
-                    format_f64(spill_width),
-                    format_f64(height_pt),
-                );
-                generate_cell_content(out, &cell.content, ctx)?;
-                let _ = write!(
-                    out,
-                    "])#box(width: 0pt, height: {}pt)",
-                    format_f64(height_pt)
-                );
-            }
+        // The clip box states a width, and a Typst box **wraps** its content
+        // at the width it states. The line therefore broke into several, the
+        // clip hid all but one of them, and the one left visible was the tail:
+        // a merged title rendered starting mid-sentence, with its opening
+        // words gone (issue #811).
+        //
+        // Binding the content and sizing an inner box to `measure()`'s answer
+        // is what keeps it on one line — measure lays out in an unbounded
+        // region, so the inner box is the text's natural width and has nothing
+        // to break at. The clip then cuts that single line at the spill edge,
+        // which is where Excel cuts it, and each anchor keeps the fragment
+        // Excel leaves visible: the head for a left cell, the tail for a right
+        // one, the middle for a centred one.
+        let height: String = match line_box_height_pt {
+            Some(height_pt) => format!("{}pt", format_f64(height_pt)),
             // Unknown font metrics: keep the legacy ambient-sized shape.
-            None => {
-                let _ = write!(
-                    out,
-                    "#place({anchor} + {vertical_anchor}, box(width: {}pt, height: 1.3em, clip: true)[",
-                    format_f64(spill_width),
-                );
-                generate_cell_content(out, &cell.content, ctx)?;
-                out.push_str("])#box(width: 0pt, height: 1.3em)");
-            }
-        }
+            None => "1.3em".to_string(),
+        };
+        out.push_str("#context {let o2p-spill = [");
+        let enclosing_in_spill_cell = ctx.in_spill_cell;
+        ctx.in_spill_cell = true;
+        let spill_content = generate_cell_content(out, &cell.content, ctx);
+        ctx.in_spill_cell = enclosing_in_spill_cell;
+        spill_content?;
+        let _ = write!(
+            out,
+            "]; place({anchor} + {vertical_anchor}, box(width: {}pt, height: {height}, clip: true)\
+             [#box(width: measure(o2p-spill).width)[#o2p-spill]])}}#box(width: 0pt, height: {height})",
+            format_f64(spill_width),
+        );
     } else {
         generate_cell_content(out, &cell.content, ctx)?;
     }
@@ -1735,6 +1744,7 @@ fn generate_cell_content(
             line_grid_pitch: ctx.line_grid_pitch,
             row_has_east_asian_text: ctx.row_has_east_asian_text,
             seats_text_on_descender: ctx.cell_seats_text_on_descender,
+            in_spill_cell: ctx.in_spill_cell,
             uses_powerpoint_line_box: ctx.table_uses_powerpoint_line_box,
             stacks_multiple_blocks,
             paragraph_mark_metric_runs: para
@@ -1799,6 +1809,14 @@ struct CellParagraphCtx<'a> {
     /// Decided once per row so every cell in it shares a baseline (issue #498).
     row_has_east_asian_text: bool,
     seats_text_on_descender: bool,
+    /// Whether this paragraph is inside a spill cell's clipped wrapper, where
+    /// the `#place` anchor already carries the cell's horizontal alignment.
+    /// A `width: 100%` block inside that wrapper is not just redundant: the
+    /// wrapper sizes itself from `measure()`, which lays out in an unbounded
+    /// region where a percentage width has nothing to resolve against, and the
+    /// paragraph came back so narrow that every word took a line of its own
+    /// (issue #811).
+    in_spill_cell: bool,
     /// Whether the cell stacks more than one rendered block, so this
     /// paragraph has a sibling to leak Typst's default block spacing against.
     stacks_multiple_blocks: bool,
@@ -1943,7 +1961,11 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
 
     if has_block_wrapper {
         out.push_str("#block(");
-        write_cell_paragraph_block_params(out, align_str.is_some(), suppress_default_block_spacing);
+        write_cell_paragraph_block_params(
+            out,
+            align_str.is_some() && !cell.in_spill_cell,
+            suppress_default_block_spacing,
+        );
         out.push_str(")[\n");
         write_line_box_settings(out, style.line_box);
         write_par_settings(out, style);
