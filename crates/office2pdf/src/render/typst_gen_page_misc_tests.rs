@@ -2288,9 +2288,20 @@ fn doc_with_footer_run(text: &str, style: TextStyle) -> Document {
 /// `w:rFonts`, and Word moves the footer baseline with the font: 804.72pt for
 /// Arial against 802.80pt for Malgun Gothic. Typst's `bottom-edge:
 /// "descender"` is nearly right for Arial and 2.10pt wrong for Malgun Gothic,
-/// so a test that pins only one font would have passed throughout (issue #630).
+/// so a test that pinned only one font would have passed throughout
+/// (issue #630).
+///
+/// Needs a Korean face to say anything: where none is installed — the Linux CI
+/// runner is one — the East Asian side has no metrics, the band keeps the
+/// renderer's own seat, and there is no font-driven difference to measure. The
+/// emission itself is covered unconditionally by
+/// [`test_footer_band_states_its_own_bottom_edge`].
 #[test]
 fn test_footer_baseline_follows_its_own_font_descent() {
+    if crate::render::pdf::font_line_metrics_em("Malgun Gothic").is_none() {
+        return;
+    }
+
     let latin: f64 = baselines_of(&doc_with_footer_run("- 1 -", arial(8.0)), "- 1 -")[0];
     let east_asian: f64 = baselines_of(&doc_with_footer_run("- 1 -", malgun(8.0)), "- 1 -")[0];
 
@@ -2308,17 +2319,33 @@ fn test_footer_baseline_follows_its_own_font_descent() {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-/// Triangulation for the emission: the band must state the descent, not defer
-/// to the renderer's own `"descender"`, which is the normalised one.
+/// Triangulation for the emission: the band states the descent itself rather
+/// than deferring to the renderer's `"descender"`, which is the *normalised*
+/// one and so answers a different question.
+///
+/// Arial, because every runner resolves it — through Liberation Sans where the
+/// face itself is absent — so this half of #630 is pinned everywhere.
 #[test]
 fn test_footer_band_states_its_own_bottom_edge() {
-    let source = generate_typst(&doc_with_footer_run("- 1 -", malgun(8.0)))
+    let (ascender_em, descender_em, pitch_em) =
+        crate::render::pdf::font_line_metrics_em("Arial").expect("Arial metrics should resolve");
+    let expected_em: f64 = pitch_em - ascender_em;
+    assert!(
+        (expected_em - descender_em).abs() < 1e-9,
+        "a Latin line's sub-baseline share is its descender; the model changed"
+    );
+
+    let source = generate_typst(&doc_with_footer_run("- 1 -", arial(8.0)))
         .expect("document should generate")
         .source;
 
     assert!(
         !source.contains("bottom-edge: \"descender\""),
         "the footer band must not take the renderer's normalised descender: {source}"
+    );
+    assert!(
+        source.contains(&format!("bottom-edge: -{}em", format_f64(expected_em))),
+        "the band must state the face's own {expected_em}em descent: {source}"
     );
     assert!(
         source.contains("footer-descent: 0pt"),
