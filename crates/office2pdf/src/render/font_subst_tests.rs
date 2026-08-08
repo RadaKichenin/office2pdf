@@ -901,3 +901,129 @@ fn test_korean_under_a_sans_family_still_reaches_the_sans_chain() {
         );
     }
 }
+
+// ----- One face covering several scripts at once (issue #668) -----
+
+#[test]
+fn a_mixed_script_chain_substitutes_the_declared_face_before_the_script_faces() {
+    // A Korean chart's Latin labels have to reach the stand-in for the face the
+    // chart asked for. Ordering the script faces first sent `DOCX` to Malgun
+    // Gothic, which covers Latin too, so the substitute was never consulted.
+    let context = FontSearchContext::for_test(Vec::new(), &["Carlito", "Malgun Gothic"], &[], &[]);
+    let list: String = with_font_search_context(Some(&context), || {
+        font_for_mixed_script_text("Calibri", "DOCX 매출")
+    });
+
+    let carlito = list
+        .find("Carlito")
+        .expect("Calibri's substitute is listed");
+    let malgun = list
+        .find("Malgun Gothic")
+        .expect("the Korean face is still listed");
+    assert!(
+        carlito < malgun,
+        "the declared face's substitute must precede the script faces, got {list}"
+    );
+}
+
+#[test]
+fn a_mixed_script_chain_still_reaches_the_script_face() {
+    // Dropping the script faces would leave the Hangul to the engine's own pick.
+    let context = FontSearchContext::for_test(Vec::new(), &["Carlito", "Malgun Gothic"], &[], &[]);
+    let list: String = with_font_search_context(Some(&context), || {
+        font_for_mixed_script_text("Calibri", "DOCX 매출")
+    });
+    assert!(list.contains("Malgun Gothic"), "got {list}");
+}
+
+#[test]
+fn test_document_requests_font_families_true_for_a_chart_only_document() {
+    // A deck whose only font request comes from a chart's resolved theme face
+    // still needs the font search context, or the compiler never sees the
+    // directories that hold it and the chart falls back to the engine's
+    // default anyway — the same trap shape labels fell into (issue #461).
+    let mut chart = crate::ir::Chart {
+        chart_type: crate::ir::ChartType::Column,
+        hole_size_percent: None,
+        title: Some("Sales".to_string()),
+        categories: vec!["Q1".to_string()],
+        series: Vec::new(),
+        grouping: crate::ir::ChartGrouping::default(),
+        legend_position: crate::ir::LegendPosition::default(),
+        has_legend: false,
+        category_axis_title: None,
+        value_axis_title: None,
+        category_axis_major_tick_mark: crate::ir::AxisTickMark::default(),
+        value_axis_major_tick_mark: crate::ir::AxisTickMark::default(),
+        category_axis_deleted: false,
+        value_axis_deleted: false,
+        bar_band_layout: crate::ir::BarBandLayout::default(),
+        theme_accent_colors: Vec::new(),
+        chart_area_outline: crate::ir::ChartAreaOutline::Default,
+        text_font_family: Some("Pretendard".to_string()),
+    };
+
+    let doc = Document {
+        metadata: crate::ir::Metadata::default(),
+        pages: vec![Page::Flow(crate::ir::FlowPage {
+            size: crate::ir::PageSize::default(),
+            margins: crate::ir::Margins::default(),
+            content: vec![Block::Chart(chart.clone())],
+            header: None,
+            footer: None,
+            columns: None,
+            line_grid_pitch: None,
+            line_grid_snaps_lines: false,
+            page_numbering: None,
+        })],
+        styles: crate::ir::StyleSheet::default(),
+    };
+    assert!(
+        document_requests_font_families(&doc),
+        "a flowed chart's face must reach the font-context gate"
+    );
+
+    // The slide path is the one PPTX charts actually take.
+    let doc = Document {
+        metadata: crate::ir::Metadata::default(),
+        pages: vec![Page::Fixed(crate::ir::FixedPage {
+            size: crate::ir::PageSize {
+                width: 720.0,
+                height: 540.0,
+            },
+            elements: vec![crate::ir::FixedElement {
+                x: 0.0,
+                y: 0.0,
+                width: 480.0,
+                height: 320.0,
+                kind: FixedElementKind::Chart(chart.clone()),
+            }],
+            background_color: None,
+            background_gradient: None,
+        })],
+        styles: crate::ir::StyleSheet::default(),
+    };
+    assert!(
+        document_requests_font_families(&doc),
+        "a slide chart's face must reach the font-context gate"
+    );
+
+    // A chart that names nothing still asks for nothing.
+    chart.text_font_family = None;
+    let doc = Document {
+        metadata: crate::ir::Metadata::default(),
+        pages: vec![Page::Flow(crate::ir::FlowPage {
+            size: crate::ir::PageSize::default(),
+            margins: crate::ir::Margins::default(),
+            content: vec![Block::Chart(chart)],
+            header: None,
+            footer: None,
+            columns: None,
+            line_grid_pitch: None,
+            line_grid_snaps_lines: false,
+            page_numbering: None,
+        })],
+        styles: crate::ir::StyleSheet::default(),
+    };
+    assert!(!document_requests_font_families(&doc));
+}

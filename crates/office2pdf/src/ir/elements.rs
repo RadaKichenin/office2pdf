@@ -218,6 +218,39 @@ pub struct Chart {
     /// What the chart area's own outline should be, from
     /// `c:chartSpace/c:spPr/a:ln` (#637).
     pub chart_area_outline: ChartAreaOutline,
+    /// The face every string the chart draws is set in, from
+    /// `c:chartSpace/c:txPr/a:p/a:pPr/a:defRPr/a:latin@typeface`.
+    ///
+    /// `None` when the chart names none, which is the common case: the face
+    /// then comes from the package theme's minor font, since chart text is
+    /// body text. The parser leaves a `+mn-lt`/`+mj-lt` token unresolved
+    /// because the chart part names no theme of its own — the loader that knew
+    /// which package this came from substitutes the face, exactly as it does
+    /// for [`Chart::theme_accent_colors`] (issue #668).
+    pub text_font_family: Option<String>,
+}
+
+impl Chart {
+    /// Every string the chart draws, concatenated.
+    ///
+    /// [`Chart::text_font_family`] is one face for all of them, so the fallback
+    /// chain behind it has to cover each script that appears anywhere in the
+    /// chart — a Korean category label needs the East Asian chain that a Latin
+    /// family alone would not reach. Both the renderer, which emits the chain,
+    /// and the font-context gate, which decides whether the search paths are
+    /// scanned at all, have to sample the same strings (issue #668).
+    pub fn text_sample(&self) -> String {
+        self.title
+            .iter()
+            .chain(self.category_axis_title.iter())
+            .chain(self.value_axis_title.iter())
+            .chain(self.categories.iter())
+            .chain(self.series.iter().filter_map(|series| series.name.as_ref()))
+            .fold(String::new(), |mut sample, text| {
+                sample.push_str(text);
+                sample
+            })
+    }
 }
 
 /// How a bar chart's bars divide the band one category gets, from

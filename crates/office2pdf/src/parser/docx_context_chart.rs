@@ -40,12 +40,21 @@ pub(in super::super) fn build_chart_context_from_xml(
 
     // A series that names no fill takes the document theme's accents rather
     // than the renderer's built-in palette (issue #670).
-    let theme_accents: Vec<crate::ir::Color> = read_zip_text(archive, "word/theme/theme1.xml")
+    // The same part settles chart text's face: a chart naming no `a:latin`
+    // takes the theme's minor font rather than the engine's default (issue
+    // #668).
+    let theme_xml: Option<String> = read_zip_text(archive, "word/theme/theme1.xml");
+    let theme_accents: Vec<crate::ir::Color> = theme_xml
+        .as_deref()
         .map(|theme_xml| {
             crate::parser::drawingml::theme_accent_palette(
-                &crate::parser::drawingml::parse_theme_color_scheme(&theme_xml),
+                &crate::parser::drawingml::parse_theme_color_scheme(theme_xml),
             )
         })
+        .unwrap_or_default();
+    let theme_fonts: crate::parser::drawingml::ThemeFontScheme = theme_xml
+        .as_deref()
+        .map(crate::parser::drawingml::parse_theme_font_scheme)
         .unwrap_or_default();
 
     for (body_index, relationship_id) in chart_references {
@@ -54,6 +63,8 @@ pub(in super::super) fn build_chart_context_from_xml(
             && let Some(mut chart) = chart::parse_chart_xml(&chart_xml)
         {
             chart.theme_accent_colors = theme_accents.clone();
+            chart.text_font_family =
+                theme_fonts.resolve_chart_text_typeface(chart.text_font_family.as_deref());
             charts.entry(body_index).or_default().push(chart);
         }
     }

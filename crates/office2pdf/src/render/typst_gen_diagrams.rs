@@ -1,5 +1,6 @@
 use super::*;
 use crate::ir::ChartAreaOutline;
+use crate::render::font_subst;
 
 /// How a chart is drawn. Selecting the variant once lets the atomicity decision
 /// and the emitter agree on which geometry applies.
@@ -98,10 +99,38 @@ pub(super) fn generate_chart_in(out: &mut String, chart: &Chart, frame: Option<(
     if atomic {
         out.push_str("#block(breakable: false)[\n");
     }
+    // `c:chartSpace/c:txPr` sets the face for every string the chart draws, and
+    // no sub-renderer below names a font of its own, so one scoped `set` reaches
+    // the title, tick labels, legend and data labels alike. Without it they all
+    // fell through to the engine's default serif, a face that appears nowhere
+    // else in the document (issue #668).
+    let font_scope: Option<String> = chart_text_font_scope(chart);
+    if let Some(ref scope) = font_scope {
+        out.push_str("#[\n");
+        out.push_str(scope);
+    }
     generate_chart_body(out, chart, frame);
+    if font_scope.is_some() {
+        out.push_str("]\n");
+    }
     if atomic {
         out.push_str("]\n");
     }
+}
+
+/// The `#set text(font: …)` a chart's declared face calls for, or `None` when
+/// it names none and the theme supplied nothing either.
+///
+/// The fallback chain is built from the chart's own strings, because they carry
+/// the scripts: a Korean category label needs the East Asian chain that a Latin
+/// family alone would not reach.
+fn chart_text_font_scope(chart: &Chart) -> Option<String> {
+    let family: &str = chart.text_font_family.as_deref()?;
+    let sample: String = chart.text_sample();
+    Some(format!(
+        "#set text(font: {})\n",
+        font_subst::font_for_mixed_script_text(family, &sample)
+    ))
 }
 
 /// Emit the chart's own markup, without the atomicity wrapper.

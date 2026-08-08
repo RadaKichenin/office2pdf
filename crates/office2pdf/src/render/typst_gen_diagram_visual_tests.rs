@@ -32,6 +32,7 @@ fn test_codegen_chart_bar_visual_bars() {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        text_font_family: None,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -90,6 +91,7 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        text_font_family: None,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -136,6 +138,7 @@ fn test_codegen_chart_pie_draws_a_pie() {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        text_font_family: None,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -187,6 +190,7 @@ fn test_codegen_chart_line_trend_indicators() {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        text_font_family: None,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -229,6 +233,7 @@ fn test_codegen_chart_empty_series() {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        text_font_family: None,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -304,6 +309,7 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        text_font_family: None,
     }));
     let doc = make_doc(vec![make_flow_page(content)]);
 
@@ -348,6 +354,7 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        text_font_family: None,
     }));
     let doc = make_doc(vec![make_flow_page(content)]);
 
@@ -544,6 +551,7 @@ fn test_codegen_chart_line_plot() {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        text_font_family: None,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -593,6 +601,7 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        text_font_family: None,
     })])]);
 
     let pages = page_texts(&doc);
@@ -667,6 +676,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
         },
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        text_font_family: None,
     }
 }
 
@@ -792,6 +802,7 @@ fn legend_chart(position: LegendPosition) -> Chart {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        text_font_family: None,
     }
 }
 
@@ -935,6 +946,7 @@ fn a_declared_series_fill_reaches_the_bars() {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        text_font_family: None,
     };
 
     let source = chart_source(chart);
@@ -977,6 +989,7 @@ fn a_series_without_a_fill_still_takes_the_palette() {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        text_font_family: None,
     };
 
     let source = chart_source(chart);
@@ -1017,6 +1030,7 @@ fn per_point_fills_colour_each_bar_separately() {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        text_font_family: None,
     };
 
     let source = chart_source(chart);
@@ -1056,6 +1070,7 @@ fn axis_titled_chart(category: Option<&str>, value: Option<&str>) -> Chart {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        text_font_family: None,
     }
 }
 
@@ -1145,6 +1160,7 @@ fn labelled_chart(labels: DataLabels) -> Chart {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        text_font_family: None,
     }
 }
 
@@ -1227,6 +1243,7 @@ fn pie_chart(values: Vec<f64>) -> Chart {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        text_font_family: None,
     }
 }
 
@@ -1408,6 +1425,7 @@ fn test_chart_default_gridline_matches_powerpoint() {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        text_font_family: None,
     })])]);
 
     let source = generate_typst(&doc).unwrap().source;
@@ -1553,6 +1571,7 @@ fn tick_mark_chart(
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        text_font_family: None,
     }
 }
 
@@ -2142,6 +2161,7 @@ fn band_layout_chart(
         bar_band_layout: layout,
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        text_font_family: None,
     }
 }
 
@@ -2410,6 +2430,7 @@ fn two_series_bar_chart(theme_accent_colors: Vec<crate::ir::Color>) -> Chart {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors,
         chart_area_outline: ChartAreaOutline::Default,
+        text_font_family: None,
     }
 }
 
@@ -2684,5 +2705,64 @@ fn a_chart_outline_keeps_its_own_width_and_colour() {
     assert!(
         !source.contains(&format!("stroke: {CHART_AREA_OUTLINE})[")),
         "a declared line must not be replaced by the automatic one; got:\n{source}"
+    );
+}
+
+// ----- The chart's declared text face (issue #668) -----
+
+#[test]
+fn chart_text_is_set_in_the_face_the_chart_declares() {
+    // Every chart string used to fall through to the engine's default serif,
+    // a face that appears nowhere else in the document. No sub-renderer names
+    // a font, so one scoped `set` has to cover them all.
+    let mut chart = two_series_bar_chart(Vec::new());
+    chart.categories = vec!["Q1".to_string(), "Q2".to_string()];
+    chart.series[0].values = vec![4.0, 8.0];
+    chart.series[1].values = vec![2.0, 6.0];
+    chart.title = Some("Sales".to_string());
+    chart.text_font_family = Some("Calibri".to_string());
+
+    let source: String = chart_source(chart);
+    assert!(
+        source.contains("#set text(font: "),
+        "the chart must set its declared face, got:\n{source}"
+    );
+    assert!(
+        source.contains("Calibri"),
+        "the declared face must reach the emitted font list, got:\n{source}"
+    );
+}
+
+#[test]
+fn a_chart_naming_no_face_sets_none() {
+    // A chart whose package has no theme keeps the renderer's existing
+    // behaviour rather than naming a face nothing resolves.
+    let mut chart = two_series_bar_chart(Vec::new());
+    chart.categories = vec!["Q1".to_string(), "Q2".to_string()];
+    chart.series[0].values = vec![4.0, 8.0];
+    chart.series[1].values = vec![2.0, 6.0];
+    chart.text_font_family = None;
+
+    assert!(!chart_source(chart).contains("#set text(font: "));
+}
+
+#[test]
+fn a_chart_with_korean_labels_keeps_an_east_asian_fallback() {
+    // The declared face is Latin; the categories are not. A chain built from
+    // the family alone would leave the Hangul to the engine's own pick.
+    let mut chart = two_series_bar_chart(Vec::new());
+    chart.categories = vec!["매출".to_string(), "비용".to_string()];
+    chart.series[0].values = vec![4.0, 8.0];
+    chart.series[1].values = vec![2.0, 6.0];
+    chart.text_font_family = Some("Calibri".to_string());
+
+    let source: String = chart_source(chart);
+    let set_line: &str = source
+        .lines()
+        .find(|line| line.starts_with("#set text(font: "))
+        .expect("the chart sets a face");
+    assert!(
+        set_line.contains(','),
+        "a Korean chart needs a fallback chain, not a bare family: {set_line}"
     );
 }

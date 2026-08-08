@@ -1255,3 +1255,61 @@ fn a_chart_space_line_keeps_its_width_and_colour() {
         other => panic!("expected an explicit outline, got {other:?}"),
     }
 }
+
+// ----- Chart text's declared face (issue #668) -----
+
+#[test]
+fn a_chart_space_tx_pr_latin_typeface_reaches_the_model() {
+    // `office2pdf_introduction_ko.pptx`'s chart1.xml names the face outright
+    // rather than deferring to the theme.
+    let chart = parse_chart_xml(&chart_space_with(
+        r#"<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr>
+             <a:defRPr><a:latin typeface="Calibri"/></a:defRPr>
+           </a:pPr><a:endParaRPr lang="en-US"/></a:p></c:txPr>"#,
+    ))
+    .expect("chart parses");
+    assert_eq!(chart.text_font_family.as_deref(), Some("Calibri"));
+}
+
+#[test]
+fn a_chart_space_tx_pr_keeps_the_unresolved_theme_token() {
+    // The chart part names no theme of its own, so the parser cannot turn
+    // `+mn-lt` into a face. Whoever loaded the part resolves it.
+    let chart = parse_chart_xml(&chart_space_with(
+        r#"<c:txPr><a:p><a:pPr><a:defRPr><a:latin typeface="+mn-lt"/></a:defRPr></a:pPr></a:p></c:txPr>"#,
+    ))
+    .expect("chart parses");
+    assert_eq!(chart.text_font_family.as_deref(), Some("+mn-lt"));
+}
+
+#[test]
+fn a_chart_with_no_tx_pr_names_no_face() {
+    // `bar-chart.pptx` is this shape: the face has to come from the theme's
+    // minor font, which only the loader knows.
+    let chart = parse_chart_xml(&chart_space_with("")).expect("chart parses");
+    assert_eq!(chart.text_font_family, None);
+}
+
+#[test]
+fn a_plot_area_tx_pr_is_not_read_as_the_chart_space_one() {
+    // `c:txPr` is a sibling of `c:chart` written after it, exactly like
+    // `c:spPr`. A flat event loop that does not wait for `</c:chart>` would
+    // pick up an axis' own `c:txPr` instead (#637 made the same mistake).
+    let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+        <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+            <c:chart>
+                <c:plotArea>
+                    <c:lineChart><c:ser><c:idx val="0"/>
+                        <c:val><c:numRef><c:numCache><c:pt idx="0"><c:v>1</c:v></c:pt></c:numCache></c:numRef></c:val>
+                    </c:ser></c:lineChart>
+                    <c:catAx>
+                        <c:txPr><a:p><a:pPr><a:defRPr><a:latin typeface="Impact"/></a:defRPr></a:pPr></a:p></c:txPr>
+                    </c:catAx>
+                </c:plotArea>
+            </c:chart>
+            <c:txPr><a:p><a:pPr><a:defRPr><a:latin typeface="Calibri"/></a:defRPr></a:pPr></a:p></c:txPr>
+        </c:chartSpace>"#;
+    let chart = parse_chart_xml(xml).expect("chart parses");
+    assert_eq!(chart.text_font_family.as_deref(), Some("Calibri"));
+}

@@ -222,6 +222,7 @@ fn test_charts_stay_on_first_column_group() {
             bar_band_layout: crate::ir::BarBandLayout::default(),
             theme_accent_colors: Vec::new(),
             chart_area_outline: ChartAreaOutline::Default,
+            text_font_family: None,
         },
     )];
     let pages = split_sheet_page_by_width(page, None, None);

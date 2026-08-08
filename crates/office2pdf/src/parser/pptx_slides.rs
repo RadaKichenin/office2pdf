@@ -455,6 +455,14 @@ fn collect_chart_elements<R: Read + std::io::Seek>(
     // A series with no fill of its own takes the deck's theme accents rather
     // than the renderer's built-in palette (issue #670).
     let theme_accents: Vec<Color> = crate::parser::drawingml::theme_accent_palette(&theme.colors);
+    // Chart text resolves its face the same way: the chart part names no theme
+    // of its own, so the deck's font scheme settles both `+mn-lt` and the far
+    // commoner case of a chart that names no face at all (issue #668).
+    let theme_fonts: crate::parser::drawingml::ThemeFontScheme =
+        crate::parser::drawingml::ThemeFontScheme {
+            major_latin: theme.major_font.clone(),
+            minor_latin: theme.minor_font.clone(),
+        };
     let chart_data = load_chart_data(slide_path, archive);
     chart_refs
         .iter()
@@ -462,6 +470,8 @@ fn collect_chart_elements<R: Read + std::io::Seek>(
             chart_data.get(&c_ref.chart_rid).map(|chart| {
                 let mut chart: Chart = chart.clone();
                 chart.theme_accent_colors = theme_accents.clone();
+                chart.text_font_family =
+                    theme_fonts.resolve_chart_text_typeface(chart.text_font_family.as_deref());
                 FixedElement {
                     x: emu_to_pt(c_ref.x),
                     y: emu_to_pt(c_ref.y),
