@@ -684,9 +684,9 @@ fn write_tick_left_of_plot(out: &mut String, axis_x: f64, y: f64, (outward, inwa
 }
 
 const PLOT_MAIN: f64 = 300.0; // value-axis length in points
-const ROW: f64 = 34.0; // per-category thickness
-const LABEL_W: f64 = 62.0; // category label gutter
-const TICK_GAP: f64 = 22.0; // value tick label gutter
+pub(super) const ROW: f64 = 34.0; // per-category thickness
+pub(super) const LABEL_W: f64 = 62.0; // category label gutter
+pub(super) const TICK_GAP: f64 = 22.0; // value tick label gutter
 const GAP: f64 = 6.0;
 const LEGEND_ROW_H: f64 = 14.0; // per-entry height when the legend stacks
 const LEGEND_ENTRY_W: f64 = 78.0; // per-entry width when the legend runs across
@@ -854,14 +854,74 @@ fn chart_axis_extent(chart: &Chart) -> (f64, f64) {
     )
 }
 
+/// The band a value tick label needs, for text at the size the chart declares.
+///
+/// [`TICK_GAP`] was calibrated at [`CHART_DEFAULT_TEXT_PT`], so a chart that
+/// declares nothing reserves exactly what it always did. A chart declaring 18pt
+/// used to reserve the 10pt band and the plot swallowed the difference. On
+/// `bar-chart.pptx`, whose GT frame is 480x320pt, that left the plot 260.88pt
+/// tall against PowerPoint's 233.28; scaling the band brings it to 243.12, so
+/// the height error falls from 27.60pt to 9.84pt. The remaining 9.84pt is why
+/// #706 stays open.
+pub(super) fn chart_tick_band_pt(chart: &Chart) -> f64 {
+    TICK_GAP / CHART_DEFAULT_TEXT_PT * chart_axis_text_pt(chart, chart.value_axis_text_style)
+}
+
+/// The band one category takes across the category axis, at the declared size.
+pub(super) fn chart_category_band_pt(chart: &Chart) -> f64 {
+    ROW / CHART_DEFAULT_TEXT_PT * chart_axis_text_pt(chart, chart.category_axis_text_style)
+}
+
+/// Width the category labels take down the left of a bar plot.
+///
+/// Measured from the widest label in the face it is set in, rather than scaled
+/// from [`LABEL_W`]: this is a width holding text, not a height, so it grows
+/// with what the labels say as well as with their size. `bar-chart.pptx`'s
+/// labels are as short as `4th Qtr`, and scaling the constant by the same 1.8
+/// the band takes would have reserved far more than they need — the plot is
+/// 16.32pt wider than PowerPoint's before this and 10.08pt after, so the gutter
+/// had room to grow but not by the constant's full ratio.
+///
+/// Falls back to the flat constant where the face cannot be measured — wasm has
+/// no font search — so the gutter is never narrower than it was.
+pub(super) fn chart_category_gutter_pt(chart: &Chart) -> f64 {
+    let size_pt: f64 = chart_axis_text_pt(chart, chart.category_axis_text_style);
+    let bold: bool = chart
+        .text_style
+        .resolved_bold(chart.category_axis_text_style)
+        .unwrap_or(false);
+    let family: &str = chart
+        .text_font_family
+        .as_deref()
+        .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_FAMILY);
+    let widest_em: f64 = chart
+        .categories
+        .iter()
+        .filter_map(|category| crate::render::pdf::text_advance_em(family, bold, category))
+        .fold(0.0_f64, f64::max);
+    if widest_em <= 0.0 {
+        return LABEL_W;
+    }
+    // The tick mark reaches out of the plot into this gutter, and the label
+    // stops a gap short of it.
+    let tick: f64 = chart_major_tick_length(size_pt);
+    (widest_em * size_pt + tick + GAP).max(LABEL_W)
+}
+
 /// Gutters the category labels and the value tick labels take inside the box,
 /// alongside whatever the legend and the axis titles reserve.
 fn axis_label_gutters(chart: &Chart) -> (f64, f64) {
     let (title_left, title_bottom) = axis_title_gutters(chart);
     if matches!(chart.chart_type, ChartType::Bar) {
-        (LABEL_W + GAP + title_left, TICK_GAP + title_bottom)
+        (
+            chart_category_gutter_pt(chart) + GAP + title_left,
+            chart_tick_band_pt(chart) + title_bottom,
+        )
     } else {
-        (TICK_GAP + GAP + title_left, ROW + title_bottom)
+        (
+            chart_tick_band_pt(chart) + GAP + title_left,
+            chart_category_band_pt(chart) + title_bottom,
+        )
     }
 }
 
@@ -898,7 +958,7 @@ const LABEL_LINE_H: f64 = 10.0;
 /// lays it out. Without one it keeps the intrinsic size: `PLOT_MAIN` along the
 /// value axis, one `ROW` per category across it.
 fn axis_plot_size(chart: &Chart, frame: Option<(f64, f64)>) -> (f64, f64) {
-    let plot_cross: f64 = chart.categories.len() as f64 * ROW;
+    let plot_cross: f64 = chart.categories.len() as f64 * chart_category_band_pt(chart);
     let (intrinsic_w, intrinsic_h) = if matches!(chart.chart_type, ChartType::Bar) {
         (PLOT_MAIN, plot_cross)
     } else {
@@ -1103,7 +1163,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
     // value; a framed chart divides the axis it actually got, so widening the
     // frame widens the bars rather than leaving them stranded at one end.
     let row: f64 = if categories == 0 {
-        ROW
+        chart_category_band_pt(chart)
     } else if horizontal {
         plot_h / categories as f64
     } else {
@@ -1165,7 +1225,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                             chart.value_axis_text_style
                         )) / 2.0
                     ),
-                    format_f64(TICK_GAP),
+                    format_f64(chart_tick_band_pt(chart)),
                     format_f64(chart_label_box_h(chart_axis_text_pt(
                         chart,
                         chart.value_axis_text_style
@@ -1270,7 +1330,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 out,
                 "#place(top + left, dx: 0pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(right + horizon)[#text(size: {}pt{})[{}]]])",
                 format_f64(row_top),
-                format_f64(LABEL_W),
+                format_f64(chart_category_gutter_pt(chart)),
                 format_f64(row),
                 format_f64(chart_axis_text_pt(chart, chart.category_axis_text_style)),
                 chart_axis_text_weight(chart, chart.category_axis_text_style),
@@ -1283,7 +1343,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 format_f64(plot_x + group_start),
                 format_f64(plot_y + plot_h + 2.0),
                 format_f64(row),
-                format_f64(ROW),
+                format_f64(chart_category_band_pt(chart)),
                 format_f64(chart_axis_text_pt(chart, chart.category_axis_text_style)),
                 chart_axis_text_weight(chart, chart.category_axis_text_style),
                 escape_typst(category)
@@ -1381,9 +1441,15 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
         // The content the legend sits beside spans the plot and both label
         // gutters, so a bottom legend clears the category labels.
         let (gutter_w, gutter_h) = if horizontal {
-            (LABEL_W + GAP, TICK_GAP)
+            (
+                chart_category_gutter_pt(chart) + GAP,
+                chart_tick_band_pt(chart),
+            )
         } else {
-            (TICK_GAP + GAP, ROW)
+            (
+                chart_tick_band_pt(chart) + GAP,
+                chart_category_band_pt(chart),
+            )
         };
         let (entry_x, entry_y) = legend.entry_origin(
             chart.legend_position,

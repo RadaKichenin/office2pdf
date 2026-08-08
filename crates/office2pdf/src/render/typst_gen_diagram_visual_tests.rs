@@ -2,8 +2,9 @@ use super::*;
 use crate::ir::ChartAreaOutline;
 use crate::ir::DataLabels;
 use crate::render::typst_gen::diagrams::{
-    CHART_AREA_OUTLINE, CHART_AUTOMATIC_LINE, CHART_DEFAULT_TEXT_PT, LEGEND_KEY_LEN_PT,
-    SERIES_LINE_PT,
+    CHART_AREA_OUTLINE, CHART_AUTOMATIC_LINE, CHART_DEFAULT_TEXT_PT, LABEL_W, LEGEND_KEY_LEN_PT,
+    ROW, SERIES_LINE_PT, TICK_GAP, chart_category_band_pt, chart_category_gutter_pt,
+    chart_tick_band_pt,
 };
 
 #[test]
@@ -2998,4 +2999,67 @@ fn a_radar_with_no_positive_value_keeps_the_table_fallback() {
     chart.series[0].values = vec![0.0; 5];
     chart.series[1].values = vec![0.0; 5];
     assert!(chart_source(chart).contains("Radar Chart"));
+}
+
+// ----- Plot chrome sized from the text it holds (issue #706) -----
+
+fn bar_chart_at(size_pt: Option<f64>, categories: &[&str]) -> Chart {
+    let mut chart = two_series_bar_chart(Vec::new());
+    chart.chart_type = ChartType::Bar;
+    chart.categories = categories.iter().map(|c| (*c).to_string()).collect();
+    chart.series[0].values = vec![4.0; categories.len()];
+    chart.series[1].values = vec![2.0; categories.len()];
+    chart.text_style = crate::ir::ChartTextStyle {
+        size_pt,
+        bold: None,
+    };
+    chart
+}
+
+#[test]
+fn a_chart_declaring_no_size_keeps_its_chrome_where_it_was() {
+    // The band constants were calibrated at the 10pt chart default, so scaling
+    // from them has to be the identity there or every untouched chart moves.
+    let chart = bar_chart_at(None, &["Q1", "Q2"]);
+    assert_eq!(chart_tick_band_pt(&chart), TICK_GAP);
+    assert_eq!(chart_category_band_pt(&chart), ROW);
+}
+
+#[test]
+fn a_larger_declared_size_reserves_a_taller_tick_band() {
+    // The band held 10pt's worth whatever the chart asked for, so an 18pt chart
+    // gave the difference to the plot instead: on `bar-chart.pptx` the plot came
+    // out 260.88pt tall against PowerPoint's 233.28, and 243.12 with the band
+    // scaled. That is 17.76pt of a 27.60pt error, not all of it — #706 stays
+    // open for the 9.84pt residual.
+    let chart = bar_chart_at(Some(18.0), &["Q1", "Q2"]);
+    assert!(
+        (chart_tick_band_pt(&chart) - TICK_GAP * 1.8).abs() < 1e-9,
+        "an 18pt chart reserves 1.8x the 10pt band, got {}",
+        chart_tick_band_pt(&chart)
+    );
+    assert!(chart_tick_band_pt(&chart) > TICK_GAP);
+}
+
+#[test]
+fn the_category_gutter_never_narrows_below_the_calibrated_width() {
+    // The gutter is measured from the widest label, and a face that cannot be
+    // measured — wasm has no font search — must not collapse it.
+    assert!(chart_category_gutter_pt(&bar_chart_at(None, &["Q", "R"])) >= LABEL_W);
+}
+
+#[test]
+fn the_category_gutter_grows_with_the_widest_label() {
+    // A width holding text has to follow what the text says, not just its size.
+    // `bar-chart.pptx`'s labels are as short as `4th Qtr`, so scaling the flat
+    // constant by the band's 1.8 would reserve far more than they need.
+    let short: f64 = chart_category_gutter_pt(&bar_chart_at(Some(18.0), &["Q1", "Q2"]));
+    let long: f64 = chart_category_gutter_pt(&bar_chart_at(
+        Some(18.0),
+        &["Q1", "A considerably longer category label"],
+    ));
+    assert!(
+        long > short,
+        "a longer label must widen the gutter: {long} against {short}"
+    );
 }
