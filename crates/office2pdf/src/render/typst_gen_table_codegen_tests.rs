@@ -831,14 +831,14 @@ fn bottom_aligned_spill_cell_anchors_its_line_box_at_the_bottom() {
     let result = generate_typst(&doc).unwrap().source;
     assert!(
         result.contains(&format!(
-            "#place(left + bottom, box(width: 200pt, height: {}pt, clip: true)[",
+            "place(left + bottom, box(width: 200pt, height: {}pt, clip: true)",
             format_f64(line_box_height_pt)
         )),
         "bottom cell's spill box must anchor at the bottom, sized to its own line: {result}"
     );
     assert!(
         result.contains(&format!(
-            "])#box(width: 0pt, height: {}pt)",
+            "#box(width: 0pt, height: {}pt)",
             format_f64(line_box_height_pt)
         )),
         "the in-flow strut must hold the same line height in points: {result}"
@@ -888,11 +888,11 @@ fn center_aligned_spill_cell_keeps_the_centered_wrapper() {
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
     let result = generate_typst(&doc).unwrap().source;
     assert!(
-        result.contains("#place(left + horizon, box(width: 200pt, height: 1.3em, clip: true)["),
+        result.contains("place(left + horizon, box(width: 200pt, height: 1.3em, clip: true)"),
         "an explicitly centred spill cell keeps its current wrapper: {result}"
     );
     assert!(
-        result.contains("])#box(width: 0pt, height: 1.3em)"),
+        result.contains("#box(width: 0pt, height: 1.3em)"),
         "an explicitly centred spill cell keeps its current strut: {result}"
     );
 }
@@ -1356,5 +1356,71 @@ fn test_slide_table_empty_cell_blank_line_uses_the_powerpoint_line_box() {
     assert!(
         source.contains("height: 24pt"),
         "the blank line must be PowerPoint's 1.2em (24pt at 20pt), got: {source}"
+    );
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+/// A spill cell's text stays on one line.
+///
+/// The clip box states a width, and a Typst box wraps its content at the width
+/// it states. So the line broke into several, the clip hid all but one, and
+/// because the wrapper is anchored vertically the one left visible was the
+/// *tail*: the merged title in `merged_row_overflows_page_column.xlsx`
+/// rendered starting mid-sentence with its opening words gone (issue #811).
+///
+/// Asserted on baselines rather than on the emitted markup, because the defect
+/// was invisible in the source — the wrapper read exactly as intended and it
+/// was Typst's layout of it that differed.
+#[test]
+fn spill_cell_text_is_not_wrapped_by_its_clip_box() {
+    let long_text: &str = "This merged full-width title is deliberately far wider \
+                           than the first horizontal page-column so that it must \
+                           either be clipped at the page break or continued on the \
+                           following page-column of the printout.";
+    let cell = TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: long_text.to_string(),
+                style: TextStyle {
+                    font_family: Some("Libertinus Serif".to_string()),
+                    font_size: Some(10.0),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })],
+        // Far narrower than the text, which is the whole point of a spill.
+        spill_width: Some(120.0),
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            cells: vec![cell],
+            height: None,
+        }],
+        column_widths: vec![60.0],
+        prints_gridlines: false,
+        prints_headings: false,
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+
+    let output = generate_typst(&doc).expect("document should generate");
+    let runs = crate::render::pdf::compiled_text_runs(&output.source, 0)
+        .unwrap_or_else(|error| panic!("compile failed: {error}\n{}", output.source));
+    let mut baselines: Vec<f64> = runs
+        .iter()
+        .filter(|run| run.text.contains("merged") || run.text.contains("printout"))
+        .map(|run| run.baseline_pt)
+        .collect();
+    baselines.sort_by(f64::total_cmp);
+    baselines.dedup_by(|left, right| (*left - *right).abs() < 0.01);
+    assert_eq!(
+        baselines.len(),
+        1,
+        "a spill cell's text must occupy exactly one line, got {} baselines: {baselines:?}",
+        baselines.len()
     );
 }
