@@ -253,6 +253,14 @@ fn test_generate_alignment_justify() {
     // Typst hangs line-final punctuation into the margin when justifying.
     // Word does not, so a justified line ending in a comma overshot the
     // right margin by about 0.8 of the comma's advance (issue #640).
+    // Typst lets a justified line squeeze its spaces to two thirds of their
+    // natural width. Word's own exports never go below 0.9332, and on the
+    // audited letter our 0.9014 squeeze pulled one more syllable onto a line
+    // and split a Korean word across the break (issue #639).
+    assert!(
+        result.contains("justification-limits: (spacing: (min: 80%, max: 150%))"),
+        "justified text must not shrink its spaces below their natural width: {result}"
+    );
     assert!(
         result.contains("overhang: false"),
         "justified text must not hang punctuation past the margin: {result}"
