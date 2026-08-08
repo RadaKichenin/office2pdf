@@ -223,6 +223,9 @@ fn test_charts_stay_on_first_column_group() {
             theme_accent_colors: Vec::new(),
             chart_area_outline: ChartAreaOutline::Default,
             text_font_family: None,
+            text_style: crate::ir::ChartTextStyle::default(),
+            category_axis_text_style: crate::ir::ChartTextStyle::default(),
+            value_axis_text_style: crate::ir::ChartTextStyle::default(),
         },
     )];
     let pages = split_sheet_page_by_width(page, None, None);
