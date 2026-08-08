@@ -958,7 +958,13 @@ fn boundary_conflict_rank(side: &BorderSide) -> BoundaryConflictRank {
 /// header cell's bottom slot: both sides then paint the same
 /// boundary-anchored band — coincident and invisible where they overlap on
 /// page 1, while the header's copy repeats with it.
-fn resolve_boundary_painted_borders(
+///
+/// A sheet that prints headings is the second exception, and a broader one:
+/// there "exactly one declaration" does not hold at any ordinary horizontal
+/// boundary, because a band left on one side alone closes only one side of a
+/// page break codegen cannot see. Both are kept. See
+/// `keeps_coincident_horizontal_bands` in the body (issue #722).
+pub(super) fn resolve_boundary_painted_borders(
     table: &Table,
     num_cols: usize,
     repeating_header_boundaries: &[usize],
@@ -1061,6 +1067,32 @@ fn resolve_boundary_painted_borders(
         }
     }
 
+    // Whether a horizontal boundary keeps *both* its declarations instead of
+    // resolving them down to one.
+    //
+    // Codegen cannot see the page breaks Typst chooses, so a boundary painted
+    // by only one of its two owners is closed on only one side of a break. At
+    // a tie the rule below hands the boundary to the top owner — the row
+    // *below* — which on an intermediate page is the first row of the *next*
+    // page, leaving the previous page's bottom edge open. Excel frames every
+    // page across the full block width, and the row-number gutter's span was
+    // the part left hanging: the data span survived only because #622's
+    // gridline seeds happen to put a band there independently, and with
+    // gridlines off the whole bottom edge would go (issue #722).
+    //
+    // Inverting the tie would only move the hole to the top of the next page,
+    // so both bands are kept. They are one rule drawn twice at the same
+    // coordinate, which is what `augment_page_with_print_headings` already
+    // assumes when it declares a bottom on every gutter cell: "adjacent
+    // cells' coincident bands overlap invisibly, as in #622". The cost is a
+    // doubled draw op per interior boundary, visible in a rect census but not
+    // in the ink.
+    //
+    // Scoped to sheets that print headings, which is where the frame is a
+    // stated Excel behaviour; Word tables keep the single-owner resolution so
+    // their calibrated border geometry is untouched.
+    let keeps_coincident_horizontal_bands: bool = table.prints_headings;
+
     let mut painted: Vec<Vec<Option<CellBorder>>> = table
         .rows
         .iter()
@@ -1082,6 +1114,7 @@ fn resolve_boundary_painted_borders(
         let bottom_is_repeating_header_boundary: bool =
             repeating_header_boundaries.contains(&bottom_boundary);
         if let Some(side) = &resolved.bottom
+            && (bottom_is_repeating_header_boundary || !keeps_coincident_horizontal_bands)
             && column_tracks.clone().all(|col| {
                 top_sides
                     .get(&(bottom_boundary, col))
