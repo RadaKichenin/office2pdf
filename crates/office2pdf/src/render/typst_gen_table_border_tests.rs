@@ -1357,3 +1357,72 @@ fn test_gridlines_absent_without_the_flag() {
         "gridlines must not leak outside the boundary-band regime: {result}"
     );
 }
+
+/// A print-heading sheet keeps both declarations at a horizontal boundary.
+///
+/// Codegen cannot see the page breaks Typst chooses, so a boundary painted by
+/// only one of its two owners is closed on only one side of a break. At a tie
+/// the resolver hands the boundary to the top owner — the row *below* — which
+/// on an intermediate page is the first row of the next page, leaving the
+/// previous page's bottom edge open across the row-number gutter (issue #722).
+///
+/// Word tables keep the single-owner resolution, which the second half asserts:
+/// their border geometry is calibrated against it.
+#[test]
+fn test_print_heading_boundary_keeps_both_coincident_bands() {
+    let rule = || BorderSide {
+        width: 1.0,
+        color: Color::black(),
+        style: BorderLineStyle::Solid,
+    };
+    let cell = |text: &str| TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: text.to_string(),
+                style: TextStyle::default(),
+                href: None,
+                footnote: None,
+            }],
+        })],
+        // Both rows declare the same rule at the boundary between them.
+        border: Some(CellBorder {
+            top: Some(rule()),
+            bottom: Some(rule()),
+            left: None,
+            right: None,
+        }),
+        ..TableCell::default()
+    };
+    let table = |prints_headings: bool| Table {
+        rows: vec![
+            TableRow {
+                cells: vec![cell("1")],
+                height: None,
+            },
+            TableRow {
+                cells: vec![cell("2")],
+                height: None,
+            },
+        ],
+        column_widths: vec![60.0],
+        prints_headings,
+        ..Table::default()
+    };
+
+    let painted_bottom = |prints_headings: bool| -> bool {
+        super::tables::resolve_boundary_painted_borders(&table(prints_headings), 1, &[])[0][0]
+            .as_ref()
+            .is_some_and(|border| border.bottom.is_some())
+    };
+
+    assert!(
+        painted_bottom(true),
+        "a print-heading sheet must keep the upper row's bottom band, so a page \
+         break at that boundary still closes the page"
+    );
+    assert!(
+        !painted_bottom(false),
+        "an ordinary table must still resolve the tie to a single owner"
+    );
+}
