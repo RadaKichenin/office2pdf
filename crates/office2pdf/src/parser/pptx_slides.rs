@@ -470,6 +470,7 @@ fn collect_chart_elements<R: Read + std::io::Seek>(
             chart_data.get(&c_ref.chart_rid).map(|chart| {
                 let mut chart: Chart = chart.clone();
                 chart.theme_accent_colors = theme_accents.clone();
+                chart.host = crate::ir::ChartHost::Presentation;
                 chart.text_font_family =
                     theme_fonts.resolve_chart_text_typeface(chart.text_font_family.as_deref());
                 FixedElement {

@@ -222,6 +222,7 @@ fn test_charts_stay_on_first_column_group() {
             bar_band_layout: crate::ir::BarBandLayout::default(),
             theme_accent_colors: Vec::new(),
             chart_area_outline: ChartAreaOutline::Default,
+            host: crate::ir::ChartHost::default(),
             text_font_family: None,
             text_style: crate::ir::ChartTextStyle::default(),
             category_axis_text_style: crate::ir::ChartTextStyle::default(),

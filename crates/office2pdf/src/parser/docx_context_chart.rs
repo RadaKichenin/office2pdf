@@ -63,6 +63,7 @@ pub(in super::super) fn build_chart_context_from_xml(
             && let Some(mut chart) = chart::parse_chart_xml(&chart_xml)
         {
             chart.theme_accent_colors = theme_accents.clone();
+            chart.host = crate::ir::ChartHost::WordProcessing;
             chart.text_font_family =
                 theme_fonts.resolve_chart_text_typeface(chart.text_font_family.as_deref());
             charts.entry(body_index).or_default().push(chart);

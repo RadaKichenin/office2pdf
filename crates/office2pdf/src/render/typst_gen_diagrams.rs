@@ -464,8 +464,12 @@ const MAJOR_UNIT_FRACTIONS: [(f64, f64); 3] = [(2.0, 0.2), (5.0, 0.5), (10.0, 1.
 /// (issue #673).
 pub(super) const CHART_AUTOMATIC_LINE: &str = "0.75pt + rgb(134, 134, 134)";
 
-/// Outline Office draws around the whole chart area — plot, axis labels and
+/// Outline **Excel** draws around the whole chart area — plot, axis labels and
 /// legend alike — when the file states no `c:chartSpace/c:spPr/a:ln`.
+///
+/// Not Office's in general: PowerPoint draws none in the same case, so which
+/// hosts reach this is [`automatic_chart_area_stroke`]'s decision, not this
+/// constant's (issue #823).
 ///
 /// It is the same stroke as the gridlines: the native Excel export of
 /// `WithChart.xlsx` draws the border as a single grey pixel at 150 DPI. In the
@@ -475,6 +479,27 @@ pub(super) const CHART_AUTOMATIC_LINE: &str = "0.75pt + rgb(134, 134, 134)";
 /// outline a chart has no boundary against the sheet behind it (#637).
 pub(super) const CHART_AREA_OUTLINE: &str = CHART_AUTOMATIC_LINE;
 
+/// What "the automatic chart-area outline" is for the application whose package
+/// the chart came out of.
+///
+/// Excel draws one and PowerPoint draws none. [`CHART_AREA_OUTLINE`] was
+/// calibrated against an Excel export, and applying it everywhere put a border
+/// around every chart on a slide that the deck never asks for: on
+/// `bar-chart.pptx` a 480.00 x 301.00pt rectangle at 0.75pt, where a pixel scan
+/// of the native export finds no straight run longer than the axis line
+/// (issue #823).
+///
+/// Word's automatic outline is unmeasured, so it keeps Excel's — which is what
+/// every chart took before this.
+fn automatic_chart_area_stroke(host: crate::ir::ChartHost) -> &'static str {
+    match host {
+        crate::ir::ChartHost::Presentation => "none",
+        crate::ir::ChartHost::Spreadsheet | crate::ir::ChartHost::WordProcessing => {
+            CHART_AREA_OUTLINE
+        }
+    }
+}
+
 /// The Typst `stroke:` argument for a chart's own area outline.
 ///
 /// The default is *not* unconditional: chart parts across the corpus declare
@@ -482,9 +507,13 @@ pub(super) const CHART_AREA_OUTLINE: &str = CHART_AUTOMATIC_LINE;
 /// of their own, so drawing [`CHART_AREA_OUTLINE`] regardless would put a border
 /// on charts that ask for none and the wrong border on charts that ask for
 /// theirs. See [`ChartAreaOutline`] for the fixtures covering each case (#637).
-fn chart_area_stroke(outline: &ChartAreaOutline) -> String {
+///
+/// Nor is the automatic case itself one answer: `host` decides it, because
+/// Excel and PowerPoint disagree about what an automatic outline is. See
+/// [`automatic_chart_area_stroke`] (#823).
+fn chart_area_stroke(outline: &ChartAreaOutline, host: crate::ir::ChartHost) -> String {
     match outline {
-        ChartAreaOutline::Default => CHART_AREA_OUTLINE.to_string(),
+        ChartAreaOutline::Default => automatic_chart_area_stroke(host).to_string(),
         ChartAreaOutline::Suppressed => "none".to_string(),
         // A width or colour the file left out, or named in a form this parser
         // does not resolve, falls back to the automatic one rather than to
@@ -1150,7 +1179,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
         "#box(width: {}pt, height: {}pt, stroke: {})[",
         format_f64(total_w),
         format_f64(total_h),
-        chart_area_stroke(&chart.chart_area_outline)
+        chart_area_stroke(&chart.chart_area_outline, chart.host)
     );
 
     // Plot-area origin (top-left of the plotting rectangle), shifted by
@@ -1596,7 +1625,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
         "#box(width: {}pt, height: {}pt, stroke: {})[",
         format_f64(total_w),
         format_f64(total_h),
-        chart_area_stroke(&chart.chart_area_outline)
+        chart_area_stroke(&chart.chart_area_outline, chart.host)
     );
 
     // `<c:delete val="1"/>` switches an axis off; see `generate_chart_axis`.
@@ -1884,7 +1913,7 @@ fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64
         "#box(width: {}pt, height: {}pt, stroke: {})[",
         format_f64(total_w),
         format_f64(total_h),
-        chart_area_stroke(&chart.chart_area_outline)
+        chart_area_stroke(&chart.chart_area_outline, chart.host)
     );
 
     // Office puts the first category at twelve o'clock and runs clockwise, the
@@ -2104,7 +2133,7 @@ fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, 
         "#box(width: {}pt, height: {}pt, stroke: {})[",
         format_f64(total_w),
         format_f64(total_h),
-        chart_area_stroke(&chart.chart_area_outline)
+        chart_area_stroke(&chart.chart_area_outline, chart.host)
     );
 
     // Office starts the first wedge at twelve o'clock and sweeps clockwise.
