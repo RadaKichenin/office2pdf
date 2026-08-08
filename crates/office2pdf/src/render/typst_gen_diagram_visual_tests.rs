@@ -2912,3 +2912,90 @@ fn an_axis_size_overrides_the_chart_space_size_for_that_axis_only() {
     // The title still follows the chart space.
     assert!(source.contains("#text(size: 21.6pt, weight: \"bold\")[Sales]"));
 }
+
+// ----- Radar charts (issue #679) -----
+
+fn radar_chart() -> Chart {
+    let mut chart = two_series_bar_chart(Vec::new());
+    chart.chart_type = ChartType::Other(crate::ir::RADAR_CHART_LABEL.to_string());
+    chart.categories = vec![
+        "Deploy".to_string(),
+        "Startup".to_string(),
+        "Deps".to_string(),
+        "Portable".to_string(),
+        "Coverage".to_string(),
+    ];
+    chart.series[0].values = vec![5.0, 5.0, 5.0, 5.0, 3.0];
+    chart.series[1].values = vec![2.0, 2.0, 1.0, 3.0, 5.0];
+    chart.title = Some("Qualitative".to_string());
+    chart
+}
+
+#[test]
+fn a_radar_chart_draws_a_plot_rather_than_a_data_table() {
+    // #544 replaced the silently dropped chart with a bordered rectangle
+    // holding an italic caption and a table of the series values, so a slide
+    // whose primary content was a radar still lost it.
+    let source: String = chart_source(radar_chart());
+    assert!(
+        !source.contains("Radar Chart"),
+        "the type-label caption belongs to the table fallback, got:\n{source}"
+    );
+    assert!(
+        source.contains("path(closed: true"),
+        "a radar is drawn as closed rings and polygons, got:\n{source}"
+    );
+}
+
+#[test]
+fn a_radar_draws_one_closed_polygon_per_series() {
+    // Two series over five categories: five web rings plus two series rings.
+    let source: String = chart_source(radar_chart());
+    let closed: usize = source.matches("path(closed: true").count();
+    assert!(
+        closed > 2,
+        "expected a ring per major unit plus one polygon per series, got {closed} in:\n{source}"
+    );
+    // Each series polygon carries the series stroke width; the web does not.
+    let series_rings: usize = source
+        .matches(&format!(
+            "path(closed: true, stroke: {}pt + ",
+            format_f64(SERIES_LINE_PT)
+        ))
+        .count();
+    assert_eq!(
+        series_rings, 2,
+        "one closed polygon per series, got:\n{source}"
+    );
+}
+
+#[test]
+fn a_radar_labels_every_category_and_keeps_its_title() {
+    let source: String = chart_source(radar_chart());
+    for category in ["Deploy", "Startup", "Deps", "Portable", "Coverage"] {
+        assert!(
+            source.contains(&format!("[{category}]")),
+            "category {category} must be labelled, got:\n{source}"
+        );
+    }
+    assert!(source.contains("[Qualitative]"), "got:\n{source}");
+}
+
+#[test]
+fn a_radar_with_too_few_categories_keeps_the_table_fallback() {
+    // Two spokes cannot close a ring, so the table still says more than a
+    // degenerate plot would.
+    let mut chart = radar_chart();
+    chart.categories = vec!["Deploy".to_string(), "Startup".to_string()];
+    chart.series[0].values = vec![5.0, 5.0];
+    chart.series[1].values = vec![2.0, 2.0];
+    assert!(chart_source(chart).contains("Radar Chart"));
+}
+
+#[test]
+fn a_radar_with_no_positive_value_keeps_the_table_fallback() {
+    let mut chart = radar_chart();
+    chart.series[0].values = vec![0.0; 5];
+    chart.series[1].values = vec![0.0; 5];
+    assert!(chart_source(chart).contains("Radar Chart"));
+}

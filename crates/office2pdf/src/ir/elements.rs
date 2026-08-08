@@ -160,6 +160,13 @@ pub enum ChartAreaOutline {
     },
 }
 
+/// The label the parser gives a `<c:radarChart>`.
+///
+/// The radar family has no `ChartType` variant of its own, so the parser and
+/// the renderer agree through this one string rather than repeating the
+/// literal (issue #679).
+pub const RADAR_CHART_LABEL: &str = "Radar Chart";
+
 /// A chart extracted from an embedded chart object.
 #[derive(Debug, Clone)]
 pub struct Chart {

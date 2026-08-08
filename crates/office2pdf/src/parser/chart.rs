@@ -38,7 +38,7 @@ const CHART_TAG_TYPES: &[(&[u8], ChartType)] = &[
 /// Dropping them instead made the chart vanish with no diagnostic, taking the
 /// whole graphic frame with it (issue #544).
 const UNPLOTTED_CHART_LABELS: &[(&[u8], &str)] = &[
-    (b"radarChart", "Radar Chart"),
+    (b"radarChart", crate::ir::RADAR_CHART_LABEL),
     (b"bubbleChart", "Bubble Chart"),
     (b"stockChart", "Stock Chart"),
     (b"surfaceChart", "Surface Chart"),
