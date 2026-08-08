@@ -2003,6 +2003,39 @@ fn write_page_format_state(out: &mut String) {
     // and footer bands, which do not go through the paragraph settings, are
     // covered too.
     let _ = writeln!(out, "#set text(overhang: false)");
+    // How far a justified line may squeeze its spaces. Typst's default floor
+    // is two thirds of the space's natural width, which is far looser than
+    // Word: on the audited official letter it squeezed 14 spaces to 90.1% each
+    // to pull one more syllable onto a line, splitting 예정이오니 across the
+    // break where Word wraps the word whole (issue #639).
+    //
+    // Word does shrink — the issue's "Word only ever stretches" is wrong.
+    // Measuring every justified line of the ten native DOCX exports in
+    // `tests/golden_mocks/business/expected/docx/`, as the rendered space gap
+    // over the face's own `hmtx` advance, Word's spaces run from 0.9332 to
+    // 1.3400 of natural. So the real floor sits in (0.9014, 0.9332]: below the
+    // tightest line Word does set, above the one it refused.
+    //
+    // The number here is not that floor, because Typst's line breaker also
+    // *prices* a shrink against the allowance it is given — halve the
+    // allowance and a 6.6% squeeze it used to prefer loses to the alternative
+    // break. So the constant is calibrated on the corpus instead: the letter's
+    // over-shrink disappears at every value tested up to 85%, and at 88% the
+    // research report's legitimate 0.9344 line starts wrapping early. 80% is
+    // the middle of that window. At it, the only line that moves anywhere in
+    // the 30-file corpus is the one this issue reports, and the three files
+    // whose lines Word genuinely compresses keep their 0.9344/0.9639/0.9653
+    // spaces against Word's 0.9332/0.9634/0.9636.
+    //
+    // Only the floor moves; the 150% ceiling is Typst's own default.
+    //
+    // Set for the document, next to the overhang rule above, so every
+    // justified paragraph is covered whether it comes through the body, a
+    // list or a table cell. It is inert wherever `justify` is false.
+    let _ = writeln!(
+        out,
+        "#set par(justification-limits: (spacing: (min: 80%, max: 150%)))"
+    );
     let _ = writeln!(
         out,
         "#let {PAGE_FORMAT_STATE} = state(\"{PAGE_FORMAT_STATE}\", \"1\")"
