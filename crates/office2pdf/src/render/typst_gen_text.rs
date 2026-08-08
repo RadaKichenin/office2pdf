@@ -1205,10 +1205,15 @@ pub(super) fn generate_runs(out: &mut String, runs: &[Run], eojeol_wrap: EojeolW
     }
 
     for (framed, pieces) in &units {
-        if *framed {
-            write_eojeol_frame_open(out, pieces, line_box_em);
-        }
-        write_eojeol_pieces(out, pieces);
+        // A framed eojeol restores the paragraph's edges inside itself, so a
+        // synthetic-oblique box within it has to claim the same descent or
+        // the frame's baseline shift over-corrects by exactly that much.
+        let seat_bottom_pt: Option<f64> = if *framed {
+            write_eojeol_frame_open(out, pieces, line_box_em)
+        } else {
+            None
+        };
+        write_eojeol_pieces(out, pieces, seat_bottom_pt);
         if *framed {
             write_eojeol_frame_close(out, line_box_em);
         }
@@ -1228,7 +1233,7 @@ struct EojeolPiece {
 }
 
 /// Emits pieces, re-joining every neighbouring pair cut from the same run.
-fn write_eojeol_pieces(out: &mut String, pieces: &[EojeolPiece]) {
+fn write_eojeol_pieces(out: &mut String, pieces: &[EojeolPiece], seat_bottom_pt: Option<f64>) {
     let mut pending: Option<(usize, Run)> = None;
     for piece in pieces {
         match pending {
@@ -1237,14 +1242,14 @@ fn write_eojeol_pieces(out: &mut String, pieces: &[EojeolPiece]) {
             }
             _ => {
                 if let Some((_, previous)) = pending.take() {
-                    generate_run(out, &previous);
+                    generate_run_seated(out, &previous, false, seat_bottom_pt);
                 }
                 pending = Some((piece.run_index, piece.run.clone()));
             }
         }
     }
     if let Some((_, previous)) = pending {
-        generate_run(out, &previous);
+        generate_run_seated(out, &previous, false, seat_bottom_pt);
     }
 }
 
@@ -1503,10 +1508,10 @@ fn write_eojeol_frame_open(
     out: &mut String,
     token: &[EojeolPiece],
     line_box_em: Option<(f64, f64)>,
-) {
+) -> Option<f64> {
     let Some((top_em, bottom_em)) = line_box_em else {
         out.push_str("#box[");
-        return;
+        return None;
     };
     let font_size_pt: f64 =
         largest_font_size_pt(token.iter().filter_map(|piece| piece.run.style.font_size));
@@ -1519,6 +1524,7 @@ fn write_eojeol_frame_open(
         format_f64(top_pt),
         format_f64(bottom_pt)
     );
+    Some(bottom_pt)
 }
 
 fn write_eojeol_frame_close(out: &mut String, line_box_em: Option<(f64, f64)>) {
@@ -1819,6 +1825,18 @@ pub(super) fn generate_run(out: &mut String, run: &Run) {
 /// single space therefore still loses it; that path needs a paragraph-level
 /// notion of line start, which this does not add.
 pub(super) fn generate_run_at(out: &mut String, run: &Run, opens_line: bool) {
+    generate_run_seated(out, run, opens_line, None);
+}
+
+/// As [`generate_run_at`], plus the descent the run's line box carries below
+/// the baseline, in points, when the caller knows it.
+///
+/// Only the synthetic-oblique path reads it, and only to keep its slant box
+/// claiming the same space below the baseline the unslanted text would have.
+/// `None` means "not stated", and the box then ends at the baseline — exact
+/// wherever nothing outside it depends on that descent, which is every path
+/// but the eojeol frame's (issue #686).
+fn generate_run_seated(out: &mut String, run: &Run, opens_line: bool, seat_bottom_pt: Option<f64>) {
     if let Some(ref content) = run.footnote {
         // The note's runs carry the style its `w:pStyle` and `w:rPr` resolved
         // to, so they emit through the ordinary run path rather than as a bare
@@ -1835,11 +1853,11 @@ pub(super) fn generate_run_at(out: &mut String, run: &Run, opens_line: bool) {
         || run.text.contains(HANGUL_KINSOKU_BREAK_CHAR)
         || run.text.contains(EAST_ASIAN_AUTO_SPACE_CHAR)
     {
-        write_run_with_break_markers(out, run, opens_line);
+        write_run_with_break_markers(out, run, opens_line, seat_bottom_pt);
         return;
     }
 
-    write_run_segment(out, run, &run.text, opens_line);
+    write_run_segment(out, run, &run.text, opens_line, seat_bottom_pt);
 }
 
 /// Expands the PPTX in-text markers: a soft line break becomes
@@ -1850,7 +1868,12 @@ pub(super) fn generate_run_at(out: &mut String, run: &Run, opens_line: bool) {
 /// the mark to the frame, so the two move to the next line together, and
 /// the zero-size frame neither disturbs line metrics nor leaves a
 /// zero-width space in the PDF text layer.
-fn write_run_with_break_markers(out: &mut String, run: &Run, opens_line: bool) {
+fn write_run_with_break_markers(
+    out: &mut String,
+    run: &Run,
+    opens_line: bool,
+    seat_bottom_pt: Option<f64>,
+) {
     let mut segment_start: usize = 0;
 
     for (offset, ch) in run.text.char_indices() {
@@ -1872,6 +1895,7 @@ fn write_run_with_break_markers(out: &mut String, run: &Run, opens_line: bool) {
                 run,
                 &run.text[segment_start..offset],
                 opens_line && segment_start == 0,
+                seat_bottom_pt,
             );
         }
         out.push_str(replacement);
@@ -1884,11 +1908,18 @@ fn write_run_with_break_markers(out: &mut String, run: &Run, opens_line: bool) {
             run,
             &run.text[segment_start..],
             opens_line && segment_start == 0,
+            seat_bottom_pt,
         );
     }
 }
 
-fn write_run_segment(out: &mut String, run: &Run, text: &str, opens_line: bool) {
+fn write_run_segment(
+    out: &mut String,
+    run: &Run,
+    text: &str,
+    opens_line: bool,
+    seat_bottom_pt: Option<f64>,
+) {
     let style = &run.style;
 
     let needs_all_caps: bool = matches!(style.all_caps, Some(true));
@@ -1914,11 +1945,195 @@ fn write_run_segment(out: &mut String, run: &Run, text: &str, opens_line: bool) 
         out.push_str(wrapper);
     }
 
-    write_run_content(out, &escaped, style);
+    match synthetic_oblique_units(style, &source) {
+        Some(units) => {
+            write_synthetic_oblique_content(out, style, &source, &units, opens_line, seat_bottom_pt)
+        }
+        None => write_run_content(out, &escaped, style),
+    }
 
     for _ in &wrappers {
         out.push(']');
     }
+}
+
+/// The shear Word and PowerPoint apply to a run marked italic whose resolved
+/// face ships no italic member.
+///
+/// Measured off a native Word export of a Malgun Gothic `<w:i/>` run: its text
+/// matrix reads `trm="38 0 12.91406 38"`, a slope of 12.91406/38 = 0.340
+/// (issue #686). Typst has no synthetic style of its own — it selects the
+/// upright face and the emphasis disappears without a warning.
+///
+/// Typst's `skew` takes an angle, so the slope is carried as `atan(0.34)` =
+/// 18.778 degrees, whose tangent is 0.3399994 — 6.5e-7 of slope from the
+/// measured value.
+const SYNTHETIC_OBLIQUE_ANGLE_DEG: f64 = 18.778;
+
+/// One stretch of a run that the synthetic-oblique path treats alike.
+enum ObliqueUnit<'a> {
+    /// Shaped by a family that has a real italic face; the engine handles it.
+    RealItalic(&'a str),
+    /// Slanted by hand, inside one atomic box.
+    Slanted(&'a str),
+    /// Whitespace, kept outside the boxes so a line can still break on it.
+    Space(&'a str),
+}
+
+/// How `text` has to be split so every part is slanted the way its own face
+/// requires, or `None` when the ordinary `style: "italic"` path covers it.
+///
+/// `None` is the overwhelmingly common answer — a non-italic run, or an italic
+/// one on a face that has the variant — and keeps those runs emitting exactly
+/// what they emitted before.
+fn synthetic_oblique_units<'a>(style: &TextStyle, text: &'a str) -> Option<Vec<ObliqueUnit<'a>>> {
+    if !matches!(style.italic, Some(true)) || text.is_empty() {
+        return None;
+    }
+    let family: Option<&str> = style.font_family.as_deref();
+    let east_asian: Option<&str> = style.east_asian_font_family.as_deref();
+    let latin_needs_slant: bool = font_subst::needs_synthetic_oblique(
+        family,
+        east_asian,
+        text,
+        font_subst::TextScript::Latin,
+    );
+    // The East Asian half of a mixed run resolves to a different face than its
+    // Latin half, so the two are asked separately — that split is exactly what
+    // the issue measured: Calibri-Italic for the Latin, a synthesised slant
+    // for the Hangul.
+    let east_asian_script: font_subst::TextScript = font_subst::text_script(text);
+    let east_asian_needs_slant: bool = east_asian_script != font_subst::TextScript::Latin
+        && font_subst::needs_synthetic_oblique(family, east_asian, text, east_asian_script);
+    if !latin_needs_slant && !east_asian_needs_slant {
+        return None;
+    }
+
+    let needs_slant = |character: char| -> bool {
+        if font_subst::is_east_asian_char(character) {
+            east_asian_needs_slant
+        } else {
+            latin_needs_slant
+        }
+    };
+    Some(split_oblique_units(text, needs_slant))
+}
+
+/// Group `text` into [`ObliqueUnit`]s.
+///
+/// A slant box is a single object to UAX #14, so nothing inside one can break.
+/// The grouping therefore keeps every break opportunity the text already had:
+/// whitespace stays outside the boxes, each East Asian character gets its own
+/// box — Korean and Japanese break between characters — and a Latin word,
+/// which is atomic anyway, stays whole so its kerning and ligatures survive.
+fn split_oblique_units(text: &str, needs_slant: impl Fn(char) -> bool) -> Vec<ObliqueUnit<'_>> {
+    fn push_unit<'a>(units: &mut Vec<ObliqueUnit<'a>>, chunk: &'a str, kind: (bool, bool)) {
+        if chunk.is_empty() {
+            return;
+        }
+        units.push(match kind {
+            (true, _) => ObliqueUnit::Space(chunk),
+            (false, true) => ObliqueUnit::Slanted(chunk),
+            (false, false) => ObliqueUnit::RealItalic(chunk),
+        });
+    }
+
+    let mut units: Vec<ObliqueUnit<'_>> = Vec::new();
+    let mut start: usize = 0;
+    let mut current: Option<(bool, bool)> = None; // (is_space, is_slanted)
+
+    for (offset, character) in text.char_indices() {
+        let is_space: bool = character.is_whitespace();
+        let is_slanted: bool = !is_space && needs_slant(character);
+        let kind: (bool, bool) = (is_space, is_slanted);
+        // An East Asian character is its own break opportunity, so it always
+        // starts a new box rather than joining the one before it.
+        let breaks_group: bool =
+            current != Some(kind) || (is_slanted && font_subst::is_east_asian_char(character));
+        if breaks_group {
+            if let Some(kind) = current {
+                push_unit(&mut units, &text[start..offset], kind);
+            }
+            start = offset;
+            current = Some(kind);
+        }
+    }
+    if let Some(kind) = current {
+        push_unit(&mut units, &text[start..], kind);
+    }
+    units
+}
+
+/// Write a run whose slant the engine cannot supply on its own.
+///
+/// One outer `#text(...)` carries the run's font list, size and colour — minus
+/// the italic the resolved face cannot honour — so the whitespace between the
+/// boxes keeps the run's own metrics, and each part inside picks the slant it
+/// needs.
+fn write_synthetic_oblique_content(
+    out: &mut String,
+    style: &TextStyle,
+    source: &str,
+    units: &[ObliqueUnit<'_>],
+    opens_line: bool,
+    seat_bottom_pt: Option<f64>,
+) {
+    let upright_style: TextStyle = TextStyle {
+        italic: None,
+        ..style.clone()
+    };
+    out.push_str("#text(");
+    write_text_params_for_text(out, &upright_style, source);
+    out.push_str(")[");
+
+    for (index, unit) in units.iter().enumerate() {
+        match unit {
+            // The line-opening space has to be a code-mode string for the same
+            // reason it does on the ordinary path: markup collapses a space at
+            // the start of a line (issue #752).
+            ObliqueUnit::Space(spaces) if index == 0 && opens_line => {
+                let _ = write!(out, "#\"{spaces}\";");
+            }
+            ObliqueUnit::Space(spaces) => out.push_str(&escape_typst(spaces)),
+            ObliqueUnit::RealItalic(chunk) => {
+                let _ = write!(out, "#text(style: \"italic\")[{}]", escape_typst(chunk));
+            }
+            ObliqueUnit::Slanted(chunk) => {
+                // Three details keep the box from moving the text it slants.
+                //
+                // `bottom-edge: "baseline"` makes the box end at the baseline,
+                // and an inline box sits on the line by its bottom edge, so
+                // the glyphs keep their seat: with the paragraph's own bottom
+                // edge they came out a descent high. `origin: bottom + left`
+                // then pivots the shear on that same baseline, so the glyphs
+                // lean without sliding — the default centre pivot moved a 11pt
+                // Malgun Gothic syllable 1.34pt left, and a descender pivot
+                // moved it 0.88pt right.
+                //
+                // A stated seat adds the descent back as padding below the
+                // box and shifts the box down by the same amount, which
+                // cancels for the glyphs and leaves the box occupying exactly
+                // what the unslanted text did. An eojeol frame needs that: it
+                // shifts its own baseline up by the descent it expects its
+                // content to carry (issue #626), and a box that ended at the
+                // baseline dropped every framed Korean italic 3.97pt.
+                let seat: String = match seat_bottom_pt {
+                    Some(bottom_pt) => format!(
+                        "inset: (bottom: {bottom}pt), baseline: {bottom}pt, ",
+                        bottom = format_f64(bottom_pt)
+                    ),
+                    None => String::new(),
+                };
+                let _ = write!(
+                    out,
+                    "#box({seat}skew(ax: -{}deg, origin: bottom + left)[#text(bottom-edge: \"baseline\")[{}]])",
+                    format_f64(SYNTHETIC_OBLIQUE_ANGLE_DEG),
+                    escape_typst(chunk)
+                );
+            }
+        }
+    }
+    out.push(']');
 }
 
 /// Builds the ordered list of `#command[` openers that wrap a run's content.

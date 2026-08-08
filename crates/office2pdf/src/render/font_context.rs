@@ -2,10 +2,12 @@
 // compiled but unreachable (visibility sealing exposed them to dead_code).
 #![cfg_attr(target_arch = "wasm32", allow(dead_code))]
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;
 use std::path::PathBuf;
+
+use super::font_subst::TextScript;
 
 #[cfg(not(target_arch = "wasm32"))]
 use typst_kit::fonts::FontSearcher;
@@ -19,6 +21,15 @@ pub(crate) struct FontSearchContext {
     available_families: HashSet<String>,
     office_families: HashSet<String>,
     user_families: HashSet<String>,
+    /// Families that ship at least one italic or oblique face. A family that
+    /// is available but absent here renders `style: "italic"` upright, which
+    /// is what the synthetic oblique exists to cover (issue #686).
+    italic_families: HashSet<String>,
+    /// Which scripts each available family has glyphs for, as
+    /// [`script_bit`] flags. Deciding *which* family a run's text lands on
+    /// needs this: the declared family leads the font list even for a script
+    /// it cannot write, and Typst falls through to the next entry per glyph.
+    family_scripts: HashMap<String, u8>,
 }
 
 impl FontSearchContext {
@@ -29,6 +40,23 @@ impl FontSearchContext {
     pub(crate) fn has_family(&self, family: &str) -> bool {
         self.available_families
             .contains(&normalize_family_name(family))
+    }
+
+    /// Whether `family` ships a real italic or oblique face.
+    pub(crate) fn has_italic_face(&self, family: &str) -> bool {
+        self.italic_families
+            .contains(&normalize_family_name(family))
+    }
+
+    /// Whether `family` has glyphs for `script`.
+    ///
+    /// Unknown families answer `false`: a face the context never saw cannot be
+    /// shown to cover anything, and every caller treats "unknown" as "keep
+    /// looking".
+    pub(crate) fn covers_script(&self, family: &str, script: TextScript) -> bool {
+        self.family_scripts
+            .get(&normalize_family_name(family))
+            .is_some_and(|scripts| scripts & script_bit(script) != 0)
     }
 
     pub(crate) fn family_source_rank(&self, family: &str) -> u8 {
@@ -65,13 +93,63 @@ impl FontSearchContext {
                 .iter()
                 .map(|family| normalize_family_name(family))
                 .collect(),
+            italic_families: HashSet::new(),
+            family_scripts: HashMap::new(),
         }
+    }
+
+    /// Declare, for a test, which families ship an italic face and which
+    /// scripts each one writes. Kept off [`Self::for_test`] so the existing
+    /// call sites that care only about availability stay as they are.
+    #[cfg(test)]
+    pub(crate) fn with_italic_and_scripts(
+        mut self,
+        italic_families: &[&str],
+        family_scripts: &[(&str, &[TextScript])],
+    ) -> Self {
+        self.italic_families = italic_families
+            .iter()
+            .map(|family| normalize_family_name(family))
+            .collect();
+        self.family_scripts = family_scripts
+            .iter()
+            .map(|(family, scripts)| {
+                let bits: u8 = scripts
+                    .iter()
+                    .fold(0, |bits, script| bits | script_bit(*script));
+                (normalize_family_name(family), bits)
+            })
+            .collect();
+        self
     }
 }
 
 fn normalize_family_name(family: &str) -> String {
     family.trim().to_ascii_lowercase()
 }
+
+/// The flag [`FontSearchContext::family_scripts`] stores `script` under.
+fn script_bit(script: TextScript) -> u8 {
+    match script {
+        TextScript::Latin => 1,
+        TextScript::Korean => 2,
+        TextScript::Japanese => 4,
+        TextScript::Chinese => 8,
+    }
+}
+
+/// A character whose presence in a face proves it writes `script`.
+///
+/// Latin is probed with a plain capital rather than with the whole alphabet:
+/// a face carrying `A` and not the rest of ASCII does not exist in practice,
+/// and every extra probe costs a coverage lookup per family.
+#[cfg(not(target_arch = "wasm32"))]
+const SCRIPT_PROBES: [(TextScript, char); 4] = [
+    (TextScript::Latin, 'A'),
+    (TextScript::Korean, '가'),
+    (TextScript::Japanese, 'あ'),
+    (TextScript::Chinese, '漢'),
+];
 
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn resolve_font_search_context(user_font_paths: &[PathBuf]) -> FontSearchContext {
@@ -84,13 +162,18 @@ pub(crate) fn resolve_font_search_context(user_font_paths: &[PathBuf]) -> FontSe
     let search_paths = merge_prioritized_paths(&office_paths, &user_paths);
     let office_families = available_families_from_paths(&office_paths, false);
     let user_families = available_families_from_paths(&user_paths, false);
-    let available_families = available_families_from_paths(&search_paths, true);
+    let FamilyIndex {
+        available_families,
+        italic_families,
+        family_scripts,
+    } = index_families_from_paths(&search_paths, true);
 
     debug!(
         office_path_count = office_paths.len(),
         user_path_count = user_paths.len(),
         search_path_count = search_paths.len(),
         available_family_count = available_families.len(),
+        italic_family_count = italic_families.len(),
         "resolved font search context"
     );
 
@@ -99,6 +182,8 @@ pub(crate) fn resolve_font_search_context(user_font_paths: &[PathBuf]) -> FontSe
         available_families,
         office_families,
         user_families,
+        italic_families,
+        family_scripts,
     }
 }
 
@@ -109,6 +194,21 @@ pub(crate) fn resolve_font_search_context(_user_font_paths: &[PathBuf]) -> FontS
 
 #[cfg(not(target_arch = "wasm32"))]
 fn available_families_from_paths(paths: &[PathBuf], include_system_fonts: bool) -> HashSet<String> {
+    index_families_from_paths(paths, include_system_fonts).available_families
+}
+
+/// What one font search says about the families it found.
+#[cfg(not(target_arch = "wasm32"))]
+struct FamilyIndex {
+    available_families: HashSet<String>,
+    italic_families: HashSet<String>,
+    family_scripts: HashMap<String, u8>,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn index_families_from_paths(paths: &[PathBuf], include_system_fonts: bool) -> FamilyIndex {
+    use typst::text::FontStyle;
+
     let mut searcher = FontSearcher::new();
     searcher.include_system_fonts(include_system_fonts);
     searcher.include_embedded_fonts(include_system_fonts);
@@ -117,11 +217,36 @@ fn available_families_from_paths(paths: &[PathBuf], include_system_fonts: bool) 
     } else {
         searcher.search_with(paths.iter().map(|path| path.as_path()))
     };
-    font_data
-        .book
-        .families()
-        .map(|(family, _)| normalize_family_name(family))
-        .collect()
+
+    let mut index = FamilyIndex {
+        available_families: HashSet::new(),
+        italic_families: HashSet::new(),
+        family_scripts: HashMap::new(),
+    };
+    for (family, infos) in font_data.book.families() {
+        let key: String = normalize_family_name(family);
+        let infos: Vec<&typst::text::FontInfo> = infos.collect();
+        if infos
+            .iter()
+            .any(|info| info.variant.style != FontStyle::Normal)
+        {
+            index.italic_families.insert(key.clone());
+        }
+        // A family's scripts are the union over its faces: a face-by-face
+        // answer would report the Hangul-less italic member of a family whose
+        // regular member does carry Hangul.
+        let scripts: u8 = SCRIPT_PROBES
+            .iter()
+            .filter(|(_, probe)| {
+                infos
+                    .iter()
+                    .any(|info| info.coverage.contains(*probe as u32))
+            })
+            .fold(0, |bits, (script, _)| bits | script_bit(*script));
+        index.family_scripts.insert(key.clone(), scripts);
+        index.available_families.insert(key);
+    }
+    index
 }
 
 #[cfg(not(target_arch = "wasm32"))]

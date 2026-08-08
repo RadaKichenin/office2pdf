@@ -1893,3 +1893,202 @@ fn test_header_field_never_states_kerning_false() {
         "and never the one that can drop glyphs: {source}"
     );
 }
+
+// ── Synthetic oblique for faces with no italic (issue #686) ──────
+
+use crate::render::font_context::FontSearchContext;
+use crate::render::font_subst::{TextScript, with_font_search_context};
+
+/// A context where Calibri ships an italic face and Malgun Gothic does not —
+/// the split the issue measured against a native Word and PowerPoint export.
+fn calibri_italic_malgun_upright_context() -> FontSearchContext {
+    FontSearchContext::for_test(Vec::new(), &["Calibri", "Malgun Gothic"], &[], &[])
+        .with_italic_and_scripts(
+            &["Calibri"],
+            &[
+                ("Calibri", &[TextScript::Latin]),
+                ("Malgun Gothic", &[TextScript::Latin, TextScript::Korean]),
+            ],
+        )
+}
+
+fn italic_run(text: &str, family: &str) -> Run {
+    Run {
+        text: text.to_string(),
+        style: TextStyle {
+            font_family: Some(family.to_string()),
+            font_size: Some(14.0),
+            italic: Some(true),
+            ..TextStyle::default()
+        },
+        href: None,
+        footnote: None,
+    }
+}
+
+fn generated_source(runs: &[Run], context: &FontSearchContext) -> String {
+    with_font_search_context(Some(context), || {
+        let mut out = String::new();
+        generate_runs(&mut out, runs, EojeolWrap::Syllable);
+        out
+    })
+}
+
+#[test]
+fn test_italic_on_face_without_italic_emits_a_synthetic_oblique() {
+    // Word slants a Malgun Gothic `<w:i/>` run itself — the measured text
+    // matrix is `trm="38 0 12.91406 38"`, a 0.340 slope. Typst has no such
+    // fallback, so without this the emphasis vanishes silently (issue #686).
+    let source = generated_source(
+        &[italic_run("한국어", "Malgun Gothic")],
+        &calibri_italic_malgun_upright_context(),
+    );
+
+    assert!(
+        source.contains("skew(ax: -18.778deg, origin: bottom + left)"),
+        "Hangul on a face with no italic must be slanted by hand, got:\n{source}"
+    );
+    assert!(
+        !source.contains("style: \"italic\""),
+        "the upright face must not also be asked for an italic it does not have, got:\n{source}"
+    );
+}
+
+#[test]
+fn test_italic_on_face_with_italic_is_left_to_the_engine() {
+    // Triangulation: the same run on a family that *does* ship an italic must
+    // take the unchanged path, or every italic in the corpus gains a box.
+    let source = generated_source(
+        &[italic_run("Report", "Calibri")],
+        &calibri_italic_malgun_upright_context(),
+    );
+
+    assert!(
+        source.contains("style: \"italic\""),
+        "a real italic face must still be selected by style, got:\n{source}"
+    );
+    assert!(
+        !source.contains("skew("),
+        "a face with a real italic must not be slanted by hand, got:\n{source}"
+    );
+}
+
+#[test]
+fn test_mixed_script_italic_slants_only_the_face_that_needs_it() {
+    // The audited deck's captions run Hangul and Latin through one `i="1"`
+    // run: GT keeps Calibri-Italic for the Latin part and synthesises the
+    // slant only for the Hangul.
+    let source = generated_source(
+        &[italic_run("PDF 변환", "Calibri")],
+        &calibri_italic_malgun_upright_context(),
+    );
+
+    assert!(
+        source.contains("skew(ax:"),
+        "the Hangul half must be slanted by hand, got:\n{source}"
+    );
+    assert!(
+        source.contains("style: \"italic\""),
+        "the Latin half must keep the real italic face, got:\n{source}"
+    );
+    assert!(
+        !source.contains("skew(ax: -18.778deg, origin: bottom + left)[PDF"),
+        "the Latin half must not be inside a slant box, got:\n{source}"
+    );
+}
+
+#[test]
+fn test_synthetic_oblique_keeps_a_break_opportunity_per_syllable() {
+    // A slant box is atomic for line breaking, so one box around the whole
+    // run would turn a wrapping Korean caption into a single overflowing
+    // line. One box per syllable keeps the break opportunities Korean text
+    // already has.
+    let source = generated_source(
+        &[italic_run("가나다", "Malgun Gothic")],
+        &calibri_italic_malgun_upright_context(),
+    );
+
+    assert_eq!(
+        source.matches("#box(skew(").count(),
+        3,
+        "each Hangul syllable needs its own box, got:\n{source}"
+    );
+}
+
+#[test]
+fn test_synthetic_oblique_keeps_latin_words_whole() {
+    // Latin wraps at spaces, so a word is already atomic: one box per word
+    // keeps its kerning and ligatures instead of splitting every letter.
+    let context = FontSearchContext::for_test(Vec::new(), &["Bodoni Ornaments"], &[], &[])
+        .with_italic_and_scripts(&[], &[("Bodoni Ornaments", &[TextScript::Latin])]);
+    let source = generated_source(&[italic_run("two words", "Bodoni Ornaments")], &context);
+
+    assert_eq!(
+        source.matches("#box(skew(").count(),
+        2,
+        "one box per word, with the space left outside them, got:\n{source}"
+    );
+}
+
+#[test]
+fn test_no_font_context_leaves_italic_alone() {
+    // On WASM there is no font context at all. Guessing "no italic face" there
+    // would slant every italic run in the document.
+    let mut out = String::new();
+    with_font_search_context(None, || {
+        generate_runs(
+            &mut out,
+            &[italic_run("한국어", "Malgun Gothic")],
+            EojeolWrap::Syllable,
+        );
+    });
+
+    assert!(
+        !out.contains("skew("),
+        "an unknown font context must not synthesise anything, got:\n{out}"
+    );
+}
+
+#[test]
+fn test_synthetic_oblique_inside_an_eojeol_frame_keeps_the_frame_s_descent() {
+    // An eojeol frame shifts its own baseline up by the descent it expects its
+    // content to carry (issue #626). A slant box that ended at the baseline
+    // carried none, so the frame's shift over-corrected and every framed
+    // Korean italic in `10_research_report_ko` dropped 3.97pt below the
+    // unframed text on its own line.
+    let context = calibri_italic_malgun_upright_context();
+    let source = with_font_search_context(Some(&context), || {
+        let mut out = String::new();
+        generate_runs(
+            &mut out,
+            &[italic_run("가나 다라", "Malgun Gothic")],
+            EojeolWrap::Eojeol {
+                line_box_em: Some((1.28789, 0.44121)),
+                measure_pt: Some(400.0),
+            },
+        );
+        out
+    });
+
+    // 0.44121em at the run's 14pt.
+    assert!(
+        source.contains("inset: (bottom: 6.17694pt), baseline: 6.17694pt"),
+        "a framed slant box must claim the frame's own descent, got:\n{source}"
+    );
+}
+
+#[test]
+fn test_synthetic_oblique_outside_a_frame_states_no_seat() {
+    // Triangulation for the seat: with nothing depending on the box's descent
+    // the box ends at the baseline, which is what keeps the unframed paths
+    // emitting the same geometry they did before.
+    let source = generated_source(
+        &[italic_run("가나", "Malgun Gothic")],
+        &calibri_italic_malgun_upright_context(),
+    );
+
+    assert!(
+        !source.contains("inset:"),
+        "an unframed slant box must not pad itself, got:\n{source}"
+    );
+}
