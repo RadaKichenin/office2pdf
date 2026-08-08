@@ -27,3 +27,5 @@ Whole-page thumbnails at 80 DPI hide hairlines, dash patterns, font weight, and 
 3. **Pixel-difference sweep.** Run `magick compare -metric AE -fuzz 5% gt.png out.png diff.png` on size-normalized pages; view `diff.png` and inspect every highlighted cluster. A checklist pass is complete only when each cluster is either explained by an accepted rendering difference (fonts/antialiasing) or captured as an issue.
 4. **Hairline inventory.** Explicitly enumerate elements ≤1pt (rules, underlines, dashed/dotted lines, borders, tick marks) found in GT and confirm each exists in the output at matching position, width, and dash pattern.
 5. **Weight/emphasis inventory.** Enumerate bold/italic/underlined runs visible in GT (including CJK) and confirm the same emphasis in the output — weight differences must be checked on the high-DPI crops, not thumbnails.
+
+`magick` is ImageMagick 7 only. On ImageMagick 6 drop it: `convert input.png -crop ...`, `compare -metric AE ...`. `scripts/compare_render.py` resolves this itself.

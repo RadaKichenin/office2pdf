@@ -52,6 +52,9 @@ FILL_TEXT_RE = re.compile(
 TRACE_PAGE_RE = re.compile(r"<page\b")
 GLYPH_RE = re.compile(r'<g unicode="([^"]*)" glyph="[^"]*" x="([-0-9.]+)" y="([-0-9.]+)"')
 HISTOGRAM_BINS = 32
+# Every ImageMagick tool the colour and pixel axes reach for. Named here so the
+# availability check and the call sites cannot drift apart.
+IMAGEMAGICK_TOOLS = ("convert", "identify", "compare")
 
 
 @dataclass(frozen=True)
@@ -86,6 +89,29 @@ def render_page(pdf: Path, page: int, dpi: int, out_dir: Path, role: str) -> Pat
 def has_mutool() -> bool:
     """Whether `mutool` is on PATH (it ships in `mupdf-tools`)."""
     return shutil.which("mutool") is not None
+
+
+def imagemagick_command(tool: str) -> list[str] | None:
+    """Argv prefix invoking an ImageMagick tool, or None if it is unavailable.
+
+    ImageMagick 7 dispatches every tool through a single `magick` binary;
+    ImageMagick 6 installs them under their own names and has no `magick` at
+    all. Hardcoding the IM7 spelling left the colour and pixel axes dying with
+    FileNotFoundError on an IM6 host, after the geometry axis had already
+    printed a report that looked whole.
+    """
+    if shutil.which("magick") is not None:
+        # `magick convert` is deprecated in 7.1 and warns; plain conversion is
+        # the bare dispatcher, so only the named subtools take an argument.
+        return ["magick"] if tool == "convert" else ["magick", tool]
+    if shutil.which(tool) is not None:
+        return [tool]
+    return None
+
+
+def has_imagemagick() -> bool:
+    """Whether every tool the colour and pixel axes need can be invoked."""
+    return all(imagemagick_command(tool) is not None for tool in IMAGEMAGICK_TOOLS)
 
 
 def baseline_lines(pdf: Path) -> list[TextLine]:
@@ -239,7 +265,7 @@ def report_geometry(gt: Path, other: Path) -> dict[str, float]:
 def histogram(png: Path) -> tuple[list[int], int]:
     """Per-channel binned colour counts, flattened R|G|B, and the pixel total."""
     txt = subprocess.run(
-        ["magick", str(png), "-depth", "8", "txt:-"],
+        [*(imagemagick_command("convert") or []), str(png), "-depth", "8", "txt:-"],
         capture_output=True,
         text=True,
         check=True,
@@ -329,13 +355,14 @@ def report_pixels(gt_png: Path, other_png: Path, out_dir: Path) -> None:
     """Whole-page difference, as a coarse catch-all."""
     normalised = out_dir / "gt-normalised.png"
     size = subprocess.run(
-        ["magick", "identify", "-format", "%wx%h", str(other_png)],
+        [*(imagemagick_command("identify") or []), "-format", "%wx%h", str(other_png)],
         capture_output=True, text=True, check=True,
     ).stdout.strip()
     # pdftoppm can differ by a pixel between two PDFs of the same paper size,
     # which would otherwise make every comparison fail outright.
     subprocess.run(
-        ["magick", str(gt_png), "-background", "white", "-extent", size, str(normalised)],
+        [*(imagemagick_command("convert") or []), str(gt_png),
+         "-background", "white", "-extent", size, str(normalised)],
         check=True, capture_output=True,
     )
 
@@ -346,13 +373,16 @@ def report_pixels(gt_png: Path, other_png: Path, out_dir: Path) -> None:
         ("RMSE       ", ["-metric", "RMSE"]),
     ):
         result = subprocess.run(
-            ["magick", "compare", *args, str(normalised), str(other_png), "null:"],
+            [*(imagemagick_command("compare") or []), *args,
+             str(normalised), str(other_png), "null:"],
             capture_output=True, text=True,
         )
         print(f"  {label}      {result.stderr.strip()}")
 
 
-def diagnose(geometry: dict[str, float], histogram_result: dict[str, float]) -> None:
+def diagnose(
+    geometry: dict[str, float], histogram_result: dict[str, float] | None
+) -> None:
     """Say what the combination of axes means, and what to look at next.
 
     This is the point of running all three: a single number invites the
@@ -360,7 +390,13 @@ def diagnose(geometry: dict[str, float], histogram_result: dict[str, float]) -> 
     and one that does not move at all can hide a large geometric
     improvement. The pattern across axes is what identifies the defect
     class.
+
+    `histogram_result` is None when ImageMagick is absent. An axis that did not
+    run must never read as an axis that agreed, so silence there is reported
+    rather than folded into the verdict.
     """
+    colour_measured: bool = histogram_result is not None
+    histogram_result = histogram_result or {}
     print("## Reading")
     if not geometry:
         print("  Geometry could not be measured, so the other axes stand alone.")
@@ -397,10 +433,17 @@ def diagnose(geometry: dict[str, float], histogram_result: dict[str, float]) -> 
     # Measured separation on this corpus: renderer dithering across a smooth
     # gradient reaches 0.0003, and the half-width cell borders of #487
     # reached 0.0016 before the fix and 0.0004 after it.
-    colour_differs: bool = histogram_result.get("shift", 0.0) > 0.001
-    ink_differs: bool = abs(ink_delta) > 0.2
+    colour_differs: bool = colour_measured and histogram_result.get("shift", 0.0) > 0.001
+    ink_differs: bool = colour_measured and abs(ink_delta) > 0.2
 
     findings: list[str] = []
+    if not colour_measured:
+        findings.append(
+            "The colour and pixel axes did not run — ImageMagick is absent, so "
+            "a wrong fill, a recolour, or a missing element cannot be seen "
+            "here at all. Geometry below stands alone; compare the pages by "
+            "eye before concluding they agree."
+        )
     if pages_differ:
         findings.append(
             "Pagination differs — content sits on the wrong page. Fix this "
@@ -442,7 +485,12 @@ def diagnose(geometry: dict[str, float], histogram_result: dict[str, float]) -> 
     for index, finding in enumerate(findings, start=1):
         print(f"  {index}. {finding}")
 
-    if not colour_differs and not ink_differs and (drifts_vertically or drifts_horizontally):
+    if (
+        colour_measured
+        and not colour_differs
+        and not ink_differs
+        and (drifts_vertically or drifts_horizontally)
+    ):
         print()
         print("  Colour and ink are unchanged while geometry moves: this is a")
         print("  pure layout difference. A pixel count may rise even as the")
@@ -509,13 +557,20 @@ def main() -> None:
     if args.lines:
         report_matched_lines(args.gt, args.output)
         print()
-    with tempfile.TemporaryDirectory() as raw_dir:
-        out_dir = Path(raw_dir)
-        gt_png = render_page(args.gt, args.page, args.dpi, out_dir, "gt")
-        other_png = render_page(args.output, args.page, args.dpi, out_dir, "candidate")
-        histogram_result = report_histogram(gt_png, other_png)
-        print()
-        report_pixels(gt_png, other_png, out_dir)
+    histogram_result: dict[str, float] | None = None
+    if has_imagemagick():
+        with tempfile.TemporaryDirectory() as raw_dir:
+            out_dir = Path(raw_dir)
+            gt_png = render_page(args.gt, args.page, args.dpi, out_dir, "gt")
+            other_png = render_page(args.output, args.page, args.dpi, out_dir, "candidate")
+            histogram_result = report_histogram(gt_png, other_png)
+            print()
+            report_pixels(gt_png, other_png, out_dir)
+    else:
+        print("## Histogram and pixel difference — SKIPPED")
+        print("  ImageMagick is absent: neither `magick` (7.x) nor all of "
+              f"{', '.join(f'`{tool}`' for tool in IMAGEMAGICK_TOOLS)} (6.x)")
+        print("  is on PATH. Install `imagemagick` to measure colour and ink.")
     print()
     diagnose(geometry, histogram_result)
 
