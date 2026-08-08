@@ -1287,8 +1287,9 @@ fn write_flow_page_setup(out: &mut String, page: &FlowPage, size: &PageSize, ctx
         // `footer-descent: 0pt` puts Typst's footer origin on the bottom margin
         // line, so a block spanning exactly that gap ends where Word's footer
         // ends; bottom-aligning the content inside it reproduces the upward
-        // growth without having to measure the content. Word measures down to
-        // the descender line, so the band's text bottom edge must match.
+        // growth without having to measure the content. What the band's text
+        // bottom edge has to match is set below, from the footer face's own
+        // line box.
         let footer_band: Option<f64> = footer
             .distance_from_edge
             // Keep float noise (62.35 - 35.4) out of the emitted source.
@@ -1299,9 +1300,21 @@ fn write_flow_page_setup(out: &mut String, page: &FlowPage, size: &PageSize, ctx
             if hf_needs_context(footer) {
                 out.push_str("context ");
             }
+            // The band's bottom is the footer's bottom, so what sits between it
+            // and the last baseline is that line's own sub-baseline share.
+            // Typst's `"descender"` is its normalised one, which is the wrong
+            // quantity for a face whose line box carries more below the
+            // baseline than its descender does (issue #630).
+            let bottom_edge: String = footer
+                .paragraphs
+                .last()
+                .map(hf_paragraph_metric_runs)
+                .and_then(|runs| text::word_footer_line_descent_em(&runs))
+                .map(|descent_em| format!("-{}em", format_f64(descent_em)))
+                .unwrap_or_else(|| "\"descender\"".to_string());
             let _ = write!(
                 out,
-                "block(width: 100%, height: {}pt)[#set text(bottom-edge: \"descender\"); #place(bottom, block(width: 100%)[",
+                "block(width: 100%, height: {}pt)[#set text(bottom-edge: {bottom_edge}); #place(bottom, block(width: 100%)[",
                 format_f64(band)
             );
             generate_flow_hf_content(out, footer, ctx);
