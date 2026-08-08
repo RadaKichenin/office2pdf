@@ -1235,6 +1235,33 @@ fn test_wrapping_row_without_custom_height_stays_auto() {
 }
 
 #[test]
+fn test_wrapping_row_whose_text_fits_takes_the_native_track() {
+    // `wrapText` is a property of the cell, not evidence that anything wraps.
+    // Every data cell in the business mocks carries it, so treating the flag
+    // alone as "content-driven" left every ht=15 auto row growing to its own
+    // content box: 15.00pt against Excel's 14.00pt across the six Latin
+    // workbooks (issue #710), and 22.32pt against 15.00pt across the Korean
+    // ones (issue #709). A single short word cannot wrap, so the row prints
+    // its mapped track like any other.
+    let data = build_xlsx_formatted(|sheet| {
+        let cell = sheet.get_cell_mut("A1");
+        cell.set_value("OK");
+        cell.get_style_mut().get_alignment_mut().set_wrap_text(true);
+        let row = sheet.get_row_dimension_mut(&1);
+        row.set_height(15.0);
+        row.set_custom_height(false);
+    });
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let tp = get_sheet_page(&doc, 0);
+    assert_eq!(
+        tp.table.rows[0].height,
+        Some(14.0),
+        "a wrapText cell that fits its column still prints Excel's 14pt track"
+    );
+}
+
+#[test]
 fn test_wrapping_row_with_custom_height_stays_fixed() {
     let data = build_xlsx_formatted(|sheet| {
         let cell = sheet.get_cell_mut("A1");
