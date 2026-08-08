@@ -27,7 +27,9 @@ pub(super) fn extract_charts_with_anchors(data: &[u8]) -> HashMap<String, Vec<(u
 
     // A series that names no fill takes its colour from the workbook's theme,
     // not from the renderer's built-in palette (issue #670).
-    let (theme_colors, _) = workbook_theme(&mut archive, &workbook_rels_xml);
+    // The same part settles chart text's face: a chart naming no `a:latin`
+    // takes the theme's minor font rather than the engine's default (#668).
+    let (theme_colors, theme_fonts) = workbook_theme(&mut archive, &workbook_rels_xml);
     let theme_accents: Vec<crate::ir::Color> =
         crate::parser::drawingml::theme_accent_palette(&theme_colors);
 
@@ -79,6 +81,8 @@ pub(super) fn extract_charts_with_anchors(data: &[u8]) -> HashMap<String, Vec<(u
                 let chart_xml = read_zip_entry_string(&mut archive, &chart_path);
                 if let Some(mut chart) = parse_chart_xml(&chart_xml) {
                     chart.theme_accent_colors = theme_accents.clone();
+                    chart.text_font_family =
+                        theme_fonts.resolve_chart_text_typeface(chart.text_font_family.as_deref());
                     result
                         .entry(sheet_name.clone())
                         .or_default()
@@ -129,6 +133,8 @@ pub(super) fn extract_charts_with_anchors(data: &[u8]) -> HashMap<String, Vec<(u
             let chart_xml = read_zip_entry_string(&mut archive, path);
             if let Some(mut chart) = parse_chart_xml(&chart_xml) {
                 chart.theme_accent_colors = theme_accents.clone();
+                chart.text_font_family =
+                    theme_fonts.resolve_chart_text_typeface(chart.text_font_family.as_deref());
                 result
                     .entry(first_sheet.clone())
                     .or_default()

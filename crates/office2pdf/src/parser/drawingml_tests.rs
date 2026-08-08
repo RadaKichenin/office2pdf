@@ -217,3 +217,58 @@ fn theme_accent_palette_is_empty_when_an_accent_is_missing() {
 
     assert!(theme_accent_palette(&colors).is_empty());
 }
+
+// ----- A chart's text face against the package theme (issue #668) -----
+
+fn office_font_scheme() -> ThemeFontScheme {
+    ThemeFontScheme {
+        major_latin: Some("Calibri Light".to_string()),
+        minor_latin: Some("Calibri".to_string()),
+    }
+}
+
+#[test]
+fn a_chart_naming_no_face_takes_the_theme_body_font() {
+    // `bar-chart.pptx` is this shape: `c:txPr` carries only `sz`, so the face
+    // has to resolve through `+mn-lt` to the theme's minor font.
+    assert_eq!(
+        office_font_scheme().resolve_chart_text_typeface(None),
+        Some("Calibri".to_string())
+    );
+}
+
+#[test]
+fn a_chart_naming_a_theme_token_resolves_it() {
+    let scheme = office_font_scheme();
+    assert_eq!(
+        scheme.resolve_chart_text_typeface(Some("+mn-lt")),
+        Some("Calibri".to_string())
+    );
+    assert_eq!(
+        scheme.resolve_chart_text_typeface(Some("+mj-lt")),
+        Some("Calibri Light".to_string())
+    );
+}
+
+#[test]
+fn a_chart_naming_a_real_face_keeps_it() {
+    // `office2pdf_introduction_ko.pptx`'s chart1.xml names Calibri outright.
+    assert_eq!(
+        office_font_scheme().resolve_chart_text_typeface(Some("Impact")),
+        Some("Impact".to_string())
+    );
+}
+
+#[test]
+fn a_theme_with_no_body_font_leaves_the_face_unset() {
+    // Better to fall through to the renderer's default than to name a face
+    // spelled `+mn-lt`, which would select nothing.
+    assert_eq!(
+        ThemeFontScheme::default().resolve_chart_text_typeface(None),
+        None
+    );
+    assert_eq!(
+        ThemeFontScheme::default().resolve_chart_text_typeface(Some("+mn-lt")),
+        None
+    );
+}

@@ -715,6 +715,7 @@ fn test_table_page_with_chart_at_row() {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        text_font_family: None,
     };
 
     let page = Page::Sheet(SheetPage {
@@ -771,6 +772,7 @@ fn test_table_page_with_chart_at_end() {
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
+        text_font_family: None,
     };
 
     let page = Page::Sheet(SheetPage {

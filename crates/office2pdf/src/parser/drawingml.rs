@@ -364,6 +364,20 @@ impl ThemeFontScheme {
             literal => Some(literal.to_string()),
         }
     }
+
+    /// The face a chart sets its strings in, given whatever its
+    /// `c:chartSpace/c:txPr` declared.
+    ///
+    /// Chart text is body text, so a chart that names nothing lands where an
+    /// explicit `+mn-lt` would: the theme's minor font. Without this the text
+    /// fell through to the engine's own default, which is a serif face that
+    /// appears nowhere else in the document (issue #668).
+    pub(crate) fn resolve_chart_text_typeface(&self, declared: Option<&str>) -> Option<String> {
+        match declared {
+            Some(typeface) => self.resolve_typeface(typeface),
+            None => self.minor_latin.clone(),
+        }
+    }
 }
 
 /// Parse just the `<a:fontScheme>` Latin typefaces out of a theme part

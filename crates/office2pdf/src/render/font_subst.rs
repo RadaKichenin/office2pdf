@@ -524,6 +524,10 @@ fn symbol_fallbacks(text: &str) -> &'static [&'static str] {
 /// chain, still ahead of the family's substitutes, because Word resolves a
 /// marker its family lacks to Arial rather than through that family's own
 /// chain. See [`symbol_fallbacks`] (issue #642).
+///
+/// This ordering assumes `text` is one run, and so one script. See
+/// [`font_for_mixed_script_text`] for the case where one face has to cover
+/// several at once.
 pub fn font_with_fallbacks_for_text(font_family: &str, text: &str) -> String {
     ACTIVE_FONT_CONTEXT.with(|active_context| {
         let context = active_context.borrow();
@@ -539,6 +543,41 @@ pub fn font_with_fallbacks_for_text(font_family: &str, text: &str) -> String {
                 .map(|face| (*face).to_string()),
         );
         families.extend(fallback_candidates(font_family, context.as_ref()));
+        join_font_list(families)
+    })
+}
+
+/// The font list for one face that has to cover text in several scripts at
+/// once.
+///
+/// A chart sets a single face for every string it draws, so the sample handed
+/// here mixes the title, the categories and the series names — and with them
+/// their scripts. [`font_with_fallbacks_for_text`] puts the script's faces
+/// ahead of the declared family's substitutes, which is right when the run's
+/// text *is* that script: a substitute preserving Latin metrics is the wrong
+/// answer for a Hangul glyph. Applied to a mixed sample it is the wrong answer
+/// the other way round — the Hangul face covers Latin too, so it takes the
+/// Latin glyphs before the chain ever reaches the stand-in for the face the
+/// chart asked for, and a Korean chart rendered its `DOCX` label in Malgun
+/// Gothic instead of Calibri's substitute.
+///
+/// So the declared family's own substitutes come first here, and the script
+/// faces catch only what neither covers (issue #668).
+pub(crate) fn font_for_mixed_script_text(font_family: &str, text: &str) -> String {
+    ACTIVE_FONT_CONTEXT.with(|active_context| {
+        let context = active_context.borrow();
+        let mut families: Vec<String> = vec![font_family.to_string()];
+        families.extend(fallback_candidates(font_family, context.as_ref()));
+        families.extend(
+            script_fallbacks(font_family, text)
+                .iter()
+                .map(|face| (*face).to_string()),
+        );
+        families.extend(
+            symbol_fallbacks(text)
+                .iter()
+                .map(|face| (*face).to_string()),
+        );
         join_font_list(families)
     })
 }
@@ -677,15 +716,36 @@ fn visit_block_fonts(block: &Block, visitor: &mut impl FnMut(&str, &str) -> bool
                 .iter()
                 .all(|paragraph| visit_paragraph_fonts(paragraph, visitor))
         }),
+        Block::Chart(chart) => visit_chart_fonts(chart, visitor),
         Block::Image(_)
         | Block::InlineImages(_)
         | Block::FloatingImage(_)
         | Block::FloatingShape(_)
         | Block::MathEquation(_)
-        | Block::Chart(_)
         | Block::PageBreak
         | Block::ColumnBreak => true,
     }
+}
+
+/// Offer the chart's own face to the visitor, paired with the strings it is
+/// drawn over.
+///
+/// A chart sets one face for every string it draws, so its scripts decide the
+/// chain the same way a run's text does. A document whose *only* font request
+/// comes from a chart still needs the font search context, or the directories
+/// holding the requested face are never scanned and the chart falls back to the
+/// engine's default — which is the very thing resolving the theme font was
+/// meant to stop (issues #668, #461).
+pub(super) fn visit_chart_fonts(
+    chart: &crate::ir::Chart,
+    visitor: &mut impl FnMut(&str, &str) -> bool,
+) -> bool {
+    let Some(family) = chart.text_font_family.as_deref() else {
+        return true;
+    };
+    // The same strings the renderer builds the chain from, so the gate and the
+    // chain cannot disagree about which scripts the chart contains.
+    visitor(family, &chart.text_sample())
 }
 
 /// Walk a slice of blocks, calling `visitor` for each font family found.
@@ -806,10 +866,15 @@ fn collect_document_font_requests(doc: &Document) -> BTreeSet<FontRequest> {
                             }
                         }
                         FixedElementKind::Table(table) => collect_table_fonts(table, &mut fonts),
+                        FixedElementKind::Chart(chart) => {
+                            visit_chart_fonts(chart, &mut |font, text| {
+                                fonts.insert((font.to_string(), text_script(text)));
+                                true
+                            });
+                        }
                         FixedElementKind::Image(_)
                         | FixedElementKind::Shape(_)
-                        | FixedElementKind::SmartArt(_)
-                        | FixedElementKind::Chart(_) => {}
+                        | FixedElementKind::SmartArt(_) => {}
                     }
                 }
             }
@@ -850,10 +915,14 @@ pub(crate) fn document_requests_font_families(doc: &Document) -> bool {
                 text_box.content.iter().any(block_requests_font_family)
             }
             FixedElementKind::Table(table) => table_requests_font_family(table),
+            // A slide whose only font request is a chart's face still needs the
+            // context resolved (#668).
+            FixedElementKind::Chart(chart) => {
+                !visit_chart_fonts(chart, &mut font_family_uses_context_free_fallbacks)
+            }
             FixedElementKind::Image(_)
             | FixedElementKind::Shape(_)
-            | FixedElementKind::SmartArt(_)
-            | FixedElementKind::Chart(_) => false,
+            | FixedElementKind::SmartArt(_) => false,
         }),
         Page::Sheet(page) => {
             page.header

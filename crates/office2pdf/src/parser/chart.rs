@@ -151,6 +151,10 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
     // area's own (#637).
     let mut chart_element_ended: bool = false;
     let mut chart_area_outline: ChartAreaOutline = ChartAreaOutline::Default;
+    // `c:chartSpace/c:txPr` is a sibling of `c:chart` for the same reason
+    // `c:spPr` is, so it needs the same marker: an axis carries a `c:txPr` of
+    // its own inside `c:plotArea`, and a flat loop would read that one (#668).
+    let mut text_font_family: Option<String> = None;
 
     loop {
         match reader.read_event() {
@@ -159,6 +163,8 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
                 let tag: &[u8] = local.as_ref();
                 if tag == b"spPr" && chart_element_ended {
                     chart_area_outline = parse_chart_area_outline(&mut reader);
+                } else if tag == b"txPr" && chart_element_ended {
+                    text_font_family = parse_chart_text_font(&mut reader);
                 } else if tag == b"legend" {
                     // Declared, unless the element switches itself off.
                     let (deleted, position) = parse_legend(&mut reader);
@@ -247,7 +253,36 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
         // which theme part applies.
         theme_accent_colors: Vec::new(),
         chart_area_outline,
+        // A `+mn-lt` token stays as written for the same reason: resolving it
+        // needs the package theme, which only the loader has.
+        text_font_family,
     })
+}
+
+/// Read `c:chartSpace/c:txPr` into the face its `a:defRPr` names.
+///
+/// Only `a:latin` matters here. Its absence is the common case — the chart then
+/// inherits the theme's minor font — and is reported as `None` rather than as a
+/// face, so the loader can tell "said nothing" from "said this" (issue #668).
+fn parse_chart_text_font(reader: &mut Reader<&[u8]>) -> Option<String> {
+    let mut typeface: Option<String> = None;
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
+                if e.local_name().as_ref() == b"latin" && typeface.is_none() {
+                    // An empty `typeface=""` names no face; Office writes that
+                    // to mean "inherit", which is what `None` already says.
+                    typeface = xml_util::get_attr_str(e, b"typeface")
+                        .filter(|face| !face.trim().is_empty());
+                }
+            }
+            Ok(Event::End(ref e)) if e.local_name().as_ref() == b"txPr" => break,
+            Ok(Event::Eof) => break,
+            Err(_) => break,
+            _ => {}
+        }
+    }
+    typeface
 }
 
 /// Read `c:chartSpace/c:spPr` into what it says about the chart-area outline.
