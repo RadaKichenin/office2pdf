@@ -11,6 +11,9 @@ enum ChartVariant {
     LinePlot,
     /// Circular plot whose wedges are each point's share of the total.
     PiePlot,
+    /// One spoke per category radiating from a centre, each series a closed
+    /// polygon through its value on every spoke.
+    RadarPlot,
     /// Bordered box holding a title, a type label, and a data table.
     BorderedTable,
 }
@@ -27,6 +30,17 @@ fn chart_variant(chart: &Chart) -> ChartVariant {
         && chart.categories.len() >= 2
     {
         return ChartVariant::LinePlot;
+    }
+    // A radar needs a closed ring of spokes, so two categories cannot make one.
+    if is_radar(chart)
+        && !chart.series.is_empty()
+        && chart.categories.len() >= 3
+        && chart
+            .series
+            .iter()
+            .any(|series| series.values.iter().any(|value| *value > 0.0))
+    {
+        return ChartVariant::RadarPlot;
     }
     if matches!(chart.chart_type, ChartType::Pie | ChartType::Doughnut)
         && chart
@@ -59,9 +73,9 @@ fn chart_fits_on_one_page(chart: &Chart) -> bool {
     let height: f64 = match chart_variant(chart) {
         // The plot box plus the title block above it.
         ChartVariant::AxisPlot => chart_axis_extent(chart).1 + 24.0,
-        // The polyline and pie plots are a fixed size regardless of how many
-        // points they carry.
-        ChartVariant::LinePlot | ChartVariant::PiePlot => return true,
+        // The polyline, pie and radar plots are a fixed size regardless of how
+        // many points they carry.
+        ChartVariant::LinePlot | ChartVariant::PiePlot | ChartVariant::RadarPlot => return true,
         ChartVariant::BorderedTable => {
             BORDERED_TABLE_CHROME_PT + chart.categories.len() as f64 * BORDERED_TABLE_ROW_PT
         }
@@ -71,9 +85,12 @@ fn chart_fits_on_one_page(chart: &Chart) -> bool {
 
 /// Generate Typst markup for a chart.
 ///
-/// Bar and column charts render as an axis-scaled plot, line and area charts as
-/// a polyline plot over the same axis, and everything else falls back to a
-/// bordered box holding the title, a type label, and a data table.
+/// Bar and column charts render as an axis-scaled plot; line and area charts
+/// as a polyline plot over the same axis; pie and doughnut charts as a wedge
+/// plot; and a radar carrying at least three categories and one positive value
+/// as a spoke-and-polygon plot. What is left — bubble, stock, surface, and a
+/// radar too small or too flat to draw — falls back to a bordered box holding
+/// the title, a type label, and a data table.
 ///
 /// Excel and PowerPoint treat a chart as one floating graphic that never splits
 /// at a page boundary: it moves to the next page whole. Typst blocks are
@@ -139,6 +156,7 @@ fn generate_chart_body(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
         ChartVariant::AxisPlot => return generate_chart_axis(out, chart, frame),
         ChartVariant::LinePlot => return generate_chart_line_plot(out, chart, frame),
         ChartVariant::PiePlot => return generate_chart_pie_plot(out, chart, frame),
+        ChartVariant::RadarPlot => return generate_chart_radar_plot(out, chart, frame),
         ChartVariant::BorderedTable => {}
     }
 
@@ -1697,6 +1715,265 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
             format_f64(chart_text_pt(chart)),
             escape_typst(name)
         );
+    }
+
+    out.push_str("]\n");
+}
+
+/// Whether the chart part declared `<c:radarChart>`.
+///
+/// The parser labels it `ChartType::Other("Radar Chart")` because the family
+/// has no variant of its own; matching the label keeps that decision in one
+/// place (issue #679).
+fn is_radar(chart: &Chart) -> bool {
+    matches!(&chart.chart_type, ChartType::Other(kind) if kind == crate::ir::RADAR_CHART_LABEL)
+}
+
+/// Render a radar chart: one spoke per category radiating from a common
+/// centre, each series a closed polygon through its value on every spoke.
+///
+/// Before this the family fell through to the bordered-table fallback, so a
+/// slide whose primary content was a radar lost it entirely and showed a plain
+/// table of the series values instead (issue #679).
+fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64, f64)>) {
+    /// Intrinsic plot size for a flowed radar, matching the pie's.
+    const RADAR_DIAMETER: f64 = 200.0;
+    const RADAR_LEGEND_ROW_H: f64 = 14.0;
+    /// Width of the gutter the value tick labels are right-aligned in, left of
+    /// the centre. Matches the line plot's own value gutter.
+    const RADAR_VALUE_GAP: f64 = 24.0;
+    /// Room left outside the outermost web ring for the category labels.
+    ///
+    /// A label sits beyond its spoke's end, so the web has to stop short of the
+    /// box or the labels leave it.
+    const RADAR_LABEL_MARGIN_PT: f64 = 30.0;
+    /// Half-width of the box a category label is centred in.
+    ///
+    /// Wider than the margin the web gives up: the box is centred on the point
+    /// outside the spoke, so half of it lies back over the web, and a category
+    /// name only as wide as the margin would wrap. `기동 지연 최소화` still
+    /// wrapped to two lines at the margin's 30pt; widening the box to 48pt
+    /// stopped it. Observed on the rendered page rather than measured from the
+    /// face's advances.
+    const RADAR_LABEL_HALF_W_PT: f64 = 48.0;
+
+    let category_count: usize = chart.categories.len();
+    if category_count < 3 {
+        return;
+    }
+    let max_value: f64 = chart
+        .series
+        .iter()
+        .flat_map(|series| series.values.iter())
+        .cloned()
+        .fold(0.0_f64, f64::max);
+    let (nice_max, step) = nice_axis(max_value);
+    if nice_max <= 0.0 {
+        return;
+    }
+
+    if let Some(title) = chart.title.as_deref() {
+        let _ = writeln!(
+            out,
+            "#align(center)[#text(size: {}pt, weight: \"bold\")[{}]]",
+            format_f64(chart_area_title_pt(chart)),
+            escape_typst(title)
+        );
+        out.push_str("#v(4pt)\n");
+    }
+
+    let legend: LegendBox = if chart.has_legend {
+        LegendBox::new(chart.legend_position, RADAR_LEGEND_ROW_H, LEGEND_ENTRY_W)
+    } else {
+        LegendBox::hidden()
+    };
+    // As elsewhere: the title is drawn above the box, so a framed chart takes
+    // its height out of the frame.
+    let frame: Option<(f64, f64)> = frame.map(|(width, height)| {
+        let title_h: f64 = if chart.title.is_some() {
+            chart_area_title_h(chart)
+        } else {
+            0.0
+        };
+        (width, (height - title_h).max(MIN_PLOT_PT))
+    });
+    let (total_w, total_h) = match frame {
+        Some(extent) => extent,
+        None => (
+            legend.left + RADAR_DIAMETER + legend.right,
+            legend.top + RADAR_DIAMETER + legend.bottom,
+        ),
+    };
+
+    // The web stays circular, so it takes the smaller of the two axes, less the
+    // room the category labels need outside it.
+    let span_w: f64 = total_w - legend.left - legend.right;
+    let span_h: f64 = total_h - legend.top - legend.bottom;
+    let radius: f64 = (span_w.min(span_h) / 2.0 - RADAR_LABEL_MARGIN_PT).max(MIN_PLOT_PT / 2.0);
+    let centre_x: f64 = legend.left + span_w / 2.0;
+    let centre_y: f64 = legend.top + span_h / 2.0;
+
+    let _ = writeln!(
+        out,
+        "#box(width: {}pt, height: {}pt, stroke: {})[",
+        format_f64(total_w),
+        format_f64(total_h),
+        chart_area_stroke(&chart.chart_area_outline)
+    );
+
+    // Office puts the first category at twelve o'clock and runs clockwise, the
+    // same origin and direction the pie's first wedge takes.
+    let angle = |index: usize| -> f64 {
+        -std::f64::consts::FRAC_PI_2
+            + (index as f64) * std::f64::consts::TAU / (category_count as f64)
+    };
+    let point = |index: usize, value: f64| -> (f64, f64) {
+        let reach: f64 = radius * (value / nice_max).clamp(0.0, 1.0);
+        let a: f64 = angle(index);
+        (centre_x + reach * a.cos(), centre_y + reach * a.sin())
+    };
+
+    // The web: one closed ring per major unit, so the rings land on the same
+    // values the tick labels name.
+    for unit in major_units(nice_max, step) {
+        if unit <= 0.0 {
+            continue;
+        }
+        let ring: String = (0..category_count)
+            .map(|index| {
+                let (x, y) = point(index, unit);
+                format!("({}pt, {}pt)", format_f64(x), format_f64(y))
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        let _ = writeln!(
+            out,
+            "#place(top + left, path(closed: true, stroke: {}, {ring}))",
+            CHART_AUTOMATIC_LINE
+        );
+    }
+
+    // The spokes, each running the full radius so the outermost ring's vertices
+    // sit on them.
+    for index in 0..category_count {
+        let (x, y) = point(index, nice_max);
+        let _ = writeln!(
+            out,
+            "#place(top + left, dx: {}pt, dy: {}pt, line(end: ({}pt, {}pt), stroke: {}))",
+            format_f64(centre_x),
+            format_f64(centre_y),
+            format_f64(x - centre_x),
+            format_f64(y - centre_y),
+            CHART_AUTOMATIC_LINE
+        );
+    }
+
+    // The value tick labels, read up the first spoke as Office reads them.
+    let label_pt: f64 = chart_axis_text_pt(chart, chart.value_axis_text_style);
+    if !chart.value_axis_deleted {
+        for unit in major_units(nice_max, step) {
+            if unit <= 0.0 {
+                continue;
+            }
+            let (_, y) = point(0, unit);
+            let _ = writeln!(
+                out,
+                "#place(top + left, dx: {}pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(right + horizon)[#text(size: {}pt)[{}]]])",
+                format_f64(centre_x - RADAR_VALUE_GAP - GAP),
+                format_f64(y - chart_label_box_h(label_pt) / 2.0),
+                format_f64(RADAR_VALUE_GAP),
+                format_f64(chart_label_box_h(label_pt)),
+                format_f64(label_pt),
+                chart_value_label(unit)
+            );
+        }
+    }
+
+    // Each series as one closed polygon through its value on every spoke.
+    for (series_index, series) in chart.series.iter().enumerate() {
+        let color: String = series_color(series, series_index, 0, &chart.theme_accent_colors);
+        let points: Vec<(f64, f64)> = (0..category_count)
+            .map(|index| point(index, series.values.get(index).copied().unwrap_or(0.0)))
+            .collect();
+        let coords: String = points
+            .iter()
+            .map(|(x, y)| format!("({}pt, {}pt)", format_f64(*x), format_f64(*y)))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let _ = writeln!(
+            out,
+            "#place(top + left, path(closed: true, stroke: {}pt + {color}, {coords}))",
+            format_f64(SERIES_LINE_PT)
+        );
+        for (x, y) in &points {
+            write_series_marker(out, series_index, *x, *y, &color);
+        }
+    }
+
+    // The category labels, each just outside its spoke's end.
+    if !chart.category_axis_deleted {
+        let category_pt: f64 = chart_axis_text_pt(chart, chart.category_axis_text_style);
+        let weight: &str = chart_axis_text_weight(chart, chart.category_axis_text_style);
+        for (index, category) in chart.categories.iter().enumerate() {
+            let a: f64 = angle(index);
+            let label_x: f64 = centre_x + (radius + GAP) * a.cos();
+            let label_y: f64 = centre_y + (radius + GAP) * a.sin();
+            // The box is centred on the point outside the spoke, so a label at
+            // the left of the web grows leftwards and one at the right grows
+            // rightwards rather than every label running off one side.
+            let _ = writeln!(
+                out,
+                "#place(top + left, dx: {}pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(center + horizon)[#text(size: {}pt{})[{}]]])",
+                format_f64(label_x - RADAR_LABEL_HALF_W_PT),
+                format_f64(label_y - chart_label_box_h(category_pt) / 2.0),
+                format_f64(RADAR_LABEL_HALF_W_PT * 2.0),
+                format_f64(chart_label_box_h(category_pt)),
+                format_f64(category_pt),
+                weight,
+                escape_typst(category)
+            );
+        }
+    }
+
+    // The legend, keyed like the line plot's: a stroke sample carrying the
+    // marker the series draws on each vertex.
+    if chart.has_legend {
+        for (series_index, series) in chart.series.iter().enumerate() {
+            let color: String = series_color(series, series_index, 0, &chart.theme_accent_colors);
+            let default_name: String = format!("Series {}", series_index + 1);
+            let name: &str = series.name.as_deref().unwrap_or(&default_name);
+            let (entry_x, entry_y) = legend.entry_origin(
+                chart.legend_position,
+                series_index,
+                chart.series.len().max(1),
+                (legend.left, legend.top, span_w, span_h),
+                RADAR_LEGEND_ROW_H,
+                LEGEND_ENTRY_W,
+            );
+            let key_mid: f64 = SERIES_MARKER_SIZE_PT / 2.0;
+            let key: String = format!(
+                "#box(width: {}pt, height: {}pt, baseline: {}pt)[\
+                 #place(top + left, dx: 0pt, dy: {}pt, line(end: ({}pt, 0pt), stroke: {}pt + {color}))\
+                 {}]",
+                format_f64(LEGEND_KEY_LEN_PT),
+                format_f64(SERIES_MARKER_SIZE_PT),
+                format_f64(LEGEND_KEY_BASELINE_PT),
+                format_f64(key_mid),
+                format_f64(LEGEND_KEY_LEN_PT),
+                format_f64(SERIES_LINE_PT),
+                series_marker_markup(series_index, LEGEND_KEY_LEN_PT / 2.0, key_mid, &color)
+                    .trim_end()
+            );
+            let _ = writeln!(
+                out,
+                "#place(top + left, dx: {}pt, dy: {}pt, box[{key}#h({}pt)#text(size: {}pt)[{}]])",
+                format_f64(entry_x),
+                format_f64(entry_y),
+                format_f64(LEGEND_KEY_LABEL_GAP_PT),
+                format_f64(chart_text_pt(chart)),
+                escape_typst(name)
+            );
+        }
     }
 
     out.push_str("]\n");
