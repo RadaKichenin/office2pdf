@@ -467,6 +467,46 @@ fn east_asian_ascent_excess_em(runs: &[Run], pitch_em: f64) -> f64 {
     }
 }
 
+/// Where Word seats a footer story's last baseline, in em **above** the
+/// `w:pgMar/@w:footer` line the footer is measured up from.
+///
+/// The mirror of [`word_header_line_ascent_em`], and the same shape of answer:
+/// the footer's bottom is its last line's box bottom, so the term is that
+/// line's sub-baseline share — the East Asian advance minus the ascent Word
+/// seats the glyphs at — rather than the face's plain descender.
+///
+/// Which one it is decides the footer outright. The three golden mocks 01, 02
+/// and 03 differ in their `footer1.xml` only in `w:rFonts`, and Word moves the
+/// baseline with the font: 804.72pt for the Arial footer and 802.80pt for the
+/// Malgun Gothic ones, both at `w:footer="708"` = 35.40pt on A4. Typst's
+/// `bottom-edge: "descender"` answers with its *normalised* descender, which is
+/// 0.199em for Malgun Gothic against the 0.4412em its line box actually carries
+/// below the baseline — so every Korean footer in the corpus printed 2.10pt low
+/// while the Arial one, whose two answers nearly agree, looked correct
+/// (issue #630).
+///
+/// East Asian metrics key on the resolved face, not on the footer's characters:
+/// `- 2 -` is ASCII in all three files and Word still gives the Malgun ones the
+/// taller line. That is [`line_takes_east_asian_metrics`]'s rule, already
+/// established for body lines by issue #643.
+///
+/// `None` when the face's metrics are unknown, which leaves the footer on the
+/// renderer's own seat.
+pub(super) fn word_footer_line_descent_em(runs: &[Run]) -> Option<f64> {
+    let family: &str = east_asian_aware_metric_family(runs)?;
+    let (ascender_em, descender_em, pitch_em) = crate::render::pdf::font_line_metrics_em(family)?;
+    if ascender_em + descender_em <= 0.0 || pitch_em <= 0.0 {
+        return None;
+    }
+    let advance_em: f64 = if line_takes_east_asian_metrics(runs) {
+        EAST_ASIAN_LINE_HEIGHT_FACTOR * pitch_em
+    } else {
+        pitch_em
+    };
+    let top_em: f64 = ascender_em + east_asian_ascent_excess_em(runs, pitch_em);
+    Some(advance_em - top_em)
+}
+
 /// Where Word seats a header story's first baseline, in em below the
 /// `w:pgMar/@w:header` line the header is measured from.
 ///

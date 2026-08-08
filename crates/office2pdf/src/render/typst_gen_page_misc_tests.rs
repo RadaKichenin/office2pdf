@@ -2241,3 +2241,114 @@ fn test_caption_list_numbers_in_the_target_sections_format() {
         output.source
     );
 }
+
+/// A footer whose run names an East Asian face, otherwise identical to
+/// [`arial`]'s.
+#[cfg(not(target_arch = "wasm32"))]
+fn malgun(size_pt: f64) -> TextStyle {
+    TextStyle {
+        font_family: Some("Malgun Gothic".to_string()),
+        font_size: Some(size_pt),
+        ..TextStyle::default()
+    }
+}
+
+/// Build a one-section document whose footer holds a single run, at
+/// `w:pgMar/@w:footer` = 35.40pt on A4.
+#[cfg(not(target_arch = "wasm32"))]
+fn doc_with_footer_run(text: &str, style: TextStyle) -> Document {
+    use crate::ir::HeaderFooter;
+
+    make_doc(vec![Page::Flow(FlowPage {
+        size: PageSize::default(),
+        margins: Margins {
+            top: 62.35,
+            bottom: 62.35,
+            left: 70.85,
+            right: 70.85,
+        },
+        content: vec![make_paragraph("Body")],
+        header: None,
+        footer: Some(HeaderFooter {
+            distance_from_edge: Some(35.4),
+            paragraphs: vec![header_text_paragraph(text, style)],
+        }),
+        columns: None,
+        line_grid_pitch: None,
+        line_grid_snaps_lines: false,
+        page_numbering: None,
+    })])
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+/// The footer's last baseline is one line-box descent above the `w:footer`
+/// edge, and that descent is the resolved face's — not a constant.
+///
+/// The three golden mocks 01, 02 and 03 differ in their `footer1.xml` only in
+/// `w:rFonts`, and Word moves the footer baseline with the font: 804.72pt for
+/// Arial against 802.80pt for Malgun Gothic. Typst's `bottom-edge:
+/// "descender"` is nearly right for Arial and 2.10pt wrong for Malgun Gothic,
+/// so a test that pinned only one font would have passed throughout
+/// (issue #630).
+///
+/// Needs a Korean face to say anything: where none is installed — the Linux CI
+/// runner is one — the East Asian side has no metrics, the band keeps the
+/// renderer's own seat, and there is no font-driven difference to measure. The
+/// emission itself is covered unconditionally by
+/// [`test_footer_band_states_its_own_bottom_edge`].
+#[test]
+fn test_footer_baseline_follows_its_own_font_descent() {
+    if crate::render::pdf::font_line_metrics_em("Malgun Gothic").is_none() {
+        return;
+    }
+
+    let latin: f64 = baselines_of(&doc_with_footer_run("- 1 -", arial(8.0)), "- 1 -")[0];
+    let east_asian: f64 = baselines_of(&doc_with_footer_run("- 1 -", malgun(8.0)), "- 1 -")[0];
+
+    assert!(
+        east_asian < latin,
+        "an East Asian footer carries more below its baseline, so it must sit \
+         higher than the Arial one: Malgun {east_asian}pt against Arial {latin}pt"
+    );
+    // Word's own gap between the two, from the exports named above.
+    let gap: f64 = latin - east_asian;
+    assert!(
+        (gap - 1.92).abs() < 0.35,
+        "Word separates the two footers by 1.92pt; this build separates them by {gap}pt"
+    );
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+/// Triangulation for the emission: the band states the descent itself rather
+/// than deferring to the renderer's `"descender"`, which is the *normalised*
+/// one and so answers a different question.
+///
+/// Arial, because every runner resolves it — through Liberation Sans where the
+/// face itself is absent — so this half of #630 is pinned everywhere.
+#[test]
+fn test_footer_band_states_its_own_bottom_edge() {
+    let (ascender_em, descender_em, pitch_em) =
+        crate::render::pdf::font_line_metrics_em("Arial").expect("Arial metrics should resolve");
+    let expected_em: f64 = pitch_em - ascender_em;
+    assert!(
+        (expected_em - descender_em).abs() < 1e-9,
+        "a Latin line's sub-baseline share is its descender; the model changed"
+    );
+
+    let source = generate_typst(&doc_with_footer_run("- 1 -", arial(8.0)))
+        .expect("document should generate")
+        .source;
+
+    assert!(
+        !source.contains("bottom-edge: \"descender\""),
+        "the footer band must not take the renderer's normalised descender: {source}"
+    );
+    assert!(
+        source.contains(&format!("bottom-edge: -{}em", format_f64(expected_em))),
+        "the band must state the face's own {expected_em}em descent: {source}"
+    );
+    assert!(
+        source.contains("footer-descent: 0pt"),
+        "the footer origin must stay on the bottom margin line: {source}"
+    );
+}
