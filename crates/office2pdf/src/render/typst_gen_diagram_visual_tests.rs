@@ -33,6 +33,9 @@ fn test_codegen_chart_bar_visual_bars() {
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
         text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -92,6 +95,9 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
         text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -139,6 +145,9 @@ fn test_codegen_chart_pie_draws_a_pie() {
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
         text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -191,6 +200,9 @@ fn test_codegen_chart_line_trend_indicators() {
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
         text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -234,6 +246,9 @@ fn test_codegen_chart_empty_series() {
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
         text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -310,6 +325,9 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
         text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
     }));
     let doc = make_doc(vec![make_flow_page(content)]);
 
@@ -355,6 +373,9 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
         text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
     }));
     let doc = make_doc(vec![make_flow_page(content)]);
 
@@ -552,6 +573,9 @@ fn test_codegen_chart_line_plot() {
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
         text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -602,6 +626,9 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
         text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
     })])]);
 
     let pages = page_texts(&doc);
@@ -677,6 +704,9 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
         text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
     }
 }
 
@@ -803,6 +833,9 @@ fn legend_chart(position: LegendPosition) -> Chart {
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
         text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
     }
 }
 
@@ -947,6 +980,9 @@ fn a_declared_series_fill_reaches_the_bars() {
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
         text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
     };
 
     let source = chart_source(chart);
@@ -990,6 +1026,9 @@ fn a_series_without_a_fill_still_takes_the_palette() {
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
         text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
     };
 
     let source = chart_source(chart);
@@ -1031,6 +1070,9 @@ fn per_point_fills_colour_each_bar_separately() {
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
         text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
     };
 
     let source = chart_source(chart);
@@ -1071,6 +1113,9 @@ fn axis_titled_chart(category: Option<&str>, value: Option<&str>) -> Chart {
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
         text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
     }
 }
 
@@ -1161,6 +1206,9 @@ fn labelled_chart(labels: DataLabels) -> Chart {
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
         text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
     }
 }
 
@@ -1244,6 +1292,9 @@ fn pie_chart(values: Vec<f64>) -> Chart {
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
         text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
     }
 }
 
@@ -1426,6 +1477,9 @@ fn test_chart_default_gridline_matches_powerpoint() {
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
         text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
     })])]);
 
     let source = generate_typst(&doc).unwrap().source;
@@ -1572,6 +1626,9 @@ fn tick_mark_chart(
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
         text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
     }
 }
 
@@ -2162,6 +2219,9 @@ fn band_layout_chart(
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
         text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
     }
 }
 
@@ -2431,6 +2491,9 @@ fn two_series_bar_chart(theme_accent_colors: Vec<crate::ir::Color>) -> Chart {
         theme_accent_colors,
         chart_area_outline: ChartAreaOutline::Default,
         text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
     }
 }
 
@@ -2765,4 +2828,87 @@ fn a_chart_with_korean_labels_keeps_an_east_asian_fallback() {
         set_line.contains(','),
         "a Korean chart needs a fallback chain, not a bare family: {set_line}"
     );
+}
+
+// ----- Run properties declared in c:txPr (issue #669) -----
+
+fn sized_bar_chart(size_pt: f64) -> Chart {
+    let mut chart = two_series_bar_chart(Vec::new());
+    chart.categories = vec!["Q1".to_string(), "Q2".to_string()];
+    chart.series[0].values = vec![4.0, 8.0];
+    chart.series[1].values = vec![2.0, 6.0];
+    chart.title = Some("Sales".to_string());
+    chart.text_style = crate::ir::ChartTextStyle {
+        size_pt: Some(size_pt),
+        bold: None,
+    };
+    chart
+}
+
+#[test]
+fn chart_labels_take_the_size_the_chart_declares() {
+    // `bar-chart.pptx` asks for 18pt and rendered at 10 — a little over half
+    // the size the file requested.
+    let source: String = chart_source(sized_bar_chart(18.0));
+    for label in ["Q1", "Q2"] {
+        assert_eq!(
+            emitted_text_sizes(&source, label),
+            vec![18.0],
+            "category label {label} must take the declared size, got:\n{source}"
+        );
+    }
+    assert!(
+        !source.contains("#text(size: 10pt)"),
+        "nothing may fall back to the chart default once a size is declared:\n{source}"
+    );
+}
+
+#[test]
+fn a_chart_title_takes_office_s_scaled_size() {
+    // Office renders the 18pt `bar-chart.pptx` declares as a 22pt title.
+    let source: String = chart_source(sized_bar_chart(18.0));
+    // `emitted_text_sizes` cannot read a `#text` carrying a weight, and the
+    // title always carries one.
+    assert!(
+        source.contains("#text(size: 21.6pt, weight: \"bold\")[Sales]"),
+        "the title must scale by 1.2, got:\n{source}"
+    );
+}
+
+#[test]
+fn a_chart_declaring_no_size_keeps_the_eleven_point_title() {
+    // The default title size is what `AREA_TITLE_H` was measured against, so a
+    // chart that declares nothing must not move.
+    let mut chart = sized_bar_chart(18.0);
+    chart.text_style = crate::ir::ChartTextStyle::default();
+    assert!(chart_source(chart).contains("#text(size: 11pt, weight: \"bold\")[Sales]"));
+}
+
+#[test]
+fn category_labels_take_the_axis_weight() {
+    // `a:defRPr b="1"` on `c:catAx` was dropped, so bold category labels
+    // rendered regular while the data labels beside them kept their own bold.
+    let mut chart = sized_bar_chart(11.0);
+    chart.category_axis_text_style = crate::ir::ChartTextStyle {
+        size_pt: None,
+        bold: Some(true),
+    };
+    let source: String = chart_source(chart);
+    assert!(
+        source.contains("#text(size: 11pt, weight: \"bold\")[Q1]"),
+        "the category label must carry the axis' weight, got:\n{source}"
+    );
+}
+
+#[test]
+fn an_axis_size_overrides_the_chart_space_size_for_that_axis_only() {
+    let mut chart = sized_bar_chart(18.0);
+    chart.category_axis_text_style = crate::ir::ChartTextStyle {
+        size_pt: Some(9.0),
+        bold: None,
+    };
+    let source: String = chart_source(chart);
+    assert_eq!(emitted_text_sizes(&source, "Q1"), vec![9.0]);
+    // The title still follows the chart space.
+    assert!(source.contains("#text(size: 21.6pt, weight: \"bold\")[Sales]"));
 }

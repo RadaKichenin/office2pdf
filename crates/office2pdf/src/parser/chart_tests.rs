@@ -1313,3 +1313,83 @@ fn a_plot_area_tx_pr_is_not_read_as_the_chart_space_one() {
     let chart = parse_chart_xml(xml).expect("chart parses");
     assert_eq!(chart.text_font_family.as_deref(), Some("Calibri"));
 }
+
+// ----- Run properties declared in c:txPr (issue #669) -----
+
+#[test]
+fn a_chart_space_tx_pr_size_reaches_the_model() {
+    // `bar-chart.pptx` sets all chart text to 18pt this way.
+    let chart = parse_chart_xml(&chart_space_with(
+        r#"<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1800"/></a:pPr>
+           <a:endParaRPr lang="en-US"/></a:p></c:txPr>"#,
+    ))
+    .expect("chart parses");
+    assert_eq!(chart.text_style.size_pt, Some(18.0));
+    assert_eq!(chart.text_style.bold, None);
+}
+
+#[test]
+fn a_chart_space_tx_pr_bold_reaches_the_model() {
+    let chart = parse_chart_xml(&chart_space_with(
+        r#"<c:txPr><a:p><a:pPr><a:defRPr sz="1200" b="1"/></a:pPr></a:p></c:txPr>"#,
+    ))
+    .expect("chart parses");
+    assert_eq!(chart.text_style.size_pt, Some(12.0));
+    assert_eq!(chart.text_style.bold, Some(true));
+}
+
+#[test]
+fn a_chart_with_no_tx_pr_declares_no_run_properties() {
+    let chart = parse_chart_xml(&chart_space_with("")).expect("chart parses");
+    assert_eq!(chart.text_style, crate::ir::ChartTextStyle::default());
+}
+
+#[test]
+fn an_axis_tx_pr_overrides_the_chart_space_one() {
+    // `office2pdf_introduction_ko.pptx` page 17 bolds only the category labels.
+    let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+        <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+            <c:chart>
+                <c:plotArea>
+                    <c:barChart><c:barDir val="col"/><c:ser><c:idx val="0"/>
+                        <c:cat><c:strLit><c:pt idx="0"><c:v>Q1</c:v></c:pt></c:strLit></c:cat>
+                        <c:val><c:numRef><c:numCache><c:pt idx="0"><c:v>1</c:v></c:pt></c:numCache></c:numRef></c:val>
+                    </c:ser></c:barChart>
+                    <c:catAx>
+                        <c:txPr><a:p><a:pPr><a:defRPr sz="1100" b="1"/></a:pPr></a:p></c:txPr>
+                    </c:catAx>
+                    <c:valAx>
+                        <c:txPr><a:p><a:pPr><a:defRPr sz="900"/></a:pPr></a:p></c:txPr>
+                    </c:valAx>
+                </c:plotArea>
+            </c:chart>
+            <c:txPr><a:p><a:pPr><a:defRPr sz="1800"/></a:pPr></a:p></c:txPr>
+        </c:chartSpace>"#;
+    let chart = parse_chart_xml(xml).expect("chart parses");
+    assert_eq!(chart.text_style.size_pt, Some(18.0));
+    assert_eq!(chart.category_axis_text_style.size_pt, Some(11.0));
+    assert_eq!(chart.category_axis_text_style.bold, Some(true));
+    assert_eq!(chart.value_axis_text_style.size_pt, Some(9.0));
+    assert_eq!(chart.value_axis_text_style.bold, None);
+}
+
+#[test]
+fn an_axis_declaring_no_tx_pr_inherits_the_chart_space_one() {
+    let chart = parse_chart_xml(&chart_space_with(
+        r#"<c:txPr><a:p><a:pPr><a:defRPr sz="1800"/></a:pPr></a:p></c:txPr>"#,
+    ))
+    .expect("chart parses");
+    assert_eq!(
+        chart.category_axis_text_style,
+        crate::ir::ChartTextStyle::default()
+    );
+    // Resolution against the chart-space default is the renderer's job; the
+    // parser reports only what each element actually declared.
+    assert_eq!(
+        chart
+            .text_style
+            .resolved_size_pt(chart.category_axis_text_style),
+        Some(18.0)
+    );
+}

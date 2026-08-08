@@ -8,8 +8,8 @@ use quick_xml::events::Event;
 
 use super::xml_util;
 use crate::ir::{
-    AxisTickMark, BarBandLayout, Chart, ChartAreaOutline, ChartGrouping, ChartSeries, ChartType,
-    Color, DataLabels, LegendPosition,
+    AxisTickMark, BarBandLayout, Chart, ChartAreaOutline, ChartGrouping, ChartSeries,
+    ChartTextStyle, ChartType, Color, DataLabels, LegendPosition,
 };
 
 /// Mapping from XML chart element tag names to their corresponding `ChartType`.
@@ -155,6 +155,7 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
     // `c:spPr` is, so it needs the same marker: an axis carries a `c:txPr` of
     // its own inside `c:plotArea`, and a flat loop would read that one (#668).
     let mut text_font_family: Option<String> = None;
+    let mut text_style: ChartTextStyle = ChartTextStyle::default();
 
     loop {
         match reader.read_event() {
@@ -164,7 +165,9 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
                 if tag == b"spPr" && chart_element_ended {
                     chart_area_outline = parse_chart_area_outline(&mut reader);
                 } else if tag == b"txPr" && chart_element_ended {
-                    text_font_family = parse_chart_text_font(&mut reader);
+                    let (family, style) = parse_chart_text_properties(&mut reader);
+                    text_font_family = family;
+                    text_style = style;
                 } else if tag == b"legend" {
                     // Declared, unless the element switches itself off.
                     let (deleted, position) = parse_legend(&mut reader);
@@ -256,24 +259,34 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
         // A `+mn-lt` token stays as written for the same reason: resolving it
         // needs the package theme, which only the loader has.
         text_font_family,
+        text_style,
+        category_axis_text_style: category_axis.text_style,
+        value_axis_text_style: value_axis.text_style,
     })
 }
 
-/// Read `c:chartSpace/c:txPr` into the face its `a:defRPr` names.
+/// Read `c:chartSpace/c:txPr` into the face and the run properties its
+/// `a:defRPr` declares.
 ///
-/// Only `a:latin` matters here. Its absence is the common case — the chart then
-/// inherits the theme's minor font — and is reported as `None` rather than as a
-/// face, so the loader can tell "said nothing" from "said this" (issue #668).
-fn parse_chart_text_font(reader: &mut Reader<&[u8]>) -> Option<String> {
+/// `a:latin`'s absence is the common case — the chart then inherits the theme's
+/// minor font — and is reported as `None` rather than as a face, so the loader
+/// can tell "said nothing" from "said this" (issue #668). The same holds for
+/// each run property (issue #669).
+fn parse_chart_text_properties(reader: &mut Reader<&[u8]>) -> (Option<String>, ChartTextStyle) {
     let mut typeface: Option<String> = None;
+    let mut style: ChartTextStyle = ChartTextStyle::default();
     loop {
         match reader.read_event() {
             Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
-                if e.local_name().as_ref() == b"latin" && typeface.is_none() {
-                    // An empty `typeface=""` names no face; Office writes that
-                    // to mean "inherit", which is what `None` already says.
-                    typeface = xml_util::get_attr_str(e, b"typeface")
-                        .filter(|face| !face.trim().is_empty());
+                match e.local_name().as_ref() {
+                    b"latin" if typeface.is_none() => {
+                        // An empty `typeface=""` names no face; Office writes
+                        // that to mean "inherit", which is what `None` says.
+                        typeface = xml_util::get_attr_str(e, b"typeface")
+                            .filter(|face| !face.trim().is_empty());
+                    }
+                    b"defRPr" => read_def_rpr_into(e, &mut style),
+                    _ => {}
                 }
             }
             Ok(Event::End(ref e)) if e.local_name().as_ref() == b"txPr" => break,
@@ -282,7 +295,31 @@ fn parse_chart_text_font(reader: &mut Reader<&[u8]>) -> Option<String> {
             _ => {}
         }
     }
-    typeface
+    (typeface, style)
+}
+
+/// Read a `c:txPr` that governs one element rather than the whole chart space,
+/// keeping only its run properties.
+fn parse_chart_text_style(reader: &mut Reader<&[u8]>) -> ChartTextStyle {
+    parse_chart_text_properties(reader).1
+}
+
+/// Take `a:defRPr`'s run properties, leaving untouched whatever it omits.
+///
+/// Only the first `a:defRPr` counts: `c:txPr` holds one paragraph, and a later
+/// `a:endParaRPr` describes the empty run after the text rather than the text.
+fn read_def_rpr_into(element: &quick_xml::events::BytesStart<'_>, style: &mut ChartTextStyle) {
+    if style.size_pt.is_none() {
+        // `@sz` is in hundredths of a point.
+        style.size_pt = xml_util::get_attr_str(element, b"sz")
+            .and_then(|raw| raw.parse::<f64>().ok())
+            .filter(|hundredths| *hundredths > 0.0)
+            .map(|hundredths| hundredths / 100.0);
+    }
+    if style.bold.is_none() {
+        style.bold =
+            xml_util::get_attr_str(element, b"b").map(|raw| matches!(raw.trim(), "1" | "true"));
+    }
 }
 
 /// Read `c:chartSpace/c:spPr` into what it says about the chart-area outline.
@@ -358,6 +395,7 @@ struct Axis {
     title: Option<String>,
     major_tick_mark: AxisTickMark,
     deleted: bool,
+    text_style: ChartTextStyle,
 }
 
 /// Read an axis element, consuming it to `end_tag`.
@@ -370,6 +408,9 @@ fn parse_axis(reader: &mut Reader<&[u8]>, end_tag: &[u8]) -> Axis {
         match reader.read_event() {
             Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"title" => {
                 axis.title = axis.title.or_else(|| parse_chart_title(reader));
+            }
+            Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"txPr" => {
+                axis.text_style = parse_chart_text_style(reader);
             }
             // Office writes `<c:majorTickMark val="out"/>` self-closing, so the
             // `Start` arm alone would never see it.

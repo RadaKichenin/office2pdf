@@ -716,6 +716,9 @@ fn test_table_page_with_chart_at_row() {
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
         text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
     };
 
     let page = Page::Sheet(SheetPage {
@@ -773,6 +776,9 @@ fn test_table_page_with_chart_at_end() {
         theme_accent_colors: Vec::new(),
         chart_area_outline: ChartAreaOutline::Default,
         text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
     };
 
     let page = Page::Sheet(SheetPage {

@@ -228,6 +228,43 @@ pub struct Chart {
     /// which package this came from substitutes the face, exactly as it does
     /// for [`Chart::theme_accent_colors`] (issue #668).
     pub text_font_family: Option<String>,
+    /// Run properties `c:chartSpace/c:txPr` declares, which govern every string
+    /// the chart draws unless a more specific `c:txPr` overrides them.
+    pub text_style: ChartTextStyle,
+    /// What `c:catAx/c:txPr` declares for the category labels alone.
+    pub category_axis_text_style: ChartTextStyle,
+    /// What `c:valAx/c:txPr` declares for the value tick labels alone.
+    pub value_axis_text_style: ChartTextStyle,
+}
+
+/// Run properties a `c:txPr` declares for the strings it governs.
+///
+/// Both fields are `Option` because "said nothing" and "said this" have to stay
+/// distinguishable: a `c:catAx/c:txPr` that sets only `b` must still take its
+/// size from `c:chartSpace/c:txPr`, and an element that declares no `c:txPr` at
+/// all must fall through to the renderer's default (issue #669).
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct ChartTextStyle {
+    /// `a:defRPr@sz`, in points — the attribute is in hundredths.
+    pub size_pt: Option<f64>,
+    /// `a:defRPr@b`.
+    pub bold: Option<bool>,
+}
+
+impl ChartTextStyle {
+    /// This style's size where `override_style` states none.
+    ///
+    /// Office resolves a chart string against the most specific `c:txPr` that
+    /// mentions the attribute, so an axis setting only `b` keeps the chart
+    /// space's size rather than dropping to a default.
+    pub fn resolved_size_pt(self, override_style: Self) -> Option<f64> {
+        override_style.size_pt.or(self.size_pt)
+    }
+
+    /// This style's weight where `override_style` states none.
+    pub fn resolved_bold(self, override_style: Self) -> Option<bool> {
+        override_style.bold.or(self.bold)
+    }
 }
 
 impl Chart {
