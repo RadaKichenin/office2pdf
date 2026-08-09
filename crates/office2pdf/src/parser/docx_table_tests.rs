@@ -959,7 +959,7 @@ fn test_table_exact_row_height_and_cell_vertical_align() {
                 docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text("Peer")),
             ),
         ])
-        .row_height(36.0)
+        .row_height(360.0)
         .height_rule(docx_rs::HeightRule::Exact),
     ])
     .set_grid(vec![2000, 2000]);
@@ -969,11 +969,37 @@ fn test_table_exact_row_height_and_cell_vertical_align() {
     let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
     let t = first_table(&doc);
 
-    assert_eq!(t.rows[0].height, Some(36.0));
+    // `w:trHeight/@w:val` is ST_TwipsMeasure: 360 twips is 18pt.
+    assert_eq!(t.rows[0].height, Some(18.0));
     assert_eq!(
         t.rows[0].cells[0].vertical_align,
         Some(CellVerticalAlign::Center)
     );
+}
+
+/// Two heights that differ by more than the 20x factor, so a parser that
+/// forwards raw twips cannot satisfy both by coincidence.
+#[test]
+fn test_exact_row_heights_convert_twips_to_points_per_row() {
+    let row = |text: &str, twips: f32| {
+        docx_rs::TableRow::new(vec![docx_rs::TableCell::new().add_paragraph(
+            docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text(text)),
+        )])
+        .row_height(twips)
+        .height_rule(docx_rs::HeightRule::Exact)
+    };
+
+    // 461 and 403 twips are the invoice-template header rows from issue #842.
+    let table = docx_rs::Table::new(vec![row("Header", 461.0), row("Terms", 403.0)])
+        .set_grid(vec![4000]);
+
+    let data = build_docx_with_table(table);
+    let parser = DocxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let t = first_table(&doc);
+
+    assert_eq!(t.rows[0].height, Some(23.05));
+    assert_eq!(t.rows[1].height, Some(20.15));
 }
 
 #[test]

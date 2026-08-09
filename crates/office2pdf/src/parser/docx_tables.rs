@@ -22,6 +22,7 @@ struct RawCell {
 
 struct RawRow {
     cells: Vec<RawCell>,
+    /// Exact row height in points, already converted from `w:trHeight`'s twips.
     height: Option<f64>,
 }
 
@@ -220,11 +221,15 @@ fn extract_raw_rows(
     for table_child in &table.rows {
         let docx_rs::TableChild::TableRow(row) = table_child;
         let row_prop_json = serde_json::to_value(&row.property).ok();
+        // docx-rs stores `w:trHeight/@w:val` verbatim, and the schema types it
+        // as ST_TwipsMeasure — forwarding it as points made every exact-height
+        // row 20x too tall (issue #842).
         let height = row_prop_json
             .as_ref()
             .filter(|j| j.get("heightRule").and_then(|v| v.as_str()) == Some("exact"))
             .and_then(|j| j.get("rowHeight"))
-            .and_then(|v| v.as_f64());
+            .and_then(|v| v.as_f64())
+            .map(twips_to_pt);
         let mut cells: Vec<RawCell> = Vec::new();
         let mut col_index: usize = 0;
 
