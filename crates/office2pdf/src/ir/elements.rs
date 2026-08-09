@@ -266,6 +266,9 @@ pub struct Chart {
     pub category_axis_text_style: ChartTextStyle,
     /// What `c:valAx/c:txPr` declares for the value tick labels alone.
     pub value_axis_text_style: ChartTextStyle,
+    /// `<c:valAx><c:numFmt formatCode>` — how the value axis prints its tick
+    /// labels. Outranks a series' cache format for the axis (issue #865).
+    pub value_axis_number_format: Option<String>,
 }
 
 /// Run properties a `c:txPr` declares for the strings it governs.
@@ -390,6 +393,10 @@ pub struct DataLabels {
     pub show_percent: bool,
     /// `<c:separator>` between the enabled parts.
     pub separator: String,
+    /// `<c:dLbls><c:numFmt formatCode>` — how the label prints its value.
+    /// Outranks the series' cache format, which is the source cell's own
+    /// (issue #865).
+    pub number_format: Option<String>,
 }
 
 impl Default for DataLabels {
@@ -399,6 +406,7 @@ impl Default for DataLabels {
             show_category: false,
             show_series: false,
             show_percent: false,
+            number_format: None,
             separator: "; ".to_string(),
         }
     }
@@ -478,6 +486,10 @@ pub struct ChartSeries {
     pub point_fills: Vec<Option<Color>>,
     /// What this series' `<c:dLbls>` prints beside each point.
     pub data_labels: DataLabels,
+    /// The number format code from `<c:numCache><c:formatCode>`, when the
+    /// series states one that is not `General`. A ratio is stored as a
+    /// fraction and only this says to print it as a percentage (issue #865).
+    pub number_format: Option<String>,
 }
 
 impl ChartSeries {

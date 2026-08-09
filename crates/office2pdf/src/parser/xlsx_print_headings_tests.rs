@@ -350,6 +350,7 @@ fn test_drawings_shift_with_the_inset_grid_and_charts_by_one_row() {
             text_style: crate::ir::ChartTextStyle::default(),
             category_axis_text_style: crate::ir::ChartTextStyle::default(),
             value_axis_text_style: crate::ir::ChartTextStyle::default(),
+            value_axis_number_format: None,
         },
     ));
 

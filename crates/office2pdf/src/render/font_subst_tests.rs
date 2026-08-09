@@ -965,6 +965,7 @@ fn test_document_requests_font_families_true_for_a_chart_only_document() {
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: None,
     };
 
     let doc = Document {
