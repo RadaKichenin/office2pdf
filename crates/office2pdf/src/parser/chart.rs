@@ -209,9 +209,9 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
             Ok(Event::Empty(ref e)) if e.local_name().as_ref() == b"legend" => {
                 has_legend = true;
             }
-            Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e))
-                if e.local_name().as_ref() == b"autoTitleDeleted" =>
-            {
+            // `CT_Boolean`, so always self-closing; an earlier arm already
+            // owns every `Start` event in this loop.
+            Ok(Event::Empty(ref e)) if e.local_name().as_ref() == b"autoTitleDeleted" => {
                 auto_title_deleted = ct_boolean(e);
             }
             Ok(Event::Empty(ref e)) if e.local_name().as_ref() == b"legendPos" => {
