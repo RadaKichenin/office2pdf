@@ -976,7 +976,7 @@ fn category_total(series: &[crate::ir::ChartSeries], category_index: usize) -> f
 fn chart_axis_extent(chart: &Chart) -> (f64, f64) {
     let (plot_w, plot_h) = axis_plot_size(chart, None);
     let legend: LegendBox = axis_legend_box(chart);
-    let (label_gutter_w, label_gutter_h) = axis_label_gutters(chart);
+    let (label_gutter_w, label_gutter_h) = axis_label_gutters(chart, None);
     (
         label_gutter_w + plot_w + legend.left + legend.right,
         plot_h + label_gutter_h + legend.top + legend.bottom,
@@ -1037,9 +1037,85 @@ pub(super) fn chart_category_gutter_pt(chart: &Chart) -> f64 {
     (widest_em * size_pt + tick + GAP).max(LABEL_W)
 }
 
+/// Angle Office slants crowded category labels by.
+///
+/// A constant, not a function of how badly they crowd: all four labels in the
+/// reference export of the deck in #841 carry the same text matrix,
+/// `8.493095 8.4635 -8.4634 8.492994`, whose `atan2` is 44.90deg, and each
+/// one's horizontal and vertical extents are equal to within 0.6pt — the
+/// signature of exactly 45 (issue #884).
+const CATEGORY_LABEL_ROTATION_DEG: f64 = 45.0;
+
+/// Widest category label's advance, in points, or `None` where the face cannot
+/// be measured — wasm has no font search, and a chart that cannot measure its
+/// labels must not guess that they crowd.
+fn chart_category_label_widest_pt(chart: &Chart) -> Option<f64> {
+    let size_pt: f64 = chart_axis_text_pt(chart, chart.category_axis_text_style);
+    let bold: bool = chart
+        .text_style
+        .resolved_bold(chart.category_axis_text_style)
+        .unwrap_or(false);
+    let family: &str = chart
+        .text_font_family
+        .as_deref()
+        .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_FAMILY);
+    let widest_em: f64 = chart
+        .categories
+        .iter()
+        .filter_map(|category| crate::render::pdf::text_advance_em(family, bold, category))
+        .fold(0.0_f64, f64::max);
+    (widest_em > 0.0).then_some(widest_em * size_pt)
+}
+
+/// Whether the category labels have to slant to fit the bands they own.
+///
+/// Only a column plot asks: a bar chart's categories run down the left edge,
+/// where a label's length costs width and is already measured by
+/// [`chart_category_gutter_pt`].
+fn chart_category_labels_rotated(chart: &Chart, frame: Option<(f64, f64)>) -> bool {
+    if matches!(chart.chart_type, ChartType::Bar) || chart.category_axis_deleted {
+        return false;
+    }
+    let categories: usize = chart.categories.len();
+    let Some(widest_pt) = chart_category_label_widest_pt(chart) else {
+        return false;
+    };
+    if categories == 0 {
+        return false;
+    }
+    // The band is the plot divided by the categories. The plot's *width* here
+    // depends only on the left gutter, which no category rotation moves, so
+    // asking this question inside `axis_label_gutters` is not circular.
+    let band: f64 = match frame {
+        Some((frame_w, _)) => {
+            let legend: LegendBox = axis_legend_box(chart);
+            let (title_left, _) = axis_title_gutters(chart);
+            let gutter_w: f64 = chart_tick_band_pt(chart) + GAP + title_left;
+            (frame_w - gutter_w - legend.left - legend.right).max(MIN_PLOT_PT) / categories as f64
+        }
+        None => chart_category_band_pt(chart),
+    };
+    widest_pt > band
+}
+
+/// Height slanted category labels reserve below the axis.
+///
+/// A label rotated 45deg drops by its own advance times sin 45. The reference's
+/// longest label is 244.4pt of text and hangs 172.56pt below the axis;
+/// `244.4 * sin 45` is 172.8 (issue #884).
+fn chart_category_rotated_gutter_pt(chart: &Chart) -> f64 {
+    let widest_pt: f64 = chart_category_label_widest_pt(chart).unwrap_or(0.0);
+    let size_pt: f64 = chart_axis_text_pt(chart, chart.category_axis_text_style);
+    let drop: f64 = widest_pt * CATEGORY_LABEL_ROTATION_DEG.to_radians().sin();
+    // The glyphs' own height leans into the gutter too, and the label starts a
+    // tick's length clear of the axis.
+    drop + size_pt * CATEGORY_LABEL_ROTATION_DEG.to_radians().cos()
+        + chart_major_tick_length(size_pt)
+}
+
 /// Gutters the category labels and the value tick labels take inside the box,
 /// alongside whatever the legend and the axis titles reserve.
-fn axis_label_gutters(chart: &Chart) -> (f64, f64) {
+fn axis_label_gutters(chart: &Chart, frame: Option<(f64, f64)>) -> (f64, f64) {
     let (title_left, title_bottom) = axis_title_gutters(chart);
     if matches!(chart.chart_type, ChartType::Bar) {
         (
@@ -1047,9 +1123,14 @@ fn axis_label_gutters(chart: &Chart) -> (f64, f64) {
             chart_tick_band_pt(chart) + title_bottom,
         )
     } else {
+        let category_band: f64 = if chart_category_labels_rotated(chart, frame) {
+            chart_category_rotated_gutter_pt(chart)
+        } else {
+            chart_category_band_pt(chart)
+        };
         (
             chart_tick_band_pt(chart) + GAP + title_left,
-            chart_category_band_pt(chart) + title_bottom,
+            category_band + title_bottom,
         )
     }
 }
@@ -1116,7 +1197,7 @@ fn axis_plot_size(chart: &Chart, frame: Option<(f64, f64)>) -> (f64, f64) {
         return (intrinsic_w, intrinsic_h);
     };
     let legend: LegendBox = axis_legend_box(chart);
-    let (gutter_w, gutter_h) = axis_label_gutters(chart);
+    let (gutter_w, gutter_h) = axis_label_gutters(chart, frame);
     // A frame too small for the chrome would give a negative plot, so the
     // intrinsic size is the floor rather than a source of inverted geometry.
     (
@@ -1334,7 +1415,10 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
     // whatever the legend reserves on the left or above.
     let legend: LegendBox = axis_legend_box(chart);
     let (plot_w, plot_h) = axis_plot_size(chart, frame);
-    let (gutter_w, _) = axis_label_gutters(chart);
+    let (gutter_w, _) = axis_label_gutters(chart, frame);
+    // Decided once for the whole axis: labels all slant or none do, so a short
+    // label in a crowded axis still hangs with its neighbours (issue #884).
+    let category_labels_rotated: bool = chart_category_labels_rotated(chart, frame);
     let (plot_x, plot_y) = (legend.left + gutter_w, legend.top);
     // Pitch of one category along the category axis. `ROW` is the intrinsic
     // value; a framed chart divides the axis it actually got, so widening the
@@ -1541,6 +1625,26 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 chart_axis_text_weight(chart, chart.category_axis_text_style),
                 escape_typst(category)
             );
+        } else if category_labels_rotated {
+            // Every label hangs from the axis by its trailing end, pinned at
+            // its band's centre, and slants away down-left. Rotating about
+            // `top + right` is what puts all of them on one top edge, which is
+            // how the reference draws them (issue #884). The box is the widest
+            // label's width for every label so that right-aligning inside it
+            // lands each trailing end on the pivot.
+            let label_box_w: f64 = chart_category_label_widest_pt(chart).unwrap_or(row);
+            let centre: f64 = plot_x + group_start + row / 2.0;
+            let _ = writeln!(
+                out,
+                "#place(top + left, dx: {}pt, dy: {}pt, rotate(-{}deg, origin: top + right, box(width: {}pt)[#align(right)[#text(size: {}pt{})[{}]]]))",
+                format_f64(centre - label_box_w),
+                format_f64(plot_y + plot_h + 2.0),
+                format_f64(CATEGORY_LABEL_ROTATION_DEG),
+                format_f64(label_box_w),
+                format_f64(chart_axis_text_pt(chart, chart.category_axis_text_style)),
+                chart_axis_text_weight(chart, chart.category_axis_text_style),
+                escape_typst(category)
+            );
         } else {
             let _ = writeln!(
                 out,
@@ -1647,7 +1751,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
         );
     }
     if let Some(title) = chart.category_axis_title.as_deref() {
-        let (_, gutter_h) = axis_label_gutters(chart);
+        let (_, gutter_h) = axis_label_gutters(chart, frame);
         let _ = writeln!(
             out,
             "#place(top + left, dx: {}pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(center + horizon)[#text(size: 9pt, weight: \"bold\")[{}]]])",
