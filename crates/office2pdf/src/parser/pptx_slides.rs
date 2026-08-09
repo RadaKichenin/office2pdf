@@ -843,6 +843,10 @@ struct PictureState {
     blip_alpha: Option<f64>,
     /// Preset geometry name from `<a:prstGeom prst>` ("crop to shape").
     prst_geom: Option<String>,
+    /// Subpaths flattened from `<a:custGeom>`, normalized to the picture box.
+    /// A picture may crop to a custom shape just as it can to a preset one
+    /// (issue #872).
+    custom_geometry: Vec<Vec<(f64, f64)>>,
     /// Outer shadow from the picture's `<a:effectLst>` (issue #360).
     shadow: Option<Shadow>,
     /// First `<a:gd>` adjust value inside the picture's prstGeom avLst.
@@ -1237,9 +1241,20 @@ fn finalize_picture(
                     .unwrap_or_else(|| (asset.data.clone(), format)),
                 _ => (asset.data.clone(), format),
             };
-            // Typst's corner radius cannot express a true ellipse on a
-            // non-square box, so bake elliptical clips into the alpha mask.
-            let (data, format) = if clip_shape == Some(ImageClipShape::Ellipse) {
+            // Typst's corner radius expresses a rounded rectangle and nothing
+            // else, so the crops it cannot draw are baked into the alpha mask.
+            let (data, format) = if !pic.custom_geometry.is_empty() {
+                // A custom geometry has no corner-radius equivalent at all
+                // (issue #872).
+                match apply_path_mask(&data, &pic.custom_geometry) {
+                    Some(masked) => {
+                        clip_shape = None;
+                        masked
+                    }
+                    None => (data, format),
+                }
+            } else if clip_shape == Some(ImageClipShape::Ellipse) {
+                // A radius cannot describe a true ellipse on a non-square box.
                 match apply_ellipse_mask(&data) {
                     Some(masked) => {
                         clip_shape = None;
@@ -1310,6 +1325,60 @@ fn apply_ellipse_mask(data: &[u8]) -> Option<(Vec<u8>, ImageFormat)> {
         .write_to(&mut out, image::ImageFormat::Png)
         .ok()?;
     Some((out.into_inner(), ImageFormat::Png))
+}
+
+/// Clear the alpha of every pixel outside `subpaths`, and re-encode as PNG.
+///
+/// A picture may carry an `a:custGeom` just as a shape does — the deck on #872
+/// clips its team photos to circles and its background art to discs that way —
+/// and Typst's corner radius cannot express those, so the clip is baked into
+/// the alpha channel the same way [`apply_ellipse_mask`] bakes an ellipse.
+///
+/// Subpaths are normalized to 0..1 of the picture box and filled even-odd, so
+/// an inner boundary carves a hole (issues #866, #870).
+fn apply_path_mask(data: &[u8], subpaths: &[Vec<(f64, f64)>]) -> Option<(Vec<u8>, ImageFormat)> {
+    let decoded = image::load_from_memory(data).ok()?;
+    let mut rgba = decoded.into_rgba8();
+    let (width, height) = rgba.dimensions();
+    if width == 0 || height == 0 || subpaths.is_empty() {
+        return None;
+    }
+    for (x, y, pixel) in rgba.enumerate_pixels_mut() {
+        let px = (f64::from(x) + 0.5) / f64::from(width);
+        let py = (f64::from(y) + 0.5) / f64::from(height);
+        if !point_is_inside_even_odd(subpaths, px, py) {
+            pixel[3] = 0;
+        }
+    }
+    let mut out = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::ImageRgba8(rgba)
+        .write_to(&mut out, image::ImageFormat::Png)
+        .ok()?;
+    Some((out.into_inner(), ImageFormat::Png))
+}
+
+/// Whether a point falls inside a set of closed subpaths under the even-odd
+/// rule: cast a ray and count the edges it crosses.
+fn point_is_inside_even_odd(subpaths: &[Vec<(f64, f64)>], px: f64, py: f64) -> bool {
+    let mut crossings: usize = 0;
+    for subpath in subpaths {
+        if subpath.len() < 3 {
+            continue;
+        }
+        for index in 0..subpath.len() {
+            let (x1, y1) = subpath[index];
+            let (x2, y2) = subpath[(index + 1) % subpath.len()];
+            // A horizontal edge cannot be crossed by a horizontal ray, and the
+            // half-open test keeps a vertex from counting twice.
+            if (y1 > py) != (y2 > py) {
+                let t: f64 = (py - y1) / (y2 - y1);
+                if px < x1 + t * (x2 - x1) {
+                    crossings += 1;
+                }
+            }
+        }
+    }
+    crossings % 2 == 1
 }
 
 /// Multiply the image's alpha channel by `alpha` and re-encode as PNG.
@@ -1635,6 +1704,11 @@ impl<'a> SlideXmlParser<'a> {
             b"prstGeom" if self.in_pic && self.pic.in_sp_pr => {
                 self.pic.prst_geom = get_attr_str(e, b"prst");
                 self.pic.in_prst_geom = true;
+            }
+            // A picture can crop to a custom shape as well as a preset one
+            // (issue #872).
+            b"custGeom" if self.in_pic && self.pic.in_sp_pr => {
+                self.pic.custom_geometry = super::custom_geometry::parse_custom_geometry(reader);
             }
             b"effectLst" if self.in_pic && self.pic.in_sp_pr => {
                 self.pic.shadow = parse_effect_list(reader, self.ctx.theme, self.ctx.color_map);
@@ -2734,4 +2808,62 @@ fn parse_slide_xml_inner<'a>(
     }
 
     Ok(parser.finish())
+}
+
+#[cfg(test)]
+mod picture_mask_tests {
+    use super::point_is_inside_even_odd;
+
+    /// The unit square, and a smaller square inside it.
+    fn frame() -> Vec<Vec<(f64, f64)>> {
+        vec![
+            vec![(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)],
+            vec![(0.25, 0.25), (0.75, 0.25), (0.75, 0.75), (0.25, 0.75)],
+        ]
+    }
+
+    /// A picture's custom crop keeps what the path encloses and clears the
+    /// rest, so a point outside every subpath is masked away (issue #872).
+    #[test]
+    fn a_point_outside_the_only_subpath_is_masked() {
+        let triangle = vec![vec![(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]];
+        assert!(point_is_inside_even_odd(&triangle, 0.1, 0.1));
+        assert!(!point_is_inside_even_odd(&triangle, 0.9, 0.9));
+    }
+
+    /// An inner boundary carves a hole rather than adding to the fill, so the
+    /// middle of a frame is masked away too (issues #870, #872).
+    #[test]
+    fn the_inside_of_a_frame_is_a_hole() {
+        assert!(
+            point_is_inside_even_odd(&frame(), 0.1, 0.5),
+            "the band between the two rings is kept"
+        );
+        assert!(
+            !point_is_inside_even_odd(&frame(), 0.5, 0.5),
+            "the centre falls inside both rings, so it is a hole"
+        );
+        assert!(
+            !point_is_inside_even_odd(&frame(), 1.5, 0.5),
+            "a point outside both is masked"
+        );
+    }
+
+    /// A degenerate subpath encloses nothing and must not swallow the picture.
+    #[test]
+    fn a_subpath_with_too_few_points_is_ignored() {
+        let degenerate = vec![vec![(0.0, 0.0), (1.0, 1.0)]];
+        assert!(!point_is_inside_even_odd(&degenerate, 0.5, 0.5));
+    }
+
+    /// A vertex exactly on the ray must not be counted twice, or a whole row
+    /// of the mask inverts.
+    #[test]
+    fn a_vertex_on_the_ray_is_counted_once() {
+        let diamond = vec![vec![(0.5, 0.0), (1.0, 0.5), (0.5, 1.0), (0.0, 0.5)]];
+        assert!(point_is_inside_even_odd(&diamond, 0.5, 0.5));
+        assert!(!point_is_inside_even_odd(&diamond, 0.05, 0.05));
+        // The ray at y = 0.5 passes exactly through the left and right vertices.
+        assert!(!point_is_inside_even_odd(&diamond, 1.2, 0.5));
+    }
 }

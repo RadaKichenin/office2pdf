@@ -922,7 +922,10 @@ pub struct ImageParagraphSpacing {
     pub after: Option<f64>,
 }
 
-/// Supported picture clip geometries (PowerPoint "crop to shape").
+/// Supported **preset** picture clip geometries (PowerPoint "crop to shape").
+///
+/// A custom `a:custGeom` crop is baked into the image's alpha channel instead
+/// and never reaches this enum, so it needs no variant here (issue #872).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ImageClipShape {
     /// Rounded rectangle with the corner radius as a fraction of the
