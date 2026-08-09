@@ -28,7 +28,7 @@ pub(crate) struct SheetPrintOptions {
 /// rules every cell boundary (issue #622) and prints the heading gutter and
 /// strip on every page (issue #623). umya-spreadsheet's `PrintOptions`
 /// models only the centering attributes, so the flags are read from the
-/// archive directly, like `sheets_fitting_to_page`.
+/// archive directly, like `sheets_fit_to_width`.
 pub(crate) fn sheets_print_options(data: &[u8]) -> HashMap<String, SheetPrintOptions> {
     let mut options_by_sheet: HashMap<String, SheetPrintOptions> = HashMap::new();
     let Ok(mut archive) = crate::parser::open_zip(data) else {
