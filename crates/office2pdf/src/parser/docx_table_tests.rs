@@ -1338,3 +1338,97 @@ fn test_table_level_borders_expand_to_cells() {
     assert!(first.top.is_some(), "outer top on first row");
     assert!(first.bottom.is_some(), "insideH between rows");
 }
+
+/// A content control that wraps a whole `<w:p>` inside a table cell — the
+/// block-level form Word writes for a placeholder line — contributed nothing,
+/// because `TableCellContent::StructuredDataTag` fell through the cell walker
+/// (issue #844). The run-level form, where the `w:sdt` sits inside an existing
+/// paragraph, always worked; both appear here so the fix cannot regress it.
+#[test]
+fn test_cell_renders_a_block_level_sdt_paragraph() {
+    let document_xml = r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:body>
+            <w:tbl>
+                <w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid>
+                <w:tr>
+                    <w:tc>
+                        <w:p><w:sdt><w:sdtPr><w:showingPlcHdr/></w:sdtPr><w:sdtContent><w:r><w:t>Gateadresse</w:t></w:r></w:sdtContent></w:sdt></w:p>
+                        <w:sdt>
+                            <w:sdtPr><w:showingPlcHdr/></w:sdtPr>
+                            <w:sdtContent>
+                                <w:p><w:r><w:t>Postnummer, poststed</w:t></w:r></w:p>
+                            </w:sdtContent>
+                        </w:sdt>
+                        <w:p><w:r><w:t>Telefon</w:t></w:r></w:p>
+                    </w:tc>
+                </w:tr>
+            </w:tbl>
+            <w:sectPr/>
+        </w:body>
+    </w:document>"#;
+
+    let data = build_docx_with_columns(document_xml);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let t = first_table(&doc);
+
+    let cell_text: Vec<String> = t.rows[0].cells[0]
+        .content
+        .iter()
+        .filter_map(|block| match block {
+            Block::Paragraph(p) => Some(p.runs.iter().map(|r| r.text.as_str()).collect::<String>()),
+            _ => None,
+        })
+        .collect();
+
+    assert_eq!(
+        cell_text,
+        vec!["Gateadresse", "Postnummer, poststed", "Telefon"],
+        "the block-level sdt's paragraph must keep its place between its siblings"
+    );
+}
+
+/// A block-level `w:sdt` may hold several paragraphs and may nest, and all of
+/// them belong to the cell.
+#[test]
+fn test_cell_renders_every_paragraph_of_a_nested_block_sdt() {
+    let document_xml = r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:body>
+            <w:tbl>
+                <w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid>
+                <w:tr>
+                    <w:tc>
+                        <w:sdt>
+                            <w:sdtPr/>
+                            <w:sdtContent>
+                                <w:p><w:r><w:t>Outer one</w:t></w:r></w:p>
+                                <w:sdt>
+                                    <w:sdtPr/>
+                                    <w:sdtContent>
+                                        <w:p><w:r><w:t>Inner</w:t></w:r></w:p>
+                                    </w:sdtContent>
+                                </w:sdt>
+                                <w:p><w:r><w:t>Outer two</w:t></w:r></w:p>
+                            </w:sdtContent>
+                        </w:sdt>
+                    </w:tc>
+                </w:tr>
+            </w:tbl>
+            <w:sectPr/>
+        </w:body>
+    </w:document>"#;
+
+    let data = build_docx_with_columns(document_xml);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let t = first_table(&doc);
+
+    let cell_text: Vec<String> = t.rows[0].cells[0]
+        .content
+        .iter()
+        .filter_map(|block| match block {
+            Block::Paragraph(p) => Some(p.runs.iter().map(|r| r.text.as_str()).collect::<String>()),
+            _ => None,
+        })
+        .collect();
+
+    assert_eq!(cell_text, vec!["Outer one", "Inner", "Outer two"]);
+}

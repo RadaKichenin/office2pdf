@@ -1698,3 +1698,119 @@ fn test_fill_theme_color_resolves_through_the_workbook_scheme() {
         Some(Color::new(0x44, 0x72, 0xC4))
     );
 }
+
+/// Build a one-cell workbook from raw parts so the `cellStyleXfs` /
+/// `cellXfs` / `xfId` relationship can be stated exactly — umya's builder
+/// cannot express a Normal style that switches a format category off.
+fn build_xlsx_with_style_xfs(styles_xml: &str, cell_xml: &str) -> Vec<u8> {
+    let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    let options = zip::write::FileOptions::default();
+    let mut write = |path: &str, body: &str| {
+        zip.start_file(path, options).unwrap();
+        std::io::Write::write_all(&mut zip, body.as_bytes()).unwrap();
+    };
+
+    write(
+        "[Content_Types].xml",
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>"#,
+    );
+    write(
+        "_rels/.rels",
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>"#,
+    );
+    write(
+        "xl/workbook.xml",
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets>
+</workbook>"#,
+    );
+    write(
+        "xl/_rels/workbook.xml.rels",
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>"#,
+    );
+    write("xl/styles.xml", styles_xml);
+    write(
+        "xl/worksheets/sheet1.xml",
+        &format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<sheetData><row r="1">{cell_xml}</row></sheetData>
+</worksheet>"#
+        ),
+    );
+
+    zip.finish().unwrap().into_inner()
+}
+
+/// A `styles.xml` whose Normal style (`cellStyleXfs[0]`) switches number
+/// formatting off, and whose `cellXfs[1]` inherits from `cellStyleXfs[1]`
+/// instead. Every cell resolved against entry 0 while `xfId` went unread, so
+/// the whole workbook lost its number formats (issue #851).
+const STYLES_WITH_APPLY_NUMBER_FORMAT_OFF: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>
+<fills count="1"><fill><patternFill patternType="none"/></fill></fills>
+<borders count="1"><border/></borders>
+<cellStyleXfs count="2">
+<xf numFmtId="0" fontId="0" fillId="0" borderId="0" applyNumberFormat="0"/>
+<xf numFmtId="9" fontId="0" fillId="0" borderId="0"/>
+</cellStyleXfs>
+<cellXfs count="2">
+<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+<xf numFmtId="9" fontId="0" fillId="0" borderId="0" xfId="1" applyFont="1"/>
+</cellXfs>
+</styleSheet>"#;
+
+#[test]
+fn test_builtin_percent_format_survives_a_normal_style_that_disables_it() {
+    let data = build_xlsx_with_style_xfs(
+        STYLES_WITH_APPLY_NUMBER_FORMAT_OFF,
+        r#"<c r="A1" s="1"><v>0.25</v></c>"#,
+    );
+    let (doc, _warnings) = XlsxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let tp = get_sheet_page(&doc, 0);
+
+    assert_eq!(cell_text(&tp.table.rows[0].cells[0]), "25%");
+}
+
+/// A different value and a different builtin id, so nothing can pass by
+/// returning a fixed string.
+#[test]
+fn test_builtin_two_decimal_percent_resolves_through_its_own_xf() {
+    let styles = STYLES_WITH_APPLY_NUMBER_FORMAT_OFF.replace(r#"numFmtId="9""#, r#"numFmtId="10""#);
+    let data = build_xlsx_with_style_xfs(&styles, r#"<c r="A1" s="1"><v>0.5</v></c>"#);
+    let (doc, _warnings) = XlsxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let tp = get_sheet_page(&doc, 0);
+
+    assert_eq!(cell_text(&tp.table.rows[0].cells[0]), "50.00%");
+}
+
+/// A cell that really does point at the Normal style keeps taking its veto,
+/// so the fix cannot be "ignore applyNumberFormat".
+#[test]
+fn test_a_cell_pointing_at_the_normal_style_still_takes_its_veto() {
+    let styles = STYLES_WITH_APPLY_NUMBER_FORMAT_OFF.replace(
+        r#"<xf numFmtId="9" fontId="0" fillId="0" borderId="0" xfId="1" applyFont="1"/>"#,
+        r#"<xf numFmtId="9" fontId="0" fillId="0" borderId="0" xfId="0" applyFont="1"/>"#,
+    );
+    let data = build_xlsx_with_style_xfs(&styles, r#"<c r="A1" s="1"><v>0.25</v></c>"#);
+    let (doc, _warnings) = XlsxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let tp = get_sheet_page(&doc, 0);
+
+    assert_eq!(cell_text(&tp.table.rows[0].cells[0]), "0.25");
+}
