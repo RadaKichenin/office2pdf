@@ -1,9 +1,9 @@
 //! Placeholder inheritance for PPTX slides.
 //!
 //! A slide placeholder (`<p:sp>`/`<p:pic>` with `<p:ph>`) that omits
-//! `<a:xfrm>` inherits its position and size from the matching placeholder
-//! in the slide layout, which in turn may inherit from the slide master
-//! (ECMA-376 §19.3.1.36). Placeholder text likewise stacks the master's
+//! `<a:xfrm>` inherits its position, size and rotation from the matching
+//! placeholder in the slide layout, which in turn may inherit from the slide
+//! master (ECMA-376 §19.3.1.36). Placeholder text likewise stacks the master's
 //! `<p:txStyles>` bucket, the master placeholder's `<a:lstStyle>`, and the
 //! layout placeholder's `<a:lstStyle>` beneath slide-local properties.
 //!
@@ -28,13 +28,20 @@ use super::theme::{
 use crate::ir::Color;
 use crate::parser::xml_util::{get_attr_i64, get_attr_str};
 
-/// Resolved placeholder position and size, in EMU.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Resolved placeholder position and size, in EMU, with the rotation the
+/// same `<a:xfrm>` declares.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) struct PlaceholderGeometry {
     pub(super) x: i64,
     pub(super) y: i64,
     pub(super) cx: i64,
     pub(super) cy: i64,
+    /// `<a:xfrm rot>` in clockwise degrees. A template rotates the box on the
+    /// layout to run a strip of text down an edge, and the slide placeholder
+    /// that inherits the box has to inherit the angle with it (issue #881) —
+    /// the offset and extent alone describe a box that is off-slide and
+    /// wider than the slide is tall.
+    pub(super) rotation_deg: Option<f64>,
 }
 
 /// A placeholder declared by one inheritance layer (layout or master).
@@ -271,6 +278,7 @@ fn scan_layer_placeholders(
         y: Option<i64>,
         cx: Option<i64>,
         cy: Option<i64>,
+        rotation_deg: Option<f64>,
         in_sp_pr: bool,
         in_xfrm: bool,
         in_line: bool,
@@ -314,6 +322,7 @@ fn scan_layer_placeholders(
                     && state.in_sp_pr
                 {
                     state.in_xfrm = true;
+                    state.rotation_deg = get_attr_i64(e, b"rot").map(|rot| rot as f64 / 60_000.0);
                 }
             }
             // A fill nested in `<a:ln>` paints the outline, not the shape.
@@ -418,7 +427,13 @@ fn scan_layer_placeholders(
                         let geometry: Option<PlaceholderGeometry> =
                             match (state.x, state.y, state.cx, state.cy) {
                                 (Some(x), Some(y), Some(cx), Some(cy)) => {
-                                    Some(PlaceholderGeometry { x, y, cx, cy })
+                                    Some(PlaceholderGeometry {
+                                        x,
+                                        y,
+                                        cx,
+                                        cy,
+                                        rotation_deg: state.rotation_deg,
+                                    })
                                 }
                                 _ => None,
                             };
