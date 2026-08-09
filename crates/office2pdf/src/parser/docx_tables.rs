@@ -872,10 +872,69 @@ fn extract_cell_content(
                     depth + 1,
                 )));
             }
+            // A content control wrapping whole paragraphs — the block-level
+            // form Word writes for a placeholder line. Its children are
+            // ordinary cell content; dropping the wrapper dropped them with it
+            // (issue #844).
+            docx_rs::TableCellContent::StructuredDataTag(sdt) => {
+                extend_with_cell_sdt_content(
+                    &mut blocks,
+                    sdt,
+                    images,
+                    hyperlinks,
+                    style_map,
+                    ctx,
+                    depth,
+                );
+            }
             _ => {}
         }
     }
     blocks
+}
+
+/// Append a block-level `w:sdt`'s paragraphs and tables to a cell's content,
+/// in document order, descending through nested controls.
+fn extend_with_cell_sdt_content(
+    blocks: &mut Vec<Block>,
+    sdt: &docx_rs::StructuredDataTag,
+    images: &ImageMap,
+    hyperlinks: &HyperlinkMap,
+    style_map: &StyleMap,
+    ctx: &DocxConversionContext,
+    depth: usize,
+) {
+    for child in &sdt.children {
+        match child {
+            docx_rs::StructuredDataTagChild::Paragraph(para) => {
+                convert_paragraph_blocks(
+                    para,
+                    blocks,
+                    images,
+                    hyperlinks,
+                    style_map,
+                    ctx,
+                    ParagraphContainer::TableCell,
+                );
+            }
+            docx_rs::StructuredDataTagChild::Table(nested_table) if depth < MAX_TABLE_DEPTH => {
+                blocks.push(Block::Table(convert_table(
+                    nested_table,
+                    images,
+                    hyperlinks,
+                    style_map,
+                    ctx,
+                    depth + 1,
+                )));
+            }
+            docx_rs::StructuredDataTagChild::StructuredDataTag(nested) => {
+                extend_with_cell_sdt_content(
+                    blocks, nested, images, hyperlinks, style_map, ctx, depth,
+                );
+            }
+            _ => {}
+        }
+    }
 }
 
 /// Expand table-level `w:tblBorders` onto cells that carry no explicit
