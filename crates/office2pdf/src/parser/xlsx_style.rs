@@ -1,6 +1,30 @@
 use crate::ir::{BorderLineStyle, BorderSide, CellBorder, Color, TextStyle};
 use crate::parser::xml_util::parse_argb_color;
 
+/// Resolve a style colour, following `<color theme="N" tint="T"/>` into the
+/// workbook's colour scheme.
+///
+/// A themed colour carries no `rgb`, so `get_argb()` returns the empty string
+/// for it and every themed run, fill and border fell back to the renderer's
+/// default — a workbook styled entirely from its theme came out black
+/// (issue #853). `get_argb_with_theme` indexes umya's colour map, which is
+/// `[lt1, dk1, lt2, dk2, accent1..6, hlink, folHlink]` — the ECMA-376 order,
+/// including the light/dark swap on slots 0 and 1 — and applies `tint` to the
+/// resolved luminance.
+///
+/// `theme` is `None` when the workbook ships no readable theme part; an
+/// explicit `rgb` still resolves, and a themed colour is left unset rather
+/// than guessed.
+pub(super) fn resolve_style_color(
+    color: &umya_spreadsheet::Color,
+    theme: Option<&umya_spreadsheet::structs::drawing::Theme>,
+) -> Option<Color> {
+    match theme {
+        Some(theme) => parse_argb_color(&color.get_argb_with_theme(theme)),
+        None => parse_argb_color(color.get_argb()),
+    }
+}
+
 /// Map an Excel border style name to its printed band width in points.
 ///
 /// Measured directly on a native Excel 16.111 one-factor probe against
@@ -36,6 +60,7 @@ pub(super) fn border_style_to_width(style: &str) -> Option<f64> {
 pub(super) fn extract_cell_text_style(
     cell: &umya_spreadsheet::Cell,
     normal_font: Option<&super::xlsx_cells::NormalFont>,
+    theme: Option<&umya_spreadsheet::structs::drawing::Theme>,
 ) -> TextStyle {
     let style = cell.get_style();
     let Some(font) = style.get_font() else {
@@ -75,13 +100,13 @@ pub(super) fn extract_cell_text_style(
         normal_font.map(|normal| normal.size_pt)
     };
 
-    // Font color
-    let color_argb = font.get_color().get_argb();
-    let color = if color_argb.is_empty() || color_argb == "FF000000" {
-        // Default black — skip
+    // Font color. An explicit `FF000000` is still skipped so the renderer's
+    // own default black stands; a themed colour carries no `rgb` at all and is
+    // resolved through the workbook's colour scheme instead (issue #853).
+    let color: Option<Color> = if font.get_color().get_argb() == "FF000000" {
         None
     } else {
-        parse_argb_color(color_argb)
+        resolve_style_color(font.get_color(), theme)
     };
 
     TextStyle {
@@ -122,7 +147,11 @@ fn normal_font_text_style(normal_font: Option<&super::xlsx_cells::NormalFont>) -
 /// Excel writes only the properties a run changes into its `<rPr>`, so
 /// unspecified properties (empty name, zero size, absent color) must keep the
 /// cell style rather than reset to defaults.
-pub(super) fn apply_rich_run_font(base: &TextStyle, font: &umya_spreadsheet::Font) -> TextStyle {
+pub(super) fn apply_rich_run_font(
+    base: &TextStyle,
+    font: &umya_spreadsheet::Font,
+    theme: Option<&umya_spreadsheet::structs::drawing::Theme>,
+) -> TextStyle {
     let mut style = base.clone();
 
     let font_name: &str = font.get_name();
@@ -151,10 +180,7 @@ pub(super) fn apply_rich_run_font(base: &TextStyle, font: &umya_spreadsheet::Fon
         style.strikethrough = Some(true);
     }
 
-    let color_argb: &str = font.get_color().get_argb();
-    if !color_argb.is_empty()
-        && let Some(color) = parse_argb_color(color_argb)
-    {
+    if let Some(color) = resolve_style_color(font.get_color(), theme) {
         style.color = Some(color);
     }
 
@@ -162,9 +188,12 @@ pub(super) fn apply_rich_run_font(base: &TextStyle, font: &umya_spreadsheet::Fon
 }
 
 /// Extract background color from a cell's style.
-pub(super) fn extract_cell_background(cell: &umya_spreadsheet::Cell) -> Option<Color> {
+pub(super) fn extract_cell_background(
+    cell: &umya_spreadsheet::Cell,
+    theme: Option<&umya_spreadsheet::structs::drawing::Theme>,
+) -> Option<Color> {
     let bg = cell.get_style().get_background_color()?;
-    parse_argb_color(bg.get_argb())
+    resolve_style_color(bg, theme)
 }
 
 /// Map Excel border style name to `BorderLineStyle`.
@@ -182,10 +211,13 @@ pub(super) fn border_style_to_line_style(style: &str) -> BorderLineStyle {
 }
 
 /// Extract a single border side from an umya Border object.
-pub(super) fn extract_border_side(border: &umya_spreadsheet::Border) -> Option<BorderSide> {
+pub(super) fn extract_border_side(
+    border: &umya_spreadsheet::Border,
+    theme: Option<&umya_spreadsheet::structs::drawing::Theme>,
+) -> Option<BorderSide> {
     let border_style_str = border.get_border_style();
     let width = border_style_to_width(border_style_str)?;
-    let color = parse_argb_color(border.get_color().get_argb()).unwrap_or(Color::black());
+    let color = resolve_style_color(border.get_color(), theme).unwrap_or(Color::black());
     let style = border_style_to_line_style(border_style_str);
     Some(BorderSide {
         width,
@@ -195,12 +227,15 @@ pub(super) fn extract_border_side(border: &umya_spreadsheet::Border) -> Option<B
 }
 
 /// Extract cell border properties.
-pub(super) fn extract_cell_borders(cell: &umya_spreadsheet::Cell) -> Option<CellBorder> {
+pub(super) fn extract_cell_borders(
+    cell: &umya_spreadsheet::Cell,
+    theme: Option<&umya_spreadsheet::structs::drawing::Theme>,
+) -> Option<CellBorder> {
     let borders = cell.get_style().get_borders()?;
-    let top = extract_border_side(borders.get_top());
-    let bottom = extract_border_side(borders.get_bottom());
-    let left = extract_border_side(borders.get_left());
-    let right = extract_border_side(borders.get_right());
+    let top = extract_border_side(borders.get_top(), theme);
+    let bottom = extract_border_side(borders.get_bottom(), theme);
+    let left = extract_border_side(borders.get_left(), theme);
+    let right = extract_border_side(borders.get_right(), theme);
     if top.is_none() && bottom.is_none() && left.is_none() && right.is_none() {
         return None;
     }
