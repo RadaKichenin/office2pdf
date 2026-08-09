@@ -911,10 +911,10 @@ struct ShapeState {
     has_direct_effect_lst: bool,
     in_sp_pr: bool,
     prst_geom: Option<String>,
-    /// Vertices flattened from `<a:custGeom>`, normalized to the shape box.
-    /// Present only when the geometry could be expressed as one polygon
-    /// (issue #855).
-    custom_geometry: Option<Vec<(f64, f64)>>,
+    /// Subpaths flattened from `<a:custGeom>`, each normalized to the shape
+    /// box. Empty when the geometry yielded nothing usable, in which case the
+    /// rectangle fallback stands (issues #855, #866).
+    custom_geometry: Vec<Vec<(f64, f64)>>,
     fill: Option<Color>,
     gradient_fill: Option<GradientFill>,
     pattern_fill: Option<PatternFill>,
@@ -967,7 +967,7 @@ impl Default for ShapeState {
             shadow: None,
             in_sp_pr: false,
             prst_geom: None,
-            custom_geometry: None,
+            custom_geometry: Vec::new(),
             fill: None,
             gradient_fill: None,
             pattern_fill: None,
@@ -1060,8 +1060,11 @@ fn finalize_shape(
         let text_shape_kind: Option<ShapeKind> = shape.prst_geom.as_deref().and_then(|geom| {
             let width: f64 = emu_to_pt(shape.cx);
             let height: f64 = emu_to_pt(shape.cy);
-            if let Some(vertices) = custom_geometry_kind(shape) {
-                return Some(vertices);
+            // A text-bearing shape gets one background box, so only the
+            // first subpath can back it; a multi-subpath decoration carries
+            // no text in practice.
+            if let Some(kind) = custom_geometry_kinds(shape).into_iter().next() {
+                return Some(kind);
             }
             let kind: ShapeKind = prst_to_shape_kind(
                 geom,
@@ -1150,8 +1153,9 @@ fn finalize_shape(
     } else if let Some(ref geom) = shape.prst_geom {
         let width: f64 = emu_to_pt(shape.cx);
         let height: f64 = emu_to_pt(shape.cy);
-        let kind: ShapeKind = custom_geometry_kind(shape).unwrap_or_else(|| {
-            prst_to_shape_kind(
+        let mut kinds: Vec<ShapeKind> = custom_geometry_kinds(shape);
+        if kinds.is_empty() {
+            kinds.push(prst_to_shape_kind(
                 geom,
                 width,
                 height,
@@ -1160,8 +1164,8 @@ fn finalize_shape(
                 shape.head_end,
                 shape.tail_end,
                 &shape.adj_values,
-            )
-        });
+            ));
+        }
         // Use explicit line color, falling back to style-based color from
         // <p:style><a:lnRef> - unless <a:ln><a:noFill/> disabled the line.
         let effective_ln_color: Option<Color> = if shape.explicit_no_line {
@@ -1174,38 +1178,52 @@ fn finalize_shape(
             color,
             style: shape.ln_dash_style,
         });
-        vec![FixedElement {
-            x: emu_to_pt(shape.x),
-            y: emu_to_pt(shape.y),
-            width,
-            height,
-            kind: FixedElementKind::Shape(Shape {
-                kind,
-                fill: effective_fill,
-                gradient_fill: shape.gradient_fill.take(),
-                pattern_fill: shape.pattern_fill.take(),
-                stroke,
-                rotation_deg: shape.rotation_deg,
-                opacity: shape.opacity,
-                shadow: shape.shadow.take(),
-            }),
-        }]
+        // Each subpath is its own element; they share the shape's box, fill
+        // and stroke. The gradient, pattern and shadow ride on the first so a
+        // fill is not repainted once per ribbon (issue #866).
+        let gradient_fill = shape.gradient_fill.take();
+        let pattern_fill = shape.pattern_fill.take();
+        let shadow = shape.shadow.take();
+        kinds
+            .into_iter()
+            .enumerate()
+            .map(|(index, kind)| FixedElement {
+                x: emu_to_pt(shape.x),
+                y: emu_to_pt(shape.y),
+                width,
+                height,
+                kind: FixedElementKind::Shape(Shape {
+                    kind,
+                    fill: effective_fill,
+                    gradient_fill: (index == 0).then(|| gradient_fill.clone()).flatten(),
+                    pattern_fill: (index == 0).then(|| pattern_fill.clone()).flatten(),
+                    stroke: stroke.clone(),
+                    rotation_deg: shape.rotation_deg,
+                    opacity: shape.opacity,
+                    shadow: (index == 0).then(|| shadow.clone()).flatten(),
+                }),
+            })
+            .collect()
     } else {
         Vec::new()
     }
 }
 
-/// The polygon a shape's `<a:custGeom>` flattened to, when it produced one.
+/// The polygons a shape's `<a:custGeom>` flattened to, one per subpath.
 ///
-/// A custom geometry that could not be expressed as a single polygon leaves
-/// this `None` and the shape keeps the rectangle fallback (issue #855).
-fn custom_geometry_kind(shape: &ShapeState) -> Option<ShapeKind> {
+/// A geometry that yielded nothing usable leaves this empty and the shape
+/// keeps its rectangle fallback (issue #855). Each subpath becomes its own
+/// element: a deck's wave line-art is dozens of thin ribbons inside one path,
+/// and merging them welded each ribbon's end to the next one's start
+/// (issue #866).
+fn custom_geometry_kinds(shape: &ShapeState) -> Vec<ShapeKind> {
     shape
         .custom_geometry
-        .as_ref()
+        .iter()
         .map(|vertices| ShapeKind::Polygon {
             vertices: vertices.clone(),
         })
+        .collect()
 }
 
 /// Finalize a picture element when `</p:pic>` is reached.
