@@ -911,6 +911,10 @@ struct ShapeState {
     has_direct_effect_lst: bool,
     in_sp_pr: bool,
     prst_geom: Option<String>,
+    /// Vertices flattened from `<a:custGeom>`, normalized to the shape box.
+    /// Present only when the geometry could be expressed as one polygon
+    /// (issue #855).
+    custom_geometry: Option<Vec<(f64, f64)>>,
     fill: Option<Color>,
     gradient_fill: Option<GradientFill>,
     pattern_fill: Option<PatternFill>,
@@ -963,6 +967,7 @@ impl Default for ShapeState {
             shadow: None,
             in_sp_pr: false,
             prst_geom: None,
+            custom_geometry: None,
             fill: None,
             gradient_fill: None,
             pattern_fill: None,
@@ -1055,6 +1060,9 @@ fn finalize_shape(
         let text_shape_kind: Option<ShapeKind> = shape.prst_geom.as_deref().and_then(|geom| {
             let width: f64 = emu_to_pt(shape.cx);
             let height: f64 = emu_to_pt(shape.cy);
+            if let Some(vertices) = custom_geometry_kind(shape) {
+                return Some(vertices);
+            }
             let kind: ShapeKind = prst_to_shape_kind(
                 geom,
                 width,
@@ -1142,16 +1150,18 @@ fn finalize_shape(
     } else if let Some(ref geom) = shape.prst_geom {
         let width: f64 = emu_to_pt(shape.cx);
         let height: f64 = emu_to_pt(shape.cy);
-        let kind: ShapeKind = prst_to_shape_kind(
-            geom,
-            width,
-            height,
-            shape.flip_h,
-            shape.flip_v,
-            shape.head_end,
-            shape.tail_end,
-            &shape.adj_values,
-        );
+        let kind: ShapeKind = custom_geometry_kind(shape).unwrap_or_else(|| {
+            prst_to_shape_kind(
+                geom,
+                width,
+                height,
+                shape.flip_h,
+                shape.flip_v,
+                shape.head_end,
+                shape.tail_end,
+                &shape.adj_values,
+            )
+        });
         // Use explicit line color, falling back to style-based color from
         // <p:style><a:lnRef> - unless <a:ln><a:noFill/> disabled the line.
         let effective_ln_color: Option<Color> = if shape.explicit_no_line {
@@ -1183,6 +1193,19 @@ fn finalize_shape(
     } else {
         Vec::new()
     }
+}
+
+/// The polygon a shape's `<a:custGeom>` flattened to, when it produced one.
+///
+/// A custom geometry that could not be expressed as a single polygon leaves
+/// this `None` and the shape keeps the rectangle fallback (issue #855).
+fn custom_geometry_kind(shape: &ShapeState) -> Option<ShapeKind> {
+    shape
+        .custom_geometry
+        .as_ref()
+        .map(|vertices| ShapeKind::Polygon {
+            vertices: vertices.clone(),
+        })
 }
 
 /// Finalize a picture element when `</p:pic>` is reached.
@@ -1630,8 +1653,11 @@ impl<'a> SlideXmlParser<'a> {
                     self.shape.prst_geom = Some(prst);
                 }
             }
-            // Treat custom geometry as a rectangle fallback so the fill renders.
+            // Custom geometry is flattened to a polygon. A geometry too
+            // complex for one polygon still falls back to a rectangle, so the
+            // fill renders as it did before (issue #855).
             b"custGeom" if self.shape.in_sp_pr && self.shape.prst_geom.is_none() => {
+                self.shape.custom_geometry = super::custom_geometry::parse_custom_geometry(reader);
                 self.shape.prst_geom = Some("rect".to_string());
             }
             b"noFill" if self.shape.in_sp_pr && !self.shape.in_ln && !self.in_rpr => {
@@ -2164,6 +2190,9 @@ impl<'a> SlideXmlParser<'a> {
                     self.shape.prst_geom = Some(prst);
                 }
             }
+            // Self-closing `<a:custGeom/>`: there is no `a:pathLst` to flatten,
+            // so only the rectangle fallback applies. The start-tag handler is
+            // the one that reads a path (issue #855).
             b"custGeom" if self.shape.in_sp_pr && self.shape.prst_geom.is_none() => {
                 self.shape.prst_geom = Some("rect".to_string());
             }
