@@ -415,6 +415,10 @@ pub(super) struct SheetContext {
     pub(super) normal_font: Option<NormalFont>,
     /// Banded-row shading declared by the sheet's tables (issue #532).
     pub(super) row_stripes: Vec<crate::parser::xlsx::tables::RowStripes>,
+    /// The workbook's colour scheme, which `<color theme="N"/>` indexes into
+    /// (issue #853). Cloned rather than borrowed so the context stays free of
+    /// the workbook's lifetime; it is twelve colours and a font scheme.
+    pub(super) theme: Option<umya_spreadsheet::structs::drawing::Theme>,
 }
 
 /// First strong bidi direction of a character: Some(true) for right-to-left
@@ -791,13 +795,16 @@ pub(super) fn build_rows_for_range(
 
             // Extract formatting from the cell
             let mut text_style = umya_cell
-                .map(|cell| extract_cell_text_style(cell, ctx.normal_font.as_ref()))
+                .map(|cell| {
+                    extract_cell_text_style(cell, ctx.normal_font.as_ref(), ctx.theme.as_ref())
+                })
                 .unwrap_or_default();
             let (cell_alignment, cell_vertical_align) = umya_cell
                 .map(extract_cell_alignment)
                 .unwrap_or((None, None));
-            let mut background = umya_cell.and_then(extract_cell_background);
-            let border = umya_cell.and_then(extract_cell_borders);
+            let mut background =
+                umya_cell.and_then(|cell| extract_cell_background(cell, ctx.theme.as_ref()));
+            let border = umya_cell.and_then(|cell| extract_cell_borders(cell, ctx.theme.as_ref()));
 
             // Apply conditional formatting overrides
             let mut data_bar = None;
@@ -832,7 +839,7 @@ pub(super) fn build_rows_for_range(
                         text: element.get_text().to_string(),
                         style: element
                             .get_run_properties()
-                            .map(|font| apply_rich_run_font(&text_style, font))
+                            .map(|font| apply_rich_run_font(&text_style, font, ctx.theme.as_ref()))
                             .unwrap_or_else(|| text_style.clone()),
                         href: None,
                         footnote: None,
@@ -958,6 +965,7 @@ pub(super) fn prepare_sheet_context(
     normal_font: Option<&NormalFont>,
     raw_cond_fmt_hints: Option<&super::cond_fmt_raw::RawCondFmtHints>,
     row_stripes: Vec<crate::parser::xlsx::tables::RowStripes>,
+    theme: Option<&umya_spreadsheet::structs::drawing::Theme>,
 ) -> Option<(SheetContext, u32, u32)> {
     let (mut max_col, mut max_row) = sheet.get_highest_column_and_row();
     if max_col == 0 || max_row == 0 {
@@ -1013,6 +1021,7 @@ pub(super) fn prepare_sheet_context(
             cond_fmt_overrides,
             normal_font: normal_font.cloned(),
             row_stripes,
+            theme: theme.cloned(),
         },
         row_start,
         row_end,
