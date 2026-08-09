@@ -287,6 +287,7 @@ fn anchored_image(
 fn empty_sheet_context(
     sheet: &umya_spreadsheet::Worksheet,
     normal_font: Option<&NormalFont>,
+    theme: Option<&umya_spreadsheet::structs::drawing::Theme>,
 ) -> SheetContext {
     let unit_pt: f64 = resolve_column_unit_pt(sheet, normal_font);
     let default_width_pt: f64 = default_column_width_pt(
@@ -334,6 +335,7 @@ fn empty_sheet_context(
         cond_fmt_overrides: std::collections::HashMap::new(),
         normal_font: normal_font.cloned(),
         row_stripes: Vec::new(),
+        theme: theme.cloned(),
     }
 }
 
@@ -416,6 +418,7 @@ impl XlsxParser {
                 normal_font.as_ref(),
                 cond_fmt_hints.get(sheet.get_name()),
                 row_stripes.remove(sheet.get_name()).unwrap_or_default(),
+                Some(book.get_theme()),
             ) else {
                 // A sheet without used cells can still carry drawings; give
                 // its images a page instead of dropping them.
@@ -424,7 +427,8 @@ impl XlsxParser {
                 let raw_text_boxes = text_box_map.remove(&sheet_name);
                 let raw_charts = chart_map.remove(&sheet_name);
                 if raw_images.is_some() || raw_text_boxes.is_some() || raw_charts.is_some() {
-                    let stub_ctx = empty_sheet_context(sheet, normal_font.as_ref());
+                    let stub_ctx =
+                        empty_sheet_context(sheet, normal_font.as_ref(), Some(book.get_theme()));
                     let images: Vec<crate::ir::SheetImage> = raw_images
                         .unwrap_or_default()
                         .into_iter()
@@ -659,6 +663,7 @@ impl Parser for XlsxParser {
                 normal_font.as_ref(),
                 cond_fmt_hints.get(sheet.get_name()),
                 row_stripes.remove(sheet.get_name()).unwrap_or_default(),
+                Some(book.get_theme()),
             ) else {
                 // A sheet without used cells can still carry drawings; give
                 // its images a page instead of dropping them.
@@ -667,7 +672,8 @@ impl Parser for XlsxParser {
                 let raw_text_boxes = text_box_map.remove(&sheet_name);
                 let raw_charts = chart_map.remove(&sheet_name);
                 if raw_images.is_some() || raw_text_boxes.is_some() || raw_charts.is_some() {
-                    let stub_ctx = empty_sheet_context(sheet, normal_font.as_ref());
+                    let stub_ctx =
+                        empty_sheet_context(sheet, normal_font.as_ref(), Some(book.get_theme()));
                     let images: Vec<crate::ir::SheetImage> = raw_images
                         .unwrap_or_default()
                         .into_iter()

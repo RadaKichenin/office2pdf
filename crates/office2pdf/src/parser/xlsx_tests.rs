@@ -1009,7 +1009,7 @@ fn test_empty_sheet_context_derives_metric_from_normal_font() {
         family: "Calibri".to_string(),
         size_pt: 11.0,
     };
-    let calibri_ctx = empty_sheet_context(sheet, Some(&calibri_11));
+    let calibri_ctx = empty_sheet_context(sheet, Some(&calibri_11), None);
     assert_eq!(resolve_column_unit_pt(sheet, Some(&calibri_11)), 6.0);
     assert_eq!(calibri_ctx.default_column_width_pt, 53.0);
     assert_eq!(calibri_ctx.normal_font, Some(calibri_11));
@@ -1023,14 +1023,14 @@ fn test_empty_sheet_context_derives_metric_from_normal_font() {
     };
     assert_eq!(resolve_column_unit_pt(sheet, Some(&calibri_8)), 4.0);
     assert_eq!(
-        empty_sheet_context(sheet, Some(&calibri_8)).default_column_width_pt,
+        empty_sheet_context(sheet, Some(&calibri_8), None).default_column_width_pt,
         37.0
     );
 
     // No readable Normal font: the shared cell-font fallback finds no cells
     // on an empty sheet and keeps the legacy 5.25pt unit (7px × 0.75); the
     // #621 probes never covered a stylesheet-less workbook.
-    let fallback_ctx = empty_sheet_context(sheet, None);
+    let fallback_ctx = empty_sheet_context(sheet, None, None);
     assert_eq!(resolve_column_unit_pt(sheet, None), 5.25);
     assert_eq!(fallback_ctx.default_column_width_pt, 8.0 * 5.25 + 5.0);
     assert_eq!(fallback_ctx.normal_font, None);
@@ -1189,7 +1189,7 @@ fn test_empty_sheet_context_reads_declared_column_widths() {
         size_pt: 11.0,
     };
 
-    let ctx = empty_sheet_context(sheet, Some(&calibri_11));
+    let ctx = empty_sheet_context(sheet, Some(&calibri_11), None);
 
     assert_eq!((ctx.col_start, ctx.col_end), (1, 3));
     assert_eq!(ctx.column_widths.len(), 3);
@@ -1210,7 +1210,7 @@ fn test_empty_sheet_context_without_cols_keeps_the_default_window() {
     let book = umya_spreadsheet::new_file();
     let sheet: &umya_spreadsheet::Worksheet = book.get_sheet(&0).unwrap();
 
-    let ctx = empty_sheet_context(sheet, None);
+    let ctx = empty_sheet_context(sheet, None, None);
 
     assert!(ctx.column_widths.is_empty());
     assert_eq!(ctx.num_cols, 0);

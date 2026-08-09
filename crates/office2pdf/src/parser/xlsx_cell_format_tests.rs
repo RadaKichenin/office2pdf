@@ -1600,6 +1600,105 @@ fn test_spill_still_blocked_by_occupied_neighbor() {
     );
 }
 
+/// `<color theme="N"/>` names a slot in the workbook's colour scheme and
+/// carries no `rgb`, so reading colours through `get_argb()` alone left every
+/// themed run, fill and border to the renderer's default (issue #853).
+/// umya's map is `[lt1, dk1, lt2, dk2, accent1..6, hlink, folHlink]`, the
+/// ECMA-376 order with the light/dark swap on slots 0 and 1; the Office theme
+/// umya builds by default puts accent1 at 4472C4 and accent2 at ED7D31.
+#[test]
+fn test_font_theme_color_resolves_through_the_workbook_scheme() {
+    let data = build_xlsx_formatted(|sheet| {
+        sheet.get_cell_mut("A1").set_value("Accent one");
+        sheet
+            .get_cell_mut("A1")
+            .get_style_mut()
+            .get_font_mut()
+            .get_color_mut()
+            .set_theme_index(4);
+    });
+    let (doc, _warnings) = XlsxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let tp = get_sheet_page(&doc, 0);
+
+    let style = first_run_style(&tp.table.rows[0].cells[0]);
+    assert_eq!(style.color, Some(Color::new(0x44, 0x72, 0xC4)));
+}
+
+/// A second slot, so nothing passes by resolving every theme index to one
+/// colour.
+#[test]
+fn test_a_second_theme_slot_resolves_to_its_own_colour() {
+    let data = build_xlsx_formatted(|sheet| {
+        sheet.get_cell_mut("A1").set_value("Accent two");
+        sheet
+            .get_cell_mut("A1")
+            .get_style_mut()
+            .get_font_mut()
+            .get_color_mut()
+            .set_theme_index(5);
+    });
+    let (doc, _warnings) = XlsxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let tp = get_sheet_page(&doc, 0);
+
+    let style = first_run_style(&tp.table.rows[0].cells[0]);
+    assert_eq!(style.color, Some(Color::new(0xED, 0x7D, 0x31)));
+}
+
+/// `tint` shifts the resolved colour's luminance. Slot 1 is the scheme's
+/// black, so a positive tint has to lighten it to a neutral grey — resolving
+/// the slot but dropping the tint would leave it black.
+#[test]
+fn test_a_tint_lightens_the_resolved_theme_colour() {
+    let data = build_xlsx_formatted(|sheet| {
+        sheet.get_cell_mut("A1").set_value("Tinted");
+        let color = sheet
+            .get_cell_mut("A1")
+            .get_style_mut()
+            .get_font_mut()
+            .get_color_mut();
+        color.set_theme_index(1);
+        color.set_tint(0.5);
+    });
+    let (doc, _warnings) = XlsxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let tp = get_sheet_page(&doc, 0);
+
+    let color = first_run_style(&tp.table.rows[0].cells[0])
+        .color
+        .expect("a tinted theme colour must resolve");
+    assert_eq!(color.r, color.g, "a tinted black stays neutral");
+    assert_eq!(color.g, color.b, "a tinted black stays neutral");
+    assert!(
+        color.r > 0x40 && color.r < 0xC0,
+        "tint 0.5 on black must land mid-grey, got {:#04x}",
+        color.r
+    );
+}
+
+/// The same resolution has to reach a cell's fill, not only its text.
+#[test]
+fn test_fill_theme_color_resolves_through_the_workbook_scheme() {
+    let data = build_xlsx_formatted(|sheet| {
+        sheet.get_cell_mut("A1").set_value("Filled");
+        let style = sheet.get_cell_mut("A1").get_style_mut();
+        style
+            .get_fill_mut()
+            .get_pattern_fill_mut()
+            .set_pattern_type(umya_spreadsheet::PatternValues::Solid);
+        style
+            .get_fill_mut()
+            .get_pattern_fill_mut()
+            .get_foreground_color_mut()
+            .set_theme_index(4);
+    });
+    let (doc, _warnings) = XlsxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let tp = get_sheet_page(&doc, 0);
+
+    assert_eq!(
+        tp.table.rows[0].cells[0].background,
+        Some(Color::new(0x44, 0x72, 0xC4))
+    );
+}
+
 /// Build a one-cell workbook from raw parts so the `cellStyleXfs` /
 /// `cellXfs` / `xfId` relationship can be stated exactly — umya's builder
 /// cannot express a Normal style that switches a format category off.
