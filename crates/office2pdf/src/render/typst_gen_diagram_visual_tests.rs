@@ -3834,3 +3834,49 @@ fn a_stated_major_unit_sets_the_tick_interval() {
         "the axis still needs its ticks: {stated:?}"
     );
 }
+
+// ----- Crowded category labels slant (issue #884) -----
+
+/// A column chart whose category labels are far longer than their bands, as
+/// the deck in #841 has.
+fn crowded_column_chart() -> Chart {
+    let mut chart = two_series_bar_chart(Vec::new());
+    chart.chart_type = ChartType::Column;
+    chart.series.truncate(1);
+    chart.categories = vec![
+        "Fortjenestemargin".to_string(),
+        "Bruttofortjeneste".to_string(),
+        "Konverteringsfrekvens for kundeemne".to_string(),
+        "Frekvens for kundebevaring".to_string(),
+    ];
+    chart.series[0].values = vec![33.9, 68.9, 2.4, 9.3];
+    chart.title = None;
+    chart
+}
+
+#[test]
+fn crowded_category_labels_slant_by_forty_five_degrees() {
+    let source: String = chart_source(crowded_column_chart());
+    assert!(
+        source.contains("rotate(-45deg, origin: top + right"),
+        "labels longer than their band must slant, got:\n{source}"
+    );
+}
+
+#[test]
+fn category_labels_that_fit_their_band_stay_flat() {
+    // Triangulation: the same chart type with short labels must not rotate,
+    // or the rule is "always rotate" rather than "rotate when crowded".
+    let mut chart = crowded_column_chart();
+    chart.categories = vec![
+        "Q1".to_string(),
+        "Q2".to_string(),
+        "Q3".to_string(),
+        "Q4".to_string(),
+    ];
+    let source: String = chart_source(chart);
+    assert!(
+        !source.contains("rotate(-45deg"),
+        "short labels must stay flat, got:\n{source}"
+    );
+}
