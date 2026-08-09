@@ -2410,6 +2410,22 @@ fn write_text_params_inner(out: &mut String, style: &TextStyle, kerning_text: Ke
 /// text must not take the surrounding answer, and a parameter that is merely
 /// omitted takes whatever the nearest `#set text` says.
 fn kerning_param(style: &TextStyle, kerning_text: KerningText<'_>) -> Option<String> {
+    // A tracked run states its own inter-glyph spacing. A pair kern lands on
+    // top of that, and where the face is a substitute its pairs are not the
+    // ones the document was set in — the combined advance can exceed the gap a
+    // PDF text extractor reads as a word break. On the deck in issue #864 that
+    // split five titles: `ANSATTE` extracted as `ANSAT TE` while the glyphs
+    // rendered continuously, because the T/T pair came to 0.115em against the
+    // reference's 0.078em.
+    //
+    // The RTL exemption still wins: switching the `kern` feature off there
+    // costs glyphs, which is worse than a word break.
+    if style.letter_spacing.is_some_and(|spacing| spacing != 0.0)
+        && !rtl_shaping_exemption_is_active()
+        && matches!(kerning_text, KerningText::Known(_))
+    {
+        return Some("kerning: false".to_string());
+    }
     let pair_kerning: PairKerning = style.pair_kerning?;
     let kerns: bool = pair_kerning.applies_at(style.font_size)
         || rtl_shaping_exemption_is_active()

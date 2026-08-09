@@ -1750,3 +1750,71 @@ fn test_zero_letter_spacing_keeps_ligatures() {
         "zero tracking must not disable ligatures, got: {result}"
     );
 }
+
+/// A substituted face's kern pairs land on top of the tracking the document
+/// declared, and the combined advance can exceed the gap a PDF text extractor
+/// reads as a word break. On the deck in issue #864 that split five titles —
+/// `ANSATTE` extracted as `ANSAT TE` — while the glyphs rendered continuously.
+#[test]
+fn test_letter_spacing_disables_kerning() {
+    let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
+        style: ParagraphStyle::default(),
+        runs: vec![Run {
+            text: "ANSATTE".to_string(),
+            style: TextStyle {
+                letter_spacing: Some(3.0),
+                ..TextStyle::default()
+            },
+            href: None,
+            footnote: None,
+        }],
+    })])]);
+    let result = generate_typst(&doc).unwrap().source;
+    assert!(
+        result.contains("kerning: false"),
+        "tracked text must disable kerning, got: {result}"
+    );
+}
+
+/// Triangulation: an untracked run keeps kerning, so the rule is tied to
+/// letter-spacing and does not flatten every run's pair spacing.
+#[test]
+fn test_untracked_text_keeps_kerning() {
+    let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
+        style: ParagraphStyle::default(),
+        runs: vec![Run {
+            text: "ANSATTE".to_string(),
+            style: TextStyle::default(),
+            href: None,
+            footnote: None,
+        }],
+    })])]);
+    let result = generate_typst(&doc).unwrap().source;
+    assert!(
+        !result.contains("kerning: false"),
+        "untracked text must keep kerning, got: {result}"
+    );
+}
+
+/// An explicit zero tracking is not tracking, so it leaves kerning alone —
+/// PowerPoint writes `spc="0"` routinely.
+#[test]
+fn test_zero_letter_spacing_keeps_kerning() {
+    let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
+        style: ParagraphStyle::default(),
+        runs: vec![Run {
+            text: "ANSATTE".to_string(),
+            style: TextStyle {
+                letter_spacing: Some(0.0),
+                ..TextStyle::default()
+            },
+            href: None,
+            footnote: None,
+        }],
+    })])]);
+    let result = generate_typst(&doc).unwrap().source;
+    assert!(
+        !result.contains("kerning: false"),
+        "zero tracking must keep kerning, got: {result}"
+    );
+}
