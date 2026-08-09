@@ -2130,9 +2130,22 @@ fn write_hf_border_line(out: &mut String, border: &BorderSide, is_primary_double
     // Word paints a header rule past both edges of the text column, exactly as
     // it does a body paragraph's. `#move` shifts the line without disturbing
     // the band's layout (issue #644).
+    //
+    // The rule is wider than the text column by design, and a bare block
+    // inherits the enclosing alignment — which for a header paragraph is its
+    // own `w:jc`. A right-aligned header therefore pinned the *line's* right
+    // edge to the column edge, so the whole overhang fell on the left and the
+    // `#move` compounded it: on `03_meeting_minutes_ko` the rule started at
+    // 66.53 against 69.41 once it is aligned left, exactly the 2.88pt of two
+    // outsets. Word does not align a border by the paragraph's `w:jc`, so the
+    // rule states `left` for itself and both ends overhang again (#840).
+    //
+    // The double-rule path in `typst_gen_text.rs` needs no such statement:
+    // `#place(bottom, …)` leaves the horizontal component unset, which Typst
+    // resolves to a fixed `start` rather than to the enclosing alignment.
     let _ = write!(
         out,
-        "block(height: {}pt)[#move(dx: -{}pt)[#line(length: 100% + {}pt, stroke: (paint: {}, thickness: {}pt, dash: \"{}\"))]]",
+        "block(height: {}pt)[#align(left)[#move(dx: -{}pt)[#line(length: 100% + {}pt, stroke: (paint: {}, thickness: {}pt, dash: \"{}\"))]]]",
         format_f64(width),
         format_f64(TEXT_COLUMN_DECORATION_OVERHANG_PT),
         format_f64(2.0 * TEXT_COLUMN_DECORATION_OVERHANG_PT),
