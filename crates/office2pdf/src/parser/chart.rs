@@ -275,6 +275,7 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
         value_axis_major_tick_mark: value_axis.major_tick_mark,
         category_axis_line: category_axis.line,
         value_axis_line: value_axis.line,
+        value_axis_major_unit: value_axis.major_unit,
         // Office hangs the gridlines off whichever axis they run across; the
         // value axis carries the horizontal set our renderer draws.
         major_gridline_line: match value_axis.gridline {
@@ -449,6 +450,8 @@ struct Axis {
     /// What `<c:majorGridlines><c:spPr>` says; the gridlines hang off the
     /// axis rather than off the plot area.
     gridline: ChartLine,
+    /// `<c:majorUnit>` — the tick interval this axis states.
+    major_unit: Option<f64>,
 }
 
 /// The `formatCode` a `<c:numFmt>` states, when it states one that is not
@@ -493,6 +496,13 @@ fn parse_axis(reader: &mut Reader<&[u8]>, end_tag: &[u8], scheme: &SchemeColors<
                     .as_deref()
                     .map(axis_tick_mark_for)
                     .unwrap_or_default();
+            }
+            Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e))
+                if e.local_name().as_ref() == b"majorUnit" =>
+            {
+                axis.major_unit = xml_util::get_attr_str(e, b"val")
+                    .and_then(|value| value.parse::<f64>().ok())
+                    .filter(|unit| unit.is_finite() && *unit > 0.0);
             }
             Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e))
                 if e.local_name().as_ref() == b"delete" =>

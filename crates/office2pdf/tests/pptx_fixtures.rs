@@ -882,7 +882,7 @@ fn structure_introduction_ko_plots_the_doughnut_chart() {
         })
         .flat_map(|fixed| fixed.elements.iter())
         .filter_map(|element| match &element.kind {
-            FixedElementKind::Chart(chart) => Some(chart),
+            FixedElementKind::Chart(chart) => Some(chart.as_ref()),
             _ => None,
         })
         .collect();

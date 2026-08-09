@@ -487,7 +487,7 @@ fn collect_chart_elements<R: Read + std::io::Seek>(
                     y: emu_to_pt(c_ref.y),
                     width: emu_to_pt(c_ref.cx),
                     height: emu_to_pt(c_ref.cy),
-                    kind: FixedElementKind::Chart(chart),
+                    kind: FixedElementKind::Chart(Box::new(chart)),
                 }
             })
         })

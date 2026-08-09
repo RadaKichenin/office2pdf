@@ -343,6 +343,7 @@ fn test_drawings_shift_with_the_inset_grid_and_charts_by_one_row() {
             category_axis_deleted: false,
             category_axis_line: crate::ir::ChartLine::Automatic,
             value_axis_line: crate::ir::ChartLine::Automatic,
+            value_axis_major_unit: None,
             major_gridline_line: crate::ir::ChartLine::Automatic,
             value_axis_deleted: false,
             bar_band_layout: crate::ir::BarBandLayout::default(),

@@ -228,6 +228,9 @@ pub struct Chart {
     pub category_axis_line: ChartLine,
     /// What `<c:valAx><c:spPr>` says about the value axis' line.
     pub value_axis_line: ChartLine,
+    /// `<c:valAx><c:majorUnit>` — the tick interval the part states.
+    /// `None` leaves the interval to the automatic scale (issue #882).
+    pub value_axis_major_unit: Option<f64>,
     /// What `<c:majorGridlines><c:spPr>` says about the gridlines' line.
     pub major_gridline_line: ChartLine,
     /// Whether `<c:catAx><c:delete>` switched the category axis off.

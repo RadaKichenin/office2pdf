@@ -220,6 +220,7 @@ fn test_charts_stay_on_first_column_group() {
             category_axis_deleted: false,
             category_axis_line: crate::ir::ChartLine::Automatic,
             value_axis_line: crate::ir::ChartLine::Automatic,
+            value_axis_major_unit: None,
             major_gridline_line: crate::ir::ChartLine::Automatic,
             value_axis_deleted: false,
             bar_band_layout: crate::ir::BarBandLayout::default(),

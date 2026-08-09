@@ -443,6 +443,20 @@ pub(super) fn chart_value_label(value: f64) -> String {
     text
 }
 
+/// Apply `<c:majorUnit>` to an axis the auto-scale has already sized.
+///
+/// The stated unit sets the interval; the maximum is then the fewest whole
+/// units that still cover the data, so a declared 0.2 on a 0.689 maximum gives
+/// ticks at 0, 0.2, 0.4, 0.6, 0.8 rather than the automatic tenths (#882).
+fn axis_with_stated_unit(axis: (f64, f64), stated: Option<f64>) -> (f64, f64) {
+    let (nice_max, step) = axis;
+    let Some(unit) = stated.filter(|unit| unit.is_finite() && *unit > 0.0) else {
+        return (nice_max, step);
+    };
+    let covered: f64 = (nice_max / unit - 1e-9).ceil().max(1.0) * unit;
+    (covered, unit)
+}
+
 /// Choose Excel's automatic axis maximum and major unit covering `[0, max]`
 /// (e.g. max 8.2 → (10, 1), giving ticks 0,1,…,10).
 fn nice_axis(max_value: f64) -> (f64, f64) {
@@ -1255,7 +1269,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
 
     // A stacked bar is read against its category's total, so the axis must
     // cover the tallest stack rather than the largest single segment.
-    let (nice_max, step) = match chart.grouping {
+    let auto_axis = match chart.grouping {
         // Every stack fills the plot, so the axis is the percentage scale
         // itself and needs no rounding.
         ChartGrouping::PercentStacked => (100.0, 20.0),
@@ -1272,6 +1286,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 .fold(0.0_f64, f64::max),
         ),
     };
+    let (nice_max, step) = axis_with_stated_unit(auto_axis, chart.value_axis_major_unit);
 
     // Chart-area title: the explicit chart title, else the automatic one
     // Office derives from a single series' name — unless the chart declined
@@ -1774,7 +1789,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
         .flat_map(|s| s.values.iter())
         .copied()
         .fold(0.0_f64, f64::max);
-    let (nice_max, step) = nice_axis(max_value);
+    let (nice_max, step) = axis_with_stated_unit(nice_axis(max_value), chart.value_axis_major_unit);
 
     if let Some(title) = chart.title.as_deref() {
         let _ = writeln!(
@@ -2081,7 +2096,7 @@ fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64
         .flat_map(|series| series.values.iter())
         .cloned()
         .fold(0.0_f64, f64::max);
-    let (nice_max, step) = nice_axis(max_value);
+    let (nice_max, step) = axis_with_stated_unit(nice_axis(max_value), chart.value_axis_major_unit);
     if nice_max <= 0.0 {
         return;
     }
