@@ -6,13 +6,22 @@
 //! (ECMA-376 §19.3.1.36). Placeholder text likewise stacks the master's
 //! `<p:txStyles>` bucket, the master placeholder's `<a:lstStyle>`, and the
 //! layout placeholder's `<a:lstStyle>` beneath slide-local properties.
+//!
+//! Shape fill follows the same chain: a slide placeholder that declares no
+//! fill of its own takes the `<a:solidFill>` on the layout placeholder's
+//! `<p:spPr>`, then the master's. An explicit `<a:noFill/>` is an answer and
+//! ends the chain, and a fill nested in `<a:ln>` is the outline's, not the
+//! shape's.
 
 use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
 
 use super::PptxTextBodyStyleDefaults;
 use super::text::parse_pptx_list_style;
-use super::theme::{ColorMapData, PptxMasterTextStyles, ThemeData};
+use super::theme::{
+    ColorMapData, PptxMasterTextStyles, ThemeData, parse_color_from_empty, parse_color_from_start,
+};
+use crate::ir::Color;
 use crate::parser::xml_util::{get_attr_i64, get_attr_str};
 
 /// Resolved placeholder position and size, in EMU.
@@ -32,6 +41,22 @@ struct LayerPlaceholder {
     geometry: Option<PlaceholderGeometry>,
     /// Parsed `<a:lstStyle>` from the placeholder's own `<p:txBody>`.
     text_defaults: Option<PptxTextBodyStyleDefaults>,
+    /// `<a:solidFill>` declared directly on the placeholder's `<p:spPr>`.
+    /// A slide placeholder that names no fill of its own paints this one — it
+    /// is where a template puts the colour band behind a title (issue #856).
+    fill: Option<PlaceholderFill>,
+    /// `<a:noFill/>` on the placeholder's `<p:spPr>`. An explicit "no fill"
+    /// is an answer, so it ends the inheritance chain rather than letting the
+    /// master's fill through.
+    explicit_no_fill: bool,
+}
+
+/// A placeholder's inherited solid fill: the resolved colour and the `a:alpha`
+/// the template applied to it, as a 0..1 fraction.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct PlaceholderFill {
+    pub(super) color: Color,
+    pub(super) opacity: Option<f64>,
 }
 
 /// Placeholder inheritance lookup table for one slide, built from its
@@ -109,6 +134,29 @@ impl PlaceholderGeometryMap {
             }
         }
         find_in_master(&self.master, ph_type).and_then(|m| m.geometry)
+    }
+
+    /// The solid fill a slide placeholder inherits, layout first, then master.
+    pub(super) fn lookup_fill(
+        &self,
+        ph_type: Option<&str>,
+        ph_idx: Option<&str>,
+    ) -> Option<PlaceholderFill> {
+        if let Some(entry) = find_in_layer(&self.layout, ph_type, ph_idx) {
+            if let Some(fill) = entry.fill {
+                return Some(fill);
+            }
+            if entry.explicit_no_fill {
+                return None;
+            }
+            if let Some(master) = find_in_master(&self.master, entry.ph_type.as_deref()) {
+                return master.fill.filter(|_| !master.explicit_no_fill);
+            }
+            return None;
+        }
+        find_in_master(&self.master, ph_type)
+            .filter(|master| !master.explicit_no_fill)
+            .and_then(|m| m.fill)
     }
 }
 
@@ -197,6 +245,10 @@ fn scan_layer_placeholders(
         cy: Option<i64>,
         in_sp_pr: bool,
         in_xfrm: bool,
+        in_line: bool,
+        in_solid_fill: bool,
+        fill: Option<PlaceholderFill>,
+        explicit_no_fill: bool,
         text_defaults: Option<PptxTextBodyStyleDefaults>,
     }
 
@@ -222,6 +274,30 @@ fn scan_layer_placeholders(
                     && state.in_sp_pr
                 {
                     state.in_xfrm = true;
+                }
+            }
+            // A fill nested in `<a:ln>` paints the outline, not the shape.
+            b"ln" => {
+                if let Some(state) = current.as_mut()
+                    && state.in_sp_pr
+                {
+                    state.in_line = true;
+                }
+            }
+            b"solidFill" => {
+                if let Some(state) = current.as_mut()
+                    && state.in_sp_pr
+                    && !state.in_line
+                {
+                    state.in_solid_fill = true;
+                }
+            }
+            b"noFill" => {
+                if let Some(state) = current.as_mut()
+                    && state.in_sp_pr
+                    && !state.in_line
+                {
+                    state.explicit_no_fill = true;
                 }
             }
             b"off" => {
@@ -256,12 +332,43 @@ fn scan_layer_placeholders(
                     if let Some(state) = current.as_mut() {
                         state.text_defaults = Some(defaults);
                     }
+                } else if current
+                    .as_ref()
+                    .is_some_and(|state| state.in_solid_fill && state.fill.is_none())
+                    && matches!(e.local_name().as_ref(), b"srgbClr" | b"schemeClr")
+                {
+                    // A colour with children, e.g. `<a:schemeClr><a:alpha/></a:schemeClr>`.
+                    let parsed = parse_color_from_start(&mut reader, e, theme, color_map);
+                    if let Some(state) = current.as_mut()
+                        && let Some(color) = parsed.color
+                    {
+                        state.fill = Some(PlaceholderFill {
+                            color,
+                            opacity: parsed.alpha,
+                        });
+                    }
                 } else {
                     handle_simple_start(&mut current, e);
                 }
             }
             Ok(Event::Empty(ref e)) => {
-                handle_simple_start(&mut current, e);
+                if current
+                    .as_ref()
+                    .is_some_and(|state| state.in_solid_fill && state.fill.is_none())
+                    && matches!(e.local_name().as_ref(), b"srgbClr" | b"schemeClr")
+                {
+                    let parsed = parse_color_from_empty(e, theme, color_map);
+                    if let Some(state) = current.as_mut()
+                        && let Some(color) = parsed.color
+                    {
+                        state.fill = Some(PlaceholderFill {
+                            color,
+                            opacity: parsed.alpha,
+                        });
+                    }
+                } else {
+                    handle_simple_start(&mut current, e);
+                }
             }
             Ok(Event::End(ref e)) => match e.local_name().as_ref() {
                 b"sp" | b"pic" => {
@@ -280,6 +387,8 @@ fn scan_layer_placeholders(
                             ph_idx: state.ph_idx,
                             geometry,
                             text_defaults: state.text_defaults,
+                            fill: state.fill,
+                            explicit_no_fill: state.explicit_no_fill,
                         });
                     }
                 }
@@ -291,6 +400,16 @@ fn scan_layer_placeholders(
                 b"xfrm" => {
                     if let Some(state) = current.as_mut() {
                         state.in_xfrm = false;
+                    }
+                }
+                b"ln" => {
+                    if let Some(state) = current.as_mut() {
+                        state.in_line = false;
+                    }
+                }
+                b"solidFill" => {
+                    if let Some(state) = current.as_mut() {
+                        state.in_solid_fill = false;
                     }
                 }
                 _ => {}

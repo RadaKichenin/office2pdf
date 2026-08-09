@@ -361,3 +361,207 @@ fn test_picture_placeholder_inherits_layout_geometry() {
         .expect("no image element on page");
     assert_geometry(element, 2_286_000, 1_143_000, 4_572_000, 3_429_000);
 }
+
+// ── Layout placeholder fill ──────────────────────────────────────────
+
+/// Like `make_placeholder_sp`, but the shape carries a solid fill — the shape
+/// property a colour band behind a title lives on.
+fn make_filled_placeholder_sp(
+    ph_attrs: &str,
+    xfrm_emu: (i64, i64, i64, i64),
+    fill_hex: &str,
+    text: &str,
+) -> String {
+    let (x, y, cx, cy) = xfrm_emu;
+    format!(
+        r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="Placeholder"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph {ph_attrs}/></p:nvPr></p:nvSpPr><p:spPr><a:xfrm><a:off x="{x}" y="{y}"/><a:ext cx="{cx}" cy="{cy}"/></a:xfrm><a:solidFill><a:srgbClr val="{fill_hex}"/></a:solidFill></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US"/><a:t>{text}</a:t></a:r></a:p></p:txBody></p:sp>"#
+    )
+}
+
+/// Every fill painted on the page, whatever element carries it. A filled box
+/// with text renders as a text box with a background; without text it renders
+/// as a shape. Both are the same ink, so the assertion is about the ink.
+fn painted_fills(page: &FixedPage) -> Vec<Color> {
+    page.elements
+        .iter()
+        .filter_map(|element| match &element.kind {
+            FixedElementKind::Shape(shape) => shape.fill,
+            FixedElementKind::TextBox(text_box) => text_box.fill,
+            _ => None,
+        })
+        .collect()
+}
+
+fn element_with_fill(page: &FixedPage, fill: Color) -> &FixedElement {
+    page.elements
+        .iter()
+        .find(|element| match &element.kind {
+            FixedElementKind::Shape(shape) => shape.fill == Some(fill),
+            FixedElementKind::TextBox(text_box) => text_box.fill == Some(fill),
+            _ => false,
+        })
+        .expect("an element carries the inherited fill")
+}
+
+fn page_text(page: &FixedPage) -> String {
+    fn block_text(blocks: &[Block]) -> String {
+        blocks
+            .iter()
+            .map(|block| match block {
+                Block::Paragraph(p) => p.runs.iter().map(|r| r.text.as_str()).collect::<String>(),
+                _ => String::new(),
+            })
+            .collect()
+    }
+    page.elements
+        .iter()
+        .map(|element| match &element.kind {
+            FixedElementKind::TextBox(tb) => block_text(&tb.content),
+            _ => String::new(),
+        })
+        .collect()
+}
+
+/// A slide placeholder inherits its shape properties from the layout's
+/// matching placeholder, so the colour band behind a title is declared there
+/// while the slide carries only the text. The layout copy is not drawn — its
+/// prompt text would come with it — so the fill has to reach the slide's own
+/// shape (issue #856).
+#[test]
+fn test_layout_placeholder_fill_is_drawn_behind_the_slide_text() {
+    let slide = make_slide_with_shapes(&[make_placeholder_sp(r#"type="title""#, None, "Hello")]);
+    let layout = make_layout_with_shapes(&[make_filled_placeholder_sp(
+        r#"type="title""#,
+        (0, 5_367_528, 12_188_952, 1_490_472),
+        "7048E8",
+        "Click to edit title",
+    )]);
+    let master = make_master_with_shapes(&[]);
+    let data = build_test_pptx_with_layout_master(SLIDE_CX, SLIDE_CY, &slide, &layout, &master);
+
+    let doc = parse_document(&data);
+    let page = first_fixed_page(&doc);
+
+    assert!(
+        painted_fills(page).contains(&Color::new(0x70, 0x48, 0xE8)),
+        "the layout placeholder's fill must be drawn, got {:?}",
+        painted_fills(page)
+    );
+    assert!(
+        page_text(page).contains("Hello"),
+        "the slide's own text must still render"
+    );
+    assert!(
+        !page_text(page).contains("Click to edit title"),
+        "the layout's prompt text must stay out of the output"
+    );
+}
+
+/// The slide placeholder also inherits its geometry from the layout, so the
+/// band lands on the layout's box.
+#[test]
+fn test_the_drawn_layout_placeholder_keeps_its_own_geometry() {
+    let slide = make_slide_with_shapes(&[make_placeholder_sp(r#"type="title""#, None, "Hello")]);
+    let layout = make_layout_with_shapes(&[make_filled_placeholder_sp(
+        r#"type="title""#,
+        (0, 5_367_528, 12_188_952, 1_490_472),
+        "7048E8",
+        "Click to edit title",
+    )]);
+    let master = make_master_with_shapes(&[]);
+    let data = build_test_pptx_with_layout_master(SLIDE_CX, SLIDE_CY, &slide, &layout, &master);
+
+    let doc = parse_document(&data);
+    let page = first_fixed_page(&doc);
+    let band = element_with_fill(page, Color::new(0x70, 0x48, 0xE8));
+
+    assert_geometry(band, 0, 5_367_528, 12_188_952, 1_490_472);
+}
+
+/// A layout placeholder with nothing to paint stays out of the output, so an
+/// empty prompt box does not become a stray element.
+#[test]
+fn test_an_unfilled_layout_placeholder_still_draws_nothing() {
+    let slide = make_slide_with_shapes(&[make_placeholder_sp(r#"type="title""#, None, "Hello")]);
+    let layout = make_layout_with_shapes(&[make_placeholder_sp(
+        r#"type="title""#,
+        Some((457_200, 274_638, 8_229_600, 1_143_000)),
+        "Click to edit title",
+    )]);
+    let master = make_master_with_shapes(&[]);
+    let data = build_test_pptx_with_layout_master(SLIDE_CX, SLIDE_CY, &slide, &layout, &master);
+
+    let doc = parse_document(&data);
+    let page = first_fixed_page(&doc);
+
+    assert!(
+        painted_fills(page).is_empty(),
+        "nothing to paint means no fill, got {:?}",
+        painted_fills(page)
+    );
+    assert!(!page_text(page).contains("Click to edit title"));
+}
+
+/// `<a:noFill/>` on the layout placeholder is an answer, not a gap: it must
+/// end the chain rather than let the master's fill through. Without this, a
+/// template's transparent subtitle boxes picked up the master's band.
+#[test]
+fn test_a_layout_no_fill_ends_the_inheritance_chain() {
+    let slide = make_slide_with_shapes(&[make_placeholder_sp(
+        r#"type="body" idx="1""#,
+        None,
+        "Subtitle",
+    )]);
+    let layout = make_layout_with_shapes(&[
+        r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="Placeholder"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph type="body" idx="1"/></p:nvPr></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="5367528"/><a:ext cx="12188952" cy="1490472"/></a:xfrm><a:noFill/></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US"/><a:t>Prompt</a:t></a:r></a:p></p:txBody></p:sp>"#
+            .to_string(),
+    ]);
+    let master = make_master_with_shapes(&[make_filled_placeholder_sp(
+        r#"type="body" idx="1""#,
+        (0, 5_367_528, 12_188_952, 1_490_472),
+        "7048E8",
+        "Master prompt",
+    )]);
+    let data = build_test_pptx_with_layout_master(SLIDE_CX, SLIDE_CY, &slide, &layout, &master);
+
+    let doc = parse_document(&data);
+    let page = first_fixed_page(&doc);
+
+    assert!(
+        !painted_fills(page).contains(&Color::new(0x70, 0x48, 0xE8)),
+        "the layout's noFill must stop the master's band, got {:?}",
+        painted_fills(page)
+    );
+}
+
+/// With no `noFill` in the way, the master's fill does reach the slide — so
+/// the test above is pinning the veto, not an inability to inherit at depth.
+#[test]
+fn test_a_master_fill_reaches_a_slide_through_a_silent_layout() {
+    let slide = make_slide_with_shapes(&[make_placeholder_sp(
+        r#"type="body" idx="1""#,
+        None,
+        "Subtitle",
+    )]);
+    let layout = make_layout_with_shapes(&[make_placeholder_sp(
+        r#"type="body" idx="1""#,
+        Some((0, 5_367_528, 12_188_952, 1_490_472)),
+        "Prompt",
+    )]);
+    let master = make_master_with_shapes(&[make_filled_placeholder_sp(
+        r#"type="body" idx="1""#,
+        (0, 5_367_528, 12_188_952, 1_490_472),
+        "7048E8",
+        "Master prompt",
+    )]);
+    let data = build_test_pptx_with_layout_master(SLIDE_CX, SLIDE_CY, &slide, &layout, &master);
+
+    let doc = parse_document(&data);
+    let page = first_fixed_page(&doc);
+
+    assert!(
+        painted_fills(page).contains(&Color::new(0x70, 0x48, 0xE8)),
+        "the master's fill must reach the slide, got {:?}",
+        painted_fills(page)
+    );
+}
