@@ -1432,3 +1432,179 @@ fn test_cell_renders_every_paragraph_of_a_nested_block_sdt() {
 
     assert_eq!(cell_text, vec!["Outer one", "Inner", "Outer two"]);
 }
+
+/// A table style's resolved run and paragraph properties beyond colour and
+/// bold — `w:caps` from a conditional first row, and `w:jc` from the style's
+/// own `w:pPr` — never reached the cell (issue #845).
+fn build_docx_with_table_style(styles_xml_body: &str, table_xml: &str) -> Vec<u8> {
+    let document_xml = format!(
+        r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:body>{table_xml}<w:sectPr/></w:body>
+    </w:document>"#
+    );
+    let styles_xml = format!(
+        r#"<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">{styles_xml_body}</w:styles>"#
+    );
+    build_docx_with_notes_xml(
+        &document_xml,
+        &styles_xml,
+        r#"<w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>"#,
+    )
+}
+
+fn first_run_of(cell: &TableCell) -> &Run {
+    cell.content
+        .iter()
+        .find_map(|block| match block {
+            Block::Paragraph(p) => p.runs.first(),
+            _ => None,
+        })
+        .expect("cell holds a run")
+}
+
+fn first_paragraph_of(cell: &TableCell) -> &Paragraph {
+    cell.content
+        .iter()
+        .find_map(|block| match block {
+            Block::Paragraph(p) => Some(p),
+            _ => None,
+        })
+        .expect("cell holds a paragraph")
+}
+
+const TABLE_WITH_STYLE: &str = r#"<w:tbl>
+    <w:tblPr><w:tblStyle w:val="Invoice"/><w:tblLook w:firstRow="1" w:lastRow="0" w:firstColumn="0" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr>
+    <w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid>
+    <w:tr><w:tc><w:p><w:r><w:t>Stilling</w:t></w:r></w:p></w:tc></w:tr>
+    <w:tr><w:tc><w:p><w:r><w:t>Produkt</w:t></w:r></w:p></w:tc></w:tr>
+</w:tbl>"#;
+
+#[test]
+fn test_table_style_first_row_caps_reaches_the_run() {
+    let data = build_docx_with_table_style(
+        r#"<w:style w:type="table" w:styleId="Invoice"><w:name w:val="Invoice"/>
+            <w:tblStylePr w:type="firstRow"><w:rPr><w:caps/></w:rPr></w:tblStylePr>
+        </w:style>"#,
+        TABLE_WITH_STYLE,
+    );
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let t = first_table(&doc);
+
+    assert_eq!(
+        first_run_of(&t.rows[0].cells[0]).style.all_caps,
+        Some(true),
+        "the conditional first row's w:caps must reach its run"
+    );
+    assert_ne!(
+        first_run_of(&t.rows[1].cells[0]).style.all_caps,
+        Some(true),
+        "a row outside the conditional region must not take it"
+    );
+}
+
+/// The style's own `w:pPr` applies to every row, not only the first.
+#[test]
+fn test_table_style_paragraph_alignment_reaches_the_cell() {
+    let data = build_docx_with_table_style(
+        r#"<w:style w:type="table" w:styleId="Invoice"><w:name w:val="Invoice"/>
+            <w:pPr><w:jc w:val="right"/></w:pPr>
+        </w:style>"#,
+        TABLE_WITH_STYLE,
+    );
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let t = first_table(&doc);
+
+    assert_eq!(
+        first_paragraph_of(&t.rows[0].cells[0]).style.alignment,
+        Some(Alignment::Right)
+    );
+    assert_eq!(
+        first_paragraph_of(&t.rows[1].cells[0]).style.alignment,
+        Some(Alignment::Right)
+    );
+}
+
+/// A different alignment, so the value is read rather than assumed.
+#[test]
+fn test_table_style_centre_alignment_is_read_as_written() {
+    let data = build_docx_with_table_style(
+        r#"<w:style w:type="table" w:styleId="Invoice"><w:name w:val="Invoice"/>
+            <w:pPr><w:jc w:val="center"/></w:pPr>
+        </w:style>"#,
+        TABLE_WITH_STYLE,
+    );
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let t = first_table(&doc);
+
+    assert_eq!(
+        first_paragraph_of(&t.rows[0].cells[0]).style.alignment,
+        Some(Alignment::Center)
+    );
+}
+
+/// A paragraph that declares its own `w:jc` keeps it: direct formatting wins
+/// over the style.
+#[test]
+fn test_a_cell_paragraph_own_alignment_beats_the_table_style() {
+    let table_xml = TABLE_WITH_STYLE.replace(
+        r#"<w:tr><w:tc><w:p><w:r><w:t>Produkt</w:t></w:r></w:p></w:tc></w:tr>"#,
+        r#"<w:tr><w:tc><w:p><w:pPr><w:jc w:val="left"/></w:pPr><w:r><w:t>Produkt</w:t></w:r></w:p></w:tc></w:tr>"#,
+    );
+    let data = build_docx_with_table_style(
+        r#"<w:style w:type="table" w:styleId="Invoice"><w:name w:val="Invoice"/>
+            <w:pPr><w:jc w:val="right"/></w:pPr>
+        </w:style>"#,
+        &table_xml,
+    );
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let t = first_table(&doc);
+
+    assert_eq!(
+        first_paragraph_of(&t.rows[1].cells[0]).style.alignment,
+        Some(Alignment::Left)
+    );
+}
+
+/// `w:tblPr/w:jc` positions the table box and must not be mistaken for the
+/// style's paragraph alignment.
+#[test]
+fn test_a_table_level_jc_in_the_style_does_not_align_cell_text() {
+    let data = build_docx_with_table_style(
+        r#"<w:style w:type="table" w:styleId="Invoice"><w:name w:val="Invoice"/>
+            <w:tblPr><w:jc w:val="center"/></w:tblPr>
+        </w:style>"#,
+        TABLE_WITH_STYLE,
+    );
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let t = first_table(&doc);
+
+    assert_eq!(
+        first_paragraph_of(&t.rows[0].cells[0]).style.alignment,
+        None
+    );
+}
+
+/// A paragraph's own `w:jc="distribute"` is Word's East Asian distributed
+/// justification. Dropping it to `None` let the table style overwrite it,
+/// which contradicted "direct formatting wins" (issue #845 review).
+#[test]
+fn test_a_distributed_paragraph_keeps_its_own_alignment() {
+    let table_xml = TABLE_WITH_STYLE.replace(
+        r#"<w:tr><w:tc><w:p><w:r><w:t>Produkt</w:t></w:r></w:p></w:tc></w:tr>"#,
+        r#"<w:tr><w:tc><w:p><w:pPr><w:jc w:val="distribute"/></w:pPr><w:r><w:t>Produkt</w:t></w:r></w:p></w:tc></w:tr>"#,
+    );
+    let data = build_docx_with_table_style(
+        r#"<w:style w:type="table" w:styleId="Invoice"><w:name w:val="Invoice"/>
+            <w:pPr><w:jc w:val="right"/></w:pPr>
+        </w:style>"#,
+        &table_xml,
+    );
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let t = first_table(&doc);
+
+    assert_eq!(
+        first_paragraph_of(&t.rows[1].cells[0]).style.alignment,
+        Some(Alignment::Justify),
+        "the style's right alignment must not overwrite a declared distribute"
+    );
+}

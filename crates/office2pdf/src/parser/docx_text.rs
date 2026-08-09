@@ -10,12 +10,21 @@ use crate::parser::xml_util;
 // package omits one; Arial gives the parser a stable cross-platform baseline.
 const WORD_COMPATIBLE_DEFAULT_FONT: &str = "Arial";
 
-fn parse_alignment(value: &str) -> Option<Alignment> {
+/// Map a `w:jc` value onto the IR's alignment.
+///
+/// Shared with the table-style resolver so a style's `w:jc` and a paragraph's
+/// own `w:jc` cannot disagree — they did, over `distribute`, which one side
+/// dropped to `None` while the other justified it (issue #845).
+///
+/// `distribute` is Word's East Asian distributed justification: like `both`,
+/// but it stretches the last line too. The IR has one justify mode, so both
+/// land on it.
+pub(super) fn parse_alignment(value: &str) -> Option<Alignment> {
     match value {
         "center" => Some(Alignment::Center),
         "right" | "end" => Some(Alignment::Right),
         "left" | "start" => Some(Alignment::Left),
-        "both" | "justified" => Some(Alignment::Justify),
+        "both" | "justified" | "distribute" => Some(Alignment::Justify),
         _ => None,
     }
 }
