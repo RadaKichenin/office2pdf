@@ -2,16 +2,22 @@
 //!
 //! Explicit family mappings provide preferred alternatives, including
 //! metric-compatible Office substitutes. A name the table does not list is
-//! read for a class token instead: a monospace one gets a fixed-pitch chain,
-//! a sans-serif one a sans chain, so a missing face does not land on the
-//! document's default serif. The requested family remains first.
+//! answered in two further steps: the class the document itself declared for
+//! that family, then — failing that — a class token read out of the name. A
+//! monospace answer gets a fixed-pitch chain and a sans-serif one a sans
+//! chain, so a missing face does not land on the document's default serif.
+//! The requested family remains first.
+//!
+//! Only PPTX populates the declared-class map today; DOCX `w:family` in
+//! `word/fontTable.xml` is not read yet, so a DOCX face still relies on the
+//! table and the name token (issue #891).
 
 // Font discovery/embedding is native-only; on wasm32 these items are
 // compiled but unreachable (visibility sealing exposed them to dead_code).
 #![cfg_attr(target_arch = "wasm32", allow(dead_code))]
 
 use std::cell::RefCell;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 #[cfg(target_arch = "wasm32")]
 use std::path::PathBuf;
 
@@ -21,6 +27,7 @@ use crate::ir::{
 
 use super::font_context::FontSearchContext;
 use super::typst_gen::escape_typst_string;
+use crate::ir::DeclaredFontClass;
 
 const MONOSPACE_SUBSTITUTES: &[&str] = &[
     "DejaVu Sans Mono",
@@ -34,8 +41,39 @@ const MONOSPACE_SUBSTITUTES: &[&str] = &[
 /// against (issue #848).
 const SANS_SERIF_SUBSTITUTES: &[&str] = &["Liberation Sans", "Arimo", "DejaVu Sans", "Helvetica"];
 
+/// Where a family that declares itself serif lands when it is missing. Only a
+/// declared class reaches this — an unclassified family already falls through
+/// to the document's default face, which is a serif (issue #891).
+const SERIF_SUBSTITUTES: &[&str] = &["Liberation Serif", "Tinos", "DejaVu Serif"];
+
 thread_local! {
     static ACTIVE_FONT_CONTEXT: RefCell<Option<FontSearchContext>> = const { RefCell::new(None) };
+    /// The family classes the document itself declares, keyed by lowercased
+    /// family name. A face that states its class outranks any guess drawn
+    /// from its name (issue #891).
+    static DECLARED_FONT_CLASSES: RefCell<HashMap<String, DeclaredFontClass>> =
+        RefCell::new(HashMap::new());
+}
+
+/// Install the family classes a document declares, for the duration of one
+/// render. Returns the previous map so a nested render can restore it.
+pub(crate) fn set_declared_font_classes(
+    classes: HashMap<String, DeclaredFontClass>,
+) -> HashMap<String, DeclaredFontClass> {
+    DECLARED_FONT_CLASSES.with(|cell| cell.replace(classes))
+}
+
+/// The substitutes a document-declared class asks for, if it declared one.
+fn declared_class_substitutes(normalized_family: &str) -> Option<&'static [&'static str]> {
+    DECLARED_FONT_CLASSES.with(|cell| {
+        cell.borrow()
+            .get(normalized_family)
+            .map(|class| match class {
+                DeclaredFontClass::SansSerif => SANS_SERIF_SUBSTITUTES,
+                DeclaredFontClass::Monospace => MONOSPACE_SUBSTITUTES,
+                DeclaredFontClass::Serif => SERIF_SUBSTITUTES,
+            })
+    })
 }
 
 fn normalized_lookup_key(font_family: &str) -> String {
@@ -301,11 +339,20 @@ pub fn substitutes(font_family: &str) -> Option<&'static [&'static str]> {
             "Arial Unicode MS",
         ]),
         "corbel" | "candara" => Some(SANS_SERIF_SUBSTITUTES),
-        // Monospace first: a name carrying both tokens, as "… Sans Mono"
-        // does, is fixed-pitch.
-        _ if family_name_declares_monospace(&normalized_family) => Some(MONOSPACE_SUBSTITUTES),
-        _ if family_name_declares_sans_serif(&normalized_family) => Some(SANS_SERIF_SUBSTITUTES),
-        _ => None,
+        // The document's own declaration outranks anything read off the name,
+        // and a name token is consulted only when it declared nothing (issue
+        // #891). An `if let` match guard would say this more directly but is
+        // unstable on the MSRV.
+        _ => declared_class_substitutes(&normalized_family)
+            // Monospace first: a name carrying both tokens, as "… Sans Mono"
+            // does, is fixed-pitch.
+            .or_else(|| {
+                family_name_declares_monospace(&normalized_family).then_some(MONOSPACE_SUBSTITUTES)
+            })
+            .or_else(|| {
+                family_name_declares_sans_serif(&normalized_family)
+                    .then_some(SANS_SERIF_SUBSTITUTES)
+            }),
     }
 }
 

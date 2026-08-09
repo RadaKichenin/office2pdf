@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
 
-use crate::ir::Color;
+use crate::ir::{Color, DeclaredFontClass};
 use crate::parser::xml_util::{get_attr_i64, get_attr_str, parse_hex_color};
 
 /// A format-agnostic view of a theme's color scheme.
@@ -426,3 +426,66 @@ pub(crate) fn parse_theme_font_scheme(xml: &str) -> ThemeFontScheme {
 #[cfg(test)]
 #[path = "drawingml_tests.rs"]
 mod tests;
+
+/// Classify a face from `@pitchFamily` and `@panose` (issue #891).
+///
+/// `pitchFamily`'s high nibble is the family — 1 roman, 2 swiss, 3 modern —
+/// and is checked first because it states the class outright. PANOSE digit 2
+/// is the serif style, where 11..13 are the sans variants and 15 is rounded
+/// sans (Calibri's `020F…`); 2..10 are the serif ones. Digit 1 must be 02,
+/// Latin Text, for digit 2 to carry that meaning at all.
+pub(crate) fn declared_font_class(
+    panose: Option<&str>,
+    pitch_family: Option<&str>,
+) -> Option<DeclaredFontClass> {
+    if let Some(value) = pitch_family.and_then(|raw| raw.trim().parse::<u8>().ok()) {
+        match value >> 4 {
+            1 => return Some(DeclaredFontClass::Serif),
+            2 => return Some(DeclaredFontClass::SansSerif),
+            3 => return Some(DeclaredFontClass::Monospace),
+            _ => {}
+        }
+    }
+    let panose = panose?.trim();
+    if panose.len() < 4 || u8::from_str_radix(&panose[0..2], 16).ok()? != 2 {
+        return None;
+    }
+    match u8::from_str_radix(&panose[2..4], 16).ok()? {
+        11..=13 | 15 => Some(DeclaredFontClass::SansSerif),
+        2..=10 => Some(DeclaredFontClass::Serif),
+        _ => None,
+    }
+}
+
+/// Collect every `<a:latin>` in a part that states its family class.
+///
+/// One sweep per part beats threading the attributes through each of the ten
+/// places a run's typeface is read, and the answer is the same: a family's
+/// class does not vary by where it is named.
+pub(crate) fn scan_declared_font_classes(xml: &str, out: &mut HashMap<String, DeclaredFontClass>) {
+    let mut reader: Reader<&[u8]> = Reader::from_str(xml);
+    loop {
+        match reader.read_event() {
+            Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e))
+                if e.local_name().as_ref() == b"latin" =>
+            {
+                let Some(typeface) = get_attr_str(e, b"typeface") else {
+                    continue;
+                };
+                // `+mn-lt`/`+mj-lt` name the theme's slot, not a face.
+                if typeface.starts_with('+') || typeface.trim().is_empty() {
+                    continue;
+                }
+                if let Some(class) = declared_font_class(
+                    get_attr_str(e, b"panose").as_deref(),
+                    get_attr_str(e, b"pitchFamily").as_deref(),
+                ) {
+                    out.entry(typeface.trim().to_ascii_lowercase())
+                        .or_insert(class);
+                }
+            }
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+}

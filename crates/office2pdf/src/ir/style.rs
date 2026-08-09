@@ -1,7 +1,23 @@
+/// The family class a font declares about itself, independent of its name.
+///
+/// OOXML states this on the very element that names the face, and it outranks
+/// any guess drawn from the name: `Posterama` and `Avenir Next LT Pro` carry
+/// no `sans` token yet both declare themselves sans-serif (issue #891).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeclaredFontClass {
+    Serif,
+    SansSerif,
+    Monospace,
+}
+
 /// Collection of named styles in the document.
 #[derive(Debug, Clone, Default)]
 pub struct StyleSheet {
     pub styles: Vec<NamedStyle>,
+    /// The family classes the source declares, keyed by lowercased family
+    /// name. A face that states its class outranks any guess drawn from its
+    /// name when a substitute has to be chosen (issue #891).
+    pub declared_font_classes: std::collections::HashMap<String, DeclaredFontClass>,
     /// Document default tab stop interval in points (`w:defaultTabStop`
     /// from `word/settings.xml`). `None` when the document does not
     /// declare one.
