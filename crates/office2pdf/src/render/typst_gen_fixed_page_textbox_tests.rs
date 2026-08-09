@@ -2051,3 +2051,57 @@ fn consecutive_slide_paragraphs_keep_powerpoints_full_line_advance() {
         }
     }
 }
+
+/// A box barely one line tall does not scale its text unless the file asked
+/// for it (issue #898).
+///
+/// `single_line_fit_paragraph` folded the paragraph onto one line and scaled
+/// it whenever the box was short, whatever `auto_fit` said. The deck in #841
+/// gives its sensitivity label a 67.4 x 9.6pt box holding 8pt text and no
+/// `<a:normAutofit/>`; we rendered it at 0.61x — an effective 4.9pt — where
+/// the reference keeps 8pt and lets it overflow.
+#[test]
+fn a_short_box_without_autofit_does_not_scale_its_text() {
+    let doc = make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![FixedElement {
+            x: 5.0,
+            y: 525.0,
+            width: 67.4,
+            height: 9.6,
+            kind: FixedElementKind::TextBox(crate::ir::TextBoxData {
+                content: vec![Block::Paragraph(Paragraph {
+                    style: ParagraphStyle::default(),
+                    runs: vec![Run {
+                        text: "Sensitivity: Internal".to_string(),
+                        style: TextStyle {
+                            font_size: Some(8.0),
+                            ..TextStyle::default()
+                        },
+                        href: None,
+                        footnote: None,
+                    }],
+                })],
+                padding: Insets::default(),
+                vertical_align: TextBoxVerticalAlign::Top,
+                fill: None,
+                opacity: None,
+                stroke: None,
+                shape_kind: None,
+                no_wrap: false,
+                auto_fit: false,
+                text_rotation_deg: None,
+                shape_rotation_deg: None,
+            }),
+        }],
+    )]);
+
+    let output = generate_typst(&doc).unwrap();
+
+    assert!(
+        !output.source.contains("text_box_scale_"),
+        "nothing asked for the text to shrink:\n{}",
+        output.source
+    );
+}
