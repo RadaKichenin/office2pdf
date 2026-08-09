@@ -960,6 +960,74 @@ fn test_generate_header_with_bottom_border_draws_rule_below_text() {
         rule_pos > text_pos,
         "a bottom rule must be drawn after the header text"
     );
+    // The rule overhangs the text column, so it must not inherit the header
+    // paragraph's alignment — a right-aligned header would otherwise pin the
+    // line's right edge to the column and throw the whole overhang left
+    // (issue #840).
+    assert!(
+        output
+            .source
+            .contains("#align(left)[#move(dx: -1.44pt)[#line(length: 100% + 2.88pt"),
+        "the rule states its own alignment: {}",
+        output.source
+    );
+}
+
+/// A right-aligned header still draws its rule symmetrically about the column.
+///
+/// Regression for #840: the rule is 2.88pt wider than the text column, so
+/// inheriting `w:jc = right` put its right edge on the column edge and the
+/// whole overhang on the left, which the `#move` then doubled.
+#[test]
+fn a_right_aligned_header_does_not_drag_its_rule_left() {
+    use crate::ir::{BorderSide, CellBorder, HFInline, HeaderFooter, HeaderFooterParagraph};
+
+    let right_aligned = ParagraphStyle {
+        alignment: Some(crate::ir::Alignment::Right),
+        ..ParagraphStyle::default()
+    };
+    let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
+        size: PageSize::default(),
+        margins: Margins::default(),
+        content: vec![make_paragraph("Body")],
+        header: Some(HeaderFooter {
+            distance_from_edge: None,
+            paragraphs: vec![HeaderFooterParagraph {
+                style: right_aligned,
+                elements: vec![HFInline::Run(Run {
+                    text: "Minutes | Internal".to_string(),
+                    style: TextStyle::default(),
+                    href: None,
+                    footnote: None,
+                })],
+                border: Some(CellBorder {
+                    top: None,
+                    bottom: Some(BorderSide {
+                        width: 0.5,
+                        color: Color::new(0xCC, 0xCC, 0xCC),
+                        style: BorderLineStyle::Solid,
+                    }),
+                    left: None,
+                    right: None,
+                }),
+                border_space: None,
+                frame: None,
+            }],
+        }),
+        footer: None,
+        columns: None,
+        line_grid_pitch: None,
+        line_grid_snaps_lines: false,
+        page_numbering: None,
+    })]);
+
+    let source = generate_typst(&doc).unwrap().source;
+    assert!(
+        source.contains("#align(left)[#move(dx: -1.44pt)[#line(length: 100% + 2.88pt"),
+        "the rule must override the paragraph's right alignment: {source}"
+    );
 }
 
 /// A paragraph carrying both a top and a bottom rule must draw both.
