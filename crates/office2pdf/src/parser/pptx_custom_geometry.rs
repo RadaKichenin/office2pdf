@@ -5,11 +5,11 @@
 //! substituting a rectangle turned every decorative curve into a block and
 //! every circular frame into a square (issue #855).
 //!
-//! The commands are flattened to a polygon in the shape's normalized 0..1 box,
-//! which is what [`crate::ir::ShapeKind::Polygon`] renders. Curves are sampled
-//! rather than preserved: at the sizes these decorations print, the sampling
-//! error is far below the rectangle it replaces, and the polygon path already
-//! has a renderer.
+//! The commands are flattened to subpaths in the shape's normalized 0..1 box,
+//! which [`crate::ir::ShapeKind::Path`] renders as one path under the even-odd
+//! fill rule. Curves are sampled rather than preserved: at the sizes these
+//! decorations print, the sampling error is far below the rectangle it
+//! replaces.
 
 use quick_xml::Reader;
 use quick_xml::events::Event;
@@ -31,14 +31,20 @@ const MIN_POLYGON_VERTICES: usize = 3;
 /// consumed through its end tag either way, so a geometry this cannot express
 /// still leaves the caller's parse in step.
 ///
-/// Returns `None` when nothing usable was found — no path, a degenerate
-/// coordinate space, or fewer than three distinct points. The caller keeps its
-/// rectangle fallback for those.
+/// Returns an empty vector when nothing usable was found — no path, a
+/// degenerate coordinate space, or fewer than three distinct points in any
+/// subpath. The caller keeps its rectangle fallback for those.
 ///
-/// Only the largest single path is returned: a polygon has no way to express
-/// the holes a multi-path geometry can carve, and the largest path is the one
-/// that carries the silhouette.
-pub(super) fn parse_custom_geometry(reader: &mut Reader<&[u8]>) -> Option<Vec<(f64, f64)>> {
+/// **Every** subpath is returned, each as its own polygon. A geometry's
+/// subpaths come from separate `<a:path>` elements and from a `moveTo`
+/// part-way through one, and the deck on #866 draws its wave line-art as
+/// dozens of thin ribbons inside a single path. Concatenating them welded the
+/// end of one ribbon to the start of the next and painted the wedge between;
+/// keeping only the largest threw the rest of the art away. An inner boundary
+/// carves a hole rather than painting solid because the caller hands every
+/// subpath to one [`crate::ir::ShapeKind::Path`], which fills even-odd
+/// (issue #870).
+pub(super) fn parse_custom_geometry(reader: &mut Reader<&[u8]>) -> Vec<Vec<(f64, f64)>> {
     let mut depth: usize = 1;
     let mut paths: Vec<Vec<(f64, f64)>> = Vec::new();
     let mut current: Vec<(f64, f64)> = Vec::new();
@@ -97,6 +103,15 @@ pub(super) fn parse_custom_geometry(reader: &mut Reader<&[u8]>) -> Option<Vec<(f
                         if let Some(kind) = command.take()
                             && Command::from_tag(other) == Some(kind)
                         {
+                            // A `moveTo` after any point starts a new subpath.
+                            // One `<a:path>` may hold several — `moveTo lnTo
+                            // lnTo close moveTo lnTo …` is one shape in the
+                            // deck on #866 — and concatenating them joined the
+                            // end of one outline to the start of the next,
+                            // painting the wedge between (issue #866).
+                            if kind == Command::Move && !current.is_empty() {
+                                flush_path(&mut paths, &mut current, path_width, path_height);
+                            }
                             apply_command(kind, &pending_points, &mut current);
                             pending_points.clear();
                         }
@@ -112,14 +127,8 @@ pub(super) fn parse_custom_geometry(reader: &mut Reader<&[u8]>) -> Option<Vec<(f
     }
     flush_path(&mut paths, &mut current, path_width, path_height);
 
+    paths.retain(|path| path.len() >= MIN_POLYGON_VERTICES);
     paths
-        .into_iter()
-        .max_by(|left, right| {
-            enclosed_area(left)
-                .partial_cmp(&enclosed_area(right))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
-        .filter(|path| path.len() >= MIN_POLYGON_VERTICES)
 }
 
 /// The drawing commands a path can carry. `close` is handled separately: it
@@ -230,21 +239,6 @@ fn flush_path(
             .map(|(x, y)| (x / width, y / height))
             .collect(),
     );
-}
-
-/// Twice the signed area of the polygon, unsigned — used only to rank paths
-/// against each other, so the factor of two does not matter.
-fn enclosed_area(points: &[(f64, f64)]) -> f64 {
-    if points.len() < MIN_POLYGON_VERTICES {
-        return 0.0;
-    }
-    let mut sum: f64 = 0.0;
-    for index in 0..points.len() {
-        let (x1, y1) = points[index];
-        let (x2, y2) = points[(index + 1) % points.len()];
-        sum += x1 * y2 - x2 * y1;
-    }
-    sum.abs()
 }
 
 #[cfg(test)]

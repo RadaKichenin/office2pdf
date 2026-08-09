@@ -97,6 +97,9 @@ pub(super) fn generate_shape(out: &mut String, shape: &Shape, width: f64, height
         ShapeKind::Polygon { vertices } => {
             write_polygon(out, shape, width, height, vertices);
         }
+        ShapeKind::Path { subpaths } => {
+            write_subpath_curve(out, shape, width, height, subpaths);
+        }
     }
 
     if use_typst_rotation {
@@ -382,6 +385,51 @@ fn write_polygon_vertices(out: &mut String, width: f64, height: f64, vertices: &
             format_f64(vy * height),
         );
     }
+}
+
+/// Generate a Typst `#curve(...)` for a shape made of several closed
+/// subpaths, filled under the even-odd rule.
+///
+/// A DrawingML `a:custGeom` is one path however many subpaths it holds, so an
+/// inner boundary carves a hole. Drawing each subpath as its own filled
+/// polygon painted that hole solid (issue #870).
+fn write_subpath_curve(
+    out: &mut String,
+    shape: &Shape,
+    width: f64,
+    height: f64,
+    subpaths: &[Vec<(f64, f64)>],
+) {
+    out.push_str("#curve(fill-rule: \"even-odd\"");
+    if let Some(pattern) = &shape.pattern_fill {
+        out.push_str(", fill: ");
+        write_pattern_fill(out, pattern);
+    } else if let Some(gradient) = &shape.gradient_fill {
+        out.push_str(", fill: ");
+        write_gradient_fill(out, gradient);
+    } else if let Some(fill) = &shape.fill {
+        write_fill_color(out, fill, shape.opacity);
+    }
+    write_shape_stroke(out, &shape.stroke);
+    for subpath in subpaths {
+        write_curve_subpath(out, width, height, subpath);
+    }
+    out.push_str(")\n");
+}
+
+/// One closed subpath as `curve.move` / `curve.line` … / `curve.close`.
+fn write_curve_subpath(out: &mut String, width: f64, height: f64, vertices: &[(f64, f64)]) {
+    for (index, (vx, vy)) in vertices.iter().enumerate() {
+        let verb: &str = if index == 0 { "move" } else { "line" };
+        let _ = write!(
+            out,
+            ", curve.{}(({}pt, {}pt))",
+            verb,
+            format_f64(vx * width),
+            format_f64(vy * height),
+        );
+    }
+    out.push_str(", curve.close()");
 }
 
 /// Generate a Typst `#polygon(...)` for an arbitrary polygon shape.

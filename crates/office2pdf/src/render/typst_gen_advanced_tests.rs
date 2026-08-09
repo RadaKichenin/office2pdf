@@ -1493,3 +1493,72 @@ fn test_sheet_drawings_overlay_the_grid_at_absolute_offsets() {
         );
     }
 }
+
+/// A custom geometry's subpaths are one path under one fill rule, so an inner
+/// boundary carves a hole rather than painting solid. Filling each subpath
+/// independently painted the frame in the deck on #870 as a blob.
+#[test]
+fn test_multi_subpath_shape_fills_even_odd() {
+    let doc = make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![make_shape_element(
+            0.0,
+            0.0,
+            100.0,
+            100.0,
+            ShapeKind::Path {
+                subpaths: vec![
+                    vec![(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)],
+                    vec![(0.25, 0.25), (0.75, 0.25), (0.75, 0.75), (0.25, 0.75)],
+                ],
+            },
+            Some(Color::new(0, 128, 0)),
+            None,
+        )],
+    )]);
+    let source = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        source.contains("#curve("),
+        "a multi-subpath shape draws as a curve: {source}"
+    );
+    assert!(
+        source.contains("fill-rule: \"even-odd\""),
+        "the inner boundary must carve a hole: {source}"
+    );
+    assert_eq!(
+        source.matches("curve.move(").count(),
+        2,
+        "one move per subpath: {source}"
+    );
+    assert!(
+        source.contains("fill: rgb(0, 128, 0)"),
+        "the fill still applies: {source}"
+    );
+}
+
+/// A single-subpath geometry still draws as one closed outline, so the change
+/// does not turn every custom shape into a hole-carving path.
+#[test]
+fn test_single_subpath_shape_still_closes_its_outline() {
+    let doc = make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![make_shape_element(
+            0.0,
+            0.0,
+            100.0,
+            100.0,
+            ShapeKind::Path {
+                subpaths: vec![vec![(0.0, 0.0), (1.0, 0.0), (1.0, 1.0)]],
+            },
+            Some(Color::new(0, 0, 255)),
+            None,
+        )],
+    )]);
+    let source = generate_typst(&doc).unwrap().source;
+
+    assert_eq!(source.matches("curve.move(").count(), 1);
+    assert!(source.contains("curve.close()"), "got {source}");
+}

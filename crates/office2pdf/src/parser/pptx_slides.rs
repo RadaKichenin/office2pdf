@@ -911,10 +911,10 @@ struct ShapeState {
     has_direct_effect_lst: bool,
     in_sp_pr: bool,
     prst_geom: Option<String>,
-    /// Vertices flattened from `<a:custGeom>`, normalized to the shape box.
-    /// Present only when the geometry could be expressed as one polygon
-    /// (issue #855).
-    custom_geometry: Option<Vec<(f64, f64)>>,
+    /// Subpaths flattened from `<a:custGeom>`, each normalized to the shape
+    /// box. Empty when the geometry yielded nothing usable, in which case the
+    /// rectangle fallback stands (issues #855, #866).
+    custom_geometry: Vec<Vec<(f64, f64)>>,
     fill: Option<Color>,
     gradient_fill: Option<GradientFill>,
     pattern_fill: Option<PatternFill>,
@@ -967,7 +967,7 @@ impl Default for ShapeState {
             shadow: None,
             in_sp_pr: false,
             prst_geom: None,
-            custom_geometry: None,
+            custom_geometry: Vec::new(),
             fill: None,
             gradient_fill: None,
             pattern_fill: None,
@@ -1060,8 +1060,8 @@ fn finalize_shape(
         let text_shape_kind: Option<ShapeKind> = shape.prst_geom.as_deref().and_then(|geom| {
             let width: f64 = emu_to_pt(shape.cx);
             let height: f64 = emu_to_pt(shape.cy);
-            if let Some(vertices) = custom_geometry_kind(shape) {
-                return Some(vertices);
+            if let Some(kind) = custom_geometry_kind(shape) {
+                return Some(kind);
             }
             let kind: ShapeKind = prst_to_shape_kind(
                 geom,
@@ -1195,17 +1195,17 @@ fn finalize_shape(
     }
 }
 
-/// The polygon a shape's `<a:custGeom>` flattened to, when it produced one.
+/// The path a shape's `<a:custGeom>` flattened to, or `None` when the geometry
+/// yielded nothing usable and the rectangle fallback stands (issue #855).
 ///
-/// A custom geometry that could not be expressed as a single polygon leaves
-/// this `None` and the shape keeps the rectangle fallback (issue #855).
+/// Every subpath rides in one [`ShapeKind::Path`], filled under the even-odd
+/// rule: a geometry is one path however many subpaths it holds, so an inner
+/// boundary carves a hole (issue #870). Concatenating them into a single ring
+/// instead welded each outline's end to the next one's start (issue #866).
 fn custom_geometry_kind(shape: &ShapeState) -> Option<ShapeKind> {
-    shape
-        .custom_geometry
-        .as_ref()
-        .map(|vertices| ShapeKind::Polygon {
-            vertices: vertices.clone(),
-        })
+    (!shape.custom_geometry.is_empty()).then(|| ShapeKind::Path {
+        subpaths: shape.custom_geometry.clone(),
+    })
 }
 
 /// Finalize a picture element when `</p:pic>` is reached.
@@ -1653,9 +1653,10 @@ impl<'a> SlideXmlParser<'a> {
                     self.shape.prst_geom = Some(prst);
                 }
             }
-            // Custom geometry is flattened to a polygon. A geometry too
-            // complex for one polygon still falls back to a rectangle, so the
-            // fill renders as it did before (issue #855).
+            // Custom geometry is flattened to subpaths and drawn as one
+            // even-odd path. A geometry that yields none still falls back to
+            // a rectangle, so its fill renders as it did before
+            // (issues #855, #866, #870).
             b"custGeom" if self.shape.in_sp_pr && self.shape.prst_geom.is_none() => {
                 self.shape.custom_geometry = super::custom_geometry::parse_custom_geometry(reader);
                 self.shape.prst_geom = Some("rect".to_string());

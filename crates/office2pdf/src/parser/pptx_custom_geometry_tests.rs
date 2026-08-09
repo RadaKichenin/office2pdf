@@ -2,7 +2,7 @@ use super::*;
 
 /// Drive the parser the way the slide parser does: positioned just after the
 /// `<a:custGeom>` start tag.
-fn parse(xml: &str) -> Option<Vec<(f64, f64)>> {
+fn parse(xml: &str) -> Vec<Vec<(f64, f64)>> {
     let mut reader = Reader::from_str(xml);
     loop {
         match reader.read_event() {
@@ -30,6 +30,7 @@ fn a_straight_sided_path_becomes_its_normalized_vertices() {
             <a:close/>
         </a:path></a:pathLst></a:custGeom>"#,
     )
+    .pop()
     .expect("a triangle is a usable polygon");
 
     assert_eq!(vertices.len(), 3);
@@ -50,6 +51,7 @@ fn vertices_normalize_against_the_paths_own_coordinate_space() {
             <a:close/>
         </a:path></a:pathLst></a:custGeom>"#,
     )
+    .pop()
     .expect("usable polygon");
 
     assert!(close_to(vertices[1], (0.5, 0.0)), "got {:?}", vertices[1]);
@@ -69,7 +71,7 @@ fn a_cubic_segment_is_sampled_along_the_curve() {
             <a:close/>
         </a:path></a:pathLst></a:custGeom>"#,
     )
-    .expect("usable polygon");
+    .pop().expect("usable polygon");
 
     assert!(
         vertices.len() > 10,
@@ -103,7 +105,7 @@ fn a_four_segment_bezier_circle_stays_circular() {
             <a:close/>
         </a:path></a:pathLst></a:custGeom>"#,
     )
-    .expect("usable polygon");
+    .pop().expect("usable polygon");
 
     for (x, y) in &vertices {
         let radius = ((x - 0.5).powi(2) + (y - 0.5).powi(2)).sqrt();
@@ -114,11 +116,12 @@ fn a_four_segment_bezier_circle_stays_circular() {
     }
 }
 
-/// A polygon cannot carve a hole, so the path that carries the silhouette —
-/// the largest — is the one kept.
+/// Every subpath is returned, in document order — a geometry's outline and
+/// the shapes inside it are separate polygons, and dropping any of them threw
+/// away the deck's wave line-art (issue #866).
 #[test]
-fn the_largest_path_wins_when_a_geometry_declares_several() {
-    let vertices = parse(
+fn every_path_of_a_multi_path_geometry_is_returned() {
+    let paths = parse(
         r#"<a:custGeom><a:pathLst>
             <a:path w="1000" h="1000">
                 <a:moveTo><a:pt x="400" y="400"/></a:moveTo>
@@ -134,39 +137,39 @@ fn the_largest_path_wins_when_a_geometry_declares_several() {
                 <a:close/>
             </a:path>
         </a:pathLst></a:custGeom>"#,
-    )
-    .expect("usable polygon");
+    );
 
-    assert_eq!(vertices.len(), 4, "the outer square is the silhouette");
-    assert!(close_to(vertices[2], (1.0, 1.0)));
+    assert_eq!(paths.len(), 2, "got {paths:?}");
+    assert_eq!(paths[0].len(), 3, "the small triangle comes first");
+    assert_eq!(paths[1].len(), 4, "the square follows it");
 }
 
 #[test]
-fn a_geometry_with_no_usable_path_returns_none() {
-    assert_eq!(parse(r#"<a:custGeom><a:pathLst/></a:custGeom>"#), None);
+fn a_geometry_with_no_usable_path_returns_nothing() {
+    assert!(parse(r#"<a:custGeom><a:pathLst/></a:custGeom>"#).is_empty());
     // A self-closing `<a:custGeom/>` is not covered here: it arrives as an
     // empty element, which the caller handles without opening a subtree, so
     // this function never sees one.
     // Two points enclose no area.
-    assert_eq!(
+    assert!(
         parse(
             r#"<a:custGeom><a:pathLst><a:path w="100" h="100">
                 <a:moveTo><a:pt x="0" y="0"/></a:moveTo>
                 <a:lnTo><a:pt x="100" y="100"/></a:lnTo>
             </a:path></a:pathLst></a:custGeom>"#
-        ),
-        None
+        )
+        .is_empty()
     );
     // A path that declares no coordinate space cannot be normalized.
-    assert_eq!(
+    assert!(
         parse(
             r#"<a:custGeom><a:pathLst><a:path>
                 <a:moveTo><a:pt x="0" y="0"/></a:moveTo>
                 <a:lnTo><a:pt x="100" y="0"/></a:lnTo>
                 <a:lnTo><a:pt x="100" y="100"/></a:lnTo>
             </a:path></a:pathLst></a:custGeom>"#
-        ),
-        None
+        )
+        .is_empty()
     );
 }
 
@@ -195,4 +198,76 @@ fn the_reader_stops_at_the_end_of_the_geometry() {
         }
         other => panic!("expected solidFill, got {other:?}"),
     }
+}
+
+/// One `<a:path>` may hold several subpaths: a `moveTo` after a `close` starts
+/// a new outline rather than continuing the last one. Concatenating them into
+/// a single ring joined the end of one to the start of the next and painted
+/// the wedge between — issue #866, on a layout shape whose path is
+/// `moveTo lnTo lnTo close moveTo lnTo …`.
+#[test]
+fn subpaths_within_one_path_do_not_join() {
+    let vertices = parse(
+        r#"<a:custGeom><a:pathLst><a:path w="1000" h="1000">
+            <a:moveTo><a:pt x="0" y="0"/></a:moveTo>
+            <a:lnTo><a:pt x="100" y="0"/></a:lnTo>
+            <a:lnTo><a:pt x="100" y="100"/></a:lnTo>
+            <a:close/>
+            <a:moveTo><a:pt x="0" y="1000"/></a:moveTo>
+            <a:lnTo><a:pt x="1000" y="1000"/></a:lnTo>
+            <a:lnTo><a:pt x="1000" y="0"/></a:lnTo>
+            <a:lnTo><a:pt x="0" y="0"/></a:lnTo>
+            <a:close/>
+        </a:path></a:pathLst></a:custGeom>"#,
+    )
+    .pop()
+    .expect("usable polygon");
+
+    // The two subpaths stay separate rather than being welded into one ring.
+    // This checks the second; the first is the small triangle.
+    assert_eq!(vertices.len(), 4, "got {vertices:?}");
+    assert!(close_to(vertices[0], (0.0, 1.0)));
+    assert!(close_to(vertices[1], (1.0, 1.0)));
+    assert!(close_to(vertices[2], (1.0, 0.0)));
+    assert!(close_to(vertices[3], (0.0, 0.0)));
+}
+
+/// A `moveTo` that is not preceded by a `close` also starts a subpath — Office
+/// writes both forms.
+#[test]
+fn a_move_to_without_a_close_also_starts_a_subpath() {
+    let vertices = parse(
+        r#"<a:custGeom><a:pathLst><a:path w="1000" h="1000">
+            <a:moveTo><a:pt x="0" y="0"/></a:moveTo>
+            <a:lnTo><a:pt x="100" y="0"/></a:lnTo>
+            <a:lnTo><a:pt x="100" y="100"/></a:lnTo>
+            <a:moveTo><a:pt x="0" y="1000"/></a:moveTo>
+            <a:lnTo><a:pt x="1000" y="1000"/></a:lnTo>
+            <a:lnTo><a:pt x="1000" y="0"/></a:lnTo>
+            <a:lnTo><a:pt x="0" y="0"/></a:lnTo>
+        </a:path></a:pathLst></a:custGeom>"#,
+    )
+    .pop()
+    .expect("usable polygon");
+
+    assert_eq!(vertices.len(), 4, "got {vertices:?}");
+}
+
+/// A single-subpath geometry is unaffected, so the split does not fragment the
+/// shapes that already worked.
+#[test]
+fn a_single_subpath_is_unchanged_by_the_split() {
+    let vertices = parse(
+        r#"<a:custGeom><a:pathLst><a:path w="1000" h="1000">
+            <a:moveTo><a:pt x="0" y="0"/></a:moveTo>
+            <a:lnTo><a:pt x="1000" y="0"/></a:lnTo>
+            <a:lnTo><a:pt x="1000" y="1000"/></a:lnTo>
+            <a:lnTo><a:pt x="0" y="1000"/></a:lnTo>
+            <a:close/>
+        </a:path></a:pathLst></a:custGeom>"#,
+    )
+    .pop()
+    .expect("usable polygon");
+
+    assert_eq!(vertices.len(), 4);
 }
