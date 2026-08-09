@@ -24,6 +24,8 @@ fn test_generate_empty_paragraph_reserves_line_height() {
 #[test]
 fn test_generate_page_setup() {
     let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize {
             width: 612.0,
             height: 792.0,

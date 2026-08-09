@@ -6,6 +6,8 @@ fn test_generate_flow_page_with_text_header() {
     use crate::ir::{HFInline, HeaderFooter, HeaderFooterParagraph};
 
     let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins::default(),
         content: vec![make_paragraph("Body text")],
@@ -40,6 +42,8 @@ fn test_generate_flow_page_with_page_number_footer() {
     use crate::ir::{HFInline, HeaderFooter, HeaderFooterParagraph};
 
     let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins::default(),
         content: vec![make_paragraph("Body text")],
@@ -85,6 +89,8 @@ fn test_generate_footer_with_compound_border_and_right_positioned_tab() {
     };
 
     let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins::default(),
         content: vec![make_paragraph("Body")],
@@ -146,6 +152,8 @@ fn test_generate_page_anchored_footer_frame_in_foreground() {
     };
 
     let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins::default(),
         content: vec![make_paragraph("Body")],
@@ -200,6 +208,8 @@ fn test_page_anchored_frame_page_number_compiles() {
     };
 
     let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins::default(),
         content: vec![make_paragraph("Body")],
@@ -249,6 +259,8 @@ fn test_generate_flow_page_with_header_and_footer() {
     use crate::ir::{HFInline, HeaderFooter, HeaderFooterParagraph};
 
     let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins::default(),
         content: vec![make_paragraph("Body")],
@@ -297,6 +309,8 @@ fn test_generate_flow_page_without_header_footer() {
 #[test]
 fn test_generate_typst_inserts_pagebreak_between_flow_pages() {
     let first = Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins::default(),
         content: vec![make_paragraph("First section")],
@@ -308,6 +322,8 @@ fn test_generate_typst_inserts_pagebreak_between_flow_pages() {
         page_numbering: None,
     });
     let second = Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins::default(),
         content: vec![make_paragraph("Second section")],
@@ -886,6 +902,8 @@ fn test_generate_header_with_bottom_border_draws_rule_below_text() {
     use crate::ir::{BorderSide, CellBorder, HFInline, HeaderFooter, HeaderFooterParagraph};
 
     let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins::default(),
         content: vec![make_paragraph("Body")],
@@ -958,6 +976,8 @@ fn test_generate_header_with_top_and_bottom_borders_draws_both_rules() {
     };
 
     let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins::default(),
         content: vec![make_paragraph("Body")],
@@ -1004,6 +1024,8 @@ fn test_flow_page_footer_is_pinned_to_the_word_edge_distance() {
     use crate::ir::{HFInline, HeaderFooter, HeaderFooterParagraph};
 
     let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins {
             top: 62.35,
@@ -1067,6 +1089,8 @@ fn test_flow_page_footer_without_edge_distance_keeps_default_placement() {
     use crate::ir::{HFInline, HeaderFooter, HeaderFooterParagraph};
 
     let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins::default(),
         content: vec![make_paragraph("Body")],
@@ -1104,6 +1128,8 @@ fn test_flow_page_footer_distance_beyond_margin_falls_back() {
     use crate::ir::{HFInline, HeaderFooter, HeaderFooterParagraph};
 
     let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins {
             top: 72.0,
@@ -1152,6 +1178,8 @@ fn test_first_document_paragraph_keeps_its_space_before() {
     }
 
     let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins::default(),
         content: vec![heading, make_paragraph("Body")],
@@ -1194,6 +1222,8 @@ fn test_later_paragraph_space_before_stays_block_spacing() {
     }
 
     let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins::default(),
         content: vec![make_paragraph("First"), second],
@@ -1222,6 +1252,8 @@ fn test_generate_header_border_uses_declared_pbdr_space() {
     };
 
     let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins::default(),
         content: vec![make_paragraph("Body")],
@@ -1279,6 +1311,8 @@ fn test_generate_header_border_without_space_keeps_hairline_gap() {
     use crate::ir::{BorderSide, CellBorder, HFInline, HeaderFooter, HeaderFooterParagraph};
 
     let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins::default(),
         content: vec![make_paragraph("Body")],
@@ -1325,6 +1359,8 @@ fn test_flow_page_header_is_pinned_to_the_word_edge_distance() {
     use crate::ir::{HFInline, HeaderFooter, HeaderFooterParagraph};
 
     let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins {
             top: 62.35,
@@ -1379,6 +1415,8 @@ fn test_flow_page_header_without_edge_distance_keeps_default_placement() {
     use crate::ir::{HFInline, HeaderFooter, HeaderFooterParagraph};
 
     let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins::default(),
         content: vec![make_paragraph("Body")],
@@ -1433,6 +1471,8 @@ fn doc_with_header(
     use crate::ir::HeaderFooter;
 
     make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins {
             top: top_margin_pt,
@@ -1803,6 +1843,8 @@ fn test_header_band_shift_leaves_the_footer_where_it_was() {
     let footer_paragraph: HeaderFooterParagraph = header_text_paragraph("- 1 -", arial(8.0));
     let page = |header: Option<HeaderFooter>| {
         make_doc(vec![Page::Flow(FlowPage {
+            first_header: None,
+            first_footer: None,
             size: PageSize::default(),
             margins: Margins {
                 top: 62.35,
@@ -1883,6 +1925,8 @@ fn test_page_number_field_uses_its_run_style() {
         ..TextStyle::default()
     };
     let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins::default(),
         content: vec![make_paragraph("Body")],
@@ -1938,6 +1982,8 @@ fn test_unstyled_page_number_field_stays_bare() {
     use crate::ir::{HFInline, HeaderFooter, HeaderFooterParagraph};
 
     let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins::default(),
         content: vec![make_paragraph("Body")],
@@ -2125,6 +2171,8 @@ fn test_contents_entries_number_in_the_target_sections_format() {
     use crate::ir::{PageNumberFormat, PageNumbering};
 
     let front_matter = Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins::default(),
         content: vec![
@@ -2153,6 +2201,8 @@ fn test_contents_entries_number_in_the_target_sections_format() {
         }),
     });
     let body = Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins::default(),
         content: vec![Block::Paragraph(Paragraph {
@@ -2211,6 +2261,8 @@ fn test_caption_list_numbers_in_the_target_sections_format() {
     use crate::ir::{Caption, PageNumberFormat, PageNumbering};
 
     let page = Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins::default(),
         content: vec![
@@ -2274,6 +2326,8 @@ fn doc_with_footer_run(text: &str, style: TextStyle) -> Document {
     use crate::ir::HeaderFooter;
 
     make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins {
             top: 62.35,

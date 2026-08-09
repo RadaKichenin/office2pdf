@@ -1102,3 +1102,152 @@ fn a_cell_inside_a_cell_is_still_a_cell() {
         "a nested cell suppresses the auto space too"
     );
 }
+
+// ----- `w:titlePg` selects the first-page stories (issue #846) -----
+
+/// Every run's text in a header or footer story, concatenated.
+fn header_footer_text(story: &crate::ir::HeaderFooter) -> String {
+    story
+        .paragraphs
+        .iter()
+        .flat_map(|paragraph| paragraph.elements.iter())
+        .filter_map(|element| match element {
+            crate::ir::HFInline::Run(run) => Some(run.text.as_str()),
+            _ => None,
+        })
+        .collect()
+}
+
+fn build_docx_with_title_page(title_pg: bool) -> Vec<u8> {
+    let default_header = docx_rs::Header::new().add_paragraph(
+        docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text("Every other page")),
+    );
+    let first_header = docx_rs::Header::new().add_paragraph(
+        docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text("Cover banner")),
+    );
+    let docx = docx_rs::Docx::new()
+        .header(default_header)
+        .first_header(first_header)
+        .add_paragraph(
+            docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text("Body text")),
+        );
+    let docx = if title_pg { docx.title_pg() } else { docx };
+    let mut cursor = Cursor::new(Vec::new());
+    docx.build().pack(&mut cursor).unwrap();
+    cursor.into_inner()
+}
+
+#[test]
+fn title_pg_keeps_the_first_page_header_apart_from_the_rest() {
+    let page = parse_flow_page(&build_docx_with_title_page(true));
+
+    let first = page
+        .first_header
+        .as_ref()
+        .expect("titlePg must resolve a first-page header");
+    assert!(
+        header_footer_text(first).contains("Cover banner"),
+        "the first page takes the `first` story, got {:?}",
+        header_footer_text(first)
+    );
+    let rest = page
+        .header
+        .as_ref()
+        .expect("the remaining pages keep the default header");
+    assert!(
+        header_footer_text(rest).contains("Every other page"),
+        "pages after the first keep the default story, got {:?}",
+        header_footer_text(rest)
+    );
+}
+
+#[test]
+fn a_first_header_without_title_pg_is_not_used() {
+    // Triangulation: Word only honours the `first` story when `w:titlePg` asks
+    // for it, so its mere presence must not split the section.
+    //
+    // Driven off `SectionProperty` rather than a built document because
+    // `docx_rs`'s `first_header` sets `title_pg` for you — its sibling is
+    // named `first_header_without_title_pg` precisely because the two are
+    // separable in the format even though that builder couples them.
+    let story = || {
+        docx_rs::Header::new().add_paragraph(
+            docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text("Cover banner")),
+        )
+    };
+    let assets = super::sections::HeaderFooterAssets::default();
+
+    let declared = docx_rs::SectionProperty::new().first_header(story(), "rId9");
+    assert!(
+        declared.title_pg,
+        "the builder is expected to set title_pg here; if this fails the \
+         coupling changed and the test below proves nothing"
+    );
+    assert!(
+        super::sections::extract_docx_first_header(&declared, &assets).is_some(),
+        "titlePg with a first story resolves it"
+    );
+
+    let undeclared = docx_rs::SectionProperty::new().first_header_without_title_pg(story(), "rId9");
+    assert!(!undeclared.title_pg);
+    assert!(
+        super::sections::extract_docx_first_header(&undeclared, &assets).is_none(),
+        "a first story without titlePg is not a first-page story"
+    );
+}
+
+#[test]
+fn a_title_page_header_is_emitted_as_a_per_page_choice() {
+    // The two stories become one `header:` value that asks which page it is
+    // on, rather than the section committing to a single story (issue #846).
+    let data = build_docx_with_title_page(true);
+    let (document, _warnings) = DocxParser
+        .parse(&data, &ConvertOptions::default())
+        .expect("document parses");
+    let source = crate::internal::generate_typst(&document)
+        .expect("document generates")
+        .source;
+
+    assert!(
+        source.contains("header: context { if here().page() =="),
+        "the header must choose per page, got:\n{source}"
+    );
+    assert!(
+        source.contains("query(<o2p-sec-0>).first().location().page()"),
+        "the choice resolves the section's own first page, got:\n{source}"
+    );
+    assert!(
+        source.contains("#metadata(none) <o2p-sec-0>"),
+        "the section must label its first page, got:\n{source}"
+    );
+    let cover = source.find("Cover banner").expect("first story present");
+    let rest = source
+        .find("Every other page")
+        .expect("default story present");
+    assert!(
+        cover < rest,
+        "the first-page story is the `if` branch and the default the `else`"
+    );
+}
+
+#[test]
+fn a_section_with_only_a_first_page_header_still_emits_it() {
+    // A `w:titlePg` section may declare just the `first` story, meaning later
+    // pages carry no header at all. The page-setup shortcut used to ask only
+    // about the default stories and would have dropped this one (issue #846).
+    let data = build_docx_with_title_page(true);
+    let (mut document, _warnings) = DocxParser
+        .parse(&data, &ConvertOptions::default())
+        .expect("document parses");
+    if let Some(crate::ir::Page::Flow(page)) = document.pages.first_mut() {
+        page.header = None;
+        page.footer = None;
+    }
+    let source = crate::internal::generate_typst(&document)
+        .expect("document generates")
+        .source;
+    assert!(
+        source.contains("Cover only") || source.contains("Cover banner"),
+        "a first-only header must still reach the page setup, got:\n{source}"
+    );
+}

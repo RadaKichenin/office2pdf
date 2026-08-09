@@ -7,6 +7,8 @@ fn test_floating_image_square_wrap_codegen() {
     let doc = Document {
         metadata: Metadata::default(),
         pages: vec![Page::Flow(FlowPage {
+            first_header: None,
+            first_footer: None,
             size: PageSize::default(),
             margins: Margins::default(),
             content: vec![Block::FloatingImage(FloatingImage {
@@ -60,6 +62,8 @@ fn test_floating_image_top_and_bottom_codegen() {
     let doc = Document {
         metadata: Metadata::default(),
         pages: vec![Page::Flow(FlowPage {
+            first_header: None,
+            first_footer: None,
             size: PageSize::default(),
             margins: Margins::default(),
             content: vec![Block::FloatingImage(FloatingImage {
@@ -108,6 +112,8 @@ fn test_floating_image_behind_codegen() {
     let doc = Document {
         metadata: Metadata::default(),
         pages: vec![Page::Flow(FlowPage {
+            first_header: None,
+            first_footer: None,
             size: PageSize::default(),
             margins: Margins::default(),
             content: vec![Block::FloatingImage(FloatingImage {

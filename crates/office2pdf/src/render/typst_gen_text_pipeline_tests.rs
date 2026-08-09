@@ -77,6 +77,8 @@ fn test_escape_typst_already_nfc_unchanged() {
 #[test]
 fn test_generate_flow_page_with_equal_columns() {
     let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins::default(),
         content: vec![make_paragraph("Column text")],
@@ -105,6 +107,8 @@ fn test_generate_flow_page_with_equal_columns() {
 #[test]
 fn test_generate_flow_page_with_three_columns() {
     let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins::default(),
         content: vec![make_paragraph("Three col text")],
@@ -129,6 +133,8 @@ fn test_generate_flow_page_with_three_columns() {
 #[test]
 fn test_generate_flow_page_with_unequal_columns() {
     let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins::default(),
         content: vec![make_paragraph("Unequal col text")],
@@ -153,6 +159,8 @@ fn test_generate_flow_page_with_unequal_columns() {
 #[test]
 fn test_generate_column_break() {
     let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins::default(),
         content: vec![
@@ -1862,6 +1870,8 @@ fn test_header_field_never_states_kerning_false() {
         ..TextStyle::default()
     };
     let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins::default(),
         content: vec![make_paragraph("Body")],

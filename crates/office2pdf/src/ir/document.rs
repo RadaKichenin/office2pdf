@@ -88,6 +88,12 @@ pub struct FlowPage {
     pub content: Vec<Block>,
     pub header: Option<super::elements::HeaderFooter>,
     pub footer: Option<super::elements::HeaderFooter>,
+    /// The header this section's **first** page takes, where `<w:titlePg/>`
+    /// asks for one. `None` means every page takes [`FlowPage::header`]
+    /// (issue #846).
+    pub first_header: Option<super::elements::HeaderFooter>,
+    /// The footer this section's first page takes, under the same rule.
+    pub first_footer: Option<super::elements::HeaderFooter>,
     /// Optional multi-column layout for the page.
     pub columns: Option<ColumnLayout>,
     /// Word document-grid line pitch in points (`w:docGrid w:linePitch`),

@@ -106,6 +106,9 @@ const CAPTION_ENTRY_SPACING_PT: f64 = 16.4;
 
 /// Internal context for tracking image assets during code generation.
 struct GenCtx {
+    /// Which flow section is being written, so a `<w:titlePg/>` header can
+    /// label its own section's first page (issue #846).
+    flow_section_index: usize,
     images: Vec<ImageAsset>,
     next_image_id: usize,
     next_text_box_id: usize,
@@ -193,6 +196,7 @@ struct GenCtx {
 impl GenCtx {
     fn new() -> Self {
         Self {
+            flow_section_index: 0,
             images: Vec::new(),
             next_image_id: 0,
             next_text_box_id: 0,
@@ -529,7 +533,10 @@ fn generate_pages(doc: &Document, options: &ConvertOptions) -> Result<TypstOutpu
             out.push_str("\n#pagebreak()\n");
         }
         match page {
-            Page::Flow(flow) => generate_flow_page(&mut out, flow, &mut ctx, options)?,
+            Page::Flow(flow) => {
+                generate_flow_page(&mut out, flow, &mut ctx, options)?;
+                ctx.flow_section_index += 1;
+            }
             Page::Fixed(fixed) => generate_fixed_page(&mut out, fixed, &mut ctx, options)?,
             Page::Sheet(sheet_page) => {
                 generate_table_page(&mut out, sheet_page, &mut ctx, options)?;
@@ -562,6 +569,16 @@ fn generate_flow_page(
         Some(size.width - page.margins.left - page.margins.right).filter(|measure| *measure > 0.0);
     write_flow_page_setup(out, page, &size, ctx);
     out.push('\n');
+    // The marker sits at the section's first page, so a first-page header can
+    // resolve which page that is without assuming the section starts the
+    // document (issue #846).
+    if page.first_header.is_some() || page.first_footer.is_some() {
+        let _ = writeln!(
+            out,
+            "#metadata(none) <{}>",
+            section_first_page_label(ctx.flow_section_index)
+        );
+    }
     // Word restarts the counter at the section boundary; Typst counts pages
     // from the document start, so the section states its own first number.
     if let Some(start) = page.page_numbering.and_then(|numbering| numbering.start) {
@@ -1342,8 +1359,166 @@ fn write_page_setup(out: &mut String, size: &PageSize, margins: &Margins) {
 }
 
 /// Write the full page setup for a FlowPage, including optional header/footer.
+/// One footer story rendered as the value of `#set page(footer: …)`.
+#[derive(Default)]
+struct FlowFooterValue {
+    markup: String,
+    /// Whether this story needs `footer-descent: 0pt`.
+    wants_zero_descent: bool,
+}
+
+/// Build the `#set page(footer: …)` value for one footer story (issue #846).
+fn flow_footer_value(footer: &HeaderFooter, page: &FlowPage, ctx: &mut GenCtx) -> FlowFooterValue {
+    let mut value = String::new();
+    // `w:sectPr/w:pgMar/@w:footer` is the distance from the bottom page
+    // edge to the *bottom* of the footer, which then grows upward.
+    // `footer-descent: 0pt` puts Typst's footer origin on the bottom margin
+    // line, so a block spanning exactly that gap ends where Word's footer
+    // ends; bottom-aligning the content inside it reproduces the upward
+    // growth without having to measure the content. What the band's text
+    // bottom edge has to match is set below, from the footer face's own line
+    // box.
+    let footer_band: Option<f64> = footer
+        .distance_from_edge
+        // Keep float noise (62.35 - 35.4) out of the emitted source.
+        .map(|distance| ((page.margins.bottom - distance) * 100.0).round() / 100.0)
+        .filter(|band| *band > 0.0);
+    if let Some(band) = footer_band {
+        if hf_needs_context(footer) {
+            value.push_str("context ");
+        }
+        // The band's bottom is the footer's bottom, so what sits between it
+        // and the last baseline is that line's own sub-baseline share.
+        // Typst's `"descender"` is its normalised one, which is the wrong
+        // quantity for a face whose line box carries more below the
+        // baseline than its descender does (issue #630).
+        let bottom_edge: String = footer
+            .paragraphs
+            .last()
+            .map(hf_paragraph_metric_runs)
+            .and_then(|runs| text::word_footer_line_descent_em(&runs))
+            .map(|descent_em| format!("-{}em", format_f64(descent_em)))
+            .unwrap_or_else(|| "\"descender\"".to_string());
+        let _ = write!(
+            value,
+            "block(width: 100%, height: {}pt)[#set text(bottom-edge: {bottom_edge}); #place(bottom, block(width: 100%)[",
+            format_f64(band)
+        );
+        generate_flow_hf_content(&mut value, footer, ctx);
+        value.push_str("])]");
+        return FlowFooterValue {
+            markup: value,
+            wants_zero_descent: true,
+        };
+    }
+    if hf_needs_stack_offset(footer) {
+        value.push_str("context { let footer_content = block(width: 100%)[");
+        generate_flow_hf_content(&mut value, footer, ctx);
+        value.push_str("]; move(dy: -measure(footer_content).height / 2)[#footer_content] }");
+    } else {
+        if hf_needs_context(footer) {
+            value.push_str("context ");
+        }
+        value.push('[');
+        generate_flow_hf_content(&mut value, footer, ctx);
+        value.push(']');
+    }
+    FlowFooterValue {
+        markup: value,
+        wants_zero_descent: false,
+    }
+}
+
+/// One header story rendered as the value of `#set page(header: …)`.
+#[derive(Default)]
+struct FlowHeaderValue {
+    /// The Typst content expression, ready to place after `header:`.
+    markup: String,
+    /// Whether this story needs `header-ascent: 0pt` to sit where Word puts it.
+    wants_zero_ascent: bool,
+}
+
+/// Label a section's first page carries, so a first-page header can ask which
+/// page it is on without assuming the section starts the document.
+fn section_first_page_label(section_index: usize) -> String {
+    format!("o2p-sec-{section_index}")
+}
+
+/// Typst expression for the page a section starts on (issue #846).
+fn section_first_page_expression(section_index: usize) -> String {
+    format!(
+        "query(<{}>).first().location().page()",
+        section_first_page_label(section_index)
+    )
+}
+
+/// Build the `#set page(header: …)` value for one header story.
+///
+/// Split out of the page setup so `<w:titlePg/>`'s two stories are built the
+/// same way and differ only in which one a page picks (issue #846).
+fn flow_header_value(
+    header: &HeaderFooter,
+    page: &FlowPage,
+    size: &PageSize,
+    ctx: &mut GenCtx,
+) -> FlowHeaderValue {
+    let mut out = String::new();
+    // `w:sectPr/w:pgMar/@w:header` is the distance from the top page edge to
+    // the *top* of the header, which then grows downward. Typst anchors
+    // header content by its bottom, so anything added below the text — a
+    // `w:pBdr` rule and its `w:space` gap — would otherwise push the text
+    // up. `header-ascent: 0pt` puts the origin on the top margin line, and a
+    // band of exactly that gap holds the content against Word's header top.
+    let header_band: Option<f64> = header
+        .distance_from_edge
+        // Keep float noise out of the emitted source.
+        .map(|distance| ((page.margins.top - distance) * 100.0).round() / 100.0)
+        .filter(|band| *band > 0.0);
+    if let Some(band) = header_band {
+        match header_band_shift_pt(header) {
+            Some(shift) => {
+                write_shifted_header_band(&mut out, header, band, shift, page, size, ctx)
+            }
+            None => {
+                if hf_needs_context(header) {
+                    out.push_str("context ");
+                }
+                let _ = write!(
+                    out,
+                    "block(width: 100%, height: {}pt)[#place(top, block(width: 100%)[",
+                    format_f64(band)
+                );
+                generate_flow_hf_content(&mut out, header, ctx);
+                out.push_str("])]");
+            }
+        }
+        return FlowHeaderValue {
+            markup: out,
+            wants_zero_ascent: true,
+        };
+    }
+    if hf_needs_context(header) {
+        out.push_str("context [");
+    } else {
+        out.push('[');
+    }
+    generate_flow_hf_content(&mut out, header, ctx);
+    out.push(']');
+    FlowHeaderValue {
+        markup: out,
+        wants_zero_ascent: false,
+    }
+}
+
 fn write_flow_page_setup(out: &mut String, page: &FlowPage, size: &PageSize, ctx: &mut GenCtx) {
-    if page.header.is_none() && page.footer.is_none() {
+    // A section may declare only a first-page story — `w:titlePg` with just a
+    // `first` reference means pages after the first carry none — so the
+    // shortcut has to ask about those too (issue #846).
+    if page.header.is_none()
+        && page.footer.is_none()
+        && page.first_header.is_none()
+        && page.first_footer.is_none()
+    {
         write_page_setup(out, size, &page.margins);
         return;
     }
@@ -1359,100 +1534,78 @@ fn write_flow_page_setup(out: &mut String, page: &FlowPage, size: &PageSize, ctx
         format_f64(page.margins.right),
     );
 
-    if let Some(header) = &page.header
-        && hf_has_flow_content(header)
-    {
-        // `w:sectPr/w:pgMar/@w:header` is the distance from the top page edge to
-        // the *top* of the header, which then grows downward. Typst anchors
-        // header content by its bottom, so anything added below the text — a
-        // `w:pBdr` rule and its `w:space` gap — would otherwise push the text
-        // up. `header-ascent: 0pt` puts the origin on the top margin line, and a
-        // band of exactly that gap holds the content against Word's header top.
-        let header_band: Option<f64> = header
-            .distance_from_edge
-            // Keep float noise out of the emitted source.
-            .map(|distance| ((page.margins.top - distance) * 100.0).round() / 100.0)
-            .filter(|band| *band > 0.0);
-        if let Some(band) = header_band {
-            out.push_str(", header-ascent: 0pt, header: ");
-            match header_band_shift_pt(header) {
-                Some(shift) => write_shifted_header_band(out, header, band, shift, page, size, ctx),
-                None => {
-                    if hf_needs_context(header) {
-                        out.push_str("context ");
-                    }
-                    let _ = write!(
-                        out,
-                        "block(width: 100%, height: {}pt)[#place(top, block(width: 100%)[",
-                        format_f64(band)
-                    );
-                    generate_flow_hf_content(out, header, ctx);
-                    out.push_str("])]");
-                }
+    // A section with `<w:titlePg/>` draws a different story on its first page,
+    // so the header value becomes a choice made per page rather than one block
+    // (issue #846). Both variants share the band and ascent, which come from
+    // the section's own margins, so they are built the same way.
+    let default_header = page
+        .header
+        .as_ref()
+        .filter(|header| hf_has_flow_content(header));
+    let first_header = page
+        .first_header
+        .as_ref()
+        .filter(|header| hf_has_flow_content(header));
+    if first_header.is_some() || default_header.is_some() {
+        let default_value = default_header
+            .map(|header| flow_header_value(header, page, size, ctx))
+            .unwrap_or_default();
+        let first_value = first_header
+            .map(|header| flow_header_value(header, page, size, ctx))
+            .unwrap_or_default();
+        // The ascent is a page property, so it is set when either story wants
+        // it; a story that does not is unaffected by it.
+        if default_value.wants_zero_ascent || first_value.wants_zero_ascent {
+            out.push_str(", header-ascent: 0pt");
+        }
+        match first_header {
+            Some(_) => {
+                let _ = write!(
+                    out,
+                    ", header: context {{ if here().page() == {} {{ {} }} else {{ {} }} }}",
+                    section_first_page_expression(ctx.flow_section_index),
+                    first_value.markup,
+                    default_value.markup
+                );
             }
-        } else {
-            if hf_needs_context(header) {
-                out.push_str(", header: context [");
-            } else {
-                out.push_str(", header: [");
+            None => {
+                let _ = write!(out, ", header: {}", default_value.markup);
             }
-            generate_flow_hf_content(out, header, ctx);
-            out.push(']');
         }
     }
 
-    if let Some(footer) = &page.footer
-        && hf_has_flow_content(footer)
-    {
-        // `w:sectPr/w:pgMar/@w:footer` is the distance from the bottom page
-        // edge to the *bottom* of the footer, which then grows upward.
-        // `footer-descent: 0pt` puts Typst's footer origin on the bottom margin
-        // line, so a block spanning exactly that gap ends where Word's footer
-        // ends; bottom-aligning the content inside it reproduces the upward
-        // growth without having to measure the content. What the band's text
-        // bottom edge has to match is set below, from the footer face's own
-        // line box.
-        let footer_band: Option<f64> = footer
-            .distance_from_edge
-            // Keep float noise (62.35 - 35.4) out of the emitted source.
-            .map(|distance| ((page.margins.bottom - distance) * 100.0).round() / 100.0)
-            .filter(|band| *band > 0.0);
-        if let Some(band) = footer_band {
-            out.push_str(", footer-descent: 0pt, footer: ");
-            if hf_needs_context(footer) {
-                out.push_str("context ");
+    // The footer takes the same first-page choice the header does (issue #846).
+    let default_footer = page
+        .footer
+        .as_ref()
+        .filter(|footer| hf_has_flow_content(footer));
+    let first_footer = page
+        .first_footer
+        .as_ref()
+        .filter(|footer| hf_has_flow_content(footer));
+    if first_footer.is_some() || default_footer.is_some() {
+        let default_value = default_footer
+            .map(|footer| flow_footer_value(footer, page, ctx))
+            .unwrap_or_default();
+        let first_value = first_footer
+            .map(|footer| flow_footer_value(footer, page, ctx))
+            .unwrap_or_default();
+        if default_value.wants_zero_descent || first_value.wants_zero_descent {
+            out.push_str(", footer-descent: 0pt");
+        }
+        match first_footer {
+            Some(_) => {
+                let _ = write!(
+                    out,
+                    ", footer: context {{ if here().page() == {} {{ {} }} else {{ {} }} }}",
+                    section_first_page_expression(ctx.flow_section_index),
+                    first_value.markup,
+                    default_value.markup
+                );
             }
-            // The band's bottom is the footer's bottom, so what sits between it
-            // and the last baseline is that line's own sub-baseline share.
-            // Typst's `"descender"` is its normalised one, which is the wrong
-            // quantity for a face whose line box carries more below the
-            // baseline than its descender does (issue #630).
-            let bottom_edge: String = footer
-                .paragraphs
-                .last()
-                .map(hf_paragraph_metric_runs)
-                .and_then(|runs| text::word_footer_line_descent_em(&runs))
-                .map(|descent_em| format!("-{}em", format_f64(descent_em)))
-                .unwrap_or_else(|| "\"descender\"".to_string());
-            let _ = write!(
-                out,
-                "block(width: 100%, height: {}pt)[#set text(bottom-edge: {bottom_edge}); #place(bottom, block(width: 100%)[",
-                format_f64(band)
-            );
-            generate_flow_hf_content(out, footer, ctx);
-            out.push_str("])]");
-        } else if hf_needs_stack_offset(footer) {
-            out.push_str(", footer: context { let footer_content = block(width: 100%)[");
-            generate_flow_hf_content(out, footer, ctx);
-            out.push_str("]; move(dy: -measure(footer_content).height / 2)[#footer_content] }");
-        } else if hf_needs_context(footer) {
-            out.push_str(", footer: context [");
-            generate_flow_hf_content(out, footer, ctx);
-            out.push(']');
-        } else {
-            out.push_str(", footer: [");
-            generate_flow_hf_content(out, footer, ctx);
-            out.push(']');
+            None => {
+                let _ = write!(out, ", footer: {}", default_value.markup);
+            }
         }
     }
 
