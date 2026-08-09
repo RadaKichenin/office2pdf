@@ -565,3 +565,200 @@ fn test_a_master_fill_reaches_a_slide_through_a_silent_layout() {
         painted_fills(page)
     );
 }
+
+// ── Slide → layout `<a:bodyPr>` inheritance ──────────────────────────
+
+/// A placeholder `<p:sp>` whose `<a:bodyPr>` carries the given attributes.
+/// `body_pr_attrs` is the raw attribute string (e.g. `anchor="b"`).
+fn make_placeholder_sp_with_body_pr(
+    ph_attrs: &str,
+    xfrm_emu: Option<(i64, i64, i64, i64)>,
+    body_pr_attrs: &str,
+    text: &str,
+) -> String {
+    let sp_pr: String = match xfrm_emu {
+        Some((x, y, cx, cy)) => format!(
+            r#"<p:spPr><a:xfrm><a:off x="{x}" y="{y}"/><a:ext cx="{cx}" cy="{cy}"/></a:xfrm></p:spPr>"#
+        ),
+        None => "<p:spPr/>".to_string(),
+    };
+    format!(
+        r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="Placeholder"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph {ph_attrs}/></p:nvPr></p:nvSpPr>{sp_pr}<p:txBody><a:bodyPr {body_pr_attrs}/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US"/><a:t>{text}</a:t></a:r></a:p></p:txBody></p:sp>"#
+    )
+}
+
+fn text_box_of<'a>(page: &'a FixedPage, needle: &str) -> &'a TextBoxData {
+    match &find_text_box_with_text(page, needle).kind {
+        FixedElementKind::TextBox(text_box) => text_box,
+        _ => unreachable!("find_text_box_with_text only matches text boxes"),
+    }
+}
+
+/// The deck in issue #877 gives its footer placeholder a bare `<a:bodyPr/>`
+/// on the slide while the layout placeholder declares `anchor="b"`. An
+/// omitted attribute on a placeholder means "ask the layout", not "use the
+/// built-in top anchor".
+#[test]
+fn test_placeholder_inherits_the_layout_body_pr_anchor() {
+    let slide = make_slide_with_shapes(&[make_placeholder_sp(
+        r#"type="ftr" sz="quarter" idx="10""#,
+        None,
+        "CONTOSO",
+    )]);
+    let layout = make_layout_with_shapes(&[make_placeholder_sp_with_body_pr(
+        r#"type="ftr" sz="quarter" idx="10""#,
+        Some((795_528, 5_751_576, 4_956_048, 722_376)),
+        r#"rtlCol="0" anchor="b""#,
+        "Prompt",
+    )]);
+    let master = make_master_with_shapes(&[]);
+    let data = build_test_pptx_with_layout_master(SLIDE_CX, SLIDE_CY, &slide, &layout, &master);
+
+    let doc = parse_document(&data);
+    let page = first_fixed_page(&doc);
+    assert_eq!(
+        text_box_of(page, "CONTOSO").vertical_align,
+        TextBoxVerticalAlign::Bottom
+    );
+}
+
+/// Triangulation for the test above: the same slide markup against a layout
+/// that anchors to the centre must land on the centre, not on a fixed answer.
+#[test]
+fn test_placeholder_inherits_a_centre_anchor_too() {
+    let slide = make_slide_with_shapes(&[make_placeholder_sp(r#"type="title""#, None, "Tittel")]);
+    let layout = make_layout_with_shapes(&[make_placeholder_sp_with_body_pr(
+        r#"type="title""#,
+        Some((7_955_280, 676_656, 3_666_744, 5_495_544)),
+        r#"lIns="0" tIns="45720" rIns="0" bIns="45720" rtlCol="0" anchor="ctr""#,
+        "Prompt",
+    )]);
+    let master = make_master_with_shapes(&[]);
+    let data = build_test_pptx_with_layout_master(SLIDE_CX, SLIDE_CY, &slide, &layout, &master);
+
+    let doc = parse_document(&data);
+    let page = first_fixed_page(&doc);
+    assert_eq!(
+        text_box_of(page, "Tittel").vertical_align,
+        TextBoxVerticalAlign::Center
+    );
+}
+
+/// The slide's own `<a:bodyPr>` still wins where it states an attribute.
+#[test]
+fn test_a_slide_body_pr_anchor_overrides_the_layout() {
+    let slide = make_slide_with_shapes(&[make_placeholder_sp_with_body_pr(
+        r#"type="title""#,
+        None,
+        r#"anchor="t""#,
+        "Tittel",
+    )]);
+    let layout = make_layout_with_shapes(&[make_placeholder_sp_with_body_pr(
+        r#"type="title""#,
+        Some((7_955_280, 676_656, 3_666_744, 5_495_544)),
+        r#"rtlCol="0" anchor="ctr""#,
+        "Prompt",
+    )]);
+    let master = make_master_with_shapes(&[]);
+    let data = build_test_pptx_with_layout_master(SLIDE_CX, SLIDE_CY, &slide, &layout, &master);
+
+    let doc = parse_document(&data);
+    let page = first_fixed_page(&doc);
+    assert_eq!(
+        text_box_of(page, "Tittel").vertical_align,
+        TextBoxVerticalAlign::Top
+    );
+}
+
+/// Insets inherit on the same chain. The deck in issue #878 puts
+/// `lIns="795528"` (62.64pt) on the layout title, where the built-in default
+/// is 91440 EMU (7.2pt) — a 55.44pt difference in where the title starts.
+#[test]
+fn test_placeholder_inherits_the_layout_text_insets() {
+    let slide = make_slide_with_shapes(&[make_placeholder_sp(r#"type="title""#, None, "Tittel")]);
+    let layout = make_layout_with_shapes(&[make_placeholder_sp_with_body_pr(
+        r#"type="title""#,
+        Some((0, 5_367_528, 12_188_952, 1_490_472)),
+        r#"lIns="795528" tIns="338328" rtlCol="0""#,
+        "Prompt",
+    )]);
+    let master = make_master_with_shapes(&[]);
+    let data = build_test_pptx_with_layout_master(SLIDE_CX, SLIDE_CY, &slide, &layout, &master);
+
+    let doc = parse_document(&data);
+    let page = first_fixed_page(&doc);
+    let padding = text_box_of(page, "Tittel").padding;
+    assert!(
+        (padding.left - emu_to_pt(795_528)).abs() < 0.01,
+        "left inset: got {}, want {}",
+        padding.left,
+        emu_to_pt(795_528)
+    );
+    assert!(
+        (padding.top - emu_to_pt(338_328)).abs() < 0.01,
+        "top inset: got {}, want {}",
+        padding.top,
+        emu_to_pt(338_328)
+    );
+    // `rIns`/`bIns` are absent from the layout too, so they keep the built-in
+    // default rather than picking up the left/top values.
+    assert!(
+        (padding.right - emu_to_pt(91_440)).abs() < 0.01,
+        "right inset: got {}, want the 91440 EMU default",
+        padding.right
+    );
+}
+
+/// A layout that states nothing passes the question on to the master.
+#[test]
+fn test_placeholder_body_pr_falls_back_to_the_master() {
+    let slide = make_slide_with_shapes(&[make_placeholder_sp(
+        r#"type="ftr" sz="quarter" idx="10""#,
+        None,
+        "CONTOSO",
+    )]);
+    let layout = make_layout_with_shapes(&[make_placeholder_sp_with_body_pr(
+        r#"type="ftr" sz="quarter" idx="10""#,
+        Some((795_528, 5_751_576, 4_956_048, 722_376)),
+        r#"rtlCol="0""#,
+        "Prompt",
+    )]);
+    let master = make_master_with_shapes(&[make_placeholder_sp_with_body_pr(
+        r#"type="ftr" sz="quarter" idx="3""#,
+        Some((795_528, 5_751_576, 4_956_048, 722_376)),
+        r#"rtlCol="0" anchor="ctr""#,
+        "Master prompt",
+    )]);
+    let data = build_test_pptx_with_layout_master(SLIDE_CX, SLIDE_CY, &slide, &layout, &master);
+
+    let doc = parse_document(&data);
+    let page = first_fixed_page(&doc);
+    assert_eq!(
+        text_box_of(page, "CONTOSO").vertical_align,
+        TextBoxVerticalAlign::Center
+    );
+}
+
+/// A plain text box is not a placeholder and inherits nothing: the deck in
+/// issue #877 draws one on top of the footer placeholder, and it must keep
+/// the anchor it states itself.
+#[test]
+fn test_a_non_placeholder_text_box_inherits_no_body_pr() {
+    let text_box = r#"<p:sp><p:nvSpPr><p:cNvPr id="9" name="TextBox"/><p:cNvSpPr txBox="1"><a:spLocks/></p:cNvSpPr><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="796918" y="5749741"/><a:ext cx="4959308" cy="721732"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US"/><a:t>Plain box</a:t></a:r></a:p></p:txBody></p:sp>"#.to_string();
+    let slide = make_slide_with_shapes(&[text_box]);
+    let layout = make_layout_with_shapes(&[make_placeholder_sp_with_body_pr(
+        r#"type="ftr" sz="quarter" idx="10""#,
+        Some((795_528, 5_751_576, 4_956_048, 722_376)),
+        r#"rtlCol="0" anchor="b""#,
+        "Prompt",
+    )]);
+    let master = make_master_with_shapes(&[]);
+    let data = build_test_pptx_with_layout_master(SLIDE_CX, SLIDE_CY, &slide, &layout, &master);
+
+    let doc = parse_document(&data);
+    let page = first_fixed_page(&doc);
+    assert_eq!(
+        text_box_of(page, "Plain box").vertical_align,
+        TextBoxVerticalAlign::Top
+    );
+}

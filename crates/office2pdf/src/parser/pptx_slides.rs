@@ -1830,6 +1830,15 @@ impl<'a> SlideXmlParser<'a> {
                 } else {
                     self.ctx.inherited_text_body_defaults.clone()
                 };
+                // The layout/master placeholder's `<a:bodyPr>` is the base the
+                // slide's own then overrides attribute by attribute, so it has
+                // to land before `<a:bodyPr>` is read a few events later.
+                if self.shape.has_placeholder
+                    && let Some(map) = self.placeholder_geometry
+                {
+                    map.body_props(self.shape.ph_type.as_deref(), self.shape.ph_idx.as_deref())
+                        .apply_to(&mut self.text_box);
+                }
                 // Apply fontRef default text color from <p:style> to all text levels,
                 // overriding inherited layout/master defaults.
                 if let Some(color) = self.shape.style_font_color {

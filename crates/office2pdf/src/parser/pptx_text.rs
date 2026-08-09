@@ -611,42 +611,96 @@ pub(super) fn extract_pptx_text_box_body_props(
     e: &quick_xml::events::BytesStart,
     settings: &mut PptxTextBoxSettings,
 ) {
-    let PptxTextBoxSettings {
-        padding,
-        vertical_align,
-        no_wrap,
-        text_rotation_deg,
-        ..
-    } = settings;
-    if let Some(vert) = get_attr_str(e, b"vert") {
-        // "vert" runs top-to-bottom (90° cw), "vert270" bottom-to-top.
-        *text_rotation_deg = match vert.as_str() {
+    parse_pptx_body_props(e).apply_to(settings);
+}
+
+/// One `<a:bodyPr>`'s attributes, each left `None` when the element does not
+/// state it.
+///
+/// A placeholder's `<a:bodyPr>` inherits attribute by attribute from the
+/// matching layout placeholder and then the master's (ECMA-376 §19.3.1.36),
+/// so "absent" and "stated as the built-in default" are different answers and
+/// [`PptxTextBoxSettings`] cannot represent the difference.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub(super) struct PptxBodyProps {
+    /// Outer `Some` means `vert` was stated; the inner value is the rotation
+    /// it resolves to, which is `None` for the horizontal writing modes.
+    pub(super) text_rotation_deg: Option<Option<f64>>,
+    pub(super) padding_left: Option<f64>,
+    pub(super) padding_right: Option<f64>,
+    pub(super) padding_top: Option<f64>,
+    pub(super) padding_bottom: Option<f64>,
+    pub(super) vertical_align: Option<TextBoxVerticalAlign>,
+    pub(super) no_wrap: Option<bool>,
+}
+
+impl PptxBodyProps {
+    /// Overlay `nearer`'s stated attributes onto `self`, which holds the ones
+    /// from further up the inheritance chain.
+    pub(super) fn overlay(&mut self, nearer: &Self) {
+        let PptxBodyProps {
+            text_rotation_deg,
+            padding_left,
+            padding_right,
+            padding_top,
+            padding_bottom,
+            vertical_align,
+            no_wrap,
+        } = *nearer;
+        self.text_rotation_deg = text_rotation_deg.or(self.text_rotation_deg);
+        self.padding_left = padding_left.or(self.padding_left);
+        self.padding_right = padding_right.or(self.padding_right);
+        self.padding_top = padding_top.or(self.padding_top);
+        self.padding_bottom = padding_bottom.or(self.padding_bottom);
+        self.vertical_align = vertical_align.or(self.vertical_align);
+        self.no_wrap = no_wrap.or(self.no_wrap);
+    }
+
+    pub(super) fn apply_to(&self, settings: &mut PptxTextBoxSettings) {
+        if let Some(rotation) = self.text_rotation_deg {
+            settings.text_rotation_deg = rotation;
+        }
+        if let Some(value) = self.padding_left {
+            settings.padding.left = value;
+        }
+        if let Some(value) = self.padding_right {
+            settings.padding.right = value;
+        }
+        if let Some(value) = self.padding_top {
+            settings.padding.top = value;
+        }
+        if let Some(value) = self.padding_bottom {
+            settings.padding.bottom = value;
+        }
+        if let Some(align) = self.vertical_align {
+            settings.vertical_align = align;
+        }
+        // `wrap="square"` is the default and says nothing, so only the
+        // no-wrap answer is carried; a nearer layer cannot turn it back off.
+        if self.no_wrap == Some(true) {
+            settings.no_wrap = true;
+        }
+    }
+}
+
+pub(super) fn parse_pptx_body_props(e: &quick_xml::events::BytesStart) -> PptxBodyProps {
+    PptxBodyProps {
+        text_rotation_deg: get_attr_str(e, b"vert").map(|vert| match vert.as_str() {
+            // "vert" runs top-to-bottom (90° cw), "vert270" bottom-to-top.
             "vert" | "eaVert" | "mongolianVert" => Some(270.0),
             "vert270" => Some(90.0),
             _ => None,
-        };
-    }
-    if let Some(value) = get_attr_i64(e, b"lIns") {
-        padding.left = emu_to_pt(value);
-    }
-    if let Some(value) = get_attr_i64(e, b"rIns") {
-        padding.right = emu_to_pt(value);
-    }
-    if let Some(value) = get_attr_i64(e, b"tIns") {
-        padding.top = emu_to_pt(value);
-    }
-    if let Some(value) = get_attr_i64(e, b"bIns") {
-        padding.bottom = emu_to_pt(value);
-    }
-    if let Some(anchor) = get_attr_str(e, b"anchor") {
-        *vertical_align = match anchor.as_str() {
+        }),
+        padding_left: get_attr_i64(e, b"lIns").map(emu_to_pt),
+        padding_right: get_attr_i64(e, b"rIns").map(emu_to_pt),
+        padding_top: get_attr_i64(e, b"tIns").map(emu_to_pt),
+        padding_bottom: get_attr_i64(e, b"bIns").map(emu_to_pt),
+        vertical_align: get_attr_str(e, b"anchor").map(|anchor| match anchor.as_str() {
             "ctr" => TextBoxVerticalAlign::Center,
             "b" => TextBoxVerticalAlign::Bottom,
             _ => TextBoxVerticalAlign::Top,
-        };
-    }
-    if get_attr_str(e, b"wrap").as_deref() == Some("none") {
-        *no_wrap = true;
+        }),
+        no_wrap: get_attr_str(e, b"wrap").map(|wrap| wrap == "none"),
     }
 }
 
