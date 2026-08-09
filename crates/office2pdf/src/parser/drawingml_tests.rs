@@ -272,3 +272,53 @@ fn a_theme_with_no_body_font_leaves_the_face_unset() {
         None
     );
 }
+
+#[test]
+fn a_declared_family_class_is_read_from_pitch_family_and_panose() {
+    // `Avenir Next LT Pro` carries no `sans` token in its name, so only the
+    // declaration tells us it is one (issue #891).
+    assert_eq!(
+        declared_font_class(Some("020B0502020202020204"), Some("34")),
+        Some(DeclaredFontClass::SansSerif)
+    );
+    // pitchFamily wins where both are present: its high nibble is the family.
+    assert_eq!(
+        declared_font_class(Some("02020603050405020304"), Some("18")),
+        Some(DeclaredFontClass::Serif)
+    );
+    // PANOSE alone still answers when pitchFamily is absent or unusable.
+    assert_eq!(
+        declared_font_class(Some("020B0604020202020204"), None),
+        Some(DeclaredFontClass::SansSerif)
+    );
+    assert_eq!(
+        declared_font_class(Some("02040503050406030204"), None),
+        Some(DeclaredFontClass::Serif)
+    );
+    // A non-latin PANOSE family (first byte != 2) classifies nothing.
+    assert_eq!(
+        declared_font_class(Some("05000000000000000000"), None),
+        None
+    );
+    assert_eq!(declared_font_class(None, None), None);
+}
+
+#[test]
+fn the_font_class_sweep_skips_theme_slots() {
+    // `+mj-lt` names a theme slot rather than a face, so recording a class
+    // under that spelling would attach it to every theme-following run.
+    let xml = r#"<a:t xmlns:a="x">
+        <a:latin typeface="+mj-lt" panose="020B0502" pitchFamily="34"/>
+        <a:latin typeface="Posterama" panose="020B0502" pitchFamily="34"/>
+        <a:latin typeface="Posterama" panose="02020603" pitchFamily="18"/>
+    </a:t>"#;
+    let mut out: HashMap<String, DeclaredFontClass> = HashMap::new();
+    scan_declared_font_classes(xml, &mut out);
+
+    // Keyed by the normalized spelling, which is what the substitution chain
+    // looks the family up with.
+    assert_eq!(out.get("posterama"), Some(&DeclaredFontClass::SansSerif));
+    assert!(!out.contains_key("+mj-lt"));
+    // First declaration wins, so a later contradictory one cannot flip it.
+    assert_eq!(out.len(), 1);
+}

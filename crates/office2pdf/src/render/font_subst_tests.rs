@@ -1094,3 +1094,26 @@ fn corbel_resolves_to_a_sans_serif_face() {
         "Corbel must resolve to a sans face, got {subs:?}"
     );
 }
+
+#[test]
+fn a_declared_sans_family_stops_falling_back_to_a_serif() {
+    // `Posterama` carries no `sans` token, so before the declaration was read
+    // it fell through every name heuristic to the serif default (issue #891).
+    assert_eq!(substitutes("Posterama"), None);
+    let courier_before = substitutes("Courier New");
+
+    let previous = set_declared_font_classes(HashMap::from([(
+        "posterama".to_string(),
+        DeclaredFontClass::SansSerif,
+    )]));
+    let declared = substitutes("Posterama").expect("a declared class must yield substitutes");
+    assert_eq!(declared, SANS_SERIF_SUBSTITUTES);
+    // The lookup normalizes, so the spelling at the call site does not matter.
+    assert_eq!(substitutes("  POSTERAMA "), Some(SANS_SERIF_SUBSTITUTES));
+
+    // A family the map says nothing about keeps whatever it resolved to.
+    assert_eq!(substitutes("Courier New"), courier_before);
+
+    set_declared_font_classes(previous);
+    assert_eq!(substitutes("Posterama"), None);
+}

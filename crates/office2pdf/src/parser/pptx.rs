@@ -399,6 +399,10 @@ impl Parser for PptxParser {
         options: &ConvertOptions,
     ) -> Result<(Document, Vec<ConvertWarning>), ConvertError> {
         let mut archive = crate::parser::open_zip(data)?;
+        // A face's declared family class does not vary by where it is named,
+        // so one sweep of the package answers for the whole deck (issue #891).
+        let declared_font_classes: std::collections::HashMap<String, crate::ir::DeclaredFontClass> =
+            scan_package_font_classes(&mut archive);
 
         // Extract metadata from docProps/core.xml
         let metadata = crate::parser::metadata::extract_metadata_from_zip(&mut archive);
@@ -508,7 +512,10 @@ impl Parser for PptxParser {
             Document {
                 metadata,
                 pages,
-                styles: StyleSheet::default(),
+                styles: StyleSheet {
+                    declared_font_classes,
+                    ..StyleSheet::default()
+                },
             },
             warnings,
         ))
@@ -538,3 +545,35 @@ use super::xml_util::parse_hex_color;
 #[cfg(test)]
 #[path = "pptx_tests.rs"]
 mod tests;
+
+/// Sweep every DrawingML part in a package for faces that declare their family
+/// class, so the substitution chooser can prefer the declaration over the name
+/// (issue #891).
+fn scan_package_font_classes<R: std::io::Read + std::io::Seek>(
+    archive: &mut zip::ZipArchive<R>,
+) -> std::collections::HashMap<String, crate::ir::DeclaredFontClass> {
+    let mut classes = std::collections::HashMap::new();
+    let names: Vec<String> = (0..archive.len())
+        .filter_map(|index| {
+            archive
+                .by_index(index)
+                .ok()
+                .map(|file| file.name().to_string())
+        })
+        .filter(|name| {
+            name.ends_with(".xml")
+                && (name.starts_with("ppt/slides/")
+                    || name.starts_with("ppt/slideLayouts/")
+                    || name.starts_with("ppt/slideMasters/")
+                    || name.starts_with("ppt/theme/")
+                    || name.starts_with("ppt/charts/")
+                    || name.starts_with("ppt/notesSlides/"))
+        })
+        .collect();
+    for name in names {
+        if let Ok(xml) = self::package::read_zip_entry(archive, &name) {
+            crate::parser::drawingml::scan_declared_font_classes(&xml, &mut classes);
+        }
+    }
+    classes
+}

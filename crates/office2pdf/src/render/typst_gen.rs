@@ -493,7 +493,11 @@ pub(crate) fn generate_typst_with_options_and_font_context(
     options: &ConvertOptions,
     font_context: Option<&FontSearchContext>,
 ) -> Result<TypstOutput, ConvertError> {
-    super::font_subst::with_font_search_context(font_context, || {
+    // The classes the source declares travel with it, so a face that states
+    // itself sans is not guessed at by name (issue #891).
+    let previous_classes =
+        super::font_subst::set_declared_font_classes(doc.styles.declared_font_classes.clone());
+    let generated = super::font_subst::with_font_search_context(font_context, || {
         let first_pass: TypstOutput =
             text::with_rtl_shaping_exemption(false, || generate_pages(doc, options))?;
         // Whether the document shapes right-to-left is answered by the markup
@@ -504,7 +508,9 @@ pub(crate) fn generate_typst_with_options_and_font_context(
             return Ok(first_pass);
         }
         text::with_rtl_shaping_exemption(true, || generate_pages(doc, options))
-    })
+    });
+    super::font_subst::set_declared_font_classes(previous_classes);
+    generated
 }
 
 fn generate_pages(doc: &Document, options: &ConvertOptions) -> Result<TypstOutput, ConvertError> {
