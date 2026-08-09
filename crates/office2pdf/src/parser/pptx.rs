@@ -45,6 +45,8 @@ use self::theme::{
     resolve_scheme_color, resolve_theme_font,
 };
 
+#[path = "pptx_custom_geometry.rs"]
+mod custom_geometry;
 #[path = "pptx_package.rs"]
 mod package;
 #[path = "pptx_placeholders.rs"]
