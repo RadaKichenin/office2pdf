@@ -990,8 +990,8 @@ fn test_exact_row_heights_convert_twips_to_points_per_row() {
     };
 
     // 461 and 403 twips are the invoice-template header rows from issue #842.
-    let table = docx_rs::Table::new(vec![row("Header", 461.0), row("Terms", 403.0)])
-        .set_grid(vec![4000]);
+    let table =
+        docx_rs::Table::new(vec![row("Header", 461.0), row("Terms", 403.0)]).set_grid(vec![4000]);
 
     let data = build_docx_with_table(table);
     let parser = DocxParser;
