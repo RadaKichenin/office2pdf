@@ -1254,11 +1254,19 @@ fn finalize_picture(
                 _ => (asset.data.clone(), format),
             };
             // Typst's corner radius expresses a rounded rectangle and nothing
-            // else, so the crops it cannot draw are baked into the alpha mask.
+            // else, so the crops it cannot draw are clipped out here instead:
+            // baked into the alpha mask for a raster, wrapped in a
+            // `<clipPath>` for an SVG (issue #897).
             let (data, format) = if !pic.custom_geometry.is_empty() {
                 // A custom geometry has no corner-radius equivalent at all
-                // (issue #872).
-                match apply_path_mask(&data, &pic.custom_geometry) {
+                // (issue #872). An SVG has no raster to mask, so it takes the
+                // same path as a `<clipPath>` instead (issue #897).
+                let clipped: Option<(Vec<u8>, ImageFormat)> = if format == ImageFormat::Svg {
+                    clip_svg_to_path(&data, &pic.custom_geometry).map(|svg| (svg, ImageFormat::Svg))
+                } else {
+                    apply_path_mask(&data, &pic.custom_geometry)
+                };
+                match clipped {
                     Some(masked) => {
                         clip_shape = None;
                         masked
@@ -1337,6 +1345,83 @@ fn apply_ellipse_mask(data: &[u8]) -> Option<(Vec<u8>, ImageFormat)> {
         .write_to(&mut out, image::ImageFormat::Png)
         .ok()?;
     Some((out.into_inner(), ImageFormat::Png))
+}
+
+/// Clip an SVG to `subpaths` by wrapping its content in a `<clipPath>`.
+///
+/// An SVG has no raster to mask, so [`apply_path_mask`] could not touch one
+/// and a curved panel rendered as its bounding rectangle (issue #897). The
+/// subpaths arrive normalised to 0..1 of the picture box, so they scale onto
+/// the root's own `viewBox` to become user-space coordinates.
+///
+/// Returns `None` when the root states no usable `viewBox`, leaving the asset
+/// alone rather than clipping it against guessed units.
+fn clip_svg_to_path(data: &[u8], subpaths: &[Vec<(f64, f64)>]) -> Option<Vec<u8>> {
+    use std::fmt::Write as _;
+
+    if subpaths.is_empty() {
+        return None;
+    }
+    let text: &str = std::str::from_utf8(data).ok()?;
+    let open_end: usize = text.find('>')?;
+    if !text[..open_end].trim_start().starts_with("<svg") {
+        return None;
+    }
+    let close: usize = text.rfind("</svg>")?;
+
+    let attr_start: usize = text[..open_end].find("viewBox=\"")? + "viewBox=\"".len();
+    let attr_len: usize = text[attr_start..open_end].find('"')?;
+    let values: Vec<f64> = text[attr_start..attr_start + attr_len]
+        .split(|c: char| c.is_whitespace() || c == ',')
+        .filter(|part| !part.is_empty())
+        .map(str::parse::<f64>)
+        .collect::<Result<Vec<f64>, _>>()
+        .ok()?;
+    let [x, y, width, height] = values[..] else {
+        return None;
+    };
+    if !(width.is_finite() && height.is_finite() && width > 0.0 && height > 0.0) {
+        return None;
+    }
+
+    let mut path: String = String::new();
+    for subpath in subpaths.iter().filter(|points| points.len() >= 3) {
+        for (index, (fx, fy)) in subpath.iter().enumerate() {
+            let _ = write!(
+                path,
+                "{} {} {} ",
+                if index == 0 { "M" } else { "L" },
+                format_svg_number(x + fx * width),
+                format_svg_number(y + fy * height),
+            );
+        }
+        path.push_str("Z ");
+    }
+    let path: &str = path.trim_end();
+    if path.is_empty() {
+        return None;
+    }
+
+    let mut out: String = String::with_capacity(text.len() + path.len() + 128);
+    out.push_str(&text[..=open_end]);
+    let _ = write!(
+        out,
+        "<clipPath id=\"o2pPicClip\" clipPathUnits=\"userSpaceOnUse\"><path clip-rule=\"evenodd\" d=\"{path}\"/></clipPath><g clip-path=\"url(#o2pPicClip)\" clip-rule=\"evenodd\">"
+    );
+    out.push_str(&text[open_end + 1..close]);
+    out.push_str("</g>");
+    out.push_str(&text[close..]);
+    Some(out.into_bytes())
+}
+
+/// A number for SVG markup: no exponent, and no trailing zeros to read past.
+fn format_svg_number(value: f64) -> String {
+    let rounded: f64 = (value * 1000.0).round() / 1000.0;
+    let mut text: String = format!("{rounded}");
+    if text.contains('.') {
+        text = text.trim_end_matches('0').trim_end_matches('.').to_string();
+    }
+    text
 }
 
 /// Clear the alpha of every pixel outside `subpaths`, and re-encode as PNG.
@@ -2841,7 +2926,53 @@ fn parse_slide_xml_inner<'a>(
 
 #[cfg(test)]
 mod picture_mask_tests {
-    use super::point_is_inside_even_odd;
+    use super::{clip_svg_to_path, point_is_inside_even_odd};
+
+    const SVG: &str = r#"<svg width="100" height="50" viewBox="0 0 100 50" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="50"/></svg>"#;
+
+    /// An SVG takes its `a:custGeom` as a `<clipPath>` rather than an alpha
+    /// mask, since there is no raster to mask (issue #897).
+    ///
+    /// The subpaths arrive normalised to 0..1 of the picture box, so they are
+    /// scaled onto the root's own viewBox to become user-space coordinates.
+    #[test]
+    fn an_svg_takes_its_custom_geometry_as_a_clip_path() {
+        let triangle = vec![vec![(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]];
+        let out = clip_svg_to_path(SVG.as_bytes(), &triangle).expect("the SVG is clipped");
+        let text = String::from_utf8(out).expect("still an SVG");
+
+        assert!(text.contains("<clipPath"), "a clipPath is added: {text}");
+        assert!(
+            text.contains(r#"clipPathUnits="userSpaceOnUse""#),
+            "the path is in the root's own units: {text}"
+        );
+        // 0..1 across a 100 x 50 viewBox.
+        assert!(
+            text.contains("M 0 0 L 100 0 L 0 50 Z"),
+            "the triangle is scaled onto the viewBox: {text}"
+        );
+        assert!(
+            text.contains(r#"clip-rule="evenodd""#),
+            "an inner boundary must carve a hole, as the raster mask does: {text}"
+        );
+        assert!(
+            text.contains(r#"<rect width="100" height="50"/>"#),
+            "the drawing itself is untouched: {text}"
+        );
+        assert!(
+            text.trim_end().ends_with("</svg>"),
+            "the document stays well formed: {text}"
+        );
+    }
+
+    /// A root that states no usable viewBox is left alone rather than clipped
+    /// against guessed units.
+    #[test]
+    fn an_svg_without_a_view_box_is_not_clipped() {
+        const NO_BOX: &str = r#"<svg width="10" height="10"><rect width="10" height="10"/></svg>"#;
+        let triangle = vec![vec![(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]];
+        assert!(clip_svg_to_path(NO_BOX.as_bytes(), &triangle).is_none());
+    }
 
     /// The unit square, and a smaller square inside it.
     fn frame() -> Vec<Vec<(f64, f64)>> {
