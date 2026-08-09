@@ -20,6 +20,7 @@ fn test_codegen_chart_bar_visual_bars() {
             fill: None,
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
+            number_format: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -38,6 +39,7 @@ fn test_codegen_chart_bar_visual_bars() {
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: None,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -83,6 +85,7 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
             fill: None,
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
+            number_format: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -101,6 +104,7 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: None,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -134,6 +138,7 @@ fn test_codegen_chart_pie_draws_a_pie() {
             fill: None,
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
+            number_format: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -152,6 +157,7 @@ fn test_codegen_chart_pie_draws_a_pie() {
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: None,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -190,6 +196,7 @@ fn test_codegen_chart_line_trend_indicators() {
             fill: None,
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
+            number_format: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -208,6 +215,7 @@ fn test_codegen_chart_line_trend_indicators() {
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: None,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -255,6 +263,7 @@ fn test_codegen_chart_empty_series() {
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: None,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -317,6 +326,7 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
             fill: None,
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
+            number_format: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -335,6 +345,7 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: None,
     }));
     let doc = make_doc(vec![make_flow_page(content)]);
 
@@ -366,6 +377,7 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
             fill: None,
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
+            number_format: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -384,6 +396,7 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: None,
     }));
     let doc = make_doc(vec![make_flow_page(content)]);
 
@@ -559,6 +572,7 @@ fn test_codegen_chart_line_plot() {
                 fill: None,
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
+                number_format: None,
             },
             ChartSeries {
                 name: Some("B".to_string()),
@@ -566,6 +580,7 @@ fn test_codegen_chart_line_plot() {
                 fill: None,
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
+                number_format: None,
             },
         ],
         grouping: ChartGrouping::Clustered,
@@ -585,6 +600,7 @@ fn test_codegen_chart_line_plot() {
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: None,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -621,6 +637,7 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
             fill: None,
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
+            number_format: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -639,6 +656,7 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: None,
     })])]);
 
     let pages = page_texts(&doc);
@@ -675,6 +693,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
                 fill: None,
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
+                number_format: None,
             },
             ChartSeries {
                 name: Some("Tables".to_string()),
@@ -682,6 +701,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
                 fill: None,
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
+                number_format: None,
             },
             ChartSeries {
                 name: Some("Graphics".to_string()),
@@ -689,6 +709,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
                 fill: None,
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
+                number_format: None,
             },
             ChartSeries {
                 name: Some("Structure".to_string()),
@@ -696,6 +717,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
                 fill: None,
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
+                number_format: None,
             },
         ],
         grouping,
@@ -718,6 +740,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: None,
     }
 }
 
@@ -822,6 +845,7 @@ fn legend_chart(position: LegendPosition) -> Chart {
                 fill: None,
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
+                number_format: None,
             },
             ChartSeries {
                 name: Some("Tables".to_string()),
@@ -829,6 +853,7 @@ fn legend_chart(position: LegendPosition) -> Chart {
                 fill: None,
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
+                number_format: None,
             },
         ],
         grouping: ChartGrouping::Stacked,
@@ -848,6 +873,7 @@ fn legend_chart(position: LegendPosition) -> Chart {
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: None,
     }
 }
 
@@ -978,6 +1004,7 @@ fn a_declared_series_fill_reaches_the_bars() {
             fill: Some(Color::new(0x4f, 0x81, 0xbd)),
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
+            number_format: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -996,6 +1023,7 @@ fn a_declared_series_fill_reaches_the_bars() {
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: None,
     };
 
     let source = chart_source(chart);
@@ -1025,6 +1053,7 @@ fn a_series_without_a_fill_still_takes_the_palette() {
             fill: None,
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
+            number_format: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -1043,6 +1072,7 @@ fn a_series_without_a_fill_still_takes_the_palette() {
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: None,
     };
 
     let source = chart_source(chart);
@@ -1070,6 +1100,7 @@ fn per_point_fills_colour_each_bar_separately() {
                 Some(Color::new(0x9b, 0xbb, 0x59)),
             ],
             data_labels: DataLabels::default(),
+            number_format: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -1088,6 +1119,7 @@ fn per_point_fills_colour_each_bar_separately() {
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: None,
     };
 
     let source = chart_source(chart);
@@ -1114,6 +1146,7 @@ fn axis_titled_chart(category: Option<&str>, value: Option<&str>) -> Chart {
             fill: None,
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
+            number_format: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -1132,6 +1165,7 @@ fn axis_titled_chart(category: Option<&str>, value: Option<&str>) -> Chart {
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: None,
     }
 }
 
@@ -1208,6 +1242,7 @@ fn labelled_chart(labels: DataLabels) -> Chart {
             fill: None,
             point_fills: Vec::new(),
             data_labels: labels,
+            number_format: None,
         }],
         grouping: ChartGrouping::Stacked,
         legend_position: LegendPosition::Right,
@@ -1226,6 +1261,7 @@ fn labelled_chart(labels: DataLabels) -> Chart {
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: None,
     }
 }
 
@@ -1295,6 +1331,7 @@ fn pie_chart(values: Vec<f64>) -> Chart {
             fill: None,
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
+            number_format: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -1313,6 +1350,7 @@ fn pie_chart(values: Vec<f64>) -> Chart {
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: None,
     }
 }
 
@@ -1481,6 +1519,7 @@ fn test_chart_default_gridline_matches_powerpoint() {
             fill: None,
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
+            number_format: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -1499,6 +1538,7 @@ fn test_chart_default_gridline_matches_powerpoint() {
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: None,
     })])]);
 
     let source = generate_typst(&doc).unwrap().source;
@@ -1631,6 +1671,7 @@ fn tick_mark_chart(
             fill: None,
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
+            number_format: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -1649,6 +1690,7 @@ fn tick_mark_chart(
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: None,
     }
 }
 
@@ -2224,6 +2266,7 @@ fn band_layout_chart(
                 fill: None,
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
+                number_format: None,
             })
             .collect(),
         grouping,
@@ -2243,6 +2286,7 @@ fn band_layout_chart(
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: None,
     }
 }
 
@@ -2490,6 +2534,7 @@ fn two_series_bar_chart(theme_accent_colors: Vec<crate::ir::Color>) -> Chart {
                 fill: None,
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
+                number_format: None,
             },
             ChartSeries {
                 name: Some("Cost".to_string()),
@@ -2497,6 +2542,7 @@ fn two_series_bar_chart(theme_accent_colors: Vec<crate::ir::Color>) -> Chart {
                 fill: None,
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
+                number_format: None,
             },
         ],
         grouping: ChartGrouping::Clustered,
@@ -2516,6 +2562,7 @@ fn two_series_bar_chart(theme_accent_colors: Vec<crate::ir::Color>) -> Chart {
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: None,
     }
 }
 
@@ -3217,5 +3264,195 @@ fn short_legend_names_keep_the_calibrated_pitch() {
         (gap - LEGEND_ENTRY_W).abs() < 1e-9,
         "short names keep the {}pt pitch, got {gap}",
         format_f64(LEGEND_ENTRY_W)
+    );
+}
+
+/// The data-table fallback prints each value through the format its series
+/// declares, so a ratio stored as a fraction reads as the percentage the
+/// source shows (issue #865).
+#[test]
+fn test_data_table_prints_a_series_number_format() {
+    let chart = Chart {
+        // A bubble chart has no plot renderer, so it takes the data-table
+        // fallback this rule lives in.
+        chart_type: ChartType::Other("bubbleChart".to_string()),
+        hole_size_percent: None,
+        title: None,
+        categories: vec!["Q1".to_string(), "Q2".to_string()],
+        series: vec![ChartSeries {
+            name: Some("Rate".to_string()),
+            values: vec![0.024, 0.689],
+            fill: None,
+            point_fills: Vec::new(),
+            data_labels: DataLabels::default(),
+            number_format: Some("0.0%".to_string()),
+        }],
+        grouping: ChartGrouping::Clustered,
+        legend_position: LegendPosition::Right,
+        has_legend: true,
+        category_axis_title: None,
+        value_axis_title: None,
+        category_axis_major_tick_mark: AxisTickMark::Outside,
+        value_axis_major_tick_mark: AxisTickMark::Outside,
+        category_axis_deleted: false,
+        value_axis_deleted: false,
+        bar_band_layout: BarBandLayout::default(),
+        theme_accent_colors: Vec::new(),
+        chart_area_outline: ChartAreaOutline::Default,
+        host: crate::ir::ChartHost::default(),
+        text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: None,
+    };
+    let source = chart_source(chart);
+
+    assert!(source.contains("2.4%"), "expected 2.4% in: {source}");
+    assert!(source.contains("68.9%"), "expected 68.9% in: {source}");
+    assert!(
+        !source.contains("[0.024]"),
+        "the raw fraction must go: {source}"
+    );
+}
+
+/// A different code is honoured, so the renderer is not special-casing
+/// percentages.
+#[test]
+fn test_data_table_prints_a_declared_thousands_format() {
+    let chart = Chart {
+        // A bubble chart has no plot renderer, so it takes the data-table
+        // fallback this rule lives in.
+        chart_type: ChartType::Other("bubbleChart".to_string()),
+        hole_size_percent: None,
+        title: None,
+        categories: vec!["Q1".to_string()],
+        series: vec![ChartSeries {
+            name: Some("Revenue".to_string()),
+            values: vec![1234567.0],
+            fill: None,
+            point_fills: Vec::new(),
+            data_labels: DataLabels::default(),
+            number_format: Some("#,##0".to_string()),
+        }],
+        grouping: ChartGrouping::Clustered,
+        legend_position: LegendPosition::Right,
+        has_legend: true,
+        category_axis_title: None,
+        value_axis_title: None,
+        category_axis_major_tick_mark: AxisTickMark::Outside,
+        value_axis_major_tick_mark: AxisTickMark::Outside,
+        category_axis_deleted: false,
+        value_axis_deleted: false,
+        bar_band_layout: BarBandLayout::default(),
+        theme_accent_colors: Vec::new(),
+        chart_area_outline: ChartAreaOutline::Default,
+        host: crate::ir::ChartHost::default(),
+        text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: None,
+    };
+    let source = chart_source(chart);
+
+    assert!(
+        source.contains("1,234,567"),
+        "expected grouping in: {source}"
+    );
+}
+
+/// A series that states no format keeps the plain rendering, so nothing else
+/// in the table moves.
+#[test]
+fn test_data_table_without_a_number_format_prints_plainly() {
+    let chart = Chart {
+        // A bubble chart has no plot renderer, so it takes the data-table
+        // fallback this rule lives in.
+        chart_type: ChartType::Other("bubbleChart".to_string()),
+        hole_size_percent: None,
+        title: None,
+        categories: vec!["Q1".to_string()],
+        series: vec![ChartSeries {
+            name: Some("Rate".to_string()),
+            values: vec![0.024],
+            fill: None,
+            point_fills: Vec::new(),
+            data_labels: DataLabels::default(),
+            number_format: None,
+        }],
+        grouping: ChartGrouping::Clustered,
+        legend_position: LegendPosition::Right,
+        has_legend: true,
+        category_axis_title: None,
+        value_axis_title: None,
+        category_axis_major_tick_mark: AxisTickMark::Outside,
+        value_axis_major_tick_mark: AxisTickMark::Outside,
+        category_axis_deleted: false,
+        value_axis_deleted: false,
+        bar_band_layout: BarBandLayout::default(),
+        theme_accent_colors: Vec::new(),
+        chart_area_outline: ChartAreaOutline::Default,
+        host: crate::ir::ChartHost::default(),
+        text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: None,
+    };
+    let source = chart_source(chart);
+
+    assert!(
+        source.contains("0.024"),
+        "expected the plain value in: {source}"
+    );
+}
+
+/// A currency format emits `$`, which opens math mode in Typst markup. Writing
+/// a formatted axis label unescaped produced 48 "unclosed delimiter" errors on
+/// a budget workbook in the bulk corpus, so every formatted label is escaped.
+#[test]
+fn test_a_currency_axis_label_is_escaped() {
+    let chart = Chart {
+        chart_type: ChartType::Column,
+        hole_size_percent: None,
+        title: None,
+        categories: vec!["Q1".to_string()],
+        series: vec![ChartSeries {
+            name: Some("Spend".to_string()),
+            values: vec![1200.0],
+            fill: None,
+            point_fills: Vec::new(),
+            data_labels: DataLabels::default(),
+            number_format: None,
+        }],
+        grouping: ChartGrouping::Clustered,
+        legend_position: LegendPosition::Right,
+        has_legend: true,
+        category_axis_title: None,
+        value_axis_title: None,
+        category_axis_major_tick_mark: AxisTickMark::Outside,
+        value_axis_major_tick_mark: AxisTickMark::Outside,
+        category_axis_deleted: false,
+        value_axis_deleted: false,
+        bar_band_layout: BarBandLayout::default(),
+        theme_accent_colors: Vec::new(),
+        chart_area_outline: ChartAreaOutline::Default,
+        host: crate::ir::ChartHost::default(),
+        text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: Some("\"$\"#,##0".to_string()),
+    };
+    let source = chart_source(chart);
+
+    assert!(
+        source.contains("\\$"),
+        "a currency tick label must be escaped: {source}"
+    );
+    assert!(
+        !source.contains("[$"),
+        "an unescaped $ opens math mode: {source}"
     );
 }

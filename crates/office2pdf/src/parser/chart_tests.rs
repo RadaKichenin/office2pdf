@@ -1393,3 +1393,122 @@ fn an_axis_declaring_no_tx_pr_inherits_the_chart_space_one() {
         Some(18.0)
     );
 }
+
+/// `<c:formatCode>` inside the numeric cache is how a chart states that its
+/// values are percentages, currency or dates. Without it the data-table
+/// fallback printed the stored fraction — `0.024` where the source, and every
+/// other renderer, shows `2.4%` (issue #865).
+fn percent_chart_xml(format_code: &str) -> String {
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+        <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+            <c:chart><c:plotArea><c:bubbleChart>
+                <c:ser>
+                    <c:idx val="0"/>
+                    <c:tx><c:strRef><c:strCache><c:pt idx="0"><c:v>Rate</c:v></c:pt></c:strCache></c:strRef></c:tx>
+                    <c:cat><c:strRef><c:strCache>
+                        <c:pt idx="0"><c:v>Q1</c:v></c:pt>
+                        <c:pt idx="1"><c:v>Q2</c:v></c:pt>
+                    </c:strCache></c:strRef></c:cat>
+                    <c:val><c:numRef><c:numCache>
+                        <c:formatCode>{format_code}</c:formatCode>
+                        <c:pt idx="0"><c:v>0.024</c:v></c:pt>
+                        <c:pt idx="1"><c:v>0.689</c:v></c:pt>
+                    </c:numCache></c:numRef></c:val>
+                </c:ser>
+            </c:bubbleChart></c:plotArea></c:chart>
+        </c:chartSpace>"#
+    )
+}
+
+#[test]
+fn test_series_carries_its_number_format() {
+    let chart = parse_chart_xml(&percent_chart_xml("0.0%")).expect("chart parses");
+    assert_eq!(chart.series[0].number_format.as_deref(), Some("0.0%"));
+    assert_eq!(chart.series[0].values, vec![0.024, 0.689]);
+}
+
+/// A different code is read as written, so the value is not assumed to be a
+/// percentage.
+#[test]
+fn test_a_declared_currency_format_is_read_as_written() {
+    let chart = parse_chart_xml(&percent_chart_xml("#,##0.00")).expect("chart parses");
+    assert_eq!(chart.series[0].number_format.as_deref(), Some("#,##0.00"));
+}
+
+/// A cache that states no format leaves the field unset, so the renderer keeps
+/// its plain rendering.
+#[test]
+fn test_a_series_without_a_format_code_states_none() {
+    let xml = percent_chart_xml("0%").replace("<c:formatCode>0%</c:formatCode>", "");
+    let chart = parse_chart_xml(&xml).expect("chart parses");
+    assert_eq!(chart.series[0].number_format, None);
+}
+
+/// `General` is Excel's "no format", and applying it would only reformat the
+/// number the plain path already prints.
+#[test]
+fn test_a_general_format_code_states_none() {
+    let chart = parse_chart_xml(&percent_chart_xml("General")).expect("chart parses");
+    assert_eq!(chart.series[0].number_format, None);
+}
+
+/// `<c:valAx><c:numFmt>` and `<c:dLbls><c:numFmt>` are what the chart states
+/// for its tick labels and its data labels. They outrank the numeric cache's
+/// `formatCode`, which is the source cell's own — the deck on #841 declares
+/// `0.00%` in the cache but `0%` on the axis and `0.0%` on the labels, and the
+/// reference prints the latter two (issue #865).
+const AXIS_AND_LABEL_FORMAT_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+    <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                  xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <c:chart><c:plotArea>
+            <c:barChart>
+                <c:barDir val="col"/>
+                <c:ser>
+                    <c:idx val="0"/>
+                    <c:dLbls><c:numFmt formatCode="0.0%" sourceLinked="0"/><c:showVal val="1"/></c:dLbls>
+                    <c:cat><c:strRef><c:strCache><c:pt idx="0"><c:v>Q1</c:v></c:pt></c:strCache></c:strRef></c:cat>
+                    <c:val><c:numRef><c:numCache>
+                        <c:formatCode>0.00%</c:formatCode>
+                        <c:pt idx="0"><c:v>0.024</c:v></c:pt>
+                    </c:numCache></c:numRef></c:val>
+                </c:ser>
+            </c:barChart>
+            <c:catAx><c:axPos val="b"/><c:numFmt formatCode="General" sourceLinked="1"/></c:catAx>
+            <c:valAx><c:axPos val="l"/><c:numFmt formatCode="0%" sourceLinked="0"/></c:valAx>
+        </c:plotArea></c:chart>
+    </c:chartSpace>"#;
+
+#[test]
+fn test_value_axis_number_format_is_read() {
+    let chart = parse_chart_xml(AXIS_AND_LABEL_FORMAT_XML).expect("chart parses");
+    assert_eq!(chart.value_axis_number_format.as_deref(), Some("0%"));
+}
+
+#[test]
+fn test_data_label_number_format_is_read() {
+    let chart = parse_chart_xml(AXIS_AND_LABEL_FORMAT_XML).expect("chart parses");
+    assert_eq!(
+        chart.series[0].data_labels.number_format.as_deref(),
+        Some("0.0%")
+    );
+}
+
+/// The category axis states `General`, which is Excel's "no format" — it must
+/// not be mistaken for the value axis' code, and it must not reach the chart.
+#[test]
+fn test_a_general_axis_format_states_none() {
+    let xml =
+        AXIS_AND_LABEL_FORMAT_XML.replace(r#"<c:numFmt formatCode="0%" sourceLinked="0"/>"#, "");
+    let chart = parse_chart_xml(&xml).expect("chart parses");
+    assert_eq!(chart.value_axis_number_format, None);
+}
+
+/// The cache format survives alongside them, so the data table still has an
+/// answer where no axis or label format is stated.
+#[test]
+fn test_the_cache_format_is_kept_beside_the_declared_ones() {
+    let chart = parse_chart_xml(AXIS_AND_LABEL_FORMAT_XML).expect("chart parses");
+    assert_eq!(chart.series[0].number_format.as_deref(), Some("0.00%"));
+}

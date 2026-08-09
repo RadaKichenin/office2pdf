@@ -265,6 +265,7 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
         text_style,
         category_axis_text_style: category_axis.text_style,
         value_axis_text_style: value_axis.text_style,
+        value_axis_number_format: value_axis.number_format,
     })
 }
 
@@ -399,6 +400,19 @@ struct Axis {
     major_tick_mark: AxisTickMark,
     deleted: bool,
     text_style: ChartTextStyle,
+    /// `<c:numFmt formatCode>` — how this axis prints its tick labels.
+    number_format: Option<String>,
+}
+
+/// The `formatCode` a `<c:numFmt>` states, when it states one that is not
+/// `General`.
+///
+/// `General` is Excel's "no format" and applying it would only reformat the
+/// number the plain path already prints (issue #865).
+fn explicit_format_code(element: &quick_xml::events::BytesStart<'_>) -> Option<String> {
+    let code = xml_util::get_attr_str(element, b"formatCode")?;
+    let code = code.trim();
+    (!code.is_empty() && !code.eq_ignore_ascii_case("General")).then(|| code.to_string())
 }
 
 /// Read an axis element, consuming it to `end_tag`.
@@ -429,6 +443,11 @@ fn parse_axis(reader: &mut Reader<&[u8]>, end_tag: &[u8]) -> Axis {
                 if e.local_name().as_ref() == b"delete" =>
             {
                 axis.deleted = ct_boolean(e);
+            }
+            Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e))
+                if e.local_name().as_ref() == b"numFmt" =>
+            {
+                axis.number_format = explicit_format_code(e);
             }
             Ok(Event::End(ref e)) if e.local_name().as_ref() == end_tag => break,
             Ok(Event::Eof) | Err(_) => break,
@@ -647,13 +666,18 @@ fn parse_single_series(reader: &mut Reader<&[u8]>) -> (ChartSeries, Vec<String>)
     // points that override the series, and not necessarily in order.
     let mut point_fills: std::collections::BTreeMap<usize, Color> =
         std::collections::BTreeMap::new();
+    let mut number_format: Option<String> = None;
 
     loop {
         match reader.read_event() {
             Ok(Event::Start(ref e)) => match e.local_name().as_ref() {
                 b"tx" => name = parse_series_text(reader),
                 b"cat" => categories = parse_category_data(reader),
-                b"val" | b"yVal" => values = parse_value_data(reader),
+                b"val" | b"yVal" => {
+                    let (parsed, format_code) = parse_value_data(reader);
+                    values = parsed;
+                    number_format = format_code;
+                }
                 // The series' own fill. This match is flat, so it would also
                 // see a `<c:spPr>` nested inside a sibling element; every
                 // element that can carry one is consumed by its own branch
@@ -696,6 +720,7 @@ fn parse_single_series(reader: &mut Reader<&[u8]>) -> (ChartSeries, Vec<String>)
             fill,
             point_fills,
             data_labels,
+            number_format,
         },
         categories,
     )
@@ -722,6 +747,7 @@ fn parse_data_labels(reader: &mut Reader<&[u8]>) -> DataLabels {
                 b"showCatName" => labels.show_category = ct_boolean(e),
                 b"showSerName" => labels.show_series = ct_boolean(e),
                 b"showPercent" => labels.show_percent = ct_boolean(e),
+                b"numFmt" => labels.number_format = explicit_format_code(e),
                 b"separator" => in_separator = true,
                 _ => {}
             },
@@ -869,21 +895,32 @@ fn parse_category_data(reader: &mut Reader<&[u8]>) -> Vec<String> {
     categories
 }
 
-/// Parse numeric values from `<c:val>` or `<c:yVal>`.
-fn parse_value_data(reader: &mut Reader<&[u8]>) -> Vec<f64> {
+/// Parse numeric values from `<c:val>` or `<c:yVal>`, with the cache's
+/// `<c:formatCode>` when it states one.
+///
+/// `General` is Excel's "no format" and is reported as `None`: applying it
+/// would only reformat the number the plain path already prints.
+fn parse_value_data(reader: &mut Reader<&[u8]>) -> (Vec<f64>, Option<String>) {
     let mut values = Vec::new();
+    let mut format_code: Option<String> = None;
     let mut in_v = false;
+    let mut in_format_code = false;
     let mut current_text = String::new();
 
     loop {
         match reader.read_event() {
-            Ok(Event::Start(ref e)) => {
-                if e.local_name().as_ref() == b"v" {
+            Ok(Event::Start(ref e)) => match e.local_name().as_ref() {
+                b"v" => {
                     in_v = true;
                     current_text.clear();
                 }
-            }
-            Ok(Event::Text(ref t)) if in_v => {
+                b"formatCode" => {
+                    in_format_code = true;
+                    current_text.clear();
+                }
+                _ => {}
+            },
+            Ok(Event::Text(ref t)) if in_v || in_format_code => {
                 if let Ok(s) = t.xml_content() {
                     current_text.push_str(s.as_ref());
                 }
@@ -895,6 +932,13 @@ fn parse_value_data(reader: &mut Reader<&[u8]>) -> Vec<f64> {
                         values.push(v);
                     }
                 }
+                b"formatCode" => {
+                    in_format_code = false;
+                    let code = current_text.trim();
+                    if !code.is_empty() && !code.eq_ignore_ascii_case("General") {
+                        format_code = Some(code.to_string());
+                    }
+                }
                 b"val" | b"yVal" => break,
                 _ => {}
             },
@@ -903,7 +947,7 @@ fn parse_value_data(reader: &mut Reader<&[u8]>) -> Vec<f64> {
         }
     }
 
-    values
+    (values, format_code)
 }
 
 /// Scan document.xml for chart relationship IDs.
