@@ -224,6 +224,12 @@ pub struct Chart {
     /// Where the value axis puts its major tick marks, from
     /// `<c:valAx><c:majorTickMark>`.
     pub value_axis_major_tick_mark: AxisTickMark,
+    /// What `<c:catAx><c:spPr>` says about the category axis' line.
+    pub category_axis_line: ChartLine,
+    /// What `<c:valAx><c:spPr>` says about the value axis' line.
+    pub value_axis_line: ChartLine,
+    /// What `<c:majorGridlines><c:spPr>` says about the gridlines' line.
+    pub major_gridline_line: ChartLine,
     /// Whether `<c:catAx><c:delete>` switched the category axis off.
     pub category_axis_deleted: bool,
     /// Whether `<c:valAx><c:delete>` switched the value axis off.
@@ -1209,6 +1215,28 @@ pub struct Shadow {
     pub color: Color,
     /// Opacity from 0.0 (fully transparent) to 1.0 (fully opaque).
     pub opacity: f64,
+}
+
+/// What a chart axis' or gridline's `<c:spPr>` says about its line.
+///
+/// The three states are distinct, exactly as they are for the chart area
+/// ([`ChartAreaOutline`], issue #637): saying nothing means the automatic
+/// line, `<a:ln><a:noFill/></a:ln>` means none at all, and a stated `<a:ln>`
+/// means that one. The two enums have the same shape and are candidates for
+/// unification.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum ChartLine {
+    /// The part states no `<a:ln>`; the renderer's automatic stroke applies.
+    #[default]
+    Automatic,
+    /// `<a:ln><a:noFill/></a:ln>` — draw nothing.
+    Suppressed,
+    /// A stated line. Either half may still be absent: a `<a:ln>` naming only
+    /// a width keeps the automatic colour, and vice versa.
+    Explicit {
+        width_pt: Option<f64>,
+        color: Option<Color>,
+    },
 }
 
 /// Basic geometric shape.

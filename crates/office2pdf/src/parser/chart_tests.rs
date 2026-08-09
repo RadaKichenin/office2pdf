@@ -1764,3 +1764,79 @@ fn a_series_scheme_color_applies_its_luminance_transform() {
         "expected a darker colour, got {fill:?}"
     );
 }
+
+/// An axis and its gridlines carry the `<a:ln>` they declare (issue #900).
+///
+/// `002.CONTOSO.pptx` (#841) gives `<c:catAx>` and `<c:majorGridlines>` the
+/// same white 12700 EMU line; both rendered as the automatic
+/// `rgb(134, 134, 134)` at 0.75pt.
+#[test]
+fn an_axis_and_its_gridlines_keep_the_line_they_declare() {
+    let line = r#"<c:spPr><a:ln w="12700" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="bg1"/></a:solidFill><a:round/></a:ln><a:effectLst/></c:spPr>"#;
+    let gridlines = format!("<c:majorGridlines>{line}</c:majorGridlines>");
+    let xml = bar_chart_xml(r#"<c:barDir val="col"/><c:grouping val="clustered"/>"#)
+        .replace("</c:plotArea>", &format!(
+            r#"<c:catAx><c:axId val="1"/>{line}</c:catAx><c:valAx><c:axId val="2"/>{gridlines}{line}</c:valAx></c:plotArea>"#
+        ));
+    let colors: std::collections::HashMap<String, Color> =
+        [("bg1".to_string(), Color::new(0xFF, 0xFF, 0xFF))]
+            .into_iter()
+            .collect();
+    let aliases: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let scheme = SchemeColors {
+        colors: &colors,
+        aliases: &aliases,
+    };
+
+    let chart = parse_chart_xml(&xml, &scheme).expect("chart parses");
+
+    let expected = ChartLine::Explicit {
+        width_pt: Some(1.0),
+        color: Some(Color::new(0xFF, 0xFF, 0xFF)),
+    };
+    for (label, line) in [
+        ("category axis", chart.category_axis_line),
+        ("value axis", chart.value_axis_line),
+        ("major gridlines", chart.major_gridline_line),
+    ] {
+        assert_eq!(line, expected, "{label}");
+    }
+}
+
+/// `<a:ln><a:noFill/></a:ln>` suppresses the line, which is not the same as
+/// declaring none — the deck in #841 writes exactly that on its value axis and
+/// the reference draws no vertical rule there, where we drew the automatic
+/// grey one.
+#[test]
+fn an_axis_no_fill_line_suppresses_it() {
+    let suppressed = r#"<c:spPr><a:noFill/><a:ln><a:noFill/></a:ln><a:effectLst/></c:spPr>"#;
+    let xml = bar_chart_xml(r#"<c:barDir val="col"/><c:grouping val="clustered"/>"#).replace(
+        "</c:plotArea>",
+        &format!(r#"<c:valAx><c:axId val="2"/>{suppressed}</c:valAx></c:plotArea>"#),
+    );
+
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).expect("chart parses");
+
+    assert_eq!(chart.value_axis_line, ChartLine::Suppressed);
+    assert_eq!(
+        chart.category_axis_line,
+        ChartLine::Automatic,
+        "an axis that states nothing is not suppressed"
+    );
+}
+
+/// An axis that declares no line at all leaves the automatic one to the
+/// renderer.
+#[test]
+fn an_axis_without_a_line_is_automatic() {
+    let xml = bar_chart_xml(r#"<c:barDir val="col"/><c:grouping val="clustered"/>"#).replace(
+        "</c:plotArea>",
+        r#"<c:catAx><c:axId val="1"/></c:catAx><c:valAx><c:axId val="2"/></c:valAx></c:plotArea>"#,
+    );
+
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).expect("chart parses");
+
+    assert_eq!(chart.category_axis_line, ChartLine::Automatic);
+    assert_eq!(chart.value_axis_line, ChartLine::Automatic);
+    assert_eq!(chart.major_gridline_line, ChartLine::Automatic);
+}
