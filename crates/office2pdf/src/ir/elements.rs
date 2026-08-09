@@ -295,6 +295,8 @@ pub struct ChartTextStyle {
     pub size_pt: Option<f64>,
     /// `a:defRPr@b`.
     pub bold: Option<bool>,
+    /// `a:defRPr/a:solidFill` — the colour the runs are set in (issue #916).
+    pub color: Option<Color>,
 }
 
 impl ChartTextStyle {
@@ -310,6 +312,11 @@ impl ChartTextStyle {
     /// This style's weight where `override_style` states none.
     pub fn resolved_bold(self, override_style: Self) -> Option<bool> {
         override_style.bold.or(self.bold)
+    }
+
+    /// This style's colour where `override_style` states none.
+    pub fn resolved_color(self, override_style: Self) -> Option<Color> {
+        override_style.color.or(self.color)
     }
 }
 

@@ -3019,6 +3019,7 @@ fn sized_bar_chart(size_pt: f64) -> Chart {
     chart.text_style = crate::ir::ChartTextStyle {
         size_pt: Some(size_pt),
         bold: None,
+        color: None,
     };
     chart
 }
@@ -3070,6 +3071,7 @@ fn category_labels_take_the_axis_weight() {
     chart.category_axis_text_style = crate::ir::ChartTextStyle {
         size_pt: None,
         bold: Some(true),
+        color: None,
     };
     let source: String = chart_source(chart);
     assert!(
@@ -3084,6 +3086,7 @@ fn an_axis_size_overrides_the_chart_space_size_for_that_axis_only() {
     chart.category_axis_text_style = crate::ir::ChartTextStyle {
         size_pt: Some(9.0),
         bold: None,
+        color: None,
     };
     let source: String = chart_source(chart);
     assert_eq!(emitted_text_sizes(&source, "Q1"), vec![9.0]);
@@ -3189,6 +3192,7 @@ fn bar_chart_at(size_pt: Option<f64>, categories: &[&str]) -> Chart {
     chart.text_style = crate::ir::ChartTextStyle {
         size_pt,
         bold: None,
+        color: None,
     };
     chart
 }
@@ -3878,5 +3882,71 @@ fn category_labels_that_fit_their_band_stay_flat() {
     assert!(
         !source.contains("rotate(-45deg"),
         "short labels must stay flat, got:\n{source}"
+    );
+}
+
+// ----- A chart's declared text colour (issue #916) -----
+
+#[test]
+fn axis_labels_take_the_declared_chart_text_colour() {
+    // The deck in #841 sets its chart text white against a dark chart area;
+    // the tick labels printed black because no colour was ever parsed.
+    let mut chart = sized_bar_chart(11.0);
+    chart.text_style.color = Some(crate::ir::Color::new(255, 255, 255));
+    let source: String = chart_source(chart);
+    assert!(
+        source.contains("#text(size: 11pt, fill: rgb(255, 255, 255))[Q1]"),
+        "a category label must take the declared colour, got:\n{source}"
+    );
+    assert!(
+        source.contains("fill: rgb(255, 255, 255))[0]"),
+        "a value tick label must take it too, got:\n{source}"
+    );
+}
+
+#[test]
+fn an_axis_colour_overrides_the_chart_space_colour_for_that_axis_only() {
+    let mut chart = sized_bar_chart(11.0);
+    chart.text_style.color = Some(crate::ir::Color::new(255, 255, 255));
+    chart.category_axis_text_style.color = Some(crate::ir::Color::new(255, 0, 0));
+    let source: String = chart_source(chart);
+    assert!(
+        source.contains("#text(size: 11pt, fill: rgb(255, 0, 0))[Q1]"),
+        "the category axis' own colour must win, got:\n{source}"
+    );
+    assert!(
+        source.contains("fill: rgb(255, 255, 255))[0]"),
+        "the value axis must keep the chart-space colour, got:\n{source}"
+    );
+}
+
+#[test]
+fn a_chart_declaring_no_colour_keeps_the_colours_it_had() {
+    // Triangulation: the fix must not force a default onto every chart. An
+    // axis label stays uncoloured and a data label stays the hardcoded white.
+    let mut chart = sized_bar_chart(11.0);
+    // The white only appears where a data label is drawn at all.
+    chart.series[0].data_labels.show_value = true;
+    let source: String = chart_source(chart);
+    // Bars carry their series colour as a fill and a legend swatch sits on the
+    // same line as its label, so the question is only about what is inside a
+    // `#text(...)` argument list.
+    let coloured_runs: Vec<&str> = source
+        .match_indices("#text(")
+        .filter_map(|(at, _)| {
+            let args = &source[at + "#text(".len()..];
+            let args = &args[..args.find(')')?];
+            // `fill: white` is the data label's long-standing default and is
+            // asserted separately below; only a resolved colour would be new.
+            args.contains("fill: rgb(").then_some(args)
+        })
+        .collect();
+    assert!(
+        coloured_runs.is_empty(),
+        "nothing declared must leave text uncoloured, got: {coloured_runs:?}"
+    );
+    assert!(
+        source.contains("fill: white)"),
+        "the data label keeps its white, got:\n{source}"
     );
 }
