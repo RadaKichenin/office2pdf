@@ -1,5 +1,5 @@
 use super::*;
-use crate::ir::ChartAreaOutline;
+use crate::ir::{ChartAreaOutline, DataLabelPosition};
 use crate::render::font_subst;
 
 /// How a chart is drawn. Selecting the variant once lets the atomicity decision
@@ -1063,8 +1063,15 @@ fn axis_title_gutters(chart: &Chart) -> (f64, f64) {
 /// Thickness of an axis-title band: a 9pt line plus breathing room.
 const AXIS_TITLE_H: f64 = 15.0;
 
-/// Height of one data-label line, for centring it on its segment.
+/// Height of one data-label line: the span to centre across when the label
+/// sits on its segment, and the box to offset by when it sits at the
+/// segment's end instead (issue #901).
 const LABEL_LINE_H: f64 = 10.0;
+
+/// Width of the box a label gets when it sits at the end of a horizontal bar
+/// rather than across it. The centred case spans the bar, which is the wrong
+/// span once the label is beside it (issue #901).
+const LABEL_OUTSIDE_W: f64 = 40.0;
 
 /// Size of the plotting rectangle itself.
 ///
@@ -1441,25 +1448,41 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 );
             }
             if let Some(label) = data_label_text(chart, s, cat_index, category_total) {
-                // Centred on the segment, as `<c:dLblPos val="ctr"/>` asks and
-                // as a stacked bar needs — an outside label would sit on the
-                // segment above it.
+                // Where the label sits along the bar, from `<c:dLblPos>` or the
+                // grouping's default (issue #901). A stacked segment centres
+                // because an outside label would land on the segment above.
+                let position = s.data_labels.position;
                 let (label_x, label_y, label_w) = if horizontal {
                     let row_top: f64 = plot_h - (cat_index as f64 + 1.0) * row;
+                    let bar_start: f64 = plot_x + stack_base * plot_w;
+                    let bar_w: f64 = frac * plot_w;
+                    let x: f64 = match position {
+                        DataLabelPosition::Center => bar_start,
+                        DataLabelPosition::OutsideEnd => bar_start + bar_w,
+                        DataLabelPosition::InsideEnd => bar_start + bar_w - LABEL_OUTSIDE_W,
+                        DataLabelPosition::InsideBase => bar_start,
+                    };
+                    let w: f64 = match position {
+                        DataLabelPosition::Center => bar_w,
+                        _ => LABEL_OUTSIDE_W,
+                    };
                     (
-                        plot_x + stack_base * plot_w,
+                        x,
                         row_top + offset + bar_thickness / 2.0 - LABEL_LINE_H / 2.0,
-                        frac * plot_w,
+                        w,
                     )
                 } else {
-                    (
-                        plot_x + group_start + offset,
-                        plot_y + plot_h
-                            - stack_base * plot_h
-                            - frac * plot_h / 2.0
-                            - LABEL_LINE_H / 2.0,
-                        bar_thickness,
-                    )
+                    let bar_top: f64 = plot_y + plot_h - stack_base * plot_h - frac * plot_h;
+                    let bar_bottom: f64 = plot_y + plot_h - stack_base * plot_h;
+                    let y: f64 = match position {
+                        DataLabelPosition::Center => {
+                            (bar_top + bar_bottom) / 2.0 - LABEL_LINE_H / 2.0
+                        }
+                        DataLabelPosition::OutsideEnd => bar_top - LABEL_LINE_H,
+                        DataLabelPosition::InsideEnd => bar_top,
+                        DataLabelPosition::InsideBase => bar_bottom - LABEL_LINE_H,
+                    };
+                    (plot_x + group_start + offset, y, bar_thickness)
                 };
                 let _ = writeln!(
                     out,

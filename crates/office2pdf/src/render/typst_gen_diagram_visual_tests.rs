@@ -1358,6 +1358,8 @@ fn the_enabled_parts_are_joined_by_the_separator() {
         show_category: true,
         show_series: true,
         separator: "; ".to_string(),
+        position: crate::ir::DataLabelPosition::Center,
+        position_stated: false,
         ..DataLabels::default()
     }));
 
@@ -1523,6 +1525,8 @@ fn a_pie_draws_a_label_on_each_wedge() {
         show_category: true,
         show_percent: true,
         separator: "; ".to_string(),
+        position: crate::ir::DataLabelPosition::Center,
+        position_stated: false,
         ..DataLabels::default()
     };
 
@@ -3679,5 +3683,46 @@ fn an_undeclared_axis_still_draws_the_automatic_line() {
     assert!(
         source.contains("0.75pt + rgb(134, 134, 134)"),
         "the automatic stroke must survive:\n{source}"
+    );
+}
+
+/// A clustered column's labels sit beyond the bar's end, and a stacked one's
+/// centre on the segment (issue #901).
+///
+/// The label's `dy` is what moves: `outEnd` puts its box just above the bar
+/// top, `ctr` halfway down the bar.
+#[test]
+fn a_clustered_bar_label_sits_outside_its_end_and_a_stacked_one_centres() {
+    fn label_dy(grouping: ChartGrouping, position: crate::ir::DataLabelPosition) -> f64 {
+        let mut chart = stacked_support_chart(grouping);
+        for series in &mut chart.series {
+            series.data_labels = DataLabels {
+                show_value: true,
+                position,
+                position_stated: true,
+                ..DataLabels::default()
+            };
+        }
+        let source = chart_source(chart);
+        // The first label draw after the first bar rect.
+        source
+            .lines()
+            .filter(|line| line.contains("align(center + horizon)"))
+            .find_map(|line| {
+                let dy = line.split("dy: ").nth(1)?;
+                dy.split("pt").next()?.parse::<f64>().ok()
+            })
+            .expect("a data label is drawn")
+    }
+
+    let centred = label_dy(ChartGrouping::Stacked, crate::ir::DataLabelPosition::Center);
+    let outside = label_dy(
+        ChartGrouping::Clustered,
+        crate::ir::DataLabelPosition::OutsideEnd,
+    );
+
+    assert!(
+        outside < centred,
+        "an outEnd label must sit above a centred one: outEnd dy {outside}, ctr dy {centred}"
     );
 }

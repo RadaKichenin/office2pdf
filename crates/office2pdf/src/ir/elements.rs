@@ -387,6 +387,25 @@ pub enum AxisTickMark {
     Cross,
 }
 
+/// Where a data label sits relative to the point it belongs to, from
+/// `<c:dLblPos>` (ECMA-376 §21.2.2.49).
+///
+/// The element is optional and its default depends on the plot: a `clustered`
+/// bar puts labels just beyond the bar's end, a stacked one centres them on
+/// the segment, since an outside label would land on the segment above.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DataLabelPosition {
+    /// `ctr` — centred on the point.
+    #[default]
+    Center,
+    /// `outEnd` — just beyond the end of the bar or segment.
+    OutsideEnd,
+    /// `inEnd` — inside it, against the end.
+    InsideEnd,
+    /// `inBase` — inside it, against the baseline.
+    InsideBase,
+}
+
 /// What a chart's data labels print, from `<c:dLbls>`.
 ///
 /// Office joins the enabled parts with `<c:separator>`, defaulting to `"; "`.
@@ -406,6 +425,13 @@ pub struct DataLabels {
     /// Outranks the series' cache format, which is the source cell's own
     /// (issue #865).
     pub number_format: Option<String>,
+    /// `<c:dLblPos>`, or the default the plot's grouping implies when the
+    /// part states none (issue #901).
+    pub position: DataLabelPosition,
+    /// Whether `<c:dLblPos>` was stated. A stated position outranks the
+    /// grouping's default, so the two cannot be told apart by value alone —
+    /// `ctr` is both a legal statement and the stacked default.
+    pub position_stated: bool,
 }
 
 impl Default for DataLabels {
@@ -417,6 +443,8 @@ impl Default for DataLabels {
             show_percent: false,
             number_format: None,
             separator: "; ".to_string(),
+            position: DataLabelPosition::Center,
+            position_stated: false,
         }
     }
 }
