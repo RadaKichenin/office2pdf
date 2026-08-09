@@ -218,12 +218,20 @@ pub struct TextStyle {
     /// Small caps: render lowercase letters as smaller uppercase.
     pub small_caps: Option<bool>,
     /// Character spacing (letter spacing / tracking) in points.
+    ///
+    /// A non-zero value also switches ligatures and pair kerning off: both
+    /// redistribute the inter-glyph spacing this field states, and a
+    /// substituted face's pairs are not the ones the document was set in
+    /// (issues #684, #864).
     pub letter_spacing: Option<f64>,
     /// Whether the source application kerns this run, and from which size up.
     ///
-    /// `None` means the format states nothing about kerning and the renderer's
-    /// own default stands. Only the DOCX path resolves this today; PPTX and
-    /// XLSX leave it `None`, so their output is unchanged (issue #628).
+    /// `None` means the format states nothing about kerning, so this field
+    /// alone leaves the renderer's own default standing. Only the DOCX path
+    /// resolves it today (issue #628) — but it is no longer the only input to
+    /// the decision: a non-zero `letter_spacing` switches kerning off
+    /// regardless of this field's own answer, except under the RTL shaping
+    /// exemption, and that reaches PPTX and XLSX too (issue #864).
     pub pair_kerning: Option<PairKerning>,
 }
 

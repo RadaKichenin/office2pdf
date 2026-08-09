@@ -1047,7 +1047,7 @@ fn a_letter_spaced_run_is_not_framed() {
     let result = generate_typst(&doc).unwrap().source;
 
     assert!(
-        result.contains("#text(tracking: 0.5pt, ligatures: false)[활용 설치부터]"),
+        result.contains("#text(tracking: 0.5pt, ligatures: false, kerning: false)[활용 설치부터]"),
         "a tracked run stays one text item: {result}"
     );
     assert!(
@@ -2090,5 +2090,39 @@ fn test_synthetic_oblique_outside_a_frame_states_no_seat() {
     assert!(
         !source.contains("inset:"),
         "an unframed slant box must not pad itself, got:\n{source}"
+    );
+}
+
+/// The RTL exemption outranks the tracking rule of issue #864: typst 0.14.2
+/// mis-orders RTL glyph ranges when the `kern` feature is off, and losing
+/// glyphs is worse than the spurious word break the rule exists to prevent.
+#[test]
+fn test_rtl_run_keeps_kerning_despite_tracking() {
+    let doc = make_doc_with_default_text(
+        vec![make_flow_page(vec![styled_paragraph(
+            "مرحبا بالعالم",
+            TextStyle {
+                font_family: Some("Arial".to_string()),
+                letter_spacing: Some(3.0),
+                pair_kerning: Some(PairKerning::Never),
+                ..TextStyle::default()
+            },
+        )])],
+        TextStyle {
+            font_size: Some(11.0),
+            pair_kerning: Some(PairKerning::Never),
+            ..TextStyle::default()
+        },
+    );
+
+    let source = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        source.contains("kerning: true"),
+        "a tracked RTL run must keep kerning on: {source}"
+    );
+    assert!(
+        !source.contains("kerning: false"),
+        "the tracking rule must not reach RTL text: {source}"
     );
 }
