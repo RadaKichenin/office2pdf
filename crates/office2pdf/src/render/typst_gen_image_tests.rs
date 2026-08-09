@@ -381,3 +381,99 @@ fn test_image_without_border_no_box() {
         output.source
     );
 }
+
+/// An `a:srcRect` crop reaches an SVG asset too, by narrowing its viewBox
+/// (issue #892).
+///
+/// `preprocess_image_asset` cropped by decoding the bitmap, and
+/// `raster_image_format` returns `None` for an SVG, so a cropped vector
+/// graphic was drawn whole and stretched into a box sized for the retained
+/// part. The deck in #841 does this to a 6-column dot grid with
+/// `<a:srcRect r="49115"/>`: three columns should show, six did.
+#[test]
+fn an_svg_crop_narrows_the_view_box() {
+    const SVG: &str = r#"<svg width="365" height="340" viewBox="0 0 365 340" xmlns="http://www.w3.org/2000/svg" overflow="hidden"><circle cx="10" cy="10" r="5"/></svg>"#;
+    let doc = make_doc(vec![make_flow_page(vec![Block::Image(ImageData {
+        rotation_deg: None,
+        data: SVG.as_bytes().to_vec(),
+        format: ImageFormat::Svg,
+        width: Some(20.0),
+        height: Some(40.0),
+        crop: Some(ImageCrop {
+            left: 0.0,
+            top: 0.4302,
+            right: 0.49115,
+            bottom: 0.0,
+        }),
+        stroke: None,
+        alignment: None,
+        clip_shape: None,
+        shadow: None,
+        paragraph_spacing: None,
+    })])]);
+
+    let output = generate_typst(&doc).unwrap();
+    let svg = String::from_utf8(output.images[0].data.clone()).expect("the asset stays an SVG");
+
+    // 49.115% off the right of 365 leaves 185.73; 43.02% off the top of 340
+    // leaves y from 146.27 for 193.73.
+    let view_box = svg
+        .split("viewBox=\"")
+        .nth(1)
+        .and_then(|rest| rest.split('"').next())
+        .expect("a viewBox survives");
+    let values: Vec<f64> = view_box
+        .split_whitespace()
+        .map(|v| v.parse().expect("numeric viewBox"))
+        .collect();
+    let expected = [0.0, 146.27, 185.73, 193.73];
+    for (index, (got, want)) in values.iter().zip(expected.iter()).enumerate() {
+        assert!(
+            (got - want).abs() < 0.05,
+            "viewBox component {index}: got {got}, want {want} (viewBox {view_box})"
+        );
+    }
+    // The viewport must shrink with the viewBox. Left at its old size,
+    // `preserveAspectRatio` meets the smaller viewBox inside it — scaling by
+    // one and centring the drawing instead of cropping it.
+    for (name, want) in [("width", 185.73), ("height", 193.73)] {
+        let got: f64 = svg
+            .split(&format!("{name}=\""))
+            .nth(1)
+            .and_then(|rest| rest.split('"').next())
+            .and_then(|value| value.parse().ok())
+            .unwrap_or_else(|| panic!("a numeric {name} survives: {svg}"));
+        assert!(
+            (got - want).abs() < 0.05,
+            "{name}: got {got}, want {want} ({svg})"
+        );
+    }
+    assert!(
+        svg.contains(r#"<circle cx="10" cy="10" r="5"/>"#),
+        "the drawing itself is untouched: {svg}"
+    );
+}
+
+/// An SVG with no crop is passed through byte for byte, so nothing is rewritten
+/// on the far commoner path.
+#[test]
+fn an_uncropped_svg_is_left_alone() {
+    const SVG: &str =
+        r#"<svg width="10" height="10" viewBox="0 0 10 10"><rect width="10" height="10"/></svg>"#;
+    let doc = make_doc(vec![make_flow_page(vec![Block::Image(ImageData {
+        rotation_deg: None,
+        data: SVG.as_bytes().to_vec(),
+        format: ImageFormat::Svg,
+        width: Some(10.0),
+        height: Some(10.0),
+        crop: None,
+        stroke: None,
+        alignment: None,
+        clip_shape: None,
+        shadow: None,
+        paragraph_spacing: None,
+    })])]);
+
+    let output = generate_typst(&doc).unwrap();
+    assert_eq!(output.images[0].data, SVG.as_bytes());
+}
