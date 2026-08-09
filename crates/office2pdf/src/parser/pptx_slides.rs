@@ -1381,8 +1381,10 @@ struct SlideXmlParser<'a> {
     /// Used when parsing master/layout layers whose placeholder content
     /// should not render unless the slide overrides it.
     skip_placeholders: bool,
-    /// Layout/master placeholder geometry for slide placeholders that
-    /// omit `<a:xfrm>`. None outside slide-layer parsing.
+    /// The layout/master placeholder chain a slide placeholder inherits from.
+    /// Supplies geometry to one that omits `<a:xfrm>`, and shape fill to one
+    /// that declares no fill — the two are looked up independently. None
+    /// outside slide-layer parsing.
     placeholder_geometry: Option<&'a PlaceholderGeometryMap>,
 
     // ── Output accumulators ─────────────────────────────────────────
@@ -2434,6 +2436,29 @@ impl<'a> SlideXmlParser<'a> {
                             self.ctx.theme,
                             self.ctx.color_map,
                         );
+                    }
+                    // A slide placeholder inherits its shape properties from
+                    // the layout's matching copy, so a template's colour band
+                    // behind a title is declared there while the slide carries
+                    // only the text. The layout copy is not drawn — its prompt
+                    // text would come with it — so the fill has to reach the
+                    // slide's own shape, where it also lands at the right
+                    // place in z-order (issue #856).
+                    if self.shape.has_placeholder
+                        && self.shape.fill.is_none()
+                        && self.shape.gradient_fill.is_none()
+                        && self.shape.pattern_fill.is_none()
+                        && !self.shape.explicit_no_fill
+                        && let Some(map) = self.placeholder_geometry
+                        && let Some(inherited) = map.lookup_fill(
+                            self.shape.ph_type.as_deref(),
+                            self.shape.ph_idx.as_deref(),
+                        )
+                    {
+                        self.shape.fill = Some(inherited.color);
+                        if self.shape.opacity.is_none() {
+                            self.shape.opacity = inherited.opacity;
+                        }
                     }
                     if !(self.skip_placeholders && self.shape.has_placeholder) {
                         self.elements.extend(finalize_shape(
