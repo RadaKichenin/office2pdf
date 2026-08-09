@@ -143,6 +143,7 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
     // still gets a default position, so the position alone cannot say whether
     // one was asked for (issue #762).
     let mut has_legend: bool = false;
+    let mut auto_title_deleted: bool = false;
     let mut category_axis: Axis = Axis::default();
     let mut value_axis: Axis = Axis::default();
     // `c:chartSpace/c:spPr` is a *sibling* of `c:chart`, and the schema puts it
@@ -208,6 +209,11 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
             Ok(Event::Empty(ref e)) if e.local_name().as_ref() == b"legend" => {
                 has_legend = true;
             }
+            Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e))
+                if e.local_name().as_ref() == b"autoTitleDeleted" =>
+            {
+                auto_title_deleted = ct_boolean(e);
+            }
             Ok(Event::Empty(ref e)) if e.local_name().as_ref() == b"legendPos" => {
                 legend_position = xml_util::get_attr_str(e, b"val")
                     .as_deref()
@@ -241,6 +247,7 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
         grouping: grouping.unwrap_or_default(),
         legend_position: legend_position.unwrap_or_default(),
         has_legend,
+        auto_title_deleted,
         category_axis_title: category_axis.title,
         value_axis_title: value_axis.title,
         category_axis_major_tick_mark: category_axis.major_tick_mark,

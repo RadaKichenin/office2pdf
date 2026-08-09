@@ -269,6 +269,9 @@ pub struct Chart {
     /// `<c:valAx><c:numFmt formatCode>` — how the value axis prints its tick
     /// labels. Outranks a series' cache format for the axis (issue #865).
     pub value_axis_number_format: Option<String>,
+    /// `<c:autoTitleDeleted val="1"/>` — the chart declines the title Office
+    /// would otherwise derive from its single series' name (issue #883).
+    pub auto_title_deleted: bool,
 }
 
 /// Run properties a `c:txPr` declares for the strings it governs.

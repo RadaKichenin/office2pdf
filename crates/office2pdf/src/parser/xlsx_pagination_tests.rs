@@ -228,6 +228,7 @@ fn test_charts_stay_on_first_column_group() {
             category_axis_text_style: crate::ir::ChartTextStyle::default(),
             value_axis_text_style: crate::ir::ChartTextStyle::default(),
             value_axis_number_format: None,
+            auto_title_deleted: false,
         },
     )];
     let pages = split_sheet_page_by_width(page, None, None);

@@ -1512,3 +1512,46 @@ fn test_the_cache_format_is_kept_beside_the_declared_ones() {
     let chart = parse_chart_xml(AXIS_AND_LABEL_FORMAT_XML).expect("chart parses");
     assert_eq!(chart.series[0].number_format.as_deref(), Some("0.00%"));
 }
+
+/// `<c:autoTitleDeleted val="1"/>` is how a chart declines the automatic title
+/// Office would otherwise draw from its single series' name (issue #883).
+fn single_series_chart_xml(extra: &str) -> String {
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+        <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+            <c:chart>{extra}<c:plotArea><c:barChart>
+                <c:barDir val="col"/>
+                <c:ser>
+                    <c:idx val="0"/>
+                    <c:tx><c:strRef><c:strCache><c:pt idx="0"><c:v>Serie 1</c:v></c:pt></c:strCache></c:strRef></c:tx>
+                    <c:cat><c:strRef><c:strCache><c:pt idx="0"><c:v>Q1</c:v></c:pt></c:strCache></c:strRef></c:cat>
+                    <c:val><c:numRef><c:numCache><c:pt idx="0"><c:v>1</c:v></c:pt></c:numCache></c:numRef></c:val>
+                </c:ser>
+            </c:barChart></c:plotArea></c:chart>
+        </c:chartSpace>"#
+    )
+}
+
+#[test]
+fn test_auto_title_deleted_is_read() {
+    let chart = parse_chart_xml(&single_series_chart_xml(r#"<c:autoTitleDeleted val="1"/>"#))
+        .expect("chart parses");
+    assert!(chart.auto_title_deleted);
+}
+
+/// A chart that says nothing keeps the automatic title, so the flag is read
+/// rather than assumed.
+#[test]
+fn test_a_chart_without_the_flag_keeps_its_automatic_title() {
+    let chart = parse_chart_xml(&single_series_chart_xml("")).expect("chart parses");
+    assert!(!chart.auto_title_deleted);
+}
+
+/// `val="0"` is the explicit "keep it", which must not read as deleted.
+#[test]
+fn test_auto_title_deleted_zero_keeps_the_title() {
+    let chart = parse_chart_xml(&single_series_chart_xml(r#"<c:autoTitleDeleted val="0"/>"#))
+        .expect("chart parses");
+    assert!(!chart.auto_title_deleted);
+}
