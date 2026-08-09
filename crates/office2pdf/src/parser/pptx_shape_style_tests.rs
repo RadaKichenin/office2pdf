@@ -794,3 +794,67 @@ fn test_no_fill_line_suppresses_style_outline_fallback() {
     );
     assert!(shape.fill.is_some(), "the shape fill must be unaffected");
 }
+
+/// A rotated shape that carries text keeps its rotation (issue #894).
+///
+/// A plain rectangle with text becomes a `TextBoxData` rather than a `Shape`,
+/// and `TextBoxData` had nowhere to put `a:xfrm/@rot`, so the rotation was
+/// dropped: LibreOffice writes a `0 24 -24 0` text matrix for a 270° box where
+/// we wrote the unrotated `24 0 0 -24`.
+#[test]
+fn a_rotated_text_shape_keeps_its_rotation() {
+    let shape = r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="T"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm rot="16200000"><a:off x="1000000" y="1000000"/><a:ext cx="4000000" cy="600000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US" sz="2400"/><a:t>ROTATED</a:t></a:r></a:p></p:txBody></p:sp>"#.to_string();
+    let slide = make_slide_xml(&[shape]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = first_fixed_page(&doc);
+    let FixedElementKind::TextBox(ref text_box) = page.elements[0].kind else {
+        panic!("expected a TextBox, got {:?}", page.elements[0].kind);
+    };
+    let rotation = text_box
+        .shape_rotation_deg
+        .expect("a rotated text shape must carry its rotation");
+    assert!(
+        (rotation - 270.0).abs() < 0.01,
+        "expected 270 degrees, got {rotation}"
+    );
+    assert_eq!(
+        text_box.text_rotation_deg, None,
+        "the box rotates, the glyphs inside it do not"
+    );
+}
+
+/// Triangulation: a different `rot` must produce that angle, not a fixed one,
+/// and an unrotated text shape must carry no rotation at all.
+#[test]
+fn a_text_shape_rotation_follows_the_declared_angle() {
+    for (rot_attr, expected) in [(Some(2_700_000_i64), Some(45.0_f64)), (None, None)] {
+        let xfrm = match rot_attr {
+            Some(rot) => format!(r#"<a:xfrm rot="{rot}">"#),
+            None => "<a:xfrm>".to_string(),
+        };
+        let shape = format!(
+            r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="T"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr>{xfrm}<a:off x="0" y="0"/><a:ext cx="2000000" cy="600000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US"/><a:t>Tilted</a:t></a:r></a:p></p:txBody></p:sp>"#
+        );
+        let slide = make_slide_xml(&[shape]);
+        let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+
+        let parser = PptxParser;
+        let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+        let page = first_fixed_page(&doc);
+        let FixedElementKind::TextBox(ref text_box) = page.elements[0].kind else {
+            panic!("expected a TextBox");
+        };
+        match (text_box.shape_rotation_deg, expected) {
+            (None, None) => {}
+            (Some(actual), Some(want)) => assert!(
+                (actual - want).abs() < 0.01,
+                "expected {want} degrees, got {actual}"
+            ),
+            (actual, want) => panic!("expected {want:?}, got {actual:?}"),
+        }
+    }
+}

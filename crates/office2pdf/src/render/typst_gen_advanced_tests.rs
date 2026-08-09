@@ -1032,6 +1032,7 @@ fn test_vert_text_box_remaps_insets() {
         no_wrap: false,
         auto_fit: false,
         text_rotation_deg: Some(270.0),
+        shape_rotation_deg: None,
     };
     let elem = FixedElement {
         x: 0.0,

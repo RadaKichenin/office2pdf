@@ -95,6 +95,7 @@ fn test_fixed_page_text_box_multiple_paragraphs_preserve_breaks() {
                 no_wrap: false,
                 auto_fit: false,
                 text_rotation_deg: None,
+                shape_rotation_deg: None,
             }),
         }],
     )]);
@@ -192,6 +193,7 @@ fn test_fixed_page_text_box_ordered_list_preserves_textbox_styling() {
                 no_wrap: false,
                 auto_fit: false,
                 text_rotation_deg: None,
+                shape_rotation_deg: None,
             }),
         }],
     )]);
@@ -281,6 +283,7 @@ fn test_fixed_page_text_box_compact_list_items_use_full_width_blocks() {
                     no_wrap: false,
                 auto_fit: false,
             text_rotation_deg: None,
+            shape_rotation_deg: None,
             }),
         }],
     )]);
@@ -344,6 +347,7 @@ fn test_fixed_page_text_box_compact_list_preserves_hanging_indent() {
                     no_wrap: false,
                 auto_fit: false,
             text_rotation_deg: None,
+            shape_rotation_deg: None,
             }),
         }],
     )]);
@@ -416,6 +420,7 @@ fn test_fixed_page_text_box_compact_list_preserves_marker_origin_offset() {
                     no_wrap: false,
                 auto_fit: false,
             text_rotation_deg: None,
+            shape_rotation_deg: None,
             }),
         }],
     )]);
@@ -493,6 +498,7 @@ fn test_fixed_page_text_box_compact_bulleted_list_uses_custom_marker_style() {
                 no_wrap: false,
                 auto_fit: false,
                 text_rotation_deg: None,
+                shape_rotation_deg: None,
             }),
         }],
     )]);
@@ -592,6 +598,7 @@ fn test_fixed_page_text_box_dash_bullets_use_generic_list_path() {
                 no_wrap: false,
                 auto_fit: false,
                 text_rotation_deg: None,
+                shape_rotation_deg: None,
             }),
         }],
     )]);
@@ -653,6 +660,7 @@ fn test_fixed_page_text_box_compact_list_preserves_soft_line_breaks() {
                 no_wrap: false,
                 auto_fit: false,
                 text_rotation_deg: None,
+                shape_rotation_deg: None,
             }),
         }],
     )]);
@@ -708,6 +716,7 @@ fn test_fixed_page_text_box_with_solid_fill() {
                 no_wrap: false,
                 auto_fit: false,
                 text_rotation_deg: None,
+                shape_rotation_deg: None,
             }),
         }],
     )]);
@@ -756,6 +765,7 @@ fn test_fixed_page_text_box_with_fill_and_stroke() {
                 no_wrap: false,
                 auto_fit: false,
                 text_rotation_deg: None,
+                shape_rotation_deg: None,
             }),
         }],
     )]);
@@ -805,6 +815,7 @@ fn test_fixed_page_text_box_with_fill_and_opacity() {
                 no_wrap: false,
                 auto_fit: false,
                 text_rotation_deg: None,
+                shape_rotation_deg: None,
             }),
         }],
     )]);
@@ -856,6 +867,7 @@ fn test_fixed_page_text_box_with_polygon_shape_kind() {
                 no_wrap: false,
                 auto_fit: false,
                 text_rotation_deg: None,
+                shape_rotation_deg: None,
             }),
         }],
     )]);
@@ -950,6 +962,7 @@ fn test_fixed_page_text_box_no_wrap_centered_text_uses_inline_box() {
                 no_wrap: true,
                 auto_fit: false,
                 text_rotation_deg: None,
+                shape_rotation_deg: None,
             }),
         }],
     )]);
@@ -1009,6 +1022,7 @@ fn test_fixed_page_text_box_no_wrap_keeps_mixed_latin_cjk_searchable() {
                 no_wrap: true,
                 auto_fit: false,
                 text_rotation_deg: None,
+                shape_rotation_deg: None,
             }),
         }],
     )]);
@@ -1058,6 +1072,7 @@ fn test_fixed_page_text_box_no_wrap_still_strips_the_kinsoku_marker() {
                 no_wrap: true,
                 auto_fit: false,
                 text_rotation_deg: None,
+                shape_rotation_deg: None,
             }),
         }],
     )]);
@@ -1109,6 +1124,7 @@ fn test_fixed_page_text_box_no_wrap_keeps_cjk_title_extractable() {
                 no_wrap: true,
                 auto_fit: false,
                 text_rotation_deg: None,
+                shape_rotation_deg: None,
             }),
         }],
     )]);
@@ -1173,6 +1189,7 @@ fn test_fixed_page_text_box_no_wrap_keeps_latin_text_extractable() {
                 no_wrap: true,
                 auto_fit: false,
                 text_rotation_deg: None,
+                shape_rotation_deg: None,
             }),
         }],
     )]);
@@ -1224,6 +1241,7 @@ fn test_fixed_page_text_box_no_wrap_keeps_mixed_script_titles_unbroken() {
                 no_wrap: true,
                 auto_fit: false,
                 text_rotation_deg: None,
+                shape_rotation_deg: None,
             }),
         }],
     )]);
@@ -1293,6 +1311,7 @@ fn test_fixed_page_text_box_no_wrap_preserves_mixed_script_titles_across_runs() 
                 no_wrap: true,
                 auto_fit: false,
                 text_rotation_deg: None,
+                shape_rotation_deg: None,
             }),
         }],
     )]);
@@ -1347,6 +1366,7 @@ fn test_fixed_page_text_box_auto_fit_short_text_uses_scale_to_fit() {
                 no_wrap: false,
                 auto_fit: true,
                 text_rotation_deg: None,
+                shape_rotation_deg: None,
             }),
         }],
     )]);
@@ -1434,6 +1454,7 @@ fn test_fixed_page_text_box_no_wrap_auto_fit_uses_scale_to_fit() {
                 no_wrap: true,
                 auto_fit: true,
                 text_rotation_deg: None,
+                shape_rotation_deg: None,
             }),
         }],
     )]);
@@ -1505,6 +1526,7 @@ fn test_fixed_page_text_box_mixed_font_header_uses_scale_to_fit() {
                 no_wrap: false,
                 auto_fit: false,
                 text_rotation_deg: None,
+                shape_rotation_deg: None,
             }),
         }],
     )]);
@@ -1574,6 +1596,7 @@ fn test_fixed_page_text_box_mixed_font_header_with_tight_leading_uses_scale_to_f
                 no_wrap: false,
                 auto_fit: false,
                 text_rotation_deg: None,
+                shape_rotation_deg: None,
             }),
         }],
     )]);
@@ -1646,6 +1669,7 @@ fn test_fixed_page_text_box_wrapped_centered_paragraph_scales_to_fit_height() {
                 no_wrap: false,
                 auto_fit: false,
                 text_rotation_deg: None,
+                shape_rotation_deg: None,
             }),
         }],
     )]);
@@ -1741,6 +1765,7 @@ fn test_fixed_page_text_box_ordered_grid_normalizes_marker_spacing() {
                 no_wrap: false,
                 auto_fit: false,
                 text_rotation_deg: None,
+                shape_rotation_deg: None,
             }),
         }],
     )]);

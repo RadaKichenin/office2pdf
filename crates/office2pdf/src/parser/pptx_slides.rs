@@ -428,6 +428,7 @@ fn smartart_shape_to_elements(f: SmartArtShapeFields) -> Vec<FixedElement> {
                 no_wrap: false,
                 auto_fit: false,
                 text_rotation_deg: None,
+                shape_rotation_deg: None,
             }),
         });
     }
@@ -1127,6 +1128,7 @@ fn finalize_shape(
                     no_wrap: text_box.no_wrap,
                     auto_fit: text_box.auto_fit,
                     text_rotation_deg: text_box.text_rotation_deg,
+                    shape_rotation_deg: shape.rotation_deg,
                 }),
             });
         } else {
@@ -1147,6 +1149,7 @@ fn finalize_shape(
                     no_wrap: text_box.no_wrap,
                     auto_fit: text_box.auto_fit,
                     text_rotation_deg: text_box.text_rotation_deg,
+                    shape_rotation_deg: shape.rotation_deg,
                 }),
             });
         }

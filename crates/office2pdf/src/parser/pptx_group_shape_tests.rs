@@ -280,6 +280,34 @@ fn test_group_rotation_orbits_children_and_adds_shape_rotation() {
     assert!((shape.rotation_deg.unwrap() - 120.0).abs() < 0.01);
 }
 
+/// A text box inside a rotated group composes the group's angle the same way
+/// a shape does (issue #894). Before `TextBoxData` could hold a rotation, a
+/// grouped label was orbited into place and then drawn horizontally.
+#[test]
+fn test_group_rotation_adds_to_a_child_text_box() {
+    let child = r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="T"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm rot="1800000"><a:off x="1828800" y="762000"/><a:ext cx="457200" cy="304800"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US"/><a:t>Label</a:t></a:r></a:p></p:txBody></p:sp>"#;
+    let group = format!(
+        r#"<p:grpSp><p:nvGrpSpPr><p:cNvPr id="10" name="G"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm rot="5400000"><a:off x="914400" y="914400"/><a:ext cx="2286000" cy="1828800"/><a:chOff x="0" y="0"/><a:chExt cx="2286000" cy="1828800"/></a:xfrm></p:grpSpPr>{child}</p:grpSp>"#
+    );
+    let slide = make_slide_xml(&[group]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let page = first_fixed_page(&doc);
+    let FixedElementKind::TextBox(ref text_box) = page.elements[0].kind else {
+        panic!("expected a text box");
+    };
+    // The child's own 30° plus the group's 90°.
+    let rotation = text_box
+        .shape_rotation_deg
+        .expect("a grouped text box must carry the composed rotation");
+    assert!(
+        (rotation - 120.0).abs() < 0.01,
+        "expected 120 degrees, got {rotation}"
+    );
+}
+
 #[test]
 fn test_group_scaling_stretches_line_endpoints() {
     // Hairline axes bake their geometry in child-space points; without
