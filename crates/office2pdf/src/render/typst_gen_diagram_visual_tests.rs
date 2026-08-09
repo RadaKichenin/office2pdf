@@ -3407,3 +3407,52 @@ fn test_data_table_without_a_number_format_prints_plainly() {
         "expected the plain value in: {source}"
     );
 }
+
+/// A currency format emits `$`, which opens math mode in Typst markup. Writing
+/// a formatted axis label unescaped produced 48 "unclosed delimiter" errors on
+/// a budget workbook in the bulk corpus, so every formatted label is escaped.
+#[test]
+fn test_a_currency_axis_label_is_escaped() {
+    let chart = Chart {
+        chart_type: ChartType::Column,
+        hole_size_percent: None,
+        title: None,
+        categories: vec!["Q1".to_string()],
+        series: vec![ChartSeries {
+            name: Some("Spend".to_string()),
+            values: vec![1200.0],
+            fill: None,
+            point_fills: Vec::new(),
+            data_labels: DataLabels::default(),
+            number_format: None,
+        }],
+        grouping: ChartGrouping::Clustered,
+        legend_position: LegendPosition::Right,
+        has_legend: true,
+        category_axis_title: None,
+        value_axis_title: None,
+        category_axis_major_tick_mark: AxisTickMark::Outside,
+        value_axis_major_tick_mark: AxisTickMark::Outside,
+        category_axis_deleted: false,
+        value_axis_deleted: false,
+        bar_band_layout: BarBandLayout::default(),
+        theme_accent_colors: Vec::new(),
+        chart_area_outline: ChartAreaOutline::Default,
+        host: crate::ir::ChartHost::default(),
+        text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: Some("\"$\"#,##0".to_string()),
+    };
+    let source = chart_source(chart);
+
+    assert!(
+        source.contains("\\$"),
+        "a currency tick label must be escaped: {source}"
+    );
+    assert!(
+        !source.contains("[$"),
+        "an unescaped $ opens math mode: {source}"
+    );
+}

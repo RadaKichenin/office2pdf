@@ -1311,7 +1311,10 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                     format_f64(x - 12.0),
                     format_f64(plot_y + plot_h + 4.0),
                     format_f64(chart_axis_text_pt(chart, chart.value_axis_text_style)),
-                    chart_value_label_formatted(*tick, chart_value_number_format(chart))
+                    escape_typst(&chart_value_label_formatted(
+                        *tick,
+                        chart_value_number_format(chart)
+                    ))
                 );
             }
         } else {
@@ -1340,7 +1343,10 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                         chart.value_axis_text_style
                     ))),
                     format_f64(chart_axis_text_pt(chart, chart.value_axis_text_style)),
-                    chart_value_label_formatted(*tick, chart_value_number_format(chart))
+                    escape_typst(&chart_value_label_formatted(
+                        *tick,
+                        chart_value_number_format(chart)
+                    ))
                 );
             }
         }
@@ -1748,7 +1754,10 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
                     chart.value_axis_text_style
                 ))),
                 format_f64(chart_axis_text_pt(chart, chart.value_axis_text_style)),
-                chart_value_label_formatted(*tick, chart_value_number_format(chart))
+                escape_typst(&chart_value_label_formatted(
+                    *tick,
+                    chart_value_number_format(chart)
+                ))
             );
         }
     }
