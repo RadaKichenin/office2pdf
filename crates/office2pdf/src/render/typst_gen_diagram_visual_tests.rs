@@ -40,6 +40,7 @@ fn test_codegen_chart_bar_visual_bars() {
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
+        auto_title_deleted: false,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -105,6 +106,7 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
+        auto_title_deleted: false,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -158,6 +160,7 @@ fn test_codegen_chart_pie_draws_a_pie() {
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
+        auto_title_deleted: false,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -216,6 +219,7 @@ fn test_codegen_chart_line_trend_indicators() {
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
+        auto_title_deleted: false,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -264,6 +268,7 @@ fn test_codegen_chart_empty_series() {
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
+        auto_title_deleted: false,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -346,6 +351,7 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
+        auto_title_deleted: false,
     }));
     let doc = make_doc(vec![make_flow_page(content)]);
 
@@ -397,6 +403,7 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
+        auto_title_deleted: false,
     }));
     let doc = make_doc(vec![make_flow_page(content)]);
 
@@ -601,6 +608,7 @@ fn test_codegen_chart_line_plot() {
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
+        auto_title_deleted: false,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -657,6 +665,7 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
+        auto_title_deleted: false,
     })])]);
 
     let pages = page_texts(&doc);
@@ -741,6 +750,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
+        auto_title_deleted: false,
     }
 }
 
@@ -874,6 +884,7 @@ fn legend_chart(position: LegendPosition) -> Chart {
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
+        auto_title_deleted: false,
     }
 }
 
@@ -1024,6 +1035,7 @@ fn a_declared_series_fill_reaches_the_bars() {
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
+        auto_title_deleted: false,
     };
 
     let source = chart_source(chart);
@@ -1073,6 +1085,7 @@ fn a_series_without_a_fill_still_takes_the_palette() {
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
+        auto_title_deleted: false,
     };
 
     let source = chart_source(chart);
@@ -1120,6 +1133,7 @@ fn per_point_fills_colour_each_bar_separately() {
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
+        auto_title_deleted: false,
     };
 
     let source = chart_source(chart);
@@ -1166,6 +1180,7 @@ fn axis_titled_chart(category: Option<&str>, value: Option<&str>) -> Chart {
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
+        auto_title_deleted: false,
     }
 }
 
@@ -1262,6 +1277,7 @@ fn labelled_chart(labels: DataLabels) -> Chart {
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
+        auto_title_deleted: false,
     }
 }
 
@@ -1351,6 +1367,7 @@ fn pie_chart(values: Vec<f64>) -> Chart {
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
+        auto_title_deleted: false,
     }
 }
 
@@ -1539,6 +1556,7 @@ fn test_chart_default_gridline_matches_powerpoint() {
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
+        auto_title_deleted: false,
     })])]);
 
     let source = generate_typst(&doc).unwrap().source;
@@ -1691,6 +1709,7 @@ fn tick_mark_chart(
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
+        auto_title_deleted: false,
     }
 }
 
@@ -2287,6 +2306,7 @@ fn band_layout_chart(
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
+        auto_title_deleted: false,
     }
 }
 
@@ -2563,6 +2583,7 @@ fn two_series_bar_chart(theme_accent_colors: Vec<crate::ir::Color>) -> Chart {
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
+        auto_title_deleted: false,
     }
 }
 
@@ -3305,6 +3326,7 @@ fn test_data_table_prints_a_series_number_format() {
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
+        auto_title_deleted: false,
     };
     let source = chart_source(chart);
 
@@ -3353,6 +3375,7 @@ fn test_data_table_prints_a_declared_thousands_format() {
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
+        auto_title_deleted: false,
     };
     let source = chart_source(chart);
 
@@ -3399,6 +3422,7 @@ fn test_data_table_without_a_number_format_prints_plainly() {
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
+        auto_title_deleted: false,
     };
     let source = chart_source(chart);
 
@@ -3444,6 +3468,7 @@ fn test_a_currency_axis_label_is_escaped() {
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: Some("\"$\"#,##0".to_string()),
+        auto_title_deleted: false,
     };
     let source = chart_source(chart);
 
@@ -3454,5 +3479,63 @@ fn test_a_currency_axis_label_is_escaped() {
     assert!(
         !source.contains("[$"),
         "an unescaped $ opens math mode: {source}"
+    );
+}
+
+/// A single-series chart that declines the automatic title must not get one
+/// from its series name (issue #883).
+fn single_series_chart(auto_title_deleted: bool) -> Chart {
+    Chart {
+        chart_type: ChartType::Column,
+        hole_size_percent: None,
+        title: None,
+        categories: vec!["Q1".to_string()],
+        series: vec![ChartSeries {
+            name: Some("Serie 1".to_string()),
+            values: vec![1.0],
+            fill: None,
+            point_fills: Vec::new(),
+            data_labels: DataLabels::default(),
+            number_format: None,
+        }],
+        grouping: ChartGrouping::Clustered,
+        legend_position: LegendPosition::Right,
+        has_legend: false,
+        category_axis_title: None,
+        value_axis_title: None,
+        category_axis_major_tick_mark: AxisTickMark::Outside,
+        value_axis_major_tick_mark: AxisTickMark::Outside,
+        category_axis_deleted: false,
+        value_axis_deleted: false,
+        bar_band_layout: BarBandLayout::default(),
+        theme_accent_colors: Vec::new(),
+        chart_area_outline: ChartAreaOutline::Default,
+        host: crate::ir::ChartHost::default(),
+        text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: None,
+        auto_title_deleted,
+    }
+}
+
+#[test]
+fn test_auto_title_deleted_suppresses_the_series_name_title() {
+    let source = chart_source(single_series_chart(true));
+    assert!(
+        !source.contains("Serie 1"),
+        "a declined automatic title must not be drawn: {source}"
+    );
+}
+
+/// Triangulation: the fallback itself stays, so a chart that does not decline
+/// it still gets its automatic title.
+#[test]
+fn test_a_chart_that_keeps_its_automatic_title_still_gets_one() {
+    let source = chart_source(single_series_chart(false));
+    assert!(
+        source.contains("Serie 1"),
+        "the automatic title must survive: {source}"
     );
 }

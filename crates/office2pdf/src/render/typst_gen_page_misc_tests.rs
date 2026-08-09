@@ -722,6 +722,7 @@ fn test_table_page_with_chart_at_row() {
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
+        auto_title_deleted: false,
     };
 
     let page = Page::Sheet(SheetPage {
@@ -785,6 +786,7 @@ fn test_table_page_with_chart_at_end() {
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
+        auto_title_deleted: false,
     };
 
     let page = Page::Sheet(SheetPage {

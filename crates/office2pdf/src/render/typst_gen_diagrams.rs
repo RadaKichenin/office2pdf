@@ -1221,10 +1221,11 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
         ),
     };
 
-    // Chart-area title: the explicit chart title, else the single series
-    // name (which is what the audited fixture carries).
+    // Chart-area title: the explicit chart title, else the automatic one
+    // Office derives from a single series' name — unless the chart declined
+    // that with `<c:autoTitleDeleted val="1"/>` (issue #883).
     let area_title: Option<&str> = chart.title.as_deref().or_else(|| {
-        if series.len() == 1 {
+        if series.len() == 1 && !chart.auto_title_deleted {
             series[0].name.as_deref()
         } else {
             None
