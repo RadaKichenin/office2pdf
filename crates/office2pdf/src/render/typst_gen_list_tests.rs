@@ -38,6 +38,8 @@ fn test_generate_bulleted_list() {
         level_styles: BTreeMap::new(),
     };
     let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins::default(),
         content: vec![Block::List(list)],
@@ -100,6 +102,8 @@ fn test_generate_numbered_list() {
         )]),
     };
     let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins::default(),
         content: vec![Block::List(list)],
@@ -518,6 +522,8 @@ fn test_generate_nested_list() {
         ]),
     };
     let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins::default(),
         content: vec![Block::List(list)],
@@ -573,6 +579,8 @@ fn test_nested_list_single_content_block() {
         level_styles: BTreeMap::new(),
     };
     let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
         size: PageSize::default(),
         margins: Margins::default(),
         content: vec![Block::List(list)],

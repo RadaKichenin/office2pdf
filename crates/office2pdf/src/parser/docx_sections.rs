@@ -365,19 +365,18 @@ pub(super) fn build_flow_page_from_section(
         });
     }
 
-    if section_prop.first_header_reference.is_some()
-        || section_prop.first_footer_reference.is_some()
-        || section_prop.even_header_reference.is_some()
+    // A `first` variant is honoured now, so only the `even` ones still collapse
+    // onto the default. A first variant without `w:titlePg` is not a variant at
+    // all — Word ignores it — so it does not warn either (issue #846).
+    if section_prop.even_header_reference.is_some()
         || section_prop.even_footer_reference.is_some()
-        || section_prop.first_header.is_some()
-        || section_prop.first_footer.is_some()
         || section_prop.even_header.is_some()
         || section_prop.even_footer.is_some()
     {
         warnings.push(ConvertWarning::FallbackUsed {
             format: "DOCX".to_string(),
-            from: "header/footer variants".to_string(),
-            to: "single header/footer per section".to_string(),
+            from: "even-page header/footer".to_string(),
+            to: "the section's default header/footer".to_string(),
         });
     }
 
@@ -391,6 +390,18 @@ pub(super) fn build_flow_page_from_section(
         footer.distance_from_edge = Some(twips_to_pt(section_prop.page_margin.footer));
         apply_doc_default_text_style(footer, doc_default_style);
     }
+    // The first-page stories take the same edge distance and default style the
+    // whole-section ones do; only which story is chosen differs (issue #846).
+    let mut first_header = extract_docx_first_header(section_prop, header_footer_assets);
+    if let Some(first_header) = &mut first_header {
+        first_header.distance_from_edge = Some(twips_to_pt(section_prop.page_margin.header));
+        apply_doc_default_text_style(first_header, doc_default_style);
+    }
+    let mut first_footer = extract_docx_first_footer(section_prop, header_footer_assets);
+    if let Some(first_footer) = &mut first_footer {
+        first_footer.distance_from_edge = Some(twips_to_pt(section_prop.page_margin.footer));
+        apply_doc_default_text_style(first_footer, doc_default_style);
+    }
 
     FlowPage {
         size,
@@ -398,6 +409,8 @@ pub(super) fn build_flow_page_from_section(
         content,
         header,
         footer,
+        first_header,
+        first_footer,
         page_numbering: overrides.page_numbering,
         columns: overrides
             .column_layout
@@ -499,6 +512,55 @@ fn convert_docx_footer(
         paragraphs,
         distance_from_edge: None,
     })
+}
+
+/// The `first` variant of a section's header, where `<w:titlePg/>` asks for one.
+///
+/// Unlike [`extract_docx_header`] this does not fall back to the other
+/// variants: `w:titlePg` names the first-page story specifically, and standing
+/// the default in for it would draw page one the same as the rest rather than
+/// differently, which is the bug (issue #846).
+pub(super) fn extract_docx_first_header(
+    section_prop: &docx_rs::SectionProperty,
+    assets: &HeaderFooterAssets,
+) -> Option<HeaderFooter> {
+    if !section_prop.title_pg {
+        return None;
+    }
+    section_prop
+        .first_header_reference
+        .as_ref()
+        .and_then(|reference| assets.headers.get(&reference.id).cloned())
+        .or_else(|| {
+            section_prop
+                .first_header
+                .as_ref()
+                .and_then(|(_relationship_id, header)| {
+                    convert_docx_header(header, &ImageMap::new(), &[])
+                })
+        })
+}
+
+/// The `first` variant of a section's footer, under the same rule.
+pub(super) fn extract_docx_first_footer(
+    section_prop: &docx_rs::SectionProperty,
+    assets: &HeaderFooterAssets,
+) -> Option<HeaderFooter> {
+    if !section_prop.title_pg {
+        return None;
+    }
+    section_prop
+        .first_footer_reference
+        .as_ref()
+        .and_then(|reference| assets.footers.get(&reference.id).cloned())
+        .or_else(|| {
+            section_prop
+                .first_footer
+                .as_ref()
+                .and_then(|(_relationship_id, footer)| {
+                    convert_docx_footer(footer, &ImageMap::new(), &[], &[])
+                })
+        })
 }
 
 /// Extract the header for a section, preferring the default variant and falling back to
