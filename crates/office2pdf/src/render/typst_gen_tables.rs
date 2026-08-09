@@ -12,8 +12,16 @@ pub(super) fn generate_table(
     let enclosing_default_vertical_align: Option<CellVerticalAlign> =
         ctx.table_default_vertical_align;
     let enclosing_seats_on_descender: bool = ctx.table_seats_bottom_aligned_text_on_descender;
+    let enclosing_box_is_aligned: bool = ctx.table_box_is_aligned;
     ctx.table_default_vertical_align = table.default_vertical_align;
     ctx.table_seats_bottom_aligned_text_on_descender = table.seats_bottom_aligned_text_on_descender;
+    // `w:tblPr/w:jc` places the table box on the page and says nothing about
+    // the text inside it, but Typst inherits `align` into the cells. The cells
+    // undo it; a nested table's own answer must not outlive it (issue #843).
+    ctx.table_box_is_aligned = matches!(
+        table.alignment,
+        Some(Alignment::Center) | Some(Alignment::Right)
+    );
     let result = match table.alignment {
         Some(Alignment::Center) => {
             out.push_str("#align(center)[\n");
@@ -31,6 +39,7 @@ pub(super) fn generate_table(
     };
     ctx.table_default_vertical_align = enclosing_default_vertical_align;
     ctx.table_seats_bottom_aligned_text_on_descender = enclosing_seats_on_descender;
+    ctx.table_box_is_aligned = enclosing_box_is_aligned;
     ctx.table_depth -= 1;
     result
 }
@@ -532,6 +541,15 @@ fn generate_table_cell(
     } else {
         out.push_str(indent);
         out.push('[');
+    }
+
+    // The `#align(...)` that places an aligned table's box is inherited by
+    // everything inside it, so a cell paragraph that declares no alignment of
+    // its own would be laid out centred or right. Reset it at the cell, where
+    // a paragraph's own `#set align(...)` still nests deeper and wins
+    // (issue #843).
+    if ctx.table_box_is_aligned {
+        out.push_str("#set align(start)\n");
     }
 
     if let Some(band) = &boundary_band {

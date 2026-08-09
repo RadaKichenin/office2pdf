@@ -128,6 +128,11 @@ struct GenCtx {
     /// none takes this, and its paragraph codegen must know the effective
     /// answer to seat the line box (issue #618).
     table_default_vertical_align: Option<CellVerticalAlign>,
+    /// Whether the enclosing table's box is positioned by an `#align(...)`
+    /// wrapper. Typst inherits `align` into the cells, so a cell paragraph
+    /// that declares none has to reset it or it inherits the table's own
+    /// placement as text alignment (issue #843).
+    table_box_is_aligned: bool,
     /// Whether the enclosing table rests bottom-aligned text on the descender
     /// line, i.e. is a spreadsheet ([`Table::seats_bottom_aligned_text_on_descender`]).
     table_seats_bottom_aligned_text_on_descender: bool,
@@ -196,6 +201,7 @@ impl GenCtx {
             line_grid_pitch: None,
             row_has_east_asian_text: false,
             table_default_vertical_align: None,
+            table_box_is_aligned: false,
             table_seats_bottom_aligned_text_on_descender: false,
             cell_seats_text_on_descender: false,
             in_spill_cell: false,
