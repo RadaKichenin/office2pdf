@@ -1424,3 +1424,78 @@ fn spill_cell_text_is_not_wrapped_by_its_clip_box() {
         baselines.len()
     );
 }
+
+/// `w:tblPr/w:jc` positions the table box. Typst's `align` is inherited, so
+/// the wrapper that centres the box also centred every cell paragraph that
+/// declared no alignment of its own (issue #843).
+#[test]
+fn test_centred_table_does_not_centre_its_cell_paragraphs() {
+    let table = Table {
+        rows: vec![TableRow {
+            cells: vec![make_text_cell("Inherits left")],
+            height: None,
+        }],
+        column_widths: vec![100.0],
+        alignment: Some(Alignment::Center),
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains("#align(center)["),
+        "Expected the table box to stay centred in: {result}"
+    );
+    assert!(
+        result.contains("#set align(start)"),
+        "Expected the cell to reset the inherited alignment in: {result}"
+    );
+}
+
+/// The reset must not override a paragraph that declares its own alignment,
+/// or a right-aligned total inside a centred table would move.
+#[test]
+fn test_centred_table_keeps_a_cell_paragraph_own_alignment() {
+    let mut cell = make_text_cell("Right");
+    if let Some(Block::Paragraph(paragraph)) = cell.content.first_mut() {
+        paragraph.style.alignment = Some(Alignment::Right);
+    }
+    let table = Table {
+        rows: vec![TableRow {
+            cells: vec![cell],
+            height: None,
+        }],
+        column_widths: vec![100.0],
+        alignment: Some(Alignment::Center),
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains("#set align(right)"),
+        "Expected the declared right alignment to survive in: {result}"
+    );
+}
+
+/// A table with no `w:jc` emits no wrapper, so there is nothing to reset and
+/// the cells must stay exactly as they were.
+#[test]
+fn test_unaligned_table_emits_no_alignment_reset() {
+    let table = Table {
+        rows: vec![TableRow {
+            cells: vec![make_text_cell("Plain")],
+            height: None,
+        }],
+        column_widths: vec![100.0],
+        alignment: None,
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        !result.contains("#set align(start)"),
+        "Expected no alignment reset in: {result}"
+    );
+}
