@@ -2,7 +2,7 @@ use std::cell::Cell;
 use std::collections::HashMap;
 
 use super::super::{Block, Color, TextStyle, parse_hex_color};
-use crate::ir::{BorderLineStyle, BorderSide, CellBorder};
+use crate::ir::{Alignment, BorderLineStyle, BorderSide, CellBorder};
 
 #[derive(Debug, Clone, Default)]
 struct RegionBorders {
@@ -32,6 +32,14 @@ struct TableRegionStyle {
     background: Option<Color>,
     text_color: Option<Color>,
     bold: Option<bool>,
+    /// `w:caps` from the region's `w:rPr`. A table style is where an invoice
+    /// template puts the uppercasing of its header row; the runs themselves
+    /// stay mixed-case (issue #845).
+    all_caps: Option<bool>,
+    /// `w:jc` from the region's `w:pPr`, i.e. how text sits inside the cell.
+    /// `w:tblPr/w:jc` is a different property — it places the table box — and
+    /// is deliberately not read here.
+    alignment: Option<Alignment>,
     borders: RegionBorders,
 }
 
@@ -41,6 +49,8 @@ impl TableRegionStyle {
             background: other.background.or(self.background),
             text_color: other.text_color.or(self.text_color),
             bold: other.bold.or(self.bold),
+            all_caps: other.all_caps.or(self.all_caps),
+            alignment: other.alignment.or(self.alignment),
             borders: self.borders.overlay(other.borders),
         }
     }
@@ -104,6 +114,8 @@ pub(in super::super) struct ResolvedTableCellStyle {
     pub(in super::super) background: Option<Color>,
     pub(in super::super) text_color: Option<Color>,
     pub(in super::super) bold: Option<bool>,
+    pub(in super::super) all_caps: Option<bool>,
+    pub(in super::super) alignment: Option<Alignment>,
     pub(in super::super) border: Option<CellBorder>,
 }
 
@@ -238,6 +250,8 @@ impl ResolvedTableStyle {
             background: region.background,
             text_color: region.text_color,
             bold: region.bold,
+            all_caps: region.all_caps,
+            alignment: region.alignment,
             border,
         }
     }
@@ -254,6 +268,11 @@ pub(in super::super) fn apply_table_text_style(
 
 fn apply_text_style(block: &mut Block, region: &ResolvedTableCellStyle) {
     if let Block::Paragraph(paragraph) = block {
+        // Direct formatting wins, so the style only fills what the paragraph
+        // left unsaid (issue #845).
+        if paragraph.style.alignment.is_none() {
+            paragraph.style.alignment = region.alignment;
+        }
         for run in &mut paragraph.runs {
             let mut style: TextStyle = run.style.clone();
             if style.color.is_none() {
@@ -261,6 +280,9 @@ fn apply_text_style(block: &mut Block, region: &ResolvedTableCellStyle) {
             }
             if style.bold.is_none() {
                 style.bold = region.bold;
+            }
+            if style.all_caps.is_none() {
+                style.all_caps = region.all_caps;
             }
             run.style = style;
         }
@@ -338,6 +360,7 @@ fn scan_table_styles(xml: &str) -> HashMap<String, TableStyleDefinition> {
     let mut current_region = TableStyleRegion::Base;
     let mut in_cell_properties = false;
     let mut in_run_properties = false;
+    let mut in_paragraph_properties = false;
     let mut in_borders = false;
 
     loop {
@@ -357,6 +380,7 @@ fn scan_table_styles(xml: &str) -> HashMap<String, TableStyleDefinition> {
                     }
                     b"tcPr" if current_style_id.is_some() => in_cell_properties = true,
                     b"rPr" if current_style_id.is_some() => in_run_properties = true,
+                    b"pPr" if current_style_id.is_some() => in_paragraph_properties = true,
                     b"tblBorders" | b"tcBorders" if current_style_id.is_some() => in_borders = true,
                     _ => {}
                 }
@@ -364,9 +388,12 @@ fn scan_table_styles(xml: &str) -> HashMap<String, TableStyleDefinition> {
                     element,
                     &mut current_definition,
                     current_region,
-                    in_cell_properties,
-                    in_run_properties,
-                    in_borders,
+                    StyleElementScope {
+                        in_cell_properties,
+                        in_run_properties,
+                        in_paragraph_properties,
+                        in_borders,
+                    },
                 );
             }
             Ok(quick_xml::events::Event::Empty(ref element)) => {
@@ -374,14 +401,18 @@ fn scan_table_styles(xml: &str) -> HashMap<String, TableStyleDefinition> {
                     element,
                     &mut current_definition,
                     current_region,
-                    in_cell_properties,
-                    in_run_properties,
-                    in_borders,
+                    StyleElementScope {
+                        in_cell_properties,
+                        in_run_properties,
+                        in_paragraph_properties,
+                        in_borders,
+                    },
                 );
             }
             Ok(quick_xml::events::Event::End(ref element)) => match element.local_name().as_ref() {
                 b"tcPr" => in_cell_properties = false,
                 b"rPr" => in_run_properties = false,
+                b"pPr" => in_paragraph_properties = false,
                 b"tblBorders" | b"tcBorders" => in_borders = false,
                 b"tblStylePr" => current_region = TableStyleRegion::Base,
                 b"style" => {
@@ -400,14 +431,29 @@ fn scan_table_styles(xml: &str) -> HashMap<String, TableStyleDefinition> {
     styles
 }
 
+/// Which property container the scanner is currently inside. `w:jc` appears
+/// in both `w:pPr` and `w:tblPr` with unrelated meanings, so the containers
+/// have to be distinguished rather than merged.
+#[derive(Debug, Clone, Copy)]
+struct StyleElementScope {
+    in_cell_properties: bool,
+    in_run_properties: bool,
+    in_paragraph_properties: bool,
+    in_borders: bool,
+}
+
 fn apply_style_element(
     element: &quick_xml::events::BytesStart<'_>,
     definition: &mut TableStyleDefinition,
     region: TableStyleRegion,
-    in_cell_properties: bool,
-    in_run_properties: bool,
-    in_borders: bool,
+    scope: StyleElementScope,
 ) {
+    let StyleElementScope {
+        in_cell_properties,
+        in_run_properties,
+        in_paragraph_properties,
+        in_borders,
+    } = scope;
     let Some(target) = region_mut(definition, region) else {
         return;
     };
@@ -439,6 +485,14 @@ fn apply_style_element(
         }
         b"b" | b"bCs" if in_run_properties => {
             target.bold = Some(on_off_element_is_enabled(element));
+        }
+        b"caps" if in_run_properties => {
+            target.all_caps = Some(on_off_element_is_enabled(element));
+        }
+        b"jc" if in_paragraph_properties => {
+            target.alignment = attribute_value(element, b"val")
+                .as_deref()
+                .and_then(super::super::text::parse_alignment);
         }
         _ => {}
     }
