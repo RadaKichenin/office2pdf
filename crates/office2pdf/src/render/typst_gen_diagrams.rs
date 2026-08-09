@@ -553,9 +553,9 @@ fn chart_area_stroke(outline: &ChartAreaOutline, host: crate::ir::ChartHost) -> 
     match outline {
         ChartAreaOutline::Default => automatic_chart_area_stroke(host).to_string(),
         ChartAreaOutline::Suppressed => "none".to_string(),
-        // A width or colour the file left out, or named in a form this parser
-        // does not resolve, falls back to the automatic one rather than to
-        // nothing: the file did ask for *a* line.
+        // A width or colour the file left out, or one the host theme cannot
+        // resolve, falls back to the automatic one rather than to nothing:
+        // the file did ask for *a* line.
         ChartAreaOutline::Explicit { width_pt, color } => format!(
             "{}pt + {}",
             format_f64(width_pt.unwrap_or(CHART_AUTOMATIC_LINE_PT)),

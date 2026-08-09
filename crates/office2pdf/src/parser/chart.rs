@@ -6,6 +6,7 @@
 use quick_xml::Reader;
 use quick_xml::events::Event;
 
+use super::drawingml::{self, SchemeColors};
 use super::xml_util;
 use crate::ir::{
     AxisTickMark, BarBandLayout, Chart, ChartAreaOutline, ChartGrouping, ChartHost, ChartSeries,
@@ -128,7 +129,7 @@ fn bar_direction_chart_type(direction: Option<&str>) -> Option<ChartType> {
 }
 
 /// Parse a chart XML file (e.g., `word/charts/chart1.xml`) into a `Chart` IR.
-pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
+pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Chart> {
     let mut reader = Reader::from_str(xml);
     let mut chart_type = None;
     let mut hole_size_percent: Option<u32> = None;
@@ -164,7 +165,7 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
                 let local = e.local_name();
                 let tag: &[u8] = local.as_ref();
                 if tag == b"spPr" && chart_element_ended {
-                    chart_area_outline = parse_chart_area_outline(&mut reader);
+                    chart_area_outline = parse_chart_area_outline(&mut reader, scheme);
                 } else if tag == b"txPr" && chart_element_ended {
                     let (family, style) = parse_chart_text_properties(&mut reader);
                     text_font_family = family;
@@ -182,7 +183,14 @@ pub(crate) fn parse_chart_xml(xml: &str) -> Option<Chart> {
                     value_axis = parse_axis(&mut reader, b"valAx");
                 } else if let Some(ct) = chart_type_for_tag(tag) {
                     let mut plot: PlotAreaProps = PlotAreaProps::default();
-                    parse_chart_series(&mut reader, tag, &mut categories, &mut series, &mut plot);
+                    parse_chart_series(
+                        &mut reader,
+                        tag,
+                        &mut categories,
+                        &mut series,
+                        &mut plot,
+                        scheme,
+                    );
                     chart_type = Some(match ct {
                         // `<c:ofPieChart>` names its shape in a child element,
                         // so the label waits until the body has been read.
@@ -338,7 +346,10 @@ fn read_def_rpr_into(element: &quick_xml::events::BytesStart<'_>, style: &mut Ch
 /// Only `a:ln` matters here. Its absence is not the same as `<a:noFill/>`:
 /// absent means Office's default outline, `noFill` means none at all, and an
 /// explicit line means that line (#637).
-fn parse_chart_area_outline(reader: &mut Reader<&[u8]>) -> ChartAreaOutline {
+fn parse_chart_area_outline(
+    reader: &mut Reader<&[u8]>,
+    scheme: &SchemeColors<'_>,
+) -> ChartAreaOutline {
     let mut in_line: bool = false;
     let mut saw_line: bool = false;
     let mut suppressed: bool = false;
@@ -370,14 +381,17 @@ fn parse_chart_area_outline(reader: &mut Reader<&[u8]>) -> ChartAreaOutline {
             Ok(Event::End(ref e)) if e.local_name().as_ref() == b"solidFill" => {
                 in_solid_fill = false;
             }
-            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))
-                if in_solid_fill && e.local_name().as_ref() == b"srgbClr" =>
+            Ok(Event::Start(ref e))
+                if in_solid_fill
+                    && matches!(e.local_name().as_ref(), b"srgbClr" | b"schemeClr") =>
             {
-                color = color.or_else(|| {
-                    xml_util::get_attr_str(e, b"val")
-                        .as_deref()
-                        .and_then(xml_util::parse_hex_color)
-                });
+                color = color.or(drawingml::parse_color_from_start(reader, e, scheme).color);
+            }
+            Ok(Event::Empty(ref e))
+                if in_solid_fill
+                    && matches!(e.local_name().as_ref(), b"srgbClr" | b"schemeClr") =>
+            {
+                color = color.or(drawingml::parse_color_from_empty(e, scheme).color);
             }
             Ok(Event::End(ref e)) if e.local_name().as_ref() == b"ln" => {
                 in_line = false;
@@ -637,12 +651,13 @@ fn parse_chart_series(
     categories: &mut Vec<String>,
     series: &mut Vec<ChartSeries>,
     plot: &mut PlotAreaProps,
+    scheme: &SchemeColors<'_>,
 ) {
     loop {
         match reader.read_event() {
             Ok(Event::Start(ref e)) => {
                 if e.local_name().as_ref() == b"ser" {
-                    let (ser, cats) = parse_single_series(reader);
+                    let (ser, cats) = parse_single_series(reader, scheme);
                     // Use categories from first series that has them
                     if categories.is_empty() && !cats.is_empty() {
                         *categories = cats;
@@ -663,7 +678,10 @@ fn parse_chart_series(
 }
 
 /// Parse a single `<c:ser>` element and return the series data + category labels.
-fn parse_single_series(reader: &mut Reader<&[u8]>) -> (ChartSeries, Vec<String>) {
+fn parse_single_series(
+    reader: &mut Reader<&[u8]>,
+    scheme: &SchemeColors<'_>,
+) -> (ChartSeries, Vec<String>) {
     let mut name = None;
     let mut values = Vec::new();
     let mut categories = Vec::new();
@@ -689,9 +707,9 @@ fn parse_single_series(reader: &mut Reader<&[u8]>) -> (ChartSeries, Vec<String>)
                 // see a `<c:spPr>` nested inside a sibling element; every
                 // element that can carry one is consumed by its own branch
                 // first, leaving only the series-level fill here.
-                b"spPr" => fill = fill.or(parse_solid_fill(reader, b"spPr")),
+                b"spPr" => fill = fill.or(parse_solid_fill(reader, b"spPr", scheme)),
                 b"dPt" => {
-                    if let Some((index, color)) = parse_data_point(reader) {
+                    if let Some((index, color)) = parse_data_point(reader, scheme) {
                         point_fills.insert(index, color);
                     }
                 }
@@ -780,14 +798,17 @@ fn parse_data_labels(reader: &mut Reader<&[u8]>) -> DataLabels {
 }
 
 /// Parse a `<c:dPt>` into its `(point index, fill)`.
-fn parse_data_point(reader: &mut Reader<&[u8]>) -> Option<(usize, Color)> {
+fn parse_data_point(
+    reader: &mut Reader<&[u8]>,
+    scheme: &SchemeColors<'_>,
+) -> Option<(usize, Color)> {
     let mut index: Option<usize> = None;
     let mut fill: Option<Color> = None;
 
     loop {
         match reader.read_event() {
             Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"spPr" => {
-                fill = fill.or(parse_solid_fill(reader, b"spPr"));
+                fill = fill.or(parse_solid_fill(reader, b"spPr", scheme));
             }
             Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))
                 if e.local_name().as_ref() == b"idx" =>
@@ -803,11 +824,16 @@ fn parse_data_point(reader: &mut Reader<&[u8]>) -> Option<(usize, Color)> {
     Some((index?, fill?))
 }
 
-/// Read the `<a:srgbClr>` of a solid fill, consuming up to `end_tag`.
+/// Read the colour of a solid fill, consuming up to `end_tag`.
 ///
-/// Theme colours (`<a:schemeClr>`) need the chart part's own theme, which the
-/// parser does not resolve, so they fall through to the palette.
-fn parse_solid_fill(reader: &mut Reader<&[u8]>, end_tag: &[u8]) -> Option<Color> {
+/// A chart part declares no theme of its own, so `<a:schemeClr>` resolves
+/// against the theme of the document the graphic frame sits in, which the
+/// caller supplies (issue #876).
+fn parse_solid_fill(
+    reader: &mut Reader<&[u8]>,
+    end_tag: &[u8],
+    scheme: &SchemeColors<'_>,
+) -> Option<Color> {
     let mut in_solid_fill: bool = false;
     let mut color: Option<Color> = None;
 
@@ -816,14 +842,18 @@ fn parse_solid_fill(reader: &mut Reader<&[u8]>, end_tag: &[u8]) -> Option<Color>
             Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"solidFill" => {
                 in_solid_fill = true;
             }
-            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))
-                if in_solid_fill && e.local_name().as_ref() == b"srgbClr" =>
+            Ok(Event::Start(ref e))
+                if in_solid_fill
+                    && matches!(e.local_name().as_ref(), b"srgbClr" | b"schemeClr") =>
             {
-                color = color.or_else(|| {
-                    xml_util::get_attr_str(e, b"val")
-                        .as_deref()
-                        .and_then(xml_util::parse_hex_color)
-                });
+                let parsed = drawingml::parse_color_from_start(reader, e, scheme);
+                color = color.or(parsed.color);
+            }
+            Ok(Event::Empty(ref e))
+                if in_solid_fill
+                    && matches!(e.local_name().as_ref(), b"srgbClr" | b"schemeClr") =>
+            {
+                color = color.or(drawingml::parse_color_from_empty(e, scheme).color);
             }
             Ok(Event::End(ref e)) if e.local_name().as_ref() == b"solidFill" => {
                 in_solid_fill = false;

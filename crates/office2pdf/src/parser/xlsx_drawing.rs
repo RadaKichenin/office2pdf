@@ -32,6 +32,13 @@ pub(super) fn extract_charts_with_anchors(data: &[u8]) -> HashMap<String, Vec<(u
     let (theme_colors, theme_fonts) = workbook_theme(&mut archive, &workbook_rels_xml);
     let theme_accents: Vec<crate::ir::Color> =
         crate::parser::drawingml::theme_accent_palette(&theme_colors);
+    // A series that names its fill through `<a:schemeClr>` resolves it against
+    // the same workbook theme (issue #876).
+    let no_aliases: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let scheme = crate::parser::drawingml::SchemeColors {
+        colors: &theme_colors,
+        aliases: &no_aliases,
+    };
 
     // Step 3: For each sheet, find its drawing and extract chart anchors
     let mut result: HashMap<String, Vec<(u32, Chart)>> = HashMap::new();
@@ -79,7 +86,7 @@ pub(super) fn extract_charts_with_anchors(data: &[u8]) -> HashMap<String, Vec<(u
                 };
                 let chart_path = resolve_relative_xl_path(drawing_dir, chart_target);
                 let chart_xml = read_zip_entry_string(&mut archive, &chart_path);
-                if let Some(mut chart) = parse_chart_xml(&chart_xml) {
+                if let Some(mut chart) = parse_chart_xml(&chart_xml, &scheme) {
                     chart.theme_accent_colors = theme_accents.clone();
                     chart.host = crate::ir::ChartHost::Spreadsheet;
                     chart.text_font_family =
@@ -132,7 +139,7 @@ pub(super) fn extract_charts_with_anchors(data: &[u8]) -> HashMap<String, Vec<(u
                 continue;
             }
             let chart_xml = read_zip_entry_string(&mut archive, path);
-            if let Some(mut chart) = parse_chart_xml(&chart_xml) {
+            if let Some(mut chart) = parse_chart_xml(&chart_xml, &scheme) {
                 chart.theme_accent_colors = theme_accents.clone();
                 chart.host = crate::ir::ChartHost::Spreadsheet;
                 chart.text_font_family =
