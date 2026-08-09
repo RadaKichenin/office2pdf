@@ -5,11 +5,11 @@
 //! substituting a rectangle turned every decorative curve into a block and
 //! every circular frame into a square (issue #855).
 //!
-//! The commands are flattened to a polygon in the shape's normalized 0..1 box,
-//! which is what [`crate::ir::ShapeKind::Polygon`] renders. Curves are sampled
-//! rather than preserved: at the sizes these decorations print, the sampling
-//! error is far below the rectangle it replaces, and the polygon path already
-//! has a renderer.
+//! The commands are flattened to subpaths in the shape's normalized 0..1 box,
+//! which [`crate::ir::ShapeKind::Path`] renders as one path under the even-odd
+//! fill rule. Curves are sampled rather than preserved: at the sizes these
+//! decorations print, the sampling error is far below the rectangle it
+//! replaces.
 
 use quick_xml::Reader;
 use quick_xml::events::Event;
@@ -40,10 +40,10 @@ const MIN_POLYGON_VERTICES: usize = 3;
 /// part-way through one, and the deck on #866 draws its wave line-art as
 /// dozens of thin ribbons inside a single path. Concatenating them welded the
 /// end of one ribbon to the start of the next and painted the wedge between;
-/// keeping only the largest threw the rest of the art away. A hole is the one
-/// case this gets wrong — subpaths are filled independently, so an inner
-/// boundary paints solid instead of carving out; that needs a path primitive
-/// with a fill rule and is tracked in #870.
+/// keeping only the largest threw the rest of the art away. An inner boundary
+/// carves a hole rather than painting solid because the caller hands every
+/// subpath to one [`crate::ir::ShapeKind::Path`], which fills even-odd
+/// (issue #870).
 pub(super) fn parse_custom_geometry(reader: &mut Reader<&[u8]>) -> Vec<Vec<(f64, f64)>> {
     let mut depth: usize = 1;
     let mut paths: Vec<Vec<(f64, f64)>> = Vec::new();

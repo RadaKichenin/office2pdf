@@ -1232,6 +1232,16 @@ pub enum ShapeKind {
     Polygon {
         vertices: Vec<(f64, f64)>,
     },
+    /// Several closed subpaths filled as one path under the even-odd rule, so
+    /// an inner boundary carves a hole rather than painting solid.
+    ///
+    /// This is what a DrawingML `a:custGeom` is: its `a:pathLst` may hold
+    /// separate `a:path` elements, and one `a:path` may hold several subpaths.
+    /// Vertices are normalized to 0.0–1.0 of the bounding box, like
+    /// [`ShapeKind::Polygon`] (issue #870).
+    Path {
+        subpaths: Vec<Vec<(f64, f64)>>,
+    },
 }
 
 /// Arrowhead decoration on a line endpoint.
