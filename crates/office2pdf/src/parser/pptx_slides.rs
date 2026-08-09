@@ -1851,7 +1851,10 @@ impl<'a> SlideXmlParser<'a> {
             b"bodyPr" if self.in_shape && self.in_txbody => {
                 extract_pptx_text_box_body_props(e, &mut self.text_box);
             }
-            b"spAutoFit" | b"normAutofit" if self.in_shape && self.in_txbody => {
+            // Only `<a:normAutofit/>` shrinks text. `<a:spAutoFit/>` grows the
+            // shape to the text and leaves the run's declared size alone
+            // (ECMA-376 §21.1.2.1.2 / §21.1.2.1.3, issue #898).
+            b"normAutofit" if self.in_shape && self.in_txbody => {
                 self.text_box.auto_fit = true;
             }
             b"lstStyle" if self.in_shape && self.in_txbody => {
@@ -2251,7 +2254,10 @@ impl<'a> SlideXmlParser<'a> {
             b"bodyPr" if self.in_shape && self.in_txbody => {
                 extract_pptx_text_box_body_props(e, &mut self.text_box);
             }
-            b"spAutoFit" | b"normAutofit" if self.in_shape && self.in_txbody => {
+            // Only `<a:normAutofit/>` shrinks text. `<a:spAutoFit/>` grows the
+            // shape to the text and leaves the run's declared size alone
+            // (ECMA-376 §21.1.2.1.2 / §21.1.2.1.3, issue #898).
+            b"normAutofit" if self.in_shape && self.in_txbody => {
                 self.text_box.auto_fit = true;
             }
             b"prstGeom" if self.in_pic && self.pic.in_sp_pr => {

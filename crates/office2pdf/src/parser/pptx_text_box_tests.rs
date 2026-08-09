@@ -682,3 +682,38 @@ fn test_a_run_without_cap_leaves_casing_unset() {
     assert_eq!(style.all_caps, None);
     assert_eq!(style.small_caps, None);
 }
+
+/// `<a:spAutoFit/>` and `<a:normAutofit/>` are different requests
+/// (ECMA-376 §21.1.2.1.2 / §21.1.2.1.3) and only the second one shrinks text
+/// (issue #898).
+///
+/// - *shape autofit* grows the **shape** to the text; the run keeps its
+///   declared size, and PowerPoint saves the grown box.
+/// - *normal autofit* shrinks the **text** on overflow, by the `fontScale`
+///   and `lnSpcReduction` it states.
+///
+/// The deck in #841 puts `<a:spAutoFit/>` on a 9.6pt-tall box holding 8pt
+/// text, and we scaled the run to 4.9pt to make it fit one line.
+#[test]
+fn sp_auto_fit_does_not_shrink_text_but_norm_autofit_does() {
+    for (autofit, expected_scaling) in [("<a:spAutoFit/>", false), ("<a:normAutofit/>", true)] {
+        let shape = format!(
+            r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="T"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="63500" y="6672580"/><a:ext cx="855663" cy="121920"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr><p:txBody><a:bodyPr horzOverflow="overflow" lIns="0" tIns="0" rIns="0" bIns="0">{autofit}</a:bodyPr><a:lstStyle/><a:p><a:r><a:rPr lang="en-US" sz="800"/><a:t>Sensitivity: Internal</a:t></a:r></a:p></p:txBody></p:sp>"#
+        );
+        let slide = make_slide_xml(&[shape]);
+        let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+        let parser = PptxParser;
+        let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+        let page = first_fixed_page(&doc);
+        let FixedElementKind::TextBox(ref text_box) = page.elements[0].kind else {
+            panic!("expected a text box");
+        };
+        assert_eq!(
+            text_box.auto_fit,
+            expected_scaling,
+            "{autofit} must {} request text scaling",
+            if expected_scaling { "" } else { "not" }
+        );
+    }
+}

@@ -604,7 +604,10 @@ pub struct TextBoxData {
     /// When true, text should not wrap — the content width is unconstrained.
     /// Corresponds to `<a:bodyPr wrap="none"/>` in OOXML.
     pub no_wrap: bool,
-    /// Whether the source requested PowerPoint autofit behavior for this box.
+    /// Whether the source asked for the text to shrink to the box —
+    /// `<a:normAutofit/>` alone. `<a:spAutoFit/>` grows the shape to the
+    /// text instead and leaves the declared size alone, so it does not set
+    /// this (issue #898).
     pub auto_fit: bool,
     /// Clockwise text rotation from `<a:bodyPr vert>` ("vert" = 90°,
     /// "vert270" = 270°); the box geometry itself stays unrotated.
