@@ -1396,7 +1396,7 @@ fn flow_footer_value(footer: &HeaderFooter, page: &FlowPage, ctx: &mut GenCtx) -
             .paragraphs
             .last()
             .map(hf_paragraph_metric_runs)
-            .and_then(|runs| text::word_footer_line_descent_em(&runs))
+            .and_then(|runs| text::word_line_box_descent_em(&runs))
             .map(|descent_em| format!("-{}em", format_f64(descent_em)))
             .unwrap_or_else(|| "\"descender\"".to_string());
         let _ = write!(
@@ -2065,7 +2065,17 @@ fn generate_hf_paragraph(
         let _ = write!(out, ", block(height: {}pt)[], ", format_f64(top_space));
     }
     if stacks_rules {
-        out.push_str("[#set text(bottom-edge: \"descender\");");
+        // Word measures `w:pBdr w:space` from the line's bottom, which for an
+        // East Asian line is the 1.3x line box's lower edge rather than the
+        // face's descender. Typst's `"descender"` answers with its normalised
+        // one — 0.2002em for Malgun Gothic (OS/2 410/2048) against the
+        // 0.4412em its line box carries — which left a Korean header's rule
+        // 1.98pt high, 51.30pt against Word's 53.28pt (issue #737).
+        let bottom_edge: String =
+            text::word_line_box_descent_em(&hf_paragraph_metric_runs(paragraph))
+                .map(|descent_em| format!("-{}em", format_f64(descent_em)))
+                .unwrap_or_else(|| "\"descender\"".to_string());
+        let _ = write!(out, "[#set text(bottom-edge: {bottom_edge});");
     }
 
     if let Some(index) = right_tab {
