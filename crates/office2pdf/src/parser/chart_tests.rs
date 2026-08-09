@@ -1,5 +1,27 @@
 use super::*;
 
+use std::sync::LazyLock;
+
+static NO_THEME_COLORS: LazyLock<std::collections::HashMap<String, Color>> =
+    LazyLock::new(std::collections::HashMap::new);
+static NO_THEME_ALIASES: LazyLock<std::collections::HashMap<String, String>> =
+    LazyLock::new(std::collections::HashMap::new);
+
+/// A chart with no host theme behind it: every `<a:schemeClr>` falls through,
+/// which is what these tests want unless they say otherwise.
+trait EmptyScheme {
+    fn empty() -> SchemeColors<'static>;
+}
+
+impl EmptyScheme for SchemeColors<'static> {
+    fn empty() -> SchemeColors<'static> {
+        SchemeColors {
+            colors: &NO_THEME_COLORS,
+            aliases: &NO_THEME_ALIASES,
+        }
+    }
+}
+
 #[test]
 fn test_parse_bar_chart() {
     let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -34,7 +56,7 @@ fn test_parse_bar_chart() {
             </c:chart>
         </c:chartSpace>"#;
 
-    let chart = parse_chart_xml(xml).unwrap();
+    let chart = parse_chart_xml(xml, &SchemeColors::empty()).unwrap();
     assert_eq!(chart.chart_type, ChartType::Column);
     assert_eq!(chart.title.as_deref(), Some("Sales Data"));
     assert_eq!(chart.categories, vec!["Q1", "Q2", "Q3"]);
@@ -72,7 +94,7 @@ fn test_parse_pie_chart() {
             </c:chart>
         </c:chartSpace>"#;
 
-    let chart = parse_chart_xml(xml).unwrap();
+    let chart = parse_chart_xml(xml, &SchemeColors::empty()).unwrap();
     assert_eq!(chart.chart_type, ChartType::Pie);
     assert!(chart.title.is_none());
     assert_eq!(chart.categories, vec!["Apple", "Banana", "Cherry"]);
@@ -119,7 +141,7 @@ fn test_parse_line_chart_multiple_series() {
             </c:chart>
         </c:chartSpace>"#;
 
-    let chart = parse_chart_xml(xml).unwrap();
+    let chart = parse_chart_xml(xml, &SchemeColors::empty()).unwrap();
     assert_eq!(chart.chart_type, ChartType::Line);
     assert_eq!(chart.title.as_deref(), Some("Trends"));
     assert_eq!(chart.categories, vec!["Jan", "Feb"]);
@@ -148,7 +170,7 @@ fn test_parse_chart_no_title() {
             </c:chart>
         </c:chartSpace>"#;
 
-    let chart = parse_chart_xml(xml).unwrap();
+    let chart = parse_chart_xml(xml, &SchemeColors::empty()).unwrap();
     assert!(chart.title.is_none());
     assert_eq!(chart.categories, vec!["A"]);
     assert_eq!(chart.series[0].values, vec![42.0]);
@@ -194,7 +216,7 @@ fn bar_chart_xml(bar_chart_body: &str) -> String {
 fn test_bar_dir_col_is_a_column_chart() {
     let xml = bar_chart_xml(r#"<c:barDir val="col"/><c:grouping val="clustered"/>"#);
 
-    let chart = parse_chart_xml(&xml).unwrap();
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
 
     assert_eq!(chart.chart_type, ChartType::Column);
     assert_eq!(chart.categories, vec!["parser", "render", "core"]);
@@ -205,7 +227,7 @@ fn test_bar_dir_col_is_a_column_chart() {
 fn test_grouping_stacked_is_read() {
     let xml = bar_chart_xml(r#"<c:barDir val="col"/><c:grouping val="stacked"/>"#);
 
-    let chart = parse_chart_xml(&xml).unwrap();
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
 
     assert_eq!(chart.grouping, ChartGrouping::Stacked);
 }
@@ -214,7 +236,7 @@ fn test_grouping_stacked_is_read() {
 fn test_grouping_percent_stacked_is_read() {
     let xml = bar_chart_xml(r#"<c:barDir val="col"/><c:grouping val="percentStacked"/>"#);
 
-    let chart = parse_chart_xml(&xml).unwrap();
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
 
     assert_eq!(chart.grouping, ChartGrouping::PercentStacked);
 }
@@ -223,7 +245,7 @@ fn test_grouping_percent_stacked_is_read() {
 fn test_grouping_clustered_is_read() {
     let xml = bar_chart_xml(r#"<c:barDir val="col"/><c:grouping val="clustered"/>"#);
 
-    let chart = parse_chart_xml(&xml).unwrap();
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
 
     assert_eq!(chart.grouping, ChartGrouping::Clustered);
 }
@@ -232,7 +254,7 @@ fn test_grouping_clustered_is_read() {
 fn test_grouping_defaults_to_clustered_when_absent() {
     let xml = bar_chart_xml(r#"<c:barDir val="col"/>"#);
 
-    let chart = parse_chart_xml(&xml).unwrap();
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
 
     assert_eq!(chart.grouping, ChartGrouping::Clustered);
 }
@@ -257,7 +279,7 @@ fn test_line_chart_standard_grouping_is_not_stacked() {
             </c:chart>
         </c:chartSpace>"#;
 
-    let chart = parse_chart_xml(xml).unwrap();
+    let chart = parse_chart_xml(xml, &SchemeColors::empty()).unwrap();
 
     assert_eq!(chart.grouping, ChartGrouping::Clustered);
 }
@@ -266,7 +288,7 @@ fn test_line_chart_standard_grouping_is_not_stacked() {
 fn test_bar_dir_bar_is_a_bar_chart() {
     let xml = bar_chart_xml(r#"<c:barDir val="bar"/><c:grouping val="clustered"/>"#);
 
-    let chart = parse_chart_xml(&xml).unwrap();
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
 
     assert_eq!(chart.chart_type, ChartType::Bar);
 }
@@ -277,7 +299,7 @@ fn test_bar_dir_defaults_to_column_when_absent() {
     // the required element is read as a column chart rather than rotated.
     let xml = bar_chart_xml(r#"<c:grouping val="clustered"/>"#);
 
-    let chart = parse_chart_xml(&xml).unwrap();
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
 
     assert_eq!(chart.chart_type, ChartType::Column);
 }
@@ -302,7 +324,7 @@ fn test_bar_dir_does_not_leak_into_other_chart_families() {
             </c:chart>
         </c:chartSpace>"#;
 
-    let chart = parse_chart_xml(xml).unwrap();
+    let chart = parse_chart_xml(xml, &SchemeColors::empty()).unwrap();
 
     assert_eq!(chart.chart_type, ChartType::Line);
 }
@@ -325,7 +347,7 @@ fn test_bar3d_chart_honours_bar_dir() {
             </c:chart>
         </c:chartSpace>"#;
 
-    let chart = parse_chart_xml(xml).unwrap();
+    let chart = parse_chart_xml(xml, &SchemeColors::empty()).unwrap();
 
     assert_eq!(chart.chart_type, ChartType::Bar);
 }
@@ -406,7 +428,7 @@ fn test_legend_pos_bottom_is_read() {
     let xml =
         bar_chart_with_legend(r#"<c:legend><c:legendPos val="b"/><c:overlay val="0"/></c:legend>"#);
 
-    let chart = parse_chart_xml(&xml).unwrap();
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
 
     assert_eq!(chart.legend_position, LegendPosition::Bottom);
     assert!(chart.legend_position.is_horizontal());
@@ -425,7 +447,7 @@ fn test_every_legend_pos_value_is_mapped() {
             r#"<c:legend><c:legendPos val="{val}"/></c:legend>"#
         ));
 
-        let chart = parse_chart_xml(&xml).unwrap();
+        let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
 
         assert_eq!(chart.legend_position, expected, "legendPos val=\"{val}\"");
     }
@@ -437,7 +459,7 @@ fn test_legend_pos_defaults_to_right_when_absent() {
     // legend was drawn before the element was read.
     let xml = bar_chart_with_legend(r#"<c:legend><c:overlay val="0"/></c:legend>"#);
 
-    let chart = parse_chart_xml(&xml).unwrap();
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
 
     assert_eq!(chart.legend_position, LegendPosition::Right);
     assert!(!chart.legend_position.is_horizontal());
@@ -447,7 +469,7 @@ fn test_legend_pos_defaults_to_right_when_absent() {
 fn test_chart_without_a_legend_element_keeps_the_default() {
     let xml = bar_chart_with_legend("");
 
-    let chart = parse_chart_xml(&xml).unwrap();
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
 
     assert_eq!(chart.legend_position, LegendPosition::Right);
 }
@@ -465,7 +487,7 @@ fn test_series_sppr_fill_is_read() {
         r#"<c:spPr><a:solidFill><a:srgbClr val="4f81bd"/></a:solidFill><a:ln w="9360"><a:solidFill><a:srgbClr val="f9f9f9"/></a:solidFill></a:ln></c:spPr><c:tx>"#,
     );
 
-    let chart = parse_chart_xml(&xml).unwrap();
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
 
     assert_eq!(chart.series[0].fill, Some(Color::new(0x4f, 0x81, 0xbd)));
 }
@@ -494,7 +516,7 @@ fn test_data_point_fills_override_the_series() {
             </c:chart>
         </c:chartSpace>"#;
 
-    let chart = parse_chart_xml(xml).unwrap();
+    let chart = parse_chart_xml(xml, &SchemeColors::empty()).unwrap();
     let series = &chart.series[0];
 
     assert_eq!(series.fill_for_point(0), Some(Color::new(0x4f, 0x81, 0xbd)));
@@ -508,22 +530,24 @@ fn test_data_point_fills_override_the_series() {
 fn test_a_series_without_a_fill_leaves_the_palette_to_decide() {
     let xml = bar_chart_xml(r#"<c:barDir val="col"/>"#);
 
-    let chart = parse_chart_xml(&xml).unwrap();
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
 
     assert_eq!(chart.series[0].fill, None);
     assert_eq!(chart.series[0].fill_for_point(0), None);
 }
 
 #[test]
-fn test_a_theme_colour_fill_falls_through_to_the_palette() {
-    // `<a:schemeClr>` needs the chart part's own theme, which this parser does
-    // not resolve, so it must not be mistaken for an explicit colour.
+fn test_a_theme_colour_the_scheme_cannot_resolve_falls_through_to_the_palette() {
+    // A host whose theme is missing or does not carry the named entry leaves
+    // the colour unresolved, and an unresolved colour must not be mistaken for
+    // an explicit one. Resolution itself is covered by
+    // `a_series_scheme_color_fill_resolves_against_the_host_theme`.
     let xml = bar_chart_xml(r#"<c:barDir val="col"/>"#).replace(
         "<c:tx>",
         r#"<c:spPr><a:solidFill><a:schemeClr val="accent1"/></a:solidFill></c:spPr><c:tx>"#,
     );
 
-    let chart = parse_chart_xml(&xml).unwrap();
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
 
     assert_eq!(chart.series[0].fill, None);
 }
@@ -538,7 +562,7 @@ fn test_a_data_label_fill_is_not_mistaken_for_the_series_fill() {
         r#"<c:dLbls><c:spPr><a:solidFill><a:srgbClr val="ff0000"/></a:solidFill></c:spPr><c:showVal val="1"/></c:dLbls><c:cat>"#,
     );
 
-    let chart = parse_chart_xml(&xml).unwrap();
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
 
     assert_eq!(chart.series[0].fill, None);
     assert_eq!(chart.series[0].values, vec![23334.0, 8331.0, 4120.0]);
@@ -556,7 +580,7 @@ fn test_a_data_label_fill_does_not_shadow_a_declared_series_fill() {
             r#"<c:dLbls><c:spPr><a:solidFill><a:srgbClr val="ff0000"/></a:solidFill></c:spPr></c:dLbls><c:cat>"#,
         );
 
-    let chart = parse_chart_xml(&xml).unwrap();
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
 
     assert_eq!(chart.series[0].fill, Some(Color::new(0x4f, 0x81, 0xbd)));
 }
@@ -590,7 +614,8 @@ fn test_a_radar_chart_survives_with_its_data() {
     // The deck's slide 27 loses its entire left half when this returns None.
     let xml = chart_of_type("radarChart", r#"<c:radarStyle val="marker"/>"#);
 
-    let chart = parse_chart_xml(&xml).expect("a radar chart must not be dropped");
+    let chart =
+        parse_chart_xml(&xml, &SchemeColors::empty()).expect("a radar chart must not be dropped");
 
     assert_eq!(
         chart.chart_type,
@@ -604,7 +629,8 @@ fn test_a_radar_chart_survives_with_its_data() {
 fn test_a_doughnut_chart_survives_with_its_data() {
     let xml = chart_of_type("doughnutChart", r#"<c:holeSize val="50"/>"#);
 
-    let chart = parse_chart_xml(&xml).expect("a doughnut chart must not be dropped");
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty())
+        .expect("a doughnut chart must not be dropped");
 
     // It was `Other("Doughnut Chart")` while the tabular fallback stood in for
     // it (issue #544). It is a plotted family now, so it carries its own type
@@ -622,7 +648,8 @@ fn test_a_doughnut_chart_survives_with_its_data() {
 fn test_a_doughnut_chart_without_a_hole_size_still_plots() {
     let xml = chart_of_type("doughnutChart", "");
 
-    let chart = parse_chart_xml(&xml).expect("a doughnut chart must not be dropped");
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty())
+        .expect("a doughnut chart must not be dropped");
 
     assert_eq!(chart.chart_type, ChartType::Doughnut);
     assert_eq!(chart.hole_size_percent, None);
@@ -634,7 +661,7 @@ fn test_a_doughnut_chart_without_a_hole_size_still_plots() {
 fn test_a_pie_chart_carries_no_hole_size() {
     let xml = chart_of_type("pieChart", "");
 
-    let chart = parse_chart_xml(&xml).expect("a pie chart parses");
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).expect("a pie chart parses");
 
     assert_eq!(chart.chart_type, ChartType::Pie);
     assert_eq!(chart.hole_size_percent, None);
@@ -663,8 +690,8 @@ fn test_every_schema_chart_family_is_recognised() {
     ] {
         let xml = chart_of_type(element, "");
 
-        let chart =
-            parse_chart_xml(&xml).unwrap_or_else(|| panic!("<c:{element}> must not be dropped"));
+        let chart = parse_chart_xml(&xml, &SchemeColors::empty())
+            .unwrap_or_else(|| panic!("<c:{element}> must not be dropped"));
 
         assert_eq!(
             chart.series[0].values,
@@ -684,7 +711,7 @@ fn test_an_unmapped_family_keeps_a_readable_label() {
     ] {
         let xml = chart_of_type(element, "");
 
-        let chart = parse_chart_xml(&xml).unwrap();
+        let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
 
         assert_eq!(
             chart.chart_type,
@@ -703,7 +730,7 @@ fn test_a_non_chart_element_is_still_not_a_chart() {
             <c:chart><c:plotArea><c:layout/></c:plotArea></c:chart>
         </c:chartSpace>"#;
 
-    assert!(parse_chart_xml(xml).is_none());
+    assert!(parse_chart_xml(xml, &SchemeColors::empty()).is_none());
 }
 
 #[test]
@@ -718,7 +745,7 @@ fn test_of_pie_names_the_shape_its_ofpietype_asks_for() {
     ] {
         let xml = chart_of_type("ofPieChart", of_pie_type);
 
-        let chart = parse_chart_xml(&xml).unwrap();
+        let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
 
         assert_eq!(
             chart.chart_type,
@@ -777,7 +804,7 @@ fn axis_title(text: &str, rotation: &str) -> String {
 fn test_axis_titles_are_read() {
     let xml = chart_with_axes(&axis_title("계층", "0"), &axis_title("LOC", "-5400000"));
 
-    let chart = parse_chart_xml(&xml).unwrap();
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
 
     assert_eq!(chart.category_axis_title.as_deref(), Some("계층"));
     assert_eq!(chart.value_axis_title.as_deref(), Some("LOC"));
@@ -789,7 +816,7 @@ fn test_an_axis_title_does_not_displace_the_chart_title() {
     // later and must not be mistaken for it, nor it for them.
     let xml = chart_with_axes(&axis_title("계층", "0"), &axis_title("LOC", "-5400000"));
 
-    let chart = parse_chart_xml(&xml).unwrap();
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
 
     assert_eq!(chart.title.as_deref(), Some("계층별 프로덕션 LOC"));
 }
@@ -798,7 +825,7 @@ fn test_an_axis_title_does_not_displace_the_chart_title() {
 fn test_axes_without_titles_report_none() {
     let xml = chart_with_axes("", "");
 
-    let chart = parse_chart_xml(&xml).unwrap();
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
 
     assert_eq!(chart.category_axis_title, None);
     assert_eq!(chart.value_axis_title, None);
@@ -809,7 +836,7 @@ fn test_axes_without_titles_report_none() {
 fn test_one_titled_axis_does_not_borrow_the_others_title() {
     let xml = chart_with_axes("", &axis_title("LOC", "-5400000"));
 
-    let chart = parse_chart_xml(&xml).unwrap();
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
 
     assert_eq!(chart.category_axis_title, None);
     assert_eq!(chart.value_axis_title.as_deref(), Some("LOC"));
@@ -826,7 +853,7 @@ fn test_outward_major_tick_marks_are_read() {
         r#"<c:majorTickMark val="out"/>"#,
     );
 
-    let chart = parse_chart_xml(&xml).unwrap();
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
 
     assert_eq!(chart.category_axis_major_tick_mark, AxisTickMark::Outside);
     assert_eq!(chart.value_axis_major_tick_mark, AxisTickMark::Outside);
@@ -841,7 +868,7 @@ fn test_each_axis_keeps_its_own_major_tick_mark() {
         r#"<c:majorTickMark val="in"/>"#,
     );
 
-    let chart = parse_chart_xml(&xml).unwrap();
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
 
     assert_eq!(chart.category_axis_major_tick_mark, AxisTickMark::None);
     assert_eq!(chart.value_axis_major_tick_mark, AxisTickMark::Inside);
@@ -854,7 +881,7 @@ fn test_crossing_major_tick_marks_are_read() {
         r#"<c:majorTickMark val="cross"/>"#,
     );
 
-    let chart = parse_chart_xml(&xml).unwrap();
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
 
     assert_eq!(chart.category_axis_major_tick_mark, AxisTickMark::Cross);
     assert_eq!(chart.value_axis_major_tick_mark, AxisTickMark::Cross);
@@ -868,7 +895,7 @@ fn test_an_axis_without_the_element_still_ticks_outward() {
     // ECMA-376 gives the attribute.
     let xml = chart_with_axes("", "");
 
-    let chart = parse_chart_xml(&xml).unwrap();
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
 
     assert_eq!(chart.category_axis_major_tick_mark, AxisTickMark::Outside);
     assert_eq!(chart.value_axis_major_tick_mark, AxisTickMark::Outside);
@@ -890,7 +917,7 @@ fn test_a_switched_off_axis_is_read_as_deleted() {
         &format!(r#"{}<c:majorTickMark val="out"/>"#, axis_delete(false)),
     );
 
-    let chart = parse_chart_xml(&xml).unwrap();
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
 
     assert!(chart.category_axis_deleted);
     assert!(!chart.value_axis_deleted);
@@ -903,7 +930,7 @@ fn test_the_value_axis_switches_off_independently_of_the_category_one() {
     // common authoring pattern, so neither flag may stand for both.
     let xml = chart_with_axes(&axis_delete(false), &axis_delete(true));
 
-    let chart = parse_chart_xml(&xml).unwrap();
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
 
     assert!(!chart.category_axis_deleted);
     assert!(chart.value_axis_deleted);
@@ -913,7 +940,7 @@ fn test_the_value_axis_switches_off_independently_of_the_category_one() {
 fn test_an_axis_without_the_element_stays_on() {
     let xml = chart_with_axes("", "");
 
-    let chart = parse_chart_xml(&xml).unwrap();
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
 
     assert!(!chart.category_axis_deleted);
     assert!(!chart.value_axis_deleted);
@@ -924,7 +951,7 @@ fn test_the_element_without_its_attribute_switches_the_axis_off() {
     // `CT_Boolean/@val` defaults to true, so the attribute is optional.
     let xml = chart_with_axes("<c:delete/>", "");
 
-    let chart = parse_chart_xml(&xml).unwrap();
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
 
     assert!(chart.category_axis_deleted);
     assert!(!chart.value_axis_deleted);
@@ -944,7 +971,10 @@ fn test_show_val_turns_the_value_on() {
         r#"<c:dLbls><c:dLblPos val="ctr"/><c:showLegendKey val="0"/><c:showVal val="1"/><c:showCatName val="0"/><c:showSerName val="0"/><c:showPercent val="0"/></c:dLbls>"#,
     );
 
-    let labels = &parse_chart_xml(&xml).unwrap().series[0].data_labels;
+    let labels = &parse_chart_xml(&xml, &SchemeColors::empty())
+        .unwrap()
+        .series[0]
+        .data_labels;
 
     assert!(labels.show_value);
     assert!(!labels.show_category && !labels.show_series && !labels.show_percent);
@@ -956,7 +986,9 @@ fn test_a_series_without_dlbls_prints_nothing() {
     let xml = bar_chart_xml(r#"<c:barDir val="col"/>"#);
 
     assert!(
-        parse_chart_xml(&xml).unwrap().series[0]
+        parse_chart_xml(&xml, &SchemeColors::empty())
+            .unwrap()
+            .series[0]
             .data_labels
             .is_empty()
     );
@@ -969,7 +1001,10 @@ fn test_all_dlbls_parts_and_the_separator_are_read() {
         r#"<c:dLbls><c:showVal val="1"/><c:showCatName val="1"/><c:showSerName val="1"/><c:showPercent val="1"/><c:separator>; </c:separator></c:dLbls>"#,
     );
 
-    let labels = &parse_chart_xml(&xml).unwrap().series[0].data_labels;
+    let labels = &parse_chart_xml(&xml, &SchemeColors::empty())
+        .unwrap()
+        .series[0]
+        .data_labels;
 
     assert!(labels.show_value && labels.show_category && labels.show_series && labels.show_percent);
     assert_eq!(labels.separator, "; ");
@@ -981,7 +1016,9 @@ fn test_a_bare_show_flag_defaults_to_on() {
     let xml = chart_with_data_labels(r#"<c:dLbls><c:showVal/></c:dLbls>"#);
 
     assert!(
-        parse_chart_xml(&xml).unwrap().series[0]
+        parse_chart_xml(&xml, &SchemeColors::empty())
+            .unwrap()
+            .series[0]
             .data_labels
             .show_value
     );
@@ -996,7 +1033,9 @@ fn test_data_labels_do_not_disturb_the_series_fill() {
         r#"<c:dLbls><c:spPr><a:solidFill><a:srgbClr val="ff0000"/></a:solidFill></c:spPr><c:showVal val="1"/></c:dLbls><c:cat>"#,
     );
 
-    let series = &parse_chart_xml(&xml).unwrap().series[0];
+    let series = &parse_chart_xml(&xml, &SchemeColors::empty())
+        .unwrap()
+        .series[0];
 
     assert_eq!(
         series.fill, None,
@@ -1014,7 +1053,10 @@ fn test_a_per_point_label_override_is_not_the_series_default() {
         r#"<c:dLbls><c:dLbl><c:idx val="0"/><c:showVal val="1"/><c:showCatName val="1"/></c:dLbl></c:dLbls>"#,
     );
 
-    let labels = &parse_chart_xml(&xml).unwrap().series[0].data_labels;
+    let labels = &parse_chart_xml(&xml, &SchemeColors::empty())
+        .unwrap()
+        .series[0]
+        .data_labels;
 
     assert!(
         labels.is_empty(),
@@ -1028,7 +1070,10 @@ fn test_group_settings_still_win_after_per_point_overrides() {
         r#"<c:dLbls><c:dLbl><c:idx val="0"/><c:showCatName val="1"/></c:dLbl><c:showVal val="1"/></c:dLbls>"#,
     );
 
-    let labels = &parse_chart_xml(&xml).unwrap().series[0].data_labels;
+    let labels = &parse_chart_xml(&xml, &SchemeColors::empty())
+        .unwrap()
+        .series[0]
+        .data_labels;
 
     assert!(labels.show_value, "the group-level showVal applies");
     assert!(
@@ -1054,7 +1099,9 @@ fn test_gap_width_and_overlap_are_read_from_the_bar_chart() {
     // repository's bar-chart fixtures carry verbatim.
     let xml = chart_with_bar_layout(r#"<c:gapWidth val="219"/><c:overlap val="-27"/>"#);
 
-    let layout = parse_chart_xml(&xml).unwrap().bar_band_layout;
+    let layout = parse_chart_xml(&xml, &SchemeColors::empty())
+        .unwrap()
+        .bar_band_layout;
 
     assert_eq!(layout.gap_width_percent, 219.0);
     assert_eq!(layout.overlap_percent, -27.0);
@@ -1066,7 +1113,9 @@ fn test_a_different_declaration_gives_a_different_layout() {
     // a gap of 100 and no overlap at all.
     let xml = chart_with_bar_layout(r#"<c:gapWidth val="100"/>"#);
 
-    let layout = parse_chart_xml(&xml).unwrap().bar_band_layout;
+    let layout = parse_chart_xml(&xml, &SchemeColors::empty())
+        .unwrap()
+        .bar_band_layout;
 
     assert_eq!(layout.gap_width_percent, 100.0);
     assert_eq!(layout.overlap_percent, 0.0);
@@ -1078,7 +1127,9 @@ fn test_a_bar_chart_without_the_elements_takes_the_office_defaults() {
     // Excel 16.0 exports it at exactly 150 / 0.
     let xml = chart_with_bar_layout("");
 
-    let layout = parse_chart_xml(&xml).unwrap().bar_band_layout;
+    let layout = parse_chart_xml(&xml, &SchemeColors::empty())
+        .unwrap()
+        .bar_band_layout;
 
     assert_eq!(layout.gap_width_percent, 150.0);
     assert_eq!(layout.overlap_percent, 0.0);
@@ -1090,7 +1141,9 @@ fn test_a_percent_suffixed_amount_is_the_same_number() {
     // percentage string, so `"90%"` and `"90"` describe the same chart.
     let xml = chart_with_bar_layout(r#"<c:gapWidth val="90%"/><c:overlap val="100%"/>"#);
 
-    let layout = parse_chart_xml(&xml).unwrap().bar_band_layout;
+    let layout = parse_chart_xml(&xml, &SchemeColors::empty())
+        .unwrap()
+        .bar_band_layout;
 
     assert_eq!(layout.gap_width_percent, 90.0);
     assert_eq!(layout.overlap_percent, 100.0);
@@ -1104,8 +1157,12 @@ fn test_values_past_the_schema_bounds_are_pulled_back() {
     let over = chart_with_bar_layout(r#"<c:gapWidth val="1000"/><c:overlap val="400"/>"#);
     let under = chart_with_bar_layout(r#"<c:gapWidth val="-40"/><c:overlap val="-500"/>"#);
 
-    let over_layout = parse_chart_xml(&over).unwrap().bar_band_layout;
-    let under_layout = parse_chart_xml(&under).unwrap().bar_band_layout;
+    let over_layout = parse_chart_xml(&over, &SchemeColors::empty())
+        .unwrap()
+        .bar_band_layout;
+    let under_layout = parse_chart_xml(&under, &SchemeColors::empty())
+        .unwrap()
+        .bar_band_layout;
 
     assert_eq!(over_layout.gap_width_percent, 500.0);
     assert_eq!(over_layout.overlap_percent, 100.0);
@@ -1118,7 +1175,9 @@ fn test_an_unreadable_amount_leaves_the_default_standing() {
     let xml = chart_with_bar_layout(r#"<c:gapWidth val="wide"/>"#);
 
     assert_eq!(
-        parse_chart_xml(&xml).unwrap().bar_band_layout,
+        parse_chart_xml(&xml, &SchemeColors::empty())
+            .unwrap()
+            .bar_band_layout,
         BarBandLayout::default()
     );
 }
@@ -1133,7 +1192,9 @@ fn test_a_trailing_line_chart_keeps_the_bar_layout() {
         r#"</c:barChart><c:lineChart><c:grouping val="standard"/><c:ser><c:idx val="1"/><c:val><c:numLit><c:pt idx="0"><c:v>7</c:v></c:pt></c:numLit></c:val></c:ser></c:lineChart>"#,
     );
 
-    let layout = parse_chart_xml(&xml).unwrap().bar_band_layout;
+    let layout = parse_chart_xml(&xml, &SchemeColors::empty())
+        .unwrap()
+        .bar_band_layout;
 
     assert_eq!(layout.gap_width_percent, 90.0);
     assert_eq!(layout.overlap_percent, 100.0);
@@ -1147,7 +1208,7 @@ fn test_declared_legend_is_recorded() {
     let xml =
         bar_chart_with_legend(r#"<c:legend><c:legendPos val="b"/><c:overlay val="0"/></c:legend>"#);
 
-    let chart = parse_chart_xml(&xml).unwrap();
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
 
     assert!(chart.has_legend);
     // The position still arrives: reading the legend body must not swallow it.
@@ -1158,7 +1219,7 @@ fn test_declared_legend_is_recorded() {
 /// way, which is why the presence flag exists.
 #[test]
 fn test_absent_legend_is_not_recorded() {
-    let chart = parse_chart_xml(&bar_chart_with_legend("")).unwrap();
+    let chart = parse_chart_xml(&bar_chart_with_legend(""), &SchemeColors::empty()).unwrap();
 
     assert!(!chart.has_legend);
     assert_eq!(chart.legend_position, LegendPosition::Right);
@@ -1171,7 +1232,7 @@ fn test_deleted_legend_is_not_recorded() {
     let xml =
         bar_chart_with_legend(r#"<c:legend><c:legendPos val="b"/><c:delete val="1"/></c:legend>"#);
 
-    let chart = parse_chart_xml(&xml).unwrap();
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
 
     assert!(!chart.has_legend);
     // Its settings survive, so switching it back on would not lose the edge.
@@ -1184,7 +1245,7 @@ fn test_undeleted_legend_is_recorded() {
     let xml =
         bar_chart_with_legend(r#"<c:legend><c:legendPos val="t"/><c:delete val="0"/></c:legend>"#);
 
-    let chart = parse_chart_xml(&xml).unwrap();
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
 
     assert!(chart.has_legend);
     assert_eq!(chart.legend_position, LegendPosition::Top);
@@ -1221,15 +1282,17 @@ fn a_chart_with_no_chart_space_line_takes_the_default_outline() {
     // The plot area in the fixture above declares a fat red `a:ln` of its own.
     // The event loop is flat, so reading the first `c:spPr` it meets would pick
     // that one up and report the chart area as red (#637).
-    let chart = parse_chart_xml(&chart_space_with("")).expect("chart parses");
+    let chart =
+        parse_chart_xml(&chart_space_with(""), &SchemeColors::empty()).expect("chart parses");
     assert_eq!(chart.chart_area_outline, ChartAreaOutline::Default);
 }
 
 #[test]
 fn a_chart_space_no_fill_suppresses_the_outline() {
-    let chart = parse_chart_xml(&chart_space_with(
-        "<c:spPr><a:ln><a:noFill/></a:ln></c:spPr>",
-    ))
+    let chart = parse_chart_xml(
+        &chart_space_with("<c:spPr><a:ln><a:noFill/></a:ln></c:spPr>"),
+        &SchemeColors::empty(),
+    )
     .expect("chart parses");
     assert_eq!(chart.chart_area_outline, ChartAreaOutline::Suppressed);
 }
@@ -1240,7 +1303,7 @@ fn a_chart_space_line_keeps_its_width_and_colour() {
     // #d9d9d9 its colour.
     let chart = parse_chart_xml(&chart_space_with(
         r#"<c:spPr><a:ln w="9360"><a:solidFill><a:srgbClr val="d9d9d9"/></a:solidFill></a:ln></c:spPr>"#,
-    ))
+    ), &SchemeColors::empty())
     .expect("chart parses");
     match chart.chart_area_outline {
         ChartAreaOutline::Explicit { width_pt, color } => {
@@ -1256,17 +1319,49 @@ fn a_chart_space_line_keeps_its_width_and_colour() {
     }
 }
 
+/// The chart-area outline resolves a theme colour on the same chain a series'
+/// fill does — it is the same `<a:solidFill>` markup in the same part (#876).
+#[test]
+fn a_chart_space_line_resolves_a_theme_colour() {
+    let colors: std::collections::HashMap<String, Color> =
+        [("bg1".to_string(), Color::new(0xFF, 0xFF, 0xFF))]
+            .into_iter()
+            .collect();
+    let aliases: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let scheme = SchemeColors {
+        colors: &colors,
+        aliases: &aliases,
+    };
+
+    let chart = parse_chart_xml(
+        &chart_space_with(
+            r#"<c:spPr><a:ln w="9360"><a:solidFill><a:schemeClr val="bg1"/></a:solidFill></a:ln></c:spPr>"#,
+        ),
+        &scheme,
+    )
+    .expect("chart parses");
+    match chart.chart_area_outline {
+        ChartAreaOutline::Explicit { color, .. } => {
+            assert_eq!(color, Some(Color::new(0xFF, 0xFF, 0xFF)));
+        }
+        other => panic!("expected an explicit outline, got {other:?}"),
+    }
+}
+
 // ----- Chart text's declared face (issue #668) -----
 
 #[test]
 fn a_chart_space_tx_pr_latin_typeface_reaches_the_model() {
     // `office2pdf_introduction_ko.pptx`'s chart1.xml names the face outright
     // rather than deferring to the theme.
-    let chart = parse_chart_xml(&chart_space_with(
-        r#"<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr>
+    let chart = parse_chart_xml(
+        &chart_space_with(
+            r#"<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr>
              <a:defRPr><a:latin typeface="Calibri"/></a:defRPr>
            </a:pPr><a:endParaRPr lang="en-US"/></a:p></c:txPr>"#,
-    ))
+        ),
+        &SchemeColors::empty(),
+    )
     .expect("chart parses");
     assert_eq!(chart.text_font_family.as_deref(), Some("Calibri"));
 }
@@ -1277,7 +1372,7 @@ fn a_chart_space_tx_pr_keeps_the_unresolved_theme_token() {
     // `+mn-lt` into a face. Whoever loaded the part resolves it.
     let chart = parse_chart_xml(&chart_space_with(
         r#"<c:txPr><a:p><a:pPr><a:defRPr><a:latin typeface="+mn-lt"/></a:defRPr></a:pPr></a:p></c:txPr>"#,
-    ))
+    ), &SchemeColors::empty())
     .expect("chart parses");
     assert_eq!(chart.text_font_family.as_deref(), Some("+mn-lt"));
 }
@@ -1286,7 +1381,8 @@ fn a_chart_space_tx_pr_keeps_the_unresolved_theme_token() {
 fn a_chart_with_no_tx_pr_names_no_face() {
     // `bar-chart.pptx` is this shape: the face has to come from the theme's
     // minor font, which only the loader knows.
-    let chart = parse_chart_xml(&chart_space_with("")).expect("chart parses");
+    let chart =
+        parse_chart_xml(&chart_space_with(""), &SchemeColors::empty()).expect("chart parses");
     assert_eq!(chart.text_font_family, None);
 }
 
@@ -1310,7 +1406,7 @@ fn a_plot_area_tx_pr_is_not_read_as_the_chart_space_one() {
             </c:chart>
             <c:txPr><a:p><a:pPr><a:defRPr><a:latin typeface="Calibri"/></a:defRPr></a:pPr></a:p></c:txPr>
         </c:chartSpace>"#;
-    let chart = parse_chart_xml(xml).expect("chart parses");
+    let chart = parse_chart_xml(xml, &SchemeColors::empty()).expect("chart parses");
     assert_eq!(chart.text_font_family.as_deref(), Some("Calibri"));
 }
 
@@ -1319,10 +1415,13 @@ fn a_plot_area_tx_pr_is_not_read_as_the_chart_space_one() {
 #[test]
 fn a_chart_space_tx_pr_size_reaches_the_model() {
     // `bar-chart.pptx` sets all chart text to 18pt this way.
-    let chart = parse_chart_xml(&chart_space_with(
-        r#"<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1800"/></a:pPr>
+    let chart = parse_chart_xml(
+        &chart_space_with(
+            r#"<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1800"/></a:pPr>
            <a:endParaRPr lang="en-US"/></a:p></c:txPr>"#,
-    ))
+        ),
+        &SchemeColors::empty(),
+    )
     .expect("chart parses");
     assert_eq!(chart.text_style.size_pt, Some(18.0));
     assert_eq!(chart.text_style.bold, None);
@@ -1330,9 +1429,12 @@ fn a_chart_space_tx_pr_size_reaches_the_model() {
 
 #[test]
 fn a_chart_space_tx_pr_bold_reaches_the_model() {
-    let chart = parse_chart_xml(&chart_space_with(
-        r#"<c:txPr><a:p><a:pPr><a:defRPr sz="1200" b="1"/></a:pPr></a:p></c:txPr>"#,
-    ))
+    let chart = parse_chart_xml(
+        &chart_space_with(
+            r#"<c:txPr><a:p><a:pPr><a:defRPr sz="1200" b="1"/></a:pPr></a:p></c:txPr>"#,
+        ),
+        &SchemeColors::empty(),
+    )
     .expect("chart parses");
     assert_eq!(chart.text_style.size_pt, Some(12.0));
     assert_eq!(chart.text_style.bold, Some(true));
@@ -1340,7 +1442,8 @@ fn a_chart_space_tx_pr_bold_reaches_the_model() {
 
 #[test]
 fn a_chart_with_no_tx_pr_declares_no_run_properties() {
-    let chart = parse_chart_xml(&chart_space_with("")).expect("chart parses");
+    let chart =
+        parse_chart_xml(&chart_space_with(""), &SchemeColors::empty()).expect("chart parses");
     assert_eq!(chart.text_style, crate::ir::ChartTextStyle::default());
 }
 
@@ -1366,7 +1469,7 @@ fn an_axis_tx_pr_overrides_the_chart_space_one() {
             </c:chart>
             <c:txPr><a:p><a:pPr><a:defRPr sz="1800"/></a:pPr></a:p></c:txPr>
         </c:chartSpace>"#;
-    let chart = parse_chart_xml(xml).expect("chart parses");
+    let chart = parse_chart_xml(xml, &SchemeColors::empty()).expect("chart parses");
     assert_eq!(chart.text_style.size_pt, Some(18.0));
     assert_eq!(chart.category_axis_text_style.size_pt, Some(11.0));
     assert_eq!(chart.category_axis_text_style.bold, Some(true));
@@ -1376,9 +1479,10 @@ fn an_axis_tx_pr_overrides_the_chart_space_one() {
 
 #[test]
 fn an_axis_declaring_no_tx_pr_inherits_the_chart_space_one() {
-    let chart = parse_chart_xml(&chart_space_with(
-        r#"<c:txPr><a:p><a:pPr><a:defRPr sz="1800"/></a:pPr></a:p></c:txPr>"#,
-    ))
+    let chart = parse_chart_xml(
+        &chart_space_with(r#"<c:txPr><a:p><a:pPr><a:defRPr sz="1800"/></a:pPr></a:p></c:txPr>"#),
+        &SchemeColors::empty(),
+    )
     .expect("chart parses");
     assert_eq!(
         chart.category_axis_text_style,
@@ -1424,7 +1528,8 @@ fn percent_chart_xml(format_code: &str) -> String {
 
 #[test]
 fn test_series_carries_its_number_format() {
-    let chart = parse_chart_xml(&percent_chart_xml("0.0%")).expect("chart parses");
+    let chart =
+        parse_chart_xml(&percent_chart_xml("0.0%"), &SchemeColors::empty()).expect("chart parses");
     assert_eq!(chart.series[0].number_format.as_deref(), Some("0.0%"));
     assert_eq!(chart.series[0].values, vec![0.024, 0.689]);
 }
@@ -1433,7 +1538,8 @@ fn test_series_carries_its_number_format() {
 /// percentage.
 #[test]
 fn test_a_declared_currency_format_is_read_as_written() {
-    let chart = parse_chart_xml(&percent_chart_xml("#,##0.00")).expect("chart parses");
+    let chart = parse_chart_xml(&percent_chart_xml("#,##0.00"), &SchemeColors::empty())
+        .expect("chart parses");
     assert_eq!(chart.series[0].number_format.as_deref(), Some("#,##0.00"));
 }
 
@@ -1442,7 +1548,7 @@ fn test_a_declared_currency_format_is_read_as_written() {
 #[test]
 fn test_a_series_without_a_format_code_states_none() {
     let xml = percent_chart_xml("0%").replace("<c:formatCode>0%</c:formatCode>", "");
-    let chart = parse_chart_xml(&xml).expect("chart parses");
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).expect("chart parses");
     assert_eq!(chart.series[0].number_format, None);
 }
 
@@ -1450,7 +1556,8 @@ fn test_a_series_without_a_format_code_states_none() {
 /// number the plain path already prints.
 #[test]
 fn test_a_general_format_code_states_none() {
-    let chart = parse_chart_xml(&percent_chart_xml("General")).expect("chart parses");
+    let chart = parse_chart_xml(&percent_chart_xml("General"), &SchemeColors::empty())
+        .expect("chart parses");
     assert_eq!(chart.series[0].number_format, None);
 }
 
@@ -1482,13 +1589,15 @@ const AXIS_AND_LABEL_FORMAT_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?
 
 #[test]
 fn test_value_axis_number_format_is_read() {
-    let chart = parse_chart_xml(AXIS_AND_LABEL_FORMAT_XML).expect("chart parses");
+    let chart =
+        parse_chart_xml(AXIS_AND_LABEL_FORMAT_XML, &SchemeColors::empty()).expect("chart parses");
     assert_eq!(chart.value_axis_number_format.as_deref(), Some("0%"));
 }
 
 #[test]
 fn test_data_label_number_format_is_read() {
-    let chart = parse_chart_xml(AXIS_AND_LABEL_FORMAT_XML).expect("chart parses");
+    let chart =
+        parse_chart_xml(AXIS_AND_LABEL_FORMAT_XML, &SchemeColors::empty()).expect("chart parses");
     assert_eq!(
         chart.series[0].data_labels.number_format.as_deref(),
         Some("0.0%")
@@ -1501,7 +1610,7 @@ fn test_data_label_number_format_is_read() {
 fn test_a_general_axis_format_states_none() {
     let xml =
         AXIS_AND_LABEL_FORMAT_XML.replace(r#"<c:numFmt formatCode="0%" sourceLinked="0"/>"#, "");
-    let chart = parse_chart_xml(&xml).expect("chart parses");
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).expect("chart parses");
     assert_eq!(chart.value_axis_number_format, None);
 }
 
@@ -1509,7 +1618,8 @@ fn test_a_general_axis_format_states_none() {
 /// answer where no axis or label format is stated.
 #[test]
 fn test_the_cache_format_is_kept_beside_the_declared_ones() {
-    let chart = parse_chart_xml(AXIS_AND_LABEL_FORMAT_XML).expect("chart parses");
+    let chart =
+        parse_chart_xml(AXIS_AND_LABEL_FORMAT_XML, &SchemeColors::empty()).expect("chart parses");
     assert_eq!(chart.series[0].number_format.as_deref(), Some("0.00%"));
 }
 
@@ -1535,8 +1645,11 @@ fn single_series_chart_xml(extra: &str) -> String {
 
 #[test]
 fn test_auto_title_deleted_is_read() {
-    let chart = parse_chart_xml(&single_series_chart_xml(r#"<c:autoTitleDeleted val="1"/>"#))
-        .expect("chart parses");
+    let chart = parse_chart_xml(
+        &single_series_chart_xml(r#"<c:autoTitleDeleted val="1"/>"#),
+        &SchemeColors::empty(),
+    )
+    .expect("chart parses");
     assert!(chart.auto_title_deleted);
 }
 
@@ -1544,14 +1657,110 @@ fn test_auto_title_deleted_is_read() {
 /// rather than assumed.
 #[test]
 fn test_a_chart_without_the_flag_keeps_its_automatic_title() {
-    let chart = parse_chart_xml(&single_series_chart_xml("")).expect("chart parses");
+    let chart = parse_chart_xml(&single_series_chart_xml(""), &SchemeColors::empty())
+        .expect("chart parses");
     assert!(!chart.auto_title_deleted);
 }
 
 /// `val="0"` is the explicit "keep it", which must not read as deleted.
 #[test]
 fn test_auto_title_deleted_zero_keeps_the_title() {
-    let chart = parse_chart_xml(&single_series_chart_xml(r#"<c:autoTitleDeleted val="0"/>"#))
-        .expect("chart parses");
+    let chart = parse_chart_xml(
+        &single_series_chart_xml(r#"<c:autoTitleDeleted val="0"/>"#),
+        &SchemeColors::empty(),
+    )
+    .expect("chart parses");
     assert!(!chart.auto_title_deleted);
+}
+
+/// A series that names its fill through a theme colour resolves it against the
+/// host document's theme — the chart part declares none of its own (#876).
+///
+/// `002.CONTOSO.pptx` (issue #841) writes
+/// `<c:spPr><a:solidFill><a:schemeClr val="accent5"/></a:solidFill>` on its
+/// first series, where the deck's `accent5` is the lime `C6FC15`; the bars
+/// rendered palette-blue.
+#[test]
+fn a_series_scheme_color_fill_resolves_against_the_host_theme() {
+    let xml = bar_chart_xml(r#"<c:barDir val="col"/><c:grouping val="clustered"/>"#).replace(
+        "<c:tx>",
+        r#"<c:spPr><a:solidFill><a:schemeClr val="accent5"/></a:solidFill><a:ln><a:noFill/></a:ln></c:spPr><c:tx>"#,
+    );
+    let colors: std::collections::HashMap<String, Color> =
+        [("accent5".to_string(), Color::new(0xC6, 0xFC, 0x15))]
+            .into_iter()
+            .collect();
+    let aliases: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let scheme = SchemeColors {
+        colors: &colors,
+        aliases: &aliases,
+    };
+
+    let chart = parse_chart_xml(&xml, &scheme).unwrap();
+
+    assert_eq!(chart.series[0].fill, Some(Color::new(0xC6, 0xFC, 0x15)));
+}
+
+/// Triangulation: a different scheme name takes that theme entry, and a name
+/// the theme does not carry stays unresolved so the palette still applies.
+#[test]
+fn a_series_scheme_color_follows_the_named_theme_entry() {
+    let colors: std::collections::HashMap<String, Color> = [
+        ("accent1".to_string(), Color::new(0x11, 0x22, 0x33)),
+        ("accent5".to_string(), Color::new(0xC6, 0xFC, 0x15)),
+    ]
+    .into_iter()
+    .collect();
+    let aliases: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let scheme = SchemeColors {
+        colors: &colors,
+        aliases: &aliases,
+    };
+
+    for (name, expected) in [
+        ("accent1", Some(Color::new(0x11, 0x22, 0x33))),
+        ("accent5", Some(Color::new(0xC6, 0xFC, 0x15))),
+        ("accent3", None),
+    ] {
+        let xml = bar_chart_xml(r#"<c:barDir val="col"/><c:grouping val="clustered"/>"#).replace(
+            "<c:tx>",
+            &format!(
+                r#"<c:spPr><a:solidFill><a:schemeClr val="{name}"/></a:solidFill></c:spPr><c:tx>"#
+            ),
+        );
+        let chart = parse_chart_xml(&xml, &scheme).unwrap();
+        assert_eq!(chart.series[0].fill, expected, "scheme colour {name}");
+    }
+}
+
+/// A theme colour carrying a transform keeps it — `<a:schemeClr>` children are
+/// the same markup everywhere else in the package.
+#[test]
+fn a_series_scheme_color_applies_its_luminance_transform() {
+    let xml = bar_chart_xml(r#"<c:barDir val="col"/><c:grouping val="clustered"/>"#).replace(
+        "<c:tx>",
+        r#"<c:spPr><a:solidFill><a:schemeClr val="accent1"><a:lumMod val="50000"/></a:schemeClr></a:solidFill></c:spPr><c:tx>"#,
+    );
+    let colors: std::collections::HashMap<String, Color> =
+        [("accent1".to_string(), Color::new(0x40, 0x80, 0xC0))]
+            .into_iter()
+            .collect();
+    let aliases: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let scheme = SchemeColors {
+        colors: &colors,
+        aliases: &aliases,
+    };
+
+    let fill = parse_chart_xml(&xml, &scheme).unwrap().series[0]
+        .fill
+        .expect("the series states a fill");
+    assert_ne!(
+        fill,
+        Color::new(0x40, 0x80, 0xC0),
+        "lumMod 50% must darken the theme colour, not pass it through"
+    );
+    assert!(
+        fill.r < 0x40 && fill.g < 0x80 && fill.b < 0xC0,
+        "expected a darker colour, got {fill:?}"
+    );
 }

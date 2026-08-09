@@ -44,14 +44,19 @@ pub(in super::super) fn build_chart_context_from_xml(
     // takes the theme's minor font rather than the engine's default (issue
     // #668).
     let theme_xml: Option<String> = read_zip_text(archive, "word/theme/theme1.xml");
-    let theme_accents: Vec<crate::ir::Color> = theme_xml
+    // The same scheme resolves a series' own `<a:schemeClr>` fill: the chart
+    // part declares no theme, so it borrows the document's (issue #876).
+    let theme_colors: std::collections::HashMap<String, crate::ir::Color> = theme_xml
         .as_deref()
-        .map(|theme_xml| {
-            crate::parser::drawingml::theme_accent_palette(
-                &crate::parser::drawingml::parse_theme_color_scheme(theme_xml),
-            )
-        })
+        .map(crate::parser::drawingml::parse_theme_color_scheme)
         .unwrap_or_default();
+    let no_aliases: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let scheme = crate::parser::drawingml::SchemeColors {
+        colors: &theme_colors,
+        aliases: &no_aliases,
+    };
+    let theme_accents: Vec<crate::ir::Color> =
+        crate::parser::drawingml::theme_accent_palette(&theme_colors);
     let theme_fonts: crate::parser::drawingml::ThemeFontScheme = theme_xml
         .as_deref()
         .map(crate::parser::drawingml::parse_theme_font_scheme)
@@ -60,7 +65,7 @@ pub(in super::super) fn build_chart_context_from_xml(
     for (body_index, relationship_id) in chart_references {
         if let Some(chart_path) = chart_relationships.get(&relationship_id)
             && let Some(chart_xml) = read_zip_text(archive, chart_path)
-            && let Some(mut chart) = chart::parse_chart_xml(&chart_xml)
+            && let Some(mut chart) = chart::parse_chart_xml(&chart_xml, &scheme)
         {
             chart.theme_accent_colors = theme_accents.clone();
             chart.host = crate::ir::ChartHost::WordProcessing;

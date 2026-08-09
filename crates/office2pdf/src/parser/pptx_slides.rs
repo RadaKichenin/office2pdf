@@ -447,6 +447,7 @@ fn collect_chart_elements<R: Read + std::io::Seek>(
     slide_path: &str,
     archive: &mut ZipArchive<R>,
     theme: &ThemeData,
+    color_map: &ColorMapData,
 ) -> Vec<FixedElement> {
     let chart_refs = scan_chart_refs(slide_xml);
     if chart_refs.is_empty() {
@@ -464,7 +465,14 @@ fn collect_chart_elements<R: Read + std::io::Seek>(
             major_latin: theme.major_font.clone(),
             minor_latin: theme.minor_font.clone(),
         };
-    let chart_data = load_chart_data(slide_path, archive);
+    // A series' own `<a:schemeClr>` fill resolves against the deck's theme —
+    // the chart part declares none of its own (issue #876). The slide's colour
+    // map comes with it, since `bg1`/`tx1` are aliases the map settles.
+    let chart_scheme = crate::parser::drawingml::SchemeColors {
+        colors: &theme.colors,
+        aliases: &color_map.aliases,
+    };
+    let chart_data = load_chart_data(slide_path, archive, &chart_scheme);
     chart_refs
         .iter()
         .filter_map(|c_ref| {
@@ -733,6 +741,7 @@ pub(super) fn parse_single_slide<R: Read + std::io::Seek>(
         slide_path,
         archive,
         theme,
+        &chain.slide_color_map,
     ));
 
     let background: ResolvedBackground = resolve_slide_background(&chain, slide_path, theme);
