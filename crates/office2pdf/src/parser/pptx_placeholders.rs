@@ -7,6 +7,10 @@
 //! `<p:txStyles>` bucket, the master placeholder's `<a:lstStyle>`, and the
 //! layout placeholder's `<a:lstStyle>` beneath slide-local properties.
 //!
+//! `<a:bodyPr>` inherits attribute by attribute on the same chain: an anchor
+//! or text inset the slide omits comes from the layout placeholder, then the
+//! master's, rather than resetting to the built-in default.
+//!
 //! Shape fill follows the same chain: a slide placeholder that declares no
 //! fill of its own takes the `<a:solidFill>` on the layout placeholder's
 //! `<p:spPr>`, then the master's. An explicit `<a:noFill/>` is an answer and
@@ -17,7 +21,7 @@ use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
 
 use super::PptxTextBodyStyleDefaults;
-use super::text::parse_pptx_list_style;
+use super::text::{PptxBodyProps, parse_pptx_body_props, parse_pptx_list_style};
 use super::theme::{
     ColorMapData, PptxMasterTextStyles, ThemeData, parse_color_from_empty, parse_color_from_start,
 };
@@ -41,6 +45,11 @@ struct LayerPlaceholder {
     geometry: Option<PlaceholderGeometry>,
     /// Parsed `<a:lstStyle>` from the placeholder's own `<p:txBody>`.
     text_defaults: Option<PptxTextBodyStyleDefaults>,
+    /// Attributes stated on the placeholder's `<a:bodyPr>`. This is where a
+    /// template puts the vertical anchor and the text insets a slide
+    /// placeholder's bare `<a:bodyPr/>` expects to inherit (issues #873,
+    /// #877, #878).
+    body_props: PptxBodyProps,
     /// `<a:solidFill>` declared directly on the placeholder's `<p:spPr>`.
     /// A slide placeholder that names no fill of its own paints this one — it
     /// is where a template puts the colour band behind a title (issue #856).
@@ -112,6 +121,25 @@ impl PlaceholderGeometryMap {
             defaults.merge_from(overlay);
         }
         defaults
+    }
+
+    /// Resolve the `<a:bodyPr>` attributes a slide placeholder inherits:
+    /// the master placeholder's, overlaid by the layout placeholder's. The
+    /// slide's own `<a:bodyPr>` is applied on top of the result by the caller.
+    pub(super) fn body_props(&self, ph_type: Option<&str>, ph_idx: Option<&str>) -> PptxBodyProps {
+        let layout_entry: Option<&LayerPlaceholder> = find_in_layer(&self.layout, ph_type, ph_idx);
+        // A layout placeholder that omits `<a:xfrm>` chains into the master
+        // under its own type, so follow the same type for `<a:bodyPr>`.
+        let master_type: Option<&str> = layout_entry
+            .and_then(|entry| entry.ph_type.as_deref())
+            .or(ph_type);
+        let mut props: PptxBodyProps = find_in_master(&self.master, master_type)
+            .map(|entry| entry.body_props)
+            .unwrap_or_default();
+        if let Some(entry) = layout_entry {
+            props.overlay(&entry.body_props);
+        }
+        props
     }
 
     /// Resolve the effective geometry for a slide placeholder:
@@ -250,6 +278,8 @@ fn scan_layer_placeholders(
         fill: Option<PlaceholderFill>,
         explicit_no_fill: bool,
         text_defaults: Option<PptxTextBodyStyleDefaults>,
+        body_props: PptxBodyProps,
+        has_body_props: bool,
     }
 
     fn handle_simple_start(current: &mut Option<Current>, e: &BytesStart) {
@@ -267,6 +297,16 @@ fn scan_layer_placeholders(
             b"spPr" => {
                 if let Some(state) = current.as_mut() {
                     state.in_sp_pr = true;
+                }
+            }
+            // Only the shape's own `<p:txBody>` states body properties; take
+            // the first one so nothing nested can overwrite it.
+            b"bodyPr" => {
+                if let Some(state) = current.as_mut()
+                    && !state.has_body_props
+                {
+                    state.body_props = parse_pptx_body_props(e);
+                    state.has_body_props = true;
                 }
             }
             b"xfrm" => {
@@ -387,6 +427,7 @@ fn scan_layer_placeholders(
                             ph_idx: state.ph_idx,
                             geometry,
                             text_defaults: state.text_defaults,
+                            body_props: state.body_props,
                             fill: state.fill,
                             explicit_no_fill: state.explicit_no_fill,
                         });
