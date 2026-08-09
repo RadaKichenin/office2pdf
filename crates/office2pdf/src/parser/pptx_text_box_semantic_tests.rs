@@ -304,10 +304,11 @@ fn test_text_box_body_pr_defaults_and_center_anchor_extracted() {
         text_box.vertical_align,
         crate::ir::TextBoxVerticalAlign::Center
     );
-    assert!(
-        text_box.auto_fit,
-        "spAutoFit text boxes should preserve the autofit hint in the IR"
-    );
+    // `auto_fit` drives text scaling, and `<a:spAutoFit/>` does not ask for
+    // any: it resizes the shape to the text and leaves the run's declared
+    // size alone (ECMA-376 §21.1.2.1.2). This assertion used to require the
+    // opposite, which is what shrank an 8pt label to 4.9pt in issue #898.
+    assert!(!text_box.auto_fit);
     assert!(!text_box.no_wrap);
 }
 
