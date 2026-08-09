@@ -2764,10 +2764,12 @@ fn single_line_fit_paragraph(text_box: &TextBoxData, inner_height_pt: f64) -> Op
         return None;
     }
 
-    let needs_single_line_fit: bool =
-        text_box.auto_fit || inner_height_pt <= estimated_line_height_pt * 1.2;
-
-    needs_single_line_fit.then_some(paragraph)
+    // Only a file that asked for it gets its text scaled. A box barely one
+    // line tall used to qualify on its own, which overrode the declared size:
+    // an 8pt label in a 9.6pt box came out at 4.9pt where the reference keeps
+    // 8pt and lets the text overflow (issue #898). `auto_fit` is
+    // `<a:normAutofit/>` alone, since #904.
+    text_box.auto_fit.then_some(paragraph)
 }
 
 fn wrapped_fit_paragraph(text_box: &TextBoxData) -> Option<&Paragraph> {
