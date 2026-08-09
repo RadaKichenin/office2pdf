@@ -674,6 +674,42 @@ pub(super) fn chart_axis_text_weight(
     }
 }
 
+/// The declared text colour for an axis' labels, as a Typst `text` argument.
+///
+/// Empty where the chart declares nothing, so a chart that says nothing keeps
+/// the colour it has always been drawn in rather than being forced to a
+/// default this crate invented (issue #916).
+pub(super) fn chart_axis_text_fill(chart: &Chart, axis: crate::ir::ChartTextStyle) -> String {
+    match chart.text_style.resolved_color(axis) {
+        Some(color) => format!(", fill: {}", fmt::rgb(&color)),
+        None => String::new(),
+    }
+}
+
+/// Colour a data label is set in.
+///
+/// Unlike an axis label this has always had a colour — a hardcoded white,
+/// chosen because a bar-end label sits on the bar. A chart that declares one
+/// overrides it; a chart that declares nothing keeps the white it had, so no
+/// existing output moves (issue #916).
+pub(super) fn chart_data_label_fill(chart: &Chart) -> String {
+    match chart.text_style.color {
+        Some(color) => fmt::rgb(&color),
+        None => "white".to_string(),
+    }
+}
+
+/// Every `text` argument an axis label carries beyond its size: weight, then
+/// colour. One slot so a label's format string does not grow a hole per
+/// property (issue #916).
+pub(super) fn chart_axis_text_attrs(chart: &Chart, axis: crate::ir::ChartTextStyle) -> String {
+    format!(
+        "{}{}",
+        chart_axis_text_weight(chart, axis),
+        chart_axis_text_fill(chart, axis)
+    )
+}
+
 /// Height of the box that vertically centres one value tick label on its
 /// gridline, as a multiple of the text size.
 ///
@@ -1463,10 +1499,11 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
             if value_axis_drawn {
                 let _ = writeln!(
                     out,
-                    "#place(top + left, dx: {}pt, dy: {}pt, box(width: 24pt)[#align(center)[#text(size: {}pt)[{}]]])",
+                    "#place(top + left, dx: {}pt, dy: {}pt, box(width: 24pt)[#align(center)[#text(size: {}pt{})[{}]]])",
                     format_f64(x - 12.0),
                     format_f64(plot_y + plot_h + 4.0),
                     format_f64(chart_axis_text_pt(chart, chart.value_axis_text_style)),
+                    chart_axis_text_attrs(chart, chart.value_axis_text_style),
                     escape_typst(&chart_value_label_formatted(
                         *tick,
                         chart_value_number_format(chart)
@@ -1488,7 +1525,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
             if value_axis_drawn {
                 let _ = writeln!(
                     out,
-                    "#place(top + left, dx: 0pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(right + horizon)[#text(size: {}pt)[{}]]])",
+                    "#place(top + left, dx: 0pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(right + horizon)[#text(size: {}pt{})[{}]]])",
                     format_f64(
                         y - chart_label_box_h(chart_axis_text_pt(
                             chart,
@@ -1501,6 +1538,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                         chart.value_axis_text_style
                     ))),
                     format_f64(chart_axis_text_pt(chart, chart.value_axis_text_style)),
+                    chart_axis_text_attrs(chart, chart.value_axis_text_style),
                     escape_typst(&chart_value_label_formatted(
                         *tick,
                         chart_value_number_format(chart)
@@ -1597,11 +1635,12 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 };
                 let _ = writeln!(
                     out,
-                    "#place(top + left, dx: {}pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(center + horizon)[#text(size: 8pt, weight: \"bold\", fill: white)[{}]]])",
+                    "#place(top + left, dx: {}pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(center + horizon)[#text(size: 8pt, weight: \"bold\", fill: {})[{}]]])",
                     format_f64(label_x),
                     format_f64(label_y),
                     format_f64(label_w.max(0.0)),
                     format_f64(LABEL_LINE_H),
+                    chart_data_label_fill(chart),
                     escape_typst(&label)
                 );
             }
@@ -1622,7 +1661,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 format_f64(chart_category_gutter_pt(chart)),
                 format_f64(row),
                 format_f64(chart_axis_text_pt(chart, chart.category_axis_text_style)),
-                chart_axis_text_weight(chart, chart.category_axis_text_style),
+                chart_axis_text_attrs(chart, chart.category_axis_text_style),
                 escape_typst(category)
             );
         } else if category_labels_rotated {
@@ -1642,7 +1681,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 format_f64(CATEGORY_LABEL_ROTATION_DEG),
                 format_f64(label_box_w),
                 format_f64(chart_axis_text_pt(chart, chart.category_axis_text_style)),
-                chart_axis_text_weight(chart, chart.category_axis_text_style),
+                chart_axis_text_attrs(chart, chart.category_axis_text_style),
                 escape_typst(category)
             );
         } else {
@@ -1654,7 +1693,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 format_f64(row),
                 format_f64(chart_category_band_pt(chart)),
                 format_f64(chart_axis_text_pt(chart, chart.category_axis_text_style)),
-                chart_axis_text_weight(chart, chart.category_axis_text_style),
+                chart_axis_text_attrs(chart, chart.category_axis_text_style),
                 escape_typst(category)
             );
         }
@@ -1965,7 +2004,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
         if value_axis_drawn {
             let _ = writeln!(
                 out,
-                "#place(top + left, dx: 0pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(right + horizon)[#text(size: {}pt)[{}]]])",
+                "#place(top + left, dx: 0pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(right + horizon)[#text(size: {}pt{})[{}]]])",
                 format_f64(
                     y - chart_label_box_h(chart_axis_text_pt(chart, chart.value_axis_text_style))
                         / 2.0
@@ -1976,6 +2015,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
                     chart.value_axis_text_style
                 ))),
                 format_f64(chart_axis_text_pt(chart, chart.value_axis_text_style)),
+                chart_axis_text_attrs(chart, chart.value_axis_text_style),
                 escape_typst(&chart_value_label_formatted(
                     *tick,
                     chart_value_number_format(chart)
@@ -2013,7 +2053,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
                 format_f64(x - 12.0),
                 format_f64(plot_y + plot_h + 3.0),
                 format_f64(chart_axis_text_pt(chart, chart.category_axis_text_style)),
-                chart_axis_text_weight(chart, chart.category_axis_text_style),
+                chart_axis_text_attrs(chart, chart.category_axis_text_style),
                 escape_typst(category)
             );
         }
@@ -2311,12 +2351,13 @@ fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64
             let (_, y) = point(0, unit);
             let _ = writeln!(
                 out,
-                "#place(top + left, dx: {}pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(right + horizon)[#text(size: {}pt)[{}]]])",
+                "#place(top + left, dx: {}pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(right + horizon)[#text(size: {}pt{})[{}]]])",
                 format_f64(centre_x - RADAR_VALUE_GAP - GAP),
                 format_f64(y - chart_label_box_h(label_pt) / 2.0),
                 format_f64(RADAR_VALUE_GAP),
                 format_f64(chart_label_box_h(label_pt)),
                 format_f64(label_pt),
+                chart_axis_text_attrs(chart, chart.value_axis_text_style),
                 chart_value_label(unit)
             );
         }
@@ -2346,7 +2387,7 @@ fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64
     // The category labels, each just outside its spoke's end.
     if !chart.category_axis_deleted {
         let category_pt: f64 = chart_axis_text_pt(chart, chart.category_axis_text_style);
-        let weight: &str = chart_axis_text_weight(chart, chart.category_axis_text_style);
+        let weight: String = chart_axis_text_attrs(chart, chart.category_axis_text_style);
         for (index, category) in chart.categories.iter().enumerate() {
             let a: f64 = angle(index);
             let label_x: f64 = centre_x + (radius + GAP) * a.cos();
@@ -2516,10 +2557,11 @@ fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, 
             let label_w: f64 = radius;
             let _ = writeln!(
                 out,
-                "#place(top + left, dx: {}pt, dy: {}pt, box(width: {}pt)[#align(center)[#text(size: 8pt, weight: \"bold\", fill: white)[{}]]])",
+                "#place(top + left, dx: {}pt, dy: {}pt, box(width: {}pt)[#align(center)[#text(size: 8pt, weight: \"bold\", fill: {})[{}]]])",
                 format_f64(centre_x + label_radius * bisector.cos() - label_w / 2.0),
                 format_f64(centre_y + label_radius * bisector.sin() - LABEL_LINE_H / 2.0),
                 format_f64(label_w),
+                chart_data_label_fill(chart),
                 escape_typst(&label)
             );
         }

@@ -167,7 +167,7 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
                 if tag == b"spPr" && chart_element_ended {
                     chart_area_outline = parse_chart_area_outline(&mut reader, scheme);
                 } else if tag == b"txPr" && chart_element_ended {
-                    let (family, style) = parse_chart_text_properties(&mut reader);
+                    let (family, style) = parse_chart_text_properties(&mut reader, scheme);
                     text_font_family = family;
                     text_style = style;
                 } else if tag == b"legend" {
@@ -313,9 +313,17 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
 /// minor font — and is reported as `None` rather than as a face, so the loader
 /// can tell "said nothing" from "said this" (issue #668). The same holds for
 /// each run property (issue #669).
-fn parse_chart_text_properties(reader: &mut Reader<&[u8]>) -> (Option<String>, ChartTextStyle) {
+fn parse_chart_text_properties(
+    reader: &mut Reader<&[u8]>,
+    scheme: &SchemeColors<'_>,
+) -> (Option<String>, ChartTextStyle) {
     let mut typeface: Option<String> = None;
     let mut style: ChartTextStyle = ChartTextStyle::default();
+    // `a:solidFill` also appears under `a:ln` and other siblings inside a
+    // `c:txPr`, so the colour is only taken while inside the run properties
+    // themselves (issue #916).
+    let mut in_def_rpr: bool = false;
+    let mut in_solid_fill: bool = false;
     loop {
         match reader.read_event() {
             Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
@@ -326,11 +334,23 @@ fn parse_chart_text_properties(reader: &mut Reader<&[u8]>) -> (Option<String>, C
                         typeface = xml_util::get_attr_str(e, b"typeface")
                             .filter(|face| !face.trim().is_empty());
                     }
-                    b"defRPr" => read_def_rpr_into(e, &mut style),
+                    b"defRPr" => {
+                        read_def_rpr_into(e, &mut style);
+                        in_def_rpr = true;
+                    }
+                    b"solidFill" if in_def_rpr => in_solid_fill = true,
+                    _ if in_solid_fill && style.color.is_none() => {
+                        style.color = drawingml::parse_color_from_empty(e, scheme).color;
+                    }
                     _ => {}
                 }
             }
-            Ok(Event::End(ref e)) if e.local_name().as_ref() == b"txPr" => break,
+            Ok(Event::End(ref e)) => match e.local_name().as_ref() {
+                b"txPr" => break,
+                b"defRPr" => in_def_rpr = false,
+                b"solidFill" => in_solid_fill = false,
+                _ => {}
+            },
             Ok(Event::Eof) => break,
             Err(_) => break,
             _ => {}
@@ -341,8 +361,8 @@ fn parse_chart_text_properties(reader: &mut Reader<&[u8]>) -> (Option<String>, C
 
 /// Read a `c:txPr` that governs one element rather than the whole chart space,
 /// keeping only its run properties.
-fn parse_chart_text_style(reader: &mut Reader<&[u8]>) -> ChartTextStyle {
-    parse_chart_text_properties(reader).1
+fn parse_chart_text_style(reader: &mut Reader<&[u8]>, scheme: &SchemeColors<'_>) -> ChartTextStyle {
+    parse_chart_text_properties(reader, scheme).1
 }
 
 /// Take `a:defRPr`'s run properties, leaving untouched whatever it omits.
@@ -477,7 +497,7 @@ fn parse_axis(reader: &mut Reader<&[u8]>, end_tag: &[u8], scheme: &SchemeColors<
                 axis.title = axis.title.or_else(|| parse_chart_title(reader));
             }
             Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"txPr" => {
-                axis.text_style = parse_chart_text_style(reader);
+                axis.text_style = parse_chart_text_style(reader, scheme);
             }
             // The axis' own line, and the gridlines' — both are an `<a:ln>`
             // inside a `<c:spPr>`, and both are dropped without this (#900).
