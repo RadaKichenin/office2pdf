@@ -899,3 +899,37 @@ fn structure_introduction_ko_plots_the_doughnut_chart() {
         "the doughnut carries its plotted values"
     );
 }
+
+// ---------------------------------------------------------------------------
+// rotated_text_box.pptx
+// ---------------------------------------------------------------------------
+
+#[test]
+fn smoke_rotated_text_box() {
+    assert_produces_valid_pdf("rotated_text_box.pptx");
+}
+
+/// The fixture's three rotated rails keep the angles their `a:xfrm rot`
+/// declares, and its unrotated heading keeps none (issue #894).
+#[test]
+fn structure_rotated_text_box_keeps_each_declared_angle() {
+    let pages = fixed_pages("rotated_text_box.pptx");
+    assert_eq!(pages.len(), 1);
+
+    let mut angles: Vec<Option<i64>> = pages[0]
+        .elements
+        .iter()
+        .filter_map(|element| match &element.kind {
+            FixedElementKind::TextBox(text_box) => {
+                Some(text_box.shape_rotation_deg.map(|deg| deg.round() as i64))
+            }
+            _ => None,
+        })
+        .collect();
+    angles.sort();
+    assert_eq!(
+        angles,
+        vec![None, Some(45), Some(90), Some(270)],
+        "one unrotated heading and the 45/90/270 degree rails"
+    );
+}

@@ -1009,6 +1009,23 @@ fn generate_fixed_text_box(
     text_box: &TextBoxData,
     ctx: &mut GenCtx,
 ) -> Result<(), ConvertError> {
+    // Shape rotation (`<a:xfrm rot>`): the content lays out in the unrotated
+    // box and the whole result turns about its centre, so `reflow: false`
+    // keeps the placed geometry where the slide puts it. This wraps the
+    // vertical-text case below, which rotates the glyphs inside the box.
+    if let Some(rotation) = text_box.shape_rotation_deg.filter(|deg| *deg != 0.0) {
+        let mut inner: TextBoxData = text_box.clone();
+        inner.shape_rotation_deg = None;
+        let _ = write!(
+            out,
+            "#rotate({}deg, origin: center, reflow: false)[",
+            format_f64(rotation)
+        );
+        generate_fixed_text_box(out, elem, &inner, ctx)?;
+        out.push_str("]\n");
+        return Ok(());
+    }
+
     // Vertical text (`<a:bodyPr vert>`): lay the content out in a box with
     // swapped dimensions and rotate it around the element center; the outer
     // geometry stays unrotated, matching PowerPoint.

@@ -104,8 +104,8 @@ impl GroupTransform {
         }
 
         // Compose the group's own rotation: orbit the child's center around
-        // the group center and add the angle to the child's own rotation
-        // (shape geometry only — images and text boxes carry no rotation).
+        // the group center and add the angle to the child's own rotation:
+        // a group turns what is inside it, not just where it sits.
         if self.rot_deg != 0.0 {
             let group_center_x = off_x_pt + emu_to_pt(self.ext_cx) / 2.0;
             let group_center_y = off_y_pt + emu_to_pt(self.ext_cy) / 2.0;
@@ -119,8 +119,20 @@ impl GroupTransform {
             let rotated_y = group_center_y + dx * sin + dy * cos;
             elem.x = rotated_x - elem.width / 2.0;
             elem.y = rotated_y - elem.height / 2.0;
-            if let FixedElementKind::Shape(ref mut shape) = elem.kind {
-                shape.rotation_deg = Some(shape.rotation_deg.unwrap_or(0.0) + self.rot_deg);
+            match elem.kind {
+                FixedElementKind::Shape(ref mut shape) => {
+                    shape.rotation_deg = Some(shape.rotation_deg.unwrap_or(0.0) + self.rot_deg);
+                }
+                FixedElementKind::TextBox(ref mut text_box) => {
+                    text_box.shape_rotation_deg =
+                        Some(text_box.shape_rotation_deg.unwrap_or(0.0) + self.rot_deg);
+                }
+                // TODO(#895): `ImageData` has a `rotation_deg` of its own but
+                // does not take the group's, so a picture inside a rotated
+                // group is orbited into place and then drawn upright. Left
+                // out here to keep this change to one root cause; #895
+                // carries the measurement.
+                _ => {}
             }
         }
     }

@@ -609,6 +609,10 @@ pub struct TextBoxData {
     /// Clockwise text rotation from `<a:bodyPr vert>` ("vert" = 90°,
     /// "vert270" = 270°); the box geometry itself stays unrotated.
     pub text_rotation_deg: Option<f64>,
+    /// Clockwise rotation of the whole box from `<a:xfrm rot>`, about its
+    /// centre. Unlike `text_rotation_deg` the content lays out in the
+    /// unrotated width x height box and the result is turned as a unit.
+    pub shape_rotation_deg: Option<f64>,
 }
 
 /// The kind of list: ordered (numbered) or unordered (bulleted).
