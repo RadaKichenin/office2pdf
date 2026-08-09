@@ -1060,6 +1060,14 @@ pub(super) fn extract_rpr_attributes(e: &quick_xml::events::BytesStart, style: &
     if let Some(val) = get_attr_str(e, b"strike") {
         style.strikethrough = Some(val != "noStrike");
     }
+    // PowerPoint cases the run at render time and leaves the stored text
+    // alone, so a title written mixed-case prints uppercase (issue #875).
+    // `none` is an explicit override of an inherited `cap` and has to state
+    // both answers rather than stay silent.
+    if let Some(val) = get_attr_str(e, b"cap") {
+        style.all_caps = Some(val == "all");
+        style.small_caps = Some(val == "small");
+    }
     if let Some(sz) = get_attr_i64(e, b"sz") {
         // Font size in hundredths of a point (e.g. 1200 = 12pt)
         style.font_size = Some(sz as f64 / 100.0);

@@ -622,3 +622,63 @@ fn a_field_beside_literal_runs_keeps_the_reading_order() {
 
     assert_eq!(text, "Page 1 of 1");
 }
+
+/// `a:rPr/@cap` is how PowerPoint uppercases a run at render time — the text
+/// stays mixed-case in the file. The deck on issue #875 uses it 25 times, and
+/// its closing title reads `SPØRSMÅL OG SVAR` in every other renderer while we
+/// printed the stored `Spørsmål og svar`.
+fn text_box_with_cap(cap: &str, text: &str) -> String {
+    format!(
+        r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="TextBox"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="4000000" cy="1000000"/></a:xfrm></p:spPr><p:txBody><a:bodyPr/><a:p><a:r><a:rPr lang="en-US" cap="{cap}"/><a:t>{text}</a:t></a:r></a:p></p:txBody></p:sp>"#
+    )
+}
+
+fn first_run_style_of(slide_xml: &str) -> TextStyle {
+    let data = build_test_pptx(
+        SLIDE_CX,
+        SLIDE_CY,
+        &[make_slide_xml(&[slide_xml.to_string()])],
+    );
+    let (doc, _warnings) = PptxParser
+        .parse(&data, &ConvertOptions::default())
+        .expect("parses");
+    let page = first_fixed_page(&doc);
+    let blocks = text_box_blocks(&page.elements[0]);
+    match &blocks[0] {
+        Block::Paragraph(p) => p.runs[0].style.clone(),
+        other => panic!("expected a paragraph, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_run_cap_all_sets_all_caps() {
+    let style = first_run_style_of(&text_box_with_cap("all", "Spørsmål og svar"));
+    assert_eq!(style.all_caps, Some(true));
+    assert_ne!(style.small_caps, Some(true));
+}
+
+#[test]
+fn test_run_cap_small_sets_small_caps() {
+    let style = first_run_style_of(&text_box_with_cap("small", "Spørsmål og svar"));
+    assert_eq!(style.small_caps, Some(true));
+    assert_ne!(style.all_caps, Some(true));
+}
+
+/// `cap="none"` is an explicit "do not case this run", which PowerPoint writes
+/// to override an inherited `cap`. It must state the answer, not stay silent.
+#[test]
+fn test_run_cap_none_states_no_casing() {
+    let style = first_run_style_of(&text_box_with_cap("none", "Spørsmål og svar"));
+    assert_eq!(style.all_caps, Some(false));
+    assert_eq!(style.small_caps, Some(false));
+}
+
+/// A run that declares no `cap` leaves both unset, so an inherited answer still
+/// stands.
+#[test]
+fn test_a_run_without_cap_leaves_casing_unset() {
+    let shape = make_text_box(0, 0, 4_000_000, 1_000_000, "Spørsmål og svar");
+    let style = first_run_style_of(&shape);
+    assert_eq!(style.all_caps, None);
+    assert_eq!(style.small_caps, None);
+}
