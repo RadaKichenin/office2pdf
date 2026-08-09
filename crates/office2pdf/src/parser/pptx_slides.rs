@@ -2537,6 +2537,7 @@ impl<'a> SlideXmlParser<'a> {
                         self.shape.y = geometry.y;
                         self.shape.cx = geometry.cx;
                         self.shape.cy = geometry.cy;
+                        self.shape.rotation_deg = geometry.rotation_deg;
                     }
                     // A `<p:style>` effect reference fills in only where the
                     // shape stated no effect of its own (issue #740). Resolved
@@ -2728,6 +2729,7 @@ impl<'a> SlideXmlParser<'a> {
                     self.pic.y = geometry.y;
                     self.pic.cx = geometry.cx;
                     self.pic.cy = geometry.cy;
+                    self.pic.rotation_deg = geometry.rotation_deg;
                 }
                 let (element, picture_warnings) =
                     finalize_picture(&self.pic, self.ctx.images, self.ctx.warning_context);

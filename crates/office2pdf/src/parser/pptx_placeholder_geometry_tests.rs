@@ -762,3 +762,101 @@ fn test_a_non_placeholder_text_box_inherits_no_body_pr() {
         TextBoxVerticalAlign::Top
     );
 }
+
+// ── Slide → layout `<a:xfrm>` rotation inheritance ───────────────────
+
+/// A placeholder `<p:sp>` whose `<a:xfrm>` carries the given extra attributes
+/// (e.g. `rot="16200000"`).
+fn make_placeholder_sp_with_xfrm_attrs(
+    ph_attrs: &str,
+    xfrm_emu: (i64, i64, i64, i64),
+    xfrm_attrs: &str,
+    text: &str,
+) -> String {
+    let (x, y, cx, cy) = xfrm_emu;
+    format!(
+        r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="Placeholder"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph {ph_attrs}/></p:nvPr></p:nvSpPr><p:spPr><a:xfrm {xfrm_attrs}><a:off x="{x}" y="{y}"/><a:ext cx="{cx}" cy="{cy}"/></a:xfrm></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US"/><a:t>{text}</a:t></a:r></a:p></p:txBody></p:sp>"#
+    )
+}
+
+/// A slide placeholder that omits `<a:xfrm>` inherits the layout's rotation
+/// along with its position and size (issue #881). The deck there rotates the
+/// footer strip 270° on the layout, and the slide states no transform at all.
+#[test]
+fn test_placeholder_inherits_the_layout_rotation() {
+    let slide = make_slide_with_shapes(&[make_placeholder_sp(
+        r#"type="ftr" sz="quarter" idx="25""#,
+        None,
+        "CONTOSO",
+    )]);
+    let layout = make_layout_with_shapes(&[make_placeholder_sp_with_xfrm_attrs(
+        r#"type="ftr" sz="quarter" idx="25""#,
+        (-3_049_519, 3_049_522, 6_857_999, 758_952),
+        r#"rot="16200000""#,
+        "Prompt",
+    )]);
+    let master = make_master_with_shapes(&[]);
+    let data = build_test_pptx_with_layout_master(SLIDE_CX, SLIDE_CY, &slide, &layout, &master);
+
+    let doc = parse_document(&data);
+    let page = first_fixed_page(&doc);
+    let rotation = text_box_of(page, "CONTOSO")
+        .shape_rotation_deg
+        .expect("an inherited placeholder must carry the layout's rotation");
+    assert!(
+        (rotation - 270.0).abs() < 0.01,
+        "expected 270 degrees, got {rotation}"
+    );
+}
+
+/// Triangulation: a different layout angle must come through as that angle,
+/// and a layout that states none must leave the placeholder unrotated.
+#[test]
+fn test_placeholder_rotation_follows_the_layout_angle() {
+    for (xfrm_attrs, expected) in [(r#"rot="5400000""#, Some(90.0_f64)), ("", None)] {
+        let slide =
+            make_slide_with_shapes(&[make_placeholder_sp(r#"type="title""#, None, "Tittel")]);
+        let layout = make_layout_with_shapes(&[make_placeholder_sp_with_xfrm_attrs(
+            r#"type="title""#,
+            (886_968, 1_627_632, 4_416_552, 685_800),
+            xfrm_attrs,
+            "Prompt",
+        )]);
+        let master = make_master_with_shapes(&[]);
+        let data = build_test_pptx_with_layout_master(SLIDE_CX, SLIDE_CY, &slide, &layout, &master);
+
+        let doc = parse_document(&data);
+        let page = first_fixed_page(&doc);
+        match (text_box_of(page, "Tittel").shape_rotation_deg, expected) {
+            (None, None) => {}
+            (Some(actual), Some(want)) => assert!(
+                (actual - want).abs() < 0.01,
+                "expected {want} degrees, got {actual}"
+            ),
+            (actual, want) => panic!("expected {want:?}, got {actual:?}"),
+        }
+    }
+}
+
+/// A slide placeholder that states its own `<a:xfrm>` keeps its own transform,
+/// rotation included — the layout's is not merged into it.
+#[test]
+fn test_a_placeholder_with_its_own_xfrm_keeps_its_own_rotation() {
+    let slide = make_slide_with_shapes(&[make_placeholder_sp(
+        r#"type="ftr" sz="quarter" idx="25""#,
+        Some((100_000, 200_000, 3_000_000, 500_000)),
+        "CONTOSO",
+    )]);
+    let layout = make_layout_with_shapes(&[make_placeholder_sp_with_xfrm_attrs(
+        r#"type="ftr" sz="quarter" idx="25""#,
+        (-3_049_519, 3_049_522, 6_857_999, 758_952),
+        r#"rot="16200000""#,
+        "Prompt",
+    )]);
+    let master = make_master_with_shapes(&[]);
+    let data = build_test_pptx_with_layout_master(SLIDE_CX, SLIDE_CY, &slide, &layout, &master);
+
+    let doc = parse_document(&data);
+    let page = first_fixed_page(&doc);
+    assert_eq!(text_box_of(page, "CONTOSO").shape_rotation_deg, None);
+}
