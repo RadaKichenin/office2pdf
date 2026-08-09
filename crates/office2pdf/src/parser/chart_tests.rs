@@ -1840,3 +1840,58 @@ fn an_axis_without_a_line_is_automatic() {
     assert_eq!(chart.value_axis_line, ChartLine::Automatic);
     assert_eq!(chart.major_gridline_line, ChartLine::Automatic);
 }
+
+/// `<c:dLblPos>` reaches the model, and a bar chart that states none takes the
+/// default its grouping implies (issue #901).
+///
+/// ECMA-376 §21.2.2.49: a `clustered` bar defaults to `outEnd`, a stacked one
+/// to `ctr`. We centred every label whatever the grouping, so a clustered
+/// bar's label sat inside the bar instead of just beyond its end.
+#[test]
+fn a_bar_chart_data_label_position_defaults_by_grouping() {
+    for (grouping, expected) in [
+        ("clustered", DataLabelPosition::OutsideEnd),
+        ("stacked", DataLabelPosition::Center),
+        ("percentStacked", DataLabelPosition::Center),
+    ] {
+        let xml = bar_chart_xml(&format!(
+            r#"<c:barDir val="col"/><c:grouping val="{grouping}"/>"#
+        ))
+        .replace(
+            "<c:cat>",
+            r#"<c:dLbls><c:showVal val="1"/></c:dLbls><c:cat>"#,
+        );
+
+        let chart = parse_chart_xml(&xml, &SchemeColors::empty()).expect("chart parses");
+
+        assert_eq!(
+            chart.series[0].data_labels.position, expected,
+            "{grouping} grouping"
+        );
+    }
+}
+
+/// A stated `<c:dLblPos>` outranks the grouping's default.
+#[test]
+fn a_stated_data_label_position_wins_over_the_default() {
+    for (stated, expected) in [
+        ("ctr", DataLabelPosition::Center),
+        ("outEnd", DataLabelPosition::OutsideEnd),
+        ("inEnd", DataLabelPosition::InsideEnd),
+        ("inBase", DataLabelPosition::InsideBase),
+    ] {
+        let xml = bar_chart_xml(r#"<c:barDir val="col"/><c:grouping val="clustered"/>"#).replace(
+            "<c:cat>",
+            &format!(
+                r#"<c:dLbls><c:dLblPos val="{stated}"/><c:showVal val="1"/></c:dLbls><c:cat>"#
+            ),
+        );
+
+        let chart = parse_chart_xml(&xml, &SchemeColors::empty()).expect("chart parses");
+
+        assert_eq!(
+            chart.series[0].data_labels.position, expected,
+            "dLblPos {stated}"
+        );
+    }
+}

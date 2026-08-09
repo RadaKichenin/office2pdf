@@ -10,7 +10,7 @@ use super::drawingml::{self, SchemeColors};
 use super::xml_util;
 use crate::ir::{
     AxisTickMark, BarBandLayout, Chart, ChartAreaOutline, ChartGrouping, ChartHost, ChartLine,
-    ChartSeries, ChartTextStyle, ChartType, Color, DataLabels, LegendPosition,
+    ChartSeries, ChartTextStyle, ChartType, Color, DataLabelPosition, DataLabels, LegendPosition,
 };
 
 /// Mapping from XML chart element tag names to their corresponding `ChartType`.
@@ -246,13 +246,26 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
         categories = (1..=point_count).map(|i| i.to_string()).collect();
     }
 
+    // A label position the part left out is settled by the grouping, which is
+    // only known once the whole plot has been read: a clustered bar puts its
+    // labels beyond the bar's end, a stacked one centres them because an
+    // outside label would land on the segment above (ECMA-376 §21.2.2.49).
+    let grouping: ChartGrouping = grouping.unwrap_or_default();
+    if matches!(grouping, ChartGrouping::Clustered) {
+        for entry in &mut series {
+            if !entry.data_labels.position_stated {
+                entry.data_labels.position = DataLabelPosition::OutsideEnd;
+            }
+        }
+    }
+
     Some(Chart {
         chart_type,
         hole_size_percent,
         title,
         categories,
         series,
-        grouping: grouping.unwrap_or_default(),
+        grouping,
         legend_position: legend_position.unwrap_or_default(),
         has_legend,
         auto_title_deleted,
@@ -783,6 +796,9 @@ fn parse_data_labels(reader: &mut Reader<&[u8]>) -> DataLabels {
     let mut labels = DataLabels::default();
     let mut in_separator: bool = false;
     let mut separator = String::new();
+    // `<c:dLblPos>` is optional; `None` here means the grouping's default is
+    // applied later, once the plot family is known (issue #901).
+    let mut stated_position: Option<DataLabelPosition> = None;
 
     loop {
         let event = reader.read_event();
@@ -794,6 +810,11 @@ fn parse_data_labels(reader: &mut Reader<&[u8]>) -> DataLabels {
                 b"showSerName" => labels.show_series = ct_boolean(e),
                 b"showPercent" => labels.show_percent = ct_boolean(e),
                 b"numFmt" => labels.number_format = explicit_format_code(e),
+                b"dLblPos" => {
+                    stated_position = xml_util::get_attr_str(e, b"val")
+                        .as_deref()
+                        .and_then(data_label_position_for);
+                }
                 b"separator" => in_separator = true,
                 _ => {}
             },
@@ -815,7 +836,28 @@ fn parse_data_labels(reader: &mut Reader<&[u8]>) -> DataLabels {
     if !separator.is_empty() {
         labels.separator = separator;
     }
+    // A position the part did not state is settled by the grouping, which the
+    // caller knows; `Center` stands in until then and matches the stacked
+    // default, so only a clustered plot has to override it.
+    if let Some(position) = stated_position {
+        labels.position = position;
+        labels.position_stated = true;
+    }
     labels
+}
+
+/// `<c:dLblPos val>` as ECMA-376 §21.2.2.49 names the positions. `bestFit`
+/// and the pie-only `t`/`b`/`l`/`r` are not mapped: they describe placements
+/// this renderer does not draw, and guessing one would move a label the file
+/// did not ask to move.
+fn data_label_position_for(value: &str) -> Option<DataLabelPosition> {
+    match value {
+        "ctr" => Some(DataLabelPosition::Center),
+        "outEnd" => Some(DataLabelPosition::OutsideEnd),
+        "inEnd" => Some(DataLabelPosition::InsideEnd),
+        "inBase" => Some(DataLabelPosition::InsideBase),
+        _ => None,
+    }
 }
 
 /// Parse a `<c:dPt>` into its `(point index, fill)`.
