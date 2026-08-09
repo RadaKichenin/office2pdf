@@ -612,8 +612,9 @@ pub struct TextBoxData {
     /// Clockwise text rotation from `<a:bodyPr vert>` ("vert" = 90°,
     /// "vert270" = 270°); the box geometry itself stays unrotated.
     pub text_rotation_deg: Option<f64>,
-    /// Clockwise rotation of the whole box from `<a:xfrm rot>`, about its
-    /// centre. Unlike `text_rotation_deg` the content lays out in the
+    /// Clockwise rotation of the whole box about its centre: the shape's own
+    /// `<a:xfrm rot>` composed with the angle of any rotated ancestor
+    /// `<p:grpSp>`. Unlike `text_rotation_deg` the content lays out in the
     /// unrotated width x height box and the result is turned as a unit.
     pub shape_rotation_deg: Option<f64>,
 }
@@ -900,8 +901,9 @@ impl ImageCrop {
 #[derive(Debug, Clone)]
 pub struct ImageData {
     pub data: Vec<u8>,
-    /// Clockwise rotation in degrees from `a:xfrm/@rot`, about the image's
-    /// centre. `None` means upright (issue #682).
+    /// Clockwise rotation in degrees about the image's centre: the picture's
+    /// own `a:xfrm/@rot` composed with the angle of any rotated ancestor
+    /// `<p:grpSp>`. `None` means upright (issues #682, #895).
     pub rotation_deg: Option<f64>,
     pub format: ImageFormat,
     pub width: Option<f64>,

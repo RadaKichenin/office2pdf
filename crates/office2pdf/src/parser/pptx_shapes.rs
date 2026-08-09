@@ -127,11 +127,9 @@ impl GroupTransform {
                     text_box.shape_rotation_deg =
                         Some(text_box.shape_rotation_deg.unwrap_or(0.0) + self.rot_deg);
                 }
-                // TODO(#895): `ImageData` has a `rotation_deg` of its own but
-                // does not take the group's, so a picture inside a rotated
-                // group is orbited into place and then drawn upright. Left
-                // out here to keep this change to one root cause; #895
-                // carries the measurement.
+                FixedElementKind::Image(ref mut image) => {
+                    image.rotation_deg = Some(image.rotation_deg.unwrap_or(0.0) + self.rot_deg);
+                }
                 _ => {}
             }
         }

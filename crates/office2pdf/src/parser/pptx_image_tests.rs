@@ -1069,3 +1069,85 @@ fn test_picture_outer_shadow_parsed() {
     assert!((shadow.opacity - 0.22).abs() < 0.01);
     assert!((shadow.distance - 3.0).abs() < 0.1, "38100 EMU = 3pt");
 }
+
+/// A picture inside a rotated `<p:grpSp>` takes the group's angle, the way a
+/// shape and a text box already do (issue #895).
+///
+/// `GroupTransform::apply` orbits every child around the group centre but only
+/// composed the angle into a `Shape` and, since #894, a `TextBox`. A picture
+/// was moved into place and then drawn upright: measured against a LibreOffice
+/// 24.2 export of a 90°-rotated group holding a 4x2 bitmap, the reference drew
+/// it 47.2 x 125.9pt where we drew it 126.0 x 47.2pt.
+#[test]
+fn a_picture_in_a_rotated_group_takes_the_groups_angle() {
+    let bmp_data = make_test_bmp();
+    let pic = make_pic_xml(0, 0, 1_600_000, 600_000, "rId3");
+    let group = format!(
+        r#"<p:grpSp><p:nvGrpSpPr><p:cNvPr id="10" name="G"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm rot="5400000"><a:off x="4000000" y="2000000"/><a:ext cx="1600000" cy="600000"/><a:chOff x="0" y="0"/><a:chExt cx="1600000" cy="600000"/></a:xfrm></p:grpSpPr>{pic}</p:grpSp>"#
+    );
+    let slide_xml = make_slide_xml(&[group]);
+    let slide_images = vec![TestSlideImage {
+        rid: "rId3".to_string(),
+        path: "../media/image1.bmp".to_string(),
+        data: bmp_data,
+        relationship_type: None,
+    }];
+    let data = build_test_pptx_with_images(SLIDE_CX, SLIDE_CY, &[(slide_xml, slide_images)]);
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = first_fixed_page(&doc);
+    let image = get_image(&page.elements[0]);
+    let rotation = image
+        .rotation_deg
+        .expect("a picture in a rotated group must carry the group's angle");
+    assert!(
+        (rotation - 90.0).abs() < 0.01,
+        "expected 90 degrees, got {rotation}"
+    );
+}
+
+/// Triangulation: the group's angle adds to the picture's own, and an
+/// unrotated group leaves a picture unrotated.
+#[test]
+fn a_group_angle_adds_to_a_pictures_own_rotation() {
+    for (group_rot, pic_rot, expected) in [
+        (Some(5_400_000_i64), Some(1_800_000_i64), Some(120.0_f64)),
+        (None, None, None),
+    ] {
+        let pic_xfrm = match pic_rot {
+            Some(rot) => format!(r#"<a:xfrm rot="{rot}">"#),
+            None => "<a:xfrm>".to_string(),
+        };
+        let pic = format!(
+            r#"<p:pic><p:nvPicPr><p:cNvPr id="5" name="Picture"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="rId3"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr>{pic_xfrm}<a:off x="0" y="0"/><a:ext cx="1600000" cy="600000"/></a:xfrm></p:spPr></p:pic>"#
+        );
+        let group_xfrm = match group_rot {
+            Some(rot) => format!(r#"<a:xfrm rot="{rot}">"#),
+            None => "<a:xfrm>".to_string(),
+        };
+        let group = format!(
+            r#"<p:grpSp><p:nvGrpSpPr><p:cNvPr id="10" name="G"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr>{group_xfrm}<a:off x="4000000" y="2000000"/><a:ext cx="1600000" cy="600000"/><a:chOff x="0" y="0"/><a:chExt cx="1600000" cy="600000"/></a:xfrm></p:grpSpPr>{pic}</p:grpSp>"#
+        );
+        let slide_xml = make_slide_xml(&[group]);
+        let slide_images = vec![TestSlideImage {
+            rid: "rId3".to_string(),
+            path: "../media/image1.bmp".to_string(),
+            data: make_test_bmp(),
+            relationship_type: None,
+        }];
+        let data = build_test_pptx_with_images(SLIDE_CX, SLIDE_CY, &[(slide_xml, slide_images)]);
+        let parser = PptxParser;
+        let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+        let page = first_fixed_page(&doc);
+        match (get_image(&page.elements[0]).rotation_deg, expected) {
+            (None, None) => {}
+            (Some(actual), Some(want)) => assert!(
+                (actual - want).abs() < 0.01,
+                "expected {want} degrees, got {actual}"
+            ),
+            (actual, want) => panic!("expected {want:?}, got {actual:?}"),
+        }
+    }
+}
