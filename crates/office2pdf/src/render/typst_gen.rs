@@ -257,10 +257,100 @@ fn crop_to_pixels(crop: ImageCrop, width: u32, height: u32) -> Option<(u32, u32,
     Some((left, top, width - left - right, height - top - bottom))
 }
 
+/// Narrow an SVG's `viewBox` to the region an `a:srcRect` keeps.
+///
+/// A root `<svg>` clips to its viewport, so moving the viewBox is the whole
+/// crop — the drawing itself is untouched, and nothing has to be rasterised
+/// (issue #892). Returns `None` when the root states no usable `viewBox`,
+/// leaving the asset alone rather than guessing at its user units.
+fn crop_svg_view_box(data: &[u8], crop: ImageCrop) -> Option<Vec<u8>> {
+    let text: &str = std::str::from_utf8(data).ok()?;
+    let open_end: usize = text.find('>')?;
+    let head: &str = &text[..open_end];
+    if !head.trim_start().starts_with("<svg") {
+        return None;
+    }
+    let attr_start: usize = head.find("viewBox=\"")? + "viewBox=\"".len();
+    let attr_len: usize = head[attr_start..].find('"')?;
+    let values: Vec<f64> = head[attr_start..attr_start + attr_len]
+        .split(|c: char| c.is_whitespace() || c == ',')
+        .filter(|part| !part.is_empty())
+        .map(str::parse::<f64>)
+        .collect::<Result<Vec<f64>, _>>()
+        .ok()?;
+    let [x, y, width, height] = values[..] else {
+        return None;
+    };
+    if !(width.is_finite() && height.is_finite() && width > 0.0 && height > 0.0) {
+        return None;
+    }
+
+    let left: f64 = crop.left.clamp(0.0, 1.0);
+    let top: f64 = crop.top.clamp(0.0, 1.0);
+    let kept_w: f64 = width * (1.0 - left - crop.right.clamp(0.0, 1.0));
+    let kept_h: f64 = height * (1.0 - top - crop.bottom.clamp(0.0, 1.0));
+    if kept_w <= 0.0 || kept_h <= 0.0 {
+        return None;
+    }
+
+    let replacement: String = format!(
+        "viewBox=\"{} {} {} {}\"",
+        format_f64(x + width * left),
+        format_f64(y + height * top),
+        format_f64(kept_w),
+        format_f64(kept_h)
+    );
+    let mut out: String = String::with_capacity(text.len() + replacement.len());
+    out.push_str(&text[..attr_start - "viewBox=\"".len()]);
+    out.push_str(&replacement);
+    out.push_str(&text[attr_start + attr_len + 1..]);
+
+    // The viewport has to shrink with the viewBox. Left at its old size it
+    // still describes the whole drawing, and `preserveAspectRatio` then meets
+    // the smaller viewBox inside it — scaling by 1 and centring the content
+    // rather than cropping it, which is a translation and no crop at all.
+    let out: String = replace_svg_length(&out, "width", kept_w);
+    let out: String = replace_svg_length(&out, "height", kept_h);
+    Some(out.into_bytes())
+}
+
+/// Rewrite a root `<svg>` length attribute, keeping any unit suffix it
+/// carries. Leaves the document alone when the attribute is absent, since a
+/// root without one already takes its size from the viewBox.
+fn replace_svg_length(text: &str, name: &str, value: f64) -> String {
+    let open_end: usize = match text.find('>') {
+        Some(index) => index,
+        None => return text.to_string(),
+    };
+    let needle: String = format!("{name}=\"");
+    let Some(offset) = text[..open_end].find(&needle) else {
+        return text.to_string();
+    };
+    let start: usize = offset + needle.len();
+    let Some(len) = text[start..].find('"') else {
+        return text.to_string();
+    };
+    let old: &str = &text[start..start + len];
+    let unit: &str = old.trim_start_matches(|c: char| c.is_ascii_digit() || c == '.' || c == '-');
+    format!(
+        "{}{}{}{}",
+        &text[..start],
+        format_f64(value),
+        unit,
+        &text[start + len..]
+    )
+}
+
 fn preprocess_image_asset(image: &ImageData) -> (Vec<u8>, ImageFormat) {
     let Some(crop) = image.crop.filter(|crop| !crop.is_empty()) else {
         return (image.data.clone(), image.format);
     };
+    if image.format == ImageFormat::Svg {
+        return match crop_svg_view_box(&image.data, crop) {
+            Some(cropped) => (cropped, ImageFormat::Svg),
+            None => (image.data.clone(), image.format),
+        };
+    }
     let Some(raster_format) = raster_image_format(image.format) else {
         return (image.data.clone(), image.format);
     };
