@@ -1031,3 +1031,61 @@ fn test_document_requests_font_families_true_for_a_chart_only_document() {
     };
     assert!(!document_requests_font_families(&doc));
 }
+
+// --- sans-serif class fallback (issue #848) ---
+
+#[test]
+fn named_sans_serif_families_get_a_sans_serif_fallback_chain() {
+    // The families the templates on issue #841 actually ask for, plus one
+    // grotesque, none of which the explicit table names.
+    for family in [
+        "Microsoft Sans Serif",
+        "Franklin Gothic Demi",
+        "Century Gothic",
+        "Akzidenz Grotesk",
+    ] {
+        let substitutes = substitutes(family)
+            .unwrap_or_else(|| panic!("{family} should have class-preserving substitutes"));
+        assert_eq!(
+            substitutes,
+            &["Liberation Sans", "Arimo", "DejaVu Sans", "Helvetica"],
+            "{family} must not fall through to a proportional serif"
+        );
+    }
+}
+
+/// `mono` wins over `sans` when a name carries both, or every mono face whose
+/// name says "Sans Mono" would come back proportional.
+#[test]
+fn a_sans_mono_family_stays_monospace() {
+    let substitutes = substitutes("Noto Sans Mono CJK KR").expect("class-preserving substitutes");
+    assert_eq!(
+        substitutes,
+        &[
+            "DejaVu Sans Mono",
+            "Noto Sans Mono",
+            "Liberation Mono",
+            "Cousine",
+        ]
+    );
+}
+
+/// A serif family carries no sans token and must keep falling through to the
+/// document default rather than being pushed onto a sans chain.
+#[test]
+fn a_serif_family_is_not_misclassified_as_sans_serif() {
+    for family in ["Bookman Old Style", "Baskerville", "Palatino Linotype"] {
+        assert_eq!(substitutes(family), None, "{family} is not sans-serif");
+    }
+}
+
+/// Corbel is a humanist sans with no class token in its name, so the table
+/// has to name it — the Gantt template on #841 sets it as its major face.
+#[test]
+fn corbel_resolves_to_a_sans_serif_face() {
+    let subs = substitutes("Corbel").expect("Corbel should have substitutes");
+    assert!(
+        subs.contains(&"Liberation Sans"),
+        "Corbel must resolve to a sans face, got {subs:?}"
+    );
+}

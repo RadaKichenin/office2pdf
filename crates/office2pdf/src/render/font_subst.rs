@@ -1,8 +1,10 @@
 //! Font substitution and fallback chains.
 //!
 //! Explicit family mappings provide preferred alternatives, including
-//! metric-compatible Office substitutes. Names carrying a monospace class token
-//! instead get a fixed-pitch chain. The requested family remains first.
+//! metric-compatible Office substitutes. A name the table does not list is
+//! read for a class token instead: a monospace one gets a fixed-pitch chain,
+//! a sans-serif one a sans chain, so a missing face does not land on the
+//! document's default serif. The requested family remains first.
 
 // Font discovery/embedding is native-only; on wasm32 these items are
 // compiled but unreachable (visibility sealing exposed them to dead_code).
@@ -26,6 +28,11 @@ const MONOSPACE_SUBSTITUTES: &[&str] = &[
     "Liberation Mono",
     "Cousine",
 ];
+
+/// Where a missing sans-serif family lands. Liberation Sans leads because it
+/// is metric-compatible with Arial, which most Office sans faces are sized
+/// against (issue #848).
+const SANS_SERIF_SUBSTITUTES: &[&str] = &["Liberation Sans", "Arimo", "DejaVu Sans", "Helvetica"];
 
 thread_local! {
     static ACTIVE_FONT_CONTEXT: RefCell<Option<FontSearchContext>> = const { RefCell::new(None) };
@@ -129,7 +136,8 @@ fn fallback_candidates(font_family: &str, context: Option<&FontSearchContext>) -
 /// reliable family-class signal.
 ///
 /// The returned slice is ordered by preference. Explicit mappings preserve the
-/// known family's intent; class-derived mappings preserve fixed pitch.
+/// known family's intent; class-derived mappings preserve the family class the
+/// name declares — fixed pitch, or sans-serif.
 pub fn substitutes(font_family: &str) -> Option<&'static [&'static str]> {
     let normalized_family = normalized_lookup_key(font_family);
     match normalized_family.as_str() {
@@ -292,7 +300,11 @@ pub fn substitutes(font_family: &str) -> Option<&'static [&'static str]> {
             "Yu Mincho",
             "Arial Unicode MS",
         ]),
+        "corbel" | "candara" => Some(SANS_SERIF_SUBSTITUTES),
+        // Monospace first: a name carrying both tokens, as "… Sans Mono"
+        // does, is fixed-pitch.
         _ if family_name_declares_monospace(&normalized_family) => Some(MONOSPACE_SUBSTITUTES),
+        _ if family_name_declares_sans_serif(&normalized_family) => Some(SANS_SERIF_SUBSTITUTES),
         _ => None,
     }
 }
@@ -304,6 +316,23 @@ fn family_name_declares_monospace(normalized_family: &str) -> bool {
     normalized_family
         .split(|character: char| !character.is_ascii_alphanumeric())
         .any(|token| matches!(token, "mono" | "monospace" | "typewriter"))
+}
+
+/// A standalone class token marking the requested family as sans-serif.
+///
+/// Without this an unlisted sans family fell through to the document's default
+/// face, which is a serif — a family-class error rather than the metric
+/// difference a substitution normally costs (issue #848). Matching whole
+/// tokens keeps brand names out of it, the same discipline
+/// [`family_name_declares_monospace`] uses: `Sansation` and `Gothamist` are
+/// not classified, `Microsoft Sans Serif` and `Franklin Gothic Demi` are.
+///
+/// `sans` is tested for its own sake, so `Microsoft Sans Serif` resolves as
+/// sans despite also carrying `serif`.
+fn family_name_declares_sans_serif(normalized_family: &str) -> bool {
+    normalized_family
+        .split(|character: char| !character.is_ascii_alphanumeric())
+        .any(|token| matches!(token, "sans" | "gothic" | "grotesk" | "grotesque"))
 }
 
 /// Check whether the given font family (or its alias) is available in the
