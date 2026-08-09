@@ -339,14 +339,20 @@ pub fn substitutes(font_family: &str) -> Option<&'static [&'static str]> {
             "Arial Unicode MS",
         ]),
         "corbel" | "candara" => Some(SANS_SERIF_SUBSTITUTES),
-        // The document's own declaration outranks anything read off the name
-        // (issue #891).
-        _ if let Some(declared) = declared_class_substitutes(&normalized_family) => Some(declared),
-        // Monospace first: a name carrying both tokens, as "… Sans Mono"
-        // does, is fixed-pitch.
-        _ if family_name_declares_monospace(&normalized_family) => Some(MONOSPACE_SUBSTITUTES),
-        _ if family_name_declares_sans_serif(&normalized_family) => Some(SANS_SERIF_SUBSTITUTES),
-        _ => None,
+        // The document's own declaration outranks anything read off the name,
+        // and a name token is consulted only when it declared nothing (issue
+        // #891). An `if let` match guard would say this more directly but is
+        // unstable on the MSRV.
+        _ => declared_class_substitutes(&normalized_family)
+            // Monospace first: a name carrying both tokens, as "… Sans Mono"
+            // does, is fixed-pitch.
+            .or_else(|| {
+                family_name_declares_monospace(&normalized_family).then_some(MONOSPACE_SUBSTITUTES)
+            })
+            .or_else(|| {
+                family_name_declares_sans_serif(&normalized_family)
+                    .then_some(SANS_SERIF_SUBSTITUTES)
+            }),
     }
 }
 
