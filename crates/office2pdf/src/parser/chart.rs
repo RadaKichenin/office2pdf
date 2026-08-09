@@ -9,8 +9,8 @@ use quick_xml::events::Event;
 use super::drawingml::{self, SchemeColors};
 use super::xml_util;
 use crate::ir::{
-    AxisTickMark, BarBandLayout, Chart, ChartAreaOutline, ChartGrouping, ChartHost, ChartSeries,
-    ChartTextStyle, ChartType, Color, DataLabels, LegendPosition,
+    AxisTickMark, BarBandLayout, Chart, ChartAreaOutline, ChartGrouping, ChartHost, ChartLine,
+    ChartSeries, ChartTextStyle, ChartType, Color, DataLabels, LegendPosition,
 };
 
 /// Mapping from XML chart element tag names to their corresponding `ChartType`.
@@ -178,9 +178,9 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
                 } else if tag == b"title" && title.is_none() {
                     title = parse_chart_title(&mut reader);
                 } else if tag == b"catAx" {
-                    category_axis = parse_axis(&mut reader, b"catAx");
+                    category_axis = parse_axis(&mut reader, b"catAx", scheme);
                 } else if tag == b"valAx" {
-                    value_axis = parse_axis(&mut reader, b"valAx");
+                    value_axis = parse_axis(&mut reader, b"valAx", scheme);
                 } else if let Some(ct) = chart_type_for_tag(tag) {
                     let mut plot: PlotAreaProps = PlotAreaProps::default();
                     parse_chart_series(
@@ -260,6 +260,14 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
         value_axis_title: value_axis.title,
         category_axis_major_tick_mark: category_axis.major_tick_mark,
         value_axis_major_tick_mark: value_axis.major_tick_mark,
+        category_axis_line: category_axis.line,
+        value_axis_line: value_axis.line,
+        // Office hangs the gridlines off whichever axis they run across; the
+        // value axis carries the horizontal set our renderer draws.
+        major_gridline_line: match value_axis.gridline {
+            ChartLine::Automatic => category_axis.gridline,
+            stated => stated,
+        },
         category_axis_deleted: category_axis.deleted,
         value_axis_deleted: value_axis.deleted,
         bar_band_layout: BarBandLayout {
@@ -423,6 +431,11 @@ struct Axis {
     text_style: ChartTextStyle,
     /// `<c:numFmt formatCode>` — how this axis prints its tick labels.
     number_format: Option<String>,
+    /// What `<c:spPr>` says about the axis' own line.
+    line: ChartLine,
+    /// What `<c:majorGridlines><c:spPr>` says; the gridlines hang off the
+    /// axis rather than off the plot area.
+    gridline: ChartLine,
 }
 
 /// The `formatCode` a `<c:numFmt>` states, when it states one that is not
@@ -440,7 +453,7 @@ fn explicit_format_code(element: &quick_xml::events::BytesStart<'_>) -> Option<S
 ///
 /// Axis titles sit after the plot-area family element, so they never reach the
 /// `<c:title>` branch that captures the chart's own title.
-fn parse_axis(reader: &mut Reader<&[u8]>, end_tag: &[u8]) -> Axis {
+fn parse_axis(reader: &mut Reader<&[u8]>, end_tag: &[u8], scheme: &SchemeColors<'_>) -> Axis {
     let mut axis: Axis = Axis::default();
     loop {
         match reader.read_event() {
@@ -449,6 +462,14 @@ fn parse_axis(reader: &mut Reader<&[u8]>, end_tag: &[u8]) -> Axis {
             }
             Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"txPr" => {
                 axis.text_style = parse_chart_text_style(reader);
+            }
+            // The axis' own line, and the gridlines' — both are an `<a:ln>`
+            // inside a `<c:spPr>`, and both are dropped without this (#900).
+            Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"spPr" => {
+                axis.line = parse_chart_line(reader, b"spPr", scheme);
+            }
+            Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"majorGridlines" => {
+                axis.gridline = parse_chart_line(reader, b"majorGridlines", scheme);
             }
             // Office writes `<c:majorTickMark val="out"/>` self-closing, so the
             // `Start` arm alone would never see it.
@@ -822,6 +843,76 @@ fn parse_data_point(
     }
 
     Some((index?, fill?))
+}
+
+/// Read an `<a:ln>` nested anywhere up to `end_tag` into the stroke it states.
+///
+/// Returns `None` when the element carries no `<a:ln>` at all, which is the
+/// difference between "use the automatic line" and "use this one".
+fn parse_chart_line(
+    reader: &mut Reader<&[u8]>,
+    end_tag: &[u8],
+    scheme: &SchemeColors<'_>,
+) -> ChartLine {
+    let mut saw_line: bool = false;
+    let mut suppressed: bool = false;
+    let mut width_pt: Option<f64> = None;
+    let mut color: Option<Color> = None;
+    let mut in_line: bool = false;
+    let mut in_solid_fill: bool = false;
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))
+                if e.local_name().as_ref() == b"ln" =>
+            {
+                in_line = true;
+                saw_line = true;
+                width_pt = width_pt.or_else(|| {
+                    xml_util::get_attr_str(e, b"w")
+                        .and_then(|w| w.parse::<f64>().ok())
+                        .map(|emu| emu / EMU_PER_POINT)
+                });
+            }
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))
+                if in_line && e.local_name().as_ref() == b"noFill" =>
+            {
+                suppressed = true;
+            }
+            Ok(Event::Start(ref e)) if in_line && e.local_name().as_ref() == b"solidFill" => {
+                in_solid_fill = true;
+            }
+            Ok(Event::End(ref e)) if e.local_name().as_ref() == b"solidFill" => {
+                in_solid_fill = false;
+            }
+            Ok(Event::Start(ref e))
+                if in_solid_fill
+                    && matches!(e.local_name().as_ref(), b"srgbClr" | b"schemeClr") =>
+            {
+                color = color.or(drawingml::parse_color_from_start(reader, e, scheme).color);
+            }
+            Ok(Event::Empty(ref e))
+                if in_solid_fill
+                    && matches!(e.local_name().as_ref(), b"srgbClr" | b"schemeClr") =>
+            {
+                color = color.or(drawingml::parse_color_from_empty(e, scheme).color);
+            }
+            Ok(Event::End(ref e)) if e.local_name().as_ref() == b"ln" => {
+                in_line = false;
+            }
+            Ok(Event::End(ref e)) if e.local_name().as_ref() == end_tag => break,
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+
+    if !saw_line {
+        ChartLine::Automatic
+    } else if suppressed {
+        ChartLine::Suppressed
+    } else {
+        ChartLine::Explicit { width_pt, color }
+    }
 }
 
 /// Read the colour of a solid fill, consuming up to `end_tag`.

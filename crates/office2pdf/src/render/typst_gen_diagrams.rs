@@ -502,6 +502,27 @@ const MAJOR_UNIT_FRACTIONS: [(f64, f64); 3] = [(2.0, 0.2), (5.0, 0.5), (10.0, 1.
 /// (issue #673).
 pub(super) const CHART_AUTOMATIC_LINE: &str = "0.75pt + rgb(134, 134, 134)";
 
+/// The stroke to draw one piece of chart chrome with, or `None` when the part
+/// suppressed it with `<a:ln><a:noFill/></a:ln>` and nothing should be drawn
+/// at all (issue #900).
+///
+/// A stated line falls back to [`CHART_AUTOMATIC_LINE`] for whichever half it
+/// leaves out, so a `<a:ln>` naming only a width keeps the automatic colour.
+fn chart_chrome_stroke(declared: crate::ir::ChartLine) -> Option<String> {
+    match declared {
+        crate::ir::ChartLine::Automatic => Some(CHART_AUTOMATIC_LINE.to_string()),
+        crate::ir::ChartLine::Suppressed => None,
+        crate::ir::ChartLine::Explicit { width_pt, color } => Some(format!(
+            "{}pt + {}",
+            format_f64(width_pt.unwrap_or(CHART_AUTOMATIC_LINE_PT)),
+            color.map_or_else(
+                || CHART_AUTOMATIC_LINE_RGB.to_string(),
+                |c| format!("rgb({}, {}, {})", c.r, c.g, c.b)
+            )
+        )),
+    }
+}
+
 /// Outline **Excel** draws around the whole chart area — plot, axis labels and
 /// legend alike — when the file states no `c:chartSpace/c:spPr/a:ln`.
 ///
@@ -700,53 +721,65 @@ fn tick_reach(mark: AxisTickMark, label_size_pt: f64) -> Option<(f64, f64)> {
 /// when the bars ran horizontally and the bottom one when they ran vertically.
 /// Both of those are the category axis, so the value axis went unstroked in
 /// either orientation (issue #672).
-fn write_left_axis_line(out: &mut String, plot_x: f64, plot_y: f64, plot_h: f64) {
+fn write_left_axis_line(out: &mut String, plot_x: f64, plot_y: f64, plot_h: f64, stroke: &str) {
     let _ = writeln!(
         out,
         "#place(top + left, dx: {}pt, dy: {}pt, line(end: (0pt, {}pt), stroke: {}))",
         format_f64(plot_x),
         format_f64(plot_y),
         format_f64(plot_h),
-        CHART_AUTOMATIC_LINE
+        stroke
     );
 }
 
 /// Stroke the axis line along the plot's bottom edge, at `axis_y`.
-fn write_bottom_axis_line(out: &mut String, plot_x: f64, axis_y: f64, plot_w: f64) {
+fn write_bottom_axis_line(out: &mut String, plot_x: f64, axis_y: f64, plot_w: f64, stroke: &str) {
     let _ = writeln!(
         out,
         "#place(top + left, dx: {}pt, dy: {}pt, line(end: ({}pt, 0pt), stroke: {}))",
         format_f64(plot_x),
         format_f64(axis_y),
         format_f64(plot_w),
-        CHART_AUTOMATIC_LINE
+        stroke
     );
 }
 
 /// Stroke one major tick across the axis line running under the plot, at `x`:
 /// `outward` reaches below the axis and `inward` back up into the plot.
-fn write_tick_under_plot(out: &mut String, x: f64, axis_y: f64, (outward, inward): (f64, f64)) {
+fn write_tick_under_plot(
+    out: &mut String,
+    x: f64,
+    axis_y: f64,
+    (outward, inward): (f64, f64),
+    stroke: &str,
+) {
     let _ = writeln!(
         out,
         "#place(top + left, dx: {}pt, dy: {}pt, line(end: (0pt, {}pt), stroke: {}))",
         format_f64(x),
         format_f64(axis_y - inward),
         format_f64(outward + inward),
-        CHART_AUTOMATIC_LINE
+        stroke
     );
 }
 
 /// Stroke one major tick across the axis line running down the plot's left
 /// edge, at `y`: `outward` reaches left of the axis and `inward` back into the
 /// plot.
-fn write_tick_left_of_plot(out: &mut String, axis_x: f64, y: f64, (outward, inward): (f64, f64)) {
+fn write_tick_left_of_plot(
+    out: &mut String,
+    axis_x: f64,
+    y: f64,
+    (outward, inward): (f64, f64),
+    stroke: &str,
+) {
     let _ = writeln!(
         out,
         "#place(top + left, dx: {}pt, dy: {}pt, line(end: ({}pt, 0pt), stroke: {}))",
         format_f64(axis_x - outward),
         format_f64(y),
         format_f64(outward + inward),
-        CHART_AUTOMATIC_LINE
+        stroke
     );
 }
 
@@ -1291,20 +1324,24 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
     let value_axis_drawn: bool = !chart.value_axis_deleted;
     let category_axis_drawn: bool = !chart.category_axis_deleted;
 
-    // Gridlines + value tick labels.
+    // Gridlines + value tick labels. The gridlines take the line
+    // `<c:majorGridlines><c:spPr><a:ln>` declares, if it declares one (#900).
+    let gridline_stroke = chart_chrome_stroke(chart.major_gridline_line);
     let major_units: Vec<f64> = major_units(nice_max, step);
     for tick in &major_units {
         let frac: f64 = tick / nice_max;
         if horizontal {
             let x: f64 = plot_x + frac * plot_w;
-            let _ = writeln!(
-                out,
-                "#place(top + left, dx: {}pt, dy: {}pt, line(end: (0pt, {}pt), stroke: {}))",
-                format_f64(x),
-                format_f64(plot_y),
-                format_f64(plot_h),
-                CHART_AUTOMATIC_LINE
-            );
+            if let Some(stroke) = gridline_stroke.as_deref() {
+                let _ = writeln!(
+                    out,
+                    "#place(top + left, dx: {}pt, dy: {}pt, line(end: (0pt, {}pt), stroke: {}))",
+                    format_f64(x),
+                    format_f64(plot_y),
+                    format_f64(plot_h),
+                    stroke
+                );
+            }
             if value_axis_drawn {
                 let _ = writeln!(
                     out,
@@ -1320,14 +1357,16 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
             }
         } else {
             let y: f64 = plot_y + (1.0 - frac) * plot_h;
-            let _ = writeln!(
-                out,
-                "#place(top + left, dx: {}pt, dy: {}pt, line(end: ({}pt, 0pt), stroke: {}))",
-                format_f64(plot_x),
-                format_f64(y),
-                format_f64(plot_w),
-                CHART_AUTOMATIC_LINE
-            );
+            if let Some(stroke) = gridline_stroke.as_deref() {
+                let _ = writeln!(
+                    out,
+                    "#place(top + left, dx: {}pt, dy: {}pt, line(end: ({}pt, 0pt), stroke: {}))",
+                    format_f64(plot_x),
+                    format_f64(y),
+                    format_f64(plot_w),
+                    stroke
+                );
+            }
             if value_axis_drawn {
                 let _ = writeln!(
                     out,
@@ -1478,11 +1517,23 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
     } else {
         (value_axis_drawn, category_axis_drawn)
     };
-    if left_axis_drawn {
-        write_left_axis_line(out, plot_x, plot_y, plot_h);
+    // Each axis draws with the line it declares, if it declares one (#900).
+    let (left_stroke, bottom_stroke) = if horizontal {
+        (
+            chart_chrome_stroke(chart.category_axis_line),
+            chart_chrome_stroke(chart.value_axis_line),
+        )
+    } else {
+        (
+            chart_chrome_stroke(chart.value_axis_line),
+            chart_chrome_stroke(chart.category_axis_line),
+        )
+    };
+    if let (true, Some(stroke)) = (left_axis_drawn, left_stroke.as_deref()) {
+        write_left_axis_line(out, plot_x, plot_y, plot_h, stroke);
     }
-    if bottom_axis_drawn {
-        write_bottom_axis_line(out, plot_x, plot_y + plot_h, plot_w);
+    if let (true, Some(stroke)) = (bottom_axis_drawn, bottom_stroke.as_deref()) {
+        write_bottom_axis_line(out, plot_x, plot_y + plot_h, plot_w, stroke);
     }
     if value_axis_drawn
         && let Some(reach) = tick_reach(
@@ -1494,9 +1545,17 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
         for tick in &major_units {
             let frac: f64 = tick / nice_max;
             if horizontal {
-                write_tick_under_plot(out, plot_x + frac * plot_w, plot_y + plot_h, reach);
-            } else {
-                write_tick_left_of_plot(out, plot_x, plot_y + (1.0 - frac) * plot_h, reach);
+                if let Some(stroke) = bottom_stroke.as_deref() {
+                    write_tick_under_plot(
+                        out,
+                        plot_x + frac * plot_w,
+                        plot_y + plot_h,
+                        reach,
+                        stroke,
+                    );
+                }
+            } else if let Some(stroke) = left_stroke.as_deref() {
+                write_tick_left_of_plot(out, plot_x, plot_y + (1.0 - frac) * plot_h, reach, stroke);
             }
         }
     }
@@ -1514,9 +1573,13 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
         for boundary in 0..=categories {
             let offset: f64 = boundary as f64 * row;
             if horizontal {
-                write_tick_left_of_plot(out, plot_x, plot_y + offset, reach);
+                if let Some(stroke) = left_stroke.as_deref() {
+                    write_tick_left_of_plot(out, plot_x, plot_y + offset, reach, stroke);
+                }
             } else {
-                write_tick_under_plot(out, plot_x + offset, plot_y + plot_h, reach);
+                if let Some(stroke) = bottom_stroke.as_deref() {
+                    write_tick_under_plot(out, plot_x + offset, plot_y + plot_h, reach, stroke);
+                }
             }
         }
     }
@@ -1729,18 +1792,22 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
     let value_axis_drawn: bool = !chart.value_axis_deleted;
     let category_axis_drawn: bool = !chart.category_axis_deleted;
 
-    // Horizontal gridlines + value tick labels.
+    // Horizontal gridlines + value tick labels, with the line
+    // `<c:majorGridlines>` declares when it declares one (#900).
+    let gridline_stroke = chart_chrome_stroke(chart.major_gridline_line);
     let major_units: Vec<f64> = major_units(nice_max, step);
     for tick in &major_units {
         let y: f64 = plot_y + (1.0 - tick / nice_max) * plot_h;
-        let _ = writeln!(
-            out,
-            "#place(top + left, dx: {}pt, dy: {}pt, line(end: ({}pt, 0pt), stroke: {}))",
-            format_f64(plot_x),
-            format_f64(y),
-            format_f64(plot_w),
-            CHART_AUTOMATIC_LINE
-        );
+        if let Some(stroke) = gridline_stroke.as_deref() {
+            let _ = writeln!(
+                out,
+                "#place(top + left, dx: {}pt, dy: {}pt, line(end: ({}pt, 0pt), stroke: {}))",
+                format_f64(plot_x),
+                format_f64(y),
+                format_f64(plot_w),
+                stroke
+            );
+        }
         if value_axis_drawn {
             let _ = writeln!(
                 out,
@@ -1828,11 +1895,13 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
     // Value/category axis lines and their major tick marks. The value axis
     // always runs down the left edge here and the category axis along the
     // bottom, whatever shape the series take.
-    if value_axis_drawn {
-        write_left_axis_line(out, plot_x, plot_y, plot_h);
+    let value_stroke = chart_chrome_stroke(chart.value_axis_line);
+    let category_stroke = chart_chrome_stroke(chart.category_axis_line);
+    if let (true, Some(stroke)) = (value_axis_drawn, value_stroke.as_deref()) {
+        write_left_axis_line(out, plot_x, plot_y, plot_h, stroke);
     }
-    if category_axis_drawn {
-        write_bottom_axis_line(out, plot_x, plot_y + plot_h, plot_w);
+    if let (true, Some(stroke)) = (category_axis_drawn, category_stroke.as_deref()) {
+        write_bottom_axis_line(out, plot_x, plot_y + plot_h, plot_w, stroke);
     }
     if value_axis_drawn
         && let Some(reach) = tick_reach(
@@ -1843,7 +1912,9 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
         // Every value tick sits on its own gridline, both being one major unit.
         for tick in &major_units {
             let y: f64 = plot_y + (1.0 - tick / nice_max) * plot_h;
-            write_tick_left_of_plot(out, plot_x, y, reach);
+            if let Some(stroke) = value_stroke.as_deref() {
+                write_tick_left_of_plot(out, plot_x, y, reach, stroke);
+            }
         }
     }
     // The boundaries of the bands `point_x` centres each category in, so every
@@ -1856,12 +1927,15 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
         )
     {
         for boundary in 0..=categories {
-            write_tick_under_plot(
-                out,
-                plot_x + boundary as f64 * band_w,
-                plot_y + plot_h,
-                reach,
-            );
+            if let Some(stroke) = category_stroke.as_deref() {
+                write_tick_under_plot(
+                    out,
+                    plot_x + boundary as f64 * band_w,
+                    plot_y + plot_h,
+                    reach,
+                    stroke,
+                );
+            }
         }
     }
 

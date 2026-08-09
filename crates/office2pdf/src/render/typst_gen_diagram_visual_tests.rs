@@ -30,6 +30,9 @@ fn test_codegen_chart_bar_visual_bars() {
         category_axis_major_tick_mark: AxisTickMark::Outside,
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
+        category_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_line: crate::ir::ChartLine::Automatic,
+        major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
@@ -96,6 +99,9 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
         category_axis_major_tick_mark: AxisTickMark::Outside,
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
+        category_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_line: crate::ir::ChartLine::Automatic,
+        major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
@@ -150,6 +156,9 @@ fn test_codegen_chart_pie_draws_a_pie() {
         category_axis_major_tick_mark: AxisTickMark::Outside,
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
+        category_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_line: crate::ir::ChartLine::Automatic,
+        major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
@@ -209,6 +218,9 @@ fn test_codegen_chart_line_trend_indicators() {
         category_axis_major_tick_mark: AxisTickMark::Outside,
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
+        category_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_line: crate::ir::ChartLine::Automatic,
+        major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
@@ -258,6 +270,9 @@ fn test_codegen_chart_empty_series() {
         category_axis_major_tick_mark: AxisTickMark::Outside,
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
+        category_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_line: crate::ir::ChartLine::Automatic,
+        major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
@@ -341,6 +356,9 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
         category_axis_major_tick_mark: AxisTickMark::Outside,
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
+        category_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_line: crate::ir::ChartLine::Automatic,
+        major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
@@ -393,6 +411,9 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
         category_axis_major_tick_mark: AxisTickMark::Outside,
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
+        category_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_line: crate::ir::ChartLine::Automatic,
+        major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
@@ -598,6 +619,9 @@ fn test_codegen_chart_line_plot() {
         category_axis_major_tick_mark: AxisTickMark::Outside,
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
+        category_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_line: crate::ir::ChartLine::Automatic,
+        major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
@@ -655,6 +679,9 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
         category_axis_major_tick_mark: AxisTickMark::Outside,
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
+        category_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_line: crate::ir::ChartLine::Automatic,
+        major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
@@ -737,6 +764,9 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
         category_axis_major_tick_mark: AxisTickMark::Outside,
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
+        category_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_line: crate::ir::ChartLine::Automatic,
+        major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout {
             gap_width_percent: 90.0,
@@ -874,6 +904,9 @@ fn legend_chart(position: LegendPosition) -> Chart {
         category_axis_major_tick_mark: AxisTickMark::Outside,
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
+        category_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_line: crate::ir::ChartLine::Automatic,
+        major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
@@ -1025,6 +1058,9 @@ fn a_declared_series_fill_reaches_the_bars() {
         category_axis_major_tick_mark: AxisTickMark::Outside,
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
+        category_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_line: crate::ir::ChartLine::Automatic,
+        major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
@@ -1075,6 +1111,9 @@ fn a_series_without_a_fill_still_takes_the_palette() {
         category_axis_major_tick_mark: AxisTickMark::Outside,
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
+        category_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_line: crate::ir::ChartLine::Automatic,
+        major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
@@ -1123,6 +1162,9 @@ fn per_point_fills_colour_each_bar_separately() {
         category_axis_major_tick_mark: AxisTickMark::Outside,
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
+        category_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_line: crate::ir::ChartLine::Automatic,
+        major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
@@ -1170,6 +1212,9 @@ fn axis_titled_chart(category: Option<&str>, value: Option<&str>) -> Chart {
         category_axis_major_tick_mark: AxisTickMark::Outside,
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
+        category_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_line: crate::ir::ChartLine::Automatic,
+        major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
@@ -1267,6 +1312,9 @@ fn labelled_chart(labels: DataLabels) -> Chart {
         category_axis_major_tick_mark: AxisTickMark::Outside,
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
+        category_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_line: crate::ir::ChartLine::Automatic,
+        major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
@@ -1357,6 +1405,9 @@ fn pie_chart(values: Vec<f64>) -> Chart {
         category_axis_major_tick_mark: AxisTickMark::Outside,
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
+        category_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_line: crate::ir::ChartLine::Automatic,
+        major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
@@ -1546,6 +1597,9 @@ fn test_chart_default_gridline_matches_powerpoint() {
         category_axis_major_tick_mark: AxisTickMark::Outside,
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
+        category_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_line: crate::ir::ChartLine::Automatic,
+        major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
@@ -1699,6 +1753,9 @@ fn tick_mark_chart(
         category_axis_major_tick_mark,
         value_axis_major_tick_mark,
         category_axis_deleted: false,
+        category_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_line: crate::ir::ChartLine::Automatic,
+        major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
@@ -2296,6 +2353,9 @@ fn band_layout_chart(
         category_axis_major_tick_mark: AxisTickMark::Outside,
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
+        category_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_line: crate::ir::ChartLine::Automatic,
+        major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: layout,
         theme_accent_colors: Vec::new(),
@@ -2573,6 +2633,9 @@ fn two_series_bar_chart(theme_accent_colors: Vec<crate::ir::Color>) -> Chart {
         category_axis_major_tick_mark: AxisTickMark::Outside,
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
+        category_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_line: crate::ir::ChartLine::Automatic,
+        major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors,
@@ -3316,6 +3379,9 @@ fn test_data_table_prints_a_series_number_format() {
         category_axis_major_tick_mark: AxisTickMark::Outside,
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
+        category_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_line: crate::ir::ChartLine::Automatic,
+        major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
@@ -3365,6 +3431,9 @@ fn test_data_table_prints_a_declared_thousands_format() {
         category_axis_major_tick_mark: AxisTickMark::Outside,
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
+        category_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_line: crate::ir::ChartLine::Automatic,
+        major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
@@ -3412,6 +3481,9 @@ fn test_data_table_without_a_number_format_prints_plainly() {
         category_axis_major_tick_mark: AxisTickMark::Outside,
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
+        category_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_line: crate::ir::ChartLine::Automatic,
+        major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
@@ -3458,6 +3530,9 @@ fn test_a_currency_axis_label_is_escaped() {
         category_axis_major_tick_mark: AxisTickMark::Outside,
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
+        category_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_line: crate::ir::ChartLine::Automatic,
+        major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
@@ -3506,6 +3581,9 @@ fn single_series_chart(auto_title_deleted: bool) -> Chart {
         category_axis_major_tick_mark: AxisTickMark::Outside,
         value_axis_major_tick_mark: AxisTickMark::Outside,
         category_axis_deleted: false,
+        category_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_line: crate::ir::ChartLine::Automatic,
+        major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
@@ -3537,5 +3615,69 @@ fn test_a_chart_that_keeps_its_automatic_title_still_gets_one() {
     assert!(
         source.contains("Serie 1"),
         "the automatic title must survive: {source}"
+    );
+}
+
+/// The axes and gridlines draw with the line the part declares, and fall back
+/// to the automatic stroke only where it declares none (issue #900).
+#[test]
+fn declared_axis_and_gridline_lines_reach_the_generated_source() {
+    let white = crate::ir::ChartLine::Explicit {
+        width_pt: Some(1.0),
+        color: Some(Color::new(0xFF, 0xFF, 0xFF)),
+    };
+    let mut chart = stacked_support_chart(ChartGrouping::Clustered);
+    chart.category_axis_line = white;
+    chart.value_axis_line = white;
+    chart.major_gridline_line = white;
+
+    let source = chart_source(chart);
+
+    assert!(
+        source.contains("stroke: 1pt + rgb(255, 255, 255)"),
+        "the declared white line must reach the source:\n{source}"
+    );
+    // The chart-area outline is a separate declaration and this chart states
+    // none, so it keeps the automatic stroke. Only the `line(...)` draws — the
+    // axes, ticks and gridlines — are this issue's.
+    let automatic_lines = source
+        .lines()
+        .filter(|line| line.contains("line(end:") && line.contains("rgb(134, 134, 134)"))
+        .count();
+    assert_eq!(
+        automatic_lines, 0,
+        "no axis, tick or gridline should still take the automatic grey:\n{source}"
+    );
+}
+
+/// A suppressed line draws nothing at all — not the automatic one.
+#[test]
+fn a_suppressed_axis_line_is_not_drawn() {
+    let mut chart = stacked_support_chart(ChartGrouping::Clustered);
+    chart.value_axis_line = crate::ir::ChartLine::Suppressed;
+    chart.category_axis_line = crate::ir::ChartLine::Suppressed;
+    chart.major_gridline_line = crate::ir::ChartLine::Suppressed;
+
+    let source = chart_source(chart);
+
+    let drawn_lines = source
+        .lines()
+        .filter(|line| line.contains("line(end:"))
+        .count();
+    assert_eq!(
+        drawn_lines, 0,
+        "a suppressed axis and gridline draw nothing:\n{source}"
+    );
+}
+
+/// A chart that declares nothing keeps the automatic stroke, so the fallback
+/// is not lost along the way.
+#[test]
+fn an_undeclared_axis_still_draws_the_automatic_line() {
+    let source = chart_source(stacked_support_chart(ChartGrouping::Clustered));
+
+    assert!(
+        source.contains("0.75pt + rgb(134, 134, 134)"),
+        "the automatic stroke must survive:\n{source}"
     );
 }
