@@ -386,6 +386,44 @@ const CHART_CATEGORY_COLORS: [&str; 6] = [
     "rgb(0, 172, 193)",
 ];
 
+/// A chart value rendered through the number format its data declares, or
+/// through [`chart_value_label`] when it declares none.
+///
+/// A chart stores a ratio as a fraction and says `0.00%` beside it in
+/// `<c:numCache><c:formatCode>`, so a value axis and its data labels printed
+/// `0.2` and `0.024` where the source, and every other renderer, show `20%`
+/// and `2.4%` (issue #865). The formatter is the one the XLSX path already
+/// uses, so a code means the same thing in both.
+pub(super) fn chart_value_label_formatted(value: f64, number_format: Option<&str>) -> String {
+    match number_format {
+        Some(format_code) => umya_spreadsheet::helper::number_format::to_formatted_string(
+            value.to_string(),
+            format_code,
+        ),
+        None => chart_value_label(value),
+    }
+}
+
+/// The number format a chart's value axis and data labels take: the first one
+/// any series declares. A chart's series share one value axis, and Office
+/// writes the same code into each series' cache.
+pub(super) fn chart_value_number_format(chart: &Chart) -> Option<&str> {
+    chart
+        .value_axis_number_format
+        .as_deref()
+        .or_else(|| chart.series.iter().find_map(|s| s.number_format.as_deref()))
+}
+
+/// The number format one series' data labels take: the label's own, else the
+/// series' cache format, which is the source cell's.
+pub(super) fn series_label_number_format(series: &crate::ir::ChartSeries) -> Option<&str> {
+    series
+        .data_labels
+        .number_format
+        .as_deref()
+        .or(series.number_format.as_deref())
+}
+
 /// Format a chart value without floating-point noise (e.g. 8.2000001 → 8.2).
 pub(super) fn chart_value_label(value: f64) -> String {
     if value.fract().abs() < 1e-9 {
@@ -858,7 +896,10 @@ fn data_label_text(
         parts.push(category.clone());
     }
     if labels.show_value {
-        parts.push(chart_value_label(value));
+        parts.push(chart_value_label_formatted(
+            value,
+            series_label_number_format(series),
+        ));
     }
     if labels.show_percent {
         let percent: f64 = if percent_base == 0.0 {
@@ -1270,7 +1311,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                     format_f64(x - 12.0),
                     format_f64(plot_y + plot_h + 4.0),
                     format_f64(chart_axis_text_pt(chart, chart.value_axis_text_style)),
-                    chart_value_label(*tick)
+                    chart_value_label_formatted(*tick, chart_value_number_format(chart))
                 );
             }
         } else {
@@ -1299,7 +1340,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                         chart.value_axis_text_style
                     ))),
                     format_f64(chart_axis_text_pt(chart, chart.value_axis_text_style)),
-                    chart_value_label(*tick)
+                    chart_value_label_formatted(*tick, chart_value_number_format(chart))
                 );
             }
         }
@@ -1707,7 +1748,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
                     chart.value_axis_text_style
                 ))),
                 format_f64(chart_axis_text_pt(chart, chart.value_axis_text_style)),
-                chart_value_label(*tick)
+                chart_value_label_formatted(*tick, chart_value_number_format(chart))
             );
         }
     }
@@ -2536,7 +2577,14 @@ fn generate_chart_table(out: &mut String, chart: &Chart) {
         let _ = write!(out, "  [{escaped_category}], ");
         for (index, series) in chart.series.iter().enumerate() {
             let value: f64 = series.values.get(row_index).copied().unwrap_or(0.0);
-            let _ = write!(out, "[{}]", format_f64(value));
+            let _ = write!(
+                out,
+                "[{}]",
+                escape_typst(&chart_value_label_formatted(
+                    value,
+                    series.number_format.as_deref()
+                ))
+            );
             if index + 1 < chart.series.len() {
                 out.push_str(", ");
             }

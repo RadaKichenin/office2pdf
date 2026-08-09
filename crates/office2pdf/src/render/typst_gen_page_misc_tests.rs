@@ -702,6 +702,7 @@ fn test_table_page_with_chart_at_row() {
             fill: None,
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
+            number_format: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -720,6 +721,7 @@ fn test_table_page_with_chart_at_row() {
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: None,
     };
 
     let page = Page::Sheet(SheetPage {
@@ -763,6 +765,7 @@ fn test_table_page_with_chart_at_end() {
             fill: None,
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
+            number_format: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -781,6 +784,7 @@ fn test_table_page_with_chart_at_end() {
         text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: None,
     };
 
     let page = Page::Sheet(SheetPage {
