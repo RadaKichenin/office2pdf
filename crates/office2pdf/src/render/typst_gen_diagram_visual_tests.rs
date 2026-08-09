@@ -3726,3 +3726,47 @@ fn a_clustered_bar_label_sits_outside_its_end_and_a_stacked_one_centres() {
         "an outEnd label must sit above a centred one: outEnd dy {outside}, ctr dy {centred}"
     );
 }
+
+/// An `outEnd` label clears the bar's end rather than sitting flush against it
+/// (issue #907).
+///
+/// The reference leaves about 2.8pt whatever the label's size — 8pt labels
+/// clear by a mean 2.66pt, 11.97pt by 2.99pt, 18pt by 2.73pt — so the
+/// placement carries a constant offset, asserted here against the bar's own
+/// `dy` in the same generated source.
+#[test]
+fn an_outside_end_label_clears_the_bar_by_a_constant() {
+    let mut chart = stacked_support_chart(ChartGrouping::Clustered);
+    for series in &mut chart.series {
+        series.data_labels = DataLabels {
+            show_value: true,
+            position: crate::ir::DataLabelPosition::OutsideEnd,
+            position_stated: true,
+            ..DataLabels::default()
+        };
+    }
+    let source = chart_source(chart);
+
+    fn first_dy(source: &str, needle: &str) -> f64 {
+        source
+            .lines()
+            .filter(|line| line.contains(needle))
+            .find_map(|line| line.split("dy: ").nth(1)?.split("pt").next()?.parse().ok())
+            .unwrap_or_else(|| panic!("no {needle} draw in:\n{source}"))
+    }
+
+    // The first bar rect and the first label box, in draw order.
+    let bar_top: f64 = first_dy(&source, "rect(width:");
+    let label_dy: f64 = first_dy(&source, "align(center + horizon)");
+
+    let clearance: f64 = bar_top - label_dy;
+    assert!(
+        clearance > 10.0,
+        "an outEnd label must clear the bar top by more than its own line box, \
+         got {clearance} (bar {bar_top}, label {label_dy})"
+    );
+    assert!(
+        (clearance - 12.4).abs() < 0.01,
+        "expected the 10pt line box plus the 2.4pt gap, got {clearance}"
+    );
+}

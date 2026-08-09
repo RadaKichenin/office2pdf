@@ -1073,6 +1073,18 @@ const LABEL_LINE_H: f64 = 10.0;
 /// span once the label is beside it (issue #901).
 const LABEL_OUTSIDE_W: f64 = 40.0;
 
+/// Clearance between a bar's end and an `outEnd` label, so the text does not
+/// sit flush against it (issue #907).
+///
+/// Measured on `002.CONTOSO.pptx` (#841) through LibreOffice 24.2 with the
+/// deck's label size rewritten, to tell an absolute gap from one that scales:
+/// 8pt labels clear the bar by a mean 2.66pt, 11.97pt by 2.99pt and 18pt by
+/// 2.73pt. Across a 2.25x range in size the gap moves by 0.33pt while the
+/// ratio to the size swings from 0.33 to 0.15, so it is a constant. This is
+/// the offset added to the placement; the glyphs already sit about 0.44pt
+/// inside their line box, which brings the drawn clearance to about 2.8pt.
+const LABEL_OUTSIDE_GAP: f64 = 2.4;
+
 /// Size of the plotting rectangle itself.
 ///
 /// Given a frame, the plot takes whatever is left of it after the label gutters
@@ -1458,7 +1470,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                     let bar_w: f64 = frac * plot_w;
                     let x: f64 = match position {
                         DataLabelPosition::Center => bar_start,
-                        DataLabelPosition::OutsideEnd => bar_start + bar_w,
+                        DataLabelPosition::OutsideEnd => bar_start + bar_w + LABEL_OUTSIDE_GAP,
                         DataLabelPosition::InsideEnd => bar_start + bar_w - LABEL_OUTSIDE_W,
                         DataLabelPosition::InsideBase => bar_start,
                     };
@@ -1478,7 +1490,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                         DataLabelPosition::Center => {
                             (bar_top + bar_bottom) / 2.0 - LABEL_LINE_H / 2.0
                         }
-                        DataLabelPosition::OutsideEnd => bar_top - LABEL_LINE_H,
+                        DataLabelPosition::OutsideEnd => bar_top - LABEL_LINE_H - LABEL_OUTSIDE_GAP,
                         DataLabelPosition::InsideEnd => bar_top,
                         DataLabelPosition::InsideBase => bar_bottom - LABEL_LINE_H,
                     };
