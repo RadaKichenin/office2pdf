@@ -131,6 +131,32 @@ This project follows a **6-month rolling MSRV policy** (aligned with [tokio](htt
 - **Closing condition.** An issue may be closed only when a fresh GT comparison shows its specific defect gone. Every remaining visible deviation on that comparison must already have its own open issue — file the missing ones before closing.
 - **After images are re-audited.** When posting an after image, re-run the checklist on it; each still-visible deviation gets an issue reference in the PR body ("remaining, tracked in #N").
 
+### Fine-level difference analysis (reported files)
+
+When a user reports files, audit **every page of every file** to this depth, not
+just the pages a screenshot shows.
+
+1. **Check the reference's provenance first.** `pdfinfo x.pdf | grep -Ei
+   'producer|creator'`. A PDF attached beside a source file is often *our own*
+   output — office2pdf reports `Creator: Typst 0.14.x`, LibreOffice reports
+   `Producer: LibreOffice`. Two PDFs sharing embedded font subset tags came from
+   the same producer. Generate a real reference with `soffice --headless
+   --convert-to pdf` when in doubt.
+2. **Run all four axes**, not one: `compare_layout.py` (geometry, per page),
+   `compare_text_layer.py` (what a reader can select), `compare_render.py`
+   (colour and pixels), and a page-by-page visual at >=150 DPI.
+3. **Read the source XML before attributing a deviation.** Name the element and
+   attribute that produced it; a measurement without one is a guess.
+4. **A token the reference has and we lack is not automatically our defect.**
+   LibreOffice fragments words itself (`Gullfi sk`, `eff ektivt`,
+   `C O N T O S O`). Check which side is wrong before filing.
+5. File **one issue per root cause**, each with the numbers that identify it.
+
+**Iterate until a pass finds nothing new.** Every fix changes what is visible
+underneath it, so after each merge re-run the whole audit, file what the fix
+uncovered, and fix that in turn. Report a file "done" only after a pass over it
+produces no new finding.
+
 ### Three-axis comparison (`scripts/compare_render.py`)
 
 Run `python3 scripts/compare_render.py <GT.pdf> <output.pdf> [--page N]` before
