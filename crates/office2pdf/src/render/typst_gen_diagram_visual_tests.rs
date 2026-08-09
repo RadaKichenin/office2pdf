@@ -32,6 +32,7 @@ fn test_codegen_chart_bar_visual_bars() {
         category_axis_deleted: false,
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_major_unit: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -101,6 +102,7 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
         category_axis_deleted: false,
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_major_unit: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -158,6 +160,7 @@ fn test_codegen_chart_pie_draws_a_pie() {
         category_axis_deleted: false,
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_major_unit: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -220,6 +223,7 @@ fn test_codegen_chart_line_trend_indicators() {
         category_axis_deleted: false,
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_major_unit: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -272,6 +276,7 @@ fn test_codegen_chart_empty_series() {
         category_axis_deleted: false,
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_major_unit: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -358,6 +363,7 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
         category_axis_deleted: false,
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_major_unit: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -413,6 +419,7 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
         category_axis_deleted: false,
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_major_unit: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -621,6 +628,7 @@ fn test_codegen_chart_line_plot() {
         category_axis_deleted: false,
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_major_unit: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -681,6 +689,7 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
         category_axis_deleted: false,
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_major_unit: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -766,6 +775,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
         category_axis_deleted: false,
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_major_unit: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout {
@@ -906,6 +916,7 @@ fn legend_chart(position: LegendPosition) -> Chart {
         category_axis_deleted: false,
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_major_unit: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -1060,6 +1071,7 @@ fn a_declared_series_fill_reaches_the_bars() {
         category_axis_deleted: false,
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_major_unit: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -1113,6 +1125,7 @@ fn a_series_without_a_fill_still_takes_the_palette() {
         category_axis_deleted: false,
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_major_unit: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -1164,6 +1177,7 @@ fn per_point_fills_colour_each_bar_separately() {
         category_axis_deleted: false,
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_major_unit: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -1214,6 +1228,7 @@ fn axis_titled_chart(category: Option<&str>, value: Option<&str>) -> Chart {
         category_axis_deleted: false,
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_major_unit: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -1314,6 +1329,7 @@ fn labelled_chart(labels: DataLabels) -> Chart {
         category_axis_deleted: false,
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_major_unit: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -1409,6 +1425,7 @@ fn pie_chart(values: Vec<f64>) -> Chart {
         category_axis_deleted: false,
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_major_unit: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -1603,6 +1620,7 @@ fn test_chart_default_gridline_matches_powerpoint() {
         category_axis_deleted: false,
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_major_unit: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -1759,6 +1777,7 @@ fn tick_mark_chart(
         category_axis_deleted: false,
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_major_unit: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -2359,6 +2378,7 @@ fn band_layout_chart(
         category_axis_deleted: false,
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_major_unit: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: layout,
@@ -2639,6 +2659,7 @@ fn two_series_bar_chart(theme_accent_colors: Vec<crate::ir::Color>) -> Chart {
         category_axis_deleted: false,
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_major_unit: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -3385,6 +3406,7 @@ fn test_data_table_prints_a_series_number_format() {
         category_axis_deleted: false,
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_major_unit: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -3437,6 +3459,7 @@ fn test_data_table_prints_a_declared_thousands_format() {
         category_axis_deleted: false,
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_major_unit: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -3487,6 +3510,7 @@ fn test_data_table_without_a_number_format_prints_plainly() {
         category_axis_deleted: false,
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_major_unit: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -3536,6 +3560,7 @@ fn test_a_currency_axis_label_is_escaped() {
         category_axis_deleted: false,
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_major_unit: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -3587,6 +3612,7 @@ fn single_series_chart(auto_title_deleted: bool) -> Chart {
         category_axis_deleted: false,
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_major_unit: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -3768,5 +3794,43 @@ fn an_outside_end_label_clears_the_bar_by_a_constant() {
     assert!(
         (clearance - 12.4).abs() < 0.01,
         "expected the 10pt line box plus the 2.4pt gap, got {clearance}"
+    );
+}
+
+/// A declared `<c:majorUnit>` sets the tick interval (issue #882).
+///
+/// The deck in #841 declares 0.2 on a 0.689 maximum and the reference ticks
+/// 0/20/40/60/80%; we ticked every 10%, twice as often as the file asks.
+#[test]
+fn a_stated_major_unit_sets_the_tick_interval() {
+    fn tick_labels(unit: Option<f64>) -> Vec<String> {
+        let mut chart = stacked_support_chart(ChartGrouping::Clustered);
+        chart.value_axis_major_unit = unit;
+        let source = chart_source(chart);
+        source
+            .lines()
+            .filter(|line| line.contains("align(right + horizon)"))
+            .filter_map(|line| {
+                let start = line.rfind('[')?;
+                Some(
+                    line[start + 1..]
+                        .trim_end_matches(&[']', ')'][..])
+                        .to_string(),
+                )
+            })
+            .collect()
+    }
+
+    let automatic = tick_labels(None);
+    let stated = tick_labels(Some(4.0));
+
+    assert!(
+        stated.len() < automatic.len(),
+        "a 4-unit interval must give fewer ticks than the automatic one: \
+         automatic {automatic:?}, stated {stated:?}"
+    );
+    assert!(
+        stated.len() >= 2,
+        "the axis still needs its ticks: {stated:?}"
     );
 }

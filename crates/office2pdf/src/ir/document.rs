@@ -173,7 +173,10 @@ pub enum FixedElementKind {
     Shape(super::elements::Shape),
     Table(super::elements::Table),
     SmartArt(super::elements::SmartArt),
-    Chart(super::elements::Chart),
+    /// Boxed: `Chart` is much the largest variant, and carrying it inline
+    /// made every `FixedElement` pay for it (clippy's
+    /// `large_enum_variant`).
+    Chart(Box<super::elements::Chart>),
 }
 
 /// A spreadsheet sheet page (XLSX sheets).

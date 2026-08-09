@@ -1895,3 +1895,37 @@ fn a_stated_data_label_position_wins_over_the_default() {
         );
     }
 }
+
+/// `<c:majorUnit>` sets the value axis' tick interval; the auto-scale applies
+/// only when the part states none (issue #882).
+///
+/// `002.CONTOSO.pptx` (#841) declares `<c:majorUnit val="0.2"/>` and the
+/// reference ticks 0/20/40/60/80%; we ticked every 10%, twice as often as the
+/// file asks.
+#[test]
+fn a_stated_major_unit_reaches_the_model() {
+    let xml = bar_chart_xml(r#"<c:barDir val="col"/><c:grouping val="clustered"/>"#).replace(
+        "</c:plotArea>",
+        r#"<c:valAx><c:axId val="2"/><c:majorUnit val="0.2"/></c:valAx></c:plotArea>"#,
+    );
+
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).expect("chart parses");
+
+    let unit = chart
+        .value_axis_major_unit
+        .expect("a stated major unit reaches the model");
+    assert!((unit - 0.2).abs() < 1e-9, "expected 0.2, got {unit}");
+}
+
+/// An axis that states none leaves the interval to the auto-scale.
+#[test]
+fn an_unstated_major_unit_is_none() {
+    let xml = bar_chart_xml(r#"<c:barDir val="col"/><c:grouping val="clustered"/>"#).replace(
+        "</c:plotArea>",
+        r#"<c:valAx><c:axId val="2"/></c:valAx></c:plotArea>"#,
+    );
+
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).expect("chart parses");
+
+    assert_eq!(chart.value_axis_major_unit, None);
+}
