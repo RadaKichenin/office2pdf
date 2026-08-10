@@ -1854,15 +1854,16 @@ fn test_header_whose_first_paragraph_is_a_page_field_seats_that_line() {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-/// The shift can never push header ink past the bottom of its band.
+/// Header ink never reaches the body's first line.
 ///
-/// The band is a fixed `w:top - w:header` tall, so an unclamped shift walks the
-/// story into the body's first line: a two-line 12pt Malgun letterhead put its
-/// second baseline 1.995pt past the top margin. Word does not overprint there —
-/// it grows the top margin — so until that is modelled (issue #736) the shift is
-/// clamped to the slack the story leaves.
+/// This once asserted the ink stayed inside the *declared* `w:top - w:header`
+/// band, because the shift was clamped to whatever slack the story left — a
+/// stand-in noted as holding only "until #736 is modelled". #736 is modelled
+/// now: the band grows with the story instead, so the invariant worth keeping
+/// is the one the clamp was protecting, that the header never overprints the
+/// body.
 #[test]
-fn test_header_band_shift_never_pushes_ink_past_the_band() {
+fn test_header_ink_never_reaches_the_body() {
     if crate::render::pdf::font_hhea_ascender_em("Malgun Gothic").is_none() {
         return;
     }
@@ -1889,9 +1890,13 @@ fn test_header_band_shift_never_pushes_ink_past_the_band() {
     let last_header_baseline: f64 = *baselines_of(&doc, "서울특별시")
         .last()
         .expect("the second header line is placed");
+    let first_body_baseline: f64 = *baselines_of(&doc, "Body")
+        .first()
+        .expect("the body's first line is placed");
     assert!(
-        last_header_baseline <= 62.35 + 0.01,
-        "header ink reached {last_header_baseline}pt, past the 62.35pt band bottom"
+        last_header_baseline < first_body_baseline,
+        "header ink reached {last_header_baseline}pt, at or past the body's \
+         first baseline at {first_body_baseline}pt"
     );
     let body_baseline: f64 = baselines_of(&doc, "Body")[0];
     assert!(
@@ -2547,5 +2552,113 @@ fn a_header_rule_is_spaced_from_the_line_box_bottom() {
     assert!(
         source.contains(&expected),
         "the header rule must be spaced from the line box bottom ({expected}): {source}"
+    );
+}
+
+/// A header taller than its band grows the top margin (issue #736).
+///
+/// The two-line case above was only clamped, so it never reached the body and
+/// would pass without this fix. Four 12pt lines into the same 26.95pt band do
+/// overflow: before the margin grew, the third and fourth header lines
+/// interleaved with the body text, which the reference export places below all
+/// four.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_header_taller_than_its_band_pushes_the_body_down() {
+    if crate::render::pdf::font_hhea_ascender_em("Malgun Gothic").is_none() {
+        return;
+    }
+    let line = |text: &str| {
+        header_text_paragraph(
+            text,
+            TextStyle {
+                font_family: Some("Malgun Gothic".to_string()),
+                east_asian_font_family: Some("Malgun Gothic".to_string()),
+                font_size: Some(12.0),
+                ..TextStyle::default()
+            },
+        )
+    };
+    // 26.95pt of band against four 12pt East Asian lines.
+    let doc = doc_with_header(
+        Some(35.4),
+        62.35,
+        vec![
+            line("첫째 줄"),
+            line("둘째 줄"),
+            line("셋째 줄"),
+            line("넷째 줄"),
+        ],
+    );
+
+    let last_header_baseline: f64 = *baselines_of(&doc, "넷째 줄")
+        .last()
+        .expect("the fourth header line is placed");
+    let first_body_baseline: f64 = *baselines_of(&doc, "Body")
+        .first()
+        .expect("the body's first line is placed");
+    assert!(
+        last_header_baseline < first_body_baseline,
+        "the fourth header line sits at {last_header_baseline}pt, at or past \
+         the body's first baseline at {first_body_baseline}pt — the top margin \
+         did not grow"
+    );
+    // And the growth is real rather than the body merely starting late.
+    assert!(
+        first_body_baseline > 62.35,
+        "the body must be pushed past the declared 62.35pt top margin, got \
+         {first_body_baseline}pt"
+    );
+}
+
+/// A taller first-page story grows the shared margin too (issues #736, #846).
+///
+/// One margin serves the whole section, so measuring only the default story
+/// would leave a taller `w:titlePg` header overprinting page one — the same
+/// defect, one page in.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_taller_first_page_header_also_grows_the_margin() {
+    use crate::ir::HeaderFooter;
+
+    if crate::render::pdf::font_hhea_ascender_em("Malgun Gothic").is_none() {
+        return;
+    }
+    let line = |text: &str| {
+        header_text_paragraph(
+            text,
+            TextStyle {
+                font_family: Some("Malgun Gothic".to_string()),
+                east_asian_font_family: Some("Malgun Gothic".to_string()),
+                font_size: Some(12.0),
+                ..TextStyle::default()
+            },
+        )
+    };
+    // The default story fits its band; only the first-page one overflows.
+    let mut doc = doc_with_header(Some(35.4), 62.35, vec![line("한 줄")]);
+    let Some(Page::Flow(page)) = doc.pages.first_mut() else {
+        panic!("the fixture is a flow page");
+    };
+    page.first_header = Some(HeaderFooter {
+        distance_from_edge: Some(35.4),
+        paragraphs: vec![
+            line("표지 첫째 줄"),
+            line("표지 둘째 줄"),
+            line("표지 셋째 줄"),
+            line("표지 넷째 줄"),
+        ],
+    });
+
+    let last_first_page_baseline: f64 = *baselines_of(&doc, "표지 넷째 줄")
+        .last()
+        .expect("the fourth first-page header line is placed");
+    let first_body_baseline: f64 = *baselines_of(&doc, "Body")
+        .first()
+        .expect("the body's first line is placed");
+    assert!(
+        last_first_page_baseline < first_body_baseline,
+        "the first-page header reaches {last_first_page_baseline}pt against the \
+         body's {first_body_baseline}pt — the shared margin ignored it"
     );
 }

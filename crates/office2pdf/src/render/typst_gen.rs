@@ -1460,6 +1460,7 @@ fn flow_header_value(
     header: &HeaderFooter,
     page: &FlowPage,
     size: &PageSize,
+    top_margin_pt: f64,
     ctx: &mut GenCtx,
 ) -> FlowHeaderValue {
     let mut out = String::new();
@@ -1472,7 +1473,7 @@ fn flow_header_value(
     let header_band: Option<f64> = header
         .distance_from_edge
         // Keep float noise out of the emitted source.
-        .map(|distance| ((page.margins.top - distance) * 100.0).round() / 100.0)
+        .map(|distance| ((top_margin_pt - distance) * 100.0).round() / 100.0)
         .filter(|band| *band > 0.0);
     if let Some(band) = header_band {
         match header_band_shift_pt(header) {
@@ -1510,6 +1511,78 @@ fn flow_header_value(
     }
 }
 
+/// The top margin the page needs, in points.
+///
+/// Word's header band is `w:top - w:header`, and a header taller than it grows
+/// the top margin rather than overprinting the body. Before this, a header of
+/// four 12pt lines in a 26.95pt band interleaved its last two lines with the
+/// body text; the reference export pushes the body below all four (issue #736).
+///
+/// Only growth is possible, and only for a story that outgrows its band: one
+/// that fits leaves `w:top` alone, so the common case emits exactly what it
+/// always did. A header whose face cannot be measured also leaves it alone
+/// rather than guessing.
+fn flow_page_top_margin_pt(page: &FlowPage) -> f64 {
+    // One margin serves the whole section, so where `w:titlePg` gives the first
+    // page its own story both have to fit it — taking the default story alone
+    // would leave a taller first-page header overprinting page one, which is
+    // the same defect one page in (#846 added that second story).
+    [page.header.as_ref(), page.first_header.as_ref()]
+        .into_iter()
+        .flatten()
+        .filter(|header| hf_has_flow_content(header))
+        .filter_map(|header| {
+            // The band runs from the `w:header` line down, so a story that
+            // overflows needs the margin to reach the bottom of its content.
+            let reach: f64 =
+                header.distance_from_edge.unwrap_or(0.0) + hf_content_height_pt(header)?;
+            // A story that fits its band is left exactly as it renders today,
+            // clamp and all. Growing those too would move the body a fraction
+            // of a point on ordinary documents — measured at 0.63pt for a
+            // single 12pt Malgun line well inside its band — which is a
+            // different change from stopping an overflow, and one no reference
+            // export here justifies.
+            if reach <= page.margins.top {
+                return None;
+            }
+            // An overflowing story needs room for the ascent correction as
+            // well, or `write_shifted_header_band` clamps the shift straight
+            // back off: the two-line Malgun letterhead measured 41.4984pt of
+            // content against a 41.5pt band, 0.0016pt of room for a 6.84pt
+            // shift (#629 seats that baseline).
+            Some(reach + header_band_shift_pt(header).unwrap_or(0.0).max(0.0))
+        })
+        .fold(page.margins.top, f64::max)
+}
+
+/// Height a header or footer story's lines take, in points.
+///
+/// One natural line per paragraph plus whatever its `w:pBdr` rules and their
+/// `w:space` reserve. Wrapping is not modelled: a header paragraph that wraps
+/// would measure short, which grows the margin less than it should rather than
+/// more, so the failure stays on the side of the current behaviour.
+fn hf_content_height_pt(hf: &HeaderFooter) -> Option<f64> {
+    let mut total: f64 = 0.0;
+    for paragraph in &hf.paragraphs {
+        let runs: Vec<Run> = hf_paragraph_metric_runs(paragraph);
+        total += text::word_line_advance_pt(&runs)?;
+        if let Some(border) = paragraph.border.as_ref() {
+            for (side, space) in [
+                (border.top.as_ref(), paragraph.border_space.map(|i| i.top)),
+                (
+                    border.bottom.as_ref(),
+                    paragraph.border_space.map(|i| i.bottom),
+                ),
+            ] {
+                if let Some(side) = side {
+                    total += side.width + space.filter(|gap| *gap > 0.0).unwrap_or(0.5);
+                }
+            }
+        }
+    }
+    Some(total)
+}
+
 fn write_flow_page_setup(out: &mut String, page: &FlowPage, size: &PageSize, ctx: &mut GenCtx) {
     // A section may declare only a first-page story — `w:titlePg` with just a
     // `first` reference means pages after the first carry none — so the
@@ -1523,12 +1596,15 @@ fn write_flow_page_setup(out: &mut String, page: &FlowPage, size: &PageSize, ctx
         return;
     }
 
+    // A header taller than `w:top - w:header` grows the margin instead of
+    // overprinting the body (issue #736).
+    let top_margin_pt: f64 = flow_page_top_margin_pt(page);
     let _ = write!(
         out,
         "#set page(width: {}pt, height: {}pt, margin: (top: {}pt, bottom: {}pt, left: {}pt, right: {}pt)",
         format_f64(size.width),
         format_f64(size.height),
-        format_f64(page.margins.top),
+        format_f64(top_margin_pt),
         format_f64(page.margins.bottom),
         format_f64(page.margins.left),
         format_f64(page.margins.right),
@@ -1548,10 +1624,10 @@ fn write_flow_page_setup(out: &mut String, page: &FlowPage, size: &PageSize, ctx
         .filter(|header| hf_has_flow_content(header));
     if first_header.is_some() || default_header.is_some() {
         let default_value = default_header
-            .map(|header| flow_header_value(header, page, size, ctx))
+            .map(|header| flow_header_value(header, page, size, top_margin_pt, ctx))
             .unwrap_or_default();
         let first_value = first_header
-            .map(|header| flow_header_value(header, page, size, ctx))
+            .map(|header| flow_header_value(header, page, size, top_margin_pt, ctx))
             .unwrap_or_default();
         // The ascent is a page property, so it is set when either story wants
         // it; a story that does not is unaffected by it.
@@ -1750,20 +1826,17 @@ fn hf_paragraph_metric_runs(paragraph: &crate::ir::HeaderFooterParagraph) -> Vec
 
 /// Emit a pinned header band whose content is moved down by `shift` points.
 ///
-/// The band itself keeps its fixed height, so an unclamped shift would push
-/// header ink out of the band and onto the body's first line: a two-line 12pt
-/// Malgun letterhead put its second baseline 1.995pt past the top margin. The
-/// shift is therefore capped at the slack the story leaves inside the band, so a
-/// story that already fills it renders exactly where it does without the shift
-/// rather than worse.
+/// The band this shifts within is sized by [`flow_page_top_margin_pt`], which
+/// grows the top margin to hold the story's content *and* this shift, so the
+/// cap below has slack to spare on the stories it grows for. It binds as before
+/// on a story that fits its band, which that growth deliberately leaves alone. It still binds where the height could
+/// not be measured — the margin then stays at `w:top` — and it remains the
+/// backstop that keeps ink off the body if the two measurements ever disagree.
 ///
-/// TODO(#736: a full band keeps the compiler's cap-height seat instead of
-/// Word's): Word is understood to grow the top margin and push the body down
-/// when the header outgrows `w:top - w:header`, but that was not confirmed here
-/// — every native Word `save as … format PDF` died with AppleEvent -1712 and
-/// wrote a 0-byte file — and modelling it means feeding a measured header
-/// height back into the page margins, which is a larger change than this
-/// placement.
+/// Word's growth was unconfirmed when this was written — every native `save as
+/// … format PDF` died with AppleEvent -1712 — and is now measured: against a
+/// reference export, four 12pt header lines in a 26.95pt band place the body
+/// below all four rather than interleaving with them (issue #736).
 fn write_shifted_header_band(
     out: &mut String,
     header: &HeaderFooter,
