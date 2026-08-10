@@ -102,12 +102,25 @@ fn worksheet_paper_size(code: u32) -> PageSize {
 /// is Excel's unconstrained width, so it scales nothing.
 fn sheet_fit_to_width(
     sheet_name: &str,
-    fitting_sheets: &std::collections::HashMap<String, u32>,
+    fitting_sheets: &std::collections::HashMap<String, fit_to_page::SheetFitToPage>,
 ) -> Option<u32> {
     fitting_sheets
         .get(sheet_name)
-        .copied()
+        .map(|fit| fit.pages_wide)
         .filter(|pages| *pages > 0)
+}
+
+/// Whether the sheet's header and footer shrink with its fit-to-page scale.
+///
+/// `headerFooter/@scaleWithDoc` defaults to 1, so a sheet that states nothing —
+/// including one with no `<headerFooter>` at all — scales (issue #940).
+fn sheet_header_footer_scales_with_doc(
+    sheet_name: &str,
+    fitting_sheets: &std::collections::HashMap<String, fit_to_page::SheetFitToPage>,
+) -> bool {
+    fitting_sheets
+        .get(sheet_name)
+        .is_none_or(|fit| fit.header_footer_scales_with_doc)
 }
 
 /// The first sheet the caller asked for, honouring `sheet_names`.
@@ -507,6 +520,8 @@ impl XlsxParser {
                     sheet_print_options.prints_headings,
                 );
             let fit_to_width: Option<u32> = sheet_fit_to_width(&sheet_name, &fitting_sheets);
+            let header_footer_scales_with_doc: bool =
+                sheet_header_footer_scales_with_doc(&sheet_name, &fitting_sheets);
 
             // Process rows in chunks
             let mut chunk_start = row_start;
@@ -596,6 +611,7 @@ impl XlsxParser {
                         sheet_page,
                         title_columns,
                         fit_to_width,
+                        header_footer_scales_with_doc,
                     )
                     .into_iter()
                     .map(Page::Sheet)
@@ -717,6 +733,8 @@ impl Parser for XlsxParser {
                     sheet_print_options.prints_headings,
                 );
             let fit_to_width: Option<u32> = sheet_fit_to_width(sheet.get_name(), &fitting_sheets);
+            let header_footer_scales_with_doc: bool =
+                sheet_header_footer_scales_with_doc(sheet.get_name(), &fitting_sheets);
             // Only the rows named by `_xlnm.Print_Titles` repeat on later
             // pages. Rows above them still lead the table, but print once, so
             // they go into a non-repeating header block.
@@ -811,6 +829,7 @@ impl Parser for XlsxParser {
                         sheet_page,
                         title_columns,
                         fit_to_width,
+                        header_footer_scales_with_doc,
                     )
                     .into_iter()
                     .map(Page::Sheet),
@@ -929,6 +948,7 @@ impl Parser for XlsxParser {
                             sheet_page,
                             title_columns,
                             fit_to_width,
+                            header_footer_scales_with_doc,
                         )
                         .into_iter()
                         .map(Page::Sheet),

@@ -4,7 +4,7 @@
 //! (default order: down, then over). office2pdf previously clipped them at
 //! the right page edge, silently losing content.
 
-use crate::ir::{Block, SheetPage, Table, TableCell, TableRow};
+use crate::ir::{Block, HFInline, HeaderFooter, SheetPage, Table, TableCell, TableRow};
 
 /// Upper bound on overflow pages per sheet chunk. Pathological sheets (used
 /// ranges thousands of columns wide) would otherwise explode into thousands
@@ -20,8 +20,9 @@ pub(super) fn split_sheet_page_by_width(
     page: SheetPage,
     title_columns: Option<(usize, usize)>,
     fit_to_width: Option<u32>,
+    header_footer_scales_with_doc: bool,
 ) -> Vec<SheetPage> {
-    let page: SheetPage = fit_page_to_width(page, fit_to_width);
+    let page: SheetPage = fit_page_to_width(page, fit_to_width, header_footer_scales_with_doc);
     let printable_width: f64 = page.size.width - page.margins.left - page.margins.right;
     let total_width: f64 = page.table.column_widths.iter().sum();
     if total_width <= printable_width || page.table.column_widths.len() <= 1 {
@@ -113,7 +114,11 @@ pub(super) fn split_sheet_page_by_width(
 ///
 /// Excel never scales *up* to fill a page, so a sheet that already fits is
 /// left alone.
-fn fit_page_to_width(page: SheetPage, fit_to_width: Option<u32>) -> SheetPage {
+fn fit_page_to_width(
+    page: SheetPage,
+    fit_to_width: Option<u32>,
+    header_footer_scales_with_doc: bool,
+) -> SheetPage {
     let Some(pages_wide) = fit_to_width.filter(|pages| *pages > 0) else {
         return page;
     };
@@ -131,7 +136,7 @@ fn fit_page_to_width(page: SheetPage, fit_to_width: Option<u32>) -> SheetPage {
     if scale >= 1.0 {
         return page;
     }
-    scale_sheet_page(page, scale)
+    scale_sheet_page(page, scale, header_footer_scales_with_doc)
 }
 
 /// Multiply a sheet's widths, heights, type sizes, and cell padding by
@@ -140,7 +145,24 @@ fn fit_page_to_width(page: SheetPage, fit_to_width: Option<u32>) -> SheetPage {
 /// Padding has to scale with the rest: it is a fixed per-row overhead, so
 /// leaving it at full size while the rows shrink costs a constant slice of
 /// every row and accumulates into whole extra pages over a long sheet.
-fn scale_sheet_page(mut page: SheetPage, scale: f64) -> SheetPage {
+///
+/// The header and footer scale too, unless the sheet opts out.
+/// `headerFooter/@scaleWithDoc` defaults to 1 (ECMA-376 §18.3.1.46), so Excel
+/// shrinks them with the sheet; leaving them at full size printed the Gantt
+/// template's 8pt `&8` run beside 5.85pt body text (issue #940).
+fn scale_sheet_page(
+    mut page: SheetPage,
+    scale: f64,
+    header_footer_scales_with_doc: bool,
+) -> SheetPage {
+    if header_footer_scales_with_doc {
+        for header_footer in [page.header.as_mut(), page.footer.as_mut()]
+            .into_iter()
+            .flatten()
+        {
+            scale_header_footer_font_sizes(header_footer, scale);
+        }
+    }
     for width in &mut page.table.column_widths {
         *width *= scale;
     }
@@ -161,6 +183,26 @@ fn scale_sheet_page(mut page: SheetPage, scale: f64) -> SheetPage {
         }
     }
     page
+}
+
+/// Scale every run of a header or footer.
+///
+/// A run that states no size takes the renderer's default rather than being
+/// left alone: it is the size the run actually prints at, and skipping it left
+/// the Gantt template's leading `_x000D_` at 11pt while everything around it
+/// shrank (issue #940).
+fn scale_header_footer_font_sizes(header_footer: &mut HeaderFooter, scale: f64) {
+    for paragraph in &mut header_footer.paragraphs {
+        for element in &mut paragraph.elements {
+            if let HFInline::Run(run) = element {
+                let size_pt: f64 = run
+                    .style
+                    .font_size
+                    .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_SIZE_PT);
+                run.style.font_size = Some(size_pt * scale);
+            }
+        }
+    }
 }
 
 fn scale_block_font_sizes(block: &mut Block, scale: f64) {
