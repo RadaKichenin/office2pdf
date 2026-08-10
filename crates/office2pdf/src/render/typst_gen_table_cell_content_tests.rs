@@ -1214,3 +1214,96 @@ fn an_empty_cell_paragraph_holds_one_full_line_box() {
         "every paragraph's own w:after still separates it from the next: {result}"
     );
 }
+
+/// Word's `w:ind` offsets a paragraph's column wherever the paragraph sits,
+/// and the cell path never emitted it: the invoice template of issue #841 puts
+/// its `Title` style — `<w:ind w:left="101"/>`, 5.05pt — in the first cell of a
+/// layout table, and a native export offsets it exactly that far from the
+/// column's other paragraphs while we rendered it flush (issue #938).
+#[test]
+fn cell_paragraph_carries_its_left_indent() {
+    let indented = Block::Paragraph(Paragraph {
+        style: ParagraphStyle {
+            indent_left: Some(5.05),
+            ..ParagraphStyle::default()
+        },
+        runs: vec![Run {
+            text: "FAKTURA".to_string(),
+            style: TextStyle::default(),
+            href: None,
+            footnote: None,
+        }],
+    });
+    let flush = Block::Paragraph(Paragraph {
+        style: ParagraphStyle::default(),
+        runs: vec![Run {
+            text: "DATO".to_string(),
+            style: TextStyle::default(),
+            href: None,
+            footnote: None,
+        }],
+    });
+    let table = Table {
+        rows: vec![TableRow {
+            cells: vec![TableCell {
+                content: vec![indented, flush],
+                ..TableCell::default()
+            }],
+            height: None,
+        }],
+        column_widths: vec![176.95],
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    let indented_block: &str = result
+        .split("FAKTURA")
+        .next()
+        .and_then(|before| before.rfind("#block(").map(|at| &before[at..]))
+        .expect("the indented paragraph opens a block");
+    assert!(
+        indented_block.contains("inset: (left: 5.05pt, right: 0pt)"),
+        "the indented cell paragraph carries its w:ind as an inset: {result}"
+    );
+    assert_eq!(
+        result.matches("inset: (left:").count(),
+        1,
+        "only the indented paragraph gets an inset; the flush one keeps none: {result}"
+    );
+}
+
+/// A right indent narrows the column the cell text wraps in, so it has to
+/// reach the same inset rather than being dropped (issue #938).
+#[test]
+fn cell_paragraph_carries_its_right_indent() {
+    let table = Table {
+        rows: vec![TableRow {
+            cells: vec![TableCell {
+                content: vec![Block::Paragraph(Paragraph {
+                    style: ParagraphStyle {
+                        indent_right: Some(12.0),
+                        ..ParagraphStyle::default()
+                    },
+                    runs: vec![Run {
+                        text: "Narrowed".to_string(),
+                        style: TextStyle::default(),
+                        href: None,
+                        footnote: None,
+                    }],
+                })],
+                ..TableCell::default()
+            }],
+            height: None,
+        }],
+        column_widths: vec![176.95],
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains("inset: (left: 0pt, right: 12pt)"),
+        "the cell paragraph carries its right indent as an inset: {result}"
+    );
+}
