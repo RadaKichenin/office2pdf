@@ -1081,16 +1081,17 @@ fn single_paragraph_cell_emission_is_unchanged() {
     );
 }
 
-/// A cell paragraph carrying its own `w:spacing w:line` gets *no* fixed line
-/// box — `word_cell_line_box` bails on `line_spacing`/`line_box` — so its
-/// height is whatever Typst's own line model produces. Zeroing such a
-/// paragraph's `#block` spacing removes the only vertical separation it has
-/// and collapses the stack onto itself (8.33pt where Word prints ~26.2pt).
-/// The suppression must therefore be gated per paragraph on the fixed line
-/// box actually being emitted, not on the cell merely stacking blocks. The
-/// residual short advance these paragraphs keep is issue #727.
+/// A cell paragraph carrying its own `w:spacing w:line` now gets a fixed line
+/// box of the declared multiple, so it also gets the block-spacing
+/// suppression: the box carries the whole advance, and Typst's own gap on top
+/// of it would be counted twice.
+///
+/// It used to get neither — `word_cell_line_box` bailed on `line_spacing`, so
+/// the paragraph fell back to Typst's line model and the suppression had to be
+/// gated off it, or the stack collapsed onto itself. Fixing that bail
+/// (issue #727) is what lets both apply here.
 #[test]
-fn line_spaced_stacked_cell_paragraphs_keep_the_default_block_spacing() {
+fn line_spaced_stacked_cell_paragraphs_take_a_scaled_line_box() {
     if crate::render::pdf::font_line_metrics_em("Libertinus Serif").is_none() {
         return; // no font book available (e.g. exotic CI sandbox)
     }
@@ -1130,15 +1131,20 @@ fn line_spaced_stacked_cell_paragraphs_keep_the_default_block_spacing() {
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
     let result = generate_typst(&doc).unwrap().source;
 
-    assert_eq!(
-        result.matches("#block()[").count(),
-        2,
-        "a line-spaced cell paragraph has no fixed line box, so it must keep \
-         the plain wrapper: {result}"
-    );
+    let (ascender_em, _descender_em, word_pitch_em) =
+        crate::render::pdf::font_line_metrics_em("Libertinus Serif").expect("checked above");
     assert!(
-        !result.contains("above: 0pt"),
-        "zeroing a line-spaced paragraph's block spacing collapses the stack: {result}"
+        result.contains(&format!(
+            "#set text(top-edge: {}em, bottom-edge: -{}em)",
+            format_f64(ascender_em),
+            format_f64(1.5 * word_pitch_em - ascender_em)
+        )),
+        "each paragraph takes a box 1.5 x Word's line: {result}"
+    );
+    assert_eq!(
+        result.matches("above: 0pt, below: 0pt").count(),
+        2,
+        "and the box carrying the advance means the wrapper contributes none: {result}"
     );
 }
 
@@ -1305,5 +1311,179 @@ fn cell_paragraph_carries_its_right_indent() {
     assert!(
         result.contains("inset: (left: 0pt, right: 12pt)"),
         "the cell paragraph carries its right indent as an inset: {result}"
+    );
+}
+
+/// A cell paragraph's `w:spacing w:line` scales its line box, exactly as it
+/// scales a body paragraph's. `word_cell_line_box` bailed on any declared line
+/// spacing, so the multiple never applied inside a cell and the paragraph fell
+/// back to Typst's own advance — short of Word's by the whole difference
+/// (issue #727).
+#[test]
+fn a_line_spaced_cell_paragraph_scales_its_line_box() {
+    let Some((ascender_em, descender_em, word_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+    let font_size: f64 = 10.0;
+    let make_cell = |line_spacing: Option<LineSpacing>| -> TableCell {
+        TableCell {
+            content: vec![Block::Paragraph(Paragraph {
+                style: ParagraphStyle {
+                    line_spacing,
+                    ..ParagraphStyle::default()
+                },
+                runs: vec![Run {
+                    text: "Signature".to_string(),
+                    style: TextStyle {
+                        font_family: Some("Libertinus Serif".to_string()),
+                        font_size: Some(font_size),
+                        ..TextStyle::default()
+                    },
+                    href: None,
+                    footnote: None,
+                }],
+            })],
+            ..TableCell::default()
+        }
+    };
+    let render = |line_spacing: Option<LineSpacing>| -> String {
+        let table = Table {
+            rows: vec![TableRow {
+                cells: vec![make_cell(line_spacing)],
+                height: None,
+            }],
+            column_widths: vec![200.0],
+            ..Table::default()
+        };
+        let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+        generate_typst(&doc).unwrap().source
+    };
+
+    // Unspaced: Word's single line, which the metric pair sums to directly.
+    let single: String = render(None);
+    assert!(
+        single.contains(&format!(
+            "#set text(top-edge: {}em, bottom-edge: -{}em)",
+            format_f64(ascender_em),
+            format_f64(word_pitch_em - ascender_em)
+        )),
+        "an unspaced cell keeps Word's single line: {single}"
+    );
+
+    // 1.5 lines: the same box, scaled — the bottom edge carries the surplus.
+    let spaced: String = render(Some(LineSpacing::Proportional(1.5)));
+    assert!(
+        spaced.contains(&format!(
+            "#set text(top-edge: {}em, bottom-edge: -{}em)",
+            format_f64(ascender_em),
+            format_f64(1.5 * word_pitch_em - ascender_em)
+        )),
+        "a 1.5-line cell advances 1.5 x Word's line: {spaced}"
+    );
+    let _ = descender_em;
+}
+
+/// `w:lineRule="exact"` states the advance outright, so the box is that many
+/// points tall whatever the font asks for (issue #727).
+#[test]
+fn an_exactly_spaced_cell_paragraph_takes_the_stated_advance() {
+    let Some((ascender_em, _descender_em, _pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
+        return;
+    };
+    let font_size: f64 = 10.0;
+    let table = Table {
+        rows: vec![TableRow {
+            cells: vec![TableCell {
+                content: vec![Block::Paragraph(Paragraph {
+                    style: ParagraphStyle {
+                        line_spacing: Some(LineSpacing::Exact(18.0)),
+                        ..ParagraphStyle::default()
+                    },
+                    runs: vec![Run {
+                        text: "Exact".to_string(),
+                        style: TextStyle {
+                            font_family: Some("Libertinus Serif".to_string()),
+                            font_size: Some(font_size),
+                            ..TextStyle::default()
+                        },
+                        href: None,
+                        footnote: None,
+                    }],
+                })],
+                ..TableCell::default()
+            }],
+            height: None,
+        }],
+        column_widths: vec![200.0],
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let source = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        source.contains(&format!(
+            "#set text(top-edge: {}em, bottom-edge: -{}em)",
+            format_f64(ascender_em),
+            format_f64(18.0 / font_size - ascender_em)
+        )),
+        "an exact rule states the advance outright: {source}"
+    );
+}
+
+/// A grid-snapped row folds the paragraph's `w:spacing w:after` into its line
+/// box, so the caller must not emit it again. That holds for a line-spaced
+/// paragraph too, now that one resolves a box at all: gating the absorption on
+/// `line_spacing` would emit the gap twice (issue #727).
+#[test]
+fn a_grid_snapped_line_spaced_cell_emits_its_space_after_once() {
+    if crate::render::pdf::font_line_metrics_em("Libertinus Serif").is_none() {
+        return; // no font book available (e.g. exotic CI sandbox)
+    }
+    let cell = TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle {
+                line_spacing: Some(LineSpacing::Proportional(1.5)),
+                space_after: Some(1.5),
+                ..ParagraphStyle::default()
+            },
+            runs: vec![Run {
+                text: "계약자".to_string(),
+                style: TextStyle {
+                    font_family: Some("Libertinus Serif".to_string()),
+                    font_size: Some(9.5),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })],
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            cells: vec![cell],
+            height: None,
+        }],
+        column_widths: vec![225.65],
+        ..Table::default()
+    };
+    let mut page = match make_flow_page(vec![Block::Table(table)]) {
+        Page::Flow(flow) => flow,
+        _ => unreachable!(),
+    };
+    page.line_grid_pitch = Some(18.0);
+    page.line_grid_snaps_lines = true;
+    let source = generate_typst(&make_doc(vec![Page::Flow(page)]))
+        .unwrap()
+        .source;
+
+    assert_eq!(
+        source.matches("#v(1.5pt)").count(),
+        0,
+        "the grid-snapped box already carries the gap: {source}"
     );
 }

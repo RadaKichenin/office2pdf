@@ -638,15 +638,20 @@ fn largest_font_size_pt(sizes: impl Iterator<Item = f64>) -> f64 {
 /// `w:spacing w:after`, so the caller must not emit it a second time.
 ///
 /// Mirrors the guard inside [`word_cell_line_box_settings`] exactly, including
-/// its early return for paragraphs that carry their own line spacing or box —
-/// gating on `row_has_east_asian_text` alone would strip the gap from those.
+/// its early return for a paragraph carrying its own line box — gating on
+/// `row_has_east_asian_text` alone would strip the gap from those.
+///
+/// A declared `w:spacing w:line` is deliberately *not* a bail here, and must
+/// not become one again: since issue #727 the box scales by the multiple
+/// rather than being abandoned, so it absorbs the gap like any other, and
+/// re-adding the clause would emit `w:after` twice on a grid-snapped
+/// line-spaced row.
 pub(super) fn cell_grid_absorbs_space_after(
     style: &ParagraphStyle,
     line_grid_pitch: Option<f64>,
     row_has_east_asian_text: bool,
 ) -> bool {
     row_has_east_asian_text
-        && style.line_spacing.is_none()
         && style.line_box.is_none()
         && line_grid_pitch.is_some_and(|pitch| pitch > 0.0)
 }
@@ -675,7 +680,8 @@ pub(super) struct CellLineBox {
 /// font's descender and the removed sub-baseline surplus moves into leading,
 /// so the last line's descent rests on the row's bottom inset edge while
 /// multi-line advance is unchanged (issue #618). `None` when the font's
-/// metrics are unknown or the paragraph carries its own line spacing/box.
+/// metrics are unknown or the paragraph carries its own line box; a declared
+/// `w:spacing w:line` scales the box instead of suppressing it (issue #727).
 ///
 /// The box also carries the paragraph's `w:spacing w:after` when a snapping
 /// grid is in force, because Word snaps the line and that gap together (issues
@@ -716,7 +722,7 @@ pub(super) fn word_cell_line_box(
     row_has_east_asian_text: bool,
     seats_text_on_descender: bool,
 ) -> Option<CellLineBox> {
-    if style.line_spacing.is_some() || style.line_box.is_some() {
+    if style.line_box.is_some() {
         return None;
     }
     let family: &str = east_asian_aware_metric_family(runs)?;
@@ -757,6 +763,18 @@ pub(super) fn word_cell_line_box(
             advance_pt / font_size
         }
         _ => natural_em,
+    };
+    // `w:spacing w:line` states the advance the same way inside a cell as it
+    // does in the body: a proportional rule scales Word's own line, an exact
+    // one replaces it outright. Bailing on any declared spacing left the
+    // paragraph with no fixed box at all, so the multiple never applied and the
+    // advance fell back to whatever Typst chose (issue #727).
+    let advance_em: f64 = match style.line_spacing {
+        None => advance_em,
+        Some(LineSpacing::Proportional(factor)) if factor > 0.0 => advance_em * factor,
+        Some(LineSpacing::Exact(points)) if points > 0.0 => points / font_size,
+        // A non-positive rule states nothing usable; Word ignores it.
+        Some(_) => advance_em,
     };
     let excess_em: f64 = if row_has_east_asian_text {
         EAST_ASIAN_ASCENT_EXCESS * word_pitch_em

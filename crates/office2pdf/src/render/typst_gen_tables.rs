@@ -1996,12 +1996,13 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
         }
     });
     // Typst's default block spacing may only be dropped where this paragraph
-    // supplies a fixed line box of its own. A paragraph carrying `w:spacing
-    // w:line` gets none (`word_cell_line_box` bails on it), so zeroing its
-    // wrapper would leave it with no vertical separation at all and collapse
-    // the stack onto itself. Such a paragraph already advances short of Word
-    // for want of that box — that is issue #727, a separate defect from this
-    // suppression, which merely declines to make it worse.
+    // supplies a fixed line box of its own, which carries the whole advance;
+    // adding Typst's gap on top would count the line twice. A paragraph that
+    // resolves no box — an unknown face, say — keeps the default, or zeroing
+    // its wrapper would leave it no vertical separation at all and collapse the
+    // stack onto itself. A `w:spacing w:line` used to land in that second case
+    // and advance short of Word for want of a box; it now scales one
+    // (issue #727).
     let emits_fixed_line_box: bool =
         line_height_settings.is_some() || paragraph_mark_line_pt.is_some();
     let suppress_default_block_spacing: bool = cell.stacks_multiple_blocks && emits_fixed_line_box;
