@@ -2,7 +2,9 @@ use std::collections::HashMap;
 
 use crate::ir::{Color, DataBarInfo};
 use crate::parser::xlsx::cond_fmt_raw::{RawCondFmtHint, RawCondFmtHints};
+use crate::parser::xlsx::xlsx_style::{blend_color, pattern_ink_coverage, resolve_style_color};
 use crate::parser::xlsx::{CellPos, CellRange, parse_cell_ref};
+use crate::parser::xlsx_formula;
 use crate::parser::xml_util;
 
 /// A conditional formatting override for a specific cell.
@@ -151,22 +153,25 @@ fn evaluate_cell_is_text_rule(
 }
 
 /// Extract formatting overrides from a conditional formatting rule's style.
-fn extract_cond_fmt_style(rule: &umya_spreadsheet::ConditionalFormattingRule) -> CondFmtOverride {
+fn extract_cond_fmt_style(
+    rule: &umya_spreadsheet::ConditionalFormattingRule,
+    theme: Option<&umya_spreadsheet::structs::drawing::Theme>,
+) -> CondFmtOverride {
     let mut result = CondFmtOverride::default();
 
     if let Some(style) = rule.get_style() {
-        if let Some(bg) = style.get_background_color() {
-            result.background = parse_argb_color(bg.get_argb());
-        }
-        // Differential formats (dxf) store solid CF fills in the pattern's
-        // bgColor with no fgColor, which get_background_color misses.
-        if result.background.is_none()
-            && let Some(bg) = style
-                .get_fill()
-                .and_then(|fill| fill.get_pattern_fill()?.get_background_color())
-        {
-            result.background = parse_argb_color(bg.get_argb());
-        }
+        // The pattern fill is read first and directly: `Style::get_background_color`
+        // hands back the `fgColor` whatever the `patternType` is, which for a
+        // hatch is the ink rather than what the cell prints — the Gantt
+        // legend's `lightUp` bars came out solid dark purple instead of the
+        // quarter-strength lilac beside them (issues #926, #852). It stays as
+        // the fallback for a style that carries a colour but no `<fill>` at
+        // all, which is the shape umya builds from `set_background_color`.
+        result.background = dxf_fill_color(style, theme).or_else(|| {
+            style
+                .get_background_color()
+                .and_then(|color| resolve_style_color(color, theme))
+        });
         if let Some(font) = style.get_font() {
             if *font.get_bold() {
                 result.bold = Some(true);
@@ -174,6 +179,8 @@ fn extract_cond_fmt_style(rule: &umya_spreadsheet::ConditionalFormattingRule) ->
             let color_argb = font.get_color().get_argb();
             if !color_argb.is_empty() && color_argb != "FF000000" {
                 result.font_color = parse_argb_color(color_argb);
+            } else if color_argb.is_empty() {
+                result.font_color = resolve_style_color(font.get_color(), theme);
             }
         }
     }
@@ -238,6 +245,7 @@ fn apply_text_rule(
     sheet: &umya_spreadsheet::Worksheet,
     rule: &umya_spreadsheet::ConditionalFormattingRule,
     ranges: &[CellRange],
+    theme: Option<&umya_spreadsheet::structs::drawing::Theme>,
     overrides: &mut HashMap<CellPos, CondFmtOverride>,
 ) {
     use umya_spreadsheet::ConditionalFormatValues;
@@ -245,7 +253,7 @@ fn apply_text_rule(
     if needle.is_empty() {
         return;
     }
-    let fmt = extract_cond_fmt_style(rule);
+    let fmt = extract_cond_fmt_style(rule, theme);
 
     for range in ranges {
         for row in range.start_row..=range.end_row {
@@ -282,13 +290,14 @@ fn apply_cell_is_rule(
     sheet: &umya_spreadsheet::Worksheet,
     rule: &umya_spreadsheet::ConditionalFormattingRule,
     ranges: &[CellRange],
+    theme: Option<&umya_spreadsheet::structs::drawing::Theme>,
     overrides: &mut HashMap<CellPos, CondFmtOverride>,
 ) {
     let operator = rule.get_operator();
     let Some(operand) = parse_cell_is_operand(rule) else {
         return;
     };
-    let fmt = extract_cond_fmt_style(rule);
+    let fmt = extract_cond_fmt_style(rule, theme);
 
     for range in ranges {
         for row in range.start_row..=range.end_row {
@@ -765,10 +774,119 @@ fn icon_set_glyphs(set_type: &str, band_count: usize) -> Vec<(&'static str, Opti
     }
 }
 
+/// The colour a differential format's `<fill>` paints.
+///
+/// A dxf inverts the cell convention: its *solid* fill states the colour in
+/// `bgColor` and leaves `fgColor` as `auto`, which is why the cond-format path
+/// reads the background where `extract_cell_background` reads the foreground.
+/// A hatch keeps the cell meaning — `fgColor` is the ink over a `bgColor`
+/// ground — so the two composite the same way (issue #926).
+///
+/// Both are commonly `<… theme="N" tint="T"/>` with no ARGB of their own, so
+/// they resolve against the workbook scheme; reading the bare ARGB found
+/// nothing at all and every conditional fill in the Gantt template of #841 was
+/// dropped (issues #853, #852).
+fn dxf_fill_color(
+    style: &umya_spreadsheet::Style,
+    theme: Option<&umya_spreadsheet::structs::drawing::Theme>,
+) -> Option<Color> {
+    let pattern = style.get_fill()?.get_pattern_fill()?;
+    let pattern_type: &umya_spreadsheet::PatternValues = pattern.get_pattern_type();
+    let background: Option<Color> = pattern
+        .get_background_color()
+        .and_then(|color| resolve_style_color(color, theme));
+    // A dxf that states no `patternType` at all is a solid fill of its
+    // `bgColor` — Excel writes a conditional format's plain fill that way, and
+    // treating the absent attribute as "no fill" dropped every band and
+    // highlight in the Gantt template of #841.
+    let coverage: f64 = match pattern_type {
+        umya_spreadsheet::PatternValues::None | umya_spreadsheet::PatternValues::Solid => 1.0,
+        hatch => pattern_ink_coverage(hatch),
+    };
+    if coverage >= 1.0 {
+        return background;
+    }
+    let foreground: Option<Color> = pattern
+        .get_foreground_color()
+        .and_then(|color| resolve_style_color(color, theme));
+    match (foreground, background) {
+        // `bgColor auto="1"` resolves to nothing and means the sheet's own
+        // white, which is what a hatch over an unfilled cell sits on.
+        (Some(ink), ground) => Some(blend_color(ground.unwrap_or(Color::white()), ink, coverage)),
+        (None, ground) => ground,
+    }
+}
+
+/// Apply one `cfRule type="expression"` across its ranges.
+///
+/// The rule's formula is evaluated once per cell, with relative references
+/// rebased onto that cell from the top-left of the `sqref` — which is how
+/// `H$4=period_selected` reads "the period number above me" in every column of
+/// the range. A formula the evaluator does not model answers `None` and the
+/// cell is left alone rather than painted on a guess (issue #852).
+fn apply_expression_rule(
+    sheet: &umya_spreadsheet::Worksheet,
+    rule: &umya_spreadsheet::ConditionalFormattingRule,
+    ranges: &[CellRange],
+    defined_names: &HashMap<String, String>,
+    theme: Option<&umya_spreadsheet::structs::drawing::Theme>,
+    raw_hint: Option<&RawCondFmtHint>,
+    overrides: &mut HashMap<CellPos, CondFmtOverride>,
+) {
+    let Some(formula) = raw_hint.and_then(|hint| hint.formulas.first()) else {
+        return;
+    };
+    let fmt = extract_cond_fmt_style(rule, theme);
+    if fmt.background.is_none() && fmt.font_color.is_none() && fmt.bold.is_none() {
+        return;
+    }
+    let value_at = |column: u32, row: u32| -> xlsx_formula::Value {
+        let Some(cell) = sheet.get_cell((column, row)) else {
+            return xlsx_formula::Value::Blank;
+        };
+        if let Some(number) = cell_numeric_value(cell) {
+            return xlsx_formula::Value::Number(number);
+        }
+        match cell_text_value(cell) {
+            Some(text) => xlsx_formula::Value::Text(text),
+            None => xlsx_formula::Value::Blank,
+        }
+    };
+
+    for range in ranges {
+        let base: (u32, u32) = (range.start_col, range.start_row);
+        for row in range.start_row..=range.end_row {
+            for col in range.start_col..=range.end_col {
+                let ctx = xlsx_formula::EvalContext {
+                    cell: (col, row),
+                    base,
+                    names: defined_names,
+                    value_at: &value_at,
+                };
+                if !xlsx_formula::evaluate(formula, &ctx).is_some_and(|value| value.is_truthy()) {
+                    continue;
+                }
+                let entry = overrides.entry((col, row)).or_default();
+                if fmt.background.is_some() {
+                    entry.background = fmt.background;
+                }
+                if fmt.font_color.is_some() {
+                    entry.font_color = fmt.font_color;
+                }
+                if fmt.bold.is_some() {
+                    entry.bold = fmt.bold;
+                }
+            }
+        }
+    }
+}
+
 /// Build a map of conditional formatting overrides for all cells in the sheet.
 pub(crate) fn build_cond_fmt_overrides(
     sheet: &umya_spreadsheet::Worksheet,
     raw_hints: Option<&RawCondFmtHints>,
+    defined_names: &HashMap<String, String>,
+    theme: Option<&umya_spreadsheet::structs::drawing::Theme>,
 ) -> HashMap<(u32, u32), CondFmtOverride> {
     let mut overrides: HashMap<CellPos, CondFmtOverride> = HashMap::new();
 
@@ -779,19 +897,27 @@ pub(crate) fn build_cond_fmt_overrides(
             continue;
         }
 
-        for rule in cf.get_conditional_collection() {
+        // Excel resolves overlapping rules highest priority first — the
+        // smallest `priority` number — and a cell keeps the first fill that
+        // matches. Applying them in document order let a low-priority band
+        // paint over the bar above it (issue #852).
+        let mut rules: Vec<&umya_spreadsheet::ConditionalFormattingRule> =
+            cf.get_conditional_collection().iter().collect();
+        rules.sort_by_key(|rule| std::cmp::Reverse(*rule.get_priority()));
+
+        for rule in rules {
             use umya_spreadsheet::ConditionalFormatValues;
             let raw_hint = raw_hints.and_then(|hints| hints.get(rule.get_priority()));
 
             match rule.get_type() {
                 ConditionalFormatValues::CellIs => {
-                    apply_cell_is_rule(sheet, rule, &ranges, &mut overrides);
+                    apply_cell_is_rule(sheet, rule, &ranges, theme, &mut overrides);
                 }
                 ConditionalFormatValues::ContainsText
                 | ConditionalFormatValues::NotContainsText
                 | ConditionalFormatValues::BeginsWith
                 | ConditionalFormatValues::EndsWith => {
-                    apply_text_rule(sheet, rule, &ranges, &mut overrides);
+                    apply_text_rule(sheet, rule, &ranges, theme, &mut overrides);
                 }
                 ConditionalFormatValues::ColorScale => {
                     apply_color_scale_rule(sheet, rule, &ranges, &mut overrides);
@@ -801,6 +927,17 @@ pub(crate) fn build_cond_fmt_overrides(
                 }
                 ConditionalFormatValues::IconSet => {
                     apply_icon_set_rule(sheet, rule, &ranges, &mut overrides, raw_hint);
+                }
+                ConditionalFormatValues::Expression => {
+                    apply_expression_rule(
+                        sheet,
+                        rule,
+                        &ranges,
+                        defined_names,
+                        theme,
+                        raw_hint,
+                        &mut overrides,
+                    );
                 }
                 _ => {}
             }

@@ -15,7 +15,7 @@ use crate::parser::xml_util::parse_argb_color;
 /// `theme` is `None` when the workbook ships no readable theme part; an
 /// explicit `rgb` still resolves, and a themed colour is left unset rather
 /// than guessed.
-pub(super) fn resolve_style_color(
+pub(crate) fn resolve_style_color(
     color: &umya_spreadsheet::Color,
     theme: Option<&umya_spreadsheet::structs::drawing::Theme>,
 ) -> Option<Color> {
@@ -208,7 +208,7 @@ pub(super) fn apply_rich_run_font(
 /// Two values do not follow from the names: `darkGrid` covers a half, not the
 /// three quarters a union of two dark line families would, and `lightTrellis`
 /// covers three eighths rather than `lightGrid`'s seven sixteenths.
-fn pattern_ink_coverage(pattern: &umya_spreadsheet::PatternValues) -> f64 {
+pub(crate) fn pattern_ink_coverage(pattern: &umya_spreadsheet::PatternValues) -> f64 {
     use umya_spreadsheet::PatternValues::*;
     match pattern {
         Solid => 1.0,
@@ -224,7 +224,7 @@ fn pattern_ink_coverage(pattern: &umya_spreadsheet::PatternValues) -> f64 {
 }
 
 /// Composite `foreground` over `background` at `coverage`.
-fn blend_color(background: Color, foreground: Color, coverage: f64) -> Color {
+pub(crate) fn blend_color(background: Color, foreground: Color, coverage: f64) -> Color {
     let mix = |below: u8, above: u8| -> u8 {
         (f64::from(below) * (1.0 - coverage) + f64::from(above) * coverage).round() as u8
     };

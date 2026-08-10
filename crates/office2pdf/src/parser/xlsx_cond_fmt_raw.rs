@@ -13,6 +13,10 @@ pub(crate) struct RawCondFmtHint {
     /// order. Parsed from the raw XML because umya-spreadsheet's IconSet
     /// reader drops cfvos written as start/end tag pairs (issue #406).
     pub(crate) icon_cfvos: Vec<(String, String)>,
+    /// The rule's `<formula>` children, in document order. umya-spreadsheet
+    /// models one formula per rule; an `expression` rule needs the text as
+    /// written, entities and all, so it is read here (issue #852).
+    pub(crate) formulas: Vec<String>,
 }
 
 pub(crate) type RawCondFmtHints = HashMap<i32, RawCondFmtHint>;
@@ -93,6 +97,20 @@ pub(crate) fn parse_worksheet_hints(xml: &str) -> RawCondFmtHints {
             Ok(Event::Start(element)) if element.local_name().as_ref() == b"cfRule" => {
                 current_priority = attr_value(&reader, &element, b"priority")
                     .and_then(|value| value.parse::<i32>().ok());
+            }
+            Ok(Event::Start(element)) if element.local_name().as_ref() == b"formula" => {
+                let name = element.name().to_owned();
+                if let (Some(priority), Ok(raw)) = (
+                    current_priority,
+                    reader.read_text(quick_xml::name::QName(name.as_ref())),
+                ) && let Ok(formula) = quick_xml::escape::unescape(&raw)
+                {
+                    hints
+                        .entry(priority)
+                        .or_insert_with(RawCondFmtHint::default)
+                        .formulas
+                        .push(formula.into_owned());
+                }
             }
             Ok(Event::Start(element) | Event::Empty(element))
                 if element.local_name().as_ref() == b"dataBar" =>
@@ -184,6 +202,53 @@ pub(crate) fn extract_cond_fmt_hints(data: &[u8]) -> SheetCondFmtHints {
         }
     }
     result
+}
+
+/// The workbook's `<definedName>` formulas, keyed by upper-case name.
+///
+/// A conditional-format expression names them rather than repeating their
+/// formulas, and the whole Gantt bar area of #841 is written that way
+/// (issue #852). umya-spreadsheet models a defined name as an *address*, which
+/// loses one whose definition is an expression rather than a range, so the
+/// text is read from `xl/workbook.xml` directly.
+///
+/// Sheet-scoped names (`localSheetId`) collapse into the same map: a workbook
+/// that scopes two names alike to different sheets would resolve one of them
+/// wrongly, which no template in the corpus does and which a range-aware
+/// resolver would have to distinguish.
+pub(crate) fn extract_defined_names(data: &[u8]) -> HashMap<String, String> {
+    let mut names: HashMap<String, String> = HashMap::new();
+    let Ok(mut archive) = crate::parser::open_zip(data) else {
+        return names;
+    };
+    let Some(workbook_xml) = read_zip_text(&mut archive, "xl/workbook.xml") else {
+        return names;
+    };
+
+    let mut reader = Reader::from_str(&workbook_xml);
+    reader.config_mut().trim_text(true);
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(element)) if element.local_name().as_ref() == b"definedName" => {
+                let Some(name) = attr_value(&reader, &element, b"name") else {
+                    continue;
+                };
+                // `read_text` gathers the element's whole content, entity
+                // references included. Taking a single `Event::Text` truncated
+                // every definition at its first `&gt;` — which is most of them
+                // (issue #852).
+                let tag = element.name().to_owned();
+                if let Ok(raw) = reader.read_text(quick_xml::name::QName(tag.as_ref()))
+                    && let Ok(definition) = quick_xml::escape::unescape(&raw)
+                {
+                    names.insert(name.to_ascii_uppercase(), definition.into_owned());
+                }
+            }
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+    names
 }
 
 #[cfg(test)]
