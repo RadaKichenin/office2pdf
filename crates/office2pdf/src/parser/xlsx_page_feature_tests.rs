@@ -694,8 +694,11 @@ fn test_hf_code_midway_splits_the_section() {
 /// A header/footer run before the format string's first `&"Font"` code takes
 /// the workbook's Normal font, as an unstyled cell does. Leaving it unset sent
 /// it to the renderer's ambient default — a serif — so the Gantt template of
-/// issue #841 printed the two runs ahead of its `&"Aptos"` code in a serif
-/// nothing else on the sheet used (issue #951).
+/// issue #841 printed the run ahead of its `&"Aptos"` code in a serif nothing
+/// else on the sheet used (issue #951).
+///
+/// The `_x000D_` that opens the string is a line break, not text, so the run
+/// it would have formed is an empty first line and is dropped (issue #929).
 #[test]
 fn a_header_footer_run_before_any_font_code_takes_the_normal_font() {
     let normal_font = NormalFont {
@@ -720,12 +723,8 @@ fn a_header_footer_run_before_any_font_code_takes_the_normal_font() {
 
     assert_eq!(
         families,
-        vec![
-            Some("Corbel".to_string()),
-            Some("Corbel".to_string()),
-            Some("Aptos".to_string()),
-        ],
-        "the runs before the code take the Normal font; the one after takes Aptos"
+        vec![Some("Corbel".to_string()), Some("Aptos".to_string())],
+        "the run before the code takes the Normal font; the one after takes Aptos"
     );
 }
 
@@ -739,4 +738,62 @@ fn a_header_footer_without_a_normal_font_states_no_family() {
         panic!("expected a run");
     };
     assert_eq!(run.style.font_family, None);
+}
+
+/// `_xHHHH_` is ECMA-376's escape for a character a spreadsheet string cannot
+/// carry directly (§22.9.2.19, `ST_Xstring`). Excel writes a footer's line
+/// break as `_x000D_`; we printed the seven characters (issue #929).
+#[test]
+fn a_header_footer_decodes_xstring_escapes() {
+    let hf = parse_hf_format_string(
+        r#"&L_x000D_&1#&"Aptos"&8&K000000 Sensitivity: Internal"#,
+        "Sheet1",
+        None,
+        &mut Vec::new(),
+    )
+    .expect("footer parsed");
+    let text: String = hf_section_texts(&hf).join("");
+    assert!(
+        !text.contains("_x000D_") && !text.contains("x000D"),
+        "the escape is decoded, not printed: {text:?}"
+    );
+    assert_eq!(text, "# Sensitivity: Internal");
+}
+
+/// The escape is case-insensitive per the schema, and `_x005F_` is the way a
+/// literal underscore is written — decoding it first is what lets a genuine
+/// `_x000D_` in the *text* survive as seven characters (issue #929).
+#[test]
+fn a_header_footer_escape_is_case_insensitive_and_underscore_safe() {
+    let upper = parse_hf_format_string("&Ca_x0062_c", "Sheet1", None, &mut Vec::new())
+        .expect("header parsed");
+    assert_eq!(hf_section_texts(&upper), vec!["abc"]);
+
+    // `_x005F_x000D_` is a literal `_` followed by `x000D_`, not a carriage
+    // return: the underscore escape is consumed and its output not rescanned.
+    let literal = parse_hf_format_string("&C_x005F_x000D_", "Sheet1", None, &mut Vec::new())
+        .expect("header parsed");
+    assert_eq!(hf_section_texts(&literal), vec!["_x000D_"]);
+}
+
+/// A decoded carriage return breaks the section into lines rather than
+/// vanishing: text after it starts a new footer line (issue #929).
+#[test]
+fn a_decoded_carriage_return_breaks_the_section_into_lines() {
+    let hf = parse_hf_format_string("&Ltop_x000D_bottom", "Sheet1", None, &mut Vec::new())
+        .expect("footer parsed");
+    assert_eq!(hf_section_texts(&hf), vec!["top", "bottom"]);
+    for paragraph in &hf.paragraphs {
+        assert_eq!(paragraph.style.alignment, Some(Alignment::Left));
+    }
+}
+
+/// A character the escape names but that no text can carry — a control code
+/// other than the line break — is dropped rather than emitted raw, so it
+/// cannot reach the renderer as an unprintable glyph (issue #929).
+#[test]
+fn a_header_footer_drops_a_decoded_control_character() {
+    let hf = parse_hf_format_string("&Ca_x0007_b", "Sheet1", None, &mut Vec::new())
+        .expect("header parsed");
+    assert_eq!(hf_section_texts(&hf), vec!["ab"]);
 }

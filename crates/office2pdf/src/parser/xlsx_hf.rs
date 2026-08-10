@@ -61,6 +61,53 @@ fn open_segment(section: &mut Vec<HfSegment>, mut style: HfSegment) {
     }
 }
 
+/// Sentinel standing for a decoded line break inside a section, alongside the
+/// `\x01`/`\x02` page-number ones. A raw `\r` cannot serve: it would have to
+/// survive `build_segment_elements`' catch-all and reach the renderer.
+const LINE_BREAK_SENTINEL: char = '\x03';
+
+/// Decode ECMA-376's `_xHHHH_` escapes (§22.9.2.19, `ST_Xstring`), the form a
+/// spreadsheet string uses for a character it cannot carry directly.
+///
+/// `_x005F_` is the escape for a literal underscore, and decoding it here —
+/// without rescanning what it produces — is what lets a genuine `_x000D_` in
+/// the *text* survive as seven characters rather than turning into a line
+/// break (issue #929). The four hex digits are case-insensitive per the schema.
+///
+/// Anything that is not a well-formed escape is passed through, so a lone
+/// underscore costs nothing.
+fn decode_xstring_escapes(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out: String = String::with_capacity(text.len());
+    let mut index: usize = 0;
+    while index < chars.len() {
+        if let Some(decoded) = xstring_escape_at(&chars, index) {
+            out.push(decoded);
+            index += XSTRING_ESCAPE_LEN;
+        } else {
+            out.push(chars[index]);
+            index += 1;
+        }
+    }
+    out
+}
+
+/// `_xHHHH_` is always seven characters.
+const XSTRING_ESCAPE_LEN: usize = 7;
+
+/// The character the escape starting at `index` names, if one starts there.
+fn xstring_escape_at(chars: &[char], index: usize) -> Option<char> {
+    let escape: &[char] = chars.get(index..index + XSTRING_ESCAPE_LEN)?;
+    if escape[0] != '_' || !escape[1].eq_ignore_ascii_case(&'x') || escape[6] != '_' {
+        return None;
+    }
+    let mut code: u32 = 0;
+    for digit in &escape[2..6] {
+        code = code * 16 + digit.to_digit(16)?;
+    }
+    char::from_u32(code)
+}
+
 /// Parse an Excel header/footer format string into IR HeaderFooter.
 ///
 /// Excel format strings use `&L`, `&C`, `&R` to define left/center/right sections,
@@ -90,7 +137,12 @@ pub(super) fn parse_hf_format_string(
     normal_font: Option<&NormalFont>,
     warnings: &mut Vec<ConvertWarning>,
 ) -> Option<HeaderFooter> {
-    let s = format_str.trim();
+    // `ST_Xstring` escapes ride the whole string, under the `&` codes, so they
+    // come off first — a decoded `_x000D_` then reaches the walk below as the
+    // line break Excel means by it rather than as seven characters
+    // (issue #929).
+    let decoded: String = decode_xstring_escapes(format_str);
+    let s = decoded.trim();
     if s.is_empty() {
         return None;
     }
@@ -238,7 +290,25 @@ pub(super) fn parse_hf_format_string(
                 }
             }
         } else {
-            push_char(current, chars[i]);
+            // A decoded carriage return (or the line feed that may follow it)
+            // breaks the section; the pair collapses to one break.
+            match chars[i] {
+                '\r' | '\n' => {
+                    let already_broken = current
+                        .last()
+                        .is_some_and(|segment| segment.text.ends_with(LINE_BREAK_SENTINEL));
+                    if !(chars[i] == '\n' && already_broken) {
+                        push_char(current, LINE_BREAK_SENTINEL);
+                    }
+                }
+                // A control character the escape named but that no run can
+                // carry would otherwise reach the renderer as an unprintable
+                // glyph. The two page-number sentinels are ours and cannot
+                // appear here, since the codes that emit them are handled
+                // above.
+                other if other.is_control() => {}
+                other => push_char(current, other),
+            }
             i += 1;
         }
     }
@@ -256,18 +326,24 @@ pub(super) fn parse_hf_format_string(
         if text.iter().all(|segment| segment.text.is_empty()) {
             continue;
         }
-        let elements = build_hf_elements(text);
-        if !elements.is_empty() {
-            paragraphs.push(HeaderFooterParagraph {
-                style: ParagraphStyle {
-                    alignment: Some(*alignment),
-                    ..ParagraphStyle::default()
-                },
-                elements,
-                border: None,
-                border_space: None,
-                frame: None,
-            });
+        // One paragraph per line of the section. A line that carries no ink is
+        // skipped, exactly as an empty section is: Excel seats a footer's text
+        // against the band, so materialising a blank leading line would move
+        // the visible label without any measurement asking for it.
+        for line in split_section_lines(text) {
+            let elements = build_hf_elements(&line);
+            if !elements.is_empty() {
+                paragraphs.push(HeaderFooterParagraph {
+                    style: ParagraphStyle {
+                        alignment: Some(*alignment),
+                        ..ParagraphStyle::default()
+                    },
+                    elements,
+                    border: None,
+                    border_space: None,
+                    frame: None,
+                });
+            }
         }
     }
 
@@ -279,6 +355,31 @@ pub(super) fn parse_hf_format_string(
             distance_from_edge: None,
         })
     }
+}
+
+/// Split a section's segments at every [`LINE_BREAK_SENTINEL`], keeping each
+/// piece's style.
+///
+/// A break can fall inside a segment as easily as between two, since the codes
+/// that open a segment and the break that ends a line are independent
+/// (issue #929).
+fn split_section_lines(section: &[HfSegment]) -> Vec<Vec<HfSegment>> {
+    let mut lines: Vec<Vec<HfSegment>> = Vec::new();
+    let mut current: Vec<HfSegment> = Vec::new();
+    for segment in section {
+        let mut pieces = segment.text.split(LINE_BREAK_SENTINEL).peekable();
+        while let Some(piece) = pieces.next() {
+            current.push(HfSegment {
+                text: piece.to_string(),
+                ..segment.clone()
+            });
+            if pieces.peek().is_some() {
+                lines.push(std::mem::take(&mut current));
+            }
+        }
+    }
+    lines.push(current);
+    lines
 }
 
 /// Build HFInline elements from a section string, replacing sentinel chars.
