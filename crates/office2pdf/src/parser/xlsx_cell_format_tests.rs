@@ -1906,3 +1906,109 @@ fn test_a_cell_pointing_at_the_normal_style_still_takes_its_veto() {
 
     assert_eq!(cell_text(&tp.table.rows[0].cells[0]), "0.25");
 }
+
+/// Excel composes a merged range's outline from the cells on each edge — the
+/// bottom from the range's bottom row, the right from its right column — while
+/// we built the whole cell from the top-left member alone. The Gantt template
+/// of issue #841 merges each header label down one row and declares the header
+/// rule only on the bottom members, so the rule vanished across every merged
+/// column while surviving on the unmerged ones beside them (issue #939).
+#[test]
+fn merged_range_takes_its_bottom_border_from_the_bottom_row() {
+    let data = build_xlsx_formatted(|sheet| {
+        sheet.get_cell_mut("A1").set_value("AKTIVITET");
+        // The bottom member of the merge carries the rule, as Excel writes it.
+        let bottom_member = sheet.get_cell_mut("A2");
+        let borders = bottom_member.get_style_mut().get_borders_mut();
+        borders
+            .get_bottom_mut()
+            .set_border_style(umya_spreadsheet::Border::BORDER_THIN);
+        borders
+            .get_bottom_mut()
+            .get_color_mut()
+            .set_argb("FF7F5F7F");
+        sheet.add_merge_cells("A1:A2");
+    });
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let tp = get_sheet_page(&doc, 0);
+    let cell = &tp.table.rows[0].cells[0];
+    assert_eq!(cell.row_span, 2, "the merge is still one cell");
+    let border = cell
+        .border
+        .as_ref()
+        .expect("the merged range keeps the rule its bottom row declares");
+    let bottom = border
+        .bottom
+        .as_ref()
+        .expect("the bottom side comes from the range's bottom row");
+    assert_eq!(bottom.color, Color::new(0x7F, 0x5F, 0x7F));
+    assert!((bottom.width - 1.0).abs() < 0.01);
+}
+
+/// The same composition on the horizontal axis: a right border declared on the
+/// range's right-hand member has to reach the merged cell (issue #939).
+#[test]
+fn merged_range_takes_its_right_border_from_the_right_column() {
+    let data = build_xlsx_formatted(|sheet| {
+        sheet.get_cell_mut("A1").set_value("Wide");
+        let right_member = sheet.get_cell_mut("C1");
+        let borders = right_member.get_style_mut().get_borders_mut();
+        borders
+            .get_right_mut()
+            .set_border_style(umya_spreadsheet::Border::BORDER_MEDIUM);
+        borders.get_right_mut().get_color_mut().set_argb("FF0000FF");
+        sheet.add_merge_cells("A1:C1");
+    });
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let tp = get_sheet_page(&doc, 0);
+    let cell = &tp.table.rows[0].cells[0];
+    assert_eq!(cell.col_span, 3);
+    let right = cell
+        .border
+        .as_ref()
+        .and_then(|border| border.right.as_ref())
+        .expect("the right side comes from the range's right column");
+    assert_eq!(right.color, Color::new(0, 0, 255));
+}
+
+/// The top-left member still states the top and left sides, and a range whose
+/// members declare nothing keeps no border at all (issue #939).
+#[test]
+fn merged_range_keeps_the_top_left_members_own_sides() {
+    let data = build_xlsx_formatted(|sheet| {
+        let top_left = sheet.get_cell_mut("A1");
+        top_left.set_value("Corner");
+        let borders = top_left.get_style_mut().get_borders_mut();
+        borders
+            .get_top_mut()
+            .set_border_style(umya_spreadsheet::Border::BORDER_THIN);
+        borders.get_top_mut().get_color_mut().set_argb("FF00FF00");
+        sheet.get_cell_mut("E1").set_value("Plain");
+        sheet.add_merge_cells("A1:B2");
+        sheet.add_merge_cells("E1:F1");
+    });
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let tp = get_sheet_page(&doc, 0);
+    let corner = &tp.table.rows[0].cells[0];
+    let border = corner.border.as_ref().expect("the top side survives");
+    assert_eq!(
+        border.top.as_ref().expect("top side").color,
+        Color::new(0, 255, 0)
+    );
+    assert!(border.bottom.is_none(), "no member declares a bottom side");
+    let plain = tp.table.rows[0]
+        .cells
+        .iter()
+        .find(|cell| cell_text(cell) == "Plain")
+        .expect("the unbordered merge is still emitted");
+    assert!(
+        plain.border.is_none(),
+        "a merge whose members declare nothing keeps no border"
+    );
+}
