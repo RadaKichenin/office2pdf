@@ -2488,3 +2488,64 @@ fn test_footer_band_states_its_own_bottom_edge() {
         "the footer origin must stay on the bottom margin line: {source}"
     );
 }
+
+/// A header rule is spaced from the line's bottom, not the font's descender.
+///
+/// Regression for #737: Typst's `"descender"` is its *normalised* descender,
+/// 0.199em for Malgun Gothic against the 0.4412em its 1.3x line box actually
+/// carries, so a Korean header's rule sat 1.98pt high. The assertion is font
+/// independent on purpose — CI's Linux runner has no CJK face, so it checks
+/// that the header asks [`word_line_box_descent_em`] rather than that the
+/// answer is any particular number.
+#[test]
+fn a_header_rule_is_spaced_from_the_line_box_bottom() {
+    use crate::ir::{BorderSide, CellBorder, HFInline, HeaderFooter, HeaderFooterParagraph};
+
+    let run = Run {
+        text: "Minutes".to_string(),
+        style: TextStyle::default(),
+        href: None,
+        footnote: None,
+    };
+    let paragraph = HeaderFooterParagraph {
+        style: ParagraphStyle::default(),
+        elements: vec![HFInline::Run(run.clone())],
+        border: Some(CellBorder {
+            top: None,
+            bottom: Some(BorderSide {
+                width: 0.5,
+                color: Color::new(0xCC, 0xCC, 0xCC),
+                style: BorderLineStyle::Solid,
+            }),
+            left: None,
+            right: None,
+        }),
+        border_space: None,
+        frame: None,
+    };
+    let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
+        size: PageSize::default(),
+        margins: Margins::default(),
+        content: vec![make_paragraph("Body")],
+        header: Some(HeaderFooter {
+            distance_from_edge: None,
+            paragraphs: vec![paragraph],
+        }),
+        footer: None,
+        columns: None,
+        line_grid_pitch: None,
+        line_grid_snaps_lines: false,
+        page_numbering: None,
+    })]);
+
+    let source = generate_typst(&doc).unwrap().source;
+    let expected: String = crate::render::typst_gen::text::word_line_box_descent_em(&[run])
+        .map(|descent_em| format!("bottom-edge: -{}em", format_f64(descent_em)))
+        .unwrap_or_else(|| "bottom-edge: \"descender\"".to_string());
+    assert!(
+        source.contains(&expected),
+        "the header rule must be spaced from the line box bottom ({expected}): {source}"
+    );
+}

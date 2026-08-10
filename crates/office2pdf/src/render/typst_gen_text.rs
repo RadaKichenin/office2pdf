@@ -467,13 +467,14 @@ fn east_asian_ascent_excess_em(runs: &[Run], pitch_em: f64) -> f64 {
     }
 }
 
-/// Where Word seats a footer story's last baseline, in em **above** the
-/// `w:pgMar/@w:footer` line the footer is measured up from.
+/// A line's sub-baseline share, in em: the East Asian advance minus the ascent
+/// Word seats the glyphs at, rather than the face's plain descender.
 ///
-/// The mirror of [`word_header_line_ascent_em`], and the same shape of answer:
-/// the footer's bottom is its last line's box bottom, so the term is that
-/// line's sub-baseline share — the East Asian advance minus the ascent Word
-/// seats the glyphs at — rather than the face's plain descender.
+/// Two callers want exactly this quantity. A footer story is measured **up**
+/// from the `w:pgMar/@w:footer` line to its last line's box bottom, which is
+/// the mirror of [`word_header_line_ascent_em`]. A header's `w:pBdr w:space`
+/// gap is measured **down** from the same box bottom. The rationale below was
+/// established for the footer case; the header case is noted at the end.
 ///
 /// Which one it is decides the footer outright. The three golden mocks 01, 02
 /// and 03 differ in their `footer1.xml` only in `w:rFonts`, and Word moves the
@@ -490,9 +491,13 @@ fn east_asian_ascent_excess_em(runs: &[Run], pitch_em: f64) -> f64 {
 /// taller line. That is [`line_takes_east_asian_metrics`]'s rule, already
 /// established for body lines by issue #643.
 ///
-/// `None` when the face's metrics are unknown, which leaves the footer on the
+/// The header path asks the same question: `w:pBdr w:space` is measured from
+/// the line's bottom, so a Korean header rule sat 1.98pt high on the same
+/// normalised-descender answer until it read this instead (issue #737).
+///
+/// `None` when the face's metrics are unknown, which leaves the story on the
 /// renderer's own seat.
-pub(super) fn word_footer_line_descent_em(runs: &[Run]) -> Option<f64> {
+pub(super) fn word_line_box_descent_em(runs: &[Run]) -> Option<f64> {
     let family: &str = east_asian_aware_metric_family(runs)?;
     let (ascender_em, descender_em, pitch_em) = crate::render::pdf::font_line_metrics_em(family)?;
     if ascender_em + descender_em <= 0.0 || pitch_em <= 0.0 {
@@ -711,9 +716,13 @@ pub(super) fn word_cell_line_box(
     // The symmetric box carries the East Asian 0.15-line surplus below the
     // baseline, which floated bottom-aligned Korean cells above where Excel
     // prints them (issue #618). Ending the box at the descender and moving the
-    // surplus into leading keeps multi-line advance identical. Word and Excel
-    // both measure a line's bottom down to the descender line — the same rule
-    // the header/footer path already applies with `bottom-edge: "descender"`.
+    // surplus into leading keeps multi-line advance identical.
+    //
+    // This once cited the header/footer path as applying the same rule with
+    // `bottom-edge: "descender"`. It no longer does: a header's `w:pBdr` gap
+    // measures from the East Asian line box's bottom, not the descender, and
+    // reads that from `word_line_box_descent_em` (issue #737). The seating
+    // here is Excel's and is unaffected.
     // TODO(#618 follow-up: leading is one per-paragraph pt value derived from
     // the max run size, so mixed-font-size wrapped lines gain
     // 0.15*pitch*(max-line) advance error; needs per-line seating if a real
