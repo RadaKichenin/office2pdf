@@ -376,15 +376,21 @@ fn apply_conditional_table_style(raw_rows: &mut [RawRow], table_style: &Resolved
 ///
 /// Derived on the invoice's Word GT (issue #624): the uniform scale put
 /// Description and Amount at an identical 161.32pt where Word prints 156.9
-/// and 153.3, while this rule lands every column within 0.10pt. The model
-/// runs ONLY in the direction that GT verified — `Σpref > W` compression with
-/// `k < 1` — and every other case returns the pre-#624 uniform scale over the
-/// per-column tcW maxima: `Σpref <= W` (conflict-free tables — every other
-/// golden mock — where the scale is ≈1 and the grid comes back verbatim, and
-/// the unverified `k >= 1` extrapolation), any token that cannot be measured
-/// (wasm, missing face or glyph), and tables whose cells are all empty (no
-/// measurement to anchor the minima), so font-less and wasm output is
-/// byte-identical to before.
+/// and 153.3, while this rule lands every column within 0.10pt. The model runs
+/// ONLY in that direction — `Σpref > W` compression with `k < 1`, which is
+/// what GT verified.
+///
+/// `Σpref <= W` is not a conflict at all, so `w:tblGrid` stands, scaled to the
+/// fit width (issue #925, measured on a second Word GT). Rescaling the tcW
+/// maxima there only ever agreed with Word at `Σpref == W`.
+///
+/// The pre-#624 uniform scale over the per-column tcW maxima survives as the
+/// degrade target for the cases that cannot be measured at all: any token
+/// without a face or a glyph (wasm, missing font), tables whose cells are all
+/// empty (no measurement to anchor the minima), and a compression whose
+/// columns already sit at min-content. Font-less and wasm output is unchanged
+/// by #624; #925 does move it, since the surplus branch runs before any
+/// measurement.
 fn reconcile_auto_layout_widths(
     grid: &[f64],
     raw_rows: &[RawRow],
@@ -430,13 +436,20 @@ fn reconcile_auto_layout_widths(
 
     let preferred: Vec<f64> = derive_grid_column_preferences(grid, raw_rows);
     let preferred_total: f64 = preferred.iter().sum();
-    // Σpref <= W covers both the no-conflict case (Σpref == W: the uniform
-    // scale is ≈1 and the grid comes back verbatim) and the k >= 1 surplus
-    // direction, where the slack model would extrapolate beyond every stated
-    // preference — never measured against GT — so the pre-#624 uniform scale
-    // is kept for both. Only Σpref > W (k < 1 compression) is verified.
+    // Σpref <= W is the surplus direction: nothing is over-subscribed, so
+    // there is no conflict for the slack model to resolve and `w:tblGrid` —
+    // Word's own last layout of this table — stands, scaled to the fit width.
+    //
+    // Rescaling the `w:tcW` maxima instead only ever agreed with Word at
+    // Σpref == W. Below it the scale is not ≈1 and the grid does NOT come
+    // back: the invoice of #925 states a 2403/2656/2997/2550 grid against
+    // stale 2092/2313/2610/1620 cells, and the 1.2283 rescale handed its last
+    // column 99.5pt where Word prints 127.5, so a 12pt `FORFALLSDATO` header
+    // spilled past the table's right edge. Only Σpref > W (k < 1 compression,
+    // issue #624) needs the slack model.
     if preferred_total <= fit_width_pt + AUTO_LAYOUT_WIDTH_EPSILON_PT {
-        return uniformly_scaled;
+        let grid_scale: f64 = fit_width_pt / grid_total;
+        return grid.iter().map(|width| width * grid_scale).collect();
     }
     let Some(min_content) = derive_grid_column_min_content_widths(raw_rows, grid.len()) else {
         return uniformly_scaled;
@@ -470,7 +483,10 @@ fn reconcile_auto_layout_widths(
 
 /// One twip (0.05pt) — the resolution of every source value. A conflict
 /// smaller than one twip is dxa rounding noise, not an authored disagreement,
-/// so it skips token measurement entirely and keeps the uniform-scale result.
+/// so it falls on the no-conflict side of the surplus gate: the grid scaled to
+/// the fit width, reached without measuring a single token. The same epsilon
+/// guards the min-content saturation check, whose degrade target is still the
+/// uniform scale.
 const AUTO_LAYOUT_WIDTH_EPSILON_PT: f64 = 0.05;
 
 /// The preferred width of each grid column: the widest `w:tcW` any
