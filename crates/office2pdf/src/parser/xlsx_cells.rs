@@ -7,7 +7,7 @@ use super::xlsx_style::{
     apply_rich_run_font, extract_cell_alignment, extract_cell_background, extract_cell_borders,
     extract_cell_text_style,
 };
-use crate::ir::{Color, Insets, TableCell};
+use crate::ir::{BorderSide, CellBorder, Color, Insets, TableCell};
 
 /// A cell range within a sheet (1-indexed, inclusive).
 #[derive(Debug, Clone, Copy)]
@@ -763,6 +763,57 @@ fn printed_row_height(
         .map(native_excel_pdf_row_height)
 }
 
+/// The outline a merged range prints: each side taken from the members that
+/// sit on that edge, rather than from the top-left member alone.
+///
+/// Excel writes a range's border format onto its constituent cells, so a rule
+/// under a two-row header lands on the *bottom* row's cells and a rule down the
+/// right-hand side lands on the right column's — neither of which the top-left
+/// member records. Collapsing the range to that one cell dropped both
+/// (issue #939).
+///
+/// One IR border holds a single side each, so the first member along an edge
+/// that declares that side wins. Excel lets the members disagree and paints
+/// each segment from its own cell; a range whose edge is formatted as a unit —
+/// which is what applying a border to a merged range produces — has them all
+/// agreeing anyway.
+fn merged_range_border(
+    sheet: &umya_spreadsheet::Worksheet,
+    ctx: &SheetContext,
+    col: u32,
+    row: u32,
+    info: &MergeInfo,
+) -> Option<CellBorder> {
+    let last_col: u32 = col + info.col_span.saturating_sub(1);
+    let last_row: u32 = row + info.row_span.saturating_sub(1);
+    let side_of = |member_col: u32, member_row: u32| -> Option<CellBorder> {
+        sheet
+            .get_cell((member_col, member_row))
+            .and_then(|cell| extract_cell_borders(cell, ctx.theme.as_ref()))
+    };
+    let first_along = |cells: &mut dyn Iterator<Item = (u32, u32)>,
+                       pick: fn(CellBorder) -> Option<BorderSide>|
+     -> Option<BorderSide> {
+        cells
+            .filter_map(|(c, r)| side_of(c, r).and_then(pick))
+            .next()
+    };
+
+    let border = CellBorder {
+        top: first_along(&mut (col..=last_col).map(|c| (c, row)), |b| b.top),
+        bottom: first_along(&mut (col..=last_col).map(|c| (c, last_row)), |b| b.bottom),
+        left: first_along(&mut (row..=last_row).map(|r| (col, r)), |b| b.left),
+        right: first_along(&mut (row..=last_row).map(|r| (last_col, r)), |b| b.right),
+    };
+    let CellBorder {
+        top,
+        bottom,
+        left,
+        right,
+    } = &border;
+    (top.is_some() || bottom.is_some() || left.is_some() || right.is_some()).then_some(border)
+}
+
 /// Build TableRows for a range of rows in a sheet.
 pub(super) fn build_rows_for_range(
     sheet: &umya_spreadsheet::Worksheet,
@@ -804,7 +855,13 @@ pub(super) fn build_rows_for_range(
                 .unwrap_or((None, None));
             let mut background =
                 umya_cell.and_then(|cell| extract_cell_background(cell, ctx.theme.as_ref()));
-            let border = umya_cell.and_then(|cell| extract_cell_borders(cell, ctx.theme.as_ref()));
+            // A merged range is one IR cell, but Excel composes its outline
+            // from the members on each edge, so reading only the top-left one
+            // loses every side the range declares elsewhere (issue #939).
+            let border = match ctx.merge_tops.get(&(col_idx, row_idx)) {
+                Some(info) => merged_range_border(sheet, ctx, col_idx, row_idx, info),
+                None => umya_cell.and_then(|cell| extract_cell_borders(cell, ctx.theme.as_ref())),
+            };
 
             // Apply conditional formatting overrides
             let mut data_bar = None;
