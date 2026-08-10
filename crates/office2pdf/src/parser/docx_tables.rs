@@ -149,8 +149,17 @@ pub(super) fn convert_table(
         depth,
         default_cell_padding,
     );
+    // The table's own `w:tblBorders`, as tri-states: a stated `none` has to
+    // reach the style merge as a suppression rather than as silence
+    // (issue #931).
+    let direct_table_borders: TableBorderSpec = table_prop_json
+        .as_ref()
+        .and_then(|json| json.get("borders"))
+        .filter(|borders| !borders.is_null())
+        .map(extract_table_border_spec)
+        .unwrap_or_default();
     if let Some(table_style) = table_style.as_ref() {
-        apply_conditional_table_style(&mut raw_rows, table_style);
+        apply_conditional_table_style(&mut raw_rows, table_style, &direct_table_borders);
     }
 
     let mut column_widths: Vec<f64> = if table.grid.is_empty() {
@@ -330,7 +339,11 @@ fn align_top_oriented_cells_to_row_vertical_margins(
     }
 }
 
-fn apply_conditional_table_style(raw_rows: &mut [RawRow], table_style: &ResolvedTableStyle) {
+fn apply_conditional_table_style(
+    raw_rows: &mut [RawRow],
+    table_style: &ResolvedTableStyle,
+    direct_borders: &TableBorderSpec,
+) {
     let row_count = raw_rows.len();
     let column_count = raw_table_column_count(raw_rows);
     for (row_index, row) in raw_rows.iter_mut().enumerate() {
@@ -341,6 +354,7 @@ fn apply_conditional_table_style(raw_rows: &mut [RawRow], table_style: &Resolved
                 cell.col_index,
                 cell.col_span as usize,
                 column_count,
+                direct_borders,
             );
             if !cell.has_explicit_background {
                 cell.background = style.background;
@@ -1018,6 +1032,97 @@ fn apply_table_level_borders(rows: &mut [TableRow], table_prop_json: Option<&ser
 fn extract_border_side(borders_json: &serde_json::Value, key: &str) -> Option<BorderSide> {
     extract_cell_borders(&serde_json::json!({ "top": borders_json.get(key)? }))
         .and_then(|border| border.top)
+}
+
+/// One side of a `w:tblBorders`/`w:tcBorders`, keeping "stated as none" apart
+/// from "not stated at all".
+///
+/// ECMA-376 gives `w:val="none"` (and its legacy spelling `nil`) the meaning
+/// "no border", which outranks whatever the table style would have drawn;
+/// only an *absent* side inherits. Collapsing the two onto `None` made the
+/// invoice of #841 draw six grey rules its `w:tblBorders` asks not to have
+/// (issue #931).
+#[derive(Debug, Clone, Default)]
+pub(super) enum BorderSideSpec {
+    /// The element states nothing; the style decides.
+    #[default]
+    Unstated,
+    /// `w:val="none"` or `"nil"` — draw nothing, and stop the style lookup.
+    Suppressed,
+    /// A border to draw.
+    Stated(BorderSide),
+}
+
+impl BorderSideSpec {
+    /// The side to draw, once the resolution above has run.
+    pub(super) fn drawn(&self) -> Option<BorderSide> {
+        match self {
+            Self::Stated(side) => Some(side.clone()),
+            Self::Unstated | Self::Suppressed => None,
+        }
+    }
+
+    pub(super) fn is_stated(&self) -> bool {
+        !matches!(self, Self::Unstated)
+    }
+}
+
+/// The six sides a `w:tblBorders` can state, each as a tri-state.
+#[derive(Debug, Clone, Default)]
+pub(super) struct TableBorderSpec {
+    pub(super) top: BorderSideSpec,
+    pub(super) bottom: BorderSideSpec,
+    pub(super) left: BorderSideSpec,
+    pub(super) right: BorderSideSpec,
+    pub(super) inside_h: BorderSideSpec,
+    pub(super) inside_v: BorderSideSpec,
+}
+
+impl TableBorderSpec {
+    /// The side this spec states for a cell's top or bottom edge, given where
+    /// the cell sits: the outer side on a boundary row, `insideH` between
+    /// rows. `outer` picks which of `top`/`bottom` the caller means.
+    pub(super) fn horizontal<'a>(
+        &'a self,
+        at_boundary: bool,
+        outer: &'a BorderSideSpec,
+    ) -> &'a BorderSideSpec {
+        if at_boundary { outer } else { &self.inside_h }
+    }
+
+    /// As [`Self::horizontal`], for a cell's left and right edges.
+    pub(super) fn vertical<'a>(
+        &'a self,
+        at_boundary: bool,
+        outer: &'a BorderSideSpec,
+    ) -> &'a BorderSideSpec {
+        if at_boundary { outer } else { &self.inside_v }
+    }
+}
+
+/// Read a `w:tblBorders`/`w:tcBorders` element as tri-states, so a stated
+/// `none` survives to the style merge (issue #931).
+pub(super) fn extract_table_border_spec(borders_json: &serde_json::Value) -> TableBorderSpec {
+    let side = |key: &str| -> BorderSideSpec {
+        let Some(value) = borders_json.get(key) else {
+            return BorderSideSpec::Unstated;
+        };
+        if value.is_null() {
+            return BorderSideSpec::Unstated;
+        }
+        match extract_border_side(borders_json, key) {
+            Some(border) => BorderSideSpec::Stated(border),
+            None => BorderSideSpec::Suppressed,
+        }
+    };
+    TableBorderSpec {
+        top: side("top"),
+        bottom: side("bottom"),
+        left: side("left"),
+        right: side("right"),
+        inside_h: side("insideH"),
+        inside_v: side("insideV"),
+    }
 }
 
 fn extract_cell_borders(borders_json: &serde_json::Value) -> Option<CellBorder> {

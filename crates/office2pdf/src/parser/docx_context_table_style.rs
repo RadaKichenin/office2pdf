@@ -1,6 +1,7 @@
 use std::cell::Cell;
 use std::collections::HashMap;
 
+use super::super::tables::{BorderSideSpec, TableBorderSpec};
 use super::super::{Block, Color, TextStyle, parse_hex_color};
 use crate::ir::{Alignment, BorderLineStyle, BorderSide, CellBorder};
 
@@ -155,6 +156,7 @@ impl ResolvedTableStyle {
         column_index: usize,
         column_span: usize,
         column_count: usize,
+        direct_borders: &TableBorderSpec,
     ) -> ResolvedTableCellStyle {
         let mut region = self.definition.base.clone();
         if self.look.horizontal_banding {
@@ -190,27 +192,46 @@ impl ResolvedTableStyle {
         // edges); an active special region's explicit sides then override
         // the matching edges of its own cells (e.g. the firstRow bottom
         // border lands on the header row's bottom edge).
+        //
+        // The table's own `w:tblBorders` sits between the two: it is direct
+        // formatting, so it outranks the style's grid on every side it states
+        // — including a `w:val="none"`, which means "draw nothing" rather than
+        // "say nothing" and so must survive as a suppression (issue #931).
         let base = &self.definition.base.borders;
-        let mut top = if row_index == 0 {
-            base.top.clone()
-        } else {
-            base.inside_h.clone()
+        let grid = |at_boundary: bool, outer: &Option<BorderSide>, inside: &Option<BorderSide>| {
+            if at_boundary {
+                outer.clone()
+            } else {
+                inside.clone()
+            }
         };
-        let mut bottom = if row_index + 1 == row_count {
-            base.bottom.clone()
-        } else {
-            base.inside_h.clone()
+        let at_top = row_index == 0;
+        let at_bottom = row_index + 1 == row_count;
+        let at_left = column_index == 0;
+        let at_right = column_index + column_span >= column_count;
+        let direct = |stated: &BorderSideSpec, from_style: Option<BorderSide>| {
+            if stated.is_stated() {
+                stated.drawn()
+            } else {
+                from_style
+            }
         };
-        let mut left = if column_index == 0 {
-            base.left.clone()
-        } else {
-            base.inside_v.clone()
-        };
-        let mut right = if column_index + column_span >= column_count {
-            base.right.clone()
-        } else {
-            base.inside_v.clone()
-        };
+        let mut top = direct(
+            direct_borders.horizontal(at_top, &direct_borders.top),
+            grid(at_top, &base.top, &base.inside_h),
+        );
+        let mut bottom = direct(
+            direct_borders.horizontal(at_bottom, &direct_borders.bottom),
+            grid(at_bottom, &base.bottom, &base.inside_h),
+        );
+        let mut left = direct(
+            direct_borders.vertical(at_left, &direct_borders.left),
+            grid(at_left, &base.left, &base.inside_v),
+        );
+        let mut right = direct(
+            direct_borders.vertical(at_right, &direct_borders.right),
+            grid(at_right, &base.right, &base.inside_v),
+        );
 
         let mut override_edges = |borders: &RegionBorders| {
             if let Some(side) = &borders.top {
@@ -651,7 +672,7 @@ mod tests {
         let resolved = context.consume_next().expect("style application");
 
         // Interior cell: white grid on all sides from tblBorders.
-        let interior = resolved.cell_style(1, 3, 1, 1, 3);
+        let interior = resolved.cell_style(1, 3, 1, 1, 3, &TableBorderSpec::default());
         let border = interior.border.expect("interior cell gets style borders");
         for side in [&border.top, &border.bottom, &border.left, &border.right] {
             let side = side.as_ref().expect("all sides bordered");
@@ -660,7 +681,7 @@ mod tests {
         }
 
         // First-row cell: red double bottom border from the region override.
-        let header = resolved.cell_style(0, 3, 1, 1, 3);
+        let header = resolved.cell_style(0, 3, 1, 1, 3, &TableBorderSpec::default());
         let border = header.border.expect("header cell gets style borders");
         let bottom = border.bottom.as_ref().expect("bottom side");
         assert_eq!(bottom.color, Color::new(0xFF, 0, 0));
@@ -673,8 +694,80 @@ mod tests {
         assert_eq!(header.background, Some(Color::new(0, 0, 0)));
 
         // Boundary edges use the outer borders (still white here).
-        let top_left = resolved.cell_style(1, 3, 0, 1, 3);
+        let top_left = resolved.cell_style(1, 3, 0, 1, 3, &TableBorderSpec::default());
         let border = top_left.border.expect("boundary cell borders");
         assert!(border.left.is_some());
+    }
+
+    /// A table whose own `w:tblBorders` states `w:val="none"` on every side
+    /// asks for no borders, and direct formatting outranks the style's grid.
+    /// Reading `none` as "nothing stated" left the invoice of #841 drawing six
+    /// grey rules the document turns off (issue #931).
+    #[test]
+    fn a_stated_none_suppresses_the_styles_grid() {
+        let context = TableStyleContext::from_xml(Some(DOCUMENT_XML), Some(STYLES_XML));
+        let resolved = context.consume_next().expect("style application");
+        let all_none: TableBorderSpec = TableBorderSpec {
+            top: BorderSideSpec::Suppressed,
+            bottom: BorderSideSpec::Suppressed,
+            left: BorderSideSpec::Suppressed,
+            right: BorderSideSpec::Suppressed,
+            inside_h: BorderSideSpec::Suppressed,
+            inside_v: BorderSideSpec::Suppressed,
+        };
+
+        // An interior cell keeps nothing at all.
+        let interior = resolved.cell_style(1, 3, 1, 1, 3, &all_none);
+        assert!(
+            interior.border.is_none(),
+            "a suppressed grid draws no side: {:?}",
+            interior.border
+        );
+        // A boundary cell likewise — the outer sides are suppressed too.
+        let corner = resolved.cell_style(2, 3, 0, 1, 3, &all_none);
+        assert!(corner.border.is_none(), "{:?}", corner.border);
+
+        // The conditional region still rules its own edge: `firstRow` states a
+        // red double bottom border, which direct table-level formatting does
+        // not reach.
+        let header = resolved.cell_style(0, 3, 1, 1, 3, &all_none);
+        let border = header.border.expect("the firstRow region survives");
+        let bottom = border.bottom.as_ref().expect("its bottom side");
+        assert_eq!(bottom.color, Color::new(0xFF, 0, 0));
+        assert!(
+            border.top.is_none() && border.left.is_none() && border.right.is_none(),
+            "only the side the region states survives: {border:?}"
+        );
+    }
+
+    /// An unstated side still inherits, and a side the table states outright
+    /// replaces the style's rather than being ignored (issue #931).
+    #[test]
+    fn an_unstated_side_inherits_while_a_stated_one_replaces() {
+        let context = TableStyleContext::from_xml(Some(DOCUMENT_XML), Some(STYLES_XML));
+        let resolved = context.consume_next().expect("style application");
+        let only_inside_h: TableBorderSpec = TableBorderSpec {
+            inside_h: BorderSideSpec::Stated(BorderSide {
+                width: 2.0,
+                color: Color::new(0, 0, 0xFF),
+                style: crate::ir::BorderLineStyle::Solid,
+            }),
+            ..TableBorderSpec::default()
+        };
+        let interior = resolved.cell_style(1, 3, 1, 1, 3, &only_inside_h);
+        let border = interior.border.expect("borders resolved");
+        let top = border.top.as_ref().expect("insideH reaches the top edge");
+        assert_eq!(
+            top.color,
+            Color::new(0, 0, 0xFF),
+            "the table's own side wins"
+        );
+        assert_eq!(top.width, 2.0);
+        let left = border.left.as_ref().expect("the vertical side is unstated");
+        assert_eq!(
+            left.color,
+            Color::new(0xFF, 0xFF, 0xFF),
+            "an unstated side still inherits the style's"
+        );
     }
 }
