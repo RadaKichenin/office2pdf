@@ -315,6 +315,76 @@ fn test_auto_layout_without_conflict_returns_grid_verbatim() {
     );
 }
 
+/// When the cells ask for LESS than the fit width the columns come from
+/// `w:tblGrid`, not from the stale `w:tcW` proportions rescaled to fill it
+/// (issue #925). `003_FAKTURA.docx`'s `SELGER` table states a grid of
+/// 2403/2656/2997/2550 twips (120.15/132.80/149.85/127.50pt) while its cells
+/// still carry 2092/2313/2610/1620 — Sigma-tcW is 431.75pt against the grid's
+/// 530.30pt. Rescaling the tcW set gave the last column 99.5pt where Word
+/// prints 127.5, and its `FORFALLSDATO` header spilled past the table edge.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn test_auto_layout_surplus_keeps_the_declared_grid() {
+    let document_xml = format!(
+        r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:body>
+            <w:tbl>
+                <w:tblPr/>
+                <w:tblGrid><w:gridCol w:w="2403"/><w:gridCol w:w="2656"/>
+                           <w:gridCol w:w="2997"/><w:gridCol w:w="2550"/></w:tblGrid>
+                <w:tr>{a}{b}{c}{d}</w:tr>
+            </w:tbl>
+            <w:sectPr/>
+        </w:body>
+    </w:document>"#,
+        a = auto_layout_cell_xml(Some(2092), None, "a"),
+        b = auto_layout_cell_xml(Some(2313), None, "a"),
+        c = auto_layout_cell_xml(Some(2610), None, "a"),
+        d = auto_layout_cell_xml(Some(1620), None, "a"),
+    );
+    let data = build_docx_with_columns(&document_xml);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let widths = &first_table(&doc).column_widths;
+
+    for (index, expected) in [120.15_f64, 132.80, 149.85, 127.50].iter().enumerate() {
+        assert!(
+            (widths[index] - expected).abs() < 0.01,
+            "column {index} must come from the grid ({expected}pt), got {widths:?}"
+        );
+    }
+}
+
+/// Triangulation for #925: a different grid, and a `w:tblW` that is not the
+/// grid total, so neither the grid verbatim nor a constant can pass. Grid
+/// 100/300pt scaled to the declared 200pt fit width is 50/150pt; the tcW set
+/// (100/100pt) rescaled to it would have been 100/100pt.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn test_auto_layout_surplus_scales_the_grid_to_a_narrower_tblw() {
+    let document_xml = format!(
+        r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:body>
+            <w:tbl>
+                <w:tblPr><w:tblW w:type="dxa" w:w="4000"/></w:tblPr>
+                <w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="6000"/></w:tblGrid>
+                <w:tr>{a}{b}</w:tr>
+            </w:tbl>
+            <w:sectPr/>
+        </w:body>
+    </w:document>"#,
+        a = auto_layout_cell_xml(Some(2000), None, "a"),
+        b = auto_layout_cell_xml(Some(2000), None, "a"),
+    );
+    let data = build_docx_with_columns(&document_xml);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let widths = &first_table(&doc).column_widths;
+
+    assert!(
+        (widths[0] - 50.0).abs() < 0.01 && (widths[1] - 150.0).abs() < 0.01,
+        "the grid scales to the declared 200pt fit width, got {widths:?}"
+    );
+}
+
 /// When any token cannot be measured (here U+E000, which no embedded face
 /// covers) the redistribution degrades to the pre-#624 uniform scale over the
 /// per-column preference maxima, so font-less environments keep today's
@@ -462,12 +532,13 @@ fn test_auto_layout_ignores_tblw_beyond_the_grid_total() {
     );
 }
 
-/// When the preferences undershoot the fit width (Σpref < W) the slack model
-/// would extrapolate k > 1 beyond every stated preference — a direction never
-/// measured against GT — so the pre-#624 uniform scale is kept: maxima
-/// 50/100pt scaled to the 200pt grid → 66.67/133.33pt.
+/// When the preferences undershoot the fit width (Σpref < W) nothing is
+/// over-subscribed, so `w:tblGrid` stands: an equal 100/100pt grid stays equal
+/// however lopsided the stale `w:tcW` pair (50/100pt) on it is. This direction
+/// used to keep the pre-#624 uniform scale as a placeholder because it had no
+/// GT; #925 measured it on `003_FAKTURA.docx` and the grid is what Word draws.
 #[test]
-fn test_auto_layout_preference_undershoot_keeps_uniform_scale() {
+fn test_auto_layout_preference_undershoot_keeps_the_declared_grid() {
     let document_xml = format!(
         r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
         <w:body>
@@ -487,8 +558,8 @@ fn test_auto_layout_preference_undershoot_keeps_uniform_scale() {
     let widths = &first_table(&doc).column_widths;
 
     assert!(
-        (widths[0] - 200.0 / 3.0).abs() < 0.01 && (widths[1] - 400.0 / 3.0).abs() < 0.01,
-        "k >= 1 must return the uniform-scale result, got {widths:?}"
+        (widths[0] - 100.0).abs() < 0.01 && (widths[1] - 100.0).abs() < 0.01,
+        "an undershoot must return the declared grid, got {widths:?}"
     );
 }
 
