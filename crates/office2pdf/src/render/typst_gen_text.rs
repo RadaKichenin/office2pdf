@@ -556,6 +556,24 @@ pub(super) fn word_header_band_shift_pt(runs: &[Run]) -> Option<f64> {
     Some((word_ascent_em - compiler_ascent_em) * paragraph_font_size_pt(runs))
 }
 
+/// The height one header or footer line takes, in points.
+///
+/// Word's natural line for the paragraph's resolved face and size — the hhea
+/// line, or 1.3 times it for an East Asian one. A header taller than the band
+/// `w:top - w:header` leaves has to grow the top margin, and this is the term
+/// that measures it (issue #736).
+///
+/// `None` where the face's metrics are unknown, which leaves the band at the
+/// declared size rather than guessing at a growth.
+pub(super) fn word_line_advance_pt(runs: &[Run]) -> Option<f64> {
+    let family: &str = east_asian_aware_metric_family(runs)?;
+    let (_ascender_em, _descender_em, pitch_em) = crate::render::pdf::font_line_metrics_em(family)?;
+    if pitch_em <= 0.0 {
+        return None;
+    }
+    Some(word_natural_line_em(runs, pitch_em) * paragraph_font_size_pt(runs))
+}
+
 /// The line advance Word gives this paragraph before any grid is consulted:
 /// the font's hhea line, or 1.3 times it when the line is set in an East Asian
 /// face (issues #518, #643).
