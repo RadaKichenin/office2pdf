@@ -2662,3 +2662,49 @@ fn a_taller_first_page_header_also_grows_the_margin() {
          body's {first_body_baseline}pt — the shared margin ignored it"
     );
 }
+
+/// A header line advances by Word's pitch, not Typst's default leading.
+///
+/// Regression for #735. The story carried no leading, so its lines took the
+/// 0.65em default on top of Typst's cap-height edge — 10.9305pt for 8pt Arial
+/// against Word's 9.1992pt. The leading is stated once for the story, which is
+/// a single Typst paragraph joined by `\\` line breaks; stating it per
+/// paragraph would make each one a block and Typst would put `par(spacing:)`
+/// between them instead.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_header_line_advances_by_words_pitch() {
+    let runs = vec![Run {
+        text: "Header".to_string(),
+        style: TextStyle {
+            font_family: Some("Arial".to_string()),
+            font_size: Some(8.0),
+            ..TextStyle::default()
+        },
+        href: None,
+        footnote: None,
+    }];
+    let Some(expected) = crate::render::typst_gen::text::word_hf_line_leading_pt(&runs, 0.0) else {
+        return; // the face is unavailable on this runner
+    };
+    let doc = doc_with_header(
+        Some(35.4),
+        62.35,
+        vec![header_text_paragraph("Header", runs[0].style.clone())],
+    );
+    let source = generate_typst(&doc).unwrap().source;
+
+    let marker: String = format!("#set par(leading: {}pt)", format_f64(expected));
+    assert_eq!(
+        source.matches(marker.as_str()).count(),
+        1,
+        "the story states its leading exactly once, expected {marker}: {source}"
+    );
+    // Word's advance is the leading plus the cap-height edge it is measured
+    // against, so the emitted value must be strictly less than the advance.
+    assert!(
+        expected > 0.0 && expected < 9.1992,
+        "8pt Arial leading tops the cap-height edge up to Word's 9.1992pt \
+         advance, got {expected}pt"
+    );
+}
