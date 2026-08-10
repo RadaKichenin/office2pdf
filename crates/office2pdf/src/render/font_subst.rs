@@ -3,14 +3,15 @@
 //! Explicit family mappings provide preferred alternatives, including
 //! metric-compatible Office substitutes. A name the table does not list is
 //! answered in two further steps: the class the document itself declared for
-//! that family, then — failing that — a class token read out of the name. A
-//! monospace answer gets a fixed-pitch chain and a sans-serif one a sans
-//! chain, so a missing face does not land on the document's default serif.
-//! The requested family remains first.
+//! that family, then — failing that — the name itself, read either as a class
+//! token or, for a short list of brands that carry no such token, as a
+//! known-brand match on its first word. A monospace answer gets a fixed-pitch
+//! chain and a sans-serif one a sans chain, so a missing face does not land on
+//! the document's default serif. The requested family remains first.
 //!
 //! Only PPTX populates the declared-class map today; DOCX `w:family` in
 //! `word/fontTable.xml` is not read yet, so a DOCX face still relies on the
-//! table and the name token (issue #891).
+//! table and the name (issue #891).
 
 // Font discovery/embedding is native-only; on wasm32 these items are
 // compiled but unreachable (visibility sealing exposed them to dead_code).
@@ -350,8 +351,9 @@ pub fn substitutes(font_family: &str) -> Option<&'static [&'static str]> {
                 family_name_declares_monospace(&normalized_family).then_some(MONOSPACE_SUBSTITUTES)
             })
             .or_else(|| {
-                family_name_declares_sans_serif(&normalized_family)
-                    .then_some(SANS_SERIF_SUBSTITUTES)
+                (family_name_declares_sans_serif(&normalized_family)
+                    || family_name_is_known_sans_serif_brand(&normalized_family))
+                .then_some(SANS_SERIF_SUBSTITUTES)
             }),
     }
 }
@@ -380,6 +382,26 @@ fn family_name_declares_sans_serif(normalized_family: &str) -> bool {
     normalized_family
         .split(|character: char| !character.is_ascii_alphanumeric())
         .any(|token| matches!(token, "sans" | "gothic" | "grotesk" | "grotesque"))
+}
+
+/// A sans-serif family that says so nowhere a heuristic can read it: no class
+/// token in its name, and no declared class either where the source names a
+/// face as a bare string — an XLSX header/footer's `&"Font"` code carries
+/// nothing else at all.
+///
+/// Matched on the family's *first* token, so every weight and width of the
+/// family lands with it without enumerating them. The monospace check runs
+/// first, so a fixed-pitch member such as `Aptos Mono` still resolves as
+/// monospace.
+///
+/// `Aptos` has been Microsoft 365's default face since 2024, which puts it in
+/// every document a current Office build creates; without this it fell through
+/// to the document's serif default (issue #949).
+fn family_name_is_known_sans_serif_brand(normalized_family: &str) -> bool {
+    let first_token: Option<&str> = normalized_family
+        .split(|character: char| !character.is_ascii_alphanumeric())
+        .find(|token| !token.is_empty());
+    matches!(first_token, Some("aptos"))
 }
 
 /// Check whether the given font family (or its alias) is available in the

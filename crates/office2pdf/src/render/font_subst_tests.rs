@@ -1110,6 +1110,30 @@ fn corbel_resolves_to_a_sans_serif_face() {
     );
 }
 
+/// Aptos has been Microsoft 365's default face since 2024, so it turns up in
+/// every document a current Office build creates. It is a sans with no class
+/// token in its name, and an XLSX header/footer names it as a bare `&"Aptos"`
+/// with no declared class to fall back on, so the table has to name it — the
+/// Gantt template on #841 sets its footer in it (issue #949).
+#[test]
+fn the_aptos_family_resolves_to_a_sans_serif_face() {
+    for family in ["Aptos", "Aptos Display", "Aptos Narrow", "Aptos SemiBold"] {
+        let subs = substitutes(family).unwrap_or_else(|| panic!("{family} should substitute"));
+        assert!(
+            subs.contains(&"Liberation Sans"),
+            "{family} must resolve to a sans face, got {subs:?}"
+        );
+    }
+}
+
+/// `Aptos Mono` is the family's fixed-pitch member, and the monospace token
+/// already outranks the sans classification (issue #949).
+#[test]
+fn aptos_mono_stays_fixed_pitch() {
+    let subs = substitutes("Aptos Mono").expect("Aptos Mono should substitute");
+    assert_eq!(subs, MONOSPACE_SUBSTITUTES);
+}
+
 #[test]
 fn a_declared_sans_family_stops_falling_back_to_a_serif() {
     // `Posterama` carries no `sans` token, so before the declaration was read
@@ -1131,4 +1155,12 @@ fn a_declared_sans_family_stops_falling_back_to_a_serif() {
 
     set_declared_font_classes(previous);
     assert_eq!(substitutes("Posterama"), None);
+}
+
+/// The brand list matches the family's first token, so an unrelated family
+/// that merely ends in one is left alone (issue #949).
+#[test]
+fn a_brand_token_only_counts_at_the_start_of_the_family() {
+    assert_eq!(substitutes("Old Aptos"), None);
+    assert_eq!(substitutes("Aptosia"), None);
 }
