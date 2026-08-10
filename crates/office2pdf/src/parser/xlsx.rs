@@ -482,10 +482,18 @@ impl XlsxParser {
 
             // Extract sheet header/footer
             let hf = sheet.get_header_footer();
-            let sheet_header =
-                parse_hf_format_string(hf.get_odd_header().get_value(), &sheet_name, &mut warnings);
-            let sheet_footer =
-                parse_hf_format_string(hf.get_odd_footer().get_value(), &sheet_name, &mut warnings);
+            let sheet_header = parse_hf_format_string(
+                hf.get_odd_header().get_value(),
+                &sheet_name,
+                normal_font.as_ref(),
+                &mut warnings,
+            );
+            let sheet_footer = parse_hf_format_string(
+                hf.get_odd_footer().get_value(),
+                &sheet_name,
+                normal_font.as_ref(),
+                &mut warnings,
+            );
 
             // Pull charts for this sheet
             let mut sheet_charts = chart_map.remove(&sheet_name).unwrap_or_default();
@@ -755,10 +763,18 @@ impl Parser for XlsxParser {
 
             // Extract sheet header/footer
             let hf = sheet.get_header_footer();
-            let sheet_header =
-                parse_hf_format_string(hf.get_odd_header().get_value(), &sheet_name, &mut warnings);
-            let sheet_footer =
-                parse_hf_format_string(hf.get_odd_footer().get_value(), &sheet_name, &mut warnings);
+            let sheet_header = parse_hf_format_string(
+                hf.get_odd_header().get_value(),
+                &sheet_name,
+                normal_font.as_ref(),
+                &mut warnings,
+            );
+            let sheet_footer = parse_hf_format_string(
+                hf.get_odd_footer().get_value(),
+                &sheet_name,
+                normal_font.as_ref(),
+                &mut warnings,
+            );
 
             // Pull charts for this sheet (if any)
             let mut sheet_charts = chart_map.remove(&sheet_name).unwrap_or_default();
