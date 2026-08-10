@@ -556,6 +556,41 @@ pub(super) fn word_header_band_shift_pt(runs: &[Run]) -> Option<f64> {
     Some((word_ascent_em - compiler_ascent_em) * paragraph_font_size_pt(runs))
 }
 
+/// Leading that makes a header or footer line advance by Word's pitch.
+///
+/// Typst advances a line by `top-edge + bottom-edge + leading`, and the story
+/// carried none of those, so it took the 0.65em default: a wrapped 8pt Arial
+/// header advanced 10.9305pt = (0.65 + 0.71631) x 8 where Word advances
+/// 9.1992pt = (2355/2048) x 8 (issue #735).
+///
+/// The leading is the remainder after the edges, not a replacement for them.
+/// That matters: the top edge is what #629's `word_header_band_shift_pt` seats
+/// the first baseline against, so leaving it alone keeps that seat exactly
+/// where it was and confines this to the advance *between* lines. `bottom_edge_em`
+/// is whatever the caller set, which is nonzero only where a `w:pBdr` wrapper
+/// pinned it (#737).
+///
+/// Not to be confused with [`word_line_leading_pt`], which answers a different
+/// question for body paragraphs: that one is folded into a fixed line box,
+/// this one is emitted directly as `par(leading:)` for a header or footer
+/// story.
+///
+/// `None` where the face's metrics are unknown, or where the edges already
+/// exceed Word's pitch and no leading could shrink the advance to it.
+pub(super) fn word_hf_line_leading_pt(runs: &[Run], bottom_edge_em: f64) -> Option<f64> {
+    let family: &str = east_asian_aware_metric_family(runs)?;
+    let (_ascender_em, _descender_em, pitch_em) = crate::render::pdf::font_line_metrics_em(family)?;
+    if pitch_em <= 0.0 {
+        return None;
+    }
+    // The story sets no `top-edge`, so Typst's default cap-height one is what
+    // the advance already carries.
+    let top_edge_em: f64 = crate::render::pdf::font_cap_height_em(family)?;
+    let advance_em: f64 = word_natural_line_em(runs, pitch_em);
+    let leading_em: f64 = advance_em - top_edge_em - bottom_edge_em;
+    (leading_em >= 0.0).then(|| leading_em * paragraph_font_size_pt(runs))
+}
+
 /// The height one header or footer line takes, in points.
 ///
 /// Word's natural line for the paragraph's resolved face and size — the hhea

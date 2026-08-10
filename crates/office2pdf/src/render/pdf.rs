@@ -570,9 +570,10 @@ pub(crate) fn font_hhea_ascender_em(_family: &str) -> Option<f64> {
 /// is what lets the header band be shifted by the *difference* between Word's
 /// seat and the compiler's, leaving every line box — and therefore the story's
 /// baseline-to-baseline advance — exactly as the compiler would lay it out
-/// (issue #629). That advance is the compiler's, not Word's: header paragraphs
-/// never receive the line-box settings body paragraphs do, which is issue #735
-/// and deliberately untouched here.
+/// (issue #629). The advance is set separately, as a story-level
+/// `par(leading:)` that tops this cap-height edge up to Word's pitch (issue
+/// #735) — reading the cap height here is what keeps the two independent, since
+/// the leading is computed as the remainder after it.
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn font_cap_height_em(family: &str) -> Option<f64> {
     static CAP_HEIGHT_CACHE: OnceLock<Mutex<HashMap<String, Option<f64>>>> = OnceLock::new();

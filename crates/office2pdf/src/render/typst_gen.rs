@@ -1735,6 +1735,28 @@ fn hf_has_page_anchored_frames(header_footer: &HeaderFooter) -> bool {
 }
 
 fn generate_flow_hf_content(out: &mut String, hf: &HeaderFooter, ctx: &mut GenCtx) {
+    // The story's paragraphs are joined by a `\\` line break below, so they are
+    // one Typst paragraph and `par(leading:)` is what separates their lines.
+    // Typst advances a line by `top-edge + bottom-edge + leading`, and the story
+    // set no leading, so it took the 0.65em default: an 8pt Arial header advanced
+    // 10.9305pt where Word advances 9.1992pt. Stating the remainder after the
+    // edges leaves the first baseline — seated against the top edge by #629 —
+    // exactly where it was, and corrects only the advance between lines (#735).
+    //
+    // Set once for the story rather than per paragraph: wrapping each paragraph
+    // in its own content block makes it a block, and Typst then puts
+    // `par(spacing:)` between them — a different and much larger gap.
+    if let Some(leading) = hf
+        .paragraphs
+        .iter()
+        .find(|paragraph| hf_paragraph_is_emitted(paragraph))
+        .and_then(|paragraph| {
+            let runs: Vec<Run> = hf_paragraph_metric_runs(paragraph);
+            text::word_hf_line_leading_pt(&runs, 0.0)
+        })
+    {
+        let _ = writeln!(out, "#set par(leading: {}pt)", format_f64(leading));
+    }
     let mut is_first: bool = true;
     for paragraph in &hf.paragraphs {
         if !hf_paragraph_is_emitted(paragraph) {
@@ -1774,9 +1796,10 @@ const MIN_HEADER_BAND_SHIFT_PT: f64 = 0.02;
 /// without touching a single line box, so the story's own baseline-to-baseline
 /// advance stays exactly what the compiler would produce — declaring the ascent
 /// as a `top-edge` instead would widen *every* wrapped line of the paragraph and
-/// stretch that advance (issue #629). Preserving it is the point: it is the
-/// compiler's advance rather than Word's, which is issue #735, and a placement
-/// fix has no business changing it.
+/// stretch that advance (issue #629). Preserving it is still the point, and it
+/// is what keeps this shift valid now that the advance itself is Word's: the
+/// story states its leading separately (issue #735), so a placement fix and a
+/// line-advance fix stay independent of each other.
 ///
 /// The band is sized by the first paragraph the story actually emits, which is
 /// the one whose top the header distance pins. `None` when that paragraph gives
@@ -2137,17 +2160,21 @@ fn generate_hf_paragraph(
         write_hf_border_rules(out, border);
         let _ = write!(out, ", block(height: {}pt)[], ", format_f64(top_space));
     }
+    // Word measures `w:pBdr w:space` from the line's bottom, which for an East
+    // Asian line is the 1.3x line box's lower edge rather than the face's
+    // descender. Typst's `"descender"` answers with its normalised one —
+    // 0.2002em for Malgun Gothic (OS/2 410/2048) against the 0.4412em its line
+    // box carries — which left a Korean header's rule 1.98pt high, 51.30pt
+    // against Word's 53.28pt (issue #737). Only a story that stacks rules pins
+    // it; the rest keep Typst's baseline bottom edge.
+    let metric_runs: Vec<Run> = hf_paragraph_metric_runs(paragraph);
+    let bottom_edge_em: Option<f64> = stacks_rules
+        .then(|| text::word_line_box_descent_em(&metric_runs))
+        .flatten();
     if stacks_rules {
-        // Word measures `w:pBdr w:space` from the line's bottom, which for an
-        // East Asian line is the 1.3x line box's lower edge rather than the
-        // face's descender. Typst's `"descender"` answers with its normalised
-        // one — 0.2002em for Malgun Gothic (OS/2 410/2048) against the
-        // 0.4412em its line box carries — which left a Korean header's rule
-        // 1.98pt high, 51.30pt against Word's 53.28pt (issue #737).
-        let bottom_edge: String =
-            text::word_line_box_descent_em(&hf_paragraph_metric_runs(paragraph))
-                .map(|descent_em| format!("-{}em", format_f64(descent_em)))
-                .unwrap_or_else(|| "\"descender\"".to_string());
+        let bottom_edge: String = bottom_edge_em
+            .map(|descent_em| format!("-{}em", format_f64(descent_em)))
+            .unwrap_or_else(|| "\"descender\"".to_string());
         let _ = write!(out, "[#set text(bottom-edge: {bottom_edge});");
     }
 
