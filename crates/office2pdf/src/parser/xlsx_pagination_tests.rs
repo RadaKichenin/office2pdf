@@ -1,7 +1,8 @@
 use super::*;
 use crate::ir::ChartAreaOutline;
 use crate::ir::{
-    AxisTickMark, Block, Margins, PageSize, Paragraph, ParagraphStyle, Run, TextStyle,
+    AxisTickMark, Block, HFInline, HeaderFooter, HeaderFooterParagraph, Margins, PageSize,
+    Paragraph, ParagraphStyle, Run, TextStyle,
 };
 
 fn cell(text: &str) -> TableCell {
@@ -89,7 +90,7 @@ fn test_narrow_sheet_stays_single_page() {
             height: None,
         }],
     );
-    let pages = split_sheet_page_by_width(page, None, None);
+    let pages = split_sheet_page_by_width(page, None, None, true);
     assert_eq!(pages.len(), 1);
 }
 
@@ -103,7 +104,7 @@ fn test_wide_sheet_splits_into_column_groups() {
             height: None,
         }],
     );
-    let pages = split_sheet_page_by_width(page, None, None);
+    let pages = split_sheet_page_by_width(page, None, None, true);
     assert_eq!(pages.len(), 3);
     assert_eq!(pages[0].table.column_widths.len(), 2);
     assert_eq!(pages[1].table.column_widths.len(), 2);
@@ -129,7 +130,7 @@ fn test_merge_straddling_boundary_truncates_and_blanks_continuation() {
             height: None,
         }],
     );
-    let pages = split_sheet_page_by_width(page, None, None);
+    let pages = split_sheet_page_by_width(page, None, None, true);
     assert_eq!(pages.len(), 2);
 
     let first_row = &pages[0].table.rows[0];
@@ -162,7 +163,7 @@ fn test_merge_spill_width_is_clamped_to_the_column_group() {
             height: None,
         }],
     );
-    let pages = split_sheet_page_by_width(page, None, None);
+    let pages = split_sheet_page_by_width(page, None, None, true);
     assert_eq!(pages.len(), 2);
 
     // Page 1 keeps two of the four merged columns, so the line may run 300pt.
@@ -186,7 +187,7 @@ fn test_unmerged_spill_width_is_clamped_to_the_remaining_group_width() {
             height: None,
         }],
     );
-    let pages = split_sheet_page_by_width(page, None, None);
+    let pages = split_sheet_page_by_width(page, None, None, true);
     assert_eq!(pages.len(), 2);
 
     // The cell sits at the group's left edge, so 300pt of the group remain.
@@ -235,7 +236,7 @@ fn test_charts_stay_on_first_column_group() {
             auto_title_deleted: false,
         },
     )];
-    let pages = split_sheet_page_by_width(page, None, None);
+    let pages = split_sheet_page_by_width(page, None, None, true);
     assert_eq!(pages.len(), 2);
     assert_eq!(pages[0].charts.len(), 1);
     assert!(pages[1].charts.is_empty());
@@ -253,7 +254,7 @@ fn test_pathologically_wide_sheet_is_capped() {
             height: None,
         }],
     );
-    let pages = split_sheet_page_by_width(page, None, None);
+    let pages = split_sheet_page_by_width(page, None, None, true);
     assert_eq!(pages.len(), 12);
     let total_columns: usize = pages.iter().map(|p| p.table.column_widths.len()).sum();
     assert_eq!(total_columns, 100);
@@ -271,7 +272,7 @@ fn test_fit_to_width_scales_columns_onto_one_page() {
             height: Some(20.0),
         }],
     );
-    let pages = split_sheet_page_by_width(page, None, Some(1));
+    let pages = split_sheet_page_by_width(page, None, Some(1), true);
     assert_eq!(pages.len(), 1);
     assert_eq!(pages[0].table.column_widths, vec![200.0, 200.0]);
     assert_eq!(pages[0].table.rows[0].height, Some(10.0));
@@ -290,7 +291,7 @@ fn test_fit_to_width_truncates_scale_to_whole_percent() {
         paragraph.runs[0].style.font_size = Some(10.0);
     }
     let page = make_page(vec![530.0], vec![row]);
-    let pages = split_sheet_page_by_width(page, None, Some(1));
+    let pages = split_sheet_page_by_width(page, None, Some(1), true);
     assert_eq!(pages.len(), 1);
     assert_eq!(pages[0].table.column_widths, vec![397.5]);
     let Block::Paragraph(paragraph) = &pages[0].table.rows[0].cells[0].content[0] else {
@@ -309,7 +310,7 @@ fn test_fit_to_width_does_not_upscale_a_sheet_that_already_fits() {
             height: Some(20.0),
         }],
     );
-    let pages = split_sheet_page_by_width(page, None, Some(1));
+    let pages = split_sheet_page_by_width(page, None, Some(1), true);
     assert_eq!(pages.len(), 1);
     assert_eq!(pages[0].table.column_widths, vec![100.0, 100.0]);
     assert_eq!(pages[0].table.rows[0].height, Some(20.0));
@@ -326,7 +327,7 @@ fn test_fit_to_width_two_pages_scales_then_splits() {
             height: None,
         }],
     );
-    let pages = split_sheet_page_by_width(page, None, Some(2));
+    let pages = split_sheet_page_by_width(page, None, Some(2), true);
     assert_eq!(pages.len(), 2);
     assert_eq!(pages[0].table.column_widths, vec![200.0, 200.0]);
     assert_eq!(pages[1].table.column_widths, vec![200.0, 200.0]);
@@ -351,7 +352,7 @@ fn test_fit_to_width_scales_cell_padding() {
             height: Some(20.0),
         }],
     );
-    let pages = split_sheet_page_by_width(page, None, Some(1));
+    let pages = split_sheet_page_by_width(page, None, Some(1), true);
     let padding = pages[0].table.rows[0].cells[0]
         .padding
         .expect("padding survives the fit");
@@ -382,7 +383,7 @@ fn test_width_split_repeats_the_heading_gutter_and_keeps_the_flag() {
     );
     page.table.prints_headings = true;
 
-    let pages = split_sheet_page_by_width(page, Some((0, 1)), None);
+    let pages = split_sheet_page_by_width(page, Some((0, 1)), None, true);
     assert_eq!(pages.len(), 2);
     for split_page in &pages {
         assert!(
@@ -411,11 +412,109 @@ fn test_first_group_packs_against_the_full_printable_width() {
             height: None,
         }],
     );
-    let pages = split_sheet_page_by_width(page, Some((0, 1)), None);
+    let pages = split_sheet_page_by_width(page, Some((0, 1)), None, true);
     // 23+180+190 = 393 <= 400 fits page 1; the 200pt column overflows to
     // page 2 behind the repeated 23pt title column.
     assert_eq!(pages.len(), 2);
     assert_eq!(pages[0].table.column_widths, vec![23.0, 180.0, 190.0]);
     assert_eq!(pages[1].table.column_widths, vec![23.0, 200.0]);
     assert_eq!(cell_text(&pages[1].table.rows[0].cells[1]), "C");
+}
+
+/// One footer paragraph carrying `runs`, in the shape `parse_hf_format_string`
+/// builds for `&L…`.
+fn footer_with_runs(runs: Vec<Run>) -> HeaderFooter {
+    HeaderFooter {
+        paragraphs: vec![HeaderFooterParagraph {
+            style: ParagraphStyle::default(),
+            elements: runs.into_iter().map(HFInline::Run).collect(),
+            border: None,
+            border_space: None,
+            frame: None,
+        }],
+        distance_from_edge: None,
+    }
+}
+
+fn footer_run_sizes(page: &SheetPage) -> Vec<Option<f64>> {
+    page.footer
+        .as_ref()
+        .expect("the page keeps its footer")
+        .paragraphs
+        .iter()
+        .flat_map(|paragraph| paragraph.elements.iter())
+        .filter_map(|element| match element {
+            HFInline::Run(run) => Some(run.style.font_size),
+            _ => None,
+        })
+        .collect()
+}
+
+/// `headerFooter/@scaleWithDoc` defaults to 1 (ECMA-376 §18.3.1.46), so Excel
+/// shrinks the footer with the sheet. Leaving it at full size printed the Gantt
+/// template's 8pt `&8` run at 8pt beside 5.85pt body text (issue #940).
+#[test]
+fn a_scaled_sheet_scales_its_footer_with_it() {
+    let mut page = make_page(
+        vec![400.0, 400.0],
+        vec![TableRow {
+            cells: vec![cell("left"), cell("right")],
+            height: Some(20.0),
+        }],
+    );
+    page.footer = Some(footer_with_runs(vec![
+        Run {
+            text: "_x000D_".to_string(),
+            // No `&<n>` before it, so it takes the renderer's default size.
+            style: TextStyle::default(),
+            href: None,
+            footnote: None,
+        },
+        Run {
+            text: " Sensitivity: Internal".to_string(),
+            style: TextStyle {
+                font_size: Some(8.0),
+                ..TextStyle::default()
+            },
+            href: None,
+            footnote: None,
+        },
+    ]));
+    let pages = split_sheet_page_by_width(page, None, Some(1), true);
+
+    assert_eq!(pages.len(), 1);
+    // 400 + 400 onto a 400pt printable width: scale 0.5.
+    assert_eq!(
+        footer_run_sizes(&pages[0]),
+        vec![
+            Some(crate::defaults::TYPST_DEFAULT_FONT_SIZE_PT * 0.5),
+            Some(4.0)
+        ],
+        "both the sized run and the one taking the default shrink with the sheet"
+    );
+}
+
+/// A sheet that already fits is never scaled up, so its footer is untouched
+/// (issue #940).
+#[test]
+fn an_unscaled_sheet_leaves_its_footer_alone() {
+    let mut page = make_page(
+        vec![100.0],
+        vec![TableRow {
+            cells: vec![cell("narrow")],
+            height: Some(20.0),
+        }],
+    );
+    page.footer = Some(footer_with_runs(vec![Run {
+        text: "Footer".to_string(),
+        style: TextStyle {
+            font_size: Some(8.0),
+            ..TextStyle::default()
+        },
+        href: None,
+        footnote: None,
+    }]));
+    let pages = split_sheet_page_by_width(page, None, Some(1), true);
+
+    assert_eq!(footer_run_sizes(&pages[0]), vec![Some(8.0)]);
 }

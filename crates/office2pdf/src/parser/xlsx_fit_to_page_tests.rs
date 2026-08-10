@@ -83,3 +83,39 @@ fn reads_page_setup_declared_after_the_cells() {
     );
     assert_eq!(worksheet_fit_to_width(&with_cells), Some(1));
 }
+
+/// `headerFooter/@scaleWithDoc` defaults to 1, so Excel shrinks the header and
+/// footer with a scaled sheet. Only an explicit false opts out (issue #940).
+#[test]
+fn a_header_footer_scales_with_the_document_unless_it_says_otherwise() {
+    assert!(
+        worksheet_header_footer_scales_with_doc(FITTING),
+        "a part with no <headerFooter> at all still scales"
+    );
+    let stated = FITTING.replace(
+        "<sheetData/>",
+        r#"<sheetData/><headerFooter differentFirst="1"><oddFooter>&amp;L&amp;8x</oddFooter></headerFooter>"#,
+    );
+    assert!(
+        worksheet_header_footer_scales_with_doc(&stated),
+        "an omitted scaleWithDoc defaults to 1"
+    );
+    for opted_out in [r#"scaleWithDoc="0""#, r#"scaleWithDoc="false""#] {
+        let off = stated.replace("<headerFooter ", &format!("<headerFooter {opted_out} "));
+        assert!(
+            !worksheet_header_footer_scales_with_doc(&off),
+            "an explicit false opts out: {opted_out}"
+        );
+    }
+}
+
+/// A saved custom view nests its own `<headerFooter>`; reading that one would
+/// let a view's opt-out shadow the sheet's own setting (issue #940).
+#[test]
+fn a_custom_views_header_footer_does_not_shadow_the_sheets() {
+    let with_view = FITTING.replace(
+        "<sheetData/>",
+        r#"<sheetData/><customSheetViews><customSheetView guid="{0}"><headerFooter scaleWithDoc="0"/></customSheetView></customSheetViews>"#,
+    );
+    assert!(worksheet_header_footer_scales_with_doc(&with_view));
+}
