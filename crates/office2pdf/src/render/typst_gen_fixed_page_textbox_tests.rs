@@ -210,8 +210,25 @@ fn test_fixed_page_text_box_ordered_list_preserves_textbox_styling() {
             .contains("#text(size: 24pt)[2\\.]#text(size: 24pt)[ Second item]")
     );
     assert!(!output.source.contains("\\\n2. Second item"));
-    assert!(output.source.contains("#v(12pt)"));
-    assert!(output.source.contains("#set par(leading: 12pt)"));
+    // A slide list paces on PowerPoint's line box, scaled by the declared
+    // `a:lnSpc`: 1.2em at 24pt is 28.8pt, and 1.5 line spacing makes the
+    // advance between two items 43.2pt (issue #934).
+    // A slide list paces on PowerPoint's line box, scaled by the declared
+    // `a:lnSpc`: 1.2em at 24pt is 28.8pt, and 1.5 line spacing makes each
+    // item's box 43.2pt — which is the advance, since nothing is emitted
+    // between items that declare no spacing (issue #934).
+    assert!(
+        output
+            .source
+            .contains("#set text(top-edge: 1.386em, bottom-edge: -0.41400000000000003em)"),
+        "the item takes the 1.5-scaled PowerPoint line box: {}",
+        output.source
+    );
+    assert!(
+        output.source.contains("#set par(leading: 0pt)"),
+        "the line box carries the advance, so the leading is zero: {}",
+        output.source
+    );
 }
 
 #[test]
@@ -289,7 +306,15 @@ fn test_fixed_page_text_box_compact_list_items_use_full_width_blocks() {
     )]);
     let output = generate_typst(&doc).unwrap();
 
-    assert_eq!(output.source.matches("#block(width: 320pt)[").count(), 2);
+    // The items' blocks contribute no spacing of their own; the gap between
+    // them is emitted between them instead (issue #934).
+    assert_eq!(
+        output
+            .source
+            .matches("#block(width: 320pt, above: 0pt, below: 0pt)[")
+            .count(),
+        2
+    );
 }
 
 #[test]

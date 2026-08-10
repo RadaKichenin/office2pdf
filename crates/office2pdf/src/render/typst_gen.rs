@@ -3127,7 +3127,7 @@ fn generate_fixed_text_box_block(
 ) -> Result<(), ConvertError> {
     match block {
         Block::List(list) if can_render_fixed_text_list_inline(list) => {
-            generate_fixed_text_list(out, list, true, available_width_pt)
+            generate_fixed_text_list(out, list, true, available_width_pt, true)
         }
         Block::Paragraph(para) => generate_fixed_text_paragraph(out, para, no_wrap),
         // A slide's bullet list paces on PowerPoint's line, not Word's. Routing

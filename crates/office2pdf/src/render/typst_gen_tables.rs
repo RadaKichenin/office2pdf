@@ -1829,7 +1829,7 @@ fn generate_cell_content(
             Block::FloatingShape(fs) => generate_floating_shape(out, fs),
             Block::List(list) => {
                 if can_render_fixed_text_list_inline(list) {
-                    generate_fixed_text_list(out, list, true, None)?;
+                    generate_fixed_text_list(out, list, true, None, false)?;
                 } else {
                     // No wrapper settings reach a cell list, so it has no
                     // fixed text edges of its own to restore (issue #626).

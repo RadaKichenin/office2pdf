@@ -1208,3 +1208,81 @@ fn slide_bullets_add_their_paragraph_spacing_between_items() {
          got {spaced}pt against the unspaced {unspaced}pt"
     );
 }
+
+/// Two items of a bulleted slide text box are one line advance apart, the same
+/// quantity that separates two wrapped lines of one item. Each item was its own
+/// `#block`, so the distance between two of them was Typst's default block
+/// spacing — 1.2em of the *ambient* size, which has nothing to do with the
+/// list's own leading — while two wrapped lines took `par(leading:)`. On the
+/// `AGENDA` list of #841's deck (24pt) that is 13.199pt against 15.600pt, and
+/// it accumulates at 2.40pt per item (issue #934).
+#[test]
+fn two_slide_list_items_sit_one_line_advance_apart() {
+    let items: Vec<ListItem> = ["20XX høyde- og lavpunkter", "Neste steg"]
+        .iter()
+        .map(|text| ListItem {
+            content: vec![Paragraph {
+                style: ParagraphStyle::default(),
+                runs: vec![Run {
+                    text: (*text).to_string(),
+                    style: TextStyle {
+                        font_family: Some("Liberation Sans".to_string()),
+                        font_size: Some(24.0),
+                        ..TextStyle::default()
+                    },
+                    href: None,
+                    footnote: None,
+                }],
+            }],
+            level: 0,
+            start_at: None,
+        })
+        .collect();
+    let doc = make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![make_fixed_text_box(
+            50.0,
+            50.0,
+            600.0,
+            400.0,
+            Insets::default(),
+            crate::ir::TextBoxVerticalAlign::Top,
+            vec![Block::List(List {
+                kind: ListKind::Unordered,
+                items,
+                level_styles: BTreeMap::new(),
+            })],
+        )],
+    )]);
+    let source = generate_typst(&doc).unwrap().source;
+
+    // PowerPoint gives a 24pt line 1.2x the size. The item's block stands
+    // exactly that tall and contributes no spacing of its own, so two items
+    // that declare no `a:spcBef`/`a:spcAft` are one line apart with nothing
+    // emitted between them.
+    assert!(
+        source.contains("above: 0pt, below: 0pt"),
+        "the item blocks contribute no spacing of their own: {source}"
+    );
+    assert!(
+        source.contains("#set par(leading: 0pt)"),
+        "the fixed line box carries the advance: {source}"
+    );
+    assert!(
+        vertical_skips_pt(&source)
+            .iter()
+            .all(|gap| *gap == 0.0 || *gap > 100.0),
+        "no gap is emitted between the items themselves: {source}"
+    );
+}
+
+/// Every `#v(Xpt)` skip in some markup, in points — the emitted numbers carry
+/// binary noise (`43.199999999999996`), so a gap is asserted numerically.
+pub(in crate::render) fn vertical_skips_pt(source: &str) -> Vec<f64> {
+    source
+        .split("#v(")
+        .skip(1)
+        .filter_map(|rest| rest.split("pt)").next()?.parse::<f64>().ok())
+        .collect()
+}
