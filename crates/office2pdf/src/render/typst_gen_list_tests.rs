@@ -1035,20 +1035,23 @@ fn slide_list_items_keep_their_own_gaps_when_they_differ() {
 }
 
 #[test]
-fn a_slide_list_with_one_shared_gap_still_hoists_it() {
-    // Triangulation: the per-item fallback exists only for lists that cannot
-    // share one value. When they can, the gap is already carried once — by
-    // `list(spacing:)` or, for single-paragraph items, by each block's
-    // `below:` — and the items must not also emit their own on top.
+fn a_slide_list_with_one_shared_gap_separates_its_items_by_it() {
+    // Triangulation for the per-item fallback: a list whose items CAN share
+    // one value takes the shared path, and must still be separated by the gap
+    // there. This test used to accept the wrapper's `below: 8pt` as proof the
+    // gap was "carried once" — but that block encloses the whole list, so it
+    // is the list's outer bottom edge and puts nothing between two bullets
+    // (issue #928).
     let source = slide_bullet_list_source(&[8.0, 8.0, 8.0]);
 
     assert!(
-        source.contains("spacing: 8pt") || source.contains("below: 8pt"),
-        "a uniform gap is carried once, by the list or by the block: {source}"
+        source.contains("below: 8pt"),
+        "the list's outer bottom edge stays the declared gap: {source}"
     );
-    assert!(
-        !source.contains("#v(8pt)"),
-        "and must not be counted a second time per item: {source}"
+    assert_eq!(
+        source.matches("#v(8pt)").count(),
+        2,
+        "and each of the two boundaries between three items gets it: {source}"
     );
 }
 
@@ -1120,5 +1123,88 @@ fn a_hanging_indent_bullet_separates_with_the_tab_alone() {
     assert!(
         !source.contains("let tab_segment_0 = [• ]"),
         "no space may trail the glyph before the tab: {source}"
+    );
+}
+
+/// PowerPoint separates two bullets by the line advance PLUS `a:spcAft` of the
+/// first and `a:spcBef` of the second; the two are added, not collapsed to the
+/// larger (issue #928).
+///
+/// The `AGENDA` slide of `002.CONTOSO.pptx` (attached to #841) declares
+/// `spcBef` 4pt and `spcAft` 6pt on every bullet. The reference puts 8.7pt more
+/// between two bullets than between the wrapped lines of one; we put 2.4pt
+/// *less*, because both gaps landed on the wrapper around the whole list and
+/// none between its items.
+///
+/// Measured as a difference against the same list with no spacing, so the
+/// assertion holds whatever line box the resolved face gives.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn slide_bullets_add_their_paragraph_spacing_between_items() {
+    use crate::ir::{Insets, List};
+
+    let inter_item_advance = |space_before: Option<f64>, space_after: Option<f64>| -> Option<f64> {
+        let make_item = |text: &str| ListItem {
+            content: vec![Paragraph {
+                style: ParagraphStyle {
+                    space_before,
+                    space_after,
+                    ..ParagraphStyle::default()
+                },
+                runs: vec![Run {
+                    text: text.to_string(),
+                    style: TextStyle {
+                        font_family: Some("Libertinus Serif".to_string()),
+                        font_size: Some(24.0),
+                        ..TextStyle::default()
+                    },
+                    href: None,
+                    footnote: None,
+                }],
+            }],
+            level: 0,
+            start_at: None,
+        };
+        let list = List {
+            kind: ListKind::Unordered,
+            items: vec![
+                make_item("Introduksjoner"),
+                make_item("Viktige oppdateringer"),
+                make_item("Avslutning"),
+            ],
+            level_styles: BTreeMap::new(),
+        };
+        let doc = make_doc(vec![make_fixed_page(
+            960.0,
+            540.0,
+            vec![make_fixed_text_box(
+                43.2,
+                196.6,
+                301.7,
+                293.0,
+                Insets::default(),
+                crate::ir::TextBoxVerticalAlign::Top,
+                vec![Block::List(list)],
+            )],
+        )]);
+        let source = generate_typst(&doc).unwrap().source;
+        let baselines: Vec<f64> = crate::render::pdf::compiled_text_runs(&source, 0)
+            .unwrap_or_else(|error| panic!("compile failed: {error}\n{source}"))
+            .into_iter()
+            .filter(|run| run.text.contains("Viktige") || run.text.contains("Avslutning"))
+            .map(|run| run.baseline_pt)
+            .collect();
+        (baselines.len() == 2).then(|| baselines[1] - baselines[0])
+    };
+
+    let Some(unspaced) = inter_item_advance(None, None) else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+    let spaced = inter_item_advance(Some(4.0), Some(6.0)).expect("the same list, spaced");
+
+    assert!(
+        (spaced - unspaced - 10.0).abs() < 0.05,
+        "4pt before + 6pt after must add 10pt to the item advance, \
+         got {spaced}pt against the unspaced {unspaced}pt"
     );
 }

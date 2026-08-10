@@ -541,7 +541,14 @@ pub(super) fn generate_fixed_text_list(
         .first()
         .and_then(|item| item.start_at)
         .unwrap_or(1);
-    let active_gap: Option<f64> = line_gap_pt.filter(|gap| *gap > 0.0 && include_item_spacing);
+    // The extra leading and the paragraph gap are separate quantities and both
+    // land between items: the first is already inside `#set par(leading:)` for
+    // the wrapped lines of one item, the second is PowerPoint's spcAft+spcBef
+    // (issue #928).
+    let item_gap_pt: f64 =
+        line_gap_pt.unwrap_or(0.0).max(0.0) + fixed_text_list_paragraph_gap_pt(list).unwrap_or(0.0);
+    let active_gap: Option<f64> =
+        Some(item_gap_pt).filter(|gap| *gap > 0.0 && include_item_spacing);
     let use_stack: bool = available_width_pt.is_none();
 
     if use_stack {
@@ -942,6 +949,33 @@ fn fixed_text_list_line_gap_pt(style: &ParagraphStyle, list: &List) -> Option<f6
         Some(LineSpacing::Exact(points)) => Some((points - font_size_pt).max(0.0)),
         _ => None,
     }
+}
+
+/// What PowerPoint puts between two items on top of the line advance: the
+/// `a:spcAft` of the one above plus the `a:spcBef` of the one below. The two
+/// are ADDED — PowerPoint does not collapse them to the larger the way CSS
+/// margins do.
+///
+/// Both values used to reach only the block wrapped around the whole list, so
+/// a list whose every paragraph declared them got them once, at its outer
+/// edges, and nothing between its items (issue #928).
+///
+/// One gap is emitted for the whole level, so a list whose boundaries disagree
+/// returns `None` and keeps the unspaced advance rather than picking one of
+/// them.
+fn fixed_text_list_paragraph_gap_pt(list: &List) -> Option<f64> {
+    let boundary_gap = |above: &crate::ir::ListItem, below: &crate::ir::ListItem| -> Option<f64> {
+        let after: f64 = above.content.last()?.style.space_after.unwrap_or(0.0);
+        let before: f64 = below.content.first()?.style.space_before.unwrap_or(0.0);
+        Some((after + before).max(0.0))
+    };
+    let mut boundaries = list
+        .items
+        .windows(2)
+        .map(|pair| boundary_gap(&pair[0], &pair[1]));
+    let first: f64 = boundaries.next()??;
+    (first > 0.0001 && boundaries.all(|gap| gap.is_some_and(|gap| f64_approx_eq(gap, first))))
+        .then_some(first)
 }
 
 fn fixed_text_list_font_size_pt(list: &List) -> f64 {
