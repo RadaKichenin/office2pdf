@@ -1021,6 +1021,7 @@ pub(super) fn prepare_sheet_context(
     sheet: &umya_spreadsheet::Worksheet,
     normal_font: Option<&NormalFont>,
     raw_cond_fmt_hints: Option<&super::cond_fmt_raw::RawCondFmtHints>,
+    defined_names: &HashMap<String, String>,
     row_stripes: Vec<crate::parser::xlsx::tables::RowStripes>,
     theme: Option<&umya_spreadsheet::structs::drawing::Theme>,
 ) -> Option<(SheetContext, u32, u32)> {
@@ -1063,7 +1064,8 @@ pub(super) fn prepare_sheet_context(
         .collect();
 
     let (merge_tops, merge_skips) = build_merge_maps(sheet);
-    let cond_fmt_overrides = build_cond_fmt_overrides(sheet, raw_cond_fmt_hints);
+    let cond_fmt_overrides =
+        build_cond_fmt_overrides(sheet, raw_cond_fmt_hints, defined_names, theme);
     let num_cols = (col_end - col_start + 1) as usize;
 
     Some((

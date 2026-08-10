@@ -12,6 +12,8 @@ pub(crate) mod smartart;
 pub(crate) mod units;
 pub(crate) mod wmf;
 pub mod xlsx;
+#[path = "xlsx_formula.rs"]
+pub(crate) mod xlsx_formula;
 pub(crate) mod xml_util;
 
 use std::io::Cursor;

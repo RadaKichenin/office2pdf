@@ -28,7 +28,7 @@ mod xlsx_hf;
 #[path = "xlsx_pagination.rs"]
 mod xlsx_pagination;
 #[path = "xlsx_style.rs"]
-mod xlsx_style;
+pub(crate) mod xlsx_style;
 
 use self::xlsx_cells::*;
 use self::xlsx_drawing::*;
@@ -406,6 +406,9 @@ impl XlsxParser {
 
         let metadata = extract_xlsx_metadata(&book);
         let cond_fmt_hints = cond_fmt_raw::extract_cond_fmt_hints(data);
+        // A `cfRule type="expression"` names the workbook's defined names
+        // rather than repeating their formulas (issue #852).
+        let defined_names = cond_fmt_raw::extract_defined_names(data);
         let fitting_sheets = fit_to_page::sheets_fit_to_width(data);
         let print_options_by_sheet = print_options::sheets_print_options(data);
         let mut row_stripes = tables::extract_row_stripes(data);
@@ -430,6 +433,7 @@ impl XlsxParser {
                 sheet,
                 normal_font.as_ref(),
                 cond_fmt_hints.get(sheet.get_name()),
+                &defined_names,
                 row_stripes.remove(sheet.get_name()).unwrap_or_default(),
                 Some(book.get_theme()),
             ) else {
@@ -660,6 +664,9 @@ impl Parser for XlsxParser {
         // Extract metadata from umya-spreadsheet properties
         let metadata = extract_xlsx_metadata(&book);
         let cond_fmt_hints = cond_fmt_raw::extract_cond_fmt_hints(data);
+        // A `cfRule type="expression"` names the workbook's defined names
+        // rather than repeating their formulas (issue #852).
+        let defined_names = cond_fmt_raw::extract_defined_names(data);
         let fitting_sheets = fit_to_page::sheets_fit_to_width(data);
         let print_options_by_sheet = print_options::sheets_print_options(data);
         let mut row_stripes = tables::extract_row_stripes(data);
@@ -686,6 +693,7 @@ impl Parser for XlsxParser {
                 sheet,
                 normal_font.as_ref(),
                 cond_fmt_hints.get(sheet.get_name()),
+                &defined_names,
                 row_stripes.remove(sheet.get_name()).unwrap_or_default(),
                 Some(book.get_theme()),
             ) else {
