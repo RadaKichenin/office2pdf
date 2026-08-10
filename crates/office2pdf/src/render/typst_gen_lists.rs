@@ -520,6 +520,7 @@ pub(super) fn generate_fixed_text_list(
     list: &List,
     include_item_spacing: bool,
     available_width_pt: Option<f64>,
+    uses_powerpoint_line: bool,
 ) -> Result<(), ConvertError> {
     let paragraph: &Paragraph = &list.items[0].content[0];
     let style: &ParagraphStyle = &paragraph.style;
@@ -541,12 +542,28 @@ pub(super) fn generate_fixed_text_list(
         .first()
         .and_then(|item| item.start_at)
         .unwrap_or(1);
-    // The extra leading and the paragraph gap are separate quantities and both
-    // land between items: the first is already inside `#set par(leading:)` for
+    // The line advance and the paragraph gap are separate quantities and both
+    // land between items: the first is what `#set par(leading:)` puts between
     // the wrapped lines of one item, the second is PowerPoint's spcAft+spcBef
-    // (issue #928).
-    let item_gap_pt: f64 =
-        line_gap_pt.unwrap_or(0.0).max(0.0) + fixed_text_list_paragraph_gap_pt(list).unwrap_or(0.0);
+    // (issue #928). The advance has to be emitted rather than left to the item
+    // blocks' own spacing, which is Typst's 1.2em of the *ambient* size and has
+    // nothing to do with the list's leading (issue #934).
+    // A slide's list paces on PowerPoint's line box, the same model its text
+    // boxes and table cells already use, rather than on Typst's cap-height box
+    // plus 0.65em (issue #934).
+    let powerpoint_line: Option<(String, f64)> = uses_powerpoint_line
+        .then(|| fixed_text_list_powerpoint_line(list))
+        .flatten();
+    // On the PowerPoint path the item's own block already stands one full line
+    // box tall, so the boundary carries only what the paragraphs declare on top
+    // of it. Adding the advance there as well counted the line twice — 67.6pt
+    // against a reference's 38.8pt on the `AGENDA` list of #841.
+    let leading_pt: f64 = match powerpoint_line {
+        Some(_) => 0.0,
+        None => fixed_text_list_leading_pt(style, list),
+    };
+    let paragraph_gap_pt: f64 = fixed_text_list_paragraph_gap_pt(list).unwrap_or(0.0);
+    let item_gap_pt: f64 = leading_pt + paragraph_gap_pt;
     let active_gap: Option<f64> =
         Some(item_gap_pt).filter(|gap| *gap > 0.0 && include_item_spacing);
     let use_stack: bool = available_width_pt.is_none();
@@ -565,8 +582,18 @@ pub(super) fn generate_fixed_text_list(
                 out.push_str(",\n");
             } else {
                 out.push('\n');
-                if let Some(gap) = active_gap {
-                    let _ = writeln!(out, "#v({}pt)", format_f64(gap));
+                if include_item_spacing {
+                    // Emitted apart so each stays legible as the quantity it
+                    // is: the line advance, then whatever spacing this
+                    // boundary's own paragraphs declare on top of it.
+                    if leading_pt > 0.0 {
+                        let _ = writeln!(out, "#v({}pt)", format_f64(leading_pt));
+                    }
+                    let boundary_gap_pt: f64 =
+                        fixed_text_list_boundary_gap_pt(&list.items[index - 1], item);
+                    if boundary_gap_pt > 0.0 {
+                        let _ = writeln!(out, "#v({}pt)", format_f64(boundary_gap_pt));
+                    }
                 }
             }
             if let Some(start_at) = item.start_at {
@@ -592,6 +619,9 @@ pub(super) fn generate_fixed_text_list(
             &marker_text,
             align_str,
             available_width_pt,
+            powerpoint_line
+                .as_ref()
+                .map(|(settings, _)| settings.as_str()),
         );
         if use_stack {
             out.push(']');
@@ -629,6 +659,7 @@ fn write_fixed_text_list_item(
     marker_text: &str,
     align_str: Option<&str>,
     available_width_pt: Option<f64>,
+    powerpoint_line_settings: Option<&str>,
 ) {
     let inset: Insets = fixed_text_list_item_inset(&paragraph.style);
     let has_inset: bool = inset.left > 0.0 || inset.right > 0.0;
@@ -641,10 +672,19 @@ fn write_fixed_text_list_item(
     } else {
         out.push_str("100%");
     }
+    // The distance between two items is emitted between them, so the item's own
+    // block must contribute nothing: Typst's default is 1.2em of the ambient
+    // size and would be added on top (issue #934).
+    if powerpoint_line_settings.is_some() {
+        out.push_str(", above: 0pt, below: 0pt");
+    }
     if has_inset {
         let _ = write!(out, ", inset: {}", format_insets(&inset));
     }
     out.push_str(")[");
+    if let Some(settings) = powerpoint_line_settings {
+        out.push_str(settings);
+    }
 
     if let Some(align) = align_str {
         let _ = write!(out, "#align({align})[");
@@ -951,6 +991,53 @@ fn fixed_text_list_line_gap_pt(style: &ParagraphStyle, list: &List) -> Option<f6
     }
 }
 
+/// The line advance a list's items take between them, which is the same
+/// `par(leading:)` its wrapped lines take within one item.
+///
+/// `fixed_text_list_line_gap_pt` states it only when the paragraph declares a
+/// line spacing that widens the line; otherwise the leading in force is
+/// whatever `write_par_settings` emits, or — when it emits nothing — Typst's
+/// own 0.65em default. All three have to be reproduced here, because the gap
+/// between two items is emitted rather than inherited (issue #934).
+fn fixed_text_list_leading_pt(style: &ParagraphStyle, list: &List) -> f64 {
+    if let Some(gap) = fixed_text_list_line_gap_pt(style, list).filter(|gap| *gap > 0.0) {
+        return gap;
+    }
+    let font_size_pt: f64 = fixed_text_list_font_size_pt(list);
+    match style.line_spacing {
+        // `write_par_settings` scales Typst's default by the declared factor.
+        Some(LineSpacing::Proportional(factor)) if factor > 0.0 => {
+            (font_size_pt * TYPST_DEFAULT_LEADING_EM * factor).max(0.0)
+        }
+        Some(LineSpacing::Exact(points)) => points.max(0.0),
+        _ => font_size_pt * TYPST_DEFAULT_LEADING_EM,
+    }
+}
+
+/// Typst's own `par(leading:)` default, in em.
+const TYPST_DEFAULT_LEADING_EM: f64 = 0.65;
+
+/// A slide list's PowerPoint line box: the `#set text(top-edge:/bottom-edge:)`
+/// settings that give each item the same line PowerPoint gives a text box's
+/// paragraphs, and the advance in points that box works out to.
+///
+/// The two travel together because the gap between items is emitted rather
+/// than inherited, and it has to be the same quantity the box states
+/// (issue #934).
+fn fixed_text_list_powerpoint_line(list: &List) -> Option<(String, f64)> {
+    let paragraph: &Paragraph = list.items.first()?.content.first()?;
+    let settings: String = powerpoint_line_height_settings(&paragraph.runs, &paragraph.style)?;
+    // `powerpoint_line_height_settings` scales its edges by the declared
+    // `a:lnSpc` percentage; the advance has to take the same factor, or a
+    // 1.5-spaced list would separate its items by a single line.
+    let percent: f64 = match paragraph.style.line_spacing {
+        Some(LineSpacing::Proportional(factor)) if factor > 0.0 => factor,
+        _ => 1.0,
+    };
+    let advance_pt: f64 = powerpoint_line_box_pt(&paragraph.runs)? * percent;
+    Some((settings, advance_pt))
+}
+
 /// What PowerPoint puts between two items on top of the line advance: the
 /// `a:spcAft` of the one above plus the `a:spcBef` of the one below. The two
 /// are ADDED — PowerPoint does not collapse them to the larger the way CSS
@@ -962,7 +1049,31 @@ fn fixed_text_list_line_gap_pt(style: &ParagraphStyle, list: &List) -> Option<f6
 ///
 /// One gap is emitted for the whole level, so a list whose boundaries disagree
 /// returns `None` and keeps the unspaced advance rather than picking one of
-/// them.
+/// them; `fixed_text_list_boundary_gap_pt` states each boundary's own.
+/// The `a:spcAft` of the item above plus the `a:spcBef` of the one below —
+/// what that one boundary asks for, whatever its neighbours ask for.
+///
+/// The shared value above is what a `#stack`'s uniform `spacing:` can carry;
+/// the emitted path states each boundary separately, so a list whose items
+/// disagree keeps every one of them instead of falling back to none
+/// (issue #934).
+fn fixed_text_list_boundary_gap_pt(
+    above: &crate::ir::ListItem,
+    below: &crate::ir::ListItem,
+) -> f64 {
+    let after: f64 = above
+        .content
+        .last()
+        .and_then(|paragraph| paragraph.style.space_after)
+        .unwrap_or(0.0);
+    let before: f64 = below
+        .content
+        .first()
+        .and_then(|paragraph| paragraph.style.space_before)
+        .unwrap_or(0.0);
+    (after + before).max(0.0)
+}
+
 fn fixed_text_list_paragraph_gap_pt(list: &List) -> Option<f64> {
     let boundary_gap = |above: &crate::ir::ListItem, below: &crate::ir::ListItem| -> Option<f64> {
         let after: f64 = above.content.last()?.style.space_after.unwrap_or(0.0);
