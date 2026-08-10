@@ -949,8 +949,11 @@ fn stroke_literal(side: &BorderSide) -> String {
 /// Double rules are drawn as overlays (Typst strokes have no double style),
 /// so those sides only reserve inset space here.
 ///
-/// Each side reserves its own `w:space` plus the rule's own thickness. A fixed
-/// 4pt stood in for `w:space` until #520: a letterhead declaring 8pt then
+/// Each side reserves its own `w:space` plus *half* the rule's thickness,
+/// because Typst centres a box stroke on the inset edge and the other half
+/// falls outside it (issue #648). A double side is the exception: it emits no
+/// box stroke at all, so it reserves the full three-width span its overlays
+/// draw into. A fixed 4pt stood in for `w:space` until #520: a letterhead declaring 8pt then
 /// pulled every line below it up by the difference, and the error is a step,
 /// not a drift, so it survives to the bottom of the page.
 fn write_paragraph_border_params(out: &mut String, border: &CellBorder, space: Insets) {
@@ -965,7 +968,12 @@ fn write_paragraph_border_params(out: &mut String, border: &CellBorder, space: I
             gap + double_rule_thickness(side.width)
         } else {
             strokes.push(format!("{name}: {}", stroke_literal(side)));
-            gap + side.width
+            // Typst centres a stroke on the inset edge, so half the rule
+            // already falls outside the reserved band. Reserving the whole
+            // width counted that half twice and put the rule half a width
+            // low — 0.31pt measured on `04_resume_en`'s 0.75pt name rule,
+            // against the native export (issue #648).
+            gap + side.width / 2.0
         };
         insets.push(format!("{name}: {}pt", format_f64(reserved)));
     };
