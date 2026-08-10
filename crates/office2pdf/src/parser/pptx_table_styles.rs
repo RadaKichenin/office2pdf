@@ -332,6 +332,12 @@ fn set_region_border(borders: &mut RegionBorders, side: &[u8], width: f64, color
 /// Apply table style colors/formatting to cells that don't have explicit overrides.
 ///
 /// Priority (highest wins): cell-level explicit → firstRow/lastRow/firstCol/lastCol → band → wholeTbl
+///
+/// The regions compose property by property rather than one replacing another:
+/// `wholeTbl` is always the base layer, and the region covering the cell
+/// overrides only the properties it actually states. A `firstRow` naming just a
+/// fill therefore still takes `wholeTbl`'s text colour, and a `band2H` naming
+/// nothing at all still takes `wholeTbl`'s fill (issue #941).
 pub(super) fn apply_table_style(table: &mut Table, props: &PptxTableProps, styles: &TableStyleMap) {
     let style_id: &str = match props.style_id.as_deref() {
         Some(id) => id,
@@ -364,11 +370,11 @@ pub(super) fn apply_table_style(table: &mut Table, props: &PptxTableProps, style
             let is_last_col: bool = props.last_col && total_cols > 0 && col_idx == total_cols - 1;
 
             // The region that covers this cell more specifically than
-            // wholeTbl does, if any (highest priority first). Kept separate
-            // from the wholeTbl fallback below because borders resolve
-            // differently for the two: a specific region states the cell's own
-            // edges, while wholeTbl states a grid whose interior comes from
-            // insideH/insideV.
+            // wholeTbl does, if any (highest priority first). Kept as its own
+            // binding because borders resolve differently from the fill and
+            // text below: a specific region states the cell's own edges, while
+            // wholeTbl states a grid whose interior comes from insideH/insideV,
+            // so `apply_style_borders` needs the two apart.
             let specific_region: Option<&TableCellRegionStyle> = if is_first_row {
                 style_def.first_row.as_ref()
             } else if is_last_row {
@@ -388,18 +394,21 @@ pub(super) fn apply_table_style(table: &mut Table, props: &PptxTableProps, style
             } else {
                 None
             };
-            let region_style: Option<&TableCellRegionStyle> =
-                specific_region.or(style_def.whole_table.as_ref());
-
-            match region_style {
-                Some(region) => apply_region_to_cell(cell, region),
-                None => {
-                    // Fall back to wholeTbl if the region is active but has
-                    // no definition (e.g. band2H in built-in styles).
-                    if let Some(whole) = style_def.whole_table.as_ref() {
-                        apply_region_to_cell(cell, whole);
-                    }
-                }
+            // The regions compose rather than replace one another: `wholeTbl`
+            // covers every cell and a more specific region overrides only the
+            // properties it actually states. Picking one of the two instead let
+            // a region that is *defined but states nothing* swallow the
+            // fallback — every stock "Medium Style 2" writes its off-band as
+            // `<a:band2H><a:tcStyle><a:tcBdr/></a:tcStyle></a:band2H>`, so
+            // those rows came out transparent between two banded ones
+            // (issue #941). `apply_region_to_cell` only fills what is still
+            // unset, so applying the specific region first and `wholeTbl`
+            // second gives the specific one priority.
+            if let Some(region) = specific_region {
+                apply_region_to_cell(cell, region);
+            }
+            if let Some(whole) = style_def.whole_table.as_ref() {
+                apply_region_to_cell(cell, whole);
             }
 
             apply_style_borders(
@@ -502,8 +511,14 @@ fn apply_style_borders(
 }
 
 /// Apply a region style to a cell, respecting explicit cell-level overrides.
+///
+/// Every property is written only where the cell still has none, which carries
+/// two precedences at once: the cell's own formatting beats the style, and
+/// whichever region is applied *first* beats the ones applied after it. Its
+/// caller relies on the second to give a specific region priority over
+/// `wholeTbl` while still letting `wholeTbl` fill the gaps, so the call order
+/// there is load-bearing (issue #941).
 fn apply_region_to_cell(cell: &mut TableCell, region: &TableCellRegionStyle) {
-    // Only apply fill if cell doesn't have an explicit background
     if cell.background.is_none() {
         cell.background = region.fill;
     }
