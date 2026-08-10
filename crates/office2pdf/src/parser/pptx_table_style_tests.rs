@@ -1121,3 +1121,110 @@ fn test_built_in_style_header_resolves_through_the_master_color_map() {
     assert_eq!(top.width, 0.5, "lnRef idx=1 is 6350 EMU = 0.5pt");
     assert_eq!(top.color, Color::new(0x44, 0x72, 0xC4));
 }
+
+/// DrawingML composes the table style's regions: `wholeTbl` covers every cell
+/// and a more specific region overrides only the properties it actually states.
+/// Every stock "Medium Style 2" declares its off-band as
+/// `<a:band2H><a:tcStyle><a:tcBdr/></a:tcStyle></a:band2H>` — a region that is
+/// present but names no fill — and picking one region instead of composing them
+/// left those rows transparent, showing the slide through between two banded
+/// ones (issue #941).
+#[test]
+fn a_region_stating_no_fill_falls_through_to_whole_table() {
+    let whole_fill = Color::new(0xD6, 0xF0, 0xF9);
+    let band1_fill = Color::new(0xAD, 0xE1, 0xF2);
+    let header_fill = Color::new(0x32, 0xB5, 0xDF);
+    let mut styles: TableStyleMap = HashMap::new();
+    styles.insert(
+        "medium2".to_string(),
+        PptxTableStyleDef {
+            whole_table: Some(TableCellRegionStyle {
+                fill: Some(whole_fill),
+                text_color: Some(Color::new(0x00, 0x00, 0x00)),
+                text_bold: None,
+                borders: Default::default(),
+            }),
+            first_row: Some(TableCellRegionStyle {
+                fill: Some(header_fill),
+                text_color: Some(Color::new(0xFF, 0xFF, 0xFF)),
+                text_bold: Some(true),
+                borders: Default::default(),
+            }),
+            band1_h: Some(TableCellRegionStyle {
+                fill: Some(band1_fill),
+                text_color: None,
+                text_bold: None,
+                borders: Default::default(),
+            }),
+            // The off-band: defined, but states nothing.
+            band2_h: Some(TableCellRegionStyle::default()),
+            ..Default::default()
+        },
+    );
+    let props = PptxTableProps {
+        style_id: Some("medium2".to_string()),
+        first_row: true,
+        band_row: true,
+        ..Default::default()
+    };
+    let make_row = |text: &str| -> TableRow {
+        TableRow {
+            cells: vec![TableCell {
+                content: vec![Block::Paragraph(Paragraph {
+                    style: ParagraphStyle::default(),
+                    runs: vec![Run {
+                        text: text.to_string(),
+                        style: TextStyle::default(),
+                        href: None,
+                        footnote: None,
+                    }],
+                })],
+                ..TableCell::default()
+            }],
+            height: Some(48.07),
+        }
+    };
+    let mut table = Table {
+        rows: vec![
+            make_row("NØKKELPROSJEKTER"),
+            make_row("Europium"),
+            make_row("Bravo"),
+            make_row("Gullfisk"),
+        ],
+        column_widths: vec![234.7],
+        header_row_count: 1,
+        ..Table::default()
+    };
+
+    table_styles::apply_table_style(&mut table, &props, &styles);
+
+    assert_eq!(
+        table.rows[0].cells[0].background,
+        Some(header_fill),
+        "firstRow states its own fill and keeps it"
+    );
+    assert_eq!(table.rows[1].cells[0].background, Some(band1_fill));
+    assert_eq!(
+        table.rows[2].cells[0].background,
+        Some(whole_fill),
+        "band2H states no fill, so wholeTbl's stands"
+    );
+    assert_eq!(table.rows[3].cells[0].background, Some(band1_fill));
+
+    let run_color = |row: usize| -> Option<Color> {
+        match &table.rows[row].cells[0].content[0] {
+            Block::Paragraph(paragraph) => paragraph.runs[0].style.color,
+            _ => panic!("expected a paragraph"),
+        }
+    };
+    assert_eq!(
+        run_color(0),
+        Some(Color::new(0xFF, 0xFF, 0xFF)),
+        "firstRow's text colour beats wholeTbl's"
+    );
+    assert_eq!(
+        run_color(1),
+        Some(Color::new(0x00, 0x00, 0x00)),
+        "a band that names no text colour inherits wholeTbl's"
+    );
+}
