@@ -187,13 +187,83 @@ pub(super) fn apply_rich_run_font(
     style
 }
 
+/// The fraction of a cell that a spreadsheetML pattern's foreground covers.
+///
+/// Excel tiles each `patternType` as an 8x8 hatch of `fgColor` over
+/// `bgColor`. Rendering the hatch itself needs a fill value a cell background
+/// cannot carry yet (it is a flat [`Color`]), so the two colours are composited
+/// at the pattern's coverage — which is what the reference renderer does, and
+/// what the #926 measurement pins down.
+///
+/// Measured on a one-factor probe: one cell per `patternType`, `fgColor`
+/// `FF000000` over `bgColor` `FFFFFFFF`, exported by LibreOffice 24.2 and read
+/// back as the mean grey of the swatch interior at 300 DPI. Every value came
+/// back as an exact 8-bit quantisation of the fraction below (`0.2471` is
+/// `1 - 192/255`, `0.4980` is `1 - 128/255`).
+///
+/// `lightUp`'s quarter is independently confirmed against the #841 Gantt
+/// template, where `735773` over an omitted background prints `DCD5DC` — a
+/// quarter of the way from white on all three channels, to within one level.
+///
+/// Two values do not follow from the names: `darkGrid` covers a half, not the
+/// three quarters a union of two dark line families would, and `lightTrellis`
+/// covers three eighths rather than `lightGrid`'s seven sixteenths.
+fn pattern_ink_coverage(pattern: &umya_spreadsheet::PatternValues) -> f64 {
+    use umya_spreadsheet::PatternValues::*;
+    match pattern {
+        Solid => 1.0,
+        DarkGray | DarkTrellis => 0.75,
+        MediumGray | DarkHorizontal | DarkVertical | DarkDown | DarkUp | DarkGrid => 0.5,
+        LightGrid => 0.4375,
+        LightTrellis => 0.375,
+        LightGray | LightHorizontal | LightVertical | LightDown | LightUp => 0.25,
+        Gray125 => 0.125,
+        Gray0625 => 0.0625,
+        None => 0.0,
+    }
+}
+
+/// Composite `foreground` over `background` at `coverage`.
+fn blend_color(background: Color, foreground: Color, coverage: f64) -> Color {
+    let mix = |below: u8, above: u8| -> u8 {
+        (f64::from(below) * (1.0 - coverage) + f64::from(above) * coverage).round() as u8
+    };
+    Color::new(
+        mix(background.r, foreground.r),
+        mix(background.g, foreground.g),
+        mix(background.b, foreground.b),
+    )
+}
+
 /// Extract background color from a cell's style.
+///
+/// `umya`'s `Style::get_background_color` hands back the `fgColor` whatever the
+/// `patternType` is, so every hatch used to print as a solid foreground —
+/// collapsing a legend's `lightUp`, `lightUp`-over-a-tint and `solid` swatches
+/// onto one colour (issue #926). Read the pattern fill directly instead.
 pub(super) fn extract_cell_background(
     cell: &umya_spreadsheet::Cell,
     theme: Option<&umya_spreadsheet::structs::drawing::Theme>,
 ) -> Option<Color> {
-    let bg = cell.get_style().get_background_color()?;
-    resolve_style_color(bg, theme)
+    let pattern = cell.get_style().get_fill()?.get_pattern_fill()?;
+    let pattern_type: &umya_spreadsheet::PatternValues = pattern.get_pattern_type();
+    if matches!(pattern_type, umya_spreadsheet::PatternValues::None) {
+        return Option::None;
+    }
+    let foreground: Color =
+        resolve_style_color(pattern.get_foreground_color()?, theme).unwrap_or(Color::black());
+    let coverage: f64 = pattern_ink_coverage(pattern_type);
+    if coverage >= 1.0 {
+        return Some(foreground);
+    }
+    // An omitted `bgColor` is white — the first row of #926's table, where
+    // `lightUp` over nothing prints as a quarter-strength foreground rather
+    // than as a quarter of the way to black.
+    let background: Color = pattern
+        .get_background_color()
+        .and_then(|color| resolve_style_color(color, theme))
+        .unwrap_or(Color::white());
+    Some(blend_color(background, foreground, coverage))
 }
 
 /// Map Excel border style name to `BorderLineStyle`.

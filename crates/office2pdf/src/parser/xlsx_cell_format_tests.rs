@@ -1674,6 +1674,98 @@ fn test_a_tint_lightens_the_resolved_theme_colour() {
     );
 }
 
+/// A non-solid `patternFill` paints its foreground over its background at
+/// the pattern's ink coverage; it is not a solid foreground (issue #926).
+///
+/// The legend of `004_Gantt-prosjektplanlegger1.xlsx` (attached to #841) is
+/// the measurement: `lightUp` with `fgColor` `735773` over an omitted
+/// background prints `DCD5DC`, which is white blended one quarter of the way
+/// to `735773` on all three channels. Four of its five swatches were coming
+/// out as the same `735773`.
+#[test]
+fn test_non_solid_pattern_fill_blends_foreground_over_background() {
+    let data = build_xlsx_formatted(|sheet| {
+        sheet.get_cell_mut("A1").set_value("Swatch");
+        sheet
+            .get_cell_mut("A1")
+            .get_style_mut()
+            .get_fill_mut()
+            .get_pattern_fill_mut()
+            .set_pattern_type(umya_spreadsheet::PatternValues::LightUp)
+            .get_foreground_color_mut()
+            .set_argb("FF735773");
+    });
+    let (doc, _warnings) = XlsxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let tp = get_sheet_page(&doc, 0);
+
+    assert_eq!(
+        tp.table.rows[0].cells[0].background,
+        Some(Color::new(0xDC, 0xD5, 0xDC)),
+        "lightUp over an omitted (white) background is a quarter of the way to the foreground"
+    );
+}
+
+/// Triangulation for #926: a different pattern with a different coverage, and
+/// a stated background, so neither a fixed quarter nor a white background can
+/// pass. `mediumGray` covers half the cell, so `000000` over `FFFFFF` is the
+/// mid-grey `808080`, and `darkGray` covers three quarters of it.
+#[test]
+fn test_pattern_fill_coverage_follows_the_pattern_type() {
+    for (pattern, expected) in [
+        (umya_spreadsheet::PatternValues::MediumGray, 0x80_u8),
+        (umya_spreadsheet::PatternValues::DarkGray, 0x40_u8),
+        (umya_spreadsheet::PatternValues::Gray125, 0xE0_u8),
+    ] {
+        let data = build_xlsx_formatted(|sheet| {
+            sheet.get_cell_mut("A1").set_value("Swatch");
+            let fill = sheet
+                .get_cell_mut("A1")
+                .get_style_mut()
+                .get_fill_mut()
+                .get_pattern_fill_mut();
+            fill.set_pattern_type(pattern.clone());
+            fill.get_foreground_color_mut().set_argb("FF000000");
+            fill.get_background_color_mut().set_argb("FFFFFFFF");
+        });
+        let (doc, _warnings) = XlsxParser.parse(&data, &ConvertOptions::default()).unwrap();
+        let tp = get_sheet_page(&doc, 0);
+        let background = tp.table.rows[0].cells[0].background.expect("a fill");
+
+        assert!(
+            background.r.abs_diff(expected) <= 1
+                && background.g.abs_diff(expected) <= 1
+                && background.b.abs_diff(expected) <= 1,
+            "{pattern:?} must land near {expected:#04x}, got {background:?}"
+        );
+    }
+}
+
+/// `patternType="none"` — every workbook's `fillId` 0 — paints nothing, and
+/// the new coverage path must not invent a colour for it.
+///
+/// The combination `none` + `fgColor` is NOT covered here: umya promotes it to
+/// `solid` in `PatternFill::auto_set_pattern_type`, before the parser can see
+/// it, so no assertion at this level can pin it down.
+#[test]
+fn test_pattern_type_none_paints_no_background() {
+    const STYLES_WITH_A_BARE_NONE_FILL: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>
+<fills count="1"><fill><patternFill patternType="none"/></fill></fills>
+<borders count="1"><border/></borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyFill="1"/></cellXfs>
+</styleSheet>"#;
+    let data = build_xlsx_with_style_xfs(
+        STYLES_WITH_A_BARE_NONE_FILL,
+        r#"<c r="A1" s="0" t="inlineStr"><is><t>Bare</t></is></c>"#,
+    );
+    let (doc, _warnings) = XlsxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let tp = get_sheet_page(&doc, 0);
+
+    assert_eq!(tp.table.rows[0].cells[0].background, None);
+}
+
 /// The same resolution has to reach a cell's fill, not only its text.
 #[test]
 fn test_fill_theme_color_resolves_through_the_workbook_scheme() {
