@@ -1,3 +1,4 @@
+use super::xlsx_cells::NormalFont;
 use crate::error::ConvertWarning;
 use crate::ir::{
     Alignment, HFInline, HeaderFooter, HeaderFooterParagraph, ParagraphStyle, Run, TextStyle,
@@ -69,6 +70,13 @@ fn open_segment(section: &mut Vec<HfSegment>, mut style: HfSegment) {
 /// `sheet_name` resolves `&A`. It is a component of Excel's built-in "Sheet
 /// name" header, so it turns up in files nobody customised.
 ///
+/// `normal_font` is the workbook's Normal font, which every run before the
+/// string's first `&"Font"` code takes — the same face an unstyled cell
+/// inherits. Leaving those runs' family unstated sent them to the renderer's
+/// ambient default, a serif that nothing else on the sheet used (issue #951).
+/// `None` when the workbook's `xl/styles.xml` could not be read, which leaves
+/// the family unstated rather than inventing one.
+///
 /// Codes naming data this parser does not hold now warn instead of vanishing
 /// (issue #690). `&F` and `&Z` want the workbook's file name and path, which
 /// never reach `Parser::parse` — it takes bytes. `&D` and `&T` are Excel's
@@ -79,6 +87,7 @@ fn open_segment(section: &mut Vec<HfSegment>, mut style: HfSegment) {
 pub(super) fn parse_hf_format_string(
     format_str: &str,
     sheet_name: &str,
+    normal_font: Option<&NormalFont>,
     warnings: &mut Vec<ConvertWarning>,
 ) -> Option<HeaderFooter> {
     let s = format_str.trim();
@@ -90,9 +99,16 @@ pub(super) fn parse_hf_format_string(
     // segments rather than one string, because `&"Font,Style"` and `&<n>`
     // change the face and size partway through a section and every run after
     // the code takes the new values (issue #633).
-    let mut left: Vec<HfSegment> = vec![HfSegment::default()];
-    let mut center: Vec<HfSegment> = vec![HfSegment::default()];
-    let mut right: Vec<HfSegment> = vec![HfSegment::default()];
+    // Seeded with the Normal font so a run ahead of the first `&"Font"` code
+    // carries it; `open_segment` clones the open segment's style, so a later
+    // code overrides it from that point on and nothing else has to thread it.
+    let opening_segment = || HfSegment {
+        family: normal_font.map(|font| font.family.clone()),
+        ..HfSegment::default()
+    };
+    let mut left: Vec<HfSegment> = vec![opening_segment()];
+    let mut center: Vec<HfSegment> = vec![opening_segment()];
+    let mut right: Vec<HfSegment> = vec![opening_segment()];
     let mut current = &mut center; // Default section is center if no &L/&C/&R prefix
 
     let chars: Vec<char> = s.chars().collect();

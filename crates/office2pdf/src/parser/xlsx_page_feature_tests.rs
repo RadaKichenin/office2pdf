@@ -268,7 +268,7 @@ fn test_page_break_column_widths_preserved() {
 /// Parse a header/footer string against a fixed sheet name, discarding
 /// warnings. Tests that care about either pass them explicitly instead.
 fn parse_hf(format_str: &str) -> Option<HeaderFooter> {
-    parse_hf_format_string(format_str, "Sheet1", &mut Vec::new())
+    parse_hf_format_string(format_str, "Sheet1", None, &mut Vec::new())
 }
 
 /// The concatenated text of every section, in left/center/right order.
@@ -298,6 +298,7 @@ fn test_sheet_name_code_resolves_to_the_worksheet_name() {
     let hf = parse_hf_format_string(
         r#"&C&"Times New Roman,Regular"&12&A"#,
         "Sheet1",
+        None,
         &mut Vec::new(),
     )
     .expect("a header whose only content is &A still produces a paragraph");
@@ -309,7 +310,8 @@ fn test_sheet_name_code_resolves_to_the_worksheet_name() {
 /// Triangulation: the name comes from the sheet, not from a constant.
 #[test]
 fn test_sheet_name_code_uses_the_actual_sheet_name() {
-    let hf = parse_hf_format_string("&C&A", "Q3 Budget", &mut Vec::new()).expect("header parsed");
+    let hf =
+        parse_hf_format_string("&C&A", "Q3 Budget", None, &mut Vec::new()).expect("header parsed");
 
     assert_eq!(hf_section_texts(&hf), vec!["Q3 Budget"]);
 }
@@ -318,7 +320,7 @@ fn test_sheet_name_code_uses_the_actual_sheet_name() {
 /// in whichever section it appears.
 #[test]
 fn test_sheet_name_code_composes_with_text_and_other_fields() {
-    let hf = parse_hf_format_string("&LSheet: &A&RPage &P", "Summary", &mut Vec::new())
+    let hf = parse_hf_format_string("&LSheet: &A&RPage &P", "Summary", None, &mut Vec::new())
         .expect("header parsed");
 
     assert_eq!(hf_section_texts(&hf), vec!["Sheet: Summary", "Page "]);
@@ -348,7 +350,7 @@ fn test_unresolvable_field_codes_warn_instead_of_vanishing() {
         ("&G", "&G (picture)"),
     ] {
         let mut warnings: Vec<ConvertWarning> = Vec::new();
-        parse_hf_format_string(&format!("&C{code}"), "Sheet1", &mut warnings);
+        parse_hf_format_string(&format!("&C{code}"), "Sheet1", None, &mut warnings);
 
         assert!(
             warnings.iter().any(|w| matches!(
@@ -365,7 +367,7 @@ fn test_unresolvable_field_codes_warn_instead_of_vanishing() {
 #[test]
 fn test_resolved_field_codes_do_not_warn() {
     let mut warnings: Vec<ConvertWarning> = Vec::new();
-    parse_hf_format_string("&C&A &P of &N", "Sheet1", &mut warnings);
+    parse_hf_format_string("&C&A &P of &N", "Sheet1", None, &mut warnings);
 
     assert!(
         warnings.is_empty(),
@@ -687,4 +689,54 @@ fn test_hf_code_midway_splits_the_section() {
             ("styled".to_string(), Some("Calibri".to_string())),
         ]
     );
+}
+
+/// A header/footer run before the format string's first `&"Font"` code takes
+/// the workbook's Normal font, as an unstyled cell does. Leaving it unset sent
+/// it to the renderer's ambient default — a serif — so the Gantt template of
+/// issue #841 printed the two runs ahead of its `&"Aptos"` code in a serif
+/// nothing else on the sheet used (issue #951).
+#[test]
+fn a_header_footer_run_before_any_font_code_takes_the_normal_font() {
+    let normal_font = NormalFont {
+        family: "Corbel".to_string(),
+        size_pt: 11.0,
+    };
+    let hf = parse_hf_format_string(
+        r#"&L_x000D_&1#&"Aptos"&8&K000000 Sensitivity: Internal"#,
+        "Sheet1",
+        Some(&normal_font),
+        &mut Vec::new(),
+    )
+    .expect("footer parsed");
+    let families: Vec<Option<String>> = hf.paragraphs[0]
+        .elements
+        .iter()
+        .filter_map(|element| match element {
+            HFInline::Run(run) => Some(run.style.font_family.clone()),
+            _ => None,
+        })
+        .collect();
+
+    assert_eq!(
+        families,
+        vec![
+            Some("Corbel".to_string()),
+            Some("Corbel".to_string()),
+            Some("Aptos".to_string()),
+        ],
+        "the runs before the code take the Normal font; the one after takes Aptos"
+    );
+}
+
+/// A workbook whose Normal font could not be read leaves the family unstated,
+/// exactly as before, rather than inventing one (issue #951).
+#[test]
+fn a_header_footer_without_a_normal_font_states_no_family() {
+    let hf =
+        parse_hf_format_string("&LPlain", "Sheet1", None, &mut Vec::new()).expect("footer parsed");
+    let HFInline::Run(run) = &hf.paragraphs[0].elements[0] else {
+        panic!("expected a run");
+    };
+    assert_eq!(run.style.font_family, None);
 }
