@@ -668,23 +668,23 @@ fn generate_table_cell(
         // where the cell's effective vertical alignment puts the line. The
         // hardcoded `horizon` centred bottom-aligned titles in tall rows
         // (issue #618). A bottom anchor needs the box and strut sized from
-        // the paragraph's own line box at the run's font size: the `1.3em`
-        // legacy shape resolves at the ambient text size, seating a larger
-        // line wrong even with the right anchor. The bottom anchor applies
-        // only to FIXED-height rows — auto rows are content-sized against the
-        // legacy shape (see the seating gate above). Centred cells keep the
-        // legacy shape (their measured position is correct today), and
-        // top-aligned seating is unverified against Excel GT and out of
-        // #618's measured scope, so Top keeps the legacy wrapper too.
+        // the paragraph's own line box at the run's font size. The bottom
+        // anchor applies only to FIXED-height rows — auto rows are
+        // content-sized against the legacy shape (see the seating gate above)
+        // — and top-aligned seating is unverified against Excel GT and out of
+        // #618's measured scope, so Top shares Centred's `horizon` anchor.
         let vertical_anchor: &str = match effective_vertical_align {
             Some(CellVerticalAlign::Bottom) if row_height.is_some() => "bottom",
             _ => "horizon",
         };
-        let line_box_height_pt: Option<f64> = if vertical_anchor == "horizon" {
-            None
-        } else {
-            spill_line_box_height_pt(cell, ctx)
-        };
+        // Every anchor sizes its clip box from the cell's own line. `1.3em`
+        // resolves against the *ambient* text size, so a cell set larger than
+        // its surroundings was clipped mid-glyph: an 18.9pt title on an 11pt
+        // sheet got a 14.30pt box against the 21.74pt its glyphs span, cutting
+        // every descender off flat at the baseline (issue #927). The anchor
+        // itself is unchanged — #618 measured the centred position correct,
+        // and only the box around it was wrong.
+        let line_box_height_pt: Option<f64> = spill_line_box_height_pt(cell, ctx);
         // The clip box states a width, and a Typst box **wraps** its content
         // at the width it states. The line therefore broke into several, the
         // clip hid all but one of them, and the one left visible was the tail:

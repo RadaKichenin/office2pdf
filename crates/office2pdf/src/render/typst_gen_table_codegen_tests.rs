@@ -849,52 +849,69 @@ fn bottom_aligned_spill_cell_anchors_its_line_box_at_the_bottom() {
     );
 }
 
-/// Triangulation for the spill anchor: an explicitly centred cell measures
-/// correct today, so its emission must stay exactly as it was — a `horizon`
-/// anchor with the ambient-sized box and strut.
+/// A centred spill cell keeps the `horizon` anchor #618 measured correct, but
+/// its clip box comes from the cell's own line, not from `1.3em` of whatever
+/// text size happens to surround the table. `em` there resolved against the
+/// ambient size, so a 42pt title on an 11pt sheet was clipped to 14.30pt and
+/// lost every descender in `Prosjektplanlegging` (issue #927).
 #[test]
-fn center_aligned_spill_cell_keeps_the_centered_wrapper() {
-    let cell = TableCell {
-        content: vec![Block::Paragraph(Paragraph {
-            style: ParagraphStyle::default(),
-            runs: vec![Run {
-                text: "Centered spill".to_string(),
-                style: TextStyle {
-                    font_family: Some("Libertinus Serif".to_string()),
-                    font_size: Some(10.0),
-                    ..TextStyle::default()
-                },
-                href: None,
-                footnote: None,
+fn center_aligned_spill_cell_sizes_its_clip_box_from_its_own_font() {
+    for font_size in [10.0_f64, 42.0_f64] {
+        let Some((ascender, descender, _word_pitch_em)) =
+            crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+        else {
+            return; // no font book available (e.g. exotic CI sandbox)
+        };
+        let line_box_height_pt: f64 = (ascender + descender) * font_size;
+        let cell = TableCell {
+            content: vec![Block::Paragraph(Paragraph {
+                style: ParagraphStyle::default(),
+                runs: vec![Run {
+                    text: "Centered spill".to_string(),
+                    style: TextStyle {
+                        font_family: Some("Libertinus Serif".to_string()),
+                        font_size: Some(font_size),
+                        ..TextStyle::default()
+                    },
+                    href: None,
+                    footnote: None,
+                }],
+            })],
+            spill_width: Some(200.0),
+            vertical_align: Some(CellVerticalAlign::Center),
+            ..TableCell::default()
+        };
+        let table = Table {
+            rows: vec![TableRow {
+                cells: vec![cell],
+                height: Some(23.0),
             }],
-        })],
-        spill_width: Some(200.0),
-        vertical_align: Some(CellVerticalAlign::Center),
-        ..TableCell::default()
-    };
-    let table = Table {
-        rows: vec![TableRow {
-            cells: vec![cell],
-            height: Some(23.0),
-        }],
-        column_widths: vec![60.0],
-        default_vertical_align: Some(CellVerticalAlign::Bottom),
-        seats_bottom_aligned_text_on_descender: true,
-        paints_borders_inside_boundary: false,
-        prints_gridlines: false,
-        prints_headings: false,
-        ..Table::default()
-    };
-    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
-    let result = generate_typst(&doc).unwrap().source;
-    assert!(
-        result.contains("place(left + horizon, box(width: 200pt, height: 1.3em, clip: true)"),
-        "an explicitly centred spill cell keeps its current wrapper: {result}"
-    );
-    assert!(
-        result.contains("#box(width: 0pt, height: 1.3em)"),
-        "an explicitly centred spill cell keeps its current strut: {result}"
-    );
+            column_widths: vec![60.0],
+            default_vertical_align: Some(CellVerticalAlign::Bottom),
+            seats_bottom_aligned_text_on_descender: true,
+            paints_borders_inside_boundary: false,
+            prints_gridlines: false,
+            prints_headings: false,
+            ..Table::default()
+        };
+        let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+        let result = generate_typst(&doc).unwrap().source;
+        assert!(
+            result.contains(&format!(
+                "place(left + horizon, box(width: 200pt, height: {}pt, clip: true)",
+                format_f64(line_box_height_pt)
+            )),
+            "a centred spill cell stays centred but is sized to its own line \
+             at {font_size}pt: {result}"
+        );
+        assert!(
+            result.contains(&format!(
+                "#box(width: 0pt, height: {}pt)",
+                format_f64(line_box_height_pt)
+            )),
+            "the in-flow strut must hold the same line height at {font_size}pt: {result}"
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------
