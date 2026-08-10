@@ -1416,11 +1416,15 @@ fn a_paragraph_rule_reserves_its_own_declared_space() {
     // it until #520, which displaced every line below a bordered paragraph by
     // the difference — 06_official_letter_ko declares 8pt and lost 4pt of it,
     // as a step that survived to the bottom of the page.
+    //
+    // Half the width, not the whole of it: Typst centres the stroke on the
+    // inset edge, so reserving the full width sat the rule half a width low
+    // (issue #648).
     let source = bordered_paragraph_source(0.75, BorderLineStyle::Solid, 8.0);
 
     assert!(
-        source.contains("inset: (bottom: 8.75pt)"),
-        "the rule reserves its declared 8pt plus its own 0.75pt width: {source}"
+        source.contains("inset: (bottom: 8.375pt)"),
+        "the rule reserves its declared 8pt plus half its 0.75pt width: {source}"
     );
 }
 
@@ -1431,7 +1435,7 @@ fn a_rule_that_declares_no_space_sits_against_the_text() {
     let source = bordered_paragraph_source(0.75, BorderLineStyle::Solid, 0.0);
 
     assert!(
-        source.contains("inset: (bottom: 0.75pt)"),
+        source.contains("inset: (bottom: 0.375pt)"),
         "with no declared space only the rule's width is reserved: {source}"
     );
 }
@@ -1469,10 +1473,10 @@ fn a_double_rule_reserves_its_space_plus_all_three_widths() {
 fn every_declared_space_reaches_the_output_unchanged() {
     // Triangulation across values, so no single measured constant can pass.
     for (space, expected) in [
-        (0.0, "0.75pt"),
-        (2.0, "2.75pt"),
-        (8.0, "8.75pt"),
-        (14.0, "14.75pt"),
+        (0.0, "0.375pt"),
+        (2.0, "2.375pt"),
+        (8.0, "8.375pt"),
+        (14.0, "14.375pt"),
     ] {
         let source = bordered_paragraph_source(0.75, BorderLineStyle::Solid, space);
         assert!(
