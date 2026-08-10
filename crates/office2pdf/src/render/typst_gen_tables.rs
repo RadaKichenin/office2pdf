@@ -2005,10 +2005,18 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
     let emits_fixed_line_box: bool =
         line_height_settings.is_some() || paragraph_mark_line_pt.is_some();
     let suppress_default_block_spacing: bool = cell.stacks_multiple_blocks && emits_fixed_line_box;
+    // Word's `w:ind` offsets a paragraph's whole column wherever the paragraph
+    // sits, cells included, so it rides the cell wrapper as an inset the same
+    // way the body path puts it on its own outer block (issues #464, #938).
+    // Unlike the body path this needs no separate outer block: a cell paragraph
+    // paints no `w:shd` or `w:pBdr` of its own, so nothing has to span the
+    // un-inset width.
+    let indent: Option<(f64, f64)> = paragraph_indent_pt(style);
     let has_block_wrapper = cell_paragraph_needs_block_wrapper(style)
         || align_str.is_some()
         || line_height_settings.is_some()
-        || suppress_default_block_spacing;
+        || suppress_default_block_spacing
+        || indent.is_some();
 
     if has_block_wrapper {
         out.push_str("#block(");
@@ -2016,6 +2024,7 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
             out,
             align_str.is_some() && !cell.in_spill_cell,
             suppress_default_block_spacing,
+            indent,
         );
         out.push_str(")[\n");
         write_line_box_settings(out, style.line_box);
@@ -2077,6 +2086,7 @@ fn write_cell_paragraph_block_params(
     out: &mut String,
     needs_full_width: bool,
     suppress_default_block_spacing: bool,
+    indent: Option<(f64, f64)>,
 ) {
     let mut first = true;
 
@@ -2093,5 +2103,20 @@ fn write_cell_paragraph_block_params(
     if suppress_default_block_spacing {
         write_param(out, &mut first, "above: 0pt");
         write_param(out, &mut first, "below: 0pt");
+    }
+    // Word's `w:ind`, as the block's own padding: the wrapper shrinks to its
+    // content, so a left inset shifts the text right by exactly that much and a
+    // right inset takes the same width off the measure the text wraps in
+    // (issue #938).
+    if let Some((left, right)) = indent {
+        write_param(
+            out,
+            &mut first,
+            &format!(
+                "inset: (left: {}pt, right: {}pt)",
+                format_f64(left),
+                format_f64(right)
+            ),
+        );
     }
 }
