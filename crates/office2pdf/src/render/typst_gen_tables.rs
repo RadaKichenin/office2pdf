@@ -149,7 +149,8 @@ fn generate_table_inner(
     // declaration-independent, so a boundary declared by both neighbours must
     // paint exactly once (issues #619 and #724). Resolved separately from
     // `TableCell::border` so the layout inset of #500/#503 keeps following
-    // each cell's own declaration and no text moves.
+    // each cell's own declaration. Word's content-seat translation (#649)
+    // follows the resolved owner later without changing that layout inset.
     let boundary_band_model: Option<TableBorderPaintModel> = match table.border_paint_model {
         TableBorderPaintModel::CenteredStroke => None,
         model => Some(model),
@@ -670,6 +671,22 @@ fn generate_table_cell(
         }
     }
 
+    // Word paints a cell boundary into the positive x/y side, but seats the
+    // content from that painted edge rather than from Typst's unpainted track
+    // centre. Native Word PDFs put the first glyph half a left band farther
+    // in and the first baseline one top band lower. Keep that correction as a
+    // visual translation: row pitch and column measure already match Word and
+    // must not grow with the border (issue #649).
+    let word_content_shift: Option<(f64, f64)> = word_cell_content_shift(&boundary_band);
+    if let Some((dx, dy)) = word_content_shift {
+        let _ = write!(
+            out,
+            "#move(dx: {}pt, dy: {}pt)[",
+            format_geometry(dx),
+            format_geometry(dy),
+        );
+    }
+
     if let Some(spill_width) = cell.spill_width {
         // An unwrapped cell keeps its text on one line: lay the content out in
         // a clipped box via #place (out of layout) and hold the row height with
@@ -763,9 +780,32 @@ fn generate_table_cell(
             out.push_str("])");
         }
     }
+    if word_content_shift.is_some() {
+        out.push(']');
+    }
     ctx.cell_seats_text_on_descender = enclosing_cell_seats_on_descender;
     out.push_str("],\n");
     Ok(())
+}
+
+/// The translation from Typst's cell track to Word's positive-axis content
+/// seat. Use the resolved boundary owner so a shared rule affects only the
+/// following cell, exactly like the painted band itself.
+fn word_cell_content_shift(boundary_band: &Option<BoundaryBandCell<'_>>) -> Option<(f64, f64)> {
+    let band = boundary_band.as_ref()?;
+    if band.paint_model != TableBorderPaintModel::WordPositiveAxisBands {
+        return None;
+    }
+    let border = band.painted_border.as_ref()?;
+    let dx = border
+        .left
+        .as_ref()
+        .map_or(0.0, |side| word_pdf_border_side(side).width / 2.0);
+    let dy = border
+        .top
+        .as_ref()
+        .map_or(0.0, |side| word_pdf_border_side(side).width);
+    (dx != 0.0 || dy != 0.0).then_some((dx, dy))
 }
 
 /// Height, in points, of the single line box a spill cell's paragraph emits —
