@@ -37,6 +37,8 @@
 //! std::fs::write("report.pdf", &result.pdf).unwrap();
 //! ```
 
+#[cfg(all(feature = "wasm-cjk-font", any(target_arch = "wasm32", test)))]
+pub(crate) mod bundled_fonts;
 pub mod config;
 pub(crate) mod defaults;
 pub mod error;

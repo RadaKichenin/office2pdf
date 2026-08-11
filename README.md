@@ -17,7 +17,7 @@ No LibreOffice, no Chromium, no Docker — just a single binary powered by [Typs
 - **PDF/A-2b** — archival-compliant output via `--pdf-a`
 - **Embedded font extraction** — fonts embedded in PPTX/DOCX are automatically extracted, deobfuscated, and used during conversion
 - **macOS Office font auto-discovery** — PowerPoint/Word/Excel bundled fonts and Office cloud font caches are searched automatically
-- **WASM** — runs in browsers and Node.js via WebAssembly (optional `wasm` feature)
+- **WASM** — runs in browsers and Node.js via WebAssembly, with optional caller-provided or feature-gated Simplified Chinese fonts
 - **Zero external dependencies** — runs as a standalone executable
 
 ## Installation
@@ -121,6 +121,14 @@ Build with `wasm-pack`:
 wasm-pack build crates/office2pdf --target web --features wasm
 ```
 
+The default build does not add a CJK font. For zero-configuration Simplified
+Chinese fallback, opt in to the 3.3 MiB GB2312 subset (this feature implies
+`wasm`):
+
+```sh
+wasm-pack build crates/office2pdf --target web --features wasm-cjk-font
+```
+
 Use from JavaScript:
 
 ```js
@@ -166,7 +174,14 @@ font faces embedded inside DOCX and PPTX files. Filesystem font paths remain
 unavailable in WASM, but callers can supply standalone TTF, OTF, or TTC bytes
 through `Office2PdfConverter`. When no registered or embedded face covers a
 CJK run, the result-bearing API emits a `fallback-used` warning whose `to`
-value is `.notdef`.
+value is `.notdef` in the default build.
+
+With `wasm-cjk-font`, `Noto Sans CJK SC` is automatically appended when the
+caller has not configured another last-resort family. The subset covers the
+complete GB2312 repertoire (7,445 characters, including 6,763 Han characters)
+plus printable ASCII. It is not full Traditional Chinese, Japanese, or Korean
+coverage. The warning `to` value identifies `Noto Sans CJK SC` when the bundle
+is used. An explicit `setLastResortFontFamily` call takes precedence.
 
 Native Rust callers can use the same per-conversion path through
 `ConvertOptions::font_bytes` and `ConvertOptions::last_resort_font_family`.

@@ -107,6 +107,32 @@ fn load_registered_fonts(options: &ConvertOptions) -> Result<Vec<typst::text::Fo
     Ok(fonts)
 }
 
+fn load_additional_fonts(options: &ConvertOptions) -> Result<Vec<typst::text::Font>, ConvertError> {
+    let fonts = load_registered_fonts(options)?;
+    #[cfg(all(target_arch = "wasm32", feature = "wasm-cjk-font"))]
+    {
+        let mut fonts = fonts;
+        fonts.extend_from_slice(crate::bundled_fonts::cjk_fonts());
+        Ok(fonts)
+    }
+    #[cfg(not(all(target_arch = "wasm32", feature = "wasm-cjk-font")))]
+    {
+        Ok(fonts)
+    }
+}
+
+fn effective_last_resort_family(options: &ConvertOptions) -> Option<&str> {
+    let configured = options
+        .last_resort_font_family
+        .as_deref()
+        .map(str::trim)
+        .filter(|family| !family.is_empty());
+    #[cfg(all(target_arch = "wasm32", feature = "wasm-cjk-font"))]
+    return configured.or(Some(crate::bundled_fonts::CJK_LAST_RESORT_FAMILY));
+    #[cfg(not(all(target_arch = "wasm32", feature = "wasm-cjk-font")))]
+    configured
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 pub(super) fn convert(path: impl AsRef<std::path::Path>) -> Result<ConvertResult, ConvertError> {
     convert_with_options(path, &ConvertOptions::default())
@@ -146,7 +172,7 @@ pub(super) fn convert_bytes(
 
     let total_start: Instant = Instant::now();
     let input_size_bytes = data.len() as u64;
-    let registered_fonts = load_registered_fonts(options)?;
+    let additional_fonts = load_additional_fonts(options)?;
 
     // Extract embedded fonts before parsing (PPTX/DOCX only). Native keeps the
     // materialized directory alive through compilation; WASM keeps parsed
@@ -162,7 +188,7 @@ pub(super) fn convert_bytes(
     #[cfg(target_arch = "wasm32")]
     let in_memory_fonts: Vec<typst::text::Font> = embedded_fonts
         .into_iter()
-        .chain(registered_fonts.iter().cloned())
+        .chain(additional_fonts.iter().cloned())
         .collect();
 
     let parser: Box<dyn Parser> = match format {
@@ -191,18 +217,15 @@ pub(super) fn convert_bytes(
         &doc,
         options,
         embedded_font_dir.as_ref(),
-        &registered_fonts,
+        &additional_fonts,
     );
     #[cfg(target_arch = "wasm32")]
     let font_context = (!in_memory_fonts.is_empty()
-        || options
-            .last_resort_font_family
-            .as_deref()
-            .is_some_and(|family| !family.trim().is_empty())
+        || effective_last_resort_family(options).is_some()
         || render::font_subst::document_requests_font_families(&doc))
     .then(|| {
         render::font_context::resolve_font_search_context_from_fonts(&in_memory_fonts)
-            .with_last_resort_family(options.last_resort_font_family.as_deref())
+            .with_last_resort_family(effective_last_resort_family(options))
     });
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -269,7 +292,7 @@ pub(super) fn convert_bytes(
             .as_ref()
             .map(|context| context.search_paths())
             .unwrap_or(&[]),
-        &registered_fonts,
+        &additional_fonts,
         options.tagged,
         options.pdf_ua,
     )?;
@@ -310,7 +333,7 @@ fn convert_bytes_streaming_xlsx(
 ) -> Result<ConvertResult, ConvertError> {
     let total_start: Instant = Instant::now();
     let input_size_bytes = data.len() as u64;
-    let registered_fonts = load_registered_fonts(options)?;
+    let additional_fonts = load_additional_fonts(options)?;
     let chunk_size = options
         .streaming_chunk_size
         .unwrap_or(crate::defaults::DEFAULT_STREAMING_CHUNK_SIZE);
@@ -332,11 +355,8 @@ fn convert_bytes_streaming_xlsx(
     };
     let parse_duration = parse_start.elapsed();
 
-    let needs_in_memory_font_context = !registered_fonts.is_empty()
-        || options
-            .last_resort_font_family
-            .as_deref()
-            .is_some_and(|family| !family.trim().is_empty())
+    let needs_in_memory_font_context = !additional_fonts.is_empty()
+        || effective_last_resort_family(options).is_some()
         || chunk_docs
             .iter()
             .any(render::font_subst::document_requests_font_families);
@@ -344,13 +364,13 @@ fn convert_bytes_streaming_xlsx(
     let font_context =
         (needs_in_memory_font_context || !options.font_paths.is_empty()).then(|| {
             render::font_context::resolve_font_search_context(&options.font_paths)
-                .with_in_memory_fonts(&registered_fonts)
-                .with_last_resort_family(options.last_resort_font_family.as_deref())
+                .with_in_memory_fonts(&additional_fonts)
+                .with_last_resort_family(effective_last_resort_family(options))
         });
     #[cfg(target_arch = "wasm32")]
     let font_context = needs_in_memory_font_context.then(|| {
-        render::font_context::resolve_font_search_context_from_fonts(&registered_fonts)
-            .with_last_resort_family(options.last_resort_font_family.as_deref())
+        render::font_context::resolve_font_search_context_from_fonts(&additional_fonts)
+            .with_last_resort_family(effective_last_resort_family(options))
     });
 
     if chunk_docs.is_empty() {
@@ -372,7 +392,7 @@ fn convert_bytes_streaming_xlsx(
                 .as_ref()
                 .map(|context| context.search_paths())
                 .unwrap_or(&[]),
-            &registered_fonts,
+            &additional_fonts,
             options.tagged,
             options.pdf_ua,
         )?;
@@ -432,7 +452,7 @@ fn convert_bytes_streaming_xlsx(
                 .as_ref()
                 .map(|context| context.search_paths())
                 .unwrap_or(&[]),
-            &registered_fonts,
+            &additional_fonts,
             options.tagged,
             options.pdf_ua,
         )?;
@@ -493,9 +513,30 @@ pub(super) fn render_document(doc: &ir::Document) -> Result<Vec<u8>, ConvertErro
             false,
         )
     }
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(all(target_arch = "wasm32", not(feature = "wasm-cjk-font")))]
     {
         let output = render::typst_gen::generate_typst(doc)?;
         render::pdf::compile_to_pdf(&output.source, &output.images, None, &[], false, false)
+    }
+    #[cfg(all(target_arch = "wasm32", feature = "wasm-cjk-font"))]
+    {
+        let options = ConvertOptions::default();
+        let fonts = load_additional_fonts(&options)?;
+        let font_context = render::font_context::resolve_font_search_context_from_fonts(&fonts)
+            .with_last_resort_family(effective_last_resort_family(&options));
+        let output = render::typst_gen::generate_typst_with_options_and_font_context(
+            doc,
+            &options,
+            Some(&font_context),
+        )?;
+        render::pdf::compile_to_pdf_with_fonts(
+            &output.source,
+            &output.images,
+            None,
+            &[],
+            &fonts,
+            false,
+            false,
+        )
     }
 }

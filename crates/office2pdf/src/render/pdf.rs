@@ -199,6 +199,7 @@ pub fn compile_to_pdf(
 /// Uses built-in fonts plus any fonts embedded by the document conversion
 /// pipeline. System font paths are not supported on WASM.
 #[cfg(target_arch = "wasm32")]
+#[cfg_attr(feature = "wasm-cjk-font", allow(dead_code))]
 pub fn compile_to_pdf(
     typst_source: &str,
     images: &[ImageAsset],
