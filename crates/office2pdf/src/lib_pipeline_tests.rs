@@ -72,6 +72,38 @@ fn test_should_resolve_font_context_true_when_user_font_paths_are_provided() {
     assert!(should_resolve_font_context(&doc, &options));
 }
 
+#[test]
+fn test_should_resolve_font_context_true_for_in_memory_font_options() {
+    let doc = make_simple_document("Plain text");
+    let font_options = ConvertOptions {
+        font_bytes: vec![vec![0, 1, 2]],
+        ..Default::default()
+    };
+    let fallback_options = ConvertOptions {
+        last_resort_font_family: Some("Noto Sans SC".to_string()),
+        ..Default::default()
+    };
+
+    assert!(should_resolve_font_context(&doc, &font_options));
+    assert!(should_resolve_font_context(&doc, &fallback_options));
+}
+
+#[test]
+fn test_convert_bytes_rejects_invalid_registered_font() {
+    let options = ConvertOptions {
+        font_bytes: vec![b"not a font".to_vec()],
+        ..Default::default()
+    };
+
+    let error = convert_bytes(b"not an office file", Format::Docx, &options)
+        .expect_err("invalid caller-provided font bytes must not be ignored");
+    assert!(
+        error
+            .to_string()
+            .contains("registered font at index 0 contains no usable font faces")
+    );
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn test_should_resolve_font_context_true_when_document_requests_font_family() {

@@ -134,6 +134,15 @@ pub struct ConvertOptions {
     /// Additional font directories to search for fonts.
     #[cfg_attr(feature = "typescript", ts(type = "Array<string>"))]
     pub font_paths: Vec<std::path::PathBuf>,
+    /// Standalone font or font-collection bytes to make available during this
+    /// conversion. In-memory fonts work on native and WASM targets and take
+    /// priority over filesystem and bundled fallback fonts.
+    #[cfg_attr(feature = "typescript", ts(type = "Array<Uint8Array>"))]
+    pub font_bytes: Vec<Vec<u8>>,
+    /// Family to append as the final candidate in every generated font chain.
+    /// This lets a caller-provided face cover glyphs that none of the
+    /// document's declared families or built-in substitutes can render.
+    pub last_resort_font_family: Option<String>,
     /// Force landscape orientation. If `Some(true)`, swaps width/height so width > height.
     /// If `Some(false)`, forces portrait. If `None`, uses source document orientation.
     pub landscape: Option<bool>,

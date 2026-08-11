@@ -142,6 +142,13 @@ fn test_convert_options_font_paths_default_empty() {
 }
 
 #[test]
+fn test_convert_options_in_memory_fonts_default_empty() {
+    let opts = ConvertOptions::default();
+    assert!(opts.font_bytes.is_empty());
+    assert!(opts.last_resort_font_family.is_none());
+}
+
+#[test]
 fn test_convert_options_landscape_default_none() {
     let opts = ConvertOptions::default();
     assert!(opts.landscape.is_none());
@@ -166,6 +173,20 @@ fn test_convert_options_with_font_paths() {
         ..Default::default()
     };
     assert_eq!(opts.font_paths.len(), 2);
+}
+
+#[test]
+fn test_convert_options_with_in_memory_font_and_last_resort() {
+    let opts = ConvertOptions {
+        font_bytes: vec![vec![0, 1, 2, 3]],
+        last_resort_font_family: Some("Noto Sans SC".to_string()),
+        ..Default::default()
+    };
+    assert_eq!(opts.font_bytes, vec![vec![0, 1, 2, 3]]);
+    assert_eq!(
+        opts.last_resort_font_family.as_deref(),
+        Some("Noto Sans SC")
+    );
 }
 
 #[test]

@@ -29,6 +29,18 @@ paper_size: PaperSize | null,
  */
 font_paths: Array<string>, 
 /**
+ * Standalone font or font-collection bytes to make available during this
+ * conversion. In-memory fonts work on native and WASM targets and take
+ * priority over filesystem and bundled fallback fonts.
+ */
+font_bytes: Array<Uint8Array>,
+/**
+ * Family to append as the final candidate in every generated font chain.
+ * This lets a caller-provided face cover glyphs that none of the
+ * document's declared families or built-in substitutes can render.
+ */
+last_resort_font_family: string | null,
+/**
  * Force landscape orientation. If `Some(true)`, swaps width/height so width > height.
  * If `Some(false)`, forces portrait. If `None`, uses source document orientation.
  */
@@ -43,4 +55,16 @@ tagged: boolean,
  * Enable PDF/UA (Universal Accessibility) compliance. Implies `tagged: true`.
  * Combines tagged PDF with the PDF/UA-1 standard for full accessibility compliance.
  */
-pdf_ua: boolean, };
+pdf_ua: boolean,
+/**
+ * Enable streaming mode for large file processing.
+ * In streaming mode, XLSX files are processed in chunks of rows to bound memory usage.
+ * Each chunk is compiled independently and the resulting PDFs are merged.
+ * Requires the `pdf-ops` feature for PDF merging.
+ */
+streaming: boolean,
+/**
+ * Chunk size (in rows) for streaming mode. Defaults to 1000 if `None`.
+ * Only used when `streaming` is `true`.
+ */
+streaming_chunk_size: number | null, };

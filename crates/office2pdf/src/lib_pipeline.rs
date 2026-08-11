@@ -61,6 +61,11 @@ pub(super) fn should_resolve_font_context(
 ) -> bool {
     has_embedded_fonts
         || !options.font_paths.is_empty()
+        || !options.font_bytes.is_empty()
+        || options
+            .last_resort_font_family
+            .as_deref()
+            .is_some_and(|family| !family.trim().is_empty())
         || render::font_subst::document_requests_font_families(doc)
 }
 
@@ -69,6 +74,7 @@ fn resolve_font_context_with_embedded(
     doc: &ir::Document,
     options: &ConvertOptions,
     embedded_font_dir: Option<&parser::embedded_fonts::EmbeddedFontDir>,
+    in_memory_fonts: &[typst::text::Font],
 ) -> Option<render::font_context::FontSearchContext> {
     let has_embedded = embedded_font_dir.is_some_and(|d| !d.is_empty());
     if !should_resolve_font_context(doc, options, has_embedded) {
@@ -80,9 +86,25 @@ fn resolve_font_context_with_embedded(
     {
         all_paths.push(dir.path().to_path_buf());
     }
-    Some(render::font_context::resolve_font_search_context(
-        &all_paths,
-    ))
+    Some(
+        render::font_context::resolve_font_search_context(&all_paths)
+            .with_in_memory_fonts(in_memory_fonts)
+            .with_last_resort_family(options.last_resort_font_family.as_deref()),
+    )
+}
+
+fn load_registered_fonts(options: &ConvertOptions) -> Result<Vec<typst::text::Font>, ConvertError> {
+    let mut fonts = Vec::new();
+    for (index, bytes) in options.font_bytes.iter().enumerate() {
+        let parsed = render::pdf::load_fonts_from_bytes([bytes.as_slice()]);
+        if parsed.is_empty() {
+            return Err(ConvertError::Render(format!(
+                "registered font at index {index} contains no usable font faces"
+            )));
+        }
+        fonts.extend(parsed);
+    }
+    Ok(fonts)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -124,6 +146,7 @@ pub(super) fn convert_bytes(
 
     let total_start: Instant = Instant::now();
     let input_size_bytes = data.len() as u64;
+    let registered_fonts = load_registered_fonts(options)?;
 
     // Extract embedded fonts before parsing (PPTX/DOCX only). Native keeps the
     // materialized directory alive through compilation; WASM keeps parsed
@@ -136,6 +159,11 @@ pub(super) fn convert_bytes(
     let embedded_fonts = embedded_font_data.as_ref().map_or_else(Vec::new, |fonts| {
         render::pdf::load_fonts_from_bytes(fonts.font_bytes())
     });
+    #[cfg(target_arch = "wasm32")]
+    let in_memory_fonts: Vec<typst::text::Font> = embedded_fonts
+        .into_iter()
+        .chain(registered_fonts.iter().cloned())
+        .collect();
 
     let parser: Box<dyn Parser> = match format {
         Format::Docx => Box::new(parser::docx::DocxParser),
@@ -159,11 +187,23 @@ pub(super) fn convert_bytes(
     let page_count = doc.pages.len() as u32;
 
     #[cfg(not(target_arch = "wasm32"))]
-    let font_context =
-        resolve_font_context_with_embedded(&doc, options, embedded_font_dir.as_ref());
+    let font_context = resolve_font_context_with_embedded(
+        &doc,
+        options,
+        embedded_font_dir.as_ref(),
+        &registered_fonts,
+    );
     #[cfg(target_arch = "wasm32")]
-    let font_context = (!embedded_fonts.is_empty())
-        .then(|| render::font_context::resolve_font_search_context_from_fonts(&embedded_fonts));
+    let font_context = (!in_memory_fonts.is_empty()
+        || options
+            .last_resort_font_family
+            .as_deref()
+            .is_some_and(|family| !family.trim().is_empty())
+        || render::font_subst::document_requests_font_families(&doc))
+    .then(|| {
+        render::font_context::resolve_font_search_context_from_fonts(&in_memory_fonts)
+            .with_last_resort_family(options.last_resort_font_family.as_deref())
+    });
 
     #[cfg(not(target_arch = "wasm32"))]
     if let Some(font_context) = font_context.as_ref() {
@@ -221,7 +261,7 @@ pub(super) fn convert_bytes(
 
     let compile_start: Instant = Instant::now();
     #[cfg(not(target_arch = "wasm32"))]
-    let pdf = render::pdf::compile_to_pdf(
+    let pdf = render::pdf::compile_to_pdf_with_fonts(
         &output.source,
         &output.images,
         options.pdf_standard,
@@ -229,6 +269,7 @@ pub(super) fn convert_bytes(
             .as_ref()
             .map(|context| context.search_paths())
             .unwrap_or(&[]),
+        &registered_fonts,
         options.tagged,
         options.pdf_ua,
     )?;
@@ -237,7 +278,8 @@ pub(super) fn convert_bytes(
         &output.source,
         &output.images,
         options.pdf_standard,
-        &embedded_fonts,
+        &[],
+        &in_memory_fonts,
         options.tagged,
         options.pdf_ua,
     )?;
@@ -268,6 +310,7 @@ fn convert_bytes_streaming_xlsx(
 ) -> Result<ConvertResult, ConvertError> {
     let total_start: Instant = Instant::now();
     let input_size_bytes = data.len() as u64;
+    let registered_fonts = load_registered_fonts(options)?;
     let chunk_size = options
         .streaming_chunk_size
         .unwrap_or(crate::defaults::DEFAULT_STREAMING_CHUNK_SIZE);
@@ -278,7 +321,7 @@ fn convert_bytes_streaming_xlsx(
     let parse_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         xlsx_parser.parse_streaming(data, options, chunk_size)
     }));
-    let (chunk_docs, warnings) = match parse_result {
+    let (chunk_docs, mut warnings) = match parse_result {
         Ok(result) => result?,
         Err(panic_info) => {
             return Err(ConvertError::Parse(format!(
@@ -289,37 +332,50 @@ fn convert_bytes_streaming_xlsx(
     };
     let parse_duration = parse_start.elapsed();
 
+    let needs_in_memory_font_context = !registered_fonts.is_empty()
+        || options
+            .last_resort_font_family
+            .as_deref()
+            .is_some_and(|family| !family.trim().is_empty())
+        || chunk_docs
+            .iter()
+            .any(render::font_subst::document_requests_font_families);
+    #[cfg(not(target_arch = "wasm32"))]
+    let font_context =
+        (needs_in_memory_font_context || !options.font_paths.is_empty()).then(|| {
+            render::font_context::resolve_font_search_context(&options.font_paths)
+                .with_in_memory_fonts(&registered_fonts)
+                .with_last_resort_family(options.last_resort_font_family.as_deref())
+        });
+    #[cfg(target_arch = "wasm32")]
+    let font_context = needs_in_memory_font_context.then(|| {
+        render::font_context::resolve_font_search_context_from_fonts(&registered_fonts)
+            .with_last_resort_family(options.last_resort_font_family.as_deref())
+    });
+
     if chunk_docs.is_empty() {
         let empty_doc = ir::Document {
             metadata: ir::Metadata::default(),
             pages: vec![],
             styles: ir::StyleSheet::default(),
         };
-        #[cfg(not(target_arch = "wasm32"))]
-        let font_context = resolve_font_context_with_embedded(&empty_doc, options, None);
-        #[cfg(not(target_arch = "wasm32"))]
         let output = render::typst_gen::generate_typst_with_options_and_font_context(
             &empty_doc,
-            &ConvertOptions::default(),
+            options,
             font_context.as_ref(),
         )?;
-        #[cfg(target_arch = "wasm32")]
-        let output = render::typst_gen::generate_typst(&empty_doc)?;
-        #[cfg(not(target_arch = "wasm32"))]
-        let pdf = render::pdf::compile_to_pdf(
+        let pdf = render::pdf::compile_to_pdf_with_fonts(
             &output.source,
             &output.images,
-            None,
+            options.pdf_standard,
             font_context
                 .as_ref()
                 .map(|context| context.search_paths())
                 .unwrap_or(&[]),
-            false,
-            false,
+            &registered_fonts,
+            options.tagged,
+            options.pdf_ua,
         )?;
-        #[cfg(target_arch = "wasm32")]
-        let pdf =
-            render::pdf::compile_to_pdf(&output.source, &output.images, None, &[], false, false)?;
         let total_duration = total_start.elapsed();
         return Ok(build_convert_result(
             pdf,
@@ -341,36 +397,34 @@ fn convert_bytes_streaming_xlsx(
     let mut compile_duration_total = std::time::Duration::ZERO;
     let mut total_page_count: u32 = 0;
 
-    #[cfg(not(target_arch = "wasm32"))]
-    let font_context = if options.font_paths.is_empty()
-        && !chunk_docs
-            .iter()
-            .any(render::font_subst::document_requests_font_families)
-    {
-        None
-    } else {
-        Some(render::font_context::resolve_font_search_context(
-            &options.font_paths,
-        ))
-    };
-
     for chunk_doc in chunk_docs {
         total_page_count += chunk_doc.pages.len() as u32;
 
+        if let Some(font_context) = font_context.as_ref() {
+            warnings.extend(
+                render::font_subst::detect_missing_font_fallbacks_with_context(
+                    &chunk_doc,
+                    font_context,
+                )
+                .into_iter()
+                .map(|(from, to)| ConvertWarning::FallbackUsed {
+                    format: format_label(Format::Xlsx).to_string(),
+                    from,
+                    to,
+                }),
+            );
+        }
+
         let codegen_start: Instant = Instant::now();
-        #[cfg(not(target_arch = "wasm32"))]
         let output = render::typst_gen::generate_typst_with_options_and_font_context(
             &chunk_doc,
             options,
             font_context.as_ref(),
         )?;
-        #[cfg(target_arch = "wasm32")]
-        let output = render::typst_gen::generate_typst_with_options(&chunk_doc, options)?;
         codegen_duration_total += codegen_start.elapsed();
 
         let compile_start: Instant = Instant::now();
-        #[cfg(not(target_arch = "wasm32"))]
-        let pdf = render::pdf::compile_to_pdf(
+        let pdf = render::pdf::compile_to_pdf_with_fonts(
             &output.source,
             &output.images,
             options.pdf_standard,
@@ -378,15 +432,7 @@ fn convert_bytes_streaming_xlsx(
                 .as_ref()
                 .map(|context| context.search_paths())
                 .unwrap_or(&[]),
-            options.tagged,
-            options.pdf_ua,
-        )?;
-        #[cfg(target_arch = "wasm32")]
-        let pdf = render::pdf::compile_to_pdf(
-            &output.source,
-            &output.images,
-            options.pdf_standard,
-            &options.font_paths,
+            &registered_fonts,
             options.tagged,
             options.pdf_ua,
         )?;
@@ -429,7 +475,7 @@ pub(super) fn render_document(doc: &ir::Document) -> Result<Vec<u8>, ConvertErro
     #[cfg(not(target_arch = "wasm32"))]
     {
         let options = ConvertOptions::default();
-        let font_context = resolve_font_context_with_embedded(doc, &options, None);
+        let font_context = resolve_font_context_with_embedded(doc, &options, None, &[]);
         let output = render::typst_gen::generate_typst_with_options_and_font_context(
             doc,
             &options,

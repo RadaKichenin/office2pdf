@@ -124,7 +124,11 @@ wasm-pack build crates/office2pdf --target web --features wasm
 Use from JavaScript:
 
 ```js
-import init, { convertDocxToPdf, convertToPdf } from './pkg/office2pdf.js';
+import init, {
+  Office2PdfConverter,
+  convertDocxToPdf,
+  convertToPdf,
+} from './pkg/office2pdf.js';
 
 await init();
 
@@ -133,13 +137,39 @@ const pdfBytes = convertDocxToPdf(docxBytes);
 
 // Or use the generic API with a format string
 const pdfBytes2 = convertToPdf(xlsxBytes, "xlsx");
+
+// Register a font for this converter and make it the final fallback for every
+// emitted font chain. The result-bearing API preserves structured warnings.
+const fontBytes = new Uint8Array(await fontFile.arrayBuffer());
+const converter = new Office2PdfConverter();
+converter.registerFont(fontBytes);
+converter.setLastResortFontFamily("Noto Sans SC");
+
+const result = converter.convertDocxToPdf(docxBytes);
+for (let index = 0; index < result.warningCount; index += 1) {
+  const warning = result.warningAt(index);
+  console.warn(warning.kind, warning.from, warning.to, warning.message);
+}
+const pdfBytes3 = result.pdf;
 ```
 
-Available functions: `convertToPdf(data, format)`, `convertDocxToPdf(data)`, `convertPptxToPdf(data)`, `convertXlsxToPdf(data)`.
+The compatibility functions return PDF bytes directly:
+`convertToPdf(data, format)`, `convertDocxToPdf(data)`,
+`convertPptxToPdf(data)`, and `convertXlsxToPdf(data)`. Their
+`*WithResult` counterparts return `ConversionResult`, which exposes `pdf`,
+`warningCount`, and `warningAt(index)`. `Office2PdfConverter` provides the same
+result-bearing methods together with `registerFont`, `clearFonts`,
+`setLastResortFontFamily`, and `clearLastResortFontFamily`.
 
 Browser and Node.js builds use the bundled Typst fallback fonts and also honor
-font faces embedded inside DOCX and PPTX files. Filesystem font paths and
-caller-supplied font bytes are not supported by the WASM API.
+font faces embedded inside DOCX and PPTX files. Filesystem font paths remain
+unavailable in WASM, but callers can supply standalone TTF, OTF, or TTC bytes
+through `Office2PdfConverter`. When no registered or embedded face covers a
+CJK run, the result-bearing API emits a `fallback-used` warning whose `to`
+value is `.notdef`.
+
+Native Rust callers can use the same per-conversion path through
+`ConvertOptions::font_bytes` and `ConvertOptions::last_resort_font_family`.
 
 ## CLI Options
 

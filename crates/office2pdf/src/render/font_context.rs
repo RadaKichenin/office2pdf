@@ -1,6 +1,6 @@
 // Filesystem and system-font discovery are native-only. The shared family
-// index also backs document-provided in-memory fonts on WASM; path-facing
-// members remain compiled there but are intentionally unused.
+// index also backs document- and caller-provided in-memory fonts; path-facing
+// members remain compiled on WASM but are intentionally unused there.
 #![cfg_attr(target_arch = "wasm32", allow(dead_code))]
 
 use std::collections::{HashMap, HashSet};
@@ -35,6 +35,8 @@ pub(crate) struct FontSearchContext {
     /// running under this context.
     in_memory_book: typst::text::FontBook,
     in_memory_fonts: Vec<typst::text::Font>,
+    /// Caller-selected final family for every emitted Typst font chain.
+    last_resort_font_family: Option<String>,
 }
 
 impl FontSearchContext {
@@ -64,6 +66,11 @@ impl FontSearchContext {
             .is_some_and(|scripts| scripts & script_bit(script) != 0)
     }
 
+    pub(crate) fn knows_script_coverage(&self, family: &str) -> bool {
+        self.family_scripts
+            .contains_key(&normalize_family_name(family))
+    }
+
     pub(crate) fn family_source_rank(&self, family: &str) -> u8 {
         let normalized = normalize_family_name(family);
         if self.office_families.contains(&normalized) {
@@ -75,6 +82,45 @@ impl FontSearchContext {
         } else {
             3
         }
+    }
+
+    pub(crate) fn last_resort_font_family(&self) -> Option<&str> {
+        self.last_resort_font_family.as_deref()
+    }
+
+    /// Attach a final fallback family, ignoring an empty or whitespace-only
+    /// name so native callers cannot emit an invalid empty Typst family.
+    pub(crate) fn with_last_resort_family(mut self, family: Option<&str>) -> Self {
+        self.last_resort_font_family = family
+            .map(str::trim)
+            .filter(|family| !family.is_empty())
+            .map(str::to_string);
+        self
+    }
+
+    /// Merge caller-provided faces into this context without involving the
+    /// filesystem. The same face list backs metric lookup and compilation.
+    pub(crate) fn with_in_memory_fonts(mut self, fonts: &[typst::text::Font]) -> Self {
+        if fonts.is_empty() {
+            return self;
+        }
+
+        self.in_memory_fonts.extend_from_slice(fonts);
+        self.in_memory_book = typst::text::FontBook::from_fonts(&self.in_memory_fonts);
+
+        let FamilyIndex {
+            available_families,
+            italic_families,
+            family_scripts,
+        } = index_families_from_book(&self.in_memory_book);
+        self.user_families
+            .extend(available_families.iter().cloned());
+        self.available_families.extend(available_families);
+        self.italic_families.extend(italic_families);
+        for (family, scripts) in family_scripts {
+            *self.family_scripts.entry(family).or_default() |= scripts;
+        }
+        self
     }
 
     #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
@@ -114,6 +160,7 @@ impl FontSearchContext {
             family_scripts: HashMap::new(),
             in_memory_book: typst::text::FontBook::new(),
             in_memory_fonts: Vec::new(),
+            last_resort_font_family: None,
         }
     }
 
@@ -204,6 +251,7 @@ pub(crate) fn resolve_font_search_context(user_font_paths: &[PathBuf]) -> FontSe
         family_scripts,
         in_memory_book: typst::text::FontBook::new(),
         in_memory_fonts: Vec::new(),
+        last_resort_font_family: None,
     }
 }
 
@@ -212,33 +260,17 @@ pub(crate) fn resolve_font_search_context(_user_font_paths: &[PathBuf]) -> FontS
     FontSearchContext::default()
 }
 
-/// Build the substitution index for document-provided in-memory faces.
+/// Build the substitution index for document- or caller-provided in-memory
+/// faces.
 ///
 /// These faces have the same priority as an explicit native font path: they
-/// were supplied by the Office document itself and must lead Typst's fallback
+/// were supplied explicitly for this conversion and must lead Typst's fallback
 /// fonts during family and script selection.
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) fn resolve_font_search_context_from_fonts(
     fonts: &[typst::text::Font],
 ) -> FontSearchContext {
-    let book = typst::text::FontBook::from_fonts(fonts);
-    let FamilyIndex {
-        available_families,
-        italic_families,
-        family_scripts,
-    } = index_families_from_book(&book);
-    let user_families = available_families.clone();
-
-    FontSearchContext {
-        search_paths: Vec::new(),
-        available_families,
-        office_families: HashSet::new(),
-        user_families,
-        italic_families,
-        family_scripts,
-        in_memory_book: book,
-        in_memory_fonts: fonts.to_vec(),
-    }
+    FontSearchContext::default().with_in_memory_fonts(fonts)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
