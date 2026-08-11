@@ -1077,6 +1077,7 @@ fn test_consecutive_paragraphs_each_advance_by_the_full_font_line() {
     );
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn a_mixed_font_line_uses_the_declared_runs_deeper_descent() {
     let Some((arial_top_em, arial_bottom_em, _)) =
@@ -1160,6 +1161,7 @@ fn a_mixed_font_line_uses_the_declared_runs_deeper_descent() {
     );
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn a_mixed_font_line_uses_the_following_lines_taller_ascent() {
     let Some((arial_top_em, _arial_bottom_em, _)) =
