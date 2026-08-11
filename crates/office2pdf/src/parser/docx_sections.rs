@@ -886,6 +886,8 @@ fn extract_hf_frame(property: &docx_rs::ParagraphProperty) -> Option<HeaderFoote
         inset_left: 0.0,
         inset_top: 0.0,
         bottom_offset: None,
+        // A `w:framePr` frame states no wrapping mode of its own.
+        wraps_text: true,
     })
 }
 
@@ -925,6 +927,9 @@ struct HfAnchorBox {
     shape: Option<crate::ir::Shape>,
     /// `<a:bodyPr anchor="b">` — the text sits at the box's bottom edge.
     seats_text_at_bottom: bool,
+    /// `<a:bodyPr wrap="none">` — the paragraph stays on one line and hangs
+    /// out of the text column rather than breaking (issue #967).
+    wraps_text: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -961,6 +966,7 @@ impl HfAnchorBox {
                 bottom_offset: (self.seats_text_at_bottom
                     && self.vertical.align == Some(crate::ir::FrameAlign::End))
                 .then_some(self.bottom_inset_pt),
+                wraps_text: self.wraps_text,
             }
         })
     }
@@ -1145,7 +1151,8 @@ fn attribute_f64(element: &quick_xml::events::BytesStart<'_>, name: &[u8]) -> Op
         })
 }
 
-/// Read a `<wps:bodyPr>`'s padding onto the anchor being scanned.
+/// Read a `<wps:bodyPr>`'s padding, bottom-seating and wrap mode onto the
+/// anchor being scanned.
 fn read_body_insets(element: &quick_xml::events::BytesStart<'_>, anchor: Option<&mut HfAnchorBox>) {
     let Some(anchor) = anchor else {
         return;
@@ -1172,6 +1179,9 @@ fn read_body_insets(element: &quick_xml::events::BytesStart<'_>, anchor: Option<
     anchor.seats_text_at_bottom = element.attributes().flatten().any(|attribute| {
         attribute.key.local_name().as_ref() == b"anchor" && attribute.value.as_ref() == b"b"
     });
+    anchor.wraps_text = !element.attributes().flatten().any(|attribute| {
+        attribute.key.local_name().as_ref() == b"wrap" && attribute.value.as_ref() == b"none"
+    });
 }
 
 /// Scan a header or footer part for its `<wp:anchor>` boxes, in document order.
@@ -1194,6 +1204,9 @@ fn scan_hf_anchors(xml: &str, theme_colors: &HashMap<String, Color>) -> Vec<HfAn
                     });
                     current = Some(HfAnchorBox {
                         behind_doc,
+                        // Only `wrap="none"` turns wrapping off, so a box that
+                        // states nothing wraps (issue #967).
+                        wraps_text: true,
                         ..HfAnchorBox::default()
                     });
                 }
@@ -1705,5 +1718,49 @@ mod anchor_tests {
             frame.bottom_offset.is_none(),
             "no `anchor=\"b\"`, so the text is not bottom-seated"
         );
+    }
+}
+
+#[cfg(test)]
+mod body_pr_wrap_tests {
+    use super::*;
+
+    /// The sensitivity label of `003_FAKTURA.docx` (issue #967), trimmed to the
+    /// `<wps:bodyPr>` attributes that decide whether its one line breaks.
+    const LABEL: &str = r#"<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+      xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+      xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">
+      <w:p><w:r><w:drawing><wp:anchor distT="0" distB="0">
+        <wp:positionH relativeFrom="page"><wp:align>left</wp:align></wp:positionH>
+        <wp:positionV relativeFrom="page"><wp:align>bottom</wp:align></wp:positionV>
+        <wp:extent cx="1089660" cy="351790"/>
+        <wps:wsp><wps:bodyPr wrap="none" horzOverflow="overflow"
+          lIns="254000" tIns="0" rIns="0" bIns="190500" anchor="b"/></wps:wsp>
+      </wp:anchor></w:drawing></w:r></w:p>
+    </w:ftr>"#;
+
+    /// `wrap="none"` keeps the paragraph on one line and lets it hang out of
+    /// the text column; `horzOverflow="overflow"` beside it is what permits the
+    /// overhang. Ignoring the attribute broke a label 1.33pt wider than its
+    /// column into two lines (issue #967).
+    #[test]
+    fn a_body_pr_declaring_wrap_none_yields_a_non_wrapping_frame() {
+        let anchors = scan_hf_anchors(LABEL, &HashMap::new());
+        let frame = anchors[0].to_frame().expect("a page-relative frame");
+        assert!(!frame.wraps_text);
+    }
+
+    /// `wrap="square"` and an absent attribute both wrap, which is what every
+    /// text box did before the attribute was read at all.
+    #[test]
+    fn every_other_wrap_value_still_wraps() {
+        for markup in [
+            LABEL.replace(r#"wrap="none""#, r#"wrap="square""#),
+            LABEL.replace(r#"wrap="none""#, ""),
+        ] {
+            let anchors = scan_hf_anchors(&markup, &HashMap::new());
+            let frame = anchors[0].to_frame().expect("a page-relative frame");
+            assert!(frame.wraps_text, "{markup}");
+        }
     }
 }

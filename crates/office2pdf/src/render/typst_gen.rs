@@ -2043,16 +2043,24 @@ fn generate_page_anchored_hf_frames(
                 }) + frame.inset_top,
             ),
         };
+        // `<a:bodyPr wrap="none">` keeps the paragraph whole, so the box takes
+        // its content's natural width instead of the column's. A `#box` shrinks
+        // to its content where a `#block` fills the region, which is the whole
+        // difference between one line and two (issue #967).
+        let container: &str = match frame.wraps_text {
+            true => "block",
+            false => "box",
+        };
         let _ = write!(
             out,
-            "#place({anchor}, dx: {}pt, dy: {}pt)[#block(",
+            "#place({anchor}, dx: {}pt, dy: {}pt)[#{container}(",
             format_f64(x),
             format_f64(y)
         );
-        if let Some(width) = frame.width {
-            let _ = write!(out, "width: {}pt", format_f64(width));
-        } else {
-            let width = (page_width - x - right_margin).max(0.0);
+        if frame.wraps_text {
+            let width: f64 = frame
+                .width
+                .unwrap_or_else(|| (page_width - x - right_margin).max(0.0));
             let _ = write!(out, "width: {}pt", format_f64(width));
         }
         out.push_str(")[#stack(dir: ttb, spacing: 4pt");
