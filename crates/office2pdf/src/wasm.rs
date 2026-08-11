@@ -27,6 +27,232 @@ use wasm_bindgen::prelude::*;
 
 use crate::config::{ConvertOptions, Format};
 use crate::convert_bytes;
+use crate::error::{ConvertResult as CoreConvertResult, ConvertWarning};
+
+/// Structured warning returned by the result-bearing WASM API.
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct ConversionWarning {
+    kind: String,
+    format: String,
+    message: String,
+    from: Option<String>,
+    to: Option<String>,
+    element: Option<String>,
+    detail: Option<String>,
+    reason: Option<String>,
+}
+
+#[wasm_bindgen]
+impl ConversionWarning {
+    #[wasm_bindgen(getter)]
+    pub fn kind(&self) -> String {
+        self.kind.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn format(&self) -> String {
+        self.format.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn message(&self) -> String {
+        self.message.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn from(&self) -> Option<String> {
+        self.from.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn to(&self) -> Option<String> {
+        self.to.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn element(&self) -> Option<String> {
+        self.element.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn detail(&self) -> Option<String> {
+        self.detail.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn reason(&self) -> Option<String> {
+        self.reason.clone()
+    }
+}
+
+impl From<ConvertWarning> for ConversionWarning {
+    fn from(warning: ConvertWarning) -> Self {
+        let message = warning.to_string();
+        match warning {
+            ConvertWarning::UnsupportedElement { format, element } => Self {
+                kind: "unsupported-element".to_string(),
+                format,
+                message,
+                from: None,
+                to: None,
+                element: Some(element),
+                detail: None,
+                reason: None,
+            },
+            ConvertWarning::PartialElement {
+                format,
+                element,
+                detail,
+            } => Self {
+                kind: "partial-element".to_string(),
+                format,
+                message,
+                from: None,
+                to: None,
+                element: Some(element),
+                detail: Some(detail),
+                reason: None,
+            },
+            ConvertWarning::FallbackUsed { format, from, to } => Self {
+                kind: "fallback-used".to_string(),
+                format,
+                message,
+                from: Some(from),
+                to: Some(to),
+                element: None,
+                detail: None,
+                reason: None,
+            },
+            ConvertWarning::ParseSkipped { format, reason } => Self {
+                kind: "parse-skipped".to_string(),
+                format,
+                message,
+                from: None,
+                to: None,
+                element: None,
+                detail: None,
+                reason: Some(reason),
+            },
+        }
+    }
+}
+
+/// PDF bytes and non-fatal warnings from a WASM conversion.
+#[wasm_bindgen]
+pub struct ConversionResult {
+    pdf: Vec<u8>,
+    warnings: Vec<ConversionWarning>,
+}
+
+#[wasm_bindgen]
+impl ConversionResult {
+    #[wasm_bindgen(getter)]
+    pub fn pdf(&self) -> Vec<u8> {
+        self.pdf.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = warningCount)]
+    pub fn warning_count(&self) -> usize {
+        self.warnings.len()
+    }
+
+    #[wasm_bindgen(js_name = warningAt)]
+    pub fn warning_at(&self, index: usize) -> Option<ConversionWarning> {
+        self.warnings.get(index).cloned()
+    }
+}
+
+impl From<CoreConvertResult> for ConversionResult {
+    fn from(result: CoreConvertResult) -> Self {
+        Self {
+            pdf: result.pdf,
+            warnings: result.warnings.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+/// Per-instance WASM converter with caller-provided in-memory fonts.
+#[wasm_bindgen]
+#[derive(Default)]
+pub struct Office2PdfConverter {
+    options: ConvertOptions,
+}
+
+#[wasm_bindgen]
+impl Office2PdfConverter {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Register a standalone font or font collection for later conversions.
+    #[wasm_bindgen(js_name = registerFont)]
+    pub fn register_font(&mut self, data: &[u8]) -> Result<(), JsValue> {
+        if crate::render::pdf::load_fonts_from_bytes([data]).is_empty() {
+            return Err(JsValue::from_str(
+                "registered font contains no usable font faces",
+            ));
+        }
+        self.options.font_bytes.push(data.to_vec());
+        Ok(())
+    }
+
+    /// Remove all caller-registered font buffers from this converter.
+    #[wasm_bindgen(js_name = clearFonts)]
+    pub fn clear_fonts(&mut self) {
+        self.options.font_bytes.clear();
+    }
+
+    /// Set the family appended to every generated font chain.
+    #[wasm_bindgen(js_name = setLastResortFontFamily)]
+    pub fn set_last_resort_font_family(&mut self, family: &str) -> Result<(), JsValue> {
+        let family = family.trim();
+        if family.is_empty() {
+            return Err(JsValue::from_str(
+                "last-resort font family must not be empty",
+            ));
+        }
+        self.options.last_resort_font_family = Some(family.to_string());
+        Ok(())
+    }
+
+    /// Remove the configured last-resort family.
+    #[wasm_bindgen(js_name = clearLastResortFontFamily)]
+    pub fn clear_last_resort_font_family(&mut self) {
+        self.options.last_resort_font_family = None;
+    }
+
+    #[wasm_bindgen(js_name = convertToPdf)]
+    pub fn convert_to_pdf(&self, data: &[u8], format: &str) -> Result<ConversionResult, JsValue> {
+        let format = Format::from_extension(format)
+            .ok_or_else(|| JsValue::from_str(&format!("unsupported format: {format}")))?;
+        self.convert_format(data, format)
+    }
+
+    #[wasm_bindgen(js_name = convertDocxToPdf)]
+    pub fn convert_docx_to_pdf(&self, data: &[u8]) -> Result<ConversionResult, JsValue> {
+        self.convert_format(data, Format::Docx)
+    }
+
+    #[wasm_bindgen(js_name = convertPptxToPdf)]
+    pub fn convert_pptx_to_pdf(&self, data: &[u8]) -> Result<ConversionResult, JsValue> {
+        self.convert_format(data, Format::Pptx)
+    }
+
+    #[wasm_bindgen(js_name = convertXlsxToPdf)]
+    pub fn convert_xlsx_to_pdf(&self, data: &[u8]) -> Result<ConversionResult, JsValue> {
+        self.convert_format(data, Format::Xlsx)
+    }
+}
+
+impl Office2PdfConverter {
+    fn convert_format(&self, data: &[u8], format: Format) -> Result<ConversionResult, JsValue> {
+        convert_bytes(data, format, &self.options)
+            .map(Into::into)
+            .map_err(|error| JsValue::from_str(&error.to_string()))
+    }
+}
 
 /// Internal: convert with format string, returning a `String` error (testable on native).
 fn convert_to_pdf_inner(data: &[u8], format: &str) -> Result<Vec<u8>, String> {
@@ -41,6 +267,16 @@ fn convert_format_inner(data: &[u8], format: Format) -> Result<Vec<u8>, String> 
     let result =
         convert_bytes(data, format, &ConvertOptions::default()).map_err(|e| e.to_string())?;
     Ok(result.pdf)
+}
+
+/// Convert with default options while preserving structured warnings.
+fn convert_format_with_result_inner(
+    data: &[u8],
+    format: Format,
+) -> Result<ConversionResult, String> {
+    convert_bytes(data, format, &ConvertOptions::default())
+        .map(Into::into)
+        .map_err(|error| error.to_string())
 }
 
 /// Convert an Office document to PDF.
@@ -84,6 +320,32 @@ pub fn convert_xlsx_to_pdf(data: &[u8]) -> Result<Vec<u8>, JsValue> {
     convert_format_inner(data, Format::Xlsx).map_err(|e| JsValue::from_str(&e))
 }
 
+/// Convert a document with default options and return PDF bytes plus warnings.
+#[wasm_bindgen(js_name = "convertToPdfWithResult")]
+pub fn convert_to_pdf_with_result(data: &[u8], format: &str) -> Result<ConversionResult, JsValue> {
+    let format = Format::from_extension(format)
+        .ok_or_else(|| JsValue::from_str(&format!("unsupported format: {format}")))?;
+    convert_format_with_result_inner(data, format).map_err(|error| JsValue::from_str(&error))
+}
+
+/// Convert a DOCX with default options and return PDF bytes plus warnings.
+#[wasm_bindgen(js_name = "convertDocxToPdfWithResult")]
+pub fn convert_docx_to_pdf_with_result(data: &[u8]) -> Result<ConversionResult, JsValue> {
+    convert_format_with_result_inner(data, Format::Docx).map_err(|error| JsValue::from_str(&error))
+}
+
+/// Convert a PPTX with default options and return PDF bytes plus warnings.
+#[wasm_bindgen(js_name = "convertPptxToPdfWithResult")]
+pub fn convert_pptx_to_pdf_with_result(data: &[u8]) -> Result<ConversionResult, JsValue> {
+    convert_format_with_result_inner(data, Format::Pptx).map_err(|error| JsValue::from_str(&error))
+}
+
+/// Convert an XLSX with default options and return PDF bytes plus warnings.
+#[wasm_bindgen(js_name = "convertXlsxToPdfWithResult")]
+pub fn convert_xlsx_to_pdf_with_result(data: &[u8]) -> Result<ConversionResult, JsValue> {
+    convert_format_with_result_inner(data, Format::Xlsx).map_err(|error| JsValue::from_str(&error))
+}
+
 #[cfg(test)]
 #[path = "wasm_tests.rs"]
 mod tests;
@@ -109,6 +371,23 @@ mod wasm_tests {
         let mut buf = Cursor::new(Vec::new());
         doc.build().pack(&mut buf).unwrap();
         buf.into_inner()
+    }
+
+    /// DOCX that declares SimSun but deliberately embeds no font.
+    fn make_cjk_docx_without_embedded_font() -> Vec<u8> {
+        include_bytes!("../../../tests/fixtures/docx/wasm_registered_cjk.docx").to_vec()
+    }
+
+    fn noto_sans_sc_subset_bytes() -> Vec<u8> {
+        let carrier = include_bytes!("../../../tests/fixtures/docx/wasm_embedded_cjk.docx");
+        let embedded =
+            crate::parser::embedded_fonts::extract_embedded_font_data(carrier, Format::Docx)
+                .expect("the #943 fixture should carry one embedded font");
+        embedded
+            .font_bytes()
+            .next()
+            .expect("the #943 fixture should expose one deobfuscated font")
+            .to_vec()
     }
 
     /// Helper: create a minimal valid PPTX.
@@ -221,6 +500,56 @@ mod wasm_tests {
                 .any(|window| window == b"NotoSansSC"),
             "the PDF should embed the document-provided Noto Sans SC subset"
         );
+    }
+
+    #[wasm_bindgen_test]
+    fn wasm_converter_registers_last_resort_font_and_surfaces_warning() {
+        let docx = make_cjk_docx_without_embedded_font();
+        let mut converter = Office2PdfConverter::new();
+        converter
+            .register_font(&noto_sans_sc_subset_bytes())
+            .expect("the valid Noto subset should register");
+        converter
+            .set_last_resort_font_family("Noto Sans SC")
+            .expect("a non-empty family should be accepted");
+
+        let result = converter
+            .convert_docx_to_pdf(&docx)
+            .expect("registered CJK fallback should convert");
+
+        assert!(
+            result
+                .pdf
+                .windows(b"NotoSansSC".len())
+                .any(|window| window == b"NotoSansSC"),
+            "the PDF should embed the caller-registered Noto Sans SC subset"
+        );
+        assert!(result.warnings.iter().any(|warning| {
+            warning.kind == "fallback-used"
+                && warning.from.as_deref() == Some("SimSun")
+                && warning.to.as_deref() == Some("Noto Sans SC")
+        }));
+    }
+
+    #[wasm_bindgen_test]
+    fn wasm_result_reports_notdef_when_no_cjk_face_is_available() {
+        let result = convert_docx_to_pdf_with_result(&make_cjk_docx_without_embedded_font())
+            .expect("conversion should finish even when glyph coverage is missing");
+
+        assert!(result.warnings.iter().any(|warning| {
+            warning.kind == "fallback-used"
+                && warning.from.as_deref() == Some("SimSun")
+                && warning.to.as_deref() == Some(".notdef")
+        }));
+    }
+
+    #[wasm_bindgen_test]
+    fn wasm_converter_rejects_invalid_font_and_empty_family() {
+        let mut converter = Office2PdfConverter::new();
+        assert!(converter.register_font(b"not a font").is_err());
+        assert!(converter.set_last_resort_font_family("   ").is_err());
+        assert!(converter.options.font_bytes.is_empty());
+        assert!(converter.options.last_resort_font_family.is_none());
     }
 
     #[wasm_bindgen_test]

@@ -338,6 +338,8 @@ fn run() -> Result<()> {
         pdf_standard,
         paper_size,
         font_paths: cli.font_path,
+        font_bytes: Vec::new(),
+        last_resort_font_family: None,
         landscape,
         tagged: cli.tagged,
         pdf_ua: cli.pdf_ua,

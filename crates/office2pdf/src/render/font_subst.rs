@@ -13,8 +13,8 @@
 //! `word/fontTable.xml` is not read yet, so a DOCX face still relies on the
 //! table and the name (issue #891).
 
-// The substitution index also serves document-provided in-memory fonts on
-// WASM. Filesystem-facing fallback paths remain compiled there but unused.
+// The substitution index also serves document- and caller-provided in-memory
+// fonts. Filesystem-facing fallback paths remain compiled on WASM but unused.
 #![cfg_attr(target_arch = "wasm32", allow(dead_code))]
 
 use std::cell::RefCell;
@@ -405,9 +405,8 @@ fn family_name_is_known_sans_serif_brand(normalized_family: &str) -> bool {
 }
 
 /// Check whether the given font family (or its alias) is available in the
-/// current font context. Returns `true` when no context is active (for example,
-/// WASM conversion without document-provided fonts) to preserve existing
-/// behaviour.
+/// current font context. Returns `true` when no context is active to preserve
+/// existing behaviour.
 pub fn is_primary_font_available(font_family: &str) -> bool {
     ACTIVE_FONT_CONTEXT.with(|cell| {
         let guard = cell.borrow();
@@ -655,6 +654,7 @@ fn latin_family_chain(
             .map(|face| (*face).to_string()),
     );
     families.extend(fallback_candidates(font_family, context));
+    append_last_resort(&mut families, context);
     families
 }
 
@@ -689,8 +689,21 @@ pub(crate) fn font_for_mixed_script_text(font_family: &str, text: &str) -> Strin
                 .iter()
                 .map(|face| (*face).to_string()),
         );
+        append_last_resort(&mut families, context.as_ref());
         join_font_list(families)
     })
+}
+
+fn append_last_resort(families: &mut Vec<String>, context: Option<&FontSearchContext>) {
+    let Some(family) = context.and_then(FontSearchContext::last_resort_font_family) else {
+        return;
+    };
+    if !families
+        .iter()
+        .any(|candidate| candidate.eq_ignore_ascii_case(family))
+    {
+        families.push(family.to_string());
+    }
 }
 
 /// Whether `character` is written in an East Asian script, so the font list's
@@ -799,12 +812,13 @@ pub(crate) fn family_candidates(font_family: &str) -> Vec<String> {
         let context = active_context.borrow();
         let mut candidates: Vec<String> = vec![font_family.to_string()];
         candidates.extend(fallback_candidates(font_family, context.as_ref()));
+        append_last_resort(&mut candidates, context.as_ref());
         candidates
     })
 }
 
-/// Resolve a document-provided in-memory face from the active WASM context.
-#[cfg(target_arch = "wasm32")]
+/// Resolve a document- or caller-provided in-memory face from the active
+/// conversion context.
 pub(crate) fn active_in_memory_font(
     font_family: &str,
     variant: typst::text::FontVariant,
@@ -882,6 +896,7 @@ fn east_asian_family_chain(
     );
     families.extend(fallback_candidates(east_asian_family, context));
     families.extend(fallback_candidates(latin_family, context));
+    append_last_resort(&mut families, context);
     families
 }
 
@@ -1168,7 +1183,7 @@ fn resolve_available_fallback(
     script: TextScript,
     context: &FontSearchContext,
 ) -> Option<String> {
-    if context.has_family(font_family) {
+    if family_covers_or_is_unindexed(context, font_family, script) {
         return None;
     }
 
@@ -1177,7 +1192,18 @@ fn resolve_available_fallback(
         .iter()
         .map(|face| (*face).to_string())
         .chain(fallback_candidates(font_family, Some(context)))
-        .find(|candidate| context.has_family(candidate))
+        .chain(context.last_resort_font_family().map(str::to_string))
+        .find(|candidate| family_covers_or_is_unindexed(context, candidate, script))
+        .or_else(|| (script != TextScript::Latin).then(|| ".notdef".to_string()))
+}
+
+fn family_covers_or_is_unindexed(
+    context: &FontSearchContext,
+    family: &str,
+    script: TextScript,
+) -> bool {
+    context.has_family(family)
+        && (!context.knows_script_coverage(family) || context.covers_script(family, script))
 }
 
 pub(crate) fn detect_missing_font_fallbacks_with_context(

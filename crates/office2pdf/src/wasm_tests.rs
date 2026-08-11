@@ -182,3 +182,19 @@ fn test_convert_format_inner_pptx_invalid() {
 fn test_convert_format_inner_xlsx_invalid() {
     assert!(convert_format_inner(b"bad", Format::Xlsx).is_err());
 }
+
+#[test]
+fn test_wasm_warning_preserves_fallback_fields() {
+    let warning: ConversionWarning = ConvertWarning::FallbackUsed {
+        format: "DOCX".to_string(),
+        from: "SimSun".to_string(),
+        to: "Noto Sans SC".to_string(),
+    }
+    .into();
+
+    assert_eq!(warning.kind, "fallback-used");
+    assert_eq!(warning.format, "DOCX");
+    assert_eq!(warning.from.as_deref(), Some("SimSun"));
+    assert_eq!(warning.to.as_deref(), Some("Noto Sans SC"));
+    assert!(warning.message.contains("SimSun rendered as Noto Sans SC"));
+}

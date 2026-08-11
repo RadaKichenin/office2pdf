@@ -250,6 +250,66 @@ fn test_compile_with_font_paths_empty() {
 }
 
 #[test]
+fn test_compile_with_caller_provided_in_memory_font() {
+    let carrier = include_bytes!("../../../../tests/fixtures/docx/wasm_embedded_cjk.docx");
+    let embedded = crate::parser::embedded_fonts::extract_embedded_font_data(
+        carrier,
+        crate::config::Format::Docx,
+    )
+    .expect("the #943 fixture should carry an embedded font");
+    let fonts = load_fonts_from_bytes(embedded.font_bytes());
+    assert!(!fonts.is_empty(), "the fixture font should parse");
+
+    let pdf = compile_to_pdf_with_fonts(
+        r#"#text(font: ("No Such Font", "Noto Sans SC"))[Hello 中文测试文档]"#,
+        &[],
+        None,
+        &[],
+        &fonts,
+        false,
+        false,
+    )
+    .expect("the in-memory face should compile on native targets too");
+
+    assert!(
+        pdf.windows(b"NotoSansSC".len())
+            .any(|window| window == b"NotoSansSC"),
+        "the output PDF should embed the caller-provided face"
+    );
+}
+
+#[test]
+fn test_in_memory_last_resort_bypasses_process_metric_cache() {
+    let carrier = include_bytes!("../../../../tests/fixtures/docx/wasm_embedded_cjk.docx");
+    let embedded = crate::parser::embedded_fonts::extract_embedded_font_data(
+        carrier,
+        crate::config::Format::Docx,
+    )
+    .expect("the #943 fixture should carry an embedded font");
+    let fonts = load_fonts_from_bytes(embedded.font_bytes());
+    let font = fonts.first().expect("the fixture font should parse");
+    let ttf = font.ttf();
+    let upem = f64::from(ttf.units_per_em()).max(1.0);
+    let expected_pitch =
+        (f64::from(ttf.ascender()) - f64::from(ttf.descender()) + f64::from(ttf.line_gap())) / upem;
+
+    // Populate the process cache from the machine's ordinary font set first.
+    let _ = font_line_metrics_em("SimSun");
+
+    let context = crate::render::font_context::resolve_font_search_context_from_fonts(&fonts)
+        .with_last_resort_family(Some("Noto Sans SC"));
+    let actual = crate::render::font_subst::with_font_search_context(Some(&context), || {
+        font_line_metrics_em("SimSun")
+    })
+    .expect("the active in-memory last resort should provide metrics");
+
+    assert!(
+        (actual.2 - expected_pitch).abs() < 1e-12,
+        "active metrics must come from Noto Sans SC even after SimSun was cached: {actual:?}"
+    );
+}
+
+#[test]
 fn test_compile_with_nonexistent_font_path() {
     // Non-existent font path should not crash — FontSearcher skips invalid dirs
     let paths = vec![PathBuf::from("/nonexistent/font/path")];

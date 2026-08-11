@@ -249,6 +249,59 @@ fn test_font_with_fallbacks_unknown_font() {
 }
 
 #[test]
+fn configured_last_resort_is_appended_after_every_regular_candidate() {
+    let context = FontSearchContext::for_test(
+        Vec::new(),
+        &["Source Han Sans SC"],
+        &[],
+        &["Source Han Sans SC"],
+    )
+    .with_last_resort_family(Some("Source Han Sans SC"));
+
+    let result = with_font_search_context(Some(&context), || {
+        font_with_fallbacks_for_text("SimSun", "中文")
+    });
+
+    assert!(
+        result.ends_with(", \"Source Han Sans SC\")"),
+        "the caller-selected face must be the last candidate: {result}"
+    );
+}
+
+#[test]
+fn configured_last_resort_is_appended_to_east_asian_split_chain() {
+    let context = FontSearchContext::for_test(
+        Vec::new(),
+        &["Source Han Sans SC"],
+        &[],
+        &["Source Han Sans SC"],
+    )
+    .with_last_resort_family(Some("Source Han Sans SC"));
+
+    let result = with_font_search_context(Some(&context), || {
+        font_with_east_asian_fallbacks("Calibri", "SimSun", "Hello 中文")
+    });
+
+    assert!(
+        result.ends_with(", \"Source Han Sans SC\")"),
+        "the caller-selected face must be the last candidate: {result}"
+    );
+}
+
+#[test]
+fn missing_cjk_coverage_reports_notdef_instead_of_staying_silent() {
+    let context = FontSearchContext::for_test(Vec::new(), &[], &[], &[]);
+    let doc = korean_document_requesting("SimSun", "中文");
+
+    let fallbacks = detect_missing_font_fallbacks_with_context(&doc, &context);
+
+    assert_eq!(
+        fallbacks,
+        vec![("SimSun".to_string(), ".notdef".to_string())]
+    );
+}
+
+#[test]
 fn test_font_with_fallbacks_single_substitute() {
     let result = font_with_fallbacks_for_text("Comic Sans MS", "");
     assert_eq!(result, r#"("Comic Sans MS", "Comic Neue")"#);

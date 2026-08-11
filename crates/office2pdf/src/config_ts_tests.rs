@@ -55,6 +55,14 @@ fn test_convert_options_ts_declaration() {
         decl.contains("pdf_ua"),
         "should contain pdf_ua field: {decl}"
     );
+    assert!(
+        decl.contains("font_bytes: Array<Uint8Array>"),
+        "should expose in-memory font buffers: {decl}"
+    );
+    assert!(
+        decl.contains("last_resort_font_family"),
+        "should expose the final fallback family: {decl}"
+    );
 }
 
 #[test]

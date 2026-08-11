@@ -32,27 +32,44 @@ struct CachedFontData {
     fonts: Vec<typst_kit::fonts::FontSlot>,
 }
 
-/// Document-provided in-memory faces followed by the cached Typst fallback
+/// Document- or caller-provided in-memory faces followed by cached fallback
 /// slots. The combined book preserves the same priority order that native
 /// `FontSearcher` gives an explicit font directory without eagerly loading all
 /// fallback font bytes.
 struct InMemoryFontData {
     book: LazyHash<typst::text::FontBook>,
     fonts: Vec<Font>,
-    fallback: &'static CachedFontData,
+    fallback: FallbackFontData,
 }
 
 impl InMemoryFontData {
-    fn new(fonts: &[Font]) -> Self {
-        let fallback = get_embedded_fonts();
+    fn new(fonts: &[Font], fallback: FallbackFontData) -> Self {
+        let fallback_data = fallback.data();
         let infos = fonts.iter().map(|font| font.info().clone()).chain(
-            (0..fallback.fonts.len()).filter_map(|index| fallback.book.info(index).cloned()),
+            (0..fallback_data.fonts.len())
+                .filter_map(|index| fallback_data.book.info(index).cloned()),
         );
 
         Self {
             book: LazyHash::new(typst::text::FontBook::from_infos(infos)),
             fonts: fonts.to_vec(),
             fallback,
+        }
+    }
+}
+
+/// Lazily loaded font slots that follow caller-provided in-memory faces.
+enum FallbackFontData {
+    Cached(&'static CachedFontData),
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    Shared(Arc<CachedFontData>),
+}
+
+impl FallbackFontData {
+    fn data(&self) -> &CachedFontData {
+        match self {
+            Self::Cached(data) => data,
+            Self::Shared(data) => data,
         }
     }
 }
@@ -129,7 +146,6 @@ fn get_embedded_fonts() -> &'static CachedFontData {
 }
 
 /// Parse standalone font or font-collection bytes into Typst faces.
-#[cfg(target_arch = "wasm32")]
 pub(crate) fn load_fonts_from_bytes<'a>(
     font_data: impl IntoIterator<Item = &'a [u8]>,
 ) -> Vec<Font> {
@@ -147,7 +163,8 @@ pub(crate) fn load_fonts_from_bytes<'a>(
 /// additional fonts (highest priority).
 ///
 /// On native targets, system fonts are discovered automatically. On WASM,
-/// built-in and document-embedded fonts are used and `font_paths` is ignored.
+/// built-in, document-embedded, and caller-provided in-memory fonts are used;
+/// `font_paths` is ignored.
 ///
 /// # PDF output size optimization
 ///
@@ -190,20 +207,27 @@ pub fn compile_to_pdf(
     tagged: bool,
     pdf_ua: bool,
 ) -> Result<Vec<u8>, ConvertError> {
-    compile_to_pdf_with_fonts(typst_source, images, pdf_standard, &[], tagged, pdf_ua)
+    compile_to_pdf_with_fonts(typst_source, images, pdf_standard, &[], &[], tagged, pdf_ua)
 }
 
-/// Compile Typst markup on WASM with document-provided in-memory fonts.
-#[cfg(target_arch = "wasm32")]
+/// Compile Typst markup with document- or caller-provided in-memory fonts.
 pub(crate) fn compile_to_pdf_with_fonts(
     typst_source: &str,
     images: &[ImageAsset],
     pdf_standard: Option<PdfStandard>,
-    document_fonts: &[Font],
+    font_paths: &[std::path::PathBuf],
+    in_memory_fonts: &[Font],
     tagged: bool,
     pdf_ua: bool,
 ) -> Result<Vec<u8>, ConvertError> {
-    let world = MinimalWorld::new_embedded_with_fonts(typst_source, images, document_fonts);
+    #[cfg(not(target_arch = "wasm32"))]
+    let world =
+        MinimalWorld::new_with_in_memory_fonts(typst_source, images, font_paths, in_memory_fonts);
+    #[cfg(target_arch = "wasm32")]
+    let world = {
+        let _ = font_paths;
+        MinimalWorld::new_embedded_with_fonts(typst_source, images, in_memory_fonts)
+    };
     compile_to_pdf_inner(&world, pdf_standard, tagged, pdf_ua)
 }
 
@@ -378,8 +402,8 @@ enum FontSource {
     /// Only constructed on native (extra font paths need filesystem access).
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     Shared(Arc<CachedFontData>),
-    /// Document-provided faces held in memory, followed by cached fallback
-    /// slots. Constructed by the filesystem-free WASM path.
+    /// Document- or caller-provided faces held in memory, followed by cached
+    /// fallback slots.
     InMemory(InMemoryFontData),
 }
 
@@ -398,7 +422,7 @@ impl FontSource {
         match self {
             Self::Cached(d) => d.fonts.len(),
             Self::Shared(d) => d.fonts.len(),
-            Self::InMemory(d) => d.fonts.len() + d.fallback.fonts.len(),
+            Self::InMemory(d) => d.fonts.len() + d.fallback.data().fonts.len(),
         }
     }
 
@@ -408,6 +432,7 @@ impl FontSource {
             Self::Shared(d) => d.fonts.get(index).and_then(|slot| slot.get()),
             Self::InMemory(d) => d.fonts.get(index).cloned().or_else(|| {
                 d.fallback
+                    .data()
                     .fonts
                     .get(index.checked_sub(d.fonts.len())?)
                     .and_then(|slot| slot.get())
@@ -467,7 +492,7 @@ impl MinimalWorld {
         )
     }
 
-    /// Create an embedded-only world with document-provided in-memory faces at
+    /// Create an embedded-only world with per-conversion in-memory faces at
     /// higher priority than Typst's built-in fallback fonts.
     #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
     fn new_embedded_with_fonts(
@@ -482,7 +507,35 @@ impl MinimalWorld {
         Self::new_with_font_source(
             source_text,
             images,
-            FontSource::InMemory(InMemoryFontData::new(document_fonts)),
+            FontSource::InMemory(InMemoryFontData::new(
+                document_fonts,
+                FallbackFontData::Cached(get_embedded_fonts()),
+            )),
+        )
+    }
+
+    /// Create a native world with in-memory faces ahead of the same system or
+    /// custom-path slots used by the ordinary native compiler.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn new_with_in_memory_fonts(
+        source_text: &str,
+        images: &[ImageAsset],
+        font_paths: &[PathBuf],
+        fonts: &[Font],
+    ) -> Self {
+        if fonts.is_empty() {
+            return Self::new(source_text, images, font_paths);
+        }
+
+        let fallback = if font_paths.is_empty() {
+            FallbackFontData::Cached(get_system_fonts())
+        } else {
+            FallbackFontData::Shared(get_fonts_for_extra_paths(font_paths))
+        };
+        Self::new_with_font_source(
+            source_text,
+            images,
+            FontSource::InMemory(InMemoryFontData::new(fonts, fallback)),
         )
     }
 
@@ -569,6 +622,12 @@ mod tests;
 /// compile-time cache.
 #[cfg(not(target_arch = "wasm32"))]
 fn best_face(family: &str) -> Option<typst::text::Font> {
+    if let Some(font) =
+        super::font_subst::active_in_memory_font(family, typst::text::FontVariant::default())
+    {
+        return Some(font);
+    }
+
     let search_context = super::font_context::resolve_font_search_context(&[]);
     let data = get_fonts_for_extra_paths(search_context.search_paths());
     super::font_subst::family_candidates(family)
@@ -598,6 +657,12 @@ fn cached_family_metric(
     family: &str,
     compute: impl FnOnce(&typst::text::Font) -> Option<f64>,
 ) -> Option<f64> {
+    if let Some(font) =
+        super::font_subst::active_in_memory_font(family, typst::text::FontVariant::default())
+    {
+        return compute(&font);
+    }
+
     let cache = cache.get_or_init(|| Mutex::new(HashMap::new()));
     let key: String = family.to_lowercase();
     if let Some(cached) = cache
@@ -710,6 +775,21 @@ pub(crate) fn font_line_metrics_em(family: &str) -> Option<(f64, f64, f64)> {
     type LineMetricsEm = Option<(f64, f64, f64)>;
     static METRICS_CACHE: OnceLock<Mutex<HashMap<String, LineMetricsEm>>> = OnceLock::new();
 
+    let metrics_for = |font: &typst::text::Font| {
+        let ttf = font.ttf();
+        let upem = f64::from(ttf.units_per_em()).max(1.0);
+        let hhea_pitch_em = (f64::from(ttf.ascender()) - f64::from(ttf.descender())
+            + f64::from(ttf.line_gap()))
+            / upem;
+        let top_em: f64 = (f64::from(ttf.ascender()) + f64::from(ttf.line_gap())) / upem;
+        (top_em, hhea_pitch_em - top_em, hhea_pitch_em)
+    };
+    if let Some(font) =
+        super::font_subst::active_in_memory_font(family, typst::text::FontVariant::default())
+    {
+        return Some(metrics_for(&font));
+    }
+
     let cache = METRICS_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
     let key: String = family.to_lowercase();
     if let Some(cached) = cache
@@ -721,11 +801,6 @@ pub(crate) fn font_line_metrics_em(family: &str) -> Option<(f64, f64, f64)> {
     }
 
     let metrics: Option<(f64, f64, f64)> = best_face(family).map(|font| {
-        let ttf = font.ttf();
-        let upem = f64::from(ttf.units_per_em()).max(1.0);
-        let hhea_pitch_em = (f64::from(ttf.ascender()) - f64::from(ttf.descender())
-            + f64::from(ttf.line_gap()))
-            / upem;
         // Word seats the baseline `hhea ascender + lineGap` below the top
         // of the line, not at the font's ascender/descender proportion of
         // the box — measured to 0.0005em on Arial (issue #508). Typst's
@@ -736,8 +811,7 @@ pub(crate) fn font_line_metrics_em(family: &str) -> Option<(f64, f64, f64)> {
         // derive their line count from this pair, so altering it silently
         // repaginated. They now choose between the grid pitch and the
         // natural line without consulting it.
-        let top_em: f64 = (f64::from(ttf.ascender()) + f64::from(ttf.line_gap())) / upem;
-        (top_em, hhea_pitch_em - top_em, hhea_pitch_em)
+        metrics_for(&font)
     });
     cache
         .lock()
@@ -773,6 +847,25 @@ pub(crate) fn max_digit_advance_em(family: &str) -> Option<f64> {
     use std::sync::Mutex;
     static ADVANCE_CACHE: OnceLock<Mutex<HashMap<String, Option<f64>>>> = OnceLock::new();
 
+    let advance_for = |font: &typst::text::Font| {
+        let ttf = font.ttf();
+        let upem: f64 = f64::from(ttf.units_per_em()).max(1.0);
+        ('0'..='9')
+            .filter_map(|digit| {
+                ttf.glyph_index(digit)
+                    .and_then(|glyph| ttf.glyph_hor_advance(glyph))
+            })
+            .map(|glyph_advance| f64::from(glyph_advance) / upem)
+            .fold(None, |widest: Option<f64>, advance_em: f64| {
+                Some(widest.map_or(advance_em, |width| width.max(advance_em)))
+            })
+    };
+    if let Some(font) =
+        super::font_subst::active_in_memory_font(family, typst::text::FontVariant::default())
+    {
+        return advance_for(&font);
+    }
+
     let cache = ADVANCE_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
     let key: String = family.to_lowercase();
     if let Some(cached) = cache
@@ -797,19 +890,7 @@ pub(crate) fn max_digit_advance_em(family: &str) -> Option<f64> {
         })
         .and_then(|index| data.fonts.get(index))
         .and_then(|slot| slot.get())
-        .and_then(|font| {
-            let ttf = font.ttf();
-            let upem: f64 = f64::from(ttf.units_per_em()).max(1.0);
-            ('0'..='9')
-                .filter_map(|digit| {
-                    ttf.glyph_index(digit)
-                        .and_then(|glyph| ttf.glyph_hor_advance(glyph))
-                })
-                .map(|glyph_advance| f64::from(glyph_advance) / upem)
-                .fold(None, |widest: Option<f64>, advance_em: f64| {
-                    Some(widest.map_or(advance_em, |w| w.max(advance_em)))
-                })
-        });
+        .and_then(|font| advance_for(&font));
     cache
         .lock()
         .expect("digit advance cache mutex should not be poisoned")
@@ -839,22 +920,28 @@ pub(crate) fn max_digit_advance_em(_family: &str) -> Option<f64> {
 /// when no face resolves or any character lacks a glyph, so the caller can
 /// degrade to a measurement-free path.
 ///
-/// Accepted limitation (shared behavior with `max_digit_advance_em`, whose
-/// resolution chain is identical): resolution sees only the system fonts
-/// plus the discovered Office font dirs —
-/// `ConvertOptions::font_paths` and fonts embedded in the document itself are
-/// not consulted, because the parser has no per-conversion font context to
-/// thread through. A family only such fonts provide simply fails to resolve
-/// here and the caller degrades to its measurement-free path, so the miss is
-/// conservative rather than wrong.
-/// TODO(issue #624): thread the per-conversion font set (options.font_paths +
-/// document-embedded faces) into these measurement helpers once one exists.
+/// Per-conversion in-memory faces are consulted before the process-wide cache.
+/// Native-only `ConvertOptions::font_paths` and materialized document-embedded
+/// directories are still not visible to parser-time measurements; a family
+/// only those paths provide degrades to the measurement-free path.
+/// TODO(issue #624): include native path-provided faces in these measurement
+/// helpers as well.
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn text_advance_em(family: &str, bold: bool, text: &str) -> Option<f64> {
     use std::collections::HashMap;
     use std::sync::Mutex;
     type ResolvedFaceCache = HashMap<(String, bool), Option<typst::text::Font>>;
     static FACE_CACHE: OnceLock<Mutex<ResolvedFaceCache>> = OnceLock::new();
+
+    let variant = typst::text::FontVariant {
+        weight: if bold {
+            typst::text::FontWeight::BOLD
+        } else {
+            typst::text::FontWeight::REGULAR
+        },
+        ..typst::text::FontVariant::default()
+    };
+    let active_font = super::font_subst::active_in_memory_font(family, variant);
 
     let cache = FACE_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
     let key: (String, bool) = (family.to_lowercase(), bold);
@@ -863,32 +950,28 @@ pub(crate) fn text_advance_em(family: &str, bold: bool, text: &str) -> Option<f6
         .expect("resolved face cache mutex should not be poisoned")
         .get(&key)
         .cloned();
-    let font: Option<typst::text::Font> = match cached_font {
-        Some(font) => font,
-        None => {
-            // Use the same font set the compiler will use (system + discovered
-            // Office font dirs); this also primes the compile-time cache.
-            let search_context = super::font_context::resolve_font_search_context(&[]);
-            let data = get_fonts_for_extra_paths(search_context.search_paths());
-            let variant = typst::text::FontVariant {
-                weight: if bold {
-                    typst::text::FontWeight::BOLD
-                } else {
-                    typst::text::FontWeight::REGULAR
-                },
-                ..typst::text::FontVariant::default()
-            };
-            let resolved: Option<typst::text::Font> = super::font_subst::family_candidates(family)
-                .iter()
-                .find_map(|candidate| data.book.select(&candidate.to_lowercase(), variant))
-                .and_then(|index| data.fonts.get(index))
-                .and_then(|slot| slot.get());
-            cache
-                .lock()
-                .expect("resolved face cache mutex should not be poisoned")
-                .insert(key, resolved.clone());
-            resolved
-        }
+    let font: Option<typst::text::Font> = match active_font {
+        Some(font) => Some(font),
+        None => match cached_font {
+            Some(font) => font,
+            None => {
+                // Use the same font set the compiler will use (system + discovered
+                // Office font dirs); this also primes the compile-time cache.
+                let search_context = super::font_context::resolve_font_search_context(&[]);
+                let data = get_fonts_for_extra_paths(search_context.search_paths());
+                let resolved: Option<typst::text::Font> =
+                    super::font_subst::family_candidates(family)
+                        .iter()
+                        .find_map(|candidate| data.book.select(&candidate.to_lowercase(), variant))
+                        .and_then(|index| data.fonts.get(index))
+                        .and_then(|slot| slot.get());
+                cache
+                    .lock()
+                    .expect("resolved face cache mutex should not be poisoned")
+                    .insert(key, resolved.clone());
+                resolved
+            }
+        },
     };
 
     let font: typst::text::Font = font?;
@@ -947,6 +1030,23 @@ pub(crate) fn powerpoint_line_box_em(family: &str) -> Option<(f64, f64)> {
     type LineBoxEm = Option<(f64, f64)>;
     static CACHE: OnceLock<Mutex<HashMap<String, LineBoxEm>>> = OnceLock::new();
 
+    let split_for = |font: &typst::text::Font| {
+        let ttf = font.ttf();
+        let upem = f64::from(ttf.units_per_em()).max(1.0);
+        let ascent = f64::from(ttf.ascender()).abs() / upem;
+        let descent = f64::from(ttf.descender()).abs() / upem;
+        (ascent > 0.0).then(|| {
+            let above = (POWERPOINT_LINE_HEIGHT_FACTOR + ascent - descent) / 2.0;
+            let above = above.clamp(0.0, POWERPOINT_LINE_HEIGHT_FACTOR);
+            (above, POWERPOINT_LINE_HEIGHT_FACTOR - above)
+        })
+    };
+    if let Some(font) =
+        super::font_subst::active_in_memory_font(family, typst::text::FontVariant::default())
+    {
+        return split_for(&font);
+    }
+
     let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
     let key: String = family.to_lowercase();
     if let Some(cached) = cache
@@ -965,20 +1065,12 @@ pub(crate) fn powerpoint_line_box_em(family: &str) -> Option<(f64, f64)> {
     let split: Option<(f64, f64)> = best_face(family)
         .or_else(|| best_face(crate::defaults::TYPST_DEFAULT_FONT_FAMILY))
         .and_then(|font| {
-            let ttf = font.ttf();
-            let upem = f64::from(ttf.units_per_em()).max(1.0);
-            let ascent = f64::from(ttf.ascender()).abs() / upem;
-            let descent = f64::from(ttf.descender()).abs() / upem;
-            (ascent > 0.0).then(|| {
-                // The glyphs occupy `ascent + descent`; whatever the 1.2em line
-                // has left over is the extra leading, and PowerPoint puts half
-                // of it above the glyphs and half below. So the baseline sits
-                // `ascent + (1.2 - ascent - descent) / 2` below the top, which
-                // is the expression below.
-                let above = (POWERPOINT_LINE_HEIGHT_FACTOR + ascent - descent) / 2.0;
-                let above = above.clamp(0.0, POWERPOINT_LINE_HEIGHT_FACTOR);
-                (above, POWERPOINT_LINE_HEIGHT_FACTOR - above)
-            })
+            // The glyphs occupy `ascent + descent`; whatever the 1.2em line
+            // has left over is the extra leading, and PowerPoint puts half
+            // of it above the glyphs and half below. So the baseline sits
+            // `ascent + (1.2 - ascent - descent) / 2` below the top, which
+            // is the expression below.
+            split_for(&font)
         });
     cache
         .lock()
