@@ -290,13 +290,14 @@ fn common_list_level_spacing(
     level: u32,
     wrapper_spans_full_line: bool,
 ) -> Option<f64> {
-    let level_items = items
-        .iter()
-        .filter(|item| item.level == level)
-        .collect::<Vec<_>>();
-    let mut boundaries = level_items
+    // A nested group is a real document boundary. Filtering the items first
+    // paired root items on opposite sides of that group, so an accidental
+    // match could hoist a synthetic gap and suppress every real per-item gap
+    // in the outline (issue #659).
+    let mut boundaries = items
         .windows(2)
-        .map(|pair| list_boundary_spacing(pair[0], pair[1], wrapper_spans_full_line));
+        .filter(|pair| pair[0].level == level && pair[1].level == level)
+        .map(|pair| list_boundary_spacing(&pair[0], &pair[1], wrapper_spans_full_line));
     let first = boundaries.next()??;
 
     (first > 0.0001
@@ -384,7 +385,16 @@ pub(super) fn generate_list_with_spacing_model(
     let style = list_style_for_level(list, root_level);
     let fallback_marker_style = common_list_level_text_style(&list.items, root_level);
     let indent = common_list_level_indent(&list.items, root_level);
-    let spacing_pt = common_list_level_spacing(&list.items, root_level, wrapper_spans_full_line);
+    // Typst applies one root `spacing:` after every complete root item. In a
+    // PowerPoint outline that item can end in a nested child, whose own
+    // a:spcAft is the real boundary gap. Even one adjacent root pair is not
+    // enough evidence to hoist a value across those different boundaries.
+    let has_nested_items = list.items.iter().any(|item| item.level > root_level);
+    let spacing_pt = if per_item_gaps && has_nested_items {
+        None
+    } else {
+        common_list_level_spacing(&list.items, root_level, wrapper_spans_full_line)
+    };
     let (space_before, space_after) = list_edge_spacing(list, root_level, wrapper_spans_full_line);
     let line_box = common_list_line_box(list);
     let start_at = list.items.first().and_then(|item| item.start_at);
@@ -1445,7 +1455,6 @@ fn generate_list_items(
         }
         out.push('[');
         write_list_item_content(out, item, eojeol_wrap);
-        write_list_item_trailing_gap(out, item, has_uniform_spacing, wrapper_spans_full_line);
 
         if item.level == base_level {
             let nested_start = i + 1;
@@ -1455,6 +1464,17 @@ fn generate_list_items(
             }
 
             if nested_end > nested_start {
+                let nested_gap = (per_item_gaps && wrapper_spans_full_line)
+                    .then(|| paragraph_space_after(item))
+                    .filter(|gap| *gap > 0.0001);
+                if nested_gap.is_none() {
+                    write_list_item_trailing_gap(
+                        out,
+                        item,
+                        has_uniform_spacing,
+                        wrapper_spans_full_line,
+                    );
+                }
                 let nested_style = list_style_for_level(list, base_level + 1);
                 let fallback_marker_style =
                     common_list_level_text_style(&items[nested_start..nested_end], base_level + 1);
@@ -1474,15 +1494,30 @@ fn generate_list_items(
                             child
                         },
                     );
-                let spacing_pt = common_list_level_spacing(
-                    &items[nested_start..nested_end],
-                    base_level + 1,
-                    wrapper_spans_full_line,
-                );
+                // PowerPoint's a:spcAft belongs to the item that declares it.
+                // A shared nested `spacing:` cannot carry the last child's
+                // gap across the return to its parent level, so retain every
+                // child gap on that path (issue #659).
+                let spacing_pt = if per_item_gaps {
+                    None
+                } else {
+                    common_list_level_spacing(
+                        &items[nested_start..nested_end],
+                        base_level + 1,
+                        wrapper_spans_full_line,
+                    )
+                };
                 let nested_start_at = items[nested_start].start_at;
+                if let Some(gap) = nested_gap {
+                    // `#v` immediately after inline parent text creates a new
+                    // line of its own before the nested list. Block spacing
+                    // adds only the declared PowerPoint gap to the normal
+                    // parent-to-child line advance (issue #659).
+                    let _ = writeln!(out, " #block(width: 100%, above: {}pt)[", format_f64(gap));
+                }
                 write_list_open(
                     out,
-                    " #",
+                    if nested_gap.is_some() { "#" } else { " #" },
                     &nested_style,
                     fallback_marker_style.as_ref(),
                     indent,
@@ -1500,11 +1535,21 @@ fn generate_list_items(
                     eojeol_wrap,
                 )?;
                 out.push(')');
+                if nested_gap.is_some() {
+                    out.push_str("\n]");
+                }
                 i = nested_end;
             } else {
+                write_list_item_trailing_gap(
+                    out,
+                    item,
+                    has_uniform_spacing,
+                    wrapper_spans_full_line,
+                );
                 i += 1;
             }
         } else {
+            write_list_item_trailing_gap(out, item, has_uniform_spacing, wrapper_spans_full_line);
             i += 1;
         }
 

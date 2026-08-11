@@ -1020,6 +1020,111 @@ fn slide_bullet_list_source(gaps: &[f64]) -> String {
     generate_typst(&doc).unwrap().source
 }
 
+/// A slide outline with the same root/child shape and alternating paragraph
+/// spacing as `04_training_deck_ko` page 2 (issue #659).
+#[cfg(not(target_arch = "wasm32"))]
+fn nested_slide_bullet_list(gaps: &[f64], levels: &[u32]) -> List {
+    assert_eq!(gaps.len(), levels.len());
+    let items = gaps
+        .iter()
+        .zip(levels)
+        .enumerate()
+        .map(|(index, (gap, level))| ListItem {
+            content: vec![Paragraph {
+                style: ParagraphStyle {
+                    space_after: Some(*gap),
+                    ..ParagraphStyle::default()
+                },
+                runs: vec![Run {
+                    text: format!("OutlineItem{index}"),
+                    style: TextStyle {
+                        font_family: Some("Liberation Sans".to_string()),
+                        font_size: Some(17.0),
+                        ..TextStyle::default()
+                    },
+                    href: None,
+                    footnote: None,
+                }],
+            }],
+            level: *level,
+            start_at: None,
+        })
+        .collect();
+    List {
+        kind: ListKind::Unordered,
+        items,
+        level_styles: BTreeMap::new(),
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn nested_slide_item_pitches(gaps: &[f64], levels: &[u32]) -> Vec<f64> {
+    let list = nested_slide_bullet_list(gaps, levels);
+    let doc = make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![make_fixed_text_box(
+            50.0,
+            50.0,
+            600.0,
+            400.0,
+            Insets::default(),
+            crate::ir::TextBoxVerticalAlign::Top,
+            vec![Block::List(list)],
+        )],
+    )]);
+    let source = generate_typst(&doc).unwrap().source;
+    let baselines: Vec<f64> = crate::render::pdf::compiled_text_runs(&source, 0)
+        .unwrap_or_else(|error| panic!("compile failed: {error}\n{source}"))
+        .into_iter()
+        .filter(|run| run.text.contains("OutlineItem"))
+        .map(|run| run.baseline_pt)
+        .collect();
+    assert_eq!(
+        baselines.len(),
+        gaps.len(),
+        "all outline items compile: {source}"
+    );
+
+    baselines.windows(2).map(|pair| pair[1] - pair[0]).collect()
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn nested_slide_items_keep_their_paragraph_gaps_across_level_changes() {
+    let pitches = nested_slide_item_pitches(
+        &[6.0, 10.0, 6.0, 6.0, 10.0, 6.0, 0.0],
+        &[0, 1, 0, 1, 1, 0, 1],
+    );
+
+    let expected = [26.4, 30.4, 26.4, 26.4, 30.4, 26.4];
+    for (index, (actual, expected)) in pitches.iter().zip(expected).enumerate() {
+        assert!(
+            (actual - expected).abs() < 0.05,
+            "boundary {index} must be one 20.4pt PowerPoint line plus the previous paragraph's gap: expected {expected}pt, got {actual}pt; all pitches {pitches:?}"
+        );
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_nested_slide_never_hoists_spacing_from_only_its_adjacent_root_items() {
+    // `list(spacing:)` applies after every root item, including one whose last
+    // paragraph is a nested child. Seeing the first root-to-root 6pt boundary
+    // must not hoist 6pt across the later child-to-root 10pt boundary.
+    let pitches = nested_slide_item_pitches(
+        &[6.0, 6.0, 10.0, 0.0, 0.0, 0.0, 0.0],
+        &[0, 0, 1, 0, 1, 0, 1],
+    );
+    let expected = [26.4, 26.4, 30.4, 20.4, 20.4, 20.4];
+    for (index, (actual, expected)) in pitches.iter().zip(expected).enumerate() {
+        assert!(
+            (actual - expected).abs() < 0.05,
+            "boundary {index} must use the preceding document paragraph's gap: expected {expected}pt, got {actual}pt; all pitches {pitches:?}"
+        );
+    }
+}
+
 #[test]
 fn slide_list_items_keep_their_own_gaps_when_they_differ() {
     // `list(spacing:)` carries one value for the whole level, so a list whose
