@@ -22,6 +22,45 @@ const EAST_ASIAN_AUTO_SPACE_CHAR: char = '\u{E001}';
 /// size. Measured as exactly a quarter em on a native export at two sizes.
 const EAST_ASIAN_AUTO_SPACE_EM: f64 = 0.25;
 
+/// PowerPoint snaps nominal glyph advances to this grid before accumulating
+/// them into a line. Typst keeps the font's exact fractional advances, so the
+/// sub-point error otherwise compounds across long slide lines (issue #661).
+const POWERPOINT_ADVANCE_GRID_PT: f64 = 0.125;
+
+/// Emit the contextual Typst helpers used by fixed-page (PowerPoint) text.
+///
+/// A word stays one shaped item, preserving its kerning, ligatures, and PDF
+/// text mapping. Only its horizontal scale and layout width change by the
+/// difference between exact and independently grid-rounded nominal glyph
+/// widths. Pair kerning therefore remains part of the shaped word instead of
+/// being lost to one-box-per-glyph output. Spaces remain real text characters
+/// and carry a weak correction, so they keep both extraction and line-break
+/// behavior. The word box measures and restores the active text edge below
+/// the baseline, so it occupies the same line box as unboxed text and cannot
+/// disturb vertical centring.
+pub(super) fn write_powerpoint_advance_grid_helpers(out: &mut String) {
+    let _ = writeln!(
+        out,
+        r#"#let o2p-pptx-advance-grid = {POWERPOINT_ADVANCE_GRID_PT}pt
+#let o2p-pptx-word(body, glyphs) = context {{
+  let natural = measure(body).width
+  let nominal = glyphs.map(glyph => measure(glyph).width).sum()
+  let snapped = glyphs.map(glyph => calc.round(measure(glyph).width / o2p-pptx-advance-grid) * o2p-pptx-advance-grid).sum()
+  let target = natural + snapped - nominal
+  let baseline-body = text(bottom-edge: "baseline", body)
+  let seat = measure(body).height - measure(baseline-body).height
+  if natural == 0pt {{ body }} else {{
+    box(inset: (bottom: seat), baseline: seat)[#text(bottom-edge: "baseline")[#scale(x: target / natural * 100%, origin: left, body)]] + h(target - natural)
+  }}
+}}
+#let o2p-pptx-space() = context {{
+  let natural = measure(" ").width
+  let target = calc.round(natural / o2p-pptx-advance-grid) * o2p-pptx-advance-grid
+  [#" "; #h(target - natural, weak: true)]
+}}"#
+    );
+}
+
 /// The auto space sized against the *run*, not the paragraph. It is emitted
 /// between the run's `#text(size:)` calls rather than inside one, so an `em`
 /// there would resolve against the paragraph's default size instead — 11pt
@@ -2215,12 +2254,91 @@ fn write_run_segment(
         Some(units) => {
             write_synthetic_oblique_content(out, style, &source, &units, opens_line, seat_bottom_pt)
         }
+        None if powerpoint_advance_grid_is_active() && can_snap_powerpoint_run(&source) => {
+            write_powerpoint_grid_run_content(out, &source, &escaped, style)
+        }
         None => write_run_content(out, &escaped, style),
     }
 
     for _ in &wrappers {
         out.push(']');
     }
+}
+
+/// Whether this run can take the PowerPoint advance-grid treatment without
+/// changing its native break rules.
+///
+/// PowerPoint's Latin runs break at spaces and ASCII hyphens, both modelled by
+/// [`write_powerpoint_grid_run_content`]. Common Latin punctuation is safe to
+/// shape inside the same words. CJK, bidi, and other Unicode scripts keep their
+/// existing Typst shaping and line breaking until the helper can preserve
+/// their script-specific opportunities just as precisely.
+fn can_snap_powerpoint_run(text: &str) -> bool {
+    !text.is_empty()
+        && text.chars().all(|ch| {
+            ch == ' '
+                || (ch.is_ascii_graphic() && ch != '\u{7f}')
+                || matches!(
+                    ch,
+                    '\u{2010}'..='\u{2015}' | '\u{2018}'..='\u{201f}' | '\u{2026}'
+                )
+        })
+}
+
+/// Write one Latin slide run on PowerPoint's 1/8pt advance grid.
+///
+/// Words are shaped whole and scaled only by the accumulated nominal rounding
+/// delta. That retains pair kerning and ligatures; a per-glyph box would lose
+/// both and fragment the PDF text layer. A zero-size box restores the native
+/// break opportunity after a hyphen without adding a character to extraction.
+fn write_powerpoint_grid_run_content(
+    out: &mut String,
+    source: &str,
+    escaped: &str,
+    style: &TextStyle,
+) {
+    let wrapped = has_text_properties(style) || needs_kerning_wrapper(style, escaped);
+    if wrapped {
+        out.push_str("#text(");
+        write_text_params_for_text(out, style, escaped);
+        out.push_str(")[");
+    }
+
+    let mut token_start = 0;
+    for (offset, ch) in source.char_indices() {
+        match ch {
+            ' ' => {
+                write_powerpoint_grid_word(out, &source[token_start..offset]);
+                out.push_str("#o2p-pptx-space()");
+                token_start = offset + ch.len_utf8();
+            }
+            '-' => {
+                let end = offset + ch.len_utf8();
+                write_powerpoint_grid_word(out, &source[token_start..end]);
+                if end < source.len() {
+                    out.push_str("#box[]");
+                }
+                token_start = end;
+            }
+            _ => {}
+        }
+    }
+    write_powerpoint_grid_word(out, &source[token_start..]);
+
+    if wrapped {
+        out.push(']');
+    }
+}
+
+fn write_powerpoint_grid_word(out: &mut String, word: &str) {
+    if word.is_empty() {
+        return;
+    }
+    let _ = write!(out, "#o2p-pptx-word([{}], (", escape_typst(word));
+    for glyph in word.chars() {
+        let _ = write!(out, "\"{}\",", escape_typst_string(&glyph.to_string()));
+    }
+    out.push_str("))");
 }
 
 /// The shear Word and PowerPoint apply to a run marked italic whose resolved
@@ -2668,6 +2786,27 @@ thread_local! {
     /// Whether the document being generated is one the `kern` feature may not
     /// be switched off in. See [`with_rtl_shaping_exemption`].
     static RTL_SHAPING_EXEMPTION: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Whether run emission is currently inside a fixed PowerPoint page and
+    /// should use the 1/8pt nominal-advance grid (issue #661).
+    static POWERPOINT_ADVANCE_GRID: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Run `operation` with PowerPoint advance snapping in the requested state,
+/// restoring the enclosing state even when generation panics.
+pub(super) fn with_powerpoint_advance_grid<T>(active: bool, operation: impl FnOnce() -> T) -> T {
+    POWERPOINT_ADVANCE_GRID.with(|grid| {
+        let previous = grid.replace(active);
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(operation));
+        grid.set(previous);
+        match result {
+            Ok(value) => value,
+            Err(panic) => std::panic::resume_unwind(panic),
+        }
+    })
+}
+
+fn powerpoint_advance_grid_is_active() -> bool {
+    POWERPOINT_ADVANCE_GRID.with(std::cell::Cell::get)
 }
 
 /// Run `operation` with the RTL kerning exemption in the given state, then

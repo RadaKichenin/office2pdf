@@ -1,5 +1,16 @@
 use super::*;
 
+fn assert_powerpoint_grid_words_in_order(source: &str, words: &[&str]) {
+    let mut remainder = source;
+    for word in words {
+        let needle = format!("#o2p-pptx-word([{}]", escape_typst(word));
+        let offset = remainder
+            .find(&needle)
+            .unwrap_or_else(|| panic!("missing {needle:?} in:\n{source}"));
+        remainder = &remainder[offset + needle.len()..];
+    }
+}
+
 #[test]
 fn test_fixed_page_text_box() {
     let doc = make_doc(vec![make_fixed_page(
@@ -8,7 +19,7 @@ fn test_fixed_page_text_box() {
         vec![make_text_box(100.0, 200.0, 300.0, 50.0, "Slide Title")],
     )]);
     let output = generate_typst(&doc).unwrap();
-    assert!(output.source.contains("Slide Title"));
+    assert_powerpoint_grid_words_in_order(&output.source, &["Slide", "Title"]);
     assert!(output.source.contains("100pt"));
     assert!(output.source.contains("200pt"));
 }
@@ -100,13 +111,7 @@ fn test_fixed_page_text_box_multiple_paragraphs_preserve_breaks() {
         }],
     )]);
     let output = generate_typst(&doc).unwrap();
-    assert!(output.source.contains("First item"));
-    assert!(output.source.contains("Second item"));
-    assert!(
-        output.source.find("First item") < output.source.find("Second item"),
-        "paragraph order changed: {}",
-        output.source
-    );
+    assert_powerpoint_grid_words_in_order(&output.source, &["First", "item", "Second", "item"]);
     assert_eq!(
         output
             .source
@@ -199,15 +204,15 @@ fn test_fixed_page_text_box_ordered_list_preserves_textbox_styling() {
     )]);
     let output = generate_typst(&doc).unwrap();
     assert!(!output.source.contains("#enum("));
-    assert!(
-        output
-            .source
-            .contains("#text(size: 24pt)[1\\.]#text(size: 24pt)[ First item]")
+    assert_powerpoint_grid_words_in_order(
+        &output.source,
+        &["1.", "First", "item", "2.", "Second", "item"],
     );
-    assert!(
-        output
-            .source
-            .contains("#text(size: 24pt)[2\\.]#text(size: 24pt)[ Second item]")
+    assert_eq!(
+        output.source.matches("#text(size: 24pt)[").count(),
+        4,
+        "both markers and both item bodies retain their 24pt style: {}",
+        output.source
     );
     assert!(!output.source.contains("\\\n2. Second item"));
     // A slide list paces on PowerPoint's line box, scaled by the declared
@@ -532,7 +537,7 @@ fn test_fixed_page_text_box_compact_bulleted_list_uses_custom_marker_style() {
     assert!(!output.source.contains("Wingdings"));
     assert!(output.source.contains("➔"));
     assert!(output.source.contains("tab_advance_1"));
-    assert!(output.source.contains("Symbol bullet"));
+    assert_powerpoint_grid_words_in_order(&output.source, &["Symbol", "bullet"]);
 }
 
 #[test]
@@ -1179,6 +1184,7 @@ fn test_fixed_page_text_box_no_wrap_keeps_cjk_title_extractable() {
     );
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn test_fixed_page_text_box_no_wrap_keeps_latin_text_extractable() {
     let doc = make_doc(vec![make_fixed_page(
@@ -1219,10 +1225,15 @@ fn test_fixed_page_text_box_no_wrap_keeps_latin_text_extractable() {
         }],
     )]);
     let output = generate_typst(&doc).unwrap();
+    let extracted: String = crate::render::pdf::compiled_text_runs(&output.source, 0)
+        .unwrap_or_else(|error| panic!("compile failed: {error}\n{}", output.source))
+        .into_iter()
+        .map(|run| run.text)
+        .collect();
     assert!(
-        output.source.contains("Test text"),
-        "Expected plain Latin no-wrap text to remain extractable, got:\n{}",
-        output.source,
+        extracted.contains("Test text"),
+        "Expected plain Latin no-wrap text to remain extractable, got {extracted:?}:\n{}",
+        output.source
     );
     assert!(
         !output.source.contains('\u{2060}') && !output.source.contains('\u{00A0}'),
@@ -1795,9 +1806,26 @@ fn test_fixed_page_text_box_ordered_grid_normalizes_marker_spacing() {
         }],
     )]);
     let output = generate_typst(&doc).unwrap();
-    assert!(output.source.contains("#text(size: 20pt)[1\\. ]"));
-    assert!(output.source.contains("#text(size: 20pt)[2\\. ]"));
-    assert!(!output.source.contains("#text(size: 20pt)[ Alpha]"));
+    assert!(
+        output
+            .source
+            .contains("#text(size: 20pt)[#o2p-pptx-word([1\\.]"),
+        "the first marker keeps its 20pt style: {}",
+        output.source
+    );
+    assert!(
+        output
+            .source
+            .contains("#text(size: 20pt)[#o2p-pptx-word([2\\.]"),
+        "the second marker keeps its 20pt style: {}",
+        output.source
+    );
+    assert_eq!(
+        output.source.matches("#o2p-pptx-space()").count(),
+        2,
+        "each marker owns exactly one normalized trailing space: {}",
+        output.source
+    );
 }
 
 // ----- PowerPoint's line model (issue #513) -----
@@ -2075,6 +2103,90 @@ fn consecutive_slide_paragraphs_keep_powerpoints_full_line_advance() {
             );
         }
     }
+}
+
+/// PowerPoint rounds every nominal glyph advance to the nearest 1/8pt before
+/// it decides where a line ends. Ten 17pt Libertinus `o` glyphs are a stable,
+/// environment-free edge case: their exact Typst advances fit this box, while
+/// their PowerPoint-grid advances exceed it. The tenth word must therefore
+/// move to a second line (issue #661).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn slide_text_wraps_on_powerpoints_one_eighth_point_advance_grid() {
+    let family = "Libertinus Serif";
+    let font_size_pt = 17.0;
+    let word_advance_pt = crate::render::pdf::text_advance_em(family, false, "o")
+        .expect("the embedded Libertinus Serif face must resolve")
+        * font_size_pt;
+    let space_advance_pt = crate::render::pdf::text_advance_em(family, false, " ")
+        .expect("the embedded Libertinus Serif space must resolve")
+        * font_size_pt;
+    let quantize = |advance_pt: f64| (advance_pt * 8.0).round() / 8.0;
+    let exact_line_pt = 10.0 * word_advance_pt + 9.0 * space_advance_pt;
+    let grid_line_pt = 10.0 * quantize(word_advance_pt) + 9.0 * quantize(space_advance_pt);
+    assert!(
+        grid_line_pt > exact_line_pt + 0.25,
+        "probe must straddle the 1/8pt grid: exact={exact_line_pt}, grid={grid_line_pt}"
+    );
+
+    let doc = make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![make_fixed_text_box(
+            72.0,
+            72.0,
+            (exact_line_pt + grid_line_pt) / 2.0,
+            100.0,
+            Insets::default(),
+            crate::ir::TextBoxVerticalAlign::Center,
+            vec![Block::Paragraph(Paragraph {
+                style: ParagraphStyle::default(),
+                runs: vec![Run {
+                    text: "o o o o o o o o o o".to_string(),
+                    style: TextStyle {
+                        font_family: Some(family.to_string()),
+                        font_size: Some(font_size_pt),
+                        ..TextStyle::default()
+                    },
+                    href: None,
+                    footnote: None,
+                }],
+            })],
+        )],
+    )]);
+    let output = generate_typst(&doc).unwrap();
+    let mut baselines: Vec<f64> = crate::render::pdf::compiled_text_runs(&output.source, 0)
+        .unwrap_or_else(|error| panic!("compile failed: {error}\n{}", output.source))
+        .into_iter()
+        .filter(|run| run.text.contains('o'))
+        .map(|run| run.baseline_pt)
+        .collect();
+    baselines.sort_by(f64::total_cmp);
+    baselines.dedup_by(|left, right| (*left - *right).abs() < 0.01);
+
+    assert_eq!(
+        baselines.len(),
+        2,
+        "the grid-rounded tenth word should wrap: {baselines:?}\n{}",
+        output.source
+    );
+    let (top_em, bottom_em) = crate::render::pdf::powerpoint_line_box_em(family)
+        .expect("the embedded Libertinus Serif line metrics must resolve");
+    let line_height_pt = (top_em + bottom_em) * font_size_pt;
+    let expected_first_baseline_pt =
+        72.0 + (100.0 - 2.0 * line_height_pt) / 2.0 + top_em * font_size_pt;
+    assert!(
+        (baselines[0] - expected_first_baseline_pt).abs() < 0.01,
+        "advance-grid boxes must preserve the active line box during vertical centring: \
+         got {}, expected {expected_first_baseline_pt}; {baselines:?}\n{}",
+        baselines[0],
+        output.source
+    );
+    assert!(
+        (baselines[1] - baselines[0] - line_height_pt).abs() < 0.01,
+        "grid-rounded lines must retain PowerPoint's 1.2em advance: {baselines:?}\n{}",
+        output.source
+    );
 }
 
 /// A box barely one line tall does not scale its text unless the file asked
