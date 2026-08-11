@@ -442,6 +442,10 @@ fn test_boundary_band_thin_borders_emit_offset_overlays_not_strokes() {
         result.contains("inset: (top: 5.5pt, right: 5pt, bottom: 5.5pt, left: 5pt)"),
         "border layout inset must be unchanged: {result}"
     );
+    assert!(
+        !result.contains("#move("),
+        "Word's positive-axis content seat must not leak into Excel cells: {result}"
+    );
     // Thin band [B, B+1]: a 1pt line whose path is centred at B + 0.5. With
     // the default 5pt padding the top boundary sits at inset.top = 5.5pt above
     // the content box, so dy = -5.5 + 0.5 = -5. Runs extend 1pt past their end
@@ -728,6 +732,10 @@ fn test_unflagged_table_keeps_centred_strokes_byte_identically() {
         !result.contains("#place("),
         "unflagged solid borders must not paint overlays: {result}"
     );
+    assert!(
+        !result.contains("#move("),
+        "unflagged and PowerPoint tables must keep their content seat: {result}"
+    );
 }
 
 #[test]
@@ -774,6 +782,11 @@ fn test_word_bands_quantize_and_paint_on_the_positive_axis() {
             "#place(top + right, dx: 5.48pt, dy: -5.25pt, rect(width: 0.48pt, height: 20pt, fill: rgb(0, 0, 0), stroke: none))"
         ),
         "the right band must start at the boundary and paint right: {result}"
+    );
+    assert!(
+        result.contains("#move(dx: 0.24pt, dy: 0.48pt)[Word]"),
+        "Word seats cell content half a painted left border inward and one \
+         painted top border down without changing row or column layout: {result}"
     );
 }
 
@@ -881,9 +894,10 @@ fn test_word_repeating_header_boundary_starts_inside_the_body_row() {
 
     assert!(
         result.contains(
-            "#place(top + left, dx: -5pt, dy: -5.25pt, rect(width: 100% + 10pt, height: 0.48pt, fill: rgb(0, 0, 0), stroke: none))Body"
+            "#place(top + left, dx: -5pt, dy: -5.25pt, rect(width: 100% + 10pt, height: 0.48pt, fill: rgb(0, 0, 0), stroke: none))#move(dx: 0pt, dy: 0.48pt)[Body]"
         ),
-        "the Word body row must own the repeated-header boundary: {result}"
+        "the Word body row must own the repeated-header boundary and seat its \
+         content below that band: {result}"
     );
     assert!(
         !result.contains("#place(bottom + left"),
