@@ -1,13 +1,11 @@
 //! Extract and deobfuscate embedded fonts from PPTX/DOCX archives.
 //!
-//! OOXML files can embed fonts as obfuscated binary data. This module extracts
-//! them, deobfuscates using the GUID-based XOR scheme, and writes them to a
-//! temporary directory for use during PDF compilation.
+//! OOXML files can embed fonts as obfuscated binary data. Archive parsing and
+//! deobfuscation stay in memory on every target. Native conversion materializes
+//! the faces in a temporary directory for `FontSearcher`, while WASM passes the
+//! same bytes directly to Typst.
 
-// Font discovery/embedding is native-only; on wasm32 these items are
-// compiled but unreachable (visibility sealing exposed them to dead_code).
-#![cfg_attr(target_arch = "wasm32", allow(dead_code))]
-
+use std::io::Read;
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::{Path, PathBuf};
 
@@ -71,6 +69,27 @@ struct DocxFontVariantRef {
     font_key: String,
 }
 
+/// One deobfuscated face carried by an OOXML document.
+#[derive(Debug)]
+struct EmbeddedFontFace {
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    filename: String,
+    data: Vec<u8>,
+}
+
+/// Deobfuscated document font faces, kept in memory for target-independent use.
+#[derive(Debug)]
+pub(crate) struct EmbeddedFontData {
+    faces: Vec<EmbeddedFontFace>,
+}
+
+impl EmbeddedFontData {
+    #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+    pub(crate) fn font_bytes(&self) -> impl Iterator<Item = &[u8]> {
+        self.faces.iter().map(|face| face.data.as_slice())
+    }
+}
+
 /// Temporary directory containing extracted font files.
 /// Cleaned up automatically when dropped.
 #[cfg(not(target_arch = "wasm32"))]
@@ -101,35 +120,71 @@ impl Drop for EmbeddedFontDir {
 // Public API
 // =============================================================================
 
-/// Extract embedded fonts from an OOXML archive.
+/// Extract and deobfuscate embedded fonts from an OOXML archive in memory.
 ///
 /// Returns `None` if:
 /// - The format doesn't support embedded fonts (XLSX)
 /// - No embedded fonts are declared in the document
 /// - The ZIP cannot be opened
 /// - Extraction fails silently (best-effort)
+pub(crate) fn extract_embedded_font_data(
+    data: &[u8],
+    format: crate::config::Format,
+) -> Option<EmbeddedFontData> {
+    use crate::config::Format;
+
+    let result = match format {
+        Format::Pptx => extract_pptx_font_data(data),
+        Format::Docx => extract_docx_font_data(data),
+        Format::Xlsx => None,
+    };
+
+    if let Some(ref fonts) = result {
+        tracing::info!(
+            font_count = fonts.faces.len(),
+            "extracted embedded font data from archive"
+        );
+    }
+
+    result
+}
+
+/// Extract embedded fonts and materialize them for native font discovery.
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn extract_embedded_fonts(
     data: &[u8],
     format: crate::config::Format,
 ) -> Option<EmbeddedFontDir> {
-    use crate::config::Format;
-
-    let result = match format {
-        Format::Pptx => extract_pptx_fonts(data),
-        Format::Docx => extract_docx_fonts(data),
-        Format::Xlsx => None,
+    let fonts = extract_embedded_font_data(data, format)?;
+    let prefix = match format {
+        crate::config::Format::Pptx => "office2pdf-pptx-fonts",
+        crate::config::Format::Docx => "office2pdf-docx-fonts",
+        crate::config::Format::Xlsx => return None,
     };
+    let temp_dir = create_temp_font_dir(prefix)?;
+    let mut font_count = 0;
 
-    if let Some(ref dir) = result {
-        tracing::info!(
-            font_count = dir.font_count,
-            path = ?dir.path,
-            "extracted embedded fonts from archive"
-        );
+    for face in fonts.faces {
+        if std::fs::write(temp_dir.join(face.filename), face.data).is_ok() {
+            font_count += 1;
+        }
     }
 
-    result
+    if font_count == 0 {
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        return None;
+    }
+
+    tracing::info!(
+        font_count,
+        path = ?temp_dir,
+        "materialized embedded fonts from archive"
+    );
+
+    Some(EmbeddedFontDir {
+        path: temp_dir,
+        font_count,
+    })
 }
 
 // =============================================================================
@@ -271,10 +326,7 @@ fn extract_guid_from_font_path(path: &str) -> Option<String> {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-fn extract_pptx_fonts(data: &[u8]) -> Option<EmbeddedFontDir> {
-    use std::io::Read;
-
+fn extract_pptx_font_data(data: &[u8]) -> Option<EmbeddedFontData> {
     let mut archive = crate::parser::open_zip(data).ok()?;
 
     // Read presentation.xml
@@ -299,9 +351,7 @@ fn extract_pptx_fonts(data: &[u8]) -> Option<EmbeddedFontDir> {
     };
     let rels = crate::parser::xml_util::parse_rels_id_target(&rels_xml);
 
-    // Create temp dir
-    let temp_dir = create_temp_font_dir("office2pdf-pptx-fonts")?;
-    let mut font_count: usize = 0;
+    let mut faces = Vec::new();
 
     for entry in &font_entries {
         for variant in &entry.variants {
@@ -339,28 +389,20 @@ fn extract_pptx_fonts(data: &[u8]) -> Option<EmbeddedFontDir> {
             // Deobfuscate
             deobfuscate_font_data(&mut font_data, &key);
 
-            // Detect format and write
+            // Detect format and retain the deobfuscated bytes.
             let ext = detect_font_format(&font_data)
                 .map(|f| f.extension())
                 .unwrap_or("ttf");
 
             let filename = format!("{}-{}.{}", entry.typeface, variant.style, ext);
-            let out_path = temp_dir.join(&filename);
-            if std::fs::write(&out_path, &font_data).is_ok() {
-                font_count += 1;
-            }
+            faces.push(EmbeddedFontFace {
+                filename,
+                data: font_data,
+            });
         }
     }
 
-    if font_count == 0 {
-        let _ = std::fs::remove_dir_all(&temp_dir);
-        return None;
-    }
-
-    Some(EmbeddedFontDir {
-        path: temp_dir,
-        font_count,
-    })
+    (!faces.is_empty()).then_some(EmbeddedFontData { faces })
 }
 
 // =============================================================================
@@ -428,10 +470,7 @@ fn parse_docx_embedded_font_entries(xml: &str) -> Vec<DocxEmbeddedFontEntry> {
     entries
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-fn extract_docx_fonts(data: &[u8]) -> Option<EmbeddedFontDir> {
-    use std::io::Read;
-
+fn extract_docx_font_data(data: &[u8]) -> Option<EmbeddedFontData> {
     let mut archive = crate::parser::open_zip(data).ok()?;
 
     // Read word/fontTable.xml
@@ -456,8 +495,7 @@ fn extract_docx_fonts(data: &[u8]) -> Option<EmbeddedFontDir> {
     };
     let rels = crate::parser::xml_util::parse_rels_id_target(&rels_xml);
 
-    let temp_dir = create_temp_font_dir("office2pdf-docx-fonts")?;
-    let mut font_count: usize = 0;
+    let mut faces = Vec::new();
 
     for entry in &font_entries {
         for variant in &entry.variants {
@@ -492,28 +530,20 @@ fn extract_docx_fonts(data: &[u8]) -> Option<EmbeddedFontDir> {
             // Deobfuscate
             deobfuscate_font_data(&mut font_data, &key);
 
-            // Detect format and write
+            // Detect format and retain the deobfuscated bytes.
             let ext = detect_font_format(&font_data)
                 .map(|f| f.extension())
                 .unwrap_or("ttf");
 
             let filename = format!("{}-{}.{}", entry.font_name, variant.style, ext);
-            let out_path = temp_dir.join(&filename);
-            if std::fs::write(&out_path, &font_data).is_ok() {
-                font_count += 1;
-            }
+            faces.push(EmbeddedFontFace {
+                filename,
+                data: font_data,
+            });
         }
     }
 
-    if font_count == 0 {
-        let _ = std::fs::remove_dir_all(&temp_dir);
-        return None;
-    }
-
-    Some(EmbeddedFontDir {
-        path: temp_dir,
-        font_count,
-    })
+    (!faces.is_empty()).then_some(EmbeddedFontData { faces })
 }
 
 // =============================================================================

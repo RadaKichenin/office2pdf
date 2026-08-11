@@ -125,11 +125,17 @@ pub(super) fn convert_bytes(
     let total_start: Instant = Instant::now();
     let input_size_bytes = data.len() as u64;
 
-    // Extract embedded fonts before parsing (PPTX/DOCX only).
-    // The EmbeddedFontDir must live until after PDF compilation so Typst can
-    // discover the fonts via its search paths.
+    // Extract embedded fonts before parsing (PPTX/DOCX only). Native keeps the
+    // materialized directory alive through compilation; WASM keeps parsed
+    // faces in memory for its filesystem-free Typst world.
     #[cfg(not(target_arch = "wasm32"))]
     let embedded_font_dir = parser::embedded_fonts::extract_embedded_fonts(data, format);
+    #[cfg(target_arch = "wasm32")]
+    let embedded_font_data = parser::embedded_fonts::extract_embedded_font_data(data, format);
+    #[cfg(target_arch = "wasm32")]
+    let embedded_fonts = embedded_font_data.as_ref().map_or_else(Vec::new, |fonts| {
+        render::pdf::load_fonts_from_bytes(fonts.font_bytes())
+    });
 
     let parser: Box<dyn Parser> = match format {
         Format::Docx => Box::new(parser::docx::DocxParser),
@@ -155,6 +161,9 @@ pub(super) fn convert_bytes(
     #[cfg(not(target_arch = "wasm32"))]
     let font_context =
         resolve_font_context_with_embedded(&doc, options, embedded_font_dir.as_ref());
+    #[cfg(target_arch = "wasm32")]
+    let font_context = (!embedded_fonts.is_empty())
+        .then(|| render::font_context::resolve_font_search_context_from_fonts(&embedded_fonts));
 
     #[cfg(not(target_arch = "wasm32"))]
     if let Some(font_context) = font_context.as_ref() {
@@ -170,15 +179,27 @@ pub(super) fn convert_bytes(
     }
 
     #[cfg(target_arch = "wasm32")]
-    warnings.extend(
-        render::font_subst::detect_missing_font_fallbacks(&doc, &options.font_paths)
-            .into_iter()
-            .map(|(from, to)| ConvertWarning::FallbackUsed {
-                format: format_label(format).to_string(),
-                from,
-                to,
-            }),
-    );
+    if let Some(font_context) = font_context.as_ref() {
+        warnings.extend(
+            render::font_subst::detect_missing_font_fallbacks_with_context(&doc, font_context)
+                .into_iter()
+                .map(|(from, to)| ConvertWarning::FallbackUsed {
+                    format: format_label(format).to_string(),
+                    from,
+                    to,
+                }),
+        );
+    } else {
+        warnings.extend(
+            render::font_subst::detect_missing_font_fallbacks(&doc, &options.font_paths)
+                .into_iter()
+                .map(|(from, to)| ConvertWarning::FallbackUsed {
+                    format: format_label(format).to_string(),
+                    from,
+                    to,
+                }),
+        );
+    }
 
     let codegen_start: Instant = Instant::now();
     #[cfg(not(target_arch = "wasm32"))]
@@ -188,7 +209,14 @@ pub(super) fn convert_bytes(
         font_context.as_ref(),
     )?;
     #[cfg(target_arch = "wasm32")]
-    let output = render::typst_gen::generate_typst_with_options(&doc, options)?;
+    let output = match font_context.as_ref() {
+        Some(font_context) => render::typst_gen::generate_typst_with_options_and_font_context(
+            &doc,
+            options,
+            Some(font_context),
+        )?,
+        None => render::typst_gen::generate_typst_with_options(&doc, options)?,
+    };
     let codegen_duration = codegen_start.elapsed();
 
     let compile_start: Instant = Instant::now();
@@ -205,11 +233,11 @@ pub(super) fn convert_bytes(
         options.pdf_ua,
     )?;
     #[cfg(target_arch = "wasm32")]
-    let pdf = render::pdf::compile_to_pdf(
+    let pdf = render::pdf::compile_to_pdf_with_fonts(
         &output.source,
         &output.images,
         options.pdf_standard,
-        &options.font_paths,
+        &embedded_fonts,
         options.tagged,
         options.pdf_ua,
     )?;

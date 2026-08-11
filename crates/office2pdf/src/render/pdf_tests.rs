@@ -147,7 +147,7 @@ fn test_embedded_fonts_are_available() {
     // (Libertinus Serif, New Computer Modern, DejaVu Sans Mono)
     let world = MinimalWorld::new("", &[], &[]);
     assert!(
-        !world.font_source.fonts().is_empty(),
+        world.font_source.len() > 0,
         "MinimalWorld should have at least the embedded fallback fonts"
     );
 }
@@ -165,9 +165,9 @@ fn test_system_fonts_enabled() {
     };
     // At minimum, we should have the embedded fonts
     assert!(
-        world.font_source.fonts().len() >= embedded_only_count,
+        world.font_source.len() >= embedded_only_count,
         "System font discovery should not reduce available fonts: total {} vs embedded-only {}",
-        world.font_source.fonts().len(),
+        world.font_source.len(),
         embedded_only_count
     );
 }
@@ -290,7 +290,7 @@ fn test_embedded_only_world_produces_valid_pdf() {
     // This verifies that the embedded-only MinimalWorld can produce valid PDFs.
     let world = MinimalWorld::new_embedded_only("Hello from embedded-only world!", &[]);
     assert!(
-        !world.font_source.fonts().is_empty(),
+        world.font_source.len() > 0,
         "Embedded-only world should have fonts"
     );
 
@@ -312,7 +312,7 @@ fn test_embedded_only_world_has_fonts() {
         s.search().fonts.len()
     };
     assert_eq!(
-        world.font_source.fonts().len(),
+        world.font_source.len(),
         embedded_count,
         "Embedded-only world should have exactly the embedded fonts"
     );

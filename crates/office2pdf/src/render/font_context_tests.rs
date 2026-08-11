@@ -138,3 +138,24 @@ fn test_canonicalize_existing_dirs_skips_missing_paths() {
     assert_eq!(canonicalized.len(), 1);
     assert_eq!(canonicalized[0], fs::canonicalize(existing).unwrap());
 }
+
+#[test]
+fn test_in_memory_document_font_context_indexes_family_and_cjk_coverage() {
+    let docx = include_bytes!("../../../../tests/fixtures/docx/wasm_embedded_cjk.docx");
+    let embedded = crate::parser::embedded_fonts::extract_embedded_font_data(
+        docx,
+        crate::config::Format::Docx,
+    )
+    .expect("fixture should expose its embedded font bytes");
+    let fonts: Vec<typst::text::Font> = embedded
+        .font_bytes()
+        .flat_map(|data| typst::text::Font::iter(typst::foundations::Bytes::new(data.to_vec())))
+        .collect();
+
+    let context = resolve_font_search_context_from_fonts(&fonts);
+
+    assert!(context.has_family("Noto Sans SC"));
+    assert!(context.covers_script("Noto Sans SC", TextScript::Chinese));
+    assert_eq!(context.family_source_rank("Noto Sans SC"), 1);
+    assert!(context.search_paths().is_empty());
+}

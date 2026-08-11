@@ -137,6 +137,10 @@ const pdfBytes2 = convertToPdf(xlsxBytes, "xlsx");
 
 Available functions: `convertToPdf(data, format)`, `convertDocxToPdf(data)`, `convertPptxToPdf(data)`, `convertXlsxToPdf(data)`.
 
+Browser and Node.js builds use the bundled Typst fallback fonts and also honor
+font faces embedded inside DOCX and PPTX files. Filesystem font paths and
+caller-supplied font bytes are not supported by the WASM API.
+
 ## CLI Options
 
 | Flag | Description |
