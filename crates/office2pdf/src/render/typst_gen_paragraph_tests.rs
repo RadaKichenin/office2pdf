@@ -1077,6 +1077,212 @@ fn test_consecutive_paragraphs_each_advance_by_the_full_font_line() {
     );
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_mixed_font_line_uses_the_declared_runs_deeper_descent() {
+    let Some((arial_top_em, arial_bottom_em, _)) =
+        crate::render::pdf::font_line_metrics_em("Arial")
+    else {
+        return;
+    };
+    let Some((_courier_top_em, courier_bottom_em, _)) =
+        crate::render::pdf::font_line_metrics_em("Courier New")
+    else {
+        return;
+    };
+    let arial_size_pt: f64 = 10.5;
+    let courier_size_pt: f64 = 9.5;
+    let arial_bottom_pt: f64 = arial_bottom_em * arial_size_pt;
+    let courier_bottom_pt: f64 = courier_bottom_em * courier_size_pt;
+    if courier_bottom_pt <= arial_bottom_pt + 0.1 {
+        return;
+    }
+
+    let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
+        style: ParagraphStyle {
+            alignment: Some(Alignment::Justify),
+            ..ParagraphStyle::default()
+        },
+        runs: vec![
+            Run {
+                text: "Ensure the original fonts are installed, or pass ".to_string(),
+                style: TextStyle {
+                    font_family: Some("Arial".to_string()),
+                    font_size: Some(arial_size_pt),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            },
+            Run {
+                text: "--font-path".to_string(),
+                style: TextStyle {
+                    font_family: Some("Courier New".to_string()),
+                    font_size: Some(courier_size_pt),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            },
+            Run {
+                text: "\nfiles. Missing fonts fall back to substitutes.".to_string(),
+                style: TextStyle {
+                    font_family: Some("Arial".to_string()),
+                    font_size: Some(arial_size_pt),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            },
+        ],
+    })])]);
+    let output = generate_typst(&doc).unwrap();
+    let placed = crate::render::pdf::compiled_text_runs(&output.source, 0).unwrap();
+    let mixed_baseline_pt: f64 = placed
+        .iter()
+        .find(|run| run.text.contains("--font-path"))
+        .expect("the mixed-font line should contain the Courier run")
+        .baseline_pt;
+    let following_baseline_pt: f64 = placed
+        .iter()
+        .find(|run| run.text.contains("files."))
+        .expect("the hard break should start the following Arial line")
+        .baseline_pt;
+    let actual_advance_pt: f64 = following_baseline_pt - mixed_baseline_pt;
+    let expected_advance_pt: f64 =
+        arial_top_em * arial_size_pt + courier_bottom_pt.max(arial_bottom_pt);
+
+    assert!(
+        (actual_advance_pt - expected_advance_pt).abs() < 0.05,
+        "the next baseline should use Arial's ascent plus the deepest declared \
+         run descent: got {actual_advance_pt}pt, expected {expected_advance_pt}pt; \
+         placed={placed:?}\n{}",
+        output.source
+    );
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_mixed_font_line_uses_the_following_lines_taller_ascent() {
+    let Some((arial_top_em, _arial_bottom_em, _)) =
+        crate::render::pdf::font_line_metrics_em("Arial")
+    else {
+        return;
+    };
+    let Some((courier_top_em, courier_bottom_em, _)) =
+        crate::render::pdf::font_line_metrics_em("Courier New")
+    else {
+        return;
+    };
+    let arial_size_pt: f64 = 10.5;
+    let courier_size_pt: f64 = 9.5;
+    let arial_top_pt: f64 = arial_top_em * arial_size_pt;
+    let courier_top_pt: f64 = courier_top_em * courier_size_pt;
+    if arial_top_pt <= courier_top_pt + 0.1 {
+        return;
+    }
+
+    let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
+        style: ParagraphStyle::default(),
+        runs: vec![
+            Run {
+                text: "first Courier line".to_string(),
+                style: TextStyle {
+                    font_family: Some("Courier New".to_string()),
+                    font_size: Some(courier_size_pt),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            },
+            Run {
+                text: "\nsecond Courier run ".to_string(),
+                style: TextStyle {
+                    font_family: Some("Courier New".to_string()),
+                    font_size: Some(courier_size_pt),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            },
+            Run {
+                text: "with taller Arial ascent".to_string(),
+                style: TextStyle {
+                    font_family: Some("Arial".to_string()),
+                    font_size: Some(arial_size_pt),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            },
+        ],
+    })])]);
+    let output = generate_typst(&doc).unwrap();
+    let placed = crate::render::pdf::compiled_text_runs(&output.source, 0).unwrap();
+    let first_baseline_pt: f64 = placed
+        .iter()
+        .find(|run| run.text.contains("first Courier"))
+        .expect("the first Courier line should be present")
+        .baseline_pt;
+    let second_baseline_pt: f64 = placed
+        .iter()
+        .find(|run| run.text.contains("second Courier"))
+        .expect("the hard break should start the second line")
+        .baseline_pt;
+    let actual_advance_pt: f64 = second_baseline_pt - first_baseline_pt;
+    let expected_advance_pt: f64 =
+        courier_bottom_em * courier_size_pt + arial_top_pt.max(courier_top_pt);
+
+    assert!(
+        (actual_advance_pt - expected_advance_pt).abs() < 0.05,
+        "the next baseline should use the first line's Courier descent plus the \
+         tallest declared ascent on the following line: got {actual_advance_pt}pt, \
+         expected {expected_advance_pt}pt; placed={placed:?}\n{}",
+        output.source
+    );
+}
+
+#[test]
+fn uniform_font_runs_keep_only_the_paragraph_level_line_box() {
+    let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
+        style: ParagraphStyle::default(),
+        runs: vec![
+            Run {
+                text: "first Arial run ".to_string(),
+                style: TextStyle {
+                    font_family: Some("Arial".to_string()),
+                    font_size: Some(10.5),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            },
+            Run {
+                text: "second Arial run".to_string(),
+                style: TextStyle {
+                    font_family: Some("arial".to_string()),
+                    font_size: Some(9.5),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            },
+        ],
+    })])]);
+    let output = generate_typst(&doc).unwrap();
+
+    assert!(
+        output.source.contains("#set text(top-edge:"),
+        "the paragraph-level Word line box should still be present\n{}",
+        output.source
+    );
+    assert!(
+        !output.source.contains("#text(top-edge:"),
+        "same-family runs must not gain per-run line boxes\n{}",
+        output.source
+    );
+}
+
 /// A Typst-embedded font whose hhea line is taller than its typographic
 /// metric box, so the single-spacing advance is strictly larger than the
 /// metric box. Libertinus Serif - the default test font here - has no line

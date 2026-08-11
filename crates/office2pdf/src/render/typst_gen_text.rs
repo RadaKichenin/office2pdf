@@ -184,7 +184,7 @@ pub(super) fn generate_paragraph(
         })
         .flatten();
 
-    generate_runs_with_tabs(
+    generate_word_runs_with_tabs(
         out,
         &para.runs,
         style.tab_stops.as_deref(),
@@ -195,6 +195,8 @@ pub(super) fn generate_paragraph(
             line_box_em,
             available_measure_pt,
         ),
+        style,
+        line_grid_pitch,
     );
 
     if use_align {
@@ -310,6 +312,50 @@ pub(super) fn word_line_box_em(
     let pitch_em: f64 = metric_em + leading_em;
     let top_em: f64 = ascender_em + east_asian_ascent_excess_em(runs, metric_em);
     Some((top_em, pitch_em - top_em))
+}
+
+/// The Word line-box context applied to each declared font run in a mixed-face
+/// body paragraph.
+///
+/// The paragraph-level fixed edges remain the nominal face's edges, which is
+/// what prevents glyph fallback from inflating an otherwise uniform line
+/// (issue #398). When the paragraph deliberately names more than one metric
+/// family, however, Word takes the greatest ascent and descent among the runs
+/// that actually land on each line. Giving those runs their own numeric edges
+/// lets Typst perform that per-line maximum without consulting glyph fallback
+/// or imposing a paragraph-wide maximum on every line (issue #638).
+#[derive(Clone, Copy)]
+struct WordRunLineMetrics<'a> {
+    paragraph_style: &'a ParagraphStyle,
+    line_grid_pitch: Option<f64>,
+}
+
+impl<'a> WordRunLineMetrics<'a> {
+    fn for_mixed_declared_families(
+        runs: &[Run],
+        paragraph_style: &'a ParagraphStyle,
+        line_grid_pitch: Option<f64>,
+    ) -> Option<Self> {
+        let mut families = runs
+            .iter()
+            .filter(|run| run.footnote.is_none() && !run.text.is_empty())
+            .filter_map(|run| east_asian_aware_metric_family(std::slice::from_ref(run)));
+        let first_family: &str = families.next()?;
+        families
+            .any(|family| !family.eq_ignore_ascii_case(first_family))
+            .then_some(Self {
+                paragraph_style,
+                line_grid_pitch,
+            })
+    }
+
+    fn line_box_em(self, run: &Run) -> Option<(f64, f64)> {
+        word_line_box_em(
+            std::slice::from_ref(run),
+            self.paragraph_style,
+            self.line_grid_pitch,
+        )
+    }
 }
 
 /// Line-box settings for a slide's text: PowerPoint's flat 1.2em line, with
@@ -1103,8 +1149,47 @@ pub(super) fn generate_runs_with_tabs(
     default_tab_width_pt: f64,
     eojeol_wrap: EojeolWrap,
 ) {
+    generate_runs_with_tabs_and_metrics(
+        out,
+        runs,
+        tab_stops,
+        default_tab_width_pt,
+        eojeol_wrap,
+        None,
+    );
+}
+
+fn generate_word_runs_with_tabs(
+    out: &mut String,
+    runs: &[Run],
+    tab_stops: Option<&[TabStop]>,
+    default_tab_width_pt: f64,
+    eojeol_wrap: EojeolWrap,
+    style: &ParagraphStyle,
+    line_grid_pitch: Option<f64>,
+) {
+    let metrics: Option<WordRunLineMetrics<'_>> =
+        WordRunLineMetrics::for_mixed_declared_families(runs, style, line_grid_pitch);
+    generate_runs_with_tabs_and_metrics(
+        out,
+        runs,
+        tab_stops,
+        default_tab_width_pt,
+        eojeol_wrap,
+        metrics,
+    );
+}
+
+fn generate_runs_with_tabs_and_metrics(
+    out: &mut String,
+    runs: &[Run],
+    tab_stops: Option<&[TabStop]>,
+    default_tab_width_pt: f64,
+    eojeol_wrap: EojeolWrap,
+    word_line_metrics: Option<WordRunLineMetrics<'_>>,
+) {
     if !paragraph_contains_tabs(runs) {
-        generate_runs(out, runs, eojeol_wrap);
+        generate_runs_with_metrics(out, runs, eojeol_wrap, word_line_metrics);
         return;
     }
 
@@ -1113,7 +1198,7 @@ pub(super) fn generate_runs_with_tabs(
 
     for (index, segment) in segments.iter().enumerate() {
         let _ = write!(out, "  let tab_segment_{index} = [");
-        generate_runs(out, segment, eojeol_wrap);
+        generate_runs_with_metrics(out, segment, eojeol_wrap, word_line_metrics);
         out.push_str("]\n");
 
         if index == 0 {
@@ -1309,13 +1394,22 @@ pub(super) fn paragraph_eojeol_wrap(
 }
 
 pub(super) fn generate_runs(out: &mut String, runs: &[Run], eojeol_wrap: EojeolWrap) {
+    generate_runs_with_metrics(out, runs, eojeol_wrap, None);
+}
+
+fn generate_runs_with_metrics(
+    out: &mut String,
+    runs: &[Run],
+    eojeol_wrap: EojeolWrap,
+    word_line_metrics: Option<WordRunLineMetrics<'_>>,
+) {
     let EojeolWrap::Eojeol {
         line_box_em,
         measure_pt,
     } = eojeol_wrap
     else {
         for (index, run) in runs.iter().enumerate() {
-            generate_run_at(out, run, index == 0);
+            generate_run_at_with_metrics(out, run, index == 0, word_line_metrics);
         }
         return;
     };
@@ -1341,7 +1435,7 @@ pub(super) fn generate_runs(out: &mut String, runs: &[Run], eojeol_wrap: EojeolW
         } else {
             None
         };
-        write_eojeol_pieces(out, pieces, seat_bottom_pt);
+        write_eojeol_pieces(out, pieces, seat_bottom_pt, word_line_metrics);
         if *framed {
             write_eojeol_frame_close(out, line_box_em);
         }
@@ -1361,7 +1455,12 @@ struct EojeolPiece {
 }
 
 /// Emits pieces, re-joining every neighbouring pair cut from the same run.
-fn write_eojeol_pieces(out: &mut String, pieces: &[EojeolPiece], seat_bottom_pt: Option<f64>) {
+fn write_eojeol_pieces(
+    out: &mut String,
+    pieces: &[EojeolPiece],
+    seat_bottom_pt: Option<f64>,
+    word_line_metrics: Option<WordRunLineMetrics<'_>>,
+) {
     let mut pending: Option<(usize, Run)> = None;
     for piece in pieces {
         match pending {
@@ -1370,14 +1469,20 @@ fn write_eojeol_pieces(out: &mut String, pieces: &[EojeolPiece], seat_bottom_pt:
             }
             _ => {
                 if let Some((_, previous)) = pending.take() {
-                    generate_run_seated(out, &previous, false, seat_bottom_pt);
+                    generate_run_seated_with_metrics(
+                        out,
+                        &previous,
+                        false,
+                        seat_bottom_pt,
+                        word_line_metrics,
+                    );
                 }
                 pending = Some((piece.run_index, piece.run.clone()));
             }
         }
     }
     if let Some((_, previous)) = pending {
-        generate_run_seated(out, &previous, false, seat_bottom_pt);
+        generate_run_seated_with_metrics(out, &previous, false, seat_bottom_pt, word_line_metrics);
     }
 }
 
@@ -1956,6 +2061,15 @@ pub(super) fn generate_run_at(out: &mut String, run: &Run, opens_line: bool) {
     generate_run_seated(out, run, opens_line, None);
 }
 
+fn generate_run_at_with_metrics(
+    out: &mut String,
+    run: &Run,
+    opens_line: bool,
+    word_line_metrics: Option<WordRunLineMetrics<'_>>,
+) {
+    generate_run_seated_with_metrics(out, run, opens_line, None, word_line_metrics);
+}
+
 /// As [`generate_run_at`], plus the descent the run's line box carries below
 /// the baseline, in points, when the caller knows it.
 ///
@@ -1965,6 +2079,16 @@ pub(super) fn generate_run_at(out: &mut String, run: &Run, opens_line: bool) {
 /// wherever nothing outside it depends on that descent, which is every path
 /// but the eojeol frame's (issue #686).
 fn generate_run_seated(out: &mut String, run: &Run, opens_line: bool, seat_bottom_pt: Option<f64>) {
+    generate_run_seated_with_metrics(out, run, opens_line, seat_bottom_pt, None);
+}
+
+fn generate_run_seated_with_metrics(
+    out: &mut String,
+    run: &Run,
+    opens_line: bool,
+    seat_bottom_pt: Option<f64>,
+    word_line_metrics: Option<WordRunLineMetrics<'_>>,
+) {
     if let Some(ref content) = run.footnote {
         // The note's runs carry the style its `w:pStyle` and `w:rPr` resolved
         // to, so they emit through the ordinary run path rather than as a bare
@@ -1977,15 +2101,29 @@ fn generate_run_seated(out: &mut String, run: &Run, opens_line: bool, seat_botto
         return;
     }
 
+    let line_box_em: Option<(f64, f64)> =
+        word_line_metrics.and_then(|metrics| metrics.line_box_em(run));
+    if let Some((top_em, bottom_em)) = line_box_em {
+        let _ = write!(
+            out,
+            "#text(top-edge: {}em, bottom-edge: -{}em)[",
+            format_f64(top_em),
+            format_f64(bottom_em)
+        );
+    }
+
     if run.text.contains(PPTX_SOFT_LINE_BREAK_CHAR)
         || run.text.contains(HANGUL_KINSOKU_BREAK_CHAR)
         || run.text.contains(EAST_ASIAN_AUTO_SPACE_CHAR)
     {
         write_run_with_break_markers(out, run, opens_line, seat_bottom_pt);
-        return;
+    } else {
+        write_run_segment(out, run, &run.text, opens_line, seat_bottom_pt);
     }
 
-    write_run_segment(out, run, &run.text, opens_line, seat_bottom_pt);
+    if line_box_em.is_some() {
+        out.push(']');
+    }
 }
 
 /// Expands the PPTX in-text markers: a soft line break becomes
