@@ -167,6 +167,10 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: wasm-pack
+      # `cargo check` and `wasm-pack test` do not link the browser package
+      # documented in README.md, so keep that artifact buildable too.
+      - name: Build browser package
+        run: wasm-pack build crates/office2pdf --target web --features wasm
       # Runs the wasm integration tests in src/wasm.rs under Node, exercising
       # the wasm32 time paths (Instant/SystemTime) end-to-end so the issue #178
       # class of runtime panic cannot regress unnoticed.
