@@ -154,6 +154,40 @@ fn test_body_placeholder_inherits_master_body_style_levels() {
 }
 
 #[test]
+fn test_body_placeholder_inherits_master_paragraph_spacing_by_level() {
+    let body_style = concat!(
+        r#"<p:bodyStyle><a:lvl1pPr>"#,
+        r#"<a:spcBef><a:spcPts val="600"/></a:spcBef>"#,
+        r#"<a:spcAft><a:spcPts val="800"/></a:spcAft>"#,
+        r#"<a:defRPr sz="1800"/></a:lvl1pPr><a:lvl2pPr>"#,
+        r#"<a:spcBef><a:spcPts val="1000"/></a:spcBef>"#,
+        r#"<a:spcAft><a:spcPts val="1200"/></a:spcAft>"#,
+        r#"<a:defRPr sz="1400"/></a:lvl2pPr></p:bodyStyle>"#,
+    );
+    let paragraphs = format!(
+        "{}{}",
+        make_simple_paragraph("First level spacing"),
+        make_leveled_paragraph(1, "Second level spacing")
+    );
+    let slide = make_slide(&[make_plain_placeholder_sp(
+        r#"type="body" idx="2""#,
+        &paragraphs,
+    )]);
+    let layout = make_layout(&[]);
+    let master = make_master_with_tx_styles(body_style);
+    let data = build_test_pptx_with_layout_master(SLIDE_CX, SLIDE_CY, &slide, &layout, &master);
+
+    let doc = parse_document(&data);
+    let runs = collect_runs(&doc);
+    let first = run_for(&runs, "First level spacing");
+    let second = run_for(&runs, "Second level spacing");
+    assert_eq!(first.2.space_before, Some(6.0));
+    assert_eq!(first.2.space_after, Some(8.0));
+    assert_eq!(second.2.space_before, Some(10.0));
+    assert_eq!(second.2.space_after, Some(12.0));
+}
+
+#[test]
 fn test_footer_placeholder_inherits_master_other_style() {
     let other_style =
         r#"<p:otherStyle><a:lvl1pPr><a:defRPr sz="1200"/></a:lvl1pPr></p:otherStyle>"#;
@@ -189,6 +223,38 @@ fn test_layout_placeholder_list_style_overrides_master() {
     // Layout lstStyle wins over master titleStyle...
     assert_eq!(style.font_size, Some(30.0));
     assert_eq!(paragraph_style.alignment, Some(Alignment::Left));
+}
+
+#[test]
+fn test_layout_placeholder_paragraph_spacing_overrides_master() {
+    let layout_body = concat!(
+        r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="Content"/>"#,
+        r#"<p:cNvSpPr/><p:nvPr><p:ph type="body" idx="2"/></p:nvPr></p:nvSpPr>"#,
+        r#"<p:spPr/><p:txBody><a:bodyPr/><a:lstStyle><a:lvl1pPr>"#,
+        r#"<a:spcBef><a:spcPts val="400"/></a:spcBef>"#,
+        r#"<a:spcAft><a:spcPts val="0"/></a:spcAft>"#,
+        r#"<a:defRPr sz="1400"/></a:lvl1pPr></a:lstStyle>"#,
+        r#"<a:p><a:endParaRPr lang="en-US"/></a:p></p:txBody></p:sp>"#,
+    );
+    let master_body = concat!(
+        r#"<p:bodyStyle><a:lvl1pPr>"#,
+        r#"<a:spcBef><a:spcPts val="1000"/></a:spcBef>"#,
+        r#"<a:spcAft><a:spcPts val="1200"/></a:spcAft>"#,
+        r#"<a:defRPr sz="1600"/></a:lvl1pPr></p:bodyStyle>"#,
+    );
+    let slide = make_slide(&[make_plain_placeholder_sp(
+        r#"type="body" idx="2""#,
+        &make_simple_paragraph("Layout spacing"),
+    )]);
+    let layout = make_layout(&[layout_body.to_string()]);
+    let master = make_master_with_tx_styles(master_body);
+    let data = build_test_pptx_with_layout_master(SLIDE_CX, SLIDE_CY, &slide, &layout, &master);
+
+    let doc = parse_document(&data);
+    let runs = collect_runs(&doc);
+    let (_, _, paragraph_style) = run_for(&runs, "Layout spacing");
+    assert_eq!(paragraph_style.space_before, Some(4.0));
+    assert_eq!(paragraph_style.space_after, Some(0.0));
 }
 
 // ── Theme font resolution ────────────────────────────────────────────

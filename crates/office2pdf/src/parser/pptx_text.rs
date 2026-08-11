@@ -59,6 +59,12 @@ enum ParagraphTarget {
     Level(u32),
 }
 
+#[derive(Clone, Copy)]
+enum ParagraphSpacingTarget {
+    Before,
+    After,
+}
+
 impl ParagraphTarget {
     /// Return the numeric level (0 for `Default`).
     fn level(self) -> u32 {
@@ -76,6 +82,7 @@ struct ListStyleParseState {
     active_paragraph_target: Option<ParagraphTarget>,
     active_run_target: Option<ParagraphTarget>,
     is_in_line_spacing: bool,
+    paragraph_spacing_target: Option<ParagraphSpacingTarget>,
     is_in_tab_list: bool,
     is_in_run_fill: bool,
     is_in_bullet_fill: bool,
@@ -88,6 +95,7 @@ impl ListStyleParseState {
             active_paragraph_target: None,
             active_run_target: None,
             is_in_line_spacing: false,
+            paragraph_spacing_target: None,
             is_in_tab_list: false,
             is_in_run_fill: false,
             is_in_bullet_fill: false,
@@ -141,6 +149,23 @@ impl ListStyleParseState {
                 extract_pptx_line_spacing_pct(e, style);
             } else {
                 extract_pptx_line_spacing_pts(e, style);
+            }
+        }
+    }
+
+    fn handle_paragraph_spacing_points(&mut self, e: &quick_xml::events::BytesStart) {
+        let (Some(paragraph_target), Some(spacing_target)) =
+            (self.active_paragraph_target, self.paragraph_spacing_target)
+        else {
+            return;
+        };
+        let style: &mut ParagraphStyle = self.paragraph_style_mut(paragraph_target);
+        match spacing_target {
+            ParagraphSpacingTarget::Before => {
+                extract_pptx_space_points(e, &mut style.space_before);
+            }
+            ParagraphSpacingTarget::After => {
+                extract_pptx_space_points(e, &mut style.space_after);
             }
         }
     }
@@ -345,11 +370,13 @@ impl ListStyleParseState {
             b"defPPr" => {
                 self.active_paragraph_target = None;
                 self.is_in_line_spacing = false;
+                self.paragraph_spacing_target = None;
                 self.is_in_tab_list = false;
             }
             name if parse_pptx_list_style_level(name).is_some() => {
                 self.active_paragraph_target = None;
                 self.is_in_line_spacing = false;
+                self.paragraph_spacing_target = None;
                 self.is_in_tab_list = false;
             }
             b"defRPr" => {
@@ -364,6 +391,9 @@ impl ListStyleParseState {
             }
             b"lnSpc" if self.is_in_line_spacing => {
                 self.is_in_line_spacing = false;
+            }
+            b"spcBef" | b"spcAft" if self.paragraph_spacing_target.is_some() => {
+                self.paragraph_spacing_target = None;
             }
             b"tabLst" if self.is_in_tab_list => {
                 self.is_in_tab_list = false;
@@ -397,6 +427,12 @@ pub(super) fn parse_pptx_list_style(
                     b"lnSpc" if state.active_paragraph_target.is_some() => {
                         state.is_in_line_spacing = true;
                     }
+                    b"spcBef" if state.active_paragraph_target.is_some() => {
+                        state.paragraph_spacing_target = Some(ParagraphSpacingTarget::Before);
+                    }
+                    b"spcAft" if state.active_paragraph_target.is_some() => {
+                        state.paragraph_spacing_target = Some(ParagraphSpacingTarget::After);
+                    }
                     b"tabLst" if state.active_paragraph_target.is_some() => {
                         state.begin_tab_list();
                     }
@@ -408,6 +444,9 @@ pub(super) fn parse_pptx_list_style(
                     }
                     b"spcPts" if state.is_in_line_spacing => {
                         state.handle_line_spacing_element(e, false);
+                    }
+                    b"spcPts" if state.paragraph_spacing_target.is_some() => {
+                        state.handle_paragraph_spacing_points(e);
                     }
                     b"buClr" if state.active_paragraph_target.is_some() => {
                         state.is_in_bullet_fill = true;
@@ -451,6 +490,9 @@ pub(super) fn parse_pptx_list_style(
                     }
                     b"spcPts" if state.is_in_line_spacing => {
                         state.handle_line_spacing_element(e, false);
+                    }
+                    b"spcPts" if state.paragraph_spacing_target.is_some() => {
+                        state.handle_paragraph_spacing_points(e);
                     }
                     b"tabLst" if state.active_paragraph_target.is_some() => {
                         state.begin_tab_list();
