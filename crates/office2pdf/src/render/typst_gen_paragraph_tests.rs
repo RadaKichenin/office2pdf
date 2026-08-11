@@ -1625,6 +1625,7 @@ fn test_header_right_tab_stop_pushes_its_segment_to_the_margin() {
     // were declared, so the segment a right stop should have pushed to the
     // right margin sat beside the left one (issue #579).
     let doc = make_doc(vec![page_with_header(crate::ir::HeaderFooter {
+        shapes: Vec::new(),
         paragraphs: vec![running_head(
             &["office2pdf 기술 소개서", "본문"],
             vec![stop(465.3, TabAlignment::Right)],
@@ -1646,6 +1647,7 @@ fn test_header_right_tab_stop_pushes_its_segment_to_the_margin() {
 #[test]
 fn test_header_center_and_right_tab_stops_lay_out_three_segments() {
     let doc = make_doc(vec![page_with_header(crate::ir::HeaderFooter {
+        shapes: Vec::new(),
         paragraphs: vec![running_head(
             &["left", "middle", "right"],
             vec![
@@ -1668,6 +1670,7 @@ fn test_header_tab_without_a_matching_stop_keeps_the_plain_advance() {
     // Only the two running-head shapes are laid out; a header that tabs for
     // some other reason keeps the behaviour it had.
     let doc = make_doc(vec![page_with_header(crate::ir::HeaderFooter {
+        shapes: Vec::new(),
         paragraphs: vec![running_head(
             &["a", "b"],
             vec![stop(72.0, TabAlignment::Left)],

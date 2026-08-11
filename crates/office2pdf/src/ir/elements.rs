@@ -8,6 +8,23 @@ pub struct HeaderFooter {
     pub paragraphs: Vec<HeaderFooterParagraph>,
     /// Distance in points from the page edge, as specified by the section page margins.
     pub distance_from_edge: Option<f64>,
+    /// Anchored shapes the story draws, positioned against the page rather
+    /// than laid out in the story's flow. A header's decorative banner is one
+    /// of these and carries no text at all (issue #961).
+    pub shapes: Vec<HeaderFooterShape>,
+}
+
+/// A shape a header or footer story anchors to the page.
+#[derive(Debug, Clone)]
+pub struct HeaderFooterShape {
+    pub shape: Shape,
+    pub frame: HeaderFooterFrame,
+    /// On-page bounding-box size in points, from `wp:extent`.
+    pub width: f64,
+    pub height: f64,
+    /// `<wp:anchor behindDoc="1">` — drawn under the page's own content
+    /// instead of over it, which is where a decorative banner belongs.
+    pub behind_text: bool,
 }
 
 /// A paragraph within a header or footer.
