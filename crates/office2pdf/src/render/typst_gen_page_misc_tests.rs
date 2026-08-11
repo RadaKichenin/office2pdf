@@ -12,6 +12,7 @@ fn test_generate_flow_page_with_text_header() {
         margins: Margins::default(),
         content: vec![make_paragraph("Body text")],
         header: Some(HeaderFooter {
+            shapes: Vec::new(),
             distance_from_edge: None,
             paragraphs: vec![HeaderFooterParagraph {
                 style: ParagraphStyle::default(),
@@ -49,6 +50,7 @@ fn test_generate_flow_page_with_page_number_footer() {
         content: vec![make_paragraph("Body text")],
         header: None,
         footer: Some(HeaderFooter {
+            shapes: Vec::new(),
             distance_from_edge: Some(35.4),
             paragraphs: vec![HeaderFooterParagraph {
                 style: ParagraphStyle::default(),
@@ -96,6 +98,7 @@ fn test_generate_footer_with_compound_border_and_right_positioned_tab() {
         content: vec![make_paragraph("Body")],
         header: None,
         footer: Some(HeaderFooter {
+            shapes: Vec::new(),
             distance_from_edge: None,
             paragraphs: vec![HeaderFooterParagraph {
                 style: ParagraphStyle::default(),
@@ -159,6 +162,7 @@ fn test_generate_page_anchored_footer_frame_in_foreground() {
         content: vec![make_paragraph("Body")],
         header: None,
         footer: Some(HeaderFooter {
+            shapes: Vec::new(),
             distance_from_edge: None,
             paragraphs: vec![HeaderFooterParagraph {
                 style: ParagraphStyle::default(),
@@ -219,6 +223,7 @@ fn test_page_anchored_frame_page_number_compiles() {
         margins: Margins::default(),
         content: vec![make_paragraph("Body")],
         header: Some(HeaderFooter {
+            shapes: Vec::new(),
             distance_from_edge: None,
             paragraphs: vec![HeaderFooterParagraph {
                 style: ParagraphStyle::default(),
@@ -275,6 +280,7 @@ fn test_generate_flow_page_with_header_and_footer() {
         margins: Margins::default(),
         content: vec![make_paragraph("Body")],
         header: Some(HeaderFooter {
+            shapes: Vec::new(),
             distance_from_edge: None,
             paragraphs: vec![HeaderFooterParagraph {
                 style: ParagraphStyle::default(),
@@ -290,6 +296,7 @@ fn test_generate_flow_page_with_header_and_footer() {
             }],
         }),
         footer: Some(HeaderFooter {
+            shapes: Vec::new(),
             distance_from_edge: None,
             paragraphs: vec![HeaderFooterParagraph {
                 style: ParagraphStyle::default(),
@@ -611,6 +618,7 @@ fn test_table_page_with_header() {
         margins: Margins::default(),
         table: make_simple_table(vec![vec!["A"]]),
         header: Some(HeaderFooter {
+            shapes: Vec::new(),
             distance_from_edge: None,
             paragraphs: vec![HeaderFooterParagraph {
                 style: ParagraphStyle {
@@ -648,6 +656,7 @@ fn test_table_page_with_page_number_footer() {
         table: make_simple_table(vec![vec!["A"]]),
         header: None,
         footer: Some(HeaderFooter {
+            shapes: Vec::new(),
             distance_from_edge: None,
             paragraphs: vec![HeaderFooterParagraph {
                 style: ParagraphStyle {
@@ -918,6 +927,7 @@ fn test_generate_header_with_bottom_border_draws_rule_below_text() {
         margins: Margins::default(),
         content: vec![make_paragraph("Body")],
         header: Some(HeaderFooter {
+            shapes: Vec::new(),
             distance_from_edge: None,
             paragraphs: vec![HeaderFooterParagraph {
                 style: ParagraphStyle::default(),
@@ -1003,6 +1013,7 @@ fn a_right_aligned_header_does_not_drag_its_rule_left() {
         margins: Margins::default(),
         content: vec![make_paragraph("Body")],
         header: Some(HeaderFooter {
+            shapes: Vec::new(),
             distance_from_edge: None,
             paragraphs: vec![HeaderFooterParagraph {
                 style: right_aligned,
@@ -1060,6 +1071,7 @@ fn test_generate_header_with_top_and_bottom_borders_draws_both_rules() {
         margins: Margins::default(),
         content: vec![make_paragraph("Body")],
         header: Some(HeaderFooter {
+            shapes: Vec::new(),
             distance_from_edge: None,
             paragraphs: vec![HeaderFooterParagraph {
                 style: ParagraphStyle::default(),
@@ -1114,6 +1126,7 @@ fn test_flow_page_footer_is_pinned_to_the_word_edge_distance() {
         content: vec![make_paragraph("Body")],
         header: None,
         footer: Some(HeaderFooter {
+            shapes: Vec::new(),
             distance_from_edge: Some(35.4),
             paragraphs: vec![HeaderFooterParagraph {
                 style: ParagraphStyle::default(),
@@ -1174,6 +1187,7 @@ fn test_flow_page_footer_without_edge_distance_keeps_default_placement() {
         content: vec![make_paragraph("Body")],
         header: None,
         footer: Some(HeaderFooter {
+            shapes: Vec::new(),
             distance_from_edge: None,
             paragraphs: vec![HeaderFooterParagraph {
                 style: ParagraphStyle::default(),
@@ -1218,6 +1232,7 @@ fn test_flow_page_footer_distance_beyond_margin_falls_back() {
         content: vec![make_paragraph("Body")],
         header: None,
         footer: Some(HeaderFooter {
+            shapes: Vec::new(),
             distance_from_edge: Some(48.0),
             paragraphs: vec![HeaderFooterParagraph {
                 style: ParagraphStyle::default(),
@@ -1336,6 +1351,7 @@ fn test_generate_header_border_uses_declared_pbdr_space() {
         margins: Margins::default(),
         content: vec![make_paragraph("Body")],
         header: Some(HeaderFooter {
+            shapes: Vec::new(),
             distance_from_edge: None,
             paragraphs: vec![HeaderFooterParagraph {
                 style: ParagraphStyle::default(),
@@ -1395,6 +1411,7 @@ fn test_generate_header_border_without_space_keeps_hairline_gap() {
         margins: Margins::default(),
         content: vec![make_paragraph("Body")],
         header: Some(HeaderFooter {
+            shapes: Vec::new(),
             distance_from_edge: None,
             paragraphs: vec![HeaderFooterParagraph {
                 style: ParagraphStyle::default(),
@@ -1448,6 +1465,7 @@ fn test_flow_page_header_is_pinned_to_the_word_edge_distance() {
         },
         content: vec![make_paragraph("Body")],
         header: Some(HeaderFooter {
+            shapes: Vec::new(),
             distance_from_edge: Some(35.4),
             paragraphs: vec![HeaderFooterParagraph {
                 style: ParagraphStyle::default(),
@@ -1499,6 +1517,7 @@ fn test_flow_page_header_without_edge_distance_keeps_default_placement() {
         margins: Margins::default(),
         content: vec![make_paragraph("Body")],
         header: Some(HeaderFooter {
+            shapes: Vec::new(),
             distance_from_edge: None,
             paragraphs: vec![HeaderFooterParagraph {
                 style: ParagraphStyle::default(),
@@ -1560,6 +1579,7 @@ fn doc_with_header(
         },
         content: vec![make_paragraph("Body")],
         header: Some(HeaderFooter {
+            shapes: Vec::new(),
             distance_from_edge: header_distance_pt,
             paragraphs,
         }),
@@ -1938,6 +1958,7 @@ fn test_header_band_shift_leaves_the_footer_where_it_was() {
             content: vec![make_paragraph("Body")],
             header,
             footer: Some(HeaderFooter {
+                shapes: Vec::new(),
                 distance_from_edge: Some(35.4),
                 paragraphs: vec![footer_paragraph.clone()],
             }),
@@ -1950,6 +1971,7 @@ fn test_header_band_shift_leaves_the_footer_where_it_was() {
 
     let without_header = page(None);
     let with_header = page(Some(HeaderFooter {
+        shapes: Vec::new(),
         distance_from_edge: Some(35.4),
         paragraphs: vec![header_text_paragraph("Header", arial(8.0))],
     }));
@@ -2015,6 +2037,7 @@ fn test_page_number_field_uses_its_run_style() {
         content: vec![make_paragraph("Body")],
         header: None,
         footer: Some(HeaderFooter {
+            shapes: Vec::new(),
             distance_from_edge: None,
             paragraphs: vec![HeaderFooterParagraph {
                 style: ParagraphStyle::default(),
@@ -2072,6 +2095,7 @@ fn test_unstyled_page_number_field_stays_bare() {
         content: vec![make_paragraph("Body")],
         header: None,
         footer: Some(HeaderFooter {
+            shapes: Vec::new(),
             distance_from_edge: None,
             paragraphs: vec![HeaderFooterParagraph {
                 style: ParagraphStyle::default(),
@@ -2108,6 +2132,7 @@ fn test_section_page_numbering_updates_the_counter_and_its_numerals() {
         unreachable!()
     };
     flow.footer = Some(crate::ir::HeaderFooter {
+        shapes: Vec::new(),
         paragraphs: vec![crate::ir::HeaderFooterParagraph {
             style: ParagraphStyle::default(),
             elements: vec![HFInline::PageNumber(TextStyle::default())],
@@ -2421,6 +2446,7 @@ fn doc_with_footer_run(text: &str, style: TextStyle) -> Document {
         content: vec![make_paragraph("Body")],
         header: None,
         footer: Some(HeaderFooter {
+            shapes: Vec::new(),
             distance_from_edge: Some(35.4),
             paragraphs: vec![header_text_paragraph(text, style)],
         }),
@@ -2545,6 +2571,7 @@ fn a_header_rule_is_spaced_from_the_line_box_bottom() {
         margins: Margins::default(),
         content: vec![make_paragraph("Body")],
         header: Some(HeaderFooter {
+            shapes: Vec::new(),
             distance_from_edge: None,
             paragraphs: vec![paragraph],
         }),
@@ -2651,6 +2678,7 @@ fn a_taller_first_page_header_also_grows_the_margin() {
         panic!("the fixture is a flow page");
     };
     page.first_header = Some(HeaderFooter {
+        shapes: Vec::new(),
         distance_from_edge: Some(35.4),
         paragraphs: vec![
             line("표지 첫째 줄"),
@@ -2716,5 +2744,108 @@ fn a_header_line_advances_by_words_pitch() {
         expected > 0.0 && expected < 9.1992,
         "8pt Arial leading tops the cap-height edge up to Word's 9.1992pt \
          advance, got {expected}pt"
+    );
+}
+
+/// A header story's banner carries no text, so it never reaches the paragraph
+/// path — and `behindDoc="1"` puts it under the page's own content, which the
+/// foreground layer cannot do (issue #961).
+#[test]
+fn a_behind_text_header_banner_is_drawn_on_the_background_layer() {
+    use crate::ir::{
+        FrameAnchor, GradientFill, GradientStop, HeaderFooter, HeaderFooterFrame,
+        HeaderFooterShape, Shape, ShapeKind,
+    };
+
+    let banner = HeaderFooterShape {
+        shape: Shape {
+            kind: ShapeKind::Path {
+                subpaths: vec![vec![(0.0, 0.0), (1.0, 0.0), (1.0, 0.65), (0.0, 1.0)]],
+            },
+            fill: None,
+            gradient_fill: Some(GradientFill {
+                stops: vec![
+                    GradientStop {
+                        position: 0.0,
+                        color: Color::new(0x9F, 0xDF, 0xBF),
+                    },
+                    GradientStop {
+                        position: 1.0,
+                        color: Color::new(0x4E, 0xB3, 0xCF),
+                    },
+                ],
+                angle: 32.0,
+            }),
+            pattern_fill: None,
+            stroke: None,
+            rotation_deg: None,
+            opacity: None,
+            shadow: None,
+        },
+        // Wider than the 595.28pt page, centred, so it hangs off both edges.
+        width: 609.12,
+        height: 327.6,
+        frame: HeaderFooterFrame {
+            x: None,
+            y: None,
+            width: Some(609.12),
+            height: Some(327.6),
+            horizontal_anchor: FrameAnchor::Page,
+            vertical_anchor: FrameAnchor::Page,
+            horizontal_align: Some(crate::ir::FrameAlign::Center),
+            vertical_align: Some(crate::ir::FrameAlign::Start),
+            inset_left: 0.0,
+            inset_top: 0.0,
+            bottom_offset: None,
+        },
+        behind_text: true,
+    };
+
+    let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
+        size: PageSize::default(),
+        margins: Margins::default(),
+        content: vec![make_paragraph("Body")],
+        header: Some(HeaderFooter {
+            shapes: vec![banner],
+            distance_from_edge: None,
+            paragraphs: Vec::new(),
+        }),
+        footer: None,
+        columns: None,
+        line_grid_pitch: None,
+        line_grid_snaps_lines: false,
+        page_numbering: None,
+    })]);
+
+    let output = generate_typst(&doc).unwrap();
+    assert!(
+        output.source.contains("background: ["),
+        "under the body, not over it: {}",
+        output.source
+    );
+    assert!(!output.source.contains("foreground: ["));
+    // Centring a 609.12pt banner on a 595.28pt page overhangs by 6.92pt.
+    assert!(
+        output.source.contains("#place(top + left, dx: -6.92"),
+        "{}",
+        output.source
+    );
+    // The box gives `#rotate` a frame of the shape's own extent; without it a
+    // turned banner is laid out against the page width instead.
+    assert!(
+        output
+            .source
+            .contains("[#box(width: 609.12pt, height: 327.6pt)[#curve(fill-rule: \"even-odd\""),
+        "{}",
+        output.source
+    );
+    assert!(
+        output.source.contains(
+            "gradient.linear((rgb(159, 223, 191), 0%), (rgb(78, 179, 207), 100%), angle: 32deg)"
+        ),
+        "{}",
+        output.source
     );
 }

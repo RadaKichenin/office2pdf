@@ -598,6 +598,7 @@ fn test_render_document_with_header() {
                 }],
             })],
             header: Some(HeaderFooter {
+                shapes: Vec::new(),
                 distance_from_edge: None,
                 paragraphs: vec![HeaderFooterParagraph {
                     style: ParagraphStyle::default(),
@@ -645,6 +646,7 @@ fn test_render_document_with_page_number_footer() {
             })],
             header: None,
             footer: Some(HeaderFooter {
+                shapes: Vec::new(),
                 distance_from_edge: None,
                 paragraphs: vec![HeaderFooterParagraph {
                     style: ParagraphStyle::default(),

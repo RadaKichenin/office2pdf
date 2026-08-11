@@ -425,6 +425,7 @@ fn test_first_group_packs_against_the_full_printable_width() {
 /// builds for `&L…`.
 fn footer_with_runs(runs: Vec<Run>) -> HeaderFooter {
     HeaderFooter {
+        shapes: Vec::new(),
         paragraphs: vec![HeaderFooterParagraph {
             style: ParagraphStyle::default(),
             elements: runs.into_iter().map(HFInline::Run).collect(),

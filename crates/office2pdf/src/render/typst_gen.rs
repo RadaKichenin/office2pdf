@@ -1685,20 +1685,50 @@ fn write_flow_page_setup(out: &mut String, page: &FlowPage, size: &PageSize, ctx
         }
     }
 
-    if page
-        .header
-        .iter()
-        .chain(page.footer.iter())
-        .any(hf_has_page_anchored_frames)
-    {
-        out.push_str(", foreground: [");
-        if let Some(header) = &page.header {
-            generate_page_anchored_hf_frames(out, header, size, page.margins.right, ctx);
+    // `<wp:anchor behindDoc="1">` puts the shape under the page's own content,
+    // which is where a decorative banner belongs — over it, the banner would
+    // hide the body text it sits behind (issue #961).
+    for (layer, behind_text) in [("background", true), ("foreground", false)] {
+        // `<w:titlePg/>` gives page one its own stories, and on this invoice
+        // they are the only ones carrying a banner, so the layers are gated
+        // per page exactly as the flow header and footer are (issue #961).
+        let default_markup: String = page_anchored_layer_markup(
+            page.header.as_ref(),
+            page.footer.as_ref(),
+            page,
+            size,
+            behind_text,
+            ctx,
+        );
+        let first_stated: bool = page.first_header.is_some() || page.first_footer.is_some();
+        let first_markup: String = match first_stated {
+            true => page_anchored_layer_markup(
+                page.first_header.as_ref().or(page.header.as_ref()),
+                page.first_footer.as_ref().or(page.footer.as_ref()),
+                page,
+                size,
+                behind_text,
+                ctx,
+            ),
+            false => String::new(),
+        };
+        if default_markup.is_empty() && first_markup.is_empty() {
+            continue;
         }
-        if let Some(footer) = &page.footer {
-            generate_page_anchored_hf_frames(out, footer, size, page.margins.right, ctx);
+        match first_stated {
+            true => {
+                let _ = write!(
+                    out,
+                    ", {layer}: context {{ if here().page() == {} [{}] else [{}] }}",
+                    section_first_page_expression(ctx.flow_section_index),
+                    first_markup,
+                    default_markup
+                );
+            }
+            false => {
+                let _ = write!(out, ", {layer}: [{default_markup}]");
+            }
         }
-        out.push(']');
     }
 
     out.push_str(")\n");
@@ -1709,6 +1739,10 @@ fn write_flow_page_setup(out: &mut String, page: &FlowPage, size: &PageSize, ctx
 /// absent offset already put it. An unknown extent counts as zero, so a
 /// `Center` or `End` alignment still resolves — to the frame's midpoint or its
 /// far edge, not to the start.
+///
+/// The result is not clamped to the frame: the invoice's header banner is
+/// 609.12pt wide on a 595.28pt page, and centring it genuinely hangs 6.92pt
+/// off each edge (issue #961).
 fn aligned_offset(
     align: Option<crate::ir::FrameAlign>,
     available: f64,
@@ -1716,8 +1750,8 @@ fn aligned_offset(
 ) -> f64 {
     let extent: f64 = extent.unwrap_or(0.0);
     match align {
-        Some(crate::ir::FrameAlign::Center) => ((available - extent) / 2.0).max(0.0),
-        Some(crate::ir::FrameAlign::End) => (available - extent).max(0.0),
+        Some(crate::ir::FrameAlign::Center) => (available - extent) / 2.0,
+        Some(crate::ir::FrameAlign::End) => available - extent,
         _ => 0.0,
     }
 }
@@ -1745,11 +1779,76 @@ fn hf_paragraph_has_flow_content(paragraph: &crate::ir::HeaderFooterParagraph) -
             .is_none_or(|frame| !is_page_anchored_frame(frame))
 }
 
-fn hf_has_page_anchored_frames(header_footer: &HeaderFooter) -> bool {
-    header_footer
-        .paragraphs
-        .iter()
-        .any(|paragraph| paragraph.frame.as_ref().is_some_and(is_page_anchored_frame))
+/// One page layer's markup: the anchored shapes both stories put on it, plus
+/// their framed paragraphs when it is the foreground.
+///
+/// Empty when neither story draws anything there, which is the caller's signal
+/// to leave the layer off the `#set page` entirely.
+fn page_anchored_layer_markup(
+    header: Option<&HeaderFooter>,
+    footer: Option<&HeaderFooter>,
+    page: &FlowPage,
+    size: &PageSize,
+    behind_text: bool,
+    ctx: &mut GenCtx,
+) -> String {
+    let mut markup = String::new();
+    for hf in header.into_iter().chain(footer) {
+        generate_page_anchored_hf_shapes(&mut markup, hf, size, behind_text, ctx);
+        // Framed paragraphs sit over the page's content, never under it.
+        if !behind_text {
+            generate_page_anchored_hf_frames(&mut markup, hf, size, page.margins.right, ctx);
+        }
+    }
+    markup
+}
+
+/// Place a story's page-anchored shapes, each against the page rather than in
+/// the story's flow.
+///
+/// Unlike a framed paragraph, the shape's own extent is known, so both axes
+/// resolve here without the block's height entering into it (issue #961).
+fn generate_page_anchored_hf_shapes(
+    out: &mut String,
+    hf: &HeaderFooter,
+    page_size: &PageSize,
+    behind_text: bool,
+    _ctx: &mut GenCtx,
+) {
+    for shape in &hf.shapes {
+        if shape.behind_text != behind_text || !is_page_anchored_frame(&shape.frame) {
+            continue;
+        }
+        let x: f64 = shape.frame.x.unwrap_or_else(|| {
+            aligned_offset(
+                shape.frame.horizontal_align,
+                page_size.width,
+                Some(shape.width),
+            )
+        });
+        let y: f64 = shape.frame.y.unwrap_or_else(|| {
+            aligned_offset(
+                shape.frame.vertical_align,
+                page_size.height,
+                Some(shape.height),
+            )
+        });
+        // The `#box` is not decoration: `#rotate` turns its body about the
+        // frame it was laid out into, and inside a bare `#place` that frame is
+        // the page's width. The invoice's footer band is 627.84pt on a 595.28pt
+        // page, so a 180-degree turn about the page centre slid it 32.56pt off
+        // the right edge (issue #961).
+        let _ = write!(
+            out,
+            "#place(top + left, dx: {}pt, dy: {}pt)[#box(width: {}pt, height: {}pt)[",
+            format_f64(x),
+            format_f64(y),
+            format_f64(shape.width),
+            format_f64(shape.height)
+        );
+        generate_shape(out, &shape.shape, shape.width, shape.height);
+        out.push_str("]]");
+    }
 }
 
 fn generate_flow_hf_content(out: &mut String, hf: &HeaderFooter, ctx: &mut GenCtx) {

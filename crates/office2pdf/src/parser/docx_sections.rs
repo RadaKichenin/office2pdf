@@ -75,6 +75,12 @@ pub(super) fn build_header_footer_assets<R: Read + Seek>(
         None => return HeaderFooterAssets::default(),
     };
     let (header_relationships, footer_relationships) = scan_header_footer_relationships(&rels_xml);
+    // A header part declares no theme of its own, so its anchored shapes'
+    // `<a:schemeClr>` fills borrow the document's (issue #961).
+    let theme_colors: HashMap<String, Color> = read_zip_text(archive, "word/theme/theme1.xml")
+        .as_deref()
+        .map(crate::parser::drawingml::parse_theme_color_scheme)
+        .unwrap_or_default();
     let mut assets = HeaderFooterAssets::default();
 
     for (relationship_id, path) in header_relationships {
@@ -86,7 +92,7 @@ pub(super) fn build_header_footer_assets<R: Read + Seek>(
         let Ok(header) = <docx_rs::Header as docx_rs::FromXML>::from_xml(xml.as_bytes()) else {
             continue;
         };
-        let anchors = scan_hf_anchors(&xml);
+        let anchors = scan_hf_anchors(&xml, &theme_colors);
         if let Some(converted) = convert_docx_header(&header, &images, &simple_fields, &anchors) {
             assets.headers.insert(relationship_id, converted);
         }
@@ -102,7 +108,7 @@ pub(super) fn build_header_footer_assets<R: Read + Seek>(
         let Ok(footer) = <docx_rs::Footer as docx_rs::FromXML>::from_xml(xml.as_bytes()) else {
             continue;
         };
-        let anchors = scan_hf_anchors(&xml);
+        let anchors = scan_hf_anchors(&xml, &theme_colors);
         if let Some(converted) =
             convert_docx_footer(&footer, &images, &bidi_paragraphs, &simple_fields, &anchors)
         {
@@ -459,6 +465,7 @@ fn convert_docx_header(
     simple_fields: &[Vec<SimpleFieldMarker>],
     anchors: &[HfAnchorBox],
 ) -> Option<HeaderFooter> {
+    let shapes = hf_anchored_shapes(anchors);
     let mut anchors = anchors.iter();
     let paragraphs = header
         .children
@@ -479,12 +486,15 @@ fn convert_docx_header(
             converted
         })
         .collect::<Vec<_>>();
-    if paragraphs.is_empty() {
+    // A story that draws only a decorative banner has no paragraph worth
+    // keeping but is still not empty (issue #961).
+    if paragraphs.is_empty() && shapes.is_empty() {
         return None;
     }
     Some(HeaderFooter {
         paragraphs,
         distance_from_edge: None,
+        shapes,
     })
 }
 
@@ -495,6 +505,7 @@ fn convert_docx_footer(
     simple_fields: &[Vec<SimpleFieldMarker>],
     anchors: &[HfAnchorBox],
 ) -> Option<HeaderFooter> {
+    let shapes = hf_anchored_shapes(anchors);
     let mut anchors = anchors.iter();
     let paragraphs = footer
         .children
@@ -515,12 +526,15 @@ fn convert_docx_footer(
             converted
         })
         .collect::<Vec<_>>();
-    if paragraphs.is_empty() {
+    // A story that draws only a decorative banner has no paragraph worth
+    // keeping but is still not empty (issue #961).
+    if paragraphs.is_empty() && shapes.is_empty() {
         return None;
     }
     Some(HeaderFooter {
         paragraphs,
         distance_from_edge: None,
+        shapes,
     })
 }
 
@@ -904,6 +918,11 @@ struct HfAnchorBox {
     right_inset_pt: f64,
     top_inset_pt: f64,
     bottom_inset_pt: f64,
+    /// `<wp:anchor behindDoc="1">` — the shape sits under the page's content.
+    behind_doc: bool,
+    /// The geometry and fill the anchor's `<wps:wsp>` declares, when it has
+    /// any worth drawing (issue #961).
+    shape: Option<crate::ir::Shape>,
     /// `<a:bodyPr anchor="b">` — the text sits at the box's bottom edge.
     seats_text_at_bottom: bool,
 }
@@ -945,6 +964,42 @@ impl HfAnchorBox {
             }
         })
     }
+
+    /// The frame of the drawing box itself.
+    ///
+    /// [`Self::to_frame`] describes the *text column*, which the box's own
+    /// padding narrows and shifts. A shape is drawn against the box, so it
+    /// takes the untouched extent (issue #961).
+    fn to_shape_frame(&self) -> Option<HeaderFooterFrame> {
+        let mut frame = self.to_frame()?;
+        frame.width = self.width_pt;
+        frame.inset_left = 0.0;
+        frame.inset_top = 0.0;
+        frame.bottom_offset = None;
+        Some(frame)
+    }
+}
+
+/// The page-anchored shapes a header or footer story draws.
+///
+/// A shape that carries no text still carries a fill, and a decorative banner
+/// is nothing else: the invoice of #841 draws its two green wedges this way,
+/// as one `a:custGeom` under an `a:gradFill` (issue #961).
+fn hf_anchored_shapes(anchors: &[HfAnchorBox]) -> Vec<crate::ir::HeaderFooterShape> {
+    anchors
+        .iter()
+        .filter_map(|anchor| {
+            let shape = anchor.shape.clone()?;
+            let frame = anchor.to_shape_frame()?;
+            Some(crate::ir::HeaderFooterShape {
+                shape,
+                width: anchor.width_pt?,
+                height: anchor.height_pt?,
+                frame,
+                behind_text: anchor.behind_doc,
+            })
+        })
+        .collect()
 }
 
 /// The framed paragraphs a paragraph's anchored text-box drawings contribute
@@ -1001,6 +1056,95 @@ fn hf_paragraph_carries_text(paragraph: &HeaderFooterParagraph) -> bool {
     })
 }
 
+/// A shape with nothing stated yet: a plain rectangle with no fill, which the
+/// geometry and fill handlers then fill in.
+fn default_anchor_shape() -> crate::ir::Shape {
+    crate::ir::Shape {
+        kind: crate::ir::ShapeKind::Rectangle,
+        fill: None,
+        gradient_fill: None,
+        pattern_fill: None,
+        stroke: None,
+        rotation_deg: None,
+        opacity: None,
+        shadow: None,
+    }
+}
+
+/// Read an `<a:gradFill>`'s stops and angle, resolving each scheme colour
+/// against the document theme.
+///
+/// The reader is positioned just after the start tag and is consumed through
+/// the matching end tag either way, so a gradient this cannot express still
+/// leaves the caller's scan in step. `None` when fewer than two stops resolve
+/// — one stop is not a gradient, and zero is not a fill.
+fn parse_anchor_gradient(
+    reader: &mut quick_xml::Reader<&[u8]>,
+    theme_colors: &HashMap<String, Color>,
+) -> Option<crate::ir::GradientFill> {
+    use quick_xml::events::Event;
+
+    let mut stops: Vec<crate::ir::GradientStop> = Vec::new();
+    let mut angle: f64 = 0.0;
+    let mut pending_position: Option<f64> = None;
+    loop {
+        let event = reader.read_event();
+        let is_empty: bool = matches!(event, Ok(Event::Empty(_)));
+        let element = match &event {
+            Ok(Event::Start(element) | Event::Empty(element)) => element,
+            Ok(Event::End(element)) if element.local_name().as_ref() == b"gradFill" => break,
+            Ok(Event::Eof) | Err(_) => break,
+            _ => continue,
+        };
+        match element.local_name().as_ref() {
+            // `a:gs@pos` is in thousandths of a percent.
+            b"gs" => pending_position = attribute_f64(element, b"pos").map(|pos| pos / 100_000.0),
+            b"srgbClr" | b"schemeClr" | b"sysClr" => {
+                // `<a:schemeClr val="accent3"><a:lumMod/><a:lumOff/></a:schemeClr>`
+                // is how the invoice states both of its stops, so the nested
+                // transforms are the colour, not decoration on it.
+                let no_aliases: HashMap<String, String> = HashMap::new();
+                let scheme = crate::parser::drawingml::SchemeColors {
+                    colors: theme_colors,
+                    aliases: &no_aliases,
+                };
+                let parsed = if is_empty {
+                    crate::parser::drawingml::parse_color_from_empty(element, &scheme)
+                } else {
+                    crate::parser::drawingml::parse_color_from_start(reader, element, &scheme)
+                };
+                if let (Some(position), Some(color)) = (pending_position, parsed.color) {
+                    stops.push(crate::ir::GradientStop { position, color });
+                    pending_position = None;
+                }
+            }
+            // `a:lin@ang` is in 60000ths of a degree, clockwise from the
+            // positive x axis — the convention `GradientFill::angle` uses.
+            b"lin" => {
+                if let Some(raw) = attribute_f64(element, b"ang") {
+                    angle = (raw / 60_000.0).rem_euclid(360.0);
+                }
+            }
+            _ => {}
+        }
+    }
+    (stops.len() >= 2).then_some(crate::ir::GradientFill { stops, angle })
+}
+
+fn attribute_f64(element: &quick_xml::events::BytesStart<'_>, name: &[u8]) -> Option<f64> {
+    element
+        .attributes()
+        .flatten()
+        .find(|attribute| attribute.key.local_name().as_ref() == name)
+        .and_then(|attribute| {
+            std::str::from_utf8(attribute.value.as_ref())
+                .ok()?
+                .trim()
+                .parse::<f64>()
+                .ok()
+        })
+}
+
 /// Read a `<wps:bodyPr>`'s padding onto the anchor being scanned.
 fn read_body_insets(element: &quick_xml::events::BytesStart<'_>, anchor: Option<&mut HfAnchorBox>) {
     let Some(anchor) = anchor else {
@@ -1031,7 +1175,7 @@ fn read_body_insets(element: &quick_xml::events::BytesStart<'_>, anchor: Option<
 }
 
 /// Scan a header or footer part for its `<wp:anchor>` boxes, in document order.
-fn scan_hf_anchors(xml: &str) -> Vec<HfAnchorBox> {
+fn scan_hf_anchors(xml: &str, theme_colors: &HashMap<String, Color>) -> Vec<HfAnchorBox> {
     use quick_xml::events::Event;
 
     let mut reader = quick_xml::Reader::from_str(xml);
@@ -1043,7 +1187,16 @@ fn scan_hf_anchors(xml: &str) -> Vec<HfAnchorBox> {
     loop {
         match reader.read_event() {
             Ok(Event::Start(ref element)) => match element.local_name().as_ref() {
-                b"anchor" => current = Some(HfAnchorBox::default()),
+                b"anchor" => {
+                    let behind_doc = element.attributes().flatten().any(|attribute| {
+                        attribute.key.local_name().as_ref() == b"behindDoc"
+                            && matches!(attribute.value.as_ref(), b"1" | b"true")
+                    });
+                    current = Some(HfAnchorBox {
+                        behind_doc,
+                        ..HfAnchorBox::default()
+                    });
+                }
                 b"positionH" | b"positionV" => {
                     let horizontal = element.local_name().as_ref() == b"positionH";
                     axis = Some(horizontal);
@@ -1061,6 +1214,46 @@ fn scan_hf_anchors(xml: &str) -> Vec<HfAnchorBox> {
                     }
                 }
                 b"bodyPr" => read_body_insets(element, current.as_mut()),
+                // The geometry and the fill are separate subtrees of the same
+                // `<wps:spPr>`; either can be absent, and a shape needs both
+                // before it is worth drawing (issue #961).
+                // `<a:xfrm rot>` is in 60000ths of a degree. The footer band
+                // of #841 is the header's wedge at `rot="10800000"` — 180
+                // degrees — so dropping it mirrors the band (issue #961).
+                b"xfrm" => {
+                    let rotation: Option<f64> = attribute_f64(element, b"rot")
+                        .map(|raw| (raw / 60_000.0).rem_euclid(360.0))
+                        .filter(|degrees| *degrees != 0.0);
+                    if let Some(anchor) = current.as_mut()
+                        && rotation.is_some()
+                    {
+                        anchor
+                            .shape
+                            .get_or_insert_with(default_anchor_shape)
+                            .rotation_deg = rotation;
+                    }
+                }
+                b"custGeom" => {
+                    let subpaths =
+                        crate::parser::pptx::custom_geometry::parse_custom_geometry(&mut reader);
+                    if let Some(anchor) = current.as_mut()
+                        && !subpaths.is_empty()
+                    {
+                        anchor.shape.get_or_insert_with(default_anchor_shape).kind =
+                            crate::ir::ShapeKind::Path { subpaths };
+                    }
+                }
+                b"gradFill" => {
+                    let gradient = parse_anchor_gradient(&mut reader, theme_colors);
+                    if let Some(anchor) = current.as_mut()
+                        && gradient.is_some()
+                    {
+                        anchor
+                            .shape
+                            .get_or_insert_with(default_anchor_shape)
+                            .gradient_fill = gradient;
+                    }
+                }
                 b"align" | b"posOffset" => {
                     let is_align = element.local_name().as_ref() == b"align";
                     let name = element.name().to_owned();
@@ -1361,7 +1554,7 @@ mod anchor_tests {
     /// `wp:anchor` is scanned from the part directly (issue #847).
     #[test]
     fn a_header_footer_anchor_is_scanned_from_the_part() {
-        let anchors = scan_hf_anchors(FOOTER_ANCHOR);
+        let anchors = scan_hf_anchors(FOOTER_ANCHOR, &HashMap::new());
         assert_eq!(anchors.len(), 1, "one anchored shape: {anchors:?}");
         let frame = anchors[0].to_frame().expect("a page-relative frame");
 
@@ -1395,9 +1588,106 @@ mod anchor_tests {
     #[test]
     fn an_anchor_relative_to_something_else_yields_no_frame() {
         let relative = FOOTER_ANCHOR.replace(r#"relativeFrom="page""#, r#"relativeFrom="column""#);
-        let anchors = scan_hf_anchors(&relative);
+        let anchors = scan_hf_anchors(&relative, &HashMap::new());
         assert_eq!(anchors.len(), 1);
         assert!(anchors[0].to_frame().is_none());
+    }
+
+    /// The header part of `003_FAKTURA.docx` (issue #961), trimmed to the
+    /// banner shape: a `custGeom` wedge under a two-stop `gradFill`, carrying
+    /// no text at all.
+    const HEADER_BANNER: &str = r#"<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+      xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+      xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">
+      <w:p><w:r><w:drawing><wp:anchor behindDoc="1" distL="114300" distR="114300">
+        <wp:positionH relativeFrom="page"><wp:align>center</wp:align></wp:positionH>
+        <wp:positionV relativeFrom="page"><wp:align>top</wp:align></wp:positionV>
+        <wp:extent cx="7735824" cy="4160520"/>
+        <wps:wsp><wps:spPr>
+          <a:custGeom><a:pathLst><a:path w="7738110" h="2906395">
+            <a:moveTo><a:pt x="0" y="0"/></a:moveTo>
+            <a:lnTo><a:pt x="7738110" y="0"/></a:lnTo>
+            <a:lnTo><a:pt x="7738110" y="1896461"/></a:lnTo>
+            <a:lnTo><a:pt x="0" y="2906395"/></a:lnTo>
+            <a:close/>
+          </a:path></a:pathLst></a:custGeom>
+          <a:gradFill flip="none" rotWithShape="1"><a:gsLst>
+            <a:gs pos="0"><a:schemeClr val="accent3"><a:lumMod val="40000"/><a:lumOff val="60000"/></a:schemeClr></a:gs>
+            <a:gs pos="100000"><a:schemeClr val="accent5"><a:lumMod val="100000"/></a:schemeClr></a:gs>
+          </a:gsLst><a:lin ang="1920000" scaled="0"/><a:tileRect/></a:gradFill>
+          <a:ln><a:noFill/></a:ln>
+        </wps:spPr>
+        <wps:txbx><w:txbxContent><w:p/></w:txbxContent></wps:txbx>
+        <wps:bodyPr lIns="91440" tIns="45720" rIns="91440" bIns="45720" anchor="ctr"/>
+        </wps:wsp>
+      </wp:anchor></w:drawing></w:r></w:p>
+    </w:hdr>"#;
+
+    fn accent_theme() -> HashMap<String, Color> {
+        HashMap::from([
+            ("accent3".to_string(), Color::new(0xA5, 0xA5, 0xA5)),
+            ("accent5".to_string(), Color::new(0x00, 0x80, 0x40)),
+        ])
+    }
+
+    /// The banner carries no text, so nothing about it reaches the paragraph
+    /// path — its geometry and fill have to be scanned as a shape or the
+    /// header renders blank (issue #961).
+    #[test]
+    fn a_fill_only_header_banner_is_scanned_as_a_shape() {
+        let anchors = scan_hf_anchors(HEADER_BANNER, &accent_theme());
+        assert_eq!(anchors.len(), 1, "one anchored shape: {anchors:?}");
+        let shapes = hf_anchored_shapes(&anchors);
+        assert_eq!(shapes.len(), 1, "the banner is drawable: {shapes:?}");
+        let banner = &shapes[0];
+
+        assert!(banner.behind_text, "behindDoc=\"1\"");
+        // 7735824 EMU is 609.12pt and 4160520 is 327.60pt.
+        assert!((banner.width - 609.12).abs() < 0.01, "{}", banner.width);
+        assert!((banner.height - 327.60).abs() < 0.01, "{}", banner.height);
+
+        let crate::ir::ShapeKind::Path { subpaths } = &banner.shape.kind else {
+            panic!("a custGeom wedge, not {:?}", banner.shape.kind);
+        };
+        assert_eq!(subpaths.len(), 1);
+        // The wedge's right edge stops at 1896461/2906395 of the path box,
+        // and the path box is stretched onto the shape's extent.
+        let right_edge: f64 = subpaths[0][2].1;
+        assert!((right_edge - 0.6525).abs() < 0.001, "{right_edge}");
+        assert!(
+            (subpaths[0][3].1 - 1.0).abs() < 0.001,
+            "the left edge drops to the bottom"
+        );
+    }
+
+    /// `<a:lin ang>` is in 60000ths of a degree, and each stop's scheme colour
+    /// carries `lumMod`/`lumOff` that decide what green it actually is.
+    #[test]
+    fn the_banner_gradient_resolves_its_scheme_stops() {
+        let anchors = scan_hf_anchors(HEADER_BANNER, &accent_theme());
+        let shapes = hf_anchored_shapes(&anchors);
+        let gradient = shapes[0]
+            .shape
+            .gradient_fill
+            .as_ref()
+            .expect("a two-stop gradient");
+
+        assert!(
+            (gradient.angle - 32.0).abs() < 0.01,
+            "1920000/60000 is 32deg"
+        );
+        assert_eq!(gradient.stops.len(), 2);
+        assert!((gradient.stops[0].position - 0.0).abs() < 1e-9);
+        assert!((gradient.stops[1].position - 1.0).abs() < 1e-9);
+        // accent3 at lumMod 40% + lumOff 60% is far lighter than the flat
+        // theme colour, so an unresolved stop would be plainly wrong.
+        assert!(
+            gradient.stops[0].color != Color::new(0xA5, 0xA5, 0xA5),
+            "lumMod/lumOff applied: {:?}",
+            gradient.stops[0].color
+        );
+        assert_eq!(gradient.stops[1].color, Color::new(0x00, 0x80, 0x40));
     }
 
     /// An absent `<a:bodyPr>` inset falls back to ECMA-376's own default
@@ -1408,7 +1698,7 @@ mod anchor_tests {
             r#"lIns="254000" tIns="0" rIns="0" bIns="190500" anchor="b""#,
             "",
         );
-        let anchors = scan_hf_anchors(&bare);
+        let anchors = scan_hf_anchors(&bare, &HashMap::new());
         let frame = anchors[0].to_frame().expect("a frame");
         assert!((frame.inset_left - 7.2).abs() < 0.01, "91440 EMU is 7.2pt");
         assert!(

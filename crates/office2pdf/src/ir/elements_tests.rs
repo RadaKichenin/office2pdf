@@ -187,6 +187,7 @@ fn test_paragraph_with_runs() {
 #[test]
 fn test_header_footer_with_text() {
     let hf = HeaderFooter {
+        shapes: Vec::new(),
         distance_from_edge: None,
         paragraphs: vec![HeaderFooterParagraph {
             style: ParagraphStyle::default(),
@@ -212,6 +213,7 @@ fn test_header_footer_with_text() {
 #[test]
 fn test_header_footer_with_page_number() {
     let hf = HeaderFooter {
+        shapes: Vec::new(),
         distance_from_edge: None,
         paragraphs: vec![HeaderFooterParagraph {
             style: ParagraphStyle::default(),

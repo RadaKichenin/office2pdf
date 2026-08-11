@@ -1877,6 +1877,7 @@ fn test_header_field_never_states_kerning_false() {
         content: vec![make_paragraph("Body")],
         header: None,
         footer: Some(HeaderFooter {
+            shapes: Vec::new(),
             distance_from_edge: None,
             paragraphs: vec![HeaderFooterParagraph {
                 style: ParagraphStyle::default(),

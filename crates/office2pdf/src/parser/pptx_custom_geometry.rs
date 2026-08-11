@@ -44,7 +44,7 @@ const MIN_POLYGON_VERTICES: usize = 3;
 /// carves a hole rather than painting solid because the caller hands every
 /// subpath to one [`crate::ir::ShapeKind::Path`], which fills even-odd
 /// (issue #870).
-pub(super) fn parse_custom_geometry(reader: &mut Reader<&[u8]>) -> Vec<Vec<(f64, f64)>> {
+pub(crate) fn parse_custom_geometry(reader: &mut Reader<&[u8]>) -> Vec<Vec<(f64, f64)>> {
     let mut depth: usize = 1;
     let mut paths: Vec<Vec<(f64, f64)>> = Vec::new();
     let mut current: Vec<(f64, f64)> = Vec::new();
