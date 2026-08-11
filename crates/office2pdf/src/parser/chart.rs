@@ -780,7 +780,7 @@ fn parse_single_series(
                 // Consumed whole: `<c:dLbls>` carries an `<c:spPr>` of its
                 // own for the label box, which would otherwise be read as the
                 // series fill.
-                b"dLbls" => data_labels = parse_data_labels(reader),
+                b"dLbls" => data_labels = parse_data_labels(reader, scheme),
                 b"xVal" => {
                     // For scatter charts, xVal contains category-like data
                     if categories.is_empty() {
@@ -822,7 +822,7 @@ fn parse_single_series(
 /// matches on local name alone, so each `<c:dLbl>` is skipped whole; reading
 /// them would let a single point's override become the series default whenever
 /// the group-level settings are absent.
-fn parse_data_labels(reader: &mut Reader<&[u8]>) -> DataLabels {
+fn parse_data_labels(reader: &mut Reader<&[u8]>, scheme: &SchemeColors<'_>) -> DataLabels {
     let mut labels = DataLabels::default();
     let mut in_separator: bool = false;
     let mut separator = String::new();
@@ -846,6 +846,9 @@ fn parse_data_labels(reader: &mut Reader<&[u8]>) -> DataLabels {
                         .and_then(data_label_position_for);
                 }
                 b"separator" => in_separator = true,
+                // Only the group-level `c:txPr` reaches here — a per-point
+                // `<c:dLbl>` carrying one of its own is skipped whole above.
+                b"txPr" => labels.text_style = parse_chart_text_style(reader, scheme),
                 _ => {}
             },
             Ok(Event::Text(ref text)) if in_separator => {

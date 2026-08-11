@@ -1929,3 +1929,60 @@ fn an_unstated_major_unit_is_none() {
 
     assert_eq!(chart.value_axis_major_unit, None);
 }
+
+/// A data label's size comes from its own `<c:dLbls><c:txPr>`, which the
+/// labels were never given — they were written at a literal 8pt, so the deck
+/// of #841 drew its 11.97pt labels smaller than its own axis (issue #970).
+#[test]
+fn a_data_label_takes_the_size_its_own_tx_pr_declares() {
+    let xml = r#"<?xml version="1.0"?>
+        <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+            <c:chart><c:plotArea><c:barChart>
+                <c:barDir val="col"/><c:grouping val="clustered"/>
+                <c:ser>
+                    <c:idx val="0"/>
+                    <c:dLbls>
+                        <c:dLbl><c:idx val="0"/>
+                            <c:txPr><a:bodyPr/><a:p><a:pPr><a:defRPr sz="600"/></a:pPr></a:p></c:txPr>
+                        </c:dLbl>
+                        <c:txPr><a:bodyPr/><a:p><a:pPr><a:defRPr sz="1197" b="1"/></a:pPr></a:p></c:txPr>
+                        <c:showVal val="1"/>
+                    </c:dLbls>
+                    <c:cat><c:strRef><c:strCache><c:pt idx="0"><c:v>Q1</c:v></c:pt></c:strCache></c:strRef></c:cat>
+                    <c:val><c:numRef><c:numCache><c:pt idx="0"><c:v>100</c:v></c:pt></c:numCache></c:numRef></c:val>
+                </c:ser>
+            </c:barChart></c:plotArea></c:chart>
+        </c:chartSpace>"#;
+
+    let chart = parse_chart_xml(xml, &SchemeColors::empty()).unwrap();
+    let labels = &chart.series[0].data_labels;
+
+    assert_eq!(labels.text_style.size_pt, Some(11.97), "sz is hundredths");
+    assert_eq!(labels.text_style.bold, Some(true));
+    // The per-point `<c:dLbl>` states 6pt, and a single point's override must
+    // not become the group's setting — the same reason its `showVal` does not.
+    assert!(labels.show_value);
+}
+
+/// A `<c:dLbls>` stating no `c:txPr` leaves the size to the chart space, which
+/// is what every other string on the chart already resolves against.
+#[test]
+fn a_data_label_without_a_tx_pr_states_no_size_of_its_own() {
+    let xml = r#"<?xml version="1.0"?>
+        <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+            <c:chart><c:plotArea><c:barChart>
+                <c:barDir val="col"/><c:grouping val="clustered"/>
+                <c:ser>
+                    <c:idx val="0"/>
+                    <c:dLbls><c:showVal val="1"/></c:dLbls>
+                    <c:cat><c:strRef><c:strCache><c:pt idx="0"><c:v>Q1</c:v></c:pt></c:strCache></c:strRef></c:cat>
+                    <c:val><c:numRef><c:numCache><c:pt idx="0"><c:v>100</c:v></c:pt></c:numCache></c:numRef></c:val>
+                </c:ser>
+            </c:barChart></c:plotArea></c:chart>
+        </c:chartSpace>"#;
+
+    let chart = parse_chart_xml(xml, &SchemeColors::empty()).unwrap();
+    assert_eq!(chart.series[0].data_labels.text_style.size_pt, None);
+}
