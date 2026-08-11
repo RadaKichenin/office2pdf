@@ -247,6 +247,28 @@ fn make_custom_pic_xml(x: i64, y: i64, cx: i64, cy: i64, blip_fill_xml: &str) ->
     )
 }
 
+fn make_live_feed_svg_pic_xml(cx: i64, cy: i64, custom_geometry: &str) -> String {
+    format!(
+        r#"<p:pic><p:nvPicPr><p:cNvPr id="5" name="Cameo"/><p:cNvPicPr><a:picLocks/><a:extLst><a:ext uri="{{51228E76-BA90-4043-B771-695A4F85340A}}"><alf:liveFeedProps xmlns:alf="http://schemas.microsoft.com/office/drawing/2021/livefeed"/></a:ext></a:extLst></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip><a:extLst><a:ext uri="{{96DAC541-7B7A-43D3-B8A5-EBB9C4A54BB8}}"><asvg:svgBlip xmlns:asvg="http://schemas.microsoft.com/office/drawing/2016/SVG/main" r:embed="rId3"/></a:ext></a:extLst></a:blip><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="{cx}" cy="{cy}"/></a:xfrm>{custom_geometry}</p:spPr></p:pic>"#
+    )
+}
+
+fn parse_svg_picture(pic: String, svg: &str) -> String {
+    let slide_xml = make_slide_xml(&[pic]);
+    let slide_images = vec![TestSlideImage {
+        rid: "rId3".to_string(),
+        path: "../media/image1.svg".to_string(),
+        data: svg.as_bytes().to_vec(),
+        relationship_type: None,
+    }];
+    let data = build_test_pptx_with_images(SLIDE_CX, SLIDE_CY, &[(slide_xml, slide_images)]);
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = first_fixed_page(&doc);
+    String::from_utf8(get_image(&page.elements[0]).data.clone()).expect("the asset stays an SVG")
+}
+
 /// Slide image for the test PPTX builder.
 pub(super) struct TestSlideImage {
     pub(super) rid: String,
@@ -496,6 +518,62 @@ fn test_svg_image_extraction() {
     let img = get_image(&page.elements[0]);
     assert_eq!(img.format, ImageFormat::Svg);
     assert_eq!(img.data, svg_data);
+}
+
+#[test]
+fn cameo_svg_cover_crops_before_applying_its_custom_geometry() {
+    const SVG: &str = r#"<svg width="300" height="100" viewBox="10 20 300 100" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="20" width="300" height="100"/></svg>"#;
+    const RECTANGLE_GEOMETRY: &str = r#"<a:custGeom><a:avLst/><a:pathLst><a:path w="100" h="100"><a:moveTo><a:pt x="0" y="0"/></a:moveTo><a:lnTo><a:pt x="100" y="0"/></a:lnTo><a:lnTo><a:pt x="100" y="100"/></a:lnTo><a:lnTo><a:pt x="0" y="100"/></a:lnTo><a:close/></a:path></a:pathLst></a:custGeom>"#;
+
+    let svg = parse_svg_picture(
+        make_live_feed_svg_pic_xml(1_000_000, 2_000_000, RECTANGLE_GEOMETRY),
+        SVG,
+    );
+
+    assert!(
+        svg.contains(r#"viewBox="135 20 50 100""#),
+        "a 3:1 feed should be centre-cropped to its 1:2 frame before scaling: {svg}"
+    );
+    assert!(
+        svg.contains(r#"width="50" height="100""#),
+        "the SVG viewport should adopt the cropped aspect ratio: {svg}"
+    );
+    assert!(
+        svg.contains("M 135 20 L 185 20 L 185 120 L 135 120 Z"),
+        "the custom picture clip should span the cropped viewBox, not be cropped with the artwork: {svg}"
+    );
+}
+
+#[test]
+fn cameo_svg_cover_crop_handles_a_tall_feed_in_a_wide_frame() {
+    const SVG: &str = r#"<svg width="100" height="300" viewBox="0 0 100 300" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="300"/></svg>"#;
+
+    let svg = parse_svg_picture(make_live_feed_svg_pic_xml(2_000_000, 1_000_000, ""), SVG);
+
+    assert!(
+        svg.contains(r#"viewBox="0 125 100 50""#),
+        "a 1:3 feed should be centre-cropped to its 2:1 frame: {svg}"
+    );
+    assert!(
+        svg.contains(r#"width="100" height="50""#),
+        "the cropped viewport should have the frame's 2:1 aspect ratio: {svg}"
+    );
+}
+
+#[test]
+fn an_ordinary_svg_keeps_drawingml_stretch_semantics() {
+    const SVG: &str = r#"<svg width="300" height="100" viewBox="10 20 300 100" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="20" width="300" height="100"/></svg>"#;
+    let pic = make_custom_pic_xml(
+        0,
+        0,
+        1_000_000,
+        2_000_000,
+        r#"<a:blip r:embed="rId3"/><a:stretch><a:fillRect/></a:stretch>"#,
+    );
+
+    let svg = parse_svg_picture(pic, SVG);
+
+    assert_eq!(svg, SVG, "ordinary a:stretch remains a non-uniform stretch");
 }
 
 #[test]
