@@ -833,6 +833,22 @@ pub(crate) fn active_in_memory_font(
     })
 }
 
+/// The conversion-local filesystem font paths, when code generation is
+/// running under a native font context.
+///
+/// Returning `Some` for an active context with no extra paths is intentional:
+/// its fallback chain can still differ through a conversion-local last-resort
+/// family, so family-only process caches are not authoritative in that scope.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn active_font_search_paths() -> Option<Vec<std::path::PathBuf>> {
+    ACTIVE_FONT_CONTEXT.with(|active_context| {
+        active_context
+            .borrow()
+            .as_ref()
+            .map(|context| context.search_paths().to_vec())
+    })
+}
+
 /// The font list for a run that states a Latin family and an East Asian one.
 ///
 /// Word shapes a run's Latin codepoints with `w:ascii` and its East Asian ones
