@@ -69,7 +69,7 @@ fn test_table_with_default_cell_padding() {
         use_content_driven_row_heights: false,
         default_vertical_align: None,
         seats_bottom_aligned_text_on_descender: false,
-        paints_borders_inside_boundary: false,
+        border_paint_model: TableBorderPaintModel::CenteredStroke,
         prints_gridlines: false,
         prints_headings: false,
     };
@@ -121,7 +121,7 @@ fn test_table_cell_with_padding_override() {
         use_content_driven_row_heights: false,
         default_vertical_align: None,
         seats_bottom_aligned_text_on_descender: false,
-        paints_borders_inside_boundary: false,
+        border_paint_model: TableBorderPaintModel::CenteredStroke,
         prints_gridlines: false,
         prints_headings: false,
     };
@@ -150,7 +150,7 @@ fn test_table_alignment_center_wraps_table() {
         use_content_driven_row_heights: false,
         default_vertical_align: None,
         seats_bottom_aligned_text_on_descender: false,
-        paints_borders_inside_boundary: false,
+        border_paint_model: TableBorderPaintModel::CenteredStroke,
         prints_gridlines: false,
         prints_headings: false,
     };
@@ -853,7 +853,7 @@ fn bottom_aligned_spill_cell_anchors_its_line_box_at_the_bottom() {
         column_widths: vec![60.0],
         default_vertical_align: Some(CellVerticalAlign::Bottom),
         seats_bottom_aligned_text_on_descender: true,
-        paints_borders_inside_boundary: false,
+        border_paint_model: TableBorderPaintModel::CenteredStroke,
         prints_gridlines: false,
         prints_headings: false,
         ..Table::default()
@@ -921,7 +921,7 @@ fn center_aligned_spill_cell_sizes_its_clip_box_from_its_own_font() {
             column_widths: vec![60.0],
             default_vertical_align: Some(CellVerticalAlign::Bottom),
             seats_bottom_aligned_text_on_descender: true,
-            paints_borders_inside_boundary: false,
+            border_paint_model: TableBorderPaintModel::CenteredStroke,
             prints_gridlines: false,
             prints_headings: false,
             ..Table::default()
@@ -1158,7 +1158,7 @@ fn separator_bordered_headings_table(data_cell: TableCell, prints_gridlines: boo
         column_widths: vec![23.0, 120.0],
         prints_headings: true,
         prints_gridlines,
-        paints_borders_inside_boundary: true,
+        border_paint_model: TableBorderPaintModel::ExcelBoundaryBands,
         ..Table::default()
     }
 }
@@ -1578,7 +1578,7 @@ fn a_row_minimum_height_emits_a_strut_rather_than_a_fixed_row() {
         use_content_driven_row_heights: false,
         default_vertical_align: None,
         seats_bottom_aligned_text_on_descender: false,
-        paints_borders_inside_boundary: false,
+        border_paint_model: TableBorderPaintModel::CenteredStroke,
         prints_gridlines: false,
         prints_headings: false,
     };

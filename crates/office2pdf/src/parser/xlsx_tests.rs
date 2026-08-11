@@ -1075,7 +1075,7 @@ fn test_print_options_grid_lines_flags_the_sheet_table() {
         "printOptions gridLines must set the table's gridline flag"
     );
     assert!(
-        table.paints_borders_inside_boundary,
+        table.border_paint_model == TableBorderPaintModel::ExcelBoundaryBands,
         "the gridline flag rides on the boundary-band regime"
     );
 

@@ -2,7 +2,7 @@ use super::*;
 use crate::ir::ChartAreaOutline;
 use crate::ir::{
     AxisTickMark, Block, HFInline, HeaderFooter, HeaderFooterParagraph, Margins, PageSize,
-    Paragraph, ParagraphStyle, Run, TextStyle,
+    Paragraph, ParagraphStyle, Run, TableBorderPaintModel, TextStyle,
 };
 
 fn cell(text: &str) -> TableCell {
@@ -68,7 +68,7 @@ fn make_page(column_widths: Vec<f64>, rows: Vec<TableRow>) -> SheetPage {
             use_content_driven_row_heights: false,
             default_vertical_align: None,
             seats_bottom_aligned_text_on_descender: false,
-            paints_borders_inside_boundary: false,
+            border_paint_model: TableBorderPaintModel::CenteredStroke,
             prints_gridlines: false,
             prints_headings: false,
         },

@@ -4,7 +4,7 @@ use crate::config::ConvertOptions;
 use crate::error::{ConvertError, ConvertWarning};
 use crate::ir::{
     Chart, Document, ImageData, Margins, Metadata, Page, PageSize, SheetPage, StyleSheet, Table,
-    TableRow,
+    TableBorderPaintModel, TableRow,
 };
 use crate::parser::Parser;
 
@@ -586,7 +586,7 @@ impl XlsxParser {
                         use_content_driven_row_heights: false,
                         default_vertical_align: Some(crate::ir::CellVerticalAlign::Bottom),
                         seats_bottom_aligned_text_on_descender: true,
-                        paints_borders_inside_boundary: true,
+                        border_paint_model: TableBorderPaintModel::ExcelBoundaryBands,
                         prints_gridlines: sheet_print_options.prints_gridlines,
                         prints_headings: false,
                     },
@@ -830,7 +830,7 @@ impl Parser for XlsxParser {
                         use_content_driven_row_heights: false,
                         default_vertical_align: Some(crate::ir::CellVerticalAlign::Bottom),
                         seats_bottom_aligned_text_on_descender: true,
-                        paints_borders_inside_boundary: true,
+                        border_paint_model: TableBorderPaintModel::ExcelBoundaryBands,
                         prints_gridlines: sheet_print_options.prints_gridlines,
                         prints_headings: false,
                     },
@@ -936,7 +936,7 @@ impl Parser for XlsxParser {
                             use_content_driven_row_heights: false,
                             default_vertical_align: Some(crate::ir::CellVerticalAlign::Bottom),
                             seats_bottom_aligned_text_on_descender: true,
-                            paints_borders_inside_boundary: true,
+                            border_paint_model: TableBorderPaintModel::ExcelBoundaryBands,
                             prints_gridlines: sheet_print_options.prints_gridlines,
                             prints_headings: false,
                         },

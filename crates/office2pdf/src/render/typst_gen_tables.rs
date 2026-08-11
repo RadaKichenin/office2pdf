@@ -144,15 +144,18 @@ fn generate_table_inner(
             .push(heading_strip_row_count + lead_row_count + header_row_count);
     }
 
-    // A boundary-band table (Excel) resolves which cell paints each shared
-    // boundary before emission: the bands are boundary-anchored and
+    // Excel and Word boundary-band tables resolve which cell paints each
+    // shared boundary before emission: the bands are boundary-anchored and
     // declaration-independent, so a boundary declared by both neighbours must
-    // paint exactly once (issue #619). Resolved separately from
+    // paint exactly once (issues #619 and #724). Resolved separately from
     // `TableCell::border` so the layout inset of #500/#503 keeps following
     // each cell's own declaration and no text moves.
-    let painted_borders: Option<Vec<Vec<Option<CellBorder>>>> = table
-        .paints_borders_inside_boundary
-        .then(|| resolve_boundary_painted_borders(table, num_cols, &repeating_header_boundaries));
+    let boundary_band_model: Option<TableBorderPaintModel> = match table.border_paint_model {
+        TableBorderPaintModel::CenteredStroke => None,
+        model => Some(model),
+    };
+    let painted_borders: Option<Vec<Vec<Option<CellBorder>>>> = boundary_band_model
+        .map(|_| resolve_boundary_painted_borders(table, num_cols, &repeating_header_boundaries));
     if heading_strip_row_count > 0 {
         // GT prints the column-letter strip on every page (issue #623); the
         // outermost header level repeats above the print-title headers below.
@@ -163,6 +166,7 @@ fn generate_table_inner(
             painted_borders
                 .as_deref()
                 .map(|p| &p[..heading_strip_row_count]),
+            boundary_band_model,
             &table.column_widths,
             num_cols,
             &mut rowspan_remaining,
@@ -187,6 +191,7 @@ fn generate_table_inner(
             painted_borders
                 .as_deref()
                 .map(|p| &p[lead_start..lead_start + lead_row_count]),
+            boundary_band_model,
             &table.column_widths,
             num_cols,
             &mut rowspan_remaining,
@@ -216,6 +221,7 @@ fn generate_table_inner(
             painted_borders
                 .as_deref()
                 .map(|p| &p[title_start..title_start + header_row_count]),
+            boundary_band_model,
             &table.column_widths,
             num_cols,
             &mut rowspan_remaining,
@@ -233,6 +239,7 @@ fn generate_table_inner(
         painted_borders
             .as_deref()
             .map(|p| &p[title_start + header_row_count..]),
+        boundary_band_model,
         &table.column_widths,
         num_cols,
         &mut rowspan_remaining,
@@ -251,6 +258,7 @@ fn generate_table_rows(
     out: &mut String,
     rows: &[TableRow],
     painted_borders: Option<&[Vec<Option<CellBorder>>]>,
+    boundary_band_model: Option<TableBorderPaintModel>,
     // The table's declared column widths, in points, so each cell can bound
     // how wide a framed eojeol may be (issue #626). Empty when the table
     // declares none.
@@ -304,6 +312,8 @@ fn generate_table_rows(
             let boundary_band: Option<BoundaryBandCell> =
                 painted_borders.map(|p| BoundaryBandCell {
                     painted_border: &p[row_index][cell_index],
+                    paint_model: boundary_band_model
+                        .expect("painted borders require a boundary-band model"),
                     vertical_extent: vertical_band_extent(
                         rows,
                         row_index,
@@ -558,18 +568,29 @@ fn generate_table_cell(
     }
 
     if let Some(band) = &boundary_band {
-        // Boundary-band regime (Excel, issue #619): every side — doubles
-        // included — paints as boundary-anchored overlay bands, never as a
-        // cell stroke. Offsets back out the cell's *effective* inset (the
-        // padding plus the half border widths #500/#503 reserve) so the bands
-        // land on the nominal grid boundaries.
         if let Some(border) = band.painted_border {
-            write_boundary_anchored_border_overlays(
-                out,
-                border,
-                cell_inset_with_border(cell, default_cell_padding),
-                &band.vertical_extent,
-            );
+            let inset: Insets = cell_inset_with_border(cell, default_cell_padding);
+            match band.paint_model {
+                TableBorderPaintModel::ExcelBoundaryBands => {
+                    write_boundary_anchored_border_overlays(
+                        out,
+                        border,
+                        inset,
+                        &band.vertical_extent,
+                    );
+                }
+                TableBorderPaintModel::WordPositiveAxisBands => {
+                    write_word_positive_axis_border_overlays(
+                        out,
+                        border,
+                        inset,
+                        &band.vertical_extent,
+                    );
+                }
+                TableBorderPaintModel::CenteredStroke => {
+                    unreachable!("centred strokes do not select the boundary-band path")
+                }
+            }
         }
     } else if let Some(border) = &cell.border {
         write_double_border_overlays(out, border, cell.padding.unwrap_or(default_cell_padding));
@@ -977,13 +998,14 @@ fn boundary_conflict_rank(side: &BorderSide) -> BoundaryConflictRank {
 /// Which border sides each cell paints in the boundary-band regime, parallel
 /// to `table.rows[r].cells[c]`.
 ///
-/// Excel's printed border belongs to the grid *boundary*, not to the
-/// declaring cell: the band is anchored to the boundary whichever neighbour
-/// declares it, so a boundary declared by both neighbours must paint exactly
-/// once, and Excel resolves conflicting declarations to the heavier style
-/// per [`BoundaryConflictRank`]. Each internal boundary is therefore left on
-/// exactly one declaration — the highest-ranked one, ties going to the
-/// lower/right cell's top/left slot.
+/// A printed border belongs to the grid *boundary*, not to the declaring
+/// cell: the band is anchored to the boundary whichever neighbour declares
+/// it, so a boundary declared by both neighbours must paint exactly once.
+/// Conflicting declarations resolve to the heavier style per
+/// [`BoundaryConflictRank`]. Each internal boundary is therefore left on the
+/// highest-ranked declaration; equal declarations use the lower/right cell's
+/// top/left slot. That slot paints toward positive x/y for both Excel's
+/// measured bands and Word's filled rectangles.
 ///
 /// Suppression is whole-side: when merged cells overlap a boundary only
 /// partially, both declarations are kept and the equal bands overlap
@@ -1131,9 +1153,13 @@ pub(super) fn resolve_boundary_painted_borders(
     // in the ink.
     //
     // Scoped to sheets that print headings, which is where the frame is a
-    // stated Excel behaviour; Word tables keep the single-owner resolution so
-    // their calibrated border geometry is untouched.
+    // stated Excel behaviour. Word tables keep one owner per boundary.
     let keeps_coincident_horizontal_bands: bool = table.prints_headings;
+    // The repeating-header ownership exception was measured for Excel's
+    // split header/body emission. Word paints an equal shared rule inside the
+    // following body row even when the row above repeats (#724).
+    let applies_excel_repeating_header_ownership: bool =
+        table.border_paint_model == TableBorderPaintModel::ExcelBoundaryBands;
 
     let mut painted: Vec<Vec<Option<CellBorder>>> = table
         .rows
@@ -1153,8 +1179,8 @@ pub(super) fn resolve_boundary_painted_borders(
         // boundary in every rank combination. The repeating-header boundary
         // inverts the tie direction (see the function docs).
         let bottom_boundary: usize = placement.row_index + placement.row_span;
-        let bottom_is_repeating_header_boundary: bool =
-            repeating_header_boundaries.contains(&bottom_boundary);
+        let bottom_is_repeating_header_boundary: bool = applies_excel_repeating_header_ownership
+            && repeating_header_boundaries.contains(&bottom_boundary);
         if let Some(side) = &resolved.bottom
             && (bottom_is_repeating_header_boundary || !keeps_coincident_horizontal_bands)
             && column_tracks.clone().all(|col| {
@@ -1195,7 +1221,9 @@ pub(super) fn resolve_boundary_painted_borders(
                     .is_some_and(|neighbour| {
                         let neighbour_rank = boundary_conflict_rank(neighbour);
                         let own_rank = boundary_conflict_rank(side);
-                        if repeating_header_boundaries.contains(&placement.row_index) {
+                        if applies_excel_repeating_header_ownership
+                            && repeating_header_boundaries.contains(&placement.row_index)
+                        {
                             // Ties at the repeating-header boundary stay with
                             // the header's bottom declaration.
                             neighbour_rank >= own_rank
@@ -1411,6 +1439,8 @@ struct BoundaryBandCell<'a> {
     /// The sides this cell paints after shared-boundary resolution. `None`
     /// paints nothing but still selects the band regime (no cell stroke).
     painted_border: &'a Option<CellBorder>,
+    /// The source application's placement convention for those bands.
+    paint_model: TableBorderPaintModel,
     /// How far this cell's vertical bands may extend.
     vertical_extent: VerticalBandExtent,
 }
@@ -1526,6 +1556,277 @@ fn auto_row_frame_height_estimate_pt(
         .fold(None, |tallest: Option<f64>, height| {
             Some(tallest.map_or(height, |t| t.max(height)))
         })
+}
+
+/// Word's PDF graphics grid is 1/300 inch (0.24 pt). Its native exports snap
+/// a declared half-point table border to two grid units, or 0.48 pt (#724).
+const WORD_PDF_GRAPHICS_GRID_PT: f64 = 72.0 / 300.0;
+
+fn word_pdf_border_side(side: &BorderSide) -> BorderSide {
+    let grid_units: f64 = (side.width / WORD_PDF_GRAPHICS_GRID_PT).round().max(1.0);
+    BorderSide {
+        width: grid_units * WORD_PDF_GRAPHICS_GRID_PT,
+        ..side.clone()
+    }
+}
+
+/// Paint Word table borders as rectangles whose leading edge is the nominal
+/// grid boundary and whose ink extends along positive x/y (#724). Solid and
+/// double rules use filled rectangles, matching Word's PDF primitives;
+/// patterned rules keep a line solely to preserve their dash sequence.
+fn write_word_positive_axis_border_overlays(
+    out: &mut String,
+    border: &CellBorder,
+    inset: Insets,
+    vertical_extent: &VerticalBandExtent,
+) {
+    if let Some(side) = &border.top {
+        write_word_horizontal_border(out, side, inset, true);
+    }
+    if let Some(side) = &border.bottom {
+        write_word_horizontal_border(out, side, inset, false);
+    }
+    if let Some(side) = &border.left {
+        write_word_vertical_border(out, side, inset, vertical_extent, true);
+    }
+    if let Some(side) = &border.right {
+        write_word_vertical_border(out, side, inset, vertical_extent, false);
+    }
+}
+
+fn write_word_horizontal_border(out: &mut String, side: &BorderSide, inset: Insets, is_top: bool) {
+    let painted_side: BorderSide = word_pdf_border_side(side);
+    let horizontal_length: String =
+        format!("100% + {}pt", format_geometry(inset.left + inset.right));
+    let align: &str = if is_top {
+        "top + left"
+    } else {
+        "bottom + left"
+    };
+    let offsets: &[f64] = if painted_side.style == BorderLineStyle::Double {
+        &[0.0, painted_side.width * 2.0]
+    } else {
+        &[0.0]
+    };
+    for inward_offset in offsets {
+        if matches!(
+            painted_side.style,
+            BorderLineStyle::Solid | BorderLineStyle::Double | BorderLineStyle::None
+        ) {
+            let dy: f64 = if is_top {
+                -inset.top + inward_offset
+            } else {
+                inset.bottom + painted_side.width + inward_offset
+            };
+            write_word_band_rect(
+                out,
+                align,
+                &format!("{}pt", format_geometry(-inset.left)),
+                &format!("{}pt", format_geometry(dy)),
+                &horizontal_length,
+                &format!("{}pt", format_geometry(painted_side.width)),
+                &painted_side.color,
+            );
+        } else {
+            let centre: f64 = painted_side.width / 2.0;
+            let dy: f64 = if is_top {
+                -inset.top + centre
+            } else {
+                inset.bottom + centre
+            };
+            write_boundary_band_line(
+                out,
+                align,
+                -inset.left,
+                dy,
+                "0deg",
+                &horizontal_length,
+                &painted_side,
+            );
+        }
+    }
+}
+
+fn write_word_vertical_border(
+    out: &mut String,
+    side: &BorderSide,
+    inset: Insets,
+    vertical_extent: &VerticalBandExtent,
+    is_left: bool,
+) {
+    let painted_side: BorderSide = word_pdf_border_side(side);
+    let align: &str = if is_left { "top + left" } else { "top + right" };
+    let offsets: &[f64] = if painted_side.style == BorderLineStyle::Double {
+        &[0.0, painted_side.width * 2.0]
+    } else {
+        &[0.0]
+    };
+    for inward_offset in offsets {
+        let band_anchor_x: f64 = if is_left {
+            -inset.left + inward_offset
+        } else {
+            inset.right + painted_side.width + inward_offset
+        };
+        if matches!(
+            painted_side.style,
+            BorderLineStyle::Solid | BorderLineStyle::Double | BorderLineStyle::None
+        ) {
+            write_word_vertical_band_rect(
+                out,
+                align,
+                band_anchor_x,
+                painted_side.width,
+                inset,
+                vertical_extent,
+                &painted_side.color,
+            );
+        } else {
+            let centre_x: f64 = if is_left {
+                band_anchor_x + painted_side.width / 2.0
+            } else {
+                band_anchor_x - painted_side.width / 2.0
+            };
+            write_word_patterned_vertical_band(
+                out,
+                align,
+                centre_x,
+                inset,
+                vertical_extent,
+                &painted_side,
+            );
+        }
+    }
+}
+
+fn write_word_vertical_band_rect(
+    out: &mut String,
+    align: &str,
+    dx: f64,
+    width: f64,
+    inset: Insets,
+    vertical_extent: &VerticalBandExtent,
+    color: &Color,
+) {
+    let dx: String = format!("{}pt", format_geometry(dx));
+    let width: String = format!("{}pt", format_geometry(width));
+    match *vertical_extent {
+        VerticalBandExtent::FrameHeight(frame_height_pt) => {
+            write_word_band_rect(
+                out,
+                align,
+                &dx,
+                &format!("{}pt", format_geometry(-inset.top)),
+                &width,
+                &format!("{}pt", format_geometry(frame_height_pt)),
+                color,
+            );
+        }
+        VerticalBandExtent::TwinBands(frame_estimate_pt) => {
+            let height: String = format!("{}pt", format_geometry(frame_estimate_pt));
+            write_word_band_rect(
+                out,
+                align,
+                &dx,
+                &format!("{}pt", format_geometry(-inset.top)),
+                &width,
+                &height,
+                color,
+            );
+            write_word_band_rect(
+                out,
+                &align.replacen("top", "bottom", 1),
+                &dx,
+                &format!("{}pt", format_geometry(inset.bottom)),
+                &width,
+                &height,
+                color,
+            );
+        }
+        VerticalBandExtent::TwinBandsEmFallback => {
+            let height: String = format!("1.2em + {}pt", format_geometry(inset.top + inset.bottom));
+            write_word_band_rect(
+                out,
+                align,
+                &dx,
+                &format!("{}pt", format_geometry(-inset.top)),
+                &width,
+                &height,
+                color,
+            );
+            write_word_band_rect(
+                out,
+                &align.replacen("top", "bottom", 1),
+                &dx,
+                &format!("{}pt", format_geometry(inset.bottom)),
+                &width,
+                &height,
+                color,
+            );
+        }
+    }
+}
+
+fn write_word_patterned_vertical_band(
+    out: &mut String,
+    align: &str,
+    dx: f64,
+    inset: Insets,
+    vertical_extent: &VerticalBandExtent,
+    side: &BorderSide,
+) {
+    match *vertical_extent {
+        VerticalBandExtent::FrameHeight(frame_height_pt) => write_boundary_band_line(
+            out,
+            align,
+            dx,
+            -inset.top,
+            "90deg",
+            &format!("{}pt", format_geometry(frame_height_pt)),
+            side,
+        ),
+        VerticalBandExtent::TwinBands(frame_estimate_pt) => {
+            let length: String = format!("{}pt", format_geometry(frame_estimate_pt));
+            write_boundary_band_line(out, align, dx, -inset.top, "90deg", &length, side);
+            write_boundary_band_line(
+                out,
+                &align.replacen("top", "bottom", 1),
+                dx,
+                inset.bottom,
+                "-90deg",
+                &length,
+                side,
+            );
+        }
+        VerticalBandExtent::TwinBandsEmFallback => {
+            let length: String = format!("1.2em + {}pt", format_geometry(inset.top + inset.bottom));
+            write_boundary_band_line(out, align, dx, -inset.top, "90deg", &length, side);
+            write_boundary_band_line(
+                out,
+                &align.replacen("top", "bottom", 1),
+                dx,
+                inset.bottom,
+                "-90deg",
+                &length,
+                side,
+            );
+        }
+    }
+}
+
+fn write_word_band_rect(
+    out: &mut String,
+    align: &str,
+    dx: &str,
+    dy: &str,
+    width: &str,
+    height: &str,
+    color: &Color,
+) {
+    let _ = write!(
+        out,
+        "#place({align}, dx: {dx}, dy: {dy}, rect(width: {width}, height: {height}, fill: {}, stroke: none))",
+        rgb(color),
+    );
 }
 
 /// Paint a cell's borders as filled bands anchored to the nominal grid
@@ -1732,9 +2033,10 @@ fn write_cell_params(
         );
     }
     // A boundary-band cell paints its borders as overlays instead: a Typst
-    // stroke is centred on the track boundary, half a width off Excel's
-    // boundary-anchored band (issue #619). The `inset` above still reserves
-    // the border's layout space either way.
+    // stroke is centred on the track boundary, which cannot reproduce either
+    // Excel's measured bands (#619) or Word's positive-axis rectangles
+    // (#724). The
+    // `inset` above still reserves the border's layout space either way.
     if !paints_boundary_bands && let Some(ref border) = cell.border {
         let stroke = format_cell_stroke(border);
         if !stroke.is_empty() {

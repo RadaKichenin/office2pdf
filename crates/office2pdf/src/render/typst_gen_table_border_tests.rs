@@ -369,7 +369,7 @@ fn test_solid_border_no_dash_param() {
 // boundary B (native Excel 16.111 one-factor probe + golden-mock GT traces):
 // thin/hair fill [B, B+1], medium [B-1, B+1], thick [B-1, B+2], double two
 // 1pt bands [B-1, B] and [B+1, B+2]. Tables flagged
-// `paints_borders_inside_boundary` must realize these bands as offset overlay
+// `TableBorderPaintModel::ExcelBoundaryBands` must realize these bands as offset overlay
 // lines instead of Typst cell strokes, which Typst centres on the boundary.
 // ---------------------------------------------------------------------------
 
@@ -402,7 +402,7 @@ fn boundary_band_table(rows: Vec<TableRow>, column_widths: Vec<f64>) -> Table {
     Table {
         rows,
         column_widths,
-        paints_borders_inside_boundary: true,
+        border_paint_model: TableBorderPaintModel::ExcelBoundaryBands,
         ..Table::default()
     }
 }
@@ -697,10 +697,10 @@ fn test_boundary_band_patterned_style_keeps_dash_dict() {
 }
 
 #[test]
-fn test_word_style_table_keeps_centred_strokes_byte_identically() {
-    // DOCX/PPTX tables (flag unset) keep the exact stroke emission: their
-    // border-painting conventions are unmeasured against native GT, so the
-    // #619 band regime must not leak into them.
+fn test_unflagged_table_keeps_centred_strokes_byte_identically() {
+    // Synthetic and PowerPoint tables with the default model keep the exact
+    // stroke emission. DOCX selects WordPositiveAxisBands after #724; the #619
+    // and #724 band regimes must not leak into unflagged tables.
     let border = CellBorder {
         top: Some(solid_side(1.0)),
         bottom: Some(solid_side(1.0)),
@@ -727,6 +727,167 @@ fn test_word_style_table_keeps_centred_strokes_byte_identically() {
     assert!(
         !result.contains("#place("),
         "unflagged solid borders must not paint overlays: {result}"
+    );
+}
+
+#[test]
+fn test_word_bands_quantize_and_paint_on_the_positive_axis() {
+    let border = CellBorder {
+        top: Some(solid_side(0.5)),
+        bottom: Some(solid_side(0.5)),
+        left: Some(solid_side(0.5)),
+        right: Some(solid_side(0.5)),
+    };
+    let table = Table {
+        rows: vec![fixed_row(vec![bordered_text_cell("Word", border)])],
+        column_widths: vec![100.0],
+        border_paint_model: TableBorderPaintModel::WordPositiveAxisBands,
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        !result.contains("stroke: ("),
+        "Word borders must not use centred table-cell strokes: {result}"
+    );
+    assert!(
+        result.contains(
+            "#place(top + left, dx: -5pt, dy: -5.25pt, rect(width: 100% + 10pt, height: 0.48pt, fill: rgb(0, 0, 0), stroke: none))"
+        ),
+        "the top 0.48pt band must start at the boundary and paint down: {result}"
+    );
+    assert!(
+        result.contains(
+            "#place(bottom + left, dx: -5pt, dy: 5.73pt, rect(width: 100% + 10pt, height: 0.48pt, fill: rgb(0, 0, 0), stroke: none))"
+        ),
+        "the bottom band must start at the boundary and paint down: {result}"
+    );
+    assert!(
+        result.contains(
+            "#place(top + left, dx: -5pt, dy: -5.25pt, rect(width: 0.48pt, height: 20pt, fill: rgb(0, 0, 0), stroke: none))"
+        ),
+        "the left band must start at the boundary and paint right: {result}"
+    );
+    assert!(
+        result.contains(
+            "#place(top + right, dx: 5.48pt, dy: -5.25pt, rect(width: 0.48pt, height: 20pt, fill: rgb(0, 0, 0), stroke: none))"
+        ),
+        "the right band must start at the boundary and paint right: {result}"
+    );
+}
+
+#[test]
+fn test_word_shared_boundary_starts_inside_the_following_cell() {
+    let left_cell = bordered_text_cell(
+        "L",
+        CellBorder {
+            top: None,
+            bottom: None,
+            left: None,
+            right: Some(solid_side(1.25)),
+        },
+    );
+    let right_cell = bordered_text_cell(
+        "R",
+        CellBorder {
+            top: None,
+            bottom: None,
+            left: Some(solid_side(1.25)),
+            right: None,
+        },
+    );
+    let table = Table {
+        rows: vec![fixed_row(vec![left_cell, right_cell])],
+        column_widths: vec![100.0, 100.0],
+        border_paint_model: TableBorderPaintModel::WordPositiveAxisBands,
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert_eq!(
+        result.matches("width: 1.2pt, height: 20pt").count(),
+        1,
+        "a shared Word boundary must paint once: {result}"
+    );
+    assert!(
+        result.contains(
+            "#place(top + left, dx: -5pt, dy: -5pt, rect(width: 1.2pt, height: 20pt, fill: rgb(0, 0, 0), stroke: none))"
+        ),
+        "the following cell must own the 1.2pt band on its interior side: {result}"
+    );
+}
+
+#[test]
+fn test_word_auto_row_bottom_twin_anchors_at_the_cell_boundary() {
+    let cell = bordered_text_cell(
+        "Auto",
+        CellBorder {
+            top: None,
+            bottom: None,
+            left: Some(solid_side(0.5)),
+            right: None,
+        },
+    );
+    let table = Table {
+        rows: vec![TableRow {
+            minimum_height: None,
+            cells: vec![cell],
+            height: None,
+        }],
+        column_widths: vec![100.0],
+        border_paint_model: TableBorderPaintModel::WordPositiveAxisBands,
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains("#place(bottom + left, dx: -5pt, dy: 5pt, rect(width: 0.48pt, height:"),
+        "the lower twin's bottom edge must sit on the cell boundary: {result}"
+    );
+}
+
+#[test]
+fn test_word_repeating_header_boundary_starts_inside_the_body_row() {
+    let upper = bordered_text_cell(
+        "Header",
+        CellBorder {
+            top: None,
+            bottom: Some(solid_side(0.5)),
+            left: None,
+            right: None,
+        },
+    );
+    let lower = bordered_text_cell(
+        "Body",
+        CellBorder {
+            top: Some(solid_side(0.5)),
+            bottom: None,
+            left: None,
+            right: None,
+        },
+    );
+    let table = Table {
+        rows: vec![fixed_row(vec![upper]), fixed_row(vec![lower])],
+        column_widths: vec![100.0],
+        header_row_count: 1,
+        border_paint_model: TableBorderPaintModel::WordPositiveAxisBands,
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains(
+            "#place(top + left, dx: -5pt, dy: -5.25pt, rect(width: 100% + 10pt, height: 0.48pt, fill: rgb(0, 0, 0), stroke: none))Body"
+        ),
+        "the Word body row must own the repeated-header boundary: {result}"
+    );
+    assert!(
+        !result.contains("#place(bottom + left"),
+        "the Word header must not paint the shared rule upward: {result}"
     );
 }
 
@@ -1132,7 +1293,7 @@ fn gridline_table(rows: Vec<TableRow>, column_widths: Vec<f64>) -> Table {
     Table {
         rows,
         column_widths,
-        paints_borders_inside_boundary: true,
+        border_paint_model: TableBorderPaintModel::ExcelBoundaryBands,
         prints_gridlines: true,
         ..Table::default()
     }
@@ -1358,9 +1519,9 @@ fn test_gridlines_absent_without_the_flag() {
     );
 
     // The gridline convention is measured only for Excel's boundary-band
-    // regime; a table outside it (Word/PowerPoint) must ignore the flag.
+    // regime; a centred-stroke table outside it must ignore the flag.
     let mut word_style = gridline_table(vec![fixed_row(vec![plain_text_cell("W")])], vec![100.0]);
-    word_style.paints_borders_inside_boundary = false;
+    word_style.border_paint_model = TableBorderPaintModel::CenteredStroke;
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(word_style)])]);
     let result = generate_typst(&doc).unwrap().source;
     assert!(

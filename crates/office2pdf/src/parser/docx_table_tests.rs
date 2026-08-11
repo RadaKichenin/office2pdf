@@ -30,6 +30,11 @@ fn test_table_simple_2x2() {
     assert_eq!(t.rows.len(), 2);
     assert_eq!(t.rows[0].cells.len(), 2);
     assert_eq!(t.rows[1].cells.len(), 2);
+    assert_eq!(
+        t.border_paint_model,
+        crate::ir::TableBorderPaintModel::WordPositiveAxisBands,
+        "DOCX tables must select Word's positive-axis border bands"
+    );
 
     let cell_text = |row: usize, col: usize| -> String {
         t.rows[row].cells[col]

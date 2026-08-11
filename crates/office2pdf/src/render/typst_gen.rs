@@ -14,8 +14,9 @@ use crate::ir::{
     LegendPosition, LineBox, LineSpacing, List, ListKind, Margins, MathEquation, Metadata, Page,
     PageNumberFormat, PageSize, PairKerning, Paragraph, ParagraphStyle, PatternFill, PatternPreset,
     PositionedTabAlignment, PositionedTabRelativeTo, Run, Shadow, Shape, ShapeKind, SheetPage,
-    SmartArt, TabAlignment, TabLeader, TabStop, Table, TableCell, TableOfContents, TableRow,
-    TextBoxData, TextBoxVerticalAlign, TextDirection, TextStyle, VerticalTextAlign, WrapMode,
+    SmartArt, TabAlignment, TabLeader, TabStop, Table, TableBorderPaintModel, TableCell,
+    TableOfContents, TableRow, TextBoxData, TextBoxVerticalAlign, TextDirection, TextStyle,
+    VerticalTextAlign, WrapMode,
 };
 
 use self::diagrams::{generate_chart, generate_chart_in, generate_smartart};
@@ -849,7 +850,7 @@ fn generate_table_with_anchors(
                     default_vertical_align: table.default_vertical_align,
                     seats_bottom_aligned_text_on_descender: table
                         .seats_bottom_aligned_text_on_descender,
-                    paints_borders_inside_boundary: table.paints_borders_inside_boundary,
+                    border_paint_model: table.border_paint_model,
                     prints_gridlines: table.prints_gridlines,
                     // Only the segment that still starts with the letter-strip
                     // row may treat rows[0] as that strip (issue #623); the
@@ -893,7 +894,7 @@ fn generate_table_with_anchors(
             use_content_driven_row_heights: table.use_content_driven_row_heights,
             default_vertical_align: table.default_vertical_align,
             seats_bottom_aligned_text_on_descender: table.seats_bottom_aligned_text_on_descender,
-            paints_borders_inside_boundary: table.paints_borders_inside_boundary,
+            border_paint_model: table.border_paint_model,
             prints_gridlines: table.prints_gridlines,
             // See the in-loop segment above: the strip row exists only in the
             // segment beginning at rows[0].
