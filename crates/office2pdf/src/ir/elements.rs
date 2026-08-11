@@ -66,6 +66,11 @@ pub struct HeaderFooterFrame {
     /// downward from the box's top, which is the only way its height enters
     /// the position (issue #847).
     pub bottom_offset: Option<f64>,
+    /// Whether the box's paragraph wraps inside it. `<a:bodyPr wrap="none">`
+    /// says it does not: the line stays whole and hangs out of the text column,
+    /// which the same element's `horzOverflow="overflow"` then permits
+    /// (issue #967). True for everything else, including a `w:framePr` frame.
+    pub wraps_text: bool,
 }
 
 /// Which edge of the reference frame a `<wp:align>` pins a shape to.

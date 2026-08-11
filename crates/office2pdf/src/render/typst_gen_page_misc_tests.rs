@@ -175,6 +175,7 @@ fn test_generate_page_anchored_footer_frame_in_foreground() {
                 border: None,
                 border_space: None,
                 frame: Some(HeaderFooterFrame {
+                    wraps_text: true,
                     x: Some(71.8),
                     y: Some(198.5),
                     width: None,
@@ -231,6 +232,7 @@ fn test_page_anchored_frame_page_number_compiles() {
                 border: None,
                 border_space: None,
                 frame: Some(HeaderFooterFrame {
+                    wraps_text: true,
                     x: Some(50.0),
                     y: Some(25.0),
                     width: None,
@@ -2787,6 +2789,7 @@ fn a_behind_text_header_banner_is_drawn_on_the_background_layer() {
         width: 609.12,
         height: 327.6,
         frame: HeaderFooterFrame {
+            wraps_text: true,
             x: None,
             y: None,
             width: Some(609.12),
@@ -2849,4 +2852,69 @@ fn a_behind_text_header_banner_is_drawn_on_the_background_layer() {
         "{}",
         output.source
     );
+}
+
+/// A `#block` fills its region and wraps; a `#box` shrinks to its content and
+/// does not. That is the whole difference between the one line `<a:bodyPr
+/// wrap="none">` asks for and the two lines a 1.33pt overflow produced
+/// (issue #967).
+#[test]
+fn a_non_wrapping_anchored_frame_sizes_to_its_content() {
+    use crate::ir::{
+        FrameAnchor, HFInline, HeaderFooter, HeaderFooterFrame, HeaderFooterParagraph,
+    };
+
+    let frame = |wraps_text: bool| HeaderFooterFrame {
+        x: Some(20.0),
+        y: Some(700.0),
+        width: Some(65.8),
+        height: None,
+        horizontal_anchor: FrameAnchor::Page,
+        vertical_anchor: FrameAnchor::Page,
+        horizontal_align: None,
+        vertical_align: None,
+        inset_left: 0.0,
+        inset_top: 0.0,
+        bottom_offset: None,
+        wraps_text,
+    };
+    let page = |wraps_text: bool| {
+        Page::Flow(FlowPage {
+            first_header: None,
+            first_footer: None,
+            size: PageSize::default(),
+            margins: Margins::default(),
+            content: vec![make_paragraph("Body")],
+            header: None,
+            footer: Some(HeaderFooter {
+                shapes: Vec::new(),
+                distance_from_edge: None,
+                paragraphs: vec![HeaderFooterParagraph {
+                    style: ParagraphStyle::default(),
+                    elements: vec![HFInline::Run(Run {
+                        text: "Sensitivity: Internal".to_string(),
+                        style: TextStyle::default(),
+                        href: None,
+                        footnote: None,
+                    })],
+                    border: None,
+                    border_space: None,
+                    frame: Some(frame(wraps_text)),
+                }],
+            }),
+            columns: None,
+            line_grid_pitch: None,
+            line_grid_snaps_lines: false,
+            page_numbering: None,
+        })
+    };
+
+    let non_wrapping = generate_typst(&make_doc(vec![page(false)])).unwrap().source;
+    assert!(non_wrapping.contains("[#box()["), "{non_wrapping}");
+    // The column width must not reach the markup at all — stating it is what
+    // makes Typst break the line.
+    assert!(!non_wrapping.contains("65.8pt"), "{non_wrapping}");
+
+    let wrapping = generate_typst(&make_doc(vec![page(true)])).unwrap().source;
+    assert!(wrapping.contains("[#block(width: 65.8pt)["), "{wrapping}");
 }
