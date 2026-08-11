@@ -863,6 +863,9 @@ struct PictureState {
     prst_adj: Option<f64>,
     in_prst_geom: bool,
     svg_blip_embed: Option<String>,
+    /// Office 2021 live-feed pictures (PowerPoint Cameo) use cover sizing,
+    /// unlike an ordinary DrawingML `a:stretch` picture (issue #976).
+    has_live_feed_properties: bool,
     img_layer_embeds: Vec<String>,
     crop: Option<ImageCrop>,
     /// Clockwise rotation from `a:xfrm/@rot` (issue #682).
@@ -1253,6 +1256,16 @@ fn finalize_picture(
                     .unwrap_or_else(|| (asset.data.clone(), format)),
                 _ => (asset.data.clone(), format),
             };
+            // DrawingML `a:stretch` normally scales non-uniformly. PowerPoint
+            // makes Office 2021 live-feed (Cameo) artwork an exception: it
+            // centre-crops the feed to the frame's aspect ratio. Narrow the SVG
+            // first so its later custom-geometry clip still spans the frame
+            // rather than being cropped together with the artwork (issue #976).
+            let data: Vec<u8> = if pic.has_live_feed_properties && format == ImageFormat::Svg {
+                cover_crop_svg_to_aspect_ratio(&data, pic.cx as f64, pic.cy as f64).unwrap_or(data)
+            } else {
+                data
+            };
             // Typst's corner radius expresses a rounded rectangle and nothing
             // else, so the crops it cannot draw are clipped out here instead:
             // baked into the alpha mask for a raster, wrapped in a
@@ -1412,6 +1425,103 @@ fn clip_svg_to_path(data: &[u8], subpaths: &[Vec<(f64, f64)>]) -> Option<Vec<u8>
     out.push_str("</g>");
     out.push_str(&text[close..]);
     Some(out.into_bytes())
+}
+
+/// Centre-crop an SVG viewport to `target_width / target_height`.
+///
+/// PowerPoint Cameo preserves the live feed's proportions while covering its
+/// picture frame. Rewriting both the `viewBox` and root viewport preserves that
+/// behaviour through Typst's later explicit-width-and-height stretch.
+fn cover_crop_svg_to_aspect_ratio(
+    data: &[u8],
+    target_width: f64,
+    target_height: f64,
+) -> Option<Vec<u8>> {
+    if !(target_width.is_finite()
+        && target_height.is_finite()
+        && target_width > 0.0
+        && target_height > 0.0)
+    {
+        return None;
+    }
+
+    let text: &str = std::str::from_utf8(data).ok()?;
+    let open_end: usize = text.find('>')?;
+    let head: &str = &text[..open_end];
+    if !head.trim_start().starts_with("<svg") {
+        return None;
+    }
+    let attr_start: usize = head.find("viewBox=\"")? + "viewBox=\"".len();
+    let attr_len: usize = head[attr_start..].find('"')?;
+    let values: Vec<f64> = head[attr_start..attr_start + attr_len]
+        .split(|c: char| c.is_whitespace() || c == ',')
+        .filter(|part| !part.is_empty())
+        .map(str::parse::<f64>)
+        .collect::<Result<Vec<f64>, _>>()
+        .ok()?;
+    let [x, y, width, height] = values[..] else {
+        return None;
+    };
+    if !(x.is_finite()
+        && y.is_finite()
+        && width.is_finite()
+        && height.is_finite()
+        && width > 0.0
+        && height > 0.0)
+    {
+        return None;
+    }
+
+    let target_aspect_ratio: f64 = target_width / target_height;
+    let source_aspect_ratio: f64 = width / height;
+    let (kept_x, kept_y, kept_width, kept_height): (f64, f64, f64, f64) =
+        if source_aspect_ratio > target_aspect_ratio {
+            let kept_width: f64 = height * target_aspect_ratio;
+            (x + (width - kept_width) / 2.0, y, kept_width, height)
+        } else {
+            let kept_height: f64 = width / target_aspect_ratio;
+            (x, y + (height - kept_height) / 2.0, width, kept_height)
+        };
+
+    let replacement: String = format!(
+        "viewBox=\"{} {} {} {}\"",
+        format_svg_number(kept_x),
+        format_svg_number(kept_y),
+        format_svg_number(kept_width),
+        format_svg_number(kept_height)
+    );
+    let mut out: String = String::with_capacity(text.len() + replacement.len());
+    out.push_str(&text[..attr_start - "viewBox=\"".len()]);
+    out.push_str(&replacement);
+    out.push_str(&text[attr_start + attr_len + 1..]);
+
+    let out: String = replace_svg_root_length(&out, "width", kept_width);
+    let out: String = replace_svg_root_length(&out, "height", kept_height);
+    Some(out.into_bytes())
+}
+
+/// Rewrite one root `<svg>` length while preserving its unit suffix.
+fn replace_svg_root_length(text: &str, name: &str, value: f64) -> String {
+    let Some(open_end) = text.find('>') else {
+        return text.to_string();
+    };
+    let needle: String = format!("{name}=\"");
+    let Some(offset) = text[..open_end].find(&needle) else {
+        return text.to_string();
+    };
+    let start: usize = offset + needle.len();
+    let Some(len) = text[start..open_end].find('"') else {
+        return text.to_string();
+    };
+    let old: &str = &text[start..start + len];
+    let unit: &str = old.trim_start_matches(|c: char| c.is_ascii_digit() || c == '.' || c == '-');
+    format!(
+        "{}{}{}{}",
+        &text[..start],
+        format_svg_number(value),
+        unit,
+        &text[start + len..]
+    )
 }
 
 /// A number for SVG markup: no exponent, and no trailing zeros to read past.
@@ -2243,6 +2353,9 @@ impl<'a> SlideXmlParser<'a> {
             b"svgBlip" if self.in_pic => {
                 self.pic.svg_blip_embed = get_attr_str(e, b"r:embed");
             }
+            b"liveFeedProps" if self.in_pic => {
+                self.pic.has_live_feed_properties = true;
+            }
             b"imgLayer" if self.in_pic => {
                 if let Some(rid) = get_attr_str(e, b"r:embed") {
                     self.pic.img_layer_embeds.push(rid);
@@ -2306,6 +2419,9 @@ impl<'a> SlideXmlParser<'a> {
             }
             b"svgBlip" if self.in_pic => {
                 self.pic.svg_blip_embed = get_attr_str(e, b"r:embed");
+            }
+            b"liveFeedProps" if self.in_pic => {
+                self.pic.has_live_feed_properties = true;
             }
             b"imgLayer" if self.in_pic => {
                 if let Some(rid) = get_attr_str(e, b"r:embed") {
