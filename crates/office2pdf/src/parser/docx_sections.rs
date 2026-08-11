@@ -86,7 +86,8 @@ pub(super) fn build_header_footer_assets<R: Read + Seek>(
         let Ok(header) = <docx_rs::Header as docx_rs::FromXML>::from_xml(xml.as_bytes()) else {
             continue;
         };
-        if let Some(converted) = convert_docx_header(&header, &images, &simple_fields) {
+        let anchors = scan_hf_anchors(&xml);
+        if let Some(converted) = convert_docx_header(&header, &images, &simple_fields, &anchors) {
             assets.headers.insert(relationship_id, converted);
         }
     }
@@ -101,8 +102,9 @@ pub(super) fn build_header_footer_assets<R: Read + Seek>(
         let Ok(footer) = <docx_rs::Footer as docx_rs::FromXML>::from_xml(xml.as_bytes()) else {
             continue;
         };
+        let anchors = scan_hf_anchors(&xml);
         if let Some(converted) =
-            convert_docx_footer(&footer, &images, &bidi_paragraphs, &simple_fields)
+            convert_docx_footer(&footer, &images, &bidi_paragraphs, &simple_fields, &anchors)
         {
             assets.footers.insert(relationship_id, converted);
         }
@@ -455,7 +457,9 @@ fn convert_docx_header(
     header: &docx_rs::Header,
     images: &ImageMap,
     simple_fields: &[Vec<SimpleFieldMarker>],
+    anchors: &[HfAnchorBox],
 ) -> Option<HeaderFooter> {
+    let mut anchors = anchors.iter();
     let paragraphs = header
         .children
         .iter()
@@ -464,13 +468,15 @@ fn convert_docx_header(
             _ => None,
         })
         .enumerate()
-        .map(|(index, paragraph)| {
-            convert_hf_paragraph(
+        .flat_map(|(index, paragraph)| {
+            let mut converted = vec![convert_hf_paragraph(
                 paragraph,
                 images,
                 false,
                 simple_fields.get(index).map(Vec::as_slice).unwrap_or(&[]),
-            )
+            )];
+            converted.extend(hf_anchored_text_box_paragraphs(paragraph, &mut anchors));
+            converted
         })
         .collect::<Vec<_>>();
     if paragraphs.is_empty() {
@@ -487,7 +493,9 @@ fn convert_docx_footer(
     images: &ImageMap,
     bidi_paragraphs: &[bool],
     simple_fields: &[Vec<SimpleFieldMarker>],
+    anchors: &[HfAnchorBox],
 ) -> Option<HeaderFooter> {
+    let mut anchors = anchors.iter();
     let paragraphs = footer
         .children
         .iter()
@@ -496,13 +504,15 @@ fn convert_docx_footer(
             _ => None,
         })
         .enumerate()
-        .map(|(index, paragraph)| {
-            convert_hf_paragraph(
+        .flat_map(|(index, paragraph)| {
+            let mut converted = vec![convert_hf_paragraph(
                 paragraph,
                 images,
                 bidi_paragraphs.get(index).copied().unwrap_or(false),
                 simple_fields.get(index).map(Vec::as_slice).unwrap_or(&[]),
-            )
+            )];
+            converted.extend(hf_anchored_text_box_paragraphs(paragraph, &mut anchors));
+            converted
         })
         .collect::<Vec<_>>();
     if paragraphs.is_empty() {
@@ -536,7 +546,7 @@ pub(super) fn extract_docx_first_header(
                 .first_header
                 .as_ref()
                 .and_then(|(_relationship_id, header)| {
-                    convert_docx_header(header, &ImageMap::new(), &[])
+                    convert_docx_header(header, &ImageMap::new(), &[], &[])
                 })
         })
 }
@@ -558,7 +568,7 @@ pub(super) fn extract_docx_first_footer(
                 .first_footer
                 .as_ref()
                 .and_then(|(_relationship_id, footer)| {
-                    convert_docx_footer(footer, &ImageMap::new(), &[], &[])
+                    convert_docx_footer(footer, &ImageMap::new(), &[], &[], &[])
                 })
         })
 }
@@ -578,7 +588,7 @@ fn extract_docx_header(
                 .header
                 .as_ref()
                 .and_then(|(_relationship_id, header)| {
-                    convert_docx_header(header, &ImageMap::new(), &[])
+                    convert_docx_header(header, &ImageMap::new(), &[], &[])
                 })
         })
         .or_else(|| {
@@ -592,7 +602,7 @@ fn extract_docx_header(
                 .first_header
                 .as_ref()
                 .and_then(|(_relationship_id, header)| {
-                    convert_docx_header(header, &ImageMap::new(), &[])
+                    convert_docx_header(header, &ImageMap::new(), &[], &[])
                 })
         })
         .or_else(|| {
@@ -606,7 +616,7 @@ fn extract_docx_header(
                 .even_header
                 .as_ref()
                 .and_then(|(_relationship_id, header)| {
-                    convert_docx_header(header, &ImageMap::new(), &[])
+                    convert_docx_header(header, &ImageMap::new(), &[], &[])
                 })
         })
 }
@@ -626,7 +636,7 @@ fn extract_docx_footer(
                 .footer
                 .as_ref()
                 .and_then(|(_relationship_id, footer)| {
-                    convert_docx_footer(footer, &ImageMap::new(), &[], &[])
+                    convert_docx_footer(footer, &ImageMap::new(), &[], &[], &[])
                 })
         })
         .or_else(|| {
@@ -640,7 +650,7 @@ fn extract_docx_footer(
                 .first_footer
                 .as_ref()
                 .and_then(|(_relationship_id, footer)| {
-                    convert_docx_footer(footer, &ImageMap::new(), &[], &[])
+                    convert_docx_footer(footer, &ImageMap::new(), &[], &[], &[])
                 })
         })
         .or_else(|| {
@@ -654,7 +664,7 @@ fn extract_docx_footer(
                 .even_footer
                 .as_ref()
                 .and_then(|(_relationship_id, footer)| {
-                    convert_docx_footer(footer, &ImageMap::new(), &[], &[])
+                    convert_docx_footer(footer, &ImageMap::new(), &[], &[], &[])
                 })
         })
 }
@@ -857,7 +867,261 @@ fn extract_hf_frame(property: &docx_rs::ParagraphProperty) -> Option<HeaderFoote
         height: frame.h.map(|value| twips_to_pt(value as i32)),
         horizontal_anchor: frame_anchor(frame.h_anchor.as_deref()),
         vertical_anchor: frame_anchor(frame.v_anchor.as_deref()),
+        horizontal_align: None,
+        vertical_align: None,
+        inset_left: 0.0,
+        inset_top: 0.0,
+        bottom_offset: None,
     })
+}
+
+/// EMU per point (914400 EMU/inch / 72 pt/inch).
+const EMU_PER_POINT: f64 = 12700.0;
+
+/// `<a:bodyPr>`'s default left and right inset, 91440 EMU (ECMA-376 §20.1.2.2.5).
+const DEFAULT_TEXT_INSET_PT: f64 = 7.2;
+
+/// `<a:bodyPr>`'s default top and bottom inset, 45720 EMU.
+const DEFAULT_VERTICAL_INSET_PT: f64 = 3.6;
+
+/// One `<wp:anchor>` in a header or footer part: where its shape sits and how
+/// big it is.
+///
+/// A header/footer story's anchored shapes never reach docx-rs' `Header`/
+/// `Footer` model with their positioning intact, so the `wp:anchor` attributes
+/// are scanned from the part directly and zipped with the drawings in document
+/// order (issue #847).
+#[derive(Debug, Clone, Default)]
+struct HfAnchorBox {
+    width_pt: Option<f64>,
+    height_pt: Option<f64>,
+    horizontal: HfAnchorAxis,
+    vertical: HfAnchorAxis,
+    /// `<wps:bodyPr>` left and right insets in points. The invoice of #841
+    /// states `lIns="254000"` — 20pt — and its label sits exactly that far in,
+    /// so the text box's own padding is not optional detail here.
+    left_inset_pt: f64,
+    right_inset_pt: f64,
+    top_inset_pt: f64,
+    bottom_inset_pt: f64,
+    /// `<a:bodyPr anchor="b">` — the text sits at the box's bottom edge.
+    seats_text_at_bottom: bool,
+}
+
+#[derive(Debug, Clone, Default)]
+struct HfAnchorAxis {
+    relative_from_page: bool,
+    align: Option<crate::ir::FrameAlign>,
+    offset_pt: Option<f64>,
+}
+
+impl HfAnchorBox {
+    /// The frame this anchor describes, or `None` when it is positioned
+    /// relative to something this path does not model — a column or a
+    /// character, say — where guessing would put the shape somewhere Word
+    /// never does.
+    fn to_frame(&self) -> Option<HeaderFooterFrame> {
+        (self.horizontal.relative_from_page && self.vertical.relative_from_page).then(|| {
+            HeaderFooterFrame {
+                // The frame is the text's column, so the box's own left inset
+                // moves it and both insets narrow it.
+                x: self.horizontal.offset_pt,
+                y: self.vertical.offset_pt,
+                width: self
+                    .width_pt
+                    .map(|width| (width - self.left_inset_pt - self.right_inset_pt).max(0.0)),
+                height: self.height_pt,
+                horizontal_anchor: FrameAnchor::Page,
+                vertical_anchor: FrameAnchor::Page,
+                horizontal_align: self.horizontal.align,
+                vertical_align: self.vertical.align,
+                inset_left: self.left_inset_pt,
+                inset_top: self.top_inset_pt,
+                // Only a box pinned to the bottom of its reference frame can
+                // resolve this without knowing where the box itself landed.
+                bottom_offset: (self.seats_text_at_bottom
+                    && self.vertical.align == Some(crate::ir::FrameAlign::End))
+                .then_some(self.bottom_inset_pt),
+            }
+        })
+    }
+}
+
+/// The framed paragraphs a paragraph's anchored text-box drawings contribute
+/// to a header or footer story.
+///
+/// A `<wps:wsp>` in a header or footer produced nothing at all — neither its
+/// fill nor the text in its `w:txbxContent` — because the story path reads
+/// only inline runs and images. Its content is laid out as its own paragraphs,
+/// pinned to the page by the `wp:anchor` beside it (issue #847).
+fn hf_anchored_text_box_paragraphs(
+    paragraph: &docx_rs::Paragraph,
+    anchors: &mut std::slice::Iter<'_, HfAnchorBox>,
+) -> Vec<HeaderFooterParagraph> {
+    let mut framed: Vec<HeaderFooterParagraph> = Vec::new();
+    for child in &paragraph.children {
+        let docx_rs::ParagraphChild::Run(run) = child else {
+            continue;
+        };
+        for run_child in &run.children {
+            let docx_rs::RunChild::Drawing(drawing) = run_child else {
+                continue;
+            };
+            // Every anchored drawing consumes one scanned anchor, so an image
+            // beside a shape does not shift the shape onto the wrong box.
+            let anchor: Option<&HfAnchorBox> = anchors.next();
+            let Some(docx_rs::DrawingData::TextBox(text_box)) = &drawing.data else {
+                continue;
+            };
+            let Some(frame) = anchor.and_then(HfAnchorBox::to_frame) else {
+                continue;
+            };
+            for text_box_child in &text_box.children {
+                let docx_rs::TextBoxContentChild::Paragraph(inner) = text_box_child else {
+                    continue;
+                };
+                let mut converted = convert_hf_paragraph(inner, &ImageMap::new(), false, &[]);
+                if !hf_paragraph_carries_text(&converted) {
+                    continue;
+                }
+                converted.frame = Some(frame.clone());
+                framed.push(converted);
+            }
+        }
+    }
+    framed
+}
+
+/// Whether a converted story paragraph carries any text at all, so an empty
+/// `w:txbxContent` line does not place a blank frame on the page.
+fn hf_paragraph_carries_text(paragraph: &HeaderFooterParagraph) -> bool {
+    paragraph.elements.iter().any(|element| match element {
+        crate::ir::HFInline::Run(run) => !run.text.trim().is_empty(),
+        _ => true,
+    })
+}
+
+/// Read a `<wps:bodyPr>`'s padding onto the anchor being scanned.
+fn read_body_insets(element: &quick_xml::events::BytesStart<'_>, anchor: Option<&mut HfAnchorBox>) {
+    let Some(anchor) = anchor else {
+        return;
+    };
+    let inset = |name: &[u8]| -> Option<f64> {
+        element
+            .attributes()
+            .flatten()
+            .find(|attribute| attribute.key.local_name().as_ref() == name)
+            .and_then(|attribute| {
+                std::str::from_utf8(attribute.value.as_ref())
+                    .ok()?
+                    .trim()
+                    .parse::<f64>()
+                    .ok()
+            })
+            .map(|emu| emu / EMU_PER_POINT)
+    };
+    // ECMA-376's defaults when the attribute is absent.
+    anchor.left_inset_pt = inset(b"lIns").unwrap_or(DEFAULT_TEXT_INSET_PT);
+    anchor.right_inset_pt = inset(b"rIns").unwrap_or(DEFAULT_TEXT_INSET_PT);
+    anchor.top_inset_pt = inset(b"tIns").unwrap_or(DEFAULT_VERTICAL_INSET_PT);
+    anchor.bottom_inset_pt = inset(b"bIns").unwrap_or(DEFAULT_VERTICAL_INSET_PT);
+    anchor.seats_text_at_bottom = element.attributes().flatten().any(|attribute| {
+        attribute.key.local_name().as_ref() == b"anchor" && attribute.value.as_ref() == b"b"
+    });
+}
+
+/// Scan a header or footer part for its `<wp:anchor>` boxes, in document order.
+fn scan_hf_anchors(xml: &str) -> Vec<HfAnchorBox> {
+    use quick_xml::events::Event;
+
+    let mut reader = quick_xml::Reader::from_str(xml);
+    let mut anchors: Vec<HfAnchorBox> = Vec::new();
+    let mut current: Option<HfAnchorBox> = None;
+    // Which of the two `<wp:positionH>`/`<wp:positionV>` subtrees the scan is
+    // inside, so `<wp:align>` and `<wp:posOffset>` land on the right axis.
+    let mut axis: Option<bool> = None; // Some(true) = horizontal
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(ref element)) => match element.local_name().as_ref() {
+                b"anchor" => current = Some(HfAnchorBox::default()),
+                b"positionH" | b"positionV" => {
+                    let horizontal = element.local_name().as_ref() == b"positionH";
+                    axis = Some(horizontal);
+                    let page = element.attributes().flatten().any(|attribute| {
+                        attribute.key.local_name().as_ref() == b"relativeFrom"
+                            && attribute.value.as_ref() == b"page"
+                    });
+                    if let Some(anchor) = current.as_mut() {
+                        let target = if horizontal {
+                            &mut anchor.horizontal
+                        } else {
+                            &mut anchor.vertical
+                        };
+                        target.relative_from_page = page;
+                    }
+                }
+                b"bodyPr" => read_body_insets(element, current.as_mut()),
+                b"align" | b"posOffset" => {
+                    let is_align = element.local_name().as_ref() == b"align";
+                    let name = element.name().to_owned();
+                    let Ok(text) = reader.read_text(quick_xml::name::QName(name.as_ref())) else {
+                        continue;
+                    };
+                    let (Some(anchor), Some(horizontal)) = (current.as_mut(), axis) else {
+                        continue;
+                    };
+                    let target = if horizontal {
+                        &mut anchor.horizontal
+                    } else {
+                        &mut anchor.vertical
+                    };
+                    if is_align {
+                        target.align = match text.trim() {
+                            "left" | "top" | "inside" => Some(crate::ir::FrameAlign::Start),
+                            "center" => Some(crate::ir::FrameAlign::Center),
+                            "right" | "bottom" | "outside" => Some(crate::ir::FrameAlign::End),
+                            _ => None,
+                        };
+                    } else if let Ok(emu) = text.trim().parse::<f64>() {
+                        target.offset_pt = Some(emu / EMU_PER_POINT);
+                    }
+                }
+                _ => {}
+            },
+            Ok(Event::Empty(ref element)) if element.local_name().as_ref() == b"bodyPr" => {
+                read_body_insets(element, current.as_mut());
+            }
+            Ok(Event::Empty(ref element)) if element.local_name().as_ref() == b"extent" => {
+                let value = |name: &[u8]| -> Option<f64> {
+                    element
+                        .attributes()
+                        .flatten()
+                        .find(|attribute| attribute.key.local_name().as_ref() == name)
+                        .and_then(|attribute| {
+                            std::str::from_utf8(attribute.value.as_ref())
+                                .ok()?
+                                .trim()
+                                .parse::<f64>()
+                                .ok()
+                        })
+                        .map(|emu| emu / EMU_PER_POINT)
+                };
+                if let Some(anchor) = current.as_mut() {
+                    anchor.width_pt = value(b"cx");
+                    anchor.height_pt = value(b"cy");
+                }
+            }
+            Ok(Event::End(ref element)) if element.local_name().as_ref() == b"anchor" => {
+                if let Some(anchor) = current.take() {
+                    anchors.push(anchor);
+                }
+                axis = None;
+            }
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+    anchors
 }
 
 fn frame_anchor(value: Option<&str>) -> FrameAnchor {
@@ -1071,5 +1335,85 @@ fn extract_margins(page_margin: &docx_rs::PageMargin) -> Margins {
         bottom: twips_to_pt(page_margin.bottom),
         left: twips_to_pt(page_margin.left),
         right: twips_to_pt(page_margin.right),
+    }
+}
+
+#[cfg(test)]
+mod anchor_tests {
+    use super::*;
+
+    /// The footer part of `003_FAKTURA.docx` (issue #841), trimmed to the
+    /// attributes that position its `Sensitivity: Internal` shape.
+    const FOOTER_ANCHOR: &str = r#"<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+      xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+      xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">
+      <w:p><w:r><w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0">
+        <wp:simplePos x="635" y="635"/>
+        <wp:positionH relativeFrom="page"><wp:align>left</wp:align></wp:positionH>
+        <wp:positionV relativeFrom="page"><wp:align>bottom</wp:align></wp:positionV>
+        <wp:extent cx="1089660" cy="351790"/>
+        <wps:wsp><wps:bodyPr lIns="254000" tIns="0" rIns="0" bIns="190500" anchor="b"/></wps:wsp>
+      </wp:anchor></w:drawing></w:r></w:p>
+    </w:ftr>"#;
+
+    /// A header/footer story's anchored shape carries its own position, size
+    /// and padding, none of which reaches docx-rs' `Footer` model — so the
+    /// `wp:anchor` is scanned from the part directly (issue #847).
+    #[test]
+    fn a_header_footer_anchor_is_scanned_from_the_part() {
+        let anchors = scan_hf_anchors(FOOTER_ANCHOR);
+        assert_eq!(anchors.len(), 1, "one anchored shape: {anchors:?}");
+        let frame = anchors[0].to_frame().expect("a page-relative frame");
+
+        assert_eq!(frame.horizontal_anchor, FrameAnchor::Page);
+        assert_eq!(frame.vertical_anchor, FrameAnchor::Page);
+        assert_eq!(frame.horizontal_align, Some(crate::ir::FrameAlign::Start));
+        assert_eq!(frame.vertical_align, Some(crate::ir::FrameAlign::End));
+        // 1089660 EMU is 85.8pt, less the 20pt left inset and the zero right
+        // one, so the text column is 65.8pt.
+        assert!(frame.width.is_some_and(|width| (width - 65.8).abs() < 0.01));
+        assert!(
+            (frame.inset_left - 20.0).abs() < 0.01,
+            "lIns=254000 is 20pt"
+        );
+        // `anchor="b"` seats the text at the box's bottom edge, 15pt up.
+        assert!(
+            frame
+                .bottom_offset
+                .is_some_and(|gap| (gap - 15.0).abs() < 0.01),
+            "bIns=190500 is 15pt: {:?}",
+            frame.bottom_offset
+        );
+        assert!(
+            frame.x.is_none() && frame.y.is_none(),
+            "aligned, not offset"
+        );
+    }
+
+    /// An anchor measured against something other than the page — a column,
+    /// a margin, a character — is left alone rather than placed on a guess.
+    #[test]
+    fn an_anchor_relative_to_something_else_yields_no_frame() {
+        let relative = FOOTER_ANCHOR.replace(r#"relativeFrom="page""#, r#"relativeFrom="column""#);
+        let anchors = scan_hf_anchors(&relative);
+        assert_eq!(anchors.len(), 1);
+        assert!(anchors[0].to_frame().is_none());
+    }
+
+    /// An absent `<a:bodyPr>` inset falls back to ECMA-376's own default
+    /// rather than to zero.
+    #[test]
+    fn an_unstated_inset_takes_the_schema_default() {
+        let bare = FOOTER_ANCHOR.replace(
+            r#"lIns="254000" tIns="0" rIns="0" bIns="190500" anchor="b""#,
+            "",
+        );
+        let anchors = scan_hf_anchors(&bare);
+        let frame = anchors[0].to_frame().expect("a frame");
+        assert!((frame.inset_left - 7.2).abs() < 0.01, "91440 EMU is 7.2pt");
+        assert!(
+            frame.bottom_offset.is_none(),
+            "no `anchor=\"b\"`, so the text is not bottom-seated"
+        );
     }
 }

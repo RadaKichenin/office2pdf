@@ -1693,15 +1693,33 @@ fn write_flow_page_setup(out: &mut String, page: &FlowPage, size: &PageSize, ctx
     {
         out.push_str(", foreground: [");
         if let Some(header) = &page.header {
-            generate_page_anchored_hf_frames(out, header, size.width, page.margins.right, ctx);
+            generate_page_anchored_hf_frames(out, header, size, page.margins.right, ctx);
         }
         if let Some(footer) = &page.footer {
-            generate_page_anchored_hf_frames(out, footer, size.width, page.margins.right, ctx);
+            generate_page_anchored_hf_frames(out, footer, size, page.margins.right, ctx);
         }
         out.push(']');
     }
 
     out.push_str(")\n");
+}
+
+/// Where a `<wp:align>` puts a box of `extent` inside a reference frame of
+/// `available`. An unstated alignment pins to the start, which is where an
+/// absent offset already put it. An unknown extent counts as zero, so a
+/// `Center` or `End` alignment still resolves — to the frame's midpoint or its
+/// far edge, not to the start.
+fn aligned_offset(
+    align: Option<crate::ir::FrameAlign>,
+    available: f64,
+    extent: Option<f64>,
+) -> f64 {
+    let extent: f64 = extent.unwrap_or(0.0);
+    match align {
+        Some(crate::ir::FrameAlign::Center) => ((available - extent) / 2.0).max(0.0),
+        Some(crate::ir::FrameAlign::End) => (available - extent).max(0.0),
+        _ => 0.0,
+    }
 }
 
 fn is_page_anchored_frame(frame: &HeaderFooterFrame) -> bool {
@@ -1889,10 +1907,11 @@ fn write_shifted_header_band(
 fn generate_page_anchored_hf_frames(
     out: &mut String,
     hf: &HeaderFooter,
-    page_width: f64,
+    page_size: &PageSize,
     right_margin: f64,
     ctx: &mut GenCtx,
 ) {
+    let page_width: f64 = page_size.width;
     let mut index: usize = 0;
     while index < hf.paragraphs.len() {
         let Some(frame) = hf.paragraphs[index].frame.as_ref() else {
@@ -1907,11 +1926,27 @@ fn generate_page_anchored_hf_frames(
         while end < hf.paragraphs.len() && hf.paragraphs[end].frame.as_ref() == Some(frame) {
             end += 1;
         }
-        let x = frame.x.unwrap_or(0.0);
-        let y = frame.y.unwrap_or(0.0);
+        // `<wp:align>` states the edge rather than an offset, and only the
+        // renderer knows the page it is measured against (issue #847).
+        let x: f64 = frame.x.unwrap_or_else(|| {
+            aligned_offset(frame.horizontal_align, page_size.width, frame.width)
+        }) + frame.inset_left;
+        // A box that seats its text at its own bottom edge is placed upward
+        // from the page, so the block's own height decides where it starts —
+        // the one case where the parser cannot resolve the position itself
+        // (issue #847).
+        let (anchor, y): (&str, f64) = match frame.bottom_offset {
+            Some(gap) => ("bottom + left", -gap),
+            None => (
+                "top + left",
+                frame.y.unwrap_or_else(|| {
+                    aligned_offset(frame.vertical_align, page_size.height, frame.height)
+                }) + frame.inset_top,
+            ),
+        };
         let _ = write!(
             out,
-            "#place(top + left, dx: {}pt, dy: {}pt)[#block(",
+            "#place({anchor}, dx: {}pt, dy: {}pt)[#block(",
             format_f64(x),
             format_f64(y)
         );
