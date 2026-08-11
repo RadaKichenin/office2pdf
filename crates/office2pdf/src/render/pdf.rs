@@ -32,6 +32,31 @@ struct CachedFontData {
     fonts: Vec<typst_kit::fonts::FontSlot>,
 }
 
+/// Document-provided in-memory faces followed by the cached Typst fallback
+/// slots. The combined book preserves the same priority order that native
+/// `FontSearcher` gives an explicit font directory without eagerly loading all
+/// fallback font bytes.
+struct InMemoryFontData {
+    book: LazyHash<typst::text::FontBook>,
+    fonts: Vec<Font>,
+    fallback: &'static CachedFontData,
+}
+
+impl InMemoryFontData {
+    fn new(fonts: &[Font]) -> Self {
+        let fallback = get_embedded_fonts();
+        let infos = fonts.iter().map(|font| font.info().clone()).chain(
+            (0..fallback.fonts.len()).filter_map(|index| fallback.book.info(index).cloned()),
+        );
+
+        Self {
+            book: LazyHash::new(typst::text::FontBook::from_infos(infos)),
+            fonts: fonts.to_vec(),
+            fallback,
+        }
+    }
+}
+
 /// Cached system fonts (with system font search). Used when no custom
 /// font paths are provided, which is the common case.
 #[cfg(not(target_arch = "wasm32"))]
@@ -103,6 +128,17 @@ fn get_embedded_fonts() -> &'static CachedFontData {
     })
 }
 
+/// Parse standalone font or font-collection bytes into Typst faces.
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn load_fonts_from_bytes<'a>(
+    font_data: impl IntoIterator<Item = &'a [u8]>,
+) -> Vec<Font> {
+    font_data
+        .into_iter()
+        .flat_map(|data| Font::iter(Bytes::new(data.to_vec())))
+        .collect()
+}
+
 /// Compile Typst markup to PDF bytes.
 ///
 /// When `pdf_standard` is `Some`, the output PDF will conform to the
@@ -111,7 +147,7 @@ fn get_embedded_fonts() -> &'static CachedFontData {
 /// additional fonts (highest priority).
 ///
 /// On native targets, system fonts are discovered automatically. On WASM,
-/// only embedded fonts are used and `font_paths` is ignored.
+/// built-in and document-embedded fonts are used and `font_paths` is ignored.
 ///
 /// # PDF output size optimization
 ///
@@ -143,7 +179,8 @@ pub fn compile_to_pdf(
 
 /// Compile Typst markup to PDF bytes (WASM target).
 ///
-/// Uses embedded fonts only. System font paths are not supported on WASM.
+/// Uses built-in fonts plus any fonts embedded by the document conversion
+/// pipeline. System font paths are not supported on WASM.
 #[cfg(target_arch = "wasm32")]
 pub fn compile_to_pdf(
     typst_source: &str,
@@ -153,7 +190,20 @@ pub fn compile_to_pdf(
     tagged: bool,
     pdf_ua: bool,
 ) -> Result<Vec<u8>, ConvertError> {
-    let world = MinimalWorld::new_embedded_only(typst_source, images);
+    compile_to_pdf_with_fonts(typst_source, images, pdf_standard, &[], tagged, pdf_ua)
+}
+
+/// Compile Typst markup on WASM with document-provided in-memory fonts.
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn compile_to_pdf_with_fonts(
+    typst_source: &str,
+    images: &[ImageAsset],
+    pdf_standard: Option<PdfStandard>,
+    document_fonts: &[Font],
+    tagged: bool,
+    pdf_ua: bool,
+) -> Result<Vec<u8>, ConvertError> {
+    let world = MinimalWorld::new_embedded_with_fonts(typst_source, images, document_fonts);
     compile_to_pdf_inner(&world, pdf_standard, tagged, pdf_ua)
 }
 
@@ -328,6 +378,9 @@ enum FontSource {
     /// Only constructed on native (extra font paths need filesystem access).
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     Shared(Arc<CachedFontData>),
+    /// Document-provided faces held in memory, followed by cached fallback
+    /// slots. Constructed by the filesystem-free WASM path.
+    InMemory(InMemoryFontData),
 }
 
 impl FontSource {
@@ -335,13 +388,30 @@ impl FontSource {
         match self {
             Self::Cached(d) => &d.book,
             Self::Shared(d) => &d.book,
+            Self::InMemory(d) => &d.book,
         }
     }
 
-    fn fonts(&self) -> &[typst_kit::fonts::FontSlot] {
+    #[cfg(test)]
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    fn len(&self) -> usize {
         match self {
-            Self::Cached(d) => &d.fonts,
-            Self::Shared(d) => &d.fonts,
+            Self::Cached(d) => d.fonts.len(),
+            Self::Shared(d) => d.fonts.len(),
+            Self::InMemory(d) => d.fonts.len() + d.fallback.fonts.len(),
+        }
+    }
+
+    fn font(&self, index: usize) -> Option<Font> {
+        match self {
+            Self::Cached(d) => d.fonts.get(index).and_then(|slot| slot.get()),
+            Self::Shared(d) => d.fonts.get(index).and_then(|slot| slot.get()),
+            Self::InMemory(d) => d.fonts.get(index).cloned().or_else(|| {
+                d.fallback
+                    .fonts
+                    .get(index.checked_sub(d.fonts.len())?)
+                    .and_then(|slot| slot.get())
+            }),
         }
     }
 }
@@ -390,6 +460,37 @@ impl MinimalWorld {
     /// used on WASM targets where system font discovery is not available.
     #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
     fn new_embedded_only(source_text: &str, images: &[ImageAsset]) -> Self {
+        Self::new_with_font_source(
+            source_text,
+            images,
+            FontSource::Cached(get_embedded_fonts()),
+        )
+    }
+
+    /// Create an embedded-only world with document-provided in-memory faces at
+    /// higher priority than Typst's built-in fallback fonts.
+    #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+    fn new_embedded_with_fonts(
+        source_text: &str,
+        images: &[ImageAsset],
+        document_fonts: &[Font],
+    ) -> Self {
+        if document_fonts.is_empty() {
+            return Self::new_embedded_only(source_text, images);
+        }
+
+        Self::new_with_font_source(
+            source_text,
+            images,
+            FontSource::InMemory(InMemoryFontData::new(document_fonts)),
+        )
+    }
+
+    fn new_with_font_source(
+        source_text: &str,
+        images: &[ImageAsset],
+        font_source: FontSource,
+    ) -> Self {
         let main_id = FileId::new(None, VirtualPath::new("main.typ"));
         let source = Source::new(main_id, source_text.to_string());
 
@@ -400,7 +501,7 @@ impl MinimalWorld {
 
         Self {
             library: LazyHash::new(Library::default()),
-            font_source: FontSource::Cached(get_embedded_fonts()),
+            font_source,
             source,
             images: image_map,
         }
@@ -447,10 +548,7 @@ impl World for MinimalWorld {
     }
 
     fn font(&self, index: usize) -> Option<Font> {
-        self.font_source
-            .fonts()
-            .get(index)
-            .and_then(|slot| slot.get())
+        self.font_source.font(index)
     }
 
     fn today(&self, _offset: Option<i64>) -> Option<Datetime> {
@@ -483,6 +581,11 @@ fn best_face(family: &str) -> Option<typst::text::Font> {
         })
         .and_then(|index| data.fonts.get(index))
         .and_then(|slot| slot.get())
+}
+
+#[cfg(target_arch = "wasm32")]
+fn best_face(family: &str) -> Option<typst::text::Font> {
+    super::font_subst::active_in_memory_font(family, typst::text::FontVariant::default())
 }
 
 /// Look a per-family `f64` metric up through a process-wide cache.
@@ -557,8 +660,10 @@ pub(crate) fn font_hhea_ascender_em(family: &str) -> Option<f64> {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub(crate) fn font_hhea_ascender_em(_family: &str) -> Option<f64> {
-    None
+pub(crate) fn font_hhea_ascender_em(family: &str) -> Option<f64> {
+    let font = best_face(family)?;
+    let ttf = font.ttf();
+    Some(f64::from(ttf.tables().hhea.ascender) / f64::from(ttf.units_per_em()).max(1.0))
 }
 
 /// The cap height of the best face for `family`, in em units.
@@ -583,8 +688,8 @@ pub(crate) fn font_cap_height_em(family: &str) -> Option<f64> {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub(crate) fn font_cap_height_em(_family: &str) -> Option<f64> {
-    None
+pub(crate) fn font_cap_height_em(family: &str) -> Option<f64> {
+    best_face(family).map(|font| font.metrics().cap_height.get())
 }
 
 /// Line metrics of the best face for `family`, in em units:
@@ -642,8 +747,14 @@ pub(crate) fn font_line_metrics_em(family: &str) -> Option<(f64, f64, f64)> {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub(crate) fn font_line_metrics_em(_family: &str) -> Option<(f64, f64, f64)> {
-    None
+pub(crate) fn font_line_metrics_em(family: &str) -> Option<(f64, f64, f64)> {
+    let font = best_face(family)?;
+    let ttf = font.ttf();
+    let upem = f64::from(ttf.units_per_em()).max(1.0);
+    let hhea_pitch_em =
+        (f64::from(ttf.ascender()) - f64::from(ttf.descender()) + f64::from(ttf.line_gap())) / upem;
+    let top_em = (f64::from(ttf.ascender()) + f64::from(ttf.line_gap())) / upem;
+    Some((top_em, hhea_pitch_em - top_em, hhea_pitch_em))
 }
 
 /// Maximum horizontal advance over the digits U+0030..=U+0039 of the best
@@ -877,6 +988,16 @@ pub(crate) fn powerpoint_line_box_em(family: &str) -> Option<(f64, f64)> {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub(crate) fn powerpoint_line_box_em(_family: &str) -> Option<(f64, f64)> {
-    None
+pub(crate) fn powerpoint_line_box_em(family: &str) -> Option<(f64, f64)> {
+    best_face(family).and_then(|font| {
+        let ttf = font.ttf();
+        let upem = f64::from(ttf.units_per_em()).max(1.0);
+        let ascent = f64::from(ttf.ascender()).abs() / upem;
+        let descent = f64::from(ttf.descender()).abs() / upem;
+        (ascent > 0.0).then(|| {
+            let above = (POWERPOINT_LINE_HEIGHT_FACTOR + ascent - descent) / 2.0;
+            let above = above.clamp(0.0, POWERPOINT_LINE_HEIGHT_FACTOR);
+            (above, POWERPOINT_LINE_HEIGHT_FACTOR - above)
+        })
+    })
 }

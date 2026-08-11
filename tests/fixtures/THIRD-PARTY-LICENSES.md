@@ -137,6 +137,19 @@ limitations under the License.
 
 ---
 
+## SIL Open Font License 1.1
+
+### Google Fonts Noto Sans SC
+
+- **Source:** <https://github.com/google/fonts/tree/main/ofl/notosanssc>
+- **License:** SIL Open Font License 1.1
+- **Copyright:** Copyright 2014-2021 Adobe, with Reserved Font Name "Source"
+- **License text:** `licenses/NotoSansSC-OFL.txt`
+- **File:** `docx/wasm_embedded_cjk.docx` contains a glyph-subsetted Regular
+  instance of `NotoSansSC[wght].ttf` as an OOXML-obfuscated embedded font.
+
+---
+
 ## MIT License
 
 ### OfficeDev/Open-Xml-PowerTools

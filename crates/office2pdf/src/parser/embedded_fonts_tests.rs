@@ -401,6 +401,12 @@ mod integration {
         let original_ttf = make_fake_ttf(128);
         let zip_data = build_pptx_with_embedded_font(&original_ttf, guid);
 
+        let font_data = extract_embedded_font_data(&zip_data, crate::config::Format::Pptx)
+            .expect("should retain deobfuscated PPTX font bytes in memory");
+        assert_eq!(font_data.faces.len(), 1);
+        assert_eq!(font_data.faces[0].filename, "TestFont-regular.ttf");
+        assert_eq!(font_data.faces[0].data, original_ttf);
+
         let result = extract_embedded_fonts(&zip_data, crate::config::Format::Pptx);
         assert!(result.is_some(), "should extract fonts from PPTX");
 
@@ -432,6 +438,12 @@ mod integration {
         let guid = "{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}";
         let original_ttf = make_fake_ttf(64);
         let zip_data = build_docx_with_embedded_font(&original_ttf, guid);
+
+        let font_data = extract_embedded_font_data(&zip_data, crate::config::Format::Docx)
+            .expect("should retain deobfuscated DOCX font bytes in memory");
+        assert_eq!(font_data.faces.len(), 1);
+        assert_eq!(font_data.faces[0].filename, "TestFont-regular.ttf");
+        assert_eq!(font_data.faces[0].data, original_ttf);
 
         let result = extract_embedded_fonts(&zip_data, crate::config::Format::Docx);
         assert!(result.is_some(), "should extract fonts from DOCX");

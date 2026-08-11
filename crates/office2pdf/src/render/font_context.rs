@@ -1,5 +1,6 @@
-// Font discovery/embedding is native-only; on wasm32 these items are
-// compiled but unreachable (visibility sealing exposed them to dead_code).
+// Filesystem and system-font discovery are native-only. The shared family
+// index also backs document-provided in-memory fonts on WASM; path-facing
+// members remain compiled there but are intentionally unused.
 #![cfg_attr(target_arch = "wasm32", allow(dead_code))]
 
 use std::collections::{HashMap, HashSet};
@@ -30,6 +31,10 @@ pub(crate) struct FontSearchContext {
     /// needs this: the declared family leads the font list even for a script
     /// it cannot write, and Typst falls through to the next entry per glyph.
     family_scripts: HashMap<String, u8>,
+    /// Filesystem-free faces available to WASM metric lookups while codegen is
+    /// running under this context.
+    in_memory_book: typst::text::FontBook,
+    in_memory_fonts: Vec<typst::text::Font>,
 }
 
 impl FontSearchContext {
@@ -72,6 +77,18 @@ impl FontSearchContext {
         }
     }
 
+    #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+    pub(crate) fn in_memory_font(
+        &self,
+        family: &str,
+        variant: typst::text::FontVariant,
+    ) -> Option<typst::text::Font> {
+        self.in_memory_book
+            .select(&normalize_family_name(family), variant)
+            .and_then(|index| self.in_memory_fonts.get(index))
+            .cloned()
+    }
+
     #[cfg(test)]
     pub(crate) fn for_test(
         search_paths: Vec<PathBuf>,
@@ -95,6 +112,8 @@ impl FontSearchContext {
                 .collect(),
             italic_families: HashSet::new(),
             family_scripts: HashMap::new(),
+            in_memory_book: typst::text::FontBook::new(),
+            in_memory_fonts: Vec::new(),
         }
     }
 
@@ -143,7 +162,6 @@ fn script_bit(script: TextScript) -> u8 {
 /// Latin is probed with a plain capital rather than with the whole alphabet:
 /// a face carrying `A` and not the rest of ASCII does not exist in practice,
 /// and every extra probe costs a coverage lookup per family.
-#[cfg(not(target_arch = "wasm32"))]
 const SCRIPT_PROBES: [(TextScript, char); 4] = [
     (TextScript::Latin, 'A'),
     (TextScript::Korean, '가'),
@@ -184,6 +202,8 @@ pub(crate) fn resolve_font_search_context(user_font_paths: &[PathBuf]) -> FontSe
         user_families,
         italic_families,
         family_scripts,
+        in_memory_book: typst::text::FontBook::new(),
+        in_memory_fonts: Vec::new(),
     }
 }
 
@@ -192,13 +212,41 @@ pub(crate) fn resolve_font_search_context(_user_font_paths: &[PathBuf]) -> FontS
     FontSearchContext::default()
 }
 
+/// Build the substitution index for document-provided in-memory faces.
+///
+/// These faces have the same priority as an explicit native font path: they
+/// were supplied by the Office document itself and must lead Typst's fallback
+/// fonts during family and script selection.
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub(crate) fn resolve_font_search_context_from_fonts(
+    fonts: &[typst::text::Font],
+) -> FontSearchContext {
+    let book = typst::text::FontBook::from_fonts(fonts);
+    let FamilyIndex {
+        available_families,
+        italic_families,
+        family_scripts,
+    } = index_families_from_book(&book);
+    let user_families = available_families.clone();
+
+    FontSearchContext {
+        search_paths: Vec::new(),
+        available_families,
+        office_families: HashSet::new(),
+        user_families,
+        italic_families,
+        family_scripts,
+        in_memory_book: book,
+        in_memory_fonts: fonts.to_vec(),
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 fn available_families_from_paths(paths: &[PathBuf], include_system_fonts: bool) -> HashSet<String> {
     index_families_from_paths(paths, include_system_fonts).available_families
 }
 
 /// What one font search says about the families it found.
-#[cfg(not(target_arch = "wasm32"))]
 struct FamilyIndex {
     available_families: HashSet<String>,
     italic_families: HashSet<String>,
@@ -207,8 +255,6 @@ struct FamilyIndex {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn index_families_from_paths(paths: &[PathBuf], include_system_fonts: bool) -> FamilyIndex {
-    use typst::text::FontStyle;
-
     let mut searcher = FontSearcher::new();
     searcher.include_system_fonts(include_system_fonts);
     searcher.include_embedded_fonts(include_system_fonts);
@@ -218,12 +264,18 @@ fn index_families_from_paths(paths: &[PathBuf], include_system_fonts: bool) -> F
         searcher.search_with(paths.iter().map(|path| path.as_path()))
     };
 
+    index_families_from_book(&font_data.book)
+}
+
+fn index_families_from_book(book: &typst::text::FontBook) -> FamilyIndex {
+    use typst::text::FontStyle;
+
     let mut index = FamilyIndex {
         available_families: HashSet::new(),
         italic_families: HashSet::new(),
         family_scripts: HashMap::new(),
     };
-    for (family, infos) in font_data.book.families() {
+    for (family, infos) in book.families() {
         let key: String = normalize_family_name(family);
         let infos: Vec<&typst::text::FontInfo> = infos.collect();
         if infos

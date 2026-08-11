@@ -211,6 +211,19 @@ mod wasm_tests {
     }
 
     #[wasm_bindgen_test]
+    fn wasm_convert_docx_uses_document_embedded_cjk_font() {
+        let docx = include_bytes!("../../../tests/fixtures/docx/wasm_embedded_cjk.docx");
+        let pdf = convert_docx_to_pdf(docx)
+            .expect("DOCX with an embedded CJK face should convert in WASM");
+
+        assert!(
+            pdf.windows(b"NotoSansSC".len())
+                .any(|window| window == b"NotoSansSC"),
+            "the PDF should embed the document-provided Noto Sans SC subset"
+        );
+    }
+
+    #[wasm_bindgen_test]
     fn wasm_convert_to_pdf_with_docx_format_string() {
         let docx = make_minimal_docx();
         let result = convert_to_pdf(&docx, "docx");

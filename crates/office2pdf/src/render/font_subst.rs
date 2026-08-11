@@ -13,8 +13,8 @@
 //! `word/fontTable.xml` is not read yet, so a DOCX face still relies on the
 //! table and the name (issue #891).
 
-// Font discovery/embedding is native-only; on wasm32 these items are
-// compiled but unreachable (visibility sealing exposed them to dead_code).
+// The substitution index also serves document-provided in-memory fonts on
+// WASM. Filesystem-facing fallback paths remain compiled there but unused.
 #![cfg_attr(target_arch = "wasm32", allow(dead_code))]
 
 use std::cell::RefCell;
@@ -405,8 +405,9 @@ fn family_name_is_known_sans_serif_brand(normalized_family: &str) -> bool {
 }
 
 /// Check whether the given font family (or its alias) is available in the
-/// current font context.  Returns `true` when no context is active (e.g. on
-/// WASM) to preserve existing behaviour.
+/// current font context. Returns `true` when no context is active (for example,
+/// WASM conversion without document-provided fonts) to preserve existing
+/// behaviour.
 pub fn is_primary_font_available(font_family: &str) -> bool {
     ACTIVE_FONT_CONTEXT.with(|cell| {
         let guard = cell.borrow();
@@ -714,9 +715,9 @@ pub(crate) fn is_east_asian_char(character: char) -> bool {
 /// about to happen, by naming the family that will actually shape the script
 /// and asking the font context what faces it has.
 ///
-/// `false` whenever the answer is not certain — no active font context (WASM),
-/// no declared family, or a family chain the context has never seen. Guessing
-/// the other way would slant text that a real italic face is about to handle.
+/// `false` whenever the answer is not certain — no active font context, no
+/// declared family, or a family chain the context has never seen. Guessing the
+/// other way would slant text that a real italic face is about to handle.
 pub(crate) fn needs_synthetic_oblique(
     latin_family: Option<&str>,
     east_asian_family: Option<&str>,
@@ -799,6 +800,22 @@ pub(crate) fn family_candidates(font_family: &str) -> Vec<String> {
         let mut candidates: Vec<String> = vec![font_family.to_string()];
         candidates.extend(fallback_candidates(font_family, context.as_ref()));
         candidates
+    })
+}
+
+/// Resolve a document-provided in-memory face from the active WASM context.
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn active_in_memory_font(
+    font_family: &str,
+    variant: typst::text::FontVariant,
+) -> Option<typst::text::Font> {
+    let candidates = family_candidates(font_family);
+    ACTIVE_FONT_CONTEXT.with(|active_context| {
+        let context = active_context.borrow();
+        let context = context.as_ref()?;
+        candidates
+            .iter()
+            .find_map(|candidate| context.in_memory_font(candidate, variant))
     })
 }
 
@@ -1163,7 +1180,6 @@ fn resolve_available_fallback(
         .find(|candidate| context.has_family(candidate))
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn detect_missing_font_fallbacks_with_context(
     doc: &Document,
     context: &FontSearchContext,
