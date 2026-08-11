@@ -201,7 +201,7 @@ fn test_apply_table_style_first_row_gets_header_fill_and_text_color() {
         use_content_driven_row_heights: true,
         default_vertical_align: None,
         seats_bottom_aligned_text_on_descender: false,
-        paints_borders_inside_boundary: false,
+        border_paint_model: TableBorderPaintModel::CenteredStroke,
         prints_gridlines: false,
         prints_headings: false,
     };
@@ -288,7 +288,7 @@ fn test_apply_table_style_banded_rows_skip_first_row() {
         use_content_driven_row_heights: true,
         default_vertical_align: None,
         seats_bottom_aligned_text_on_descender: false,
-        paints_borders_inside_boundary: false,
+        border_paint_model: TableBorderPaintModel::CenteredStroke,
         prints_gridlines: false,
         prints_headings: false,
     };
@@ -365,7 +365,7 @@ fn test_apply_table_style_explicit_cell_fill_not_overridden() {
         use_content_driven_row_heights: true,
         default_vertical_align: None,
         seats_bottom_aligned_text_on_descender: false,
-        paints_borders_inside_boundary: false,
+        border_paint_model: TableBorderPaintModel::CenteredStroke,
         prints_gridlines: false,
         prints_headings: false,
     };
@@ -413,7 +413,7 @@ fn test_apply_table_style_missing_style_id_is_noop() {
         use_content_driven_row_heights: true,
         default_vertical_align: None,
         seats_bottom_aligned_text_on_descender: false,
-        paints_borders_inside_boundary: false,
+        border_paint_model: TableBorderPaintModel::CenteredStroke,
         prints_gridlines: false,
         prints_headings: false,
     };

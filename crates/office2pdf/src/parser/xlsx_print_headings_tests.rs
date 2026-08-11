@@ -1,5 +1,6 @@
 use super::*;
 use crate::ir::ChartAreaOutline;
+use crate::ir::TableBorderPaintModel;
 use crate::ir::{
     Block, BorderLineStyle, Margins, PageSize, Paragraph, ParagraphStyle, Run, SheetImage,
     SheetTextBox, Table, TableCell, TableRow, TextStyle,
@@ -52,7 +53,7 @@ fn make_page(column_widths: Vec<f64>, rows: Vec<TableRow>) -> SheetPage {
         table: Table {
             rows,
             column_widths,
-            paints_borders_inside_boundary: true,
+            border_paint_model: TableBorderPaintModel::ExcelBoundaryBands,
             prints_gridlines: true,
             seats_bottom_aligned_text_on_descender: true,
             default_vertical_align: Some(crate::ir::CellVerticalAlign::Bottom),

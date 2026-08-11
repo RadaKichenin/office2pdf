@@ -803,19 +803,13 @@ pub struct Table {
     /// this: Word's and PowerPoint's bottom-cell seating is unverified against
     /// native GT, so their emission must not change (issue #618).
     pub seats_bottom_aligned_text_on_descender: bool,
-    /// When true, each border paints as a filled band anchored to the nominal
-    /// grid boundary (Excel's printed convention, measured on a native Excel
-    /// 16.111 probe: `thin` fills `[B, B+1]`, `medium` `[B-1, B+1]`, `thick`
-    /// `[B-1, B+2]`) instead of a Typst stroke centred on the boundary
-    /// (issue #619). Only spreadsheet tables set this; Word's and
-    /// PowerPoint's border-painting conventions are unmeasured against
-    /// their native GT, so they keep the centred-stroke path.
-    pub paints_borders_inside_boundary: bool,
+    /// How borders are painted relative to the nominal grid boundary.
+    pub border_paint_model: TableBorderPaintModel,
     /// When true, `<printOptions gridLines="1"/>` asks Excel to print its
     /// gridline hairline on every cell boundary of the printed range, under
     /// any explicit border styling (issue #622). Only spreadsheet tables set
     /// this, and it is honoured only together with
-    /// `paints_borders_inside_boundary`, whose boundary-band machinery the
+    /// `TableBorderPaintModel::ExcelBoundaryBands` machinery the
     /// gridlines reuse; Word/PowerPoint tables never print gridlines.
     pub prints_gridlines: bool,
     /// When true, `<printOptions headings="1"/>` prints Excel's row-number
@@ -829,6 +823,20 @@ pub struct Table {
     /// from the first row AFTER the strip. Word/PowerPoint tables never set
     /// this.
     pub prints_headings: bool,
+}
+
+/// How a table paints borders relative to its grid boundaries.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TableBorderPaintModel {
+    /// Typst's native border stroke, centred on the boundary.
+    #[default]
+    CenteredStroke,
+    /// Excel's printed bands, measured in #619 on the positive axis side for
+    /// thin rules and with weight-specific offsets for wider rules.
+    ExcelBoundaryBands,
+    /// Word's filled border rectangles, anchored at the boundary and painted
+    /// on its positive-axis side (issue #724).
+    WordPositiveAxisBands,
 }
 
 /// A table row.

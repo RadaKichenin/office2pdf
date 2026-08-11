@@ -4,6 +4,7 @@ use super::{
     HyperlinkMap, ImageMap, Insets, MAX_TABLE_DEPTH, ParagraphContainer, StyleMap, Table,
     TableCell, TableRow, convert_paragraph_blocks, parse_hex_color,
 };
+use crate::ir::TableBorderPaintModel;
 use crate::parser::units::twips_to_pt;
 
 #[derive(Clone)]
@@ -197,7 +198,7 @@ pub(super) fn convert_table(
         default_vertical_align: None,
         // Word GT has not verified descender seating for bottom cells (#618).
         seats_bottom_aligned_text_on_descender: false,
-        paints_borders_inside_boundary: false,
+        border_paint_model: TableBorderPaintModel::WordPositiveAxisBands,
         prints_gridlines: false,
         prints_headings: false,
     }
