@@ -29,6 +29,12 @@ fn test_data_bar_codegen() {
             height: None,
         }],
         column_widths: vec![100.0],
+        default_cell_padding: Some(Insets {
+            top: 1.0,
+            right: 3.0,
+            bottom: 1.5,
+            left: 3.0,
+        }),
         ..Table::default()
     };
     let page = Page::Sheet(SheetPage {
@@ -49,9 +55,17 @@ fn test_data_bar_codegen() {
         "DataBar should be a gradient in the bar color. Got: {}",
         output.source,
     );
+    // Excel's data-bar track has its own 2pt left / 1pt right inset, not the
+    // cell text's 3pt per side. In a 100pt column the track is therefore
+    // 97pt wide, and Excel quantises a 50% bar to 49 whole PDF points.
     assert!(
-        output.source.contains("width: 50%"),
-        "DataBar should contain 50% width. Got: {}",
+        output.source.contains("dx: -1pt"),
+        "DataBar should start at Excel's track inset. Got: {}",
+        output.source,
+    );
+    assert!(
+        output.source.contains("width: 49pt"),
+        "DataBar should resolve and quantise against Excel's track. Got: {}",
         output.source,
     );
     assert!(

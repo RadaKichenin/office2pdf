@@ -417,6 +417,15 @@ const DATA_BAR_VERTICAL_INSET_PT: f64 = 2.0;
 
 /// Floor for rows shorter than the inset, so a bar never vanishes or inverts.
 const DATA_BAR_MIN_HEIGHT_PT: f64 = 1.0;
+
+/// Horizontal clearance between an Excel data bar and its cell boundaries.
+///
+/// This is independent of the text inset. Native Excel exports start the bars
+/// about 2pt inside the left boundary and leave about 1pt on the right. With a
+/// 3pt/side text inset, resolving the percentage against the text box made the
+/// track 3pt too narrow and started it 1pt too far right (issue #655).
+const DATA_BAR_LEFT_INSET_PT: f64 = 2.0;
+const DATA_BAR_RIGHT_INSET_PT: f64 = 1.0;
 /// Excel's arrow icon sets are drawn shapes, not characters. Native Excel PDFs
 /// print them as sprites, filled with a vertical gradient and outlined a shade
 /// darker; these constants size the flat vector stand-in.
@@ -617,6 +626,26 @@ fn generate_table_cell(
         // to within one level. The earlier 70% stopped short of Excel
         // altogether and left brief bars reading near-solid.
         let pct = db.fill_pct.clamp(0.0, 100.0);
+        let cell_inset: Insets = cell_inset_with_border(cell, default_cell_padding);
+        let (bar_dx, bar_width): (f64, String) = match ctx.available_measure_pt {
+            Some(content_width) => {
+                // `available_measure_pt` is the column span less the text
+                // inset. Restore the full span, apply Excel's independent bar
+                // inset, then quantise the painted width to whole PDF points.
+                // This reproduces all 5 bars in `06_sales_dashboard_en` and
+                // all 45 page-1 bars in `03_inventory_en` exactly (#655).
+                let track_width = (content_width + cell_inset.left + cell_inset.right
+                    - DATA_BAR_LEFT_INSET_PT
+                    - DATA_BAR_RIGHT_INSET_PT)
+                    .max(0.0);
+                let painted_width = (track_width * pct / 100.0).round();
+                (
+                    DATA_BAR_LEFT_INSET_PT - cell_inset.left,
+                    format!("{}pt", format_f64(painted_width)),
+                )
+            }
+            None => (0.0, format!("{}%", format_f64(pct))),
+        };
         let bar_height: String = match row_height {
             Some(height) => {
                 let inset_height =
@@ -629,8 +658,9 @@ fn generate_table_cell(
         };
         let _ = write!(
             out,
-            "#place(left + horizon, box(width: {}%, height: {}, fill: gradient.linear({}, {}.lighten(83%))))",
-            format_f64(pct),
+            "#place(left + horizon, dx: {}pt, box(width: {}, height: {}, fill: gradient.linear({}, {}.lighten(83%))))",
+            format_geometry(bar_dx),
+            bar_width,
             bar_height,
             rgb(&db.color),
             rgb(&db.color),

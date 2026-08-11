@@ -872,7 +872,7 @@ pub const ICON_CIRCLE: &str = "\u{25CF}"; // ● black circle
 pub struct DataBarInfo {
     /// Bar color.
     pub color: Color,
-    /// Fill percentage from 0.0 to 1.0.
+    /// Fill percentage in percentage points from 0.0 to 100.0.
     pub fill_pct: f64,
 }
 
