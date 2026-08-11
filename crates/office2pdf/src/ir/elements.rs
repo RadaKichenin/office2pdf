@@ -31,6 +31,32 @@ pub struct HeaderFooterFrame {
     pub height: Option<f64>,
     pub horizontal_anchor: FrameAnchor,
     pub vertical_anchor: FrameAnchor,
+    /// `<wp:align>` in place of an offset, resolved against the anchor's
+    /// reference frame at render time because the parser does not know the
+    /// page size. `None` means the offset above states the position
+    /// (issue #847).
+    pub horizontal_align: Option<FrameAlign>,
+    pub vertical_align: Option<FrameAlign>,
+    /// The text box's own left/top padding in points, applied *after* the
+    /// alignment above resolves — the alignment pins the box, the padding sits
+    /// inside it. Zero for a `w:framePr` frame, which has no padding of its
+    /// own (issue #847).
+    pub inset_left: f64,
+    pub inset_top: f64,
+    /// When the shape seats its text at its own bottom edge (`<a:bodyPr
+    /// anchor="b">`), the gap between that edge and the reference frame's
+    /// bottom — so the block is placed upward from the page rather than
+    /// downward from the box's top, which is the only way its height enters
+    /// the position (issue #847).
+    pub bottom_offset: Option<f64>,
+}
+
+/// Which edge of the reference frame a `<wp:align>` pins a shape to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FrameAlign {
+    Start,
+    Center,
+    End,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
