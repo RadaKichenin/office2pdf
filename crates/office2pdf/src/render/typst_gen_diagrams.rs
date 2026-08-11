@@ -1197,7 +1197,36 @@ const AXIS_TITLE_H: f64 = 15.0;
 /// Height of one data-label line: the span to centre across when the label
 /// sits on its segment, and the box to offset by when it sits at the
 /// segment's end instead (issue #901).
-const LABEL_LINE_H: f64 = 10.0;
+///
+/// The 10pt this was fixed at is `chart_label_box_h(8.0)`, the box for the 8pt
+/// the labels were hardcoded to; sizing it from the resolved size keeps that
+/// 1.25x relationship at every size (issue #970).
+fn data_label_line_h(chart: &Chart, labels: &crate::ir::DataLabels) -> f64 {
+    chart_label_box_h(data_label_text_pt(chart, labels))
+}
+
+/// The size a data label is set at: its own `<c:dLbls><c:txPr>`, then the
+/// chart space's `c:txPr`, then [`CHART_DATA_LABEL_DEFAULT_PT`].
+///
+/// The labels used to be written at a literal 8pt whatever the file said, so a
+/// chart declaring anything else — the deck of #841 declares `sz="1197"` on its
+/// `c:dLbls`, its two axes and its chart space alike — drew its labels smaller
+/// than its own axis (issue #970).
+pub(super) fn data_label_text_pt(chart: &Chart, labels: &crate::ir::DataLabels) -> f64 {
+    labels
+        .text_style
+        .size_pt
+        .or(chart.text_style.size_pt)
+        .unwrap_or(CHART_DATA_LABEL_DEFAULT_PT)
+}
+
+/// The size a data label takes when neither it nor the chart space states one.
+///
+/// Deliberately not [`CHART_DEFAULT_TEXT_PT`], which was measured for tick
+/// labels (#800). Nothing measured this one; it is the literal the labels were
+/// pinned at before #970, kept so that reading a declared size does not also
+/// resize every chart that declares none. Changing it wants its own reference.
+const CHART_DATA_LABEL_DEFAULT_PT: f64 = 8.0;
 
 /// Width of the box a label gets when it sits at the end of a horizontal bar
 /// rather than across it. The centred case spans the bar, which is the wrong
@@ -1597,6 +1626,8 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 );
             }
             if let Some(label) = data_label_text(chart, s, cat_index, category_total) {
+                let label_pt: f64 = data_label_text_pt(chart, &s.data_labels);
+                let label_line_h: f64 = data_label_line_h(chart, &s.data_labels);
                 // Where the label sits along the bar, from `<c:dLblPos>` or the
                 // grouping's default (issue #901). A stacked segment centres
                 // because an outside label would land on the segment above.
@@ -1617,7 +1648,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                     };
                     (
                         x,
-                        row_top + offset + bar_thickness / 2.0 - LABEL_LINE_H / 2.0,
+                        row_top + offset + bar_thickness / 2.0 - label_line_h / 2.0,
                         w,
                     )
                 } else {
@@ -1625,21 +1656,22 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                     let bar_bottom: f64 = plot_y + plot_h - stack_base * plot_h;
                     let y: f64 = match position {
                         DataLabelPosition::Center => {
-                            (bar_top + bar_bottom) / 2.0 - LABEL_LINE_H / 2.0
+                            (bar_top + bar_bottom) / 2.0 - label_line_h / 2.0
                         }
-                        DataLabelPosition::OutsideEnd => bar_top - LABEL_LINE_H - LABEL_OUTSIDE_GAP,
+                        DataLabelPosition::OutsideEnd => bar_top - label_line_h - LABEL_OUTSIDE_GAP,
                         DataLabelPosition::InsideEnd => bar_top,
-                        DataLabelPosition::InsideBase => bar_bottom - LABEL_LINE_H,
+                        DataLabelPosition::InsideBase => bar_bottom - label_line_h,
                     };
                     (plot_x + group_start + offset, y, bar_thickness)
                 };
                 let _ = writeln!(
                     out,
-                    "#place(top + left, dx: {}pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(center + horizon)[#text(size: 8pt, weight: \"bold\", fill: {})[{}]]])",
+                    "#place(top + left, dx: {}pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(center + horizon)[#text(size: {}pt, weight: \"bold\", fill: {})[{}]]])",
                     format_f64(label_x),
                     format_f64(label_y),
                     format_f64(label_w.max(0.0)),
-                    format_f64(LABEL_LINE_H),
+                    format_f64(label_line_h),
+                    format_f64(label_pt),
                     chart_data_label_fill(chart),
                     escape_typst(&label)
                 );
@@ -2547,6 +2579,7 @@ fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, 
             None => write_pie_wedge(out, centre_x, centre_y, radius, start, sweep, &color),
         }
         if let Some(label) = data_label_text(chart, series, index, total) {
+            let label_pt: f64 = data_label_text_pt(chart, &series.data_labels);
             // A wedge label sits on the bisector, two thirds of the way out —
             // clear of the centre where narrow wedges converge, and inside the
             // circumference where the fill still backs it.
@@ -2557,10 +2590,14 @@ fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, 
             let label_w: f64 = radius;
             let _ = writeln!(
                 out,
-                "#place(top + left, dx: {}pt, dy: {}pt, box(width: {}pt)[#align(center)[#text(size: 8pt, weight: \"bold\", fill: {})[{}]]])",
+                "#place(top + left, dx: {}pt, dy: {}pt, box(width: {}pt)[#align(center)[#text(size: {}pt, weight: \"bold\", fill: {})[{}]]])",
                 format_f64(centre_x + label_radius * bisector.cos() - label_w / 2.0),
-                format_f64(centre_y + label_radius * bisector.sin() - LABEL_LINE_H / 2.0),
+                format_f64(
+                    centre_y + label_radius * bisector.sin()
+                        - data_label_line_h(chart, &series.data_labels) / 2.0
+                ),
                 format_f64(label_w),
+                format_f64(label_pt),
                 chart_data_label_fill(chart),
                 escape_typst(&label)
             );

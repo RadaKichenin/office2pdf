@@ -467,7 +467,9 @@ pub enum DataLabelPosition {
 /// What a chart's data labels print, from `<c:dLbls>`.
 ///
 /// Office joins the enabled parts with `<c:separator>`, defaulting to `"; "`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// Not `Eq`: [`Self::text_style`] carries a size in points.
+#[derive(Debug, Clone, PartialEq)]
 pub struct DataLabels {
     /// `<c:showVal>` — the point's own value.
     pub show_value: bool,
@@ -483,6 +485,10 @@ pub struct DataLabels {
     /// Outranks the series' cache format, which is the source cell's own
     /// (issue #865).
     pub number_format: Option<String>,
+    /// `<c:dLbls><c:txPr>` — the run properties the labels are set in. Its
+    /// size outranks the chart space's, and where it states none the chart
+    /// space's stands (issue #970).
+    pub text_style: ChartTextStyle,
     /// `<c:dLblPos>`, or the default the plot's grouping implies when the
     /// part states none (issue #901).
     pub position: DataLabelPosition,
@@ -501,6 +507,7 @@ impl Default for DataLabels {
             show_percent: false,
             number_format: None,
             separator: "; ".to_string(),
+            text_style: ChartTextStyle::default(),
             position: DataLabelPosition::Center,
             position_stated: false,
         }

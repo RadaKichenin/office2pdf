@@ -3950,3 +3950,54 @@ fn a_chart_declaring_no_colour_keeps_the_colours_it_had() {
         "the data label keeps its white, got:\n{source}"
     );
 }
+
+/// A data label was written at a literal 8pt, so a chart declaring anything
+/// else drew its labels at the wrong size — smaller than its own axis on the
+/// deck of #841, which asks for 11.97pt everywhere (issue #970).
+#[test]
+fn a_data_label_is_set_at_the_size_its_dlbls_declare() {
+    let mut chart = labelled_chart(DataLabels {
+        show_value: true,
+        text_style: crate::ir::ChartTextStyle {
+            size_pt: Some(11.97),
+            ..crate::ir::ChartTextStyle::default()
+        },
+        ..DataLabels::default()
+    });
+    chart.series[0].data_labels.text_style.size_pt = Some(11.97);
+    let source = chart_source(chart);
+
+    assert!(
+        source.contains("#text(size: 11.97pt, weight: \"bold\""),
+        "{source}"
+    );
+    assert!(
+        !source.contains("#text(size: 8pt, weight: \"bold\""),
+        "{source}"
+    );
+    // The label box has to grow with the text or the larger glyphs centre on
+    // a box sized for 8pt: 11.97 x 1.25 is 14.9625pt.
+    assert!(source.contains("height: 14.9625pt"), "{source}");
+}
+
+/// A `<c:dLbls>` stating no size takes the chart space's, and only a chart
+/// stating nothing anywhere keeps the unmeasured 8pt the labels were pinned
+/// at — reading a declared size must not resize charts that declare none.
+#[test]
+fn a_data_label_declaring_no_size_falls_back_to_the_chart_space() {
+    let mut chart = labelled_chart(DataLabels {
+        show_value: true,
+        ..DataLabels::default()
+    });
+    chart.text_style.size_pt = Some(18.0);
+    assert!(chart_source(chart).contains("#text(size: 18pt, weight: \"bold\""),);
+
+    let neither = chart_source(labelled_chart(DataLabels {
+        show_value: true,
+        ..DataLabels::default()
+    }));
+    assert!(
+        neither.contains("#text(size: 8pt, weight: \"bold\""),
+        "{neither}"
+    );
+}
