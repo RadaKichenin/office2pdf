@@ -248,6 +248,7 @@ fn make_simple_table(rows: Vec<Vec<&str>>) -> Table {
         rows: rows
             .into_iter()
             .map(|cells| TableRow {
+                minimum_height: None,
                 cells: cells
                     .into_iter()
                     .map(|text| TableCell {
@@ -501,6 +502,7 @@ fn test_generate_run_highlight_yellow() {
 fn test_table_cell_vertical_align_center() {
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![TableCell {
                 content: vec![Block::Paragraph(Paragraph {
                     style: ParagraphStyle::default(),
@@ -557,6 +559,7 @@ fn test_generate_run_highlight_with_bold() {
 fn test_table_cell_vertical_align_bottom() {
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![TableCell {
                 content: vec![Block::Paragraph(Paragraph {
                     style: ParagraphStyle::default(),

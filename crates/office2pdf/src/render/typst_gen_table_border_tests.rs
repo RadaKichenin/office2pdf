@@ -38,6 +38,7 @@ fn test_table_all_borders() {
     };
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![cell],
             height: None,
         }],
@@ -91,6 +92,7 @@ fn test_table_dashed_border_codegen() {
     };
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![cell],
             height: None,
         }],
@@ -148,10 +150,12 @@ fn test_table_double_borders_render_two_oriented_rules() {
     let table = Table {
         rows: vec![
             TableRow {
+                minimum_height: None,
                 cells: vec![TableCell::default(), TableCell::default()],
                 height: None,
             },
             TableRow {
+                minimum_height: None,
                 cells: vec![TableCell::default(), cell],
                 height: None,
             },
@@ -339,6 +343,7 @@ fn test_solid_border_no_dash_param() {
     };
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![cell],
             height: None,
         }],
@@ -406,6 +411,7 @@ fn boundary_band_table(rows: Vec<TableRow>, column_widths: Vec<f64>) -> Table {
 /// is known at codegen and a vertical band can be a single concrete line.
 fn fixed_row(cells: Vec<TableCell>) -> TableRow {
     TableRow {
+        minimum_height: None,
         cells,
         height: Some(20.0),
     }
@@ -703,6 +709,7 @@ fn test_word_style_table_keeps_centred_strokes_byte_identically() {
     };
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![bordered_text_cell("Word", border)],
             height: None,
         }],
@@ -772,6 +779,7 @@ fn test_boundary_band_auto_row_verticals_paint_concrete_twin_bands() {
     };
     let table = boundary_band_table(
         vec![TableRow {
+            minimum_height: None,
             cells: vec![cell],
             height: None,
         }],
@@ -816,6 +824,7 @@ fn test_boundary_band_auto_row_verticals_em_fallback_without_metrics() {
     );
     let table = boundary_band_table(
         vec![TableRow {
+            minimum_height: None,
             cells: vec![cell],
             height: None,
         }],
@@ -1061,10 +1070,12 @@ fn test_boundary_band_auto_row_frame_estimate_computed_once_per_row() {
     let table = boundary_band_table(
         vec![
             TableRow {
+                minimum_height: None,
                 cells: cells.clone(),
                 height: None,
             },
             TableRow {
+                minimum_height: None,
                 cells,
                 height: None,
             },
@@ -1397,10 +1408,12 @@ fn test_print_heading_boundary_keeps_both_coincident_bands() {
     let table = |prints_headings: bool| Table {
         rows: vec![
             TableRow {
+                minimum_height: None,
                 cells: vec![cell("1")],
                 height: None,
             },
             TableRow {
+                minimum_height: None,
                 cells: vec![cell("2")],
                 height: None,
             },

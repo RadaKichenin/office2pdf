@@ -882,6 +882,7 @@ fn a_sheet_cell_keeps_syllable_breaking() {
 fn a_docx_table_cell_keeps_each_hangul_eojeol_whole() {
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![make_text_cell(EOJEOL_SENTENCE)],
             height: None,
         }],
@@ -1327,6 +1328,7 @@ fn a_token_wider_than_its_column_is_not_framed() {
     }
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![make_text_cell_styled(
                 &format!("주 {long_token}"),
                 "Malgun Gothic",
@@ -1359,6 +1361,7 @@ fn the_same_token_is_framed_when_the_column_can_hold_it() {
     let long_token: String = "가나다라마바사아자차카타파하가나다라마바".to_string();
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![make_text_cell_styled(
                 &format!("주 {long_token}"),
                 "Malgun Gothic",

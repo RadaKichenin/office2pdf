@@ -335,6 +335,10 @@ fn generate_table_rows(
                 indent,
                 default_cell_padding,
                 row.height.filter(|_| fixed_row_heights),
+                // The floor belongs to the row, and a Typst table row is as
+                // tall as its tallest cell, so one strut carries it. Putting
+                // it in every cell would only repeat the same constraint.
+                row.minimum_height.filter(|_| cell_index == 0),
                 ctx,
             )?;
             ctx.available_measure_pt = enclosing_measure_pt;
@@ -500,6 +504,7 @@ fn generate_table_cell(
     indent: &str,
     default_cell_padding: Insets,
     row_height: Option<f64>,
+    row_minimum_height: Option<f64>,
     ctx: &mut GenCtx,
 ) -> Result<(), ConvertError> {
     let needs_cell_fn = clamped_colspan > 1
@@ -716,7 +721,26 @@ fn generate_table_cell(
             format_f64(spill_width),
         );
     } else {
+        // A `w:trHeight` floor is `max(floor, content)`, which no Typst row
+        // length expresses — a stated length pins the row, and `auto` drops
+        // the floor. A one-row grid beside a strut of the floor's height is
+        // exactly that maximum, and it costs nothing when the content already
+        // wins (issue #965).
+        let strut_height_pt: Option<f64> = row_minimum_height.map(|floor| {
+            let inset: Insets = cell.padding.unwrap_or(default_cell_padding);
+            (floor - inset.top - inset.bottom).max(0.0)
+        });
+        if let Some(height) = strut_height_pt {
+            let _ = write!(
+                out,
+                "#grid(columns: (0pt, 1fr), rows: (auto,), box(width: 0pt, height: {}pt), [",
+                format_f64(height)
+            );
+        }
         generate_cell_content(out, &cell.content, ctx)?;
+        if strut_height_pt.is_some() {
+            out.push_str("])");
+        }
     }
     ctx.cell_seats_text_on_descender = enclosing_cell_seats_on_descender;
     out.push_str("],\n");

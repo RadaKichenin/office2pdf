@@ -247,6 +247,7 @@ pub(super) fn augment_page_with_print_headings(
     page.table.rows.insert(
         0,
         TableRow {
+            minimum_height: None,
             cells: strip_cells,
             height: Some(PRINT_HEADING_STRIP_HEIGHT_PT),
         },

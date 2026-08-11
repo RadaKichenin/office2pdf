@@ -518,6 +518,7 @@ impl<'a> PptxTableParser<'a> {
             None
         };
         self.rows.push(TableRow {
+            minimum_height: None,
             cells: std::mem::take(&mut self.cells),
             height,
         });

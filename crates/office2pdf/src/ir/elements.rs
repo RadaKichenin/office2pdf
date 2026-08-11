@@ -823,7 +823,14 @@ pub struct Table {
 #[derive(Debug, Clone)]
 pub struct TableRow {
     pub cells: Vec<TableCell>,
+    /// The row's fixed height in points, from a `w:trHeight` whose
+    /// `@w:hRule` is `exact`.
     pub height: Option<f64>,
+    /// The row's floor in points, from a `w:trHeight` whose `@w:hRule` is
+    /// `atLeast` — the schema's default when the attribute is absent. The row
+    /// is at least this tall and grows past it for taller content, which is
+    /// what separates it from [`Self::height`] (issue #965).
+    pub minimum_height: Option<f64>,
 }
 
 /// Glyphs the parser records in [`TableCell::icon_text`] for Excel's arrow

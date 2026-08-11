@@ -70,6 +70,7 @@ fn test_table_page_merged_cells() {
     let table = Table {
         rows: vec![
             TableRow {
+                minimum_height: None,
                 cells: vec![TableCell {
                     content: vec![Block::Paragraph(Paragraph {
                         style: ParagraphStyle::default(),
@@ -86,6 +87,7 @@ fn test_table_page_merged_cells() {
                 height: None,
             },
             TableRow {
+                minimum_height: None,
                 cells: vec![
                     TableCell {
                         content: vec![Block::Paragraph(Paragraph {
@@ -136,6 +138,7 @@ fn test_table_page_merged_cells() {
 fn test_table_page_with_column_widths() {
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![
                 TableCell {
                     content: vec![Block::Paragraph(Paragraph {
@@ -214,6 +217,7 @@ fn test_table_page_rowspan_merge() {
     let table = Table {
         rows: vec![
             TableRow {
+                minimum_height: None,
                 cells: vec![
                     TableCell {
                         content: vec![Block::Paragraph(Paragraph {
@@ -244,6 +248,7 @@ fn test_table_page_rowspan_merge() {
                 height: None,
             },
             TableRow {
+                minimum_height: None,
                 cells: vec![TableCell {
                     content: vec![Block::Paragraph(Paragraph {
                         style: ParagraphStyle::default(),

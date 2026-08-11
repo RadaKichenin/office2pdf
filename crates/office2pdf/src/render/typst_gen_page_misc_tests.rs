@@ -398,6 +398,7 @@ fn test_fixed_page_without_background_color() {
 fn test_fixed_page_table_element() {
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![
                 TableCell {
                     content: vec![Block::Paragraph(Paragraph {
