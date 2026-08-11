@@ -1679,3 +1679,85 @@ fn test_a_distributed_paragraph_keeps_its_own_alignment() {
         "the style's right alignment must not overwrite a declared distribute"
     );
 }
+
+/// `w:trHeight/@w:hRule` defaults to `atLeast` when the attribute is absent,
+/// which makes `w:val` a floor rather than a fixed height. Reading only the
+/// `exact` case dropped the floor outright, collapsing the row to its content
+/// (issue #965).
+#[test]
+fn an_at_least_row_height_becomes_a_minimum_not_a_fixed_height() {
+    for rule in [None, Some(docx_rs::HeightRule::AtLeast)] {
+        let mut row = docx_rs::TableRow::new(vec![docx_rs::TableCell::new().add_paragraph(
+            docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text("Short")),
+        )])
+        // 2215 twips is 110.75pt.
+        .row_height(2215.0);
+        if let Some(rule) = rule {
+            row = row.height_rule(rule);
+        }
+        let table = docx_rs::Table::new(vec![row]).set_grid(vec![9000]);
+
+        let data = build_docx_with_table(table);
+        let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+        let parsed = first_table(&doc);
+
+        assert_eq!(
+            parsed.rows[0].height, None,
+            "not a fixed height for rule {rule:?}"
+        );
+        assert!(
+            parsed.rows[0]
+                .minimum_height
+                .is_some_and(|height| (height - 110.75).abs() < 0.01),
+            "2215 twips is a 110.75pt floor for rule {rule:?}: {:?}",
+            parsed.rows[0].minimum_height
+        );
+    }
+}
+
+/// `hRule="exact"` still pins the row, and states no floor on top of it.
+#[test]
+fn an_exact_row_height_stays_a_fixed_height() {
+    let table = docx_rs::Table::new(vec![
+        docx_rs::TableRow::new(vec![docx_rs::TableCell::new().add_paragraph(
+            docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text("Short")),
+        )])
+        .row_height(2215.0)
+        .height_rule(docx_rs::HeightRule::Exact),
+    ])
+    .set_grid(vec![9000]);
+
+    let data = build_docx_with_table(table);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let parsed = first_table(&doc);
+
+    assert!(
+        parsed.rows[0]
+            .height
+            .is_some_and(|height| (height - 110.75).abs() < 0.01),
+        "{:?}",
+        parsed.rows[0].height
+    );
+    assert_eq!(parsed.rows[0].minimum_height, None);
+}
+
+/// `hRule="auto"` states that the row is content-driven, so `w:val` carries no
+/// constraint at all.
+#[test]
+fn an_auto_row_height_states_no_constraint() {
+    let table = docx_rs::Table::new(vec![
+        docx_rs::TableRow::new(vec![docx_rs::TableCell::new().add_paragraph(
+            docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text("Short")),
+        )])
+        .row_height(2215.0)
+        .height_rule(docx_rs::HeightRule::Auto),
+    ])
+    .set_grid(vec![9000]);
+
+    let data = build_docx_with_table(table);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let parsed = first_table(&doc);
+
+    assert_eq!(parsed.rows[0].height, None);
+    assert_eq!(parsed.rows[0].minimum_height, None);
+}

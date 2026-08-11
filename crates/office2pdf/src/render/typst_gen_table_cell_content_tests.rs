@@ -27,6 +27,7 @@ fn test_table_cell_with_multiple_paragraphs() {
     };
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![multi_para_cell],
             height: None,
         }],
@@ -85,6 +86,7 @@ fn test_table_cell_simple_list_uses_compact_fixed_text_layout() {
     };
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![cell],
             height: None,
         }],
@@ -149,6 +151,7 @@ fn test_table_cell_simple_list_treats_default_and_explicit_left_as_same_style() 
     };
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![cell],
             height: None,
         }],
@@ -220,6 +223,7 @@ fn test_table_cell_compact_list_adds_inter_item_spacing_from_line_spacing() {
     };
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![cell],
             height: None,
         }],
@@ -283,6 +287,7 @@ fn test_east_asian_table_cell_snaps_to_the_document_grid() {
     };
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![cell],
             height: None,
         }],
@@ -350,6 +355,7 @@ fn test_latin_table_cell_uses_natural_line_height() {
     };
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![cell],
             height: None,
         }],
@@ -402,6 +408,7 @@ fn mixed_script_row_shares_one_line_box() {
     };
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             // A Korean month label beside a numeric column, as in the research
             // report fixture.
             cells: vec![make_cell("2024년 1월"), make_cell("380")],
@@ -462,6 +469,7 @@ fn latin_only_row_under_a_grid_keeps_the_font_line() {
     };
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![make_cell("Aug 3"), make_cell("380")],
             height: None,
         }],
@@ -526,6 +534,7 @@ fn grid_cell_absorbs_space_after_into_the_line_box() {
     };
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![cell],
             height: None,
         }],
@@ -580,6 +589,7 @@ fn ungridded_cell_still_emits_space_after() {
     };
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![cell],
             height: None,
         }],
@@ -635,6 +645,7 @@ fn cell_border_width_joins_the_inset() {
     };
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![cell],
             height: None,
         }],
@@ -687,6 +698,7 @@ fn bottom_aligned_spreadsheet_cell_seats_its_line_box_on_the_descender() {
     };
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![cell],
             height: Some(20.0),
         }],
@@ -754,6 +766,7 @@ fn center_aligned_spreadsheet_cell_keeps_the_symmetric_line_box() {
     };
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![cell],
             height: Some(20.0),
         }],
@@ -820,6 +833,7 @@ fn bottom_aligned_spreadsheet_cell_in_auto_height_row_keeps_the_symmetric_line_b
     };
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![cell],
             height: None,
         }],
@@ -886,6 +900,7 @@ fn bottom_aligned_word_table_cell_keeps_the_symmetric_line_box() {
     // rather than passing trivially through the fixed-row gate.
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![cell],
             height: Some(20.0),
         }],
@@ -951,6 +966,7 @@ fn stacked_cell_paragraphs_zero_the_default_block_spacing() {
     };
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![cell],
             height: None,
         }],
@@ -1007,6 +1023,7 @@ fn stacked_cell_paragraphs_without_w_after_stack_flush() {
     };
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![cell],
             height: None,
         }],
@@ -1058,6 +1075,7 @@ fn single_paragraph_cell_emission_is_unchanged() {
     };
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![cell],
             height: None,
         }],
@@ -1122,6 +1140,7 @@ fn line_spaced_stacked_cell_paragraphs_take_a_scaled_line_box() {
     };
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![cell],
             height: None,
         }],
@@ -1197,6 +1216,7 @@ fn an_empty_cell_paragraph_holds_one_full_line_box() {
     };
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![cell],
             height: None,
         }],
@@ -1251,6 +1271,7 @@ fn cell_paragraph_carries_its_left_indent() {
     });
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![TableCell {
                 content: vec![indented, flush],
                 ..TableCell::default()
@@ -1285,6 +1306,7 @@ fn cell_paragraph_carries_its_left_indent() {
 fn cell_paragraph_carries_its_right_indent() {
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![TableCell {
                 content: vec![Block::Paragraph(Paragraph {
                     style: ParagraphStyle {
@@ -1351,6 +1373,7 @@ fn a_line_spaced_cell_paragraph_scales_its_line_box() {
     let render = |line_spacing: Option<LineSpacing>| -> String {
         let table = Table {
             rows: vec![TableRow {
+                minimum_height: None,
                 cells: vec![make_cell(line_spacing)],
                 height: None,
             }],
@@ -1397,6 +1420,7 @@ fn an_exactly_spaced_cell_paragraph_takes_the_stated_advance() {
     let font_size: f64 = 10.0;
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![TableCell {
                 content: vec![Block::Paragraph(Paragraph {
                     style: ParagraphStyle {
@@ -1465,6 +1489,7 @@ fn a_grid_snapped_line_spaced_cell_emits_its_space_after_once() {
     };
     let table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![cell],
             height: None,
         }],

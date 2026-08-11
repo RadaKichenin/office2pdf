@@ -86,6 +86,7 @@ fn test_narrow_sheet_stays_single_page() {
     let page = make_page(
         vec![150.0, 150.0],
         vec![TableRow {
+            minimum_height: None,
             cells: vec![cell("A"), cell("B")],
             height: None,
         }],
@@ -100,6 +101,7 @@ fn test_wide_sheet_splits_into_column_groups() {
     let page = make_page(
         vec![150.0; 5],
         vec![TableRow {
+            minimum_height: None,
             cells: vec![cell("A"), cell("B"), cell("C"), cell("D"), cell("E")],
             height: None,
         }],
@@ -126,6 +128,7 @@ fn test_merge_straddling_boundary_truncates_and_blanks_continuation() {
     let page = make_page(
         vec![150.0, 150.0, 150.0, 150.0],
         vec![TableRow {
+            minimum_height: None,
             cells: vec![cell("A"), merged, cell("D")],
             height: None,
         }],
@@ -159,6 +162,7 @@ fn test_merge_spill_width_is_clamped_to_the_column_group() {
     let page = make_page(
         vec![150.0, 150.0, 150.0, 150.0],
         vec![TableRow {
+            minimum_height: None,
             cells: vec![merged],
             height: None,
         }],
@@ -183,6 +187,7 @@ fn test_unmerged_spill_width_is_clamped_to_the_remaining_group_width() {
     let page = make_page(
         vec![150.0, 150.0, 150.0, 150.0],
         vec![TableRow {
+            minimum_height: None,
             cells: vec![spilling, cell("B"), cell("C"), cell("D")],
             height: None,
         }],
@@ -199,6 +204,7 @@ fn test_charts_stay_on_first_column_group() {
     let mut page = make_page(
         vec![300.0, 300.0],
         vec![TableRow {
+            minimum_height: None,
             cells: vec![cell("A"), cell("B")],
             height: None,
         }],
@@ -250,6 +256,7 @@ fn test_pathologically_wide_sheet_is_capped() {
     let page = make_page(
         vec![150.0; 100],
         vec![TableRow {
+            minimum_height: None,
             cells,
             height: None,
         }],
@@ -268,6 +275,7 @@ fn test_fit_to_width_scales_columns_onto_one_page() {
     let page = make_page(
         vec![400.0, 400.0],
         vec![TableRow {
+            minimum_height: None,
             cells: vec![cell("left"), cell("right")],
             height: Some(20.0),
         }],
@@ -284,6 +292,7 @@ fn test_fit_to_width_scales_columns_onto_one_page() {
 #[test]
 fn test_fit_to_width_truncates_scale_to_whole_percent() {
     let mut row = TableRow {
+        minimum_height: None,
         cells: vec![cell("wide")],
         height: None,
     };
@@ -306,6 +315,7 @@ fn test_fit_to_width_does_not_upscale_a_sheet_that_already_fits() {
     let page = make_page(
         vec![100.0, 100.0],
         vec![TableRow {
+            minimum_height: None,
             cells: vec![cell("a"), cell("b")],
             height: Some(20.0),
         }],
@@ -323,6 +333,7 @@ fn test_fit_to_width_two_pages_scales_then_splits() {
     let page = make_page(
         vec![400.0, 400.0, 400.0, 400.0],
         vec![TableRow {
+            minimum_height: None,
             cells: vec![cell("a"), cell("b"), cell("c"), cell("d")],
             height: None,
         }],
@@ -348,6 +359,7 @@ fn test_fit_to_width_scales_cell_padding() {
     let page = make_page(
         vec![400.0, 400.0],
         vec![TableRow {
+            minimum_height: None,
             cells: vec![left, cell("right")],
             height: Some(20.0),
         }],
@@ -372,10 +384,12 @@ fn test_width_split_repeats_the_heading_gutter_and_keeps_the_flag() {
         vec![23.0, 150.0, 150.0, 150.0],
         vec![
             TableRow {
+                minimum_height: None,
                 cells: vec![cell(""), cell("A"), cell("B"), cell("C")],
                 height: Some(13.0),
             },
             TableRow {
+                minimum_height: None,
                 cells: vec![cell("1"), cell("a1"), cell("b1"), cell("c1")],
                 height: Some(13.0),
             },
@@ -408,6 +422,7 @@ fn test_first_group_packs_against_the_full_printable_width() {
     let page = make_page(
         vec![23.0, 180.0, 190.0, 200.0],
         vec![TableRow {
+            minimum_height: None,
             cells: vec![cell(""), cell("A"), cell("B"), cell("C")],
             height: None,
         }],
@@ -459,6 +474,7 @@ fn a_scaled_sheet_scales_its_footer_with_it() {
     let mut page = make_page(
         vec![400.0, 400.0],
         vec![TableRow {
+            minimum_height: None,
             cells: vec![cell("left"), cell("right")],
             height: Some(20.0),
         }],
@@ -502,6 +518,7 @@ fn an_unscaled_sheet_leaves_its_footer_alone() {
     let mut page = make_page(
         vec![100.0],
         vec![TableRow {
+            minimum_height: None,
             cells: vec![cell("narrow")],
             height: Some(20.0),
         }],

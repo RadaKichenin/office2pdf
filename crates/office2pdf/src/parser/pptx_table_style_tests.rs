@@ -143,6 +143,7 @@ fn test_apply_table_style_first_row_gets_header_fill_and_text_color() {
     let mut table = Table {
         rows: vec![
             TableRow {
+                minimum_height: None,
                 cells: vec![TableCell {
                     content: vec![Block::Paragraph(Paragraph {
                         style: ParagraphStyle::default(),
@@ -167,6 +168,7 @@ fn test_apply_table_style_first_row_gets_header_fill_and_text_color() {
                 height: Some(30.0),
             },
             TableRow {
+                minimum_height: None,
                 cells: vec![TableCell {
                     content: vec![Block::Paragraph(Paragraph {
                         style: ParagraphStyle::default(),
@@ -245,6 +247,7 @@ fn test_apply_table_style_banded_rows_skip_first_row() {
 
     let make_row = |text: &str| -> TableRow {
         TableRow {
+            minimum_height: None,
             cells: vec![TableCell {
                 content: vec![Block::Paragraph(Paragraph {
                     style: ParagraphStyle::default(),
@@ -330,6 +333,7 @@ fn test_apply_table_style_explicit_cell_fill_not_overridden() {
 
     let mut table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![TableCell {
                 content: vec![Block::Paragraph(Paragraph {
                     style: ParagraphStyle::default(),
@@ -385,6 +389,7 @@ fn test_apply_table_style_missing_style_id_is_noop() {
 
     let mut table = Table {
         rows: vec![TableRow {
+            minimum_height: None,
             cells: vec![TableCell {
                 content: vec![],
                 col_span: 1,
@@ -722,6 +727,7 @@ fn test_builtin_style_borders_applied_to_cells() {
     let mut table = Table {
         rows: (0..3)
             .map(|_| TableRow {
+                minimum_height: None,
                 cells: (0..3).map(|_| TableCell::default()).collect(),
                 height: None,
             })
@@ -808,6 +814,7 @@ fn band_region_border_draws_the_rule_between_rows() {
     let mut table = Table {
         rows: (0..3)
             .map(|_| TableRow {
+                minimum_height: None,
                 cells: vec![TableCell::default(), TableCell::default()],
                 height: None,
             })
@@ -1169,6 +1176,7 @@ fn a_region_stating_no_fill_falls_through_to_whole_table() {
     };
     let make_row = |text: &str| -> TableRow {
         TableRow {
+            minimum_height: None,
             cells: vec![TableCell {
                 content: vec![Block::Paragraph(Paragraph {
                     style: ParagraphStyle::default(),

@@ -24,6 +24,9 @@ struct RawRow {
     cells: Vec<RawCell>,
     /// Exact row height in points, already converted from `w:trHeight`'s twips.
     height: Option<f64>,
+    /// Minimum row height in points, from the same `w:trHeight` read under
+    /// `atLeast` (issue #965).
+    minimum_height: Option<f64>,
 }
 
 fn extract_margin_side_points(side_json: &serde_json::Value) -> Option<f64> {
@@ -233,12 +236,23 @@ fn extract_raw_rows(
         // docx-rs stores `w:trHeight/@w:val` verbatim, and the schema types it
         // as ST_TwipsMeasure — forwarding it as points made every exact-height
         // row 20x too tall (issue #842).
-        let height = row_prop_json
+        let declared_height: Option<f64> = row_prop_json
             .as_ref()
-            .filter(|j| j.get("heightRule").and_then(|v| v.as_str()) == Some("exact"))
             .and_then(|j| j.get("rowHeight"))
             .and_then(|v| v.as_f64())
             .map(twips_to_pt);
+        // `@w:hRule` decides what that value means. `exact` pins the row;
+        // `auto` discards it; anything else — including the absent attribute,
+        // whose schema default is `atLeast` — makes it a floor (issue #965).
+        let height_rule: Option<&str> = row_prop_json
+            .as_ref()
+            .and_then(|j| j.get("heightRule"))
+            .and_then(|v| v.as_str());
+        let (height, minimum_height): (Option<f64>, Option<f64>) = match height_rule {
+            Some("exact") => (declared_height, None),
+            Some("auto") => (None, None),
+            _ => (None, declared_height),
+        };
         let mut cells: Vec<RawCell> = Vec::new();
         let mut col_index: usize = 0;
 
@@ -299,7 +313,11 @@ fn extract_raw_rows(
 
         align_top_oriented_cells_to_row_vertical_margins(&mut cells, default_cell_padding);
 
-        raw_rows.push(RawRow { cells, height });
+        raw_rows.push(RawRow {
+            cells,
+            height,
+            minimum_height,
+        });
     }
 
     raw_rows
@@ -848,6 +866,7 @@ fn resolve_vmerge_and_build_rows(raw_rows: &[RawRow]) -> Vec<TableRow> {
         rows.push(TableRow {
             cells,
             height: raw_row.height,
+            minimum_height: raw_row.minimum_height,
         });
     }
 
