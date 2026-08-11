@@ -310,6 +310,85 @@ fn test_in_memory_last_resort_bypasses_process_metric_cache() {
 }
 
 #[test]
+fn test_path_font_last_resort_bypasses_process_metric_caches() {
+    let carrier = include_bytes!("../../../../tests/fixtures/docx/wasm_embedded_cjk.docx");
+    let embedded_data = crate::parser::embedded_fonts::extract_embedded_font_data(
+        carrier,
+        crate::config::Format::Docx,
+    )
+    .expect("the #969 fixture should carry an embedded font");
+    let fonts = load_fonts_from_bytes(embedded_data.font_bytes());
+    let font = fonts.first().expect("the fixture font should parse");
+    let ttf = font.ttf();
+    let upem = f64::from(ttf.units_per_em()).max(1.0);
+    let expected = (
+        (f64::from(ttf.ascender()) + f64::from(ttf.line_gap())) / upem,
+        -f64::from(ttf.descender()) / upem,
+        (f64::from(ttf.ascender()) - f64::from(ttf.descender()) + f64::from(ttf.line_gap())) / upem,
+    );
+    let expected_hhea_ascender = f64::from(ttf.tables().hhea.ascender) / upem;
+    let expected_cap_height = font.metrics().cap_height.get();
+    let ascent = f64::from(ttf.ascender()).abs() / upem;
+    let descent = f64::from(ttf.descender()).abs() / upem;
+    let expected_powerpoint_above = ((POWERPOINT_LINE_HEIGHT_FACTOR + ascent - descent) / 2.0)
+        .clamp(0.0, POWERPOINT_LINE_HEIGHT_FACTOR);
+    let expected_powerpoint = (
+        expected_powerpoint_above,
+        POWERPOINT_LINE_HEIGHT_FACTOR - expected_powerpoint_above,
+    );
+
+    // Native document fonts are materialized into a conversion-local path.
+    // Prime the family-only process cache with a miss before that path becomes
+    // active: the conversion context must still be allowed to resolve its own
+    // final fallback face.
+    let missing_family = "office2pdf issue 969 cache miss";
+    assert!(font_line_metrics_em(missing_family).is_none());
+    assert!(font_hhea_ascender_em(missing_family).is_none());
+    assert!(font_cap_height_em(missing_family).is_none());
+    let cached_powerpoint = powerpoint_line_box_em(missing_family)
+        .expect("the ordinary PowerPoint metric falls back to Typst's default face");
+
+    let embedded_dir =
+        crate::parser::embedded_fonts::extract_embedded_fonts(carrier, crate::config::Format::Docx)
+            .expect("the #969 fixture font should materialize");
+    let context = crate::render::font_context::resolve_font_search_context(&[embedded_dir
+        .path()
+        .to_path_buf()])
+    .with_last_resort_family(Some("Noto Sans SC"));
+    let (actual, hhea_ascender, cap_height, powerpoint) =
+        crate::render::font_subst::with_font_search_context(Some(&context), || {
+            (
+                font_line_metrics_em(missing_family),
+                font_hhea_ascender_em(missing_family),
+                font_cap_height_em(missing_family),
+                powerpoint_line_box_em(missing_family),
+            )
+        });
+    let actual = actual.expect("the active path font should provide line metrics");
+    let hhea_ascender = hhea_ascender.expect("the active path font should provide an ascender");
+    let cap_height = cap_height.expect("the active path font should provide a cap height");
+    let powerpoint = powerpoint.expect("the active path font should provide a PowerPoint split");
+
+    assert!(
+        (actual.0 - expected.0).abs() < 1e-12
+            && (actual.1 - expected.1).abs() < 1e-12
+            && (actual.2 - expected.2).abs() < 1e-12,
+        "active metrics must come from the materialized Noto Sans SC face: {actual:?}"
+    );
+    assert!((hhea_ascender - expected_hhea_ascender).abs() < 1e-12);
+    assert!((cap_height - expected_cap_height).abs() < 1e-12);
+    assert!(
+        (powerpoint.0 - expected_powerpoint.0).abs() < 1e-12
+            && (powerpoint.1 - expected_powerpoint.1).abs() < 1e-12,
+        "active PowerPoint metrics must come from Noto Sans SC: {powerpoint:?}"
+    );
+    assert_ne!(
+        powerpoint, cached_powerpoint,
+        "the materialized face should replace the cached default-font split"
+    );
+}
+
+#[test]
 fn test_compile_with_nonexistent_font_path() {
     // Non-existent font path should not crash — FontSearcher skips invalid dirs
     let paths = vec![PathBuf::from("/nonexistent/font/path")];

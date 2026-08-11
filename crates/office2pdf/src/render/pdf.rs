@@ -629,8 +629,12 @@ fn best_face(family: &str) -> Option<typst::text::Font> {
         return Some(font);
     }
 
-    let search_context = super::font_context::resolve_font_search_context(&[]);
-    let data = get_fonts_for_extra_paths(search_context.search_paths());
+    let search_paths = super::font_subst::active_font_search_paths().unwrap_or_else(|| {
+        super::font_context::resolve_font_search_context(&[])
+            .search_paths()
+            .to_vec()
+    });
+    let data = get_fonts_for_extra_paths(&search_paths);
     super::font_subst::family_candidates(family)
         .iter()
         .find_map(|candidate| {
@@ -662,6 +666,9 @@ fn cached_family_metric(
         super::font_subst::active_in_memory_font(family, typst::text::FontVariant::default())
     {
         return compute(&font);
+    }
+    if super::font_subst::active_font_search_paths().is_some() {
+        return best_face(family).and_then(|font| compute(&font));
     }
 
     let cache = cache.get_or_init(|| Mutex::new(HashMap::new()));
@@ -790,6 +797,9 @@ pub(crate) fn font_line_metrics_em(family: &str) -> Option<(f64, f64, f64)> {
     {
         return Some(metrics_for(&font));
     }
+    if super::font_subst::active_font_search_paths().is_some() {
+        return best_face(family).map(|font| metrics_for(&font));
+    }
 
     let cache = METRICS_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
     let key: String = family.to_lowercase();
@@ -865,6 +875,9 @@ pub(crate) fn max_digit_advance_em(family: &str) -> Option<f64> {
         super::font_subst::active_in_memory_font(family, typst::text::FontVariant::default())
     {
         return advance_for(&font);
+    }
+    if super::font_subst::active_font_search_paths().is_some() {
+        return best_face(family).and_then(|font| advance_for(&font));
     }
 
     let cache = ADVANCE_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
@@ -1046,6 +1059,11 @@ pub(crate) fn powerpoint_line_box_em(family: &str) -> Option<(f64, f64)> {
         super::font_subst::active_in_memory_font(family, typst::text::FontVariant::default())
     {
         return split_for(&font);
+    }
+    if super::font_subst::active_font_search_paths().is_some() {
+        return best_face(family)
+            .or_else(|| best_face(crate::defaults::TYPST_DEFAULT_FONT_FAMILY))
+            .and_then(|font| split_for(&font));
     }
 
     let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
