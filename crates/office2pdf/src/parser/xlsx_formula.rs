@@ -209,7 +209,6 @@ fn tokenize(text: &str) -> Option<Vec<Token>> {
                         || *c == '.'
                         || *c == '!'
                         || *c == '\''
-                        || *c == ' ' && false
                 }) {
                     index += 1;
                 }
