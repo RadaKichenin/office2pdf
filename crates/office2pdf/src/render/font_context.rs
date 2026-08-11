@@ -209,10 +209,13 @@ fn script_bit(script: TextScript) -> u8 {
 /// Latin is probed with a plain capital rather than with the whole alphabet:
 /// a face carrying `A` and not the rest of ASCII does not exist in practice,
 /// and every extra probe costs a coverage lookup per family.
-const SCRIPT_PROBES: [(TextScript, char); 4] = [
+const SCRIPT_PROBES: [(TextScript, char); 5] = [
     (TextScript::Latin, 'A'),
     (TextScript::Korean, '가'),
     (TextScript::Japanese, 'あ'),
+    // `漢` is outside GB2312 while `中` is inside it. Keeping both recognizes
+    // the existing broad CJK faces and a strict Simplified Chinese subset.
+    (TextScript::Chinese, '中'),
     (TextScript::Chinese, '漢'),
 ];
 

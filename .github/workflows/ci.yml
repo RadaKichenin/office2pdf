@@ -164,6 +164,7 @@ jobs:
           key: wasm
       - run: cargo check --target wasm32-unknown-unknown -p office2pdf
       - run: cargo check --target wasm32-unknown-unknown -p office2pdf --features wasm
+      - run: cargo check --target wasm32-unknown-unknown -p office2pdf --features wasm-cjk-font
       - uses: taiki-e/install-action@v2
         with:
           tool: wasm-pack
@@ -177,6 +178,11 @@ jobs:
       - name: Run wasm tests in Node
         working-directory: crates/office2pdf
         run: wasm-pack test --node --features wasm
+      - name: Build browser package with bundled Chinese font
+        run: wasm-pack build crates/office2pdf --target web --features wasm-cjk-font
+      - name: Run bundled Chinese font tests in Node
+        working-directory: crates/office2pdf
+        run: wasm-pack test --node --features wasm-cjk-font
 
   fmt:
     name: Format

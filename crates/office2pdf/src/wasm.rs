@@ -531,6 +531,7 @@ mod wasm_tests {
         }));
     }
 
+    #[cfg(not(feature = "wasm-cjk-font"))]
     #[wasm_bindgen_test]
     fn wasm_result_reports_notdef_when_no_cjk_face_is_available() {
         let result = convert_docx_to_pdf_with_result(&make_cjk_docx_without_embedded_font())
@@ -541,6 +542,47 @@ mod wasm_tests {
                 && warning.from.as_deref() == Some("SimSun")
                 && warning.to.as_deref() == Some(".notdef")
         }));
+    }
+
+    #[cfg(feature = "wasm-cjk-font")]
+    #[wasm_bindgen_test]
+    fn wasm_bundled_cjk_feature_renders_chinese_without_caller_font() {
+        let result = convert_docx_to_pdf_with_result(&make_cjk_docx_without_embedded_font())
+            .expect("the bundled Chinese face should make default conversion readable");
+
+        assert_eq!(result.warnings.len(), 1);
+        let warning = &result.warnings[0];
+        assert_eq!(warning.kind, "fallback-used");
+        assert_eq!(warning.from.as_deref(), Some("SimSun"));
+        assert_eq!(warning.to.as_deref(), Some("Noto Sans CJK SC"));
+        assert!(
+            result
+                .pdf
+                .windows(b"NotoSansCJKsc".len())
+                .any(|window| window == b"NotoSansCJKsc"),
+            "the PDF should embed the feature-gated bundled face"
+        );
+    }
+
+    #[cfg(feature = "wasm-cjk-font")]
+    #[wasm_bindgen_test]
+    fn wasm_bundled_cjk_feature_applies_to_render_document() {
+        use crate::parser::Parser;
+
+        let (document, _) = crate::parser::docx::DocxParser
+            .parse(
+                &make_cjk_docx_without_embedded_font(),
+                &ConvertOptions::default(),
+            )
+            .expect("fixture should parse to IR");
+        let pdf = crate::render_document(&document)
+            .expect("direct IR rendering should use the feature-gated face");
+
+        assert!(
+            pdf.windows(b"NotoSansCJKsc".len())
+                .any(|window| window == b"NotoSansCJKsc"),
+            "direct IR output should embed the feature-gated bundled face"
+        );
     }
 
     #[wasm_bindgen_test]
