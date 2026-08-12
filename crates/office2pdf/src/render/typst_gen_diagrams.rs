@@ -929,6 +929,19 @@ const CHART_LABEL_EDGE_PAD_EM: f64 = 0.927;
 const CHART_LEGEND_BASE_PAD_PT: f64 = 23.008;
 const CHART_LEGEND_PAD_EM: f64 = 1.605;
 
+/// PowerPoint's square legend key and the visible space after it scale with
+/// chart text. The right-hand entry is then fitted against a stable frame-edge
+/// clearance instead of starting immediately after the plot.
+///
+/// Measured from native PowerPoint 16.112 exports of `bar-chart.pptx` at 10,
+/// 12, 18, 24, and 36pt chart text. The fixed/relative gap fit stays within
+/// 0.001pt of all five exports; the right-edge clearance is the midpoint of
+/// the 12pt and 18pt layouts used by the regression test.
+pub(super) const PPTX_LEGEND_KEY_EM: f64 = 0.5493;
+pub(super) const PPTX_LEGEND_KEY_LABEL_GAP_PT: f64 = -0.375;
+pub(super) const PPTX_LEGEND_KEY_LABEL_GAP_EM: f64 = 0.274655;
+const PPTX_LEGEND_RIGHT_EDGE_PAD_PT: f64 = 10.127;
+
 /// Fixed chart-area padding that remains after the text-scaled bands.
 const CHART_PLOT_TOP_PAD_PT: f64 = 19.84;
 const CHART_TICK_BAND_BASE_PT: f64 = 6.58;
@@ -1041,6 +1054,12 @@ struct LegendBox {
     horizontal: bool,
 }
 
+struct LegendEntryLayout<'a> {
+    row_h: f64,
+    widths: &'a [f64],
+    right_inset: Option<(f64, f64)>,
+}
+
 impl LegendBox {
     /// Reserve nothing, for a chart that declares no legend: the plot then
     /// gets the whole frame instead of a gutter nothing is drawn in
@@ -1090,8 +1109,7 @@ impl LegendBox {
         index: usize,
         entries: usize,
         content: (f64, f64, f64, f64),
-        row_h: f64,
-        entry_widths: &[f64],
+        layout: LegendEntryLayout<'_>,
     ) -> (f64, f64) {
         let (content_x, content_y, content_w, content_h) = content;
         if self.horizontal {
@@ -1099,18 +1117,22 @@ impl LegendBox {
             // advances by its own width, not by a flat pitch: a name wider than
             // the pitch used to run under the entry beside it and the two
             // overprinted into unreadable text (issue #827).
-            let row_w: f64 = entry_widths.iter().sum();
+            let row_w: f64 = layout.widths.iter().sum();
             let start_x: f64 = content_x + (content_w - row_w).max(0.0) / 2.0;
             let y: f64 = match position {
                 LegendPosition::Top => (content_y - self.top).max(0.0),
                 _ => content_y + content_h + GAP,
             };
-            let offset: f64 = entry_widths.iter().take(index).sum();
+            let offset: f64 = layout.widths.iter().take(index).sum();
             (start_x + offset, y)
         } else {
-            let stack_h: f64 = entries as f64 * row_h;
-            let x: f64 = match position {
-                LegendPosition::Left => (content_x - self.left).max(0.0),
+            let stack_h: f64 = entries as f64 * layout.row_h;
+            let x: f64 = match (position, layout.right_inset) {
+                (LegendPosition::Right | LegendPosition::TopRight, Some((entry_w, edge_pad))) => {
+                    (content_x + content_w + self.right - edge_pad - entry_w)
+                        .max(content_x + content_w)
+                }
+                (LegendPosition::Left, _) => (content_x - self.left).max(0.0),
                 _ => content_x + content_w + GAP,
             };
             let y: f64 = match position {
@@ -1119,7 +1141,7 @@ impl LegendBox {
                 LegendPosition::TopRight => content_y,
                 _ => content_y + (content_h - stack_h).max(0.0) / 2.0,
             };
-            (x, y + index as f64 * row_h)
+            (x, y + index as f64 * layout.row_h)
         }
     }
 }
@@ -1648,6 +1670,58 @@ fn legend_entry_widths(chart: &Chart, key_len_pt: f64, names: &[String]) -> Vec<
             (key_len_pt + LEGEND_KEY_LABEL_GAP_PT + label + GAP).max(LEGEND_ENTRY_W)
         })
         .collect()
+}
+
+/// PowerPoint scales an axis chart's square legend key and its following gap
+/// with chart text. Other hosts retain the Excel-calibrated legacy metrics.
+fn axis_legend_entry_metrics(chart: &Chart) -> (f64, f64) {
+    if matches!(chart.host, crate::ir::ChartHost::Presentation) {
+        let size_pt = chart_text_pt(chart);
+        (
+            PPTX_LEGEND_KEY_EM * size_pt,
+            (PPTX_LEGEND_KEY_LABEL_GAP_PT + PPTX_LEGEND_KEY_LABEL_GAP_EM * size_pt).max(0.0),
+        )
+    } else {
+        (9.0, LEGEND_KEY_LABEL_GAP_PT)
+    }
+}
+
+/// Width of the widest entry in a PowerPoint right-side axis legend.
+///
+/// PowerPoint places the stacked column as one right-fitted group, so every
+/// key starts at the position needed by its widest label. If the source face
+/// cannot be measured (notably in font-search-free WASM builds), returning
+/// `None` preserves the prior plot-relative fallback.
+fn powerpoint_right_legend_inset(
+    chart: &Chart,
+    names: &[String],
+    key_size_pt: f64,
+    key_label_gap_pt: f64,
+) -> Option<(f64, f64)> {
+    if !matches!(chart.host, crate::ir::ChartHost::Presentation)
+        || !matches!(
+            chart.legend_position,
+            LegendPosition::Right | LegendPosition::TopRight
+        )
+    {
+        return None;
+    }
+    let size_pt = chart_text_pt(chart);
+    let family = chart
+        .text_font_family
+        .as_deref()
+        .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_FAMILY);
+    let widest_label = names
+        .iter()
+        .map(|name| chart_text_advance_em(family, false, name))
+        .collect::<Option<Vec<_>>>()?
+        .into_iter()
+        .reduce(f64::max)?
+        * size_pt;
+    Some((
+        key_size_pt + key_label_gap_pt + widest_label,
+        PPTX_LEGEND_RIGHT_EDGE_PAD_PT,
+    ))
 }
 
 /// Space the axis plot's legend reserves.
@@ -2196,6 +2270,13 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
         })
         .collect();
     let entry_widths: Vec<f64> = legend_entry_widths(chart, LEGEND_KEY_LEN_PT, &legend_names);
+    let (legend_key_size_pt, legend_key_label_gap_pt) = axis_legend_entry_metrics(chart);
+    let right_inset = powerpoint_right_legend_inset(
+        chart,
+        &legend_names,
+        legend_key_size_pt,
+        legend_key_label_gap_pt,
+    );
     let legend_entries: usize = if chart.has_legend { series.len() } else { 0 };
     for (s_index, s) in series.iter().enumerate().take(legend_entries) {
         let color: String = series_color(s, s_index, 0, &chart.theme_accent_colors);
@@ -2224,16 +2305,21 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 gutter_w + plot_w,
                 plot_h + gutter_h,
             ),
-            LEGEND_ROW_H,
-            &entry_widths,
+            LegendEntryLayout {
+                row_h: LEGEND_ROW_H,
+                widths: &entry_widths,
+                right_inset,
+            },
         );
         let _ = writeln!(
             out,
-            "#place(top + left, dx: {}pt, dy: {}pt, box[#box(width: 9pt, height: 9pt, fill: {})#h({}pt)#text(size: {}pt)[{}]])",
+            "#place(top + left, dx: {}pt, dy: {}pt, box[#box(width: {}pt, height: {}pt, fill: {})#h({}pt)#text(size: {}pt)[{}]])",
             format_f64(entry_x),
             format_f64(entry_y),
+            format_f64(legend_key_size_pt),
+            format_f64(legend_key_size_pt),
             color,
-            format_f64(LEGEND_KEY_LABEL_GAP_PT),
+            format_f64(legend_key_label_gap_pt),
             format_f64(chart_text_pt(chart)),
             escape_typst(name)
         );
@@ -2537,8 +2623,11 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
                 VALUE_GAP + GAP + plot_w,
                 plot_h + CAT_GAP,
             ),
-            LINE_LEGEND_ROW_H,
-            &entry_widths,
+            LegendEntryLayout {
+                row_h: LINE_LEGEND_ROW_H,
+                widths: &entry_widths,
+                right_inset: None,
+            },
         );
         // The key is a sample of the plotted line: the same stroke, carrying the
         // same marker the series draws on each of its points (#801).
@@ -2804,8 +2893,11 @@ fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64
                 series_index,
                 chart.series.len().max(1),
                 (legend.left, legend.top, span_w, span_h),
-                RADAR_LEGEND_ROW_H,
-                &entry_widths,
+                LegendEntryLayout {
+                    row_h: RADAR_LEGEND_ROW_H,
+                    widths: &entry_widths,
+                    right_inset: None,
+                },
             );
             let key_mid: f64 = SERIES_MARKER_SIZE_PT / 2.0;
             let key: String = format!(
@@ -2958,8 +3050,11 @@ fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, 
             index,
             entries,
             (centre_x - radius, centre_y - radius, diameter, diameter),
-            PIE_LEGEND_ROW_H,
-            &entry_widths,
+            LegendEntryLayout {
+                row_h: PIE_LEGEND_ROW_H,
+                widths: &entry_widths,
+                right_inset: None,
+            },
         );
         let _ = writeln!(
             out,
