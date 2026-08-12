@@ -787,9 +787,31 @@ pub(super) fn chart_axis_text_attrs(chart: &Chart, axis: crate::ir::ChartTextSty
 /// clipping it or the label drifting off the tick.
 const CHART_LABEL_BOX_RATIO: f64 = 1.25;
 
+/// Top-edge placement of a PowerPoint horizontal value-axis label box.
+///
+/// The old flat 4pt placement ignores the resolved label size. A fixed plus
+/// text-scaled model fitted to native PowerPoint 16.112 exports at 10, 12, 18,
+/// 24, and 36pt, translated through Typst's size-scaled ink overhang, keeps the
+/// native 18pt #841 glyph top aligned and the other measured sizes within
+/// 0.35pt.
+const PPTX_HORIZONTAL_VALUE_LABEL_GAP_PT: f64 = 3.8602445;
+const PPTX_HORIZONTAL_VALUE_LABEL_GAP_EM: f64 = 0.738435;
+
 /// Height of the box holding one value tick label set at `text_pt`.
 fn chart_label_box_h(text_pt: f64) -> f64 {
     text_pt * CHART_LABEL_BOX_RATIO
+}
+
+fn horizontal_value_label_gap(chart: &Chart) -> f64 {
+    if matches!(chart.host, crate::ir::ChartHost::Presentation)
+        && matches!(chart.chart_type, ChartType::Bar)
+    {
+        PPTX_HORIZONTAL_VALUE_LABEL_GAP_PT
+            + PPTX_HORIZONTAL_VALUE_LABEL_GAP_EM
+                * chart_axis_text_pt(chart, chart.value_axis_text_style)
+    } else {
+        4.0
+    }
 }
 
 /// The value every major unit of an axis reaching `nice_max` in `step`s sits
@@ -1593,7 +1615,7 @@ fn chart_area_title_pt(chart: &Chart) -> f64 {
 /// size relationship used here (#706). It changes only the title/plot chrome,
 /// not the horizontal PowerPoint automatic axis scale resolved by
 /// [`powerpoint_nice_axis`].
-fn chart_area_title_h(chart: &Chart) -> f64 {
+pub(super) fn chart_area_title_h(chart: &Chart) -> f64 {
     if chart.text_style.size_pt.is_some() {
         CHART_PLOT_TOP_PAD_PT + CHART_PLOT_TOP_PAD_EM * chart_text_pt(chart)
     } else {
@@ -1974,7 +1996,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                     out,
                     "#place(top + left, dx: {}pt, dy: {}pt, box(width: 24pt)[#align(center)[#text(size: {}pt{})[{}]]])",
                     format_f64(x - 12.0),
-                    format_f64(plot_y + plot_h + 4.0),
+                    format_f64(plot_y + plot_h + horizontal_value_label_gap(chart)),
                     format_f64(chart_axis_text_pt(chart, chart.value_axis_text_style)),
                     chart_axis_text_attrs(chart, chart.value_axis_text_style),
                     escape_typst(&chart_value_label_formatted(
