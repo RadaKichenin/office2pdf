@@ -3,8 +3,9 @@ use crate::ir::ChartAreaOutline;
 use crate::ir::DataLabels;
 use crate::render::typst_gen::diagrams::{
     CHART_AREA_OUTLINE, CHART_AUTOMATIC_LINE, CHART_DEFAULT_TEXT_PT, GAP, LABEL_W, LEGEND_ENTRY_W,
-    LEGEND_KEY_LEN_PT, ROW, SERIES_LINE_PT, TICK_GAP, axis_plot_rect, chart_category_band_pt,
-    chart_category_gutter_pt, chart_tick_band_pt,
+    LEGEND_KEY_LEN_PT, PPTX_LEGEND_KEY_EM, PPTX_LEGEND_KEY_LABEL_GAP_EM,
+    PPTX_LEGEND_KEY_LABEL_GAP_PT, ROW, SERIES_LINE_PT, TICK_GAP, axis_plot_rect,
+    chart_category_band_pt, chart_category_gutter_pt, chart_tick_band_pt,
 };
 
 #[test]
@@ -3263,6 +3264,69 @@ fn a_framed_bar_chart_reserves_powerpoint_measured_chrome_at_multiple_sizes() {
             "{size_pt}pt chart edges: {errors:?}"
         );
     }
+}
+
+#[test]
+fn a_powerpoint_right_legend_places_its_scaled_entry_at_multiple_sizes() {
+    // Native PowerPoint 16.112 exports of the same 480 x 320pt chart frame.
+    // These are the key's left edge relative to the frame, its size, and the
+    // visible key-to-label gap. Five sizes prevent a one-off translation fitted
+    // only to the 18pt #841 GT.
+    let measurements = [
+        (10.0, 441.4465, 5.4923, 2.3710),
+        (12.0, 435.6760, 6.5926, 2.9213),
+        (18.0, 418.4018, 9.8887, 4.5694),
+        (24.0, 401.1207, 13.1827, 6.2164),
+        (36.0, 366.5520, 19.7753, 9.5126),
+    ];
+
+    for (size_pt, expected_x, expected_key_size, expected_gap) in measurements {
+        let mut chart = bar_chart_at(Some(size_pt), &["1st Qtr", "2nd Qtr", "3rd Qtr", "4th Qtr"]);
+        chart.series.truncate(1);
+        chart.series[0].name = Some("Sales".to_string());
+        chart.has_legend = true;
+        chart.legend_position = LegendPosition::Right;
+        chart.host = crate::ir::ChartHost::Presentation;
+        chart.text_font_family = Some("Calibri".to_string());
+
+        let source = framed_chart_source(&chart, 480.0, 320.0);
+        let actual_x = legend_entry_x(&source, "Sales");
+        assert!(
+            (actual_x - expected_x).abs() <= 0.1,
+            "{size_pt}pt PowerPoint legend key starts at {actual_x}pt, expected {expected_x}pt; got:\n{source}"
+        );
+        let entry = source
+            .lines()
+            .find(|line| line.contains("box[#box") && line.contains("[Sales]]"))
+            .expect("the chart emits its Sales legend entry");
+        let key_size = PPTX_LEGEND_KEY_EM * size_pt;
+        let gap = PPTX_LEGEND_KEY_LABEL_GAP_PT + PPTX_LEGEND_KEY_LABEL_GAP_EM * size_pt;
+        assert!((key_size - expected_key_size).abs() <= 0.002);
+        assert!((gap - expected_gap).abs() <= 0.001);
+        assert!(entry.contains(&format!(
+            "box(width: {}pt, height: {}pt",
+            format_f64(key_size),
+            format_f64(key_size)
+        )));
+        assert!(entry.contains(&format!("#h({}pt)", format_f64(gap))));
+    }
+}
+
+#[test]
+fn an_unmeasurable_powerpoint_right_legend_keeps_the_plot_relative_fallback() {
+    let mut chart = bar_chart_at(Some(18.0), &["Q1", "Q2"]);
+    chart.series.truncate(1);
+    chart.series[0].name = Some("Sales".to_string());
+    chart.host = crate::ir::ChartHost::Presentation;
+    chart.text_font_family = Some("Definitely Missing Chart Face 999".to_string());
+
+    let plot_right = axis_plot_rect(&chart, (480.0, 320.0), false).2;
+    let source = framed_chart_source(&chart, 480.0, 320.0);
+    let actual_x = legend_entry_x(&source, "Sales");
+    assert!(
+        (actual_x - (plot_right + GAP)).abs() <= 0.01,
+        "an unmeasurable face must preserve the plot-relative fallback, got {actual_x} after a {plot_right}pt plot; source:\n{source}"
+    );
 }
 
 #[test]
