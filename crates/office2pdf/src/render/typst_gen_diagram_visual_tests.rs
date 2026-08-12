@@ -799,6 +799,12 @@ fn chart_source(chart: Chart) -> String {
     generate_typst(&doc).unwrap().source
 }
 
+fn framed_chart_source(chart: &Chart, width: f64, height: f64) -> String {
+    let mut source = String::new();
+    generate_chart_in(&mut source, chart, Some((width, height)));
+    source
+}
+
 /// The axis tick labels the generator emitted, in the order written.
 fn emitted_axis_ticks(source: &str) -> Vec<f64> {
     emitted_axis_ticks_at_size(source, CHART_DEFAULT_TEXT_PT)
@@ -3288,11 +3294,47 @@ fn a_framed_column_chart_reserves_powerpoint_measured_chrome() {
 fn a_chart_title_occupies_the_same_fixed_band_used_by_plot_geometry() {
     let mut chart = bar_chart_at(Some(18.0), &["Q1", "Q2"]);
     chart.title = Some("Sales".to_string());
-    let source = chart_source(chart);
+    let source = framed_chart_source(&chart, 480.0, 320.0);
     assert!(
-        source.contains("#block(width: 100%, height: 46.21pt, above: 0pt, below: 0pt)"),
-        "the emitted title must occupy its measured plot band, got:\n{source}"
+        source.contains("#block(width: 480pt, height: 46.21pt, above: 0pt, below: 0pt)"),
+        "the emitted title must occupy its measured plot band and frame width, got:\n{source}"
     );
+    assert!(
+        !source.contains("#block(width: 100%, height: 46.21pt"),
+        "a framed title must not resolve 100% against the slide, got:\n{source}"
+    );
+}
+
+#[test]
+fn framed_line_radar_and_pie_charts_center_their_titles_in_the_frame() {
+    let mut line = two_series_bar_chart(Vec::new());
+    line.chart_type = ChartType::Line;
+    line.title = Some("Line title".to_string());
+    line.categories = vec!["Q1".to_string(), "Q2".to_string()];
+    line.series[0].values = vec![1.0, 2.0];
+    line.series[1].values = vec![2.0, 1.0];
+
+    let mut radar = radar_chart();
+    radar.title = Some("Radar title".to_string());
+
+    let mut pie = pie_chart(vec![60.0, 40.0]);
+    pie.title = Some("Pie title".to_string());
+
+    for (name, chart) in [("line", line), ("radar", radar), ("pie", pie)] {
+        let source = framed_chart_source(&chart, 321.0, 240.0);
+        assert!(
+            source.contains("#block(width: 321pt)[#align(center)"),
+            "the {name} title must use its chart frame, got:\n{source}"
+        );
+    }
+}
+
+#[test]
+fn a_flowed_chart_title_keeps_its_container_width() {
+    let mut chart = bar_chart_at(Some(18.0), &["Q1", "Q2"]);
+    chart.title = Some("Sales".to_string());
+    let source = chart_source(chart);
+    assert!(source.contains("#block(width: 100%, height: 46.21pt, above: 0pt, below: 0pt)"));
 }
 
 #[test]

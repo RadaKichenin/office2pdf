@@ -1549,6 +1549,60 @@ fn chart_area_title_h(chart: &Chart) -> f64 {
     }
 }
 
+/// Draw a chart title in the width of the chart that owns it.
+///
+/// A fixed slide chart is placed inside a wider slide context. Percentage
+/// widths resolve against that context, not the chart's `<p:graphicFrame>`, so
+/// a framed title must name the frame width explicitly (#997). Flowed charts
+/// have no independent frame and keep their existing container alignment.
+fn write_chart_title(
+    out: &mut String,
+    chart: &Chart,
+    title: &str,
+    frame: Option<(f64, f64)>,
+    fixed_height: Option<f64>,
+) {
+    let escaped_title: String = escape_typst(title);
+    let title_size: String = format_f64(chart_area_title_pt(chart));
+    match (frame, fixed_height) {
+        (Some((width, _)), Some(height)) => {
+            let _ = writeln!(
+                out,
+                "#block(width: {}pt, height: {}pt, above: 0pt, below: 0pt)[#align(center + horizon)[#text(size: {}pt, weight: \"bold\")[{}]]]",
+                format_f64(width),
+                format_f64(height),
+                title_size,
+                escaped_title,
+            );
+        }
+        (None, Some(height)) => {
+            let _ = writeln!(
+                out,
+                "#block(width: 100%, height: {}pt, above: 0pt, below: 0pt)[#align(center + horizon)[#text(size: {}pt, weight: \"bold\")[{}]]]",
+                format_f64(height),
+                title_size,
+                escaped_title,
+            );
+        }
+        (Some((width, _)), None) => {
+            let _ = writeln!(
+                out,
+                "#block(width: {}pt)[#align(center)[#text(size: {}pt, weight: \"bold\")[{}]]]",
+                format_f64(width),
+                title_size,
+                escaped_title,
+            );
+        }
+        (None, None) => {
+            let _ = writeln!(
+                out,
+                "#align(center)[#text(size: {}pt, weight: \"bold\")[{}]]",
+                title_size, escaped_title,
+            );
+        }
+    }
+}
+
 /// Width each legend entry occupies when the legend runs across the chart.
 ///
 /// The key, the gap to the label, and the label itself measured in the face the
@@ -1722,13 +1776,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
         0.0
     };
     if let Some(title) = area_title {
-        let _ = writeln!(
-            out,
-            "#block(width: 100%, height: {}pt, above: 0pt, below: 0pt)[#align(center + horizon)[#text(size: {}pt, weight: \"bold\")[{}]]]",
-            format_f64(title_h),
-            format_f64(chart_area_title_pt(chart)),
-            escape_typst(title)
-        );
+        write_chart_title(out, chart, title, frame, Some(title_h));
     }
 
     // The fixed-height title block is emitted above the plot box, so a framed
@@ -2248,12 +2296,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
     let (nice_max, step) = axis_with_stated_unit(nice_axis(max_value), chart.value_axis_major_unit);
 
     if let Some(title) = chart.title.as_deref() {
-        let _ = writeln!(
-            out,
-            "#align(center)[#text(size: {}pt, weight: \"bold\")[{}]]",
-            format_f64(chart_area_title_pt(chart)),
-            escape_typst(title)
-        );
+        write_chart_title(out, chart, title, frame, None);
         out.push_str("#v(4pt)\n");
     }
     // As in `generate_chart_axis`: the title sits above the box, so a framed
@@ -2559,12 +2602,7 @@ fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64
     }
 
     if let Some(title) = chart.title.as_deref() {
-        let _ = writeln!(
-            out,
-            "#align(center)[#text(size: {}pt, weight: \"bold\")[{}]]",
-            format_f64(chart_area_title_pt(chart)),
-            escape_typst(title)
-        );
+        write_chart_title(out, chart, title, frame, None);
         out.push_str("#v(4pt)\n");
     }
 
@@ -2793,12 +2831,7 @@ fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, 
     }
 
     if let Some(title) = chart.title.as_deref() {
-        let _ = writeln!(
-            out,
-            "#align(center)[#text(size: {}pt, weight: \"bold\")[{}]]",
-            format_f64(chart_area_title_pt(chart)),
-            escape_typst(title)
-        );
+        write_chart_title(out, chart, title, frame, None);
         out.push_str("#v(4pt)\n");
     }
 
