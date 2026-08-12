@@ -5,7 +5,8 @@ use crate::render::typst_gen::diagrams::{
     CHART_AREA_OUTLINE, CHART_AUTOMATIC_LINE, CHART_DEFAULT_TEXT_PT, GAP, LABEL_W, LEGEND_ENTRY_W,
     LEGEND_KEY_LEN_PT, PPTX_LEGEND_KEY_EM, PPTX_LEGEND_KEY_LABEL_GAP_EM,
     PPTX_LEGEND_KEY_LABEL_GAP_PT, ROW, SERIES_LINE_PT, TICK_GAP, axis_plot_rect,
-    chart_area_title_h, chart_category_band_pt, chart_category_gutter_pt, chart_tick_band_pt,
+    chart_area_title_h, chart_category_band_pt, chart_category_gutter_pt,
+    chart_category_rotated_label_y, chart_tick_band_pt,
 };
 
 #[test]
@@ -4265,6 +4266,31 @@ fn crowded_category_labels_slant_by_forty_five_degrees() {
         source.contains("rotate(-45deg, origin: top + right"),
         "labels longer than their band must slant, got:\n{source}"
     );
+}
+
+#[test]
+fn a_powerpoint_rotated_category_label_takes_the_native_baseline_seat() {
+    let mut chart = crowded_column_chart();
+    chart.host = crate::ir::ChartHost::Presentation;
+    chart.text_style.size_pt = Some(11.97);
+    chart.category_axis_text_style.size_pt = Some(11.97);
+    chart.text_font_family = Some("Avenir Next LT Pro".to_string());
+
+    let axis_y = 200.0;
+    let expected = axis_y + 2.0 + 0.74 * 11.97;
+    let actual = chart_category_rotated_label_y(&chart, axis_y);
+    assert!((actual - expected).abs() < 0.001, "{actual}");
+}
+
+#[test]
+fn a_non_powerpoint_rotated_category_label_keeps_its_existing_seat() {
+    let mut chart = crowded_column_chart();
+    chart.host = crate::ir::ChartHost::Spreadsheet;
+    chart.text_style.size_pt = Some(11.97);
+    chart.category_axis_text_style.size_pt = Some(11.97);
+    chart.text_font_family = Some("Avenir Next LT Pro".to_string());
+
+    assert_eq!(chart_category_rotated_label_y(&chart, 200.0), 202.0);
 }
 
 #[test]

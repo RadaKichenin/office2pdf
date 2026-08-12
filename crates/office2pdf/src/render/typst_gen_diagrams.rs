@@ -1021,6 +1021,17 @@ const CHART_COLUMN_TOP_PAD_EM: f64 = 0.607;
 /// 147.86pt and the chart leaves another 3.23pt before the frame edge.
 const CHART_ROTATED_LABEL_EDGE_PAD_PT: f64 = 3.225;
 
+/// Vertical seat correction for a rotated PowerPoint category-label box.
+///
+/// Typst rotates the box around its top-right content edge, while PowerPoint
+/// seats the text on a baseline before applying the same 45-degree transform.
+/// On slide 14 of the #841 deck the resulting four glyph baselines are all
+/// 8.12..8.98pt low at 11.97pt. Advancing the rotated pivot by 0.74em restores
+/// their common native top edge without changing the plot or horizontal
+/// anchors (#1014). This sign follows the post-rotation PDF transform: a larger
+/// Typst `dy` moves these -45-degree glyph baselines upward in PDF coordinates.
+const PPTX_ROTATED_CATEGORY_LABEL_Y_SHIFT_EM: f64 = 0.74;
+
 /// Native Office-face advances used by the PowerPoint chart calibrations.
 ///
 /// Plot chrome is part of the source document's layout, so it must not move
@@ -1453,6 +1464,18 @@ fn chart_category_rotated_gutter_pt(chart: &Chart) -> f64 {
     let widest_pt: f64 = chart_category_label_widest_pt(chart).unwrap_or(0.0);
     let drop: f64 = widest_pt * CATEGORY_LABEL_ROTATION_DEG.to_radians().sin();
     drop + CHART_ROTATED_LABEL_EDGE_PAD_PT
+}
+
+/// Top coordinate of a rotated category-label box.
+pub(super) fn chart_category_rotated_label_y(chart: &Chart, axis_y: f64) -> f64 {
+    if chart.host == crate::ir::ChartHost::Presentation {
+        axis_y
+            + 2.0
+            + PPTX_ROTATED_CATEGORY_LABEL_Y_SHIFT_EM
+                * chart_axis_text_pt(chart, chart.category_axis_text_style)
+    } else {
+        axis_y + 2.0
+    }
 }
 
 /// Gutters the category labels and the value tick labels take inside the box,
@@ -2211,7 +2234,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 out,
                 "#place(top + left, dx: {}pt, dy: {}pt, rotate(-{}deg, origin: top + right, box(width: {}pt)[#align(right)[#text(size: {}pt{})[{}]]]))",
                 format_f64(centre - label_box_w),
-                format_f64(plot_y + plot_h + 2.0),
+                format_f64(chart_category_rotated_label_y(chart, plot_y + plot_h)),
                 format_f64(CATEGORY_LABEL_ROTATION_DEG),
                 format_f64(label_box_w),
                 format_f64(chart_axis_text_pt(chart, chart.category_axis_text_style)),
