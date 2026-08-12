@@ -3330,6 +3330,36 @@ fn an_unmeasurable_powerpoint_right_legend_keeps_the_plot_relative_fallback() {
 }
 
 #[test]
+fn a_powerpoint_right_legend_uses_the_native_vertical_center_at_multiple_sizes() {
+    // Native PowerPoint 16.112 exports of the same 480 x 320pt chart frame.
+    // Each value is the legend key's top edge inside the post-title chart body.
+    // The native absolute edge is translated by the source frame and the same
+    // title band used by `generate_chart_in`.
+    let measurements = [
+        (10.0, 133.7634),
+        (12.0, 131.5833),
+        (18.0, 125.0449),
+        (24.0, 118.5077),
+        (36.0, 105.4309),
+    ];
+
+    for (size_pt, expected_y) in measurements {
+        let mut chart = bar_chart_at(Some(size_pt), &["1st Qtr", "2nd Qtr", "3rd Qtr", "4th Qtr"]);
+        chart.series.truncate(1);
+        chart.series[0].name = Some("Sales".to_string());
+        chart.host = crate::ir::ChartHost::Presentation;
+        chart.text_font_family = Some("Calibri".to_string());
+
+        let source = framed_chart_source(&chart, 480.0, 320.0);
+        let actual_y = legend_entry_y(&source, "Sales");
+        assert!(
+            (actual_y - expected_y).abs() <= 0.1,
+            "{size_pt}pt PowerPoint legend key starts at y={actual_y}pt, expected {expected_y}pt; got:\n{source}"
+        );
+    }
+}
+
+#[test]
 fn a_framed_column_chart_reserves_powerpoint_measured_chrome() {
     // Native PowerPoint 16.112 export of slide 14 in the #841 Contoso deck.
     // The coordinates are relative to its 401.95 x 344.25pt graphic frame.
@@ -3582,6 +3612,18 @@ fn legend_entry_x(source: &str, label: &str) -> f64 {
     let line_start: usize = source[..index].rfind('\n').map_or(0, |at| at + 1);
     let line: &str = &source[line_start..index];
     line.split("dx: ")
+        .nth(1)
+        .and_then(|rest| rest.split("pt").next())
+        .and_then(|value| value.trim().parse::<f64>().ok())
+        .expect("the entry is placed")
+}
+
+fn legend_entry_y(source: &str, label: &str) -> f64 {
+    let marker: String = format!("[{label}]])");
+    let index: usize = source.find(&marker).expect("the entry is drawn");
+    let line_start: usize = source[..index].rfind('\n').map_or(0, |at| at + 1);
+    let line: &str = &source[line_start..index];
+    line.split("dy: ")
         .nth(1)
         .and_then(|rest| rest.split("pt").next())
         .and_then(|value| value.trim().parse::<f64>().ok())
