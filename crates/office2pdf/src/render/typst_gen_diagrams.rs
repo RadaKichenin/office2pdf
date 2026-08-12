@@ -1294,6 +1294,25 @@ fn chart_column_value_gutter_pt(chart: &Chart) -> f64 {
     }
 }
 
+/// Left edge of a vertical value-axis tick-label box.
+///
+/// The legacy column gutter is `TICK_GAP + GAP`, with a `TICK_GAP`-wide label
+/// box at x=0, so an undeclared-size chart already leaves [`GAP`] before the
+/// plot. A PowerPoint chart with explicit text sizing uses the independently
+/// calibrated [`chart_column_value_gutter_pt`] instead; its label box still
+/// needs that 6pt inset. Without it every tick label on slide 14 of the #841
+/// deck sits 6.087pt left of the native export while the plot differs by only
+/// 0.011pt (#1015).
+fn chart_column_value_label_x(chart: &Chart) -> f64 {
+    let has_declared_size: bool =
+        chart.text_style.size_pt.is_some() || chart.value_axis_text_style.size_pt.is_some();
+    if chart.host == crate::ir::ChartHost::Presentation && has_declared_size {
+        GAP
+    } else {
+        0.0
+    }
+}
+
 /// The band one category takes across the category axis, at the declared size.
 pub(super) fn chart_category_band_pt(chart: &Chart) -> f64 {
     ROW / CHART_DEFAULT_TEXT_PT * chart_axis_text_pt(chart, chart.category_axis_text_style)
@@ -2036,7 +2055,8 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
             if value_axis_drawn {
                 let _ = writeln!(
                     out,
-                    "#place(top + left, dx: 0pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(right + horizon)[#text(size: {}pt{})[{}]]])",
+                    "#place(top + left, dx: {}pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(right + horizon)[#text(size: {}pt{})[{}]]])",
+                    format_f64(chart_column_value_label_x(chart)),
                     format_f64(
                         y - chart_label_box_h(chart_axis_text_pt(
                             chart,

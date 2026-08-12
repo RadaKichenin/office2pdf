@@ -3434,6 +3434,49 @@ fn a_framed_column_chart_reserves_powerpoint_measured_chrome() {
 }
 
 #[test]
+fn an_explicit_powerpoint_column_value_axis_keeps_the_native_label_inset() {
+    // The #841 chart's plot is already aligned, but each right-aligned tick
+    // label was 6.087pt left of PowerPoint. The calibrated plot gutter still
+    // needs the same 6pt inner inset the legacy `TICK_GAP + GAP` layout had.
+    let mut chart = crowded_column_chart();
+    chart.host = crate::ir::ChartHost::Presentation;
+    chart.text_style.size_pt = Some(11.97);
+    chart.value_axis_text_style.size_pt = Some(11.97);
+    let source = framed_chart_source(&chart, 401.95, 344.25);
+    let zero = source
+        .lines()
+        .find(|line| line.contains("align(right + horizon)") && line.ends_with("[0]]])"))
+        .expect("the zero value-axis label is emitted");
+    assert!(zero.contains("dx: 6pt"), "{zero}");
+    assert!(
+        zero.contains("box(width: 28.784350000000003pt"),
+        "the fix must translate, not widen, the value-label box: {zero}"
+    );
+}
+
+#[test]
+fn a_non_powerpoint_or_unsized_column_keeps_its_existing_label_origin() {
+    let mut spreadsheet = crowded_column_chart();
+    spreadsheet.host = crate::ir::ChartHost::Spreadsheet;
+    spreadsheet.text_style.size_pt = Some(11.97);
+    let spreadsheet_source = framed_chart_source(&spreadsheet, 401.95, 344.25);
+    let spreadsheet_zero = spreadsheet_source
+        .lines()
+        .find(|line| line.contains("align(right + horizon)") && line.ends_with("[0]]])"))
+        .expect("the spreadsheet zero value-axis label is emitted");
+    assert!(spreadsheet_zero.contains("dx: 0pt"), "{spreadsheet_zero}");
+
+    let mut unsized_powerpoint = crowded_column_chart();
+    unsized_powerpoint.host = crate::ir::ChartHost::Presentation;
+    let powerpoint_source = framed_chart_source(&unsized_powerpoint, 401.95, 344.25);
+    let powerpoint_zero = powerpoint_source
+        .lines()
+        .find(|line| line.contains("align(right + horizon)") && line.ends_with("[0]]])"))
+        .expect("the unsized PowerPoint zero value-axis label is emitted");
+    assert!(powerpoint_zero.contains("dx: 0pt"), "{powerpoint_zero}");
+}
+
+#[test]
 fn a_chart_title_occupies_the_same_fixed_band_used_by_plot_geometry() {
     let mut chart = bar_chart_at(Some(18.0), &["Q1", "Q2"]);
     chart.title = Some("Sales".to_string());
