@@ -244,7 +244,8 @@ fn test_fixed_page_mixed_elements() {
     assert!(output.source.contains("Title"));
     assert!(output.source.contains("rect"));
     assert!(output.source.contains("#image("));
-    assert!(output.source.contains("Footer text"));
+    assert!(output.source.contains("#o2p-pptx-word([Footer]"));
+    assert!(output.source.contains("#o2p-pptx-word([text]"));
     assert_eq!(output.images.len(), 1);
 }
 

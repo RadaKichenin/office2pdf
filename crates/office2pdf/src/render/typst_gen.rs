@@ -525,6 +525,10 @@ fn generate_pages(doc: &Document, options: &ConvertOptions) -> Result<TypstOutpu
     // Emit document metadata (title/author) if present
     generate_document_metadata(&mut out, &doc.metadata);
     write_page_format_state(&mut out);
+    if doc.pages.iter().any(|page| matches!(page, Page::Fixed(_))) {
+        write_powerpoint_advance_grid_helpers(&mut out);
+        out.push('\n');
+    }
 
     let mut ctx = GenCtx::new();
     ctx.document_default_tab_stop_pt = doc.styles.default_tab_stop_pt;
@@ -751,10 +755,12 @@ fn generate_fixed_page(
     }
     out.push('\n');
 
-    for elem in &page.elements {
-        generate_fixed_element(out, elem, ctx)?;
-    }
-    Ok(())
+    with_powerpoint_advance_grid(true, || -> Result<(), ConvertError> {
+        for elem in &page.elements {
+            generate_fixed_element(out, elem, ctx)?;
+        }
+        Ok(())
+    })
 }
 
 fn generate_table_page(

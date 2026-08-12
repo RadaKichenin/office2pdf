@@ -1,5 +1,36 @@
 #![cfg(not(target_arch = "wasm32"))] // native-only unit tests (filesystem, system fonts)
 use super::*;
+
+#[test]
+fn typst_cache_state_evicts_after_the_bounded_document_interval() {
+    let mut state = TypstCacheState {
+        active_compilations: 0,
+        completed_since_eviction: 0,
+    };
+
+    for _ in 0..TYPST_CACHE_EVICTION_INTERVAL {
+        assert!(!state.begin_compilation());
+        state.finish_compilation();
+    }
+
+    assert!(state.begin_compilation());
+    assert_eq!(state.completed_since_eviction, 0);
+    state.finish_compilation();
+}
+
+#[test]
+fn typst_cache_state_defers_eviction_while_compilations_overlap() {
+    let mut state = TypstCacheState {
+        active_compilations: 1,
+        completed_since_eviction: TYPST_CACHE_EVICTION_INTERVAL,
+    };
+
+    assert!(!state.begin_compilation());
+    state.finish_compilation();
+    state.finish_compilation();
+    assert!(state.begin_compilation());
+    state.finish_compilation();
+}
 use crate::test_support::make_test_svg;
 
 #[test]
