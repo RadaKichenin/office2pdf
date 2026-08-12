@@ -54,6 +54,12 @@ pub(super) struct PptxTableProps {
     pub(super) last_col: bool,
     pub(super) band_row: bool,
     pub(super) band_col: bool,
+    /// Per-cell `<a:noFill/>` declarations, indexed by row and column.
+    ///
+    /// A cell-level no-fill is an explicit override just like a solid fill:
+    /// PowerPoint still applies the table style's text and border properties,
+    /// but does not let any region paint a background (#880).
+    pub(super) no_fill_cells: Vec<Vec<bool>>,
 }
 
 // ── Parsing ─────────────────────────────────────────────────────────────
@@ -404,11 +410,17 @@ pub(super) fn apply_table_style(table: &mut Table, props: &PptxTableProps, style
             // (issue #941). `apply_region_to_cell` only fills what is still
             // unset, so applying the specific region first and `wholeTbl`
             // second gives the specific one priority.
+            let suppress_fill = props
+                .no_fill_cells
+                .get(row_idx)
+                .and_then(|row| row.get(col_idx))
+                .copied()
+                .unwrap_or(false);
             if let Some(region) = specific_region {
-                apply_region_to_cell(cell, region);
+                apply_region_to_cell(cell, region, suppress_fill);
             }
             if let Some(whole) = style_def.whole_table.as_ref() {
-                apply_region_to_cell(cell, whole);
+                apply_region_to_cell(cell, whole, suppress_fill);
             }
 
             apply_style_borders(
@@ -518,8 +530,8 @@ fn apply_style_borders(
 /// caller relies on the second to give a specific region priority over
 /// `wholeTbl` while still letting `wholeTbl` fill the gaps, so the call order
 /// there is load-bearing (issue #941).
-fn apply_region_to_cell(cell: &mut TableCell, region: &TableCellRegionStyle) {
-    if cell.background.is_none() {
+fn apply_region_to_cell(cell: &mut TableCell, region: &TableCellRegionStyle, suppress_fill: bool) {
+    if !suppress_fill && cell.background.is_none() {
         cell.background = region.fill;
     }
 
