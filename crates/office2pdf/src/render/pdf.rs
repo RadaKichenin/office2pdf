@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
-#[cfg(not(target_arch = "wasm32"))]
 use std::sync::Mutex;
 use std::sync::{Arc, OnceLock};
 // `SystemTime::now()` panics on wasm32-unknown-unknown; web-time shims it there
@@ -87,6 +86,66 @@ static EXTRA_FONT_PATHS_CACHE: OnceLock<Mutex<HashMap<Vec<PathBuf>, Arc<CachedFo
 /// Cached embedded-only fonts (no system font search). Used on WASM
 /// or when system fonts are not needed.
 static EMBEDDED_FONTS: OnceLock<CachedFontData> = OnceLock::new();
+
+/// Clear process-global Typst memoization after this many independent Office
+/// documents. The interval avoids evicting on every call while bounding the
+/// number of completed documents retained between cleanup opportunities.
+const TYPST_CACHE_EVICTION_INTERVAL: usize = 64;
+
+struct TypstCacheState {
+    active_compilations: usize,
+    completed_since_eviction: usize,
+}
+
+impl TypstCacheState {
+    fn begin_compilation(&mut self) -> bool {
+        let should_evict = self.active_compilations == 0
+            && self.completed_since_eviction >= TYPST_CACHE_EVICTION_INTERVAL;
+        if should_evict {
+            self.completed_since_eviction = 0;
+        }
+        self.active_compilations += 1;
+        should_evict
+    }
+
+    fn finish_compilation(&mut self) {
+        self.active_compilations = self
+            .active_compilations
+            .checked_sub(1)
+            .expect("a Typst compilation guard must balance its registration");
+        self.completed_since_eviction = self.completed_since_eviction.saturating_add(1);
+    }
+}
+
+static TYPST_CACHE_STATE: Mutex<TypstCacheState> = Mutex::new(TypstCacheState {
+    active_compilations: 0,
+    completed_since_eviction: 0,
+});
+
+/// Keeps cache aging outside every overlapping group of Typst compilations.
+struct TypstCompilationGuard;
+
+impl TypstCompilationGuard {
+    fn begin() -> Self {
+        let mut state = TYPST_CACHE_STATE
+            .lock()
+            .expect("Typst cache state mutex should not be poisoned");
+        if state.begin_compilation() {
+            comemo::evict(0);
+        }
+
+        Self
+    }
+}
+
+impl Drop for TypstCompilationGuard {
+    fn drop(&mut self) {
+        let mut state = TYPST_CACHE_STATE
+            .lock()
+            .expect("Typst cache state mutex should not be poisoned");
+        state.finish_compilation();
+    }
+}
 
 /// Get or initialize cached system fonts (with system font discovery).
 #[cfg(not(target_arch = "wasm32"))]
@@ -238,6 +297,13 @@ fn compile_to_pdf_inner(
     tagged: bool,
     pdf_ua: bool,
 ) -> Result<Vec<u8>, ConvertError> {
+    // Typst's memoized layout results are process-global, while each
+    // `MinimalWorld` here is an independent Office document. Age that cache at
+    // a bounded document interval so long-running processes do not retain
+    // results from every earlier document. The guard keeps eviction outside
+    // overlapping conversions, whose live layout entries may still be in use.
+    let _compilation_guard = TypstCompilationGuard::begin();
+
     let warned = typst::compile::<typst::layout::PagedDocument>(world);
     let document = warned.output.map_err(|errors| {
         let messages: Vec<String> = errors.iter().map(|e| e.message.to_string()).collect();
