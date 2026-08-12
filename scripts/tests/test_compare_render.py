@@ -203,6 +203,28 @@ class RepeatedTextGeometryTest(unittest.TestCase):
         self.assertIn("Sales [1/2]", output.getvalue())
         self.assertIn("+120.00pt", output.getvalue())
 
+    def test_report_scopes_geometry_to_the_requested_page(self) -> None:
+        gt_lines = [
+            compare_render.TextLine(0, 10.0, 20.0, "First page"),
+            compare_render.TextLine(1, 30.0, 40.0, "Second page"),
+        ]
+        output_lines = [
+            compare_render.TextLine(0, 110.0, 120.0, "First page"),
+            compare_render.TextLine(1, 31.0, 42.0, "Second page"),
+        ]
+
+        with mock.patch.object(
+            compare_render, "text_lines", side_effect=[gt_lines, output_lines]
+        ):
+            result = compare_render.report_geometry(
+                Path("gt.pdf"), Path("output.pdf"), page=2, large_shift=5.0
+            )
+
+        self.assertEqual(result["matched"], 1.0)
+        self.assertEqual(result["large_shift_count"], 0.0)
+        self.assertAlmostEqual(result["worst_dx"], 1.0)
+        self.assertAlmostEqual(result["worst_dy"], 2.0)
+
     def test_shift_crop_contains_both_repeated_label_locations(self) -> None:
         match = compare_render.match_text_line_instances(self.gt_lines, self.output_lines)[0]
 
