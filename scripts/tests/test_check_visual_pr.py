@@ -51,6 +51,7 @@ def visual_body(result_overrides=None, include_previews=True):
 - Renderer and DPI: pdftoppm, 150 DPI
 - Evidence mode: `fix`
 - New follow-up issues found in this audit: {follow_up_value}
+- Model vision findings: Full pages, pixel diff, and matched crops were opened; no untracked visual deviation remains.
 - GT: `assets/bugfixes/issue-186/gt.jpg`
 - Before: `assets/bugfixes/issue-186/before.jpg`
 - After: `assets/bugfixes/issue-186/after.jpg`
@@ -112,6 +113,46 @@ class PullRequestBodyTests(unittest.TestCase):
             ["assets/bugfixes/issue-186/after.jpg"],
         )
         self.assertTrue(any("rendered preview" in error for error in errors))
+
+    def test_visual_audit_requires_large_instance_shift_audit(self):
+        required = (
+            "- [x] Ran compare_layout.py --audit and dispositioned every "
+            "large text-instance shift"
+        )
+        errors = validate_pr_body(
+            visual_body().replace(required, required.replace("[x]", "[ ]")),
+            ["assets/bugfixes/issue-186/after.jpg"],
+        )
+        self.assertTrue(any("large text-instance shift" in error for error in errors))
+
+    def test_visual_audit_requires_model_vision_inspection(self):
+        required = (
+            "- [x] Used Codex/Claude vision to inspect the full GT/output pages, "
+            "diff, and matched crops"
+        )
+        errors = validate_pr_body(
+            visual_body().replace(required, required.replace("[x]", "[ ]")),
+            ["assets/bugfixes/issue-186/after.jpg"],
+        )
+        self.assertTrue(any("Codex/Claude vision" in error for error in errors))
+
+    def test_visual_audit_requires_substantive_model_vision_findings(self):
+        body = visual_body().replace(
+            "Model vision findings: Full pages, pixel diff, and matched crops were opened; "
+            "no untracked visual deviation remains.",
+            "Model vision findings: None",
+        )
+        errors = validate_pr_body(body, ["assets/bugfixes/issue-186/after.jpg"])
+        self.assertTrue(any("substantive direct inspection" in error for error in errors))
+
+    def test_visual_audit_rejects_numeric_only_model_vision_findings(self):
+        body = visual_body().replace(
+            "Model vision findings: Full pages, pixel diff, and matched crops were opened; "
+            "no untracked visual deviation remains.",
+            "Model vision findings: 123456789012345678901234567890",
+        )
+        errors = validate_pr_body(body, ["assets/bugfixes/issue-186/after.jpg"])
+        self.assertTrue(any("numeric metrics alone" in error for error in errors))
 
     def test_visual_audit_requires_distinct_preview_urls(self):
         body = visual_body().replace(

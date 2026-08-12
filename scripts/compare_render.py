@@ -22,7 +22,7 @@ histogram flat has moved something without changing what is drawn, which is
 usually exactly what a positioning fix should do.
 
 Usage:
-    compare_render.py GT.pdf OUTPUT.pdf [--page N] [--dpi 150]
+    compare_render.py GT.pdf OUTPUT.pdf [--page N] [--dpi 150] [--audit]
 """
 
 from __future__ import annotations
@@ -33,8 +33,11 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
+
+from spatial_match import minimum_cost_pairs
 
 PAGE_RE = re.compile(r'<page width="[\d.]+" height="[\d.]+">(.*?)</page>', re.S)
 WORD_RE = re.compile(
@@ -63,6 +66,28 @@ class TextLine:
     x_min: float
     y_min: float
     text: str
+
+
+@dataclass(frozen=True)
+class TextLineMatch:
+    reference: TextLine
+    candidate: TextLine
+    occurrence: int
+    occurrences: int
+
+    @property
+    def label(self) -> str:
+        if self.occurrences == 1:
+            return self.reference.text
+        return f"{self.reference.text} [{self.occurrence}/{self.occurrences}]"
+
+    @property
+    def dx(self) -> float:
+        return self.candidate.x_min - self.reference.x_min
+
+    @property
+    def dy(self) -> float:
+        return self.candidate.y_min - self.reference.y_min
 
 
 def render_page(pdf: Path, page: int, dpi: int, out_dir: Path, role: str) -> Path:
@@ -112,6 +137,15 @@ def imagemagick_command(tool: str) -> list[str] | None:
 def has_imagemagick() -> bool:
     """Whether every tool the colour and pixel axes need can be invoked."""
     return all(imagemagick_command(tool) is not None for tool in IMAGEMAGICK_TOOLS)
+
+
+def require_vision_artifact_dependencies(artifacts_dir: Path | None) -> None:
+    """Fail rather than silently omit requested model-vision evidence."""
+    if artifacts_dir is not None and not has_imagemagick():
+        raise SystemExit(
+            "--artifacts-dir requires ImageMagick to preserve full pages, the "
+            "pixel diff, and matched crops; install imagemagick and rerun"
+        )
 
 
 def baseline_lines(pdf: Path) -> list[TextLine]:
@@ -207,34 +241,62 @@ def text_lines(pdf: Path) -> list[TextLine]:
     return descriptor_box_lines(pdf)
 
 
-def unique_lines(lines: list[TextLine]) -> dict[str, TextLine]:
-    """Lines keyed by their text, keeping only texts that occur exactly once.
+def match_text_line_instances(
+    gt_lines: list[TextLine], other_lines: list[TextLine]
+) -> list[TextLineMatch]:
+    """Match equal text per page, including every repeated occurrence."""
+    gt_groups: dict[tuple[int, str], list[TextLine]] = defaultdict(list)
+    other_groups: dict[tuple[int, str], list[TextLine]] = defaultdict(list)
+    for line in gt_lines:
+        gt_groups[(line.page, line.text)].append(line)
+    for line in other_lines:
+        other_groups[(line.page, line.text)].append(line)
 
-    A repeated string cannot be paired between two renderings without guessing
-    which occurrence is which, so repeats are dropped rather than mismatched.
-    """
-    seen: dict[str, list[TextLine]] = {}
-    for line in lines:
-        seen.setdefault(line.text, []).append(line)
-    return {text: found[0] for text, found in seen.items() if len(found) == 1}
+    matches: list[TextLineMatch] = []
+    for key, references in gt_groups.items():
+        candidates = other_groups.get(key, [])
+        references = sorted(references, key=lambda line: (line.y_min, line.x_min))
+        candidates = sorted(candidates, key=lambda line: (line.y_min, line.x_min))
+        for reference_index, candidate_index in minimum_cost_pairs(
+            [(line.x_min, line.y_min) for line in references],
+            [(line.x_min, line.y_min) for line in candidates],
+        ):
+            matches.append(
+                TextLineMatch(
+                    reference=references[reference_index],
+                    candidate=candidates[candidate_index],
+                    occurrence=reference_index + 1,
+                    occurrences=len(references),
+                )
+            )
+    return sorted(
+        matches,
+        key=lambda match: (
+            match.reference.page,
+            match.reference.y_min,
+            match.reference.x_min,
+        ),
+    )
 
 
-def report_geometry(gt: Path, other: Path) -> dict[str, float]:
-    """Vertical and horizontal drift of every line matched by unique text."""
-    gt_lines = unique_lines(text_lines(gt))
-    other_lines = unique_lines(text_lines(other))
-    dy: list[float] = []
-    dx: list[float] = []
-    page_mismatch = 0
-    for text, reference in gt_lines.items():
-        candidate = other_lines.get(text)
-        if candidate is None:
-            continue
-        if candidate.page != reference.page:
-            page_mismatch += 1
-            continue
-        dy.append(candidate.y_min - reference.y_min)
-        dx.append(candidate.x_min - reference.x_min)
+def report_geometry(gt: Path, other: Path, large_shift: float = 5.0) -> dict[str, float]:
+    """Vertical and horizontal drift of spatially matched text instances."""
+    gt_text_lines = text_lines(gt)
+    other_text_lines = text_lines(other)
+    matches = match_text_line_instances(gt_text_lines, other_text_lines)
+    dy = [match.dy for match in matches]
+    dx = [match.dx for match in matches]
+    other_text_pages: dict[str, set[int]] = defaultdict(set)
+    for line in other_text_lines:
+        other_text_pages[line.text].add(line.page)
+    matched_reference_ids = {id(match.reference) for match in matches}
+    page_mismatch = sum(
+        1
+        for line in gt_text_lines
+        if id(line) not in matched_reference_ids
+        and line.text in other_text_pages
+        and line.page not in other_text_pages[line.text]
+    )
 
     print("## Geometry — position, size, pitch")
     if not has_mutool():
@@ -242,15 +304,34 @@ def report_geometry(gt: Path, other: Path) -> dict[str, float]:
         print("  boxes rather than baselines. The error scales with font size and can")
         print("  invert the sign. Install mupdf-tools before trusting these numbers.")
     if not dy:
-        print("  no lines matched by unique text; compare pages manually")
+        print("  no text instances matched; compare pages manually")
         return {}
     mad_y = sum(abs(value) for value in dy) / len(dy)
     mad_x = sum(abs(value) for value in dx) / len(dx)
-    coverage = len(dy) / len(gt_lines) if gt_lines else 0.0
-    print(f"  matched lines      {len(dy)} of {len(gt_lines)} "
-          f"({coverage * 100:.0f}% of the GT's unique lines)")
-    print(f"  vertical   MAD {mad_y:7.2f}pt   worst {max(dy, key=abs):+8.2f}pt")
-    print(f"  horizontal MAD {mad_x:7.2f}pt   worst {max(dx, key=abs):+8.2f}pt")
+    coverage = len(dy) / len(gt_text_lines) if gt_text_lines else 0.0
+    worst_dy = max(matches, key=lambda match: abs(match.dy))
+    worst_dx = max(matches, key=lambda match: abs(match.dx))
+    large_matches = [
+        match for match in matches if abs(match.dx) > large_shift or abs(match.dy) > large_shift
+    ]
+    print(f"  matched instances  {len(dy)} of {len(gt_text_lines)} "
+          f"({coverage * 100:.0f}% of the GT's text lines)")
+    print(
+        f"  vertical   MAD {mad_y:7.2f}pt   worst {worst_dy.dy:+8.2f}pt  "
+        f"{worst_dy.label[:60]}"
+    )
+    print(
+        f"  horizontal MAD {mad_x:7.2f}pt   worst {worst_dx.dx:+8.2f}pt  "
+        f"{worst_dx.label[:60]}"
+    )
+    print(f"  large instance shifts (>{large_shift:.2f}pt): {len(large_matches)}")
+    for match in sorted(
+        large_matches, key=lambda item: max(abs(item.dx), abs(item.dy)), reverse=True
+    ):
+        print(
+            f"    page {match.reference.page + 1}: {match.label[:52]}  "
+            f"dx {match.dx:+.2f}pt  dy {match.dy:+.2f}pt"
+        )
     if page_mismatch:
         print(f"  on a different page: {page_mismatch} line(s) — pagination differs")
     return {
@@ -259,6 +340,10 @@ def report_geometry(gt: Path, other: Path) -> dict[str, float]:
         "page_mismatch": float(page_mismatch),
         "matched": float(len(dy)),
         "coverage": coverage,
+        "worst_dx": worst_dx.dx,
+        "worst_dy": worst_dy.dy,
+        "large_shift_count": float(len(large_matches)),
+        "large_shift_threshold": large_shift,
     }
 
 
@@ -380,6 +465,138 @@ def report_pixels(gt_png: Path, other_png: Path, out_dir: Path) -> None:
         print(f"  {label}      {result.stderr.strip()}")
 
 
+def shift_crop_box(
+    match: TextLineMatch, dpi: int, image_width: int, image_height: int
+) -> tuple[int, int, int, int]:
+    """Matched page-space crop containing both locations of one shifted line."""
+    scale = dpi / 72.0
+    text_extent_pt = max(72.0, min(240.0, len(match.reference.text) * 8.0))
+    left = max(0, round((min(match.reference.x_min, match.candidate.x_min) - 24.0) * scale))
+    right = min(
+        image_width,
+        round(
+            (max(match.reference.x_min, match.candidate.x_min) + text_extent_pt + 24.0)
+            * scale
+        ),
+    )
+    top = max(0, round((min(match.reference.y_min, match.candidate.y_min) - 32.0) * scale))
+    bottom = min(
+        image_height,
+        round((max(match.reference.y_min, match.candidate.y_min) + 24.0) * scale),
+    )
+    return left, top, max(1, right - left), max(1, bottom - top)
+
+
+def preserve_vision_artifacts(
+    gt_png: Path,
+    other_png: Path,
+    artifacts_dir: Path,
+    page: int,
+    dpi: int,
+    large_matches: list[TextLineMatch],
+) -> list[Path]:
+    """Persist full pages, a pixel diff, and matched crops for model vision."""
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+    gt_artifact = artifacts_dir / f"page-{page}-gt.png"
+    output_artifact = artifacts_dir / f"page-{page}-output.png"
+    side_by_side = artifacts_dir / f"page-{page}-side-by-side.png"
+    diff_artifact = artifacts_dir / f"page-{page}-diff-5pct.png"
+
+    size = subprocess.run(
+        [*(imagemagick_command("identify") or []), "-format", "%wx%h", str(other_png)],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    width, height = (int(value) for value in size.split("x", maxsplit=1))
+    subprocess.run(
+        [
+            *(imagemagick_command("convert") or []),
+            str(gt_png),
+            "-background",
+            "white",
+            "-extent",
+            size,
+            str(gt_artifact),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    shutil.copy2(other_png, output_artifact)
+    subprocess.run(
+        [
+            *(imagemagick_command("convert") or []),
+            str(gt_artifact),
+            str(output_artifact),
+            "+append",
+            str(side_by_side),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    diff = subprocess.run(
+        [
+            *(imagemagick_command("compare") or []),
+            "-metric",
+            "AE",
+            "-fuzz",
+            "5%",
+            str(gt_artifact),
+            str(output_artifact),
+            str(diff_artifact),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if diff.returncode not in (0, 1):
+        raise SystemExit(f"ImageMagick failed to create {diff_artifact}: {diff.stderr.strip()}")
+
+    paths = [gt_artifact, output_artifact, side_by_side, diff_artifact]
+    for index, match in enumerate(large_matches, start=1):
+        slug = re.sub(r"[^a-z0-9]+", "-", match.label.lower()).strip("-") or "text"
+        crop_path = artifacts_dir / f"page-{page}-shift-{index:02d}-{slug[:48]}.png"
+        left, top, crop_width, crop_height = shift_crop_box(match, dpi, width, height)
+        crop = f"{crop_width}x{crop_height}+{left}+{top}"
+        gt_crop = artifacts_dir / f".gt-crop-{index:02d}.png"
+        output_crop = artifacts_dir / f".output-crop-{index:02d}.png"
+        for source, destination in (
+            (gt_artifact, gt_crop),
+            (output_artifact, output_crop),
+        ):
+            subprocess.run(
+                [
+                    *(imagemagick_command("convert") or []),
+                    str(source),
+                    "-crop",
+                    crop,
+                    "+repage",
+                    str(destination),
+                ],
+                check=True,
+                capture_output=True,
+            )
+        subprocess.run(
+            [
+                *(imagemagick_command("convert") or []),
+                str(gt_crop),
+                str(output_crop),
+                "+append",
+                str(crop_path),
+            ],
+            check=True,
+            capture_output=True,
+        )
+        gt_crop.unlink()
+        output_crop.unlink()
+        paths.append(crop_path)
+
+    print("## Vision artifacts — open every image with Codex/Claude vision")
+    print("  Numeric output does not complete the visual audit.")
+    for path in paths:
+        print(f"  {path}")
+    return paths
+
+
 def diagnose(
     geometry: dict[str, float], histogram_result: dict[str, float] | None
 ) -> None:
@@ -423,6 +640,8 @@ def diagnose(
     pages_differ: bool = geometry["page_mismatch"] > 0
     intersection: float = histogram_result.get("intersection", 1.0)
     ink_delta: float = histogram_result.get("ink_delta", 0.0)
+    large_shift_count = int(geometry.get("large_shift_count", 0.0))
+    large_shift_threshold = geometry.get("large_shift_threshold", 5.0)
 
     # Thresholds are deliberately loose: they route attention, they do not
     # decide correctness. A point of drift is invisible; ten is not.
@@ -437,6 +656,13 @@ def diagnose(
     ink_differs: bool = colour_measured and abs(ink_delta) > 0.2
 
     findings: list[str] = []
+    if large_shift_count:
+        findings.append(
+            f"{large_shift_count} matched text instance(s) move more than "
+            f"{large_shift_threshold:.2f}pt. These named element-level differences "
+            "remain valid even when the page has too few lines for aggregate MAD "
+            "to be representative; inspect and track each one above."
+        )
     if not colour_measured:
         findings.append(
             "The colour and pixel axes did not run — ImageMagick is absent, so "
@@ -499,36 +725,29 @@ def diagnose(
 
 
 def report_matched_lines(gt: Path, other: Path) -> None:
-    """Per-line baselines for every line matched by unique text.
+    """Per-instance positions for every text line matched spatially.
 
     Aggregate drift says a page is wrong; this says which line. Pairing the two
     PDFs by hand — taking the topmost line, or grepping for a prefix — silently
     matches the wrong line and produces impossible numbers, so the pairing here
-    is the same unique-text match the geometry axis already trusts.
+    is the same duplicate-safe spatial match the geometry axis already trusts.
     """
-    gt_lines = unique_lines(text_lines(gt))
-    other_lines = unique_lines(text_lines(other))
-    rows: list[tuple[TextLine, TextLine]] = [
-        (reference, other_lines[text])
-        for text, reference in gt_lines.items()
-        if text in other_lines and other_lines[text].page == reference.page
-    ]
-    rows.sort(key=lambda pair: (pair[0].page, pair[0].y_min))
+    rows = match_text_line_instances(text_lines(gt), text_lines(other))
 
-    print("## Matched lines — baseline of each, and the pitch between them")
+    print("## Matched lines — x/y position of each spatial text instance")
     if not rows:
-        print("  none matched by unique text")
+        print("  no text instances matched")
         return
-    print(f"  {'page':>4} {'GT':>9} {'output':>9} {'delta':>8} "
-          f"{'GT pitch':>9} {'out pitch':>9}  text")
-    previous: tuple[float, float] | None = None
-    for reference, candidate in rows:
-        gt_pitch = "" if previous is None else f"{reference.y_min - previous[0]:9.2f}"
-        out_pitch = "" if previous is None else f"{candidate.y_min - previous[1]:9.2f}"
-        print(f"  {reference.page + 1:>4} {reference.y_min:9.2f} {candidate.y_min:9.2f} "
-              f"{candidate.y_min - reference.y_min:+8.2f} {gt_pitch:>9} {out_pitch:>9}  "
-              f"{reference.text[:44]}")
-        previous = (reference.y_min, candidate.y_min)
+    print(f"  {'page':>4} {'GT x':>8} {'out x':>8} {'dx':>8} "
+          f"{'GT y':>8} {'out y':>8} {'dy':>8}  text instance")
+    for match in rows:
+        reference = match.reference
+        candidate = match.candidate
+        print(
+            f"  {reference.page + 1:>4} {reference.x_min:8.2f} {candidate.x_min:8.2f} "
+            f"{match.dx:+8.2f} {reference.y_min:8.2f} {candidate.y_min:8.2f} "
+            f"{match.dy:+8.2f}  {match.label[:52]}"
+        )
 
 
 def main() -> None:
@@ -538,21 +757,39 @@ def main() -> None:
     parser.add_argument("--page", type=int, default=1)
     parser.add_argument("--dpi", type=int, default=150, help="at least 150")
     parser.add_argument(
+        "--large-shift",
+        type=float,
+        default=5.0,
+        metavar="PT",
+        help="flag any matched text instance whose x or y moves by more than this (default: 5pt)",
+    )
+    parser.add_argument(
+        "--audit",
+        action="store_true",
+        help="exit nonzero when a large per-instance text shift is found",
+    )
+    parser.add_argument(
+        "--artifacts-dir",
+        type=Path,
+        help="preserve full GT/output pages, 5%% diff, and large-shift crops for model vision",
+    )
+    parser.add_argument(
         "--lines",
         action="store_true",
-        help="list every matched line's baselines, so a single paragraph can be "
-        "inspected without hand-pairing text between the two PDFs",
+        help="list every matched text instance's x/y position without hand-pairing "
+        "repeated labels between the two PDFs",
     )
     args = parser.parse_args()
 
     if args.dpi < 150:
         raise SystemExit("--dpi must be at least 150; hairlines vanish below that")
+    require_vision_artifact_dependencies(args.artifacts_dir)
 
     print(f"GT     {args.gt}")
     print(f"output {args.output}")
     print(f"page {args.page} at {args.dpi} DPI\n")
 
-    geometry = report_geometry(args.gt, args.output)
+    geometry = report_geometry(args.gt, args.output, large_shift=args.large_shift)
     print()
     if args.lines:
         report_matched_lines(args.gt, args.output)
@@ -566,6 +803,26 @@ def main() -> None:
             histogram_result = report_histogram(gt_png, other_png)
             print()
             report_pixels(gt_png, other_png, out_dir)
+            if args.artifacts_dir is not None:
+                matches = match_text_line_instances(text_lines(args.gt), text_lines(args.output))
+                page_matches = [
+                    match
+                    for match in matches
+                    if match.reference.page == args.page - 1
+                    and (
+                        abs(match.dx) > args.large_shift
+                        or abs(match.dy) > args.large_shift
+                    )
+                ]
+                print()
+                preserve_vision_artifacts(
+                    gt_png,
+                    other_png,
+                    args.artifacts_dir,
+                    args.page,
+                    args.dpi,
+                    page_matches,
+                )
     else:
         print("## Histogram and pixel difference — SKIPPED")
         print("  ImageMagick is absent: neither `magick` (7.x) nor all of "
@@ -573,6 +830,13 @@ def main() -> None:
         print("  is on PATH. Install `imagemagick` to measure colour and ink.")
     print()
     diagnose(geometry, histogram_result)
+    if args.audit and geometry.get("large_shift_count", 0.0):
+        print()
+        print(
+            "AUDIT FAILED: large text-instance shifts are layout differences, not "
+            "antialiasing; inspect and track every line above."
+        )
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

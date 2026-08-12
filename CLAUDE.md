@@ -145,6 +145,15 @@ just the pages a screenshot shows.
 2. **Run all four axes**, not one: `compare_layout.py` (geometry, per page),
    `compare_text_layer.py` (what a reader can select), `compare_render.py`
    (colour and pixels), and a page-by-page visual at >=150 DPI.
+   Run the geometry axis with `--audit`; every large text-instance shift it
+   names must be fixed or recorded as a remaining deviation with an open issue.
+   Do not classify the pixel diff as antialiasing while this audit is failing.
+   Source/XML inspection and numeric reports only route attention; they never
+   constitute a visual pass. The acting Codex or Claude agent must use its image
+   vision to open and inspect the full GT/output pages, the pixel diff, and all
+   matched region crops before completing the audit. Record the concrete visual
+   observations in `Model vision findings`; numeric output or `None` does not
+   satisfy the PR contract.
 3. **Read the source XML before attributing a deviation.** Name the element and
    attribute that produced it; a measurement without one is a guess.
 4. **A token the reference has and we lack is not automatically our defect.**
@@ -162,12 +171,24 @@ produces no new finding.
 Run `python3 scripts/compare_render.py <GT.pdf> <output.pdf> [--page N]` before
 judging a rendered difference. It reports geometry, colour histogram, and pixel
 difference together, then states what the combination means.
+For a visual audit, also pass `--artifacts-dir <directory>`: for the page chosen
+by `--page`, it preserves the full GT/output pages, their side-by-side image,
+the 5% pixel diff, and a matched GT/output crop for every large text-instance
+shift on that page. Run it once for every compared page, using a distinct
+directory per page. It fails if ImageMagick is unavailable rather than silently
+omitting evidence. Open every emitted path with Codex/Claude image vision;
+producing the files is not itself inspection.
 
-For layout defects, run `python3 scripts/compare_layout.py <GT.pdf> <output.pdf>`
+For layout defects, run `python3 scripts/compare_layout.py <GT.pdf> <output.pdf> --audit`
 first: it matches text lines from `mutool` traces and reports missing/extra/
 re-wrapped lines, baseline dy, pitch and width drift, and a rect census, with
 GT noise floors built in (`--noise-floor 0.12` Word, `0.5` Excel). Its numbers
-are assertable; pixel counts are only a tripwire.
+are assertable; pixel counts are only a tripwire. Repeated strings are matched
+as separate spatial instances: a chart title and legend both named `Sales`
+appear as `Sales [1/2]` and `Sales [2/2]`, with their own `dx`/`dy`. The audit
+exits nonzero when any instance moves more than 5pt (override with
+`--large-shift PT` for a justified fixture-specific threshold); inspect and
+track every named instance before marking alignment as matching.
 
 **Its width column measures origin-to-origin and so counts invisible trailing
 glyphs.** Word emits a trailing space after a paragraph's last character where

@@ -22,7 +22,7 @@ position, size, pitch, wrap, and element presence, which is what actually
 changes when a layout defect is fixed.
 
 Usage:
-    compare_layout.py GT.pdf OUTPUT.pdf [--page N] [--noise-floor PT] [--json]
+    compare_layout.py GT.pdf OUTPUT.pdf [--page N] [--noise-floor PT] [--audit]
 """
 
 from __future__ import annotations
@@ -35,8 +35,9 @@ import statistics
 import subprocess
 import sys
 from dataclasses import dataclass, field
-from difflib import SequenceMatcher
 from pathlib import Path
+
+from spatial_match import minimum_cost_pairs
 
 # mutool 1.23.x opens a page as `<page mediabox="...">` with no `number`
 # attribute; later builds add one. Requiring it parses zero pages and reports
@@ -197,18 +198,39 @@ def build_lines(glyphs: list[Glyph], y_tolerance: float = LINE_Y_TOLERANCE_PT) -
 def match_lines(
     gt_lines: list[Line], out_lines: list[Line]
 ) -> tuple[list[tuple[Line, Line]], list[Line], list[Line]]:
-    matcher = SequenceMatcher(
-        a=[line.key for line in gt_lines], b=[line.key for line in out_lines], autojunk=False
-    )
+    """Pair every exact-text line by minimum spatial distance.
+
+    A sequence matcher can align repeated labels to the wrong occurrence, and
+    the older render harness discarded repeats entirely. Grouping by text and
+    assigning in x/y space preserves every chart title, legend, tick, and table
+    value as an independently auditable instance.
+    """
+    gt_groups: dict[str, list[Line]] = {}
+    out_groups: dict[str, list[Line]] = {}
+    for line in gt_lines:
+        gt_groups.setdefault(line.key, []).append(line)
+    for line in out_lines:
+        out_groups.setdefault(line.key, []).append(line)
+
     matches: list[tuple[Line, Line]] = []
-    missing: list[Line] = []
-    extra: list[Line] = []
-    for tag, a0, a1, b0, b1 in matcher.get_opcodes():
-        if tag == "equal":
-            matches.extend(zip(gt_lines[a0:a1], out_lines[b0:b1]))
-        else:
-            missing.extend(gt_lines[a0:a1])
-            extra.extend(out_lines[b0:b1])
+    matched_gt: set[int] = set()
+    matched_out: set[int] = set()
+    for key, references in gt_groups.items():
+        candidates = out_groups.get(key, [])
+        references = sorted(references, key=lambda line: (line.y, line.x0))
+        candidates = sorted(candidates, key=lambda line: (line.y, line.x0))
+        for reference_index, candidate_index in minimum_cost_pairs(
+            [(line.x0, line.y) for line in references],
+            [(line.x0, line.y) for line in candidates],
+        ):
+            reference = references[reference_index]
+            candidate = candidates[candidate_index]
+            matches.append((reference, candidate))
+            matched_gt.add(id(reference))
+            matched_out.add(id(candidate))
+    matches.sort(key=lambda pair: (pair[0].y, pair[0].x0))
+    missing = [line for line in gt_lines if id(line) not in matched_gt]
+    extra = [line for line in out_lines if id(line) not in matched_out]
     return matches, missing, extra
 
 
@@ -220,7 +242,7 @@ def take_wrap_differences(
     A wrap difference is text that exists on both sides but breaks at a
     different point, so joined runs of unmatched lines carry the same
     characters. Greedy prefix consumption keeps it linear and is sufficient
-    for the contiguous runs SequenceMatcher produces.
+    for the unmatched lines left after exact-text spatial pairing.
     """
     wraps: list[str] = []
     remaining_missing = list(missing)
@@ -257,7 +279,10 @@ def take_reflows(missing: list[Line], extra: list[Line]) -> tuple[dict, list[Lin
 
 
 def diff_page(
-    gt: PageLayout, out: PageLayout, noise_floor: float = 0.12
+    gt: PageLayout,
+    out: PageLayout,
+    noise_floor: float = 0.12,
+    large_shift: float = 5.0,
 ) -> dict:
     matches, missing, extra = match_lines(gt.lines, out.lines)
     wraps, missing, extra = take_wrap_differences(missing, extra)
@@ -269,6 +294,44 @@ def diff_page(
         (out_line.width - gt_line.width) / gt_line.width * 100
         for gt_line, out_line in matches
         if gt_line.width > 1.0
+    ]
+
+    gt_occurrences: dict[str, list[Line]] = {}
+    for line in gt.lines:
+        gt_occurrences.setdefault(line.key, []).append(line)
+    occurrence_by_id: dict[int, tuple[int, int]] = {}
+    for repeated in gt_occurrences.values():
+        ordered_occurrences = sorted(repeated, key=lambda line: (line.y, line.x0))
+        for index, line in enumerate(ordered_occurrences, start=1):
+            occurrence_by_id[id(line)] = (index, len(ordered_occurrences))
+
+    instances: list[dict] = []
+    for gt_line, out_line in matches:
+        occurrence, occurrence_count = occurrence_by_id[id(gt_line)]
+        label = gt_line.key[:60]
+        if occurrence_count > 1:
+            label = f"{label} [{occurrence}/{occurrence_count}]"
+        width_pct = (
+            (out_line.width - gt_line.width) / gt_line.width * 100
+            if gt_line.width > 1.0
+            else 0.0
+        )
+        instances.append(
+            {
+                "label": label,
+                "gt_x": gt_line.x0,
+                "gt_y": gt_line.y,
+                "out_x": out_line.x0,
+                "out_y": out_line.y,
+                "dx": out_line.x0 - gt_line.x0,
+                "dy": out_line.y - gt_line.y,
+                "width_pct": width_pct,
+            }
+        )
+    large_shifts = [
+        instance
+        for instance in instances
+        if abs(instance["dx"]) > large_shift or abs(instance["dy"]) > large_shift
     ]
 
     pitch_deltas: list[float] = []
@@ -334,6 +397,11 @@ def diff_page(
             "mean_abs_pct": stats(width_pcts)["mean_abs"],
             "worst_pct": abs(stats(width_pcts)["worst"]),
         },
+        "instances": {
+            "large_shift_threshold": large_shift,
+            "large_shift_count": len(large_shifts),
+            "large_shifts": large_shifts,
+        },
         "pitch": {"pairs": len(pitch_deltas), "worst_delta": abs(stats(pitch_deltas)["worst"])},
         "wraps": {"count": len(wraps), "samples": wraps[:5]},
         "reflow": reflow,
@@ -374,6 +442,20 @@ def render_reading(vectors: list[dict]) -> str:
                 f"{vector['noise_floor']}pt floor; worst {vector['baseline']['worst_dy_signed']:+.2f}pt "
                 f"on '{vector['baseline']['worst_line']}'"
             )
+        if vector["instances"]["large_shift_count"]:
+            examples = "; ".join(
+                f"'{item['label']}' dx {item['dx']:+.2f}pt, dy {item['dy']:+.2f}pt"
+                for item in sorted(
+                    vector["instances"]["large_shifts"],
+                    key=lambda value: max(abs(value["dx"]), abs(value["dy"])),
+                    reverse=True,
+                )
+            )
+            page_notes.append(
+                f"{vector['instances']['large_shift_count']} matched text instance(s) move "
+                f"past {vector['instances']['large_shift_threshold']:.2f}pt: {examples}. "
+                "These are layout differences, not antialiasing; inspect and track each one"
+            )
         if vector["pitch"]["worst_delta"] > vector["noise_floor"]:
             page_notes.append(
                 f"line pitch drifts up to {vector['pitch']['worst_delta']:.2f}pt — "
@@ -390,6 +472,16 @@ def render_reading(vectors: list[dict]) -> str:
             page_notes.append("no deviation past the noise floor")
         lines.append(f"- page {index}: " + "; ".join(page_notes))
     return "\n".join(lines)
+
+
+def audit_failures(vectors: list[dict]) -> int:
+    """Count material text findings that require visual disposition."""
+    return sum(
+        vector["instances"]["large_shift_count"]
+        + vector["lines"]["missing"]
+        + vector["lines"]["extra"]
+        for vector in vectors
+    )
 
 
 def run_mutool(pdf: Path) -> str:
@@ -416,6 +508,18 @@ def main() -> int:
         default=0.12,
         help="pt threshold under which a delta is measurement noise (0.12 Word GT, 0.5 Excel GT)",
     )
+    parser.add_argument(
+        "--large-shift",
+        type=float,
+        default=5.0,
+        metavar="PT",
+        help="flag any matched text instance whose x or y moves by more than this (default: 5pt)",
+    )
+    parser.add_argument(
+        "--audit",
+        action="store_true",
+        help="exit nonzero on missing/extra text, a large instance shift, or a page-count mismatch",
+    )
     parser.add_argument("--json", action="store_true", help="emit the deviation vectors as JSON")
     args = parser.parse_args()
 
@@ -435,11 +539,19 @@ def main() -> int:
 
     count = min(len(gt_pages), len(out_pages))
     vectors = [
-        diff_page(gt_pages[i], out_pages[i], noise_floor=args.noise_floor) for i in range(count)
+        diff_page(
+            gt_pages[i],
+            out_pages[i],
+            noise_floor=args.noise_floor,
+            large_shift=args.large_shift,
+        )
+        for i in range(count)
     ]
 
     if args.json:
         print(json.dumps({"pages": vectors, "gt_pages": len(gt_pages), "out_pages": len(out_pages)}, indent=1))
+        if args.audit and (audit_failures(vectors) or len(gt_pages) != len(out_pages)):
+            return 1
         return 0
 
     if len(gt_pages) != len(out_pages):
@@ -454,10 +566,19 @@ def main() -> int:
             f"{vector['baseline']['worst_dy_signed']:+.2f}pt | "
             f"pitch worst {vector['pitch']['worst_delta']:.2f}pt | "
             f"width worst {vector['width']['worst_pct']:.1f}% | "
+            f"large shifts {vector['instances']['large_shift_count']} | "
             f"rects {vector['rects']['gt_count']}/{vector['rects']['out_count']}"
         )
     print()
     print(render_reading(vectors))
+    failures = audit_failures(vectors)
+    if args.audit and (failures or len(gt_pages) != len(out_pages)):
+        print()
+        print(
+            f"AUDIT FAILED: {failures} unresolved text-layout finding(s) require visual "
+            "inspection and an issue reference before the audit can be marked as matching."
+        )
+        return 1
     return 0
 
 

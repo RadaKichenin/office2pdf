@@ -28,6 +28,7 @@
 - Renderer and DPI: <!-- e.g. pdftoppm, 150 DPI -->
 - Evidence mode: `fix` <!-- `fix` requires gt/before/after; `defect` requires compare -->
 - New follow-up issues found in this audit: <!-- #N, #N or None; create issues before completing the audit -->
+- Model vision findings: <!-- Describe what Codex/Claude saw in the full pages, diff, and crops. Numeric output is insufficient. -->
 - GT: `assets/bugfixes/issue-<!-- N -->/gt.jpg`
 - Before: `assets/bugfixes/issue-<!-- N -->/before.jpg`
 - After: `assets/bugfixes/issue-<!-- N -->/after.jpg`
@@ -51,7 +52,9 @@
 
 - [ ] Rendered all evidence at 150 DPI or higher
 - [ ] Stored progressive JPEG quality 86 assets with metadata stripped
+- [ ] Used Codex/Claude vision to inspect the full GT/output pages, diff, and matched crops
 - [ ] Inspected matched region crops at full resolution
+- [ ] Ran compare_layout.py --audit and dispositioned every large text-instance shift
 - [ ] Ran the 5% fuzz pixel-difference sweep
 - [ ] Inventoried hairlines and border dash styles
 - [ ] Inventoried font weight, italic, and underline emphasis

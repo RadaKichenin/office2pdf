@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import sys
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 from unittest import mock
 
@@ -110,6 +112,15 @@ class ImageMagickEntryPointTest(unittest.TestCase):
         with only_on_path("pdftoppm"):
             self.assertFalse(compare_render.has_imagemagick())
 
+    def test_requested_vision_artifacts_fail_if_imagemagick_is_absent(self) -> None:
+        with only_on_path("pdftoppm"):
+            with self.assertRaisesRegex(SystemExit, "--artifacts-dir requires ImageMagick"):
+                compare_render.require_vision_artifact_dependencies(Path("artifacts"))
+
+    def test_no_artifact_request_does_not_require_imagemagick(self) -> None:
+        with only_on_path("pdftoppm"):
+            compare_render.require_vision_artifact_dependencies(None)
+
 
 class DiagnoseWithoutColourTest(unittest.TestCase):
     """With no ImageMagick, two of three axes are missing, not agreeing."""
@@ -140,6 +151,69 @@ class DiagnoseWithoutColourTest(unittest.TestCase):
     def test_still_claims_agreement_when_every_axis_ran(self) -> None:
         report = self.render({"intersection": 1.0, "shift": 0.0, "ink_delta": 0.0})
         self.assertIn("No axis shows a material difference", report)
+
+    def test_element_shift_prevents_false_antialiasing_verdict(self) -> None:
+        self.geometry.update(
+            {
+                "large_shift_count": 1.0,
+                "large_shift_threshold": 5.0,
+                "worst_dx": 120.0,
+            }
+        )
+
+        report = self.render({"intersection": 1.0, "shift": 0.0, "ink_delta": 0.0})
+
+        self.assertIn("matched text instance", report)
+        self.assertNotIn("No axis shows a material difference", report)
+
+
+class RepeatedTextGeometryTest(unittest.TestCase):
+    """Repeated labels must be paired as spatial instances, never discarded."""
+
+    def setUp(self) -> None:
+        self.gt_lines = [
+            compare_render.TextLine(0, 337.0, 133.0, "Sales"),
+            compare_render.TextLine(0, 553.0, 286.0, "Sales"),
+        ]
+        self.output_lines = [
+            compare_render.TextLine(0, 457.0, 134.0, "Sales"),
+            compare_render.TextLine(0, 526.0, 286.0, "Sales"),
+        ]
+
+    def test_repeated_labels_are_matched_by_spatial_instance(self) -> None:
+        matches = compare_render.match_text_line_instances(self.gt_lines, self.output_lines)
+
+        self.assertEqual(len(matches), 2)
+        self.assertEqual([match.label for match in matches], ["Sales [1/2]", "Sales [2/2]"])
+        self.assertEqual([round(match.dx) for match in matches], [120, -27])
+
+    def test_report_names_the_displaced_repeated_instance(self) -> None:
+        with mock.patch.object(
+            compare_render, "text_lines", side_effect=[self.gt_lines, self.output_lines]
+        ):
+            output = StringIO()
+            with redirect_stdout(output):
+                result = compare_render.report_geometry(
+                    Path("gt.pdf"), Path("output.pdf"), large_shift=5.0
+                )
+
+        self.assertEqual(result["matched"], 2.0)
+        self.assertEqual(result["large_shift_count"], 2.0)
+        self.assertAlmostEqual(result["worst_dx"], 120.0)
+        self.assertIn("Sales [1/2]", output.getvalue())
+        self.assertIn("+120.00pt", output.getvalue())
+
+    def test_shift_crop_contains_both_repeated_label_locations(self) -> None:
+        match = compare_render.match_text_line_instances(self.gt_lines, self.output_lines)[0]
+
+        left, top, width, height = compare_render.shift_crop_box(
+            match, dpi=144, image_width=1440, image_height=1080
+        )
+
+        self.assertLessEqual(left, round(match.reference.x_min * 2))
+        self.assertGreaterEqual(left + width, round(match.candidate.x_min * 2))
+        self.assertLessEqual(top, round(match.reference.y_min * 2))
+        self.assertGreaterEqual(top + height, round(match.candidate.y_min * 2))
 
 
 if __name__ == "__main__":

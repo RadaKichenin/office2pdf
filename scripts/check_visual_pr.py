@@ -42,7 +42,9 @@ AUDIT_ROWS = (
 INSPECTION_ITEMS = (
     "Rendered all evidence at 150 DPI or higher",
     "Stored progressive JPEG quality 86 assets with metadata stripped",
+    "Used Codex/Claude vision to inspect the full GT/output pages, diff, and matched crops",
     "Inspected matched region crops at full resolution",
+    "Ran compare_layout.py --audit and dispositioned every large text-instance shift",
     "Ran the 5% fuzz pixel-difference sweep",
     "Inventoried hairlines and border dash styles",
     "Inventoried font weight, italic, and underline emphasis",
@@ -50,6 +52,11 @@ INSPECTION_ITEMS = (
 FIX_PREVIEW_LABELS = ("GT", "Before", "After")
 DEFECT_PREVIEW_LABELS = ("Compare",)
 ALLOWED_RESULTS = ("Matches GT", "Fixed", "No deviation observed")
+VISION_WORDS = re.compile(
+    r"(?i)\b(?:page|diff|crop|text|title|label|line|shape|image|chart|table|"
+    r"position|align(?:ment|ed)?|offset|colour|color|fill|stroke|border|font|"
+    r"spacing|clip(?:ping|ped)?|overflow|rotation|size|weight)\b"
+)
 
 
 @dataclass(frozen=True)
@@ -202,6 +209,19 @@ def validate_pr_body(body: str, changed_paths: list[str]) -> list[str]:
                 errors.append(
                     f"New follow-up issues must also classify a Remaining deviation: {references}."
                 )
+
+    vision_findings = field(audit, "Model vision findings")
+    descriptive_words = re.findall(r"[A-Za-z]{3,}", vision_findings or "")
+    if (
+        not vision_findings
+        or len(vision_findings) < 20
+        or len(descriptive_words) < 4
+        or not VISION_WORDS.search(vision_findings)
+    ):
+        errors.append(
+            "Visual audit > Model vision findings must record a substantive direct "
+            "inspection of the full pages, diff, and crops; numeric metrics alone do not count."
+        )
 
     for item in INSPECTION_ITEMS:
         if not checked(audit, item):
