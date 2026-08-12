@@ -181,14 +181,17 @@ producing the files is not itself inspection.
 
 For layout defects, run `python3 scripts/compare_layout.py <GT.pdf> <output.pdf> --audit`
 first: it matches text lines from `mutool` traces and reports missing/extra/
-re-wrapped lines, baseline dy, pitch and width drift, and a rect census, with
-GT noise floors built in (`--noise-floor 0.12` Word, `0.5` Excel). Its numbers
-are assertable; pixel counts are only a tripwire. Repeated strings are matched
-as separate spatial instances: a chart title and legend both named `Sales`
-appear as `Sales [1/2]` and `Sales [2/2]`, with their own `dx`/`dy`. The audit
-exits nonzero when any instance moves more than 5pt (override with
-`--large-shift PT` for a justified fixture-specific threshold); inspect and
-track every named instance before marking alignment as matching.
+re-wrapped lines, spatial-anchor dy, pitch and width drift, and a rect census,
+with GT noise floors built in (`--noise-floor 0.12` Word, `0.5` Excel).
+Horizontal text uses its true baseline; a rotated or skewed `fill_text` stays
+one visual run and uses the minimum fully transformed glyph x/y as its
+comparable anchor. Its numbers are assertable; pixel counts are only a
+tripwire. Repeated strings are matched as separate spatial instances: a chart
+title and legend both named `Sales` appear as `Sales [1/2]` and `Sales [2/2]`,
+with their own `dx`/`dy`. The audit exits nonzero when any instance moves more
+than 5pt (override with `--large-shift PT` for a justified fixture-specific
+threshold); inspect and track every named instance before marking alignment as
+matching.
 
 **Its width column measures origin-to-origin and so counts invisible trailing
 glyphs.** Word emits a trailing space after a paragraph's last character where

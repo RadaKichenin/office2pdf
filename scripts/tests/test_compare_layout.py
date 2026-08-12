@@ -140,6 +140,27 @@ class ParseTraceTest(unittest.TestCase):
         texts = [line.text for line in pages[0].lines]
         self.assertEqual(texts, ["AB", "C"])
 
+    def test_rotated_fill_text_uses_the_full_affine_transform_and_stays_one_run(self) -> None:
+        page = """<fill_text transform="1 2 3 4 5 6">
+          <span font="AAAAAA+ArialMT" trm="10 0 0 10">
+            <g unicode="A" glyph="A" x="7" y="11" adv=".5"/>
+            <g unicode="B" glyph="B" x="8" y="11" adv=".5"/>
+          </span>
+        </fill_text>"""
+        lines = compare_layout.parse_trace(trace_document(page))[0].lines
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(lines[0].text, "AB")
+        self.assertAlmostEqual(lines[0].x0, 45.0)
+        self.assertAlmostEqual(lines[0].y, 64.0)
+
+    def test_rect_bbox_uses_the_full_affine_transform(self) -> None:
+        page = """<fill_path transform="1 2 3 4 5 6">
+          <moveto x="7" y="11"/>
+          <lineto x="8" y="12"/>
+        </fill_path>"""
+        rect = compare_layout.parse_trace(trace_document(page))[0].rects[0]
+        self.assertEqual((rect.x0, rect.y0, rect.x1, rect.y1), (45.0, 64.0, 49.0, 70.0))
+
     def test_rects_capture_device_bbox_and_kind(self) -> None:
         page = "\n".join(
             [rect_op(69.36, 792.96, 525.84, 793.44), rect_op(10, 20, 30, 21, "stroke_path")]
