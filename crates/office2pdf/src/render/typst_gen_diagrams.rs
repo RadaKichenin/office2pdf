@@ -755,6 +755,21 @@ pub(super) fn chart_axis_text_fill(chart: &Chart, axis: crate::ir::ChartTextStyl
     }
 }
 
+/// Character spacing one axis' labels declare, as Typst text arguments.
+///
+/// DrawingML adds `spc` between glyphs and disables normal pair adjustment.
+/// Keeping ligatures or kerning enabled would swallow or distort part of that
+/// declared spacing, as it does for ordinary PowerPoint text (issue #1011).
+pub(super) fn chart_axis_text_tracking(chart: &Chart, axis: crate::ir::ChartTextStyle) -> String {
+    match chart.text_style.resolved_letter_spacing(axis) {
+        Some(spacing) if spacing != 0.0 => format!(
+            ", tracking: {}pt, ligatures: false, kerning: false",
+            format_f64(spacing)
+        ),
+        _ => String::new(),
+    }
+}
+
 /// Colour a data label is set in.
 ///
 /// Unlike an axis label this has always had a colour — a hardcoded white,
@@ -768,14 +783,15 @@ pub(super) fn chart_data_label_fill(chart: &Chart) -> String {
     }
 }
 
-/// Every `text` argument an axis label carries beyond its size: weight, then
-/// colour. One slot so a label's format string does not grow a hole per
-/// property (issue #916).
+/// Every `text` argument an axis label carries beyond its size: weight,
+/// colour, then character spacing. One slot so a label's format string does
+/// not grow a hole per property (issues #916 and #1011).
 pub(super) fn chart_axis_text_attrs(chart: &Chart, axis: crate::ir::ChartTextStyle) -> String {
     format!(
-        "{}{}",
+        "{}{}{}",
         chart_axis_text_weight(chart, axis),
-        chart_axis_text_fill(chart, axis)
+        chart_axis_text_fill(chart, axis),
+        chart_axis_text_tracking(chart, axis)
     )
 }
 
