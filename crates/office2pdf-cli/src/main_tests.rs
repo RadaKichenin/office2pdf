@@ -369,7 +369,7 @@ fn fixed_raster_image_does_not_round_below_the_exact_bottom_edge() {
 }
 
 #[test]
-fn rotated_preset_keeps_explicit_vertical_body_reading_direction() {
+fn rotated_preset_keeps_explicit_vertical_body_direction_and_top_anchor() {
     use lopdf::{Object, content::Content};
 
     let fixture = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -404,6 +404,11 @@ fn rotated_preset_keeps_explicit_vertical_body_reading_direction() {
     assert!(
         number(&text_matrix[1]) > 0.99 && number(&text_matrix[2]) > 0.99,
         "vert text must keep PowerPoint's bottom-to-top matrix even though its preset shape is rotated: {text_matrix:?}"
+    );
+    assert!(
+        (number(&text_matrix[4]) - 399.189_5).abs() < 0.01
+            && (number(&text_matrix[5]) - 313.600_28).abs() < 0.01,
+        "anchor=t must position vertical text in the pentagon's transformed text rectangle: {text_matrix:?}"
     );
 }
 

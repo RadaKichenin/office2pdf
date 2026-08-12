@@ -1114,21 +1114,65 @@ fn finalize_shape(
                     shadow: shape.shadow.take(),
                 }),
             });
-            // Transparent text overlay (no fill, no stroke).
-            // Preset geometries confine text to an inset text rectangle we
-            // don't model; for rotated (vert) text, edge-anchoring the
-            // column lands it on the shape's sloped boundary where
-            // PowerPoint keeps it near the middle — center it instead.
-            let overlay_vertical_align = if text_box.text_rotation_deg.is_some() {
-                TextBoxVerticalAlign::Center
-            } else {
-                text_box.vertical_align
-            };
+            // Transparent text overlay (no fill, no stroke). DrawingML
+            // anchors shape text inside the preset geometry's text rectangle,
+            // in addition to the bodyPr margins (issues #286 and #676).
+            let shape_x = emu_to_pt(shape.x);
+            let shape_y = emu_to_pt(shape.y);
+            let shape_width = emu_to_pt(shape.cx);
+            let shape_height = emu_to_pt(shape.cy);
+            let preset_text_rect = shape.prst_geom.as_deref().and_then(|geom| {
+                let rotation_deg = shape.rotation_deg.unwrap_or(0.0).rem_euclid(360.0);
+                // A transparent overlay cannot represent an independently
+                // oriented geometry rectangle. Limit this exact model to
+                // transforms that preserve its axes; other rotations retain
+                // the previous full-box safety fallback.
+                let preserves_axes =
+                    rotation_deg.abs() < 1e-9 || (rotation_deg - 180.0).abs() < 1e-9;
+                if !preserves_axes {
+                    return None;
+                }
+                preset_text_rect_insets(geom, shape_width, shape_height).map(|insets| {
+                    let rect_width = (shape_width - insets.left - insets.right).max(0.0);
+                    let rect_height = (shape_height - insets.top - insets.bottom).max(0.0);
+                    let rect_center_x = shape_x + insets.left + rect_width / 2.0;
+                    let rect_center_y = shape_y + insets.top + rect_height / 2.0;
+                    let shape_center_x = shape_x + shape_width / 2.0;
+                    let shape_center_y = shape_y + shape_height / 2.0;
+                    // The text body's reading direction is independent from
+                    // a:xfrm (issue #992), but the preset text rectangle is
+                    // part of the geometry and its center follows that
+                    // transform (issue #676).
+                    let rotation = rotation_deg.to_radians();
+                    let (sin, cos) = rotation.sin_cos();
+                    let dx = rect_center_x - shape_center_x;
+                    let dy = rect_center_y - shape_center_y;
+                    let rotated_center_x = shape_center_x + dx * cos - dy * sin;
+                    let rotated_center_y = shape_center_y + dx * sin + dy * cos;
+                    (
+                        rotated_center_x - rect_width / 2.0,
+                        rotated_center_y - rect_height / 2.0,
+                        rect_width,
+                        rect_height,
+                    )
+                })
+            });
+            let (overlay_x, overlay_y, overlay_width, overlay_height) =
+                preset_text_rect.unwrap_or((shape_x, shape_y, shape_width, shape_height));
+            // Preserve the old safety approximation for presets whose text
+            // rectangle is not modelled yet: edge-anchoring rotated text to
+            // the full shape box can put it on a sloped boundary.
+            let overlay_vertical_align =
+                if text_box.text_rotation_deg.is_some() && preset_text_rect.is_none() {
+                    TextBoxVerticalAlign::Center
+                } else {
+                    text_box.vertical_align
+                };
             elements.push(FixedElement {
-                x: emu_to_pt(shape.x),
-                y: emu_to_pt(shape.y),
-                width: emu_to_pt(shape.cx),
-                height: emu_to_pt(shape.cy),
+                x: overlay_x,
+                y: overlay_y,
+                width: overlay_width,
+                height: overlay_height,
                 kind: FixedElementKind::TextBox(TextBoxData {
                     content: blocks,
                     padding: text_box.padding,
