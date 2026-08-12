@@ -344,8 +344,11 @@ pub struct ChartTextStyle {
     pub size_pt: Option<f64>,
     /// `a:defRPr@b`.
     pub bold: Option<bool>,
-    /// `a:defRPr@spc`, in points — the attribute is in hundredths.
-    pub letter_spacing: Option<f64>,
+    /// `a:defRPr@spc`, in hundredths of a point.
+    ///
+    /// Keeping DrawingML's integer unit avoids inflating every `Chart` by
+    /// three nullable `f64` values; conversion belongs at the rendering edge.
+    pub letter_spacing_hundredths: Option<i32>,
     /// `a:defRPr/a:solidFill` — the colour the runs are set in (issue #916).
     pub color: Option<Color>,
 }
@@ -367,7 +370,10 @@ impl ChartTextStyle {
 
     /// This style's character spacing where `override_style` states none.
     pub fn resolved_letter_spacing(self, override_style: Self) -> Option<f64> {
-        override_style.letter_spacing.or(self.letter_spacing)
+        override_style
+            .letter_spacing_hundredths
+            .or(self.letter_spacing_hundredths)
+            .map(|hundredths| hundredths as f64 / 100.0)
     }
 
     /// This style's colour where `override_style` states none.

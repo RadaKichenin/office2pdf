@@ -3030,7 +3030,7 @@ fn sized_bar_chart(size_pt: f64) -> Chart {
     chart.text_style = crate::ir::ChartTextStyle {
         size_pt: Some(size_pt),
         bold: None,
-        letter_spacing: None,
+        letter_spacing_hundredths: None,
         color: None,
     };
     chart
@@ -3083,7 +3083,7 @@ fn category_labels_take_the_axis_weight() {
     chart.category_axis_text_style = crate::ir::ChartTextStyle {
         size_pt: None,
         bold: Some(true),
-        letter_spacing: None,
+        letter_spacing_hundredths: None,
         color: None,
     };
     let source: String = chart_source(chart);
@@ -3099,7 +3099,7 @@ fn an_axis_size_overrides_the_chart_space_size_for_that_axis_only() {
     chart.category_axis_text_style = crate::ir::ChartTextStyle {
         size_pt: Some(9.0),
         bold: None,
-        letter_spacing: None,
+        letter_spacing_hundredths: None,
         color: None,
     };
     let source: String = chart_source(chart);
@@ -3206,7 +3206,7 @@ fn bar_chart_at(size_pt: Option<f64>, categories: &[&str]) -> Chart {
     chart.text_style = crate::ir::ChartTextStyle {
         size_pt,
         bold: None,
-        letter_spacing: None,
+        letter_spacing_hundredths: None,
         color: None,
     };
     chart
@@ -4232,7 +4232,7 @@ fn crowded_category_labels_keep_declared_character_spacing_without_moving_the_pl
     let mut chart = crowded_column_chart();
     chart.text_style.size_pt = Some(11.97);
     chart.text_font_family = Some("Avenir Next LT Pro".to_string());
-    chart.category_axis_text_style.letter_spacing = Some(1.0);
+    chart.category_axis_text_style.letter_spacing_hundredths = Some(100);
 
     let tracked_plot = axis_plot_rect(&chart, (401.95, 344.25), false);
     let source = chart_source(chart);

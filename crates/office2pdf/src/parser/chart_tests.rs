@@ -1434,7 +1434,7 @@ fn chart_text_character_spacing_is_read_in_hundredths_of_a_point() {
         &SchemeColors::empty(),
     )
     .expect("chart parses");
-    assert_eq!(chart.text_style.letter_spacing, Some(-1.25));
+    assert_eq!(chart.text_style.letter_spacing_hundredths, Some(-125));
 }
 
 #[test]
@@ -1483,10 +1483,13 @@ fn an_axis_tx_pr_overrides_the_chart_space_one() {
     assert_eq!(chart.text_style.size_pt, Some(18.0));
     assert_eq!(chart.category_axis_text_style.size_pt, Some(11.0));
     assert_eq!(chart.category_axis_text_style.bold, Some(true));
-    assert_eq!(chart.category_axis_text_style.letter_spacing, Some(1.0));
+    assert_eq!(
+        chart.category_axis_text_style.letter_spacing_hundredths,
+        Some(100)
+    );
     assert_eq!(chart.value_axis_text_style.size_pt, Some(9.0));
     assert_eq!(chart.value_axis_text_style.bold, None);
-    assert_eq!(chart.value_axis_text_style.letter_spacing, None);
+    assert_eq!(chart.value_axis_text_style.letter_spacing_hundredths, None);
 }
 
 #[test]
