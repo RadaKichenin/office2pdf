@@ -617,6 +617,54 @@ fn test_pptx_table_with_style_applies_header_fill_and_text_color() {
 }
 
 #[test]
+fn explicit_cell_no_fill_suppresses_table_style_fill_only() {
+    let table_styles_xml = concat!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>"#,
+        r#"<a:tblStyleLst xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" def="style1">"#,
+        r#"<a:tblStyle styleId="style1" styleName="Test">"#,
+        r#"<a:wholeTbl><a:tcTxStyle b="on"><a:fontRef idx="minor"><a:schemeClr val="lt1"/></a:fontRef></a:tcTxStyle>"#,
+        r#"<a:tcStyle><a:fill><a:solidFill><a:schemeClr val="accent1"/></a:solidFill></a:fill></a:tcStyle></a:wholeTbl>"#,
+        r#"</a:tblStyle></a:tblStyleLst>"#,
+    );
+    let table_xml = concat!(
+        r#"<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="4" name="Table"/>"#,
+        r#"<p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm/>"#,
+        r#"<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table"><a:tbl>"#,
+        r#"<a:tblPr><a:tableStyleId>style1</a:tableStyleId></a:tblPr>"#,
+        r#"<a:tblGrid><a:gridCol w="1828800"/></a:tblGrid><a:tr h="370840"><a:tc>"#,
+        r#"<a:txBody><a:bodyPr/><a:p><a:r><a:rPr lang="en-US"/><a:t>Transparent</a:t></a:r></a:p></a:txBody>"#,
+        r#"<a:tcPr><a:noFill/></a:tcPr></a:tc></a:tr></a:tbl></a:graphicData></a:graphic></p:graphicFrame>"#,
+    );
+    let slide = make_slide_xml(&[table_xml.to_string()]);
+    let theme_xml = make_theme_xml(&standard_theme_colors(), "Calibri Light", "Calibri");
+    let data = build_test_pptx_with_table_styles(
+        SLIDE_CX,
+        SLIDE_CY,
+        &[slide],
+        &theme_xml,
+        table_styles_xml,
+        None,
+    );
+
+    let (doc, _warnings) = PptxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let table = table_element(&first_fixed_page(&doc).elements[0]);
+    let cell = &table.rows[0].cells[0];
+    assert_eq!(
+        cell.background, None,
+        "explicit noFill beats the style fill"
+    );
+    let run = match &cell.content[0] {
+        Block::Paragraph(paragraph) => &paragraph.runs[0],
+        other => panic!("Expected paragraph, got {other:?}"),
+    };
+    assert_eq!(
+        run.style.bold,
+        Some(true),
+        "noFill does not suppress independent style text properties"
+    );
+}
+
+#[test]
 fn test_pptx_table_without_table_styles_xml_still_works() {
     // Regular PPTX without tableStyles.xml should work fine
     let rows = format!(

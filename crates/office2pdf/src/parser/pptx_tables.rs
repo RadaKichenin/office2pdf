@@ -42,6 +42,8 @@ struct PptxTableParser<'a> {
     is_vertical_merge: bool,
     cell_text_entries: Vec<PptxParagraphEntry>,
     cell_background: Option<Color>,
+    cell_fill_suppressed: bool,
+    row_no_fill_cells: Vec<bool>,
     cell_vertical_align: Option<CellVerticalAlign>,
     cell_padding: Option<Insets>,
 
@@ -119,6 +121,8 @@ impl<'a> PptxTableParser<'a> {
             is_vertical_merge: false,
             cell_text_entries: Vec::new(),
             cell_background: None,
+            cell_fill_suppressed: false,
+            row_no_fill_cells: Vec::new(),
             cell_vertical_align: None,
             cell_padding: None,
 
@@ -252,6 +256,10 @@ impl<'a> PptxTableParser<'a> {
             b"solidFill" if self.is_in_border_line => {
                 self.solid_fill_context = SolidFillCtx::LineFill;
             }
+            b"noFill" if self.is_in_table_cell_properties && !self.is_in_border_line => {
+                self.cell_background = None;
+                self.cell_fill_suppressed = true;
+            }
             b"srgbClr" | b"schemeClr" | b"sysClr"
                 if self.solid_fill_context != SolidFillCtx::None =>
             {
@@ -300,6 +308,10 @@ impl<'a> PptxTableParser<'a> {
                     &mut self.cell_vertical_align,
                     &mut self.cell_padding,
                 );
+            }
+            b"noFill" if self.is_in_table_cell_properties && !self.is_in_border_line => {
+                self.cell_background = None;
+                self.cell_fill_suppressed = true;
             }
             b"pPr" if self.is_in_paragraph && !self.is_in_run => {
                 self.handle_paragraph_properties(e);
@@ -460,6 +472,7 @@ impl<'a> PptxTableParser<'a> {
         self.is_vertical_merge = get_attr_str(e, b"vMerge").is_some();
         self.cell_text_entries.clear();
         self.cell_background = None;
+        self.cell_fill_suppressed = false;
         self.cell_vertical_align = None;
         self.cell_padding = None;
         self.is_in_table_cell_properties = false;
@@ -505,6 +518,7 @@ impl<'a> PptxTableParser<'a> {
             vertical_align: self.cell_vertical_align.take(),
             padding: self.cell_padding.take(),
         });
+        self.row_no_fill_cells.push(self.cell_fill_suppressed);
         self.is_in_cell = false;
         self.is_in_table_cell_properties = false;
     }
@@ -522,6 +536,9 @@ impl<'a> PptxTableParser<'a> {
             cells: std::mem::take(&mut self.cells),
             height,
         });
+        self.table_props
+            .no_fill_cells
+            .push(std::mem::take(&mut self.row_no_fill_cells));
         self.is_in_row = false;
     }
 
