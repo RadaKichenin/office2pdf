@@ -31,7 +31,7 @@ use self::package::{
 use self::package::{resolve_relative_path, scan_chart_refs};
 use self::shapes::{
     parse_arrow_head, parse_group_shape, parse_src_rect, pptx_dash_to_border_style,
-    prst_to_shape_kind,
+    preset_text_rect_insets, prst_to_shape_kind,
 };
 use self::slides::{PresentationResources, SlideParseContext, parse_single_slide, parse_slide_xml};
 use self::tables::{parse_pptx_table, scale_pptx_table_geometry_to_frame};

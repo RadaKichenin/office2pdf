@@ -420,6 +420,48 @@ pub(super) fn prst_to_shape_kind(
     }
 }
 
+/// Return the edge insets of a preset geometry's DrawingML text rectangle,
+/// in points relative to the shape box.
+///
+/// The caller uses this rectangle for the text overlay and still applies the
+/// margins from `<a:bodyPr>` inside it. Preset text rectangles are
+/// shape-specific guide formulas; keep each supported preset tied to that
+/// formula rather than approximating it from the rendered path.
+pub(super) fn preset_text_rect_insets(prst: &str, width: f64, height: f64) -> Option<Insets> {
+    match prst {
+        // ECMA-376 presetShapeDefinitions.xml defines pentagon's text rect as
+        // l=x2, t=it, r=x3, b=y2. Evaluate the same guide formulas here so
+        // vertical anchors act inside the pentagon instead of on its sloped
+        // boundary (issues #286 and #676).
+        "pentagon" => {
+            let swd2 = width / 2.0 * 1.051_46;
+            let shd2 = height / 2.0 * 1.105_57;
+            let svc = height / 2.0 * 1.105_57;
+            let dx1 = swd2 * 18.0_f64.to_radians().cos();
+            let dx2 = swd2 * 306.0_f64.to_radians().cos();
+            let dy1 = shd2 * 18.0_f64.to_radians().sin();
+            let dy2 = shd2 * 306.0_f64.to_radians().sin();
+            let x2 = width / 2.0 - dx2;
+            let x3 = width / 2.0 + dx2;
+            let y1 = svc - dy1;
+            let y2 = svc - dy2;
+            let inset_top = if dx1.abs() > f64::EPSILON {
+                y1 * dx2 / dx1
+            } else {
+                0.0
+            };
+
+            Some(Insets {
+                left: x2.max(0.0),
+                top: inset_top.max(0.0),
+                right: (width - x3).max(0.0),
+                bottom: (height - y2).max(0.0),
+            })
+        }
+        _ => None,
+    }
+}
+
 enum ArrowDir {
     Right,
     Left,

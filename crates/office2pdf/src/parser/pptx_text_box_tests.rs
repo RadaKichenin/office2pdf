@@ -398,32 +398,42 @@ fn test_body_pr_vert270_sets_reverse_rotation() {
 }
 
 #[test]
-fn test_vert_text_in_preset_shape_centers_column() {
-    // Preset geometries confine text to an inset text rect we don't model;
-    // vert text anchored at the box edge would land on the shape's sloped
-    // boundary (issue #286) — the overlay centers it instead.
-    let shape = r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="P"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1417740" cy="1317072"/></a:xfrm><a:prstGeom prst="pentagon"><a:avLst/></a:prstGeom></p:spPr><p:txBody><a:bodyPr vert="vert" anchor="t"/><a:p><a:pPr algn="ctr"/><a:r><a:rPr lang="en-US"/><a:t>text</a:t></a:r></a:p></p:txBody></p:sp>"#;
-    let slide = make_slide_xml(&[shape.to_string()]);
-    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+fn test_vert_text_in_rotated_pentagon_uses_text_rect_and_keeps_anchor() {
+    let expected_alignments = [
+        ("t", TextBoxVerticalAlign::Top),
+        ("ctr", TextBoxVerticalAlign::Center),
+        ("b", TextBoxVerticalAlign::Bottom),
+    ];
 
-    let parser = PptxParser;
-    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
-    let page = first_fixed_page(&doc);
-    // Shape background + transparent text overlay.
-    let text_box = page
-        .elements
-        .iter()
-        .find_map(|elem| match &elem.kind {
-            FixedElementKind::TextBox(tb) => Some(tb),
-            _ => None,
-        })
-        .expect("text overlay present");
-    assert_eq!(text_box.text_rotation_deg, Some(270.0));
-    assert_eq!(
-        text_box.vertical_align,
-        TextBoxVerticalAlign::Center,
-        "vert text inside a preset shape must center its column"
-    );
+    for (anchor, expected_alignment) in expected_alignments {
+        let shape = format!(
+            r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="P"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm rot="10800000"><a:off x="0" y="0"/><a:ext cx="1417740" cy="1317072"/></a:xfrm><a:prstGeom prst="pentagon"><a:avLst/></a:prstGeom></p:spPr><p:txBody><a:bodyPr vert="vert" anchor="{anchor}"/><a:p><a:pPr algn="ctr"/><a:r><a:rPr lang="en-US"/><a:t>text</a:t></a:r></a:p></p:txBody></p:sp>"#
+        );
+        let slide = make_slide_xml(&[shape]);
+        let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+
+        let parser = PptxParser;
+        let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+        let page = first_fixed_page(&doc);
+        let overlay = page
+            .elements
+            .iter()
+            .find_map(|elem| match &elem.kind {
+                FixedElementKind::TextBox(tb) => Some((elem, tb)),
+                _ => None,
+            })
+            .expect("text overlay present");
+        let (element, text_box) = overlay;
+
+        assert_eq!(text_box.text_rotation_deg, Some(270.0));
+        assert_eq!(text_box.shape_rotation_deg, None);
+        assert_eq!(text_box.vertical_align, expected_alignment);
+        assert!((element.x - 21.320_092_374_282_623).abs() < 1e-9);
+        assert!((element.y - 0.000_263_493_677_863_380_07).abs() < 1e-9);
+        assert!((element.width - 68.992_886_117_576_49).abs() < 1e-9);
+        assert!((element.height - 79.224_481_916_489_57).abs() < 1e-9);
+        assert_eq!(text_box.padding, default_pptx_text_box_padding());
+    }
 }
 
 #[test]
@@ -458,6 +468,31 @@ fn test_vert_text_in_rotated_preset_keeps_body_orientation() {
         text_box.shape_rotation_deg, None,
         "a preset background keeps the shape rotation, but its explicit vertical body keeps its own reading direction"
     );
+}
+
+#[test]
+fn test_vert_text_in_angled_preset_keeps_full_box_fallback() {
+    let shape = r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="P"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm rot="2700000"><a:off x="0" y="0"/><a:ext cx="1417740" cy="1317072"/></a:xfrm><a:prstGeom prst="pentagon"><a:avLst/></a:prstGeom></p:spPr><p:txBody><a:bodyPr vert="vert" anchor="t"/><a:p><a:pPr algn="ctr"/><a:r><a:rPr lang="en-US"/><a:t>text</a:t></a:r></a:p></p:txBody></p:sp>"#;
+    let slide = make_slide_xml(&[shape.to_string()]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let page = first_fixed_page(&doc);
+    let (element, text_box) = page
+        .elements
+        .iter()
+        .find_map(|elem| match &elem.kind {
+            FixedElementKind::TextBox(tb) => Some((elem, tb)),
+            _ => None,
+        })
+        .expect("text overlay present");
+
+    assert_eq!(text_box.vertical_align, TextBoxVerticalAlign::Center);
+    assert_eq!(element.x, 0.0);
+    assert_eq!(element.y, 0.0);
+    assert!((element.width - 111.633_070_866_141_73).abs() < 1e-9);
+    assert!((element.height - 103.706_456_692_913_39).abs() < 1e-9);
 }
 
 #[test]
