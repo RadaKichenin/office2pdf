@@ -7,8 +7,10 @@ lines by their text, and reports typed deviations:
 
 - matched / missing / extra lines, and wrap-point differences (text that is
   present but breaks at a different word) counted separately from real loss;
-- baseline dy statistics, per-line dx0, line-width drift, inter-line pitch
-  deltas between consecutive matched lines;
+- spatial-anchor dy statistics, per-line dx0, line-width drift, inter-line
+  pitch deltas between consecutive matched lines. Horizontal text uses its
+  true baseline; a rotated or skewed `fill_text` stays one visual run and uses
+  the minimum fully transformed glyph x/y as its comparable anchor;
 - a fill/stroke rect census with nearest-match position deltas.
 
 A noise floor (default 0.12pt — native Word exports quantise coordinates to a
@@ -98,12 +100,11 @@ class Line:
 
     @property
     def x0(self) -> float:
-        return self.glyphs[0].x
+        return min(glyph.x for glyph in self.glyphs)
 
     @property
     def x1(self) -> float:
-        last = self.glyphs[-1]
-        return last.x + last.advance
+        return max(glyph.x + glyph.advance for glyph in self.glyphs)
 
     @property
     def width(self) -> float:
@@ -134,34 +135,55 @@ def parse_trace(trace_xml: str) -> list[PageLayout]:
     for page_match in PAGE_RE.finditer(trace_xml):
         content = page_match.group(1)
         glyphs: list[Glyph] = []
+        rotated_lines: list[Line] = []
         for op_attrs, op_body in FILL_TEXT_RE.findall(content):
             transform = parse_transform(op_attrs)
             if transform is None:
                 continue
-            a, _b, _c, d, e, f = transform
+            a, b, c, d, e, f = transform
+            transformed_run: list[Glyph] = []
             for span_attrs, span_body in SPAN_RE.findall(op_body):
                 trm = TRM_RE.search(span_attrs)
                 size_units = float(trm.group(1)) if trm else 0.0
-                size_pt = abs(size_units * a)
+                size_pt = abs(size_units) * (a * a + b * b) ** 0.5
                 for unicode_char, gx, gy, adv in GLYPH_RE.findall(span_body):
-                    glyphs.append(
+                    glyph_x = float(gx)
+                    glyph_y = float(gy)
+                    transformed_run.append(
                         Glyph(
-                            x=a * float(gx) + e,
-                            y=d * float(gy) + f,
+                            x=a * glyph_x + c * glyph_y + e,
+                            y=b * glyph_x + d * glyph_y + f,
                             unicode=unescape(unicode_char),
                             size=size_pt,
-                            advance=float(adv) * size_units * abs(a),
+                            advance=abs(float(adv) * size_units * a),
                         )
                     )
+            if not transformed_run:
+                continue
+            if abs(b) > 1e-9 or abs(c) > 1e-9:
+                # A rotated/skewed fill_text is already one visual run. Its
+                # glyphs have different device y coordinates by construction;
+                # feeding them into horizontal baseline bucketing fragments
+                # one label into many lines and invents off-page shifts.
+                rotated_lines.append(
+                    Line(
+                        y=min(glyph.y for glyph in transformed_run),
+                        glyphs=transformed_run,
+                    )
+                )
+            else:
+                glyphs.extend(transformed_run)
         rects: list[Rect] = []
         for kind, op_attrs, op_body in PATH_RE.findall(content):
             transform = parse_transform(op_attrs) or (1, 0, 0, 1, 0, 0)
-            a, _b, _c, d, e, f = transform
+            a, b, c, d, e, f = transform
             xs: list[float] = []
             ys: list[float] = []
             for px, py in POINT_RE.findall(op_body):
-                xs.append(a * float(px) + e)
-                ys.append(d * float(py) + f)
+                point_x = float(px)
+                point_y = float(py)
+                xs.append(a * point_x + c * point_y + e)
+                ys.append(b * point_x + d * point_y + f)
             if xs:
                 rects.append(
                     Rect(
@@ -172,7 +194,10 @@ def parse_trace(trace_xml: str) -> list[PageLayout]:
                         y1=max(ys),
                     )
                 )
-        pages.append(PageLayout(lines=build_lines(glyphs), rects=rects))
+        lines = build_lines(glyphs)
+        lines.extend(rotated_lines)
+        lines.sort(key=lambda line: (line.y, line.x0))
+        pages.append(PageLayout(lines=lines, rects=rects))
     return pages
 
 
