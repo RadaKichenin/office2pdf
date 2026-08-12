@@ -275,6 +275,99 @@ fn test_convert_single_with_metrics() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+#[test]
+fn fixed_raster_image_does_not_round_below_the_exact_bottom_edge() {
+    use lopdf::{Object, content::Content};
+    use office2pdf::ir::{
+        Document as OfficeDocument, FixedElement, FixedElementKind, FixedPage, ImageData,
+        ImageFormat, Metadata, Page, PageSize, StyleSheet,
+    };
+
+    // A 324pt top plus 183.6pt height on a 540pt slide leaves an exact
+    // 32.4pt PDF-space bottom. The f32 PDF transform used by Typst rounds the
+    // unadjusted subtraction to 32.399994pt, which makes a 150-DPI renderer
+    // blend the bottom source row into a second device row (issue #666).
+    const RED_PIXEL_PNG: &[u8] = &[
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44,
+        0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00, 0x00, 0x90,
+        0x77, 0x53, 0xde, 0x00, 0x00, 0x00, 0x0c, 0x49, 0x44, 0x41, 0x54, 0x08, 0xd7, 0x63, 0xf8,
+        0xcf, 0xc0, 0x00, 0x00, 0x03, 0x01, 0x01, 0x00, 0x18, 0xdd, 0x8d, 0xb0, 0x00, 0x00, 0x00,
+        0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+    ];
+    let fixed_image = |y| FixedElement {
+        x: 216.0,
+        y,
+        width: 403.2,
+        height: 183.6,
+        kind: FixedElementKind::Image(ImageData {
+            data: RED_PIXEL_PNG.to_vec(),
+            rotation_deg: None,
+            format: ImageFormat::Png,
+            width: Some(403.2),
+            height: Some(183.6),
+            crop: None,
+            stroke: None,
+            alignment: None,
+            clip_shape: None,
+            shadow: None,
+            paragraph_spacing: None,
+        }),
+    };
+    let document = OfficeDocument {
+        metadata: Metadata::default(),
+        pages: vec![Page::Fixed(FixedPage {
+            size: PageSize {
+                width: 960.0,
+                height: 540.0,
+            },
+            // The first coordinate rounds down at the compiler boundary. The
+            // second already rounds up and must stay unchanged, triangulating
+            // the conditional tie-break rather than a blanket image shift.
+            elements: vec![fixed_image(324.0), fixed_image(0.2)],
+            background_color: None,
+            background_gradient: None,
+        })],
+        styles: StyleSheet::default(),
+    };
+
+    let pdf = office2pdf::render_document(&document).expect("fixed raster should render");
+    let parsed = lopdf::Document::load_mem(&pdf).expect("rendered PDF should parse");
+    let page_id = parsed.get_pages()[&1];
+    let content = Content::decode(
+        &parsed
+            .get_page_content(page_id)
+            .expect("page content should load"),
+    )
+    .expect("page content should decode");
+    let matrices = content
+        .operations
+        .windows(2)
+        .filter_map(|operations| {
+            (operations[0].operator == "cm" && operations[1].operator == "Do")
+                .then_some(&operations[0].operands)
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(matrices.len(), 2, "each image should have one draw matrix");
+    let number = |object: &Object| match object {
+        Object::Integer(value) => *value as f64,
+        Object::Real(value) => f64::from(*value),
+        other => panic!("expected PDF number, got {other:?}"),
+    };
+    let emitted_bottom = number(&matrices[0][5]);
+    let exact_bottom = 540.0 - 324.0 - 183.6;
+
+    assert!(
+        emitted_bottom >= exact_bottom,
+        "fixed raster bottom rounded below the exact edge: {emitted_bottom} < {exact_bottom}"
+    );
+    let already_safe_bottom = (540.0_f32 - (0.2_f32 + 183.6_f32)) as f64;
+    assert_eq!(
+        number(&matrices[1][5]),
+        already_safe_bottom,
+        "a raster whose transform already rounds upward must not move"
+    );
+}
+
 // --- PDF merge/split CLI tests ---
 
 fn make_test_pdf(num_pages: u32) -> Vec<u8> {

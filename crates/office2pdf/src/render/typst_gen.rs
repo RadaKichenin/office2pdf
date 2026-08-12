@@ -757,7 +757,7 @@ fn generate_fixed_page(
 
     with_powerpoint_advance_grid(true, || -> Result<(), ConvertError> {
         for elem in &page.elements {
-            generate_fixed_element(out, elem, ctx)?;
+            generate_fixed_element(out, elem, size.height, ctx)?;
         }
         Ok(())
     })
@@ -1031,14 +1031,16 @@ fn write_placed_sheet_anchor(out: &mut String, anchor: &SheetAnchor, ctx: &mut G
 fn generate_fixed_element(
     out: &mut String,
     elem: &FixedElement,
+    page_height_pt: f64,
     ctx: &mut GenCtx,
 ) -> Result<(), ConvertError> {
+    let placement_y = fixed_raster_placement_y(elem, page_height_pt);
     // Use Typst's place() for absolute positioning
     let _ = write!(
         out,
         "#place(top + left, dx: {}pt, dy: {}pt",
         format_f64(elem.x),
-        format_f64(elem.y),
+        format_f64(placement_y),
     );
     out.push_str(")[\n");
 
@@ -1087,7 +1089,7 @@ fn generate_fixed_element(
                     out,
                     "]\n#place(top + left, dx: {}pt, dy: {}pt)[\n",
                     format_f64(elem.x),
-                    format_f64(elem.y),
+                    format_f64(placement_y),
                 );
                 let _ = write!(
                     out,
@@ -1121,6 +1123,37 @@ fn generate_fixed_element(
 
     out.push_str("]\n");
     Ok(())
+}
+
+/// Keep an upright raster's PDF-space bottom edge from rounding below its
+/// exact DrawingML coordinate when Typst converts geometry to `f32`.
+///
+/// At a 324pt top and 183.6pt height on a 540pt slide, the exact bottom is
+/// 32.4pt. Typst 0.14/krilla emits 32.399994pt, putting the source's bottom
+/// hairline halfway into a second device row at 150 DPI. Moving the top to the
+/// preceding `f32` only when that subtraction rounds downward makes the PDF
+/// matrix land above the exact edge without a visible point-space offset
+/// (issue #666).
+fn fixed_raster_placement_y(elem: &FixedElement, page_height_pt: f64) -> f64 {
+    let FixedElementKind::Image(image) = &elem.kind else {
+        return elem.y;
+    };
+    if image.format == ImageFormat::Svg
+        || image.rotation_deg.is_some_and(|degrees| degrees != 0.0)
+        || image.crop.is_some_and(|crop| !crop.is_empty())
+        || image.clip_shape.is_some()
+        || elem.y <= 0.0
+    {
+        return elem.y;
+    }
+
+    let exact_bottom = page_height_pt - elem.y - elem.height;
+    let f32_bottom = (page_height_pt as f32 - (elem.y as f32 + elem.height as f32)) as f64;
+    if f32_bottom < exact_bottom {
+        f64::from((elem.y as f32).next_down())
+    } else {
+        elem.y
+    }
 }
 
 fn generate_fixed_text_box(
