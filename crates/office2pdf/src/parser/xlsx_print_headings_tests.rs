@@ -313,6 +313,8 @@ fn test_drawings_shift_with_the_inset_grid_and_charts_by_one_row() {
         y_offset_pt: 5.0,
         image: crate::ir::ImageData {
             rotation_deg: None,
+            flip_h: false,
+            flip_v: false,
             data: Vec::new(),
             format: crate::ir::ImageFormat::Png,
             width: Some(50.0),

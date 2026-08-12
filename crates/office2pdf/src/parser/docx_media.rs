@@ -32,6 +32,8 @@ pub(super) fn extract_drawing_image(
 
     let image_data = ImageData {
         rotation_deg: None,
+        flip_h: false,
+        flip_v: false,
         data: asset.data.clone(),
         format: asset.format,
         width,
@@ -82,6 +84,8 @@ pub(super) fn extract_shape_image(shape: &docx_rs::Shape, images: &ImageMap) -> 
 
     Some(Block::Image(ImageData {
         rotation_deg: None,
+        flip_h: false,
+        flip_v: false,
         data: asset.data.clone(),
         format: asset.format,
         width,

@@ -593,6 +593,8 @@ fn build_background_image_element<R: Read + std::io::Seek>(
             data: asset.data.clone(),
             format,
             rotation_deg: None,
+            flip_h: false,
+            flip_v: false,
             width: Some(slide_size.width),
             height: Some(slide_size.height),
             crop: None,
@@ -870,6 +872,9 @@ struct PictureState {
     crop: Option<ImageCrop>,
     /// Clockwise rotation from `a:xfrm/@rot` (issue #682).
     rotation_deg: Option<f64>,
+    /// Picture-frame mirrors from `a:xfrm` (issue #1017).
+    flip_h: bool,
+    flip_v: bool,
     in_xfrm: bool,
     in_sp_pr: bool,
     in_ln: bool,
@@ -1359,6 +1364,8 @@ fn finalize_picture(
                     data,
                     format,
                     rotation_deg: pic.rotation_deg,
+                    flip_h: pic.flip_h,
+                    flip_v: pic.flip_v,
                     width: Some(emu_to_pt(pic.cx)),
                     height: Some(emu_to_pt(pic.cy)),
                     crop: pic.crop,
@@ -2378,6 +2385,10 @@ impl<'a> SlideXmlParser<'a> {
                 if let Some(rot) = get_attr_i64(e, b"rot") {
                     self.pic.rotation_deg = Some(rot as f64 / 60_000.0);
                 }
+                self.pic.flip_h =
+                    get_attr_str(e, b"flipH").is_some_and(|v| v == "1" || v == "true");
+                self.pic.flip_v =
+                    get_attr_str(e, b"flipV").is_some_and(|v| v == "1" || v == "true");
             }
             b"ln" if self.in_pic && self.pic.in_sp_pr => {
                 self.pic.in_ln = true;

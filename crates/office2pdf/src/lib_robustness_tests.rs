@@ -337,6 +337,8 @@ fn test_edge_image_only_docx() {
             margins: Margins::default(),
             content: vec![Block::Image(ImageData {
                 rotation_deg: None,
+                flip_h: false,
+                flip_v: false,
                 data: vec![0x89, 0x50, 0x4E, 0x47],
                 format: ImageFormat::Png,
                 width: Some(100.0),
