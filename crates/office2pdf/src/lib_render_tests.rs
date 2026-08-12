@@ -224,6 +224,8 @@ fn test_render_document_with_image() {
             margins: Margins::default(),
             content: vec![Block::Image(ImageData {
                 rotation_deg: None,
+                flip_h: false,
+                flip_v: false,
                 data: make_test_png(),
                 format: ImageFormat::Png,
                 width: Some(100.0),
@@ -270,6 +272,8 @@ fn test_render_document_image_mixed_with_text() {
                 }),
                 Block::Image(ImageData {
                     rotation_deg: None,
+                    flip_h: false,
+                    flip_v: false,
                     data: make_test_png(),
                     format: ImageFormat::Png,
                     width: Some(200.0),

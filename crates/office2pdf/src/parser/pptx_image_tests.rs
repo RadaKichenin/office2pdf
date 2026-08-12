@@ -1229,3 +1229,26 @@ fn a_group_angle_adds_to_a_pictures_own_rotation() {
         }
     }
 }
+
+/// Picture mirrors live on the same `a:xfrm` as rotation. Dropping them left
+/// rotated, cropped SVG artwork on the wrong side of its frame (issue #1017).
+#[test]
+fn a_picture_keeps_both_frame_flip_attributes() {
+    let pic = r#"<p:pic><p:nvPicPr><p:cNvPr id="5" name="Picture"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="rId3"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm rot="5400000" flipH="true" flipV="1"><a:off x="0" y="0"/><a:ext cx="1600000" cy="600000"/></a:xfrm></p:spPr></p:pic>"#;
+    let slide_xml = make_slide_xml(&[pic.to_string()]);
+    let slide_images = vec![TestSlideImage {
+        rid: "rId3".to_string(),
+        path: "../media/image1.bmp".to_string(),
+        data: make_test_bmp(),
+        relationship_type: None,
+    }];
+    let data = build_test_pptx_with_images(SLIDE_CX, SLIDE_CY, &[(slide_xml, slide_images)]);
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = first_fixed_page(&doc);
+    let image = get_image(&page.elements[0]);
+    assert!(image.flip_h, "flipH=true must survive parsing");
+    assert!(image.flip_v, "flipV=1 must survive parsing");
+    assert_eq!(image.rotation_deg, Some(90.0));
+}

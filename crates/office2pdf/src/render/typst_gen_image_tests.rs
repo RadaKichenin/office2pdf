@@ -27,6 +27,8 @@ fn make_quadrant_png() -> Vec<u8> {
 fn make_image(format: ImageFormat, width: Option<f64>, height: Option<f64>) -> Block {
     Block::Image(ImageData {
         rotation_deg: None,
+        flip_h: false,
+        flip_v: false,
         data: MINIMAL_PNG.to_vec(),
         format,
         width,
@@ -48,6 +50,8 @@ fn make_image(format: ImageFormat, width: Option<f64>, height: Option<f64>) -> B
 fn picture_paragraph_spacing_becomes_block_gaps() {
     let doc = make_doc(vec![make_flow_page(vec![Block::Image(ImageData {
         rotation_deg: None,
+        flip_h: false,
+        flip_v: false,
         data: MINIMAL_PNG.to_vec(),
         format: ImageFormat::Png,
         width: None,
@@ -107,6 +111,8 @@ fn test_image_basic_no_size() {
 fn test_image_crop_preprocesses_raster_asset() {
     let doc = make_doc(vec![make_flow_page(vec![Block::Image(ImageData {
         rotation_deg: None,
+        flip_h: false,
+        flip_v: false,
         data: make_quadrant_png(),
         format: ImageFormat::Png,
         width: Some(20.0),
@@ -285,6 +291,8 @@ fn test_no_images_produces_empty_assets() {
 fn test_image_with_border_renders_box_stroke() {
     let doc = make_doc(vec![make_flow_page(vec![Block::Image(ImageData {
         rotation_deg: None,
+        flip_h: false,
+        flip_v: false,
         data: MINIMAL_PNG.to_vec(),
         format: ImageFormat::Png,
         width: Some(127.0),
@@ -325,6 +333,8 @@ fn test_fixed_image_with_border_uses_rect_overlay() {
             height: 226.2,
             kind: FixedElementKind::Image(ImageData {
                 rotation_deg: None,
+                flip_h: false,
+                flip_v: false,
                 data: MINIMAL_PNG.to_vec(),
                 format: ImageFormat::Png,
                 width: Some(96.9),
@@ -367,6 +377,53 @@ fn test_fixed_image_with_border_uses_rect_overlay() {
     );
 }
 
+/// OOXML mirrors the cropped/clipped picture frame before rotating it. Keep
+/// the scale wrapper inside the rotate wrapper so non-square artwork follows
+/// the same transform order (issue #1017).
+#[test]
+fn a_fixed_picture_flip_is_applied_inside_its_rotation() {
+    let doc = make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![FixedElement {
+            x: 10.0,
+            y: 20.0,
+            width: 120.0,
+            height: 60.0,
+            kind: FixedElementKind::Image(ImageData {
+                rotation_deg: Some(90.0),
+                flip_h: true,
+                flip_v: false,
+                data: MINIMAL_PNG.to_vec(),
+                format: ImageFormat::Png,
+                width: Some(120.0),
+                height: Some(60.0),
+                crop: None,
+                stroke: None,
+                alignment: None,
+                clip_shape: None,
+                shadow: None,
+                paragraph_spacing: None,
+            }),
+        }],
+    )]);
+
+    let source = generate_typst(&doc).unwrap().source;
+    let rotate = source
+        .find("#rotate(90deg)[")
+        .expect("the outer picture rotation must be emitted");
+    let flip = source
+        .find("#scale(x: -100%, y: 100%, origin: center)[")
+        .expect("flipH must become a centered horizontal mirror");
+    let image = source
+        .find("#image(\"")
+        .expect("the picture must be emitted");
+    assert!(
+        rotate < flip && flip < image,
+        "wrong transform order: {source}"
+    );
+}
+
 #[test]
 fn test_image_without_border_no_box() {
     let doc = make_doc(vec![make_flow_page(vec![make_image(
@@ -395,6 +452,8 @@ fn an_svg_crop_narrows_the_view_box() {
     const SVG: &str = r#"<svg width="365" height="340" viewBox="0 0 365 340" xmlns="http://www.w3.org/2000/svg" overflow="hidden"><circle cx="10" cy="10" r="5"/></svg>"#;
     let doc = make_doc(vec![make_flow_page(vec![Block::Image(ImageData {
         rotation_deg: None,
+        flip_h: false,
+        flip_v: false,
         data: SVG.as_bytes().to_vec(),
         format: ImageFormat::Svg,
         width: Some(20.0),
@@ -462,6 +521,8 @@ fn an_uncropped_svg_is_left_alone() {
         r#"<svg width="10" height="10" viewBox="0 0 10 10"><rect width="10" height="10"/></svg>"#;
     let doc = make_doc(vec![make_flow_page(vec![Block::Image(ImageData {
         rotation_deg: None,
+        flip_h: false,
+        flip_v: false,
         data: SVG.as_bytes().to_vec(),
         format: ImageFormat::Svg,
         width: Some(10.0),

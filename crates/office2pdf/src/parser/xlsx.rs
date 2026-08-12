@@ -264,6 +264,8 @@ fn anchored_image(
 
     let image = ImageData {
         rotation_deg: None,
+        flip_h: false,
+        flip_v: false,
         data: anchor.data,
         format: anchor.format,
         width: Some(width),

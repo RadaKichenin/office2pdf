@@ -1033,6 +1033,13 @@ pub struct ImageData {
     /// own `a:xfrm/@rot` composed with the angle of any rotated ancestor
     /// `<p:grpSp>`. `None` means upright (issues #682, #895).
     pub rotation_deg: Option<f64>,
+    /// Mirror a fixed PPTX picture left-to-right across its frame's vertical
+    /// axis. PPTX stores this as `a:xfrm/@flipH`; the frame is flipped after
+    /// source crop and geometry clipping, before its rotation (issue #1017).
+    pub flip_h: bool,
+    /// Mirror a fixed PPTX picture top-to-bottom across its frame's horizontal
+    /// axis (`a:xfrm/@flipV`; issue #1017).
+    pub flip_v: bool,
     pub format: ImageFormat,
     pub width: Option<f64>,
     pub height: Option<f64>,

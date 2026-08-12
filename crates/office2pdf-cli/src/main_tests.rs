@@ -302,6 +302,8 @@ fn fixed_raster_image_does_not_round_below_the_exact_bottom_edge() {
         kind: FixedElementKind::Image(ImageData {
             data: RED_PIXEL_PNG.to_vec(),
             rotation_deg: None,
+            flip_h: false,
+            flip_v: false,
             format: ImageFormat::Png,
             width: Some(403.2),
             height: Some(183.6),

@@ -1078,7 +1078,19 @@ fn generate_fixed_element(
             if let Some(deg) = rotation {
                 let _ = write!(out, "#rotate({}deg)[", format_f64(deg));
             }
+            let flipped = img.flip_h || img.flip_v;
+            if flipped {
+                let _ = write!(
+                    out,
+                    "#scale(x: {}, y: {}, origin: center)[",
+                    if img.flip_h { "-100%" } else { "100%" },
+                    if img.flip_v { "-100%" } else { "100%" },
+                );
+            }
             generate_image(out, img, ctx);
+            if flipped {
+                out.push(']');
+            }
             if rotation.is_some() {
                 out.push(']');
             }
