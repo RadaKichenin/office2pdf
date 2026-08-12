@@ -167,7 +167,7 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
                 if tag == b"spPr" && chart_element_ended {
                     chart_area_outline = parse_chart_area_outline(&mut reader, scheme);
                 } else if tag == b"txPr" && chart_element_ended {
-                    let (family, style) = parse_chart_text_properties(&mut reader, scheme);
+                    let (family, style, _) = parse_chart_text_properties(&mut reader, scheme);
                     text_font_family = family;
                     text_style = style;
                 } else if tag == b"legend" {
@@ -316,9 +316,10 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
 fn parse_chart_text_properties(
     reader: &mut Reader<&[u8]>,
     scheme: &SchemeColors<'_>,
-) -> (Option<String>, ChartTextStyle) {
+) -> (Option<String>, ChartTextStyle, bool) {
     let mut typeface: Option<String> = None;
     let mut style: ChartTextStyle = ChartTextStyle::default();
+    let mut ellipsis: bool = false;
     // `a:solidFill` also appears under `a:ln` and other siblings inside a
     // `c:txPr`, so the colour is only taken while inside the run properties
     // themselves (issue #916).
@@ -328,6 +329,10 @@ fn parse_chart_text_properties(
         match reader.read_event() {
             Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
                 match e.local_name().as_ref() {
+                    b"bodyPr" => {
+                        ellipsis = xml_util::get_attr_str(e, b"vertOverflow")
+                            .is_some_and(|value| value == "ellipsis");
+                    }
                     b"latin" if typeface.is_none() => {
                         // An empty `typeface=""` names no face; Office writes
                         // that to mean "inherit", which is what `None` says.
@@ -356,13 +361,23 @@ fn parse_chart_text_properties(
             _ => {}
         }
     }
-    (typeface, style)
+    (typeface, style, ellipsis)
 }
 
 /// Read a `c:txPr` that governs one element rather than the whole chart space,
 /// keeping only its run properties.
 fn parse_chart_text_style(reader: &mut Reader<&[u8]>, scheme: &SchemeColors<'_>) -> ChartTextStyle {
     parse_chart_text_properties(reader, scheme).1
+}
+
+/// Read an axis' run properties together with its body overflow policy.
+fn parse_axis_text_properties(
+    reader: &mut Reader<&[u8]>,
+    scheme: &SchemeColors<'_>,
+) -> ChartTextStyle {
+    let (_, mut style, ellipsis) = parse_chart_text_properties(reader, scheme);
+    style.ellipsis_overflow = ellipsis;
+    style
 }
 
 /// Take `a:defRPr`'s run properties, leaving untouched whatever it omits.
@@ -504,7 +519,7 @@ fn parse_axis(reader: &mut Reader<&[u8]>, end_tag: &[u8], scheme: &SchemeColors<
                 axis.title = axis.title.or_else(|| parse_chart_title(reader));
             }
             Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"txPr" => {
-                axis.text_style = parse_chart_text_style(reader, scheme);
+                axis.text_style = parse_axis_text_properties(reader, scheme);
             }
             // The axis' own line, and the gridlines' — both are an `<a:ln>`
             // inside a `<c:spPr>`, and both are dropped without this (#900).

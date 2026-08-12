@@ -351,6 +351,10 @@ pub struct ChartTextStyle {
     pub letter_spacing_hundredths: Option<i32>,
     /// `a:defRPr/a:solidFill` — the colour the runs are set in (issue #916).
     pub color: Option<Color>,
+    /// `a:bodyPr@vertOverflow="ellipsis"`. This body property is kept beside
+    /// the run properties because every chart text scope already owns one
+    /// `ChartTextStyle` (issue #1012).
+    pub ellipsis_overflow: bool,
 }
 
 impl ChartTextStyle {

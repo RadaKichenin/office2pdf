@@ -3033,6 +3033,7 @@ fn sized_bar_chart(size_pt: f64) -> Chart {
         bold: None,
         letter_spacing_hundredths: None,
         color: None,
+        ellipsis_overflow: false,
     };
     chart
 }
@@ -3086,6 +3087,7 @@ fn category_labels_take_the_axis_weight() {
         bold: Some(true),
         letter_spacing_hundredths: None,
         color: None,
+        ellipsis_overflow: false,
     };
     let source: String = chart_source(chart);
     assert!(
@@ -3102,6 +3104,7 @@ fn an_axis_size_overrides_the_chart_space_size_for_that_axis_only() {
         bold: None,
         letter_spacing_hundredths: None,
         color: None,
+        ellipsis_overflow: false,
     };
     let source: String = chart_source(chart);
     assert_eq!(emitted_text_sizes(&source, "Q1"), vec![9.0]);
@@ -3209,6 +3212,7 @@ fn bar_chart_at(size_pt: Option<f64>, categories: &[&str]) -> Chart {
         bold: None,
         letter_spacing_hundredths: None,
         color: None,
+        ellipsis_overflow: false,
     };
     chart
 }
@@ -4316,6 +4320,29 @@ fn crowded_category_labels_keep_declared_character_spacing_without_moving_the_pl
     assert_eq!(
         tracked_plot, plain_plot,
         "tracking changes glyph advance, not the native-calibrated chart plot"
+    );
+}
+
+#[test]
+fn a_crowded_axis_with_ellipsis_overflow_shortens_only_the_label_that_exceeds_its_box() {
+    let mut chart = crowded_column_chart();
+    chart.text_style.size_pt = Some(11.97);
+    chart.text_font_family = Some("Avenir Next LT Pro".to_string());
+    chart.category_axis_text_style.letter_spacing_hundredths = Some(100);
+    chart.category_axis_text_style.ellipsis_overflow = true;
+
+    let source = chart_source(chart);
+    assert!(
+        source.contains("[Konverteringsfrekvens for…]"),
+        "the overflowing label must end at the native word boundary: {source}"
+    );
+    assert!(
+        !source.contains("[Konverteringsfrekvens for kundeemne]"),
+        "the hidden suffix must not be painted: {source}"
+    );
+    assert!(
+        source.contains("[Frekvens for kundebevaring]"),
+        "a label that still fits must remain complete: {source}"
     );
 }
 
