@@ -195,6 +195,7 @@ class MatchAndDiffTest(unittest.TestCase):
         self.assertEqual(vector["lines"]["missing"], 1)
         self.assertEqual(vector["lines"]["extra"], 0)
         self.assertIn("beta", vector["lines"]["missing_text"][0])
+        self.assertEqual(compare_layout.audit_failures([vector]), 1)
 
     def test_wrap_difference_is_detected_not_reported_missing(self) -> None:
         gt = "\n".join([line_of("abcdef", 72, 100), line_of("ghi", 72, 112)])
@@ -243,6 +244,28 @@ class MatchAndDiffTest(unittest.TestCase):
         self.assertEqual(vector["rects"]["gt_count"], 2)
         self.assertEqual(vector["rects"]["out_count"], 1)
 
+    def test_repeated_labels_are_spatially_matched_and_large_shifts_are_named(self) -> None:
+        gt = "\n".join(
+            [line_of("Sales", 337, 133), line_of("Sales", 553, 286)]
+        )
+        out = "\n".join(
+            [line_of("Sales", 457, 134), line_of("Sales", 526, 286)]
+        )
+
+        vector = self.diff(gt, out, large_shift=5.0)
+
+        self.assertEqual(vector["lines"]["matched"], 2)
+        self.assertEqual(vector["instances"]["large_shift_count"], 2)
+        self.assertEqual(
+            [item["label"] for item in vector["instances"]["large_shifts"]],
+            ["Sales [1/2]", "Sales [2/2]"],
+        )
+        self.assertEqual(
+            [round(item["dx"]) for item in vector["instances"]["large_shifts"]],
+            [120, -27],
+        )
+        self.assertEqual(compare_layout.audit_failures([vector]), 2)
+
 
 class ReadingTest(unittest.TestCase):
     def test_reading_mentions_wrap_and_missing_content(self) -> None:
@@ -255,6 +278,21 @@ class ReadingTest(unittest.TestCase):
         vector = compare_layout.diff_page(gt, out)
         reading = compare_layout.render_reading([vector])
         self.assertIn("wrap", reading.lower())
+
+    def test_reading_names_a_large_repeated_label_shift(self) -> None:
+        gt = compare_layout.parse_trace(
+            trace_document("\n".join([line_of("Sales", 337, 133), line_of("Sales", 553, 286)]))
+        )[0]
+        out = compare_layout.parse_trace(
+            trace_document("\n".join([line_of("Sales", 457, 134), line_of("Sales", 526, 286)]))
+        )[0]
+
+        reading = compare_layout.render_reading(
+            [compare_layout.diff_page(gt, out, large_shift=5.0)]
+        )
+
+        self.assertIn("Sales [1/2]", reading)
+        self.assertIn("+120.00pt", reading)
 
 
 if __name__ == "__main__":
