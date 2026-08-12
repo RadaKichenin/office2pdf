@@ -1428,6 +1428,16 @@ fn a_chart_space_tx_pr_size_reaches_the_model() {
 }
 
 #[test]
+fn chart_text_character_spacing_is_read_in_hundredths_of_a_point() {
+    let chart = parse_chart_xml(
+        &chart_space_with(r#"<c:txPr><a:p><a:pPr><a:defRPr spc="-125"/></a:pPr></a:p></c:txPr>"#),
+        &SchemeColors::empty(),
+    )
+    .expect("chart parses");
+    assert_eq!(chart.text_style.letter_spacing_hundredths, Some(-125));
+}
+
+#[test]
 fn a_chart_space_tx_pr_bold_reaches_the_model() {
     let chart = parse_chart_xml(
         &chart_space_with(
@@ -1460,7 +1470,7 @@ fn an_axis_tx_pr_overrides_the_chart_space_one() {
                         <c:val><c:numRef><c:numCache><c:pt idx="0"><c:v>1</c:v></c:pt></c:numCache></c:numRef></c:val>
                     </c:ser></c:barChart>
                     <c:catAx>
-                        <c:txPr><a:p><a:pPr><a:defRPr sz="1100" b="1"/></a:pPr></a:p></c:txPr>
+                        <c:txPr><a:p><a:pPr><a:defRPr sz="1100" b="1" spc="100"/></a:pPr></a:p></c:txPr>
                     </c:catAx>
                     <c:valAx>
                         <c:txPr><a:p><a:pPr><a:defRPr sz="900"/></a:pPr></a:p></c:txPr>
@@ -1473,8 +1483,13 @@ fn an_axis_tx_pr_overrides_the_chart_space_one() {
     assert_eq!(chart.text_style.size_pt, Some(18.0));
     assert_eq!(chart.category_axis_text_style.size_pt, Some(11.0));
     assert_eq!(chart.category_axis_text_style.bold, Some(true));
+    assert_eq!(
+        chart.category_axis_text_style.letter_spacing_hundredths,
+        Some(100)
+    );
     assert_eq!(chart.value_axis_text_style.size_pt, Some(9.0));
     assert_eq!(chart.value_axis_text_style.bold, None);
+    assert_eq!(chart.value_axis_text_style.letter_spacing_hundredths, None);
 }
 
 #[test]

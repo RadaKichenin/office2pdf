@@ -381,6 +381,13 @@ fn read_def_rpr_into(element: &quick_xml::events::BytesStart<'_>, style: &mut Ch
         style.bold =
             xml_util::get_attr_str(element, b"b").map(|raw| matches!(raw.trim(), "1" | "true"));
     }
+    if style.letter_spacing_hundredths.is_none() {
+        // DrawingML character spacing is in hundredths of a point and may be
+        // negative. Unlike an absent attribute, an explicit zero is still a
+        // declaration that overrides the chart-space default.
+        style.letter_spacing_hundredths =
+            xml_util::get_attr_str(element, b"spc").and_then(|raw| raw.parse::<i32>().ok());
+    }
 }
 
 /// Read `c:chartSpace/c:spPr` into what it says about the chart-area outline.

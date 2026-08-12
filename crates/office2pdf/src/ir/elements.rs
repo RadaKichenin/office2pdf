@@ -333,16 +333,22 @@ pub struct Chart {
 
 /// Run properties a `c:txPr` declares for the strings it governs.
 ///
-/// Both fields are `Option` because "said nothing" and "said this" have to stay
+/// Every field is `Option` because "said nothing" and "said this" have to stay
 /// distinguishable: a `c:catAx/c:txPr` that sets only `b` must still take its
-/// size from `c:chartSpace/c:txPr`, and an element that declares no `c:txPr` at
-/// all must fall through to the renderer's default (issue #669).
+/// size and character spacing from `c:chartSpace/c:txPr`, and an element that
+/// declares no `c:txPr` at all must fall through to the renderer's default
+/// (issues #669 and #1011).
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct ChartTextStyle {
     /// `a:defRPr@sz`, in points — the attribute is in hundredths.
     pub size_pt: Option<f64>,
     /// `a:defRPr@b`.
     pub bold: Option<bool>,
+    /// `a:defRPr@spc`, in hundredths of a point.
+    ///
+    /// Keeping DrawingML's integer unit avoids inflating every `Chart` by
+    /// three nullable `f64` values; conversion belongs at the rendering edge.
+    pub letter_spacing_hundredths: Option<i32>,
     /// `a:defRPr/a:solidFill` — the colour the runs are set in (issue #916).
     pub color: Option<Color>,
 }
@@ -360,6 +366,14 @@ impl ChartTextStyle {
     /// This style's weight where `override_style` states none.
     pub fn resolved_bold(self, override_style: Self) -> Option<bool> {
         override_style.bold.or(self.bold)
+    }
+
+    /// This style's character spacing where `override_style` states none.
+    pub fn resolved_letter_spacing(self, override_style: Self) -> Option<f64> {
+        override_style
+            .letter_spacing_hundredths
+            .or(self.letter_spacing_hundredths)
+            .map(|hundredths| hundredths as f64 / 100.0)
     }
 
     /// This style's colour where `override_style` states none.

@@ -3030,6 +3030,7 @@ fn sized_bar_chart(size_pt: f64) -> Chart {
     chart.text_style = crate::ir::ChartTextStyle {
         size_pt: Some(size_pt),
         bold: None,
+        letter_spacing_hundredths: None,
         color: None,
     };
     chart
@@ -3082,6 +3083,7 @@ fn category_labels_take_the_axis_weight() {
     chart.category_axis_text_style = crate::ir::ChartTextStyle {
         size_pt: None,
         bold: Some(true),
+        letter_spacing_hundredths: None,
         color: None,
     };
     let source: String = chart_source(chart);
@@ -3097,6 +3099,7 @@ fn an_axis_size_overrides_the_chart_space_size_for_that_axis_only() {
     chart.category_axis_text_style = crate::ir::ChartTextStyle {
         size_pt: Some(9.0),
         bold: None,
+        letter_spacing_hundredths: None,
         color: None,
     };
     let source: String = chart_source(chart);
@@ -3203,6 +3206,7 @@ fn bar_chart_at(size_pt: Option<f64>, categories: &[&str]) -> Chart {
     chart.text_style = crate::ir::ChartTextStyle {
         size_pt,
         bold: None,
+        letter_spacing_hundredths: None,
         color: None,
     };
     chart
@@ -4217,6 +4221,32 @@ fn crowded_category_labels_slant_by_forty_five_degrees() {
     assert!(
         source.contains("rotate(-45deg, origin: top + right"),
         "labels longer than their band must slant, got:\n{source}"
+    );
+}
+
+#[test]
+fn crowded_category_labels_keep_declared_character_spacing_without_moving_the_plot() {
+    // Slide 14 of the #841 deck declares `spc="100"` on both axes. Dropping
+    // that 1pt gap shortened the longest category by 34pt and pulled every
+    // right-aligned diagonal label up and right in the rendered comparison.
+    let mut chart = crowded_column_chart();
+    chart.text_style.size_pt = Some(11.97);
+    chart.text_font_family = Some("Avenir Next LT Pro".to_string());
+    chart.category_axis_text_style.letter_spacing_hundredths = Some(100);
+
+    let tracked_plot = axis_plot_rect(&chart, (401.95, 344.25), false);
+    let source = chart_source(chart);
+    assert!(
+        source.contains(", tracking: 1pt, ligatures: false, kerning: false)[Fortjenestemargin]"),
+        "axis text must emit the declared spacing: {source}"
+    );
+    let mut plain = crowded_column_chart();
+    plain.text_style.size_pt = Some(11.97);
+    plain.text_font_family = Some("Avenir Next LT Pro".to_string());
+    let plain_plot = axis_plot_rect(&plain, (401.95, 344.25), false);
+    assert_eq!(
+        tracked_plot, plain_plot,
+        "tracking changes glyph advance, not the native-calibrated chart plot"
     );
 }
 
