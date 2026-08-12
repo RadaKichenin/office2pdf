@@ -279,10 +279,17 @@ def match_text_line_instances(
     )
 
 
-def report_geometry(gt: Path, other: Path, large_shift: float = 5.0) -> dict[str, float]:
+def page_text_lines(pdf: Path, page: int) -> list[TextLine]:
+    """Return only the requested 1-based page's text instances."""
+    return [line for line in text_lines(pdf) if line.page == page - 1]
+
+
+def report_geometry(
+    gt: Path, other: Path, page: int = 1, large_shift: float = 5.0
+) -> dict[str, float]:
     """Vertical and horizontal drift of spatially matched text instances."""
-    gt_text_lines = text_lines(gt)
-    other_text_lines = text_lines(other)
+    gt_text_lines = page_text_lines(gt, page)
+    other_text_lines = page_text_lines(other, page)
     matches = match_text_line_instances(gt_text_lines, other_text_lines)
     dy = [match.dy for match in matches]
     dx = [match.dx for match in matches]
@@ -724,7 +731,7 @@ def diagnose(
         print("  toward its true size overlaps GT less, not more.")
 
 
-def report_matched_lines(gt: Path, other: Path) -> None:
+def report_matched_lines(gt: Path, other: Path, page: int = 1) -> None:
     """Per-instance positions for every text line matched spatially.
 
     Aggregate drift says a page is wrong; this says which line. Pairing the two
@@ -732,7 +739,7 @@ def report_matched_lines(gt: Path, other: Path) -> None:
     matches the wrong line and produces impossible numbers, so the pairing here
     is the same duplicate-safe spatial match the geometry axis already trusts.
     """
-    rows = match_text_line_instances(text_lines(gt), text_lines(other))
+    rows = match_text_line_instances(page_text_lines(gt, page), page_text_lines(other, page))
 
     print("## Matched lines — x/y position of each spatial text instance")
     if not rows:
@@ -789,10 +796,12 @@ def main() -> None:
     print(f"output {args.output}")
     print(f"page {args.page} at {args.dpi} DPI\n")
 
-    geometry = report_geometry(args.gt, args.output, large_shift=args.large_shift)
+    geometry = report_geometry(
+        args.gt, args.output, page=args.page, large_shift=args.large_shift
+    )
     print()
     if args.lines:
-        report_matched_lines(args.gt, args.output)
+        report_matched_lines(args.gt, args.output, page=args.page)
         print()
     histogram_result: dict[str, float] | None = None
     if has_imagemagick():
@@ -804,15 +813,15 @@ def main() -> None:
             print()
             report_pixels(gt_png, other_png, out_dir)
             if args.artifacts_dir is not None:
-                matches = match_text_line_instances(text_lines(args.gt), text_lines(args.output))
+                matches = match_text_line_instances(
+                    page_text_lines(args.gt, args.page),
+                    page_text_lines(args.output, args.page),
+                )
                 page_matches = [
                     match
                     for match in matches
-                    if match.reference.page == args.page - 1
-                    and (
-                        abs(match.dx) > args.large_shift
-                        or abs(match.dy) > args.large_shift
-                    )
+                    if abs(match.dx) > args.large_shift
+                    or abs(match.dy) > args.large_shift
                 ]
                 print()
                 preserve_vision_artifacts(
