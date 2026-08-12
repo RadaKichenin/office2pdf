@@ -458,7 +458,7 @@ fn axis_with_stated_unit(axis: (f64, f64), stated: Option<f64>) -> (f64, f64) {
 }
 
 /// Choose Excel's automatic axis maximum and major unit covering `[0, max]`
-/// (e.g. max 8.2 → (10, 1), giving ticks 0,1,…,10).
+/// (e.g. max 8.2 → (9, 1), giving ticks 0,1,…,9).
 fn nice_axis(max_value: f64) -> (f64, f64) {
     if max_value <= 0.0 {
         return (1.0, 1.0);
@@ -480,6 +480,75 @@ fn nice_axis(max_value: f64) -> (f64, f64) {
     // ladder itself put 23,334 against 50,000 (#553).
     let nice_max: f64 = (cleared / step - 1e-9).ceil() * step;
     (nice_max, step)
+}
+
+/// Choose PowerPoint's automatic scale for a horizontal value axis.
+///
+/// PowerPoint applies the same 5% headroom as Excel, but limits how many
+/// horizontal intervals it will label according to both text size and plot
+/// width. Native PowerPoint 16.112 exports of `bar-chart.pptx` put its 18pt,
+/// 311.37pt-wide plot into at most five intervals: 8.2 therefore clears to
+/// 8.61 and takes the first 1/2/5-ladder step that covers it in five intervals,
+/// 2, for a 0..10 axis (#824).
+///
+/// The text limits are bracketed by native transitions at 11.93/11.94pt,
+/// 20.12/20.13pt, and 41.49/41.50pt. Combined text/plot probes put the first
+/// two width cutoffs between 358/368pt and 265/296pt. Holding the text at 18pt
+/// and narrowing the frame independently brackets five-to-two intervals
+/// between 231/311pt and two-to-one between 60/71pt. The cutoffs below stay
+/// consistent with those measured gaps rather than pretending the probes
+/// reveal an undocumented exact PowerPoint constant.
+fn powerpoint_nice_axis(max_value: f64, text_pt: f64, plot_w: f64) -> (f64, f64) {
+    if max_value <= 0.0 {
+        return (1.0, 1.0);
+    }
+    let text_interval_limit: f64 = if text_pt < 11.94 {
+        10.0
+    } else if text_pt < 20.13 {
+        5.0
+    } else if text_pt < 41.50 {
+        2.0
+    } else {
+        1.0
+    };
+    let width_interval_limit: f64 = if plot_w >= 363.0 {
+        10.0
+    } else if plot_w >= 270.0 {
+        5.0
+    } else if plot_w >= 65.0 {
+        2.0
+    } else {
+        1.0
+    };
+    let interval_limit: f64 = text_interval_limit.min(width_interval_limit);
+    let cleared: f64 = max_value + max_value / AXIS_HEADROOM_DIVISOR;
+    let magnitude: f64 = 10f64.powf(cleared.log10().floor());
+    let mut step: f64 = magnitude / 10.0;
+    for fraction in [0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0] {
+        let candidate: f64 = magnitude * fraction;
+        if (cleared / candidate - 1e-9).ceil() <= interval_limit {
+            step = candidate;
+            break;
+        }
+    }
+    ((cleared / step - 1e-9).ceil() * step, step)
+}
+
+/// Resolve the host-specific automatic value axis for one chart family.
+///
+/// The PowerPoint calibration is horizontal: it applies to bar charts. A
+/// vertical value axis keeps the established Excel rule until a native
+/// PowerPoint column/line calibration proves its separate density rule.
+fn chart_auto_axis(chart: &Chart, horizontal: bool, plot_w: f64, max_value: f64) -> (f64, f64) {
+    if horizontal && matches!(chart.host, crate::ir::ChartHost::Presentation) {
+        powerpoint_nice_axis(
+            max_value,
+            chart_axis_text_pt(chart, chart.value_axis_text_style),
+            plot_w,
+        )
+    } else {
+        nice_axis(max_value)
+    }
 }
 
 /// Share of the plotted range an auto-scaled axis clears the data by before it
@@ -853,8 +922,8 @@ pub(super) const LEGEND_ENTRY_W: f64 = 78.0;
 /// text-scaled one: 6.505pt plus 0.927 times the resolved size. These
 /// coefficients come from native PowerPoint 16.112 exports of
 /// `bar-chart.pptx` at 10, 12, 18, 24, and 36pt chart-space text. They size the
-/// plot chrome only; the host-specific automatic value-axis scale remains
-/// tracked in #824.
+/// plot chrome only; [`powerpoint_nice_axis`] separately sizes the horizontal
+/// PowerPoint value axis. Vertical PowerPoint axes remain uncalibrated.
 const CHART_LABEL_EDGE_PAD_PT: f64 = 6.505;
 const CHART_LABEL_EDGE_PAD_EM: f64 = 0.927;
 const CHART_LEGEND_BASE_PAD_PT: f64 = 23.008;
@@ -1134,8 +1203,8 @@ fn chart_axis_extent(chart: &Chart) -> (f64, f64) {
 /// [`TICK_GAP`] preserves the legacy geometry for charts that declare no size.
 /// For explicit text, native PowerPoint 16.112 exports measure this band as a
 /// fixed 6.58pt plus 1.855 times the resolved value-axis text size (#706).
-/// This does not choose the tick values or axis maximum; #824 tracks that
-/// separate host-specific auto-scale behavior.
+/// This does not choose the tick values or axis maximum; the horizontal
+/// PowerPoint auto-scale is resolved separately by [`powerpoint_nice_axis`].
 pub(super) fn chart_tick_band_pt(chart: &Chart) -> f64 {
     if chart.text_style.size_pt.is_some() || chart.value_axis_text_style.size_pt.is_some() {
         CHART_TICK_BAND_BASE_PT
@@ -1470,7 +1539,8 @@ fn chart_area_title_pt(chart: &Chart) -> f64 {
 /// [`AREA_TITLE_H`] preserves charts that declare no text size. Native
 /// PowerPoint 16.112 exports at 10, 12, 18, 24, and 36pt establish the explicit
 /// size relationship used here (#706). It changes only the title/plot chrome,
-/// not the automatic axis scale still tracked in #824.
+/// not the horizontal PowerPoint automatic axis scale resolved by
+/// [`powerpoint_nice_axis`].
 fn chart_area_title_h(chart: &Chart) -> f64 {
     if chart.text_style.size_pt.is_some() {
         CHART_PLOT_TOP_PAD_PT + CHART_PLOT_TOP_PAD_EM * chart_text_pt(chart)
@@ -1511,7 +1581,9 @@ fn legend_entry_widths(chart: &Chart, key_len_pt: f64, names: &[String]) -> Vec<
 /// A vertical legend measures its longest series name and adds the key and
 /// edge clearances observed in the same native multi-size exports used for the
 /// other #706 chart chrome. Horizontal legends retain their per-entry layout;
-/// neither branch changes the host-specific auto-scale tracked in #824.
+/// neither branch chooses the host-specific axis scale. Horizontal PowerPoint
+/// scaling is resolved after this box yields the plot width; vertical
+/// PowerPoint axes remain uncalibrated.
 fn axis_legend_box(chart: &Chart) -> LegendBox {
     if !chart.has_legend {
         return LegendBox::hidden();
@@ -1622,24 +1694,17 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
 
     // A stacked bar is read against its category's total, so the axis must
     // cover the tallest stack rather than the largest single segment.
-    let auto_axis = match chart.grouping {
-        // Every stack fills the plot, so the axis is the percentage scale
-        // itself and needs no rounding.
-        ChartGrouping::PercentStacked => (100.0, 20.0),
-        ChartGrouping::Stacked => nice_axis(
-            (0..categories)
-                .map(|index| category_total(series, index))
-                .fold(0.0_f64, f64::max),
-        ),
-        ChartGrouping::Clustered => nice_axis(
-            series
-                .iter()
-                .flat_map(|s| s.values.iter())
-                .copied()
-                .fold(0.0_f64, f64::max),
-        ),
+    let auto_max_value: f64 = match chart.grouping {
+        ChartGrouping::PercentStacked => 100.0,
+        ChartGrouping::Stacked => (0..categories)
+            .map(|index| category_total(series, index))
+            .fold(0.0_f64, f64::max),
+        ChartGrouping::Clustered => series
+            .iter()
+            .flat_map(|s| s.values.iter())
+            .copied()
+            .fold(0.0_f64, f64::max),
     };
-    let (nice_max, step) = axis_with_stated_unit(auto_axis, chart.value_axis_major_unit);
 
     // Chart-area title: the explicit chart title, else the automatic one
     // Office derives from a single series' name — unless the chart declined
@@ -1687,6 +1752,14 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
     // whatever the legend reserves on the left or above.
     let legend: LegendBox = axis_legend_box(chart);
     let (plot_w, plot_h) = axis_plot_size(chart, frame);
+    let auto_axis: (f64, f64) = if matches!(chart.grouping, ChartGrouping::PercentStacked) {
+        // Every stack fills the plot, so the axis is the percentage scale
+        // itself and needs no rounding.
+        (100.0, 20.0)
+    } else {
+        chart_auto_axis(chart, horizontal, plot_w, auto_max_value)
+    };
+    let (nice_max, step) = axis_with_stated_unit(auto_axis, chart.value_axis_major_unit);
     let (gutter_w, _) = axis_label_gutters(chart, frame);
     let (inset_top, _) = axis_plot_insets(chart, frame);
     // Decided once for the whole axis: labels all slant or none do, so a short
@@ -3187,7 +3260,10 @@ fn generate_smartart_steps(out: &mut String, smartart: &SmartArt) {
 
 #[cfg(test)]
 mod chart_value_label_tests {
-    use super::{AXIS_HEADROOM_DIVISOR, chart_text_advance_em, chart_value_label, nice_axis};
+    use super::{
+        AXIS_HEADROOM_DIVISOR, chart_text_advance_em, chart_value_label, nice_axis,
+        powerpoint_nice_axis,
+    };
 
     #[test]
     fn source_office_chart_metrics_are_environment_independent() {
@@ -3224,6 +3300,85 @@ mod chart_value_label_tests {
         assert_eq!(nice_axis(3.2), (3.5, 0.5));
         assert_eq!(nice_axis(45.0), (50.0, 5.0));
         assert_eq!(nice_axis(0.0), (1.0, 1.0));
+    }
+
+    /// PowerPoint 16.112 exports of `tests/fixtures/pptx/bar-chart.pptx`, with
+    /// all four values scaled by one factor and the chart's 18pt text kept
+    /// unchanged. `scripts/measure_powerpoint_chart_axis.py` regenerates these
+    /// rows from the native PDFs.
+    const MEASURED_POWERPOINT_AUTO_SCALE: [(f64, f64, f64); 20] = [
+        (0.44, 0.5, 0.1),
+        (1.0, 1.5, 0.5),
+        (1.9, 2.0, 0.5),
+        (3.2, 4.0, 1.0),
+        (5.5, 6.0, 2.0),
+        (8.0, 10.0, 2.0),
+        (8.2, 10.0, 2.0),
+        (8.6, 10.0, 2.0),
+        (9.7, 15.0, 5.0),
+        (12.5, 15.0, 5.0),
+        (17.0, 20.0, 5.0),
+        (21.0, 25.0, 5.0),
+        (45.0, 50.0, 10.0),
+        (78.0, 100.0, 20.0),
+        (97.0, 150.0, 50.0),
+        (199.0, 250.0, 50.0),
+        (520.0, 600.0, 200.0),
+        (970.0, 1500.0, 500.0),
+        (2300.0, 2500.0, 500.0),
+        (23334.0, 25000.0, 5000.0),
+    ];
+
+    #[test]
+    fn powerpoint_axis_reproduces_every_measured_18pt_scale() {
+        for (data_max, want_max, want_step) in MEASURED_POWERPOINT_AUTO_SCALE {
+            assert_eq!(
+                powerpoint_nice_axis(data_max, 18.0, 311.365),
+                (want_max, want_step),
+                "PowerPoint 16.112 at data maximum {data_max}"
+            );
+        }
+    }
+
+    #[test]
+    fn powerpoint_axis_coarsens_as_its_horizontal_labels_grow() {
+        // Same 8.2 chart and frame, with only c:txPr's size changed. These
+        // representative sizes pin each regime without fitting its boundary
+        // to a single sample.
+        for (text_pt, plot_w, want) in [
+            (10.0, 375.738, (9.0, 1.0)),
+            (12.0, 357.807, (10.0, 2.0)),
+            (18.0, 311.365, (10.0, 2.0)),
+            (24.0, 264.916, (10.0, 5.0)),
+            (36.0, 178.607, (10.0, 5.0)),
+            (44.0, 118.116, (10.0, 10.0)),
+        ] {
+            assert_eq!(
+                powerpoint_nice_axis(8.2, text_pt, plot_w),
+                want,
+                "{text_pt}pt over a {plot_w}pt plot"
+            );
+        }
+    }
+
+    #[test]
+    fn powerpoint_axis_coarsens_as_its_plot_narrows() {
+        // Same 8.2 chart at 18pt, with only its graphic-frame width changed.
+        // Reading the bar geometry back from the native PDFs gives these plot
+        // widths independently of the surrounding frame.
+        for (plot_w, want) in [
+            (59.859, (10.0, 10.0)),
+            (71.365, (10.0, 5.0)),
+            (231.462, (10.0, 5.0)),
+            (311.365, (10.0, 2.0)),
+            (391.267, (10.0, 2.0)),
+        ] {
+            assert_eq!(
+                powerpoint_nice_axis(8.2, 18.0, plot_w),
+                want,
+                "18pt text over a {plot_w}pt plot"
+            );
+        }
     }
 
     /// Axis maxima read off renderings of `WithChart.xlsx` with both series

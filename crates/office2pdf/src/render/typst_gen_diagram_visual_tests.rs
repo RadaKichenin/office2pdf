@@ -801,7 +801,11 @@ fn chart_source(chart: Chart) -> String {
 
 /// The axis tick labels the generator emitted, in the order written.
 fn emitted_axis_ticks(source: &str) -> Vec<f64> {
-    let marker: String = format!("text(size: {}pt)[", format_f64(CHART_DEFAULT_TEXT_PT));
+    emitted_axis_ticks_at_size(source, CHART_DEFAULT_TEXT_PT)
+}
+
+fn emitted_axis_ticks_at_size(source: &str, size_pt: f64) -> Vec<f64> {
+    let marker: String = format!("text(size: {}pt)[", format_f64(size_pt));
     source
         .lines()
         .filter(|line| line.contains("#place") && line.contains(&marker))
@@ -3390,6 +3394,34 @@ fn an_explicit_outline_survives_on_every_host() {
             "on {host:?}"
         );
     }
+}
+
+// ----- The automatic horizontal value-axis scale is host-dependent (#824) -----
+
+fn auto_scaled_bar_chart_on(host: crate::ir::ChartHost) -> Chart {
+    let mut chart = framed_bar_chart_on(host);
+    chart.text_style.size_pt = Some(18.0);
+    chart.series[0].values = vec![8.2, 3.2];
+    chart.series[1].values = vec![1.4, 1.2];
+    chart
+}
+
+#[test]
+fn a_slide_bar_chart_uses_powerpoints_measured_auto_scale() {
+    let source = chart_source(auto_scaled_bar_chart_on(crate::ir::ChartHost::Presentation));
+    assert_eq!(
+        emitted_axis_ticks_at_size(&source, 18.0),
+        vec![0.0, 2.0, 4.0, 6.0, 8.0, 10.0]
+    );
+}
+
+#[test]
+fn a_workbook_bar_chart_keeps_excels_measured_auto_scale() {
+    let source = chart_source(auto_scaled_bar_chart_on(crate::ir::ChartHost::Spreadsheet));
+    assert_eq!(
+        emitted_axis_ticks_at_size(&source, 18.0),
+        vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
+    );
 }
 
 // ----- A horizontal legend advances by each entry's width (issue #827) -----
