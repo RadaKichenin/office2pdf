@@ -3362,6 +3362,50 @@ fn the_category_gutter_grows_with_the_widest_label() {
     );
 }
 
+#[test]
+fn horizontal_category_labels_stop_the_text_scaled_clearance_short_of_the_plot() {
+    let chart = bar_chart_at(Some(18.0), &["1st Qtr", "2nd Qtr", "3rd Qtr", "4th Qtr"]);
+    let source = framed_chart_source(&chart, 480.0, 320.0);
+    let label_width = chart_category_gutter_pt(&chart) - 16.686;
+    let label = source
+        .lines()
+        .find(|line| line.contains("[4th Qtr]"))
+        .expect("the chart emits its category label");
+    assert!(
+        label.contains(&format!("box(width: {}pt", format_f64(label_width))),
+        "an 18pt label must stop 16.686pt short of the plot, got:\n{label}"
+    );
+}
+
+#[test]
+fn horizontal_category_labels_keep_the_legacy_gap_without_a_declared_size() {
+    let chart = bar_chart_at(None, &["Q1", "Q2"]);
+    let source = framed_chart_source(&chart, 480.0, 320.0);
+    let label = source
+        .lines()
+        .find(|line| line.contains("[Q2]"))
+        .expect("the chart emits its category label");
+    assert!(
+        label.contains(&format!("box(width: {}pt", format_f64(LABEL_W))),
+        "an undeclared-size label must keep the pre-#706 6pt gap, got:\n{label}"
+    );
+}
+
+#[test]
+fn horizontal_category_labels_keep_the_fallback_width_when_the_face_is_unmeasurable() {
+    let mut chart = bar_chart_at(Some(18.0), &["Q1", "Q2"]);
+    chart.text_font_family = Some("Definitely Missing Chart Face 998".to_string());
+    let source = framed_chart_source(&chart, 480.0, 320.0);
+    let label = source
+        .lines()
+        .find(|line| line.contains("[Q2]"))
+        .expect("the chart emits its category label");
+    assert!(
+        label.contains(&format!("box(width: {}pt", format_f64(LABEL_W))),
+        "an unmeasurable face must keep the calibrated 62pt fallback, got:\n{label}"
+    );
+}
+
 // ----- The automatic chart-area outline is host-dependent (issue #823) -----
 
 /// The `#box(...)` line that opens the chart area, whose `stroke:` is the

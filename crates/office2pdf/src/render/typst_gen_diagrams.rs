@@ -1274,6 +1274,26 @@ pub(super) fn chart_category_gutter_pt(chart: &Chart) -> f64 {
     }
 }
 
+/// Width the horizontal category-label text box occupies inside its gutter.
+///
+/// The gutter includes clearance between the glyphs and the plot. PowerPoint's
+/// explicit-size layout scales that clearance with the category-axis text when
+/// the font can be measured. Charts that declare no size, and environments
+/// without font metrics, keep the legacy [`GAP`] instead. Keeping the clearance
+/// outside this right-aligned box preserves the plot rectangle while stopping
+/// the label itself short of the axis (#998).
+fn chart_category_label_box_w(chart: &Chart) -> f64 {
+    let gutter: f64 = chart_category_gutter_pt(chart);
+    let has_declared_size: bool =
+        chart.text_style.size_pt.is_some() || chart.category_axis_text_style.size_pt.is_some();
+    let clearance: f64 = if has_declared_size && chart_category_label_widest_pt(chart).is_some() {
+        CHART_LABEL_EDGE_PAD_EM * chart_axis_text_pt(chart, chart.category_axis_text_style)
+    } else {
+        GAP
+    };
+    (gutter - clearance).max(0.0)
+}
+
 /// Angle Office slants crowded category labels by.
 ///
 /// A constant, not a function of how badly they crowd: all four labels in the
@@ -2019,7 +2039,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 out,
                 "#place(top + left, dx: 0pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(right + horizon)[#text(size: {}pt{})[{}]]])",
                 format_f64(row_top),
-                format_f64(chart_category_gutter_pt(chart)),
+                format_f64(chart_category_label_box_w(chart)),
                 format_f64(row),
                 format_f64(chart_axis_text_pt(chart, chart.category_axis_text_style)),
                 chart_axis_text_attrs(chart, chart.category_axis_text_style),
