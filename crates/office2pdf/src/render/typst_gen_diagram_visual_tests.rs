@@ -2,8 +2,8 @@ use super::*;
 use crate::ir::ChartAreaOutline;
 use crate::ir::DataLabels;
 use crate::render::typst_gen::diagrams::{
-    CHART_AREA_OUTLINE, CHART_AUTOMATIC_LINE, CHART_DEFAULT_TEXT_PT, LABEL_W, LEGEND_ENTRY_W,
-    LEGEND_KEY_LEN_PT, ROW, SERIES_LINE_PT, TICK_GAP, chart_category_band_pt,
+    CHART_AREA_OUTLINE, CHART_AUTOMATIC_LINE, CHART_DEFAULT_TEXT_PT, GAP, LABEL_W, LEGEND_ENTRY_W,
+    LEGEND_KEY_LEN_PT, ROW, SERIES_LINE_PT, TICK_GAP, axis_plot_rect, chart_category_band_pt,
     chart_category_gutter_pt, chart_tick_band_pt,
 };
 
@@ -3204,29 +3204,100 @@ fn a_chart_declaring_no_size_keeps_its_chrome_where_it_was() {
     let chart = bar_chart_at(None, &["Q1", "Q2"]);
     assert_eq!(chart_tick_band_pt(&chart), TICK_GAP);
     assert_eq!(chart_category_band_pt(&chart), ROW);
+    assert_eq!(chart_category_gutter_pt(&chart), LABEL_W + GAP);
 }
 
 #[test]
 fn a_larger_declared_size_reserves_a_taller_tick_band() {
-    // The band held 10pt's worth whatever the chart asked for, so an 18pt chart
-    // gave the difference to the plot instead: on `bar-chart.pptx` the plot came
-    // out 260.88pt tall against PowerPoint's 233.28, and 243.12 with the band
-    // scaled. That is 17.76pt of a 27.60pt error, not all of it — #706 stays
-    // open for the 9.84pt residual.
+    // Native PowerPoint reserves 39.9817pt below the plot for an 18pt chart;
+    // the band includes both a fixed base and a text-scaled component, so a
+    // simple 1.8x scaling is still short.
     let chart = bar_chart_at(Some(18.0), &["Q1", "Q2"]);
     assert!(
-        (chart_tick_band_pt(&chart) - TICK_GAP * 1.8).abs() < 1e-9,
-        "an 18pt chart reserves 1.8x the 10pt band, got {}",
+        (chart_tick_band_pt(&chart) - 39.9817).abs() < 0.02,
+        "an 18pt chart reserves PowerPoint's measured band, got {}",
         chart_tick_band_pt(&chart)
     );
     assert!(chart_tick_band_pt(&chart) > TICK_GAP);
 }
 
 #[test]
+fn a_framed_bar_chart_reserves_powerpoint_measured_chrome_at_multiple_sizes() {
+    // Native PowerPoint 16.112 exports of `bar-chart.pptx` with only
+    // `c:chartSpace/c:txPr/a:defRPr@sz` changed. Each value is the plot's
+    // left/top/right/bottom edge relative to the 480 x 320pt graphic frame.
+    // Two sizes keep the regression test from fitting the original 18pt GT
+    // with constants that fail as soon as the chart text changes.
+    let measurements = [
+        (12.0, (55.3186, 37.4150, 413.0499, 291.0732)),
+        (18.0, (79.7209, 46.2050, 391.0825, 279.9383)),
+    ];
+
+    for (size_pt, expected) in measurements {
+        let mut chart = bar_chart_at(Some(size_pt), &["1st Qtr", "2nd Qtr", "3rd Qtr", "4th Qtr"]);
+        chart.series.truncate(1);
+        chart.series[0].name = Some("Sales".to_string());
+        chart.has_legend = true;
+        chart.legend_position = LegendPosition::Right;
+        chart.text_font_family = Some("Calibri".to_string());
+        let actual = axis_plot_rect(&chart, (480.0, 320.0), true);
+        let errors = [
+            ("left", actual.0, expected.0),
+            ("top", actual.1, expected.1),
+            ("right", actual.2, expected.2),
+            ("bottom", actual.3, expected.3),
+        ]
+        .map(|(axis, actual, expected)| (axis, actual, expected, (actual - expected).abs()));
+        assert!(
+            errors.iter().all(|(_, _, _, error)| *error <= 0.1),
+            "{size_pt}pt chart edges: {errors:?}"
+        );
+    }
+}
+
+#[test]
+fn a_framed_column_chart_reserves_powerpoint_measured_chrome() {
+    // Native PowerPoint 16.112 export of slide 14 in the #841 Contoso deck.
+    // The coordinates are relative to its 401.95 x 344.25pt graphic frame.
+    let mut chart = crowded_column_chart();
+    chart.text_style.size_pt = Some(11.97);
+    chart.category_axis_text_style.size_pt = Some(11.97);
+    chart.value_axis_text_style.size_pt = Some(11.97);
+    chart.text_font_family = Some("Avenir Next LT Pro".to_string());
+    chart.has_legend = false;
+    let actual = axis_plot_rect(&chart, (401.95, 344.25), false);
+    let expected = (46.9766, 12.266, 390.9504, 193.1674);
+    let errors = [
+        ("left", actual.0, expected.0),
+        ("top", actual.1, expected.1),
+        ("right", actual.2, expected.2),
+        ("bottom", actual.3, expected.3),
+    ]
+    .map(|(axis, actual, expected)| (axis, actual, expected, (actual - expected).abs()));
+    assert!(
+        errors.iter().all(|(_, _, _, error)| *error <= 0.1),
+        "column chart edges: {errors:?}"
+    );
+}
+
+#[test]
+fn a_chart_title_occupies_the_same_fixed_band_used_by_plot_geometry() {
+    let mut chart = bar_chart_at(Some(18.0), &["Q1", "Q2"]);
+    chart.title = Some("Sales".to_string());
+    let source = chart_source(chart);
+    assert!(
+        source.contains("#block(width: 100%, height: 46.21pt, above: 0pt, below: 0pt)"),
+        "the emitted title must occupy its measured plot band, got:\n{source}"
+    );
+}
+
+#[test]
 fn the_category_gutter_never_narrows_below_the_calibrated_width() {
     // The gutter is measured from the widest label, and a face that cannot be
     // measured — wasm has no font search — must not collapse it.
-    assert!(chart_category_gutter_pt(&bar_chart_at(None, &["Q", "R"])) >= LABEL_W);
+    let mut chart = bar_chart_at(Some(18.0), &["Q", "R"]);
+    chart.text_font_family = Some("Definitely Missing Chart Face 706".to_string());
+    assert_eq!(chart_category_gutter_pt(&chart), LABEL_W + GAP);
 }
 
 #[test]

@@ -837,7 +837,7 @@ const PLOT_MAIN: f64 = 300.0; // value-axis length in points
 pub(super) const ROW: f64 = 34.0; // per-category thickness
 pub(super) const LABEL_W: f64 = 62.0; // category label gutter
 pub(super) const TICK_GAP: f64 = 22.0; // value tick label gutter
-const GAP: f64 = 6.0;
+pub(super) const GAP: f64 = 6.0;
 const LEGEND_ROW_H: f64 = 14.0; // per-entry height when the legend stacks
 /// Floor for one entry's width in a legend that runs across the chart, and the
 /// flat width a legend down the side reserves for its gutter.
@@ -848,6 +848,49 @@ const LEGEND_ROW_H: f64 = 14.0; // per-entry height when the legend stacks
 /// [`legend_entry_widths`] — which leaves a legend of short names exactly where
 /// it was.
 pub(super) const LEGEND_ENTRY_W: f64 = 78.0;
+
+/// PowerPoint's automatic chart layout combines a fixed edge clearance with a
+/// text-scaled one: 6.505pt plus 0.927 times the resolved size. These
+/// coefficients come from native PowerPoint 16.112 exports of
+/// `bar-chart.pptx` at 10, 12, 18, 24, and 36pt chart-space text. They size the
+/// plot chrome only; the host-specific automatic value-axis scale remains
+/// tracked in #824.
+const CHART_LABEL_EDGE_PAD_PT: f64 = 6.505;
+const CHART_LABEL_EDGE_PAD_EM: f64 = 0.927;
+const CHART_LEGEND_BASE_PAD_PT: f64 = 23.008;
+const CHART_LEGEND_PAD_EM: f64 = 1.605;
+
+/// Fixed chart-area padding that remains after the text-scaled bands.
+const CHART_PLOT_TOP_PAD_PT: f64 = 19.84;
+const CHART_TICK_BAND_BASE_PT: f64 = 6.58;
+
+/// Additional gap above and below the plot, as a multiple of the chart text.
+const CHART_PLOT_TOP_PAD_EM: f64 = 1.465;
+const CHART_TICK_BAND_EM: f64 = 1.855;
+
+/// Left gutter of a column plot whose value labels run down that edge.
+///
+/// Native PowerPoint exports of the #841 column chart reserve 40.805pt at
+/// 10pt, 47.064pt at 12pt, and 84.633pt at 24pt. (The 18pt export switches to
+/// another automatic layout regime, so it is deliberately not fitted here.)
+/// Unlike a bar plot's bottom band this is a text-width relationship, so it
+/// needs its own calibration.
+const CHART_COLUMN_VALUE_GUTTER_PT: f64 = 9.5;
+const CHART_COLUMN_VALUE_GUTTER_EM: f64 = 3.13;
+
+/// Insets PowerPoint keeps at the top and right of a framed column plot.
+///
+/// Across the same native #841 exports the right edge remains 11pt inside the
+/// chart frame, while the top edge follows `5pt + 0.607em`.
+const CHART_COLUMN_RIGHT_PAD_PT: f64 = 11.0;
+const CHART_COLUMN_TOP_PAD_PT: f64 = 5.0;
+const CHART_COLUMN_TOP_PAD_EM: f64 = 0.607;
+
+/// Clearance under the longest 45deg category label in a framed column plot.
+///
+/// On the native #841 export, the longest label's rotated advance consumes
+/// 147.86pt and the chart leaves another 3.23pt before the frame edge.
+const CHART_ROTATED_LABEL_EDGE_PAD_PT: f64 = 3.225;
 
 /// Space a legend reserves around the plot, and the direction its entries run.
 ///
@@ -1019,17 +1062,30 @@ fn chart_axis_extent(chart: &Chart) -> (f64, f64) {
     )
 }
 
-/// The band a value tick label needs, for text at the size the chart declares.
+/// The bottom band a bar plot's value tick labels need.
 ///
-/// [`TICK_GAP`] was calibrated at [`CHART_DEFAULT_TEXT_PT`], so a chart that
-/// declares nothing reserves exactly what it always did. A chart declaring 18pt
-/// used to reserve the 10pt band and the plot swallowed the difference. On
-/// `bar-chart.pptx`, whose GT frame is 480x320pt, that left the plot 260.88pt
-/// tall against PowerPoint's 233.28; scaling the band brings it to 243.12, so
-/// the height error falls from 27.60pt to 9.84pt. The remaining 9.84pt is why
-/// #706 stays open.
+/// [`TICK_GAP`] preserves the legacy geometry for charts that declare no size.
+/// For explicit text, native PowerPoint 16.112 exports measure this band as a
+/// fixed 6.58pt plus 1.855 times the resolved value-axis text size (#706).
+/// This does not choose the tick values or axis maximum; #824 tracks that
+/// separate host-specific auto-scale behavior.
 pub(super) fn chart_tick_band_pt(chart: &Chart) -> f64 {
-    TICK_GAP / CHART_DEFAULT_TEXT_PT * chart_axis_text_pt(chart, chart.value_axis_text_style)
+    if chart.text_style.size_pt.is_some() || chart.value_axis_text_style.size_pt.is_some() {
+        CHART_TICK_BAND_BASE_PT
+            + CHART_TICK_BAND_EM * chart_axis_text_pt(chart, chart.value_axis_text_style)
+    } else {
+        TICK_GAP
+    }
+}
+
+/// The left band a column plot's value tick labels need.
+fn chart_column_value_gutter_pt(chart: &Chart) -> f64 {
+    if chart.text_style.size_pt.is_some() || chart.value_axis_text_style.size_pt.is_some() {
+        CHART_COLUMN_VALUE_GUTTER_PT
+            + CHART_COLUMN_VALUE_GUTTER_EM * chart_axis_text_pt(chart, chart.value_axis_text_style)
+    } else {
+        TICK_GAP + GAP
+    }
 }
 
 /// The band one category takes across the category axis, at the declared size.
@@ -1065,12 +1121,21 @@ pub(super) fn chart_category_gutter_pt(chart: &Chart) -> f64 {
         .filter_map(|category| crate::render::pdf::text_advance_em(family, bold, category))
         .fold(0.0_f64, f64::max);
     if widest_em <= 0.0 {
-        return LABEL_W;
+        return LABEL_W + GAP;
     }
-    // The tick mark reaches out of the plot into this gutter, and the label
-    // stops a gap short of it.
-    let tick: f64 = chart_major_tick_length(size_pt);
-    (widest_em * size_pt + tick + GAP).max(LABEL_W)
+    // PowerPoint's automatic layout adds a fixed 6.505pt plus 0.927 times the
+    // resolved size after the widest label. Measuring the whole reserved band
+    // avoids counting the axis tick a second time: it lives inside that edge
+    // clearance in the native export.
+    let measured =
+        widest_em * size_pt + CHART_LABEL_EDGE_PAD_PT + CHART_LABEL_EDGE_PAD_EM * size_pt;
+    if chart.text_style.size_pt.is_none() && chart.category_axis_text_style.size_pt.is_none() {
+        // Before #706 the flat label gutter and [`GAP`] were separate. Keep
+        // their combined width for charts with no declared size.
+        measured.max(LABEL_W) + GAP
+    } else {
+        measured
+    }
 }
 
 /// Angle Office slants crowded category labels by.
@@ -1136,17 +1201,13 @@ fn chart_category_labels_rotated(chart: &Chart, frame: Option<(f64, f64)>) -> bo
 
 /// Height slanted category labels reserve below the axis.
 ///
-/// A label rotated 45deg drops by its own advance times sin 45. The reference's
-/// longest label is 244.4pt of text and hangs 172.56pt below the axis;
-/// `244.4 * sin 45` is 172.8 (issue #884).
+/// A label rotated 45deg drops by its own advance times sin 45. A fresh native
+/// PowerPoint 16.112 export of slide 14 in #841 then leaves 3.23pt between that
+/// rotated advance and the chart-frame edge (#706, #884).
 fn chart_category_rotated_gutter_pt(chart: &Chart) -> f64 {
     let widest_pt: f64 = chart_category_label_widest_pt(chart).unwrap_or(0.0);
-    let size_pt: f64 = chart_axis_text_pt(chart, chart.category_axis_text_style);
     let drop: f64 = widest_pt * CATEGORY_LABEL_ROTATION_DEG.to_radians().sin();
-    // The glyphs' own height leans into the gutter too, and the label starts a
-    // tick's length clear of the axis.
-    drop + size_pt * CATEGORY_LABEL_ROTATION_DEG.to_radians().cos()
-        + chart_major_tick_length(size_pt)
+    drop + CHART_ROTATED_LABEL_EDGE_PAD_PT
 }
 
 /// Gutters the category labels and the value tick labels take inside the box,
@@ -1155,7 +1216,7 @@ fn axis_label_gutters(chart: &Chart, frame: Option<(f64, f64)>) -> (f64, f64) {
     let (title_left, title_bottom) = axis_title_gutters(chart);
     if matches!(chart.chart_type, ChartType::Bar) {
         (
-            chart_category_gutter_pt(chart) + GAP + title_left,
+            chart_category_gutter_pt(chart) + title_left,
             chart_tick_band_pt(chart) + title_bottom,
         )
     } else {
@@ -1165,7 +1226,7 @@ fn axis_label_gutters(chart: &Chart, frame: Option<(f64, f64)>) -> (f64, f64) {
             chart_category_band_pt(chart)
         };
         (
-            chart_tick_band_pt(chart) + GAP + title_left,
+            chart_column_value_gutter_pt(chart) + title_left,
             category_band + title_bottom,
         )
     }
@@ -1263,12 +1324,47 @@ fn axis_plot_size(chart: &Chart, frame: Option<(f64, f64)>) -> (f64, f64) {
     };
     let legend: LegendBox = axis_legend_box(chart);
     let (gutter_w, gutter_h) = axis_label_gutters(chart, frame);
+    let (inset_top, inset_right) = axis_plot_insets(chart, frame);
     // A frame too small for the chrome would give a negative plot, so the
     // intrinsic size is the floor rather than a source of inverted geometry.
     (
-        (frame_w - gutter_w - legend.left - legend.right).max(MIN_PLOT_PT),
-        (frame_h - gutter_h - legend.top - legend.bottom).max(MIN_PLOT_PT),
+        (frame_w - gutter_w - legend.left - legend.right - inset_right).max(MIN_PLOT_PT),
+        (frame_h - gutter_h - legend.top - legend.bottom - inset_top).max(MIN_PLOT_PT),
     )
+}
+
+/// Extra top/right breathing room inside a framed column chart.
+fn axis_plot_insets(chart: &Chart, frame: Option<(f64, f64)>) -> (f64, f64) {
+    if frame.is_some() && matches!(chart.chart_type, ChartType::Column) {
+        (
+            CHART_COLUMN_TOP_PAD_PT
+                + CHART_COLUMN_TOP_PAD_EM * chart_axis_text_pt(chart, chart.value_axis_text_style),
+            CHART_COLUMN_RIGHT_PAD_PT,
+        )
+    } else {
+        (0.0, 0.0)
+    }
+}
+
+#[cfg(test)]
+pub(super) fn axis_plot_rect(
+    chart: &Chart,
+    frame: (f64, f64),
+    has_title: bool,
+) -> (f64, f64, f64, f64) {
+    let title_h = if has_title {
+        chart_area_title_h(chart)
+    } else {
+        0.0
+    };
+    let content_frame = (frame.0, (frame.1 - title_h).max(MIN_PLOT_PT));
+    let legend = axis_legend_box(chart);
+    let (gutter_w, _) = axis_label_gutters(chart, Some(content_frame));
+    let (plot_w, plot_h) = axis_plot_size(chart, Some(content_frame));
+    let (inset_top, _) = axis_plot_insets(chart, Some(content_frame));
+    let left = legend.left + gutter_w;
+    let top = title_h + legend.top + inset_top;
+    (left, top, left + plot_w, top + plot_h)
 }
 
 /// Smallest plotting rectangle worth drawing, in points.
@@ -1302,14 +1398,18 @@ fn chart_area_title_pt(chart: &Chart) -> f64 {
         })
 }
 
-/// Height the chart-area title block takes, for a title at `title_pt`.
+/// Height the chart-area title block takes.
 ///
-/// [`AREA_TITLE_H`] is this at [`CHART_AREA_TITLE_PT`], so a chart declaring
-/// nothing reserves exactly what it always did. The band is still short of what
-/// Office reserves at any size — that is #706, and it is not what decides the
-/// text's own size here.
+/// [`AREA_TITLE_H`] preserves charts that declare no text size. Native
+/// PowerPoint 16.112 exports at 10, 12, 18, 24, and 36pt establish the explicit
+/// size relationship used here (#706). It changes only the title/plot chrome,
+/// not the automatic axis scale still tracked in #824.
 fn chart_area_title_h(chart: &Chart) -> f64 {
-    AREA_TITLE_H / CHART_AREA_TITLE_PT * chart_area_title_pt(chart)
+    if chart.text_style.size_pt.is_some() {
+        CHART_PLOT_TOP_PAD_PT + CHART_PLOT_TOP_PAD_EM * chart_text_pt(chart)
+    } else {
+        AREA_TITLE_H / CHART_AREA_TITLE_PT * chart_area_title_pt(chart)
+    }
 }
 
 /// Width each legend entry occupies when the legend runs across the chart.
@@ -1340,11 +1440,51 @@ fn legend_entry_widths(chart: &Chart, key_len_pt: f64, names: &[String]) -> Vec<
 }
 
 /// Space the axis plot's legend reserves.
+///
+/// A vertical legend measures its longest series name and adds the key and
+/// edge clearances observed in the same native multi-size exports used for the
+/// other #706 chart chrome. Horizontal legends retain their per-entry layout;
+/// neither branch changes the host-specific auto-scale tracked in #824.
 fn axis_legend_box(chart: &Chart) -> LegendBox {
     if !chart.has_legend {
         return LegendBox::hidden();
     }
-    LegendBox::new(chart.legend_position, LEGEND_ROW_H, LEGEND_ENTRY_W)
+    let mut legend = LegendBox::new(chart.legend_position, LEGEND_ROW_H, LEGEND_ENTRY_W);
+    if matches!(
+        chart.legend_position,
+        LegendPosition::Left | LegendPosition::Right
+    ) {
+        let size_pt = chart_text_pt(chart);
+        let family = chart
+            .text_font_family
+            .as_deref()
+            .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_FAMILY);
+        let widest_label = chart
+            .series
+            .iter()
+            .enumerate()
+            .map(|(index, series)| {
+                series
+                    .name
+                    .clone()
+                    .unwrap_or_else(|| format!("Series {}", index + 1))
+            })
+            .filter_map(|name| crate::render::pdf::text_advance_em(family, false, &name))
+            .fold(0.0_f64, f64::max)
+            * size_pt;
+        let measured = widest_label + CHART_LEGEND_BASE_PAD_PT + CHART_LEGEND_PAD_EM * size_pt;
+        let side = if chart.text_style.size_pt.is_none() {
+            measured.max(LEGEND_ENTRY_W + GAP)
+        } else {
+            measured
+        };
+        match chart.legend_position {
+            LegendPosition::Left => legend.left = side,
+            LegendPosition::Right | LegendPosition::TopRight => legend.right = side,
+            LegendPosition::Top | LegendPosition::Bottom => {}
+        }
+    }
+    legend
 }
 
 /// Where the bars of one category sit inside the band it gets, in points along
@@ -1444,23 +1584,23 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
             None
         }
     });
-    if let Some(title) = area_title {
-        let _ = writeln!(
-            out,
-            "#align(center)[#text(size: {}pt, weight: \"bold\")[{}]]",
-            format_f64(chart_area_title_pt(chart)),
-            escape_typst(title)
-        );
-        out.push_str("#v(4pt)\n");
-    }
-
-    // The title is emitted above the box, so a framed chart's box gets what is
-    // left of the frame beneath it.
     let title_h: f64 = if area_title.is_some() {
         chart_area_title_h(chart)
     } else {
         0.0
     };
+    if let Some(title) = area_title {
+        let _ = writeln!(
+            out,
+            "#block(width: 100%, height: {}pt, above: 0pt, below: 0pt)[#align(center + horizon)[#text(size: {}pt, weight: \"bold\")[{}]]]",
+            format_f64(title_h),
+            format_f64(chart_area_title_pt(chart)),
+            escape_typst(title)
+        );
+    }
+
+    // The fixed-height title block is emitted above the plot box, so a framed
+    // chart's box gets exactly what remains beneath it.
     let frame: Option<(f64, f64)> =
         frame.map(|(width, height)| (width, (height - title_h).max(MIN_PLOT_PT)));
     let (total_w, total_h) = match frame {
@@ -1481,10 +1621,11 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
     let legend: LegendBox = axis_legend_box(chart);
     let (plot_w, plot_h) = axis_plot_size(chart, frame);
     let (gutter_w, _) = axis_label_gutters(chart, frame);
+    let (inset_top, _) = axis_plot_insets(chart, frame);
     // Decided once for the whole axis: labels all slant or none do, so a short
     // label in a crowded axis still hangs with its neighbours (issue #884).
     let category_labels_rotated: bool = chart_category_labels_rotated(chart, frame);
-    let (plot_x, plot_y) = (legend.left + gutter_w, legend.top);
+    let (plot_x, plot_y) = (legend.left + gutter_w, legend.top + inset_top);
     // Pitch of one category along the category axis. `ROW` is the intrinsic
     // value; a framed chart divides the axis it actually got, so widening the
     // frame widens the bars rather than leaving them stranded at one end.
