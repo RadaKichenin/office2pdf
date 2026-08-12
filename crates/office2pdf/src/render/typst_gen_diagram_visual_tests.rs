@@ -5,7 +5,7 @@ use crate::render::typst_gen::diagrams::{
     CHART_AREA_OUTLINE, CHART_AUTOMATIC_LINE, CHART_DEFAULT_TEXT_PT, GAP, LABEL_W, LEGEND_ENTRY_W,
     LEGEND_KEY_LEN_PT, PPTX_LEGEND_KEY_EM, PPTX_LEGEND_KEY_LABEL_GAP_EM,
     PPTX_LEGEND_KEY_LABEL_GAP_PT, ROW, SERIES_LINE_PT, TICK_GAP, axis_plot_rect,
-    chart_category_band_pt, chart_category_gutter_pt, chart_tick_band_pt,
+    chart_area_title_h, chart_category_band_pt, chart_category_gutter_pt, chart_tick_band_pt,
 };
 
 #[test]
@@ -3360,6 +3360,51 @@ fn a_powerpoint_right_legend_uses_the_native_vertical_center_at_multiple_sizes()
 }
 
 #[test]
+fn a_powerpoint_horizontal_value_axis_keeps_native_label_gap_at_multiple_sizes() {
+    // Native PowerPoint 16.112 exports of the same 480 x 320pt chart frame.
+    // Each value is the required Typst box-top gap after translating the
+    // native zero glyph's top edge through Typst's size-scaled ink overhang.
+    // Five sizes prevent an 18pt-only translation.
+    let measurements = [
+        (10.0, 11.3134),
+        (12.0, 12.7448),
+        (18.0, 17.2527),
+        (24.0, 21.2363),
+        (36.0, 30.5978),
+    ];
+
+    for (size_pt, expected_gap) in measurements {
+        let mut chart = bar_chart_at(Some(size_pt), &["1st Qtr", "2nd Qtr", "3rd Qtr", "4th Qtr"]);
+        chart.series.truncate(1);
+        chart.series[0].name = Some("Sales".to_string());
+        chart.host = crate::ir::ChartHost::Presentation;
+
+        let source = framed_chart_source(&chart, 480.0, 320.0);
+        let plot_bottom =
+            axis_plot_rect(&chart, (480.0, 320.0), true).3 - chart_area_title_h(&chart);
+        let label_top = horizontal_value_axis_label_y(&source, "0");
+        let actual_gap = label_top - plot_bottom;
+        assert!(
+            (actual_gap - expected_gap).abs() <= 0.4,
+            "{size_pt}pt PowerPoint zero label starts {actual_gap}pt below the axis, expected {expected_gap}pt; got:\n{source}"
+        );
+    }
+}
+
+#[test]
+fn a_spreadsheet_horizontal_value_axis_keeps_the_existing_label_gap() {
+    let mut chart = bar_chart_at(Some(18.0), &["Q1", "Q2"]);
+    chart.host = crate::ir::ChartHost::Spreadsheet;
+    let source = framed_chart_source(&chart, 480.0, 320.0);
+    let plot_bottom = axis_plot_rect(&chart, (480.0, 320.0), false).3;
+    let actual_gap = horizontal_value_axis_label_y(&source, "0") - plot_bottom;
+    assert!(
+        (actual_gap - 4.0).abs() <= 0.01,
+        "the Excel-compatible gap changed to {actual_gap}pt; got:\n{source}"
+    );
+}
+
+#[test]
 fn a_framed_column_chart_reserves_powerpoint_measured_chrome() {
     // Native PowerPoint 16.112 export of slide 14 in the #841 Contoso deck.
     // The coordinates are relative to its 401.95 x 344.25pt graphic frame.
@@ -3628,6 +3673,19 @@ fn legend_entry_y(source: &str, label: &str) -> f64 {
         .and_then(|rest| rest.split("pt").next())
         .and_then(|value| value.trim().parse::<f64>().ok())
         .expect("the entry is placed")
+}
+
+fn horizontal_value_axis_label_y(source: &str, label: &str) -> f64 {
+    let marker: String = format!(")[{label}]]])");
+    let line = source
+        .lines()
+        .find(|line| line.contains("box(width: 24pt)") && line.contains(&marker))
+        .expect("the horizontal value-axis label is drawn");
+    line.split("dy: ")
+        .nth(1)
+        .and_then(|rest| rest.split("pt").next())
+        .and_then(|value| value.trim().parse::<f64>().ok())
+        .expect("the label is placed")
 }
 
 fn bottom_legend_chart(names: &[&str]) -> Chart {
