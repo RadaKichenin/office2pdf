@@ -942,6 +942,15 @@ pub(super) const PPTX_LEGEND_KEY_LABEL_GAP_PT: f64 = -0.375;
 pub(super) const PPTX_LEGEND_KEY_LABEL_GAP_EM: f64 = 0.274655;
 const PPTX_LEGEND_RIGHT_EDGE_PAD_PT: f64 = 10.127;
 
+/// Vertical correction for a PowerPoint right-side legend centred beside a
+/// horizontal axis plot. The generic side stack also sees the bottom tick
+/// label band and therefore lands progressively lower as chart text grows.
+///
+/// A fixed plus text-scaled correction fitted to native PowerPoint 16.112
+/// exports at 10, 12, 18, 24, and 36pt keeps every key top within 0.002pt.
+const PPTX_RIGHT_LEGEND_Y_SHIFT_PT: f64 = 1.579;
+const PPTX_RIGHT_LEGEND_Y_SHIFT_EM: f64 = -0.357249;
+
 /// Fixed chart-area padding that remains after the text-scaled bands.
 const CHART_PLOT_TOP_PAD_PT: f64 = 19.84;
 const CHART_TICK_BAND_BASE_PT: f64 = 6.58;
@@ -1058,6 +1067,7 @@ struct LegendEntryLayout<'a> {
     row_h: f64,
     widths: &'a [f64],
     right_inset: Option<(f64, f64)>,
+    side_y_shift: f64,
 }
 
 impl LegendBox {
@@ -1141,7 +1151,7 @@ impl LegendBox {
                 LegendPosition::TopRight => content_y,
                 _ => content_y + (content_h - stack_h).max(0.0) / 2.0,
             };
-            (x, y + index as f64 * layout.row_h)
+            (x, y + layout.side_y_shift + index as f64 * layout.row_h)
         }
     }
 }
@@ -1722,6 +1732,17 @@ fn powerpoint_right_legend_inset(
         key_size_pt + key_label_gap_pt + widest_label,
         PPTX_LEGEND_RIGHT_EDGE_PAD_PT,
     ))
+}
+
+fn powerpoint_right_legend_y_shift(chart: &Chart) -> f64 {
+    if matches!(chart.host, crate::ir::ChartHost::Presentation)
+        && matches!(chart.chart_type, ChartType::Bar)
+        && matches!(chart.legend_position, LegendPosition::Right)
+    {
+        PPTX_RIGHT_LEGEND_Y_SHIFT_PT + PPTX_RIGHT_LEGEND_Y_SHIFT_EM * chart_text_pt(chart)
+    } else {
+        0.0
+    }
 }
 
 /// Space the axis plot's legend reserves.
@@ -2309,6 +2330,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 row_h: LEGEND_ROW_H,
                 widths: &entry_widths,
                 right_inset,
+                side_y_shift: powerpoint_right_legend_y_shift(chart),
             },
         );
         let _ = writeln!(
@@ -2627,6 +2649,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
                 row_h: LINE_LEGEND_ROW_H,
                 widths: &entry_widths,
                 right_inset: None,
+                side_y_shift: 0.0,
             },
         );
         // The key is a sample of the plotted line: the same stroke, carrying the
@@ -2897,6 +2920,7 @@ fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64
                     row_h: RADAR_LEGEND_ROW_H,
                     widths: &entry_widths,
                     right_inset: None,
+                    side_y_shift: 0.0,
                 },
             );
             let key_mid: f64 = SERIES_MARKER_SIZE_PT / 2.0;
@@ -3054,6 +3078,7 @@ fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, 
                 row_h: PIE_LEGEND_ROW_H,
                 widths: &entry_widths,
                 right_inset: None,
+                side_y_shift: 0.0,
             },
         );
         let _ = writeln!(
