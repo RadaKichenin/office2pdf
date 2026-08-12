@@ -892,6 +892,73 @@ const CHART_COLUMN_TOP_PAD_EM: f64 = 0.607;
 /// 147.86pt and the chart leaves another 3.23pt before the frame edge.
 const CHART_ROTATED_LABEL_EDGE_PAD_PT: f64 = 3.225;
 
+/// Native Office-face advances used by the PowerPoint chart calibrations.
+///
+/// Plot chrome is part of the source document's layout, so it must not move
+/// with the substitute a runner happens to have installed. These are the
+/// regular-face `hmtx` advances, in the fonts' shared 2048-unit em, for Basic
+/// Latin U+0020..=U+007E. They were extracted with
+/// `uv run --with fonttools scripts/extract_font_advances.py FONT`:
+///
+/// - Calibri Regular `Version 6.20;O365`, PowerPoint 16.112's bundled
+///   `/Applications/Microsoft PowerPoint.app/Contents/Resources/DFonts/Calibri.ttf`,
+///   SHA-256
+///   `ea801e1f869b55464339058b1d4263d07cc074a18e20aa3ee1d07901423dee53`;
+/// - Avenir Next LT Pro Regular `Version 3.04;O365`, the Office cloud face
+///   resolved by the #841 deck at
+///   `$HOME/Library/Group Containers/UBF8T346G9.Office/FontCache/4/CloudFonts/Avenir Next LT Pro/26301410506.ttf`,
+///   SHA-256
+///   `0924698340c40827289297ad9b9c5d36d3f91d2e7a7e75e76ae4b8d82c46616a`.
+///
+/// The arrays below are the command's `advances` output. The renderer still
+/// measures every other family normally.
+const CALIBRI_CHART_ADVANCE: [u16; 95] = [
+    463, 667, 821, 1020, 1038, 1464, 1397, 452, 621, 621, 1020, 1020, 511, 627, 517, 791, 1038,
+    1038, 1038, 1038, 1038, 1038, 1038, 1038, 1038, 1038, 548, 548, 1020, 1020, 1020, 949, 1831,
+    1185, 1114, 1092, 1260, 1000, 941, 1292, 1276, 516, 653, 1064, 861, 1751, 1322, 1356, 1058,
+    1378, 1112, 941, 998, 1314, 1162, 1822, 1063, 998, 959, 628, 791, 628, 1020, 1020, 596, 981,
+    1076, 866, 1076, 1019, 625, 964, 1076, 470, 490, 931, 470, 1636, 1076, 1080, 1076, 1076, 714,
+    801, 686, 1076, 925, 1464, 887, 927, 809, 644, 943, 644, 1020,
+];
+
+const AVENIR_NEXT_LT_PRO_CHART_ADVANCE: [u16; 95] = [
+    512, 672, 829, 1139, 1188, 1706, 1442, 532, 614, 614, 909, 1364, 532, 655, 532, 758, 1188,
+    1188, 1188, 1188, 1188, 1188, 1188, 1188, 1188, 1188, 614, 614, 1364, 1364, 1364, 987, 1638,
+    1434, 1303, 1475, 1550, 1212, 1151, 1595, 1470, 532, 1008, 1286, 1044, 1815, 1565, 1741, 1188,
+    1726, 1227, 1155, 1167, 1454, 1276, 1991, 1329, 1233, 1171, 614, 758, 614, 1364, 1024, 492,
+    1094, 1305, 1024, 1305, 1171, 604, 1294, 1194, 512, 514, 1044, 516, 1808, 1190, 1251, 1300,
+    1300, 737, 909, 649, 1190, 999, 1528, 991, 999, 905, 614, 455, 614, 1364,
+];
+
+/// Advance one chart string in the source Office face where a native metric is
+/// part of the calibration, otherwise in the face rendering resolves locally.
+fn chart_text_advance_em(family: &str, bold: bool, text: &str) -> Option<f64> {
+    let normalized: String = family
+        .chars()
+        .filter(|character| character.is_ascii_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect();
+    let native: Option<&[u16; 95]> = if !bold {
+        match normalized.as_str() {
+            "calibri" => Some(&CALIBRI_CHART_ADVANCE),
+            "avenirnextltpro" => Some(&AVENIR_NEXT_LT_PRO_CHART_ADVANCE),
+            _ => None,
+        }
+    } else {
+        None
+    };
+    if let Some(advances) = native {
+        let units: Option<u32> = text.chars().try_fold(0_u32, |sum, character| {
+            let index: usize = (character as u32).checked_sub(0x20)?.try_into().ok()?;
+            advances.get(index).map(|advance| sum + u32::from(*advance))
+        });
+        if let Some(units) = units {
+            return Some(f64::from(units) / 2048.0);
+        }
+    }
+    crate::render::pdf::text_advance_em(family, bold, text)
+}
+
 /// Space a legend reserves around the plot, and the direction its entries run.
 ///
 /// A legend on an edge runs along that edge, so a bottom or top one lays its
@@ -1118,7 +1185,7 @@ pub(super) fn chart_category_gutter_pt(chart: &Chart) -> f64 {
     let widest_em: f64 = chart
         .categories
         .iter()
-        .filter_map(|category| crate::render::pdf::text_advance_em(family, bold, category))
+        .filter_map(|category| chart_text_advance_em(family, bold, category))
         .fold(0.0_f64, f64::max);
     if widest_em <= 0.0 {
         return LABEL_W + GAP;
@@ -1163,7 +1230,7 @@ fn chart_category_label_widest_pt(chart: &Chart) -> Option<f64> {
     let widest_em: f64 = chart
         .categories
         .iter()
-        .filter_map(|category| crate::render::pdf::text_advance_em(family, bold, category))
+        .filter_map(|category| chart_text_advance_em(family, bold, category))
         .fold(0.0_f64, f64::max);
     (widest_em > 0.0).then_some(widest_em * size_pt)
 }
@@ -1430,8 +1497,8 @@ fn legend_entry_widths(chart: &Chart, key_len_pt: f64, names: &[String]) -> Vec<
     names
         .iter()
         .map(|name| {
-            let label: f64 = crate::render::pdf::text_advance_em(family, false, name)
-                .map_or(0.0, |advance| advance * size_pt);
+            let label: f64 =
+                chart_text_advance_em(family, false, name).map_or(0.0, |advance| advance * size_pt);
             // A gutter after the label keeps neighbouring entries apart rather
             // than butting the next key against the last glyph.
             (key_len_pt + LEGEND_KEY_LABEL_GAP_PT + label + GAP).max(LEGEND_ENTRY_W)
@@ -1469,7 +1536,7 @@ fn axis_legend_box(chart: &Chart) -> LegendBox {
                     .clone()
                     .unwrap_or_else(|| format!("Series {}", index + 1))
             })
-            .filter_map(|name| crate::render::pdf::text_advance_em(family, false, &name))
+            .filter_map(|name| chart_text_advance_em(family, false, &name))
             .fold(0.0_f64, f64::max)
             * size_pt;
         let measured = widest_label + CHART_LEGEND_BASE_PAD_PT + CHART_LEGEND_PAD_EM * size_pt;
@@ -3120,7 +3187,23 @@ fn generate_smartart_steps(out: &mut String, smartart: &SmartArt) {
 
 #[cfg(test)]
 mod chart_value_label_tests {
-    use super::{AXIS_HEADROOM_DIVISOR, chart_value_label, nice_axis};
+    use super::{AXIS_HEADROOM_DIVISOR, chart_text_advance_em, chart_value_label, nice_axis};
+
+    #[test]
+    fn source_office_chart_metrics_are_environment_independent() {
+        assert_eq!(
+            chart_text_advance_em("Calibri", false, "Category 1"),
+            Some(8964.0 / 2048.0)
+        );
+        assert_eq!(
+            chart_text_advance_em("Avenir Next LT Pro", false, "Product Alpha"),
+            Some(13394.0 / 2048.0)
+        );
+        assert_eq!(
+            chart_text_advance_em("AvenirNextLTPro", false, "~"),
+            Some(1364.0 / 2048.0)
+        );
+    }
 
     #[test]
     fn formats_without_float_noise() {
