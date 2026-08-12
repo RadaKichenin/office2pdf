@@ -368,6 +368,45 @@ fn fixed_raster_image_does_not_round_below_the_exact_bottom_edge() {
     );
 }
 
+#[test]
+fn rotated_preset_keeps_explicit_vertical_body_reading_direction() {
+    use lopdf::{Object, content::Content};
+
+    let fixture = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/pptx/libreoffice/shape-text-rotate.pptx");
+    let rendered = office2pdf::convert(&fixture).expect("fixture should render");
+    let parsed = lopdf::Document::load_mem(&rendered.pdf).expect("rendered PDF should parse");
+    let page_id = parsed.get_pages()[&1];
+    let content = Content::decode(
+        &parsed
+            .get_page_content(page_id)
+            .expect("page content should load"),
+    )
+    .expect("page content should decode");
+    let number = |object: &Object| match object {
+        Object::Integer(value) => *value as f64,
+        Object::Real(value) => f64::from(*value),
+        other => panic!("expected PDF number, got {other:?}"),
+    };
+    let text_matrix = content
+        .operations
+        .windows(8)
+        .find_map(|operations| {
+            (operations[0].operator == "cm"
+                && operations[1].operator == "cs"
+                && operations[2].operator == "scn"
+                && operations[3].operator == "BT"
+                && operations[5].operator == "Tf")
+                .then_some(&operations[0].operands)
+        })
+        .expect("vertical text should have a graphics transform");
+
+    assert!(
+        number(&text_matrix[1]) > 0.99 && number(&text_matrix[2]) > 0.99,
+        "vert text must keep PowerPoint's bottom-to-top matrix even though its preset shape is rotated: {text_matrix:?}"
+    );
+}
+
 // --- PDF merge/split CLI tests ---
 
 fn make_test_pdf(num_pages: u32) -> Vec<u8> {

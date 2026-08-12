@@ -1140,7 +1140,15 @@ fn finalize_shape(
                     no_wrap: text_box.no_wrap,
                     auto_fit: text_box.auto_fit,
                     text_rotation_deg: text_box.text_rotation_deg,
-                    shape_rotation_deg: shape.rotation_deg,
+                    // A preset's geometry rotates independently from an
+                    // explicit vertical text body. Composing the same xfrm
+                    // rotation into that transparent overlay reverses the
+                    // vertical reading direction (issue #992).
+                    shape_rotation_deg: if text_box.text_rotation_deg.is_some() {
+                        None
+                    } else {
+                        shape.rotation_deg
+                    },
                 }),
             });
         } else {
