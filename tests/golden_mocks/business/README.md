@@ -36,7 +36,8 @@ tests/golden_mocks/business/
 │   ├── docx/    # Native Microsoft Word PDF exports
 │   ├── pptx/    # Native Microsoft PowerPoint PDF exports
 │   └── xlsx/    # Native Microsoft Excel PDF exports
-├── baselines/   # Conversion status and page-count baseline by tested commit
+├── baselines/   # layout.json: per-page layout deviation baseline (regenerated);
+│                # main-3e788d0.json: historical hand-recorded conversion status
 └── audits/      # Historical per-run visual metrics and review snapshots
 ```
 
@@ -128,3 +129,38 @@ python3 scripts/validate_business_golden_mocks.py
 ```
 
 The `Business Golden Contract` CI job runs both checks on every push and pull request.
+
+## Layout deviation baseline
+
+`baselines/layout.json` stores the `compare_layout.py` deviation vector for
+every page of every case (matched/missing/extra lines, baseline dy statistics,
+line-width drift, pitch deltas, wrap and reflow counts, large instance shifts,
+and the rect census), measured against the native GT with the per-format noise
+floor (0.12pt Word/PowerPoint, 0.5pt Excel). Regenerate it with a local build:
+
+```sh
+cargo build -p office2pdf-cli
+python3 scripts/generate_layout_baselines.py --office2pdf target/debug/office2pdf
+```
+
+The producer refuses to record anything when a GT fails the
+`check_gt_integrity.py` gate or when a trace parses to zero pages — both
+states would bake a silently wrong baseline in.
+
+A PR that changes conversion output regenerates the file; the git diff is the
+quantitative before/after. To classify the change under the measurement-noise
+tolerance policy (±0.24pt for Word/PowerPoint cases, ±1.0pt for Excel cases,
+±0.5% width, counts exact):
+
+```sh
+python3 scripts/generate_layout_baselines.py \
+  --office2pdf target/debug/office2pdf --output /tmp/fresh-layout.json
+python3 scripts/check_layout_baselines.py --fresh /tmp/fresh-layout.json
+```
+
+`check_layout_baselines.py` exits nonzero only on a regression, and its report
+names every case, page, and metric that moved materially in either direction.
+CI validates the baseline structurally (schema, case set, page coverage
+against the manifest); the numeric comparison needs a local converter build,
+so it is a review-time tool, not a CI gate. `main-3e788d0.json` is the
+historical hand-recorded predecessor, kept for provenance.
