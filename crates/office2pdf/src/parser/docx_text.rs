@@ -45,7 +45,11 @@ pub(super) fn extract_paragraph_style(prop: &docx_rs::ParagraphProperty) -> Para
 
     ParagraphStyle {
         alignment,
-        word_wrap: prop.word_wrap,
+        // Not read from `prop`: the published docx-rs does not parse
+        // `w:wordWrap`, and reading the patched fork's field made the crate
+        // unpublishable (issue #1041). The raw-XML word-wrap context supplies
+        // the paragraph value; styles take theirs from `scan_style_word_wrap`.
+        word_wrap: None,
         indent_left,
         indent_right,
         indent_first_line,
