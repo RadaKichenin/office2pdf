@@ -566,6 +566,157 @@ fn test_a_master_fill_reaches_a_slide_through_a_silent_layout() {
     );
 }
 
+// ── Layout placeholder shape geometry ────────────────────────────────
+
+/// Like `make_filled_placeholder_sp`, but the shape body carries the given
+/// geometry XML (`<a:custGeom>…</a:custGeom>` or `<a:prstGeom …/>`) between
+/// the `<a:xfrm>` and the fill — the shape of issue #1029's template panels.
+fn make_shaped_filled_placeholder_sp(
+    ph_attrs: &str,
+    (x, y, cx, cy): (i64, i64, i64, i64),
+    geometry_xml: &str,
+    fill_hex: &str,
+    text: &str,
+) -> String {
+    format!(
+        r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="Placeholder"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph {ph_attrs}/></p:nvPr></p:nvSpPr><p:spPr><a:xfrm><a:off x="{x}" y="{y}"/><a:ext cx="{cx}" cy="{cy}"/></a:xfrm>{geometry_xml}<a:solidFill><a:srgbClr val="{fill_hex}"/></a:solidFill></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US"/><a:t>{text}</a:t></a:r></a:p></p:txBody></p:sp>"#
+    )
+}
+
+/// A right-triangle `<a:custGeom>`: distinctive enough that inheriting it is
+/// unmistakable from a rectangle fallback.
+const TRIANGLE_CUSTGEOM: &str = r#"<a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="l" t="t" r="r" b="b"/><a:pathLst><a:path w="100" h="100"><a:moveTo><a:pt x="0" y="100"/></a:moveTo><a:lnTo><a:pt x="50" y="0"/></a:lnTo><a:lnTo><a:pt x="100" y="100"/></a:lnTo><a:close/></a:path></a:pathLst></a:custGeom>"#;
+
+fn shape_kind_of_fill(page: &FixedPage, fill: Color) -> &ShapeKind {
+    match &element_with_fill(page, fill).kind {
+        FixedElementKind::Shape(shape) => &shape.kind,
+        other => panic!("the fill must sit on a shape element, got {other:?}"),
+    }
+}
+
+fn assert_is_the_triangle(kind: &ShapeKind) {
+    let ShapeKind::Path { subpaths } = kind else {
+        panic!("the inherited geometry must flatten to a path, got {kind:?}");
+    };
+    assert_eq!(subpaths.len(), 1, "one <a:path> yields one subpath");
+    let expected: [(f64, f64); 3] = [(0.0, 1.0), (0.5, 0.0), (1.0, 1.0)];
+    let vertices: &Vec<(f64, f64)> = &subpaths[0];
+    for want in expected {
+        assert!(
+            vertices
+                .iter()
+                .any(|(x, y)| (x - want.0).abs() < 1e-6 && (y - want.1).abs() < 1e-6),
+            "vertex {want:?} missing from {vertices:?}"
+        );
+    }
+}
+
+/// Issue #1029: the layout's title band is not a rectangle unless it says so.
+/// The deck's blue panels are `<a:custGeom>` paths on the layout placeholder;
+/// painting the inherited fill into the bounding box squared off every curved
+/// corner. The path must inherit along the same chain as the fill.
+#[test]
+fn test_layout_placeholder_custom_geometry_shapes_the_inherited_fill() {
+    let slide = make_slide_with_shapes(&[make_placeholder_sp(r#"type="title""#, None, "Hello")]);
+    let layout = make_layout_with_shapes(&[make_shaped_filled_placeholder_sp(
+        r#"type="title""#,
+        (6_123_207, 0, 6_067_453, 6_857_999),
+        TRIANGLE_CUSTGEOM,
+        "32B5DF",
+        "Click to edit title",
+    )]);
+    let master = make_master_with_shapes(&[]);
+    let data = build_test_pptx_with_layout_master(SLIDE_CX, SLIDE_CY, &slide, &layout, &master);
+
+    let doc = parse_document(&data);
+    let page = first_fixed_page(&doc);
+
+    assert_is_the_triangle(shape_kind_of_fill(page, Color::new(0x32, 0xB5, 0xDF)));
+    assert!(page_text(page).contains("Hello"));
+    assert!(!page_text(page).contains("Click to edit title"));
+}
+
+/// A slide that states its own geometry has answered; the layout's path must
+/// not override it.
+#[test]
+fn test_a_slide_declared_geometry_overrides_the_layout_path() {
+    let slide = make_slide_with_shapes(&[make_shaped_filled_placeholder_sp(
+        r#"type="title""#,
+        (0, 0, 2_000_000, 1_000_000),
+        r#"<a:prstGeom prst="ellipse"><a:avLst/></a:prstGeom>"#,
+        "CD41B0",
+        "Hello",
+    )]);
+    let layout = make_layout_with_shapes(&[make_shaped_filled_placeholder_sp(
+        r#"type="title""#,
+        (6_123_207, 0, 6_067_453, 6_857_999),
+        TRIANGLE_CUSTGEOM,
+        "32B5DF",
+        "Click to edit title",
+    )]);
+    let master = make_master_with_shapes(&[]);
+    let data = build_test_pptx_with_layout_master(SLIDE_CX, SLIDE_CY, &slide, &layout, &master);
+
+    let doc = parse_document(&data);
+    let page = first_fixed_page(&doc);
+
+    assert!(
+        matches!(
+            shape_kind_of_fill(page, Color::new(0xCD, 0x41, 0xB0)),
+            ShapeKind::Ellipse
+        ),
+        "the slide's own preset must win"
+    );
+}
+
+/// A layout placeholder can also state a preset: a `roundRect` band must
+/// inherit as a rounded rectangle, not fall back to the bounding box.
+#[test]
+fn test_a_layout_preset_geometry_inherits_like_a_custom_one() {
+    let slide = make_slide_with_shapes(&[make_placeholder_sp(r#"type="title""#, None, "Hello")]);
+    let layout = make_layout_with_shapes(&[make_shaped_filled_placeholder_sp(
+        r#"type="title""#,
+        (0, 0, 2_000_000, 1_000_000),
+        r#"<a:prstGeom prst="roundRect"><a:avLst/></a:prstGeom>"#,
+        "32B5DF",
+        "Click to edit title",
+    )]);
+    let master = make_master_with_shapes(&[]);
+    let data = build_test_pptx_with_layout_master(SLIDE_CX, SLIDE_CY, &slide, &layout, &master);
+
+    let doc = parse_document(&data);
+    let page = first_fixed_page(&doc);
+
+    assert!(
+        matches!(
+            shape_kind_of_fill(page, Color::new(0x32, 0xB5, 0xDF)),
+            ShapeKind::RoundedRectangle { .. }
+        ),
+        "a layout roundRect must inherit as a rounded rectangle"
+    );
+}
+
+/// A silent layout chains into the master for shape geometry exactly as it
+/// does for fill.
+#[test]
+fn test_a_master_shape_geometry_reaches_a_slide_through_a_silent_layout() {
+    let slide = make_slide_with_shapes(&[make_placeholder_sp(r#"type="title""#, None, "Hello")]);
+    let layout = make_layout_with_shapes(&[make_placeholder_sp(r#"type="title""#, None, "Prompt")]);
+    let master = make_master_with_shapes(&[make_shaped_filled_placeholder_sp(
+        r#"type="title""#,
+        (6_123_207, 0, 6_067_453, 6_857_999),
+        TRIANGLE_CUSTGEOM,
+        "32B5DF",
+        "Master prompt",
+    )]);
+    let data = build_test_pptx_with_layout_master(SLIDE_CX, SLIDE_CY, &slide, &layout, &master);
+
+    let doc = parse_document(&data);
+    let page = first_fixed_page(&doc);
+
+    assert_is_the_triangle(shape_kind_of_fill(page, Color::new(0x32, 0xB5, 0xDF)));
+}
+
 // ── Slide → layout `<a:bodyPr>` inheritance ──────────────────────────
 
 /// A placeholder `<p:sp>` whose `<a:bodyPr>` carries the given attributes.

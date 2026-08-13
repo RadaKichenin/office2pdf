@@ -16,6 +16,11 @@
 //! `<p:spPr>`, then the master's. An explicit `<a:noFill/>` is an answer and
 //! ends the chain, and a fill nested in `<a:ln>` is the outline's, not the
 //! shape's.
+//!
+//! Shape geometry follows it too: a slide placeholder with no
+//! `<a:custGeom>`/`<a:prstGeom>` of its own takes the layout placeholder's
+//! path or preset, then the master's, so the inherited fill paints the
+//! declared path rather than the bounding rectangle (issue #1029).
 
 use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
@@ -65,6 +70,33 @@ struct LayerPlaceholder {
     /// is an answer, so it ends the inheritance chain rather than letting the
     /// master's fill through.
     explicit_no_fill: bool,
+    /// `<a:custGeom>` on the placeholder's `<p:spPr>`, flattened to subpaths
+    /// in the shape's normalized box. Inheriting the fill without the path it
+    /// was drawn for painted a template's curved panel as its bounding
+    /// rectangle (issue #1029).
+    shape_geometry: Vec<Vec<(f64, f64)>>,
+    /// `<a:prstGeom prst>` on the placeholder's `<p:spPr>`. A preset band
+    /// (e.g. `roundRect`) inherits along the same chain as a custom path.
+    prst_geom: Option<String>,
+}
+
+/// The shape geometry a slide placeholder inherits from its layout or master
+/// copy: flattened `<a:custGeom>` subpaths, or a preset name, or both empty
+/// when neither layer stated one.
+pub(super) struct PlaceholderShapeGeometry<'a> {
+    pub(super) subpaths: &'a [Vec<(f64, f64)>],
+    pub(super) preset: Option<&'a str>,
+}
+
+impl PlaceholderShapeGeometry<'_> {
+    fn of(entry: &LayerPlaceholder) -> Option<PlaceholderShapeGeometry<'_>> {
+        (!entry.shape_geometry.is_empty() || entry.prst_geom.is_some()).then_some(
+            PlaceholderShapeGeometry {
+                subpaths: &entry.shape_geometry,
+                preset: entry.prst_geom.as_deref(),
+            },
+        )
+    }
 }
 
 /// A placeholder's inherited solid fill: the resolved colour and the `a:alpha`
@@ -193,6 +225,23 @@ impl PlaceholderGeometryMap {
             .filter(|master| !master.explicit_no_fill)
             .and_then(|m| m.fill)
     }
+
+    /// The shape geometry a slide placeholder inherits, layout first, then
+    /// master — the same chain as the fill it is painted with (issue #1029).
+    pub(super) fn lookup_shape_geometry(
+        &self,
+        ph_type: Option<&str>,
+        ph_idx: Option<&str>,
+    ) -> Option<PlaceholderShapeGeometry<'_>> {
+        if let Some(entry) = find_in_layer(&self.layout, ph_type, ph_idx) {
+            if let Some(geometry) = PlaceholderShapeGeometry::of(entry) {
+                return Some(geometry);
+            }
+            return find_in_master(&self.master, entry.ph_type.as_deref())
+                .and_then(PlaceholderShapeGeometry::of);
+        }
+        find_in_master(&self.master, ph_type).and_then(PlaceholderShapeGeometry::of)
+    }
 }
 
 /// `title` and `ctrTitle` are interchangeable for matching purposes.
@@ -285,6 +334,8 @@ fn scan_layer_placeholders(
         in_solid_fill: bool,
         fill: Option<PlaceholderFill>,
         explicit_no_fill: bool,
+        shape_geometry: Vec<Vec<(f64, f64)>>,
+        prst_geom: Option<String>,
         text_defaults: Option<PptxTextBodyStyleDefaults>,
         body_props: PptxBodyProps,
         has_body_props: bool,
@@ -349,6 +400,13 @@ fn scan_layer_placeholders(
                     state.explicit_no_fill = true;
                 }
             }
+            b"prstGeom" => {
+                if let Some(state) = current.as_mut()
+                    && state.in_sp_pr
+                {
+                    state.prst_geom = get_attr_str(e, b"prst");
+                }
+            }
             b"off" => {
                 if let Some(state) = current.as_mut()
                     && state.in_xfrm
@@ -380,6 +438,14 @@ fn scan_layer_placeholders(
                         parse_pptx_list_style(&mut reader, theme, color_map);
                     if let Some(state) = current.as_mut() {
                         state.text_defaults = Some(defaults);
+                    }
+                } else if e.local_name().as_ref() == b"custGeom"
+                    && current.as_ref().is_some_and(|state| state.in_sp_pr)
+                {
+                    let subpaths: Vec<Vec<(f64, f64)>> =
+                        super::custom_geometry::parse_custom_geometry(&mut reader);
+                    if let Some(state) = current.as_mut() {
+                        state.shape_geometry = subpaths;
                     }
                 } else if current
                     .as_ref()
@@ -445,6 +511,8 @@ fn scan_layer_placeholders(
                             body_props: state.body_props,
                             fill: state.fill,
                             explicit_no_fill: state.explicit_no_fill,
+                            shape_geometry: state.shape_geometry,
+                            prst_geom: state.prst_geom,
                         });
                     }
                 }

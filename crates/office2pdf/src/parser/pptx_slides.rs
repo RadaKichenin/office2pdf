@@ -2856,6 +2856,36 @@ impl<'a> SlideXmlParser<'a> {
                             self.shape.opacity = inherited.opacity;
                         }
                     }
+                    // The band inherited above is not a rectangle unless the
+                    // layout says so: a template panel's `<a:custGeom>` (or
+                    // preset) travels the same chain as its fill, so the
+                    // colour paints the declared path rather than the
+                    // placeholder's bounding box (issue #1029). Gated on the
+                    // shape painting something, so a text-only placeholder
+                    // does not grow an invisible background element.
+                    let paints_something: bool = self.shape.fill.is_some()
+                        || self.shape.gradient_fill.is_some()
+                        || self.shape.pattern_fill.is_some()
+                        || (!self.shape.explicit_no_fill && self.shape.style_fill_color.is_some())
+                        || (!self.shape.explicit_no_line
+                            && (self.shape.ln_color.is_some()
+                                || self.shape.style_ln_color.is_some()));
+                    if self.shape.has_placeholder
+                        && self.shape.prst_geom.is_none()
+                        && self.shape.custom_geometry.is_empty()
+                        && paints_something
+                        && let Some(map) = self.placeholder_geometry
+                        && let Some(inherited) = map.lookup_shape_geometry(
+                            self.shape.ph_type.as_deref(),
+                            self.shape.ph_idx.as_deref(),
+                        )
+                    {
+                        self.shape.custom_geometry = inherited.subpaths.to_vec();
+                        // Mirror the slide-side custGeom convention: a preset
+                        // name when the layer stated one, otherwise the
+                        // rectangle fallback that guards a degenerate path.
+                        self.shape.prst_geom = Some(inherited.preset.unwrap_or("rect").to_string());
+                    }
                     if !(self.skip_placeholders && self.shape.has_placeholder) {
                         self.elements.extend(finalize_shape(
                             &mut self.shape,
