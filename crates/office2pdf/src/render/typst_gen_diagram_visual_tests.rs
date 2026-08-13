@@ -6,7 +6,7 @@ use crate::render::typst_gen::diagrams::{
     LEGEND_KEY_LEN_PT, PPTX_LEGEND_KEY_EM, PPTX_LEGEND_KEY_LABEL_GAP_EM,
     PPTX_LEGEND_KEY_LABEL_GAP_PT, ROW, SERIES_LINE_PT, TICK_GAP, axis_plot_rect,
     chart_area_title_h, chart_category_band_pt, chart_category_gutter_pt,
-    chart_category_rotated_label_y, chart_tick_band_pt,
+    chart_category_rotated_label_x, chart_category_rotated_label_y, chart_tick_band_pt,
 };
 
 #[test]
@@ -4295,6 +4295,39 @@ fn a_non_powerpoint_rotated_category_label_keeps_its_existing_seat() {
     chart.text_font_family = Some("Avenir Next LT Pro".to_string());
 
     assert_eq!(chart_category_rotated_label_y(&chart, 200.0), 202.0);
+}
+
+/// Issue #1022: with the vertical seat corrected (#1014), all four rotated
+/// label runs on the #841 deck's slide 14 still land 3.32–3.35pt right of the
+/// fresh native export at 11.97pt while their baselines agree — a uniform
+/// 0.279em inset between the band centre and the rotated trailing end.
+#[test]
+fn a_powerpoint_rotated_category_label_insets_its_trailing_anchor() {
+    let mut chart = crowded_column_chart();
+    chart.host = crate::ir::ChartHost::Presentation;
+    chart.text_style.size_pt = Some(11.97);
+    chart.category_axis_text_style.size_pt = Some(11.97);
+    chart.text_font_family = Some("Avenir Next LT Pro".to_string());
+
+    let centre = 300.0;
+    let label_box_w = 80.0;
+    let expected = centre - label_box_w - 0.279 * 11.97;
+    let actual = chart_category_rotated_label_x(&chart, centre, label_box_w);
+    assert!((actual - expected).abs() < 0.001, "{actual}");
+}
+
+#[test]
+fn a_non_powerpoint_rotated_category_label_keeps_its_trailing_anchor() {
+    let mut chart = crowded_column_chart();
+    chart.host = crate::ir::ChartHost::Spreadsheet;
+    chart.text_style.size_pt = Some(11.97);
+    chart.category_axis_text_style.size_pt = Some(11.97);
+    chart.text_font_family = Some("Avenir Next LT Pro".to_string());
+
+    assert_eq!(
+        chart_category_rotated_label_x(&chart, 300.0, 80.0),
+        300.0 - 80.0
+    );
 }
 
 #[test]

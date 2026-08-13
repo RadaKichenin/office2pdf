@@ -1028,9 +1028,20 @@ const CHART_ROTATED_LABEL_EDGE_PAD_PT: f64 = 3.225;
 /// On slide 14 of the #841 deck the resulting four glyph baselines are all
 /// 8.12..8.98pt low at 11.97pt. Advancing the rotated pivot by 0.74em restores
 /// their common native top edge without changing the plot or horizontal
-/// anchors (#1014). This sign follows the post-rotation PDF transform: a larger
+/// anchors (#1014; the horizontal anchor gained its own inset later, #1022).
+/// This sign follows the post-rotation PDF transform: a larger
 /// Typst `dy` moves these -45-degree glyph baselines upward in PDF coordinates.
 const PPTX_ROTATED_CATEGORY_LABEL_Y_SHIFT_EM: f64 = 0.74;
+
+/// Horizontal inset PowerPoint keeps between a band's centre and the rotated
+/// label's trailing end.
+///
+/// With the vertical seat corrected (#1014), all four rotated label runs on
+/// slide 14 of the #841 deck still land 3.32–3.35pt right of the fresh native
+/// export at 11.97pt while their baselines agree to ±0.13pt — a uniform
+/// horizontal displacement of the pivot itself, not a slant-axis offset,
+/// which would move the baselines with it (#1022).
+const PPTX_ROTATED_CATEGORY_LABEL_X_INSET_EM: f64 = 0.279;
 
 /// Native Office-face advances used by the PowerPoint chart calibrations.
 ///
@@ -1557,6 +1568,19 @@ pub(super) fn chart_category_rotated_label_y(chart: &Chart, axis_y: f64) -> f64 
     } else {
         axis_y + 2.0
     }
+}
+
+/// Left coordinate of a rotated category-label box whose trailing end pins to
+/// its band's centre — less the horizontal inset a PowerPoint chart keeps
+/// between the centre and the trailing end (#1022).
+pub(super) fn chart_category_rotated_label_x(chart: &Chart, centre: f64, label_box_w: f64) -> f64 {
+    let inset: f64 = if chart.host == crate::ir::ChartHost::Presentation {
+        PPTX_ROTATED_CATEGORY_LABEL_X_INSET_EM
+            * chart_axis_text_pt(chart, chart.category_axis_text_style)
+    } else {
+        0.0
+    };
+    centre - label_box_w - inset
 }
 
 /// Gutters the category labels and the value tick labels take inside the box,
@@ -2304,7 +2328,8 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
             );
         } else if category_labels_rotated {
             // Every label hangs from the axis by its trailing end, pinned at
-            // its band's centre, and slants away down-left. Rotating about
+            // its band's centre (less the PowerPoint-only inset of #1022),
+            // and slants away down-left. Rotating about
             // `top + right` is what puts all of them on one top edge, which is
             // how the reference draws them (issue #884). The box is the widest
             // label's width for every label so that right-aligning inside it
@@ -2315,7 +2340,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
             let _ = writeln!(
                 out,
                 "#place(top + left, dx: {}pt, dy: {}pt, rotate(-{}deg, origin: top + right, box(width: {}pt)[#align(right)[#text(size: {}pt{})[{}]]]))",
-                format_f64(centre - label_box_w),
+                format_f64(chart_category_rotated_label_x(chart, centre, label_box_w)),
                 format_f64(chart_category_rotated_label_y(chart, plot_y + plot_h)),
                 format_f64(CATEGORY_LABEL_ROTATION_DEG),
                 format_f64(label_box_w),
