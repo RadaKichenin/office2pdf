@@ -1639,6 +1639,25 @@ fn data_label_line_h(chart: &Chart, labels: &crate::ir::DataLabels) -> f64 {
     chart_label_box_h(data_label_text_pt(chart, labels))
 }
 
+/// Upward seat correction for a PowerPoint column data label.
+///
+/// With the axis, plot, and tick seats already calibrated, the four column
+/// data labels on slide 14 of the #841 deck still sit 1.32–1.43pt below the
+/// fresh native export's baselines while their x agrees to 0.01pt and the
+/// value ticks agree to 0.23pt — the deviation is the label's own seat, a
+/// uniform 0.114em at the label size (#1025).
+pub(super) fn pptx_column_data_label_seat_pt(chart: &Chart, labels: &crate::ir::DataLabels) -> f64 {
+    if chart.host == crate::ir::ChartHost::Presentation {
+        PPTX_COLUMN_DATA_LABEL_SEAT_EM * data_label_text_pt(chart, labels)
+    } else {
+        0.0
+    }
+}
+
+/// See [`pptx_column_data_label_seat_pt`]: mean measured offset 1.365pt at
+/// 11.97pt.
+const PPTX_COLUMN_DATA_LABEL_SEAT_EM: f64 = 0.114;
+
 /// The size a data label is set at: its own `<c:dLbls><c:txPr>`, then the
 /// chart space's `c:txPr`, then [`CHART_DATA_LABEL_DEFAULT_PT`].
 ///
@@ -2291,7 +2310,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                         DataLabelPosition::OutsideEnd => bar_top - label_line_h - LABEL_OUTSIDE_GAP,
                         DataLabelPosition::InsideEnd => bar_top,
                         DataLabelPosition::InsideBase => bar_bottom - label_line_h,
-                    };
+                    } - pptx_column_data_label_seat_pt(chart, &s.data_labels);
                     (plot_x + group_start + offset, y, bar_thickness)
                 };
                 let _ = writeln!(
