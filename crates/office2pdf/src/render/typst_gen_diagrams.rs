@@ -1424,6 +1424,87 @@ fn chart_category_label_widest_pt(chart: &Chart) -> Option<f64> {
     (widest_em > 0.0).then_some(widest_em * size_pt)
 }
 
+/// Advance of one category label after DrawingML tracking is applied.
+///
+/// The source face table covers Basic Latin. PowerPoint emits U+2026 at one
+/// em in the #841 native export, so account for that final glyph separately
+/// while retaining the source-face advances for the visible prefix.
+fn chart_category_label_advance_pt(chart: &Chart, label: &str) -> Option<f64> {
+    let size_pt: f64 = chart_axis_text_pt(chart, chart.category_axis_text_style);
+    let bold: bool = chart
+        .text_style
+        .resolved_bold(chart.category_axis_text_style)
+        .unwrap_or(false);
+    let family: &str = chart
+        .text_font_family
+        .as_deref()
+        .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_FAMILY);
+    let prefix = label.strip_suffix('…').unwrap_or(label);
+    let ellipsis_pt = if prefix.len() != label.len() {
+        size_pt
+    } else {
+        0.0
+    };
+    let glyphs = prefix.chars().count() + usize::from(ellipsis_pt > 0.0);
+    let tracking_pt = chart
+        .text_style
+        .resolved_letter_spacing(chart.category_axis_text_style)
+        .unwrap_or(0.0)
+        * glyphs.saturating_sub(1) as f64;
+    chart_text_advance_em(family, bold, prefix)
+        .map(|advance_em| advance_em * size_pt + ellipsis_pt + tracking_pt)
+}
+
+/// Apply `vertOverflow="ellipsis"` to a crowded rotated category label.
+///
+/// PowerPoint lays out slide 14 of #841 with a box as wide as the source-face
+/// advance before tracking. Tracking then makes only the longest label exceed
+/// that box. Its native PDF keeps complete words and paints
+/// `Konverteringsfrekvens for…`; it does not split `kundeemne`. Preserve that
+/// word-boundary behavior, falling back to characters only when the first word
+/// alone cannot fit (issue #1012).
+fn chart_category_label_text(chart: &Chart, label: &str, box_w: f64) -> String {
+    if !chart.category_axis_text_style.ellipsis_overflow
+        || chart_category_label_advance_pt(chart, label).is_none_or(|width| width <= box_w)
+    {
+        return label.to_string();
+    }
+
+    let mut best = String::new();
+    let mut prefix = String::new();
+    for word in label.split_whitespace() {
+        if !prefix.is_empty() {
+            prefix.push(' ');
+        }
+        prefix.push_str(word);
+        let candidate = format!("{prefix}…");
+        if chart_category_label_advance_pt(chart, &candidate).is_some_and(|width| width <= box_w) {
+            best = candidate;
+        } else {
+            break;
+        }
+    }
+    if !best.is_empty() {
+        return best;
+    }
+
+    let mut prefix = String::new();
+    for character in label.chars() {
+        prefix.push(character);
+        let candidate = format!("{prefix}…");
+        if chart_category_label_advance_pt(chart, &candidate).is_some_and(|width| width <= box_w) {
+            best = candidate;
+        } else {
+            break;
+        }
+    }
+    if best.is_empty() {
+        "…".to_string()
+    } else {
+        best
+    }
+}
+
 /// Whether the category labels have to slant to fit the bands they own.
 ///
 /// Only a column plot asks: a bar chart's categories run down the left edge,
@@ -2229,6 +2310,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
             // label's width for every label so that right-aligning inside it
             // lands each trailing end on the pivot.
             let label_box_w: f64 = chart_category_label_widest_pt(chart).unwrap_or(row);
+            let label: String = chart_category_label_text(chart, category, label_box_w);
             let centre: f64 = plot_x + group_start + row / 2.0;
             let _ = writeln!(
                 out,
@@ -2239,7 +2321,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 format_f64(label_box_w),
                 format_f64(chart_axis_text_pt(chart, chart.category_axis_text_style)),
                 chart_axis_text_attrs(chart, chart.category_axis_text_style),
-                escape_typst(category)
+                escape_typst(&label)
             );
         } else {
             let _ = writeln!(

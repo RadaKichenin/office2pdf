@@ -1493,6 +1493,23 @@ fn an_axis_tx_pr_overrides_the_chart_space_one() {
 }
 
 #[test]
+fn an_axis_preserves_its_ellipsis_overflow_policy() {
+    let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+        <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+            <c:chart><c:plotArea>
+                <c:barChart><c:barDir val="col"/></c:barChart>
+                <c:catAx><c:txPr><a:bodyPr vertOverflow="ellipsis"/>
+                    <a:p><a:pPr><a:defRPr sz="1197"/></a:pPr></a:p>
+                </c:txPr></c:catAx>
+            </c:plotArea></c:chart>
+        </c:chartSpace>"#;
+    let chart = parse_chart_xml(xml, &SchemeColors::empty()).expect("chart parses");
+    assert!(chart.category_axis_text_style.ellipsis_overflow);
+    assert_eq!(chart.category_axis_text_style.size_pt, Some(11.97));
+}
+
+#[test]
 fn an_axis_declaring_no_tx_pr_inherits_the_chart_space_one() {
     let chart = parse_chart_xml(
         &chart_space_with(r#"<c:txPr><a:p><a:pPr><a:defRPr sz="1800"/></a:pPr></a:p></c:txPr>"#),
