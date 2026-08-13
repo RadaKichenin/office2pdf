@@ -7,6 +7,7 @@ use crate::render::typst_gen::diagrams::{
     PPTX_LEGEND_KEY_LABEL_GAP_PT, ROW, SERIES_LINE_PT, TICK_GAP, axis_plot_rect,
     chart_area_title_h, chart_category_band_pt, chart_category_gutter_pt,
     chart_category_rotated_label_x, chart_category_rotated_label_y, chart_tick_band_pt,
+    pptx_column_data_label_seat_pt,
 };
 
 #[test]
@@ -4314,6 +4315,34 @@ fn a_powerpoint_rotated_category_label_insets_its_trailing_anchor() {
     let expected = centre - label_box_w - 0.279 * 11.97;
     let actual = chart_category_rotated_label_x(&chart, centre, label_box_w);
     assert!((actual - expected).abs() < 0.001, "{actual}");
+}
+
+/// Issue #1025: with axis, plot, and tick seats calibrated, the four column
+/// data labels on the #841 deck still sit 1.32-1.43pt below the native
+/// baselines with x agreeing to 0.01pt — a uniform 0.114em seat at the
+/// label size.
+#[test]
+fn a_powerpoint_column_data_label_takes_the_native_seat() {
+    let mut chart = crowded_column_chart();
+    chart.host = crate::ir::ChartHost::Presentation;
+    chart.text_style.size_pt = Some(11.97);
+
+    let labels = crate::ir::DataLabels::default();
+    let expected = 0.114 * 11.97;
+    let actual = pptx_column_data_label_seat_pt(&chart, &labels);
+    assert!((actual - expected).abs() < 0.001, "{actual}");
+}
+
+#[test]
+fn a_non_powerpoint_column_data_label_keeps_its_seat() {
+    let mut chart = crowded_column_chart();
+    chart.host = crate::ir::ChartHost::Spreadsheet;
+    chart.text_style.size_pt = Some(11.97);
+
+    assert_eq!(
+        pptx_column_data_label_seat_pt(&chart, &crate::ir::DataLabels::default()),
+        0.0
+    );
 }
 
 #[test]
