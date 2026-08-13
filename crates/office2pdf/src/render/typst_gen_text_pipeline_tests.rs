@@ -1065,6 +1065,81 @@ fn a_letter_spaced_run_is_not_framed() {
     );
 }
 
+/// Issue #1023: the PowerPoint advance-grid path splits words and spaces into
+/// separate Typst items, and Typst trims tracking at every item boundary, so
+/// the #841 deck's tracked footer lost ~4pt per word gap while every
+/// intra-word advance matched the native export. A tracked slide run keeps
+/// one shaped item instead, the same trade the framed-eojeol exemption makes.
+#[test]
+fn a_letter_spaced_slide_run_declines_the_advance_grid() {
+    let doc = make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![FixedElement {
+            x: 69.84,
+            y: 500.0,
+            width: 400.0,
+            height: 30.0,
+            kind: FixedElementKind::TextBox(crate::ir::TextBoxData {
+                content: vec![Block::Paragraph(Paragraph {
+                    style: ParagraphStyle::default(),
+                    runs: vec![Run {
+                        text: "CONTOSO ALLE ANSATTE".to_string(),
+                        style: TextStyle {
+                            letter_spacing: Some(2.0),
+                            ..TextStyle::default()
+                        },
+                        href: None,
+                        footnote: None,
+                    }],
+                })],
+                padding: Insets::default(),
+                vertical_align: crate::ir::TextBoxVerticalAlign::Top,
+                fill: None,
+                opacity: None,
+                stroke: None,
+                shape_kind: None,
+                no_wrap: false,
+                auto_fit: false,
+                text_rotation_deg: None,
+                shape_rotation_deg: None,
+            }),
+        }],
+    )]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        !result.contains("#o2p-pptx-word(") && !result.contains("#o2p-pptx-space()"),
+        "a tracked slide run must not be split into grid items: {result}"
+    );
+    assert!(
+        result.contains("CONTOSO ALLE ANSATTE"),
+        "the run stays one shaped item: {result}"
+    );
+}
+
+#[test]
+fn an_untracked_slide_run_still_takes_the_advance_grid() {
+    // Triangulation: the exclusion keys on the spacing, not on the page kind.
+    let doc = make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![make_text_box(
+            69.84,
+            500.0,
+            400.0,
+            30.0,
+            "CONTOSO ALLE ANSATTE",
+        )],
+    )]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains("#o2p-pptx-word([CONTOSO]"),
+        "an untracked slide run keeps the 1/8pt grid: {result}"
+    );
+}
+
 #[test]
 fn an_unspaced_eojeol_is_still_framed() {
     // Triangulation: the exclusion must key on the spacing, not on the words.

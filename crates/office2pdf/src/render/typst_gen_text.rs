@@ -2523,7 +2523,18 @@ fn write_run_segment(
         Some(units) => {
             write_synthetic_oblique_content(out, style, &source, &units, opens_line, seat_bottom_pt)
         }
-        None if powerpoint_advance_grid_is_active() && can_snap_powerpoint_run(&source) => {
+        // A tracked run keeps one shaped item: the grid path splits words and
+        // spaces into separate Typst items, and Typst trims tracking at every
+        // item boundary, so the inter-word gaps lost their tracking — the
+        // #841 deck's footer line came out 7.93pt narrow over two spaces
+        // while every intra-word advance matched (issue #1023). Tracked runs
+        // are short decorative display text, the same trade the framed-eojeol
+        // exemption makes, so forgoing 1/8pt snapping costs less than the
+        // gaps.
+        None if powerpoint_advance_grid_is_active()
+            && can_snap_powerpoint_run(&source)
+            && !style.letter_spacing.is_some_and(|spacing| spacing != 0.0) =>
+        {
             write_powerpoint_grid_run_content(out, &source, &escaped, style)
         }
         None => write_run_content(out, &escaped, style),
