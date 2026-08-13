@@ -256,6 +256,21 @@ The tool's `## Reading` section is the part to act on — it routes attention to
 the defect class (pagination, line advance, indent, fill, size) instead of
 leaving a bare number to be over-interpreted.
 
+### One-factor probe harness (`scripts/probe_harness.py`)
+
+To settle a layout rule, don't compare corpus files — patch one factor:
+`python3 scripts/probe_harness.py SPEC.json [--backend office2pdf|soffice|office]`
+takes a base fixture plus one-factor XML patches (JSON spec; see the script
+docstring), builds a variant package per patch and a no-patch re-zip control,
+exports the batch, and runs `compare_layout.py` into one table — one row per
+variant, keyed by the factor value. The control is a hard gate: if its export
+deviates from the base's, the run aborts, because repackaging (not the factor)
+changed the output. Differ failures abort likewise, never an empty row.
+Backend `office2pdf` answers "what does our code do" anywhere in seconds
+(`--converter` names the binary); `office` drives the native AppleScripts and
+answers "what does Office do" — its stage must sit on the internal disk (the
+Office sandbox cannot write to `/Volumes`; the harness enforces this).
+
 ### Fine-detail analysis (thin and small elements)
 
 Whole-page thumbnails at 80 DPI hide hairlines, dash patterns, font weight, and sub-pixel offsets. For every compared page:
