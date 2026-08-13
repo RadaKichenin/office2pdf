@@ -611,7 +611,14 @@ fn compute_spill_width(
     Some(total_width)
 }
 
-/// Excel's fallback row height when the sheet declares none (Calibri 11).
+/// The stored-value fallback when the sheet declares no `defaultRowHeight`.
+///
+/// TODO(#1047): this table-row fallback still trusts the declared hint,
+/// while drawing anchors now use the Normal-font recompute Excel was
+/// measured to apply to dimension-less rows (Calibri 11 → 17pt, issue
+/// #715, `default_row_height_pt` in `xlsx.rs`). Whether the printed grid
+/// recomputes too is unmeasured — the paths intentionally differ until a
+/// probe settles it.
 const EXCEL_DEFAULT_ROW_HEIGHT_PT: f64 = 15.0;
 
 /// Convert an OOXML row height to the whole-point track emitted by native
