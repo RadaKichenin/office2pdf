@@ -418,10 +418,7 @@ impl<'a> WordRunLineMetrics<'a> {
 ///
 /// `None` when the paragraph carries its own line box, when its spacing is an
 /// absolute `a:spcPts` advance, or when the font's metrics are unknown.
-pub(super) fn powerpoint_line_height_settings(
-    runs: &[Run],
-    style: &ParagraphStyle,
-) -> Option<String> {
+fn powerpoint_paragraph_line_box_em(runs: &[Run], style: &ParagraphStyle) -> Option<(f64, f64)> {
     if style.line_box.is_some() {
         return None;
     }
@@ -435,10 +432,18 @@ pub(super) fn powerpoint_line_height_settings(
         .find_map(|run| run.style.font_family.as_deref())
         .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_FAMILY);
     let (ascent_em, descent_em) = crate::render::pdf::powerpoint_line_box_em(family)?;
+    Some((ascent_em * percent, descent_em * percent))
+}
+
+pub(super) fn powerpoint_line_height_settings(
+    runs: &[Run],
+    style: &ParagraphStyle,
+) -> Option<String> {
+    let (ascent_em, descent_em) = powerpoint_paragraph_line_box_em(runs, style)?;
     Some(format!(
         "#set text(top-edge: {}em, bottom-edge: -{}em)\n#set par(leading: 0pt)\n",
-        format_f64(ascent_em * percent),
-        format_f64(descent_em * percent)
+        format_f64(ascent_em),
+        format_f64(descent_em)
     ))
 }
 
@@ -1196,6 +1201,270 @@ pub(super) fn generate_runs_with_tabs(
         eojeol_wrap,
         None,
     );
+}
+
+/// Emit fixed-page PowerPoint runs, correcting the line before each explicit
+/// break when both adjacent explicit segments fit one physical line.
+///
+/// PowerPoint gives the following line its own full line box. Typst normally
+/// advances by the preceding line's descent plus the following line's ascent,
+/// so a 12.5pt line followed by a 10pt line advances 12.69pt instead of 12pt.
+/// Replacing the preceding segment's bottom edge with the following line's
+/// descent makes the transition exactly the following line's 1.2em box.
+///
+/// The width guard is essential: an edge set on a segment that wraps would
+/// affect every physical line in it, not only the one before the hard break.
+/// Unmeasured containers and segments too close to the wrapping boundary keep
+/// their existing, internally consistent Typst line boxes.
+pub(super) fn generate_powerpoint_runs_with_tabs(
+    out: &mut String,
+    runs: &[Run],
+    style: &ParagraphStyle,
+    tab_stops: Option<&[TabStop]>,
+    default_tab_width_pt: f64,
+    eojeol_wrap: EojeolWrap,
+    available_measure_pt: Option<f64>,
+) {
+    let Some(lines) = split_runs_on_hard_breaks(runs) else {
+        generate_runs_with_tabs(out, runs, tab_stops, default_tab_width_pt, eojeol_wrap);
+        return;
+    };
+    let Some(measure_pt) = available_measure_pt
+        .map(|measure| {
+            measure
+                - style.indent_left.unwrap_or(0.0)
+                - style.indent_right.unwrap_or(0.0)
+                - style.indent_first_line.unwrap_or(0.0).max(0.0)
+        })
+        .filter(|measure| *measure > 0.0)
+    else {
+        generate_runs_with_tabs(out, runs, tab_stops, default_tab_width_pt, eojeol_wrap);
+        return;
+    };
+    let Some((top_em, bottom_em)) = powerpoint_paragraph_line_box_em(runs, style) else {
+        generate_runs_with_tabs(out, runs, tab_stops, default_tab_width_pt, eojeol_wrap);
+        return;
+    };
+    if !lines
+        .iter()
+        .all(|line| powerpoint_hard_break_line_fits(line, measure_pt))
+    {
+        generate_runs_with_tabs(out, runs, tab_stops, default_tab_width_pt, eojeol_wrap);
+        return;
+    }
+
+    let mut line_sources: Vec<String> = Vec::with_capacity(lines.len());
+    for line in &lines {
+        let mut source: String = String::new();
+        generate_runs_with_tabs(
+            &mut source,
+            &line.runs,
+            tab_stops,
+            default_tab_width_pt,
+            eojeol_wrap,
+        );
+        line_sources.push(source);
+    }
+
+    out.push_str("#stack(dir: ttb, spacing: 0pt,\n");
+    // The full-measure line box swallows the surrounding paragraph alignment,
+    // so each line re-anchors by the paragraph's own: a centred table cell
+    // stayed centred in the reference while the first stack build flushed it
+    // to the left edge.
+    let anchor: &str = match style.alignment {
+        Some(Alignment::Center) => "top + center",
+        Some(Alignment::Right) => "top + right",
+        _ => "top + left",
+    };
+    for (index, (line, source)) in lines.iter().zip(&line_sources).enumerate() {
+        let line_size_pt: f64 = line.max_font_size_pt();
+        let top_pt: f64 = top_em * line_size_pt;
+        let line_height_pt: f64 = match lines.get(index + 1) {
+            Some(next) => {
+                let next_top_pt: f64 = top_em * next.max_font_size_pt();
+                let next_advance_pt: f64 = (top_em + bottom_em) * next.line_box_font_size_pt();
+                top_pt + next_advance_pt - next_top_pt
+            }
+            None => top_pt + bottom_em * line_size_pt,
+        };
+        let _ = writeln!(
+            out,
+            "  box(width: {width}pt, height: {height}pt)[#place({anchor}, dy: {top}pt)[#text(top-edge: \"baseline\", bottom-edge: \"baseline\")[{source}]]],",
+            width = format_f64(measure_pt),
+            height = format_f64(line_height_pt),
+            top = format_f64(top_pt),
+            anchor = anchor,
+        );
+    }
+    out.push(')');
+}
+
+/// Whether this explicit segment is safely narrower than its physical line.
+///
+/// The one-point reserve keeps font-substitution and PowerPoint's 1/8pt
+/// nominal-advance rounding from turning a borderline static measurement into
+/// an actual wrap. Unsupported width-affecting constructs decline correction
+/// instead of guessing.
+fn powerpoint_hard_break_line_fits(line: &PowerPointHardBreakLine, measure_pt: f64) -> bool {
+    const WRAP_RESERVE_PT: f64 = 1.0;
+    let mut advance_pt: f64 = 0.0;
+    for run in &line.runs {
+        if run.footnote.is_some()
+            || run.text.contains('\t')
+            || matches!(run.style.italic, Some(true))
+            || matches!(run.style.small_caps, Some(true))
+            || run.style.vertical_align.is_some()
+            || run.style.baseline_shift.is_some()
+            || run
+                .style
+                .letter_spacing
+                .is_some_and(|spacing| spacing != 0.0)
+        {
+            return false;
+        }
+        let source: String = if matches!(run.style.all_caps, Some(true)) {
+            run.text.to_uppercase()
+        } else {
+            run.text.clone()
+        };
+        let latin_family: &str = match run.style.font_family.as_deref() {
+            Some(family) => family,
+            None => return false,
+        };
+        let east_asian_family: &str = run
+            .style
+            .east_asian_font_family
+            .as_deref()
+            .unwrap_or(latin_family);
+        let font_size_pt: f64 = match run.style.font_size {
+            Some(size) => size,
+            None => return false,
+        };
+        let is_bold: bool = effective_font_weight(&run.style)
+            .is_some_and(|weight| weight != "regular" && weight != "light");
+        let mut segment: String = String::new();
+        let mut segment_is_east_asian: Option<bool> = None;
+        for character in source.chars() {
+            let is_east_asian: bool = is_cjk_like(character);
+            if segment_is_east_asian != Some(is_east_asian) && !segment.is_empty() {
+                let family: &str = if segment_is_east_asian == Some(true) {
+                    east_asian_family
+                } else {
+                    latin_family
+                };
+                let Some(advance_em) =
+                    crate::render::pdf::text_advance_em(family, is_bold, &segment)
+                else {
+                    return false;
+                };
+                advance_pt += advance_em * font_size_pt;
+                segment.clear();
+            }
+            segment_is_east_asian = Some(is_east_asian);
+            segment.push(character);
+        }
+        if !segment.is_empty() {
+            let family: &str = if segment_is_east_asian == Some(true) {
+                east_asian_family
+            } else {
+                latin_family
+            };
+            let Some(advance_em) = crate::render::pdf::text_advance_em(family, is_bold, &segment)
+            else {
+                return false;
+            };
+            advance_pt += advance_em * font_size_pt;
+        }
+    }
+    advance_pt + WRAP_RESERVE_PT <= measure_pt
+}
+
+/// One source line delimited by a PPTX `<a:br/>` marker or a literal newline.
+struct PowerPointHardBreakLine {
+    runs: Vec<Run>,
+    /// Style of the delimiter that opened an otherwise empty line.
+    fallback_font_size_pt: Option<f64>,
+}
+
+impl PowerPointHardBreakLine {
+    fn max_font_size_pt(&self) -> f64 {
+        self.runs
+            .iter()
+            .filter(|run| !run.text.is_empty() || run.footnote.is_some())
+            .filter_map(|run| run.style.font_size)
+            .reduce(f64::max)
+            .or(self.fallback_font_size_pt)
+            .unwrap_or(12.0)
+    }
+
+    /// PowerPoint's line box does not shrink below the 10pt body-text floor.
+    /// The original slide 16 cell carries a 9.5pt run but advances exactly
+    /// 12pt in the native export, the same as its 10pt counterpart on slide 4.
+    fn line_box_font_size_pt(&self) -> f64 {
+        self.max_font_size_pt().max(10.0)
+    }
+}
+
+/// Split without emitting the delimiter, preserving each visible fragment's
+/// run styling. A delimiter's style is only a blank-line fallback: when the
+/// next line has text, its own runs set its size (as PowerPoint does).
+fn split_runs_on_hard_breaks(runs: &[Run]) -> Option<Vec<PowerPointHardBreakLine>> {
+    if !runs.iter().any(|run| {
+        run.text
+            .chars()
+            .any(|ch| matches!(ch, '\n' | PPTX_SOFT_LINE_BREAK_CHAR))
+    }) {
+        return None;
+    }
+
+    let mut lines: Vec<PowerPointHardBreakLine> = vec![PowerPointHardBreakLine {
+        runs: Vec::new(),
+        fallback_font_size_pt: None,
+    }];
+    for run in runs {
+        let mut segment_start: usize = 0;
+        for (offset, ch) in run.text.char_indices() {
+            if !matches!(ch, '\n' | PPTX_SOFT_LINE_BREAK_CHAR) {
+                continue;
+            }
+            if segment_start < offset {
+                lines
+                    .last_mut()
+                    .expect("a line always exists")
+                    .runs
+                    .push(Run {
+                        text: run.text[segment_start..offset].to_string(),
+                        style: run.style.clone(),
+                        href: run.href.clone(),
+                        footnote: run.footnote.clone(),
+                    });
+            }
+            lines.push(PowerPointHardBreakLine {
+                runs: Vec::new(),
+                fallback_font_size_pt: run.style.font_size,
+            });
+            segment_start = offset + ch.len_utf8();
+        }
+        if segment_start < run.text.len() {
+            lines
+                .last_mut()
+                .expect("a line always exists")
+                .runs
+                .push(Run {
+                    text: run.text[segment_start..].to_string(),
+                    style: run.style.clone(),
+                    href: run.href.clone(),
+                    footnote: run.footnote.clone(),
+                });
+        } else if segment_start == 0 {
+            lines
+                .last_mut()
+                .expect("a line always exists")
+                .runs
+                .push(run.clone());
+        }
+    }
+    Some(lines)
 }
 
 fn generate_word_runs_with_tabs(

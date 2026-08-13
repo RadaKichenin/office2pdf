@@ -1293,7 +1293,7 @@ fn generate_fixed_text_box(
         out.push_str("  ");
         // The measured raw paragraph must stay unbreakable through Typst layout,
         // otherwise mixed-font headers can reflow again inside the scaled box.
-        generate_fixed_text_paragraph(out, &raw_paragraph, true)?;
+        generate_fixed_text_paragraph(out, &raw_paragraph, Some(inner_width_pt), true)?;
         out.push_str("  ]\n");
 
         let _ = writeln!(out, "  #let text_box_content_{text_box_id} = context {{");
@@ -1334,7 +1334,7 @@ fn generate_fixed_text_box(
             format_f64(inner_width_pt),
         );
         out.push_str("  ");
-        generate_fixed_text_paragraph(out, paragraph, false)?;
+        generate_fixed_text_paragraph(out, paragraph, Some(inner_width_pt), false)?;
         out.push_str("  ]\n");
 
         let _ = writeln!(out, "  #let text_box_content_{text_box_id} = context {{");
@@ -3323,7 +3323,9 @@ fn generate_fixed_text_box_block(
         Block::List(list) if can_render_fixed_text_list_inline(list) => {
             generate_fixed_text_list(out, list, true, available_width_pt, true)
         }
-        Block::Paragraph(para) => generate_fixed_text_paragraph(out, para, no_wrap),
+        Block::Paragraph(para) => {
+            generate_fixed_text_paragraph(out, para, available_width_pt, no_wrap)
+        }
         // A slide's bullet list paces on PowerPoint's line, not Word's. Routing
         // it through `generate_block` gave it the font's hhea pitch, which is up
         // to 4% short per line and accumulates down the list (issue #513).
@@ -3351,6 +3353,7 @@ fn generate_fixed_text_box_block(
 fn generate_fixed_text_paragraph(
     out: &mut String,
     para: &Paragraph,
+    available_width_pt: Option<f64>,
     no_wrap: bool,
 ) -> Result<(), ConvertError> {
     let style: &ParagraphStyle = &para.style;
@@ -3424,9 +3427,10 @@ fn generate_fixed_text_paragraph(
             paragraph_default_tab_width_pt(style, DEFAULT_TAB_WIDTH_PT),
         );
     } else {
-        generate_runs_with_tabs(
+        generate_powerpoint_runs_with_tabs(
             out,
             &para.runs,
+            style,
             style.tab_stops.as_deref(),
             paragraph_default_tab_width_pt(style, DEFAULT_TAB_WIDTH_PT),
             // PowerPoint splits Korean mid-word, so a slide's text box already
@@ -3441,6 +3445,7 @@ fn generate_fixed_text_paragraph(
             // #626 rather than a silently wrong emission. `GenCtx`'s
             // `breaks_hangul_at_eojeol` documents the same exclusion.
             EojeolWrap::Syllable,
+            available_width_pt,
         );
     }
     if no_wrap {

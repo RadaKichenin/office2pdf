@@ -2442,18 +2442,33 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
         Some(height_pt) => {
             let _ = write!(out, "#box(width: 0pt, height: {}pt)", format_f64(height_pt));
         }
-        None => generate_runs_with_tabs(
-            out,
-            &para.runs,
-            style.tab_stops.as_deref(),
-            paragraph_default_tab_width_pt(style, cell.default_tab_width_pt),
-            paragraph_eojeol_wrap(
+        None => {
+            let eojeol_wrap = paragraph_eojeol_wrap(
                 cell.breaks_hangul_at_eojeol,
                 style,
                 cell_line_box_em,
                 cell.available_measure_pt,
-            ),
-        ),
+            );
+            if cell.uses_powerpoint_line_box {
+                generate_powerpoint_runs_with_tabs(
+                    out,
+                    &para.runs,
+                    style,
+                    style.tab_stops.as_deref(),
+                    paragraph_default_tab_width_pt(style, cell.default_tab_width_pt),
+                    eojeol_wrap,
+                    cell.available_measure_pt,
+                );
+            } else {
+                generate_runs_with_tabs(
+                    out,
+                    &para.runs,
+                    style.tab_stops.as_deref(),
+                    paragraph_default_tab_width_pt(style, cell.default_tab_width_pt),
+                    eojeol_wrap,
+                );
+            }
+        }
     }
 
     // Suppressed when the grid-snapped line box already contains it, or the

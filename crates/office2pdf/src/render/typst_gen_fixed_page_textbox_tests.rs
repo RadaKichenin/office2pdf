@@ -2105,6 +2105,231 @@ fn consecutive_slide_paragraphs_keep_powerpoints_full_line_advance() {
     }
 }
 
+/// A hard break starts a PowerPoint line whose own largest run sets the full
+/// 1.2em advance. Typst normally combines the preceding line's descent with
+/// the following line's ascent, which is wrong when the sizes differ (#683).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn powerpoint_hard_break_advance_uses_the_following_lines_font_size() {
+    let family = "Arial";
+    let doc = make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![make_fixed_text_box(
+            72.0,
+            72.0,
+            400.0,
+            120.0,
+            Insets::default(),
+            crate::ir::TextBoxVerticalAlign::Top,
+            vec![Block::Paragraph(Paragraph {
+                style: ParagraphStyle::default(),
+                runs: vec![
+                    Run {
+                        text: "Large\n".to_string(),
+                        style: TextStyle {
+                            font_family: Some(family.to_string()),
+                            font_size: Some(12.5),
+                            ..TextStyle::default()
+                        },
+                        href: None,
+                        footnote: None,
+                    },
+                    Run {
+                        text: "Small\u{000B}".to_string(),
+                        style: TextStyle {
+                            font_family: Some(family.to_string()),
+                            font_size: Some(10.0),
+                            ..TextStyle::default()
+                        },
+                        href: None,
+                        footnote: None,
+                    },
+                    Run {
+                        text: "Large".to_string(),
+                        style: TextStyle {
+                            font_family: Some(family.to_string()),
+                            font_size: Some(12.5),
+                            ..TextStyle::default()
+                        },
+                        href: None,
+                        footnote: None,
+                    },
+                ],
+            })],
+        )],
+    )]);
+    let output = generate_typst(&doc).unwrap();
+    let runs = crate::render::pdf::compiled_text_runs(&output.source, 0)
+        .unwrap_or_else(|error| panic!("compile failed: {error}\n{}", output.source));
+    let mut baselines: Vec<f64> = runs
+        .iter()
+        .filter(|run| run.text.contains("Large") || run.text.contains("Small"))
+        .map(|run| run.baseline_pt)
+        .collect();
+    baselines.sort_by(f64::total_cmp);
+    baselines.dedup_by(|left, right| (*left - *right).abs() < 0.01);
+
+    assert_eq!(baselines.len(), 3, "expected three lines: {baselines:?}");
+    let (top_em, _) = crate::render::pdf::powerpoint_line_box_em(family)
+        .expect("the Arial-compatible line metrics must resolve");
+    let expected_first_baseline = 72.0 + top_em * 12.5;
+    assert!(
+        (baselines[0] - expected_first_baseline).abs() < 0.01,
+        "hard-break boxing must preserve the first line's top seating: \
+         expected {expected_first_baseline}, got {baselines:?}\n{}",
+        output.source
+    );
+    assert!(
+        (baselines[1] - baselines[0] - 12.0).abs() < 0.01,
+        "the 10pt following line must own a 12pt advance: {baselines:?}\n{}",
+        output.source
+    );
+    assert!(
+        (baselines[2] - baselines[1] - 15.0).abs() < 0.01,
+        "the 12.5pt following line must own a 15pt advance: {baselines:?}\n{}",
+        output.source
+    );
+}
+
+/// A proportional `<a:lnSpc>` scales the following line's complete box; the
+/// hard-break correction must preserve that paragraph-level multiplier.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn powerpoint_hard_break_preserves_proportional_line_spacing() {
+    let family = "Arial";
+    let doc = make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![make_fixed_text_box(
+            72.0,
+            72.0,
+            400.0,
+            120.0,
+            Insets::default(),
+            crate::ir::TextBoxVerticalAlign::Top,
+            vec![Block::Paragraph(Paragraph {
+                style: ParagraphStyle {
+                    line_spacing: Some(LineSpacing::Proportional(1.5)),
+                    ..ParagraphStyle::default()
+                },
+                runs: vec![
+                    Run {
+                        text: "Large\n".to_string(),
+                        style: TextStyle {
+                            font_family: Some(family.to_string()),
+                            font_size: Some(12.5),
+                            ..TextStyle::default()
+                        },
+                        href: None,
+                        footnote: None,
+                    },
+                    Run {
+                        text: "Small".to_string(),
+                        style: TextStyle {
+                            font_family: Some(family.to_string()),
+                            font_size: Some(10.0),
+                            ..TextStyle::default()
+                        },
+                        href: None,
+                        footnote: None,
+                    },
+                ],
+            })],
+        )],
+    )]);
+    let output = generate_typst(&doc).unwrap();
+    let runs = crate::render::pdf::compiled_text_runs(&output.source, 0)
+        .unwrap_or_else(|error| panic!("compile failed: {error}\n{}", output.source));
+    let large_baseline = runs
+        .iter()
+        .find(|run| run.text.contains("Large"))
+        .expect("Large run")
+        .baseline_pt;
+    let small_baseline = runs
+        .iter()
+        .find(|run| run.text.contains("Small"))
+        .expect("Small run")
+        .baseline_pt;
+
+    assert!(
+        (small_baseline - large_baseline - 18.0).abs() < 0.01,
+        "the 1.5 x 1.2em box of the 10pt following line must advance 18pt: \
+         {large_baseline}, {small_baseline}\n{}",
+        output.source
+    );
+}
+
+/// The previous line's bottom edge can only be replaced when the explicit
+/// segment fits one physical line. Otherwise the replacement would also alter
+/// every ordinary wrapped line inside that segment (#683).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn powerpoint_hard_break_keeps_normal_edges_when_the_segment_soft_wraps() {
+    let family = "Arial";
+    let font_size_pt = 12.5;
+    let doc = make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![make_fixed_text_box(
+            72.0,
+            72.0,
+            45.0,
+            140.0,
+            Insets::default(),
+            crate::ir::TextBoxVerticalAlign::Top,
+            vec![Block::Paragraph(Paragraph {
+                style: ParagraphStyle::default(),
+                runs: vec![
+                    Run {
+                        text: "Large words wrap\n".to_string(),
+                        style: TextStyle {
+                            font_family: Some(family.to_string()),
+                            font_size: Some(font_size_pt),
+                            ..TextStyle::default()
+                        },
+                        href: None,
+                        footnote: None,
+                    },
+                    Run {
+                        text: "Small".to_string(),
+                        style: TextStyle {
+                            font_family: Some(family.to_string()),
+                            font_size: Some(10.0),
+                            ..TextStyle::default()
+                        },
+                        href: None,
+                        footnote: None,
+                    },
+                ],
+            })],
+        )],
+    )]);
+    let output = generate_typst(&doc).unwrap();
+    let mut large_baselines: Vec<f64> = crate::render::pdf::compiled_text_runs(&output.source, 0)
+        .unwrap_or_else(|error| panic!("compile failed: {error}\n{}", output.source))
+        .into_iter()
+        .filter(|run| run.text.contains("Large") || run.text.contains("words"))
+        .map(|run| run.baseline_pt)
+        .collect();
+    large_baselines.sort_by(f64::total_cmp);
+    large_baselines.dedup_by(|left, right| (*left - *right).abs() < 0.01);
+
+    assert!(
+        large_baselines.len() >= 2,
+        "the probe must soft-wrap before its explicit break: {large_baselines:?}\n{}",
+        output.source
+    );
+    for gap in large_baselines.windows(2).map(|pair| pair[1] - pair[0]) {
+        assert!(
+            (gap - 1.2 * font_size_pt).abs() < 0.01,
+            "ordinary wrapped lines must retain their 15pt pitch, got {gap}: \
+             {large_baselines:?}\n{}",
+            output.source
+        );
+    }
+}
+
 /// PowerPoint rounds every nominal glyph advance to the nearest 1/8pt before
 /// it decides where a line ends. Ten 17pt Libertinus `o` glyphs are a stable,
 /// environment-free edge case: their exact Typst advances fit this box, while
