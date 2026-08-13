@@ -282,6 +282,7 @@ fn anchored_image(
         x_offset_pt,
         y_offset_pt,
         image,
+        clip_width_pt: None,
     }
 }
 
@@ -462,7 +463,9 @@ impl XlsxParser {
                     if !images.is_empty() || !text_boxes.is_empty() || !charts.is_empty() {
                         chunks.push(Document {
                             metadata: metadata.clone(),
-                            pages: vec![Page::Sheet(SheetPage {
+                            // Drawings past the printable width split into
+                            // page-columns as Excel prints them (issue #713).
+                            pages: xlsx_pagination::split_drawing_only_page(SheetPage {
                                 name: sheet_name,
                                 size: sheet_page_size(sheet),
                                 margins: sheet_print_margins(sheet),
@@ -472,7 +475,10 @@ impl XlsxParser {
                                 charts,
                                 images,
                                 text_boxes,
-                            })],
+                            })
+                            .into_iter()
+                            .map(Page::Sheet)
+                            .collect(),
                             styles: StyleSheet::default(),
                         });
                     }
@@ -720,17 +726,23 @@ impl Parser for XlsxParser {
                         .collect();
                     let charts: Vec<(u32, Chart)> = raw_charts.unwrap_or_default();
                     if !images.is_empty() || !text_boxes.is_empty() || !charts.is_empty() {
-                        pages.push(Page::Sheet(SheetPage {
-                            name: sheet_name,
-                            size: sheet_page_size(sheet),
-                            margins: sheet_print_margins(sheet),
-                            table: Table::default(),
-                            header: None,
-                            footer: None,
-                            charts,
-                            images,
-                            text_boxes,
-                        }));
+                        // Drawings past the printable width split into
+                        // page-columns as Excel prints them (issue #713).
+                        pages.extend(
+                            xlsx_pagination::split_drawing_only_page(SheetPage {
+                                name: sheet_name,
+                                size: sheet_page_size(sheet),
+                                margins: sheet_print_margins(sheet),
+                                table: Table::default(),
+                                header: None,
+                                footer: None,
+                                charts,
+                                images,
+                                text_boxes,
+                            })
+                            .into_iter()
+                            .map(Page::Sheet),
+                        );
                     }
                 }
                 continue;

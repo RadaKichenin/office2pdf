@@ -536,3 +536,67 @@ fn an_unscaled_sheet_leaves_its_footer_alone() {
 
     assert_eq!(footer_run_sizes(&pages[0]), vec![Some(8.0)]);
 }
+
+// ── Drawing-width pagination on empty sheets (issue #713) ────────────
+
+fn sheet_image(x: f64, width: f64) -> crate::ir::SheetImage {
+    crate::ir::SheetImage {
+        anchor_row: 1,
+        x_offset_pt: x,
+        y_offset_pt: 0.0,
+        image: crate::ir::ImageData {
+            data: Vec::new(),
+            format: crate::ir::ImageFormat::Png,
+            rotation_deg: None,
+            width: Some(width),
+            height: Some(80.0),
+            crop: None,
+            stroke: None,
+            alignment: None,
+            clip_shape: None,
+            shadow: None,
+            paragraph_spacing: None,
+            flip_h: false,
+            flip_v: false,
+        },
+        clip_width_pt: None,
+    }
+}
+
+/// Excel prints a drawing that crosses the printable edge clipped there and
+/// continued on the next page-column; a drawing-only sheet must split the
+/// same way instead of overflowing the right margin (issue #713).
+#[test]
+fn a_drawing_past_the_printable_edge_adds_a_page_column() {
+    // Printable width is 400pt (500 − 2×50).
+    let mut page = make_page(Vec::new(), Vec::new());
+    page.images.push(sheet_image(10.0, 100.0));
+    page.images.push(sheet_image(350.0, 100.0));
+
+    let pages = split_drawing_only_page(page);
+    assert_eq!(pages.len(), 2);
+
+    assert_eq!(pages[0].images.len(), 2);
+    assert_eq!(pages[0].images[0].x_offset_pt, 10.0);
+    assert_eq!(pages[0].images[1].x_offset_pt, 350.0);
+    assert_eq!(pages[0].images[1].clip_width_pt, Some(400.0));
+
+    // The crossing image continues on the second page-column, shifted left
+    // by one printable width and clipped to the same window.
+    assert_eq!(pages[1].images.len(), 1);
+    assert_eq!(pages[1].images[0].x_offset_pt, -50.0);
+    assert_eq!(pages[1].images[0].clip_width_pt, Some(400.0));
+}
+
+#[test]
+fn drawings_inside_the_printable_width_keep_one_page() {
+    let mut page = make_page(Vec::new(), Vec::new());
+    page.images.push(sheet_image(10.0, 100.0));
+
+    let pages = split_drawing_only_page(page);
+    assert_eq!(pages.len(), 1);
+    assert_eq!(
+        pages[0].images[0].clip_width_pt, None,
+        "an unsplit page draws its images exactly as before"
+    );
+}

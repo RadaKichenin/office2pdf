@@ -1017,13 +1017,34 @@ fn write_placed_sheet_anchor(out: &mut String, anchor: &SheetAnchor, ctx: &mut G
             out.push_str("]]");
         }
         SheetAnchor::Image(sheet_image) => {
-            let _ = write!(
-                out,
-                "#place(top + left, dx: {}pt)[",
-                format_f64(sheet_image.x_offset_pt),
-            );
-            generate_image(out, &sheet_image.image, ctx);
-            out.push(']');
+            // A page-column window from drawing-width pagination: the image
+            // clips at the printable edge and a continued copy starts at a
+            // negative offset, as Excel prints it (issue #713). The clip box
+            // needs the image's own size — an inner `place` occupies nothing,
+            // so an auto-sized box would collapse and clip everything away.
+            let clip = sheet_image
+                .clip_width_pt
+                .zip(sheet_image.image.height)
+                .filter(|_| sheet_image.image.width.is_some());
+            if let Some((clip_width, image_height)) = clip {
+                let _ = write!(
+                    out,
+                    "#place(top + left)[#box(width: {}pt, height: {}pt, clip: true)[#place(top + left, dx: {}pt)[",
+                    format_f64(clip_width),
+                    format_f64(image_height),
+                    format_f64(sheet_image.x_offset_pt),
+                );
+                generate_image(out, &sheet_image.image, ctx);
+                out.push_str("]]]");
+            } else {
+                let _ = write!(
+                    out,
+                    "#place(top + left, dx: {}pt)[",
+                    format_f64(sheet_image.x_offset_pt),
+                );
+                generate_image(out, &sheet_image.image, ctx);
+                out.push(']');
+            }
         }
     }
 }
