@@ -71,6 +71,7 @@
 | Rotation/flip | <!-- status --> |
 | Fill | <!-- status --> |
 | Stroke/border | <!-- status --> |
+| Shape outline geometry | <!-- status --> |
 | Text content | <!-- status --> |
 | Font family/weight/style | <!-- status --> |
 | Text color | <!-- status --> |

@@ -267,5 +267,126 @@ class RepeatedTextGeometryTest(unittest.TestCase):
         self.assertGreaterEqual(top + height, round(match.candidate.y_min * 2))
 
 
+class DiffClusterParseTest(unittest.TestCase):
+    """The cluster census turns the diff mask into dispositionable regions.
+
+    Issue #1029's squared-off panel corners survived a 5% fuzz sweep because
+    the sweep printed one count for the whole page; nothing named where the
+    differing pixels sat. The census parses ImageMagick's
+    connected-components listing so each contiguous diff region becomes a
+    line item with coordinates.
+    """
+
+    # Verbatim shape of `-define connected-components:verbose=true` output.
+    # Component 0 is the black background, 235/257 are the #1029 corner
+    # clusters, 2 is a glyph-rasterisation blob, 99 is a sub-threshold speck.
+    VERBOSE = "\n".join(
+        [
+            "Objects (id: bounding-box centroid area mean-color):",
+            "  0: 2000x1125+0+0 987.4,553.9 2.2002e+06 gray(0)",
+            "  235: 203x329+1797+796 1941.2,1038.4 22130 gray(255)",
+            "  257: 198x313+1004+812 1060.3,1040.6 20988 gray(255)",
+            "  2: 67x63+1624+118 1652.8,155.0 1343 gray(255)",
+            "  99: 5x5+10+10 12.0,12.0 25 gray(255)",
+        ]
+    )
+
+    def clusters(self) -> list:
+        return compare_render.parse_diff_clusters(self.VERBOSE, dpi=150)
+
+    def test_reports_only_white_components(self) -> None:
+        regions = self.clusters()
+        self.assertEqual(len(regions), 3)
+
+    def test_sorts_largest_first(self) -> None:
+        areas = [region.area_pt2 for region in self.clusters()]
+        self.assertEqual(areas, sorted(areas, reverse=True))
+
+    def test_converts_pixels_to_points_at_the_given_dpi(self) -> None:
+        largest = self.clusters()[0]
+        # 203x329px at +1797+796, 150 DPI: 1px = 0.48pt.
+        self.assertAlmostEqual(largest.x_pt, 862.56, places=2)
+        self.assertAlmostEqual(largest.y_pt, 382.08, places=2)
+        self.assertAlmostEqual(largest.width_pt, 97.44, places=2)
+        self.assertAlmostEqual(largest.height_pt, 157.92, places=2)
+        self.assertAlmostEqual(largest.area_pt2, 22130 * 0.48 * 0.48, places=1)
+
+    def test_drops_specks_below_the_area_floor(self) -> None:
+        # 25px at 150 DPI is 5.76pt² — glyph antialiasing, not a defect region.
+        areas_px = [region.area_pt2 / (0.48 * 0.48) for region in self.clusters()]
+        self.assertNotIn(25, [round(area) for area in areas_px])
+
+    def test_names_the_page_region_from_the_centroid(self) -> None:
+        regions = self.clusters()
+        # Page is 2000x1125px; centroids in the bottom-right and bottom-center
+        # thirds. Both #1029 corner clusters read as bottom-edge regions.
+        self.assertEqual(regions[0].region, "bottom-right")
+        self.assertEqual(regions[1].region, "bottom")
+        self.assertEqual(regions[2].region, "top-right")
+
+    def test_a_merged_component_still_counts_as_white(self) -> None:
+        # area-threshold merging leaves near-pure means such as gray(254.7).
+        verbose = "\n".join(
+            [
+                "Objects (id: bounding-box centroid area mean-color):",
+                "  0: 100x100+0+0 50.0,50.0 9000 gray(0.3)",
+                "  1: 40x40+30+30 50.0,50.0 1000 gray(254.7)",
+            ]
+        )
+        regions = compare_render.parse_diff_clusters(verbose, dpi=150)
+        self.assertEqual(len(regions), 1)
+        self.assertEqual(regions[0].region, "center")
+
+
+class DiagnoseWithClustersTest(unittest.TestCase):
+    """A dominant contiguous cluster routes attention to structure, not noise."""
+
+    GEOMETRY = {
+        "mad_y": 0.1,
+        "mad_x": 0.1,
+        "page_mismatch": 0.0,
+        "matched": 40.0,
+        "coverage": 0.9,
+    }
+    HISTOGRAM = {"intersection": 1.0, "shift": 0.0, "ink_delta": 0.0}
+
+    def render(self, clusters) -> str:
+        from io import StringIO
+        from contextlib import redirect_stdout
+
+        buffer = StringIO()
+        with redirect_stdout(buffer):
+            compare_render.diagnose(self.GEOMETRY, self.HISTOGRAM, clusters)
+        return buffer.getvalue()
+
+    def big_cluster(self) -> object:
+        return compare_render.DiffCluster(
+            x_pt=862.6,
+            y_pt=382.1,
+            width_pt=97.4,
+            height_pt=157.9,
+            area_pt2=5100.0,
+            region="bottom-right",
+        )
+
+    def test_a_dominant_cluster_is_a_finding_even_when_the_axes_agree(self) -> None:
+        report = self.render([self.big_cluster()])
+        self.assertNotIn("No axis shows a material difference", report)
+        self.assertIn("outline", report)
+
+    def test_small_clusters_do_not_override_agreement(self) -> None:
+        small = compare_render.DiffCluster(
+            x_pt=10.0, y_pt=10.0, width_pt=8.0, height_pt=8.0,
+            area_pt2=40.0, region="top-left",
+        )
+        report = self.render([small])
+        self.assertIn("No axis shows a material difference", report)
+
+    def test_no_clusters_keeps_the_old_reading(self) -> None:
+        report = self.render(None)
+        self.assertIn("No axis shows a material difference", report)
+
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare a rendered PDF against a native Office export on three axes.
+"""Compare a rendered PDF against a native Office export across several axes.
 
 No single measure is trustworthy alone, and each one's blind spot is
 another's strength:
@@ -16,6 +16,11 @@ another's strength:
   differing pixels without weighing how different they are, so it scores a
   layout shift and a colour inversion alike, and it can *rise* when a fix is
   correct but the element is still displaced by an unrelated defect.
+- **Diff clusters** localise the pixel axis: the 5%-fuzz mask's contiguous
+  regions, each with a bounding box in points. A bare count let #1029's
+  squared-off panel corners survive an audit — two ~5,100pt² regions hiding
+  inside one number. Every listed cluster must be dispositioned: an accepted
+  rendering difference, or an issue.
 
 Read them together. A fix that improves geometry while leaving the
 histogram flat has moved something without changing what is drawn, which is
@@ -58,6 +63,20 @@ HISTOGRAM_BINS = 32
 # Every ImageMagick tool the colour and pixel axes reach for. Named here so the
 # availability check and the call sites cannot drift apart.
 IMAGEMAGICK_TOOLS = ("convert", "identify", "compare")
+# A diff region smaller than this is glyph antialiasing, not a defect: a 20pt²
+# cluster is roughly one 4.5pt-square blob. Everything at or above it is
+# listed for disposition.
+CLUSTER_MIN_AREA_PT2 = 20.0
+CLUSTER_REPORT_LIMIT = 12
+# One contiguous region this large is never rasterisation noise. #1029's
+# squared-off panel corners measured ~5,100pt² each while every axis said the
+# pages agreed; this threshold is what turns such a region into a finding.
+CLUSTER_DOMINANT_AREA_PT2 = 500.0
+COMPONENT_LINE_RE = re.compile(
+    r"^\s*\d+:\s+(?P<w>\d+)x(?P<h>\d+)\+(?P<x>\d+)\+(?P<y>\d+)\s+"
+    r"(?P<cx>[\d.eE+-]+),(?P<cy>[\d.eE+-]+)\s+(?P<area>[\d.eE+]+)\s+"
+    r"(?P<color>\S.*)$"
+)
 
 
 @dataclass(frozen=True)
@@ -88,6 +107,18 @@ class TextLineMatch:
     @property
     def dy(self) -> float:
         return self.candidate.y_min - self.reference.y_min
+
+
+@dataclass(frozen=True)
+class DiffCluster:
+    """One contiguous region of differing pixels, in page points."""
+
+    x_pt: float
+    y_pt: float
+    width_pt: float
+    height_pt: float
+    area_pt2: float
+    region: str
 
 
 def render_page(pdf: Path, page: int, dpi: int, out_dir: Path, role: str) -> Path:
@@ -468,8 +499,12 @@ def cumulative_distance(reference: list[float], candidate: list[float]) -> float
     return total / (channels * HISTOGRAM_BINS)
 
 
-def report_pixels(gt_png: Path, other_png: Path, out_dir: Path) -> None:
-    """Whole-page difference, as a coarse catch-all."""
+def report_pixels(gt_png: Path, other_png: Path, out_dir: Path) -> Path:
+    """Whole-page difference, as a coarse catch-all.
+
+    Returns the size-normalised GT so the cluster census compares the same
+    pair of images the counts above were measured on.
+    """
     normalised = out_dir / "gt-normalised.png"
     size = subprocess.run(
         [*(imagemagick_command("identify") or []), "-format", "%wx%h", str(other_png)],
@@ -495,6 +530,133 @@ def report_pixels(gt_png: Path, other_png: Path, out_dir: Path) -> None:
             capture_output=True, text=True,
         )
         print(f"  {label}      {result.stderr.strip()}")
+    return normalised
+
+
+def component_is_white(color: str) -> bool:
+    """Whether a connected-component mean colour reads as mask-white.
+
+    The mask is binary, but `area-threshold` merges sub-threshold specks into
+    their neighbour, leaving near-pure means such as `gray(254.7)`; percentages
+    appear when a build reports srgba. Thresholding at half intensity accepts
+    both without enumerating ImageMagick's colour spellings.
+    """
+    value = re.search(r"([\d.]+)", color)
+    if value is None:
+        return False
+    return float(value.group(1)) > (50.0 if "%" in color else 127.5)
+
+
+def page_region(cx: float, cy: float, width: float, height: float) -> str:
+    """Name the page third a centroid falls in, e.g. `bottom-right`."""
+    column = "left" if cx < width / 3 else "right" if cx > 2 * width / 3 else "center"
+    row = "top" if cy < height / 3 else "bottom" if cy > 2 * height / 3 else "middle"
+    if row == "middle":
+        return "center" if column == "center" else column
+    return row if column == "center" else f"{row}-{column}"
+
+
+def parse_diff_clusters(
+    verbose: str, dpi: int, min_area_pt2: float = CLUSTER_MIN_AREA_PT2
+) -> list[DiffCluster]:
+    """White connected components of the diff mask, largest first, in points.
+
+    The page extent comes from the union of every component's bounding box:
+    the black background component normally spans the full page, and when it
+    does not, the union still bounds everything that was compared.
+    """
+    scale = 72.0 / dpi
+    components: list[tuple[float, float, float, float, float, float, float]] = []
+    page_width = page_height = 0.0
+    for line in verbose.splitlines():
+        match = COMPONENT_LINE_RE.match(line)
+        if match is None:
+            continue
+        x, y = float(match.group("x")), float(match.group("y"))
+        w, h = float(match.group("w")), float(match.group("h"))
+        page_width = max(page_width, x + w)
+        page_height = max(page_height, y + h)
+        if not component_is_white(match.group("color")):
+            continue
+        components.append(
+            (x, y, w, h, float(match.group("cx")), float(match.group("cy")),
+             float(match.group("area")))
+        )
+    clusters = [
+        DiffCluster(
+            x_pt=x * scale,
+            y_pt=y * scale,
+            width_pt=w * scale,
+            height_pt=h * scale,
+            area_pt2=area * scale * scale,
+            region=page_region(cx, cy, page_width, page_height),
+        )
+        for x, y, w, h, cx, cy, area in components
+        if area * scale * scale >= min_area_pt2
+    ]
+    clusters.sort(key=lambda cluster: cluster.area_pt2, reverse=True)
+    return clusters
+
+
+def diff_cluster_census(
+    gt_png: Path, other_png: Path, out_dir: Path, dpi: int
+) -> list[DiffCluster] | None:
+    """Label the 5%-fuzz diff mask's contiguous regions, or None if unsupported.
+
+    A single-pixel morphological open drops isolated antialiasing specks first,
+    and 4-connectivity keeps diagonally-touching glyph noise from chaining into
+    one page-spanning blob the way 8-connectivity does. `area-threshold` merges
+    the sub-25px remnants so the verbose listing stays bounded.
+    """
+    mask = out_dir / "diff-mask.png"
+    # `compare` exits 1 whenever the images differ; only a missing mask is
+    # a failure.
+    subprocess.run(
+        [*(imagemagick_command("compare") or []), "-metric", "AE", "-fuzz", "5%",
+         "-compose", "src", "-highlight-color", "white", "-lowlight-color",
+         "black", str(gt_png), str(other_png), str(mask)],
+        capture_output=True,
+    )
+    if not mask.is_file():
+        return None
+    census = subprocess.run(
+        [*(imagemagick_command("convert") or []), str(mask),
+         "-morphology", "Open", "Square:1",
+         "-define", "connected-components:verbose=true",
+         "-define", "connected-components:area-threshold=25",
+         "-connected-components", "4", "null:"],
+        capture_output=True,
+        text=True,
+    )
+    if census.returncode != 0:
+        return None
+    # The objects listing has moved between stdout and stderr across
+    # ImageMagick releases; parse both.
+    return parse_diff_clusters(census.stdout + census.stderr, dpi)
+
+
+def report_diff_clusters(clusters: list[DiffCluster] | None) -> None:
+    """List every contiguous diff region large enough to need a disposition."""
+    print("## Diff clusters — where the differing pixels sit")
+    if clusters is None:
+        print("  SKIPPED: this ImageMagick build lacks -connected-components;")
+        print("  inspect the diff image by eye and disposition each region.")
+        return
+    if not clusters:
+        print(f"  none of {CLUSTER_MIN_AREA_PT2:.0f}pt² or more — what differs is")
+        print("  dispersed specks (glyph rasterisation and antialiasing).")
+        return
+    print("  Disposition every cluster: an accepted rendering difference (glyph")
+    print("  rasterisation) or an issue reference. A cluster hugging a shape's")
+    print("  corner or edge while colour and position agree is outline geometry —")
+    print("  compare the shape's path, not its fill or its box (#1029).")
+    for index, cluster in enumerate(clusters[:CLUSTER_REPORT_LIMIT], start=1):
+        print(f"  {index:>2}. {cluster.width_pt:6.1f} x {cluster.height_pt:6.1f}pt "
+              f"at ({cluster.x_pt:6.1f}, {cluster.y_pt:6.1f})  "
+              f"area {cluster.area_pt2:7.0f}pt2  {cluster.region}")
+    if len(clusters) > CLUSTER_REPORT_LIMIT:
+        print(f"  … and {len(clusters) - CLUSTER_REPORT_LIMIT} more of "
+              f"{CLUSTER_MIN_AREA_PT2:.0f}pt2 or more")
 
 
 def shift_crop_box(
@@ -630,7 +792,9 @@ def preserve_vision_artifacts(
 
 
 def diagnose(
-    geometry: dict[str, float], histogram_result: dict[str, float] | None
+    geometry: dict[str, float],
+    histogram_result: dict[str, float] | None,
+    clusters: list[DiffCluster] | None = None,
 ) -> None:
     """Say what the combination of axes means, and what to look at next.
 
@@ -734,6 +898,24 @@ def diagnose(
             "colours but at the wrong size, or a font renders at a different "
             "weight."
         )
+    dominant = [
+        cluster
+        for cluster in (clusters or [])
+        if cluster.area_pt2 >= CLUSTER_DOMINANT_AREA_PT2
+    ]
+    if dominant:
+        largest = dominant[0]
+        findings.append(
+            f"A contiguous diff cluster of {largest.area_pt2:.0f}pt2 sits at "
+            f"({largest.x_pt:.0f}, {largest.y_pt:.0f}) ({largest.region})"
+            + (f", plus {len(dominant) - 1} more of {CLUSTER_DOMINANT_AREA_PT2:.0f}pt2 or larger"
+               if len(dominant) > 1 else "")
+            + " — a structural difference: a missing element, a displaced "
+            "block, or a shape outline (rounded corner, curved edge) drawn as "
+            "its bounding box. The per-line geometry above only measures text, "
+            "so it cannot see this; disposition the cluster before concluding "
+            "the pages agree."
+        )
 
     if not findings:
         print("  No axis shows a material difference. What remains is font")
@@ -829,6 +1011,7 @@ def main() -> None:
         report_matched_lines(args.gt, args.output, page=args.page)
         print()
     histogram_result: dict[str, float] | None = None
+    clusters: list[DiffCluster] | None = None
     if has_imagemagick():
         with tempfile.TemporaryDirectory() as raw_dir:
             out_dir = Path(raw_dir)
@@ -836,7 +1019,10 @@ def main() -> None:
             other_png = render_page(args.output, args.page, args.dpi, out_dir, "candidate")
             histogram_result = report_histogram(gt_png, other_png)
             print()
-            report_pixels(gt_png, other_png, out_dir)
+            normalised = report_pixels(gt_png, other_png, out_dir)
+            print()
+            clusters = diff_cluster_census(normalised, other_png, out_dir, args.dpi)
+            report_diff_clusters(clusters)
             if args.artifacts_dir is not None:
                 matches = match_text_line_instances(
                     page_text_lines(args.gt, args.page),
@@ -863,7 +1049,7 @@ def main() -> None:
               f"{', '.join(f'`{tool}`' for tool in IMAGEMAGICK_TOOLS)} (6.x)")
         print("  is on PATH. Install `imagemagick` to measure colour and ink.")
     print()
-    diagnose(geometry, histogram_result)
+    diagnose(geometry, histogram_result, clusters)
     if args.audit and geometry.get("large_shift_count", 0.0):
         print()
         print(

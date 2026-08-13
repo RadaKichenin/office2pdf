@@ -126,7 +126,7 @@ This project follows a **6-month rolling MSRV policy** (aligned with [tokio](htt
 
 ### Visual check discipline (harness rules)
 
-- **Enumerate before fixing.** For every compared page, walk this checklist and record each deviation before touching code: page count/order; element presence; position; size; rotation/flip; fill; stroke/border (incl. dash style); text content; font family/weight/style; text color; alignment; line/paragraph spacing; clipping/overflow.
+- **Enumerate before fixing.** For every compared page, walk this checklist and record each deviation before touching code: page count/order; element presence; position; size; rotation/flip; fill; stroke/border (incl. dash style); shape outline geometry (corner rounding, curved edges — a panel drawn as its bounding box, #1029); text content; font family/weight/style; text color; alignment; line/paragraph spacing; clipping/overflow.
 - **One issue per root cause.** When one image reveals multiple independent defects, file a separate issue for each — never bundle them into one issue or one PR. Fix them sequentially.
 - **Closing condition.** An issue may be closed only when a fresh GT comparison shows its specific defect gone. Every remaining visible deviation on that comparison must already have its own open issue — file the missing ones before closing.
 - **After images are re-audited.** When posting an after image, re-run the checklist on it; each still-visible deviation gets an issue reference in the PR body ("remaining, tracked in #N").
@@ -234,6 +234,13 @@ cut the error from 86pt to 4.4pt barely moved it, because re-proportioning
 columns changes where pixels are, not how many differ. Use `RMSE` or
 `AE -fuzz 1%` when magnitude matters, and treat all of them as a regression
 tripwire rather than evidence.
+
+The script's **Diff clusters** section localises that count: contiguous mask
+regions with bounding boxes in points, largest first. Disposition every listed
+cluster — an accepted rendering difference or an issue reference. The two
+~5,100pt² corner clusters of #1029 sailed through a bare 84,400-pixel count;
+the census names them and their page region, and text-line geometry cannot see
+them at all.
 
 **Text layer (`scripts/compare_text_layer.py`)** is a fourth axis none of the
 three above can see. Some defects change what a reader can select and search
