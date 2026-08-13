@@ -190,22 +190,22 @@ fn test_text_box_paragraph_tab_stops_are_extracted() {
         paragraph.style.tab_stops,
         Some(vec![
             TabStop {
-                position: 64.8,
+                position: 72.0,
                 alignment: TabAlignment::Left,
                 leader: TabLeader::None,
             },
             TabStop {
-                position: 136.8,
+                position: 144.0,
                 alignment: TabAlignment::Center,
                 leader: TabLeader::None,
             },
             TabStop {
-                position: 208.8,
+                position: 216.0,
                 alignment: TabAlignment::Right,
                 leader: TabLeader::None,
             },
             TabStop {
-                position: 280.8,
+                position: 288.0,
                 alignment: TabAlignment::Decimal,
                 leader: TabLeader::None,
             },
@@ -232,7 +232,7 @@ fn test_text_box_paragraph_inherits_tab_stops_from_list_style() {
     assert_eq!(
         paragraph.style.tab_stops,
         Some(vec![TabStop {
-            position: 64.8,
+            position: 72.0,
             alignment: TabAlignment::Right,
             leader: TabLeader::None,
         }])
@@ -272,7 +272,7 @@ fn test_custom_geo_page_46_tabs_are_relative_to_the_inner_text_origin() {
             .as_deref()
             .expect("Expected explicit tab stop");
         assert_eq!(tab_stops.len(), 1);
-        assert!((tab_stops[0].position - 244.8).abs() < 0.001);
+        assert!((tab_stops[0].position - 252.0).abs() < 0.001);
     }
 }
 
