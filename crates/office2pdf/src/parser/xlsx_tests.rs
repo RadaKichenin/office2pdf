@@ -1216,3 +1216,51 @@ fn test_empty_sheet_context_without_cols_keeps_the_default_window() {
     assert_eq!(ctx.num_cols, 0);
     assert!(ctx.col_start > ctx.col_end, "an empty window");
 }
+
+// ── Normal-font default row height (issue #715) ──────────────────────
+
+/// Excel recomputes the default row height from the Normal font for rows
+/// that record no height, ignoring the `defaultRowHeight` hint unless the
+/// sheet marks it `customHeight` (issue #715).
+#[test]
+fn a_dimensionless_row_takes_the_normal_font_default() {
+    let mut book = umya_spreadsheet::new_file();
+    let sheet = book.get_sheet_mut(&0).unwrap();
+    sheet
+        .get_sheet_format_properties_mut()
+        .set_default_row_height(15.0);
+    let calibri = NormalFont {
+        family: "Calibri".to_string(),
+        size_pt: 11.0,
+    };
+    assert_eq!(super::default_row_height_pt(sheet, Some(&calibri)), 17.0);
+}
+
+#[test]
+fn a_custom_height_default_is_honoured_as_declared() {
+    let mut book = umya_spreadsheet::new_file();
+    let sheet = book.get_sheet_mut(&0).unwrap();
+    let properties = sheet.get_sheet_format_properties_mut();
+    properties.set_default_row_height(15.0);
+    properties.set_custom_height(true);
+    let calibri = NormalFont {
+        family: "Calibri".to_string(),
+        size_pt: 11.0,
+    };
+    assert_eq!(super::default_row_height_pt(sheet, Some(&calibri)), 15.0);
+}
+
+#[test]
+fn an_unmeasured_normal_font_keeps_the_declared_default() {
+    let mut book = umya_spreadsheet::new_file();
+    let sheet = book.get_sheet_mut(&0).unwrap();
+    sheet
+        .get_sheet_format_properties_mut()
+        .set_default_row_height(15.0);
+    let arial = NormalFont {
+        family: "Arial".to_string(),
+        size_pt: 10.0,
+    };
+    assert_eq!(super::default_row_height_pt(sheet, Some(&arial)), 15.0);
+    assert_eq!(super::default_row_height_pt(sheet, None), 15.0);
+}

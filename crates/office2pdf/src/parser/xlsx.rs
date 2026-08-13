@@ -197,6 +197,34 @@ fn title_column_indices(print_titles: PrintTitles, ctx: &SheetContext) -> Option
     Some((start_idx as usize, end_idx as usize))
 }
 
+/// The default height of a row that records no height of its own.
+///
+/// Excel does not honour the `sheetFormatPr defaultRowHeight` hint for such
+/// rows unless the sheet marks it `customHeight`: it recomputes the default
+/// from the workbook's Normal font. On the `WithDrawing.xlsx` native export
+/// (Calibri 11 Normal, declared default 15, no `customHeight`) every
+/// dimension-less row lays out at 17pt — an 8-row picture anchor measures
+/// 148pt against the 132pt the declared hint gives — and an openpyxl probe
+/// with the same Normal font reproduces the same 17pt rows (issue #715).
+/// Only the measured face and size are mapped; other Normal fonts keep the
+/// declared default until they are measured.
+fn default_row_height_pt(
+    sheet: &umya_spreadsheet::Worksheet,
+    normal_font: Option<&xlsx_cells::NormalFont>,
+) -> f64 {
+    const MAC_EXCEL_CALIBRI_11_DEFAULT_ROW_PT: f64 = 17.0;
+    let properties = sheet.get_sheet_format_properties();
+    if !properties.get_custom_height()
+        && let Some(font) = normal_font
+        && font.family.eq_ignore_ascii_case("calibri")
+        && (font.size_pt - 11.0).abs() < 0.01
+    {
+        return MAC_EXCEL_CALIBRI_11_DEFAULT_ROW_PT;
+    }
+    let declared: f64 = *properties.get_default_row_height();
+    if declared > 0.0 { declared } else { 15.0 }
+}
+
 /// Convert a raw drawing anchor into a render-ready image: 1-indexed anchor
 /// row plus a size in points resolved against the sheet's column widths and
 /// row heights (twoCellAnchor) or the declared extent (oneCellAnchor).
@@ -229,10 +257,7 @@ fn anchored_image(
             .get_row_dimension(&(row_zero_based + 1))
             .map(|row| *row.get_height())
             .filter(|height| *height > 0.0)
-            .unwrap_or_else(|| {
-                let default = *sheet.get_sheet_format_properties().get_default_row_height();
-                if default > 0.0 { default } else { 15.0 }
-            })
+            .unwrap_or_else(|| default_row_height_pt(sheet, ctx.normal_font.as_ref()))
     };
 
     let (width, height): (f64, f64) =
