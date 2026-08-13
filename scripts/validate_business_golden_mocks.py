@@ -18,6 +18,19 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CORPUS_ROOT = PROJECT_ROOT / "tests" / "golden_mocks" / "business"
 FIXTURES_ROOT = PROJECT_ROOT / "tests" / "fixtures"
 MANIFEST_PATH = CORPUS_ROOT / "manifest.json"
+BASELINE_PATH = CORPUS_ROOT / "baselines" / "layout.json"
+LAYOUT_BASELINE_SCHEMA_VERSION = 2
+LAYOUT_VECTOR_SECTIONS = (
+    "lines",
+    "baseline",
+    "dx0",
+    "width",
+    "instances",
+    "pitch",
+    "wraps",
+    "reflow",
+    "rects",
+)
 EXPECTED_COUNTS = {"docx": 10, "pptx": 10, "xlsx": 10}
 SOURCE_SUFFIXES = {"docx": ".docx", "pptx": ".pptx", "xlsx": ".xlsx"}
 PPTX_SLIDE_PATTERN = re.compile(r"ppt/slides/slide[0-9]+\.xml$")
@@ -309,6 +322,51 @@ def validate_directory_inventory(cases: list[dict[str, object]]) -> None:
             fail(f"{source_format}: expected-PDF directory does not match manifest inventory")
 
 
+def validate_layout_baseline(cases: list[dict[str, object]]) -> None:
+    """Keep the tracked layout baseline structurally consistent with the manifest.
+
+    The numeric comparison lives in ``check_layout_baselines.py`` and needs a
+    locally built converter; this check only guards the invariants CI can
+    verify from the files alone, so the baseline can never silently return to
+    being an orphaned artefact nothing reads.
+    """
+    if not BASELINE_PATH.is_file():
+        fail(
+            "layout baseline missing: baselines/layout.json "
+            "(generate it with scripts/generate_layout_baselines.py)"
+        )
+    baseline = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
+    if baseline.get("schema_version") != LAYOUT_BASELINE_SCHEMA_VERSION:
+        fail(
+            f"layout baseline schema_version must be {LAYOUT_BASELINE_SCHEMA_VERSION}, "
+            f"found {baseline.get('schema_version')}"
+        )
+    baseline_cases = {str(record["id"]): record for record in baseline.get("cases", [])}
+    manifest_ids = {str(case["id"]) for case in cases}
+    if set(baseline_cases) != manifest_ids:
+        fail("layout baseline cases do not match the manifest case IDs")
+    expected_pages_by_id = {str(case["id"]): int(case["expected_pages"]) for case in cases}
+    for case_id, record in baseline_cases.items():
+        if int(record["gt_pages"]) != expected_pages_by_id[case_id]:
+            fail(
+                f"{case_id}: layout baseline gt_pages ({record['gt_pages']}) disagrees "
+                f"with manifest expected_pages ({expected_pages_by_id[case_id]})"
+            )
+        compared_pages = min(int(record["gt_pages"]), int(record["out_pages"]))
+        if len(record["pages"]) != compared_pages:
+            fail(
+                f"{case_id}: layout baseline page vectors cover {len(record['pages'])} "
+                f"page(s) but {compared_pages} were compared"
+            )
+        for page_number, vector in enumerate(record["pages"], start=1):
+            for section in LAYOUT_VECTOR_SECTIONS:
+                if section not in vector:
+                    fail(
+                        f"{case_id}: layout baseline page {page_number} vector "
+                        f"is missing the '{section}' section"
+                    )
+
+
 def validate_manifest() -> None:
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
     cases = manifest.get("cases")
@@ -328,7 +386,10 @@ def validate_manifest() -> None:
     for case in cases:
         validate_case(case, manifest)
 
+    validate_layout_baseline(cases)
+
     print("validated 30 business golden mocks (10 DOCX, 10 PPTX, 10 XLSX)")
+    print("validated the layout baseline against the manifest")
 
 
 def main() -> int:
