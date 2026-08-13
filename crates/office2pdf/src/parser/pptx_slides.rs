@@ -1331,10 +1331,15 @@ fn finalize_picture(
                 // A custom geometry has no corner-radius equivalent at all
                 // (issue #872). An SVG has no raster to mask, so it takes the
                 // same path as a `<clipPath>` instead (issue #897).
+                // PowerPoint crops with `a:srcRect` first and clips the
+                // resulting frame second. The renderer applies the crop later,
+                // so the clip written here has to live in the cropped frame's
+                // coordinates or it lands on the pre-crop artwork (#1018).
                 let clipped: Option<(Vec<u8>, ImageFormat)> = if format == ImageFormat::Svg {
-                    clip_svg_to_path(&data, &pic.custom_geometry).map(|svg| (svg, ImageFormat::Svg))
+                    clip_svg_to_path(&data, &pic.custom_geometry, pic.crop)
+                        .map(|svg| (svg, ImageFormat::Svg))
                 } else {
-                    apply_path_mask(&data, &pic.custom_geometry)
+                    apply_path_mask(&data, &pic.custom_geometry, pic.crop)
                 };
                 match clipped {
                     Some(masked) => {
@@ -1419,6 +1424,21 @@ fn apply_ellipse_mask(data: &[u8]) -> Option<(Vec<u8>, ImageFormat)> {
     Some((out.into_inner(), ImageFormat::Png))
 }
 
+/// The fraction of the source an `a:srcRect` keeps, as `(left, top, kept
+/// width, kept height)`, mirroring the clamps of the renderer's crop.
+///
+/// `None` when there is no crop to apply — absent, empty, or degenerate
+/// (nothing kept) — the three cases where the renderer leaves the asset at
+/// its full extent, so a clip must span the full box too.
+fn crop_kept_fractions(crop: Option<ImageCrop>) -> Option<(f64, f64, f64, f64)> {
+    let crop: ImageCrop = crop.filter(|crop| !crop.is_empty())?;
+    let left: f64 = crop.left.clamp(0.0, 1.0);
+    let top: f64 = crop.top.clamp(0.0, 1.0);
+    let kept_w: f64 = 1.0 - left - crop.right.clamp(0.0, 1.0);
+    let kept_h: f64 = 1.0 - top - crop.bottom.clamp(0.0, 1.0);
+    (kept_w > 0.0 && kept_h > 0.0).then_some((left, top, kept_w, kept_h))
+}
+
 /// Clip an SVG to `subpaths` by wrapping its content in a `<clipPath>`.
 ///
 /// An SVG has no raster to mask, so [`apply_path_mask`] could not touch one
@@ -1426,9 +1446,17 @@ fn apply_ellipse_mask(data: &[u8]) -> Option<(Vec<u8>, ImageFormat)> {
 /// subpaths arrive normalised to 0..1 of the picture box, so they scale onto
 /// the root's own `viewBox` to become user-space coordinates.
 ///
+/// `crop` is the picture's `a:srcRect`, applied later by the renderer by
+/// narrowing the viewBox: the picture box maps onto the region that
+/// narrowing keeps, not the full viewBox (issue #1018).
+///
 /// Returns `None` when the root states no usable `viewBox`, leaving the asset
 /// alone rather than clipping it against guessed units.
-fn clip_svg_to_path(data: &[u8], subpaths: &[Vec<(f64, f64)>]) -> Option<Vec<u8>> {
+fn clip_svg_to_path(
+    data: &[u8],
+    subpaths: &[Vec<(f64, f64)>],
+    crop: Option<ImageCrop>,
+) -> Option<Vec<u8>> {
     use std::fmt::Write as _;
 
     if subpaths.is_empty() {
@@ -1455,6 +1483,15 @@ fn clip_svg_to_path(data: &[u8], subpaths: &[Vec<(f64, f64)>]) -> Option<Vec<u8>
     if !(width.is_finite() && height.is_finite() && width > 0.0 && height > 0.0) {
         return None;
     }
+    let (frame_x, frame_y, frame_w, frame_h) = match crop_kept_fractions(crop) {
+        Some((left, top, kept_w, kept_h)) => (
+            x + width * left,
+            y + height * top,
+            width * kept_w,
+            height * kept_h,
+        ),
+        None => (x, y, width, height),
+    };
 
     let mut path: String = String::new();
     for subpath in subpaths.iter().filter(|points| points.len() >= 3) {
@@ -1463,8 +1500,8 @@ fn clip_svg_to_path(data: &[u8], subpaths: &[Vec<(f64, f64)>]) -> Option<Vec<u8>
                 path,
                 "{} {} {} ",
                 if index == 0 { "M" } else { "L" },
-                format_svg_number(x + fx * width),
-                format_svg_number(y + fy * height),
+                format_svg_number(frame_x + fx * frame_w),
+                format_svg_number(frame_y + fy * frame_h),
             );
         }
         path.push_str("Z ");
@@ -1602,16 +1639,27 @@ fn format_svg_number(value: f64) -> String {
 ///
 /// Subpaths are normalized to 0..1 of the picture box and filled even-odd, so
 /// an inner boundary carves a hole (issues #866, #870).
-fn apply_path_mask(data: &[u8], subpaths: &[Vec<(f64, f64)>]) -> Option<(Vec<u8>, ImageFormat)> {
+fn apply_path_mask(
+    data: &[u8],
+    subpaths: &[Vec<(f64, f64)>],
+    crop: Option<ImageCrop>,
+) -> Option<(Vec<u8>, ImageFormat)> {
     let decoded = image::load_from_memory(data).ok()?;
     let mut rgba = decoded.into_rgba8();
     let (width, height) = rgba.dimensions();
     if width == 0 || height == 0 || subpaths.is_empty() {
         return None;
     }
+    // The renderer crops the bitmap after this mask is baked, so the path is
+    // evaluated in the cropped frame's coordinates: a full-bitmap mapping
+    // would clip the pre-crop artwork instead (issue #1018).
+    let (frame_x, frame_y, frame_w, frame_h) = match crop_kept_fractions(crop) {
+        Some((left, top, kept_w, kept_h)) => (left, top, kept_w, kept_h),
+        None => (0.0, 0.0, 1.0, 1.0),
+    };
     for (x, y, pixel) in rgba.enumerate_pixels_mut() {
-        let px = (f64::from(x) + 0.5) / f64::from(width);
-        let py = (f64::from(y) + 0.5) / f64::from(height);
+        let px = ((f64::from(x) + 0.5) / f64::from(width) - frame_x) / frame_w;
+        let py = ((f64::from(y) + 0.5) / f64::from(height) - frame_y) / frame_h;
         if !point_is_inside_even_odd(subpaths, px, py) {
             pixel[3] = 0;
         }
@@ -3135,7 +3183,10 @@ fn parse_slide_xml_inner<'a>(
 
 #[cfg(test)]
 mod picture_mask_tests {
-    use super::{clip_svg_to_path, point_is_inside_even_odd};
+    use super::{apply_path_mask, clip_svg_to_path, point_is_inside_even_odd};
+    use crate::config::ConvertOptions;
+    use crate::ir::{FixedElementKind, ImageCrop, ImageFormat, Page};
+    use crate::parser::Parser as _;
 
     const SVG: &str = r#"<svg width="100" height="50" viewBox="0 0 100 50" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="50"/></svg>"#;
 
@@ -3147,7 +3198,7 @@ mod picture_mask_tests {
     #[test]
     fn an_svg_takes_its_custom_geometry_as_a_clip_path() {
         let triangle = vec![vec![(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]];
-        let out = clip_svg_to_path(SVG.as_bytes(), &triangle).expect("the SVG is clipped");
+        let out = clip_svg_to_path(SVG.as_bytes(), &triangle, None).expect("the SVG is clipped");
         let text = String::from_utf8(out).expect("still an SVG");
 
         assert!(text.contains("<clipPath"), "a clipPath is added: {text}");
@@ -3180,7 +3231,7 @@ mod picture_mask_tests {
     fn an_svg_without_a_view_box_is_not_clipped() {
         const NO_BOX: &str = r#"<svg width="10" height="10"><rect width="10" height="10"/></svg>"#;
         let triangle = vec![vec![(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]];
-        assert!(clip_svg_to_path(NO_BOX.as_bytes(), &triangle).is_none());
+        assert!(clip_svg_to_path(NO_BOX.as_bytes(), &triangle, None).is_none());
     }
 
     /// The unit square, and a smaller square inside it.
@@ -3234,5 +3285,118 @@ mod picture_mask_tests {
         assert!(!point_is_inside_even_odd(&diamond, 0.05, 0.05));
         // The ray at y = 0.5 passes exactly through the left and right vertices.
         assert!(!point_is_inside_even_odd(&diamond, 1.2, 0.5));
+    }
+
+    /// PowerPoint crops the source with `a:srcRect` first and clips the
+    /// resulting frame with the custom geometry second. The renderer applies
+    /// the crop later by narrowing the viewBox, so the clip has to be written
+    /// into the region that narrowing will keep — expressed against the full
+    /// box it lands on the pre-crop artwork instead (issue #1018).
+    #[test]
+    fn a_src_rect_crop_moves_the_svg_clip_into_the_kept_region() {
+        let triangle = vec![vec![(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]];
+        let crop = ImageCrop {
+            left: 0.25,
+            top: 0.0,
+            right: 0.25,
+            bottom: 0.0,
+        };
+        let out =
+            clip_svg_to_path(SVG.as_bytes(), &triangle, Some(crop)).expect("the SVG is clipped");
+        let text = String::from_utf8(out).expect("still an SVG");
+        // The kept region is x 25..75 of the 100 x 50 viewBox.
+        assert!(
+            text.contains("M 25 0 L 75 0 L 25 50 Z"),
+            "the clip spans the cropped frame, not the full box: {text}"
+        );
+    }
+
+    /// A crop the renderer will refuse to apply (nothing kept) must leave the
+    /// clip on the full box, or clip and crop disagree about the frame again.
+    #[test]
+    fn a_degenerate_crop_leaves_the_svg_clip_on_the_full_box() {
+        let triangle = vec![vec![(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]];
+        let crop = ImageCrop {
+            left: 0.7,
+            top: 0.0,
+            right: 0.7,
+            bottom: 0.0,
+        };
+        let out =
+            clip_svg_to_path(SVG.as_bytes(), &triangle, Some(crop)).expect("the SVG is clipped");
+        let text = String::from_utf8(out).expect("still an SVG");
+        assert!(
+            text.contains("M 0 0 L 100 0 L 0 50 Z"),
+            "an unapplied crop keeps the clip on the full box: {text}"
+        );
+    }
+
+    /// The raster mask has the same two coordinate systems: the alpha is
+    /// zeroed on the full bitmap while the crop happens later in the
+    /// renderer, so the path has to be evaluated in cropped-frame
+    /// coordinates (issue #1018).
+    #[test]
+    fn a_src_rect_crop_moves_the_raster_mask_too() {
+        let opaque = image::RgbaImage::from_pixel(8, 8, image::Rgba([255, 0, 0, 255]));
+        let mut png = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::ImageRgba8(opaque)
+            .write_to(&mut png, image::ImageFormat::Png)
+            .expect("encode the fixture");
+        // Keep the right half of the source; the path keeps the frame's
+        // left half — pixels 4..6 of the original bitmap.
+        let crop = ImageCrop {
+            left: 0.5,
+            top: 0.0,
+            right: 0.0,
+            bottom: 0.0,
+        };
+        let half = vec![vec![(0.0, 0.0), (0.5, 0.0), (0.5, 1.0), (0.0, 1.0)]];
+        let (data, _format) =
+            apply_path_mask(&png.into_inner(), &half, Some(crop)).expect("the raster is masked");
+        let masked = image::load_from_memory(&data).expect("decode").into_rgba8();
+        assert_eq!(
+            masked.get_pixel(4, 4)[3],
+            255,
+            "the frame's left half survives"
+        );
+        assert_eq!(
+            masked.get_pixel(7, 4)[3],
+            0,
+            "the frame's right half is masked away"
+        );
+    }
+
+    /// End to end through the parser: the probe deck's slide 2 combines
+    /// `srcRect l="20000" t="10000"` with a pentagon custGeom on an SVG
+    /// picture (the issue #1018 shape). The clip must land in the kept
+    /// region of the 800x600 viewBox — x 160..800, y 60..600 — not the
+    /// full box.
+    #[test]
+    fn a_cropped_svg_pictures_clip_lands_in_the_kept_region() {
+        let data = include_bytes!("../../../../tests/fixtures/pptx/svg-srcrect-clip-probe.pptx");
+        let (doc, _warnings) = crate::parser::pptx::PptxParser
+            .parse(data, &ConvertOptions::default())
+            .expect("the probe deck parses");
+        let Page::Fixed(page) = &doc.pages[1] else {
+            panic!("slide 2 is a fixed page");
+        };
+        let svg = page
+            .elements
+            .iter()
+            .find_map(|element| match &element.kind {
+                FixedElementKind::Image(image) if image.format == ImageFormat::Svg => {
+                    Some(std::str::from_utf8(&image.data).expect("SVG stays UTF-8"))
+                }
+                _ => None,
+            })
+            .expect("slide 2 carries the clipped SVG");
+        // Pentagon vertices mapped into the kept region: apex (480, 60) and
+        // the mid-left anchor (160, 330). The full-box mapping would put
+        // them at (400, 0) and (0, 300).
+        assert!(
+            svg.contains("M 480 60") && svg.contains("L 160 330"),
+            "the clip is written in cropped-frame coordinates: {}",
+            &svg[..svg.len().min(600)]
+        );
     }
 }
