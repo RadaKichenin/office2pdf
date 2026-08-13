@@ -4365,9 +4365,12 @@ fn a_crowded_axis_with_ellipsis_overflow_shortens_only_the_label_that_exceeds_it
     chart.category_axis_text_style.ellipsis_overflow = true;
 
     let source = chart_source(chart);
+    // Issue #1035: the native export right-aligns the pre-ellipsis text —
+    // including the swallowed inter-word space — at the trailing-end anchor
+    // and draws the ellipsis beyond it as a separate overflowing run.
     assert!(
-        source.contains("[Konverteringsfrekvens for…]"),
-        "the overflowing label must end at the native word boundary: {source}"
+        source.contains("[Konverteringsfrekvens for#\" \";#box(width: 0pt)[#align(left)[…]]]"),
+        "the pre-ellipsis text aligns with its space and the ellipsis overflows: {source}"
     );
     assert!(
         !source.contains("[Konverteringsfrekvens for kundeemne]"),

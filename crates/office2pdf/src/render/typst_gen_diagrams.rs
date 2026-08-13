@@ -1466,6 +1466,37 @@ fn chart_category_label_advance_pt(chart: &Chart, label: &str) -> Option<f64> {
         .map(|advance_em| advance_em * size_pt + ellipsis_pt + tracking_pt)
 }
 
+/// Typst content for a rotated category label, aligned as the native export
+/// aligns it.
+///
+/// An untruncated label right-aligns whole. An ellipsized one aligns only its
+/// pre-ellipsis text — including the inter-word space the truncation swallowed
+/// — at the trailing-end anchor, and draws the `…` beyond it: on the #841
+/// deck's native export the prefix `Konverteringsfrekvens for ` ends at the
+/// same anchor the other labels share and a separate `…` run starts there.
+/// Right-aligning the combined string instead left the label short by the
+/// space-plus-ellipsis advance, 12.97pt along the slant (issue #1035). The
+/// zero-width box needs its own `align(left)`, or it inherits the line's
+/// right alignment and overflows leftwards across the prefix.
+fn rotated_category_label_content(category: &str, label: &str) -> String {
+    let Some(stem) = label.strip_suffix('…').filter(|_| label != category) else {
+        return escape_typst(label);
+    };
+    let swallowed_space: &str = if category
+        .strip_prefix(stem)
+        .is_some_and(|rest| rest.starts_with(' '))
+    {
+        "#\" \";"
+    } else {
+        ""
+    };
+    format!(
+        "{}{}#box(width: 0pt)[#align(left)[…]]",
+        escape_typst(stem),
+        swallowed_space
+    )
+}
+
 /// Apply `vertOverflow="ellipsis"` to a crowded rotated category label.
 ///
 /// PowerPoint lays out slide 14 of #841 with a box as wide as the source-face
@@ -2333,7 +2364,8 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
             // `top + right` is what puts all of them on one top edge, which is
             // how the reference draws them (issue #884). The box is the widest
             // label's width for every label so that right-aligning inside it
-            // lands each trailing end on the pivot.
+            // lands each trailing end on the pivot — except an ellipsized
+            // label's `…`, which deliberately overflows past it (#1035).
             let label_box_w: f64 = chart_category_label_widest_pt(chart).unwrap_or(row);
             let label: String = chart_category_label_text(chart, category, label_box_w);
             let centre: f64 = plot_x + group_start + row / 2.0;
@@ -2346,7 +2378,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 format_f64(label_box_w),
                 format_f64(chart_axis_text_pt(chart, chart.category_axis_text_style)),
                 chart_axis_text_attrs(chart, chart.category_axis_text_style),
-                escape_typst(&label)
+                rotated_category_label_content(category, &label)
             );
         } else {
             let _ = writeln!(
