@@ -2979,8 +2979,12 @@ impl<'a> SlideXmlParser<'a> {
                 );
                 let mut paragraph_runs = std::mem::take(&mut self.runs);
                 insert_hangul_kinsoku_break_markers(&mut paragraph_runs);
-                let mut paragraph_style: ParagraphStyle = self.para_style.clone();
-                normalize_pptx_tab_stops(&mut paragraph_style, self.text_box.padding.left);
+                let paragraph_style: ParagraphStyle = self.para_style.clone();
+                // `a:tab pos` is measured from the text origin — the box edge
+                // plus `lIns` — not from the box edge itself: the native
+                // export of customGeo.pptx page 46 lands its value run at
+                // exactly text_origin + pos, 7.2pt (one default lIns) right
+                // of where the former inset subtraction put it (issue #785).
                 self.paragraphs.push(PptxParagraphEntry {
                     paragraph: Paragraph {
                         style: paragraph_style,

@@ -589,15 +589,6 @@ pub(super) fn extract_pptx_tab_stop(e: &quick_xml::events::BytesStart, style: &m
     tab_stops.sort_by(|left, right| left.position.total_cmp(&right.position));
 }
 
-pub(super) fn normalize_pptx_tab_stops(style: &mut ParagraphStyle, text_inset_left_pt: f64) {
-    let Some(tab_stops) = style.tab_stops.as_mut() else {
-        return;
-    };
-    for tab_stop in tab_stops {
-        tab_stop.position = (tab_stop.position - text_inset_left_pt).max(0.0);
-    }
-}
-
 pub(super) fn extract_pptx_line_spacing_pct(
     e: &quick_xml::events::BytesStart,
     style: &mut ParagraphStyle,
