@@ -311,6 +311,7 @@ fn test_drawings_shift_with_the_inset_grid_and_charts_by_one_row() {
         anchor_row: 1,
         x_offset_pt: 10.0,
         y_offset_pt: 5.0,
+        clip_width_pt: None,
         image: crate::ir::ImageData {
             rotation_deg: None,
             flip_h: false,

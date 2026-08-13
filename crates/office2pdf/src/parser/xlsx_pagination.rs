@@ -3,6 +3,10 @@
 //! Excel prints columns that overflow the page width on subsequent pages
 //! (default order: down, then over). office2pdf previously clipped them at
 //! the right page edge, silently losing content.
+//!
+//! A drawing-only sheet has no columns to split on, so its page-columns come
+//! from the drawings' extents instead ([`split_drawing_only_page`],
+//! issue #713).
 
 use crate::ir::{Block, HFInline, HeaderFooter, SheetPage, Table, TableCell, TableRow};
 
@@ -376,6 +380,65 @@ fn slice_table_columns(table: &Table, start: usize, end: usize) -> Table {
         prints_gridlines: table.prints_gridlines,
         prints_headings: table.prints_headings,
     }
+}
+
+/// Split a drawing-only sheet into page-columns at printable-width
+/// boundaries.
+///
+/// Excel prints a drawing that crosses the printable edge clipped there and
+/// continues it on the next page-column. The empty-sheet branch previously
+/// emitted one page and let the pictures overflow the right margin — the
+/// tomcat of `WithDrawing.xlsx` ran 36pt past the printable edge on a single
+/// page where Excel prints two (issue #713). The table is empty, so
+/// [`split_sheet_page_by_width`] has no column widths to split on; the
+/// drawings' extents drive the paging instead.
+///
+/// Every image on a split page carries [`crate::ir::SheetImage::clip_width_pt`]
+/// so the renderer clips it to its page-column window; a continued copy also
+/// carries a negative `x_offset_pt`. Charts and text boxes stay on the first
+/// page-column, like the column splitter keeps them on its first group.
+pub(super) fn split_drawing_only_page(page: SheetPage) -> Vec<SheetPage> {
+    let printable_width: f64 = page.size.width - page.margins.left - page.margins.right;
+    if printable_width <= 0.0 {
+        return vec![page];
+    }
+    let right_extent: f64 = page
+        .images
+        .iter()
+        .map(|image| image.x_offset_pt + image.image.width.unwrap_or(0.0))
+        .fold(0.0, f64::max);
+    if right_extent <= printable_width {
+        return vec![page];
+    }
+    let group_count: usize =
+        ((right_extent / printable_width).ceil() as usize).clamp(2, MAX_COLUMN_GROUPS);
+
+    (0..group_count)
+        .map(|group| {
+            let window_left: f64 = group as f64 * printable_width;
+            let mut paged: SheetPage = page.clone();
+            paged.images = page
+                .images
+                .iter()
+                .filter(|image| {
+                    let width: f64 = image.image.width.unwrap_or(0.0);
+                    image.x_offset_pt + width > window_left
+                        && image.x_offset_pt < window_left + printable_width
+                })
+                .map(|image| {
+                    let mut paged_image = image.clone();
+                    paged_image.x_offset_pt -= window_left;
+                    paged_image.clip_width_pt = Some(printable_width);
+                    paged_image
+                })
+                .collect();
+            if group > 0 {
+                paged.charts = Vec::new();
+                paged.text_boxes = Vec::new();
+            }
+            paged
+        })
+        .collect()
 }
 
 #[cfg(test)]
