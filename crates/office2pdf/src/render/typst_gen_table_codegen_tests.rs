@@ -1350,6 +1350,98 @@ fn test_slide_table_cell_uses_the_powerpoint_line_box() {
     }
 }
 
+/// A hard break inside a centred slide-table cell takes the next line's box.
+///
+/// The original slide 16 cell in `office2pdf_introduction_ko.pptx` is the
+/// awkward boundary case: 13pt `DOCX` followed by 9.5pt `Word`. PowerPoint's
+/// native export advances exactly 12pt, the same floor as a 10pt next line.
+/// This compiles the real table-cell path so its vertical centring and line
+/// box cannot make a source-only assertion pass by accident (issue #683).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn slide_table_hard_break_uses_the_following_lines_size_floor() {
+    let family = "Arial";
+    let cell = TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle {
+                alignment: Some(Alignment::Center),
+                ..ParagraphStyle::default()
+            },
+            runs: vec![
+                Run {
+                    text: "DOCX\n".to_string(),
+                    style: TextStyle {
+                        font_family: Some(family.to_string()),
+                        font_size: Some(13.0),
+                        bold: Some(true),
+                        ..TextStyle::default()
+                    },
+                    href: None,
+                    footnote: None,
+                },
+                Run {
+                    text: "Word".to_string(),
+                    style: TextStyle {
+                        font_family: Some(family.to_string()),
+                        font_size: Some(9.5),
+                        ..TextStyle::default()
+                    },
+                    href: None,
+                    footnote: None,
+                },
+            ],
+        })],
+        vertical_align: Some(CellVerticalAlign::Center),
+        padding: Some(Insets {
+            top: 3.6,
+            right: 7.2,
+            bottom: 3.6,
+            left: 7.2,
+        }),
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            minimum_height: None,
+            cells: vec![cell],
+            height: Some(66.24),
+        }],
+        column_widths: vec![120.0],
+        ..Table::default()
+    };
+    let output = generate_typst(&make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![FixedElement {
+            x: 72.0,
+            y: 72.0,
+            width: 120.0,
+            height: 66.24,
+            kind: FixedElementKind::Table(table),
+        }],
+    )]))
+    .unwrap();
+    let runs = crate::render::pdf::compiled_text_runs(&output.source, 0)
+        .unwrap_or_else(|error| panic!("compile failed: {error}\n{}", output.source));
+    let docx_baseline = runs
+        .iter()
+        .find(|run| run.text.contains("DOCX"))
+        .expect("DOCX run")
+        .baseline_pt;
+    let word_baseline = runs
+        .iter()
+        .find(|run| run.text.contains("Word"))
+        .expect("Word run")
+        .baseline_pt;
+
+    assert!(
+        (word_baseline - docx_baseline - 12.0).abs() < 0.01,
+        "the 9.5pt following line must own PowerPoint's measured 12pt advance: \
+         {docx_baseline}, {word_baseline}\n{}",
+        output.source
+    );
+}
+
 /// An empty paragraph's blank line in a slide cell comes from the same model.
 ///
 /// The strut that holds an empty `<a:p>`'s height was sized by
