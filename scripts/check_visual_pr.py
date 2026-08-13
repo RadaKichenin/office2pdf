@@ -32,6 +32,7 @@ AUDIT_ROWS = (
     "Rotation/flip",
     "Fill",
     "Stroke/border",
+    "Shape outline geometry",
     "Text content",
     "Font family/weight/style",
     "Text color",
