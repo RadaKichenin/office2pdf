@@ -22,11 +22,12 @@ use self::contexts::{
     BidiContext, ChartContext, DocxConversionContext, DrawingShapeContext, DrawingTextBoxContext,
     DrawingTextBoxInfo, FieldContext, MathContext, NoteContent, NoteContext,
     ParagraphShadingContext, SmallCapsContext, TableHeaderContext, TableStyleContext,
-    VmlTextBoxContext, VmlTextBoxInfo, WpgDrawingInfo, WrapContext, build_chart_context_from_xml,
-    build_math_context_from_xml, build_note_context_from_xml, build_wrap_context_from_xml,
-    extract_column_layout_from_section_property, is_note_reference_run, read_zip_text,
-    scan_column_layouts, scan_page_numbering, scan_style_paragraph_shading, seq_identifier,
-    toc_caption_identifier, toc_heading_depth,
+    VmlTextBoxContext, VmlTextBoxInfo, WordWrapContext, WpgDrawingInfo, WrapContext,
+    build_chart_context_from_xml, build_math_context_from_xml, build_note_context_from_xml,
+    build_wrap_context_from_xml, extract_column_layout_from_section_property,
+    is_note_reference_run, read_zip_text, scan_column_layouts, scan_page_numbering,
+    scan_style_paragraph_shading, scan_style_word_wrap, seq_identifier, toc_caption_identifier,
+    toc_heading_depth,
 };
 use self::lists::{
     NumberingMap, TaggedElement, build_numbering_map, extract_num_info, group_into_lists,
@@ -205,6 +206,7 @@ struct ZipPreParseAssets {
     theme_fonts: ThemeFonts,
     default_paragraph_style_id: Option<String>,
     style_paragraph_backgrounds: HashMap<String, Color>,
+    style_word_wraps: HashMap<String, bool>,
     /// Read from the raw `word/styles.xml` because docx-rs has no field for
     /// `w:kern` (issue #628).
     pair_kerning: PairKerningRules,
@@ -223,6 +225,7 @@ fn build_zip_preparse_assets(data: &[u8]) -> ZipPreParseAssets {
                 .as_deref()
                 .and_then(styles::scan_default_paragraph_style_id);
             let style_paragraph_backgrounds = scan_style_paragraph_shading(styles_xml.as_deref());
+            let style_word_wraps = scan_style_word_wrap(styles_xml.as_deref());
             let theme_xml = read_zip_text(&mut archive, "word/theme/theme1.xml");
             let notes = build_note_context_from_xml(doc_xml.as_deref(), &mut archive);
             let wraps = build_wrap_context_from_xml(doc_xml.as_deref());
@@ -258,6 +261,7 @@ fn build_zip_preparse_assets(data: &[u8]) -> ZipPreParseAssets {
                 bidi,
                 small_caps,
                 paragraph_shading: ParagraphShadingContext::from_xml(doc_xml.as_deref()),
+                word_wraps: WordWrapContext::from_xml(doc_xml.as_deref()),
                 fields: FieldContext::default(),
             };
             ZipPreParseAssets {
@@ -275,6 +279,7 @@ fn build_zip_preparse_assets(data: &[u8]) -> ZipPreParseAssets {
                     .unwrap_or_default(),
                 default_paragraph_style_id,
                 style_paragraph_backgrounds,
+                style_word_wraps,
                 pair_kerning: PairKerningRules::from_styles_xml(styles_xml.as_deref()),
             }
         }
@@ -291,6 +296,7 @@ fn build_zip_preparse_assets(data: &[u8]) -> ZipPreParseAssets {
                 bidi: BidiContext::from_xml(None),
                 small_caps: SmallCapsContext::from_xml(None),
                 paragraph_shading: ParagraphShadingContext::from_xml(None),
+                word_wraps: WordWrapContext::from_xml(None),
                 fields: FieldContext::default(),
             },
             math: MathContext::empty(),
@@ -302,6 +308,7 @@ fn build_zip_preparse_assets(data: &[u8]) -> ZipPreParseAssets {
             theme_fonts: ThemeFonts::default(),
             default_paragraph_style_id: None,
             style_paragraph_backgrounds: HashMap::new(),
+            style_word_wraps: HashMap::new(),
             pair_kerning: PairKerningRules::default(),
         },
     }
@@ -326,6 +333,7 @@ impl Parser for DocxParser {
             theme_fonts,
             default_paragraph_style_id,
             style_paragraph_backgrounds,
+            style_word_wraps,
             pair_kerning,
         } = build_zip_preparse_assets(data);
 
@@ -345,6 +353,7 @@ impl Parser for DocxParser {
             &theme_fonts,
             default_paragraph_style_id.as_deref(),
             &style_paragraph_backgrounds,
+            &style_word_wraps,
             &pair_kerning,
         );
         let mut warnings: Vec<ConvertWarning> = Vec::new();
@@ -995,6 +1004,9 @@ pub(super) enum ParagraphContainer {
 struct ParagraphFlow {
     is_rtl: bool,
     background: Option<Color>,
+    /// The paragraph's own `w:wordWrap`, recovered from the raw XML — the
+    /// published docx-rs does not parse it (issue #1041).
+    word_wrap: Option<bool>,
     container: ParagraphContainer,
 }
 
@@ -1015,6 +1027,7 @@ fn convert_paragraph_blocks(
     let flow = ParagraphFlow {
         is_rtl: ctx.bidi.next_is_bidi(),
         background: ctx.paragraph_shading.next_background(),
+        word_wrap: ctx.word_wraps.next_word_wrap(),
         container,
     };
 
@@ -1302,6 +1315,7 @@ fn push_paragraph_from_runs(
 ) {
     let mut explicit_para_style = extract_paragraph_style(&para.property);
     explicit_para_style.background = flow.background;
+    explicit_para_style.word_wrap = flow.word_wrap;
     let explicit_tab_overrides = extract_tab_stop_overrides(&para.property.tabs);
     let mut style = merge_paragraph_style(
         &explicit_para_style,

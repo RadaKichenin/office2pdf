@@ -26,6 +26,8 @@ mod table_header;
 mod table_style;
 #[path = "docx_context_vml.rs"]
 mod vml;
+#[path = "docx_context_word_wrap.rs"]
+mod word_wrap;
 #[path = "docx_context_wrap.rs"]
 mod wrap;
 
@@ -47,6 +49,7 @@ pub(super) use table_header::TableHeaderContext;
 pub(super) use table_header::scan_table_headers;
 pub(super) use table_style::{ResolvedTableStyle, TableStyleContext, apply_table_text_style};
 pub(super) use vml::{VmlTextBoxContext, VmlTextBoxInfo};
+pub(super) use word_wrap::{WordWrapContext, scan_style_word_wrap};
 pub(super) use wrap::{WrapContext, build_wrap_context_from_xml};
 
 /// Bundled conversion contexts threaded through the recursive DOCX call tree.
@@ -64,5 +67,6 @@ pub(super) struct DocxConversionContext {
     pub(super) bidi: BidiContext,
     pub(super) small_caps: SmallCapsContext,
     pub(super) paragraph_shading: ParagraphShadingContext,
+    pub(super) word_wraps: WordWrapContext,
     pub(super) fields: FieldContext,
 }

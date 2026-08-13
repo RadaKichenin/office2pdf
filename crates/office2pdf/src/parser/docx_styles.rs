@@ -219,6 +219,7 @@ pub(super) fn build_style_map(
     theme_fonts: &ThemeFonts,
     default_paragraph_style_id: Option<&str>,
     paragraph_backgrounds: &HashMap<String, Color>,
+    style_word_wraps: &HashMap<String, bool>,
     pair_kerning: &PairKerningRules,
 ) -> StyleMap {
     let mut map = StyleMap::new();
@@ -257,6 +258,9 @@ pub(super) fn build_style_map(
                     &default_paragraph,
                 );
                 paragraph.background = paragraph_backgrounds.get(&style.style_id).copied();
+                // From the raw styles.xml, since the published docx-rs does
+                // not parse `w:wordWrap` (issue #1041).
+                paragraph.word_wrap = style_word_wraps.get(&style.style_id).copied();
                 let paragraph_tab_overrides =
                     extract_tab_stop_overrides(&style.paragraph_property.tabs);
                 let heading_level = style

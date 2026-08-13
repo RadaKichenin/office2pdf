@@ -714,18 +714,64 @@ fn test_parse_docx_text_after_run_page_break_still_renders() {
 
 // ── w:wordWrap (issue #730) ────────────────────────────────────────────
 
-/// The property reaches the IR from `docx-rs`, with `0` and `1` distinct from
-/// each other and from an absent element.
+/// The property reaches the IR from the raw XML, with `0` and `1` distinct
+/// from each other and from an absent element. It cannot come from `docx-rs`:
+/// the published crate does not parse `w:wordWrap`, and reading the patched
+/// fork's field made the package unpublishable (issue #1041).
 #[test]
 fn test_word_wrap_reaches_the_paragraph_style() {
-    let off = extract_paragraph_style(&docx_rs::ParagraphProperty::new().word_wrap(false));
-    assert_eq!(off.word_wrap, Some(false));
+    let xml = r#"<?xml version="1.0"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+<w:p><w:pPr><w:wordWrap w:val="0"/></w:pPr></w:p>
+<w:p><w:pPr><w:wordWrap w:val="1"/></w:pPr></w:p>
+<w:p><w:pPr><w:wordWrap/></w:pPr></w:p>
+<w:p/>
+</w:body></w:document>"#;
+    let context = super::super::contexts::WordWrapContext::from_xml(Some(xml));
+    assert_eq!(context.next_word_wrap(), Some(false));
+    assert_eq!(context.next_word_wrap(), Some(true));
+    assert_eq!(
+        context.next_word_wrap(),
+        Some(true),
+        "an absent w:val means on, the element's own default"
+    );
+    assert_eq!(context.next_word_wrap(), None);
+}
 
-    let on = extract_paragraph_style(&docx_rs::ParagraphProperty::new().word_wrap(true));
-    assert_eq!(on.word_wrap, Some(true));
+/// A table cell's paragraph consumes its own slot, so nesting cannot shift
+/// the pairing between the raw scan and the structured walk.
+#[test]
+fn test_word_wrap_scan_covers_nested_table_paragraphs() {
+    let xml = r#"<?xml version="1.0"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+<w:p/>
+<w:tbl><w:tr><w:tc><w:p><w:pPr><w:wordWrap w:val="0"/></w:pPr></w:p></w:tc></w:tr></w:tbl>
+<w:p/>
+</w:body></w:document>"#;
+    let context = super::super::contexts::WordWrapContext::from_xml(Some(xml));
+    assert_eq!(context.next_word_wrap(), None);
+    assert_eq!(context.next_word_wrap(), Some(false));
+    assert_eq!(context.next_word_wrap(), None);
+}
 
-    let absent = extract_paragraph_style(&docx_rs::ParagraphProperty::new());
-    assert_eq!(absent.word_wrap, None);
+/// A paragraph style's `w:wordWrap` comes from the raw styles.xml the same
+/// way (issue #730's style chain).
+#[test]
+fn test_style_word_wrap_is_scanned_by_style_id() {
+    let xml = r#"<?xml version="1.0"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:style w:type="paragraph" w:styleId="NoWrap"><w:pPr><w:wordWrap w:val="0"/></w:pPr></w:style>
+<w:style w:type="paragraph" w:styleId="Plain"><w:pPr/></w:style>
+<w:style w:type="character" w:styleId="CharNoWrap"><w:pPr><w:wordWrap w:val="0"/></w:pPr></w:style>
+</w:styles>"#;
+    let map = super::super::contexts::scan_style_word_wrap(Some(xml));
+    assert_eq!(map.get("NoWrap"), Some(&false));
+    assert_eq!(map.get("Plain"), None);
+    assert_eq!(
+        map.get("CharNoWrap"),
+        None,
+        "a character style's stray wordWrap stays out of the paragraph chain"
+    );
 }
 
 /// Measured on Word: a paragraph's own `w:wordWrap` beats the one its style
@@ -733,8 +779,10 @@ fn test_word_wrap_reaches_the_paragraph_style() {
 /// the style alone keeps eojeol whole.
 #[test]
 fn test_explicit_word_wrap_overrides_the_style_chain() {
-    let explicit_prop = docx_rs::ParagraphProperty::new().word_wrap(false);
-    let explicit = extract_paragraph_style(&explicit_prop);
+    let explicit = ParagraphStyle {
+        word_wrap: Some(false),
+        ..ParagraphStyle::default()
+    };
     let style = ResolvedStyle {
         text: TextStyle::default(),
         paragraph: ParagraphStyle {
