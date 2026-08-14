@@ -1,0 +1,22 @@
+[package]
+name = "ooxml-package"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Lossless OOXML (OPC) package model for round-trip editing"
+# Not published yet: the editing foundation (issue #746) ships behind the
+# converter crates until the editable models stabilize.
+publish = false
+
+[dependencies]
+thiserror = "2"
+tracing = "0.1"
+quick-xml = "0.38"
+zip = { version = "0.6", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+# The round-trip tests re-read saved containers with `zip` directly so the
+# crate under test never verifies its own output.
+zip = { version = "0.6", default-features = false, features = ["deflate"] }

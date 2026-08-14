@@ -1,0 +1,26 @@
+[package]
+name = "pptx-model"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Lossless, editable PPTX document model over ooxml-package"
+# Not published yet: the editing foundation (issue #746) ships behind the
+# converter crates until the editable models stabilize.
+publish = false
+
+[dependencies]
+ooxml-package = { path = "../ooxml-package" }
+thiserror = "2"
+tracing = "0.1"
+quick-xml = "0.38"
+
+[dev-dependencies]
+# Projection tests render the round-tripped package through the existing
+# converter pipeline and inspect the resulting PDF.
+office2pdf = { path = "../office2pdf" }
+pdf-extract = "0.10"
+# Saved containers are re-read with `zip` directly so the model under test
+# never verifies its own output.
+zip = { version = "0.6", default-features = false, features = ["deflate"] }
