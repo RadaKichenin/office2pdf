@@ -1443,3 +1443,142 @@ fn a_section_with_only_a_first_page_header_still_emits_it() {
         "a first-only header must still reach the page setup, got:\n{source}"
     );
 }
+
+// ----- Hangul wrap follows the same defined-style trigger (issue #833) -----
+
+/// A pure-Hangul sentence — no digit/Latin boundary, so the auto-space pass
+/// leaves it byte-identical and the assertions below see only the wrap frames.
+const HANGUL_WRAP_SENTENCE: &str = "본 계약은 갑과 을이";
+
+/// Framing puts each multi-syllable eojeol alone inside a bracket pair
+/// (`…#box(…)[#text(…)[계약은]]…`), where the unframed sentence emits as one
+/// span (`[본 계약은 갑과 을이]`) — so this substring appears iff framed.
+const FRAMED_EOJEOL: &str = "[계약은]";
+
+/// End-to-end: package bytes through the parser and the Typst generator, so
+/// the assertion sees the frames a paragraph would actually wrap with.
+fn typst_source_for(styles_xml: &str, body_xml: &str) -> String {
+    let (doc, _warnings) = DocxParser
+        .parse(
+            &build_docx_with_raw_styles(styles_xml, body_xml),
+            &ConvertOptions::default(),
+        )
+        .expect("document parses");
+    crate::internal::generate_typst(&doc)
+        .expect("document generates")
+        .source
+}
+
+#[test]
+fn a_bare_hangul_paragraph_gets_no_eojeol_frames_without_a_defined_default_style() {
+    // The #833 probe series: the report's bare 9pt note breaks `표시되어야`
+    // after `표` in native Word (GT line 1 ends at 523.68pt), and so does the
+    // same text at 10.5pt, without italic, and without its final stop — while
+    // re-exporting the same bytes plus only a default-style definition keeps
+    // the eojeol whole with `표` declined at 524.1pt of a 524.45pt measure.
+    // Word's built-in Korean Normal breaks Hangul at character level; every
+    // paragraph #626 measured as eojeol-whole is `ListParagraph`-styled.
+    let source = typst_source_for(
+        CORPUS_SHAPED_STYLES,
+        &format!("<w:p>{}</w:p>", korean_run_xml(HANGUL_WRAP_SENTENCE)),
+    );
+
+    assert!(
+        source.contains(HANGUL_WRAP_SENTENCE),
+        "a bare paragraph keeps syllable-level break opportunities: {source}"
+    );
+    assert!(
+        !source.contains(FRAMED_EOJEOL),
+        "no eojeol frame may reach a bare paragraph: {source}"
+    );
+}
+
+#[test]
+fn a_style_referencing_hangul_paragraph_keeps_its_eojeol_frames() {
+    // Probe F2: `w:pStyle="ListParagraph"` alone — no numbering — keeps
+    // `정함을` whole with 24.85pt to spare, in the same package whose bare
+    // control breaks mid-word. Probe F7 measures the same for `Heading6`, so
+    // the trigger is any resolvable style, not the list machinery.
+    let body = format!(
+        r#"<w:p><w:pPr><w:pStyle w:val="ListParagraph"/></w:pPr>{}</w:p>"#,
+        korean_run_xml(HANGUL_WRAP_SENTENCE)
+    );
+    let source = typst_source_for(CORPUS_SHAPED_STYLES, &body);
+
+    assert!(
+        source.contains(FRAMED_EOJEOL),
+        "a defined, referenced style keeps each eojeol whole: {source}"
+    );
+}
+
+#[test]
+fn a_bare_hangul_paragraph_keeps_its_eojeol_frames_when_a_default_style_is_defined() {
+    // Probe G1: adding only a default-style definition to the report package
+    // flips its bare note paragraph from breaking after `표` to keeping
+    // `표시되어야` whole — the leg every real Word-authored document is on,
+    // since Word always writes a `Normal` definition.
+    let source = typst_source_for(
+        DEFAULT_STYLE_DEFINING_STYLES,
+        &format!("<w:p>{}</w:p>", korean_run_xml(HANGUL_WRAP_SENTENCE)),
+    );
+
+    assert!(
+        source.contains(FRAMED_EOJEOL),
+        "a defined default style keeps each eojeol whole: {source}"
+    );
+}
+
+#[test]
+fn an_unresolvable_pstyle_gets_no_eojeol_frames() {
+    // Probe F8: a `w:pStyle` naming a style the document never defines wraps
+    // exactly like the bare control — mid-word — so resolution, not the mere
+    // presence of the reference, is what replaces the built-in Korean Normal.
+    let body = format!(
+        r#"<w:p><w:pPr><w:pStyle w:val="NoSuchStyle"/></w:pPr>{}</w:p>"#,
+        korean_run_xml(HANGUL_WRAP_SENTENCE)
+    );
+    let source = typst_source_for(CORPUS_SHAPED_STYLES, &body);
+
+    assert!(
+        !source.contains(FRAMED_EOJEOL),
+        "an unresolvable style reference is the same as no style: {source}"
+    );
+}
+
+#[test]
+fn a_bare_cell_hangul_paragraph_gets_no_eojeol_frames_without_a_defined_default_style() {
+    // Probe H2: a bare cell paragraph in the no-default-style package breaks
+    // `목적으로` after `목` at the cell's own measure — the cell follows the
+    // same style rule as the body, as it does for the auto space (#627, #732).
+    let source = typst_source_for(
+        CORPUS_SHAPED_STYLES,
+        &nested_cell_body_xml(HANGUL_WRAP_SENTENCE, 1),
+    );
+
+    assert!(
+        source.contains(HANGUL_WRAP_SENTENCE),
+        "a bare cell paragraph keeps syllable-level break opportunities: {source}"
+    );
+    assert!(
+        !source.contains(FRAMED_EOJEOL),
+        "no eojeol frame may reach a bare cell paragraph: {source}"
+    );
+}
+
+#[test]
+fn an_explicit_word_wrap_keeps_eojeol_frames_on_a_bare_paragraph() {
+    // Direct formatting outranks the style chain it overrides (issue #730's
+    // `w:val="0"` is checked first for the same reason), so an explicit
+    // `w:wordWrap w:val="1"` restores word-level wrapping even where the
+    // built-in Korean Normal would break characters.
+    let body = format!(
+        r#"<w:p><w:pPr><w:wordWrap w:val="1"/></w:pPr>{}</w:p>"#,
+        korean_run_xml(HANGUL_WRAP_SENTENCE)
+    );
+    let source = typst_source_for(CORPUS_SHAPED_STYLES, &body);
+
+    assert!(
+        source.contains(FRAMED_EOJEOL),
+        "an explicit word-level wrap request keeps the frames: {source}"
+    );
+}

@@ -988,7 +988,9 @@ struct ParagraphFlow {
     /// explicitly defined in `word/styles.xml` — a resolvable `w:pStyle`, or
     /// the document's own default-style definition for a bare paragraph.
     /// False means the paragraph falls through to Word's built-in Normal,
-    /// which is what suppresses the East Asian auto space (issue #732).
+    /// which is what suppresses the East Asian auto space (issue #732) and
+    /// what breaks Hangul lines at character level rather than keeping each
+    /// eojeol whole (issue #833).
     effective_style_is_defined: bool,
 }
 
@@ -1312,6 +1314,20 @@ fn push_paragraph_from_runs(
         style.direction = Some(TextDirection::Rtl);
     }
     apply_word_compatible_paragraph_defaults(&mut style);
+    // Word's built-in Korean Normal — in force exactly when no document-defined
+    // style resolves for the paragraph — breaks Hangul lines at character
+    // level, where a document-defined style keeps each eojeol whole. Measured
+    // by the #833 probe series: the same bare sentence flips between breaking
+    // `표시되어야` after `표` and declining that syllable at 524.1pt of a
+    // 524.45pt measure when only a default-style definition is added, a
+    // referenced `ListParagraph` or `Heading6` flips it alone, and `w:numPr`
+    // without a style does not. Same trigger as the auto space below
+    // (issue #732); every paragraph #626 measured as eojeol-whole is
+    // `ListParagraph`-styled. Recorded as an effective `w:wordWrap` default so
+    // an explicit `w:val` keeps outranking it either way (issue #730).
+    if style.word_wrap.is_none() && !flow.effective_style_is_defined {
+        style.word_wrap = Some(false);
+    }
     // Word's automatic East Asian/Latin space, applied once per paragraph so a
     // boundary falling between two runs is caught too. It goes only to
     // paragraphs whose effective style the document defines: Word's built-in

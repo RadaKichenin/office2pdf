@@ -407,7 +407,7 @@
       "samples": []
      },
      "width": {
-      "mean_abs_pct": 3.33,
+      "mean_abs_pct": 3.32,
       "worst_pct": 18.29
      },
      "wraps": {
@@ -3227,7 +3227,7 @@
   "xlsx": 0.5
  },
  "office2pdf_version": "office2pdf 0.6.7",
- "repository_commit": "28cabfb9964170ac42710c5020994d487ae65328-dirty",
+ "repository_commit": "65aa2714d81f9bfeda0a0e9dcbb3732eec38e6fb-dirty",
  "schema_version": 2,
  "summary": {
   "cases": 30,
