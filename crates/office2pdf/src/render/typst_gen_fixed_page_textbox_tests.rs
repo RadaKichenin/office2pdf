@@ -216,16 +216,15 @@ fn test_fixed_page_text_box_ordered_list_preserves_textbox_styling() {
     );
     assert!(!output.source.contains("\\\n2. Second item"));
     // A slide list paces on PowerPoint's line box, scaled by the declared
-    // `a:lnSpc`: 1.2em at 24pt is 28.8pt, and 1.5 line spacing makes the
-    // advance between two items 43.2pt (issue #934).
-    // A slide list paces on PowerPoint's line box, scaled by the declared
     // `a:lnSpc`: 1.2em at 24pt is 28.8pt, and 1.5 line spacing makes each
     // item's box 43.2pt — which is the advance, since nothing is emitted
-    // between items that declare no spacing (issue #934).
+    // between items that declare no spacing (issue #934). The percentage grows
+    // the line from its top, so the face keeps its plain 0.276em descent gap
+    // and the ascent takes the whole 0.6em the box gains (issue #1020).
     assert!(
         output
             .source
-            .contains("#set text(top-edge: 1.386em, bottom-edge: -0.41400000000000003em)"),
+            .contains("#set text(top-edge: 1.5239999999999998em, bottom-edge: -0.276em)"),
         "the item takes the 1.5-scaled PowerPoint line box: {}",
         output.source
     );
@@ -1916,6 +1915,59 @@ fn slide_baseline_splits_the_lines_extra_leading_evenly() {
     );
 }
 
+/// A face whose own line overflows the 1.2em box gets the box shared in its
+/// own proportion, because there is no leading left to halve.
+///
+/// Measured on a native PowerPoint 16.112 export of the #841 Contoso deck,
+/// whose titles are set in Posterama Bold (hhea ascender 2134, descender -590
+/// per 2048 upem, so its own line is 1.3301em against PowerPoint's 1.2em box).
+/// Slide 1 sets that face at 50pt with no `<a:lnSpc>`, and its three baselines
+/// pace exactly 60.00pt = 1.2em apart, so the box really is 1.2em there. The
+/// export seats the first one 47.06pt below the frame's content top = 0.9411em;
+/// the proportional share predicts 0.9401em and the even split 0.9770em, which
+/// is 1.79pt low (issue #1020).
+#[test]
+fn an_overflowing_face_shares_the_line_box_in_its_own_proportion() {
+    // New Computer Modern: hhea 1127/-290 per 1000 upem = a 1.417em line.
+    let family: &str = "New Computer Modern";
+    let Some((above, below)) = crate::render::pdf::powerpoint_line_box_em(family) else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+    let Some((word_top_em, descent_em, _)) = crate::render::pdf::font_line_metrics_em(family)
+    else {
+        return;
+    };
+    let ascent_em: f64 = crate::render::pdf::font_hhea_ascender_em(family)
+        .expect("the same face resolved for the line box must report an ascender");
+    assert!(
+        (word_top_em - ascent_em).abs() < 1e-9,
+        "this test reads the bare hhea descent out of Word's gap-inclusive \
+         split, which only holds for a face with no hhea line gap: \
+         {word_top_em} against {ascent_em}"
+    );
+    let natural_em: f64 = ascent_em + descent_em;
+    assert!(
+        natural_em > 1.2,
+        "this test needs a face that overflows the box, got {natural_em}em"
+    );
+
+    assert!(
+        (above + below - 1.2).abs() < 1e-9,
+        "the split must still span the 1.2em line, got {above} + {below}"
+    );
+    let proportional: f64 = 1.2 * ascent_em / natural_em;
+    assert!(
+        (above - proportional).abs() < 0.001,
+        "an overflowing face seats its baseline at {proportional}em, not {above}em"
+    );
+    let even: f64 = (1.2 + ascent_em - descent_em) / 2.0;
+    assert!(
+        above < even - 0.01,
+        "the even split's negative half-leading pushes the baseline down to \
+         {even}em; the proportional share must sit above it, got {above}em"
+    );
+}
+
 #[test]
 fn the_split_differs_between_fonts_while_the_line_does_not() {
     // Triangulation: the height is a property of PowerPoint and the split is a
@@ -1995,30 +2047,115 @@ fn slide_line_spacing_scales_proportionally() {
 }
 
 #[test]
-fn slide_line_spacing_keeps_the_fonts_baseline_split() {
-    // Scaling the line must not move the baseline within it: the glyphs keep
-    // their half of the taller box's extra leading.
-    let Some(source) = slide_text_box_source(
-        "Libertinus Serif",
+fn slide_line_spacing_keeps_the_descent_gap_and_moves_the_ascent() {
+    // A percentage resizes the line from its top: the gap the face keeps below
+    // its baseline is the same whatever the percentage, and the ascent side
+    // absorbs the whole change.
+    //
+    // Measured on native PowerPoint 16.112 exports. Arial 38pt in a plain box
+    // drops its first baseline 36.96pt below the content top and 30.00pt under
+    // `<a:spcPct val="85000">` — a 6.96pt loss against the 6.84pt the line
+    // itself loses, so the descent gap moved by 0.12pt, half of the export's
+    // 0.24pt position grid. Posterama Bold behaves the same across the #841
+    // Contoso deck's five title sizes. Scaling both sides instead left every
+    // one of those titles 1.8-3.7pt low (issues #1020, #1024).
+    let family: &str = "Libertinus Serif";
+    let Some(plain) = slide_text_box_source(family, 18.0, ParagraphStyle::default()) else {
+        return;
+    };
+    let Some(scaled) = slide_text_box_source(
+        family,
         18.0,
         ParagraphStyle {
-            line_spacing: Some(LineSpacing::Proportional(1.5)),
+            line_spacing: Some(LineSpacing::Proportional(0.85)),
             ..ParagraphStyle::default()
         },
     ) else {
         return;
     };
-    let (top, bottom) = emitted_line_box_em(&source).expect("line box emitted");
-    let (unscaled_top, unscaled_bottom) =
-        crate::render::pdf::powerpoint_line_box_em("Libertinus Serif").expect("metrics resolve");
+    let (plain_top, plain_bottom) = emitted_line_box_em(&plain).expect("line box emitted");
+    let (scaled_top, scaled_bottom) = emitted_line_box_em(&scaled).expect("line box emitted");
 
     assert!(
-        (top / (top + bottom) - unscaled_top / (unscaled_top + unscaled_bottom)).abs() < 0.001,
-        "the baseline split moved: {top}/{bottom} against {unscaled_top}/{unscaled_bottom}"
+        (scaled_bottom - plain_bottom).abs() < 0.001,
+        "the descent gap must survive the percentage: {scaled_bottom}em against \
+         {plain_bottom}em"
     );
     assert!(
-        source.contains("leading: 0pt"),
-        "the advance is carried by the box, not by leading: {source}"
+        (scaled_top - (plain_top - 0.15 * 1.2)).abs() < 0.001,
+        "the ascent must absorb the whole 0.18em the line loses: {scaled_top}em \
+         against {plain_top}em"
+    );
+    assert!(
+        (scaled_top + scaled_bottom - 0.85 * 1.2).abs() < 0.001,
+        "the line still spans its percentage of 1.2em: {scaled_top}/{scaled_bottom}"
+    );
+    assert!(
+        scaled.contains("leading: 0pt"),
+        "the advance is carried by the box, not by leading: {scaled}"
+    );
+}
+
+/// The #841 Contoso deck's slide-18 footer title, against a native PowerPoint
+/// 16.112 export of the same file.
+///
+/// `slideLayout18` seats the title placeholder at 5367528 EMU with a 1490472
+/// EMU height, `tIns="137160"`, the inherited 45720 EMU `bIns`, and
+/// `anchor="ctr"`; its `lvl1pPr` declares `<a:lnSpc><a:spcPct val="85000"/>`
+/// and the slide sets the run in 30pt Posterama. The export puts
+/// `SPØRSMÅL OG SVAR` on 492.48pt; we put it on 494.53, exactly 2.05pt low
+/// (issue #1020).
+///
+/// Posterama is a cloud font no CI host has, so the seat is computed from the
+/// model rather than rendered: what the fixture would exercise is the split,
+/// and the split is a pure function of the face's metrics.
+#[test]
+fn the_contoso_footer_title_lands_on_its_native_baseline() {
+    // Posterama Bold: hhea ascender 2134, descender -590 per 2048 upem.
+    let (plain_above, plain_below) =
+        crate::render::pdf::powerpoint_line_box_split_em(2134.0 / 2048.0, 590.0 / 2048.0)
+            .expect("a positive ascent splits the line box");
+    assert!((plain_above + plain_below - 1.2).abs() < 1e-9);
+
+    let (above, below) =
+        crate::render::typst_gen::text::powerpoint_percentage_line_box_em(plain_below, 0.85);
+    const EMU_PER_PT: f64 = 12700.0;
+    let content_top_pt: f64 = (5367528.0 + 137160.0) / EMU_PER_PT;
+    let content_height_pt: f64 = (1490472.0 - 137160.0 - 45720.0) / EMU_PER_PT;
+    let size_pt: f64 = 30.0;
+    let line_pt: f64 = (above + below) * size_pt;
+    let baseline_pt: f64 = content_top_pt + (content_height_pt - line_pt) / 2.0 + above * size_pt;
+
+    assert!(
+        (baseline_pt - 492.48).abs() <= 0.24,
+        "the centred footer title must land on the native 492.48pt baseline \
+         within the export's 0.24pt position grid, got {baseline_pt}pt"
+    );
+}
+
+/// The same deck's top-anchored titles, which move the other way from the
+/// centred one and so pin the ascent term on its own.
+///
+/// `slideLayout2` gives the title `tIns="338328"` at the same 5367528 EMU
+/// origin and inherits the master's `anchor="t"`; the slide sets 38pt
+/// Posterama. The export puts `Mirjam Nilsson` on 478.32pt against our
+/// 480.84 — 2.52pt low, the deviation issue #1024 reports for the same
+/// placeholder chain on slides 13 and 14.
+#[test]
+fn the_contoso_top_anchored_title_lands_on_its_native_baseline() {
+    let (_, plain_below) =
+        crate::render::pdf::powerpoint_line_box_split_em(2134.0 / 2048.0, 590.0 / 2048.0)
+            .expect("a positive ascent splits the line box");
+    let (above, _) =
+        crate::render::typst_gen::text::powerpoint_percentage_line_box_em(plain_below, 0.85);
+    const EMU_PER_PT: f64 = 12700.0;
+    let content_top_pt: f64 = (5367528.0 + 338328.0) / EMU_PER_PT;
+    let baseline_pt: f64 = content_top_pt + above * 38.0;
+
+    assert!(
+        (baseline_pt - 478.32).abs() <= 0.24,
+        "the top-anchored title must land on the native 478.32pt baseline \
+         within the export's 0.24pt position grid, got {baseline_pt}pt"
     );
 }
 
