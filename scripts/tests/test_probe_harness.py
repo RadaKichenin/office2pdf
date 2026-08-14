@@ -20,6 +20,7 @@ import zipfile
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -475,6 +476,59 @@ class ExportTest(unittest.TestCase):
             self.assertEqual((pdf_dir / "base.pdf").read_bytes(), b"%PDF1")
 
 
+class StageRootTest(unittest.TestCase):
+    """Where a run stages when --stage-root is not given (#1051)."""
+
+    def test_the_office_backend_stages_in_the_driven_apps_own_container(self):
+        # Anywhere outside the sandbox container raises a per-file "Grant
+        # Access" dialog, which stalls an unattended run; a cross-app
+        # container prompts too, so each format goes to its own app's.
+        for extension, bundle_id in (
+            (".docx", "com.microsoft.Word"),
+            (".pptx", "com.microsoft.Powerpoint"),
+            (".xlsx", "com.microsoft.Excel"),
+        ):
+            with self.subTest(extension=extension):
+                self.assertEqual(
+                    probe_harness.default_stage_root("office", extension),
+                    probe_harness.CONTAINERS_ROOT / bundle_id / "Data" / "probes",
+                )
+
+    def test_an_extension_no_office_app_opens_is_an_error(self):
+        with self.assertRaisesRegex(probe_harness.ProbeError, "odt"):
+            probe_harness.default_stage_root("office", ".odt")
+
+    def test_the_other_backends_stage_under_the_repo_results_root(self):
+        # Only the sandboxed apps need the container; our converter and
+        # LibreOffice read and write anywhere.
+        for backend in ("office2pdf", "soffice"):
+            with self.subTest(backend=backend):
+                self.assertEqual(
+                    probe_harness.default_stage_root(backend, ".pptx"),
+                    probe_harness.RESULTS_ROOT,
+                )
+
+    def test_results_are_copied_out_of_the_container(self):
+        with TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            stage = tmp / "container" / "spcAft"
+            (stage / "pdfs").mkdir(parents=True)
+            (stage / "packages").mkdir()
+            (stage / "report.md").write_text("# Probe: spcAft\n")
+            (stage / "pdfs" / "base.pdf").write_bytes(b"%PDF base")
+            (stage / "pdfs" / "variant-500.pdf").write_bytes(b"%PDF 500")
+            destination = tmp / "target" / "probes" / "spcAft"
+
+            report_path = probe_harness.mirror_results(stage, destination)
+
+            self.assertEqual(report_path, destination / "report.md")
+            self.assertEqual(report_path.read_text(), "# Probe: spcAft\n")
+            self.assertEqual(
+                (destination / "pdfs" / "variant-500.pdf").read_bytes(), b"%PDF 500"
+            )
+            self.assertEqual((destination / "pdfs" / "base.pdf").read_bytes(), b"%PDF base")
+
+
 class DifferTest(unittest.TestCase):
     def test_the_differ_report_is_parsed_from_json(self):
         report = differ_report(page_vector())
@@ -674,6 +728,80 @@ class EndToEndTest(unittest.TestCase):
             packages = stage_root / "spcAft-linearity" / "packages"
             self.assertTrue((packages / "control.pptx").exists())
             self.assertTrue((packages / "variant-500.pptx").exists())
+
+    def office_runner(self):
+        """A fake `osascript` export deriving each PDF from its package's part."""
+        calls: list[list[str]] = []
+
+        def runner(argv):
+            calls.append(list(argv))
+            if argv[0] == "osascript":
+                pdf_dir = Path(argv[2])
+                for index in range(3, len(argv), 2):
+                    job_id, package = argv[index], argv[index + 1]
+                    with zipfile.ZipFile(package) as archive:
+                        content = archive.read("ppt/slides/slide1.xml")
+                    (pdf_dir / f"{job_id}.pdf").write_bytes(b"%PDF " + content)
+                return completed(argv)
+            if argv[1].endswith("compare_layout.py"):
+                return completed(argv, stdout=json.dumps(differ_report(page_vector())))
+            raise AssertionError(f"unexpected command {argv}")
+
+        return calls, runner
+
+    def test_an_office_run_stages_in_the_container_and_copies_results_out(self):
+        # Every path PowerPoint is handed must sit inside its own container,
+        # or the sandbox raises a Grant Access dialog per file (#1051); the
+        # results still have to land where the caller looks for them.
+        with TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            write_base_package(tmp / "base.pptx")
+            spec_path = write_spec(tmp)
+            containers = tmp / "Containers"
+            results = tmp / "target" / "probes"
+            calls, runner = self.office_runner()
+            with patch.object(probe_harness, "CONTAINERS_ROOT", containers), patch.object(
+                probe_harness, "RESULTS_ROOT", results
+            ), redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                report_path = probe_harness.run_probe(
+                    spec_path, backend="office", runner=runner
+                )
+
+            stage = containers / "com.microsoft.Powerpoint" / "Data" / "probes" / "spcAft-linearity"
+            exports = [argv for argv in calls if argv[0] == "osascript"]
+            self.assertEqual(len(exports), 1)
+            for argument in exports[0][2:]:
+                if "/" in argument:
+                    self.assertTrue(
+                        Path(argument).is_relative_to(stage),
+                        f"{argument} is outside the app container",
+                    )
+            self.assertEqual(report_path, results / "spcAft-linearity" / "report.md")
+            self.assertIn("| 500 |", report_path.read_text())
+            self.assertEqual(
+                (results / "spcAft-linearity" / "pdfs" / "variant-500.pdf").read_bytes(),
+                (stage / "pdfs" / "variant-500.pdf").read_bytes(),
+            )
+
+    def test_an_explicit_stage_root_is_honoured_and_still_guarded(self):
+        with TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            write_base_package(tmp / "base.pptx")
+            spec_path = write_spec(tmp)
+            _, runner = self.office_runner()
+            with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                report_path = probe_harness.run_probe(
+                    spec_path, backend="office", stage_root=tmp / "explicit", runner=runner
+                )
+            self.assertEqual(report_path, tmp / "explicit" / "spcAft-linearity" / "report.md")
+
+            with self.assertRaisesRegex(probe_harness.ProbeError, "internal disk"):
+                probe_harness.run_probe(
+                    spec_path,
+                    backend="office",
+                    stage_root=Path("/Volumes/FakeDisk/probes"),
+                    runner=runner,
+                )
 
     def test_a_differ_failure_fails_the_whole_run(self):
         def differ_result(argv):

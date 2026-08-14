@@ -268,8 +268,17 @@ deviates from the base's, the run aborts, because repackaging (not the factor)
 changed the output. Differ failures abort likewise, never an empty row.
 Backend `office2pdf` answers "what does our code do" anywhere in seconds
 (`--converter` names the binary); `office` drives the native AppleScripts and
-answers "what does Office do" — its stage must sit on the internal disk (the
-Office sandbox cannot write to `/Volumes`; the harness enforces this).
+answers "what does Office do".
+
+The `office` stage is constrained by the app sandbox on both sides. It defaults
+into the driven app's own container — `~/Library/Containers/com.microsoft.Word`,
+`.Powerpoint` or `.Excel` under `Data/probes/`, matched to the fixture's format
+— and the report and PDFs are copied back to `target/probes/` afterwards.
+Anywhere else, including another Office app's container, costs a per-file
+"Grant Access" dialog that stalls an unattended run. An explicit `--stage-root`
+overrides that and must still sit on the internal disk: the sandbox cannot
+write to `/Volumes` at all (AppleEvent timeout -1712), which the harness
+enforces.
 
 ### Fine-detail analysis (thin and small elements)
 
