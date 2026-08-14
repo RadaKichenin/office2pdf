@@ -504,7 +504,8 @@ fn uses_native_arabic_digits(format_code: &str) -> bool {
 /// sentence a third more than its glyphs really advance (issue #1054) and
 /// priced `iiiiiiiiii` like `WWWWWWWWWW`. Fixed-pitch families are the
 /// remaining miss: Courier New advances every glyph by its digit advance, so
-/// this under-counts a line of its capitals by ~14%.
+/// proportional ratios misprice its lines by 13.7% on average and up to 23%
+/// — where the flat rule was a uniform 8.4% under-count.
 ///
 /// The table is static rather than read from the resolved face for the reason
 /// [`reference_digit_advance_em`] gives: a machine substituting a metrically

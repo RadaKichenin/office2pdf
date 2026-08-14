@@ -323,8 +323,8 @@ fn test_max_digit_advance_em_reads_real_face_hmtx() {
 /// range past the page and split a one-page sheet in two (issue #1054).
 ///
 /// Ground truth is the real `hmtx` advance sum of each named face over the
-/// literal string — 41.6772em of ArialMT, 22.9761em of Verdana, 8.6875em of
-/// Calibri — measured with the issue #621 probe tooling.
+/// literal string, read from those faces' own tables: 41.6772em of ArialMT,
+/// 22.9761em of Verdana, 8.6875em of Calibri.
 #[test]
 fn test_estimate_line_width_tracks_real_face_advances() {
     let cases: [(&str, &str, f64, f64); 3] = [
