@@ -606,6 +606,10 @@ const EAST_ASIAN_AUTO_SPACE_CHAR: char = '\u{E001}';
 /// paragraphs, cells (issue #627) and centred date line (issue #728) flush
 /// yet widen their `ListParagraph` items.
 ///
+/// It is a property of *nothing else*: a second one-factor probe patched only
+/// `w:jc` in that same package and measured left, centred, justified and right
+/// at the same +2.588pt per boundary (issue #1053).
+///
 /// The boundary can fall between two runs, so the scan carries the previous
 /// character across the run break rather than restarting at each run.
 ///

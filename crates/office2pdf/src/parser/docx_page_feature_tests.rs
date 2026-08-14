@@ -853,21 +853,29 @@ fn a_paragraph_without_a_rule_has_no_border_space() {
 /// the parser so the test pins the wire format rather than the constant.
 const AUTO_SPACE_MARKER: char = '\u{E001}';
 
-/// A one-paragraph document whose only run holds `text`, optionally justified.
-fn build_docx_with_korean_text(text: &str, justified: bool) -> Vec<u8> {
+/// A one-paragraph document whose only run holds `text`, optionally aligned.
+fn build_docx_with_korean_text_aligned(
+    text: &str,
+    alignment: Option<docx_rs::AlignmentType>,
+) -> Vec<u8> {
     let mut paragraph = docx_rs::Paragraph::new().add_run(
         docx_rs::Run::new()
             .add_text(text)
             .fonts(docx_rs::RunFonts::new().east_asia("Malgun Gothic"))
             .size(21),
     );
-    if justified {
-        paragraph = paragraph.align(docx_rs::AlignmentType::Both);
+    if let Some(alignment) = alignment {
+        paragraph = paragraph.align(alignment);
     }
     let docx = docx_rs::Docx::new().add_paragraph(paragraph);
     let mut cursor = Cursor::new(Vec::new());
     docx.build().pack(&mut cursor).unwrap();
     cursor.into_inner()
+}
+
+/// The same document, left to Word's default alignment.
+fn build_docx_with_korean_text(text: &str) -> Vec<u8> {
+    build_docx_with_korean_text_aligned(text, None)
 }
 
 fn first_paragraph_text(data: &[u8]) -> String {
@@ -890,7 +898,7 @@ fn a_boundary_between_east_asian_text_and_a_number_carries_the_auto_space() {
     // digit with no literal space between, on both sides of the island. A
     // native export measures 2.625pt at 10.5pt and 2.375pt at 9.5pt, and our
     // output was that much narrower at every such boundary (issue #521).
-    let text = first_paragraph_text(&build_docx_with_korean_text("2026년 제3자", false));
+    let text = first_paragraph_text(&build_docx_with_korean_text("2026년 제3자"));
 
     assert_eq!(
         text,
@@ -904,7 +912,7 @@ fn a_boundary_between_east_asian_text_and_a_number_carries_the_auto_space() {
 fn a_boundary_that_already_has_a_space_gets_nothing() {
     // Triangulation: Word adds nothing where the author already typed a space,
     // which is why `은 2026` measures the same in the GT as in our output.
-    let text = first_paragraph_text(&build_docx_with_korean_text("유효기간은 2026", false));
+    let text = first_paragraph_text(&build_docx_with_korean_text("유효기간은 2026"));
 
     assert!(
         !text.contains(AUTO_SPACE_MARKER),
@@ -913,17 +921,49 @@ fn a_boundary_that_already_has_a_space_gets_nothing() {
 }
 
 #[test]
-fn a_justified_paragraph_keeps_its_lines_as_authored() {
-    // Word treats the space as compressible and justification absorbs it:
-    // every boundary that lacks it in the corpus GT is on a line Word is
-    // actively stretching or compressing. Adding a rigid one there re-wrapped
-    // the line instead (issue #521).
-    let text = first_paragraph_text(&build_docx_with_korean_text("2026년 제3자", true));
+fn an_aligned_paragraph_widens_exactly_like_an_unaligned_one() {
+    // The #1053 one-factor probe patched only `w:jc` in a Normal-defining
+    // package and exported each variant through native Word: left, centred,
+    // justified and right all measure +2.588pt at every boundary of an
+    // unstretched line. Alignment is not part of the predicate.
+    let expected = format!("2026{AUTO_SPACE_MARKER}년 제{AUTO_SPACE_MARKER}3{AUTO_SPACE_MARKER}자");
 
-    assert!(
-        !text.contains(AUTO_SPACE_MARKER),
-        "a justified paragraph absorbs the space rather than showing it: {text:?}"
-    );
+    for alignment in [
+        docx_rs::AlignmentType::Both,
+        docx_rs::AlignmentType::Center,
+        docx_rs::AlignmentType::Right,
+    ] {
+        let text = first_paragraph_text(&build_docx_with_korean_text_aligned(
+            "2026년 제3자",
+            Some(alignment),
+        ));
+
+        assert_eq!(
+            text, expected,
+            "{alignment:?} takes the same quarter em as an unaligned paragraph"
+        );
+    }
+}
+
+#[test]
+fn an_aligned_paragraph_stays_flush_without_a_defined_default_style() {
+    // Triangulation on the other factor: alignment does not *grant* the space
+    // either. In a corpus-shaped package — no default style defined — Word
+    // draws a centred or justified line flush, which is why 02_contract_ko's
+    // centred date line (issue #728) and its justified body are flush in the
+    // GT. Only the style resolution decides (issue #732).
+    for alignment in ["center", "both"] {
+        let body = format!(
+            r#"<w:p><w:pPr><w:jc w:val="{alignment}"/></w:pPr>{}</w:p>"#,
+            korean_run_xml("2026년 제3자")
+        );
+        let text = first_paragraph_text(&build_docx_with_raw_styles(CORPUS_SHAPED_STYLES, &body));
+
+        assert_eq!(
+            text, "2026년 제3자",
+            "a bare {alignment} paragraph keeps the boundaries the author typed"
+        );
+    }
 }
 
 #[test]
@@ -931,7 +971,7 @@ fn latin_only_and_east_asian_only_text_are_untouched() {
     // Triangulation on both sides of the predicate: the rule needs one of each
     // script, so neither a pure Latin run nor a pure Korean one may widen.
     for text in ["Version 2026 release 3", "계약서를 작성하여 보관한다"] {
-        let parsed = first_paragraph_text(&build_docx_with_korean_text(text, false));
+        let parsed = first_paragraph_text(&build_docx_with_korean_text(text));
         assert!(
             !parsed.contains(AUTO_SPACE_MARKER),
             "single-script text needs no auto space: {parsed:?}"
@@ -944,7 +984,7 @@ fn cjk_punctuation_is_not_a_boundary() {
     // `is_east_asian_text` is deliberately narrower than the renderer's
     // `is_cjk_like`: CJK punctuation and the fullwidth forms are already
     // full-width, and Word adds nothing beside them.
-    let text = first_paragraph_text(&build_docx_with_korean_text("、2026", false));
+    let text = first_paragraph_text(&build_docx_with_korean_text("、2026"));
 
     assert!(
         !text.contains(AUTO_SPACE_MARKER),
@@ -1196,7 +1236,7 @@ fn a_body_paragraph_is_left_exactly_as_it_was() {
     // at every boundary (issue #732). The assertion is unchanged from when it
     // pinned today's emission — what changed is that the emission is now known
     // to be what Word does to this document.
-    let text = first_paragraph_text(&build_docx_with_korean_text("2024년 1월", false));
+    let text = first_paragraph_text(&build_docx_with_korean_text("2024년 1월"));
 
     assert_eq!(
         text,
