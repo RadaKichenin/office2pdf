@@ -857,6 +857,32 @@ fn rewrite_first_styles_font(data: &[u8], family: &str, size_pt: f64) -> Vec<u8>
     out.finish().expect("finished zip").into_inner()
 }
 
+/// Replace every worksheet's `<sheetFormatPr .../>` with `replacement`. umya
+/// models only `defaultRowHeight`, so a fixture that needs `customHeight` or a
+/// hint umya would not write has to patch the part directly.
+fn rewrite_sheet_format_pr(data: &[u8], replacement: &str) -> Vec<u8> {
+    let mut archive = zip::ZipArchive::new(Cursor::new(data)).expect("readable zip");
+    let mut out = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index).expect("readable entry");
+        let name = entry.name().to_string();
+        let mut bytes = Vec::new();
+        std::io::Read::read_to_end(&mut entry, &mut bytes).expect("readable entry body");
+        if name.starts_with("xl/worksheets/sheet") && name.ends_with(".xml") {
+            let xml = String::from_utf8(bytes).expect("worksheet part is utf-8");
+            let start = xml
+                .find("<sheetFormatPr")
+                .expect("worksheet has sheetFormatPr");
+            let end = xml[start..].find("/>").expect("sheetFormatPr is closed") + start + 2;
+            bytes = format!("{}{}{}", &xml[..start], replacement, &xml[end..]).into_bytes();
+        }
+        out.start_file(name, zip::write::FileOptions::default())
+            .expect("writable entry");
+        std::io::Write::write_all(&mut out, &bytes).expect("writable entry body");
+    }
+    out.finish().expect("finished zip").into_inner()
+}
+
 // ----- Drawing-only sheets (issue #620) -----
 
 /// A workbook whose only sheet has no cells but carries one picture anchored
@@ -1012,6 +1038,7 @@ fn test_empty_sheet_context_derives_metric_from_normal_font() {
     let calibri_11 = NormalFont {
         family: "Calibri".to_string(),
         size_pt: 11.0,
+        uses_theme_scheme: false,
     };
     let calibri_ctx = empty_sheet_context(sheet, Some(&calibri_11), None);
     assert_eq!(resolve_column_unit_pt(sheet, Some(&calibri_11)), 6.0);
@@ -1024,6 +1051,7 @@ fn test_empty_sheet_context_derives_metric_from_normal_font() {
     let calibri_8 = NormalFont {
         family: "Calibri".to_string(),
         size_pt: 8.0,
+        uses_theme_scheme: false,
     };
     assert_eq!(resolve_column_unit_pt(sheet, Some(&calibri_8)), 4.0);
     assert_eq!(
@@ -1191,6 +1219,7 @@ fn test_empty_sheet_context_reads_declared_column_widths() {
     let calibri_11 = NormalFont {
         family: "Calibri".to_string(),
         size_pt: 11.0,
+        uses_theme_scheme: false,
     };
 
     let ctx = empty_sheet_context(sheet, Some(&calibri_11), None);
@@ -1221,7 +1250,17 @@ fn test_empty_sheet_context_without_cols_keeps_the_default_window() {
     assert!(ctx.col_start > ctx.col_end, "an empty window");
 }
 
-// ── Normal-font default row height (issue #715) ──────────────────────
+// ── Dimension-less row heights (issues #715, #1047) ──────────────────
+
+/// A Normal font declared at `size_pt` that resolves through the theme's
+/// minor font scheme, as every Excel-authored stylesheet writes it.
+fn theme_scheme_normal_font(size_pt: f64) -> NormalFont {
+    NormalFont {
+        family: "Calibri".to_string(),
+        size_pt,
+        uses_theme_scheme: true,
+    }
+}
 
 /// Excel recomputes the default row height from the Normal font for rows
 /// that record no height, ignoring the `defaultRowHeight` hint unless the
@@ -1233,11 +1272,29 @@ fn a_dimensionless_row_takes_the_normal_font_default() {
     sheet
         .get_sheet_format_properties_mut()
         .set_default_row_height(15.0);
-    let calibri = NormalFont {
-        family: "Calibri".to_string(),
-        size_pt: 11.0,
-    };
-    assert_eq!(super::default_row_height_pt(sheet, Some(&calibri)), 17.0);
+    assert_eq!(
+        super::default_row_height_pt(sheet, Some(&theme_scheme_normal_font(11.0))),
+        17.0
+    );
+}
+
+/// The declared hint is not a floor or a starting point — it is ignored.
+/// Probe-measured (issue #1047): declaring 9, 15, 20 or 30 exports the same
+/// 17pt rows, so a hint that disagrees with the font changes nothing.
+#[test]
+fn a_declared_default_the_normal_font_disagrees_with_is_ignored() {
+    for declared in [9.0, 20.0, 30.0] {
+        let mut book = umya_spreadsheet::new_file();
+        let sheet = book.get_sheet_mut(&0).unwrap();
+        sheet
+            .get_sheet_format_properties_mut()
+            .set_default_row_height(declared);
+        assert_eq!(
+            super::default_row_height_pt(sheet, Some(&theme_scheme_normal_font(11.0))),
+            17.0,
+            "declared {declared} must not reach the recomputed default"
+        );
+    }
 }
 
 #[test]
@@ -1245,11 +1302,46 @@ fn a_custom_height_default_is_honoured_as_declared() {
     let mut book = umya_spreadsheet::new_file();
     let sheet = book.get_sheet_mut(&0).unwrap();
     let properties = sheet.get_sheet_format_properties_mut();
-    properties.set_default_row_height(15.0);
+    properties.set_default_row_height(30.0);
     properties.set_custom_height(true);
+    assert_eq!(
+        super::default_row_height_pt(sheet, Some(&theme_scheme_normal_font(11.0))),
+        30.0
+    );
+}
+
+/// Every measured theme-scheme size, so the recompute cannot collapse to the
+/// single 11pt constant the tests would otherwise pin.
+#[test]
+fn the_recomputed_default_tracks_the_normal_font_size() {
+    for (size_pt, expected) in [(8.0, 13.0), (10.0, 15.0), (11.0, 17.0), (18.0, 27.0)] {
+        let mut book = umya_spreadsheet::new_file();
+        let sheet = book.get_sheet_mut(&0).unwrap();
+        sheet
+            .get_sheet_format_properties_mut()
+            .set_default_row_height(15.0);
+        assert_eq!(
+            super::default_row_height_pt(sheet, Some(&theme_scheme_normal_font(size_pt))),
+            expected,
+            "{size_pt}pt Normal font"
+        );
+    }
+}
+
+/// A Normal font that names its own face instead of deferring to the theme
+/// scheme is a different measurement, and an unmeasured one: the declared
+/// default stands (issue #1047).
+#[test]
+fn a_scheme_less_normal_font_keeps_the_declared_default() {
+    let mut book = umya_spreadsheet::new_file();
+    let sheet = book.get_sheet_mut(&0).unwrap();
+    sheet
+        .get_sheet_format_properties_mut()
+        .set_default_row_height(15.0);
     let calibri = NormalFont {
         family: "Calibri".to_string(),
         size_pt: 11.0,
+        uses_theme_scheme: false,
     };
     assert_eq!(super::default_row_height_pt(sheet, Some(&calibri)), 15.0);
 }
@@ -1261,10 +1353,74 @@ fn an_unmeasured_normal_font_keeps_the_declared_default() {
     sheet
         .get_sheet_format_properties_mut()
         .set_default_row_height(15.0);
-    let arial = NormalFont {
-        family: "Arial".to_string(),
-        size_pt: 10.0,
-    };
-    assert_eq!(super::default_row_height_pt(sheet, Some(&arial)), 15.0);
+    assert_eq!(
+        super::default_row_height_pt(sheet, Some(&theme_scheme_normal_font(12.0))),
+        15.0
+    );
     assert_eq!(super::default_row_height_pt(sheet, None), 15.0);
+}
+
+/// The printed grid recomputes exactly as anchors do, and prints the
+/// recomputed height unscaled — the `native_excel_pdf_row_height`
+/// compaction is calibrated for declared heights, not for this one
+/// (issue #1047: `Formatting.xlsx` exports 17pt rows against our 14pt).
+#[test]
+fn a_dimensionless_printed_row_takes_the_recomputed_default() {
+    let data = build_xlsx_bytes("Sheet1", &[("A1", "one"), ("A2", "two")]);
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let table = &get_sheet_page(&doc, 0).table;
+    for row in &table.rows {
+        assert_eq!(row.height, Some(17.0));
+    }
+}
+
+#[test]
+fn a_dimensionless_printed_row_ignores_a_disagreeing_declared_default() {
+    let data = rewrite_sheet_format_pr(
+        &build_xlsx_bytes("Sheet1", &[("A1", "one"), ("A2", "two")]),
+        r#"<sheetFormatPr defaultRowHeight="30"/>"#,
+    );
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let table = &get_sheet_page(&doc, 0).table;
+    for row in &table.rows {
+        assert_eq!(row.height, Some(17.0));
+    }
+}
+
+/// `customHeight` marks the declared default as user-set, and a user-set
+/// height prints through the declared-height compaction: 30 → 28
+/// (probe-measured, issue #1047).
+#[test]
+fn a_custom_height_printed_default_maps_through_the_grid() {
+    let data = rewrite_sheet_format_pr(
+        &build_xlsx_bytes("Sheet1", &[("A1", "one"), ("A2", "two")]),
+        r#"<sheetFormatPr defaultRowHeight="30" customHeight="1"/>"#,
+    );
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let table = &get_sheet_page(&doc, 0).table;
+    for row in &table.rows {
+        assert_eq!(row.height, Some(28.0));
+    }
+}
+
+/// A scheme-less Normal font keeps the declared default on the printed path
+/// too, mapped as any declared height is: `functions-excel-2010.xlsx`
+/// (Calibri 11, no `scheme`, `defaultRowHeight="15"`) exports 14pt rows.
+#[test]
+fn a_scheme_less_dimensionless_printed_row_keeps_the_declared_default() {
+    let data = rewrite_sheet_format_pr(
+        &build_xlsx_with_normal_font("Calibri", 11.0),
+        r#"<sheetFormatPr defaultRowHeight="15"/>"#,
+    );
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let table = &get_sheet_page(&doc, 0).table;
+    assert_eq!(table.rows[0].height, Some(14.0));
 }

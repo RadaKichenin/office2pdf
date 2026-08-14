@@ -704,6 +704,7 @@ fn a_header_footer_run_before_any_font_code_takes_the_normal_font() {
     let normal_font = NormalFont {
         family: "Corbel".to_string(),
         size_pt: 11.0,
+        uses_theme_scheme: false,
     };
     let hf = parse_hf_format_string(
         r#"&L_x000D_&1#&"Aptos"&8&K000000 Sensitivity: Internal"#,

@@ -1300,15 +1300,19 @@ fn test_native_excel_print_height_calibrates_custom_title_rows() {
 
 #[test]
 fn test_native_excel_print_height_calibrates_default_rows() {
-    // The same native print path measures the workbook's default 15pt row
-    // as a 14pt track. This matters for blank spacer rows because they have
+    // The same native print path measures a declared 15pt default row as a
+    // 14pt track. This matters for blank spacer rows because they have
     // no content from which Typst could derive the native height.
+    //
+    // `customHeight` is what keeps the declared 15 in play: without it
+    // Excel ignores the hint and recomputes the default from the Normal
+    // font instead (issue #1047).
     let data = build_xlsx_formatted(|sheet| {
         sheet.get_cell_mut("A1").set_value("Title");
         sheet.get_cell_mut("A3").set_value("Header");
-        sheet
-            .get_sheet_format_properties_mut()
-            .set_default_row_height(15.0);
+        let properties = sheet.get_sheet_format_properties_mut();
+        properties.set_default_row_height(15.0);
+        properties.set_custom_height(true);
     });
     let parser = XlsxParser;
     let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
