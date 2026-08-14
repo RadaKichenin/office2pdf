@@ -987,7 +987,8 @@ fn build_docx_with_raw_styles(styles_xml: &str, body_xml: &str) -> Vec<u8> {
     )
     .unwrap();
 
-    zip.start_file("word/_rels/document.xml.rels", opts).unwrap();
+    zip.start_file("word/_rels/document.xml.rels", opts)
+        .unwrap();
     zip.write_all(
         br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">

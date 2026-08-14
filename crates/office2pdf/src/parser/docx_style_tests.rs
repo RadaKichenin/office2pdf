@@ -376,7 +376,9 @@ fn test_scan_defines_default_paragraph_style() {
       <w:style w:type="paragraph" w:styleId="ListParagraph"><w:name w:val="List Paragraph"/></w:style>
     </w:styles>"#;
 
-    assert!(styles::scan_defines_default_paragraph_style(by_default_flag));
+    assert!(styles::scan_defines_default_paragraph_style(
+        by_default_flag
+    ));
     assert!(styles::scan_defines_default_paragraph_style(by_normal_id));
     assert!(!styles::scan_defines_default_paragraph_style(corpus_shaped));
 }

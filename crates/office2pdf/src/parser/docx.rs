@@ -546,14 +546,7 @@ fn convert_paragraph_element(
 
     // Build the paragraph IR
     let mut blocks = Vec::new();
-    convert_paragraph_blocks(
-        para,
-        &mut blocks,
-        images,
-        hyperlinks,
-        style_map,
-        ctx,
-    );
+    convert_paragraph_blocks(para, &mut blocks, images, hyperlinks, style_map, ctx);
 
     match num_info {
         Some(info) => {
