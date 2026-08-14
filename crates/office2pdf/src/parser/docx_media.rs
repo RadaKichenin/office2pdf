@@ -1,7 +1,7 @@
 use super::contexts::DocxConversionContext;
 use super::{
     Block, DrawingTextBoxInfo, FloatingImage, FloatingTextBox, HyperlinkMap, ImageData, ImageMap,
-    ParagraphContainer, StyleMap, VmlTextBoxInfo, WrapContext, convert_paragraph_blocks,
+    StyleMap, VmlTextBoxInfo, WrapContext, convert_paragraph_blocks,
     convert_table,
 };
 use crate::parser::units::emu_to_pt;
@@ -242,7 +242,6 @@ pub(super) fn extract_drawing_text_box_blocks(
                     hyperlinks,
                     style_map,
                     ctx,
-                    ParagraphContainer::Body,
                 );
             }
             docx_rs::TextBoxContentChild::Table(table) => {

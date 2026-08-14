@@ -807,10 +807,14 @@ fn test_explicit_word_wrap_overrides_the_style_chain() {
 
 // ── Centred paragraphs take no CJK/Latin auto-space (issue #728) ───────
 
-/// Word applies the 0.25em auto-space in a body paragraph and not in a centred
-/// one. Measured on `02_contract_ko` page 1: every digit-to-Hangul boundary of
-/// the centred date line advances 5.78pt in Word against 8.41pt in the body
-/// paragraph above it, and 8.41 − 5.78 is the 0.25em space at 10.5pt.
+/// Measured on `02_contract_ko` page 1: every digit-to-Hangul boundary of
+/// the centred date line advances 5.78pt in Word against 8.41pt in the list
+/// paragraph above it, and 8.41 − 5.78 is the 0.25em space at 10.5pt (issue
+/// #728). The #732 probe reframes the corpus case — that date line is a bare
+/// paragraph in a package defining no default style, flush for that reason —
+/// but no probe has measured a centred or stretched-justified paragraph in a
+/// style-defining package, so the alignment carve-out stays (issue #1053):
+/// this document defines `Normal` (docx-rs writes one) and still suppresses.
 #[test]
 fn test_centred_paragraph_takes_no_east_asian_auto_space() {
     // Built and parsed for real, so this exercises the parser's own gate
