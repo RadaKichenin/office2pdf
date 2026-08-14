@@ -428,6 +428,10 @@ fn a_fixed_picture_flip_is_applied_inside_its_rotation() {
 /// `Grafikk 310` on the CONTOSO deck's layout 15 (issue #1032). PowerPoint
 /// mirrors it about its own centre and turns it about that same centre,
 /// however far the box hangs off the slide.
+///
+/// Its two tests read the compiled frames, which needs a Typst compilation
+/// the wasm test target does not build.
+#[cfg(not(target_arch = "wasm32"))]
 fn oversized_turned_picture() -> (Document, [(f64, f64); 4]) {
     const X: f64 = -89.37716535433071;
     const Y: f64 = -154.79425196850394;
@@ -486,6 +490,7 @@ fn oversized_turned_picture() -> (Document, [(f64, f64); 4]) {
 /// in, and that frame is clamped to the region. A picture box taller than
 /// the slide therefore turned about the slide's midpoint instead of its own,
 /// landing 119pt off its seat and dragging the artwork with it (issue #1032).
+#[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn an_oversized_turned_picture_pivots_on_its_own_centre() {
     let (doc, expected) = oversized_turned_picture();
@@ -506,6 +511,7 @@ fn an_oversized_turned_picture_pivots_on_its_own_centre() {
 
 /// The same pivot, read as the invariant it protects: a turn about the box
 /// centre leaves that centre where the frame put it, whatever the angle.
+#[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn a_turned_pictures_centre_stays_on_its_frame_centre() {
     let (doc, _expected) = oversized_turned_picture();
