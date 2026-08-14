@@ -1686,3 +1686,61 @@ fn structure_technical_brief_keeps_every_table_and_figure() {
         .count();
     assert_eq!(images, 6, "every `w:drawing` figure survives parsing");
 }
+
+// ---------------------------------------------------------------------------
+// korean_alignment_autospace.docx — alignment and the CJK/Latin auto-space
+// ---------------------------------------------------------------------------
+
+/// Four Korean paragraphs — left, centred, justified-short and
+/// justified-wrapping — in a package that defines a default paragraph style,
+/// which is the condition issue #732 settled as the auto-space trigger.
+///
+/// The one-factor probe of issue #1053 patched only `w:jc` in this shape and
+/// exported each variant through native Word: every alignment measures the
+/// same +2.588pt at every East Asian/Latin boundary of an unstretched line, so
+/// this fixture pins that alignment gates nothing. Its Word export is the
+/// ground truth:
+///
+/// ```sh
+/// osascript scripts/macos/export_word_pdfs.applescript \
+///     "$PWD/target/visual-audit/docx/ground-truth-pdf" \
+///     korean-alignment-autospace \
+///     "$PWD/tests/fixtures/docx/korean_alignment_autospace.docx"
+/// ```
+const KOREAN_ALIGNMENT_AUTOSPACE_FIXTURE: &str = "korean_alignment_autospace.docx";
+
+/// The in-text marker the parser places at such a boundary; the renderer
+/// expands it to a quarter em and never emits it literally.
+const EAST_ASIAN_AUTO_SPACE_MARKER: char = '\u{E001}';
+
+#[test]
+fn smoke_korean_alignment_autospace() {
+    assert_produces_valid_pdf(KOREAN_ALIGNMENT_AUTOSPACE_FIXTURE);
+}
+
+#[test]
+fn structure_korean_alignment_autospace_widens_every_alignment() {
+    let pages = flow_pages(KOREAN_ALIGNMENT_AUTOSPACE_FIXTURE);
+    let blocks = all_blocks(&pages);
+
+    let markers_per_paragraph: Vec<usize> = blocks
+        .iter()
+        .filter_map(|block| match block {
+            Block::Paragraph(paragraph) => Some(
+                paragraph_text(paragraph)
+                    .matches(EAST_ASIAN_AUTO_SPACE_MARKER)
+                    .count(),
+            ),
+            _ => None,
+        })
+        .collect();
+
+    // Left, centred and justified all carry the same five boundaries; the
+    // wrapping paragraph carries twelve. Before issue #1053 the centred and
+    // justified ones read 0.
+    assert_eq!(
+        markers_per_paragraph,
+        [5, 5, 5, 12],
+        "every alignment takes Word's quarter em at every boundary"
+    );
+}

@@ -1341,18 +1341,16 @@ fn push_paragraph_from_runs(
     // style, while its widened list items and #521's all-widening probe are
     // styled or Normal-defining.
     let entry_text: Option<String> = caption_identifier.map(|_| caption_entry_text(runs));
-    // Justified and centred paragraphs are still left alone. For centred ones
-    // no probe has measured a style-defining case. For justified ones the
-    // probe says an unstretched line does widen (case E), but Word treats the
-    // space as compressible under justification while ours is rigid, and a
-    // rigid quarter em re-wraps stretched lines (issue #521). Issue #1053
-    // tracks both.
-    if flow.effective_style_is_defined
-        && !matches!(
-            style.alignment,
-            Some(Alignment::Justify) | Some(Alignment::Center)
-        )
-    {
+    // Alignment is not part of the predicate. A one-factor probe that patched
+    // only `w:jc` in a Normal-defining package measured left, centred,
+    // justified and right at the same +2.588pt per boundary, and a stretch
+    // sweep showed why the earlier justified reading looked different: Word
+    // hands a line's justification demand to its word spaces first, widening
+    // the auto space only once they reach half an em. Our quarter em is
+    // therefore what Word draws for every line whose demand its word spaces
+    // absorb, and it is the natural width Word breaks lines on either way
+    // (issue #1053).
+    if flow.effective_style_is_defined {
         insert_east_asian_auto_space(runs);
     }
     let paragraph = Paragraph {

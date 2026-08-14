@@ -805,18 +805,19 @@ fn test_explicit_word_wrap_overrides_the_style_chain() {
     assert_eq!(inherited.word_wrap, Some(true));
 }
 
-// ── Centred paragraphs take no CJK/Latin auto-space (issue #728) ───────
+// ── Alignment does not gate the CJK/Latin auto-space (issue #1053) ─────
 
 /// Measured on `02_contract_ko` page 1: every digit-to-Hangul boundary of
 /// the centred date line advances 5.78pt in Word against 8.41pt in the list
 /// paragraph above it, and 8.41 − 5.78 is the 0.25em space at 10.5pt (issue
-/// #728). The #732 probe reframes the corpus case — that date line is a bare
-/// paragraph in a package defining no default style, flush for that reason —
-/// but no probe has measured a centred or stretched-justified paragraph in a
-/// style-defining package, so the alignment carve-out stays (issue #1053):
-/// this document defines `Normal` (docx-rs writes one) and still suppresses.
+/// #728). The #732 probe reframed that corpus case — the date line is a bare
+/// paragraph in a package defining no default style, flush for *that* reason —
+/// and the #1053 probe finished the job: in a package that does define one,
+/// native Word gives a centred line and a justified line the same +2.588pt at
+/// every boundary as a left-aligned one. So alignment gates nothing; the style
+/// predicate alone decides, and this docx-rs document defines `Normal`.
 #[test]
-fn test_centred_paragraph_takes_no_east_asian_auto_space() {
+fn test_alignment_does_not_gate_the_east_asian_auto_space() {
     // Built and parsed for real, so this exercises the parser's own gate
     // rather than restating the condition.
     let body_text = |alignment: Option<docx_rs::AlignmentType>| -> String {
@@ -847,19 +848,19 @@ fn test_centred_paragraph_takes_no_east_asian_auto_space() {
             .expect("the paragraph survives parsing")
     };
 
+    let widened = body_text(None);
     assert_ne!(
-        body_text(None),
-        "2026년",
+        widened, "2026년",
         "an unaligned body paragraph still gets the auto-space"
     );
     assert_eq!(
         body_text(Some(docx_rs::AlignmentType::Center)),
-        "2026년",
-        "a centred one does not"
+        widened,
+        "a centred one gets exactly the same"
     );
     assert_eq!(
         body_text(Some(docx_rs::AlignmentType::Justified)),
-        "2026년",
-        "nor does a justified one"
+        widened,
+        "and so does a justified one"
     );
 }
