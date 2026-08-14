@@ -304,16 +304,22 @@ fn write_powerpoint_verification_artifacts() {
 
     let no_op = PptxDocument::from_bytes(original.clone()).expect("should load");
     let no_op_path: PathBuf = output_dir.join("withmaster-no-op-roundtrip.pptx");
-    std::fs::write(&no_op_path, no_op.save_to_bytes().expect("save should succeed"))
-        .expect("artifact should write");
+    std::fs::write(
+        &no_op_path,
+        no_op.save_to_bytes().expect("save should succeed"),
+    )
+    .expect("artifact should write");
 
     let mut edited = PptxDocument::from_bytes(original).expect("should load");
     edited
         .set_slide_text_run(0, 0, "Edited page title")
         .expect("edit should succeed");
     let edited_path: PathBuf = output_dir.join("withmaster-edited-roundtrip.pptx");
-    std::fs::write(&edited_path, edited.save_to_bytes().expect("save should succeed"))
-        .expect("artifact should write");
+    std::fs::write(
+        &edited_path,
+        edited.save_to_bytes().expect("save should succeed"),
+    )
+    .expect("artifact should write");
 
     println!("no-op artifact:  {}", no_op_path.display());
     println!("edited artifact: {}", edited_path.display());
