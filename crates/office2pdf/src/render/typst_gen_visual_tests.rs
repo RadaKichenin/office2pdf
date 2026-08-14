@@ -790,9 +790,9 @@ fn test_shape_shadow_blur_renders_layered_rings() {
     // PowerPoint blurs outer shadows over `blurRad`; a single crisp offset
     // duplicate reads as a second shape. The approximation stacks
     // `SHADOW_RING_COUNT` concentric rings across the measured Gaussian
-    // (sigma = 0.3 * blurRad, rings out to `SHADOW_RING_EXTENT_SIGMA` each
+    // (sigma = blurRad/3, rings out to `SHADOW_RING_EXTENT_SIGMA` each
     // way) whose compounded alphas step down the CDF from the full opacity
-    // inside to under 1% of it at the rim (issues #390, #662).
+    // inside to under 1% of it at the rim (issues #390, #662, #784).
     use crate::ir::Shadow;
 
     let elem = FixedElement {
@@ -830,10 +830,10 @@ fn test_shape_shadow_blur_renders_layered_rings() {
         SHADOW_RING_COUNT,
         "expected one rect per ring in: {source}"
     );
-    // sigma = 0.3 * 8pt = 2.4pt, and the rings reach the declared extent each
+    // sigma = 8pt / 3, and the rings reach the declared extent each
     // way, so the outermost outsets the 200x150 shape by that and the
     // innermost insets it by the same.
-    let reach = SHADOW_RING_EXTENT_SIGMA * 2.4;
+    let reach = SHADOW_RING_EXTENT_SIGMA * (8.0 / 3.0);
     let outermost = format!(
         "width: {}pt, height: {}pt",
         format_f64(200.0 + 2.0 * reach),

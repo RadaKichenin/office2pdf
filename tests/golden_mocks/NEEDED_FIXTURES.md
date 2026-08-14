@@ -21,8 +21,10 @@ Earlier entries in this file were fulfilled and their issues resolved:
   `tests/fixtures/pptx/shadow_blur_radii.pptx` (Windows-PowerPoint-authored,
   blurRad 6/12/24pt plus the issue's 9pt case at constant dist/dir). Its
   export showed PowerPoint's ramp is itself a stepped ring stack following
-  a Gaussian CDF with sigma about 0.3 x blurRad — the constants now in
-  `shadow_blur_layers`. Measuring it also surfaced #516.
+  a Gaussian CDF; that first read sigma as about 0.3 x blurRad, which a
+  one-factor probe at blur 1-18.9pt later tightened to blurRad/3 (fitted
+  0.331-0.345, #784) — the constants now in `shadow_blur_layers`.
+  Measuring it also surfaced #516.
 
 - **Vertically centred text at several sizes and scripts** (#485, closed):
   a Windows-PowerPoint-authored centring fixture showed the filed 6.4/10.8pt

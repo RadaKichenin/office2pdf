@@ -163,11 +163,14 @@ fn rotate_point(
     )
 }
 
-/// The blur's standard deviation as a fraction of `blurRad`, measured
-/// from native PowerPoint exports at blur 6/9/12/24pt (issue #390): the
-/// exported ramp is a Gaussian CDF centred on the shadow silhouette
-/// whose sigma tracks 0.23–0.35 of the radius across those samples.
-const SHADOW_BLUR_SIGMA_PER_RADIUS: f64 = 0.3;
+/// The blur's standard deviation as a fraction of `blurRad`: PowerPoint
+/// treats the declared radius as the blur's full 3-sigma extent. A
+/// one-factor probe over native exports at blur 1/3.15/6.3/12.6/18.9pt
+/// fit the flattened shadow bitmap's ramp — a Gaussian CDF centred on
+/// the shadow silhouette — at sigma/blurRad 0.331–0.345 on every edge
+/// (issue #784, tightening #390's coarser 0.23–0.35 reading whose 0.3
+/// midpoint cut the ramp's reach and density about 10% short).
+const SHADOW_BLUR_SIGMA_PER_RADIUS: f64 = 1.0 / 3.0;
 
 /// How many concentric rings approximate the blur, and how far out they
 /// reach in sigma units.
