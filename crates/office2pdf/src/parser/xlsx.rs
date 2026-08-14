@@ -3,7 +3,7 @@ use std::io::Cursor;
 use crate::config::ConvertOptions;
 use crate::error::{ConvertError, ConvertWarning};
 use crate::ir::{
-    Chart, Document, ImageData, Margins, Metadata, Page, PageSize, SheetPage, StyleSheet, Table,
+    Document, ImageData, Margins, Metadata, Page, PageSize, SheetPage, StyleSheet, Table,
     TableBorderPaintModel, TableRow,
 };
 use crate::parser::Parser;
@@ -413,6 +413,47 @@ fn anchored_text_box(
     }
 }
 
+/// Convert a raw chart anchor into a render-ready sheet chart: the anchor's
+/// absolute placement resolved exactly as a picture's is, or no placement at
+/// all for a chart no drawing references (issue #982).
+fn anchored_chart(
+    anchor: xlsx_drawing::RawChartAnchor,
+    sheet: &umya_spreadsheet::Worksheet,
+    ctx: &SheetContext,
+) -> crate::ir::SheetChart {
+    let Some(geometry) = anchor.geometry else {
+        return crate::ir::SheetChart {
+            anchor_row: u32::MAX,
+            placement: None,
+            chart: anchor.chart,
+        };
+    };
+    let placed = anchored_image(
+        xlsx_drawing::RawImageAnchor {
+            from_row: geometry.from_row,
+            from_col: geometry.from_col,
+            from_col_off_emu: geometry.from_col_off_emu,
+            from_row_off_emu: geometry.from_row_off_emu,
+            to: geometry.to,
+            ext_emu: geometry.ext_emu,
+            data: Vec::new(),
+            format: crate::ir::ImageFormat::Png,
+        },
+        sheet,
+        ctx,
+    );
+    crate::ir::SheetChart {
+        anchor_row: placed.anchor_row,
+        placement: Some(crate::ir::SheetChartPlacement {
+            x_offset_pt: placed.x_offset_pt,
+            y_offset_pt: placed.y_offset_pt,
+            width: placed.image.width.unwrap_or(100.0),
+            height: placed.image.height.unwrap_or(50.0),
+        }),
+        chart: anchor.chart,
+    }
+}
+
 pub struct XlsxParser;
 
 impl XlsxParser {
@@ -484,7 +525,11 @@ impl XlsxParser {
                         .into_iter()
                         .map(|anchor| anchored_text_box(anchor, sheet, &stub_ctx))
                         .collect();
-                    let charts: Vec<(u32, Chart)> = raw_charts.unwrap_or_default();
+                    let charts: Vec<crate::ir::SheetChart> = raw_charts
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|anchor| anchored_chart(anchor, sheet, &stub_ctx))
+                        .collect();
                     if !images.is_empty() || !text_boxes.is_empty() || !charts.is_empty() {
                         chunks.push(Document {
                             metadata: metadata.clone(),
@@ -533,16 +578,26 @@ impl XlsxParser {
             );
 
             // Pull charts for this sheet
-            let mut sheet_charts = chart_map.remove(&sheet_name).unwrap_or_default();
-            for (_, chart) in &sheet_charts {
-                let title = chart.title.as_deref().unwrap_or("untitled").to_string();
+            let mut sheet_charts: Vec<crate::ir::SheetChart> = chart_map
+                .remove(&sheet_name)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|anchor| anchored_chart(anchor, sheet, &ctx))
+                .collect();
+            for sheet_chart in &sheet_charts {
+                let title = sheet_chart
+                    .chart
+                    .title
+                    .as_deref()
+                    .unwrap_or("untitled")
+                    .to_string();
                 warnings.push(ConvertWarning::FallbackUsed {
                     format: "XLSX".to_string(),
                     from: format!("chart ({title})"),
                     to: "data table".to_string(),
                 });
             }
-            sheet_charts.sort_by_key(|(row, _)| *row);
+            sheet_charts.sort_by_key(|sheet_chart| sheet_chart.anchor_row);
             let mut sheet_images: Vec<crate::ir::SheetImage> = image_map
                 .remove(&sheet_name)
                 .unwrap_or_default()
@@ -749,7 +804,11 @@ impl Parser for XlsxParser {
                         .into_iter()
                         .map(|anchor| anchored_text_box(anchor, sheet, &stub_ctx))
                         .collect();
-                    let charts: Vec<(u32, Chart)> = raw_charts.unwrap_or_default();
+                    let charts: Vec<crate::ir::SheetChart> = raw_charts
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|anchor| anchored_chart(anchor, sheet, &stub_ctx))
+                        .collect();
                     if !images.is_empty() || !text_boxes.is_empty() || !charts.is_empty() {
                         // Drawings past the printable width split into
                         // page-columns as Excel prints them (issue #713).
@@ -824,9 +883,19 @@ impl Parser for XlsxParser {
             );
 
             // Pull charts for this sheet (if any)
-            let mut sheet_charts = chart_map.remove(&sheet_name).unwrap_or_default();
-            for (_, chart) in &sheet_charts {
-                let title = chart.title.as_deref().unwrap_or("untitled").to_string();
+            let mut sheet_charts: Vec<crate::ir::SheetChart> = chart_map
+                .remove(&sheet_name)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|anchor| anchored_chart(anchor, sheet, &ctx))
+                .collect();
+            for sheet_chart in &sheet_charts {
+                let title = sheet_chart
+                    .chart
+                    .title
+                    .as_deref()
+                    .unwrap_or("untitled")
+                    .to_string();
                 warnings.push(ConvertWarning::FallbackUsed {
                     format: "XLSX".to_string(),
                     from: format!("chart ({title})"),
@@ -834,7 +903,7 @@ impl Parser for XlsxParser {
                 });
             }
             // Sort by anchor row
-            sheet_charts.sort_by_key(|(row, _)| *row);
+            sheet_charts.sort_by_key(|sheet_chart| sheet_chart.anchor_row);
             let mut sheet_images: Vec<crate::ir::SheetImage> = image_map
                 .remove(&sheet_name)
                 .unwrap_or_default()

@@ -726,7 +726,7 @@ fn test_table_page_no_header_footer() {
 }
 
 #[test]
-fn test_table_page_with_chart_at_row() {
+fn test_table_page_with_anchored_chart_overlays_the_grid() {
     use crate::ir::{Chart, ChartGrouping, ChartSeries, ChartType, DataLabels, LegendPosition};
 
     let chart = Chart {
@@ -780,7 +780,16 @@ fn test_table_page_with_chart_at_row() {
         ]),
         header: None,
         footer: None,
-        charts: vec![(2, chart)],
+        charts: vec![crate::ir::SheetChart {
+            anchor_row: 3,
+            placement: Some(crate::ir::SheetChartPlacement {
+                x_offset_pt: 40.0,
+                y_offset_pt: 60.0,
+                width: 200.0,
+                height: 120.0,
+            }),
+            chart,
+        }],
         images: Vec::new(),
         text_boxes: Vec::new(),
     });
@@ -789,8 +798,29 @@ fn test_table_page_with_chart_at_row() {
     let output = generate_typst(&doc).unwrap();
     let src = &output.source;
 
-    assert_eq!(src.matches("#table(").count(), 2);
-    assert!(src.contains("Sales"));
+    // Excel floats an anchored chart over the cells, so the grid keeps every
+    // row in one table instead of being cut into segments around it (#982).
+    assert_eq!(src.matches("#table(").count(), 1);
+    let overlay: usize = src
+        .find("#place(top + left, dy: 60pt)")
+        .expect("the chart is placed at its anchor's vertical offset");
+    assert!(
+        src[overlay..].starts_with("#place(top + left, dy: 60pt)[#place(top + left, dx: 40pt)["),
+        "the chart is placed at its anchor's horizontal offset too"
+    );
+    let chart_pos: usize = src.find("Sales").expect("the chart's title");
+    let table_pos: usize = src.find("#table(").expect("the sheet grid");
+    assert!(
+        overlay < chart_pos && chart_pos < table_pos,
+        "the chart is drawn in the overlay that precedes the grid"
+    );
+    // The anchor sizes the chart, the way a slide's graphicFrame extent does:
+    // its title band and plot box together fill the anchored 200x120pt.
+    assert!(
+        src.contains("#block(width: 200pt, height: 19pt")
+            && src.contains("#box(width: 200pt, height: 101pt"),
+        "the chart is laid out at the anchor's size"
+    );
 }
 
 #[test]
@@ -842,7 +872,11 @@ fn test_table_page_with_chart_at_end() {
         table: make_simple_table(vec![vec!["Data"]]),
         header: None,
         footer: None,
-        charts: vec![(u32::MAX, chart)],
+        charts: vec![crate::ir::SheetChart {
+            anchor_row: u32::MAX,
+            placement: None,
+            chart,
+        }],
         images: Vec::new(),
         text_boxes: Vec::new(),
     });

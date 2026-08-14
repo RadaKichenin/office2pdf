@@ -295,7 +295,7 @@ fn test_merged_cell_spans_stay_on_their_data_columns() {
 }
 
 #[test]
-fn test_drawings_shift_with_the_inset_grid_and_charts_by_one_row() {
+fn test_drawings_shift_with_the_inset_grid() {
     // Drawing offsets are absolute worksheet coordinates measured from cell
     // A1's top-left corner; the headings move that corner right by the gutter
     // track and down by the strip track.
@@ -339,9 +339,15 @@ fn test_drawings_shift_with_the_inset_grid_and_charts_by_one_row() {
         border: None,
         vertical_center: false,
     });
-    page.charts.push((
-        2,
-        crate::ir::Chart {
+    page.charts.push(crate::ir::SheetChart {
+        anchor_row: 2,
+        placement: Some(crate::ir::SheetChartPlacement {
+            x_offset_pt: 30.0,
+            y_offset_pt: 60.0,
+            width: 200.0,
+            height: 100.0,
+        }),
+        chart: crate::ir::Chart {
             chart_type: crate::ir::ChartType::Bar,
             hole_size_percent: None,
             title: None,
@@ -371,7 +377,7 @@ fn test_drawings_shift_with_the_inset_grid_and_charts_by_one_row() {
             value_axis_number_format: None,
             auto_title_deleted: false,
         },
-    ));
+    });
 
     augment_page_with_print_headings(&mut page, &[1], 1, None);
 
@@ -379,9 +385,13 @@ fn test_drawings_shift_with_the_inset_grid_and_charts_by_one_row() {
     assert_eq!(page.images[0].y_offset_pt, 5.0 + 13.0);
     assert_eq!(page.text_boxes[0].x_offset_pt, 23.0);
     assert_eq!(page.text_boxes[0].y_offset_pt, 13.0);
-    // Chart anchors compare against table row indices, which the strip row
-    // shifted by one.
-    assert_eq!(page.charts[0].0, 3);
+    // An anchored chart is overlaid at the same absolute coordinates, so it
+    // moves with the grid exactly as the other drawings do.
+    let placement = page.charts[0]
+        .placement
+        .expect("the chart keeps its placement");
+    assert_eq!(placement.x_offset_pt, 30.0 + 23.0);
+    assert_eq!(placement.y_offset_pt, 60.0 + 13.0);
 }
 
 #[test]

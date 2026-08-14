@@ -80,6 +80,39 @@ fn make_page(column_widths: Vec<f64>, rows: Vec<TableRow>) -> SheetPage {
     }
 }
 
+fn bar_chart() -> crate::ir::Chart {
+    crate::ir::Chart {
+        chart_type: crate::ir::ChartType::Bar,
+        hole_size_percent: None,
+        title: None,
+        categories: vec![],
+        series: vec![],
+        grouping: crate::ir::ChartGrouping::Clustered,
+        legend_position: crate::ir::LegendPosition::Right,
+        has_legend: true,
+        category_axis_title: None,
+        value_axis_title: None,
+        category_axis_major_tick_mark: AxisTickMark::Outside,
+        value_axis_major_tick_mark: AxisTickMark::Outside,
+        category_axis_deleted: false,
+        category_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_major_unit: None,
+        major_gridline_line: crate::ir::ChartLine::Automatic,
+        value_axis_deleted: false,
+        bar_band_layout: crate::ir::BarBandLayout::default(),
+        theme_accent_colors: Vec::new(),
+        chart_area_outline: ChartAreaOutline::Default,
+        host: crate::ir::ChartHost::default(),
+        text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: None,
+        auto_title_deleted: false,
+    }
+}
+
 #[test]
 fn test_narrow_sheet_stays_single_page() {
     // Printable width 400pt; two 150pt columns fit.
@@ -209,39 +242,16 @@ fn test_charts_stay_on_first_column_group() {
             height: None,
         }],
     );
-    page.charts = vec![(
-        1,
-        crate::ir::Chart {
-            chart_type: crate::ir::ChartType::Bar,
-            hole_size_percent: None,
-            title: None,
-            categories: vec![],
-            series: vec![],
-            grouping: crate::ir::ChartGrouping::Clustered,
-            legend_position: crate::ir::LegendPosition::Right,
-            has_legend: true,
-            category_axis_title: None,
-            value_axis_title: None,
-            category_axis_major_tick_mark: AxisTickMark::Outside,
-            value_axis_major_tick_mark: AxisTickMark::Outside,
-            category_axis_deleted: false,
-            category_axis_line: crate::ir::ChartLine::Automatic,
-            value_axis_line: crate::ir::ChartLine::Automatic,
-            value_axis_major_unit: None,
-            major_gridline_line: crate::ir::ChartLine::Automatic,
-            value_axis_deleted: false,
-            bar_band_layout: crate::ir::BarBandLayout::default(),
-            theme_accent_colors: Vec::new(),
-            chart_area_outline: ChartAreaOutline::Default,
-            host: crate::ir::ChartHost::default(),
-            text_font_family: None,
-            text_style: crate::ir::ChartTextStyle::default(),
-            category_axis_text_style: crate::ir::ChartTextStyle::default(),
-            value_axis_text_style: crate::ir::ChartTextStyle::default(),
-            value_axis_number_format: None,
-            auto_title_deleted: false,
-        },
-    )];
+    page.charts = vec![crate::ir::SheetChart {
+        anchor_row: 1,
+        placement: Some(crate::ir::SheetChartPlacement {
+            x_offset_pt: 0.0,
+            y_offset_pt: 0.0,
+            width: 200.0,
+            height: 100.0,
+        }),
+        chart: bar_chart(),
+    }];
     let pages = split_sheet_page_by_width(page, None, None, true);
     assert_eq!(pages.len(), 2);
     assert_eq!(pages[0].charts.len(), 1);
@@ -284,6 +294,41 @@ fn test_fit_to_width_scales_columns_onto_one_page() {
     assert_eq!(pages.len(), 1);
     assert_eq!(pages[0].table.column_widths, vec![200.0, 200.0]);
     assert_eq!(pages[0].table.rows[0].height, Some(10.0));
+}
+
+/// A chart is anchored to the sheet's columns and rows, so the fit-to-page
+/// scale that shrinks those has to carry it along; leaving it full size slid
+/// the fitted grid out from under it (issue #982).
+#[test]
+fn test_fit_to_width_scales_an_anchored_chart_with_the_grid() {
+    let mut page = make_page(
+        vec![400.0, 400.0],
+        vec![TableRow {
+            minimum_height: None,
+            cells: vec![cell("left"), cell("right")],
+            height: Some(20.0),
+        }],
+    );
+    page.charts = vec![crate::ir::SheetChart {
+        anchor_row: 1,
+        placement: Some(crate::ir::SheetChartPlacement {
+            x_offset_pt: 100.0,
+            y_offset_pt: 40.0,
+            width: 600.0,
+            height: 200.0,
+        }),
+        chart: bar_chart(),
+    }];
+
+    let pages = split_sheet_page_by_width(page, None, Some(1), true);
+
+    let placement = pages[0].charts[0]
+        .placement
+        .expect("the chart keeps its placement");
+    assert_eq!(placement.x_offset_pt, 50.0);
+    assert_eq!(placement.y_offset_pt, 20.0);
+    assert_eq!(placement.width, 300.0);
+    assert_eq!(placement.height, 100.0);
 }
 
 /// Excel's auto-fit scale is a whole percent, truncated so the content is

@@ -81,7 +81,7 @@ fn test_xlsx_with_chart_embeds_in_table_page() {
     let tp = get_sheet_page(&doc, 0);
     assert!(!tp.charts.is_empty(), "Expected charts in table page");
 
-    let chart = &tp.charts[0].1;
+    let chart = &tp.charts[0].chart;
     assert_eq!(chart.chart_type, ChartType::Column);
     assert_eq!(chart.title.as_deref(), Some("Sales"));
     assert_eq!(chart.categories, vec!["Q1", "Q2"]);
@@ -131,7 +131,7 @@ fn test_xlsx_chart_data_is_correct() {
 
     let tp = get_sheet_page(&doc, 0);
     assert!(!tp.charts.is_empty(), "Expected a chart in the table page");
-    let chart = &tp.charts[0].1;
+    let chart = &tp.charts[0].chart;
     assert_eq!(chart.chart_type, ChartType::Pie);
     assert!(chart.title.is_none());
     assert_eq!(chart.categories, vec!["Apple", "Banana"]);
@@ -277,9 +277,65 @@ fn test_xlsx_chart_anchored_at_row_5() {
 
     let tp = get_sheet_page(&doc, 0);
     assert_eq!(tp.charts.len(), 1, "Expected 1 anchored chart");
-    assert_eq!(tp.charts[0].0, 5, "Chart should be anchored at row 5");
-    assert_eq!(tp.charts[0].1.chart_type, ChartType::Column);
-    assert_eq!(tp.charts[0].1.title.as_deref(), Some("Sales"));
+    // 1-indexed, like every other worksheet drawing: the anchor names row 5
+    // in the 0-indexed drawing XML.
+    assert_eq!(
+        tp.charts[0].anchor_row, 6,
+        "Chart should be anchored at row 6"
+    );
+    assert_eq!(tp.charts[0].chart.chart_type, ChartType::Column);
+    assert_eq!(tp.charts[0].chart.title.as_deref(), Some("Sales"));
+}
+
+#[test]
+fn test_anchored_chart_is_placed_at_its_drawing_anchor() {
+    // Cells across A..J, so the sheet's column window spans the anchor and the
+    // spanned widths are the ones the IR page reports.
+    let cells: Vec<(&str, &str)> = (1..=10)
+        .flat_map(|row| {
+            (b'A'..=b'J').map(move |column| {
+                let coord: &str = Box::leak(format!("{}{row}", column as char).into_boxed_str());
+                let value: &str = Box::leak(format!("{}{row}", column as char).into_boxed_str());
+                (coord, value)
+            })
+        })
+        .collect();
+
+    // The helper anchors from column 2, row 5 to column 8, row 20 — six whole
+    // columns wide and fifteen whole rows tall, with no cell offsets.
+    let data = build_xlsx_with_anchored_chart(&cells, &make_bar_chart_xml(), 5);
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = get_sheet_page(&doc, 0);
+    assert_eq!(page.charts.len(), 1, "expected one anchored chart");
+    let placement = page.charts[0]
+        .placement
+        .expect("an anchored chart carries the anchor's absolute placement");
+
+    let widths: &[f64] = &page.table.column_widths;
+    let spanned_width: f64 = widths[2..8].iter().sum();
+    let left_of_anchor: f64 = widths[0..2].iter().sum();
+    assert!(
+        (placement.width - spanned_width).abs() < 0.01,
+        "chart spans columns C..I: expected {spanned_width}pt wide, got {}pt",
+        placement.width
+    );
+    assert!(
+        (placement.x_offset_pt - left_of_anchor).abs() < 0.01,
+        "chart starts at column C: expected x {left_of_anchor}pt, got {}pt",
+        placement.x_offset_pt
+    );
+    // The rows are uniform here, so five rows above the anchor must measure
+    // exactly a third of the fifteen rows the anchor spans.
+    assert!(
+        placement.height > 0.0 && placement.y_offset_pt > 0.0,
+        "an anchored chart sits below and to the right of A1, got {placement:?}"
+    );
+    assert!(
+        (placement.y_offset_pt / 5.0 - placement.height / 15.0).abs() < 0.01,
+        "chart top must be five rows down from the grid's top: {placement:?}"
+    );
 }
 
 #[test]
@@ -294,8 +350,12 @@ fn test_xlsx_chart_without_anchor_falls_back_to_end() {
         "Unanchored chart should still be embedded in table page"
     );
     assert_eq!(
-        tp.charts[0].0,
+        tp.charts[0].anchor_row,
         u32::MAX,
         "Unanchored chart should have sentinel row"
+    );
+    assert!(
+        tp.charts[0].placement.is_none(),
+        "an unanchored chart has no worksheet coordinates to overlay it at"
     );
 }

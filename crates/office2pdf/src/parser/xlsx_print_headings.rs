@@ -269,10 +269,13 @@ pub(super) fn augment_page_with_print_headings(
         text_box.x_offset_pt += PRINT_HEADING_GUTTER_WIDTH_PT;
         text_box.y_offset_pt += PRINT_HEADING_STRIP_HEIGHT_PT;
     }
-    // Chart anchors compare against table row indices in codegen; the strip
-    // row shifted every data row down by one.
-    for (anchor_row, _) in &mut page.charts {
-        *anchor_row = anchor_row.saturating_add(1);
+    for placement in page
+        .charts
+        .iter_mut()
+        .filter_map(|chart| chart.placement.as_mut())
+    {
+        placement.x_offset_pt += PRINT_HEADING_GUTTER_WIDTH_PT;
+        placement.y_offset_pt += PRINT_HEADING_STRIP_HEIGHT_PT;
     }
 }
 

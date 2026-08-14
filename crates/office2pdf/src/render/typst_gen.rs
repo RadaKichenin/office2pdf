@@ -799,140 +799,39 @@ fn generate_table_page(
     Ok(())
 }
 
-/// An element anchored to a sheet row: emitted between table segments.
+/// A drawing overlaid on a sheet at its anchor's absolute coordinates.
 enum SheetAnchor<'a> {
-    Chart(&'a Chart),
+    Chart(&'a crate::ir::SheetChart),
     Image(&'a crate::ir::SheetImage),
     TextBox(&'a crate::ir::SheetTextBox),
 }
 
-/// Render a table interleaved with charts/images at their anchor positions.
-/// Splits the table into segments at anchor rows and emits the anchored
-/// elements between segments.
+/// Render a sheet's grid with its drawings overlaid at their anchors.
 fn generate_table_with_anchors(
     out: &mut String,
     table: &Table,
-    charts: &[(u32, Chart)],
+    charts: &[crate::ir::SheetChart],
     images: &[crate::ir::SheetImage],
     text_boxes: &[crate::ir::SheetTextBox],
     ctx: &mut GenCtx,
 ) -> Result<(), ConvertError> {
-    use crate::ir::Table;
-
     // Excel overlays drawings on the grid at absolute worksheet
     // coordinates. Threading them through the row flow could never match
     // that, because our printed row heights are not Excel's: on the
     // regression fixture the two rows above the anchor occupy 47.3pt here
     // against Excel's 36pt, leaving the shapes 11pt low however carefully
     // they were sequenced (issue #474). Place them from the sheet's content
-    // origin instead, reserving no flow height, and leave charts - which are
-    // ordinary flow content - in the row walk.
-    write_sheet_drawing_overlay(out, images, text_boxes, ctx);
+    // origin instead, reserving no flow height.
+    write_sheet_drawing_overlay(out, charts, images, text_boxes, ctx);
 
-    let mut sorted_charts: Vec<(u32, SheetAnchor)> = charts
-        .iter()
-        .map(|(row, chart)| (*row, SheetAnchor::Chart(chart)))
-        .collect();
-    sorted_charts.sort_by_key(|(row, _)| *row);
+    generate_table(out, table, ctx)?;
+    out.push('\n');
 
-    let total_rows = table.rows.len();
-    let mut row_start = 0usize;
-    let mut chart_idx = 0;
-
-    // Walk through rows and emit table segments + charts
-    for row_end in 0..total_rows {
-        let row_num = (row_end + 1) as u32; // 1-indexed row number
-
-        // Emit all charts anchored at or before this row
-        while chart_idx < sorted_charts.len() && sorted_charts[chart_idx].0 <= row_num {
-            // Emit the table segment up to but NOT including the anchor row:
-            // a drawing starts at its `xdr:from` row's top edge, so emitting
-            // the anchor row first pushed every shape a whole row band lower
-            // than Excel (issue #474).
-            if row_start < row_end {
-                let segment = Table {
-                    rows: table.rows[row_start..row_end].to_vec(),
-                    column_widths: table.column_widths.clone(),
-                    header_row_count: if row_start == 0 {
-                        table.header_row_count.min(row_end)
-                    } else {
-                        0
-                    },
-                    non_repeating_header_row_count: 0,
-                    alignment: table.alignment,
-                    default_cell_padding: table.default_cell_padding,
-                    use_content_driven_row_heights: table.use_content_driven_row_heights,
-                    default_vertical_align: table.default_vertical_align,
-                    seats_bottom_aligned_text_on_descender: table
-                        .seats_bottom_aligned_text_on_descender,
-                    border_paint_model: table.border_paint_model,
-                    prints_gridlines: table.prints_gridlines,
-                    // Only the segment that still starts with the letter-strip
-                    // row may treat rows[0] as that strip (issue #623); the
-                    // gutter column itself rides along in every segment's
-                    // cells.
-                    prints_headings: table.prints_headings && row_start == 0,
-                };
-                generate_table(out, &segment, ctx)?;
-                out.push('\n');
-                row_start = row_end;
-            }
-            // Emit every drawing anchored to this row together, so same-row
-            // shapes overlay rather than stack (issue #459).
-            let row_end_idx: usize = sorted_charts[chart_idx..]
-                .iter()
-                .take_while(|(row, _)| *row == sorted_charts[chart_idx].0)
-                .count()
-                + chart_idx;
-            let row_anchors: Vec<&SheetAnchor> = sorted_charts[chart_idx..row_end_idx]
-                .iter()
-                .map(|(_, anchor)| anchor)
-                .collect();
-            generate_sheet_anchor_row(out, &row_anchors);
-            chart_idx = row_end_idx;
-        }
-    }
-
-    // Emit remaining rows after last chart
-    if row_start < total_rows {
-        let segment = Table {
-            rows: table.rows[row_start..].to_vec(),
-            column_widths: table.column_widths.clone(),
-            header_row_count: if row_start == 0 {
-                table.header_row_count.min(total_rows - row_start)
-            } else {
-                0
-            },
-            non_repeating_header_row_count: 0,
-            alignment: table.alignment,
-            default_cell_padding: table.default_cell_padding,
-            use_content_driven_row_heights: table.use_content_driven_row_heights,
-            default_vertical_align: table.default_vertical_align,
-            seats_bottom_aligned_text_on_descender: table.seats_bottom_aligned_text_on_descender,
-            border_paint_model: table.border_paint_model,
-            prints_gridlines: table.prints_gridlines,
-            // See the in-loop segment above: the strip row exists only in the
-            // segment beginning at rows[0].
-            prints_headings: table.prints_headings && row_start == 0,
-        };
-        generate_table(out, &segment, ctx)?;
+    // A chart no drawing anchors has no worksheet coordinates to overlay it
+    // at, so it stays flow content and follows the grid.
+    for sheet_chart in charts.iter().filter(|chart| chart.placement.is_none()) {
+        generate_chart(out, &sheet_chart.chart);
         out.push('\n');
-    }
-
-    // Emit any remaining anchors (anchored beyond last row, e.g., u32::MAX),
-    // still grouped by the row they share.
-    while chart_idx < sorted_charts.len() {
-        let row_end_idx: usize = sorted_charts[chart_idx..]
-            .iter()
-            .take_while(|(row, _)| *row == sorted_charts[chart_idx].0)
-            .count()
-            + chart_idx;
-        let row_anchors: Vec<&SheetAnchor> = sorted_charts[chart_idx..row_end_idx]
-            .iter()
-            .map(|(_, anchor)| anchor)
-            .collect();
-        generate_sheet_anchor_row(out, &row_anchors);
-        chart_idx = row_end_idx;
     }
 
     Ok(())
@@ -942,17 +841,34 @@ fn generate_table_with_anchors(
 ///
 /// Emitted as a zero-height box at the top of the sheet content so the grid
 /// below is untouched, matching Excel, where a drawing floats over the cells
-/// rather than displacing them (issues #459, #474).
+/// rather than displacing them (issues #459, #474, #982).
 fn write_sheet_drawing_overlay(
     out: &mut String,
+    charts: &[crate::ir::SheetChart],
     images: &[crate::ir::SheetImage],
     text_boxes: &[crate::ir::SheetTextBox],
     ctx: &mut GenCtx,
 ) {
-    if images.is_empty() && text_boxes.is_empty() {
+    let placed_charts: Vec<&crate::ir::SheetChart> = charts
+        .iter()
+        .filter(|chart| chart.placement.is_some())
+        .collect();
+    if placed_charts.is_empty() && images.is_empty() && text_boxes.is_empty() {
         return;
     }
     out.push_str("#box(width: 100%, height: 0pt)[");
+    for sheet_chart in placed_charts {
+        let placement = sheet_chart
+            .placement
+            .expect("only placed charts reach the overlay");
+        let _ = write!(
+            out,
+            "#place(top + left, dy: {}pt)[",
+            format_f64(placement.y_offset_pt)
+        );
+        write_placed_sheet_anchor(out, &SheetAnchor::Chart(sheet_chart), ctx);
+        out.push(']');
+    }
     for sheet_image in images {
         let _ = write!(
             out,
@@ -974,26 +890,29 @@ fn write_sheet_drawing_overlay(
     out.push_str("]\n");
 }
 
-/// Emit the chart anchors that belong after one worksheet row.
-///
-/// Only charts reach here: they are ordinary flow content. Images and text
-/// boxes are overlaid at absolute sheet coordinates by
-/// `write_sheet_drawing_overlay` instead (issues #459, #474).
-fn generate_sheet_anchor_row(out: &mut String, anchors: &[&SheetAnchor]) {
-    for anchor in anchors {
-        if let SheetAnchor::Chart(chart) = anchor {
-            generate_chart(out, chart);
-            out.push('\n');
-        }
-    }
-}
-
-/// Place one drawing at its horizontal offset, inside whichever container
-/// the caller opened: the absolute overlay for images and text boxes, or a
-/// chart row's reserved box.
+/// Place one drawing at its horizontal offset, inside the absolute overlay
+/// the caller opened.
 fn write_placed_sheet_anchor(out: &mut String, anchor: &SheetAnchor, ctx: &mut GenCtx) {
     match anchor {
-        SheetAnchor::Chart(_) => {}
+        SheetAnchor::Chart(sheet_chart) => {
+            let Some(placement) = sheet_chart.placement else {
+                return;
+            };
+            // The anchor sizes the chart, the way a slide's graphicFrame
+            // extent does (issue #548); rendering at the intrinsic size
+            // instead left the anchored band empty beneath it (issue #982).
+            let _ = write!(
+                out,
+                "#place(top + left, dx: {}pt)[",
+                format_f64(placement.x_offset_pt),
+            );
+            generate_chart_in(
+                out,
+                &sheet_chart.chart,
+                Some((placement.width, placement.height)),
+            );
+            out.push(']');
+        }
         SheetAnchor::TextBox(text_box) => {
             let _ = write!(
                 out,
