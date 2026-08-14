@@ -397,9 +397,9 @@ impl<'a> WordRunLineMetrics<'a> {
     }
 }
 
-/// Line-box settings for a slide's text: PowerPoint's flat 1.2em line, with
-/// its extra leading split evenly above and below the glyphs, and zero
-/// leading between lines.
+/// Line-box settings for a slide's text: PowerPoint's flat 1.2em line, split
+/// by [`crate::render::pdf::powerpoint_line_box_split_em`], and zero leading
+/// between lines.
 ///
 /// This is the PPTX counterpart of [`word_line_height_settings`], and the two
 /// models genuinely differ. Word's line is the font's own hhea pitch;
@@ -411,10 +411,10 @@ impl<'a> WordRunLineMetrics<'a> {
 /// at all (issue #513).
 ///
 /// `<a:lnSpc><a:spcPct>` scales that line rather than replacing it: the advance
-/// is `percent x 1.2em`, and the baseline keeps the font's share of the taller
-/// box. Carrying the percentage as `par(leading)` instead moved nothing between
-/// single-line paragraphs — a slide's code block is one `<a:p>` per line — so
-/// the lines overlapped (issue #541).
+/// is `percent x 1.2em`, and [`powerpoint_percentage_line_box_em`] takes the
+/// whole change off the ascent side. Carrying the percentage as `par(leading)`
+/// instead moved nothing between single-line paragraphs — a slide's code block
+/// is one `<a:p>` per line — so the lines overlapped (issue #541).
 ///
 /// `None` when the paragraph carries its own line box, when its spacing is an
 /// absolute `a:spcPts` advance, or when the font's metrics are unknown.
@@ -431,8 +431,33 @@ fn powerpoint_paragraph_line_box_em(runs: &[Run], style: &ParagraphStyle) -> Opt
         .iter()
         .find_map(|run| run.style.font_family.as_deref())
         .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_FAMILY);
-    let (ascent_em, descent_em) = crate::render::pdf::powerpoint_line_box_em(family)?;
-    Some((ascent_em * percent, descent_em * percent))
+    let (_ascent_em, descent_em) = crate::render::pdf::powerpoint_line_box_em(family)?;
+    Some(powerpoint_percentage_line_box_em(descent_em, percent))
+}
+
+/// The `(above baseline, below baseline)` split, in em, of a line an
+/// `<a:lnSpc><a:spcPct>` has resized to `percent` of PowerPoint's 1.2em box.
+///
+/// PowerPoint resizes the line from its **top**: the gap the face keeps below
+/// its baseline is `descent_em` whatever the percentage, and the ascent side
+/// absorbs the whole change.
+///
+/// Measured on native PowerPoint 16.112 exports, both against the plain-box
+/// control for the same face and size. Arial 38pt drops its first baseline
+/// 36.96pt below the content top plain and 30.00pt under `val="85000"`: a
+/// 6.96pt loss where the line itself loses 6.84pt, so the descent gap moved by
+/// 0.12pt — half of the 0.24pt grid those exports quantise positions to. All 18
+/// Posterama titles of the #841 Contoso deck agree across 30, 32, 36, 38, 46 and
+/// 50pt. Scaling both sides by the percentage instead, which is what the even
+/// division of a *taller* box implies, left every one of those titles 1.8-3.7pt
+/// low (issues #1020, #1024).
+///
+/// The descent gap cannot outgrow the line it sits in, so a percentage small
+/// enough to close the box takes the ascent to zero rather than negative.
+pub(super) fn powerpoint_percentage_line_box_em(descent_em: f64, percent: f64) -> (f64, f64) {
+    let advance_em: f64 = (crate::render::pdf::POWERPOINT_LINE_HEIGHT_FACTOR * percent).max(0.0);
+    let below_em: f64 = descent_em.clamp(0.0, advance_em);
+    (advance_em - below_em, below_em)
 }
 
 pub(super) fn powerpoint_line_height_settings(

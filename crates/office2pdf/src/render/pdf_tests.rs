@@ -361,12 +361,11 @@ fn test_path_font_last_resort_bypasses_process_metric_caches() {
     let expected_cap_height = font.metrics().cap_height.get();
     let ascent = f64::from(ttf.ascender()).abs() / upem;
     let descent = f64::from(ttf.descender()).abs() / upem;
-    let expected_powerpoint_above = ((POWERPOINT_LINE_HEIGHT_FACTOR + ascent - descent) / 2.0)
-        .clamp(0.0, POWERPOINT_LINE_HEIGHT_FACTOR);
-    let expected_powerpoint = (
-        expected_powerpoint_above,
-        POWERPOINT_LINE_HEIGHT_FACTOR - expected_powerpoint_above,
-    );
+    // What this test pins is which *face* answers, not which split rule: the
+    // rule itself is covered by `test_powerpoint_line_box_splits_leading_evenly`
+    // and `an_overflowing_face_shares_the_line_box_in_its_own_proportion`.
+    let expected_powerpoint =
+        powerpoint_line_box_split_em(ascent, descent).expect("the fixture face declares an ascent");
 
     // Native document fonts are materialized into a conversion-local path.
     // Prime the family-only process cache with a miss before that path becomes

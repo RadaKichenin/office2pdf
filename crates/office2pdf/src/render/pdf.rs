@@ -1083,19 +1083,33 @@ pub(crate) fn text_advance_em(_family: &str, _bold: bool, _text: &str) -> Option
 /// Arial, Calibri, and Malgun Gothic (issues #485, #513).
 pub(crate) const POWERPOINT_LINE_HEIGHT_FACTOR: f64 = 1.2;
 
-/// PowerPoint's `(above baseline, below baseline)` split of that line, in em.
+/// PowerPoint's `(above baseline, below baseline)` split of its 1.2em line for
+/// a face with these hhea metrics, both given as positive em fractions.
 ///
-/// PowerPoint splits the line's **extra leading evenly** above and below the
-/// glyphs: the glyphs take `ascent + descent` and the remainder of the 1.2em
-/// line is halved, seating the baseline at `(1.2 + ascent - descent) / 2`.
+/// Where the face fits inside the line, PowerPoint splits the **extra leading
+/// evenly** above and below the glyphs: the glyphs take `ascent + descent` and
+/// the remainder of the 1.2em line is halved, seating the baseline at
+/// `(1.2 + ascent - descent) / 2`.
 ///
-/// This replaced a proportional split, `1.2 x winAscent / (winAscent +
+/// That replaced a proportional split, `1.2 x winAscent / (winAscent +
 /// winDescent)`. Both reproduce the line's *height* — they must, since both
 /// span 1.2em — so only the first baseline separates them, and the native
 /// exports side with the even split. On `08_marketing_report_en` p3, a 17pt
-/// top-anchored frame, GT's first baseline is 142.08pt; the even split predicts
-/// 142.09 and the proportional one put us at 142.53, 0.45pt low. Arial's two
-/// predictions are 0.9467em and 0.9724em (issue #660).
+/// top-anchored Arial frame, GT's first baseline is 142.08pt; the even split
+/// predicts 142.09 and the proportional one put us at 142.53, 0.45pt low.
+/// Arial's two predictions are 0.9467em and 0.9724em (issue #660).
+///
+/// A face whose own line **overflows** 1.2em has no leading to halve, and there
+/// the even split is what fails: subtracting the same absolute amount from both
+/// sides moves the baseline down against the face's own proportions. PowerPoint
+/// shares the box in that proportion instead. Measured on a native PowerPoint
+/// 16.112 export of the #841 Contoso deck, set in Posterama Bold (hhea 2134 and
+/// -590 per 2048 upem, a 1.3301em line): slide 1 carries no `<a:lnSpc>` and
+/// paces its three 50pt baselines exactly 60.00pt = 1.2em apart, so the box is
+/// 1.2em there, and it seats the first 0.9411em below the content top. The
+/// proportional share predicts 0.9401em; the even split says 0.9770em, 1.79pt
+/// low at that size, and every one of the deck's 18 titles was low by 1.8-3.7pt
+/// (issue #1020).
 ///
 /// The metrics are hhea's, not OS/2's `usWin*` pair: the even split needs the
 /// ascent and descent as em fractions rather than as a ratio, and the two
@@ -1103,6 +1117,23 @@ pub(crate) const POWERPOINT_LINE_HEIGHT_FACTOR: f64 = 1.2;
 ///
 /// The below-baseline half is the descent gap a bottom-anchored box keeps under
 /// its last baseline, which we used to drop entirely (issue #513).
+///
+/// `None` for a face that declares no ascent, which no split could seat.
+pub(crate) fn powerpoint_line_box_split_em(ascent: f64, descent: f64) -> Option<(f64, f64)> {
+    if ascent <= 0.0 {
+        return None;
+    }
+    let natural: f64 = ascent + descent;
+    let above: f64 = if natural <= POWERPOINT_LINE_HEIGHT_FACTOR {
+        (POWERPOINT_LINE_HEIGHT_FACTOR + ascent - descent) / 2.0
+    } else {
+        POWERPOINT_LINE_HEIGHT_FACTOR * ascent / natural
+    };
+    let above: f64 = above.clamp(0.0, POWERPOINT_LINE_HEIGHT_FACTOR);
+    Some((above, POWERPOINT_LINE_HEIGHT_FACTOR - above))
+}
+
+/// [`powerpoint_line_box_split_em`] for the best face resolved for `family`.
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn powerpoint_line_box_em(family: &str) -> Option<(f64, f64)> {
     use std::collections::HashMap;
@@ -1115,11 +1146,7 @@ pub(crate) fn powerpoint_line_box_em(family: &str) -> Option<(f64, f64)> {
         let upem = f64::from(ttf.units_per_em()).max(1.0);
         let ascent = f64::from(ttf.ascender()).abs() / upem;
         let descent = f64::from(ttf.descender()).abs() / upem;
-        (ascent > 0.0).then(|| {
-            let above = (POWERPOINT_LINE_HEIGHT_FACTOR + ascent - descent) / 2.0;
-            let above = above.clamp(0.0, POWERPOINT_LINE_HEIGHT_FACTOR);
-            (above, POWERPOINT_LINE_HEIGHT_FACTOR - above)
-        })
+        powerpoint_line_box_split_em(ascent, descent)
     };
     if let Some(font) =
         super::font_subst::active_in_memory_font(family, typst::text::FontVariant::default())
@@ -1149,14 +1176,7 @@ pub(crate) fn powerpoint_line_box_em(family: &str) -> Option<(f64, f64)> {
     // the fallback font's glyph height (issue #705).
     let split: Option<(f64, f64)> = best_face(family)
         .or_else(|| best_face(crate::defaults::TYPST_DEFAULT_FONT_FAMILY))
-        .and_then(|font| {
-            // The glyphs occupy `ascent + descent`; whatever the 1.2em line
-            // has left over is the extra leading, and PowerPoint puts half
-            // of it above the glyphs and half below. So the baseline sits
-            // `ascent + (1.2 - ascent - descent) / 2` below the top, which
-            // is the expression below.
-            split_for(&font)
-        });
+        .and_then(|font| split_for(&font));
     cache
         .lock()
         .expect("metrics cache mutex should not be poisoned")
@@ -1171,10 +1191,6 @@ pub(crate) fn powerpoint_line_box_em(family: &str) -> Option<(f64, f64)> {
         let upem = f64::from(ttf.units_per_em()).max(1.0);
         let ascent = f64::from(ttf.ascender()).abs() / upem;
         let descent = f64::from(ttf.descender()).abs() / upem;
-        (ascent > 0.0).then(|| {
-            let above = (POWERPOINT_LINE_HEIGHT_FACTOR + ascent - descent) / 2.0;
-            let above = above.clamp(0.0, POWERPOINT_LINE_HEIGHT_FACTOR);
-            (above, POWERPOINT_LINE_HEIGHT_FACTOR - above)
-        })
+        powerpoint_line_box_split_em(ascent, descent)
     })
 }
