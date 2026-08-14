@@ -64,6 +64,7 @@ pub(super) fn extract_normal_font(data: &[u8]) -> Option<NormalFont> {
     let mut in_first_font = false;
     let mut name: Option<String> = None;
     let mut size: Option<f64> = None;
+    let mut uses_theme_scheme = false;
     loop {
         match reader.read_event() {
             Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"font" => {
@@ -79,6 +80,7 @@ pub(super) fn extract_normal_font(data: &[u8]) -> Option<NormalFont> {
                 match e.local_name().as_ref() {
                     b"name" => name = val,
                     b"sz" => size = val.and_then(|v| v.parse::<f64>().ok()),
+                    b"scheme" => uses_theme_scheme = true,
                     _ => {}
                 }
             }
@@ -89,6 +91,7 @@ pub(super) fn extract_normal_font(data: &[u8]) -> Option<NormalFont> {
     Some(NormalFont {
         family: name?,
         size_pt: size.unwrap_or(11.0),
+        uses_theme_scheme,
     })
 }
 
@@ -99,6 +102,15 @@ pub(super) fn extract_normal_font(data: &[u8]) -> Option<NormalFont> {
 pub(super) struct NormalFont {
     pub(super) family: String,
     pub(super) size_pt: f64,
+    /// Whether the font defers its face to the theme's font scheme
+    /// (`<scheme val="minor"/>`), rather than naming it outright.
+    ///
+    /// Excel then lays rows out against whatever the scheme resolves to,
+    /// which is not necessarily `family`: on the reference machine the minor
+    /// scheme of the standard Office theme resolves to the locale UI face
+    /// (Malgun Gothic), and the same declared Calibri 11 gives a 17pt
+    /// default row against a scheme-less 15pt (issue #1047).
+    pub(super) uses_theme_scheme: bool,
 }
 
 /// Max digit advance of Calibri (and metrically identical Carlito), Excel's
@@ -618,14 +630,71 @@ fn compute_spill_width(
 }
 
 /// The stored-value fallback when the sheet declares no `defaultRowHeight`.
-///
-/// TODO(#1047): this table-row fallback still trusts the declared hint,
-/// while drawing anchors now use the Normal-font recompute Excel was
-/// measured to apply to dimension-less rows (Calibri 11 → 17pt, issue
-/// #715, `default_row_height_pt` in `xlsx.rs`). Whether the printed grid
-/// recomputes too is unmeasured — the paths intentionally differ until a
-/// probe settles it.
 const EXCEL_DEFAULT_ROW_HEIGHT_PT: f64 = 15.0;
+
+/// The height Excel recomputes for a row that records none, when the model
+/// for this Normal font is measured. `None` leaves the caller on the
+/// declared `defaultRowHeight`.
+///
+/// Excel does not honour that declared hint for such rows unless the sheet
+/// marks it `customHeight`; it lays them out from the workbook's Normal font
+/// instead. Probe-measured against native Excel-for-Mac exports of a
+/// 20-row workbook whose rows carry no `ht` (issue #1047): declaring 9, 15,
+/// 20 or 30 exports byte-identical 17pt rows, and only adding
+/// `customHeight="1"` brings the declared value back (30 → 30pt rows). The
+/// same probe read the heights back through AppleScript, which reports 15.0
+/// for a declared 30 — the hint never reaches the row.
+///
+/// Keyed on size alone, because the face is not `family`: with
+/// `<scheme val="minor"/>` Excel resolves the Normal font through the
+/// theme's font scheme, which on the reference machine renders even ASCII
+/// text in the locale UI face. Both an 11pt "Calibri" and a 10pt "Arial"
+/// scheme font exported as Malgun Gothic there, at 17pt and 15pt rows —
+/// while removing `scheme` from the same package, changing nothing else,
+/// dropped the 11pt rows to 15pt. Scheme-less fonts and unmeasured sizes
+/// therefore keep the declared hint.
+///
+/// | scheme font size | recomputed row | printed track |
+/// | ---: | ---: | ---: |
+/// | 8 | 13 | 13 |
+/// | 10 | 15 | 15 |
+/// | 11 | 17 | 17 |
+/// | 14 | 20 | 20 |
+/// | 18 | 27 | 27 |
+pub(super) fn recomputed_default_row_height_pt(
+    sheet: &umya_spreadsheet::Worksheet,
+    normal_font: Option<&NormalFont>,
+) -> Option<f64> {
+    if *sheet.get_sheet_format_properties().get_custom_height() {
+        return None;
+    }
+    let font: &NormalFont = normal_font?;
+    if !font.uses_theme_scheme {
+        return None;
+    }
+    const MEASURED_TRACKS: [(f64, f64); 5] = [
+        (8.0, 13.0),
+        (10.0, 15.0),
+        (11.0, 17.0),
+        (14.0, 20.0),
+        (18.0, 27.0),
+    ];
+    MEASURED_TRACKS
+        .iter()
+        .find(|(size_pt, _)| (font.size_pt - size_pt).abs() < 0.01)
+        .map(|(_, height_pt)| *height_pt)
+}
+
+/// The sheet's `defaultRowHeight`, or Excel's stored default when it
+/// declares none.
+pub(super) fn declared_default_row_height_pt(sheet: &umya_spreadsheet::Worksheet) -> f64 {
+    let declared: f64 = *sheet.get_sheet_format_properties().get_default_row_height();
+    if declared > 0.0 {
+        declared
+    } else {
+        EXCEL_DEFAULT_ROW_HEIGHT_PT
+    }
+}
 
 /// Convert an OOXML row height to the whole-point track emitted by native
 /// Excel's macOS PDF path. Excel exposes the stored value in points in the
@@ -753,6 +822,7 @@ fn printed_row_height(
     sheet: &umya_spreadsheet::Worksheet,
     row_idx: u32,
     row_wraps_past_one_line: bool,
+    normal_font: Option<&NormalFont>,
 ) -> Option<f64> {
     let row_dimension = sheet.get_row_dimension(&row_idx);
     let is_custom_height: bool = row_dimension
@@ -764,16 +834,19 @@ fn printed_row_height(
     let declared_height: Option<f64> = row_dimension
         .map(|row| *row.get_height())
         .filter(|height| *height > 0.0);
-    declared_height
-        .or_else(|| {
-            let sheet_default: f64 = *sheet.get_sheet_format_properties().get_default_row_height();
-            if sheet_default > 0.0 {
-                Some(sheet_default)
-            } else {
-                Some(EXCEL_DEFAULT_ROW_HEIGHT_PT)
-            }
-        })
-        .map(native_excel_pdf_row_height)
+    match declared_height {
+        Some(height) => Some(native_excel_pdf_row_height(height)),
+        // A row that records none is laid out from the Normal font, and the
+        // recomputed height is already the printed track: the probe's 8/10/
+        // 11/14/18pt scheme fonts export 13/15/17/20/27pt rows in both the
+        // worksheet and the PDF (issue #1047). The compaction below is
+        // calibrated for declared heights and does not apply to it.
+        None => Some(
+            recomputed_default_row_height_pt(sheet, normal_font).unwrap_or_else(|| {
+                native_excel_pdf_row_height(declared_default_row_height_pt(sheet))
+            }),
+        ),
+    }
 }
 
 /// The outline a merged range prints: each side taken from the members that
@@ -1016,7 +1089,12 @@ pub(super) fn build_rows_for_range(
             });
         }
 
-        let height: Option<f64> = printed_row_height(sheet, row_idx, row_wraps_past_one_line);
+        let height: Option<f64> = printed_row_height(
+            sheet,
+            row_idx,
+            row_wraps_past_one_line,
+            ctx.normal_font.as_ref(),
+        );
 
         rows.push(TableRow {
             cells,
