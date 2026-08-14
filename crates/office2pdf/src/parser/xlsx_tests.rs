@@ -316,6 +316,64 @@ fn test_max_digit_advance_em_reads_real_face_hmtx() {
     assert_eq!(column_unit_pt("Libertinus Serif", 11.0), 5.0);
 }
 
+/// The single-line width estimate prices each ASCII character against the
+/// family's own digit advance, so a line of narrow letters costs a fraction of
+/// a line of capitals. The flat half-em-per-character rule it replaced put a
+/// realistic sentence a third over its real advance, which walked the printed
+/// range past the page and split a one-page sheet in two (issue #1054).
+///
+/// Ground truth is the real `hmtx` advance sum of each named face over the
+/// literal string, read from those faces' own tables: 41.6772em of ArialMT,
+/// 22.9761em of Verdana, 8.6875em of Calibri.
+#[test]
+fn test_estimate_line_width_tracks_real_face_advances() {
+    let cases: [(&str, &str, f64, f64); 3] = [
+        (
+            "Arial",
+            "Blue = target (input). Achievement = Actual / Target; \
+             for 'lower is better' metrics read inversely.",
+            9.0,
+            41.6772,
+        ),
+        (
+            "Verdana",
+            "Fractions, Tricky With Much Longer Text Here",
+            10.0,
+            22.9761,
+        ),
+        ("Calibri", "Monthly Active Users", 11.0, 8.6875),
+    ];
+    for (family, text, size_pt, truth_em) in cases {
+        let truth_pt: f64 = truth_em * size_pt;
+        let estimate: f64 = estimate_line_width_pt(text, Some(family), size_pt);
+        let error: f64 = (estimate - truth_pt) / truth_pt;
+        assert!(
+            error.abs() < 0.05,
+            "{family} {size_pt}pt: estimate {estimate:.2}pt is {:.1}% off the \
+             face's own {truth_pt:.2}pt",
+            error * 100.0
+        );
+    }
+
+    // Triangulation: the estimate must follow the glyphs, not the character
+    // count. Ten Arial 'i' advance 2.2217em against ten 'W' at 9.4385em, a
+    // ratio the flat per-character rule collapsed to 1.
+    let narrow: f64 = estimate_line_width_pt(&"i".repeat(10), Some("Arial"), 10.0);
+    let wide: f64 = estimate_line_width_pt(&"W".repeat(10), Some("Arial"), 10.0);
+    assert!(
+        (wide / narrow - 9.4385 / 2.2217).abs() < 0.5,
+        "narrow-to-wide ratio {:.2} should track the face's 4.25",
+        wide / narrow
+    );
+
+    // A cell naming no family is priced on Excel's default Normal font, the
+    // same last resort `column_unit_pt` falls back to.
+    assert_eq!(
+        estimate_line_width_pt("Monthly Active Users", None, 11.0),
+        estimate_line_width_pt("Monthly Active Users", Some("Calibri"), 11.0),
+    );
+}
+
 /// A declared column width prints as an integer point count: Excel quantizes
 /// `width × unit` per column. Probe calibri11frac (issue #621): width 10.6 at
 /// the 6pt Calibri-11 unit prints 64pt, not 63.6pt.

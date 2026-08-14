@@ -138,6 +138,16 @@ pub(super) fn reference_digit_advance_em(family: &str) -> Option<f64> {
     }
 }
 
+/// The maximum digit advance, in em, of the face `family` names: the
+/// reference table first, then the live face, then Excel's default Normal
+/// font. Shared by the column metric and the single-line width estimate so
+/// both price a family from the same number.
+pub(super) fn digit_advance_em(family: &str) -> f64 {
+    reference_digit_advance_em(family)
+        .or_else(|| crate::render::pdf::max_digit_advance_em(family))
+        .unwrap_or(CALIBRI_DIGIT_ADVANCE_EM)
+}
+
 /// Points Excel allots to one column character unit for the given Normal
 /// font: `round_half_up(max digit advance × size)` — an INTEGER point count.
 /// Measured on 17 one-factor native Excel-for-Mac probes (issue #621); the
@@ -146,10 +156,7 @@ pub(super) fn reference_digit_advance_em(family: &str) -> Option<f64> {
 /// rounding modes (Times New Roman 13 = 6.500 → 7 kills half-even; Calibri 9
 /// and Verdana 11 kill truncation; Calibri 10 and Verdana 10 kill ceiling).
 pub(super) fn column_unit_pt(family: &str, size_pt: f64) -> f64 {
-    let digit_advance_em: f64 = reference_digit_advance_em(family)
-        .or_else(|| crate::render::pdf::max_digit_advance_em(family))
-        .unwrap_or(CALIBRI_DIGIT_ADVANCE_EM);
-    round_half_up_pt(digit_advance_em * size_pt)
+    round_half_up_pt(digit_advance_em(family) * size_pt)
 }
 
 /// Width in points of a column with no `<col>` entry.
@@ -482,24 +489,157 @@ fn uses_native_arabic_digits(format_code: &str) -> bool {
     digit_substitution >= 2 && language_id == 0x01
 }
 
-/// Rough single-line text width estimate in points: ASCII glyphs average
-/// about half the font size in Calibri-class fonts, CJK glyphs are full-width.
+/// Advance of each printable ASCII character, in multiples of its face's own
+/// maximum digit advance.
+///
+/// A proportional face prices its glyphs nearly proportionally to that digit
+/// advance — the same number every column width already scales by, see
+/// [`reference_digit_advance_em`] — so one table plus that per-family number
+/// reproduces a line's real `hmtx` advance sum closely. The entries are the
+/// mean over the `hmtx` tables of Arial, Calibri, Verdana and Tahoma; measured
+/// against those four faces' own sums over realistic cell strings the mean
+/// error is 0.9–1.6%, and 3.3% on Times New Roman.
+///
+/// It replaced a flat half-em per ASCII character, which cost a realistic
+/// sentence a third more than its glyphs really advance (issue #1054) and
+/// priced `iiiiiiiiii` like `WWWWWWWWWW`. Fixed-pitch families are the
+/// remaining miss: Courier New advances every glyph by its digit advance, so
+/// proportional ratios misprice its lines by 13.7% on average and up to 23%
+/// — where the flat rule was a uniform 8.4% under-count.
+///
+/// The table is static rather than read from the resolved face for the reason
+/// [`reference_digit_advance_em`] gives: a machine substituting a metrically
+/// different face must not move the printed range, and wasm resolves no face
+/// at all.
+const ASCII_ADVANCE_RATIO: [f64; 95] = [
+    0.5178, // U+0020 space
+    0.5924, // U+0021 '!'
+    0.7216, // U+0022 '"'
+    1.1507, // U+0023 '#'
+    1.0000, // U+0024 '$'
+    1.6227, // U+0025 '%'
+    1.2306, // U+0026 '&'
+    0.3969, // U+0027 '\''
+    0.6531, // U+0028 '('
+    0.6531, // U+0029 ')'
+    0.9206, // U+002A '*'
+    1.1632, // U+002B '+'
+    0.5297, // U+002C ','
+    0.6456, // U+002D '-'
+    0.5311, // U+002E '.'
+    0.6691, // U+002F '/'
+    1.0000, // U+0030 '0'
+    1.0000, // U+0031 '1'
+    1.0000, // U+0032 '2'
+    1.0000, // U+0033 '3'
+    1.0000, // U+0034 '4'
+    1.0000, // U+0035 '5'
+    1.0000, // U+0036 '6'
+    1.0000, // U+0037 '7'
+    1.0000, // U+0038 '8'
+    1.0000, // U+0039 '9'
+    0.5973, // U+003A ':'
+    0.5973, // U+003B ';'
+    1.1632, // U+003C '<'
+    1.1632, // U+003D '='
+    1.1632, // U+003E '>'
+    0.9099, // U+003F '?'
+    1.7069, // U+0040 '@'
+    1.1286, // U+0041 'A'
+    1.1076, // U+0042 'B'
+    1.1373, // U+0043 'C'
+    1.2417, // U+0044 'D'
+    1.0463, // U+0045 'E'
+    0.9660, // U+0046 'F'
+    1.2714, // U+0047 'G'
+    1.2367, // U+0048 'H'
+    0.5855, // U+0049 'I'
+    0.7515, // U+004A 'J'
+    1.0978, // U+004B 'K'
+    0.9041, // U+004C 'L'
+    1.4805, // U+004D 'M'
+    1.2429, // U+004E 'N'
+    1.3098, // U+004F 'O'
+    1.0442, // U+0050 'P'
+    1.3151, // U+0051 'Q'
+    1.1501, // U+0052 'R'
+    1.0504, // U+0053 'S'
+    1.0247, // U+0054 'T'
+    1.2292, // U+0055 'U'
+    1.1218, // U+0056 'V'
+    1.6649, // U+0057 'W'
+    1.0911, // U+0058 'X'
+    1.0460, // U+0059 'Y'
+    1.0310, // U+005A 'Z'
+    0.6300, // U+005B '['
+    0.6691, // U+005C '\\'
+    0.6300, // U+005D ']'
+    1.1116, // U+005E '^'
+    0.9957, // U+005F '_'
+    0.7932, // U+0060 '`'
+    0.9628, // U+0061 'a'
+    1.0073, // U+0062 'b'
+    0.8495, // U+0063 'c'
+    1.0073, // U+0064 'd'
+    0.9707, // U+0065 'e'
+    0.5595, // U+0066 'f'
+    0.9803, // U+0067 'g'
+    1.0134, // U+0068 'h'
+    0.4256, // U+0069 'i'
+    0.4823, // U+006A 'j'
+    0.9098, // U+006B 'k'
+    0.4256, // U+006C 'l'
+    1.5356, // U+006D 'm'
+    1.0134, // U+006E 'n'
+    0.9974, // U+006F 'o'
+    1.0073, // U+0070 'p'
+    1.0073, // U+0071 'q'
+    0.6545, // U+0072 'r'
+    0.8269, // U+0073 's'
+    0.5982, // U+0074 't'
+    1.0134, // U+0075 'u'
+    0.9083, // U+0076 'v'
+    1.3389, // U+0077 'w'
+    0.8979, // U+0078 'x'
+    0.9088, // U+0079 'y'
+    0.8297, // U+007A 'z'
+    0.7749, // U+007B '{'
+    0.6975, // U+007C '|'
+    0.7749, // U+007D '}'
+    1.1632, // U+007E '~'
+];
+
+/// Single-line text width estimate in points, summed over the runs' own
+/// families and sizes.
 fn estimate_text_width_pt(runs: &[Run]) -> f64 {
     runs.iter()
-        .map(|run| estimate_line_width_pt(&run.text, run.style.font_size.unwrap_or(11.0)))
+        .map(|run| {
+            estimate_line_width_pt(
+                &run.text,
+                run.style.font_family.as_deref(),
+                run.style.font_size.unwrap_or(11.0),
+            )
+        })
         .sum()
 }
 
 /// The single-run form of [`estimate_text_width_pt`], for callers that have a
-/// bare string and font size rather than IR runs.
-fn estimate_line_width_pt(text: &str, font_size: f64) -> f64 {
+/// bare string, family and font size rather than IR runs.
+///
+/// Printable ASCII costs its [`ASCII_ADVANCE_RATIO`] share of the family's
+/// digit advance; CJK and other non-Latin glyphs are priced full-width, and
+/// ASCII control characters draw nothing. A cell naming no family is measured
+/// on Excel's default Normal font, the same last resort [`column_unit_pt`]
+/// takes.
+pub(super) fn estimate_line_width_pt(text: &str, family: Option<&str>, font_size: f64) -> f64 {
+    let digit_advance_em: f64 = family.map_or(CALIBRI_DIGIT_ADVANCE_EM, digit_advance_em);
     text.chars()
-        .map(|c| {
-            if c.is_ascii() {
-                0.55 * font_size
-            } else {
-                1.05 * font_size
+        .map(|c| match c {
+            ' '..='~' => {
+                ASCII_ADVANCE_RATIO[c as usize - ' ' as usize] * digit_advance_em * font_size
             }
+            _ if c.is_ascii() => 0.0,
+            _ => 1.05 * font_size,
         })
         .sum::<f64>()
 }
@@ -1212,7 +1352,11 @@ fn spill_reach_max_col(
         }
 
         let style: TextStyle = extract_cell_text_style(cell, normal_font, theme);
-        let estimate: f64 = estimate_line_width_pt(&text, style.font_size.unwrap_or(11.0));
+        let estimate: f64 = estimate_line_width_pt(
+            &text,
+            style.font_family.as_deref(),
+            style.font_size.unwrap_or(11.0),
+        );
         let own_width: f64 = column_width_pt(col);
         let horizontal_inset: f64 = XLSX_CELL_PADDING.left + XLSX_CELL_PADDING.right;
         if estimate <= own_width - horizontal_inset {
