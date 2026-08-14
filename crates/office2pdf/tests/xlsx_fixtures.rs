@@ -1261,3 +1261,26 @@ fn structure_row_custom_format_fill_covers_spill_reached_column() {
         "plain rows must not inherit a fill in the extension column"
     );
 }
+
+/// The KPI tracker's A11 footnote is 99 characters of Arial 9 sitting in a
+/// 156pt column, so it paints past the used range — but only as far as the
+/// grid it already has. Excel prints the workbook on one page (issue #1054);
+/// pricing that line a third too wide walked the printed range three columns
+/// past F, which pushed the grid over the 487pt printable width and emitted a
+/// second, empty column group.
+#[test]
+fn structure_kpi_tracker_note_overflow_keeps_the_grid_on_one_page() {
+    let pages = sheet_pages("../../golden_mocks/business/sources/xlsx/10_kpi_tracker_en.xlsx");
+    assert_eq!(
+        sheet_names(&pages),
+        vec!["KPI"],
+        "the sheet must not split into horizontal column groups"
+    );
+    // printOptions omits headings, so the page is the A:F used range itself.
+    assert_eq!(
+        pages[0].table.column_widths.len(),
+        6,
+        "the printed range stays at the used range A:F, got widths {:?}",
+        pages[0].table.column_widths
+    );
+}
