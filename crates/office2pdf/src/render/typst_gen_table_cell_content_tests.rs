@@ -498,6 +498,236 @@ fn latin_only_row_under_a_grid_keeps_the_font_line() {
     );
 }
 
+/// The row's line box keys on the face its lines are set in, not on the
+/// script of its characters — the rule the body line took in issue #643
+/// (issue #814).
+///
+/// Measured on a native export: twelve rows of `10_research_report_ko`
+/// relabelled `2025-01`..`2025-12` — every cell Latin-only, every `w:rFonts`
+/// slot Malgun Gothic — keep Word's 25.44pt row pitch exactly, where the bare
+/// hhea line would pitch them at 21.64pt.
+#[test]
+fn latin_only_row_in_east_asian_face_keeps_the_east_asian_line_box() {
+    let Some((ascender, _descender, word_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Malgun Gothic")
+    else {
+        return; // Malgun Gothic not installed
+    };
+    let font_size: f64 = 9.5;
+    let top_em: f64 = ascender + 0.15 * word_pitch_em;
+    let bottom_em: f64 = 1.3 * word_pitch_em - top_em;
+    let make_cell = |text: &str| TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: text.to_string(),
+                style: TextStyle {
+                    font_family: Some("Malgun Gothic".to_string()),
+                    east_asian_font_family: Some("Malgun Gothic".to_string()),
+                    font_size: Some(font_size),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })],
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            minimum_height: None,
+            cells: vec![make_cell("2025-01"), make_cell("464")],
+            height: None,
+        }],
+        column_widths: vec![120.0, 80.0],
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    let east_asian_box = format!(
+        "top-edge: {}em, bottom-edge: -{}em",
+        format_f64(top_em),
+        format_f64(bottom_em)
+    );
+    assert_eq!(
+        result.matches(&east_asian_box).count(),
+        2,
+        "both Latin-only cells set in a CJK face must take the East Asian box: {result}"
+    );
+}
+
+/// Triangulation for [`latin_only_row_in_east_asian_face_keeps_the_east_asian_line_box`]:
+/// the face keys the line *height*, but only East Asian *text* snaps to a
+/// document grid — the same asymmetry the body path measured (issues #354,
+/// #643). A Latin-only row in a CJK face keeps its own 1.3-line advance under
+/// an active grid rather than being stretched to the grid pitch.
+#[test]
+fn latin_only_row_in_east_asian_face_does_not_snap_to_the_grid() {
+    let Some((ascender, _descender, word_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Malgun Gothic")
+    else {
+        return; // Malgun Gothic not installed
+    };
+    let font_size: f64 = 9.5;
+    let top_em: f64 = ascender + 0.15 * word_pitch_em;
+    let natural_bottom_em: f64 = 1.3 * word_pitch_em - top_em;
+    let grid_bottom_em: f64 = 18.0 / font_size - top_em;
+    let make_cell = |text: &str| TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: text.to_string(),
+                style: TextStyle {
+                    font_family: Some("Malgun Gothic".to_string()),
+                    east_asian_font_family: Some("Malgun Gothic".to_string()),
+                    font_size: Some(font_size),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })],
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            minimum_height: None,
+            cells: vec![make_cell("2025-01"), make_cell("464")],
+            height: None,
+        }],
+        column_widths: vec![120.0, 80.0],
+        ..Table::default()
+    };
+    let mut page = match make_flow_page(vec![Block::Table(table)]) {
+        Page::Flow(flow) => flow,
+        _ => unreachable!(),
+    };
+    page.line_grid_pitch = Some(18.0);
+    page.line_grid_snaps_lines = true;
+    let doc = make_doc(vec![Page::Flow(page)]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert_eq!(
+        result
+            .matches(&format!(
+                "top-edge: {}em, bottom-edge: -{}em",
+                format_f64(top_em),
+                format_f64(natural_bottom_em)
+            ))
+            .count(),
+        2,
+        "the row keeps its own East Asian line under the grid: {result}"
+    );
+    assert!(
+        !result.contains(&format!("bottom-edge: -{}em", format_f64(grid_bottom_em))),
+        "a Latin-only row must not be stretched to the grid pitch: {result}"
+    );
+}
+
+/// End-to-end pin for issue #814's probe fixture: `10_research_report_ko`
+/// with its twelve `2025년 N월` row labels relabelled `2025-01`..`2025-12` —
+/// the one patched factor — whose native Word export keeps the East Asian
+/// 25.44pt row pitch on every relabelled row. Every cell in the table names
+/// Malgun Gothic in all four `w:rFonts` slots, so all 31 rows must share the
+/// East Asian line box even where a row's every character is ASCII.
+#[test]
+fn research_report_probe_rows_share_the_east_asian_line_box() {
+    let Some((ascender, _descender, word_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Malgun Gothic")
+    else {
+        return; // Malgun Gothic not installed
+    };
+    let data = include_bytes!(
+        "../../../../tests/fixtures/docx/issue_814_latin_row_in_cjk_face_probe.docx"
+    );
+    let (doc, _warnings) = crate::parser::Parser::parse(
+        &crate::parser::docx::DocxParser,
+        data,
+        &crate::config::ConvertOptions::default(),
+    )
+    .expect("the probe document parses");
+    let result = generate_typst(&doc).unwrap().source;
+
+    let top_em: f64 = ascender + 0.15 * word_pitch_em;
+    let east_asian_box = format!(
+        "top-edge: {}em, bottom-edge: -{}em",
+        format_f64(top_em),
+        format_f64(1.3 * word_pitch_em - top_em)
+    );
+    let bare_box = format!(
+        "top-edge: {}em, bottom-edge: -{}em",
+        format_f64(ascender),
+        format_f64(word_pitch_em - ascender)
+    );
+    assert!(
+        result.matches(&east_asian_box).count() >= 31 * 5,
+        "all 31 rows x 5 columns must share the East Asian line box; found {}",
+        result.matches(&east_asian_box).count()
+    );
+    assert!(
+        !result.contains(&bare_box),
+        "a relabelled Latin-only row must not fall back to the bare hhea box"
+    );
+}
+
+/// A spreadsheet row keeps the text-keyed gate: the probe behind issue #814
+/// measured Word's table model, while Excel's auto-row decomposition was
+/// fitted with the text gate (issues #709, #711) and no export separates the
+/// two rules for a sheet — tracked in issue #1060.
+#[test]
+fn latin_only_spreadsheet_row_in_east_asian_face_keeps_the_hhea_line_box() {
+    let Some((ascender, _descender, word_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Malgun Gothic")
+    else {
+        return; // Malgun Gothic not installed
+    };
+    let font_size: f64 = 10.0;
+    let east_asian_top_em: f64 = ascender + 0.15 * word_pitch_em;
+    let cell = TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: "2025-01".to_string(),
+                style: TextStyle {
+                    font_family: Some("Malgun Gothic".to_string()),
+                    east_asian_font_family: Some("Malgun Gothic".to_string()),
+                    font_size: Some(font_size),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })],
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            minimum_height: None,
+            cells: vec![cell],
+            height: Some(20.0),
+        }],
+        column_widths: vec![200.0],
+        default_vertical_align: Some(CellVerticalAlign::Bottom),
+        seats_bottom_aligned_text_on_descender: true,
+        border_paint_model: TableBorderPaintModel::CenteredStroke,
+        prints_gridlines: false,
+        prints_headings: false,
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains(&format!("top-edge: {}em", format_f64(ascender))),
+        "a sheet's Latin-only row keeps the bare hhea ascent: {result}"
+    );
+    assert!(
+        !result.contains(&format!("top-edge: {}em", format_f64(east_asian_top_em))),
+        "the East Asian ascent excess must not reach a sheet's Latin row: {result}"
+    );
+}
+
 /// Word snaps a grid row's line *plus* the paragraph's `w:spacing w:after`,
 /// so the gap lives inside the line box and must not also be emitted after the
 /// runs. Adding it outside made every grid-scoped row 1.06pt too tall
