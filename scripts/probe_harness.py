@@ -20,9 +20,17 @@ Backends:
   Mac.
 - ``office`` — native Office via ``scripts/macos/export_*_pdfs.applescript``
   (picked by the base fixture's extension). Answers "what does Office do".
-  The Office apps are sandboxed and cannot write to external volumes (a save
-  under ``/Volumes`` hangs with AppleEvent timeout -1712), so the stage must
-  sit on the internal disk.
+
+  The Office apps are sandboxed, which constrains the stage twice over. A file
+  outside the driven app's own container needs per-file consent, and the
+  "Grant Access" dialog stalls an unattended run, so this backend stages under
+  ``~/Library/Containers/<bundle id>/Data/probes/`` — ``com.microsoft.Word``,
+  ``com.microsoft.Powerpoint`` or ``com.microsoft.Excel``, matched to the
+  format, since another app's container prompts just the same — and copies the
+  report and the PDFs back out to ``target/probes/`` when the run finishes
+  (#1051). And the sandbox cannot write to external volumes at all (a save
+  under ``/Volumes`` hangs with AppleEvent timeout -1712), so an explicit
+  ``--stage-root`` must still sit on the internal disk.
 
 A differ failure always propagates: a probe row built from a differ that
 silently reported nothing would show the variant as identical to the control,
@@ -70,6 +78,13 @@ APPLESCRIPT_BY_EXTENSION = {
     ".pptx": SCRIPTS_DIR / "macos" / "export_powerpoint_pdfs.applescript",
     ".xlsx": SCRIPTS_DIR / "macos" / "export_excel_pdfs.applescript",
 }
+OFFICE_BUNDLE_ID_BY_EXTENSION = {
+    ".docx": "com.microsoft.Word",
+    ".pptx": "com.microsoft.Powerpoint",
+    ".xlsx": "com.microsoft.Excel",
+}
+CONTAINERS_ROOT = Path.home() / "Library" / "Containers"
+RESULTS_ROOT = REPO_ROOT / "target" / "probes"
 
 SPEC_KEYS = {"name", "base", "part", "factor", "page", "noise_floor", "variants"}
 SPEC_REQUIRED_KEYS = ("name", "base", "part", "variants")
@@ -220,6 +235,39 @@ def ensure_internal_disk(path: Path) -> None:
             f"{path} sits on an external volume; the Office sandbox cannot write there "
             "(AppleEvent timeout -1712) — stage on the internal disk"
         )
+
+
+def default_stage_root(backend: str, extension: str) -> Path:
+    """Where a run stages packages and PDFs when ``--stage-root`` is not given.
+
+    The Office apps are sandboxed: opening a package from, or saving a PDF to,
+    anywhere outside the app's own container raises a per-file "Grant Access"
+    dialog, and an unattended run stalls on the first one (#1051). Inside the
+    container nothing is asked, so the office backend stages there — in the
+    container of the app this fixture's format drives, because reaching into
+    another app's container prompts just the same.
+    """
+    if backend != "office":
+        return RESULTS_ROOT
+    bundle_id = OFFICE_BUNDLE_ID_BY_EXTENSION.get(extension.lower())
+    if bundle_id is None:
+        raise ProbeError(f"no Office app container for '{extension.lstrip('.')}' fixtures")
+    return CONTAINERS_ROOT / bundle_id / "Data" / "probes"
+
+
+def mirror_results(stage: Path, destination: Path) -> Path:
+    """Copy a container-staged run's report and PDFs out; return the report path.
+
+    The variant packages stay behind: they rebuild deterministically from the
+    spec, while the report and the exported PDFs are what the run produced and
+    what the caller came for.
+    """
+    (destination / "pdfs").mkdir(parents=True, exist_ok=True)
+    for pdf in sorted((stage / "pdfs").glob("*.pdf")):
+        shutil.copyfile(pdf, destination / "pdfs" / pdf.name)
+    report = destination / "report.md"
+    shutil.copyfile(stage / "report.md", report)
+    return report
 
 
 def applescript_for(extension: str) -> Path:
@@ -465,17 +513,21 @@ def run_probe(
 ) -> Path:
     """Run one probe spec end to end; return the written report path."""
     spec = load_spec(spec_path)
-    stage = (stage_root or REPO_ROOT / "target" / "probes") / spec.name
+    if not spec.base.is_file():
+        raise ProbeError(f"base fixture not found: {spec.base}")
+    extension = spec.base.suffix.lower()
+
+    staged_in_container = stage_root is None and backend == "office"
+    stage = (stage_root or default_stage_root(backend, extension)) / spec.name
     if backend == "office":
         ensure_internal_disk(stage)
     packages_dir = stage / "packages"
     pdf_dir = stage / "pdfs"
     packages_dir.mkdir(parents=True, exist_ok=True)
     pdf_dir.mkdir(parents=True, exist_ok=True)
+    if staged_in_container:
+        print(f"[{spec.name}] staging inside the app sandbox container: {stage}", file=sys.stderr)
 
-    if not spec.base.is_file():
-        raise ProbeError(f"base fixture not found: {spec.base}")
-    extension = spec.base.suffix.lower()
     with zipfile.ZipFile(spec.base) as archive:
         names = archive.namelist()
         if spec.part not in names:
@@ -537,6 +589,9 @@ def run_probe(
     report_path = stage / "report.md"
     report_path.write_text(report, encoding="utf-8")
     sys.stdout.write(report)
+    if staged_in_container:
+        report_path = mirror_results(stage, RESULTS_ROOT / spec.name)
+        print(f"[{spec.name}] results copied out to {report_path.parent}", file=sys.stderr)
     return report_path
 
 
@@ -558,7 +613,11 @@ def main(argv: list[str] | None = None) -> int:
         "--stage-root",
         type=Path,
         default=None,
-        help="directory to stage packages/PDFs/reports under (default: target/probes)",
+        help=(
+            "directory to stage packages/PDFs/reports under (default: target/probes; "
+            "--backend office defaults into the driven app's sandbox container and "
+            "copies the results back to target/probes)"
+        ),
     )
     args = parser.parse_args(argv)
 
