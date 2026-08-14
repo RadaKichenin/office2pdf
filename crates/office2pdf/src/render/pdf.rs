@@ -426,6 +426,79 @@ pub(crate) fn compiled_text_runs(
     Ok(runs)
 }
 
+/// One image box as the layout engine actually placed it.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct PlacedImageBox {
+    /// Page-space positions of the source image's own corners, in points,
+    /// running from its top-left clockwise. A mirrored or turned picture
+    /// reports them in the same source order, so the corner a transform was
+    /// supposed to move is the one to read.
+    pub corners: [(f64, f64); 4],
+}
+
+/// Every image the compiled document paints on `page_index`, in layout order.
+///
+/// `#rotate` and `#scale` resolve their `origin` against a frame the layout
+/// engine sizes, so the emitted source cannot show where a turned picture
+/// ends up. Follow the frame tree instead and accumulate the full transform,
+/// not just its translation, or a turned picture reports the wrong box
+/// (issue #1032).
+#[cfg(all(test, not(target_arch = "wasm32")))]
+pub(crate) fn compiled_image_boxes(
+    typst_source: &str,
+    images: &[ImageAsset],
+    page_index: usize,
+) -> Result<Vec<PlacedImageBox>, ConvertError> {
+    use typst::layout::{Frame, FrameItem, Transform};
+
+    fn place(transform: Transform, x: f64, y: f64) -> (f64, f64) {
+        (
+            transform.sx.get() * x + transform.kx.get() * y + transform.tx.to_pt(),
+            transform.ky.get() * x + transform.sy.get() * y + transform.ty.to_pt(),
+        )
+    }
+
+    fn collect(frame: &Frame, transform: Transform, out: &mut Vec<PlacedImageBox>) {
+        for (position, item) in frame.items() {
+            let at: Transform = transform.pre_concat(Transform::translate(position.x, position.y));
+            match item {
+                FrameItem::Group(group) => {
+                    collect(&group.frame, at.pre_concat(group.transform), out);
+                }
+                FrameItem::Image(_, size, _) => {
+                    let (width, height): (f64, f64) = (size.x.to_pt(), size.y.to_pt());
+                    out.push(PlacedImageBox {
+                        corners: [
+                            place(at, 0.0, 0.0),
+                            place(at, width, 0.0),
+                            place(at, width, height),
+                            place(at, 0.0, height),
+                        ],
+                    });
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let world = MinimalWorld::new(typst_source, images, &[]);
+    let warned = typst::compile::<typst::layout::PagedDocument>(&world);
+    let document = warned.output.map_err(|errors| {
+        let messages: Vec<String> = errors.iter().map(|e| e.message.to_string()).collect();
+        ConvertError::Render(format!("Typst compilation failed: {}", messages.join("; ")))
+    })?;
+    let page = document.pages.get(page_index).ok_or_else(|| {
+        ConvertError::Render(format!(
+            "page {page_index} is past the document's {} pages",
+            document.pages.len()
+        ))
+    })?;
+    let mut boxes: Vec<PlacedImageBox> = Vec::new();
+    collect(&page.frame, Transform::identity(), &mut boxes);
+    Ok(boxes)
+}
+
 /// Convert the current system time to a Typst `Datetime` in UTC.
 ///
 /// Uses `std::time::SystemTime` to avoid an external chrono dependency.
