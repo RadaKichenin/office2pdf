@@ -647,11 +647,11 @@ fn shadow_blur_renders_gaussian_ring_stack() {
         rings >= 4 * 16,
         "a blur should ramp over many rings, not a handful: {rings}"
     );
-    // blur 24pt: sigma 7.2pt, and the outermost ring outsets the 220x130pt
-    // shape by the declared extent times that. Six rings to 2 sigma left the
-    // spread visibly short of this export's (#662).
+    // blur 24pt: sigma 8pt (blurRad/3, #784), and the outermost ring outsets
+    // the 220x130pt shape by the declared extent times that. Six rings to
+    // 2 sigma left the spread visibly short of this export's (#662).
     assert!(
-        output.source.contains("width: 257.44pt, height: 167.44pt"),
+        output.source.contains("width: 261.6pt, height: 171.6pt"),
         "24pt blur must span the declared extent"
     );
 }

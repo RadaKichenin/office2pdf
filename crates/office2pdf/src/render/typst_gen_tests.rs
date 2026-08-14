@@ -759,12 +759,12 @@ fn test_explicit_bold_still_emitted_when_font_unavailable() {
     );
 }
 
-// ── Shadow blur ring stack (issues #390, #662) ───────────────────────
+// ── Shadow blur ring stack (issues #390, #662, #784) ─────────────────
 //
 // PowerPoint renders `blurRad` as a stepped alpha ramp whose compound
 // coverage follows a Gaussian CDF centred on the shadow silhouette with
-// a std-dev of about 0.3 * blurRad (measured from native exports at
-// blur 6/9/12/24pt). The ring stack must reproduce that: full opacity
+// a std-dev of blurRad/3 (probe-fitted from native exports at blur
+// 1-18.9pt, issue #784). The ring stack must reproduce that: full opacity
 // inside, under 1% of it at the rim, monotonic in between. The rim figure
 // follows the extent — the two-sided tail beyond 2.6 sigma is about 0.9%,
 // where the 2 sigma this used to reach left about 4.6%.
@@ -806,10 +806,10 @@ fn test_blur_rings_span_the_declared_extent_each_side() {
         .iter()
         .map(|(e, _)| *e)
         .fold(f64::NEG_INFINITY, f64::max);
-    // sigma = 0.3 * 9pt = 2.7pt, and the rings run the declared extent each
+    // sigma = 9pt / 3 = 3pt, and the rings run the declared extent each
     // way. Derived from the constants rather than written out, so tuning the
     // ramp does not require rewriting an arithmetic constant here (#662).
-    let reach = SHADOW_RING_EXTENT_SIGMA * 2.7;
+    let reach = SHADOW_RING_EXTENT_SIGMA * 3.0;
     assert!((innermost + reach).abs() < 1e-9, "innermost {innermost}");
     assert!((outermost - reach).abs() < 1e-9, "outermost {outermost}");
 }
@@ -819,13 +819,13 @@ fn test_blur_ring_coverage_follows_gaussian_cdf() {
     let opacity = 0.4;
     let layers = shadow_blur_layers(&shadow_with(9.0, opacity));
     // Inside every ring the stack compounds to the shadow's own opacity.
-    let core = compound_coverage_at(&layers, -5.4);
+    let core = compound_coverage_at(&layers, -6.0);
     assert!((core - opacity).abs() < 0.02, "core coverage {core}");
     // At the silhouette edge itself the Gaussian is at 50%. The old six-ring
     // ramp was tested at 0.4 sigma because that was a band boundary; with a
     // finer ramp the halfway point sits where the Gaussian actually puts it,
     // at zero (#662).
-    let sigma = 2.7;
+    let sigma = 3.0;
     let at_edge = compound_coverage_at(&layers, 0.0);
     assert!(
         (at_edge - opacity * 0.5).abs() < 0.05,
@@ -841,6 +841,29 @@ fn test_blur_ring_coverage_follows_gaussian_cdf() {
     let rim = compound_coverage_at(&layers, 2.0 * sigma);
     assert!(rim < opacity * 0.1, "rim coverage {rim}");
     assert!(rim > 0.0, "rim must still be visible");
+}
+
+#[test]
+fn test_blur_sigma_is_a_third_of_the_declared_radius() {
+    // Native PowerPoint rasterises an `outerShdw` as a Gaussian whose
+    // std-dev is blurRad/3: one-factor probe exports of customGeo.pptx at
+    // blurRad 1/3.15/6.3/12.6/18.9pt fit sigma/blurRad = 0.331-0.345 on
+    // every silhouette edge of the flattened shadow bitmap (issue #784).
+    // The 0.3 this replaced sat below that band at every radius, which cut
+    // both the ramp's reach and its density about 10% short.
+    for blur_radius in [40000.0 / 12700.0, 160000.0 / 12700.0] {
+        let layers = shadow_blur_layers(&shadow_with(blur_radius, 0.38));
+        let outermost = layers
+            .iter()
+            .map(|(e, _)| *e)
+            .fold(f64::NEG_INFINITY, f64::max);
+        let ratio = outermost / SHADOW_RING_EXTENT_SIGMA / blur_radius;
+        assert!(
+            (0.32..=0.35).contains(&ratio),
+            "sigma/blurRad {ratio} at blur {blur_radius}pt must sit inside \
+             the probe-fitted band"
+        );
+    }
 }
 
 #[test]
@@ -860,13 +883,13 @@ fn test_blur_ring_coverage_is_monotonic_outward() {
     }
     // Triangulation at a second blur/opacity: the core still compounds
     // to the opacity and the geometry scales with the radius.
-    let core = compound_coverage_at(&layers, -14.4);
+    let core = compound_coverage_at(&layers, -16.0);
     assert!((core - 0.6).abs() < 0.02, "core coverage {core}");
-    // sigma = 0.3 * 24pt = 7.2pt, so the outermost ring reaches the declared
+    // sigma = 24pt / 3 = 8pt, so the outermost ring reaches the declared
     // extent times that.
     let outermost = expansions.last().copied().unwrap();
     assert!(
-        (outermost - SHADOW_RING_EXTENT_SIGMA * 7.2).abs() < 1e-9,
+        (outermost - SHADOW_RING_EXTENT_SIGMA * 8.0).abs() < 1e-9,
         "outermost {outermost}"
     );
 }
