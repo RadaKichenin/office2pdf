@@ -1164,3 +1164,100 @@ fn structure_merged_row_overflow_clamps_spill_to_its_page_column() {
         }
     }
 }
+
+#[test]
+fn smoke_spill_reach_print_range() {
+    assert_produces_valid_pdf("spill_reach_print_range.xlsx");
+}
+
+/// Excel extends a sheet's printed range to every column that unwrapped cell
+/// text visibly overflows into, and only to those (issue #718). Probe-measured
+/// on `NumberFormatTests.xlsx`: deleting the trailing styled `<col>` run, the
+/// row-level `customFormat`, the pane, and the selections each left the extra
+/// printed column in place, while deleting the rows whose D-column text paints
+/// past the column edge removed it; lengthening that text made Excel print
+/// additional columns and horizontal spill pages (14 pages against the
+/// workbook's baseline 9).
+///
+/// The fixture's five sheets vary one factor each around the same grid
+/// (Verdana 10; columns 20/18.33/14.66/13 chars; default width 10.6640625):
+/// - `SpillOne`: 17-char text in the 13-char last column reaches one column
+///   past the used range.
+/// - `Wrapped`: the same long text as `LongSpill`, under `wrapText`, never
+///   spills.
+/// - `Fits`: 9-char text fits its column.
+/// - `LongSpill`: 44-char text reaches three columns past the used range.
+/// - `Numeric`: a wide number never spills.
+#[test]
+fn structure_spill_reach_extends_printed_columns() {
+    let pages = sheet_pages("spill_reach_print_range.xlsx");
+    // LongSpill's extension makes the grid wider than one page, so it splits
+    // into two column groups — the same horizontal spill pages the native
+    // export emits for an overflow reaching past the printable width.
+    assert_eq!(
+        sheet_names(&pages),
+        vec![
+            "SpillOne",
+            "Wrapped",
+            "Fits",
+            "LongSpill",
+            "LongSpill",
+            "Numeric"
+        ],
+        "only the reach past the printable width may add pages"
+    );
+
+    // Each sheet prints headings, so every page group carries one row-heading
+    // column ahead of its spreadsheet columns: 1 + used range (4) + extension.
+    let column_counts: Vec<usize> = pages
+        .iter()
+        .map(|page| page.table.column_widths.len())
+        .collect();
+    assert_eq!(
+        column_counts,
+        vec![6, 5, 5, 6, 3, 5],
+        "printed columns must extend exactly to the overflow's reach \
+         (SpillOne +1, LongSpill +3 split across its column groups) and stay \
+         at the used range everywhere else"
+    );
+
+    // The extension columns carry no `<col>` record, so they take the sheet's
+    // declared default width (10.6640625 chars of Verdana 10 -> ~64pt, the
+    // width the native export prints for column E).
+    let spill_one_extension: f64 = *pages[0].table.column_widths.last().unwrap();
+    assert!(
+        (spill_one_extension - 64.0).abs() < 1.5,
+        "extension column must take the default column width; got {spill_one_extension}pt"
+    );
+}
+
+/// The `customFormat` row style paints the printed cells the row extends
+/// over, including spill-reached columns holding no cell at all — Excel's
+/// export fills the whole A1:E1 band (461pt on `NumberFormatTests.xlsx`,
+/// issue #718), not just the populated A1:D1.
+#[test]
+fn structure_row_custom_format_fill_covers_spill_reached_column() {
+    let pages = sheet_pages("spill_reach_print_range.xlsx");
+    // rows[0] is the printed column-heading row; rows[1] is spreadsheet row 1,
+    // whose customFormat style fills A1:D1 — and must also fill the reached E1.
+    let header_cells = &pages[0].table.rows[1].cells;
+    assert_eq!(header_cells.len(), 6, "header row spans the extended grid");
+    assert_eq!(
+        header_cells.last().unwrap().background,
+        Some(Color {
+            r: 255,
+            g: 192,
+            b: 0
+        }),
+        "the row-level customFormat fill must cover the spill-reached column"
+    );
+
+    // Rows without a customFormat style leave the extension column unfilled.
+    let data_cells = &pages[0].table.rows[2].cells;
+    assert_eq!(data_cells.len(), 6);
+    assert_eq!(
+        data_cells.last().unwrap().background,
+        None,
+        "plain rows must not inherit a fill in the extension column"
+    );
+}

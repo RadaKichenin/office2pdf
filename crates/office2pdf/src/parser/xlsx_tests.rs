@@ -105,14 +105,18 @@ fn test_parse_multiple_cells() {
 
 #[test]
 fn test_parse_empty_cells_in_grid() {
-    // A1 filled, B1 empty, A2 empty, B2 filled → 2x2 grid with gaps
+    // A1 filled, B1 empty, A2 empty, B2 filled → 2-row grid with gaps.
+    // "Bottom-Right" overflows B2's default-width column, so the printed
+    // range extends one column past the used range, as Excel prints an
+    // unwrapped overflow (issue #718) — a third, empty column follows.
     let data = build_xlsx_bytes("Sheet1", &[("A1", "Top-Left"), ("B2", "Bottom-Right")]);
     let parser = XlsxParser;
     let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
 
     let tp = get_sheet_page(&doc, 0);
     assert_eq!(tp.table.rows.len(), 2);
-    assert_eq!(tp.table.rows[0].cells.len(), 2);
+    assert_eq!(tp.table.rows[0].cells.len(), 3);
+    assert_eq!(cell_text(&tp.table.rows[0].cells[2]), "");
     // A1 has content
     assert_eq!(cell_text(&tp.table.rows[0].cells[0]), "Top-Left");
     // B1 is empty

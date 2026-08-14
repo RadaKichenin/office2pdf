@@ -245,7 +245,17 @@ pub(super) fn extract_cell_background(
     cell: &umya_spreadsheet::Cell,
     theme: Option<&umya_spreadsheet::structs::drawing::Theme>,
 ) -> Option<Color> {
-    let pattern = cell.get_style().get_fill()?.get_pattern_fill()?;
+    extract_style_background(cell.get_style(), theme)
+}
+
+/// Resolve a style's pattern fill to the colour it paints. Shared by cell
+/// styles and row-level `customFormat` styles, which fill a row's empty
+/// cells without any `<c>` element to hang a cell style on (issue #718).
+pub(super) fn extract_style_background(
+    style: &umya_spreadsheet::Style,
+    theme: Option<&umya_spreadsheet::structs::drawing::Theme>,
+) -> Option<Color> {
+    let pattern = style.get_fill()?.get_pattern_fill()?;
     let pattern_type: &umya_spreadsheet::PatternValues = pattern.get_pattern_type();
     if matches!(pattern_type, umya_spreadsheet::PatternValues::None) {
         return Option::None;

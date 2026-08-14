@@ -5,9 +5,13 @@ use crate::parser::cond_fmt::build_cond_fmt_overrides;
 
 use super::xlsx_style::{
     apply_rich_run_font, extract_cell_alignment, extract_cell_background, extract_cell_borders,
-    extract_cell_text_style,
+    extract_cell_text_style, extract_style_background,
 };
-use crate::ir::{BorderSide, CellBorder, Color, Insets, TableCell};
+use crate::ir::{BorderSide, CellBorder, Color, Insets, TableCell, TextStyle};
+
+/// The last addressable spreadsheet column (XFD), bounding how far a text
+/// overflow may extend the printed range.
+const MAX_XLSX_COLUMNS: u32 = 16384;
 
 /// A cell range within a sheet (1-indexed, inclusive).
 #[derive(Debug, Clone, Copy)]
@@ -470,20 +474,22 @@ fn uses_native_arabic_digits(format_code: &str) -> bool {
 /// about half the font size in Calibri-class fonts, CJK glyphs are full-width.
 fn estimate_text_width_pt(runs: &[Run]) -> f64 {
     runs.iter()
-        .map(|run| {
-            let font_size: f64 = run.style.font_size.unwrap_or(11.0);
-            run.text
-                .chars()
-                .map(|c| {
-                    if c.is_ascii() {
-                        0.55 * font_size
-                    } else {
-                        1.05 * font_size
-                    }
-                })
-                .sum::<f64>()
-        })
+        .map(|run| estimate_line_width_pt(&run.text, run.style.font_size.unwrap_or(11.0)))
         .sum()
+}
+
+/// The single-run form of [`estimate_text_width_pt`], for callers that have a
+/// bare string and font size rather than IR runs.
+fn estimate_line_width_pt(text: &str, font_size: f64) -> f64 {
+    text.chars()
+        .map(|c| {
+            if c.is_ascii() {
+                0.55 * font_size
+            } else {
+                1.05 * font_size
+            }
+        })
+        .sum::<f64>()
 }
 
 /// The width an unwrapped cell's single line may paint across, or `None` when
@@ -833,6 +839,12 @@ pub(super) fn build_rows_for_range(
     for row_idx in row_start..=row_end {
         let mut cells = Vec::with_capacity(ctx.num_cols);
         let mut row_wraps_past_one_line = false;
+        // A row-level `customFormat` style paints the row's cell-less grid
+        // positions too — Excel fills the whole printed band, including
+        // spill-reached columns holding no `<c>` element (issue #718).
+        let row_style_fill: Option<Color> = sheet
+            .get_row_dimension(&row_idx)
+            .and_then(|row| extract_style_background(row.get_style(), ctx.theme.as_ref()));
         for col_idx in ctx.col_start..=ctx.col_end {
             // Skip cells that are part of a merge but not the top-left
             if ctx.merge_skips.contains(&(col_idx, row_idx)) {
@@ -860,8 +872,13 @@ pub(super) fn build_rows_for_range(
             let (cell_alignment, cell_vertical_align) = umya_cell
                 .map(extract_cell_alignment)
                 .unwrap_or((None, None));
-            let mut background =
-                umya_cell.and_then(|cell| extract_cell_background(cell, ctx.theme.as_ref()));
+            let mut background = umya_cell
+                .and_then(|cell| extract_cell_background(cell, ctx.theme.as_ref()))
+                .or(if umya_cell.is_none() {
+                    row_style_fill
+                } else {
+                    None
+                });
             // A merged range is one IR cell, but Excel composes its outline
             // from the members on each edge, so reading only the top-left one
             // loses every side the range declares elsewhere (issue #939).
@@ -1026,6 +1043,117 @@ pub(super) fn resolve_column_unit_pt(
         .unwrap_or_else(|| sheet_column_unit_pt(sheet))
 }
 
+/// The last printed column once unwrapped text overflow is honoured.
+///
+/// Excel extends a sheet's printed range past its used range to every column
+/// that a cell's overflowing text visibly reaches (issue #718). Probe-measured
+/// on `NumberFormatTests.xlsx` (Tests sheet): deleting the trailing styled
+/// `<col>` run, the row-level `customFormat`, the frozen pane, the `A1:XFD1`
+/// selection, and the `pageSetup` element each left the printed edge at
+/// column E, while deleting the rows whose D-column text paints past the used
+/// range pulled it back to column D — and lengthening that text made the
+/// native export print further trailing columns, adding horizontal spill
+/// pages. The bound is the overflow's reach: not one column, not the page
+/// width, and not the extent of any formatting.
+///
+/// Mirrors `compute_spill_width`'s spill conditions: only an unwrapped,
+/// general- or left-aligned text cell whose row holds nothing between it and
+/// the used-range edge paints past that edge.
+#[allow(clippy::too_many_arguments)]
+fn spill_reach_max_col(
+    sheet: &umya_spreadsheet::Worksheet,
+    max_col: u32,
+    normal_font: Option<&NormalFont>,
+    theme: Option<&umya_spreadsheet::structs::drawing::Theme>,
+    merge_tops: &HashMap<(u32, u32), MergeInfo>,
+    merge_skips: &HashSet<(u32, u32)>,
+    unit_pt: f64,
+    default_width_pt: f64,
+) -> u32 {
+    let column_width_pt = |col: u32| -> f64 {
+        sheet
+            .get_column_dimension_by_number(&col)
+            .map(|c| column_width_to_pt(*c.get_width(), unit_pt))
+            .unwrap_or(default_width_pt)
+    };
+
+    // Only a row's last value-bearing cell can paint past the used range —
+    // any populated cell to its right would block the spill first.
+    let mut last_populated_by_row: HashMap<u32, (u32, &umya_spreadsheet::Cell)> = HashMap::new();
+    for cell in sheet.get_cell_collection() {
+        if cell.get_cell_value().get_raw_value().is_empty() {
+            continue;
+        }
+        let col: u32 = *cell.get_coordinate().get_col_num();
+        let row: u32 = *cell.get_coordinate().get_row_num();
+        let entry = last_populated_by_row.entry(row).or_insert((col, cell));
+        if col >= entry.0 {
+            *entry = (col, cell);
+        }
+    }
+
+    let mut extended_max_col: u32 = max_col;
+    for (&row, &(col, cell)) in &last_populated_by_row {
+        // A merged cell clips at the merge edge instead of spilling.
+        if merge_tops.contains_key(&(col, row)) || merge_skips.contains(&(col, row)) {
+            continue;
+        }
+        let text: String = cell.get_formatted_value();
+        if text.is_empty() || text.contains('\n') {
+            continue;
+        }
+        let has_wrap_text: bool = cell
+            .get_style()
+            .get_alignment()
+            .map(|alignment| *alignment.get_wrap_text())
+            .unwrap_or(false);
+        if has_wrap_text {
+            continue;
+        }
+        // The same alignment resolution the cell loop applies: explicit
+        // horizontal alignment, else RTL text prints right-aligned, else
+        // numbers print right-aligned — and only general/left spills right.
+        let alignment: Option<crate::ir::Alignment> = extract_cell_alignment(cell)
+            .0
+            .or_else(|| {
+                text.chars()
+                    .find_map(strong_direction)
+                    .filter(|is_rtl| *is_rtl)
+                    .map(|_| crate::ir::Alignment::Right)
+            })
+            .or_else(|| cell.get_value_number().map(|_| crate::ir::Alignment::Right));
+        if !matches!(alignment, None | Some(crate::ir::Alignment::Left)) {
+            continue;
+        }
+        // A merged range between the cell and the used-range edge blocks the
+        // spill; value-bearing cells cannot occur there by construction.
+        if ((col + 1)..=max_col)
+            .any(|c| merge_tops.contains_key(&(c, row)) || merge_skips.contains(&(c, row)))
+        {
+            continue;
+        }
+
+        let style: TextStyle = extract_cell_text_style(cell, normal_font, theme);
+        let estimate: f64 = estimate_line_width_pt(&text, style.font_size.unwrap_or(11.0));
+        let own_width: f64 = column_width_pt(col);
+        let horizontal_inset: f64 = XLSX_CELL_PADDING.left + XLSX_CELL_PADDING.right;
+        if estimate <= own_width - horizontal_inset {
+            continue;
+        }
+        // The width the line needs, as `compute_spill_width` prices it; walk
+        // whole trailing columns until the text's reach is covered.
+        let needed_width: f64 = estimate + 4.0;
+        let mut covered_width: f64 = (col..=max_col).map(column_width_pt).sum();
+        let mut reach_col: u32 = max_col;
+        while needed_width > covered_width && reach_col < MAX_XLSX_COLUMNS {
+            reach_col += 1;
+            covered_width += column_width_pt(reach_col);
+        }
+        extended_max_col = extended_max_col.max(reach_col);
+    }
+    extended_max_col
+}
+
 /// Prepare the shared context for processing a sheet (dimensions, merges, styles, etc.).
 /// Returns (SheetContext, row_start, row_end) or None if the sheet is empty.
 pub(super) fn prepare_sheet_context(
@@ -1051,20 +1179,35 @@ pub(super) fn prepare_sheet_context(
         }
     }
 
-    // Check for print area — limit to that range if defined
-    let print_area = find_print_area(sheet);
-    let (col_start, col_end, row_start, row_end) = if let Some(pa) = print_area {
-        (pa.start_col, pa.end_col, pa.start_row, pa.end_row)
-    } else {
-        (1, max_col, 1, max_row)
-    };
-
     let unit_pt: f64 = resolve_column_unit_pt(sheet, normal_font);
     let default_width_pt: f64 = default_column_width_pt(
         declared_default_column_width(sheet),
         declared_base_column_width(sheet),
         unit_pt,
     );
+    let (merge_tops, merge_skips) = build_merge_maps(sheet);
+
+    // Check for print area — limit to that range if defined. Without one,
+    // the printed range grows past the used range to the columns that
+    // unwrapped text overflow visibly reaches, as Excel prints them
+    // (issue #718). An explicit print area is exact and never grows.
+    let print_area = find_print_area(sheet);
+    let (col_start, col_end, row_start, row_end) = if let Some(pa) = print_area {
+        (pa.start_col, pa.end_col, pa.start_row, pa.end_row)
+    } else {
+        let max_col: u32 = spill_reach_max_col(
+            sheet,
+            max_col,
+            normal_font,
+            theme,
+            &merge_tops,
+            &merge_skips,
+            unit_pt,
+            default_width_pt,
+        );
+        (1, max_col, 1, max_row)
+    };
+
     let column_widths: Vec<f64> = (col_start..=col_end)
         .map(|col| {
             sheet
@@ -1073,8 +1216,6 @@ pub(super) fn prepare_sheet_context(
                 .unwrap_or(default_width_pt)
         })
         .collect();
-
-    let (merge_tops, merge_skips) = build_merge_maps(sheet);
     let cond_fmt_overrides =
         build_cond_fmt_overrides(sheet, raw_cond_fmt_hints, defined_names, theme);
     let num_cols = (col_end - col_start + 1) as usize;
