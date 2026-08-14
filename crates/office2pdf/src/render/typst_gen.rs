@@ -27,8 +27,8 @@ use self::lists::{
     write_fixed_text_default_par_settings,
 };
 use self::shapes::{
-    generate_shape, shadow_blur_layers, write_fill_color, write_gradient_fill, write_shape_stroke,
-    write_text_box_shape_background,
+    generate_shape, shadow_blur_layers, shadow_outline_outset, write_fill_color,
+    write_gradient_fill, write_shape_stroke, write_text_box_shape_background,
 };
 use self::tables::generate_table;
 use self::text::*;
@@ -1003,7 +1003,12 @@ fn generate_fixed_element(
                 let dir_rad = shadow.direction.to_radians();
                 let dx = shadow.distance * dir_rad.cos();
                 let dy = shadow.distance * dir_rad.sin();
-                for (expansion, alpha) in shadow_blur_layers(shadow) {
+                // A picture's `a:ln` straddles its frame exactly as a shape's
+                // does, so the silhouette PowerPoint casts is the frame grown
+                // by half that width (issue #1057).
+                let outline_outset: f64 = shadow_outline_outset(&img.stroke);
+                for (blur_expansion, alpha) in shadow_blur_layers(shadow) {
+                    let expansion = outline_outset + blur_expansion;
                     let _ = writeln!(
                         out,
                         "#place(top + left, dx: {}pt, dy: {}pt, rect(width: {}pt, height: {}pt, fill: rgb({}, {}, {}, {})))",

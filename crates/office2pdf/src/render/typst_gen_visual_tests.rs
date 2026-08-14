@@ -854,6 +854,141 @@ fn test_shape_shadow_blur_renders_layered_rings() {
     );
 }
 
+/// The `(dx, dy, width, height)` of the first shadow ring in `source`, in
+/// points.
+///
+/// Read numerically rather than matched as a string: a direction that is a
+/// multiple of 90 degrees leaves a cosine residue of about 1e-17 in the
+/// offset, which no exact literal can spell.
+fn first_shadow_layer_geometry(source: &str) -> (f64, f64, f64, f64) {
+    let shadow_start = source
+        .find("rgb(0, 0, 0, ")
+        .expect("no shadow ring in output");
+    let placement = source[..shadow_start]
+        .rfind("#place(top + left, dx: ")
+        .expect("shadow ring is not placed");
+    let numbers: Vec<f64> = source[placement..shadow_start]
+        .split(|c: char| !(c.is_ascii_digit() || c == '.' || c == '-'))
+        .filter(|token| !token.is_empty())
+        .filter_map(|token| token.parse::<f64>().ok())
+        .collect();
+    assert_eq!(
+        numbers.len(),
+        4,
+        "expected dx, dy, width and height in: {}",
+        &source[placement..shadow_start],
+    );
+    (numbers[0], numbers[1], numbers[2], numbers[3])
+}
+
+#[test]
+fn test_shadow_silhouette_outsets_by_half_the_outline_width() {
+    // PowerPoint casts `a:outerShdw` from the *stroked* silhouette — the fill
+    // path grown by half the line width — and only then offsets it by `dist`.
+    // Measured on `customGeo.pptx` page 46 against a native macOS PowerPoint
+    // export: the banner's fill path is x [60, 672], y [36, 113.75] under a
+    // 3pt outline, and the export's flattened shadow bitmap puts its
+    // half-alpha silhouette at x [58.44, 673.56], y [36.00, 116.88] — the fill
+    // path outset by 1.5pt and then moved 1.57pt down, agreeing on every edge
+    // to within 0.09pt (issue #1057).
+    use crate::ir::Shadow;
+
+    let elem = FixedElement {
+        x: 60.0,
+        y: 36.0,
+        width: 612.0,
+        height: 77.75,
+        kind: FixedElementKind::Shape(Shape {
+            kind: ShapeKind::Rectangle,
+            fill: Some(Color::new(79, 129, 189)),
+            gradient_fill: None,
+            pattern_fill: None,
+            stroke: Some(BorderSide {
+                width: 3.0,
+                color: Color::new(255, 255, 255),
+                style: BorderLineStyle::Solid,
+            }),
+            rotation_deg: None,
+            opacity: None,
+            // Blur left off so the silhouette itself is what the geometry
+            // below measures; the blur's own reach is covered by
+            // `test_shape_shadow_blur_renders_layered_rings`.
+            shadow: Some(Shadow {
+                blur_radius: 0.0,
+                distance: 1.57,
+                direction: 90.0,
+                color: Color::new(0, 0, 0),
+                opacity: 0.38,
+            }),
+        }),
+    };
+    let doc = make_doc(vec![make_fixed_page(720.0, 540.0, vec![elem])]);
+    let source = generate_typst(&doc).unwrap().source;
+
+    let outset: f64 = 1.5;
+    let (dx, dy, width, height) = first_shadow_layer_geometry(&source);
+    assert!(
+        (width - (612.0 + 2.0 * outset)).abs() < 0.01
+            && (height - (77.75 + 2.0 * outset)).abs() < 0.01,
+        "a 3pt outline must grow the shadow silhouette by {outset}pt a side, \
+         got {width}x{height}pt: {source}"
+    );
+    // The silhouette grows about its own centre, so the outset shifts the
+    // placement back by the same amount before `dist` moves it. Against the
+    // shape's own x=60, y=36 that puts the silhouette at x [58.5, 673.5],
+    // y [36.07, 116.82] — the export's, to within 0.09pt.
+    assert!(
+        (dx - -outset).abs() < 0.01 && (dy - (1.57 - outset)).abs() < 0.01,
+        "the grown silhouette must stay centred on the shape, got dx {dx}pt \
+         dy {dy}pt: {source}"
+    );
+}
+
+#[test]
+fn test_shadow_silhouette_ignores_outline_when_shape_has_none() {
+    // The control for the outset above: a shape with no `a:ln` casts from its
+    // fill path alone, so the crisp duplicate keeps the shape's own size and
+    // sits exactly `dist` away (issue #1057).
+    use crate::ir::Shadow;
+
+    let elem = FixedElement {
+        x: 60.0,
+        y: 36.0,
+        width: 612.0,
+        height: 77.75,
+        kind: FixedElementKind::Shape(Shape {
+            kind: ShapeKind::Rectangle,
+            fill: Some(Color::new(79, 129, 189)),
+            gradient_fill: None,
+            pattern_fill: None,
+            stroke: None,
+            rotation_deg: None,
+            opacity: None,
+            shadow: Some(Shadow {
+                blur_radius: 0.0,
+                distance: 1.57,
+                direction: 90.0,
+                color: Color::new(0, 0, 0),
+                opacity: 0.38,
+            }),
+        }),
+    };
+    let doc = make_doc(vec![make_fixed_page(720.0, 540.0, vec![elem])]);
+    let source = generate_typst(&doc).unwrap().source;
+
+    let (dx, dy, width, height) = first_shadow_layer_geometry(&source);
+    assert!(
+        (width - 612.0).abs() < 0.01 && (height - 77.75).abs() < 0.01,
+        "an outline-less shape casts its fill path unchanged, got \
+         {width}x{height}pt: {source}"
+    );
+    assert!(
+        dx.abs() < 0.01 && (dy - 1.57).abs() < 0.01,
+        "an outline-less shadow sits exactly `dist` away, got dx {dx}pt \
+         dy {dy}pt: {source}"
+    );
+}
+
 #[test]
 fn test_shape_shadow_without_blur_keeps_single_duplicate() {
     use crate::ir::Shadow;
