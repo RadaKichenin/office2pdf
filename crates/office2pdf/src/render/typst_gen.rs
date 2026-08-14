@@ -144,6 +144,11 @@ struct GenCtx {
     /// the enclosing table is a spreadsheet and the cell's effective vertical
     /// alignment is bottom (issue #618).
     cell_seats_text_on_descender: bool,
+    /// The shared line the cell being generated seats on when its spreadsheet
+    /// row is too tight for per-cell vertical alignment to differ: one metric
+    /// family and size for the whole row, so every cell lands on one baseline
+    /// as Excel prints it (issue #839). `None` outside that regime.
+    cell_sheet_row_line: Option<SheetRowLine>,
     /// Whether emission is inside a spill cell's clipped wrapper (issue #811).
     in_spill_cell: bool,
     /// Numerals the active section's `PAGE` fields render in. A header is
@@ -212,6 +217,7 @@ impl GenCtx {
             table_box_is_aligned: false,
             table_seats_bottom_aligned_text_on_descender: false,
             cell_seats_text_on_descender: false,
+            cell_sheet_row_line: None,
             in_spill_cell: false,
             page_number_format: PageNumberFormat::default(),
             document_default_text: None,

@@ -930,6 +930,7 @@ fn test_boundary_band_auto_row_verticals_paint_concrete_twin_bands() {
             takes_east_asian_metrics: false,
         },
         false,
+        None,
     ) else {
         return; // no font book available (e.g. exotic CI sandbox)
     };

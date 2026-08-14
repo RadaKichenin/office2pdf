@@ -302,6 +302,18 @@ fn generate_table_rows(
                     && row_is_set_in_east_asian_face(row)),
         };
 
+        // A spreadsheet row whose fixed track cannot hold more than one line
+        // seats every cell on that one line, whatever each cell's declared
+        // vertical alignment says — Excel's native exports print such rows on
+        // a single baseline (issue #839).
+        let row_shared_line: Option<SheetRowLine> = sheet_row_shared_line(
+            row,
+            row.height.filter(|_| fixed_row_heights),
+            ctx.row_east_asian,
+            default_cell_padding,
+            ctx.table_seats_bottom_aligned_text_on_descender,
+        );
+
         // The auto-row frame estimate walks every cell's font metrics, so
         // computing it per cell is O(cells²) on wrap-text rows; it depends
         // only on the row, so it is computed lazily at most once per row and
@@ -365,6 +377,7 @@ fn generate_table_rows(
                 // tall as its tallest cell, so one strut carries it. Putting
                 // it in every cell would only repeat the same constraint.
                 row.minimum_height.filter(|_| cell_index == 0),
+                row_shared_line.as_ref(),
                 ctx,
             )?;
             ctx.available_measure_pt = enclosing_measure_pt;
@@ -446,6 +459,126 @@ fn block_is_set_in_east_asian_face(block: &Block) -> bool {
             .any(|paragraph| line_takes_east_asian_metrics(&paragraph.runs)),
         _ => false,
     }
+}
+
+/// Excel's printed grid quantises row tracks to whole PDF points (see
+/// `native_excel_pdf_row_height` in the XLSX parser), so a row's content box
+/// can read up to half a point of slack the native export does not actually
+/// have. The tightness gate absorbs that quantum before deciding a row has
+/// room for per-cell vertical alignment (issue #839).
+const SHEET_ROW_TRACK_QUANTISATION_SLACK_PT: f64 = 0.5;
+
+/// The one line a tight spreadsheet row seats every cell on, or `None` when
+/// the row is not in that regime (issue #839).
+///
+/// Excel prints every cell of a single-line sheet row on one baseline: the
+/// native export of `09_expense_report_en` puts a `vertical="bottom"` amount
+/// column and its `vertical="center"` neighbours all at y=143.00, and
+/// `04_payroll_ko`'s fixed 합계 row seats its centred Korean label with its
+/// bottom-aligned numbers at y=218.00. The alignments coincide because the
+/// track holds essentially the line alone: there is no slack to distribute,
+/// so the declared alignments have nowhere to differ.
+///
+/// Both gates key on the row's *bare hhea* line, not the 1.3-factor East
+/// Asian box (#518): the tight regime is a property of Excel's geometry, and
+/// Excel's own line never carries that Word factor — judging a 23pt Korean
+/// title track against the inflated box would misread its real ~3pt of slack
+/// as none. Two regimes stay out. A row with more content room than the line
+/// — a tall header, a spanned merge — keeps per-cell alignment, which Excel
+/// honours and #618 measured. A row whose track is *shorter* than the line
+/// holds text deliberately oversized for it (a 42pt title in a 23pt track),
+/// where the alignments pick which part of the overflowing line shows and
+/// stay honoured too; a track an auto-fit produced is never shorter than its
+/// own font's line.
+fn sheet_row_shared_line(
+    row: &TableRow,
+    row_track_pt: Option<f64>,
+    row_east_asian: RowEastAsianMetrics,
+    default_cell_padding: Insets,
+    table_seats_bottom_aligned_text_on_descender: bool,
+) -> Option<SheetRowLine> {
+    if !table_seats_bottom_aligned_text_on_descender {
+        return None;
+    }
+    let track_pt: f64 = row_track_pt?;
+    let metric_family: &str = row_metric_family(row, row_east_asian.takes_east_asian_metrics)?;
+    let font_size_pt: f64 = row_font_size_pt(row);
+    let bare_line_pt: f64 = sheet_row_line_advance_pt(metric_family, font_size_pt, false)?;
+    if track_pt + SHEET_ROW_TRACK_QUANTISATION_SLACK_PT < bare_line_pt {
+        return None;
+    }
+    // The tallest content box among the cells this track alone holds; a cell
+    // spanning several tracks has more room than the track and is judged out
+    // of scope by its `row_span` in `generate_table_cell` anyway.
+    let max_content_pt: f64 = row
+        .cells
+        .iter()
+        .filter(|cell| cell.col_span > 0 && cell.row_span == 1)
+        .map(|cell| {
+            let inset: Insets = cell_inset_with_border(cell, default_cell_padding);
+            track_pt - inset.top - inset.bottom
+        })
+        .fold(f64::NAN, f64::max);
+    // A NaN (no cells hold this track alone) fails the comparison and bails.
+    let row_is_tight: bool = max_content_pt <= bare_line_pt + SHEET_ROW_TRACK_QUANTISATION_SLACK_PT;
+    if !row_is_tight {
+        return None;
+    }
+    Some(SheetRowLine {
+        metric_family: metric_family.to_string(),
+        font_size_pt,
+    })
+}
+
+/// The family whose metrics pace a spreadsheet row's shared line: the
+/// row-level mirror of `east_asian_aware_metric_family` (issue #839). An East
+/// Asian row is paced by the family shaping its East Asian text — the
+/// declared `east_asian_font_family` slot, or failing that the `font_family`
+/// of a run that carries East Asian characters (how a sheet row becomes East
+/// Asian at all, since its gate is text-keyed). A Latin row is paced by its
+/// first declared family.
+fn row_metric_family(row: &TableRow, takes_east_asian_metrics: bool) -> Option<&str> {
+    let runs = || {
+        row.cells
+            .iter()
+            .flat_map(|cell| cell.content.iter())
+            .filter_map(|block| match block {
+                Block::Paragraph(paragraph) => Some(paragraph.runs.as_slice()),
+                _ => None,
+            })
+            .flatten()
+    };
+    let latin = || runs().find_map(|run| run.style.font_family.as_deref());
+    if takes_east_asian_metrics {
+        runs()
+            .find_map(|run| run.style.east_asian_font_family.as_deref())
+            .or_else(|| {
+                runs()
+                    .filter(|run| run.text.chars().any(is_cjk_like))
+                    .find_map(|run| run.style.font_family.as_deref())
+            })
+            .or_else(latin)
+    } else {
+        latin()
+    }
+}
+
+/// The size a spreadsheet row's shared line resolves at: the largest run size
+/// in the row, mirroring `paragraph_font_size_pt`'s largest-run rule at row
+/// scope (issue #839).
+fn row_font_size_pt(row: &TableRow) -> f64 {
+    let largest: f64 = row
+        .cells
+        .iter()
+        .flat_map(|cell| cell.content.iter())
+        .filter_map(|block| match block {
+            Block::Paragraph(paragraph) => Some(paragraph.runs.as_slice()),
+            _ => None,
+        })
+        .flatten()
+        .filter_map(|run| run.style.font_size)
+        .fold(f64::NAN, f64::max);
+    if largest.is_nan() { 11.0 } else { largest }
 }
 
 /// Excel does not fill the cell with a data bar: it insets the bar from the
@@ -563,22 +696,63 @@ fn generate_table_cell(
     default_cell_padding: Insets,
     row_height: Option<f64>,
     row_minimum_height: Option<f64>,
+    row_shared_line: Option<&SheetRowLine>,
     ctx: &mut GenCtx,
 ) -> Result<(), ConvertError> {
+    // Whether this cell joins its tight row's one baseline (issue #839). A
+    // cell spanning several tracks has more room than the row's single track,
+    // and a cell stacking several blocks holds more than the row's one line;
+    // both keep their declared alignment, which is what Excel honours when
+    // there is room. A cell with no paragraph has no line to seat.
+    let seats_on_row_line: bool = row_shared_line.is_some()
+        && cell.row_span <= 1
+        && cell
+            .content
+            .iter()
+            .filter(|block| {
+                !matches!(
+                    block,
+                    Block::TableOfContents(_) | Block::PageBreak | Block::ColumnBreak
+                )
+            })
+            .count()
+            <= 1
+        && cell
+            .content
+            .iter()
+            .any(|block| matches!(block, Block::Paragraph(_)));
+
     let needs_cell_fn = clamped_colspan > 1
         || cell.row_span > 1
         || cell.border.is_some()
         || cell.background.is_some()
         || cell.vertical_align.is_some()
-        || cell.padding.is_some();
+        || cell.padding.is_some()
+        || seats_on_row_line;
 
     // The alignment the cell actually renders with: its own, or the table's
     // default (Excel's bottom). The paragraph codegen needs the effective
     // answer, not the cell's declaration, because Excel's untouched default
     // cells are exactly the bottom-aligned ones (issue #618).
-    let effective_vertical_align: Option<CellVerticalAlign> =
-        cell.vertical_align.or(ctx.table_default_vertical_align);
+    //
+    // In a tight spreadsheet row the declared alignment has no room to act in
+    // Excel, so the choice of anchor here is free — and it is taken as the
+    // *centred* symmetric box for every cell, not the descender seat. The
+    // centred baseline sits at `content centre + (ascent − pitch/2)`, a
+    // quantity the East Asian 1.3 line factor cancels out of entirely, so it
+    // is immune to that factor's known overshoot (#709); the bottom seat
+    // inherits the row-track error in full. Measured on the business corpus
+    // baseline gate, centring is the anchor that moves every deviating cell
+    // toward its GT — the descender seat moved every Korean page 1.2–1.8pt
+    // further away (issue #839).
+    let effective_vertical_align: Option<CellVerticalAlign> = if seats_on_row_line {
+        Some(CellVerticalAlign::Center)
+    } else {
+        cell.vertical_align.or(ctx.table_default_vertical_align)
+    };
     let enclosing_cell_seats_on_descender: bool = ctx.cell_seats_text_on_descender;
+    let enclosing_cell_sheet_row_line: Option<SheetRowLine> = ctx.cell_sheet_row_line.take();
+    ctx.cell_sheet_row_line = row_shared_line.filter(|_| seats_on_row_line).cloned();
     // Descender seating applies only to FIXED-height rows (`row_height` is
     // `Some` only then). In auto rows the renderer sizes the row from the
     // content itself, whose intrinsic height was calibrated against Excel GT
@@ -599,6 +773,7 @@ fn generate_table_cell(
             clamped_colspan,
             default_cell_padding,
             paints_boundary_bands,
+            seats_on_row_line.then_some(CellVerticalAlign::Center),
         );
         out.push_str(")[");
     } else {
@@ -852,6 +1027,7 @@ fn generate_table_cell(
         out.push(']');
     }
     ctx.cell_seats_text_on_descender = enclosing_cell_seats_on_descender;
+    ctx.cell_sheet_row_line = enclosing_cell_sheet_row_line;
     out.push_str("],\n");
     Ok(())
 }
@@ -890,6 +1066,7 @@ fn spill_line_box_height_pt(cell: &TableCell, ctx: &GenCtx) -> Option<f64> {
         ctx.line_grid_pitch,
         ctx.row_east_asian,
         ctx.cell_seats_text_on_descender,
+        ctx.cell_sheet_row_line.as_ref(),
     )?;
     Some((line_box.top_em + line_box.bottom_em) * line_box.font_size_pt)
 }
@@ -1646,13 +1823,15 @@ fn auto_row_frame_height_estimate_pt(
                 _ => None,
             })?;
             // Auto rows never seat text on the descender — the seating gate
-            // keys on a fixed row height — so the estimate must not either.
+            // keys on a fixed row height — so the estimate must not either,
+            // and no shared row line exists for it to resolve against.
             let line_box: CellLineBox = word_cell_line_box(
                 &paragraph.runs,
                 &paragraph.style,
                 ctx.line_grid_pitch,
                 ctx.row_east_asian,
                 false,
+                None,
             )?;
             let inset: Insets = cell_inset_with_border(cell, default_cell_padding);
             Some(
@@ -2120,6 +2299,11 @@ fn write_cell_params(
     clamped_colspan: u32,
     default_cell_padding: Insets,
     paints_boundary_bands: bool,
+    // `Some` replaces whatever vertical alignment the cell declares or
+    // inherits: a tight spreadsheet row anchors every cell on its one centred
+    // line (issue #839). Emitted even for a cell declaring nothing, because
+    // the sheet table's default it would inherit is bottom.
+    forced_vertical_align: Option<CellVerticalAlign>,
 ) {
     let mut first = true;
 
@@ -2151,7 +2335,9 @@ fn write_cell_params(
             write_param(out, &mut first, &stroke);
         }
     }
-    if let Some(ref va) = cell.vertical_align {
+    let emitted_vertical_align: Option<CellVerticalAlign> =
+        forced_vertical_align.or(cell.vertical_align);
+    if let Some(va) = emitted_vertical_align {
         let align_str: &str = match va {
             CellVerticalAlign::Top => "top",
             CellVerticalAlign::Center => "horizon",
@@ -2229,6 +2415,7 @@ fn generate_cell_content(
             line_grid_pitch: ctx.line_grid_pitch,
             row_east_asian: ctx.row_east_asian,
             seats_text_on_descender: ctx.cell_seats_text_on_descender,
+            sheet_row_line: ctx.cell_sheet_row_line.clone(),
             in_spill_cell: ctx.in_spill_cell,
             uses_powerpoint_line_box: ctx.table_uses_powerpoint_line_box,
             stacks_multiple_blocks,
@@ -2294,6 +2481,10 @@ struct CellParagraphCtx<'a> {
     /// Decided once per row so every cell in it shares a baseline (issue #498).
     row_east_asian: RowEastAsianMetrics,
     seats_text_on_descender: bool,
+    /// The one line the cell's tight spreadsheet row seats every cell on, so
+    /// this paragraph's box resolves at the row's family and size rather than
+    /// its own (issue #839). `None` outside that regime.
+    sheet_row_line: Option<SheetRowLine>,
     /// Whether this paragraph is inside a spill cell's clipped wrapper, where
     /// the `#place` anchor already carries the cell's horizontal alignment.
     /// A `width: 100%` block inside that wrapper is not just redundant: the
@@ -2385,6 +2576,7 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
             cell.line_grid_pitch,
             cell.row_east_asian,
             cell.seats_text_on_descender,
+            cell.sheet_row_line.as_ref(),
         )
     };
     // Whichever fixed edges the block wrapper below puts in force — the
@@ -2398,6 +2590,7 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
         cell.line_grid_pitch,
         cell.row_east_asian,
         cell.seats_text_on_descender,
+        cell.sheet_row_line.as_ref(),
     )
     .map(|line_box| (line_box.top_em, line_box.bottom_em))
     .or_else(|| {
@@ -2425,6 +2618,7 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
                 cell.line_grid_pitch,
                 cell.row_east_asian,
                 cell.seats_text_on_descender,
+                cell.sheet_row_line.as_ref(),
             )
             .map(|line_box| (line_box.top_em + line_box.bottom_em) * line_box.font_size_pt)
         }

@@ -930,7 +930,10 @@ fn bottom_aligned_spreadsheet_cell_seats_its_line_box_on_the_descender() {
         rows: vec![TableRow {
             minimum_height: None,
             cells: vec![cell],
-            height: Some(20.0),
+            // Tall enough to hold visibly more than the 10pt line: a track
+            // the line fills alone is the tight regime of issue #839, where
+            // every cell centres the row's one box instead.
+            height: Some(30.0),
         }],
         column_widths: vec![200.0],
         default_vertical_align: Some(CellVerticalAlign::Bottom),
@@ -1740,5 +1743,209 @@ fn a_grid_snapped_line_spaced_cell_emits_its_space_after_once() {
         source.matches("#v(1.5pt)").count(),
         0,
         "the grid-snapped box already carries the gap: {source}"
+    );
+}
+
+/// Excel prints every cell of a single-line sheet row on one baseline: the
+/// native export of `09_expense_report_en` puts a `vertical="bottom"` amount
+/// column and its `vertical="center"` neighbours all at y=143.00 in a 14pt
+/// track, because the track has no room for the alignments to differ.
+/// Honouring the declared alignments split the row 0.50pt (issue #839): a
+/// tight row must anchor every cell on its one centred line.
+#[test]
+fn mixed_alignment_tight_sheet_row_seats_every_cell_on_one_baseline() {
+    if crate::render::pdf::font_line_metrics_em("Libertinus Serif").is_none() {
+        return; // no font book available (e.g. exotic CI sandbox)
+    }
+    let font_size: f64 = 10.0;
+    let make_cell = |text: &str, vertical_align: Option<CellVerticalAlign>| TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: text.to_string(),
+                style: TextStyle {
+                    font_family: Some("Libertinus Serif".to_string()),
+                    font_size: Some(font_size),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })],
+        vertical_align,
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            minimum_height: None,
+            // A number-format column beside a centred text column, as in the
+            // expense report's data rows.
+            cells: vec![
+                make_cell("1,240.00 €", None),
+                make_cell("Airfare", Some(CellVerticalAlign::Center)),
+            ],
+            height: Some(14.0),
+        }],
+        column_widths: vec![84.0, 72.0],
+        default_vertical_align: Some(CellVerticalAlign::Bottom),
+        seats_bottom_aligned_text_on_descender: true,
+        border_paint_model: TableBorderPaintModel::CenteredStroke,
+        prints_gridlines: false,
+        prints_headings: false,
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert_eq!(
+        result.matches("align: horizon").count(),
+        2,
+        "both cells — the bottom-defaulted number included — must anchor on \
+         the row's one centred line: {result}"
+    );
+    // The table-level default emission is `align: bottom,` — the check that
+    // no *cell* anchors bottom keys on the cell parameter's closing paren.
+    assert!(
+        !result.contains("align: bottom)"),
+        "no cell of a tight row may keep a bottom anchor of its own: {result}"
+    );
+}
+
+/// The tight row's one line resolves one metric family for every cell: reading
+/// each cell's own face gave a Korean cell and its Latin neighbour boxes of
+/// different heights, so their anchors still split by the box difference —
+/// `04_payroll_ko`'s `E-1021` column sat 0.25pt off its Korean neighbours
+/// (issue #839).
+#[test]
+fn tight_sheet_row_resolves_one_metric_family_for_every_cell() {
+    let Some((malgun_ascender, _malgun_descender, malgun_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Malgun Gothic")
+    else {
+        return; // Malgun Gothic not installed
+    };
+    if crate::render::pdf::font_line_metrics_em("Libertinus Serif").is_none() {
+        return; // no font book available (e.g. exotic CI sandbox)
+    }
+    let font_size: f64 = 10.0;
+    let make_cell = |text: &str, family: &str| TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: text.to_string(),
+                style: TextStyle {
+                    font_family: Some(family.to_string()),
+                    font_size: Some(font_size),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })],
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            minimum_height: None,
+            // A Korean name cell beside a Latin employee-number cell, as in
+            // the payroll's data rows.
+            cells: vec![
+                make_cell("김민준", "Malgun Gothic"),
+                make_cell("E-1021", "Libertinus Serif"),
+            ],
+            height: Some(14.0),
+        }],
+        column_widths: vec![72.0, 72.0],
+        default_vertical_align: Some(CellVerticalAlign::Bottom),
+        seats_bottom_aligned_text_on_descender: true,
+        border_paint_model: TableBorderPaintModel::CenteredStroke,
+        prints_gridlines: false,
+        prints_headings: false,
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    let top_em: f64 = malgun_ascender + 0.15 * malgun_pitch_em;
+    let row_box = format!(
+        "top-edge: {}em, bottom-edge: -{}em",
+        format_f64(top_em),
+        format_f64(1.3 * malgun_pitch_em - top_em)
+    );
+    assert_eq!(
+        result.matches(&row_box).count(),
+        2,
+        "both cells must take the row face's symmetric box: {result}"
+    );
+    assert_eq!(
+        result.matches("align: horizon").count(),
+        2,
+        "both cells must anchor on the row's one centred line: {result}"
+    );
+}
+
+/// Triangulation: the collapse is the tight row's, not every fixed row's. A
+/// cell spanning several tracks has real room, and Excel honours its declared
+/// alignment there — the merge must keep it while its single-track
+/// neighbours join the row line (issue #839).
+#[test]
+fn row_spanning_cell_keeps_its_declared_alignment_in_a_tight_row() {
+    if crate::render::pdf::font_line_metrics_em("Libertinus Serif").is_none() {
+        return; // no font book available (e.g. exotic CI sandbox)
+    }
+    let font_size: f64 = 10.0;
+    let make_cell =
+        |text: &str, row_span: u32, vertical_align: Option<CellVerticalAlign>| TableCell {
+            content: vec![Block::Paragraph(Paragraph {
+                style: ParagraphStyle::default(),
+                runs: vec![Run {
+                    text: text.to_string(),
+                    style: TextStyle {
+                        font_family: Some("Libertinus Serif".to_string()),
+                        font_size: Some(font_size),
+                        ..TextStyle::default()
+                    },
+                    href: None,
+                    footnote: None,
+                }],
+            })],
+            row_span,
+            vertical_align,
+            ..TableCell::default()
+        };
+    let table = Table {
+        rows: vec![
+            TableRow {
+                minimum_height: None,
+                cells: vec![
+                    make_cell("Merged", 2, Some(CellVerticalAlign::Bottom)),
+                    make_cell("A", 1, None),
+                ],
+                height: Some(14.0),
+            },
+            TableRow {
+                minimum_height: None,
+                cells: vec![make_cell("B", 1, None)],
+                height: Some(14.0),
+            },
+        ],
+        column_widths: vec![72.0, 72.0],
+        default_vertical_align: Some(CellVerticalAlign::Bottom),
+        seats_bottom_aligned_text_on_descender: true,
+        border_paint_model: TableBorderPaintModel::CenteredStroke,
+        prints_gridlines: false,
+        prints_headings: false,
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains("align: bottom)"),
+        "a cell spanning two tracks keeps its declared bottom seat: {result}"
+    );
+    assert_eq!(
+        result.matches("align: horizon").count(),
+        2,
+        "the merge's single-track neighbours join the row's centred line: {result}"
     );
 }
