@@ -880,7 +880,7 @@ fn with_chart_renders_embedded_chart() {
         .next()
         .expect("a chart");
     assert!(
-        !chart.1.series.is_empty(),
+        !chart.chart.series.is_empty(),
         "chart must carry its series data"
     );
 }
@@ -957,7 +957,7 @@ fn structure_repository_workbook_extracts_every_dashboard_chart_with_data() {
     let charts: Vec<&office2pdf::ir::Chart> = pages
         .iter()
         .filter(|page| page.name == "01_대시보드")
-        .flat_map(|page| page.charts.iter().map(|(_, chart)| chart))
+        .flat_map(|page| page.charts.iter().map(|sheet_chart| &sheet_chart.chart))
         .collect();
 
     assert_eq!(charts.len(), 3, "the dashboard anchors three charts");

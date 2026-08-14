@@ -6,13 +6,21 @@ use crate::parser::chart::parse_chart_xml;
 use crate::parser::drawingml::ThemeFontScheme;
 use crate::parser::xml_util;
 
-/// Extract charts from the XLSX ZIP with their anchor positions per sheet.
+/// A chart from a worksheet drawing, in raw drawing coordinates.
+pub(super) struct RawChartAnchor {
+    /// The anchor's geometry, or `None` for a chart no drawing references —
+    /// which flows after the sheet's rows instead of overlaying them.
+    pub(super) geometry: Option<ImageAnchorGeometry>,
+    pub(super) chart: Chart,
+}
+
+/// Extract charts from the XLSX ZIP with their anchor geometry per sheet.
 ///
-/// Returns a map from sheet name → list of (anchor_row, Chart).
-/// Charts with drawing anchors get positioned at their anchor row.
-/// Charts without anchors (no drawing reference found) use `u32::MAX`
-/// as a sentinel to place them at the end of the sheet.
-pub(super) fn extract_charts_with_anchors(data: &[u8]) -> HashMap<String, Vec<(u32, Chart)>> {
+/// Returns a map from sheet name → list of charts. A chart a drawing anchors
+/// carries that anchor's geometry, so it can be overlaid on the grid at
+/// absolute worksheet coordinates the way pictures are (issue #982). A chart
+/// no drawing references carries none and is placed after the sheet's rows.
+pub(super) fn extract_charts_with_anchors(data: &[u8]) -> HashMap<String, Vec<RawChartAnchor>> {
     let Ok(mut archive) = crate::parser::open_zip(data) else {
         return HashMap::new();
     };
@@ -41,7 +49,7 @@ pub(super) fn extract_charts_with_anchors(data: &[u8]) -> HashMap<String, Vec<(u
     };
 
     // Step 3: For each sheet, find its drawing and extract chart anchors
-    let mut result: HashMap<String, Vec<(u32, Chart)>> = HashMap::new();
+    let mut result: HashMap<String, Vec<RawChartAnchor>> = HashMap::new();
 
     for (sheet_name, sheet_rid) in &sheet_rids {
         let Some(sheet_target) = rid_to_target.get(sheet_rid) else {
@@ -80,8 +88,8 @@ pub(super) fn extract_charts_with_anchors(data: &[u8]) -> HashMap<String, Vec<(u
             let drawing_rels_xml = read_zip_entry_string(&mut archive, &drawing_rels_path);
             let drawing_rid_targets = parse_rels_targets(&drawing_rels_xml);
 
-            for (anchor_row, chart_rid) in &anchors {
-                let Some(chart_target) = drawing_rid_targets.get(chart_rid) else {
+            for (geometry, chart_rid) in anchors {
+                let Some(chart_target) = drawing_rid_targets.get(&chart_rid) else {
                     continue;
                 };
                 let chart_path = resolve_relative_xl_path(drawing_dir, chart_target);
@@ -94,7 +102,10 @@ pub(super) fn extract_charts_with_anchors(data: &[u8]) -> HashMap<String, Vec<(u
                     result
                         .entry(sheet_name.clone())
                         .or_default()
-                        .push((*anchor_row, chart));
+                        .push(RawChartAnchor {
+                            geometry: Some(geometry),
+                            chart,
+                        });
                 }
             }
         }
@@ -147,7 +158,10 @@ pub(super) fn extract_charts_with_anchors(data: &[u8]) -> HashMap<String, Vec<(u
                 result
                     .entry(first_sheet.clone())
                     .or_default()
-                    .push((u32::MAX, chart));
+                    .push(RawChartAnchor {
+                        geometry: None,
+                        chart,
+                    });
             }
         }
     }
@@ -157,7 +171,7 @@ pub(super) fn extract_charts_with_anchors(data: &[u8]) -> HashMap<String, Vec<(u
 
 /// Collect the set of chart XML paths that were already positioned via drawing anchors.
 pub(super) fn collect_positioned_chart_paths(
-    chart_map: &HashMap<String, Vec<(u32, Chart)>>,
+    chart_map: &HashMap<String, Vec<RawChartAnchor>>,
     data: &[u8],
 ) -> HashSet<String> {
     // Re-trace the drawing → chart resolution to find which chart paths are covered.
@@ -198,7 +212,7 @@ pub(super) fn collect_positioned_chart_paths(
             let drawing_rels_xml = read_zip_entry_string(&mut archive, &drawing_rels_path);
             let drawing_rid_targets = parse_rels_targets(&drawing_rels_xml);
 
-            for (_row, chart_rid) in &anchors {
+            for (_geometry, chart_rid) in &anchors {
                 if let Some(chart_target) = drawing_rid_targets.get(chart_rid) {
                     positioned.insert(resolve_relative_xl_path(drawing_dir, chart_target));
                 }
@@ -316,51 +330,108 @@ pub(super) fn resolve_relative_xl_path(base_dir: &str, relative: &str) -> String
     xml_util::resolve_relative_path(base_dir, relative)
 }
 
-/// Parse drawing XML for chart anchor positions.
-/// Returns (anchor_row, chart_rId) pairs from `<xdr:twoCellAnchor>` elements.
-pub(super) fn parse_drawing_chart_anchors(xml: &str) -> Vec<(u32, String)> {
-    let mut result = Vec::new();
+/// Parse `<xdr:graphicFrame>` chart anchors from a worksheet drawing: the
+/// anchor's geometry plus the chart relationship id.
+///
+/// The whole `from`/`to` span is read, not just the anchor row: Excel floats
+/// the chart over the cells at those coordinates and sizes it to them, so the
+/// renderer needs the same geometry a picture anchor already carries (issue
+/// #982).
+pub(super) fn parse_drawing_chart_anchors(xml: &str) -> Vec<(ImageAnchorGeometry, String)> {
+    #[derive(Default, Clone, Copy)]
+    struct Corner {
+        col: u32,
+        col_off: i64,
+        row: u32,
+        row_off: i64,
+    }
+
+    let mut result: Vec<(ImageAnchorGeometry, String)> = Vec::new();
     let mut reader = quick_xml::Reader::from_str(xml);
 
-    let mut in_two_cell_anchor = false;
-    let mut in_from = false;
-    let mut in_row = false;
-    let mut anchor_row: Option<u32> = None;
+    let mut in_anchor = false;
+    let mut in_graphic_frame = false;
+    let mut in_chart_graphic_data = false;
+    let mut corner_target: Option<bool> = None; // Some(true)=from, Some(false)=to
+    let mut current_field: Option<&'static str> = None;
+    let mut from = Corner::default();
+    let mut to: Option<Corner> = None;
+    let mut ext_emu: Option<(i64, i64)> = None;
     let mut chart_rid: Option<String> = None;
-    let mut in_graphic_data = false;
 
     loop {
         match reader.read_event() {
-            Ok(quick_xml::events::Event::Start(ref e)) => {
-                let local = e.local_name();
-                match local.as_ref() {
-                    b"twoCellAnchor" | b"oneCellAnchor" => {
-                        in_two_cell_anchor = true;
-                        anchor_row = None;
-                        chart_rid = None;
-                    }
-                    b"from" if in_two_cell_anchor => {
-                        in_from = true;
-                    }
-                    b"row" if in_from => {
-                        in_row = true;
-                    }
-                    b"graphicData" if in_two_cell_anchor => {
-                        for attr in e.attributes().flatten() {
-                            if attr.key.local_name().as_ref() == b"uri"
-                                && let Ok(val) = attr.unescape_value()
-                                && val.contains("chart")
-                            {
-                                in_graphic_data = true;
-                            }
+            Ok(quick_xml::events::Event::Start(ref e)) => match e.local_name().as_ref() {
+                b"twoCellAnchor" | b"oneCellAnchor" | b"absoluteAnchor" => {
+                    in_anchor = true;
+                    in_graphic_frame = false;
+                    in_chart_graphic_data = false;
+                    from = Corner::default();
+                    to = None;
+                    ext_emu = None;
+                    chart_rid = None;
+                }
+                b"from" if in_anchor => corner_target = Some(true),
+                b"to" if in_anchor => {
+                    corner_target = Some(false);
+                    to = Some(Corner::default());
+                }
+                b"col" if corner_target.is_some() => current_field = Some("col"),
+                b"colOff" if corner_target.is_some() => current_field = Some("colOff"),
+                b"row" if corner_target.is_some() => current_field = Some("row"),
+                b"rowOff" if corner_target.is_some() => current_field = Some("rowOff"),
+                b"graphicFrame" if in_anchor => in_graphic_frame = true,
+                b"graphicData" if in_graphic_frame => {
+                    for attr in e.attributes().flatten() {
+                        if attr.key.local_name().as_ref() == b"uri"
+                            && let Ok(val) = attr.unescape_value()
+                            && val.contains("chart")
+                        {
+                            in_chart_graphic_data = true;
                         }
                     }
-                    _ => {}
                 }
-            }
+                _ => {}
+            },
             Ok(quick_xml::events::Event::Empty(ref e)) => {
                 let local = e.local_name();
-                if in_graphic_data && local.as_ref() == b"chart" {
+                if in_anchor && local.as_ref() == b"ext" && !in_graphic_frame && to.is_none() {
+                    // The anchor's own extent (a oneCellAnchor's or an
+                    // absoluteAnchor's). The frame's `a:ext` lives inside
+                    // `xdr:xfrm`, which `!in_graphic_frame` excludes.
+                    let mut cx: i64 = 0;
+                    let mut cy: i64 = 0;
+                    for attr in e.attributes().flatten() {
+                        let value: i64 = attr
+                            .unescape_value()
+                            .ok()
+                            .and_then(|v| v.parse().ok())
+                            .unwrap_or(0);
+                        match attr.key.local_name().as_ref() {
+                            b"cx" => cx = value,
+                            b"cy" => cy = value,
+                            _ => {}
+                        }
+                    }
+                    ext_emu = Some((cx, cy));
+                }
+                if in_anchor && local.as_ref() == b"pos" && !in_graphic_frame {
+                    // An absoluteAnchor measures from the sheet origin, which
+                    // is column 0 / row 0 plus the position as the offset.
+                    for attr in e.attributes().flatten() {
+                        let value: i64 = attr
+                            .unescape_value()
+                            .ok()
+                            .and_then(|v| v.parse().ok())
+                            .unwrap_or(0);
+                        match attr.key.local_name().as_ref() {
+                            b"x" => from.col_off = value,
+                            b"y" => from.row_off = value,
+                            _ => {}
+                        }
+                    }
+                }
+                if in_chart_graphic_data && local.as_ref() == b"chart" {
                     for attr in e.attributes().flatten() {
                         if (attr.key.as_ref() == b"r:id" || attr.key.local_name().as_ref() == b"id")
                             && let Ok(val) = attr.unescape_value()
@@ -371,36 +442,50 @@ pub(super) fn parse_drawing_chart_anchors(xml: &str) -> Vec<(u32, String)> {
                 }
             }
             Ok(quick_xml::events::Event::Text(ref t)) => {
-                if in_row
-                    && let Ok(s) = t.xml_content()
-                    && let Ok(row) = s.trim().parse::<u32>()
+                if let (Some(is_from), Some(field)) = (corner_target, current_field)
+                    && let Ok(text) = t.xml_content()
+                    && let Ok(number) = text.trim().parse::<i64>()
                 {
-                    anchor_row = Some(row);
+                    let corner: &mut Corner = if is_from {
+                        &mut from
+                    } else {
+                        to.as_mut().expect("to corner initialized on <to>")
+                    };
+                    match field {
+                        "col" => corner.col = number as u32,
+                        "colOff" => corner.col_off = number,
+                        "row" => corner.row = number as u32,
+                        "rowOff" => corner.row_off = number,
+                        _ => {}
+                    }
                 }
             }
-            Ok(quick_xml::events::Event::End(ref e)) => {
-                let local = e.local_name();
-                match local.as_ref() {
-                    b"twoCellAnchor" | b"oneCellAnchor" => {
-                        if let (Some(row), Some(rid)) = (anchor_row.take(), chart_rid.take()) {
-                            result.push((row, rid));
-                        }
-                        in_two_cell_anchor = false;
-                        in_from = false;
-                        in_graphic_data = false;
+            Ok(quick_xml::events::Event::End(ref e)) => match e.local_name().as_ref() {
+                b"twoCellAnchor" | b"oneCellAnchor" | b"absoluteAnchor" => {
+                    if let Some(rid) = chart_rid.take() {
+                        result.push((
+                            ImageAnchorGeometry {
+                                from_row: from.row,
+                                from_col: from.col,
+                                from_col_off_emu: from.col_off,
+                                from_row_off_emu: from.row_off,
+                                to: to.map(|c| (c.col, c.col_off, c.row, c.row_off)),
+                                ext_emu,
+                            },
+                            rid,
+                        ));
                     }
-                    b"from" => {
-                        in_from = false;
-                    }
-                    b"row" => {
-                        in_row = false;
-                    }
-                    b"graphicData" => {
-                        in_graphic_data = false;
-                    }
-                    _ => {}
+                    in_anchor = false;
+                    in_graphic_frame = false;
+                    in_chart_graphic_data = false;
+                    corner_target = None;
                 }
-            }
+                b"from" | b"to" => corner_target = None,
+                b"col" | b"colOff" | b"row" | b"rowOff" => current_field = None,
+                b"graphicFrame" => in_graphic_frame = false,
+                b"graphicData" => in_chart_graphic_data = false,
+                _ => {}
+            },
             Ok(quick_xml::events::Event::Eof) => break,
             Err(_) => break,
             _ => {}

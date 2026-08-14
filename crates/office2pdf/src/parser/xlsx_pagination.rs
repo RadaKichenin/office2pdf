@@ -170,6 +170,21 @@ fn scale_sheet_page(
     for width in &mut page.table.column_widths {
         *width *= scale;
     }
+    // An anchored chart is measured against the sheet's own columns and rows,
+    // so the scale that shrinks those has to shrink the chart with them —
+    // otherwise the fitted grid slides out from under a full-size chart. On
+    // the reported workbook the 0.82 scale left the chart 183pt wider than
+    // the band it is anchored to, spilling past the printable edge (#982).
+    for placement in page
+        .charts
+        .iter_mut()
+        .filter_map(|chart| chart.placement.as_mut())
+    {
+        placement.x_offset_pt *= scale;
+        placement.y_offset_pt *= scale;
+        placement.width *= scale;
+        placement.height *= scale;
+    }
     for row in &mut page.table.rows {
         if let Some(height) = row.height.as_mut() {
             *height *= scale;

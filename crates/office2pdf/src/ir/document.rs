@@ -194,13 +194,44 @@ pub struct SheetPage {
     pub table: super::elements::Table,
     pub header: Option<super::elements::HeaderFooter>,
     pub footer: Option<super::elements::HeaderFooter>,
-    /// Charts anchored within this sheet, stored as (anchor_row, chart) where
-    /// `anchor_row` is the 1-indexed row number after which the chart is rendered.
-    pub charts: Vec<(u32, super::elements::Chart)>,
+    /// Charts drawn on this sheet.
+    pub charts: Vec<SheetChart>,
     /// Drawing images anchored within this sheet.
     pub images: Vec<SheetImage>,
     /// Drawing text boxes anchored within this sheet.
     pub text_boxes: Vec<SheetTextBox>,
+}
+
+/// A chart drawn on a worksheet.
+#[derive(Debug, Clone)]
+pub struct SheetChart {
+    /// 1-indexed anchor row. Orders drawings deterministically; `u32::MAX`
+    /// marks a chart that no drawing anchors.
+    pub anchor_row: u32,
+    /// Where the drawing anchor puts the chart, in points from the sheet's
+    /// content origin. `None` for a chart no drawing anchors, which flows
+    /// after the grid instead.
+    pub placement: Option<SheetChartPlacement>,
+    pub chart: super::elements::Chart,
+}
+
+/// The absolute placement a worksheet drawing anchor gives a chart.
+///
+/// Excel floats an anchored chart over the cells at worksheet coordinates and
+/// sizes it to the anchor, exactly as it does a picture or a text box (issues
+/// #459, #474). Flowing charts between row segments instead drew the reported
+/// workbook's chart above the grid at an intrinsic size, leaving the band its
+/// anchor reserves empty (issue #982).
+#[derive(Debug, Clone, Copy)]
+pub struct SheetChartPlacement {
+    /// Horizontal offset of the anchor from the sheet's left edge, points.
+    pub x_offset_pt: f64,
+    /// Vertical offset of the anchor from the sheet's content top, points.
+    pub y_offset_pt: f64,
+    /// Width in points, from the columns the anchor spans.
+    pub width: f64,
+    /// Height in points, from the rows the anchor spans.
+    pub height: f64,
 }
 
 /// A worksheet text box anchored to a sheet row.
