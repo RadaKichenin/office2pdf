@@ -257,6 +257,27 @@ pub(super) fn shadow_blur_layers(shadow: &Shadow) -> Vec<(f64, u8)> {
         .collect()
 }
 
+/// How far an outline pushes the shadow's silhouette past the fill path.
+///
+/// PowerPoint casts an `a:outerShdw` from the *stroked* shape — the fill path
+/// grown by half the line width, since a stroke straddles its path — and only
+/// then offsets it by `dist`. Measured against a native macOS PowerPoint
+/// export of `customGeo.pptx` page 46: the title banner's fill path is
+/// x [60, 672], y [36, 113.75] under a 3pt outline, and the export's
+/// flattened shadow bitmap puts its half-alpha silhouette at x [58.44,
+/// 673.56], y [36.00, 116.88] — fill outset by 1.5pt, then `dist` 1.57pt
+/// down, agreeing on every edge to within 0.09pt (issue #1057).
+///
+/// Casting from the fill path alone left the whole ramp a half-width short on
+/// every side, which a light outline then covered at its densest — the same
+/// defect that read as the banner's outer white edge going missing (#1044).
+pub(super) fn shadow_outline_outset(stroke: &Option<BorderSide>) -> f64 {
+    stroke
+        .as_ref()
+        .filter(|stroke| stroke.style != BorderLineStyle::None)
+        .map_or(0.0, |stroke| (stroke.width / 2.0).max(0.0))
+}
+
 /// Render a shadow approximation: concentric translucent duplicates whose
 /// stacked alphas peak at the core and fade across the blur radius.
 fn write_shadow_shape(out: &mut String, shape: &Shape, width: f64, height: f64, shadow: &Shadow) {
@@ -267,8 +288,10 @@ fn write_shadow_shape(out: &mut String, shape: &Shape, width: f64, height: f64, 
     let dir_rad = shadow.direction.to_radians();
     let dx = shadow.distance * dir_rad.cos();
     let dy = shadow.distance * dir_rad.sin();
+    let outline_outset: f64 = shadow_outline_outset(&shape.stroke);
 
-    for (expansion, alpha) in shadow_blur_layers(shadow) {
+    for (blur_expansion, alpha) in shadow_blur_layers(shadow) {
+        let expansion = outline_outset + blur_expansion;
         let layer_width = (width + 2.0 * expansion).max(0.0);
         let layer_height = (height + 2.0 * expansion).max(0.0);
         let _ = write!(

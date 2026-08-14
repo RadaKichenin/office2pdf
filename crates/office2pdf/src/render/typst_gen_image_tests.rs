@@ -321,6 +321,64 @@ fn test_image_with_border_renders_box_stroke() {
     );
 }
 
+/// A bordered picture casts its shadow from the same stroked silhouette a
+/// shape does — the frame grown by half the line width, then offset by `dist`
+/// (issue #1057, measured on a native PowerPoint export; see
+/// `shadow_outline_outset`). The picture path builds its ring stack separately
+/// from `write_shadow_shape`, so it needs its own guard.
+#[test]
+fn a_bordered_picture_casts_its_shadow_from_the_stroked_frame() {
+    use crate::ir::Shadow;
+
+    let doc = make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![FixedElement {
+            x: 100.0,
+            y: 50.0,
+            width: 200.0,
+            height: 120.0,
+            kind: FixedElementKind::Image(ImageData {
+                rotation_deg: None,
+                flip_h: false,
+                flip_v: false,
+                data: MINIMAL_PNG.to_vec(),
+                format: ImageFormat::Png,
+                width: Some(200.0),
+                height: Some(120.0),
+                crop: None,
+                stroke: Some(BorderSide {
+                    width: 3.0,
+                    color: Color {
+                        r: 255,
+                        g: 255,
+                        b: 255,
+                    },
+                    style: BorderLineStyle::Solid,
+                }),
+                alignment: None,
+                clip_shape: None,
+                shadow: Some(Shadow {
+                    blur_radius: 0.0,
+                    distance: 4.0,
+                    direction: 0.0,
+                    color: Color { r: 0, g: 0, b: 0 },
+                    opacity: 0.38,
+                }),
+                paragraph_spacing: None,
+            }),
+        }],
+    )]);
+    let source = generate_typst(&doc).unwrap().source;
+
+    // 200x120 frame outset by half of the 3pt border, moved 4pt right.
+    assert!(
+        source.contains("dx: 2.5pt, dy: -1.5pt, rect(width: 203pt, height: 123pt"),
+        "a 3pt border must grow the picture's shadow silhouette by 1.5pt a \
+         side: {source}"
+    );
+}
+
 #[test]
 fn test_fixed_image_with_border_uses_rect_overlay() {
     let doc = make_doc(vec![make_fixed_page(
