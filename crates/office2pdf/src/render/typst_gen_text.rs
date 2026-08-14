@@ -770,9 +770,56 @@ pub(super) fn cell_grid_absorbs_space_after(
         && line_grid_pitch.is_some_and(|pitch| pitch > 0.0)
 }
 
+/// The one text line every cell of a *tight* spreadsheet row seats on
+/// (issue #839).
+///
+/// Excel prints a single-line sheet row's cells on one baseline: the native
+/// export of `09_expense_report_en` puts a `vertical="bottom"` amount column
+/// and its `vertical="center"` neighbours all at y=143.00 in a 14pt track,
+/// and `04_payroll_ko`'s fixed 합계 row seats its centred Korean label and
+/// bottom-aligned numbers together at y=218.00. A track that cannot hold more
+/// than one line leaves the alignments nowhere to differ, so the row's line
+/// is resolved once — one metric family, one size — and every cell centres
+/// that one box (see `generate_table_cell` for why centring is the anchor
+/// taken). Reading each cell's own face and alignment instead split one row
+/// across baselines 0.13–1.40pt apart, keyed to the cell's column.
+#[derive(Clone)]
+pub(super) struct SheetRowLine {
+    /// The family whose metrics pace the row's shared line.
+    pub metric_family: String,
+    /// The size the row's line resolves at: the largest run size in the row.
+    pub font_size_pt: f64,
+}
+
+/// The advance, in points, of one line set in `metric_family` at
+/// `font_size_pt` under the row's East Asian answer — the height the
+/// tightness gate compares the row's content box against (issue #839).
+///
+/// `None` when the family's metrics are unknown, in which case no shared row
+/// line can be resolved either.
+pub(super) fn sheet_row_line_advance_pt(
+    metric_family: &str,
+    font_size_pt: f64,
+    takes_east_asian_metrics: bool,
+) -> Option<f64> {
+    let (_ascender_em, _descender_em, pitch_em) =
+        crate::render::pdf::font_line_metrics_em(metric_family)?;
+    if pitch_em <= 0.0 {
+        return None;
+    }
+    let advance_em: f64 = if takes_east_asian_metrics {
+        EAST_ASIAN_LINE_HEIGHT_FACTOR * pitch_em
+    } else {
+        pitch_em
+    };
+    Some(advance_em * font_size_pt)
+}
+
 /// A table-cell paragraph's fixed line box, resolved at the paragraph's own
-/// font size. `top_em`/`bottom_em` are the metric edges the cell emits;
-/// `leading_pt` is the gap between line boxes.
+/// font size — or at the row's shared family and size when a tight
+/// spreadsheet row supplies a [`SheetRowLine`] (issue #839). `top_em`/
+/// `bottom_em` are the metric edges the cell emits; `leading_pt` is the gap
+/// between line boxes.
 pub(super) struct CellLineBox {
     pub top_em: f64,
     pub bottom_em: f64,
@@ -801,6 +848,12 @@ pub(super) struct CellLineBox {
 /// grid is in force, because Word snaps the line and that gap together (issues
 /// #500, #503).
 ///
+/// When `sheet_row_line` is `Some` — a tight fixed-track spreadsheet row,
+/// gated by `sheet_row_shared_line` in the table codegen — the box resolves
+/// at the row's shared metric family and size instead of this paragraph's
+/// own, so every cell of the row carries the same box and lands on one
+/// baseline as Excel prints it (issue #839).
+///
 /// A **slide's** table cell does not come here: it paces on PowerPoint's flat
 /// 1.2em line via [`powerpoint_line_height_settings`], like the slide's own
 /// text boxes (issue #663).
@@ -810,6 +863,7 @@ pub(super) fn word_cell_line_box_settings(
     line_grid_pitch: Option<f64>,
     row_east_asian: RowEastAsianMetrics,
     seats_text_on_descender: bool,
+    sheet_row_line: Option<&SheetRowLine>,
 ) -> Option<String> {
     let line_box: CellLineBox = word_cell_line_box(
         runs,
@@ -817,6 +871,7 @@ pub(super) fn word_cell_line_box_settings(
         line_grid_pitch,
         row_east_asian,
         seats_text_on_descender,
+        sheet_row_line,
     )?;
     Some(format!(
         "#set text(top-edge: {}em, bottom-edge: -{}em)\n#set par(leading: {}pt)\n",
@@ -835,18 +890,28 @@ pub(super) fn word_cell_line_box(
     line_grid_pitch: Option<f64>,
     row_east_asian: RowEastAsianMetrics,
     seats_text_on_descender: bool,
+    sheet_row_line: Option<&SheetRowLine>,
 ) -> Option<CellLineBox> {
     if style.line_box.is_some() {
         return None;
     }
-    let family: &str = east_asian_aware_metric_family(runs)?;
+    // A tight spreadsheet row's box resolves at the row's one family and
+    // size, not this cell's: Excel prints every cell of such a row on one
+    // baseline, and per-cell metrics split it by the descender difference
+    // (issue #839).
+    let (family, font_size): (&str, f64) = match sheet_row_line {
+        Some(row_line) => (row_line.metric_family.as_str(), row_line.font_size_pt),
+        None => (
+            east_asian_aware_metric_family(runs)?,
+            paragraph_font_size_pt(runs),
+        ),
+    };
     let (ascender_em, descender_em, word_pitch_em) =
         crate::render::pdf::font_line_metrics_em(family)?;
     let metric_em: f64 = ascender_em + descender_em;
     if metric_em <= 0.0 || word_pitch_em <= 0.0 {
         return None;
     }
-    let font_size: f64 = paragraph_font_size_pt(runs);
     // The row decides whether its lines are East Asian, not this cell: reading
     // each cell's own text put a Korean label and its numeric neighbours on
     // line boxes of different heights, splitting one row across two baselines
