@@ -2159,6 +2159,46 @@ fn the_contoso_top_anchored_title_lands_on_its_native_baseline() {
     );
 }
 
+/// The deck's slide-13 and slide-14 titles, the two issue #1024 measures.
+///
+/// Neither slide states any geometry of its own: both title shapes carry an
+/// empty `<p:spPr/>` and a bare `<a:bodyPr rtlCol="0"/>`, so the frame, the
+/// `tIns` and the `<a:lnSpc><a:spcPct val="85000"/>` all come from the layout's
+/// title placeholder — `slideLayout13` seats it at y=0 with `tIns="685800"`,
+/// `slideLayout14` at y=0 with `tIns="704088"`, both inheriting the master's
+/// top anchor — and the slides set 38pt Posterama. Two layouts differing only
+/// in their inset keep the assertion on the seat below the content top rather
+/// than on one absolute number.
+///
+/// The native PowerPoint 16.112 export puts `PROSJEKT` on 83.04pt and
+/// `NØKKELTALL` on 84.48pt. Splitting the box evenly and scaling both of its
+/// sides by the percentage put them on 85.56 and 87.00 — the +2.52pt #1024
+/// reports.
+///
+/// Posterama is a cloud font no CI host has, so the seat is computed from the
+/// model rather than rendered: what a fixture would exercise here is the split,
+/// and the split is a pure function of the face's metrics.
+#[test]
+fn the_contoso_inherited_slide_titles_land_on_their_native_baselines() {
+    // Posterama Bold: hhea ascender 2134, descender -590 per 2048 upem.
+    let (_, plain_below) =
+        crate::render::pdf::powerpoint_line_box_split_em(2134.0 / 2048.0, 590.0 / 2048.0)
+            .expect("a positive ascent splits the line box");
+    let (above, _) =
+        crate::render::typst_gen::text::powerpoint_percentage_line_box_em(plain_below, 0.85);
+    const EMU_PER_PT: f64 = 12700.0;
+
+    for (slide, top_inset_emu, native_pt) in [(13, 685800.0, 83.04), (14, 704088.0, 84.48)] {
+        let baseline_pt: f64 = top_inset_emu / EMU_PER_PT + above * 38.0;
+
+        assert!(
+            (baseline_pt - native_pt).abs() <= 0.24,
+            "slide {slide}'s inherited title must land on the native {native_pt}pt \
+             baseline within the export's 0.24pt position grid, got {baseline_pt}pt"
+        );
+    }
+}
+
 #[test]
 fn a_slide_paragraph_declares_its_own_block_spacing() {
     // A slide paragraph's gaps are its own `a:spcBef`/`a:spcAft` and nothing
