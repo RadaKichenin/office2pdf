@@ -207,6 +207,21 @@ Native Rust callers can use the same per-conversion path through
 | PPTX | Supported | Slides, text boxes, shapes, tables, images, masters, gradients, effects |
 | XLSX | Supported | Sheets, formatting, merged cells, column/row sizing, conditional formatting |
 
+## Workspace Crates
+
+| Crate | Published | Purpose |
+|-------|-----------|---------|
+| `office2pdf` | [crates.io](https://crates.io/crates/office2pdf) | Conversion library (this README) |
+| `office2pdf-cli` | [crates.io](https://crates.io/crates/office2pdf-cli) | Command-line interface |
+| `ooxml-package` | not yet | Lossless OPC (OOXML container) model: byte-for-byte round trip, dirty-part tracking, surgical save |
+| `pptx-model` | not yet | Lossless, editable PPTX model over `ooxml-package`: slide enumeration, surgical text-run edits |
+
+`ooxml-package` and `pptx-model` are the foundation for round-trip OOXML
+editing: a load/save cycle preserves every package part — including parts and
+XML they do not model — and saving rewrites only edited entries. The
+`office2pdf` rendering pipeline stays a derived projection for PDF
+preview/export; it is not the editable source of truth.
+
 ## License
 
 Licensed under [Apache License, Version 2.0](LICENSE).
