@@ -8,7 +8,7 @@ pub(super) fn generate_table(
     ctx.table_depth += 1;
     // A nested table decides its cells' effective vertical alignment from its
     // own defaults; restore the enclosing table's answers afterwards, like
-    // `row_has_east_asian_text` below.
+    // `row_east_asian` below.
     let enclosing_default_vertical_align: Option<CellVerticalAlign> =
         ctx.table_default_vertical_align;
     let enclosing_seats_on_descender: bool = ctx.table_seats_bottom_aligned_text_on_descender;
@@ -273,7 +273,7 @@ fn generate_table_rows(
 ) -> Result<(), ConvertError> {
     // A nested table decides its own rows; restore the enclosing row's answer
     // so the outer cells that follow keep sharing their baseline.
-    let enclosing_row_has_east_asian_text: bool = ctx.row_has_east_asian_text;
+    let enclosing_row_east_asian: RowEastAsianMetrics = ctx.row_east_asian;
     for (row_index, row) in rows.iter().enumerate() {
         for rs in rowspan_remaining.iter_mut() {
             if *rs > 0 {
@@ -285,7 +285,22 @@ fn generate_table_rows(
         // Asian text, every cell in it takes the East Asian line height, and a
         // snapping grid applies to all of them. Asking each cell separately
         // split mixed-script rows across two baselines (issue #498).
-        ctx.row_has_east_asian_text = row_has_east_asian_text(row);
+        //
+        // The line box itself keys on the face, not the text: a native export
+        // with twelve `10_research_report_ko` rows relabelled `2025-01`..
+        // `2025-12` — Latin-only rows in an all-slots Malgun Gothic face —
+        // keeps Word's 25.44pt row pitch where the bare hhea line would give
+        // 21.64pt (issue #814). The probe measured Word's table model only, so
+        // a spreadsheet row keeps the text-keyed gate Excel's auto-row
+        // decomposition was fitted with (issues #709, #711) — tracked in
+        // issue #1060.
+        let has_east_asian_text: bool = row_has_east_asian_text(row);
+        ctx.row_east_asian = RowEastAsianMetrics {
+            has_east_asian_text,
+            takes_east_asian_metrics: has_east_asian_text
+                || (!ctx.table_seats_bottom_aligned_text_on_descender
+                    && row_is_set_in_east_asian_face(row)),
+        };
 
         // The auto-row frame estimate walks every cell's font metrics, so
         // computing it per cell is O(cells²) on wrap-text rows; it depends
@@ -373,7 +388,7 @@ fn generate_table_rows(
             col_pos += 1;
         }
     }
-    ctx.row_has_east_asian_text = enclosing_row_has_east_asian_text;
+    ctx.row_east_asian = enclosing_row_east_asian;
 
     Ok(())
 }
@@ -406,6 +421,29 @@ fn block_has_east_asian_text(block: &Block) -> bool {
                         .any(|run| run.text.chars().any(is_cjk_like))
                 })
         }
+        _ => false,
+    }
+}
+
+/// Whether any line in the row resolves to an East Asian metric family, which
+/// gives the whole row Word's East Asian line box even when every character is
+/// Latin (issues #643, #814). Nested tables are excluded like
+/// [`row_has_east_asian_text`]'s.
+fn row_is_set_in_east_asian_face(row: &TableRow) -> bool {
+    row.cells
+        .iter()
+        .flat_map(|cell| cell.content.iter())
+        .any(block_is_set_in_east_asian_face)
+}
+
+fn block_is_set_in_east_asian_face(block: &Block) -> bool {
+    match block {
+        Block::Paragraph(paragraph) => line_takes_east_asian_metrics(&paragraph.runs),
+        Block::List(list) => list
+            .items
+            .iter()
+            .flat_map(|item| item.content.iter())
+            .any(|paragraph| line_takes_east_asian_metrics(&paragraph.runs)),
         _ => false,
     }
 }
@@ -850,7 +888,7 @@ fn spill_line_box_height_pt(cell: &TableCell, ctx: &GenCtx) -> Option<f64> {
         &paragraph.runs,
         &paragraph.style,
         ctx.line_grid_pitch,
-        ctx.row_has_east_asian_text,
+        ctx.row_east_asian,
         ctx.cell_seats_text_on_descender,
     )?;
     Some((line_box.top_em + line_box.bottom_em) * line_box.font_size_pt)
@@ -1613,7 +1651,7 @@ fn auto_row_frame_height_estimate_pt(
                 &paragraph.runs,
                 &paragraph.style,
                 ctx.line_grid_pitch,
-                ctx.row_has_east_asian_text,
+                ctx.row_east_asian,
                 false,
             )?;
             let inset: Insets = cell_inset_with_border(cell, default_cell_padding);
@@ -2189,7 +2227,7 @@ fn generate_cell_content(
         let paragraph_ctx = |para: &Paragraph| CellParagraphCtx {
             default_tab_width_pt: ctx.default_tab_width_pt,
             line_grid_pitch: ctx.line_grid_pitch,
-            row_has_east_asian_text: ctx.row_has_east_asian_text,
+            row_east_asian: ctx.row_east_asian,
             seats_text_on_descender: ctx.cell_seats_text_on_descender,
             in_spill_cell: ctx.in_spill_cell,
             uses_powerpoint_line_box: ctx.table_uses_powerpoint_line_box,
@@ -2254,7 +2292,7 @@ struct CellParagraphCtx<'a> {
     default_tab_width_pt: f64,
     line_grid_pitch: Option<f64>,
     /// Decided once per row so every cell in it shares a baseline (issue #498).
-    row_has_east_asian_text: bool,
+    row_east_asian: RowEastAsianMetrics,
     seats_text_on_descender: bool,
     /// Whether this paragraph is inside a spill cell's clipped wrapper, where
     /// the `#place` anchor already carries the cell's horizontal alignment.
@@ -2345,7 +2383,7 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
             &para.runs,
             style,
             cell.line_grid_pitch,
-            cell.row_has_east_asian_text,
+            cell.row_east_asian,
             cell.seats_text_on_descender,
         )
     };
@@ -2358,7 +2396,7 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
         &para.runs,
         style,
         cell.line_grid_pitch,
-        cell.row_has_east_asian_text,
+        cell.row_east_asian,
         cell.seats_text_on_descender,
     )
     .map(|line_box| (line_box.top_em, line_box.bottom_em))
@@ -2385,7 +2423,7 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
                 runs,
                 style,
                 cell.line_grid_pitch,
-                cell.row_has_east_asian_text,
+                cell.row_east_asian,
                 cell.seats_text_on_descender,
             )
             .map(|line_box| (line_box.top_em + line_box.bottom_em) * line_box.font_size_pt)
@@ -2477,7 +2515,7 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
     // strong #v while body flow max-collapses them; Word's in-cell rule is
     // unmeasured — probe before changing).
     if let Some(space_after) = style.space_after
-        && !cell_grid_absorbs_space_after(style, cell.line_grid_pitch, cell.row_has_east_asian_text)
+        && !cell_grid_absorbs_space_after(style, cell.line_grid_pitch, cell.row_east_asian)
     {
         let _ = write!(out, "\n#v({}pt)", format_f64(space_after));
     }

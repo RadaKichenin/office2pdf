@@ -538,7 +538,7 @@ fn has_east_asian_text(runs: &[Run]) -> bool {
 /// a Latin-only line to its Latin family. So an Arial paragraph inside a Korean
 /// document keeps its own line, which is what Word does — snapping those
 /// inflated every Western document by 30-50% (issue #354).
-fn line_takes_east_asian_metrics(runs: &[Run]) -> bool {
+pub(super) fn line_takes_east_asian_metrics(runs: &[Run]) -> bool {
     has_east_asian_text(runs)
         || east_asian_aware_metric_family(runs)
             .is_some_and(crate::render::font_subst::is_east_asian_family)
@@ -617,9 +617,15 @@ pub(super) fn word_line_box_descent_em(runs: &[Run]) -> Option<f64> {
 /// those exports quantise positions to. Taking the gap-inclusive body ascent
 /// instead would predict 42.90pt for the Arial case, a whole grid step past
 /// what Word wrote (issue #629).
+///
+/// The bonus keys on the resolved face, not on the header's characters, like
+/// every other line box (issues #643, #814): a one-factor native export of
+/// `10_research_report_ko` with its header text swapped to `Monthly Customer
+/// Satisfaction Trend Report` keeps the baseline at 45.60pt — exactly the
+/// Korean control's seat — where the bare ascender would put it at 44.11pt.
 fn word_header_line_ascent_em(runs: &[Run], family: &str) -> Option<f64> {
     let ascender_em: f64 = crate::render::pdf::font_hhea_ascender_em(family)?;
-    if !has_east_asian_text(runs) {
+    if !line_takes_east_asian_metrics(runs) {
         return Some(ascender_em);
     }
     let (_, _, pitch_em) = crate::render::pdf::font_line_metrics_em(family)?;
@@ -724,12 +730,30 @@ fn largest_font_size_pt(sizes: impl Iterator<Item = f64>) -> f64 {
     if largest.is_nan() { 11.0 } else { largest }
 }
 
+/// The row-level East Asian answer every cell in a table row shares, decided
+/// once per row so the whole row sits on one baseline (issue #498).
+///
+/// The two gates deliberately differ, mirroring the body path's asymmetry:
+/// the line *box* keys on the face the row's lines are set in (issues #643,
+/// #814), while a snapping document grid keys on the characters — Word does
+/// not stretch a Latin-only line to the grid pitch (issue #354).
+#[derive(Clone, Copy)]
+pub(super) struct RowEastAsianMetrics {
+    /// Whether any cell in the row carries East Asian characters — what a
+    /// snapping grid and its `w:spacing w:after` absorption key on (issues
+    /// #354, #500).
+    pub has_east_asian_text: bool,
+    /// Whether the row's lines take Word's East Asian line box — keyed on the
+    /// resolved face, not the script of the characters (issues #643, #814).
+    pub takes_east_asian_metrics: bool,
+}
+
 /// Whether a cell's grid-snapped line box already contains the paragraph's
 /// `w:spacing w:after`, so the caller must not emit it a second time.
 ///
 /// Mirrors the guard inside [`word_cell_line_box_settings`] exactly, including
 /// its early return for a paragraph carrying its own line box — gating on
-/// `row_has_east_asian_text` alone would strip the gap from those.
+/// `has_east_asian_text` alone would strip the gap from those.
 ///
 /// A declared `w:spacing w:line` is deliberately *not* a bail here, and must
 /// not become one again: since issue #727 the box scales by the multiple
@@ -739,9 +763,9 @@ fn largest_font_size_pt(sizes: impl Iterator<Item = f64>) -> f64 {
 pub(super) fn cell_grid_absorbs_space_after(
     style: &ParagraphStyle,
     line_grid_pitch: Option<f64>,
-    row_has_east_asian_text: bool,
+    row_east_asian: RowEastAsianMetrics,
 ) -> bool {
-    row_has_east_asian_text
+    row_east_asian.has_east_asian_text
         && style.line_box.is_none()
         && line_grid_pitch.is_some_and(|pitch| pitch > 0.0)
 }
@@ -784,14 +808,14 @@ pub(super) fn word_cell_line_box_settings(
     runs: &[Run],
     style: &ParagraphStyle,
     line_grid_pitch: Option<f64>,
-    row_has_east_asian_text: bool,
+    row_east_asian: RowEastAsianMetrics,
     seats_text_on_descender: bool,
 ) -> Option<String> {
     let line_box: CellLineBox = word_cell_line_box(
         runs,
         style,
         line_grid_pitch,
-        row_has_east_asian_text,
+        row_east_asian,
         seats_text_on_descender,
     )?;
     Some(format!(
@@ -809,7 +833,7 @@ pub(super) fn word_cell_line_box(
     runs: &[Run],
     style: &ParagraphStyle,
     line_grid_pitch: Option<f64>,
-    row_has_east_asian_text: bool,
+    row_east_asian: RowEastAsianMetrics,
     seats_text_on_descender: bool,
 ) -> Option<CellLineBox> {
     if style.line_box.is_some() {
@@ -828,7 +852,7 @@ pub(super) fn word_cell_line_box(
     // line boxes of different heights, splitting one row across two baselines
     // 4.29pt apart (issue #498). So both the 1.3 line-height bonus and the
     // ascent excess it implies key on the row's answer.
-    let natural_em: f64 = if row_has_east_asian_text {
+    let natural_em: f64 = if row_east_asian.takes_east_asian_metrics {
         EAST_ASIAN_LINE_HEIGHT_FACTOR * word_pitch_em
     } else {
         word_pitch_em
@@ -839,9 +863,10 @@ pub(super) fn word_cell_line_box(
     // 12.64pt of Malgun and a 1.5pt gap both fit inside one 18pt line where
     // 18 + 1.5 does not (issues #500, #503). `cell_grid_absorbs_space_after`
     // gates the caller's matching suppression of the trailing gap; the two must
-    // agree.
+    // agree. The grid keys on the row's *text*, not its face: Word does not
+    // stretch a Latin-only line to the grid pitch (issues #354, #814).
     let advance_em: f64 = match line_grid_pitch.filter(|pitch| *pitch > 0.0) {
-        Some(pitch) if row_has_east_asian_text => {
+        Some(pitch) if row_east_asian.has_east_asian_text => {
             // Same two-way choice as the body path (issue #508), with the
             // paragraph's `w:after` inside the quantity being compared.
             let natural_pt: f64 = natural_em * font_size + style.space_after.unwrap_or(0.0);
@@ -866,7 +891,7 @@ pub(super) fn word_cell_line_box(
         // A non-positive rule states nothing usable; Word ignores it.
         Some(_) => advance_em,
     };
-    let excess_em: f64 = if row_has_east_asian_text {
+    let excess_em: f64 = if row_east_asian.takes_east_asian_metrics {
         EAST_ASIAN_ASCENT_EXCESS * word_pitch_em
     } else {
         0.0

@@ -1794,6 +1794,56 @@ fn test_east_asian_header_baseline_keeps_the_word_line_bonus() {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+/// The face decides the header ascent, not the script of the line's
+/// characters: a Latin-only header set in Malgun Gothic keeps the same East
+/// Asian bonus a Korean one gets — the rule the body line took in issue #643
+/// and the footer in issue #630 (issue #814).
+///
+/// Measured on a native export: `10_research_report_ko` with its header text
+/// replaced by `Monthly Customer Satisfaction Trend Report` — the only patched
+/// factor — keeps its first baseline at 45.60pt at `w:header="708"` = 35.40pt,
+/// exactly where the Korean control's sits, where the bare hhea ascender would
+/// seat it at 44.11pt.
+#[test]
+fn test_latin_only_header_in_east_asian_face_keeps_the_word_line_bonus() {
+    let Some(ascender_em) = crate::render::pdf::font_hhea_ascender_em("Malgun Gothic") else {
+        return;
+    };
+    let (_, _, pitch_em) = crate::render::pdf::font_line_metrics_em("Malgun Gothic")
+        .expect("a resolved face has line metrics");
+    let doc = doc_with_header_run(
+        Some(35.4),
+        62.35,
+        "Monthly Customer Satisfaction Trend Report",
+        TextStyle {
+            font_family: Some("Malgun Gothic".to_string()),
+            east_asian_font_family: Some("Malgun Gothic".to_string()),
+            font_size: Some(8.0),
+            ..TextStyle::default()
+        },
+    );
+
+    let baselines: Vec<f64> = baselines_of(&doc, "Monthly Customer Satisfaction");
+    let expected_pt: f64 = 35.4 + (ascender_em + 0.15 * pitch_em) * 8.0;
+    assert_eq!(baselines.len(), 1, "the header is one line");
+    assert!(
+        (baselines[0] - expected_pt).abs() < 0.01,
+        "Latin header in a CJK face: baseline {}pt should be {expected_pt}pt",
+        baselines[0]
+    );
+    assert!(
+        (baselines[0] - (35.4 + ascender_em * 8.0)).abs() > 1.0,
+        "the bonus must lift the baseline clear of the bare ascent"
+    );
+    assert!(
+        !shaped_by(&doc, "Monthly Customer Satisfaction", &MALGUN_METRIC_FACES)
+            || (baselines[0] - 45.60).abs() < 0.15,
+        "Word's own export measures 45.60pt, not {}pt",
+        baselines[0]
+    );
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 /// Moving the band must not touch the story's own line advance.
 ///
 /// The header ascent is a property of where the *first* line sits, not of how

@@ -124,10 +124,10 @@ struct GenCtx {
     /// `w:spacing w:before` on the very first body paragraph, unlike the top of
     /// pages reached by a break.
     at_document_start: bool,
-    /// Whether the table row being generated takes the section's grid-snapped
-    /// line box. Decided once per row so every cell in it shares a baseline,
-    /// which reading each cell's own text could not guarantee (issue #498).
-    row_has_east_asian_text: bool,
+    /// The table row being generated's East Asian line answer. Decided once
+    /// per row so every cell in it shares a baseline, which reading each
+    /// cell's own text could not guarantee (issue #498).
+    row_east_asian: RowEastAsianMetrics,
     /// The enclosing table's default vertical alignment: a cell that declares
     /// none takes this, and its paragraph codegen must know the effective
     /// answer to seat the line box (issue #618).
@@ -204,7 +204,10 @@ impl GenCtx {
             table_depth: 0,
             table_uses_powerpoint_line_box: false,
             line_grid_pitch: None,
-            row_has_east_asian_text: false,
+            row_east_asian: RowEastAsianMetrics {
+                has_east_asian_text: false,
+                takes_east_asian_metrics: false,
+            },
             table_default_vertical_align: None,
             table_box_is_aligned: false,
             table_seats_bottom_aligned_text_on_descender: false,
