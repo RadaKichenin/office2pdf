@@ -210,6 +210,53 @@ pub(super) fn scan_default_paragraph_style_id(styles_xml: &str) -> Option<String
     }
 }
 
+/// Whether the document explicitly defines its default paragraph style —
+/// either a paragraph style flagged `w:default="1"` (how Word writes it) or
+/// one whose id is `Normal` without the flag (how docx-rs writes it).
+///
+/// This is the factor that decides Word's East Asian/Latin auto space for
+/// bare paragraphs: Word's own built-in Korean `Normal` suppresses the space,
+/// and any explicit definition replaces that built-in, restoring the spec
+/// default of on. Measured on one-factor native exports — the same bytes flip
+/// every bare-paragraph, cell and justified boundary between flush and
+/// +0.25em on exactly this difference (issue #732).
+pub(super) fn scan_defines_default_paragraph_style(styles_xml: &str) -> bool {
+    use quick_xml::events::Event;
+
+    let mut reader = quick_xml::Reader::from_str(styles_xml);
+    reader.config_mut().trim_text(true);
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(element) | Event::Empty(element))
+                if element.local_name().as_ref() == b"style" =>
+            {
+                let mut style_type = None;
+                let mut is_default = false;
+                let mut style_id = None;
+                for attribute in element.attributes().flatten() {
+                    let value = attribute
+                        .decode_and_unescape_value(reader.decoder())
+                        .ok()
+                        .map(|value| value.into_owned());
+                    match attribute.key.local_name().as_ref() {
+                        b"type" => style_type = value,
+                        b"default" => is_default = matches!(value.as_deref(), Some("1" | "true")),
+                        b"styleId" => style_id = value,
+                        _ => {}
+                    }
+                }
+                if style_type.as_deref() == Some("paragraph")
+                    && (is_default || style_id.as_deref() == Some("Normal"))
+                {
+                    return true;
+                }
+            }
+            Ok(Event::Eof) | Err(_) => return false,
+            _ => {}
+        }
+    }
+}
+
 use crate::defaults::HEADING_FONT_SIZES;
 
 /// Build a map from style ID → resolved formatting by extracting formatting

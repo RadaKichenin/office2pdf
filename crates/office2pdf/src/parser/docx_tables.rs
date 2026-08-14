@@ -1,8 +1,8 @@
 use super::contexts::{DocxConversionContext, ResolvedTableStyle, apply_table_text_style};
 use super::{
     Alignment, Block, BorderLineStyle, BorderSide, CellBorder, CellVerticalAlign, Color,
-    HyperlinkMap, ImageMap, Insets, MAX_TABLE_DEPTH, ParagraphContainer, StyleMap, Table,
-    TableCell, TableRow, convert_paragraph_blocks, parse_hex_color,
+    HyperlinkMap, ImageMap, Insets, MAX_TABLE_DEPTH, StyleMap, Table, TableCell, TableRow,
+    convert_paragraph_blocks, parse_hex_color,
 };
 use crate::ir::TableBorderPaintModel;
 use crate::parser::units::twips_to_pt;
@@ -902,15 +902,7 @@ fn extract_cell_content(
     for content in &cell.children {
         match content {
             docx_rs::TableCellContent::Paragraph(para) => {
-                convert_paragraph_blocks(
-                    para,
-                    &mut blocks,
-                    images,
-                    hyperlinks,
-                    style_map,
-                    ctx,
-                    ParagraphContainer::TableCell,
-                );
+                convert_paragraph_blocks(para, &mut blocks, images, hyperlinks, style_map, ctx);
             }
             docx_rs::TableCellContent::Table(nested_table) if depth < MAX_TABLE_DEPTH => {
                 blocks.push(Block::Table(convert_table(
@@ -957,15 +949,7 @@ fn extend_with_cell_sdt_content(
     for child in &sdt.children {
         match child {
             docx_rs::StructuredDataTagChild::Paragraph(para) => {
-                convert_paragraph_blocks(
-                    para,
-                    blocks,
-                    images,
-                    hyperlinks,
-                    style_map,
-                    ctx,
-                    ParagraphContainer::TableCell,
-                );
+                convert_paragraph_blocks(para, blocks, images, hyperlinks, style_map, ctx);
             }
             docx_rs::StructuredDataTagChild::Table(nested_table) if depth < MAX_TABLE_DEPTH => {
                 blocks.push(Block::Table(convert_table(

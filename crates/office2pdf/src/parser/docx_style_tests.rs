@@ -357,6 +357,33 @@ fn test_scan_default_paragraph_style_id_from_raw_styles_xml() {
 }
 
 #[test]
+fn test_scan_defines_default_paragraph_style() {
+    // The two shapes real packages declare their default paragraph style in:
+    // Word marks it `w:default="1"`; docx-rs-built files write a style whose
+    // id is `Normal` without the flag. Either replaces Word's built-in Normal,
+    // which is what reactivates the East Asian auto space (issue #732).
+    let by_default_flag = r#"<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+      <w:style w:type="paragraph" w:default="1" w:styleId="Standard"/>
+    </w:styles>"#;
+    let by_normal_id = r#"<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+      <w:style w:type="paragraph" w:styleId="Normal"><w:name w:val="Normal"/></w:style>
+    </w:styles>"#;
+    // The corpus shape: named styles only, no default, no Normal. A character
+    // style named Normal must not count — only a paragraph style replaces the
+    // built-in paragraph default.
+    let corpus_shaped = r#"<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+      <w:style w:type="character" w:default="1" w:styleId="Normal"/>
+      <w:style w:type="paragraph" w:styleId="ListParagraph"><w:name w:val="List Paragraph"/></w:style>
+    </w:styles>"#;
+
+    assert!(styles::scan_defines_default_paragraph_style(
+        by_default_flag
+    ));
+    assert!(styles::scan_defines_default_paragraph_style(by_normal_id));
+    assert!(!styles::scan_defines_default_paragraph_style(corpus_shaped));
+}
+
+#[test]
 fn test_doc_default_theme_font_resolves_via_theme() {
     // docDefaults referencing asciiTheme="minorHAnsi" must resolve to the
     // theme's minor latin typeface instead of falling back to the renderer

@@ -69,4 +69,8 @@ pub(super) struct DocxConversionContext {
     pub(super) paragraph_shading: ParagraphShadingContext,
     pub(super) word_wraps: WordWrapContext,
     pub(super) fields: FieldContext,
+    /// Whether `word/styles.xml` explicitly defines the default paragraph
+    /// style. Decides the East Asian auto space for paragraphs without a
+    /// resolvable `w:pStyle` (issue #732).
+    pub(super) default_paragraph_style_is_defined: bool,
 }

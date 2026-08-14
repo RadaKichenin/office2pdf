@@ -952,7 +952,175 @@ fn cjk_punctuation_is_not_a_boundary() {
     );
 }
 
-// ----- The auto space stops at a table cell (issue #627) -----
+// ----- The trigger is a defined paragraph style (issues #627, #732) -----
+
+/// A minimal package whose `word/styles.xml` is under the test's control,
+/// written as raw XML because docx-rs always writes a `Normal` definition
+/// into the styles part it builds — and whether the default paragraph style
+/// is *defined at all* is exactly the factor these tests vary (issue #732).
+fn build_docx_with_raw_styles(styles_xml: &str, body_xml: &str) -> Vec<u8> {
+    use std::io::Write;
+    use zip::ZipWriter;
+    use zip::write::FileOptions;
+
+    let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+    let opts = FileOptions::default();
+
+    zip.start_file("[Content_Types].xml", opts).unwrap();
+    zip.write_all(
+        br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+</Types>"#,
+    )
+    .unwrap();
+
+    zip.start_file("_rels/.rels", opts).unwrap();
+    zip.write_all(
+        br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>"#,
+    )
+    .unwrap();
+
+    zip.start_file("word/_rels/document.xml.rels", opts)
+        .unwrap();
+    zip.write_all(
+        br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>"#,
+    )
+    .unwrap();
+
+    zip.start_file("word/styles.xml", opts).unwrap();
+    zip.write_all(styles_xml.as_bytes()).unwrap();
+
+    zip.start_file("word/document.xml", opts).unwrap();
+    let document_xml = format!(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    {body_xml}
+    <w:sectPr>
+      <w:pgSz w:w="11906" w:h="16838"/>
+      <w:docGrid w:linePitch="360"/>
+    </w:sectPr>
+  </w:body>
+</w:document>"#
+    );
+    zip.write_all(document_xml.as_bytes()).unwrap();
+
+    zip.finish().unwrap().into_inner()
+}
+
+/// The styles part every Korean business mock ships: document defaults plus a
+/// `ListParagraph` definition, and — decisively — no `Normal` (issue #732).
+const CORPUS_SHAPED_STYLES: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:docDefaults>
+    <w:rPrDefault><w:rPr><w:rFonts w:ascii="Malgun Gothic" w:cs="Malgun Gothic" w:eastAsia="Malgun Gothic" w:hAnsi="Malgun Gothic"/><w:sz w:val="21"/><w:szCs w:val="21"/></w:rPr></w:rPrDefault>
+    <w:pPrDefault/>
+  </w:docDefaults>
+  <w:style w:type="paragraph" w:styleId="ListParagraph"><w:name w:val="List Paragraph"/><w:basedOn w:val="Normal"/><w:qFormat/></w:style>
+</w:styles>"#;
+
+/// The same styles part with an explicit default paragraph style added — the
+/// one factor #521's probe package differed by. Deliberately not named
+/// `Normal`, so the test isolates the `w:default="1"` arm of the scan.
+const DEFAULT_STYLE_DEFINING_STYLES: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:docDefaults>
+    <w:rPrDefault><w:rPr><w:rFonts w:ascii="Malgun Gothic" w:cs="Malgun Gothic" w:eastAsia="Malgun Gothic" w:hAnsi="Malgun Gothic"/><w:sz w:val="21"/><w:szCs w:val="21"/></w:rPr></w:rPrDefault>
+    <w:pPrDefault/>
+  </w:docDefaults>
+  <w:style w:type="paragraph" w:styleId="Standard" w:default="1"><w:name w:val="Normal"/></w:style>
+  <w:style w:type="paragraph" w:styleId="ListParagraph"><w:name w:val="List Paragraph"/><w:basedOn w:val="Normal"/><w:qFormat/></w:style>
+</w:styles>"#;
+
+/// A run in the corpus mocks' shape: explicit Malgun Gothic, 9.5pt.
+fn korean_run_xml(text: &str) -> String {
+    format!(
+        r#"<w:r><w:rPr><w:rFonts w:ascii="Malgun Gothic" w:cs="Malgun Gothic" w:eastAsia="Malgun Gothic" w:hAnsi="Malgun Gothic"/><w:sz w:val="19"/><w:szCs w:val="19"/></w:rPr><w:t xml:space="preserve">{text}</w:t></w:r>"#
+    )
+}
+
+/// `text` inside `nesting` levels of single-cell table, as raw body XML.
+fn nested_cell_body_xml(text: &str, nesting: usize) -> String {
+    let mut body = format!("<w:p>{}</w:p>", korean_run_xml(text));
+    for _ in 0..nesting {
+        body = format!(
+            "<w:tbl><w:tblPr><w:tblW w:type=\"dxa\" w:w=\"9026\"/></w:tblPr>\
+             <w:tblGrid><w:gridCol w:w=\"9026\"/></w:tblGrid>\
+             <w:tr><w:tc><w:tcPr><w:tcW w:type=\"dxa\" w:w=\"9026\"/></w:tcPr>{body}</w:tc></w:tr></w:tbl>"
+        );
+    }
+    // A table may not end the body, so Word always writes a paragraph after it.
+    body.push_str("<w:p/>");
+    body
+}
+
+#[test]
+fn a_bare_paragraph_stays_flush_without_a_defined_default_style() {
+    // The plain-body rule of issue #732, settled by a one-factor probe: in a
+    // package that defines no default paragraph style — the shape of every
+    // Korean business mock — native Word draws every digit-Hangul boundary of
+    // a bare paragraph flush (06_official_letter_ko `1→부` is -0.06pt), and
+    // adding only a default-style definition to the same bytes flips every one
+    // of them to +0.25em. Word's own built-in Korean Normal carries the
+    // suppression; a defined style replaces it.
+    let text = first_paragraph_text(&build_docx_with_raw_styles(
+        CORPUS_SHAPED_STYLES,
+        &format!("<w:p>{}</w:p>", korean_run_xml("체크리스트 1부.")),
+    ));
+
+    assert_eq!(
+        text, "체크리스트 1부.",
+        "a bare paragraph keeps the boundaries the author typed"
+    );
+}
+
+#[test]
+fn a_bare_paragraph_widens_when_a_default_style_is_defined() {
+    // The other side of the same factor: #521's probe package defined its
+    // `Normal` explicitly, and native Word gave its bare paragraphs the full
+    // 0.25em at every boundary — 2.62pt at 10.5pt, 2.37pt at 9.5pt. Only the
+    // styles part differs from the fixture above.
+    let text = first_paragraph_text(&build_docx_with_raw_styles(
+        DEFAULT_STYLE_DEFINING_STYLES,
+        &format!("<w:p>{}</w:p>", korean_run_xml("체크리스트 1부.")),
+    ));
+
+    assert_eq!(
+        text,
+        format!("체크리스트 1{AUTO_SPACE_MARKER}부."),
+        "a defined default style reactivates the auto space"
+    );
+}
+
+#[test]
+fn a_list_styled_paragraph_widens_without_numbering() {
+    // #521's first survey read the corpus split as a `w:numPr` correlation;
+    // the probe shows the style is the real trigger: a `ListParagraph`-styled
+    // paragraph with no numbering at all takes the full 0.25em in the same
+    // package whose bare paragraphs are flush (case H, issue #732). This is
+    // why 02/03's list items widen while 06's plain body does not.
+    let body = format!(
+        r#"<w:p><w:pPr><w:pStyle w:val="ListParagraph"/></w:pPr>{}</w:p>"#,
+        korean_run_xml("2026년 8월")
+    );
+    let text = first_paragraph_text(&build_docx_with_raw_styles(CORPUS_SHAPED_STYLES, &body));
+
+    assert_eq!(
+        text,
+        format!("2026{AUTO_SPACE_MARKER}년 8{AUTO_SPACE_MARKER}월"),
+        "a defined, referenced style reactivates the auto space"
+    );
+}
 
 /// The same run `build_docx_with_korean_text` produces, wrapped in `nesting`
 /// levels of single-cell table so a cell inside a cell can be exercised too.
@@ -1003,13 +1171,16 @@ fn innermost_cell_paragraph_text(data: &[u8]) -> String {
 
 #[test]
 fn a_table_cell_gets_no_auto_space_at_a_digit_hangul_boundary() {
-    // Word does not apply the East Asian/Latin auto space to cell text. In
-    // 10_research_report_ko's month column every digit-Hangul boundary is
+    // In 10_research_report_ko's month column every digit-Hangul boundary is
     // flush (-0.056pt) in the native export while ours opened 2.366pt, taking
     // the cell text from Word's 48.60pt to 53.25pt (+9.6%) and rendering
-    // `2024년 1월` as `2024 년 1 월` (issue #627).
-    let text =
-        innermost_cell_paragraph_text(&build_docx_with_korean_text_in_table_cell("2024년 1월", 1));
+    // `2024년 1월` as `2024 년 1 월` (issue #627). #627 read this as a cell
+    // rule; the #732 probe shows it is the same style rule as the body: those
+    // cell paragraphs are bare, and the corpus defines no default style.
+    let text = innermost_cell_paragraph_text(&build_docx_with_raw_styles(
+        CORPUS_SHAPED_STYLES,
+        &nested_cell_body_xml("2024년 1월", 1),
+    ));
 
     assert_eq!(
         text, "2024년 1월",
@@ -1019,25 +1190,44 @@ fn a_table_cell_gets_no_auto_space_at_a_digit_hangul_boundary() {
 
 #[test]
 fn a_body_paragraph_is_left_exactly_as_it_was() {
-    // Triangulation on the other side of the new predicate: the cell rule must
-    // not reach the body flow. This pins TODAY's body emission, not Word's —
-    // the plain-body rule is unsettled and this shape is one of the cases Word
-    // renders flush (issue #732). Rewrite this expectation, do not delete the
-    // test, when that rule is settled.
+    // docx-rs writes a `Normal` definition into every styles part it builds,
+    // so this document is in #521's-probe territory, not the corpus's: its
+    // probe defined `Normal` too, and native Word widened its bare paragraphs
+    // at every boundary (issue #732). The assertion is unchanged from when it
+    // pinned today's emission — what changed is that the emission is now known
+    // to be what Word does to this document.
     let text = first_paragraph_text(&build_docx_with_korean_text("2024년 1월", false));
 
     assert_eq!(
         text,
         format!("2024{AUTO_SPACE_MARKER}년 1{AUTO_SPACE_MARKER}월"),
-        "the cell predicate must not change body emission"
+        "a document whose builder defines Normal keeps the auto space"
+    );
+}
+
+#[test]
+fn a_table_cell_widens_when_a_default_style_is_defined() {
+    // #521's probe put the same sentence in a table cell of its
+    // Normal-defining package and native Word widened every boundary exactly
+    // as in the body (cases I/J: 2.62pt at 10.5pt, 2.37pt at 9.5pt). The cell
+    // is not a suppressor — the undefined default style is, and this docx-rs
+    // package defines one (issue #732).
+    let text =
+        innermost_cell_paragraph_text(&build_docx_with_korean_text_in_table_cell("2024년 1월", 1));
+
+    assert_eq!(
+        text,
+        format!("2024{AUTO_SPACE_MARKER}년 1{AUTO_SPACE_MARKER}월"),
+        "a defined default style reactivates the auto space in cells too"
     );
 }
 
 #[test]
 fn a_numbered_list_paragraph_keeps_the_auto_space() {
-    // The one body case the corpus GT settles: Word applies the gap in exactly
-    // the `w:pStyle="ListParagraph"` + `w:numPr` paragraphs of 02 and 03
-    // (8.41/8.40pt, matched by us today). The cell fix must not reach it.
+    // The corpus GT's positive case: the `w:pStyle="ListParagraph"` + `w:numPr`
+    // paragraphs of 02 and 03 widen (8.41/8.40pt, matched by us today). The
+    // #732 probe shows the referenced style — not the numbering — carries
+    // this, so a numbered item must keep widening under the style predicate.
     let abstract_num = docx_rs::AbstractNumbering::new(0).add_level(docx_rs::Level::new(
         0,
         docx_rs::Start::new(1),
@@ -1092,14 +1282,16 @@ fn a_numbered_list_paragraph_keeps_the_auto_space() {
 
 #[test]
 fn a_cell_inside_a_cell_is_still_a_cell() {
-    // Triangulation on depth: the suppression follows the `<w:tc>` ancestry,
-    // not the outermost container, so a nested table's cells behave the same.
-    let text =
-        innermost_cell_paragraph_text(&build_docx_with_korean_text_in_table_cell("2024년 1월", 2));
+    // Triangulation on depth: the style rule reaches a nested table's bare
+    // cell paragraphs the same way it reaches the outer table's.
+    let text = innermost_cell_paragraph_text(&build_docx_with_raw_styles(
+        CORPUS_SHAPED_STYLES,
+        &nested_cell_body_xml("2024년 1월", 2),
+    ));
 
     assert_eq!(
         text, "2024년 1월",
-        "a nested cell suppresses the auto space too"
+        "a nested cell's bare paragraph stays flush too"
     );
 }
 

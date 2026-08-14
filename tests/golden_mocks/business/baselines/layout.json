@@ -407,7 +407,7 @@
       "samples": []
      },
      "width": {
-      "mean_abs_pct": 3.15,
+      "mean_abs_pct": 3.33,
       "worst_pct": 18.29
      },
      "wraps": {
@@ -3162,8 +3162,8 @@
    "gt_pages": 1,
    "id": "xlsx-kpi-tracker-en",
    "noise_floor_pt": 0.5,
-   "out_pages": 1,
-   "page_parity": true,
+   "out_pages": 2,
+   "page_parity": false,
    "pages": [
     {
      "baseline": {
@@ -3227,7 +3227,7 @@
   "xlsx": 0.5
  },
  "office2pdf_version": "office2pdf 0.6.7",
- "repository_commit": "05f1df754c990ecb695e20b9e57914eea22dfa6c-dirty",
+ "repository_commit": "28cabfb9964170ac42710c5020994d487ae65328-dirty",
  "schema_version": 2,
  "summary": {
   "cases": 30,
@@ -3235,7 +3235,7 @@
   "extra_lines": 0,
   "large_shifts": 14,
   "missing_lines": 0,
-  "page_parity_cases": 30,
+  "page_parity_cases": 29,
   "pages_compared": 54
  }
 }

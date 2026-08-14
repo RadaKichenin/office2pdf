@@ -1,8 +1,7 @@
 use super::contexts::DocxConversionContext;
 use super::{
     Block, DrawingTextBoxInfo, FloatingImage, FloatingTextBox, HyperlinkMap, ImageData, ImageMap,
-    ParagraphContainer, StyleMap, VmlTextBoxInfo, WrapContext, convert_paragraph_blocks,
-    convert_table,
+    StyleMap, VmlTextBoxInfo, WrapContext, convert_paragraph_blocks, convert_table,
 };
 use crate::parser::units::emu_to_pt;
 
@@ -235,15 +234,7 @@ pub(super) fn extract_drawing_text_box_blocks(
             docx_rs::TextBoxContentChild::Paragraph(para) => {
                 // A text box carries its own flow: Word lays its paragraphs
                 // out as body text even when the box is anchored in a cell.
-                convert_paragraph_blocks(
-                    para,
-                    &mut blocks,
-                    images,
-                    hyperlinks,
-                    style_map,
-                    ctx,
-                    ParagraphContainer::Body,
-                );
+                convert_paragraph_blocks(para, &mut blocks, images, hyperlinks, style_map, ctx);
             }
             docx_rs::TextBoxContentChild::Table(table) => {
                 blocks.push(Block::Table(convert_table(

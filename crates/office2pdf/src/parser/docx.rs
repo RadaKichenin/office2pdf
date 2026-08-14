@@ -263,6 +263,9 @@ fn build_zip_preparse_assets(data: &[u8]) -> ZipPreParseAssets {
                 paragraph_shading: ParagraphShadingContext::from_xml(doc_xml.as_deref()),
                 word_wraps: WordWrapContext::from_xml(doc_xml.as_deref()),
                 fields: FieldContext::default(),
+                default_paragraph_style_is_defined: styles_xml
+                    .as_deref()
+                    .is_some_and(styles::scan_defines_default_paragraph_style),
             };
             ZipPreParseAssets {
                 metadata,
@@ -298,6 +301,7 @@ fn build_zip_preparse_assets(data: &[u8]) -> ZipPreParseAssets {
                 paragraph_shading: ParagraphShadingContext::from_xml(None),
                 word_wraps: WordWrapContext::from_xml(None),
                 fields: FieldContext::default(),
+                default_paragraph_style_is_defined: false,
             },
             math: MathContext::empty(),
             chart_ctx: ChartContext::empty(),
@@ -542,15 +546,7 @@ fn convert_paragraph_element(
 
     // Build the paragraph IR
     let mut blocks = Vec::new();
-    convert_paragraph_blocks(
-        para,
-        &mut blocks,
-        images,
-        hyperlinks,
-        style_map,
-        ctx,
-        ParagraphContainer::Body,
-    );
+    convert_paragraph_blocks(para, &mut blocks, images, hyperlinks, style_map, ctx);
 
     match num_info {
         Some(info) => {
@@ -742,7 +738,6 @@ fn convert_wpg_drawing_blocks(
                     hyperlinks,
                     style_map,
                     ctx,
-                    ParagraphContainer::Body,
                 ),
                 docx_rs::DocumentChild::Table(table) => content.push(Block::Table(convert_table(
                     table, images, hyperlinks, style_map, ctx, 0,
@@ -975,28 +970,10 @@ fn process_hyperlink_runs(
     }
 }
 
-/// Which text flow a paragraph belongs to.
-///
-/// Word's East Asian/Latin auto space is a property of the flow, not of the
-/// paragraph's own formatting: cell text never gets it while body text with
-/// identical run properties does, so the text path has to be told which one it
-/// is building (issue #627).
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(super) enum ParagraphContainer {
-    /// The document body, an SDT, a WPG shape's text, or a drawing text
-    /// box's text — the paragraphs that reach `convert_paragraph_blocks`
-    /// from outside a `<w:tc>`. Headers, footers and footnote text convert
-    /// through their own paths and never reach
-    /// `insert_east_asian_auto_space` at all, so this enum does not speak
-    /// for them.
-    Body,
-    /// Inside a `<w:tc>`, at any nesting depth.
-    TableCell,
-}
-
 /// What the surrounding flow contributes to a paragraph, as opposed to the
 /// paragraph's own formatting: the direction `w:bidi` inherits onto it, the
-/// shading its style hierarchy paints behind it, and which flow it is in.
+/// shading its style hierarchy paints behind it, and whether its effective
+/// paragraph style is one the document actually defines.
 ///
 /// Resolved once per `<w:p>` because the bidi and shading cursors advance on
 /// read, then handed to every paragraph the `<w:p>` splits into.
@@ -1007,7 +984,12 @@ struct ParagraphFlow {
     /// The paragraph's own `w:wordWrap`, recovered from the raw XML — the
     /// published docx-rs does not parse it (issue #1041).
     word_wrap: Option<bool>,
-    container: ParagraphContainer,
+    /// Whether the style this paragraph takes its formatting from is
+    /// explicitly defined in `word/styles.xml` — a resolvable `w:pStyle`, or
+    /// the document's own default-style definition for a bare paragraph.
+    /// False means the paragraph falls through to Word's built-in Normal,
+    /// which is what suppresses the East Asian auto space (issue #732).
+    effective_style_is_defined: bool,
 }
 
 /// Convert a docx-rs Paragraph to IR blocks, handling page breaks and inline images.
@@ -1021,14 +1003,18 @@ fn convert_paragraph_blocks(
     hyperlinks: &HyperlinkMap,
     style_map: &StyleMap,
     ctx: &DocxConversionContext,
-    container: ParagraphContainer,
 ) {
     // Check bidi direction for this paragraph (must be called once per XML <w:p>)
     let flow = ParagraphFlow {
         is_rtl: ctx.bidi.next_is_bidi(),
         background: ctx.paragraph_shading.next_background(),
         word_wrap: ctx.word_wraps.next_word_wrap(),
-        container,
+        // A `w:pStyle` naming a style the document never defines falls back
+        // to the default style, the same as carrying no `w:pStyle` at all.
+        effective_style_is_defined: match get_paragraph_style_id(&para.property) {
+            Some(id) if style_map.contains_key(id) => true,
+            _ => ctx.default_paragraph_style_is_defined,
+        },
     };
 
     // Emit page break before the paragraph if requested
@@ -1327,23 +1313,25 @@ fn push_paragraph_from_runs(
     }
     apply_word_compatible_paragraph_defaults(&mut style);
     // Word's automatic East Asian/Latin space, applied once per paragraph so a
-    // boundary falling between two runs is caught too. Justified paragraphs are
-    // left alone: Word treats the space as compressible and absorbs it into the
-    // justification, which is why every *justified* boundary that lacks it in
-    // the corpus GT is on a line Word is actively stretching or compressing
-    // (issue #521). Centred paragraphs lack it for a different reason — see
-    // below.
-    //
-    // Table cells are left alone as well: Word applies no auto space to cell
-    // text at all (issue #627).
+    // boundary falling between two runs is caught too. It goes only to
+    // paragraphs whose effective style the document defines: Word's built-in
+    // Korean Normal suppresses the space, and any explicit definition — the
+    // paragraph's own resolvable `w:pStyle`, or a defined default style —
+    // replaces that built-in and restores the spec default of on
+    // (issue #732). This one predicate is what the earlier container and
+    // alignment readings were each seeing a slice of: the corpus cells
+    // (issue #627), its centred date line (issue #728) and its justified
+    // paragraphs are all *bare* paragraphs in packages that define no default
+    // style, while its widened list items and #521's all-widening probe are
+    // styled or Normal-defining.
     let entry_text: Option<String> = caption_identifier.map(|_| caption_entry_text(runs));
-    // A centred paragraph gets none either. Measured on `02_contract_ko`
-    // page 1: Word advances 5.78pt at each digit-to-Hangul boundary of the
-    // centred date line and 8.41pt at the same boundaries in the body
-    // paragraph above it, so it applies the space in one and not the other.
-    // 8.41 - 5.78 is 2.63pt, and 0.25em at that line's 10.5pt is 2.625pt
-    // (issue #728). Right alignment is left alone: nothing measured it.
-    if flow.container == ParagraphContainer::Body
+    // Justified and centred paragraphs are still left alone. For centred ones
+    // no probe has measured a style-defining case. For justified ones the
+    // probe says an unstretched line does widen (case E), but Word treats the
+    // space as compressible under justification while ours is rigid, and a
+    // rigid quarter em re-wraps stretched lines (issue #521). Issue #1053
+    // tracks both.
+    if flow.effective_style_is_defined
         && !matches!(
             style.alignment,
             Some(Alignment::Justify) | Some(Alignment::Center)

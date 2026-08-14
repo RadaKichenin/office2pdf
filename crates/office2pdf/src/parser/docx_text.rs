@@ -588,27 +588,23 @@ const EAST_ASIAN_AUTO_SPACE_CHAR: char = '\u{E001}';
 /// Insert Word's automatic space at every East Asian/Latin boundary in the
 /// paragraph that does not already carry a literal space.
 ///
-/// `w:autoSpaceDE` and `w:autoSpaceDN` are on unless a paragraph turns them
-/// off, and the space they add is exactly a quarter em. Measured on a native
-/// Word export of a ten-case probe that varies one factor at a time: the same
-/// sentence gets 2.625pt at 10.5pt and 2.375pt at 9.5pt as a plain paragraph, a
-/// `w:numPr` list item, a justified paragraph, a `ListParagraph`-styled
-/// paragraph, and a table cell alike, on both sides of a Latin island
-/// (`제3자` widens at `제→3` and at `3→자`). Only setting the two properties to
-/// `false` suppresses it, and then completely (issue #521).
+/// The space is exactly a quarter em of the run's size — 2.625pt at 10.5pt,
+/// 2.375pt at 9.5pt — applied on both sides of a Latin island (`제3자` widens
+/// at `제→3` and at `3→자`), measured on native Word exports (issue #521).
 ///
 /// The caller decides *whether* a paragraph is eligible; this function only
-/// knows where the boundaries are. Corpus GT then narrowed the probe's reading
-/// three times: justification absorbs the space, cell text never carries it at
-/// all (issue #627), and a centred paragraph takes none either (issue #728),
-/// so none of the three reaches here.
-///
-/// Those narrowings contradict the #521 probe above, which read the space as
-/// present in a cell and in a plain paragraph alike. The corpus GT wins where
-/// the two disagree — four native exports show cell boundaries flush — but the
-/// disagreement is unresolved for the *plain body* case, which the probe says
-/// widens and the 06_official_letter_ko GT says is flush. Issue #732 tracks
-/// settling it; until then the body arm keeps the probe's reading.
+/// knows where the boundaries are. Eligibility is a property of the
+/// paragraph's *style resolution*, settled by a one-factor probe (issue
+/// #732): Word's built-in Korean Normal style suppresses the space, and any
+/// explicitly defined style — a resolvable `w:pStyle`, or a defined default
+/// paragraph style reached by bare paragraphs — replaces the built-in and
+/// restores the spec default of on. Adding only a `Normal` definition to a
+/// package flips every bare-paragraph, cell and justified boundary from flush
+/// to +0.25em; removing it from #521's probe flips them all back. That one
+/// factor is why #521's probe (which defined `Normal`) read the space as
+/// unconditional while the corpus mocks (which define none) draw their bare
+/// paragraphs, cells (issue #627) and centred date line (issue #728) flush
+/// yet widen their `ListParagraph` items.
 ///
 /// The boundary can fall between two runs, so the scan carries the previous
 /// character across the run break rather than restarting at each run.
