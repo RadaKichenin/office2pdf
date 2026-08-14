@@ -1018,20 +1018,45 @@ fn generate_fixed_element(
                     );
                 }
             }
-            // `a:xfrm/@rot` on a `p:pic` (issue #682). Typst rotates about
-            // the centre by default, which is what PowerPoint does — the
-            // measured GT keeps the same centre and only grows its drawn
-            // extent to the rotated bounding box. The element is absolutely
-            // placed, so no reflow is needed and the box is left alone.
+            // `a:xfrm/@rot` and `@flipH`/`@flipV` on a `p:pic` (issues #682,
+            // #1017). PowerPoint mirrors and turns the frame about its own
+            // centre, and the measured GT keeps that centre fixed while the
+            // drawn extent grows to the rotated bounding box.
+            //
+            // `origin: center` cannot express that centre: Typst resolves it
+            // against the frame it lays the body out in, and that frame is
+            // clamped to the region. A picture box taller or wider than the
+            // slide then turns about the slide's midpoint and lands
+            // translated — the CONTOSO deck's 856.8pt artwork on a 540pt
+            // slide moved 119pt off its seat (issue #1032). A `top + left`
+            // origin sits at the frame's own corner, which no clamp can
+            // move, so pivot there and carry the difference in an enclosing
+            // `#move`. The element is absolutely placed, so no reflow is
+            // needed and the box is left alone.
             let rotation = img.rotation_deg.filter(|deg| *deg != 0.0);
-            if let Some(deg) = rotation {
-                let _ = write!(out, "#rotate({}deg)[", format_f64(deg));
-            }
             let flipped = img.flip_h || img.flip_v;
+            if rotation.is_some() || flipped {
+                let (dx, dy): (f64, f64) = centre_pivot_shift(
+                    img.width.unwrap_or(elem.width),
+                    img.height.unwrap_or(elem.height),
+                    rotation.unwrap_or(0.0),
+                    img.flip_h,
+                    img.flip_v,
+                );
+                let _ = write!(
+                    out,
+                    "#move(dx: {}pt, dy: {}pt)[",
+                    format_f64(dx),
+                    format_f64(dy)
+                );
+            }
+            if let Some(deg) = rotation {
+                let _ = write!(out, "#rotate({}deg, origin: top + left)[", format_f64(deg));
+            }
             if flipped {
                 let _ = write!(
                     out,
-                    "#scale(x: {}, y: {}, origin: center)[",
+                    "#scale(x: {}, y: {}, origin: top + left)[",
                     if img.flip_h { "-100%" } else { "100%" },
                     if img.flip_v { "-100%" } else { "100%" },
                 );
@@ -1041,6 +1066,9 @@ fn generate_fixed_element(
                 out.push(']');
             }
             if rotation.is_some() {
+                out.push(']');
+            }
+            if rotation.is_some() || flipped {
                 out.push(']');
             }
             // Render image border as a separate overlay so that #image()
@@ -1084,6 +1112,34 @@ fn generate_fixed_element(
 
     out.push_str("]\n");
     Ok(())
+}
+
+/// How far a picture mirrored and turned about its box's **top-left corner**
+/// has to move to land where PowerPoint's **centre** pivot would have put it.
+///
+/// With a `top + left` origin the mirror maps the box to `(±u, ±v)` and the
+/// turn follows as `R`, so the composed map is `R(S(p))`. PowerPoint's is
+/// `C + R(S(p) + m - C)`, where `C` is the box centre and `m` returns each
+/// mirrored axis to the box (`width` when `flip_h`, `height` when `flip_v`).
+/// Subtracting the two leaves `C + R(m) - R(C)`, independent of `p` — a plain
+/// translation, which is why one `#move` can carry it (issue #1032).
+fn centre_pivot_shift(
+    width: f64,
+    height: f64,
+    rotation_deg: f64,
+    flip_h: bool,
+    flip_v: bool,
+) -> (f64, f64) {
+    let (centre_x, centre_y): (f64, f64) = (width / 2.0, height / 2.0);
+    let (mirror_x, mirror_y): (f64, f64) = (
+        if flip_h { width } else { 0.0 },
+        if flip_v { height } else { 0.0 },
+    );
+    let (sin, cos): (f64, f64) = rotation_deg.to_radians().sin_cos();
+    (
+        centre_x + (cos * mirror_x - sin * mirror_y) - (cos * centre_x - sin * centre_y),
+        centre_y + (sin * mirror_x + cos * mirror_y) - (sin * centre_x + cos * centre_y),
+    )
 }
 
 /// Keep an upright raster's PDF-space bottom edge from rounding below its

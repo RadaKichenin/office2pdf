@@ -410,17 +410,119 @@ fn a_fixed_picture_flip_is_applied_inside_its_rotation() {
 
     let source = generate_typst(&doc).unwrap().source;
     let rotate = source
-        .find("#rotate(90deg)[")
+        .find("#rotate(90deg, origin: top + left)[")
         .expect("the outer picture rotation must be emitted");
     let flip = source
-        .find("#scale(x: -100%, y: 100%, origin: center)[")
-        .expect("flipH must become a centered horizontal mirror");
+        .find("#scale(x: -100%, y: 100%, origin: top + left)[")
+        .expect("flipH must become a horizontal mirror");
     let image = source
         .find("#image(\"")
         .expect("the picture must be emitted");
     assert!(
         rotate < flip && flip < image,
         "wrong transform order: {source}"
+    );
+}
+
+/// A picture frame whose box reaches past the slide, mirrored and turned:
+/// `Grafikk 310` on the CONTOSO deck's layout 15 (issue #1032). PowerPoint
+/// mirrors it about its own centre and turns it about that same centre,
+/// however far the box hangs off the slide.
+fn oversized_turned_picture() -> (Document, [(f64, f64); 4]) {
+    const X: f64 = -89.37716535433071;
+    const Y: f64 = -154.79425196850394;
+    const WIDTH: f64 = 848.043937007874;
+    const HEIGHT: f64 = 856.8;
+    const ROTATION_DEG: f64 = 135.37011666666666;
+
+    let doc: Document = make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![FixedElement {
+            x: X,
+            y: Y,
+            width: WIDTH,
+            height: HEIGHT,
+            kind: FixedElementKind::Image(ImageData {
+                rotation_deg: Some(ROTATION_DEG),
+                flip_h: false,
+                flip_v: true,
+                data: make_quadrant_png(),
+                format: ImageFormat::Png,
+                width: Some(WIDTH),
+                height: Some(HEIGHT),
+                crop: None,
+                stroke: None,
+                alignment: None,
+                clip_shape: None,
+                shadow: None,
+                paragraph_spacing: None,
+            }),
+        }],
+    )]);
+
+    // Mirror about the box's horizontal centre line, then turn about the
+    // box centre — DrawingML's own order, evaluated here independently of
+    // the markup under test.
+    let (centre_x, centre_y): (f64, f64) = (X + WIDTH / 2.0, Y + HEIGHT / 2.0);
+    let (sin, cos): (f64, f64) = ROTATION_DEG.to_radians().sin_cos();
+    let seat = |u: f64, v: f64| -> (f64, f64) {
+        let (dx, dy): (f64, f64) = (X + u - centre_x, Y + (HEIGHT - v) - centre_y);
+        (
+            centre_x + cos * dx - sin * dy,
+            centre_y + sin * dx + cos * dy,
+        )
+    };
+    let expected: [(f64, f64); 4] = [
+        seat(0.0, 0.0),
+        seat(WIDTH, 0.0),
+        seat(WIDTH, HEIGHT),
+        seat(0.0, HEIGHT),
+    ];
+    (doc, expected)
+}
+
+/// Typst resolves `origin: center` against the frame it lays the body out
+/// in, and that frame is clamped to the region. A picture box taller than
+/// the slide therefore turned about the slide's midpoint instead of its own,
+/// landing 119pt off its seat and dragging the artwork with it (issue #1032).
+#[test]
+fn an_oversized_turned_picture_pivots_on_its_own_centre() {
+    let (doc, expected) = oversized_turned_picture();
+    let output = generate_typst(&doc).unwrap();
+    let boxes = crate::render::pdf::compiled_image_boxes(&output.source, &output.images, 0)
+        .expect("the slide compiles");
+    let [placed] = boxes.as_slice() else {
+        panic!("the slide carries exactly one picture, got {boxes:?}");
+    };
+
+    for (index, (want, got)) in expected.iter().zip(placed.corners.iter()).enumerate() {
+        assert!(
+            (want.0 - got.0).abs() < 0.05 && (want.1 - got.1).abs() < 0.05,
+            "corner {index} sits at {got:?}, PowerPoint seats it at {want:?}"
+        );
+    }
+}
+
+/// The same pivot, read as the invariant it protects: a turn about the box
+/// centre leaves that centre where the frame put it, whatever the angle.
+#[test]
+fn a_turned_pictures_centre_stays_on_its_frame_centre() {
+    let (doc, _expected) = oversized_turned_picture();
+    let output = generate_typst(&doc).unwrap();
+    let boxes = crate::render::pdf::compiled_image_boxes(&output.source, &output.images, 0)
+        .expect("the slide compiles");
+    let [placed] = boxes.as_slice() else {
+        panic!("the slide carries exactly one picture, got {boxes:?}");
+    };
+    let centre: (f64, f64) = (
+        (placed.corners[0].0 + placed.corners[2].0) / 2.0,
+        (placed.corners[0].1 + placed.corners[2].1) / 2.0,
+    );
+    // -89.37716535433071 + 848.043937007874 / 2, -154.79425196850394 + 856.8 / 2
+    assert!(
+        (centre.0 - 334.6448031496063).abs() < 0.05 && (centre.1 - 273.60574803149603).abs() < 0.05,
+        "the turned picture's centre drifted to {centre:?}"
     );
 }
 
