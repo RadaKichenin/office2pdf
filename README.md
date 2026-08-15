@@ -13,7 +13,7 @@ No LibreOffice, no Chromium, no Docker — just a single binary powered by [Typs
 
 - **DOCX** — paragraphs, inline formatting (bold/italic/underline/color), tables, images, drawing shapes, ordered/nested lists, syntax-highlighted code, headers/footers, page setup
 - **PPTX** — slides, text boxes, shapes, tables (with theme-based table styles), images, slide masters, speaker notes, gradient backgrounds, shadow/reflection effects
-- **XLSX** — sheets, cell formatting, merged cells, column widths, row heights, conditional formatting (DataBar, IconSet, and formula rules)
+- **XLSX** — sheets (hidden ones skipped, as Excel does), cell formatting, merged cells, column widths, row heights, conditional formatting (DataBar, IconSet, and formula rules)
 - **PDF/A-2b** — archival-compliant output via `--pdf-a`
 - **Embedded font extraction** — fonts embedded in PPTX/DOCX are automatically extracted, deobfuscated, and used during conversion
 - **macOS Office font auto-discovery** — PowerPoint/Word/Excel bundled fonts and Office cloud font caches are searched automatically
@@ -195,7 +195,7 @@ Native Rust callers can use the same per-conversion path through
 | `--paper <SIZE>` | Paper size: `a4`, `letter`, `legal` |
 | `--landscape` | Force landscape orientation |
 | `--pdf-a` | Produce PDF/A-2b compliant output |
-| `--sheets <NAMES>` | XLSX sheet filter (comma-separated) |
+| `--sheets <NAMES>` | XLSX sheet filter (comma-separated); the only way to print a hidden sheet |
 | `--slides <RANGE>` | PPTX slide range (e.g. `1-5` or `3`) |
 | `--font-path <DIR>` | Additional font directory override (repeatable) |
 

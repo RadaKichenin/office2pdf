@@ -70,7 +70,8 @@ struct Cli {
     #[arg(long)]
     outdir: Option<PathBuf>,
 
-    /// XLSX sheet names to include (comma-separated, e.g. "Sheet1,Data")
+    /// XLSX sheet names to include (comma-separated, e.g. "Sheet1,Data").
+    /// Naming a hidden sheet prints it; otherwise hidden sheets are skipped.
     #[arg(long, value_delimiter = ',')]
     sheets: Option<Vec<String>>,
 

@@ -41,6 +41,35 @@ fn build_xlsx_multi_sheet(sheets: &[(&str, &[(&str, &str)])]) -> Vec<u8> {
     cursor.into_inner()
 }
 
+/// One sheet for `build_xlsx_multi_sheet_with_states`: its name, the
+/// visibility state to declare for it, and its cells as (coordinate, value).
+type SheetWithState<'a> = (
+    &'a str,
+    umya_spreadsheet::SheetStateValues,
+    &'a [(&'a str, &'a str)],
+);
+
+/// Helper: build XLSX with multiple sheets, each declaring the visibility
+/// state `xl/workbook.xml` carries on its `<sheet>` entry.
+fn build_xlsx_multi_sheet_with_states(sheets: &[SheetWithState<'_>]) -> Vec<u8> {
+    let mut book = umya_spreadsheet::new_file();
+    for (index, (name, state, cells)) in sheets.iter().enumerate() {
+        if index > 0 {
+            book.add_sheet(umya_spreadsheet::Worksheet::default())
+                .unwrap();
+        }
+        let sheet = book.get_sheet_mut(&index).unwrap();
+        sheet.set_name(*name);
+        sheet.set_state(state.clone());
+        for &(coord, value) in *cells {
+            sheet.get_cell_mut(coord).set_value(value);
+        }
+    }
+    let mut cursor = Cursor::new(Vec::new());
+    umya_spreadsheet::writer::xlsx::write_writer(&book, &mut cursor).unwrap();
+    cursor.into_inner()
+}
+
 /// Helper: extract SheetPage from Document by index.
 fn get_sheet_page(doc: &Document, idx: usize) -> &SheetPage {
     match &doc.pages[idx] {

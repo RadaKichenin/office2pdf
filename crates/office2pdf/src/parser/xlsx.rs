@@ -123,17 +123,35 @@ fn sheet_header_footer_scales_with_doc(
         .is_none_or(|fit| fit.header_footer_scales_with_doc)
 }
 
-/// The first sheet the caller asked for, honouring `sheet_names`.
-fn first_selected_sheet<'a>(
+/// Whether a worksheet contributes pages to the export.
+///
+/// A sheet that `xl/workbook.xml` declares `state="hidden"` — or
+/// `"veryHidden"`, which additionally keeps it out of the unhide dialog — is
+/// not printed by Excel: hiding a lookup sheet is the whole point of the
+/// state, and neither the native export nor LibreOffice pages it (issue
+/// #1065).
+///
+/// Naming a sheet through `--sheets` overrides that. The caller has asked for
+/// that sheet by name, which is the one way to get a hidden one on paper.
+fn sheet_prints(sheet: &umya_spreadsheet::Worksheet, options: &ConvertOptions) -> bool {
+    match options.sheet_names.as_deref() {
+        Some(names) => names.iter().any(|name| name == sheet.get_name()),
+        None => !matches!(
+            sheet.get_state(),
+            umya_spreadsheet::SheetStateValues::Hidden
+                | umya_spreadsheet::SheetStateValues::VeryHidden
+        ),
+    }
+}
+
+/// The first sheet that prints, honouring `sheet_names` and sheet visibility.
+fn first_printed_sheet<'a>(
     book: &'a umya_spreadsheet::Spreadsheet,
     options: &ConvertOptions,
 ) -> Option<&'a umya_spreadsheet::Worksheet> {
-    book.get_sheet_collection().iter().find(|sheet| {
-        options
-            .sheet_names
-            .as_ref()
-            .is_none_or(|names| names.iter().any(|name| name == sheet.get_name()))
-    })
+    book.get_sheet_collection()
+        .iter()
+        .find(|sheet| sheet_prints(sheet, options))
 }
 
 /// The single page a workbook prints when none of its sheets has a used range.
@@ -154,7 +172,7 @@ fn empty_workbook_page(
     book: &umya_spreadsheet::Spreadsheet,
     options: &ConvertOptions,
 ) -> Option<SheetPage> {
-    let sheet = first_selected_sheet(book, options)?;
+    let sheet = first_printed_sheet(book, options)?;
     Some(SheetPage {
         name: sheet.get_name().to_string(),
         size: sheet_page_size(sheet),
@@ -481,10 +499,14 @@ impl XlsxParser {
         let mut warnings = Vec::new();
 
         for sheet in book.get_sheet_collection() {
-            // Filter by sheet name if specified
-            if let Some(ref names) = options.sheet_names
-                && !names.iter().any(|n| n == sheet.get_name())
-            {
+            // Sheets the caller excluded by name, and hidden ones nobody
+            // asked for, contribute nothing.
+            if !sheet_prints(sheet, options) {
+                tracing::debug!(
+                    sheet = sheet.get_name(),
+                    state = ?sheet.get_state(),
+                    "skipping sheet that does not print"
+                );
                 continue;
             }
 
@@ -760,10 +782,14 @@ impl Parser for XlsxParser {
         let mut warnings = Vec::new();
 
         for sheet in book.get_sheet_collection() {
-            // Filter by sheet name if specified
-            if let Some(ref names) = options.sheet_names
-                && !names.iter().any(|n| n == sheet.get_name())
-            {
+            // Sheets the caller excluded by name, and hidden ones nobody
+            // asked for, contribute nothing.
+            if !sheet_prints(sheet, options) {
+                tracing::debug!(
+                    sheet = sheet.get_name(),
+                    state = ?sheet.get_state(),
+                    "skipping sheet that does not print"
+                );
                 continue;
             }
 
