@@ -175,6 +175,12 @@ fn scale_sheet_page(
     // otherwise the fitted grid slides out from under a full-size chart. On
     // the reported workbook the 0.82 scale left the chart 183pt wider than
     // the band it is anchored to, spilling past the printable edge (#982).
+    //
+    // The scale rides on the placement rather than being folded into its frame
+    // because Excel shrinks the whole drawing, not just the box around it: the
+    // chart's tick labels, category labels and legend scale with it. Shrinking
+    // the frame alone printed them at the size the chart XML declares, about
+    // 22% larger than the native export's (#1069).
     for placement in page
         .charts
         .iter_mut()
@@ -182,8 +188,7 @@ fn scale_sheet_page(
     {
         placement.x_offset_pt *= scale;
         placement.y_offset_pt *= scale;
-        placement.width *= scale;
-        placement.height *= scale;
+        placement.print_scale *= scale;
     }
     for row in &mut page.table.rows {
         if let Some(height) = row.height.as_mut() {

@@ -457,6 +457,7 @@ fn anchored_chart(
             y_offset_pt: placed.y_offset_pt,
             width: placed.image.width.unwrap_or(100.0),
             height: placed.image.height.unwrap_or(50.0),
+            print_scale: 1.0,
         }),
         chart: anchor.chart,
     }

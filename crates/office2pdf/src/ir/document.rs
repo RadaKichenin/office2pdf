@@ -228,10 +228,27 @@ pub struct SheetChartPlacement {
     pub x_offset_pt: f64,
     /// Vertical offset of the anchor from the sheet's content top, points.
     pub y_offset_pt: f64,
-    /// Width in points, from the columns the anchor spans.
+    /// Width in points, from the columns the anchor spans, before
+    /// `print_scale`.
     pub width: f64,
-    /// Height in points, from the rows the anchor spans.
+    /// Height in points, from the rows the anchor spans, before `print_scale`.
     pub height: f64,
+    /// The fit-to-page scale the sheet prints at, applied to the drawing whole.
+    /// `1.0` for a sheet that prints at full size.
+    ///
+    /// Excel scales a printed sheet whole, drawings included, so the chart's
+    /// own text, tick marks and legend come down by the same factor as its
+    /// frame. Shrinking the frame alone left the reported workbook's tick
+    /// labels and legend entries at the size the chart XML declares, about 22%
+    /// larger than Excel prints them (issue #1069).
+    ///
+    /// The chart lays itself out in `width` x `height` and the whole result is
+    /// then scaled, so the box it occupies on the page is `width * print_scale`
+    /// by `height * print_scale`. Scaling the chart's declared type sizes
+    /// instead would not do: an axis title's size never reaches the IR, and
+    /// several chart layout paths switch model on whether a size was declared
+    /// at all, so filling one in changes the chrome even at a scale of 1.
+    pub print_scale: f64,
 }
 
 /// A worksheet text box anchored to a sheet row.

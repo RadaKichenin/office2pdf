@@ -912,11 +912,28 @@ fn write_placed_sheet_anchor(out: &mut String, anchor: &SheetAnchor, ctx: &mut G
                 "#place(top + left, dx: {}pt)[",
                 format_f64(placement.x_offset_pt),
             );
+            // A fitted sheet prints its drawings shrunk whole, so the chart is
+            // laid out at its full frame and the transform brings its text down
+            // with its geometry (issue #1069). The corner it grows from is the
+            // anchor's, which is where the enclosing `place` put it.
+            let fitted: bool = placement.print_scale != 1.0;
+            if fitted {
+                // Excel's fit scale is a whole percent, so rounding here keeps
+                // 0.82 from printing as 82.00000000000001%.
+                let percent: String = format_f64((placement.print_scale * 1e6).round() / 1e4);
+                let _ = write!(
+                    out,
+                    "#scale(x: {percent}%, y: {percent}%, origin: top + left)[",
+                );
+            }
             generate_chart_in(
                 out,
                 &sheet_chart.chart,
                 Some((placement.width, placement.height)),
             );
+            if fitted {
+                out.push(']');
+            }
             out.push(']');
         }
         SheetAnchor::TextBox(text_box) => {

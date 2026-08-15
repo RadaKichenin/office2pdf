@@ -788,6 +788,7 @@ fn test_table_page_with_anchored_chart_overlays_the_grid() {
                 y_offset_pt: 60.0,
                 width: 200.0,
                 height: 120.0,
+                print_scale: 1.0,
             }),
             chart,
         }],
@@ -822,6 +823,114 @@ fn test_table_page_with_anchored_chart_overlays_the_grid() {
             && src.contains("#box(width: 200pt, height: 101pt"),
         "the chart is laid out at the anchor's size"
     );
+}
+
+/// Excel scales a printed sheet whole, drawings included, so a fit-to-page
+/// scale shrinks a chart's text, tick marks and legend along with its frame.
+/// Shrinking the frame alone left the reported workbook's tick labels and
+/// legend entries at the size the chart XML declares, about 22% larger than
+/// Excel prints them (issue #1069).
+#[test]
+fn test_fitted_sheet_draws_the_whole_chart_shrunk() {
+    let unscaled: String = sheet_source_with_chart_print_scale(1.0);
+    let fitted: String = sheet_source_with_chart_print_scale(0.82);
+
+    assert!(
+        !unscaled.contains("#scale("),
+        "a sheet printed at full size wraps the chart in no transform"
+    );
+    let wrapper: &str = "#scale(x: 82%, y: 82%, origin: top + left)[";
+    assert!(
+        fitted.contains(&format!("#place(top + left, dx: 40pt)[{wrapper}")),
+        "the fitted sheet shrinks the drawing from the anchor's top-left corner"
+    );
+    // The chart still lays itself out at the anchor's full frame and its own
+    // type sizes; the transform is what shrinks it, so the text, tick marks,
+    // legend and plot all come down by the same factor.
+    assert!(
+        fitted.contains("#block(width: 200pt, height: 19pt")
+            && fitted.contains("#box(width: 200pt, height: 101pt"),
+        "the fitted chart is laid out at the anchor's full size"
+    );
+    assert_eq!(
+        fitted.len(),
+        unscaled.len() + wrapper.len() + "]".len(),
+        "the transform and its closing bracket are the only difference"
+    );
+    // The transform is markup the layout engine has to accept: a source-only
+    // assertion would pass on a `#scale` argument Typst rejects, and every
+    // fitted sheet carrying a chart would fail to convert at all.
+    crate::render::pdf::compile_to_pdf(&fitted, &[], None, &[], false, false)
+        .expect("the fitted sheet compiles");
+}
+
+/// The sheet of [`test_table_page_with_anchored_chart_overlays_the_grid`],
+/// printed at `print_scale`.
+fn sheet_source_with_chart_print_scale(print_scale: f64) -> String {
+    use crate::ir::{Chart, ChartGrouping, ChartSeries, ChartType, DataLabels, LegendPosition};
+
+    let chart = Chart {
+        chart_type: ChartType::Bar,
+        hole_size_percent: None,
+        title: Some("Sales".to_string()),
+        categories: vec!["Q1".to_string(), "Q2".to_string()],
+        series: vec![ChartSeries {
+            name: Some("Revenue".to_string()),
+            values: vec![100.0, 200.0],
+            fill: None,
+            point_fills: Vec::new(),
+            data_labels: DataLabels::default(),
+            number_format: None,
+            plot_type: None,
+        }],
+        grouping: ChartGrouping::Clustered,
+        legend_position: LegendPosition::Right,
+        has_legend: true,
+        category_axis_title: None,
+        value_axis_title: None,
+        category_axis_major_tick_mark: AxisTickMark::Outside,
+        value_axis_major_tick_mark: AxisTickMark::Outside,
+        category_axis_deleted: false,
+        category_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_major_unit: None,
+        major_gridline_line: crate::ir::ChartLine::Automatic,
+        value_axis_deleted: false,
+        bar_band_layout: BarBandLayout::default(),
+        theme_accent_colors: Vec::new(),
+        chart_area_outline: ChartAreaOutline::Default,
+        host: crate::ir::ChartHost::default(),
+        text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: None,
+        auto_title_deleted: false,
+    };
+
+    let page = Page::Sheet(SheetPage {
+        name: "Sheet1".to_string(),
+        size: PageSize::default(),
+        margins: Margins::default(),
+        table: make_simple_table(vec![vec!["Row 1"], vec!["Row 2"]]),
+        header: None,
+        footer: None,
+        charts: vec![crate::ir::SheetChart {
+            anchor_row: 3,
+            placement: Some(crate::ir::SheetChartPlacement {
+                x_offset_pt: 40.0,
+                y_offset_pt: 60.0,
+                width: 200.0,
+                height: 120.0,
+                print_scale,
+            }),
+            chart,
+        }],
+        images: Vec::new(),
+        text_boxes: Vec::new(),
+    });
+
+    generate_typst(&make_doc(vec![page])).unwrap().source
 }
 
 #[test]
