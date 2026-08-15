@@ -1511,3 +1511,102 @@ fn a_scheme_less_dimensionless_printed_row_keeps_the_declared_default() {
     let table = &get_sheet_page(&doc, 0).table;
     assert_eq!(table.rows[0].height, Some(14.0));
 }
+
+// ── Declared row tracks and the Normal font (issue #1068) ────────────
+
+/// A workbook whose Normal font names `family` at `size_pt` outright, with
+/// one `customHeight` row per entry of `heights`.
+fn build_xlsx_with_normal_font_and_row_heights(
+    family: &str,
+    size_pt: f64,
+    heights: &[f64],
+) -> Vec<u8> {
+    let mut book = umya_spreadsheet::new_file();
+    {
+        let sheet = book.get_sheet_mut(&0).unwrap();
+        for (index, height) in heights.iter().enumerate() {
+            let row: u32 = index as u32 + 1;
+            sheet
+                .get_cell_mut(format!("A{row}").as_str())
+                .set_value("x");
+            let dimension = sheet.get_row_dimension_mut(&row);
+            dimension.set_height(*height);
+            dimension.set_custom_height(true);
+        }
+    }
+    let mut cursor = Cursor::new(Vec::new());
+    umya_spreadsheet::writer::xlsx::write_writer(&book, &mut cursor).unwrap();
+    rewrite_first_styles_font(&cursor.into_inner(), family, size_pt)
+}
+
+fn printed_row_heights(data: &[u8]) -> Vec<Option<f64>> {
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(data, &ConvertOptions::default()).unwrap();
+    get_sheet_page(&doc, 0)
+        .table
+        .rows
+        .iter()
+        .map(|row| row.height)
+        .collect()
+}
+
+/// A Normal font the machine renders itself leaves the printed grid alone:
+/// the row prints its declared height, truncated to the whole point Excel's
+/// grid lands on. Probe-measured on the reported workbook (Segoe UI 10
+/// Normal), one factor per export: 30 -> 30, 25.5 -> 25, 49.5 -> 49
+/// (issue #1068).
+#[test]
+fn a_kept_normal_font_prints_a_declared_row_height_whole() {
+    assert_eq!(
+        printed_row_heights(&build_xlsx_with_normal_font_and_row_heights(
+            "Segoe UI",
+            10.0,
+            &[30.0, 25.5, 49.5]
+        )),
+        vec![Some(30.0), Some(25.0), Some(49.0)]
+    );
+}
+
+/// The same declared heights through a Normal font Excel remaps compact
+/// instead: 30 -> 28, 25.5 -> 23, 49.5 -> 46 (probe-measured, Calibri 11).
+#[test]
+fn a_remapped_normal_font_compacts_a_declared_row_height() {
+    assert_eq!(
+        printed_row_heights(&build_xlsx_with_normal_font_and_row_heights(
+            "Calibri",
+            11.0,
+            &[30.0, 25.5, 49.5]
+        )),
+        vec![Some(28.0), Some(23.0), Some(46.0)]
+    );
+}
+
+/// The compaction belongs to the face Excel substitutes, not to the family
+/// name: the same Calibri below 11pt prints whole (probe: ht=40 exports a
+/// 40pt track at 9pt and 10pt, a 37pt one at 11pt).
+#[test]
+fn a_remapped_family_below_the_measured_size_prints_whole() {
+    assert_eq!(
+        printed_row_heights(&build_xlsx_with_normal_font_and_row_heights(
+            "Calibri",
+            10.0,
+            &[40.0]
+        )),
+        vec![Some(40.0)]
+    );
+}
+
+/// Aptos is the other face the standard theme resolves to, and it compacts
+/// exactly as Calibri does (probe: ht=40 exports a 37pt track for both
+/// "Aptos" and "Aptos Narrow" at 11pt).
+#[test]
+fn the_other_remapped_family_compacts_too() {
+    assert_eq!(
+        printed_row_heights(&build_xlsx_with_normal_font_and_row_heights(
+            "Aptos Narrow",
+            11.0,
+            &[40.0]
+        )),
+        vec![Some(37.0)]
+    );
+}
