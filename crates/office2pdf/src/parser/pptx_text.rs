@@ -1169,6 +1169,16 @@ pub(super) fn extract_rpr_attributes(e: &quick_xml::events::BytesStart, style: &
         // character gap in the run. Negative values tighten (e.g. -100 = -1pt).
         style.letter_spacing = Some(spc as f64 / 100.0);
     }
+    if let Some(kern) = get_attr_i64(e, b"kern") {
+        // DrawingML's `kern` is the size *threshold* pair kerning starts at,
+        // in hundredths of a point — not a switch. A master's `titleStyle`
+        // typically states `kern="1200"`, so PowerPoint kerns every title from
+        // 12pt up; the deck of issue #1073 sets its 38pt titles that way and
+        // tightens `TA`/`AT` by ~1.9pt each. Reading it here covers `a:rPr`
+        // and the `a:defRPr` of every list style, which is where decks
+        // actually state it (issue #1073).
+        style.pair_kerning = Some(PairKerning::from_threshold_pt(kern as f64 / 100.0));
+    }
 }
 
 /// Apply DrawingML's default hyperlink appearance without replacing run-local overrides.
