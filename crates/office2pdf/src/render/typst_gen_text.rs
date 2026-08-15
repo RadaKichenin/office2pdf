@@ -1951,9 +1951,9 @@ fn paragraph_contains_tabs(runs: &[Run]) -> bool {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(super) enum EojeolWrap {
     /// Typst's UAX #14 default, which permits a break between any two Hangul
-    /// syllable blocks. PowerPoint and a *justified* Word line both break
-    /// Korean mid-word, and our output already matches them there, so slides,
-    /// sheets and justified paragraphs stay on this.
+    /// syllable blocks. PowerPoint breaks Korean mid-word, and our output
+    /// already matches it there, so slides and sheets stay on this — as does
+    /// any Word paragraph whose effective `w:wordWrap` is off.
     #[default]
     Syllable,
     /// Emit each eojeol inside an inline `#box`. A frame is a single object to
@@ -2003,10 +2003,17 @@ const MAX_UNMEASURED_EOJEOL_CHARS: usize = 20;
 
 /// How a paragraph breaks its Hangul lines.
 ///
-/// Word falls back to syllable breaking to keep a *justified* line from going
-/// too loose — measured on the contract fixture, where both Word and this
-/// generator split `보관|한다.` in the two `w:jc="both"` paragraphs — so a
-/// justified paragraph keeps the engine default.
+/// Alignment is not part of the decision. A one-factor `w:jc` probe measured
+/// Word breaking the same Korean sentence at the same two eojeol boundaries
+/// for `left`, `both`, `center` and `right` when the package defines a default
+/// paragraph style, and at the same syllable boundary for all four when it
+/// defines none — the #732 style rule either way. The justified line is
+/// stretched 55.12pt to the measure rather than pulled tighter by borrowing a
+/// syllable, so keeping the eojeol whole is a deliberate choice Word makes
+/// under justification too. The contract fixture that once read as
+/// "justification breaks syllables" defines no paragraph style, so its
+/// paragraphs arrive here already carrying `word_wrap == Some(false)`
+/// (issue #1084).
 ///
 /// `container_measure_pt` is the width the enclosing container gives a line —
 /// the page's text width, a table column, a text box — before this
@@ -2023,7 +2030,7 @@ pub(super) fn paragraph_eojeol_wrap(
     if style.word_wrap == Some(false) {
         return EojeolWrap::Syllable;
     }
-    if !breaks_hangul_at_eojeol || matches!(style.alignment, Some(Alignment::Justify)) {
+    if !breaks_hangul_at_eojeol {
         return EojeolWrap::Syllable;
     }
     // A hanging first line (`indent_first_line < 0`) is wider than the rest,
