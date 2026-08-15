@@ -836,19 +836,89 @@ pub(super) fn declared_default_row_height_pt(sheet: &umya_spreadsheet::Worksheet
     }
 }
 
+/// Families the standard Office theme resolves to, and the ones the
+/// reference machine has no face of its own for. Matched as a prefix so the
+/// whole Aptos family — `Aptos`, `Aptos Narrow`, `Aptos Display` — and
+/// `Calibri Light` come along.
+const REMAPPED_NORMAL_FAMILIES: [&str; 2] = ["calibri", "aptos"];
+
+/// Below this the remap leaves the printed grid alone: the same declared
+/// `ht=40` exports a 40pt track under Calibri 9 and Calibri 10, and a 37pt
+/// one from 11pt up.
+const REMAPPED_NORMAL_MIN_SIZE_PT: f64 = 11.0;
+
+/// Whether Excel's printed grid compacts this workbook's declared row
+/// heights, which is a property of its Normal font rather than of the row.
+///
+/// One factor per export, sweeping only the first `<font>` of `xl/styles.xml`
+/// on `03_inventory_en.xlsx` with `ht=40 customHeight="true"` data rows and a
+/// byte-identical re-zip as the control:
+///
+/// | Normal font | printed track |
+/// | --- | ---: |
+/// | Calibri 9, Calibri 10 | 40 |
+/// | Calibri 11, 12, 13 | 37 |
+/// | Calibri 14, 16 | 38 |
+/// | Aptos 11, Aptos Narrow 11, Aptos Narrow 12 | 37 |
+/// | Segoe UI 10, Segoe UI 11 | 40 |
+/// | Arial 10, Arial 11 | 40 |
+/// | Times New Roman 11, Century Gothic 10 | 40 |
+///
+/// Nothing else moved it: `defaultRowHeight`, `sheetFormatPr@customHeight`,
+/// the frozen pane, the sheet zoom, the paper size, the theme part and the
+/// fit-to-page scale were each swapped on their own and all left the track
+/// where it was. Declaring the same Calibri 11 through `<scheme val="minor"/>`
+/// instead of by name also left it at 37.
+///
+/// Calibri and Aptos are the faces the standard theme's minor scheme
+/// resolves to, and the two this reference machine has no face of its own
+/// for — issue #1047 measures the same substitution on the dimension-less
+/// path — but that is the reading, not the measurement. Two limits are
+/// known and unmodelled: the step to 0.95 from 14pt up (no tracked workbook
+/// declares one, so those compact at 0.92, a point short at `ht=40`), and
+/// the hand-authored probe package of issue #1094, whose scheme Calibri 11
+/// rows print their declared 36pt whole where every LibreOffice-written
+/// workbook measured here compacts. What that package does differently is
+/// still open; this models the two corpora the repository actually carries.
+fn printed_grid_compacts_row_heights(normal_font: Option<&NormalFont>) -> bool {
+    match normal_font {
+        // Excel's own Normal font is Calibri/Aptos 11; a workbook we cannot
+        // read a stylesheet from is laid out against it.
+        None => true,
+        // A scheme font is whatever the theme resolves to, which is one of
+        // the remapped faces in every Office theme.
+        Some(font) if font.uses_theme_scheme => true,
+        Some(font) => {
+            let family: String = font.family.to_ascii_lowercase();
+            font.size_pt >= REMAPPED_NORMAL_MIN_SIZE_PT
+                && REMAPPED_NORMAL_FAMILIES
+                    .iter()
+                    .any(|remapped| family.starts_with(remapped))
+        }
+    }
+}
+
 /// Convert an OOXML row height to the whole-point track emitted by native
 /// Excel's macOS PDF path. Excel exposes the stored value in points in the
-/// worksheet UI, but its PDF grid is vertically compacted and snapped to
-/// whole PDF points. Across the ten XLSX audit workbooks, the two repeated
-/// fixed heights map consistently: 15pt -> 14pt and 25.5pt -> 23pt.
+/// worksheet UI, and its PDF grid snaps that to whole PDF points — after
+/// compacting it, for the Normal fonts that compact at all.
 ///
-/// "Consistently" is measured, not assumed: reading the golden exports'
-/// horizontal rules with `mutool draw -F trace` gives 23.00pt for every
-/// `ht=25.5 customHeight="true"` header in all ten, and 14.00pt for every
-/// `ht=15 customHeight="true"` row. Issue #658 reports two of them at
+/// Where it compacts, the ten XLSX audit workbooks (Calibri 11 Normal) map
+/// their two repeated fixed heights consistently: 15pt -> 14pt and
+/// 25.5pt -> 23pt. "Consistently" is measured, not assumed: reading the
+/// golden exports' horizontal rules with `mutool draw -F trace` gives 23.00pt
+/// for every `ht=25.5 customHeight="true"` header in all ten, and 14.00pt for
+/// every `ht=15 customHeight="true"` row. Issue #658 reports two of them at
 /// 24.00pt ("50 px @150 DPI"); that reads the band's *outer* extent — a 23pt
 /// track plus the 1pt rule bounding each end is 24pt, or 50px at 150 DPI —
-/// where this maps rule centre to rule centre.
+/// where this maps rule centre to rule centre. Sweeping that same workbook
+/// over eight declared heights pins the factor at 0.92 rather than the 0.925
+/// a single sample allows: 20 -> 18 and 49.5 -> 46 both need it.
+///
+/// Where it does not, the height simply truncates: the reported fit-to-page
+/// workbook of issue #1068 (Segoe UI 10 Normal) exports 12/15/18/25/30/40/49
+/// for declared 12/15/18/25.5/30/40/49.5, and its nine row boundaries down
+/// the page all land within 0.12pt of that model.
 ///
 /// Only fixed tracks go through here. A `customHeight="false"` row is
 /// auto-sized, and Excel prints it at the taller of this track and the height
@@ -858,8 +928,12 @@ pub(super) fn declared_default_row_height_pt(sheet: &umya_spreadsheet::Worksheet
 ///
 /// Keep this conversion in the XLSX parser rather than the generic table
 /// renderer so DOCX/PPTX table heights retain their native semantics.
-pub(super) fn native_excel_pdf_row_height(height: f64) -> f64 {
-    (height * 0.92).round().max(1.0)
+pub(super) fn native_excel_pdf_row_height(height: f64, normal_font: Option<&NormalFont>) -> f64 {
+    if printed_grid_compacts_row_heights(normal_font) {
+        (height * 0.92).round().max(1.0)
+    } else {
+        height.floor().max(1.0)
+    }
 }
 
 /// Cell insets for spreadsheet tables. Excel's native single-line track is
@@ -975,7 +1049,7 @@ fn printed_row_height(
         .map(|row| *row.get_height())
         .filter(|height| *height > 0.0);
     match declared_height {
-        Some(height) => Some(native_excel_pdf_row_height(height)),
+        Some(height) => Some(native_excel_pdf_row_height(height, normal_font)),
         // A row that records none is laid out from the Normal font, and the
         // recomputed height is already the printed track: the probe's 8/10/
         // 11/14/18pt scheme fonts export 13/15/17/20/27pt rows in both the
@@ -983,7 +1057,7 @@ fn printed_row_height(
         // calibrated for declared heights and does not apply to it.
         None => Some(
             recomputed_default_row_height_pt(sheet, normal_font).unwrap_or_else(|| {
-                native_excel_pdf_row_height(declared_default_row_height_pt(sheet))
+                native_excel_pdf_row_height(declared_default_row_height_pt(sheet), normal_font)
             }),
         ),
     }
