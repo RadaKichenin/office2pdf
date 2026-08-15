@@ -931,6 +931,7 @@ fn test_boundary_band_auto_row_verticals_paint_concrete_twin_bands() {
         },
         false,
         None,
+        None,
     ) else {
         return; // no font book available (e.g. exotic CI sandbox)
     };

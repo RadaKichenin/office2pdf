@@ -718,9 +718,11 @@ fn latin_only_spreadsheet_row_in_east_asian_face_keeps_the_hhea_line_box() {
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
     let result = generate_typst(&doc).unwrap().source;
 
+    let boxes: Vec<(f64, f64)> = cell_line_boxes_em(&result);
+    assert_eq!(boxes.len(), 1, "one cell, one line box: {result}");
     assert!(
-        result.contains(&format!("top-edge: {}em", format_f64(ascender))),
-        "a sheet's Latin-only row keeps the bare hhea ascent: {result}"
+        (boxes[0].0 + boxes[0].1 - word_pitch_em).abs() < 1e-9,
+        "a sheet's Latin-only row keeps the bare hhea line: {boxes:?}"
     );
     assert!(
         !result.contains(&format!("top-edge: {}em", format_f64(east_asian_top_em))),
@@ -740,6 +742,55 @@ fn distinct_top_edges(source: &str) -> std::collections::BTreeSet<&str> {
         .map(|(index, _)| {
             let value: &str = &source[index + MARKER.len()..];
             &value[..value.find(',').unwrap_or(value.len())]
+        })
+        .collect()
+}
+
+/// Every line advance `source` sets, as `(ascent em, descent em, leading pt,
+/// size pt)` in emission order.
+///
+/// The descender seat trims the box below the baseline and moves the trimmed
+/// surplus into leading, so the quantity that stays invariant across seats is
+/// the *advance*: `(ascent + descent) x size + leading`.
+fn cell_line_advances(source: &str) -> Vec<(f64, f64, f64, f64)> {
+    const MARKER: &str = "#set text(top-edge: ";
+    source
+        .match_indices(MARKER)
+        .filter_map(|(index, _)| {
+            let rest: &str = &source[index + MARKER.len()..];
+            let (top, rest) = rest.split_once("em, bottom-edge: ")?;
+            let (bottom, rest) = rest.split_once("em)\n#set par(leading: ")?;
+            let (leading, rest) = rest.split_once("pt)")?;
+            let (_, rest) = rest.split_once("size: ")?;
+            let (size, _) = rest.split_once("pt")?;
+            Some((
+                top.parse::<f64>().ok()?,
+                -bottom.parse::<f64>().ok()?,
+                leading.parse::<f64>().ok()?,
+                size.parse::<f64>().ok()?,
+            ))
+        })
+        .collect()
+}
+
+/// Every line box `source` sets, as `(ascent em, descent em)` pairs in
+/// emission order.
+///
+/// A sheet cell's ascent and descent are no longer a fixed split of the line:
+/// the seat that puts the baseline where Excel prints it redistributes the box
+/// around the baseline, keyed to the row's track (issue #1063). What stays
+/// invariant is the box's *height*, so the assertions that used to pin the
+/// split read the pair and check the sum.
+fn cell_line_boxes_em(source: &str) -> Vec<(f64, f64)> {
+    const MARKER: &str = "#set text(top-edge: ";
+    source
+        .match_indices(MARKER)
+        .filter_map(|(index, _)| {
+            let rest: &str = &source[index + MARKER.len()..];
+            let (top, rest) = rest.split_once("em, bottom-edge: ")?;
+            let (bottom, _) = rest.split_once("em)")?;
+            // The emitted descent is negative downward; report it positive.
+            Some((top.parse::<f64>().ok()?, -bottom.parse::<f64>().ok()?))
         })
         .collect()
 }
@@ -828,10 +879,16 @@ fn spreadsheet_rows_share_one_line_box_whatever_script() {
 /// End-to-end pin for the probe workbook behind issue #1060: 26 rows of
 /// Malgun Gothic in paired Korean and Latin-only blocks, auto and `ht=36`,
 /// bottom, top and centre aligned. Excel prints every pair 0.00pt apart, so
-/// one ascent must serve the whole sheet however each row's characters read.
+/// no row of the sheet may take Word's East Asian box.
+///
+/// The pin is the box's *height*, not its ascent: a row's seat is keyed to its
+/// track since issue #1063, so the probe's `ht=36` rows and its auto rows
+/// legitimately split the same line differently. Script invariance itself is
+/// pinned by [`spreadsheet_rows_share_one_line_box_whatever_script`], which
+/// compares a Korean row against its Latin twin directly.
 #[test]
-fn sheet_row_line_box_probe_emits_one_ascent_for_every_row() {
-    let Some((ascender, _descender, _word_pitch_em)) =
+fn sheet_row_line_box_probe_takes_the_bare_hhea_line_for_every_row() {
+    let Some((_ascender, _descender, word_pitch_em)) =
         crate::render::pdf::font_line_metrics_em("Malgun Gothic")
     else {
         return; // Malgun Gothic not installed
@@ -846,11 +903,20 @@ fn sheet_row_line_box_probe_emits_one_ascent_for_every_row() {
     .expect("the probe workbook parses");
     let result = generate_typst(&doc).unwrap().source;
 
-    assert_eq!(
-        distinct_top_edges(&result),
-        std::collections::BTreeSet::from([format!("{}em", format_f64(ascender)).as_str()]),
-        "every probe row shares the bare hhea ascent: {result}"
+    let advances: Vec<(f64, f64, f64, f64)> = cell_line_advances(&result);
+    assert!(
+        !advances.is_empty(),
+        "the probe sheet emits line boxes: {result}"
     );
+    for (top_em, bottom_em, leading_pt, size_pt) in advances {
+        let advance_pt: f64 = (top_em + bottom_em) * size_pt + leading_pt;
+        assert!(
+            (advance_pt - word_pitch_em * size_pt).abs() < 1e-9,
+            "every probe row advances by the bare hhea line, not Word's East \
+             Asian box: {advance_pt}pt against {}pt at {size_pt}pt",
+            word_pitch_em * size_pt
+        );
+    }
 }
 
 /// Word snaps a grid row's line *plus* the paragraph's `w:spacing w:after`,
@@ -1039,8 +1105,14 @@ fn bottom_aligned_spreadsheet_cell_seats_its_line_box_on_the_descender() {
     // What the same cell would emit under Word's East Asian box.
     let east_asian_top_em: f64 = ascender + 0.15 * word_pitch_em;
     let symmetric_bottom_em: f64 = 1.3 * word_pitch_em - east_asian_top_em;
+    // Excel rests the descent on the row's own bottom boundary, which is one
+    // cell inset below where Typst puts the box's bottom edge (issue #1063);
+    // the descent it rests there is a whole number of points.
+    let default_padding_bottom_pt: f64 = 5.0;
+    let seated_bottom_em: f64 =
+        ((descender * font_size).round() - default_padding_bottom_pt) / font_size;
     // The sub-baseline surplus the descender seat removes from the box.
-    let leading_pt: f64 = ((word_pitch_em - top_em - descender) * font_size).max(0.0);
+    let leading_pt: f64 = ((word_pitch_em - top_em - seated_bottom_em) * font_size).max(0.0);
     let cell = TableCell {
         content: vec![Block::Paragraph(Paragraph {
             style: ParagraphStyle::default(),
@@ -1079,11 +1151,12 @@ fn bottom_aligned_spreadsheet_cell_seats_its_line_box_on_the_descender() {
 
     assert!(
         result.contains(&format!(
-            "top-edge: {}em, bottom-edge: -{}em",
+            "top-edge: {}em, bottom-edge: {}em",
             format_f64(top_em),
-            format_f64(descender)
+            format_f64(-seated_bottom_em)
         )),
-        "bottom-aligned spreadsheet cell must end its line box at the descender: {result}"
+        "bottom-aligned spreadsheet cell must rest its descent on the row's \
+         own bottom boundary: {result}"
     );
     assert!(
         result.contains(&format!("#set par(leading: {}pt)", format_f64(leading_pt))),
@@ -1147,13 +1220,12 @@ fn center_aligned_spreadsheet_cell_keeps_the_symmetric_line_box() {
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
     let result = generate_typst(&doc).unwrap().source;
 
+    let boxes: Vec<(f64, f64)> = cell_line_boxes_em(&result);
+    assert_eq!(boxes.len(), 1, "one cell, one line box: {result}");
     assert!(
-        result.contains(&format!(
-            "top-edge: {}em, bottom-edge: -{}em",
-            format_f64(top_em),
-            format_f64(symmetric_bottom_em)
-        )),
-        "a centred spreadsheet cell keeps the symmetric box: {result}"
+        (boxes[0].0 + boxes[0].1 - word_pitch_em).abs() < 1e-9,
+        "a centred spreadsheet cell keeps the whole line — the descender seat \
+         would have trimmed it: {boxes:?}"
     );
     assert!(
         result.contains("#set par(leading: 0pt)"),
@@ -2021,15 +2093,21 @@ fn tight_sheet_row_resolves_one_metric_family_for_every_cell() {
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
     let result = generate_typst(&doc).unwrap().source;
 
-    let row_box = format!(
-        "top-edge: {}em, bottom-edge: -{}em",
-        format_f64(malgun_ascender),
-        format_f64(malgun_pitch_em - malgun_ascender)
-    );
-    assert_eq!(
-        result.matches(&row_box).count(),
-        4,
-        "every cell of both rows must take the row face's symmetric box: {result}"
+    let boxes: Vec<(f64, f64)> = cell_line_boxes_em(&result);
+    assert_eq!(boxes.len(), 4, "four cells, four line boxes: {result}");
+    for line_box in &boxes {
+        assert!(
+            (line_box.0 - boxes[0].0).abs() < 1e-9 && (line_box.1 - boxes[0].1).abs() < 1e-9,
+            "every cell of both rows must take the same box: {boxes:?}"
+        );
+        assert!(
+            (line_box.0 + line_box.1 - malgun_pitch_em).abs() < 1e-9,
+            "and that box is the row face's bare hhea line: {boxes:?}"
+        );
+    }
+    assert!(
+        malgun_ascender > 0.0,
+        "the row face's metrics must resolve for the comparison to mean anything"
     );
     assert_eq!(
         result.matches("align: horizon").count(),
@@ -2102,5 +2180,204 @@ fn row_spanning_cell_keeps_its_declared_alignment_in_a_tight_row() {
         result.matches("align: horizon").count(),
         2,
         "the merge's single-track neighbours join the row's centred line: {result}"
+    );
+}
+
+/// Excel lays a printed sheet out in whole device points: a row's line box is
+/// its face's `hhea` ascent and descent each rounded to a point, centred in
+/// the row's track with the odd leftover point given to the space *above* the
+/// line (issue #1063).
+///
+/// The table is what four native Excel-for-Mac probe exports measured
+/// (`/Volumes/T7/scratch/issue-1063/probe`): a track-height sweep at Arial 10,
+/// a font-size sweep in 40pt and 60pt tracks, and the two rows of
+/// `09_expense_report_en` the issue reports. Arial's `hhea` numbers are
+/// written out rather than read from a face, so the assertion holds on a
+/// runner with no Arial installed.
+#[test]
+fn sheet_cell_line_seat_reproduces_the_native_excel_probe() {
+    const ARIAL_ASCENT_EM: f64 = (1854.0 + 67.0) / 2048.0;
+    const ARIAL_DESCENT_EM: f64 = 434.0 / 2048.0;
+
+    // (track height pt, font size pt, baseline below the track's top edge pt)
+    let measured: [(f64, f64, f64); 28] = [
+        // Arial 10, one row height per point of the sweep.
+        (12.0, 10.0, 10.0),
+        (13.0, 10.0, 11.0),
+        (14.0, 10.0, 11.0),
+        (15.0, 10.0, 12.0),
+        (16.0, 10.0, 12.0),
+        (17.0, 10.0, 13.0),
+        (18.0, 10.0, 13.0),
+        (20.0, 10.0, 14.0),
+        (22.0, 10.0, 15.0),
+        (23.0, 10.0, 16.0),
+        (25.0, 10.0, 17.0),
+        (30.0, 10.0, 19.0),
+        (40.0, 10.0, 24.0),
+        // Font-size sweep in a 40pt track.
+        (40.0, 8.0, 23.0),
+        (40.0, 12.0, 24.0),
+        (40.0, 16.0, 26.0),
+        (40.0, 20.0, 28.0),
+        (40.0, 24.0, 29.0),
+        (40.0, 28.0, 30.0),
+        (40.0, 32.0, 32.0),
+        // Font-size sweep in a 60pt track.
+        (60.0, 8.0, 33.0),
+        (60.0, 10.0, 34.0),
+        (60.0, 14.0, 35.0),
+        (60.0, 18.0, 37.0),
+        (60.0, 24.0, 39.0),
+        (60.0, 30.0, 41.0),
+        (60.0, 36.0, 43.0),
+        (60.0, 44.0, 46.0),
+    ];
+
+    for (track_pt, font_size_pt, expected_pt) in measured {
+        let seated_pt: f64 = sheet_cell_baseline_from_track_top_pt(
+            track_pt,
+            ARIAL_ASCENT_EM,
+            ARIAL_DESCENT_EM,
+            font_size_pt,
+        );
+        assert!(
+            (seated_pt - expected_pt).abs() < 1e-9,
+            "Arial {font_size_pt}pt in a {track_pt}pt track: Excel prints the \
+             baseline {expected_pt}pt below the track top, seated {seated_pt}pt"
+        );
+    }
+}
+
+/// The expense report's data rows: a 14pt track of Arial 10 whose cells Excel
+/// prints at y=143.00, 11.00pt below the track's top boundary. Our own seat
+/// centred the line in the cell's *inset* box instead of the track and used
+/// unrounded metrics, landing 0.62pt high (issue #1063).
+#[test]
+fn fixed_track_sheet_cell_seats_its_centred_line_on_the_track() {
+    const FAMILY: &str = "Libertinus Serif";
+    let Some((ascent_em, descent_em, pitch_em)) = crate::render::pdf::font_line_metrics_em(FAMILY)
+    else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+    let font_size_pt: f64 = 10.0;
+    let track_pt: f64 = 14.0;
+    let padding = Insets {
+        top: 1.0,
+        right: 3.0,
+        bottom: 1.5,
+        left: 3.0,
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            minimum_height: None,
+            cells: vec![TableCell {
+                content: vec![Block::Paragraph(Paragraph {
+                    style: ParagraphStyle::default(),
+                    runs: vec![Run {
+                        text: "Airfare".to_string(),
+                        style: TextStyle {
+                            font_family: Some(FAMILY.to_string()),
+                            font_size: Some(font_size_pt),
+                            ..TextStyle::default()
+                        },
+                        href: None,
+                        footnote: None,
+                    }],
+                })],
+                vertical_align: Some(CellVerticalAlign::Center),
+                ..TableCell::default()
+            }],
+            height: Some(track_pt),
+        }],
+        column_widths: vec![72.0],
+        default_cell_padding: Some(padding),
+        default_vertical_align: Some(CellVerticalAlign::Bottom),
+        seats_bottom_aligned_text_on_descender: true,
+        border_paint_model: TableBorderPaintModel::CenteredStroke,
+        prints_gridlines: false,
+        prints_headings: false,
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    // Typst centres the fixed line box in the cell's inset content area, so
+    // the emitted ascent is what decides where the baseline lands.
+    let content_mid_pt: f64 = (padding.top + (track_pt - padding.bottom)) / 2.0;
+    let baseline_pt: f64 =
+        sheet_cell_baseline_from_track_top_pt(track_pt, ascent_em, descent_em, font_size_pt);
+    let expected_top_em: f64 = pitch_em / 2.0 + (baseline_pt - content_mid_pt) / font_size_pt;
+    let needle: String = format!("top-edge: {}em", format_f64(expected_top_em));
+    assert!(
+        result.contains(&needle),
+        "the centred line must seat its baseline {baseline_pt}pt below the \
+         track top, which needs `{needle}`: {result}"
+    );
+}
+
+/// The expense report's title: Arial Bold 14 bottom-aligned in a 23pt track,
+/// printed with its descender resting on the row's own bottom boundary — not
+/// on the boundary less the cell's bottom inset, which seated it 1.47pt high
+/// (issue #1063). The descent Excel rests there is a whole number of points.
+#[test]
+fn bottom_aligned_sheet_cell_rests_its_descender_on_the_row_boundary() {
+    const FAMILY: &str = "Libertinus Serif";
+    let Some((_ascent_em, descent_em, _pitch_em)) =
+        crate::render::pdf::font_line_metrics_em(FAMILY)
+    else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+    let font_size_pt: f64 = 14.0;
+    let padding = Insets {
+        top: 1.0,
+        right: 3.0,
+        bottom: 1.5,
+        left: 3.0,
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            minimum_height: None,
+            cells: vec![TableCell {
+                content: vec![Block::Paragraph(Paragraph {
+                    style: ParagraphStyle::default(),
+                    runs: vec![Run {
+                        text: "Business Trip Expense Report".to_string(),
+                        style: TextStyle {
+                            font_family: Some(FAMILY.to_string()),
+                            font_size: Some(font_size_pt),
+                            bold: Some(true),
+                            ..TextStyle::default()
+                        },
+                        href: None,
+                        footnote: None,
+                    }],
+                })],
+                vertical_align: Some(CellVerticalAlign::Bottom),
+                ..TableCell::default()
+            }],
+            height: Some(23.0),
+        }],
+        column_widths: vec![72.0],
+        default_cell_padding: Some(padding),
+        default_vertical_align: Some(CellVerticalAlign::Bottom),
+        seats_bottom_aligned_text_on_descender: true,
+        border_paint_model: TableBorderPaintModel::CenteredStroke,
+        prints_gridlines: false,
+        prints_headings: false,
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    // Typst rests the box's bottom edge on the inset content bottom, so the
+    // emitted descent has to be short of Excel's by that inset.
+    let descent_pt: f64 = (descent_em * font_size_pt).round();
+    let expected_bottom_em: f64 = (descent_pt - padding.bottom) / font_size_pt;
+    let needle: String = format!("bottom-edge: {}em", format_f64(-expected_bottom_em));
+    assert!(
+        result.contains(&needle),
+        "the descender must rest on the row boundary, {descent_pt}pt below the \
+         baseline, which needs `{needle}`: {result}"
     );
 }
