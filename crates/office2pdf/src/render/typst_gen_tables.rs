@@ -608,6 +608,23 @@ const DATA_BAR_MIN_HEIGHT_PT: f64 = 1.0;
 /// track 3pt too narrow and started it 1pt too far right (issue #655).
 const DATA_BAR_LEFT_INSET_PT: f64 = 2.0;
 const DATA_BAR_RIGHT_INSET_PT: f64 = 1.0;
+/// Where an icon-set icon starts, measured from its cell's left boundary.
+///
+/// Excel anchors the icon itself, not the text: in the native export of
+/// `10_kpi_tracker_en` column E spans x 384-456pt and every `3Arrows` sprite
+/// is placed `transform="11 0 0 11 386 …"` — 2pt in — while the column is
+/// centred, so the alignment moves the value and leaves the icon alone. That
+/// 2pt matches `DATA_BAR_LEFT_INSET_PT` but is a separate measurement of a
+/// separate feature; they are kept apart so a later correction to one does
+/// not silently move the other (issue #1087).
+///
+/// Extracting those sprites puts the arrow's ink flush with the placement
+/// box's left edge — the up and down arrows trim to 11x12 of a 12x12 bitmap
+/// at +0+0, the padding #651 measured falling on the right — so the drawn
+/// polygon's own left edge belongs at this inset. The circle sets have no
+/// ground truth in this corpus and share the anchor.
+const ICON_SET_LEFT_INSET_PT: f64 = 2.0;
+
 /// Excel's arrow icon sets are drawn shapes, not characters. Native Excel PDFs
 /// print them as sprites, filled with a vertical gradient and outlined a shade
 /// darker; these constants size the flat vector stand-in.
@@ -923,23 +940,31 @@ fn generate_table_cell(
         // triangle characters the parser records are only a third that size,
         // so arrows are re-drawn as polygons.
         // The circle sets are drawn discs for the same reason (#536).
+        //
+        // `#place` starts at the *content* box, which that value reserve has
+        // already pushed inward, so the icon has to be pulled back out to the
+        // cell's own icon inset — otherwise it rides along with the value and
+        // the gap Excel leaves between the two collapses (issue #1087).
+        let icon_dx: f64 =
+            ICON_SET_LEFT_INSET_PT - cell_inset_with_border(cell, default_cell_padding).left;
+        let anchor: String = format!(
+            "#place(left + horizon, dx: {}pt, ",
+            format_geometry(icon_dx)
+        );
         match (icon_shape(icon, cell.icon_color), cell.icon_color) {
             (Some(polygon), _) => {
-                let _ = write!(out, "#place(left + horizon, {polygon})");
+                let _ = write!(out, "{anchor}{polygon})");
             }
             (None, Some(color)) => {
                 let _ = write!(
                     out,
-                    "#place(left + horizon, text(fill: {}, weight: \"bold\")[{}])",
+                    "{anchor}text(fill: {}, weight: \"bold\")[{}])",
                     rgb(&color),
                     icon
                 );
             }
             (None, None) => {
-                let _ = write!(
-                    out,
-                    "#place(left + horizon, text(weight: \"bold\")[{icon}])"
-                );
+                let _ = write!(out, "{anchor}text(weight: \"bold\")[{icon}])");
             }
         }
     }

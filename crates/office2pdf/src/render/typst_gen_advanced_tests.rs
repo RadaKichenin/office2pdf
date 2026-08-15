@@ -205,8 +205,11 @@ fn test_icon_text_codegen() {
     // Excel anchors the icon at the cell's left edge on the value's own
     // line. An in-flow icon wraps narrow cells onto a second line, doubling
     // the row height (issue #367) — the icon must be placed out of layout.
+    // The `dx` that carries it back out of the cell's inset is this cell's
+    // own (issue #1087); which offset that is belongs to the tests below.
     assert!(
-        output.source.contains("#place(left + horizon, text("),
+        output.source.contains("#place(left + horizon, dx: ")
+            && output.source.contains("pt, text("),
         "Icon must be placed out of layout at the cell's left edge. Got: {}",
         output.source,
     );
@@ -1437,6 +1440,80 @@ fn test_circle_icon_set_renders_as_a_filled_disc() {
         !output.source.contains(crate::ir::ICON_CIRCLE),
         "the character must not also be drawn"
     );
+}
+
+/// The inset an XLSX icon-set cell carries: the sheet's own 3pt text inset
+/// plus the value reserve the icon's advance costs (issue #652).
+fn icon_cell_inset() -> Insets {
+    Insets {
+        top: 1.0,
+        right: 3.0,
+        bottom: 1.5,
+        left: 12.6,
+    }
+}
+
+/// Excel anchors an icon-set icon at the cell's own left inset, not at the
+/// text box the value reserve pushed inward.
+///
+/// Measured on the native export of `10_kpi_tracker_en` (issue #1087): column
+/// E spans x 384-456pt and every `3Arrows` sprite is placed
+/// `transform="11 0 0 11 386 …"`, so the icon starts 2pt inside the cell's
+/// left boundary. Extracting the sprites puts their ink flush with that box's
+/// left edge — the up and down arrows trim to 11x12 of 12x12 at +0+0 — so the
+/// drawn polygon's own left edge belongs at 386.0. Our reserve leaves the
+/// content box 12.6pt in, hence the 10.6pt pull-back.
+#[test]
+fn test_icon_set_icon_anchors_at_the_cells_left_inset() {
+    let mut cell = icon_cell(crate::ir::ICON_ARROW_UP, Color::new(0x59, 0xB0, 0x6D));
+    cell.padding = Some(icon_cell_inset());
+    let output = generate_typst(&make_doc(vec![icon_sheet(cell)])).unwrap();
+    assert!(
+        output
+            .source
+            .contains("#place(left + horizon, dx: -10.6pt, polygon("),
+        "the icon must be pulled back to 2pt inside the cell boundary. Got: {}",
+        output.source,
+    );
+}
+
+/// The pull-back is the cell's own inset less Excel's 2pt icon inset, not a
+/// fixed offset: a cell laid out with a different inset needs a different
+/// correction to land the icon in the same place.
+#[test]
+fn test_icon_anchor_follows_the_cells_own_inset() {
+    let bare_inset = Insets {
+        left: 3.0,
+        ..icon_cell_inset()
+    };
+    let mut cell = icon_cell(crate::ir::ICON_ARROW_UP, Color::new(0x59, 0xB0, 0x6D));
+    cell.padding = Some(bare_inset);
+    let output = generate_typst(&make_doc(vec![icon_sheet(cell)])).unwrap();
+    assert!(
+        output
+            .source
+            .contains("#place(left + horizon, dx: -1pt, polygon("),
+        "a 3pt inset leaves only 1pt to pull back. Got: {}",
+        output.source,
+    );
+}
+
+/// The anchor is the icon's, not the polygon's: the sets that stay characters
+/// and the drawn discs sit at the same left inset.
+#[test]
+fn test_character_and_disc_icons_share_the_left_inset_anchor() {
+    for glyph in ["✓", crate::ir::ICON_CIRCLE] {
+        let mut cell = icon_cell(glyph, Color::new(0xD6, 0x55, 0x32));
+        cell.padding = Some(icon_cell_inset());
+        let output = generate_typst(&make_doc(vec![icon_sheet(cell)])).unwrap();
+        assert!(
+            output
+                .source
+                .contains("#place(left + horizon, dx: -10.6pt,"),
+            "{glyph} must anchor at the cell's left inset too. Got: {}",
+            output.source,
+        );
+    }
 }
 
 /// A worksheet text box anchored after `anchor_row` at `x_offset_pt`.
