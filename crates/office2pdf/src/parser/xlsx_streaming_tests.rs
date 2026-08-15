@@ -93,6 +93,31 @@ fn test_parse_streaming_respects_sheet_filter() {
     assert_eq!(tp.name, "Sheet2");
 }
 
+/// The streaming path reads the same `<sheet state="hidden"/>` the batch path
+/// does, so a hidden sheet yields no chunk either (issue #1065).
+#[test]
+fn test_parse_streaming_skips_hidden_sheet() {
+    let data = build_xlsx_multi_sheet_with_states(&[
+        (
+            "Start",
+            umya_spreadsheet::SheetStateValues::Visible,
+            &[("A1", "a"), ("A2", "b")],
+        ),
+        (
+            "Data",
+            umya_spreadsheet::SheetStateValues::Hidden,
+            &[("A1", "x"), ("A2", "y")],
+        ),
+    ]);
+    let parser = XlsxParser;
+    let (chunks, _warnings) = parser
+        .parse_streaming(&data, &ConvertOptions::default(), 10)
+        .unwrap();
+
+    assert_eq!(chunks.len(), 1, "only the visible sheet should chunk");
+    assert_eq!(get_sheet_page(&chunks[0], 0).name, "Start");
+}
+
 #[test]
 fn test_parse_streaming_multi_sheet() {
     let data = build_xlsx_multi_sheet(&[

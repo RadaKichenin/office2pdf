@@ -73,6 +73,113 @@ fn test_sheet_filter_nonexistent_name() {
     );
 }
 
+// ----- Hidden worksheet tests (issue #1065) -----
+
+/// A workbook that hides its lookup sheet prints only the two visible ones.
+///
+/// Modelled on the audited gift-budget workbook of issue #982: two visible
+/// sheets in front of a `state="hidden"` data sheet. Excel and LibreOffice
+/// both export two pages from it; office2pdf paged the hidden sheet too.
+#[test]
+fn test_hidden_sheet_is_not_printed() {
+    let data = build_xlsx_multi_sheet_with_states(&[
+        (
+            "Start",
+            umya_spreadsheet::SheetStateValues::Visible,
+            &[("A1", "Welcome")],
+        ),
+        (
+            "Gift budget and tracker",
+            umya_spreadsheet::SheetStateValues::Visible,
+            &[("A1", "Gift"), ("B1", "Budget")],
+        ),
+        (
+            "Data",
+            umya_spreadsheet::SheetStateValues::Hidden,
+            &[("A1", "Lookup")],
+        ),
+    ]);
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let names: Vec<&str> = doc
+        .pages
+        .iter()
+        .map(|page| match page {
+            Page::Sheet(sheet) => sheet.name.as_str(),
+            _ => panic!("expected a sheet page"),
+        })
+        .collect();
+    assert_eq!(names, vec!["Start", "Gift budget and tracker"]);
+}
+
+/// `veryHidden` is the state a sheet hidden from the unhide dialog carries;
+/// Excel prints it no more than a plain hidden one.
+#[test]
+fn test_very_hidden_sheet_is_not_printed() {
+    let data = build_xlsx_multi_sheet_with_states(&[
+        (
+            "Report",
+            umya_spreadsheet::SheetStateValues::Visible,
+            &[("A1", "Quarterly revenue")],
+        ),
+        (
+            "Config",
+            umya_spreadsheet::SheetStateValues::VeryHidden,
+            &[("A1", "Region codes")],
+        ),
+    ]);
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    assert_eq!(doc.pages.len(), 1);
+    assert_eq!(get_sheet_page(&doc, 0).name, "Report");
+}
+
+/// `--sheets Data` asks for the hidden sheet by name, which is the one way to
+/// print it: the caller has overridden the workbook's own visibility.
+#[test]
+fn test_hidden_sheet_prints_when_named_explicitly() {
+    let data = build_xlsx_multi_sheet_with_states(&[
+        (
+            "Start",
+            umya_spreadsheet::SheetStateValues::Visible,
+            &[("A1", "Welcome")],
+        ),
+        (
+            "Data",
+            umya_spreadsheet::SheetStateValues::Hidden,
+            &[("A1", "Lookup")],
+        ),
+    ]);
+    let parser = XlsxParser;
+    let opts = ConvertOptions {
+        sheet_names: Some(vec!["Data".to_string()]),
+        ..Default::default()
+    };
+    let (doc, _warnings) = parser.parse(&data, &opts).unwrap();
+
+    assert_eq!(doc.pages.len(), 1);
+    let page = get_sheet_page(&doc, 0);
+    assert_eq!(page.name, "Data");
+    assert_eq!(cell_text(&page.table.rows[0].cells[0]), "Lookup");
+}
+
+/// The blank page a workbook with no used cells prints comes from the first
+/// sheet that would actually print, not from a hidden one preceding it.
+#[test]
+fn test_empty_workbook_page_skips_a_hidden_first_sheet() {
+    let data = build_xlsx_multi_sheet_with_states(&[
+        ("Macros", umya_spreadsheet::SheetStateValues::Hidden, &[]),
+        ("Blank", umya_spreadsheet::SheetStateValues::Visible, &[]),
+    ]);
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    assert_eq!(doc.pages.len(), 1);
+    assert_eq!(get_sheet_page(&doc, 0).name, "Blank");
+}
+
 // ----- US-035: Print area and page breaks tests -----
 
 /// Helper: build XLSX with a print area defined name.

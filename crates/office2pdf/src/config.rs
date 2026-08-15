@@ -123,7 +123,9 @@ impl PaperSize {
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 pub struct ConvertOptions {
     /// Filter XLSX sheets by name. Only sheets whose names are in this list
-    /// will be included. If `None`, all sheets are included.
+    /// are included, hidden ones among them. If `None`, every sheet the
+    /// workbook does not hide is included — Excel prints no `hidden` or
+    /// `veryHidden` sheet.
     pub sheet_names: Option<Vec<String>>,
     /// Filter PPTX slides by range (1-indexed). If `None`, all slides are included.
     pub slide_range: Option<SlideRange>,

@@ -336,14 +336,64 @@ fn smoke_any_sheets() {
 
 #[test]
 fn structure_any_sheets() {
-    // any_sheets.xlsx has 4 sheets: Visible, Hidden, VeryHidden, Chart.
-    // Parser only returns visible data worksheets (not hidden/chart sheets).
+    // any_sheets.xlsx declares 4 sheets: Visible, Hidden (state="hidden"),
+    // VeryHidden (state="veryHidden") and Chart. The hidden pair is out
+    // because Excel never prints a hidden sheet (issue #1065) — and empty of
+    // cells besides. `Chart` is a chartsheet, whose page we do not yet build
+    // (issue #1099), so one page is left.
     let pages = sheet_pages("any_sheets.xlsx");
-    assert!(!pages.is_empty(), "should have at least one visible sheet");
-    let names = sheet_names(&pages);
+    assert_eq!(sheet_names(&pages), vec!["Visible"]);
+}
+
+// ---------------------------------------------------------------------------
+// issue_1065_hidden_sheet_probe.xlsx
+// ---------------------------------------------------------------------------
+
+/// The probe workbook Excel for Mac 16.112 itself authored for issue #1065:
+/// a visible `Summary` sheet and a populated `state="hidden"` `Data` sheet,
+/// with `paperSize="9"` written into both worksheets afterwards so the paper
+/// comes from the file rather than from whichever printer exported it.
+///
+/// A native export of it is one page — Excel prints no hidden sheet — and so
+/// is ours; the hidden sheet's rows reach neither the page list nor the IR.
+#[test]
+fn structure_issue_1065_probe_pages_only_the_visible_sheet() {
+    let pages = sheet_pages("issue_1065_hidden_sheet_probe.xlsx");
+    assert_eq!(sheet_names(&pages), vec!["Summary"]);
+
+    let printed_text: String = pages
+        .iter()
+        .flat_map(|page| page.table.rows.iter())
+        .flat_map(|row| row.cells.iter())
+        .map(table_cell_text)
+        .collect::<Vec<String>>()
+        .join(" ");
     assert!(
-        names.iter().all(|n| !n.is_empty()),
-        "all sheet names should be non-empty"
+        printed_text.contains("Regional revenue"),
+        "the visible sheet's title should print"
+    );
+    assert!(
+        !printed_text.contains("N-01"),
+        "the hidden sheet's lookup rows should not print"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 123233_charts.xlsx
+// ---------------------------------------------------------------------------
+
+/// The workbook's four `data_Page1_1_*` sheets are `state="hidden"` scratch
+/// data behind the charts on `Page1_1`. Excel prints the one visible sheet;
+/// paging the hidden four added four pages no reference export has
+/// (issue #1065).
+#[test]
+fn structure_charts_123233_pages_only_the_visible_sheet() {
+    let pages = sheet_pages("123233_charts.xlsx");
+    let names = sheet_names(&pages);
+    // `Page1_1` is wider than its paper, so it splits across pages of its own.
+    assert!(
+        names.iter().all(|name| *name == "Page1_1"),
+        "only the visible sheet should page, got {names:?}"
     );
 }
 
@@ -587,6 +637,10 @@ xlsx_fixture_tests!(with_various_data, "WithVariousData.xlsx");
 // --- Repo-authored regression fixtures --------------------------------------
 
 xlsx_fixture_tests!(theme_color_drawing, "theme_color_drawing.xlsx");
+xlsx_fixture_tests!(
+    issue_1065_hidden_sheet_probe,
+    "issue_1065_hidden_sheet_probe.xlsx"
+);
 
 // --- MIT: Open-Xml-PowerTools (Microsoft) ----------------------------------
 
