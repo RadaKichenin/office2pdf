@@ -344,6 +344,35 @@ When comparing PDF output against ground truth (classified fixtures):
 6. For user-provided DOCX/XLSX/PPTX files on macOS, if Word/Excel/PowerPoint is available for that file type, export a PDF from the native Microsoft app first and compare that GT before guessing.
 7. Fix root causes in parser/codegen via TDD. Prioritize high-leverage fixes that improve multiple files.
 
+## Unattended Issue Loop
+
+`scripts/issue_loop.sh` works through the open issues without supervision: it picks the
+oldest open issue, starts a **fresh** `claude -p` for it, and repeats. One agent per
+issue is the point — a single long session fills its context, auto-compaction drops the
+early instructions, and quality decays; a new process starts empty every time, with
+GitHub holding the state (the open-issue list is the queue, a closed issue or a merged
+PR is the completion mark).
+
+```sh
+scripts/issue_loop.sh --once --max-issues 1   # trial one issue
+scripts/issue_loop.sh --model claude-opus-5   # then run it unattended
+```
+
+`scripts/issue_loop_prompt.md` carries the repository-specific instructions appended to
+every agent's prompt; edit it rather than the script when the rules change. The agent
+inside a run is headless, so it must never background the CI wait — the process dies
+when its turn ends, taking the watch with it.
+
+Guardrails, each of which has already caught a real failure: two attempts without a
+merged PR label an issue `autofix-blocked` and take it out of the queue; three
+consecutive no-progress runs trip a circuit breaker; a usage limit pauses for an hour
+instead of counting as failure; and a disk-space floor stops the loop before the
+filesystem fills. Label an umbrella issue `autofix-skip` so no agent tries to "fix" a
+tracker that closes with its children.
+
+Because a run reports only when its agent exits, use `scripts/issue_loop_watch.py` to
+see what the current agent is doing.
+
 ## Release Procedure
 
 Follow `RELEASING.md` end to end in one turn. Use `developer0hye`, merge the version PR, then dispatch `release.yml` once; do not manually create a normal release. Completion requires a green release run, tag/version alignment, both crates.io packages, and six binary assets.
