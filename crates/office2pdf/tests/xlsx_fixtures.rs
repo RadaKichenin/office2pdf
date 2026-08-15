@@ -807,6 +807,28 @@ fn with_drawing_renders_anchored_images() {
     );
 }
 
+/// Excel writes `a:blip` as a start element with children whenever the picture
+/// carries an alpha or recolour effect. The fixture is an Excel for Mac export
+/// whose only picture is spelled that way — `<a:blip r:embed="rId1">
+/// <a:alphaModFix amt="70000"/></a:blip>` — and its native export draws the
+/// photo, so dropping it left the anchored band empty (issue #1066).
+#[test]
+fn picture_with_effect_bearing_blip_is_still_drawn() {
+    let pages = sheet_pages("issue_1066_blip_effect_picture.xlsx");
+    let images: Vec<_> = pages.iter().flat_map(|sp| sp.images.iter()).collect();
+    assert_eq!(images.len(), 1, "the drawing anchors one picture");
+    assert!(
+        !images[0].image.data.is_empty(),
+        "the blip's r:embed must resolve to the media bytes"
+    );
+    assert!(
+        images[0].image.width.unwrap_or(0.0) > 10.0 && images[0].image.height.unwrap_or(0.0) > 10.0,
+        "the anchor must produce a real size, got {:?} x {:?}",
+        images[0].image.width,
+        images[0].image.height
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Worksheet drawing scheme colors resolve against the theme (issue #430)
 // ---------------------------------------------------------------------------
