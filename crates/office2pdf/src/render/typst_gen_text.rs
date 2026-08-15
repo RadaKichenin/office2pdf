@@ -861,6 +861,66 @@ pub(super) fn sheet_row_line_advance_pt(
     Some(advance_em * font_size_pt)
 }
 
+/// Where a spreadsheet cell's fixed row track sits, so the cell's line can be
+/// seated on the baseline the native export prints (issue #1063).
+///
+/// `None` outside that regime: a Word table, an auto-height sheet row (whose
+/// track is the content's own answer, not Excel's), a top-aligned cell (a
+/// seat this issue did not settle), or a cell spanning several tracks.
+#[derive(Clone, Copy)]
+pub(super) struct SheetCellSeat {
+    /// The row's printed track height, in points.
+    pub track_pt: f64,
+    /// The cell's own top inset — its padding plus its share of the border.
+    pub inset_top_pt: f64,
+    /// The cell's own bottom inset.
+    pub inset_bottom_pt: f64,
+}
+
+/// The baseline Excel prints for one line of `ascent_em`/`descent_em` set at
+/// `font_size_pt` in a `track_pt` row, as an offset below the track's **top
+/// boundary** (issue #1063).
+///
+/// Excel lays a printed sheet out in whole device points, so the line box is
+/// the face's `hhea` ascent and descent each rounded to a point; it is centred
+/// in the row's own track — not in the cell's inset content box, which four
+/// native probe exports show has no say in the vertical seat — and an odd
+/// leftover point goes to the space *above* the line.
+///
+/// Measured on native Excel-for-Mac exports of purpose-built probe workbooks
+/// (`/Volumes/T7/scratch/issue-1063/probe`, reproduced in
+/// `sheet_cell_line_seat_reproduces_the_native_excel_probe`): a row-height
+/// sweep from 12pt to 60pt at Arial 10, a font-size sweep from 8pt to 44pt in
+/// 40pt and 60pt tracks, and a border/no-border and Normal-font pairing that
+/// changed nothing. All 28 samples land on this rule exactly.
+pub(super) fn sheet_cell_baseline_from_track_top_pt(
+    track_pt: f64,
+    ascent_em: f64,
+    descent_em: f64,
+    font_size_pt: f64,
+) -> f64 {
+    let ascent_pt: f64 = (ascent_em * font_size_pt).round();
+    let descent_pt: f64 = (descent_em * font_size_pt).round();
+    // The line's half-height above the baseline, which is what the probe's
+    // centred sweep observes directly; the box it implies is twice the
+    // remainder, and is even by construction, so the parity of the leftover
+    // tracks the parity of the track alone.
+    let half_line_pt: f64 = ((ascent_pt - descent_pt) / 2.0).round();
+    let line_pt: f64 = 2.0 * (ascent_pt - half_line_pt);
+    ((track_pt - line_pt) / 2.0).ceil() + ascent_pt
+}
+
+/// The descent Excel rests a bottom-aligned sheet cell's last line on: the
+/// face's `hhea` descent at a whole number of points, sitting on the row's own
+/// bottom boundary (issue #1063).
+///
+/// The boundary itself, with no inset under it: over the probe's size sweep
+/// the fitted inset is 0.00-0.14pt, and the fixture's own 14pt title rests
+/// 3.00pt above its row boundary against a 2.97pt descent.
+pub(super) fn sheet_cell_descent_pt(descent_em: f64, font_size_pt: f64) -> f64 {
+    (descent_em * font_size_pt).round()
+}
+
 /// A table-cell paragraph's fixed line box, resolved at the paragraph's own
 /// font size — or at the row's shared family and size when a tight
 /// spreadsheet row supplies a [`SheetRowLine`] (issue #839). `top_em`/
@@ -886,8 +946,9 @@ pub(super) struct CellLineBox {
 /// spreadsheet cells in fixed-height rows), the box instead ends at the
 /// font's descender and the removed sub-baseline surplus moves into leading,
 /// so the last line's descent rests on the row's bottom inset edge while
-/// multi-line advance is unchanged (issue #618). `None` when the font's
-/// metrics are unknown or the paragraph carries its own line box; a declared
+/// multi-line advance is unchanged (issue #618) — unless `sheet_seat` re-seats
+/// it, below. `None` when the font's metrics are unknown or the paragraph
+/// carries its own line box; a declared
 /// `w:spacing w:line` scales the box instead of suppressing it (issue #727).
 ///
 /// The box also carries the paragraph's `w:spacing w:after` when a snapping
@@ -900,6 +961,14 @@ pub(super) struct CellLineBox {
 /// own, so every cell of the row carries the same box and lands on one
 /// baseline as Excel prints it (issue #839).
 ///
+/// When `sheet_seat` is `Some` — a spreadsheet cell in a fixed row track,
+/// gated by `generate_table_cell` — the box is redistributed around the
+/// baseline so it seats where Excel prints it, overriding both seats above:
+/// the ascent and descent are each rounded to a whole point and the line is
+/// centred in the row's own *track*, or, under bottom alignment, its rounded
+/// descent rests on the track's own bottom boundary. The box's height, and
+/// with it the row's advance, is unchanged (issue #1063).
+///
 /// A **slide's** table cell does not come here: it paces on PowerPoint's flat
 /// 1.2em line via [`powerpoint_line_height_settings`], like the slide's own
 /// text boxes (issue #663).
@@ -910,6 +979,7 @@ pub(super) fn word_cell_line_box_settings(
     row_east_asian: RowEastAsianMetrics,
     seats_text_on_descender: bool,
     sheet_row_line: Option<&SheetRowLine>,
+    sheet_seat: Option<SheetCellSeat>,
 ) -> Option<String> {
     let line_box: CellLineBox = word_cell_line_box(
         runs,
@@ -918,11 +988,16 @@ pub(super) fn word_cell_line_box_settings(
         row_east_asian,
         seats_text_on_descender,
         sheet_row_line,
+        sheet_seat,
     )?;
     Some(format!(
-        "#set text(top-edge: {}em, bottom-edge: -{}em)\n#set par(leading: {}pt)\n",
+        // The descent is negated here rather than written behind a literal
+        // `-`: a sheet cell's descent can fall *short* of the cell's bottom
+        // inset (issue #1063), and a negative edge behind that sign emitted
+        // `--0.02em`.
+        "#set text(top-edge: {}em, bottom-edge: {}em)\n#set par(leading: {}pt)\n",
         format_f64(line_box.top_em),
-        format_f64(line_box.bottom_em),
+        format_f64(-line_box.bottom_em),
         format_f64(line_box.leading_pt)
     ))
 }
@@ -930,6 +1005,7 @@ pub(super) fn word_cell_line_box_settings(
 /// The line box behind [`word_cell_line_box_settings`], exposed so the spill
 /// wrapper can size its clip box and strut from the same numbers the block
 /// emits (issue #618).
+#[allow(clippy::too_many_arguments)]
 pub(super) fn word_cell_line_box(
     runs: &[Run],
     style: &ParagraphStyle,
@@ -937,6 +1013,7 @@ pub(super) fn word_cell_line_box(
     row_east_asian: RowEastAsianMetrics,
     seats_text_on_descender: bool,
     sheet_row_line: Option<&SheetRowLine>,
+    sheet_seat: Option<SheetCellSeat>,
 ) -> Option<CellLineBox> {
     if style.line_box.is_some() {
         return None;
@@ -1031,6 +1108,40 @@ pub(super) fn word_cell_line_box(
         )
     } else {
         (advance_em - top_em, 0.0)
+    };
+    // A sheet cell in a fixed track seats its line where Excel prints it, not
+    // where the cell's own inset box would centre it (issue #1063). Typst
+    // places the box inside that inset box, so the seat is expressed by
+    // redistributing the box around the baseline — its height, and with it the
+    // row's advance, is unchanged.
+    let (top_em, bottom_em, leading_pt): (f64, f64, f64) = match sheet_seat {
+        None => (top_em, bottom_em, leading_pt),
+        Some(seat) if seats_text_on_descender => {
+            // Typst rests the box's bottom edge on the inset content bottom;
+            // Excel rests the descender on the row boundary itself, one inset
+            // lower.
+            let bottom_em: f64 =
+                (sheet_cell_descent_pt(descender_em, font_size) - seat.inset_bottom_pt) / font_size;
+            (
+                top_em,
+                bottom_em,
+                ((advance_em - top_em - bottom_em) * font_size).max(0.0),
+            )
+        }
+        Some(seat) => {
+            // Typst centres the box in the inset content box, whose centre is
+            // this far below the track's top boundary.
+            let content_mid_pt: f64 =
+                (seat.inset_top_pt + (seat.track_pt - seat.inset_bottom_pt)) / 2.0;
+            let baseline_pt: f64 = sheet_cell_baseline_from_track_top_pt(
+                seat.track_pt,
+                ascender_em,
+                descender_em,
+                font_size,
+            );
+            let top_em: f64 = advance_em / 2.0 + (baseline_pt - content_mid_pt) / font_size;
+            (top_em, advance_em - top_em, leading_pt)
+        }
     };
     Some(CellLineBox {
         top_em,

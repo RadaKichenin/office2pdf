@@ -749,10 +749,11 @@ fn generate_table_cell(
     // In a tight spreadsheet row the declared alignment has no room to act in
     // Excel, so the choice of anchor here is free — and it is taken as the
     // *centred* symmetric box for every cell, not the descender seat. The
-    // centred baseline sits at `content centre + (ascent − pitch/2)`, a
-    // quantity the East Asian 1.3 line factor cancels out of entirely, so it
-    // is immune to that factor's known overshoot (#709); the bottom seat
-    // inherits the row-track error in full. Measured on the business corpus
+    // centred baseline — `sheet_cell_baseline_from_track_top_pt`'s rounded,
+    // track-centred seat since issue #1063 — carries no dependence on the
+    // East Asian 1.3 line factor at all, so it is immune to that factor's
+    // known overshoot (#709); the bottom seat inherits the row-track error in
+    // full. Measured on the business corpus
     // baseline gate, centring is the anchor that moves every deviating cell
     // toward its GT — the descender seat moved every Korean page 1.2–1.8pt
     // further away (issue #839).
@@ -763,6 +764,24 @@ fn generate_table_cell(
     };
     let enclosing_cell_seats_on_descender: bool = ctx.cell_seats_text_on_descender;
     let enclosing_cell_sheet_row_line: Option<SheetRowLine> = ctx.cell_sheet_row_line.take();
+    let enclosing_cell_sheet_seat: Option<SheetCellSeat> = ctx.cell_sheet_seat.take();
+    // The fixed sheet track this cell seats its line in (issue #1063). Only a
+    // spreadsheet's fixed rows have one: an auto row's track is the content's
+    // own answer rather than Excel's grid, and a cell spanning several tracks
+    // is not seated by any one of them. A top-aligned cell stays on the legacy
+    // seat — Excel's top rule was measured but is out of this issue's scope.
+    ctx.cell_sheet_seat = row_height
+        .filter(|_| ctx.table_seats_bottom_aligned_text_on_descender)
+        .filter(|_| cell.row_span <= 1)
+        .filter(|_| effective_vertical_align != Some(CellVerticalAlign::Top))
+        .map(|track_pt| {
+            let inset: Insets = cell_inset_with_border(cell, default_cell_padding);
+            SheetCellSeat {
+                track_pt,
+                inset_top_pt: inset.top,
+                inset_bottom_pt: inset.bottom,
+            }
+        });
     ctx.cell_sheet_row_line = row_shared_line.filter(|_| seats_on_row_line).cloned();
     // Descender seating applies only to FIXED-height rows (`row_height` is
     // `Some` only then). In auto rows the renderer sizes the row from the
@@ -1039,6 +1058,7 @@ fn generate_table_cell(
     }
     ctx.cell_seats_text_on_descender = enclosing_cell_seats_on_descender;
     ctx.cell_sheet_row_line = enclosing_cell_sheet_row_line;
+    ctx.cell_sheet_seat = enclosing_cell_sheet_seat;
     out.push_str("],\n");
     Ok(())
 }
@@ -1078,6 +1098,7 @@ fn spill_line_box_height_pt(cell: &TableCell, ctx: &GenCtx) -> Option<f64> {
         ctx.row_east_asian,
         ctx.cell_seats_text_on_descender,
         ctx.cell_sheet_row_line.as_ref(),
+        ctx.cell_sheet_seat,
     )?;
     Some((line_box.top_em + line_box.bottom_em) * line_box.font_size_pt)
 }
@@ -1843,6 +1864,7 @@ fn auto_row_frame_height_estimate_pt(
                 ctx.row_east_asian,
                 false,
                 None,
+                None,
             )?;
             let inset: Insets = cell_inset_with_border(cell, default_cell_padding);
             Some(
@@ -2427,6 +2449,7 @@ fn generate_cell_content(
             row_east_asian: ctx.row_east_asian,
             seats_text_on_descender: ctx.cell_seats_text_on_descender,
             sheet_row_line: ctx.cell_sheet_row_line.clone(),
+            sheet_seat: ctx.cell_sheet_seat,
             in_spill_cell: ctx.in_spill_cell,
             uses_powerpoint_line_box: ctx.table_uses_powerpoint_line_box,
             stacks_multiple_blocks,
@@ -2496,6 +2519,9 @@ struct CellParagraphCtx<'a> {
     /// this paragraph's box resolves at the row's family and size rather than
     /// its own (issue #839). `None` outside that regime.
     sheet_row_line: Option<SheetRowLine>,
+    /// The fixed sheet track the cell sits in, so its line seats where Excel
+    /// prints it (issue #1063). `None` outside that regime.
+    sheet_seat: Option<SheetCellSeat>,
     /// Whether this paragraph is inside a spill cell's clipped wrapper, where
     /// the `#place` anchor already carries the cell's horizontal alignment.
     /// A `width: 100%` block inside that wrapper is not just redundant: the
@@ -2588,6 +2614,7 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
             cell.row_east_asian,
             cell.seats_text_on_descender,
             cell.sheet_row_line.as_ref(),
+            cell.sheet_seat,
         )
     };
     // Whichever fixed edges the block wrapper below puts in force — the
@@ -2602,6 +2629,7 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
         cell.row_east_asian,
         cell.seats_text_on_descender,
         cell.sheet_row_line.as_ref(),
+        cell.sheet_seat,
     )
     .map(|line_box| (line_box.top_em, line_box.bottom_em))
     .or_else(|| {
@@ -2630,6 +2658,7 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
                 cell.row_east_asian,
                 cell.seats_text_on_descender,
                 cell.sheet_row_line.as_ref(),
+                cell.sheet_seat,
             )
             .map(|line_box| (line_box.top_em + line_box.bottom_em) * line_box.font_size_pt)
         }

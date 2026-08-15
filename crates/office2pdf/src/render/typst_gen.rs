@@ -149,6 +149,10 @@ struct GenCtx {
     /// family and size for the whole row, so every cell lands on one baseline
     /// as Excel prints it (issue #839). `None` outside that regime.
     cell_sheet_row_line: Option<SheetRowLine>,
+    /// The fixed sheet track the cell being generated sits in, so its line
+    /// seats on the baseline Excel prints rather than on the centre of the
+    /// cell's own inset box (issue #1063). `None` outside that regime.
+    cell_sheet_seat: Option<SheetCellSeat>,
     /// Whether emission is inside a spill cell's clipped wrapper (issue #811).
     in_spill_cell: bool,
     /// Numerals the active section's `PAGE` fields render in. A header is
@@ -218,6 +222,7 @@ impl GenCtx {
             table_seats_bottom_aligned_text_on_descender: false,
             cell_seats_text_on_descender: false,
             cell_sheet_row_line: None,
+            cell_sheet_seat: None,
             in_spill_cell: false,
             page_number_format: PageNumberFormat::default(),
             document_default_text: None,

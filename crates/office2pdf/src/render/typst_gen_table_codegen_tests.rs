@@ -824,9 +824,13 @@ fn bottom_aligned_spill_cell_anchors_its_line_box_at_the_bottom() {
         return; // no font book available (e.g. exotic CI sandbox)
     };
     let font_size: f64 = 10.0;
-    // With the descender seated on the inset edge, the single line spans
-    // ascent-to-descender at the run's own size.
-    let line_box_height_pt: f64 = (ascender + descender) * font_size;
+    // Excel rests the descent on the row's own bottom boundary, one cell inset
+    // below the box's bottom edge (issue #1063), so the single line spans the
+    // ascent plus that shortened descent at the run's own size.
+    let default_padding_bottom_pt: f64 = 5.0;
+    let seated_bottom_em: f64 =
+        ((descender * font_size).round() - default_padding_bottom_pt) / font_size;
+    let line_box_height_pt: f64 = (ascender + seated_bottom_em) * font_size;
     let cell = TableCell {
         content: vec![Block::Paragraph(Paragraph {
             style: ParagraphStyle::default(),
