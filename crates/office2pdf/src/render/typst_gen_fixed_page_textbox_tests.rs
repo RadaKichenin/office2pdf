@@ -3005,3 +3005,182 @@ fn the_contoso_slide_number_lands_on_its_native_origin() {
         );
     }
 }
+
+/// Where the rotated-box probes below seat their element on the slide. Off
+/// both the slide's midlines, so a pivot on the box centre and a pivot on the
+/// slide centre cannot coincide.
+#[cfg(not(target_arch = "wasm32"))]
+const TURNED_BOX_X_PT: f64 = 120.0;
+#[cfg(not(target_arch = "wasm32"))]
+const TURNED_BOX_Y_PT: f64 = 40.0;
+
+/// One text box on a 960 x 540pt slide, with `apply` free to turn it.
+#[cfg(not(target_arch = "wasm32"))]
+fn turned_slide_text_box(
+    width_pt: f64,
+    height_pt: f64,
+    apply: impl FnOnce(&mut crate::ir::TextBoxData),
+) -> crate::ir::Document {
+    let mut element: FixedElement = make_fixed_text_box(
+        TURNED_BOX_X_PT,
+        TURNED_BOX_Y_PT,
+        width_pt,
+        height_pt,
+        Insets::default(),
+        crate::ir::TextBoxVerticalAlign::Top,
+        vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: "Turned".to_string(),
+                style: TextStyle::default(),
+                href: None,
+                footnote: None,
+            }],
+        })],
+    );
+    let FixedElementKind::TextBox(text_box) = &mut element.kind else {
+        unreachable!("make_fixed_text_box builds a text box");
+    };
+    apply(text_box);
+    make_doc(vec![make_fixed_page(960.0, 540.0, vec![element])])
+}
+
+/// Every text run's page-space origin, in layout order.
+#[cfg(not(target_arch = "wasm32"))]
+fn placed_run_origins(doc: &crate::ir::Document) -> Vec<(f64, f64)> {
+    let output = generate_typst(doc).expect("the slide generates");
+    let runs = crate::render::pdf::compiled_text_runs(&output.source, 0)
+        .unwrap_or_else(|error| panic!("compile failed: {error}\n{}", output.source));
+    assert!(
+        !runs.is_empty(),
+        "the slide carries text:\n{}",
+        output.source
+    );
+    runs.iter()
+        .map(|run| (run.left_pt, run.baseline_pt))
+        .collect()
+}
+
+/// Turn `seat` clockwise about `centre` the way PowerPoint turns a shape,
+/// evaluated here independently of the markup under test.
+#[cfg(not(target_arch = "wasm32"))]
+fn turned_about(seat: (f64, f64), centre: (f64, f64), rotation_deg: f64) -> (f64, f64) {
+    let (sin, cos): (f64, f64) = rotation_deg.to_radians().sin_cos();
+    let (dx, dy): (f64, f64) = (seat.0 - centre.0, seat.1 - centre.1);
+    (
+        centre.0 + cos * dx - sin * dy,
+        centre.1 + sin * dx + cos * dy,
+    )
+}
+
+/// `<a:xfrm rot>` on a shape turns its text box about the box's own centre,
+/// whatever the box measures.
+///
+/// Typst resolves `origin: center` against the frame it lays the body out in,
+/// and that frame is clamped to the region. A box taller than the slide
+/// therefore pivoted on the slide's midpoint and the whole box landed
+/// translated — the clamp #1032 took out of the picture path, still in the
+/// text path (issue #1078).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn an_oversized_turned_text_box_pivots_on_its_own_centre() {
+    const WIDTH_PT: f64 = 400.0;
+    const HEIGHT_PT: f64 = 856.8;
+    const ROTATION_DEG: f64 = 30.0;
+
+    let unturned: Vec<(f64, f64)> =
+        placed_run_origins(&turned_slide_text_box(WIDTH_PT, HEIGHT_PT, |_| {}));
+    let turned: Vec<(f64, f64)> =
+        placed_run_origins(&turned_slide_text_box(WIDTH_PT, HEIGHT_PT, |text_box| {
+            text_box.shape_rotation_deg = Some(ROTATION_DEG);
+        }));
+    assert_eq!(
+        unturned.len(),
+        turned.len(),
+        "the turn lays the content out unchanged and moves the result"
+    );
+
+    let centre: (f64, f64) = (
+        TURNED_BOX_X_PT + WIDTH_PT / 2.0,
+        TURNED_BOX_Y_PT + HEIGHT_PT / 2.0,
+    );
+    for (index, (seat, got)) in unturned.iter().zip(turned.iter()).enumerate() {
+        let want: (f64, f64) = turned_about(*seat, centre, ROTATION_DEG);
+        assert!(
+            (want.0 - got.0).abs() < 0.05 && (want.1 - got.1).abs() < 0.05,
+            "run {index} sits at {got:?}, a turn about the box centre seats it at {want:?}"
+        );
+    }
+}
+
+/// The same clamp under `<a:bodyPr vert>`: the content lays out in a box with
+/// the dimensions swapped, so a box wider than the slide is tall becomes a
+/// laid-out block taller than the region and the turn pivots on the slide
+/// (issue #1078).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn an_oversized_vertical_text_box_pivots_on_its_own_centre() {
+    const WIDTH_PT: f64 = 700.0;
+    const HEIGHT_PT: f64 = 200.0;
+    const ROTATION_DEG: f64 = 270.0;
+
+    // The control is that swapped box standing unturned on the same seat,
+    // which is exactly what the vertical path lays out before turning it.
+    let unturned: Vec<(f64, f64)> =
+        placed_run_origins(&turned_slide_text_box(HEIGHT_PT, WIDTH_PT, |_| {}));
+    let turned: Vec<(f64, f64)> =
+        placed_run_origins(&turned_slide_text_box(WIDTH_PT, HEIGHT_PT, |text_box| {
+            text_box.text_rotation_deg = Some(ROTATION_DEG);
+        }));
+    assert_eq!(
+        unturned.len(),
+        turned.len(),
+        "the turn lays the content out unchanged and moves the result"
+    );
+
+    // Turn about the swapped box's centre, then re-centre that box on the
+    // element's own width x height region — the box geometry stays unrotated.
+    let centre: (f64, f64) = (
+        TURNED_BOX_X_PT + HEIGHT_PT / 2.0,
+        TURNED_BOX_Y_PT + WIDTH_PT / 2.0,
+    );
+    let recentre: (f64, f64) = ((WIDTH_PT - HEIGHT_PT) / 2.0, (HEIGHT_PT - WIDTH_PT) / 2.0);
+    for (index, (seat, got)) in unturned.iter().zip(turned.iter()).enumerate() {
+        let pivoted: (f64, f64) = turned_about(*seat, centre, ROTATION_DEG);
+        let want: (f64, f64) = (pivoted.0 + recentre.0, pivoted.1 + recentre.1);
+        assert!(
+            (want.0 - got.0).abs() < 0.05 && (want.1 - got.1).abs() < 0.05,
+            "run {index} sits at {got:?}, PowerPoint seats it at {want:?}"
+        );
+    }
+}
+
+/// A box that fits the region never met the clamp, so the corner pivot has to
+/// leave it exactly where the centre pivot did — otherwise the fix would move
+/// every rotated label on the corpus.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_turned_text_box_inside_the_slide_keeps_its_seat() {
+    const WIDTH_PT: f64 = 300.0;
+    const HEIGHT_PT: f64 = 120.0;
+    const ROTATION_DEG: f64 = 45.0;
+
+    let unturned: Vec<(f64, f64)> =
+        placed_run_origins(&turned_slide_text_box(WIDTH_PT, HEIGHT_PT, |_| {}));
+    let turned: Vec<(f64, f64)> =
+        placed_run_origins(&turned_slide_text_box(WIDTH_PT, HEIGHT_PT, |text_box| {
+            text_box.shape_rotation_deg = Some(ROTATION_DEG);
+        }));
+
+    let centre: (f64, f64) = (
+        TURNED_BOX_X_PT + WIDTH_PT / 2.0,
+        TURNED_BOX_Y_PT + HEIGHT_PT / 2.0,
+    );
+    for (index, (seat, got)) in unturned.iter().zip(turned.iter()).enumerate() {
+        let want: (f64, f64) = turned_about(*seat, centre, ROTATION_DEG);
+        assert!(
+            (want.0 - got.0).abs() < 0.05 && (want.1 - got.1).abs() < 0.05,
+            "run {index} sits at {got:?}, a turn about the box centre seats it at {want:?}"
+        );
+    }
+}

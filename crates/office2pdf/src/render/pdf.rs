@@ -352,7 +352,9 @@ fn compile_to_pdf_inner(
 #[cfg(all(test, not(target_arch = "wasm32")))]
 #[derive(Debug, Clone)]
 pub(crate) struct PlacedTextRun {
-    /// Distance from the page's top edge down to the run's baseline, in points.
+    /// Distance from the page's top edge down to the run's baseline origin, in
+    /// points. A turned run reports the page-space image of that origin, so it
+    /// is the point the transform moved rather than a horizontal baseline.
     pub baseline_pt: f64,
     /// Distance from the page's left edge to the run's origin, in points.
     pub left_pt: f64,
@@ -370,27 +372,28 @@ pub(crate) struct PlacedTextRun {
 /// the paragraph it touched. Tests for placement therefore compile the source
 /// and read the frames.
 ///
-/// Group transforms are followed by their translation only; nothing in a header
-/// or footer story rotates or scales, and a run inside such a group would be
-/// reported at the wrong place rather than silently skipped.
+/// Group transforms are accumulated in full, not just their translation: a
+/// rotated text box turns the group its runs sit in, and reading only `tx`/`ty`
+/// reports every one of those runs at the unturned place (issue #1078).
 #[cfg(all(test, not(target_arch = "wasm32")))]
 pub(crate) fn compiled_text_runs(
     typst_source: &str,
     page_index: usize,
 ) -> Result<Vec<PlacedTextRun>, ConvertError> {
-    use typst::layout::{Frame, FrameItem, Point};
+    use typst::layout::{Frame, FrameItem, Transform};
 
-    fn collect(frame: &Frame, origin: Point, out: &mut Vec<PlacedTextRun>) {
+    fn collect(frame: &Frame, transform: Transform, out: &mut Vec<PlacedTextRun>) {
         for (position, item) in frame.items() {
-            let at: Point = origin + *position;
+            let at: Transform = transform.pre_concat(Transform::translate(position.x, position.y));
             match item {
                 FrameItem::Group(group) => {
-                    let shift = Point::new(group.transform.tx, group.transform.ty);
-                    collect(&group.frame, at + shift, out);
+                    collect(&group.frame, at.pre_concat(group.transform), out);
                 }
+                // The run's own origin is the local `(0, 0)` the accumulated
+                // transform maps to, which is exactly its translation column.
                 FrameItem::Text(text) => out.push(PlacedTextRun {
-                    baseline_pt: at.y.to_pt(),
-                    left_pt: at.x.to_pt(),
+                    baseline_pt: at.ty.to_pt(),
+                    left_pt: at.tx.to_pt(),
                     family: text.font.info().family.clone(),
                     text: text.text.to_string(),
                 }),
@@ -422,7 +425,7 @@ pub(crate) fn compiled_text_runs(
         ))
     })?;
     let mut runs: Vec<PlacedTextRun> = Vec::new();
-    collect(&page.frame, Point::zero(), &mut runs);
+    collect(&page.frame, Transform::identity(), &mut runs);
     Ok(runs)
 }
 

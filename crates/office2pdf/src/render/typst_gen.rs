@@ -1142,8 +1142,9 @@ fn generate_fixed_element(
     Ok(())
 }
 
-/// How far a picture mirrored and turned about its box's **top-left corner**
-/// has to move to land where PowerPoint's **centre** pivot would have put it.
+/// How far a box mirrored and turned about its **top-left corner** has to move
+/// to land where PowerPoint's **centre** pivot would have put it. Pictures pass
+/// their mirror flags; a text box turns without mirroring and passes `false`.
 ///
 /// With a `top + left` origin the mirror maps the box to `(±u, ±v)` and the
 /// turn follows as `R`, so the composed map is `R(S(p))`. PowerPoint's is
@@ -1211,16 +1212,34 @@ fn generate_fixed_text_box(
     // box and the whole result turns about its centre, so `reflow: false`
     // keeps the placed geometry where the slide puts it. This wraps the
     // vertical-text case below, which rotates the glyphs inside the box.
+    //
+    // `origin: center` cannot name that centre: Typst resolves it against the
+    // frame it lays the body out in, and that frame is clamped to the region,
+    // so a box taller or wider than the slide turns about the slide's midpoint
+    // and lands translated. Pivot on the frame's own top-left corner, which no
+    // clamp can move, and carry the difference in an enclosing `#move` — the
+    // same correction #1032 made for a picture (issue #1078). A box that fits
+    // the region is unaffected: the shift is exactly what `origin: center`
+    // resolved to there.
     if let Some(rotation) = text_box.shape_rotation_deg.filter(|deg| *deg != 0.0) {
         let mut inner: TextBoxData = text_box.clone();
         inner.shape_rotation_deg = None;
+        let (dx, dy): (f64, f64) = centre_pivot_shift(
+            elem.width.max(0.0),
+            elem.height.max(0.0),
+            rotation,
+            false,
+            false,
+        );
         let _ = write!(
             out,
-            "#rotate({}deg, origin: center, reflow: false)[",
+            "#move(dx: {}pt, dy: {}pt)[#rotate({}deg, origin: top + left, reflow: false)[",
+            format_f64(dx),
+            format_f64(dy),
             format_f64(rotation)
         );
         generate_fixed_text_box(out, elem, &inner, ctx)?;
-        out.push_str("]\n");
+        out.push_str("]]\n");
         return Ok(());
     }
 
@@ -1261,11 +1280,24 @@ fn generate_fixed_text_box(
         };
         // The outer #place pins the top-left of a width x height region;
         // center the swapped box on that region before rotating in place.
+        //
+        // The swap trades the box's two dimensions, so a box wider than the
+        // slide is high lays out as a frame taller than the region and meets
+        // the same clamp as the shape-rotation case above. Pivot on the corner
+        // for the same reason, and fold both translations into the one `#move`
+        // (issue #1078).
+        let (pivot_dx, pivot_dy): (f64, f64) = centre_pivot_shift(
+            swapped_elem.width,
+            swapped_elem.height,
+            rotation,
+            false,
+            false,
+        );
         let _ = write!(
             out,
-            "#move(dx: {}pt, dy: {}pt)[#rotate({}deg, origin: center, reflow: false)[",
-            format_f64((elem.width - elem.height) / 2.0),
-            format_f64((elem.height - elem.width) / 2.0),
+            "#move(dx: {}pt, dy: {}pt)[#rotate({}deg, origin: top + left, reflow: false)[",
+            format_f64((elem.width - elem.height) / 2.0 + pivot_dx),
+            format_f64((elem.height - elem.width) / 2.0 + pivot_dy),
             format_f64(rotation)
         );
         generate_fixed_text_box(out, &swapped_elem, &inner, ctx)?;
