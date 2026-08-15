@@ -671,10 +671,10 @@ fn research_report_probe_rows_share_the_east_asian_line_box() {
     );
 }
 
-/// A spreadsheet row keeps the text-keyed gate: the probe behind issue #814
-/// measured Word's table model, while Excel's auto-row decomposition was
-/// fitted with the text gate (issues #709, #711) and no export separates the
-/// two rules for a sheet — tracked in issue #1060.
+/// A spreadsheet row set in an East Asian face keeps the bare hhea box —
+/// the face check issue #814 gave a Word table row must not reach a sheet,
+/// because Excel's own box is the bare line for *any* script (issue #1060,
+/// measured; see [`spreadsheet_rows_share_one_line_box_whatever_script`]).
 #[test]
 fn latin_only_spreadsheet_row_in_east_asian_face_keeps_the_hhea_line_box() {
     let Some((ascender, _descender, word_pitch_em)) =
@@ -725,6 +725,131 @@ fn latin_only_spreadsheet_row_in_east_asian_face_keeps_the_hhea_line_box() {
     assert!(
         !result.contains(&format!("top-edge: {}em", format_f64(east_asian_top_em))),
         "the East Asian ascent excess must not reach a sheet's Latin row: {result}"
+    );
+}
+
+/// Every distinct line-box ascent `source` sets, as written.
+///
+/// Only the `#set text` form: an eojeol frame re-emits the same ascent
+/// resolved to points at its own token size (issue #626), which exists on
+/// Korean text alone and would read as a line-box difference here.
+fn distinct_top_edges(source: &str) -> std::collections::BTreeSet<&str> {
+    const MARKER: &str = "#set text(top-edge: ";
+    source
+        .match_indices(MARKER)
+        .map(|(index, _)| {
+            let value: &str = &source[index + MARKER.len()..];
+            &value[..value.find(',').unwrap_or(value.len())]
+        })
+        .collect()
+}
+
+/// A spreadsheet row's line box does not vary with the script of its
+/// characters, and the box it keeps is the *bare* hhea line.
+///
+/// Measured on a native Excel-for-Mac export of the probe workbook committed
+/// as `tests/fixtures/xlsx/issue_1060_sheet_row_line_box_probe.xlsx`, whose
+/// paired blocks differ only in that script — same face (Malgun Gothic, the
+/// workbook's Normal font too), size, row-height mode, column and vertical
+/// alignment. All four pairs print 0.00pt apart: auto rows at a 20.00pt track
+/// each with equal seats, `ht=36` top-aligned rows seated identically, and
+/// `ht=36` centred rows seated identically. Our text-keyed gate seated the
+/// Korean top-aligned row 2.79pt low — `0.15 x` Malgun's 1.330078em hhea
+/// pitch at 14pt (issue #1060).
+///
+/// So the two candidate gates are not the choice: Excel's invariant is the
+/// bare line, which a 1.3-factor box contradicts outright — 14pt auto rows
+/// print 20.00pt tracks that a 24.20pt East Asian box does not fit. Extending
+/// issue #814's face check to a sheet would have made both rows *equally*
+/// wrong instead; a sheet row takes no East Asian box at all.
+#[test]
+fn spreadsheet_rows_share_one_line_box_whatever_script() {
+    fn sheet_row_source(text: &str) -> String {
+        let cell = TableCell {
+            content: vec![Block::Paragraph(Paragraph {
+                style: ParagraphStyle::default(),
+                runs: vec![Run {
+                    text: text.to_string(),
+                    style: TextStyle {
+                        font_family: Some("Malgun Gothic".to_string()),
+                        east_asian_font_family: Some("Malgun Gothic".to_string()),
+                        font_size: Some(14.0),
+                        ..TextStyle::default()
+                    },
+                    href: None,
+                    footnote: None,
+                }],
+            })],
+            vertical_align: Some(CellVerticalAlign::Top),
+            ..TableCell::default()
+        };
+        let table = Table {
+            rows: vec![TableRow {
+                minimum_height: None,
+                cells: vec![cell],
+                // Tall enough that the track keeps per-cell alignment, so the
+                // box's ascent shows in the seat instead of being centred away.
+                height: Some(36.0),
+            }],
+            column_widths: vec![200.0],
+            default_vertical_align: Some(CellVerticalAlign::Top),
+            seats_bottom_aligned_text_on_descender: true,
+            border_paint_model: TableBorderPaintModel::CenteredStroke,
+            prints_gridlines: false,
+            prints_headings: false,
+            ..Table::default()
+        };
+        let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+        generate_typst(&doc).unwrap().source
+    }
+
+    let Some((ascender, _descender, word_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Malgun Gothic")
+    else {
+        return; // Malgun Gothic not installed
+    };
+    let korean: String = sheet_row_source("가나다라마 01");
+    let latin: String = sheet_row_source("Latin only row 01");
+
+    let bare_ascent: String = format!("{}em", format_f64(ascender));
+    assert_eq!(
+        distinct_top_edges(&korean),
+        distinct_top_edges(&latin),
+        "the two rows differ only in script, so their line boxes must agree"
+    );
+    assert_eq!(
+        distinct_top_edges(&korean),
+        std::collections::BTreeSet::from([bare_ascent.as_str()]),
+        "Excel seats both on the bare hhea ascent, not {}em: {korean}",
+        format_f64(ascender + 0.15 * word_pitch_em)
+    );
+}
+
+/// End-to-end pin for the probe workbook behind issue #1060: 26 rows of
+/// Malgun Gothic in paired Korean and Latin-only blocks, auto and `ht=36`,
+/// bottom, top and centre aligned. Excel prints every pair 0.00pt apart, so
+/// one ascent must serve the whole sheet however each row's characters read.
+#[test]
+fn sheet_row_line_box_probe_emits_one_ascent_for_every_row() {
+    let Some((ascender, _descender, _word_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Malgun Gothic")
+    else {
+        return; // Malgun Gothic not installed
+    };
+    let data =
+        include_bytes!("../../../../tests/fixtures/xlsx/issue_1060_sheet_row_line_box_probe.xlsx");
+    let (doc, _warnings) = crate::parser::Parser::parse(
+        &crate::parser::xlsx::XlsxParser,
+        data,
+        &crate::config::ConvertOptions::default(),
+    )
+    .expect("the probe workbook parses");
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert_eq!(
+        distinct_top_edges(&result),
+        std::collections::BTreeSet::from([format!("{}em", format_f64(ascender)).as_str()]),
+        "every probe row shares the bare hhea ascent: {result}"
     );
 }
 
@@ -897,6 +1022,11 @@ fn cell_border_width_joins_the_inset() {
 /// around the baseline, so a bottom-aligned Korean cell floated 0.15 lines
 /// above where Excel prints it (issue #618). The removed surplus moves into
 /// leading so multi-line baseline-to-baseline advance is unchanged.
+///
+/// A sheet's own line carries no such surplus since issue #1060 — the box is
+/// the face's bare hhea line for any script, which already ends at the
+/// descender — so the seat is now an identity and what this pins is that the
+/// East Asian box does not come back below a bottom-aligned sheet cell.
 #[test]
 fn bottom_aligned_spreadsheet_cell_seats_its_line_box_on_the_descender() {
     let Some((ascender, descender, word_pitch_em)) =
@@ -905,11 +1035,12 @@ fn bottom_aligned_spreadsheet_cell_seats_its_line_box_on_the_descender() {
         return; // no font book available (e.g. exotic CI sandbox)
     };
     let font_size: f64 = 10.0;
-    let top_em: f64 = ascender + 0.15 * word_pitch_em;
-    // What the same cell emits when the box stays symmetric.
-    let symmetric_bottom_em: f64 = 1.3 * word_pitch_em - top_em;
+    let top_em: f64 = ascender;
+    // What the same cell would emit under Word's East Asian box.
+    let east_asian_top_em: f64 = ascender + 0.15 * word_pitch_em;
+    let symmetric_bottom_em: f64 = 1.3 * word_pitch_em - east_asian_top_em;
     // The sub-baseline surplus the descender seat removes from the box.
-    let leading_pt: f64 = ((1.3 * word_pitch_em - top_em - descender) * font_size).max(0.0);
+    let leading_pt: f64 = ((word_pitch_em - top_em - descender) * font_size).max(0.0);
     let cell = TableCell {
         content: vec![Block::Paragraph(Paragraph {
             style: ParagraphStyle::default(),
@@ -968,8 +1099,10 @@ fn bottom_aligned_spreadsheet_cell_seats_its_line_box_on_the_descender() {
 }
 
 /// Triangulation: an explicitly centred cell in the same spreadsheet keeps the
-/// symmetric box — the East Asian surplus is even around the baseline, so
-/// centre alignment already matches Excel and must not move (issue #618).
+/// symmetric box — the descender seat is a bottom-alignment treatment and must
+/// not reach it (issue #618). Its box is the bare hhea line like every other
+/// sheet cell's (issue #1060); centring never showed the East Asian surplus
+/// anyway, because that surplus was even around the baseline.
 #[test]
 fn center_aligned_spreadsheet_cell_keeps_the_symmetric_line_box() {
     let Some((ascender, descender, word_pitch_em)) =
@@ -978,8 +1111,8 @@ fn center_aligned_spreadsheet_cell_keeps_the_symmetric_line_box() {
         return;
     };
     let font_size: f64 = 10.0;
-    let top_em: f64 = ascender + 0.15 * word_pitch_em;
-    let symmetric_bottom_em: f64 = 1.3 * word_pitch_em - top_em;
+    let top_em: f64 = ascender;
+    let symmetric_bottom_em: f64 = word_pitch_em - top_em;
     let cell = TableCell {
         content: vec![Block::Paragraph(Paragraph {
             style: ParagraphStyle::default(),
@@ -1020,34 +1153,47 @@ fn center_aligned_spreadsheet_cell_keeps_the_symmetric_line_box() {
             format_f64(top_em),
             format_f64(symmetric_bottom_em)
         )),
-        "a centred spreadsheet cell keeps the symmetric East Asian box: {result}"
+        "a centred spreadsheet cell keeps the symmetric box: {result}"
     );
     assert!(
         result.contains("#set par(leading: 0pt)"),
         "a centred spreadsheet cell keeps zero leading: {result}"
     );
+    // The bare line ends at the descender by construction, so the seat is
+    // indistinguishable here; what a re-seat would still show is the East
+    // Asian box it was written to trim.
+    assert_eq!(
+        descender, symmetric_bottom_em,
+        "the bare hhea box already ends at the descender"
+    );
     assert!(
-        !result.contains(&format!("bottom-edge: -{}em", format_f64(descender))),
-        "a centred spreadsheet cell must not be re-seated on the descender: {result}"
+        !result.contains(&format!(
+            "top-edge: {}em",
+            format_f64(ascender + 0.15 * word_pitch_em)
+        )),
+        "a centred spreadsheet cell takes no East Asian ascent: {result}"
     );
 }
 
 /// Regression: a bottom-aligned East Asian spreadsheet cell in an AUTO-height
 /// row keeps the symmetric line box and zero leading. In auto rows the
-/// renderer sizes the row from the content, whose intrinsic height was
-/// calibrated against Excel GT (#396/#411/#498) with the symmetric box; only
-/// fixed rows have slack for alignment to distribute, and only they were
+/// renderer sizes the row from the content, so the box *is* the row height;
+/// only fixed rows have slack for alignment to distribute, and only they were
 /// measured in #618.
+///
+/// That height is the face's bare hhea line since issue #1060: the same
+/// Malgun Gothic face Excel prints a 14pt auto row at 20.00pt in, which
+/// Word's 24.20pt East Asian box does not fit.
 #[test]
 fn bottom_aligned_spreadsheet_cell_in_auto_height_row_keeps_the_symmetric_line_box() {
-    let Some((ascender, descender, word_pitch_em)) =
+    let Some((ascender, _descender, word_pitch_em)) =
         crate::render::pdf::font_line_metrics_em("Libertinus Serif")
     else {
         return; // no font book available (e.g. exotic CI sandbox)
     };
     let font_size: f64 = 10.0;
-    let top_em: f64 = ascender + 0.15 * word_pitch_em;
-    let symmetric_bottom_em: f64 = 1.3 * word_pitch_em - top_em;
+    let top_em: f64 = ascender;
+    let symmetric_bottom_em: f64 = word_pitch_em - top_em;
     let cell = TableCell {
         content: vec![Block::Paragraph(Paragraph {
             style: ParagraphStyle::default(),
@@ -1087,15 +1233,18 @@ fn bottom_aligned_spreadsheet_cell_in_auto_height_row_keeps_the_symmetric_line_b
             format_f64(top_em),
             format_f64(symmetric_bottom_em)
         )),
-        "an auto-height row keeps the symmetric East Asian box: {result}"
+        "an auto-height row keeps the symmetric box: {result}"
     );
     assert!(
         result.contains("#set par(leading: 0pt)"),
         "an auto-height row keeps zero leading: {result}"
     );
     assert!(
-        !result.contains(&format!("bottom-edge: -{}em", format_f64(descender))),
-        "an auto-height row must not be re-seated on the descender: {result}"
+        !result.contains(&format!(
+            "top-edge: {}em",
+            format_f64(ascender + 0.15 * word_pitch_em)
+        )),
+        "an auto-height row must not grow by the East Asian ascent: {result}"
     );
 }
 
@@ -1816,6 +1965,10 @@ fn mixed_alignment_tight_sheet_row_seats_every_cell_on_one_baseline() {
 /// different heights, so their anchors still split by the box difference —
 /// `04_payroll_ko`'s `E-1021` column sat 0.25pt off its Korean neighbours
 /// (issue #839).
+///
+/// Which family that is keys on the row's characters, and the cell order must
+/// not decide it: the Hangul picks Malgun Gothic whichever column carries it.
+/// The row's *box* is Malgun's bare hhea line either way (issue #1060).
 #[test]
 fn tight_sheet_row_resolves_one_metric_family_for_every_cell() {
     let Some((malgun_ascender, _malgun_descender, malgun_pitch_em)) =
@@ -1843,17 +1996,20 @@ fn tight_sheet_row_resolves_one_metric_family_for_every_cell() {
         })],
         ..TableCell::default()
     };
+    let make_row = |cells: Vec<TableCell>| TableRow {
+        minimum_height: None,
+        cells,
+        height: Some(14.0),
+    };
+    let korean = || make_cell("김민준", "Malgun Gothic");
+    let latin = || make_cell("E-1021", "Libertinus Serif");
     let table = Table {
-        rows: vec![TableRow {
-            minimum_height: None,
+        rows: vec![
             // A Korean name cell beside a Latin employee-number cell, as in
-            // the payroll's data rows.
-            cells: vec![
-                make_cell("김민준", "Malgun Gothic"),
-                make_cell("E-1021", "Libertinus Serif"),
-            ],
-            height: Some(14.0),
-        }],
+            // the payroll's data rows, then the same row reversed.
+            make_row(vec![korean(), latin()]),
+            make_row(vec![latin(), korean()]),
+        ],
         column_widths: vec![72.0, 72.0],
         default_vertical_align: Some(CellVerticalAlign::Bottom),
         seats_bottom_aligned_text_on_descender: true,
@@ -1865,21 +2021,20 @@ fn tight_sheet_row_resolves_one_metric_family_for_every_cell() {
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
     let result = generate_typst(&doc).unwrap().source;
 
-    let top_em: f64 = malgun_ascender + 0.15 * malgun_pitch_em;
     let row_box = format!(
         "top-edge: {}em, bottom-edge: -{}em",
-        format_f64(top_em),
-        format_f64(1.3 * malgun_pitch_em - top_em)
+        format_f64(malgun_ascender),
+        format_f64(malgun_pitch_em - malgun_ascender)
     );
     assert_eq!(
         result.matches(&row_box).count(),
-        2,
-        "both cells must take the row face's symmetric box: {result}"
+        4,
+        "every cell of both rows must take the row face's symmetric box: {result}"
     );
     assert_eq!(
         result.matches("align: horizon").count(),
-        2,
-        "both cells must anchor on the row's one centred line: {result}"
+        4,
+        "every cell must anchor on its row's one centred line: {result}"
     );
 }
 
