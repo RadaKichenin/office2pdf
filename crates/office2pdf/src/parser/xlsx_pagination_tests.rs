@@ -249,6 +249,7 @@ fn test_charts_stay_on_first_column_group() {
             y_offset_pt: 0.0,
             width: 200.0,
             height: 100.0,
+            print_scale: 1.0,
         }),
         chart: bar_chart(),
     }];
@@ -316,6 +317,7 @@ fn test_fit_to_width_scales_an_anchored_chart_with_the_grid() {
             y_offset_pt: 40.0,
             width: 600.0,
             height: 200.0,
+            print_scale: 1.0,
         }),
         chart: bar_chart(),
     }];
@@ -327,8 +329,48 @@ fn test_fit_to_width_scales_an_anchored_chart_with_the_grid() {
         .expect("the chart keeps its placement");
     assert_eq!(placement.x_offset_pt, 50.0);
     assert_eq!(placement.y_offset_pt, 20.0);
-    assert_eq!(placement.width, 300.0);
-    assert_eq!(placement.height, 100.0);
+    // The chart lays itself out in its full-size frame and is drawn shrunk,
+    // so the box it occupies on the page is the frame times the scale.
+    assert_eq!(placement.width * placement.print_scale, 300.0);
+    assert_eq!(placement.height * placement.print_scale, 100.0);
+}
+
+/// Excel scales a printed sheet whole, drawings included, so the chart's own
+/// text shrinks with its frame. Recording the scale beside the frame — rather
+/// than baking it into the frame — lets the renderer draw the whole chart
+/// shrunk; shrinking the frame alone printed the reported workbook's tick
+/// labels and legend at the size the chart XML declares, about 22% larger than
+/// Excel prints them (issue #1069).
+#[test]
+fn test_fit_to_width_records_the_print_scale_on_an_anchored_chart() {
+    let mut page = make_page(
+        vec![400.0, 400.0],
+        vec![TableRow {
+            minimum_height: None,
+            cells: vec![cell("left"), cell("right")],
+            height: Some(20.0),
+        }],
+    );
+    page.charts = vec![crate::ir::SheetChart {
+        anchor_row: 1,
+        placement: Some(crate::ir::SheetChartPlacement {
+            x_offset_pt: 100.0,
+            y_offset_pt: 40.0,
+            width: 600.0,
+            height: 200.0,
+            print_scale: 1.0,
+        }),
+        chart: bar_chart(),
+    }];
+
+    let pages = split_sheet_page_by_width(page, None, Some(1), true);
+
+    let placement = pages[0].charts[0]
+        .placement
+        .expect("the chart keeps its placement");
+    assert_eq!(placement.print_scale, 0.5);
+    assert_eq!(placement.width, 600.0);
+    assert_eq!(placement.height, 200.0);
 }
 
 /// Excel's auto-fit scale is a whole percent, truncated so the content is
