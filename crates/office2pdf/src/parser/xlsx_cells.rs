@@ -436,8 +436,10 @@ pub(super) struct SheetContext {
     /// The workbook Normal font, which every cell without its own font
     /// inherits (issue #462). `None` when `styles.xml` is unreadable.
     pub(super) normal_font: Option<NormalFont>,
-    /// Banded-row shading declared by the sheet's tables (issue #532).
-    pub(super) row_stripes: Vec<crate::parser::xlsx::tables::RowStripes>,
+    /// The paint the sheet's tables take from their built-in style: banded-row
+    /// shading (issue #532), header and foot rules, and a bold header row
+    /// (issue #1080).
+    pub(super) table_styles: Vec<crate::parser::xlsx::tables::TableStyleRange>,
     /// The workbook's colour scheme, which `<color theme="N"/>` indexes into
     /// (issue #853). Cloned rather than borrowed so the context stays free of
     /// the workbook's lifetime; it is twelve colours and a font scheme.
@@ -1114,6 +1116,35 @@ fn merged_range_border(
     (top.is_some() || bottom.is_some() || left.is_some() || right.is_some()).then_some(border)
 }
 
+/// Lay a table style's rules under whatever borders the cell declares itself.
+///
+/// Direct cell formatting beats the table style in Excel, so a side the cell
+/// already states is left alone and the style only fills in the rest
+/// (issue #1080) — the same precedence the banded fill follows.
+fn add_table_style_rules(
+    declared: Option<CellBorder>,
+    ctx: &SheetContext,
+    col: u32,
+    row: u32,
+) -> Option<CellBorder> {
+    let Some(rules) = ctx
+        .table_styles
+        .iter()
+        .find_map(|style| style.border_at(col, row))
+    else {
+        return declared;
+    };
+    let Some(declared) = declared else {
+        return Some(rules);
+    };
+    Some(CellBorder {
+        top: declared.top.or(rules.top),
+        bottom: declared.bottom.or(rules.bottom),
+        left: declared.left.or(rules.left),
+        right: declared.right.or(rules.right),
+    })
+}
+
 /// Build TableRows for a range of rows in a sheet.
 pub(super) fn build_rows_for_range(
     sheet: &umya_spreadsheet::Worksheet,
@@ -1156,6 +1187,16 @@ pub(super) fn build_rows_for_range(
                     extract_cell_text_style(cell, ctx.normal_font.as_ref(), ctx.theme.as_ref())
                 })
                 .unwrap_or_default();
+            // A table style prints its header row bold. The cell's own font
+            // wins where it declares a weight, and conditional formatting
+            // below overrides both (issue #1080).
+            if ctx
+                .table_styles
+                .iter()
+                .any(|style| style.bolds_header_at(col_idx, row_idx))
+            {
+                text_style.bold.get_or_insert(true);
+            }
             let (cell_alignment, cell_vertical_align) = umya_cell
                 .map(extract_cell_alignment)
                 .unwrap_or((None, None));
@@ -1173,6 +1214,7 @@ pub(super) fn build_rows_for_range(
                 Some(info) => merged_range_border(sheet, ctx, col_idx, row_idx, info),
                 None => umya_cell.and_then(|cell| extract_cell_borders(cell, ctx.theme.as_ref())),
             };
+            let border: Option<CellBorder> = add_table_style_rules(border, ctx, col_idx, row_idx);
 
             // Apply conditional formatting overrides
             let mut data_bar = None;
@@ -1275,7 +1317,7 @@ pub(super) fn build_rows_for_range(
             // An explicit cell fill wins; the table's banding only shows
             // through where the cell declares none (issue #532).
             let background: Option<Color> = background.or_else(|| {
-                ctx.row_stripes
+                ctx.table_styles
                     .iter()
                     .find_map(|stripes| stripes.fill_at(col_idx, row_idx))
             });
@@ -1457,7 +1499,7 @@ pub(super) fn prepare_sheet_context(
     normal_font: Option<&NormalFont>,
     raw_cond_fmt_hints: Option<&super::cond_fmt_raw::RawCondFmtHints>,
     defined_names: &HashMap<String, String>,
-    row_stripes: Vec<crate::parser::xlsx::tables::RowStripes>,
+    table_styles: Vec<crate::parser::xlsx::tables::TableStyleRange>,
     theme: Option<&umya_spreadsheet::structs::drawing::Theme>,
 ) -> Option<(SheetContext, u32, u32)> {
     let (mut max_col, mut max_row) = sheet.get_highest_column_and_row();
@@ -1527,7 +1569,7 @@ pub(super) fn prepare_sheet_context(
             merge_skips,
             cond_fmt_overrides,
             normal_font: normal_font.cloned(),
-            row_stripes,
+            table_styles,
             theme: theme.cloned(),
         },
         row_start,

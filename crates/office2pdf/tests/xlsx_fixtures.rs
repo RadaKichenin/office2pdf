@@ -1360,3 +1360,73 @@ fn structure_kpi_tracker_note_overflow_keeps_the_grid_on_one_page() {
         pages[0].table.column_widths
     );
 }
+
+/// `ExcelTables.xlsx` styles its `G1:I4` table `TableStyleLight1`. A native
+/// Excel-for-Mac export prints that style as a `#D9D9D9` band over the 1st and
+/// 3rd body rows, three full-width black 1pt rules — above the header, under
+/// it, and at the table's foot — and a bold header row (issue #1080).
+#[test]
+fn structure_light1_table_style_bands_rules_and_bolds_its_header() {
+    let pages = sheet_pages("ExcelTables.xlsx");
+    let rows = &pages[0].table.rows;
+    // The table occupies G1:I4, so column G is grid index 6 and its header
+    // sits on the first printed row.
+    let cell_at = |row: usize, col: usize| -> &TableCell { &rows[row].cells[col] };
+    let header = cell_at(0, 6);
+    assert_eq!(
+        header.content.len(),
+        1,
+        "G1 must still hold the header label"
+    );
+
+    let stripe = Some(Color {
+        r: 0xd9,
+        g: 0xd9,
+        b: 0xd9,
+    });
+    assert_eq!(cell_at(1, 6).background, stripe, "G2 is the first band");
+    assert_eq!(cell_at(2, 6).background, None, "G3 sits between the bands");
+    assert_eq!(cell_at(3, 6).background, stripe, "G4 is the second band");
+    assert_eq!(
+        cell_at(1, 3).background,
+        None,
+        "column D is outside the table"
+    );
+
+    let header_border = header.border.as_ref().expect("G1 carries the two rules");
+    for (side, name) in [
+        (&header_border.top, "above the header"),
+        (&header_border.bottom, "under the header"),
+    ] {
+        let side = side.as_ref().unwrap_or_else(|| panic!("rule {name}"));
+        assert_eq!(side.color, Color { r: 0, g: 0, b: 0 }, "rule {name}");
+        assert_eq!(side.width, 1.0, "rule {name} is a 1pt band");
+        assert_eq!(side.style, BorderLineStyle::Solid, "rule {name}");
+    }
+    let foot_border = cell_at(3, 6)
+        .border
+        .as_ref()
+        .expect("G4 carries the foot rule");
+    assert!(
+        foot_border.bottom.is_some(),
+        "the table's last row is ruled at its foot"
+    );
+    assert!(
+        foot_border.top.is_none(),
+        "no rule runs between the body rows"
+    );
+    assert!(
+        cell_at(2, 6).border.is_none(),
+        "an interior body row carries no rule"
+    );
+
+    let header_run = match &header.content[0] {
+        Block::Paragraph(paragraph) => &paragraph.runs[0],
+        other => panic!("header holds a paragraph, got {other:?}"),
+    };
+    assert_eq!(
+        header_run.style.bold,
+        Some(true),
+        "the table style prints its header row bold"
+    );
+}

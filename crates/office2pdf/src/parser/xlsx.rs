@@ -383,7 +383,7 @@ fn empty_sheet_context(
         merge_skips: std::collections::HashSet::new(),
         cond_fmt_overrides: std::collections::HashMap::new(),
         normal_font: normal_font.cloned(),
-        row_stripes: Vec::new(),
+        table_styles: Vec::new(),
         theme: theme.cloned(),
     }
 }
@@ -489,7 +489,7 @@ impl XlsxParser {
         let defined_names = cond_fmt_raw::extract_defined_names(data);
         let fitting_sheets = fit_to_page::sheets_fit_to_width(data);
         let print_options_by_sheet = print_options::sheets_print_options(data);
-        let mut row_stripes = tables::extract_row_stripes(data);
+        let mut table_styles = tables::extract_table_styles(data);
         let normal_font = extract_normal_font(data);
 
         let mut chart_map = extract_charts_with_anchors(data);
@@ -516,7 +516,7 @@ impl XlsxParser {
                 normal_font.as_ref(),
                 cond_fmt_hints.get(sheet.get_name()),
                 &defined_names,
-                row_stripes.remove(sheet.get_name()).unwrap_or_default(),
+                table_styles.remove(sheet.get_name()).unwrap_or_default(),
                 Some(book.get_theme()),
             ) else {
                 // A sheet without used cells can still carry drawings; give
@@ -770,7 +770,7 @@ impl Parser for XlsxParser {
         let defined_names = cond_fmt_raw::extract_defined_names(data);
         let fitting_sheets = fit_to_page::sheets_fit_to_width(data);
         let print_options_by_sheet = print_options::sheets_print_options(data);
-        let mut row_stripes = tables::extract_row_stripes(data);
+        let mut table_styles = tables::extract_table_styles(data);
         let normal_font = extract_normal_font(data);
 
         // Extract charts with anchor positions per sheet
@@ -799,7 +799,7 @@ impl Parser for XlsxParser {
                 normal_font.as_ref(),
                 cond_fmt_hints.get(sheet.get_name()),
                 &defined_names,
-                row_stripes.remove(sheet.get_name()).unwrap_or_default(),
+                table_styles.remove(sheet.get_name()).unwrap_or_default(),
                 Some(book.get_theme()),
             ) else {
                 // A sheet without used cells can still carry drawings; give
