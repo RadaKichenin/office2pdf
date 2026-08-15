@@ -1397,10 +1397,10 @@ fn write_list_item_trailing_gap(
 
 /// Emits an item's paragraphs.
 ///
-/// Each paragraph decides its own Hangul breaking from its own alignment, but
-/// against the *list's* fixed line box: whatever
-/// [`generate_list_with_spacing_model`] put in force on the wrapper is what a
-/// framed eojeol has to restore inside itself (issue #626).
+/// Each paragraph decides its own Hangul breaking from its own style — its
+/// effective `w:wordWrap` and its indents — but against the *list's* fixed
+/// line box: whatever [`generate_list_with_spacing_model`] put in force on the
+/// wrapper is what a framed eojeol has to restore inside itself (issue #626).
 fn write_list_item_content(out: &mut String, item: &crate::ir::ListItem, wrap: &ListEojeolWrap) {
     for para in &item.content {
         generate_runs(

@@ -782,7 +782,7 @@ fn a_docx_paragraph_keeps_each_hangul_eojeol_whole() {
 
 /// `w:wordWrap w:val="0"` asks Word for character-level breaking of Hangul,
 /// and it overrides the style chain. A paragraph that says so must not get the
-/// eojeol frames #626 gives every other non-justified paragraph (issue #730).
+/// eojeol frames #626 gives every other flow-page paragraph (issue #730).
 #[test]
 fn a_docx_paragraph_asking_for_character_breaking_gets_no_eojeol_frames() {
     let mut paragraph = korean_paragraph(EOJEOL_SENTENCE, None, None);
@@ -819,8 +819,14 @@ fn a_docx_paragraph_asking_for_word_breaking_keeps_its_eojeol_frames() {
     );
 }
 
+/// Justification does not decide how a Korean line breaks — the style rule
+/// does. A one-factor `w:jc` probe in a package that defines a default
+/// paragraph style measured Word breaking `… 체결되며 ABC | 주식회사와 …` at
+/// exactly the same two eojeol boundaries for `left`, `both`, `center` and
+/// `right`, stretching the justified first line 55.12pt to the measure rather
+/// than pulling `주` up onto it (issue #1084).
 #[test]
-fn a_justified_docx_paragraph_keeps_syllable_breaking() {
+fn a_justified_docx_paragraph_keeps_its_eojeol_frames() {
     let doc = make_doc(vec![make_flow_page(vec![korean_paragraph(
         EOJEOL_SENTENCE,
         Some(Alignment::Justify),
@@ -829,12 +835,32 @@ fn a_justified_docx_paragraph_keeps_syllable_breaking() {
     let result = generate_typst(&doc).unwrap().source;
 
     assert!(
+        result.contains("본 #box[계약은] #box[갑과] #box[을이]"),
+        "a justified line keeps each eojeol whole, as Word does: {result}"
+    );
+}
+
+/// Triangulation for the arm removed by #1084: the justified paragraphs that
+/// *were* measured breaking mid-eojeol — `02_contract_ko`'s, in a package
+/// defining no paragraph style — reach codegen carrying the effective
+/// `w:wordWrap w:val="0"` of the #732 style rule, and that is what has to
+/// suppress the frames.
+#[test]
+fn a_justified_docx_paragraph_in_a_style_less_package_gets_no_eojeol_frames() {
+    let mut paragraph = korean_paragraph(EOJEOL_SENTENCE, Some(Alignment::Justify), None);
+    if let Block::Paragraph(ref mut p) = paragraph {
+        p.style.word_wrap = Some(false);
+    }
+    let doc = make_doc(vec![make_flow_page(vec![paragraph])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
         result.contains(EOJEOL_SENTENCE),
-        "a justified line still breaks between syllables, as Word does: {result}"
+        "the text stays one run so Typst may break inside an eojeol: {result}"
     );
     assert!(
         !result.contains("#box["),
-        "no eojeol frame may be emitted on a justified line: {result}"
+        "no eojeol frame may be emitted when wordWrap is off: {result}"
     );
 }
 
