@@ -535,6 +535,7 @@ fn generate_pages(doc: &Document, options: &ConvertOptions) -> Result<TypstOutpu
     generate_document_metadata(&mut out, &doc.metadata);
     write_page_format_state(&mut out);
     if doc.pages.iter().any(|page| matches!(page, Page::Fixed(_))) {
+        write_powerpoint_ligature_state(&mut out);
         write_powerpoint_advance_grid_helpers(&mut out);
         out.push('\n');
     }

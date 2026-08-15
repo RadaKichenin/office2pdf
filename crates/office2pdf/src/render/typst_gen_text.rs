@@ -27,10 +27,31 @@ const EAST_ASIAN_AUTO_SPACE_EM: f64 = 0.25;
 /// sub-point error otherwise compounds across long slide lines (issue #661).
 const POWERPOINT_ADVANCE_GRID_PT: f64 = 0.125;
 
+/// Emit the ligature rule every PowerPoint slide follows.
+///
+/// PowerPoint does not apply the OpenType `liga`/`clig` features. DrawingML has
+/// no run property that asks for them — `a:rPr` carries `@spc`, `@kern` and
+/// `@baseline` but nothing for ligation — and a native macOS PowerPoint export
+/// of `customGeo.pptx` page 46 draws `testing:` and `setting:` as discrete
+/// glyphs with a dotted `i`. Typst ligates by default, so the same runs came
+/// out with the face's fused `ti`/`tti` form and a dotless `i`, which also
+/// pulled every glyph after the ligature left by the advance the merge saved —
+/// 1.4pt by the trailing colon of `setting:` (issue #1058).
+///
+/// Stated once for the document rather than on each run: it holds for every
+/// slide run including the emission sites that cannot name their own text, and
+/// only PowerPoint produces fixed pages, so nothing else can inherit it.
+/// Typst's `ligatures: false` switches off `liga` and `clig` alone, so the
+/// required-ligature and contextual features that Arabic and Indic shaping
+/// depend on (`rlig`, `ccmp`, `calt`) are untouched.
+pub(super) fn write_powerpoint_ligature_state(out: &mut String) {
+    let _ = writeln!(out, "#set text(ligatures: false)");
+}
+
 /// Emit the contextual Typst helpers used by fixed-page (PowerPoint) text.
 ///
-/// A word stays one shaped item, preserving its kerning, ligatures, and PDF
-/// text mapping. Only its horizontal scale and layout width change by the
+/// A word stays one shaped item, preserving its kerning and PDF text mapping.
+/// Only its horizontal scale and layout width change by the
 /// difference between exact and independently grid-rounded nominal glyph
 /// widths. Pair kerning therefore remains part of the shaped word instead of
 /// being lost to one-box-per-glyph output. Spaces remain real text characters
@@ -2683,8 +2704,8 @@ fn can_snap_powerpoint_run(text: &str) -> bool {
 /// Write one Latin slide run on PowerPoint's 1/8pt advance grid.
 ///
 /// Words are shaped whole and scaled only by the accumulated nominal rounding
-/// delta. That retains pair kerning and ligatures; a per-glyph box would lose
-/// both and fragment the PDF text layer. A zero-size box restores the native
+/// delta. That retains pair kerning; a per-glyph box would lose it and
+/// fragment the PDF text layer. A zero-size box restores the native
 /// break opportunity after a hyphen without adding a character to extraction.
 fn write_powerpoint_grid_run_content(
     out: &mut String,
