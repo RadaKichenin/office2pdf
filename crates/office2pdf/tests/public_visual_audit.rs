@@ -101,30 +101,171 @@ fn relative_image_paths(images: &[PathBuf], report_dir: &Path) -> Vec<String> {
         .collect()
 }
 
+/// How a format's ground truth is produced: which AppleScript exports it, and
+/// which sandboxed Microsoft app that script drives.
+struct NativeExporter {
+    /// File name under `scripts/macos/`.
+    script: &'static str,
+    /// Bundle identifier, i.e. the app's container directory name.
+    bundle_id: &'static str,
+    /// How the app is named in a failure message.
+    app_name: &'static str,
+}
+
+fn native_exporter(format: Format) -> NativeExporter {
+    match format {
+        Format::Docx => NativeExporter {
+            script: "export_word_pdfs.applescript",
+            bundle_id: "com.microsoft.Word",
+            app_name: "Word",
+        },
+        Format::Pptx => NativeExporter {
+            script: "export_powerpoint_pdfs.applescript",
+            bundle_id: "com.microsoft.Powerpoint",
+            app_name: "PowerPoint",
+        },
+        Format::Xlsx => NativeExporter {
+            script: "export_excel_pdfs.applescript",
+            bundle_id: "com.microsoft.Excel",
+            app_name: "Excel",
+        },
+    }
+}
+
+/// Directory a GT export stages the fixtures and PDFs it hands the native app.
+///
+/// The Microsoft apps are sandboxed: a fixture opened from, or a PDF saved to,
+/// anywhere outside the app's own container costs a per-file "Grant Access"
+/// dialog, and an unattended export stalls on the first one (#1051, #1082).
+/// Reaching into a *different* app's container prompts just the same, so each
+/// format stages in the container of the app that opens it.
+fn office_stage_dir(containers_root: &Path, format: Format) -> PathBuf {
+    containers_root
+        .join(native_exporter(format).bundle_id)
+        .join("Data")
+        .join("visual-audit")
+}
+
+fn home_containers_root() -> PathBuf {
+    PathBuf::from(std::env::var_os("HOME").expect("HOME is set"))
+        .join("Library")
+        .join("Containers")
+}
+
+/// Copy every case's fixture into `stage`; return the exporter's `(id, path)`
+/// arguments.
+///
+/// Each copy is named after the case id, which `assert_manifest_cases` pins as
+/// unique — two cases pointing at one fixture would otherwise share a staged
+/// file and race each other.
+fn stage_fixtures(
+    stage: &Path,
+    fixtures_dir: &Path,
+    cases: &[VisualAuditCase],
+) -> Vec<(String, PathBuf)> {
+    let input_dir = stage.join("input");
+    std::fs::create_dir_all(&input_dir).expect("create staged fixture directory");
+    cases
+        .iter()
+        .map(|case| {
+            let source = fixtures_dir.join(&case.fixture);
+            let staged = input_dir.join(match source.extension() {
+                Some(extension) => format!("{}.{}", case.id, extension.to_string_lossy()),
+                None => case.id.clone(),
+            });
+            std::fs::copy(&source, &staged).unwrap_or_else(|error| {
+                panic!("stage visual audit fixture {}: {error}", source.display())
+            });
+            (case.id.clone(), staged)
+        })
+        .collect()
+}
+
+/// Move every PDF the sandboxed app wrote into `destination`; return the count.
+///
+/// A plain rename would fail when `VISUAL_AUDIT_DIR` points at another volume,
+/// so the PDFs are copied and then dropped from the container.
+fn collect_exported_pdfs(staged_pdf_dir: &Path, destination: &Path) -> usize {
+    std::fs::create_dir_all(destination).expect("create ground truth directory");
+    let mut exported: usize = 0;
+    for entry in std::fs::read_dir(staged_pdf_dir).expect("read staged PDF directory") {
+        let path = entry.expect("read staged PDF entry").path();
+        if !path
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("pdf"))
+        {
+            continue;
+        }
+        let target = destination.join(path.file_name().expect("staged PDF file name"));
+        std::fs::copy(&path, &target)
+            .unwrap_or_else(|error| panic!("copy GT PDF out of the container: {error}"));
+        std::fs::remove_file(&path)
+            .unwrap_or_else(|error| panic!("drop the container's GT PDF copy: {error}"));
+        exported += 1;
+    }
+    exported
+}
+
+/// Export every manifest case with the native app that owns `format`.
+///
+/// The app only ever sees paths inside its own container; the PDFs are moved
+/// into `ground_truth_dir` once it has quit.
+fn export_ground_truth(
+    manifest: &VisualAuditManifest,
+    format: Format,
+    fixtures_dir: &Path,
+    ground_truth_dir: &Path,
+) {
+    let exporter = native_exporter(format);
+    assert_eq!(
+        std::env::consts::OS,
+        "macos",
+        "Microsoft {} GT export is only available on macOS",
+        exporter.app_name
+    );
+    std::fs::create_dir_all(ground_truth_dir).expect("create GT directory");
+
+    // A stage left behind by an aborted run would hand the audit its stale
+    // PDFs, so start from nothing.
+    let stage = office_stage_dir(&home_containers_root(), format);
+    if stage.exists() {
+        std::fs::remove_dir_all(&stage).expect("clean stale sandbox stage");
+    }
+    let staged_pdf_dir = stage.join("pdf");
+    std::fs::create_dir_all(&staged_pdf_dir).expect("create staged PDF directory");
+
+    let mut command = Command::new("osascript");
+    command
+        .arg(project_root().join("scripts/macos").join(exporter.script))
+        .arg(&staged_pdf_dir);
+    for (id, staged_fixture) in stage_fixtures(&stage, fixtures_dir, &manifest.cases) {
+        command.arg(id).arg(staged_fixture);
+    }
+    let output = command.output().expect("run native GT exporter");
+
+    // Salvage whatever did export before reporting a partial batch's failure.
+    let exported = collect_exported_pdfs(&staged_pdf_dir, ground_truth_dir);
+    std::fs::remove_dir_all(&stage).expect("remove the sandbox stage");
+    assert!(
+        output.status.success(),
+        "{} GT export failed:\nstdout: {}\nstderr: {}",
+        exporter.app_name,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        exported > 0,
+        "{} exported no PDFs at all",
+        exporter.app_name
+    );
+}
+
 fn generate_powerpoint_ground_truth(
     manifest: &VisualAuditManifest,
     fixtures_dir: &Path,
     ground_truth_dir: &Path,
 ) {
-    assert_eq!(
-        std::env::consts::OS,
-        "macos",
-        "Microsoft PowerPoint GT export is only available on macOS"
-    );
-    std::fs::create_dir_all(ground_truth_dir).expect("create PowerPoint GT directory");
-    let script = project_root().join("scripts/macos/export_powerpoint_pdfs.applescript");
-    let mut command = Command::new("osascript");
-    command.arg(script).arg(ground_truth_dir);
-    for case in &manifest.cases {
-        command.arg(&case.id).arg(fixtures_dir.join(&case.fixture));
-    }
-    let output = command.output().expect("run PowerPoint GT exporter");
-    assert!(
-        output.status.success(),
-        "PowerPoint GT export failed:\nstdout: {}\nstderr: {}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
+    export_ground_truth(manifest, Format::Pptx, fixtures_dir, ground_truth_dir);
 }
 
 fn generate_excel_ground_truth(
@@ -132,25 +273,7 @@ fn generate_excel_ground_truth(
     fixtures_dir: &Path,
     ground_truth_dir: &Path,
 ) {
-    assert_eq!(
-        std::env::consts::OS,
-        "macos",
-        "Microsoft Excel GT export is only available on macOS"
-    );
-    std::fs::create_dir_all(ground_truth_dir).expect("create Excel GT directory");
-    let script = project_root().join("scripts/macos/export_excel_pdfs.applescript");
-    let mut command = Command::new("osascript");
-    command.arg(script).arg(ground_truth_dir);
-    for case in &manifest.cases {
-        command.arg(&case.id).arg(fixtures_dir.join(&case.fixture));
-    }
-    let output = command.output().expect("run Excel GT exporter");
-    assert!(
-        output.status.success(),
-        "Excel GT export failed:\nstdout: {}\nstderr: {}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
+    export_ground_truth(manifest, Format::Xlsx, fixtures_dir, ground_truth_dir);
 
     for case in &manifest.cases {
         let prefix = format!("{}-sheet-", case.id);
@@ -376,6 +499,137 @@ fn run_visual_audit(
         manifest.format.to_uppercase(),
         report_dir.display()
     );
+}
+
+/// A scratch directory for the staging tests below, unique per call.
+///
+/// Tests run in parallel threads of one process, so a shared name would let
+/// two of them delete each other's files mid-assertion.
+fn scratch_dir(label: &str) -> PathBuf {
+    static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let path = std::env::temp_dir().join(format!(
+        "office2pdf-visual-audit-{label}-{}-{}",
+        std::process::id(),
+        COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
+    if path.exists() {
+        std::fs::remove_dir_all(&path).expect("clean scratch directory");
+    }
+    std::fs::create_dir_all(&path).expect("create scratch directory");
+    path
+}
+
+#[test]
+fn each_format_is_exported_by_its_own_sandboxed_app() {
+    // Reaching into another app's container prompts exactly like reaching
+    // outside the sandbox, so the container has to match the exporter.
+    let powerpoint = native_exporter(Format::Pptx);
+    assert_eq!(powerpoint.bundle_id, "com.microsoft.Powerpoint");
+    assert_eq!(powerpoint.script, "export_powerpoint_pdfs.applescript");
+
+    let excel = native_exporter(Format::Xlsx);
+    assert_eq!(excel.bundle_id, "com.microsoft.Excel");
+    assert_eq!(excel.script, "export_excel_pdfs.applescript");
+
+    assert!(
+        project_root()
+            .join("scripts/macos")
+            .join(powerpoint.script)
+            .is_file()
+    );
+    assert!(
+        project_root()
+            .join("scripts/macos")
+            .join(excel.script)
+            .is_file()
+    );
+}
+
+#[test]
+fn the_ground_truth_stage_sits_inside_the_driven_apps_container() {
+    let containers = Path::new("/home/tester/Library/Containers");
+    assert!(
+        office_stage_dir(containers, Format::Pptx)
+            .starts_with(containers.join("com.microsoft.Powerpoint").join("Data")),
+        "PowerPoint GT must stage inside PowerPoint's container"
+    );
+    assert_ne!(
+        office_stage_dir(containers, Format::Pptx),
+        office_stage_dir(containers, Format::Xlsx)
+    );
+}
+
+#[test]
+fn staged_fixtures_are_container_local_copies_named_by_case_id() {
+    let stage = scratch_dir("stage");
+    let fixtures = scratch_dir("fixtures");
+    std::fs::write(fixtures.join("bar-chart.pptx"), b"PK fixture").expect("write fixture");
+    let cases = vec![
+        VisualAuditCase {
+            id: "chart".to_string(),
+            fixture: "bar-chart.pptx".to_string(),
+            focus: "chart".to_string(),
+        },
+        VisualAuditCase {
+            id: "chart-again".to_string(),
+            fixture: "bar-chart.pptx".to_string(),
+            focus: "chart".to_string(),
+        },
+    ];
+
+    let jobs = stage_fixtures(&stage, &fixtures, &cases);
+
+    assert_eq!(jobs.len(), 2);
+    for (index, (id, staged)) in jobs.iter().enumerate() {
+        assert_eq!(id, &cases[index].id);
+        assert!(
+            staged.starts_with(&stage),
+            "fixture staged outside the container: {}",
+            staged.display()
+        );
+        assert_eq!(
+            staged.file_name().and_then(|name| name.to_str()),
+            Some(format!("{id}.pptx").as_str()),
+            "two cases sharing one fixture must not collide"
+        );
+        assert_eq!(
+            std::fs::read(staged).expect("read staged fixture"),
+            b"PK fixture"
+        );
+    }
+
+    std::fs::remove_dir_all(&stage).ok();
+    std::fs::remove_dir_all(&fixtures).ok();
+}
+
+#[test]
+fn exported_pdfs_are_moved_out_of_the_container() {
+    let staged_pdf_dir = scratch_dir("exported");
+    let destination = scratch_dir("ground-truth").join("nested");
+    std::fs::write(staged_pdf_dir.join("chart.pdf"), b"%PDF chart").expect("write staged PDF");
+    std::fs::write(staged_pdf_dir.join("grid-sheet-01.pdf"), b"%PDF sheet")
+        .expect("write staged sheet PDF");
+    std::fs::write(staged_pdf_dir.join("chart.pptx"), b"PK copy").expect("write staged package");
+
+    let moved = collect_exported_pdfs(&staged_pdf_dir, &destination);
+
+    assert_eq!(moved, 2);
+    assert_eq!(
+        std::fs::read(destination.join("chart.pdf")).expect("read moved PDF"),
+        b"%PDF chart"
+    );
+    assert!(destination.join("grid-sheet-01.pdf").is_file());
+    assert!(
+        !staged_pdf_dir.join("chart.pdf").exists(),
+        "the container copy must not linger"
+    );
+    assert!(
+        staged_pdf_dir.join("chart.pptx").is_file(),
+        "only PDFs are the export's product"
+    );
+
+    std::fs::remove_dir_all(&staged_pdf_dir).ok();
+    std::fs::remove_dir_all(destination.parent().expect("scratch parent")).ok();
 }
 
 #[test]

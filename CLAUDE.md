@@ -280,6 +280,13 @@ overrides that and must still sit on the internal disk: the sandbox cannot
 write to `/Volumes` at all (AppleEvent timeout -1712), which the harness
 enforces.
 
+The same container rule binds every other caller of those AppleScripts. The
+`GENERATE_MICROSOFT_GT=1` exports in `public_visual_audit.rs` and
+`scripts/measure_powerpoint_chart_axis.py` stage the fixtures and the PDFs in
+the driven app's container and copy the results out afterwards; the last
+caller, `scripts/macos/export_business_golden_pdfs.sh`, still stages under the
+checkout (#1128).
+
 ### Fine-detail analysis (thin and small elements)
 
 Whole-page thumbnails at 80 DPI hide hairlines, dash patterns, font weight, and sub-pixel offsets. For every compared page:

@@ -18,6 +18,11 @@ chart text size or graphic-frame width. Frame-width output also reports the
 plot width recovered from the longest bar, which is the width the scaling rule
 actually consumes.
 
+Every probe package and every exported PDF is staged inside PowerPoint's own
+sandbox container and the stage is removed when the run ends, so an unattended
+run never stops on a "Grant Access" dialog (#1082). ``--keep`` copies the
+packages and PDFs out to a directory of your choice before that cleanup.
+
 Requires macOS, Microsoft PowerPoint, ``pdftotext`` (Poppler), and, for
 ``frame-width``, ``mutool`` (MuPDF).
 """
@@ -27,14 +32,17 @@ from __future__ import annotations
 import argparse
 import io
 import re
+import shutil
 import subprocess
-import tempfile
 import zipfile
 from pathlib import Path
+
+import probe_harness
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_FIXTURE = REPO_ROOT / "tests/fixtures/pptx/bar-chart.pptx"
 POWERPOINT_EXPORTER = REPO_ROOT / "scripts/macos/export_powerpoint_pdfs.applescript"
+STAGE_NAME = "powerpoint-chart-axis"
 
 SERIES_VALUES: tuple[float, ...] = (8.2, 3.2, 1.4, 1.2)
 FIXTURE_MAX = max(SERIES_VALUES)
@@ -145,6 +153,32 @@ def build_probe(source: Path, destination: Path, mode: str, value: float) -> Non
             archive_out.writestr(item, payload)
 
 
+def container_stage() -> Path:
+    """Directory PowerPoint can open and save in without a consent dialog.
+
+    The app is sandboxed: a package it opens from, or a PDF it saves to,
+    anywhere outside its own container costs a per-file "Grant Access" dialog,
+    and an unattended run stalls on the first one (#1051, #1082). The probe
+    harness already maps a format to its app's container, so reuse that rather
+    than spelling the path out a second time. Its own subdirectory keeps a
+    concurrent ``probe_harness.py`` run from clearing these packages.
+    """
+    return probe_harness.default_stage_root("office", ".pptx") / STAGE_NAME
+
+
+def mirror_stage(stage: Path, destination: Path) -> None:
+    """Copy the staged probe packages and their PDFs out of the container."""
+    for name in ("pptx", "pdf"):
+        source = stage / name
+        if not source.is_dir():
+            continue
+        target = destination / name
+        target.mkdir(parents=True, exist_ok=True)
+        for item in sorted(source.iterdir()):
+            if item.is_file():
+                shutil.copyfile(item, target / item.name)
+
+
 def export_probes(probes: list[tuple[str, Path]], out_dir: Path) -> None:
     command = ["osascript", str(POWERPOINT_EXPORTER), str(out_dir)]
     for identifier, probe in probes:
@@ -202,7 +236,7 @@ def plot_width(pdf: Path, axis_max: float) -> float:
     return max(widths) * axis_max / FIXTURE_MAX
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("values", type=float, nargs="+")
     parser.add_argument(
@@ -212,26 +246,26 @@ def main() -> int:
     )
     parser.add_argument("--fixture", type=Path, default=DEFAULT_FIXTURE)
     parser.add_argument("--rust", action="store_true", help="emit Rust rows")
-    parser.add_argument("--keep", type=Path, help="keep generated PPTX/PDF probes here")
-    args = parser.parse_args()
+    parser.add_argument(
+        "--keep", type=Path, help="copy the generated PPTX/PDF probes out to here"
+    )
+    args = parser.parse_args(argv)
 
     for required in (args.fixture, POWERPOINT_EXPORTER):
         if not required.is_file():
             raise SystemExit(f"required file not found: {required}")
 
-    temporary: tempfile.TemporaryDirectory[str] | None = None
-    if args.keep is None:
-        temporary = tempfile.TemporaryDirectory(prefix="powerpoint-chart-axis-")
-        work_root = Path(temporary.name)
-    else:
-        work_root = args.keep
-        work_root.mkdir(parents=True, exist_ok=True)
+    # Both the packages PowerPoint opens and the PDFs it writes stay in its own
+    # sandbox container for the whole run; a leftover stage from an aborted run
+    # would otherwise feed stale PDFs to the measurement below.
+    work_root = container_stage()
+    shutil.rmtree(work_root, ignore_errors=True)
 
     try:
         probe_dir = work_root / "pptx"
         pdf_dir = work_root / "pdf"
-        probe_dir.mkdir(exist_ok=True)
-        pdf_dir.mkdir(exist_ok=True)
+        probe_dir.mkdir(parents=True)
+        pdf_dir.mkdir(parents=True)
         probes: list[tuple[str, Path]] = []
         for value in args.values:
             identifier = f"{args.mode}-{slug(value)}"
@@ -239,6 +273,10 @@ def main() -> int:
             build_probe(args.fixture, probe, args.mode, value)
             probes.append((identifier, probe))
         export_probes(probes, pdf_dir)
+        # Copy out before measuring, so an analysis failure still leaves the
+        # artifacts behind for inspection.
+        if args.keep is not None:
+            mirror_stage(work_root, args.keep)
 
         if not args.rust:
             suffix = "     plot pt" if args.mode == "frame-width" else ""
@@ -271,8 +309,7 @@ def main() -> int:
                     f"{format_number(step):>12}"
                 )
     finally:
-        if temporary is not None:
-            temporary.cleanup()
+        shutil.rmtree(work_root, ignore_errors=True)
     return 0
 
 
