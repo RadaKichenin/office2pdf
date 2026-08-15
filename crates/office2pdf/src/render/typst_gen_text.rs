@@ -437,6 +437,11 @@ impl<'a> WordRunLineMetrics<'a> {
 /// instead moved nothing between single-line paragraphs — a slide's code block
 /// is one `<a:p>` per line — so the lines overlapped (issue #541).
 ///
+/// The seat inside that line is measured in whole points rather than in em, so
+/// this needs the paragraph's font size; the largest declared size is the one
+/// the line box already keys on, and a run set smaller inside the same
+/// paragraph rides the same line.
+///
 /// `None` when the paragraph carries its own line box, when its spacing is an
 /// absolute `a:spcPts` advance, or when the font's metrics are unknown.
 fn powerpoint_paragraph_line_box_em(runs: &[Run], style: &ParagraphStyle) -> Option<(f64, f64)> {
@@ -452,33 +457,84 @@ fn powerpoint_paragraph_line_box_em(runs: &[Run], style: &ParagraphStyle) -> Opt
         .iter()
         .find_map(|run| run.style.font_family.as_deref())
         .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_FAMILY);
-    let (_ascent_em, descent_em) = crate::render::pdf::powerpoint_line_box_em(family)?;
-    Some(powerpoint_percentage_line_box_em(descent_em, percent))
+    let (ascent_em, _descent_em) = crate::render::pdf::powerpoint_line_box_em(family)?;
+    Some(powerpoint_percentage_line_box_em(
+        ascent_em,
+        paragraph_font_size_pt(runs),
+        percent,
+    ))
 }
 
 /// The `(above baseline, below baseline)` split, in em, of a line an
-/// `<a:lnSpc><a:spcPct>` has resized to `percent` of PowerPoint's 1.2em box.
+/// `<a:lnSpc><a:spcPct>` has resized to `percent` of PowerPoint's 1.2em box,
+/// for text set at `font_size_pt`. `ascent_em` is the plain line's own
+/// above-baseline share, as [`crate::render::pdf::powerpoint_line_box_em`]
+/// splits it.
+///
+/// **PowerPoint seats a baseline a whole number of points below its line box's
+/// top**, and the descent gap is whatever is left of the line. So the seat's
+/// share of the em is not constant across sizes, and neither is the gap:
+/// measured on native PowerPoint 16.112 exports, Avenir Next LT Pro keeps
+/// 0.192em under its baseline at 10pt and 0.2625em at 32pt. A one-factor probe
+/// deck of bottom-anchored boxes with every inset zeroed — Georgia (1.13623em,
+/// fits the box), Verdana (1.21533em), Avenir Next LT Pro (1.21289em) and
+/// Posterama (1.33008em) at 8, 11, 14, 18, 24, 28, 32, 36, 40, 44, 48, 54, 72
+/// and 100pt — puts all 56 cells on `1.2 x size - round(share x size)` within
+/// the exports' 0.12pt half-grid, and none of them within 0.12pt of the
+/// unrounded share. Carrying the share as a plain em fraction left every slide
+/// of the #841 Contoso deck that repeats its 10pt footer band 0.55pt high
+/// (issue #1074).
+///
+/// The rounding is the whole of that fit only for the three faces that overflow
+/// the box. Georgia fits it, and its cells land on the *proportional* share
+/// rounded, not on the even split
+/// [`crate::render::pdf::powerpoint_line_box_split_em`] hands a fitting face —
+/// which is 2.04pt out at 100pt. That is a separate root cause, tracked in
+/// #1118; this function rounds whichever share it is given.
 ///
 /// PowerPoint resizes the line from its **top**: the gap the face keeps below
-/// its baseline is `descent_em` whatever the percentage, and the ascent side
-/// absorbs the whole change.
-///
-/// Measured on native PowerPoint 16.112 exports, both against the plain-box
-/// control for the same face and size. Arial 38pt drops its first baseline
-/// 36.96pt below the content top plain and 30.00pt under `val="85000"`: a
-/// 6.96pt loss where the line itself loses 6.84pt, so the descent gap moved by
-/// 0.12pt — half of the 0.24pt grid those exports quantise positions to. All 18
+/// its baseline is the plain line's `1.2em - ascent_em` whatever the
+/// percentage, and the ascent side absorbs the whole change, so the percentage
+/// enters only through the advance the seat is measured back from. Measured on
+/// the same exports, against the plain-box control for the same face and size:
+/// Arial 38pt drops its first baseline 36.96pt below the content top plain and
+/// 30.00pt under `val="85000"`, a 6.96pt loss where the line loses 6.84pt. All 18
 /// Posterama titles of the #841 Contoso deck agree across 30, 32, 36, 38, 46 and
 /// 50pt. Scaling both sides by the percentage instead, which is what the even
 /// division of a *taller* box implies, left every one of those titles 1.8-3.7pt
 /// low (issues #1020, #1024).
 ///
-/// The descent gap cannot outgrow the line it sits in, so a percentage small
-/// enough to close the box takes the ascent to zero rather than negative.
-pub(super) fn powerpoint_percentage_line_box_em(descent_em: f64, percent: f64) -> (f64, f64) {
+/// The rounding lands on the **scaled** seat, measured back from the plain
+/// line's unrounded gap, so there is one rounding and not two. Rounding the
+/// plain seat to a point first and subtracting that from the scaled advance
+/// predicts 10pt for slide 8's 14pt `Heraclitus` attribution under
+/// `val="85000"`, where the export seats it 11.04pt below the content top; this
+/// form predicts 11. The #841 deck's other `spcPct` frames cannot tell the two
+/// apart — its 30pt centred and 38pt top-anchored Posterama titles land on 23pt
+/// and 29pt either way — so that one attribution carries the distinction.
+///
+/// The seat cannot outgrow the line it sits in, so a percentage small enough to
+/// close the box takes the ascent to zero rather than negative.
+pub(super) fn powerpoint_percentage_line_box_em(
+    ascent_em: f64,
+    font_size_pt: f64,
+    percent: f64,
+) -> (f64, f64) {
     let advance_em: f64 = (crate::render::pdf::POWERPOINT_LINE_HEIGHT_FACTOR * percent).max(0.0);
-    let below_em: f64 = descent_em.clamp(0.0, advance_em);
-    (advance_em - below_em, below_em)
+    let below_em: f64 = crate::render::pdf::POWERPOINT_LINE_HEIGHT_FACTOR - ascent_em;
+    if font_size_pt.is_nan() || font_size_pt <= 0.0 {
+        // Nothing to round against; fall back to the bare em split.
+        let below_em: f64 = below_em.clamp(0.0, advance_em);
+        return (advance_em - below_em, below_em);
+    }
+    let advance_pt: f64 = advance_em * font_size_pt;
+    let seat_pt: f64 = ((advance_em - below_em) * font_size_pt)
+        .round()
+        .clamp(0.0, advance_pt);
+    (
+        seat_pt / font_size_pt,
+        (advance_pt - seat_pt) / font_size_pt,
+    )
 }
 
 pub(super) fn powerpoint_line_height_settings(
