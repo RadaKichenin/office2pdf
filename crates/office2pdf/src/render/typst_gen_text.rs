@@ -3281,21 +3281,28 @@ fn write_text_params_inner(out: &mut String, style: &TextStyle, kerning_text: Ke
 /// text must not take the surrounding answer, and a parameter that is merely
 /// omitted takes whatever the nearest `#set text` says.
 fn kerning_param(style: &TextStyle, kerning_text: KerningText<'_>) -> Option<String> {
-    // A tracked run states its own inter-glyph spacing. A pair kern lands on
-    // top of that, and where the face is a substitute its pairs are not the
-    // ones the document was set in — the combined advance can exceed the gap a
-    // PDF text extractor reads as a word break. On the deck in issue #864 that
-    // split five titles: `ANSATTE` extracted as `ANSAT TE` while the glyphs
-    // rendered continuously, because the T/T pair came to 0.115em against the
-    // reference's 0.078em.
-    //
-    // The RTL exemption still wins: switching the `kern` feature off there
-    // costs glyphs, which is worse than a word break.
-    if style.letter_spacing.is_some_and(|spacing| spacing != 0.0)
-        && !rtl_shaping_exemption_is_active()
-        && matches!(kerning_text, KerningText::Known(_))
-    {
-        return Some("kerning: false".to_string());
+    // A tracked run whose format answers the kerning question for itself takes
+    // that answer, not the fallback below: PowerPoint reads `kern` and `spc`
+    // off the same `a:rPr` and applies both, so a 38pt title under the deck's
+    // `kern="1200"` is kerned *and* tracked (issue #1073).
+    if !tracked_run_states_its_own_kerning(style) {
+        // Otherwise a tracked run states only its own inter-glyph spacing. A
+        // pair kern lands on top of that, and where the face is a substitute
+        // its pairs are not the ones the document was set in — the combined
+        // advance can exceed the gap a PDF text extractor reads as a word
+        // break. On the deck in issue #864 that split five titles: `ANSATTE`
+        // extracted as `ANSAT TE` while the glyphs rendered continuously,
+        // because the T/T pair came to 0.115em against the reference's
+        // 0.078em.
+        //
+        // The RTL exemption still wins: switching the `kern` feature off there
+        // costs glyphs, which is worse than a word break.
+        if style.letter_spacing.is_some_and(|spacing| spacing != 0.0)
+            && !rtl_shaping_exemption_is_active()
+            && matches!(kerning_text, KerningText::Known(_))
+        {
+            return Some("kerning: false".to_string());
+        }
     }
     let pair_kerning: PairKerning = style.pair_kerning?;
     let kerns: bool = pair_kerning.applies_at(style.font_size)
@@ -3307,6 +3314,25 @@ fn kerning_param(style: &TextStyle, kerning_text: KerningText<'_>) -> Option<Str
             KerningText::Unknown => true,
         };
     Some(format!("kerning: {kerns}"))
+}
+
+/// Whether a tracked run's own format already decides pair kerning, so the
+/// blanket rule of issue #864 must stand aside for it.
+///
+/// Two things have to hold together. The format must state a threshold at all
+/// — `w:kern`, or DrawingML's `kern`, which every PowerPoint master writes on
+/// its `titleStyle` — because absence leaves us guessing and the guess that
+/// protects the text layer is "do not kern". And the run's own face must be
+/// present, because #864's failure is specifically a *substitute's* kern pairs
+/// riding on top of tracking the document sized for a different face: the
+/// stated threshold says what PowerPoint would do with the real font, and says
+/// nothing about the one we actually reach for.
+fn tracked_run_states_its_own_kerning(style: &TextStyle) -> bool {
+    style.pair_kerning.is_some()
+        && style
+            .font_family
+            .as_deref()
+            .is_some_and(font_subst::is_primary_font_available)
 }
 
 thread_local! {

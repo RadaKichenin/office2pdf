@@ -161,6 +161,40 @@ fn test_text_box_without_spc_has_no_tracking() {
 }
 
 #[test]
+fn test_text_box_kern_threshold_is_hundredths_of_a_point() {
+    // DrawingML's `kern` is the size pair kerning starts at, in hundredths of
+    // a point — the unit `sz` and `spc` use. Every PowerPoint master writes
+    // `kern="1200"` on its `titleStyle`, which is where the 38pt titles of
+    // issue #1073 take their threshold from.
+    let runs_xml = r#"<a:r><a:rPr sz="3800" kern="1200" spc="300"/><a:t>RAPPORTSTATUS</a:t></a:r>"#;
+
+    let style = run_style_for(runs_xml);
+    assert_eq!(style.pair_kerning, Some(PairKerning::AtOrAbovePt(12.0)));
+    assert_eq!(style.letter_spacing, Some(3.0));
+}
+
+#[test]
+fn test_text_box_kern_zero_states_never() {
+    // `kern="0"` is how DrawingML records "do not kern this", not "kern from
+    // 0pt up".
+    let runs_xml = r#"<a:r><a:rPr sz="3800" kern="0"/><a:t>Unkerned</a:t></a:r>"#;
+
+    assert_eq!(
+        run_style_for(runs_xml).pair_kerning,
+        Some(PairKerning::Never)
+    );
+}
+
+#[test]
+fn test_text_box_without_kern_leaves_the_decision_unstated() {
+    // Absence is inheritance in DrawingML, so it must stay `None` for the
+    // enclosing list style to answer.
+    let runs_xml = r#"<a:r><a:rPr sz="1800"/><a:t>Inheriting</a:t></a:r>"#;
+
+    assert_eq!(run_style_for(runs_xml).pair_kerning, None);
+}
+
+#[test]
 fn test_text_box_run_baseline_preserves_positive_and_negative_offsets() {
     let runs_xml = concat!(
         r#"<a:r><a:rPr sz="1800"/><a:t>Body</a:t></a:r>"#,

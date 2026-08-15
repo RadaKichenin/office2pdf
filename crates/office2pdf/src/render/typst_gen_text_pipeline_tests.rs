@@ -1609,8 +1609,9 @@ fn test_run_below_kern_threshold_disables_kerning() {
 
 #[test]
 fn test_format_without_kerning_model_emits_no_kerning_parameter() {
-    // PPTX and XLSX leave `pair_kerning` unset — this issue is Word's rule
-    // only, so their markup must be untouched.
+    // XLSX states no threshold at all, and a PPTX run inherits `None` until a
+    // `kern` turns up on its own `a:rPr` or a list style above it — an
+    // unstated rule must leave the engine's own default standing.
     let doc = make_doc(vec![make_flow_page(vec![styled_paragraph(
         "Slide title",
         TextStyle {
@@ -2213,5 +2214,95 @@ fn test_rtl_run_keeps_kerning_despite_tracking() {
     assert!(
         !source.contains("kerning: false"),
         "the tracking rule must not reach RTL text: {source}"
+    );
+}
+
+/// Issue #1073: slide 13 of the #841 deck sets `RAPPORTSTATUS` at 38pt with
+/// `spc="300"` under a master `titleStyle` declaring `kern="1200"`. PowerPoint
+/// applies both, tightening `TA` and `AT` by ~1.9pt each; switching the `kern`
+/// feature off for the whole run because it is tracked set the line 3.94pt
+/// wide and, the paragraph being centred, moved its origin 0.52pt left.
+#[test]
+fn test_tracked_run_at_its_stated_kern_threshold_keeps_kerning() {
+    let doc = make_doc(vec![make_flow_page(vec![styled_paragraph(
+        "RAPPORTSTATUS",
+        TextStyle {
+            font_family: Some("Posterama".to_string()),
+            font_size: Some(38.0),
+            bold: Some(true),
+            letter_spacing: Some(3.0),
+            pair_kerning: Some(PairKerning::AtOrAbovePt(12.0)),
+            ..TextStyle::default()
+        },
+    )])]);
+
+    let source = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        source.contains("kerning: true"),
+        "a tracked run at its stated threshold keeps kerning: {source}"
+    );
+    assert!(
+        !source.contains("kerning: false"),
+        "the tracking rule must not override a stated threshold: {source}"
+    );
+}
+
+#[test]
+fn test_tracked_run_below_its_stated_kern_threshold_stays_unkerned() {
+    // Triangulation: the threshold is what decides, not the mere presence of a
+    // rule. The same deck's 10pt tracked footer sits under `kern="1200"` and
+    // PowerPoint does not kern it.
+    let doc = make_doc(vec![make_flow_page(vec![styled_paragraph(
+        "CONTOSO ALLE ANSATTE",
+        TextStyle {
+            font_family: Some("Posterama".to_string()),
+            font_size: Some(10.0),
+            letter_spacing: Some(2.0),
+            pair_kerning: Some(PairKerning::AtOrAbovePt(12.0)),
+            ..TextStyle::default()
+        },
+    )])]);
+
+    let source = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        source.contains("kerning: false"),
+        "a tracked run below its stated threshold stays unkerned: {source}"
+    );
+}
+
+#[test]
+fn test_tracked_run_in_a_substituted_face_stays_unkerned() {
+    // The protection of issue #864 is specifically against a *substitute's*
+    // kern pairs riding on top of tracking the document sized for another
+    // face: the stated threshold says what PowerPoint does with the real font
+    // and nothing about the stand-in. With Posterama absent, the tracked title
+    // must still reach the engine with the feature off.
+    use crate::render::font_context::FontSearchContext;
+    let context = FontSearchContext::for_test(Vec::new(), &["Arial"], &[], &[]);
+    let doc = make_doc(vec![make_flow_page(vec![styled_paragraph(
+        "RAPPORTSTATUS",
+        TextStyle {
+            font_family: Some("Posterama".to_string()),
+            font_size: Some(38.0),
+            bold: Some(true),
+            letter_spacing: Some(3.0),
+            pair_kerning: Some(PairKerning::AtOrAbovePt(12.0)),
+            ..TextStyle::default()
+        },
+    )])]);
+
+    let source = crate::render::typst_gen::generate_typst_with_options_and_font_context(
+        &doc,
+        &crate::config::ConvertOptions::default(),
+        Some(&context),
+    )
+    .unwrap()
+    .source;
+
+    assert!(
+        source.contains("kerning: false"),
+        "a tracked run whose face is substituted stays unkerned: {source}"
     );
 }

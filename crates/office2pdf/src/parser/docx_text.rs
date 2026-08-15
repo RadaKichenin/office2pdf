@@ -336,11 +336,7 @@ pub(super) fn extract_pair_kerning(rp: &serde_json::Value) -> Option<PairKerning
 /// `w:val="0"` is how Word records "kerning off" explicitly; it is a stated
 /// decision rather than "kern from 0pt up".
 pub(super) fn pair_kerning_from_half_points(half_points: f64) -> PairKerning {
-    if half_points > 0.0 {
-        PairKerning::AtOrAbovePt(half_points_to_pt(half_points))
-    } else {
-        PairKerning::Never
-    }
+    PairKerning::from_threshold_pt(half_points_to_pt(half_points))
 }
 
 fn json_bool_or_val(value: &serde_json::Value) -> Option<bool> {

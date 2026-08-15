@@ -194,6 +194,19 @@ pub enum PairKerning {
 const UNSTATED_FONT_SIZE_PT: f64 = 10.0;
 
 impl PairKerning {
+    /// The model for a threshold the source states in points.
+    ///
+    /// A stated zero is the format's way of writing "never kern this" — Word
+    /// spells it `w:kern w:val="0"`, DrawingML `kern="0"` — and is a decision,
+    /// not a threshold every size clears.
+    pub fn from_threshold_pt(threshold_pt: f64) -> Self {
+        if threshold_pt > 0.0 {
+            PairKerning::AtOrAbovePt(threshold_pt)
+        } else {
+            PairKerning::Never
+        }
+    }
+
     /// Whether kerning applies to a run set at `font_size_pt`.
     ///
     /// The comparison is inclusive: Word kerns text *at* the threshold, so a
@@ -235,19 +248,23 @@ pub struct TextStyle {
     pub small_caps: Option<bool>,
     /// Character spacing (letter spacing / tracking) in points.
     ///
-    /// A non-zero value also switches ligatures and pair kerning off: both
-    /// redistribute the inter-glyph spacing this field states, and a
-    /// substituted face's pairs are not the ones the document was set in
-    /// (issues #684, #864).
+    /// A non-zero value always switches ligatures off — a ligature swallows
+    /// the inter-glyph spacing this field states (issue #684). It switches
+    /// pair kerning off too, but only where `pair_kerning` leaves the question
+    /// open or the run's declared face is unavailable, because a substituted
+    /// face's pairs are not the ones the document was set in (issue #864). A
+    /// run that states its own threshold and reaches its real face keeps that
+    /// answer: PowerPoint tracks and kerns the same title (issue #1073).
     pub letter_spacing: Option<f64>,
     /// Whether the source application kerns this run, and from which size up.
     ///
     /// `None` means the format states nothing about kerning, so this field
-    /// alone leaves the renderer's own default standing. Only the DOCX path
-    /// resolves it today (issue #628) — but it is no longer the only input to
-    /// the decision: a non-zero `letter_spacing` switches kerning off
-    /// regardless of this field's own answer, except under the RTL shaping
-    /// exemption, and that reaches PPTX and XLSX too (issue #864).
+    /// alone leaves the renderer's own default standing; XLSX never states it,
+    /// and DOCX (issue #628) and PPTX (issue #1073) both do. It is not the
+    /// only input to the decision: where it is `None`, or where the run's
+    /// declared face is unavailable and so a substitute is carrying the text,
+    /// a non-zero `letter_spacing` switches kerning off regardless — except
+    /// under the RTL shaping exemption (issue #864).
     pub pair_kerning: Option<PairKerning>,
 }
 
