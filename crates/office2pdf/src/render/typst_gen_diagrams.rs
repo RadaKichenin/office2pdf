@@ -1455,19 +1455,28 @@ fn chart_category_label_box_w(chart: &Chart) -> f64 {
 /// signature of exactly 45 (issue #884).
 const CATEGORY_LABEL_ROTATION_DEG: f64 = 45.0;
 
-/// Widest category label's advance, in points, or `None` where the face cannot
-/// be measured — wasm has no font search, and a chart that cannot measure its
-/// labels must not guess that they crowd.
-fn chart_category_label_widest_pt(chart: &Chart) -> Option<f64> {
-    let size_pt: f64 = chart_axis_text_pt(chart, chart.category_axis_text_style);
-    let bold: bool = chart
-        .text_style
-        .resolved_bold(chart.category_axis_text_style)
-        .unwrap_or(false);
+/// Face a category label is set in: family, weight and size.
+fn chart_category_label_face(chart: &Chart) -> (&str, bool, f64) {
     let family: &str = chart
         .text_font_family
         .as_deref()
         .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_FAMILY);
+    let bold: bool = chart
+        .text_style
+        .resolved_bold(chart.category_axis_text_style)
+        .unwrap_or(false);
+    (
+        family,
+        bold,
+        chart_axis_text_pt(chart, chart.category_axis_text_style),
+    )
+}
+
+/// Widest category label's advance, in points, or `None` where the face cannot
+/// be measured — wasm has no font search, and a chart that cannot measure its
+/// labels must not guess that they crowd.
+fn chart_category_label_widest_pt(chart: &Chart) -> Option<f64> {
+    let (family, bold, size_pt) = chart_category_label_face(chart);
     let widest_em: f64 = chart
         .categories
         .iter()
@@ -1482,15 +1491,7 @@ fn chart_category_label_widest_pt(chart: &Chart) -> Option<f64> {
 /// em in the #841 native export, so account for that final glyph separately
 /// while retaining the source-face advances for the visible prefix.
 fn chart_category_label_advance_pt(chart: &Chart, label: &str) -> Option<f64> {
-    let size_pt: f64 = chart_axis_text_pt(chart, chart.category_axis_text_style);
-    let bold: bool = chart
-        .text_style
-        .resolved_bold(chart.category_axis_text_style)
-        .unwrap_or(false);
-    let family: &str = chart
-        .text_font_family
-        .as_deref()
-        .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_FAMILY);
+    let (family, bold, size_pt) = chart_category_label_face(chart);
     let prefix = label.strip_suffix('…').unwrap_or(label);
     let ellipsis_pt = if prefix.len() != label.len() {
         size_pt
@@ -1510,31 +1511,44 @@ fn chart_category_label_advance_pt(chart: &Chart, label: &str) -> Option<f64> {
 /// Typst content for a rotated category label, aligned as the native export
 /// aligns it.
 ///
-/// An untruncated label right-aligns whole. An ellipsized one aligns only its
-/// pre-ellipsis text — including the inter-word space the truncation swallowed
-/// — at the trailing-end anchor, and draws the `…` beyond it: on the #841
-/// deck's native export the prefix `Konverteringsfrekvens for ` ends at the
-/// same anchor the other labels share and a separate `…` run starts there.
-/// Right-aligning the combined string instead left the label short by the
-/// space-plus-ellipsis advance, 12.97pt along the slant (issue #1035). The
-/// zero-width box needs its own `align(left)`, or it inherits the line's
-/// right alignment and overflows leftwards across the prefix.
-fn rotated_category_label_content(category: &str, label: &str) -> String {
+/// An untruncated label right-aligns whole. An ellipsized one right-aligns only
+/// the text it retained; everything the truncation swallowed hangs past the
+/// trailing-end anchor. On the #841 deck's native export the retained
+/// `Konverteringsfrekvens for` ends on the same anchor the three untruncated
+/// labels share, the swallowed inter-word space paints one tracking step past
+/// it, and the `…` — taking the place of the first character it replaced —
+/// starts at that same origin.
+///
+/// So the swallowed space is painted in flow, keeping it in the label's own
+/// text run as the export does, and then pulled straight back out of the
+/// aligned width by its advance plus the tracking step before it; without that
+/// pull-back the whole label sat 3.99pt short along the slant (issue #1076,
+/// the residual #1035 left by aligning the space too). The zero-width box
+/// needs its own `align(left)`, or it inherits the line's right alignment and
+/// overflows leftwards across the retained text.
+fn rotated_category_label_content(chart: &Chart, category: &str, label: &str) -> String {
     let Some(stem) = label.strip_suffix('…').filter(|_| label != category) else {
         return escape_typst(label);
     };
-    let swallowed_space: &str = if category
+    let (family, bold, size_pt) = chart_category_label_face(chart);
+    let tracking_pt: f64 = chart
+        .text_style
+        .resolved_letter_spacing(chart.category_axis_text_style)
+        .unwrap_or(0.0);
+    let swallowed_space: String = if category
         .strip_prefix(stem)
         .is_some_and(|rest| rest.starts_with(' '))
     {
-        "#\" \";"
+        let space_pt: f64 = chart_text_advance_em(family, bold, " ").unwrap_or(0.0) * size_pt;
+        format!("#\" \";#h(-{}pt);", format_f64(tracking_pt + space_pt))
     } else {
-        ""
+        String::new()
     };
     format!(
-        "{}{}#box(width: 0pt)[#align(left)[…]]",
+        "{}{}#box(width: 0pt)[#align(left)[#move(dx: {}pt)[…]]]",
         escape_typst(stem),
-        swallowed_space
+        swallowed_space,
+        format_f64(tracking_pt)
     )
 }
 
@@ -2446,8 +2460,8 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
             // `top + right` is what puts all of them on one top edge, which is
             // how the reference draws them (issue #884). The box is the widest
             // label's width for every label so that right-aligning inside it
-            // lands each trailing end on the pivot — except an ellipsized
-            // label's `…`, which deliberately overflows past it (#1035).
+            // lands each trailing end on the pivot — except what an ellipsized
+            // label swallowed, which deliberately overflows past it (#1076).
             let label_box_w: f64 = chart_category_label_widest_pt(chart).unwrap_or(row);
             let label: String = chart_category_label_text(chart, category, label_box_w);
             let centre: f64 = plot_x + group_start + row / 2.0;
@@ -2460,7 +2474,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 format_f64(label_box_w),
                 format_f64(chart_axis_text_pt(chart, chart.category_axis_text_style)),
                 chart_axis_text_attrs(chart, chart.category_axis_text_style),
-                rotated_category_label_content(category, &label)
+                rotated_category_label_content(chart, category, &label)
             );
         } else {
             let _ = writeln!(
