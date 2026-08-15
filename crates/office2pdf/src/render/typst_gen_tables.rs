@@ -290,16 +290,23 @@ fn generate_table_rows(
         // with twelve `10_research_report_ko` rows relabelled `2025-01`..
         // `2025-12` — Latin-only rows in an all-slots Malgun Gothic face —
         // keeps Word's 25.44pt row pitch where the bare hhea line would give
-        // 21.64pt (issue #814). The probe measured Word's table model only, so
-        // a spreadsheet row keeps the text-keyed gate Excel's auto-row
-        // decomposition was fitted with (issues #709, #711) — tracked in
-        // issue #1060.
+        // 21.64pt (issue #814).
+        //
+        // A **spreadsheet** row takes no East Asian box at all, whatever its
+        // characters. A native Excel-for-Mac export of the probe workbook
+        // `tests/fixtures/xlsx/issue_1060_sheet_row_line_box_probe.xlsx`
+        // prints its paired Korean and Latin-only blocks — same Malgun Gothic
+        // face, size, row-height mode and vertical alignment, differing only
+        // in script — 0.00pt apart on all four pairs, and prints the 14pt auto
+        // rows at a 20.00pt track that Word's 24.20pt East Asian box does not
+        // fit. So the row's answer must not vary with the text (it did:
+        // a Korean top-aligned row seated 2.79pt below its Latin twin), and
+        // the value it must not vary to is the bare hhea line (issue #1060).
         let has_east_asian_text: bool = row_has_east_asian_text(row);
         ctx.row_east_asian = RowEastAsianMetrics {
             has_east_asian_text,
-            takes_east_asian_metrics: has_east_asian_text
-                || (!ctx.table_seats_bottom_aligned_text_on_descender
-                    && row_is_set_in_east_asian_face(row)),
+            takes_east_asian_metrics: !ctx.table_seats_bottom_aligned_text_on_descender
+                && (has_east_asian_text || row_is_set_in_east_asian_face(row)),
         };
 
         // A spreadsheet row whose fixed track cannot hold more than one line
@@ -501,7 +508,7 @@ fn sheet_row_shared_line(
         return None;
     }
     let track_pt: f64 = row_track_pt?;
-    let metric_family: &str = row_metric_family(row, row_east_asian.takes_east_asian_metrics)?;
+    let metric_family: &str = row_metric_family(row, row_east_asian.has_east_asian_text)?;
     let font_size_pt: f64 = row_font_size_pt(row);
     let bare_line_pt: f64 = sheet_row_line_advance_pt(metric_family, font_size_pt, false)?;
     if track_pt + SHEET_ROW_TRACK_QUANTISATION_SLACK_PT < bare_line_pt {
@@ -531,13 +538,17 @@ fn sheet_row_shared_line(
 }
 
 /// The family whose metrics pace a spreadsheet row's shared line: the
-/// row-level mirror of `east_asian_aware_metric_family` (issue #839). An East
-/// Asian row is paced by the family shaping its East Asian text — the
+/// row-level mirror of `east_asian_aware_metric_family` (issue #839). A row
+/// carrying East Asian text is paced by the family shaping that text — the
 /// declared `east_asian_font_family` slot, or failing that the `font_family`
-/// of a run that carries East Asian characters (how a sheet row becomes East
-/// Asian at all, since its gate is text-keyed). A Latin row is paced by its
+/// of a run that carries East Asian characters. A Latin row is paced by its
 /// first declared family.
-fn row_metric_family(row: &TableRow, takes_east_asian_metrics: bool) -> Option<&str> {
+///
+/// Which family paces the row keys on the *characters*, not on the row's line
+/// box: a sheet row never takes an East Asian box (issue #1060), and reading
+/// that answer here would have paced `김민준 | E-1021` on whichever cell came
+/// first instead of on the face shaping the Hangul.
+fn row_metric_family(row: &TableRow, has_east_asian_text: bool) -> Option<&str> {
     let runs = || {
         row.cells
             .iter()
@@ -549,7 +560,7 @@ fn row_metric_family(row: &TableRow, takes_east_asian_metrics: bool) -> Option<&
             .flatten()
     };
     let latin = || runs().find_map(|run| run.style.font_family.as_deref());
-    if takes_east_asian_metrics {
+    if has_east_asian_text {
         runs()
             .find_map(|run| run.style.east_asian_font_family.as_deref())
             .or_else(|| {
