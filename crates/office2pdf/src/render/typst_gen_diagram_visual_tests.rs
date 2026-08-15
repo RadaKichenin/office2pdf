@@ -4427,12 +4427,17 @@ fn a_crowded_axis_with_ellipsis_overflow_shortens_only_the_label_that_exceeds_it
     chart.category_axis_text_style.ellipsis_overflow = true;
 
     let source = chart_source(chart);
-    // Issue #1035: the native export right-aligns the pre-ellipsis text —
-    // including the swallowed inter-word space — at the trailing-end anchor
-    // and draws the ellipsis beyond it as a separate overflowing run.
+    // Issue #1076: only the retained text right-aligns at the trailing-end
+    // anchor. The swallowed inter-word space still paints — a 0.25em space at
+    // 11.97pt, one 1pt tracking step past the anchor — but is pulled back out
+    // of the aligned width, and the ellipsis takes the place of the first
+    // character it replaced, one tracking step past the anchor.
     assert!(
-        source.contains("[Konverteringsfrekvens for#\" \";#box(width: 0pt)[#align(left)[…]]]"),
-        "the pre-ellipsis text aligns with its space and the ellipsis overflows: {source}"
+        source.contains(
+            "[Konverteringsfrekvens for#\" \";#h(-3.9925pt);\
+             #box(width: 0pt)[#align(left)[#move(dx: 1pt)[…]]]]"
+        ),
+        "only the retained text aligns; space and ellipsis hang: {source}"
     );
     assert!(
         !source.contains("[Konverteringsfrekvens for kundeemne]"),
@@ -4441,6 +4446,46 @@ fn a_crowded_axis_with_ellipsis_overflow_shortens_only_the_label_that_exceeds_it
     assert!(
         source.contains("[Frekvens for kundebevaring]"),
         "a label that still fits must remain complete: {source}"
+    );
+}
+
+#[test]
+fn an_ellipsized_rotated_label_hangs_by_its_own_space_and_tracking() {
+    // Triangulation for #1076: doubling the declared spacing must move both the
+    // pull-back and the ellipsis with it, or the offsets are baked-in constants
+    // rather than the label's own metrics.
+    let mut chart = crowded_column_chart();
+    chart.text_style.size_pt = Some(11.97);
+    chart.text_font_family = Some("Avenir Next LT Pro".to_string());
+    chart.category_axis_text_style.letter_spacing_hundredths = Some(200);
+    chart.category_axis_text_style.ellipsis_overflow = true;
+
+    let source = chart_source(chart);
+    assert!(
+        source.contains("#h(-4.9925pt);#box(width: 0pt)[#align(left)[#move(dx: 2pt)[…]]]"),
+        "the hang follows the declared 2pt tracking and the 2.9925pt space: {source}"
+    );
+}
+
+#[test]
+fn a_rotated_label_truncated_mid_word_hangs_only_its_ellipsis() {
+    // Triangulation for #1076: with no inter-word space to swallow there is
+    // nothing to pull back, and the ellipsis alone overflows the anchor.
+    let mut chart = crowded_column_chart();
+    chart.categories[2] = "Konverteringsfrekvensforkundeemne".to_string();
+    chart.text_style.size_pt = Some(11.97);
+    chart.text_font_family = Some("Avenir Next LT Pro".to_string());
+    chart.category_axis_text_style.letter_spacing_hundredths = Some(100);
+    chart.category_axis_text_style.ellipsis_overflow = true;
+
+    let source = chart_source(chart);
+    assert!(
+        source.contains("#box(width: 0pt)[#align(left)[#move(dx: 1pt)[…]]]"),
+        "the ellipsis still hangs one tracking step past the anchor: {source}"
+    );
+    assert!(
+        !source.contains("#h(-"),
+        "nothing was swallowed, so nothing is pulled back: {source}"
     );
 }
 
