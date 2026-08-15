@@ -346,6 +346,39 @@ fn structure_any_sheets() {
 }
 
 // ---------------------------------------------------------------------------
+// issue_1065_hidden_sheet_probe.xlsx
+// ---------------------------------------------------------------------------
+
+/// The probe workbook Excel for Mac 16.112 itself authored for issue #1065:
+/// a visible `Summary` sheet and a populated `state="hidden"` `Data` sheet,
+/// with `paperSize="9"` written into both worksheets afterwards so the paper
+/// comes from the file rather than from whichever printer exported it.
+///
+/// A native export of it is one page — Excel prints no hidden sheet — and so
+/// is ours; the hidden sheet's rows reach neither the page list nor the IR.
+#[test]
+fn structure_issue_1065_probe_pages_only_the_visible_sheet() {
+    let pages = sheet_pages("issue_1065_hidden_sheet_probe.xlsx");
+    assert_eq!(sheet_names(&pages), vec!["Summary"]);
+
+    let printed_text: String = pages
+        .iter()
+        .flat_map(|page| page.table.rows.iter())
+        .flat_map(|row| row.cells.iter())
+        .map(table_cell_text)
+        .collect::<Vec<String>>()
+        .join(" ");
+    assert!(
+        printed_text.contains("Regional revenue"),
+        "the visible sheet's title should print"
+    );
+    assert!(
+        !printed_text.contains("N-01"),
+        "the hidden sheet's lookup rows should not print"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // 123233_charts.xlsx
 // ---------------------------------------------------------------------------
 
@@ -604,6 +637,10 @@ xlsx_fixture_tests!(with_various_data, "WithVariousData.xlsx");
 // --- Repo-authored regression fixtures --------------------------------------
 
 xlsx_fixture_tests!(theme_color_drawing, "theme_color_drawing.xlsx");
+xlsx_fixture_tests!(
+    issue_1065_hidden_sheet_probe,
+    "issue_1065_hidden_sheet_probe.xlsx"
+);
 
 // --- MIT: Open-Xml-PowerTools (Microsoft) ----------------------------------
 
