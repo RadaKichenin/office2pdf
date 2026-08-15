@@ -407,6 +407,14 @@ impl Chart {
                 sample
             })
     }
+
+    /// The family that plots `series` — the one it names, else the chart's own.
+    ///
+    /// Only a combo plot area names a family per series; see
+    /// [`ChartSeries::plot_type`] (issue #1067).
+    pub fn plot_type_of<'a>(&'a self, series: &'a ChartSeries) -> &'a ChartType {
+        series.plot_type.as_ref().unwrap_or(&self.chart_type)
+    }
 }
 
 /// How a bar chart's bars divide the band one category gets, from
@@ -610,6 +618,18 @@ pub struct ChartSeries {
     /// series states one that is not `General`. A ratio is stored as a
     /// fraction and only this says to print it as a percentage (issue #865).
     pub number_format: Option<String>,
+    /// The plot-area family that declared this series, when it is not the
+    /// chart's own [`Chart::chart_type`].
+    ///
+    /// A `c:plotArea` may hold one element per chart family, so a workbook can
+    /// put `<c:barChart>` beside `<c:lineChart>` and expect stacked columns
+    /// with a line over them. `chart_type` names only the family that governs
+    /// the axis, so before this every series drew as that one kind and the
+    /// columns disappeared into polylines (issue #1067).
+    ///
+    /// `None` — the ordinary case — means the chart's own family, which is
+    /// what every series of a single-family chart is.
+    pub plot_type: Option<ChartType>,
 }
 
 impl ChartSeries {

@@ -2018,3 +2018,123 @@ fn a_data_label_without_a_tx_pr_states_no_size_of_its_own() {
     let chart = parse_chart_xml(xml, &SchemeColors::empty()).unwrap();
     assert_eq!(chart.series[0].data_labels.text_style.size_pt, None);
 }
+
+// ── Combo plot areas (issue #1067) ─────────────────────────────────────
+
+/// The plot area of `Gift Budget and Tracker1.xlsx`, reduced to the shape that
+/// matters: three stacked columns per category with one line laid over them.
+///
+/// `<c:lineChart>` follows `<c:barChart>`, so whatever the parser takes from
+/// the last family it reads is what a combo chart ends up drawn as.
+fn combo_bar_and_line_chart_xml() -> String {
+    r#"<?xml version="1.0" encoding="UTF-8"?>
+        <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+            <c:chart><c:plotArea>
+                <c:barChart>
+                    <c:barDir val="col"/>
+                    <c:grouping val="stacked"/>
+                    <c:ser>
+                        <c:idx val="0"/>
+                        <c:tx><c:strRef><c:strCache><c:pt idx="0"><c:v>Birthday Budget</c:v></c:pt></c:strCache></c:strRef></c:tx>
+                        <c:cat><c:strRef><c:strCache>
+                            <c:pt idx="0"><c:v>May</c:v></c:pt>
+                            <c:pt idx="1"><c:v>Jun</c:v></c:pt>
+                        </c:strCache></c:strRef></c:cat>
+                        <c:val><c:numRef><c:numCache>
+                            <c:pt idx="0"><c:v>0</c:v></c:pt>
+                            <c:pt idx="1"><c:v>50</c:v></c:pt>
+                        </c:numCache></c:numRef></c:val>
+                    </c:ser>
+                    <c:ser>
+                        <c:idx val="1"/>
+                        <c:tx><c:strRef><c:strCache><c:pt idx="0"><c:v>Holiday Budget</c:v></c:pt></c:strCache></c:strRef></c:tx>
+                        <c:val><c:numRef><c:numCache>
+                            <c:pt idx="0"><c:v>0</c:v></c:pt>
+                            <c:pt idx="1"><c:v>100</c:v></c:pt>
+                        </c:numCache></c:numRef></c:val>
+                    </c:ser>
+                    <c:gapWidth val="150"/>
+                    <c:overlap val="100"/>
+                </c:barChart>
+                <c:lineChart>
+                    <c:grouping val="stacked"/>
+                    <c:ser>
+                        <c:idx val="2"/>
+                        <c:tx><c:strRef><c:strCache><c:pt idx="0"><c:v>Amount Spent</c:v></c:pt></c:strCache></c:strRef></c:tx>
+                        <c:val><c:numRef><c:numCache>
+                            <c:pt idx="0"><c:v>25</c:v></c:pt>
+                            <c:pt idx="1"><c:v>75</c:v></c:pt>
+                        </c:numCache></c:numRef></c:val>
+                    </c:ser>
+                    <c:marker val="1"/>
+                </c:lineChart>
+            </c:plotArea></c:chart>
+        </c:chartSpace>"#
+        .to_string()
+}
+
+/// A series declared by a family other than the chart's own records that
+/// family, so a combo plot area survives into the IR instead of collapsing to
+/// one kind (issue #1067).
+#[test]
+fn a_combo_plot_area_records_the_family_that_declared_each_series() {
+    let chart = parse_chart_xml(&combo_bar_and_line_chart_xml(), &SchemeColors::empty()).unwrap();
+
+    assert_eq!(chart.series.len(), 3);
+    // The bar family is the chart's own, so its series name no other.
+    assert_eq!(chart.series[0].plot_type, None);
+    assert_eq!(chart.series[1].plot_type, None);
+    assert_eq!(chart.series[2].plot_type, Some(ChartType::Line));
+}
+
+/// The bar family governs the axis in a combo: it is what the value scale and
+/// the category bands are drawn for, and a `<c:lineChart>` that follows must
+/// not take the chart's type with it.
+#[test]
+fn a_trailing_line_chart_leaves_the_bar_family_governing() {
+    let chart = parse_chart_xml(&combo_bar_and_line_chart_xml(), &SchemeColors::empty()).unwrap();
+
+    assert_eq!(chart.chart_type, ChartType::Column);
+    // `<c:lineChart><c:grouping val="stacked"/>` is the line family's own; the
+    // stacking that the columns are drawn with is the bar family's.
+    assert_eq!(chart.grouping, ChartGrouping::Stacked);
+}
+
+/// The order is not what decides it: a `<c:barChart>` following a
+/// `<c:lineChart>` governs the axis just the same.
+#[test]
+fn a_leading_line_chart_still_leaves_the_bar_family_governing() {
+    let xml: String = combo_bar_and_line_chart_xml();
+    let bar_start: usize = xml.find("<c:barChart>").unwrap();
+    let bar_end: usize = xml.find("</c:barChart>").unwrap() + "</c:barChart>".len();
+    let line_start: usize = xml.find("<c:lineChart>").unwrap();
+    let line_end: usize = xml.find("</c:lineChart>").unwrap() + "</c:lineChart>".len();
+    let swapped: String = format!(
+        "{}{}{}{}{}",
+        &xml[..bar_start],
+        &xml[line_start..line_end],
+        &xml[bar_end..line_start],
+        &xml[bar_start..bar_end],
+        &xml[line_end..]
+    );
+
+    let chart = parse_chart_xml(&swapped, &SchemeColors::empty()).unwrap();
+
+    assert_eq!(chart.chart_type, ChartType::Column);
+    assert_eq!(chart.grouping, ChartGrouping::Stacked);
+    assert_eq!(chart.series[0].plot_type, Some(ChartType::Line));
+    assert_eq!(chart.series[1].plot_type, None);
+}
+
+/// A single-family chart names no per-series family: every series is the
+/// chart's own kind, which is what `None` says.
+#[test]
+fn a_single_family_chart_leaves_every_series_on_the_chart_type() {
+    let xml = chart_with_bar_layout(r#"<c:gapWidth val="150"/>"#);
+
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
+
+    assert!(!chart.series.is_empty());
+    assert!(chart.series.iter().all(|series| series.plot_type.is_none()));
+}

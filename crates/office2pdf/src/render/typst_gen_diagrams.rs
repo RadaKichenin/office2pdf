@@ -326,6 +326,39 @@ fn series_marker_markup(series_index: usize, x: f64, y: f64, color: &str) -> Str
     format!("#place(top + left, dx: {left}pt, dy: {top}pt, {shape})\n")
 }
 
+/// Whether this plot draws `series` as a line laid over the columns rather
+/// than as a column of its own.
+///
+/// Only a chart the bar family governs has columns to lay a line over; the
+/// polyline, pie and radar plots already draw every series their own way. A
+/// combo plot area is what puts a `<c:lineChart>` series into a bar chart in
+/// the first place (issue #1067).
+fn plots_as_line(chart: &Chart, series: &crate::ir::ChartSeries) -> bool {
+    matches!(chart.chart_type, ChartType::Bar | ChartType::Column)
+        && matches!(
+            chart.plot_type_of(series),
+            ChartType::Line | ChartType::Area
+        )
+}
+
+/// The legend key for a series drawn as a line: a sample of the plotted stroke
+/// carrying the same marker the series draws on each of its points (#801).
+fn line_legend_key(series_index: usize, color: &str) -> String {
+    let key_mid: f64 = SERIES_MARKER_SIZE_PT / 2.0;
+    format!(
+        "#box(width: {}pt, height: {}pt, baseline: {}pt)[\
+         #place(top + left, dx: 0pt, dy: {}pt, line(end: ({}pt, 0pt), stroke: {}pt + {color}))\
+         {}]",
+        format_f64(LEGEND_KEY_LEN_PT),
+        format_f64(SERIES_MARKER_SIZE_PT),
+        format_f64(LEGEND_KEY_BASELINE_PT),
+        format_f64(key_mid),
+        format_f64(LEGEND_KEY_LEN_PT),
+        format_f64(SERIES_LINE_PT),
+        series_marker_markup(series_index, LEGEND_KEY_LEN_PT / 2.0, key_mid, color).trim_end()
+    )
+}
+
 /// The automatic colour for the `index`-th slot, from the file's own theme.
 ///
 /// A chart that states no fill takes `accent1`..`accent6` of the theme its
@@ -1266,10 +1299,18 @@ fn data_label_text(
     (!parts.is_empty()).then(|| parts.join(&labels.separator))
 }
 
-/// Sum of every series' value in one category — the length of its stacked bar.
-fn category_total(series: &[crate::ir::ChartSeries], category_index: usize) -> f64 {
+/// Sum of the given series' values in one category — the length of its stacked
+/// bar.
+///
+/// Takes an iterator rather than a slice because a combo plot area stacks only
+/// the bar-family series: the line laid over them is read against the same axis
+/// but is no part of the stack (issue #1067).
+fn category_total<'a>(
+    series: impl IntoIterator<Item = &'a crate::ir::ChartSeries>,
+    category_index: usize,
+) -> f64 {
     series
-        .iter()
+        .into_iter()
         .filter_map(|s| s.values.get(category_index))
         .sum()
 }
@@ -2095,14 +2136,30 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
         chart.grouping,
         ChartGrouping::Stacked | ChartGrouping::PercentStacked
     );
+    // Which series this plot draws as columns and which it lays over them as a
+    // line. Only a combo plot area has both; every series of a single-family
+    // chart is a column here (issue #1067).
+    let overlaid: Vec<bool> = series.iter().map(|s| plots_as_line(chart, s)).collect();
+    let bar_slots: Vec<usize> = (0..series.len())
+        .filter(|index| !overlaid[*index])
+        .collect();
+    let overlay_slots: Vec<usize> = (0..series.len()).filter(|index| overlaid[*index]).collect();
+    let bar_series = || bar_slots.iter().map(|index| &series[*index]);
 
+    // A line over the columns reads against the same axis, so the axis has to
+    // reach it too — but it is no part of any stack.
+    let overlay_max: f64 = overlay_slots
+        .iter()
+        .flat_map(|index| series[*index].values.iter())
+        .copied()
+        .fold(0.0_f64, f64::max);
     // A stacked bar is read against its category's total, so the axis must
     // cover the tallest stack rather than the largest single segment.
     let auto_max_value: f64 = match chart.grouping {
         ChartGrouping::PercentStacked => 100.0,
         ChartGrouping::Stacked => (0..categories)
-            .map(|index| category_total(series, index))
-            .fold(0.0_f64, f64::max),
+            .map(|index| category_total(bar_series(), index))
+            .fold(overlay_max, f64::max),
         ChartGrouping::Clustered => series
             .iter()
             .flat_map(|s| s.values.iter())
@@ -2257,15 +2314,18 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
         }
     }
 
-    // Bars, grouped per category when multiple series are present.
-    let bars: BandBars = band_bars(row, series_count, chart.bar_band_layout);
+    // Bars, grouped per category when multiple series are present. Only the
+    // series this plot draws as columns share the band; a line laid over them
+    // takes no place in it (issue #1067).
+    let bars: BandBars = band_bars(row, bar_slots.len().max(1), chart.bar_band_layout);
     let bar_thickness: f64 = bars.thickness;
     for (cat_index, category) in chart.categories.iter().enumerate() {
         let group_start: f64 = cat_index as f64 * row;
         // Fraction of the axis already consumed by the segments below.
         let mut stack_base: f64 = 0.0;
-        let category_total: f64 = category_total(series, cat_index);
-        for (s_index, s) in series.iter().enumerate() {
+        let category_total: f64 = category_total(bar_series(), cat_index);
+        for (band_slot, s_index) in bar_slots.iter().copied().enumerate() {
+            let s: &crate::ir::ChartSeries = &series[s_index];
             let value: f64 = s.values.get(cat_index).copied().unwrap_or(0.0);
             // Percent stacking rescales each stack to fill the axis, so an
             // XLSX column totalling 6 reads the same height as a DOCX one
@@ -2278,8 +2338,11 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 _ => value,
             };
             let frac: f64 = (value / nice_max).clamp(0.0, 1.0);
+            // The palette is assigned over every series the chart declares, so
+            // the colour keeps the series' own index while the band position
+            // counts only the columns.
             let color: String = series_color(s, s_index, cat_index, &chart.theme_accent_colors);
-            let offset: f64 = bars.lead + s_index as f64 * bars.step;
+            let offset: f64 = bars.lead + band_slot as f64 * bars.step;
             if horizontal {
                 // Bar charts stack categories bottom-up.
                 let row_top: f64 = plot_h - (cat_index as f64 + 1.0) * row;
@@ -2411,6 +2474,55 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 chart_axis_text_attrs(chart, chart.category_axis_text_style),
                 escape_typst(category)
             );
+        }
+    }
+
+    // A combo plot area's line-family series, over the columns they share the
+    // axis with. Each point sits at its category band's centre, where the
+    // band's own column is centred by `<c:crossBetween val="between"/>`, and at
+    // its own value rather than on top of the stack: the line records what was
+    // spent against the budget the columns total, not one more segment of it
+    // (issue #1067). Drawn after every column so no later category's bar buries
+    // it, which is the order Excel paints them in.
+    for s_index in overlay_slots.iter().copied() {
+        let s: &crate::ir::ChartSeries = &series[s_index];
+        let color: String = series_color(s, s_index, 0, &chart.theme_accent_colors);
+        let points: Vec<(f64, f64)> = s
+            .values
+            .iter()
+            .take(categories)
+            .enumerate()
+            .map(|(cat_index, value)| {
+                let frac: f64 = (value / nice_max).clamp(0.0, 1.0);
+                if horizontal {
+                    // Bar charts run their categories bottom-up and place from
+                    // the plot box's own top edge, as the column loop above does.
+                    (
+                        plot_x + frac * plot_w,
+                        plot_h - (cat_index as f64 + 0.5) * row,
+                    )
+                } else {
+                    (
+                        plot_x + (cat_index as f64 + 0.5) * row,
+                        plot_y + plot_h - frac * plot_h,
+                    )
+                }
+            })
+            .collect();
+        if points.len() >= 2 {
+            let coords: String = points
+                .iter()
+                .map(|(x, y)| format!("({}pt, {}pt)", format_f64(*x), format_f64(*y)))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let _ = writeln!(
+                out,
+                "#place(top + left, path(stroke: {}pt + {color}, {coords}))",
+                format_f64(SERIES_LINE_PT)
+            );
+        }
+        for (x, y) in &points {
+            write_series_marker(out, s_index, *x, *y, &color);
         }
     }
 
@@ -2572,14 +2684,24 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 side_y_shift: powerpoint_right_legend_y_shift(chart),
             },
         );
+        // Each series' key is drawn the way its family plots it: a filled
+        // swatch for a column, a stroke-and-marker sample for a line laid over
+        // them (issue #1067).
+        let key: String = if overlaid[s_index] {
+            line_legend_key(s_index, &color)
+        } else {
+            format!(
+                "#box(width: {}pt, height: {}pt, fill: {})",
+                format_f64(legend_key_size_pt),
+                format_f64(legend_key_size_pt),
+                color
+            )
+        };
         let _ = writeln!(
             out,
-            "#place(top + left, dx: {}pt, dy: {}pt, box[#box(width: {}pt, height: {}pt, fill: {})#h({}pt)#text(size: {}pt)[{}]])",
+            "#place(top + left, dx: {}pt, dy: {}pt, box[{key}#h({}pt)#text(size: {}pt)[{}]])",
             format_f64(entry_x),
             format_f64(entry_y),
-            format_f64(legend_key_size_pt),
-            format_f64(legend_key_size_pt),
-            color,
             format_f64(legend_key_label_gap_pt),
             format_f64(chart_text_pt(chart)),
             escape_typst(name)
@@ -2891,21 +3013,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
                 side_y_shift: 0.0,
             },
         );
-        // The key is a sample of the plotted line: the same stroke, carrying the
-        // same marker the series draws on each of its points (#801).
-        let key_mid: f64 = SERIES_MARKER_SIZE_PT / 2.0;
-        let key: String = format!(
-            "#box(width: {}pt, height: {}pt, baseline: {}pt)[\
-             #place(top + left, dx: 0pt, dy: {}pt, line(end: ({}pt, 0pt), stroke: {}pt + {color}))\
-             {}]",
-            format_f64(LEGEND_KEY_LEN_PT),
-            format_f64(SERIES_MARKER_SIZE_PT),
-            format_f64(LEGEND_KEY_BASELINE_PT),
-            format_f64(key_mid),
-            format_f64(LEGEND_KEY_LEN_PT),
-            format_f64(SERIES_LINE_PT),
-            series_marker_markup(s_index, LEGEND_KEY_LEN_PT / 2.0, key_mid, &color).trim_end()
-        );
+        let key: String = line_legend_key(s_index, &color);
         let _ = writeln!(
             out,
             "#place(top + left, dx: {}pt, dy: {}pt, box[{key}#h({}pt)#text(size: {}pt)[{}]])",
