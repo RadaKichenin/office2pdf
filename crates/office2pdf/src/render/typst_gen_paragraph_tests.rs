@@ -1966,6 +1966,40 @@ fn test_zero_letter_spacing_keeps_ligatures() {
     );
 }
 
+/// PowerPoint never applies `liga`, so a slide states that once (issue #1058).
+///
+/// The rule is document-wide rather than per-run because it holds for every
+/// slide run, including the emission sites that cannot name their own text.
+#[test]
+fn test_powerpoint_slide_disables_ligatures_document_wide() {
+    let doc = make_doc(vec![make_fixed_page(
+        720.0,
+        540.0,
+        vec![make_text_box(60.0, 200.0, 400.0, 60.0, "Standard setting:")],
+    )]);
+    let result = generate_typst(&doc).unwrap().source;
+    assert!(
+        result.contains("#set text(ligatures: false)"),
+        "a slide must switch standard ligatures off for the whole document, \
+         got: {result}"
+    );
+}
+
+/// Triangulation: the rule is keyed to the slide, not switched on for every
+/// document, so a flow page keeps the engine's default. Word's own ligature
+/// setting is a separate question this change does not answer.
+#[test]
+fn test_flow_page_keeps_ligatures_document_wide() {
+    let doc = make_doc(vec![make_flow_page(vec![make_paragraph(
+        "Standard setting:",
+    )])]);
+    let result = generate_typst(&doc).unwrap().source;
+    assert!(
+        !result.contains("ligatures: false"),
+        "a flow page must not disable ligatures document-wide, got: {result}"
+    );
+}
+
 /// A substituted face's kern pairs land on top of the tracking the document
 /// declared, and the combined advance can exceed the gap a PDF text extractor
 /// reads as a word break. On the deck in issue #864 that split five titles —
