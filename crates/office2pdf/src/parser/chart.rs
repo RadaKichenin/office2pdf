@@ -183,6 +183,7 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
                     value_axis = parse_axis(&mut reader, b"valAx", scheme);
                 } else if let Some(ct) = chart_type_for_tag(tag) {
                     let mut plot: PlotAreaProps = PlotAreaProps::default();
+                    let family_first_series: usize = series.len();
                     parse_chart_series(
                         &mut reader,
                         tag,
@@ -191,7 +192,7 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
                         &mut plot,
                         scheme,
                     );
-                    chart_type = Some(match ct {
+                    let family: ChartType = match ct {
                         // `<c:ofPieChart>` names its shape in a child element,
                         // so the label waits until the body has been read.
                         ChartType::Other(_) if tag == b"ofPieChart" => {
@@ -200,11 +201,28 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
                         other => {
                             bar_direction_chart_type(plot.bar_direction.as_deref()).unwrap_or(other)
                         }
-                    });
-                    grouping = plot.grouping.as_deref().map(chart_grouping_for);
-                    // Only the doughnut family writes it.
-                    if matches!(chart_type, Some(ChartType::Doughnut)) {
-                        hole_size_percent = plot.hole_size.as_deref().and_then(|v| v.parse().ok());
+                    };
+                    // Which family drew which series, so a combo plot area's
+                    // line does not draw as a column and vice versa. Normalised
+                    // against the chart's own family once it is settled, below
+                    // (issue #1067).
+                    for entry in &mut series[family_first_series..] {
+                        entry.plot_type = Some(family.clone());
+                    }
+                    // The bar family governs the chart: the value scale and the
+                    // category bands are the ones its columns are drawn to, and
+                    // the other families lay over them. Without this a
+                    // `<c:lineChart>` following a `<c:barChart>` took the type
+                    // and the grouping with it, and the columns vanished
+                    // (issue #1067).
+                    if !matches!(chart_type, Some(ChartType::Bar | ChartType::Column)) {
+                        chart_type = Some(family);
+                        grouping = plot.grouping.as_deref().map(chart_grouping_for);
+                        // Only the doughnut family writes it.
+                        if matches!(chart_type, Some(ChartType::Doughnut)) {
+                            hole_size_percent =
+                                plot.hole_size.as_deref().and_then(|v| v.parse().ok());
+                        }
                     }
                     // A combo plot area holds one element per chart family and
                     // only the bar family carries these two, so the family that
@@ -238,6 +256,15 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
 
     let chart_type = chart_type?;
     let default_band_layout: BarBandLayout = BarBandLayout::default();
+
+    // `plot_type` records the family only where it differs from the chart's,
+    // so a single-family chart carries none of it and hand-built IR reads the
+    // same as parsed IR (issue #1067).
+    for entry in &mut series {
+        if entry.plot_type.as_ref() == Some(&chart_type) {
+            entry.plot_type = None;
+        }
+    }
 
     // Charts may omit <c:cat> entirely; Excel then labels the category axis
     // 1..N (the point count of the longest series).
@@ -832,6 +859,9 @@ fn parse_single_series(
             point_fills,
             data_labels,
             number_format,
+            // Filled in by the caller, which knows the family element this
+            // series was read inside (issue #1067).
+            plot_type: None,
         },
         categories,
     )

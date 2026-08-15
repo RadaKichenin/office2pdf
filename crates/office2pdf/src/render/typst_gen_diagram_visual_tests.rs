@@ -24,6 +24,7 @@ fn test_codegen_chart_bar_visual_bars() {
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: None,
+            plot_type: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -94,6 +95,7 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: None,
+            plot_type: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -152,6 +154,7 @@ fn test_codegen_chart_pie_draws_a_pie() {
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: None,
+            plot_type: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -215,6 +218,7 @@ fn test_codegen_chart_line_trend_indicators() {
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: None,
+            plot_type: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -355,6 +359,7 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: None,
+            plot_type: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -411,6 +416,7 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: None,
+            plot_type: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -611,6 +617,7 @@ fn test_codegen_chart_line_plot() {
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
                 number_format: None,
+                plot_type: None,
             },
             ChartSeries {
                 name: Some("B".to_string()),
@@ -619,6 +626,7 @@ fn test_codegen_chart_line_plot() {
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
                 number_format: None,
+                plot_type: None,
             },
         ],
         grouping: ChartGrouping::Clustered,
@@ -681,6 +689,7 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: None,
+            plot_type: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -742,6 +751,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
                 number_format: None,
+                plot_type: None,
             },
             ChartSeries {
                 name: Some("Tables".to_string()),
@@ -750,6 +760,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
                 number_format: None,
+                plot_type: None,
             },
             ChartSeries {
                 name: Some("Graphics".to_string()),
@@ -758,6 +769,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
                 number_format: None,
+                plot_type: None,
             },
             ChartSeries {
                 name: Some("Structure".to_string()),
@@ -766,6 +778,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
                 number_format: None,
+                plot_type: None,
             },
         ],
         grouping,
@@ -909,6 +922,7 @@ fn legend_chart(position: LegendPosition) -> Chart {
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
                 number_format: None,
+                plot_type: None,
             },
             ChartSeries {
                 name: Some("Tables".to_string()),
@@ -917,6 +931,7 @@ fn legend_chart(position: LegendPosition) -> Chart {
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
                 number_format: None,
+                plot_type: None,
             },
         ],
         grouping: ChartGrouping::Stacked,
@@ -1073,6 +1088,7 @@ fn a_declared_series_fill_reaches_the_bars() {
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: None,
+            plot_type: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -1127,6 +1143,7 @@ fn a_series_without_a_fill_still_takes_the_palette() {
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: None,
+            plot_type: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -1179,6 +1196,7 @@ fn per_point_fills_colour_each_bar_separately() {
             ],
             data_labels: DataLabels::default(),
             number_format: None,
+            plot_type: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -1230,6 +1248,7 @@ fn axis_titled_chart(category: Option<&str>, value: Option<&str>) -> Chart {
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: None,
+            plot_type: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -1331,6 +1350,7 @@ fn labelled_chart(labels: DataLabels) -> Chart {
             point_fills: Vec::new(),
             data_labels: labels,
             number_format: None,
+            plot_type: None,
         }],
         grouping: ChartGrouping::Stacked,
         legend_position: LegendPosition::Right,
@@ -1427,6 +1447,7 @@ fn pie_chart(values: Vec<f64>) -> Chart {
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: None,
+            plot_type: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -1622,6 +1643,7 @@ fn test_chart_default_gridline_matches_powerpoint() {
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: None,
+            plot_type: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -1779,6 +1801,7 @@ fn tick_mark_chart(
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: None,
+            plot_type: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -2299,7 +2322,9 @@ struct PlacedRect {
 }
 
 /// Every rectangle the source places, in the order written. A bar or column
-/// chart draws nothing else as a rectangle, so these are exactly its bars.
+/// chart draws nothing else as a rectangle, so these are exactly its bars —
+/// unless a combo plot area lays a line over them whose series index takes the
+/// square marker of the shape cycle, which draws one too (issue #1067).
 fn emitted_rects(source: &str) -> Vec<PlacedRect> {
     source
         .lines()
@@ -2379,6 +2404,7 @@ fn band_layout_chart(
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
                 number_format: None,
+                plot_type: None,
             })
             .collect(),
         grouping,
@@ -2652,6 +2678,7 @@ fn two_series_bar_chart(theme_accent_colors: Vec<crate::ir::Color>) -> Chart {
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
                 number_format: None,
+                plot_type: None,
             },
             ChartSeries {
                 name: Some("Cost".to_string()),
@@ -2660,6 +2687,7 @@ fn two_series_bar_chart(theme_accent_colors: Vec<crate::ir::Color>) -> Chart {
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
                 number_format: None,
+                plot_type: None,
             },
         ],
         grouping: ChartGrouping::Clustered,
@@ -3805,6 +3833,7 @@ fn test_data_table_prints_a_series_number_format() {
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: Some("0.0%".to_string()),
+            plot_type: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -3858,6 +3887,7 @@ fn test_data_table_prints_a_declared_thousands_format() {
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: Some("#,##0".to_string()),
+            plot_type: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -3909,6 +3939,7 @@ fn test_data_table_without_a_number_format_prints_plainly() {
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: None,
+            plot_type: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -3959,6 +3990,7 @@ fn test_a_currency_axis_label_is_escaped() {
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: None,
+            plot_type: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -4011,6 +4043,7 @@ fn single_series_chart(auto_title_deleted: bool) -> Chart {
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: None,
+            plot_type: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -4544,4 +4577,173 @@ fn a_data_label_declaring_no_size_falls_back_to_the_chart_space() {
         neither.contains("#text(size: 8pt, weight: \"bold\""),
         "{neither}"
     );
+}
+
+// ----- Combo plot areas: bars with a line over them (issue #1067) -----
+
+/// `Gift Budget and Tracker1.xlsx`'s chart, reduced to two categories: three
+/// budget series stacked into one column per month, with the amount actually
+/// spent drawn as a line over them.
+///
+/// Stack totals are 0 and 150; the line runs 25 → 75, so it stays inside the
+/// stack rather than above it. Nothing about the numbers can be read off the
+/// column heights alone.
+fn combo_budget_chart() -> Chart {
+    let budget = |name: &str, values: Vec<f64>| ChartSeries {
+        name: Some(name.to_string()),
+        values,
+        fill: None,
+        point_fills: Vec::new(),
+        data_labels: DataLabels::default(),
+        number_format: None,
+        plot_type: None,
+    };
+    Chart {
+        chart_type: ChartType::Column,
+        hole_size_percent: None,
+        title: None,
+        categories: vec!["May".to_string(), "Jun".to_string()],
+        series: vec![
+            budget("Birthday Budget", vec![0.0, 50.0]),
+            budget("Holiday Budget", vec![0.0, 100.0]),
+            ChartSeries {
+                name: Some("Amount Spent".to_string()),
+                values: vec![25.0, 75.0],
+                fill: None,
+                point_fills: Vec::new(),
+                data_labels: DataLabels::default(),
+                number_format: None,
+                plot_type: Some(ChartType::Line),
+            },
+        ],
+        grouping: ChartGrouping::Stacked,
+        legend_position: LegendPosition::Bottom,
+        has_legend: true,
+        category_axis_title: None,
+        value_axis_title: None,
+        category_axis_major_tick_mark: AxisTickMark::None,
+        value_axis_major_tick_mark: AxisTickMark::None,
+        category_axis_deleted: false,
+        category_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_major_unit: None,
+        major_gridline_line: crate::ir::ChartLine::Automatic,
+        value_axis_deleted: false,
+        bar_band_layout: BarBandLayout {
+            gap_width_percent: 150.0,
+            overlap_percent: 100.0,
+        },
+        theme_accent_colors: Vec::new(),
+        chart_area_outline: ChartAreaOutline::Default,
+        host: crate::ir::ChartHost::Spreadsheet,
+        text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: None,
+        auto_title_deleted: true,
+    }
+}
+
+/// The points of the first emitted `path(...)`, in placement coordinates.
+fn emitted_path_points(source: &str) -> Vec<(f64, f64)> {
+    let line: &str = source
+        .lines()
+        .find(|line| line.contains("path(stroke:"))
+        .unwrap_or_default();
+    line.match_indices("(")
+        .filter_map(|(index, _)| {
+            let body: &str = line[index + 1..].split_once(')')?.0;
+            let (x, y) = body.split_once(", ")?;
+            Some((
+                x.strip_suffix("pt")?.parse().ok()?,
+                y.strip_suffix("pt")?.parse().ok()?,
+            ))
+        })
+        .collect()
+}
+
+#[test]
+fn a_line_series_over_columns_draws_a_line_not_a_column() {
+    let source = chart_source(combo_budget_chart());
+
+    // Two bar series over two categories. The line series contributes no bar:
+    // every one of its points drew as a polyline segment instead. Its markers
+    // are triangles at this series index, so they are no rectangle either.
+    assert_eq!(
+        emitted_rects(&source).len(),
+        4,
+        "only the two bar-family series may draw columns; got:\n{source}"
+    );
+    assert_eq!(
+        emitted_path_points(&source).len(),
+        2,
+        "the line series draws a polyline through its two points; got:\n{source}"
+    );
+}
+
+#[test]
+fn a_line_series_reads_against_the_same_axis_as_the_columns() {
+    // The line is not part of the stack: its 75 in June is half of that
+    // month's 150 stack, so its point sits midway up the column.
+    let source = chart_source(combo_budget_chart());
+    let bars = emitted_rects(&source);
+    let june_x: f64 = bars.iter().map(|bar| bar.dx).fold(f64::MIN, f64::max);
+    let june: Vec<PlacedRect> = bars
+        .into_iter()
+        .filter(|bar| (bar.dx - june_x).abs() < 0.01)
+        .collect();
+    let stack_top: f64 = june.iter().map(|bar| bar.dy).fold(f64::MAX, f64::min);
+    let baseline: f64 = june
+        .iter()
+        .map(|bar| bar.dy + bar.height)
+        .fold(f64::MIN, f64::max);
+
+    let points = emitted_path_points(&source);
+    let (june_point_x, june_point_y) = *points.last().expect("a point per category");
+
+    assert!(
+        (june_point_y - (stack_top + baseline) / 2.0).abs() < 0.5,
+        "75 of a 150 stack sits midway between the baseline {baseline} and the \
+         stack top {stack_top}, got {june_point_y}"
+    );
+    // And on the same category band as June's column, whose bar is centred in
+    // it by `<c:overlap val="100"/>`.
+    let band_centre: f64 = june_x + june[0].width / 2.0;
+    assert!(
+        (june_point_x - band_centre).abs() < 0.5,
+        "the point sits at its category's centre {band_centre}, got {june_point_x}"
+    );
+}
+
+#[test]
+fn a_line_series_stays_out_of_the_stack_the_axis_is_scaled_to() {
+    // Summing the line into each category's stack would carry the axis to 225
+    // and shrink every column by a third.
+    let axis_max: f64 = emitted_axis_ticks(&chart_source(combo_budget_chart()))
+        .iter()
+        .copied()
+        .fold(0.0, f64::max);
+
+    assert!(
+        (150.0..200.0).contains(&axis_max),
+        "the axis covers the 150 stack the columns reach, got {axis_max}"
+    );
+}
+
+#[test]
+fn a_combo_legend_draws_each_series_the_way_its_family_plots_it() {
+    let source = chart_source(combo_budget_chart());
+    let entry = |name: &str| -> String {
+        source
+            .lines()
+            .find(|line| line.contains(&format!("[{name}]")) && line.contains("#place"))
+            .unwrap_or_else(|| panic!("no legend entry for {name} in:\n{source}"))
+            .to_string()
+    };
+
+    // Excel draws a filled swatch for a bar series and a line-and-marker key
+    // for a line one.
+    assert!(!entry("Birthday Budget").contains("line(end:"));
+    assert!(entry("Amount Spent").contains("line(end:"));
 }
