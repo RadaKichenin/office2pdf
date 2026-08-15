@@ -2831,3 +2831,177 @@ fn a_short_box_without_autofit_does_not_scale_its_text() {
         output.source
     );
 }
+
+/// A slide text box carrying one paragraph, for the trailing letter-space
+/// probes below. The box spans the #841 deck's `sldNum` placeholder: 59.76pt
+/// wide with PowerPoint's default 7.2pt side insets, so its content measure is
+/// 45.36pt and the centre a centred line takes sits 29.88pt from the slide's
+/// left edge.
+fn tracked_slide_line_source(
+    text: &str,
+    letter_spacing: Option<f64>,
+    alignment: Option<Alignment>,
+) -> String {
+    let doc = make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![make_fixed_text_box(
+            0.0,
+            453.0,
+            59.76,
+            56.88,
+            Insets {
+                top: 3.6,
+                right: 7.2,
+                bottom: 3.6,
+                left: 7.2,
+            },
+            crate::ir::TextBoxVerticalAlign::Bottom,
+            vec![Block::Paragraph(Paragraph {
+                style: ParagraphStyle {
+                    alignment,
+                    ..ParagraphStyle::default()
+                },
+                runs: vec![Run {
+                    text: text.to_string(),
+                    style: TextStyle {
+                        font_size: Some(10.0),
+                        bold: Some(true),
+                        letter_spacing,
+                        ..TextStyle::default()
+                    },
+                    href: None,
+                    footnote: None,
+                }],
+            })],
+        )],
+    )]);
+    generate_typst(&doc).unwrap().source
+}
+
+/// PowerPoint measures a line's width with one letter-space after *every*
+/// glyph, the last one included, and centres the line on that width. Typst
+/// drops the tracking of a shaped item's final glyph, so a centred tracked
+/// line came out half a letter-space to the right of where PowerPoint puts it.
+///
+/// Measured with `scripts/probe_harness.py --backend office` on the #841
+/// Contoso deck, whose `sldNum` placeholder is a centred 10pt bold Avenir Next
+/// LT Pro field on a 45.36pt measure centred at 29.88pt. Varying only the
+/// field's `a:rPr/@spc` and tracing the glyph origin out of native PowerPoint
+/// 16.112 exports:
+///
+/// | `spc` | `5` origin | implied width |
+/// | ---: | ---: | ---: |
+/// | 0 | 26.63pt | 6.50pt |
+/// | 100 | 26.13pt | 7.50pt |
+/// | 200 | 25.63pt | 8.50pt |
+/// | 400 | 24.63pt | 10.50pt |
+/// | 800 | 22.63pt | 14.50pt |
+///
+/// One glyph, so one letter-space: the origin moves exactly half a point per
+/// point of `spc`, which is the trailing space halved by centring and nothing
+/// else (issue #1075).
+#[test]
+fn a_centred_tracked_slide_line_carries_a_trailing_letter_space() {
+    let source: String = tracked_slide_line_source("5", Some(1.0), Some(Alignment::Center));
+
+    assert!(
+        source.contains("[5]#h(1pt)"),
+        "the centred line must be measured with the letter-space that follows \
+         its last glyph: {source}"
+    );
+}
+
+/// Triangulation on the factor: the trailing space is the run's own tracking,
+/// not a constant. The same probe at `spc="400"` moves the origin 2pt, four
+/// times what `spc="100"` moves it.
+#[test]
+fn a_centred_tracked_slide_line_trails_its_own_letter_space() {
+    let source: String = tracked_slide_line_source("5", Some(4.0), Some(Alignment::Center));
+
+    assert!(
+        source.contains("[5]#h(4pt)"),
+        "the trailing space is the run's tracking: {source}"
+    );
+}
+
+/// Right alignment consumes the whole trailing space rather than half of it,
+/// which falls out of measuring the line the same way. Same probe deck with
+/// the field's paragraph forced to `algn="r"`: the origin moves a full point
+/// per point of `spc` (45.95pt at 0, 44.95pt at 100, 43.95pt at 200, 41.95pt
+/// at 400), against a 52.56pt content right edge.
+#[test]
+fn a_right_aligned_tracked_slide_line_carries_a_trailing_letter_space() {
+    let source: String = tracked_slide_line_source("5", Some(1.0), Some(Alignment::Right));
+
+    assert!(
+        source.contains("[5]#h(1pt)"),
+        "a right-aligned line is placed by the same measured width: {source}"
+    );
+}
+
+/// A left-aligned line starts at the content edge whatever its tracking, so
+/// the trailing space cannot move it — and emitting one would only risk an
+/// extra wrap. The same deck's `ftr` placeholder is left-aligned and tracked
+/// at `spc="200"`, and starts at 69.84pt in both the native export and ours.
+#[test]
+fn a_left_aligned_tracked_slide_line_trails_nothing() {
+    let source: String = tracked_slide_line_source("5", Some(1.0), Some(Alignment::Left));
+
+    assert!(
+        !source.contains("]#h("),
+        "a left-aligned line is not placed by its width: {source}"
+    );
+}
+
+/// An untracked centred line has no letter-space to trail. PowerPoint writes
+/// `spc="0"` routinely, so keying this on the attribute's presence would put a
+/// spurious `0pt` spacer on whole decks.
+#[test]
+fn an_untracked_centred_slide_line_trails_nothing() {
+    for spacing in [None, Some(0.0)] {
+        let source: String = tracked_slide_line_source("5", spacing, Some(Alignment::Center));
+
+        assert!(
+            !source.contains("]#h("),
+            "no tracking, no trailing space (spacing {spacing:?}): {source}"
+        );
+    }
+}
+
+/// The #841 Contoso deck's slide number, against a native PowerPoint 16.112
+/// export of the same file.
+///
+/// `slideLayout5` seats the `sldNum` placeholder at x=1 EMU with a 758952 EMU
+/// width, and the master's inherited 91440 EMU side insets leave a 45.36pt
+/// measure centred at 29.88pt. The master's `lvl1pPr` sets the field in 10pt
+/// bold `+mn-lt` — Avenir Next LT Pro, whose digits advance 1323/2048 em — at
+/// `spc="100"`. The export puts `5` on 26.13pt and `10` on 22.38pt; measuring
+/// the line without its trailing letter-space put us on 26.65 and 22.92.
+///
+/// Avenir Next LT Pro is a cloud font no CI host has, so the origin is
+/// computed from the metrics rather than rendered: what a fixture would
+/// exercise is the width, and the width is a pure function of the advances,
+/// the tracking, and the glyph count.
+#[test]
+fn the_contoso_slide_number_lands_on_its_native_origin() {
+    const EMU_PER_PT: f64 = 12700.0;
+    let content_left_pt: f64 = (1.0 + 91440.0) / EMU_PER_PT;
+    let content_right_pt: f64 = (1.0 + 758952.0 - 91440.0) / EMU_PER_PT;
+    let centre_pt: f64 = (content_left_pt + content_right_pt) / 2.0;
+    // Avenir Next LT Pro Bold: every digit advances 1323 units per 2048 upem.
+    let digit_pt: f64 = 1323.0 / 2048.0 * 10.0;
+    let tracking_pt: f64 = 1.0;
+
+    for (glyphs, native_origin_pt) in [(1.0_f64, 26.13_f64), (2.0, 22.38)] {
+        let width_pt: f64 = glyphs * (digit_pt + tracking_pt);
+        let origin_pt: f64 = centre_pt - width_pt / 2.0;
+
+        assert!(
+            (origin_pt - native_origin_pt).abs() <= 0.12,
+            "the centred slide number must land on the native {native_origin_pt}pt \
+             origin within the export's 0.12pt half-grid, got {origin_pt}pt for \
+             {glyphs} glyph(s)"
+        );
+    }
+}

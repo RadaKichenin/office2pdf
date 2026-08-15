@@ -274,6 +274,42 @@ pub(super) fn generate_paragraph(
     Ok(())
 }
 
+/// The letter-space PowerPoint counts after a slide line's last glyph, when
+/// the paragraph's alignment is one that the extra width moves the line by.
+///
+/// PowerPoint measures a line with one letter-space after *every* glyph, the
+/// last one included, and places the line from that width: centring halves the
+/// trailing space, right alignment consumes it whole, and left alignment —
+/// which starts at the content edge whatever the width — cannot see it at all.
+/// Typst drops the tracking of a shaped item's final glyph
+/// ([`track_and_space`] adds it only where another glyph follows), so a
+/// centred tracked line came out half a letter-space to the right of the
+/// native export (issue #1075).
+///
+/// The space belongs to the last run that puts a glyph on the line, because
+/// that run's `a:rPr/@spc` is the one PowerPoint applies after it.
+///
+/// [`track_and_space`]: https://github.com/typst/typst/blob/v0.14.2/crates/typst-layout/src/inline/shaping.rs
+pub(super) fn powerpoint_trailing_letter_space_pt(
+    style: &ParagraphStyle,
+    runs: &[Run],
+) -> Option<f64> {
+    if !matches!(
+        style.alignment,
+        Some(Alignment::Center) | Some(Alignment::Right)
+    ) {
+        return None;
+    }
+    runs.iter()
+        .rev()
+        .find(|run| !run.text.is_empty())?
+        .style
+        .letter_spacing
+        // Zero is not tracking: PowerPoint writes `spc="0"` routinely, and a
+        // `0pt` spacer would be pure noise in every deck that does.
+        .filter(|spacing| *spacing != 0.0)
+}
+
 pub(super) fn paragraph_default_tab_width_pt(style: &ParagraphStyle, fallback_pt: f64) -> f64 {
     style
         .default_tab_stop_pt

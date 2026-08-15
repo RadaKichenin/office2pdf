@@ -3481,6 +3481,12 @@ fn generate_fixed_text_paragraph(
             available_width_pt,
         );
     }
+    // The line is placed by the width PowerPoint measured, which carries a
+    // letter-space after its last glyph that Typst's shaping drops (#1075).
+    // It goes inside the `no_wrap` box so that box's own width carries it too.
+    if let Some(spacing) = powerpoint_trailing_letter_space_pt(style, &para.runs) {
+        let _ = write!(out, "#h({}pt)", format_f64(spacing));
+    }
     if no_wrap {
         out.push(']');
     }
