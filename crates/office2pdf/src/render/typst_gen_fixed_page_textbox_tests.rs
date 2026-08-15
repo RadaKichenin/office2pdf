@@ -219,13 +219,23 @@ fn test_fixed_page_text_box_ordered_list_preserves_textbox_styling() {
     // `a:lnSpc`: 1.2em at 24pt is 28.8pt, and 1.5 line spacing makes each
     // item's box 43.2pt — which is the advance, since nothing is emitted
     // between items that declare no spacing (issue #934). The percentage grows
-    // the line from its top, so the face keeps its plain 0.276em descent gap
-    // and the ascent takes the whole 0.6em the box gains (issue #1020).
+    // the line from its top, so the face keeps its plain descent gap and the
+    // ascent takes the whole 14.4pt the box gains (issue #1020), and the seat
+    // lands on a whole point (issue #1074). The expectation is derived rather
+    // than spelled out because the default face decides the share.
+    let size_pt: f64 = 24.0;
+    let (share_top, _) =
+        crate::render::pdf::powerpoint_line_box_em(crate::defaults::TYPST_DEFAULT_FONT_FAMILY)
+            .expect("the default family's line metrics must resolve");
+    let seat_pt: f64 = ((1.5 * 1.2 - (1.2 - share_top)) * size_pt).round();
+    let expected: String = format!(
+        "#set text(top-edge: {}em, bottom-edge: -{}em)",
+        crate::render::typst_gen::fmt::format_f64(seat_pt / size_pt),
+        crate::render::typst_gen::fmt::format_f64((1.5 * 1.2 * size_pt - seat_pt) / size_pt),
+    );
     assert!(
-        output
-            .source
-            .contains("#set text(top-edge: 1.5239999999999998em, bottom-edge: -0.276em)"),
-        "the item takes the 1.5-scaled PowerPoint line box: {}",
+        output.source.contains(&expected),
+        "the item takes the 1.5-scaled PowerPoint line box `{expected}`: {}",
         output.source
     );
     assert!(
@@ -1896,17 +1906,30 @@ fn slide_baseline_splits_the_lines_extra_leading_evenly() {
     // `(1.2 + ascent - descent) / 2`. A proportional split on OS/2
     // `usWinAscent` was tried and measured 0.45-1.12pt low on every frame of
     // `08_marketing_report_en` (issues #513, #660).
-    let Some(source) = slide_text_box_source("Libertinus Serif", 18.0, ParagraphStyle::default())
+    //
+    // What lands on the page is that share rounded to a whole point, which is
+    // where PowerPoint seats a baseline inside its line box; the share itself
+    // is what the rounding is applied to, so it is what this asserts (#1074).
+    let size_pt: f64 = 18.0;
+    let Some(source) =
+        slide_text_box_source("Libertinus Serif", size_pt, ParagraphStyle::default())
     else {
         return;
     };
     let (top, bottom) = emitted_line_box_em(&source).expect("line box emitted");
-    let (expected_top, expected_bottom) =
+    let (share_top, share_bottom) =
         crate::render::pdf::powerpoint_line_box_em("Libertinus Serif").expect("metrics resolve");
+    let expected_top: f64 = (share_top * size_pt).round() / size_pt;
+    let expected_bottom: f64 = 1.2 - expected_top;
 
     assert!(
         (top - expected_top).abs() < 0.001 && (bottom - expected_bottom).abs() < 0.001,
         "expected {expected_top}/{expected_bottom}em, got {top}/{bottom}em: {source}"
+    );
+    assert!(
+        (share_top + share_bottom - 1.2).abs() < 1e-9,
+        "the share the rounding starts from spans the 1.2em line: \
+         {share_top}/{share_bottom}"
     );
     assert!(
         bottom > 0.01,
@@ -1965,6 +1988,135 @@ fn an_overflowing_face_shares_the_line_box_in_its_own_proportion() {
         above < even - 0.01,
         "the even split's negative half-leading pushes the baseline down to \
          {even}em; the proportional share must sit above it, got {above}em"
+    );
+}
+
+/// PowerPoint seats a baseline a whole number of points below its line box's
+/// top, and gives whatever is left of the 1.2em line to the descent gap.
+///
+/// Measured on native PowerPoint 16.112 exports of a one-factor probe deck:
+/// four faces spanning the split's two branches — Georgia (1.13623em, fits the
+/// box), Verdana (1.21533em), Avenir Next LT Pro (1.21289em) and Posterama
+/// (1.33008em, all three overflow) — in bottom-anchored boxes with every inset
+/// zeroed, at 8, 11, 14, 18, 24, 28, 32, 36, 40, 44, 48, 54, 72 and 100pt. All
+/// 56 cells land on `1.2 x size - round(share x size)` within the export's
+/// 0.12pt half-grid, and none within 0.12pt of the unrounded share. The seat's
+/// share of the em therefore is *not* constant across sizes: Avenir Next LT Pro
+/// keeps 0.192em under its baseline at 10pt and 0.2625em at 32pt (issue #1074).
+///
+/// Georgia's cells need the *proportional* share to fit, not the even split a
+/// face that fits the box currently gets — a separate root cause tracked in
+/// #1118. What this asserts is the rounding, which is common to both.
+#[test]
+fn a_slide_line_seats_its_baseline_on_a_whole_point() {
+    let family: &str = "Libertinus Serif";
+    let Some((model_above_em, _)) = crate::render::pdf::powerpoint_line_box_em(family) else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+    let mut rounding_bit: bool = false;
+
+    for size_pt in [9.0_f64, 10.0, 11.0, 13.0, 17.0, 23.0, 31.0, 50.0] {
+        let Some(source) = slide_text_box_source(family, size_pt, ParagraphStyle::default()) else {
+            return;
+        };
+        let (top_em, bottom_em) = emitted_line_box_em(&source).expect("line box emitted");
+        let seat_pt: f64 = top_em * size_pt;
+        let unrounded_pt: f64 = model_above_em * size_pt;
+
+        assert!(
+            (seat_pt - seat_pt.round()).abs() < 1e-6,
+            "the baseline sits a whole number of points below the line top, got \
+             {seat_pt}pt at {size_pt}pt: {source}"
+        );
+        assert!(
+            (seat_pt - unrounded_pt.round()).abs() < 1e-6,
+            "the seat is the split's own share rounded to a point: expected \
+             {}pt, got {seat_pt}pt at {size_pt}pt",
+            unrounded_pt.round()
+        );
+        assert!(
+            ((top_em + bottom_em) * size_pt - 1.2 * size_pt).abs() < 1e-6,
+            "the line still spans 1.2em, got {}pt at {size_pt}pt",
+            (top_em + bottom_em) * size_pt
+        );
+        assert!(
+            bottom_em > 0.0,
+            "the descent gap a bottom-anchored box keeps must stay positive, got \
+             {bottom_em}em at {size_pt}pt"
+        );
+        rounding_bit |= (unrounded_pt - unrounded_pt.round()).abs() > 0.05;
+    }
+
+    assert!(
+        rounding_bit,
+        "no probed size exercised the rounding, so this test would pass on the \
+         unrounded model too"
+    );
+}
+
+/// The #841 Contoso deck's footer band, against a native PowerPoint 16.112
+/// export of the same file.
+///
+/// `slideLayout5` seats the `ftr` placeholder at 5751576 EMU with a 722376 EMU
+/// height and the master's inherited 45720 EMU `bIns`, `anchor="b"`, and the
+/// master's `lvl1pPr` sets it in 10pt bold `+mn-lt` — Avenir Next LT Pro. Its
+/// `sldNum` neighbour shares the frame's bottom and prints on the same line.
+/// The export puts both on 504.24pt; the unrounded share put us on 503.69,
+/// 0.55pt high, on every slide that repeats the band (issue #1074).
+///
+/// Avenir Next LT Pro is a cloud font no CI host has, so the seat is computed
+/// from the model rather than rendered: what a fixture would exercise is the
+/// split, and the split is a pure function of the face's metrics.
+#[test]
+fn the_contoso_footer_band_lands_on_its_native_baseline() {
+    // Avenir Next LT Pro Bold: hhea ascender 1972, descender -512 per 2048 upem.
+    let (above_em, _) =
+        crate::render::pdf::powerpoint_line_box_split_em(1972.0 / 2048.0, 512.0 / 2048.0)
+            .expect("a positive ascent splits the line box");
+    let size_pt: f64 = 10.0;
+    let (_, below_em) =
+        crate::render::typst_gen::text::powerpoint_percentage_line_box_em(above_em, size_pt, 1.0);
+    const EMU_PER_PT: f64 = 12700.0;
+    let content_bottom_pt: f64 = (5751576.0 + 722376.0 - 45720.0) / EMU_PER_PT;
+    let baseline_pt: f64 = content_bottom_pt - below_em * size_pt;
+
+    assert!(
+        (baseline_pt - 504.24).abs() <= 0.24,
+        "the bottom-anchored footer band must land on the native 504.24pt \
+         baseline within the export's 0.24pt position grid, got {baseline_pt}pt"
+    );
+}
+
+/// The same deck's slide-8 attribution, which is what tells the two ways of
+/// rounding a `spcPct` seat apart.
+///
+/// `slideLayout8` seats its `idx="11"` body placeholder at 6336792 EMU with
+/// `tIns="45720"`, `anchor="t"` and `<a:lnSpc><a:spcPct val="85000"/>`, and sets
+/// it in 14pt Avenir Next LT Pro. The export puts `Heraclitus` on 513.60pt,
+/// 11.04pt below the content top. Measuring the scaled seat back from the plain
+/// line's *unrounded* gap gives 11; rounding the plain seat to a point first and
+/// subtracting that gives 10, a whole point low. The deck's other three `spcPct`
+/// samples agree with both, so this one carries the distinction alone.
+#[test]
+fn the_contoso_scaled_attribution_lands_on_its_native_baseline() {
+    // Avenir Next LT Pro: hhea ascender 1972, descender -512 per 2048 upem.
+    let (plain_above, _) =
+        crate::render::pdf::powerpoint_line_box_split_em(1972.0 / 2048.0, 512.0 / 2048.0)
+            .expect("a positive ascent splits the line box");
+    let size_pt: f64 = 14.0;
+    let (above, _) = crate::render::typst_gen::text::powerpoint_percentage_line_box_em(
+        plain_above,
+        size_pt,
+        0.85,
+    );
+    const EMU_PER_PT: f64 = 12700.0;
+    let content_top_pt: f64 = (6336792.0 + 45720.0) / EMU_PER_PT;
+    let baseline_pt: f64 = content_top_pt + above * size_pt;
+
+    assert!(
+        (baseline_pt - 513.60).abs() <= 0.24,
+        "the scaled attribution must land on the native 513.60pt baseline within \
+         the export's 0.24pt position grid, got {baseline_pt}pt"
     );
 }
 
@@ -2059,13 +2211,18 @@ fn slide_line_spacing_keeps_the_descent_gap_and_moves_the_ascent() {
     // 0.24pt position grid. Posterama Bold behaves the same across the #841
     // Contoso deck's five title sizes. Scaling both sides instead left every
     // one of those titles 1.8-3.7pt low (issues #1020, #1024).
+    //
+    // Both sides land on a whole-point seat (issue #1074), so each keeps the
+    // face's own unrounded gap to within half a point rather than keeping the
+    // identical gap — asserted against that gap, in points.
     let family: &str = "Libertinus Serif";
-    let Some(plain) = slide_text_box_source(family, 18.0, ParagraphStyle::default()) else {
+    let size_pt: f64 = 18.0;
+    let Some(plain) = slide_text_box_source(family, size_pt, ParagraphStyle::default()) else {
         return;
     };
     let Some(scaled) = slide_text_box_source(
         family,
-        18.0,
+        size_pt,
         ParagraphStyle {
             line_spacing: Some(LineSpacing::Proportional(0.85)),
             ..ParagraphStyle::default()
@@ -2073,18 +2230,33 @@ fn slide_line_spacing_keeps_the_descent_gap_and_moves_the_ascent() {
     ) else {
         return;
     };
-    let (plain_top, plain_bottom) = emitted_line_box_em(&plain).expect("line box emitted");
+    let (_plain_top, plain_bottom) = emitted_line_box_em(&plain).expect("line box emitted");
     let (scaled_top, scaled_bottom) = emitted_line_box_em(&scaled).expect("line box emitted");
+    let (share_top, share_bottom) =
+        crate::render::pdf::powerpoint_line_box_em(family).expect("metrics resolve");
+    let gap_pt: f64 = share_bottom * size_pt;
 
     assert!(
-        (scaled_bottom - plain_bottom).abs() < 0.001,
-        "the descent gap must survive the percentage: {scaled_bottom}em against \
-         {plain_bottom}em"
+        ((scaled_bottom - share_bottom) * size_pt).abs() <= 0.5,
+        "the descent gap must survive the percentage to within the whole-point \
+         seat: {}pt against the face's {gap_pt}pt",
+        scaled_bottom * size_pt
     );
     assert!(
-        (scaled_top - (plain_top - 0.15 * 1.2)).abs() < 0.001,
+        ((plain_bottom - share_bottom) * size_pt).abs() <= 0.5,
+        "the plain line keeps the same gap to the same tolerance: {}pt against \
+         {gap_pt}pt",
+        plain_bottom * size_pt
+    );
+    assert!(
+        ((scaled_top - (share_top - 0.15 * 1.2)) * size_pt).abs() <= 0.5,
         "the ascent must absorb the whole 0.18em the line loses: {scaled_top}em \
-         against {plain_top}em"
+         against the face's {share_top}em"
+    );
+    assert!(
+        (scaled_top * size_pt - (scaled_top * size_pt).round()).abs() < 1e-6,
+        "the scaled line seats its baseline on a whole point too: {}pt",
+        scaled_top * size_pt
     );
     assert!(
         (scaled_top + scaled_bottom - 0.85 * 1.2).abs() < 0.001,
@@ -2117,12 +2289,15 @@ fn the_contoso_footer_title_lands_on_its_native_baseline() {
             .expect("a positive ascent splits the line box");
     assert!((plain_above + plain_below - 1.2).abs() < 1e-9);
 
-    let (above, below) =
-        crate::render::typst_gen::text::powerpoint_percentage_line_box_em(plain_below, 0.85);
+    let size_pt: f64 = 30.0;
+    let (above, below) = crate::render::typst_gen::text::powerpoint_percentage_line_box_em(
+        plain_above,
+        size_pt,
+        0.85,
+    );
     const EMU_PER_PT: f64 = 12700.0;
     let content_top_pt: f64 = (5367528.0 + 137160.0) / EMU_PER_PT;
     let content_height_pt: f64 = (1490472.0 - 137160.0 - 45720.0) / EMU_PER_PT;
-    let size_pt: f64 = 30.0;
     let line_pt: f64 = (above + below) * size_pt;
     let baseline_pt: f64 = content_top_pt + (content_height_pt - line_pt) / 2.0 + above * size_pt;
 
@@ -2143,14 +2318,18 @@ fn the_contoso_footer_title_lands_on_its_native_baseline() {
 /// placeholder chain on slides 13 and 14.
 #[test]
 fn the_contoso_top_anchored_title_lands_on_its_native_baseline() {
-    let (_, plain_below) =
+    let (plain_above, _) =
         crate::render::pdf::powerpoint_line_box_split_em(2134.0 / 2048.0, 590.0 / 2048.0)
             .expect("a positive ascent splits the line box");
-    let (above, _) =
-        crate::render::typst_gen::text::powerpoint_percentage_line_box_em(plain_below, 0.85);
+    let size_pt: f64 = 38.0;
+    let (above, _) = crate::render::typst_gen::text::powerpoint_percentage_line_box_em(
+        plain_above,
+        size_pt,
+        0.85,
+    );
     const EMU_PER_PT: f64 = 12700.0;
     let content_top_pt: f64 = (5367528.0 + 338328.0) / EMU_PER_PT;
-    let baseline_pt: f64 = content_top_pt + above * 38.0;
+    let baseline_pt: f64 = content_top_pt + above * size_pt;
 
     assert!(
         (baseline_pt - 478.32).abs() <= 0.24,
@@ -2181,15 +2360,19 @@ fn the_contoso_top_anchored_title_lands_on_its_native_baseline() {
 #[test]
 fn the_contoso_inherited_slide_titles_land_on_their_native_baselines() {
     // Posterama Bold: hhea ascender 2134, descender -590 per 2048 upem.
-    let (_, plain_below) =
+    let (plain_above, _) =
         crate::render::pdf::powerpoint_line_box_split_em(2134.0 / 2048.0, 590.0 / 2048.0)
             .expect("a positive ascent splits the line box");
-    let (above, _) =
-        crate::render::typst_gen::text::powerpoint_percentage_line_box_em(plain_below, 0.85);
+    let size_pt: f64 = 38.0;
+    let (above, _) = crate::render::typst_gen::text::powerpoint_percentage_line_box_em(
+        plain_above,
+        size_pt,
+        0.85,
+    );
     const EMU_PER_PT: f64 = 12700.0;
 
     for (slide, top_inset_emu, native_pt) in [(13, 685800.0, 83.04), (14, 704088.0, 84.48)] {
-        let baseline_pt: f64 = top_inset_emu / EMU_PER_PT + above * 38.0;
+        let baseline_pt: f64 = top_inset_emu / EMU_PER_PT + above * size_pt;
 
         assert!(
             (baseline_pt - native_pt).abs() <= 0.24,
@@ -2350,7 +2533,9 @@ fn powerpoint_hard_break_advance_uses_the_following_lines_font_size() {
     assert_eq!(baselines.len(), 3, "expected three lines: {baselines:?}");
     let (top_em, _) = crate::render::pdf::powerpoint_line_box_em(family)
         .expect("the Arial-compatible line metrics must resolve");
-    let expected_first_baseline = 72.0 + top_em * 12.5;
+    // The paragraph's largest size decides its line box, and PowerPoint seats
+    // the baseline a whole number of points below its top (issue #1074).
+    let expected_first_baseline = 72.0 + (top_em * 12.5).round();
     assert!(
         (baselines[0] - expected_first_baseline).abs() < 0.01,
         "hard-break boxing must preserve the first line's top seating: \
@@ -2575,8 +2760,10 @@ fn slide_text_wraps_on_powerpoints_one_eighth_point_advance_grid() {
     let (top_em, bottom_em) = crate::render::pdf::powerpoint_line_box_em(family)
         .expect("the embedded Libertinus Serif line metrics must resolve");
     let line_height_pt = (top_em + bottom_em) * font_size_pt;
+    // PowerPoint seats the baseline a whole number of points below its line
+    // box's top; only the centring offset stays fractional (issue #1074).
     let expected_first_baseline_pt =
-        72.0 + (100.0 - 2.0 * line_height_pt) / 2.0 + top_em * font_size_pt;
+        72.0 + (100.0 - 2.0 * line_height_pt) / 2.0 + (top_em * font_size_pt).round();
     assert!(
         (baselines[0] - expected_first_baseline_pt).abs() < 0.01,
         "advance-grid boxes must preserve the active line box during vertical centring: \
