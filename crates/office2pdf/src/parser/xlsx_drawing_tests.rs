@@ -307,3 +307,46 @@ fn run_properties_omit_emphasis_when_disabled() {
         (Some(9.0), None, None)
     );
 }
+
+/// A worksheet drawing holding one picture anchor whose blip is spelled with
+/// the given markup.
+fn drawing_with_blip(blip_markup: &str) -> String {
+    format!(
+        r#"<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <xdr:twoCellAnchor editAs="oneCell">
+    <xdr:from><xdr:col>1</xdr:col><xdr:colOff>11880</xdr:colOff><xdr:row>5</xdr:row><xdr:rowOff>360720</xdr:rowOff></xdr:from>
+    <xdr:to><xdr:col>3</xdr:col><xdr:colOff>963720</xdr:colOff><xdr:row>11</xdr:row><xdr:rowOff>5760</xdr:rowOff></xdr:to>
+    <xdr:pic>
+      <xdr:nvPicPr><xdr:cNvPr id="2" name="Picture 10" descr="Three wrapped gifts"/><xdr:cNvPicPr/></xdr:nvPicPr>
+      <xdr:blipFill>{blip_markup}<a:stretch/></xdr:blipFill>
+      <xdr:spPr><a:xfrm><a:off x="156600" y="5970960"/><a:ext cx="3268440" cy="2178720"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr>
+    </xdr:pic>
+    <xdr:clientData/>
+  </xdr:twoCellAnchor>
+</xdr:wsDr>"#
+    )
+}
+
+#[test]
+fn self_closing_blip_yields_its_embed_relationship() {
+    let anchors = parse_drawing_image_anchors(&drawing_with_blip(r#"<a:blip r:embed="rId2"/>"#));
+    assert_eq!(anchors.len(), 1, "the anchor holds one picture");
+    assert_eq!(anchors[0].1, "rId2");
+    assert_eq!(anchors[0].0.from_row, 5);
+    assert_eq!(anchors[0].0.from_col, 1);
+}
+
+#[test]
+fn blip_with_effect_children_still_yields_its_embed_relationship() {
+    // A picture carrying an alpha or recolour effect writes `a:blip` as a start
+    // element with children; reading `r:embed` only off `Event::Empty` dropped
+    // the whole picture (issue #1066). Markup is the reported workbook's.
+    let anchors = parse_drawing_image_anchors(&drawing_with_blip(
+        r#"<a:blip r:embed="rId2"><a:alphaModFix amt="70000"/><a:extLst><a:ext uri="{BEBA8EAE-BF5A-486C-A8C5-ECC9F3942E4B}"><a14:imgProps xmlns:a14="http://schemas.microsoft.com/office/drawing/2010/main"><a14:imgLayer r:embed="rId3"><a14:imgEffect><a14:brightnessContrast colorTemp="5513" contrast="40000" sat="0"/></a14:imgEffect></a14:imgLayer></a14:imgProps></a:ext></a:extLst></a:blip>"#,
+    ));
+    assert_eq!(anchors.len(), 1, "the anchor still holds one picture");
+    // rId3 is the a14 high-definition layer, not the picture Excel draws.
+    assert_eq!(anchors[0].1, "rId2");
+    assert_eq!(anchors[0].0.from_row, 5);
+    assert_eq!(anchors[0].0.from_col, 1);
+}

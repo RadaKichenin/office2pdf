@@ -629,6 +629,22 @@ pub(super) struct ImageAnchorGeometry {
     pub(super) ext_emu: Option<(i64, i64)>,
 }
 
+/// Relationship id in an `<a:blip>`'s `r:embed`, if it carries one.
+///
+/// Read from the `a:blip` element itself and never from a descendant: the
+/// `a14:imgProps` extension Excel nests inside an effect-bearing blip declares
+/// its own `r:embed` for the high-definition layer, which is not the picture
+/// Excel draws.
+fn blip_embed_rid(element: &quick_xml::events::BytesStart<'_>) -> Option<String> {
+    element.attributes().flatten().find_map(|attr| {
+        if attr.key.local_name().as_ref() == b"embed" {
+            attr.unescape_value().ok().map(|value| value.to_string())
+        } else {
+            None
+        }
+    })
+}
+
 /// Parse `<xdr:pic>` anchors from a worksheet drawing: anchor geometry plus
 /// the blip relationship id.
 pub(super) fn parse_drawing_image_anchors(xml: &str) -> Vec<(ImageAnchorGeometry, String)> {
@@ -673,6 +689,13 @@ pub(super) fn parse_drawing_image_anchors(xml: &str) -> Vec<(ImageAnchorGeometry
                 b"row" if corner_target.is_some() => current_field = Some("row"),
                 b"rowOff" if corner_target.is_some() => current_field = Some("rowOff"),
                 b"pic" if in_anchor => in_pic = true,
+                // A picture carrying an alpha or recolour effect spells its
+                // blip as a start element with children (issue #1066).
+                b"blip" if in_pic => {
+                    if let Some(rid) = blip_embed_rid(e) {
+                        blip_rid = Some(rid);
+                    }
+                }
                 _ => {}
             },
             Ok(quick_xml::events::Event::Empty(ref e)) => {
@@ -696,14 +719,11 @@ pub(super) fn parse_drawing_image_anchors(xml: &str) -> Vec<(ImageAnchorGeometry
                     }
                     ext_emu = Some((cx, cy));
                 }
-                if in_pic && local.as_ref() == b"blip" {
-                    for attr in e.attributes().flatten() {
-                        if attr.key.local_name().as_ref() == b"embed"
-                            && let Ok(val) = attr.unescape_value()
-                        {
-                            blip_rid = Some(val.to_string());
-                        }
-                    }
+                if in_pic
+                    && local.as_ref() == b"blip"
+                    && let Some(rid) = blip_embed_rid(e)
+                {
+                    blip_rid = Some(rid);
                 }
             }
             Ok(quick_xml::events::Event::Text(ref t)) => {
