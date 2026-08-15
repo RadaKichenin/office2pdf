@@ -889,8 +889,10 @@ fn test_table_cell_paragraph_uses_word_default_line_box_and_spacing() {
         other => panic!("expected table cell paragraph, got {other:?}"),
     };
 
-    // Line height stays unset in the IR (issue #354); an unspecified
-    // `w:spacing w:after` is zero (issue #452).
+    // Line height stays unset in the IR (issue #354). The unstated
+    // `w:spacing w:after` resolves to zero because docx-rs builds every
+    // package with a `w:docDefaults/w:pPrDefault`; without that declaration a
+    // cell paragraph would take Word's built-in 8pt instead (issue #1085).
     assert_eq!(paragraph(0).style.line_box, None);
     assert_eq!(paragraph(0).style.space_after, Some(0.0));
 

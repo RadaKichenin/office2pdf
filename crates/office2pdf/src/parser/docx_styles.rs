@@ -257,6 +257,50 @@ pub(super) fn scan_defines_default_paragraph_style(styles_xml: &str) -> bool {
     }
 }
 
+/// Whether `w:docDefaults` declares a `w:pPrDefault` — the document taking
+/// over its own paragraph defaults.
+///
+/// This is the factor that decides the `w:spacing w:after` a paragraph gets
+/// when neither it nor its style hierarchy states one. Without the element,
+/// Word's built-in `Normal` supplies 8pt; with it, the unstated value falls to
+/// the spec's zero. Measured on one-factor native exports of a package that
+/// states no `w:spacing` anywhere: `<w:pPrDefault/>`, `<w:pPrDefault><w:pPr/>`,
+/// and a `w:pPr` carrying only `w:before` each pull the page up by the same
+/// 24pt over three paragraph gaps that an explicit `w:after="0"` does, while a
+/// `Normal` style carrying its own `w:pPr` leaves the export untouched
+/// (issue #1085).
+///
+/// Read from the raw part because docx-rs models the absent element and one
+/// holding an empty `w:pPr` identically — the same reason `PairKerningRules`
+/// reads `w:kern` there (issue #628).
+pub(super) fn scan_declares_paragraph_property_defaults(styles_xml: &str) -> bool {
+    use quick_xml::events::Event;
+
+    let mut reader = quick_xml::Reader::from_str(styles_xml);
+    reader.config_mut().trim_text(true);
+    // `w:pPrDefault` is only a document default inside `w:docDefaults`; the
+    // scope guard keeps a stray element elsewhere in a malformed part from
+    // silencing the built-in gap.
+    let mut in_doc_defaults: bool = false;
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(element)) if element.local_name().as_ref() == b"docDefaults" => {
+                in_doc_defaults = true;
+            }
+            Ok(Event::End(element)) if element.local_name().as_ref() == b"docDefaults" => {
+                in_doc_defaults = false;
+            }
+            Ok(Event::Start(element) | Event::Empty(element))
+                if in_doc_defaults && element.local_name().as_ref() == b"pPrDefault" =>
+            {
+                return true;
+            }
+            Ok(Event::Eof) | Err(_) => return false,
+            _ => {}
+        }
+    }
+}
+
 use crate::defaults::HEADING_FONT_SIZES;
 
 /// Build a map from style ID → resolved formatting by extracting formatting

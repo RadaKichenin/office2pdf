@@ -73,4 +73,8 @@ pub(super) struct DocxConversionContext {
     /// style. Decides the East Asian auto space for paragraphs without a
     /// resolvable `w:pStyle` (issue #732).
     pub(super) default_paragraph_style_is_defined: bool,
+    /// Whether `word/styles.xml` declares `w:docDefaults/w:pPrDefault`.
+    /// Decides the `w:spacing w:after` a paragraph that states none takes:
+    /// zero with the element, Word's built-in 8pt without it (issue #1085).
+    pub(super) paragraph_property_defaults_are_declared: bool,
 }

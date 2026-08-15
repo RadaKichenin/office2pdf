@@ -1368,6 +1368,199 @@ fn test_run_stating_no_kern_keeps_the_style_threshold() {
     );
 }
 
+/// The `w:spacing w:after` a paragraph ends up with when the document states
+/// nothing, keyed by what `word/styles.xml` declares.
+///
+/// Measured against native Word by the issue #1085 probes over
+/// `korean_alignment_autospace.docx` — Malgun Gothic 10.5pt, no `w:spacing`
+/// anywhere, intra-paragraph pitch 18.24pt:
+///
+/// - `issue-1085-space-after-declared` (patching every `w:pPr`): `w:after="0"`
+///   pulls the page up 24.00pt over the three gaps, `w:after="240"` pushes it
+///   down 12.00pt, and `w:after="160"` reproduces the untouched export exactly
+///   — so the silent document already lays out as 8pt after.
+/// - `issue-1085-space-after-pprdefault` and `-default-shape` (patching
+///   `styles.xml`): any `w:docDefaults/w:pPrDefault` — carrying `w:after="0"`,
+///   carrying only `w:before`, holding an empty `w:pPr`, or written as the bare
+///   `<w:pPrDefault/>` element — collapses the gap to 0 (−24.00pt), while a
+///   `Normal` style holding its own `w:pPr`, and deleting the `Normal`
+///   definition outright, both leave the 8pt untouched.
+const BUILT_IN_NORMAL_SPACE_AFTER_PT: f64 = 8.0;
+const DECLARED_DEFAULTS_SPACE_AFTER_PT: f64 = 0.0;
+
+#[test]
+fn test_document_without_paragraph_property_defaults_opens_words_built_in_8pt() {
+    // The fixture the issue measured: four paragraphs, none stating
+    // `w:spacing`, over a `styles.xml` whose `w:docDefaults` holds only
+    // `w:rPrDefault`. Word opens 8pt below each of them.
+    let data = std::fs::read(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/docx/korean_alignment_autospace.docx"
+    ))
+    .expect("fixture");
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let paragraphs: Vec<&Paragraph> = collect_paragraphs(&doc);
+
+    assert_eq!(paragraphs.len(), 4);
+    for (index, paragraph) in paragraphs.iter().enumerate() {
+        assert_eq!(
+            paragraph.style.space_after,
+            Some(BUILT_IN_NORMAL_SPACE_AFTER_PT),
+            "paragraph {index} states no w:spacing and the package declares no \
+             w:pPrDefault, so Word's built-in Normal supplies w:after=\"160\""
+        );
+    }
+}
+
+#[test]
+fn test_declared_paragraph_property_defaults_replace_the_built_in_8pt() {
+    // A `w:pPrDefault` is the document taking over its own paragraph defaults,
+    // and ECMA-376 leaves an unstated `w:after` at zero — so even one holding
+    // an empty `w:pPr` closes the gap Word's built-in Normal would have opened.
+    let styles_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:docDefaults>
+    <w:pPrDefault><w:pPr/></w:pPrDefault>
+    <w:rPrDefault><w:rPr><w:sz w:val="22"/></w:rPr></w:rPrDefault>
+  </w:docDefaults>
+  <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>
+</w:styles>"#;
+    let document_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+  <w:p><w:r><w:t>First clause of the agreement.</w:t></w:r></w:p>
+  <w:p><w:r><w:t>Second clause of the agreement.</w:t></w:r></w:p>
+</w:body></w:document>"#;
+
+    let data = build_docx_with_styles_xml(document_xml, styles_xml);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    for paragraph in collect_paragraphs(&doc) {
+        assert_eq!(
+            paragraph.style.space_after,
+            Some(DECLARED_DEFAULTS_SPACE_AFTER_PT),
+            "a declared w:pPrDefault silences the built-in default"
+        );
+    }
+}
+
+#[test]
+fn test_bare_paragraph_property_default_element_replaces_the_built_in_8pt() {
+    // `<w:pPrDefault/>` carries no `w:pPr` at all, so nothing distinguishes it
+    // from absence in the parsed model — yet Word's export moves by the same
+    // 24pt as `w:after="0"` does. The element's presence is the whole signal.
+    let styles_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:docDefaults>
+    <w:pPrDefault/>
+    <w:rPrDefault><w:rPr><w:sz w:val="22"/></w:rPr></w:rPrDefault>
+  </w:docDefaults>
+</w:styles>"#;
+    let document_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+  <w:p><w:r><w:t>Notice of the annual general meeting.</w:t></w:r></w:p>
+</w:body></w:document>"#;
+
+    let data = build_docx_with_styles_xml(document_xml, styles_xml);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    assert_eq!(
+        collect_paragraphs(&doc)[0].style.space_after,
+        Some(DECLARED_DEFAULTS_SPACE_AFTER_PT)
+    );
+}
+
+#[test]
+fn test_style_paragraph_properties_do_not_silence_the_built_in_8pt() {
+    // A `Normal` definition holding its own `w:pPr` is not the document taking
+    // over the defaults: the probe's `Normal style w:spacing w:before only`
+    // variant exported at the untouched baselines, i.e. still 8pt after. Only
+    // `w:docDefaults/w:pPrDefault` moves it.
+    let styles_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="22"/></w:rPr></w:rPrDefault></w:docDefaults>
+  <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
+    <w:name w:val="Normal"/>
+    <w:pPr><w:spacing w:before="0"/></w:pPr>
+  </w:style>
+</w:styles>"#;
+    let document_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+  <w:p><w:r><w:t>Notice of the annual general meeting.</w:t></w:r></w:p>
+</w:body></w:document>"#;
+
+    let data = build_docx_with_styles_xml(document_xml, styles_xml);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    assert_eq!(
+        collect_paragraphs(&doc)[0].style.space_after,
+        Some(BUILT_IN_NORMAL_SPACE_AFTER_PT)
+    );
+}
+
+#[test]
+fn test_stated_spacing_outranks_the_built_in_default_either_way() {
+    // Triangulation: the default only fills a gap nothing states. A paragraph
+    // stating `w:after="240"` keeps its 12pt with no `w:pPrDefault` in sight,
+    // and one stating `w:after="0"` keeps its zero.
+    let styles_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="22"/></w:rPr></w:rPrDefault></w:docDefaults>
+</w:styles>"#;
+    let document_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+  <w:p><w:pPr><w:spacing w:after="240"/></w:pPr><w:r><w:t>Widely spaced clause.</w:t></w:r></w:p>
+  <w:p><w:pPr><w:spacing w:after="0"/></w:pPr><w:r><w:t>Tightly spaced clause.</w:t></w:r></w:p>
+  <w:p><w:r><w:t>Silent clause.</w:t></w:r></w:p>
+</w:body></w:document>"#;
+
+    let data = build_docx_with_styles_xml(document_xml, styles_xml);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let paragraphs: Vec<&Paragraph> = collect_paragraphs(&doc);
+
+    assert_eq!(paragraphs[0].style.space_after, Some(12.0));
+    assert_eq!(paragraphs[1].style.space_after, Some(0.0));
+    assert_eq!(
+        paragraphs[2].style.space_after,
+        Some(BUILT_IN_NORMAL_SPACE_AFTER_PT)
+    );
+}
+
+#[test]
+fn test_paragraph_property_defaults_are_scanned_from_the_raw_styles_part() {
+    // docx-rs models a missing `w:pPrDefault` and one holding an empty `w:pPr`
+    // identically, so the presence has to come off the raw part — the reason
+    // `PairKerningRules` reads `w:kern` there (issue #628).
+    let declares = |xml: &str| styles::scan_declares_paragraph_property_defaults(xml);
+
+    assert!(declares(
+        r#"<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+             <w:docDefaults><w:pPrDefault><w:pPr/></w:pPrDefault></w:docDefaults>
+           </w:styles>"#
+    ));
+    assert!(
+        declares(
+            r#"<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+             <w:docDefaults><w:pPrDefault/><w:rPrDefault><w:rPr/></w:rPrDefault></w:docDefaults>
+           </w:styles>"#
+        ),
+        "the bare element declares the defaults just as a populated one does"
+    );
+    assert!(
+        !declares(
+            r#"<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+             <w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="21"/></w:rPr></w:rPrDefault></w:docDefaults>
+             <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
+               <w:name w:val="Normal"/><w:pPr><w:spacing w:after="160"/></w:pPr>
+             </w:style>
+           </w:styles>"#
+        ),
+        "a style's own w:pPr is not a document-level default"
+    );
+    assert!(!declares(
+        r#"<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>"#
+    ));
+}
+
 fn collect_paragraphs(doc: &Document) -> Vec<&Paragraph> {
     doc.pages
         .iter()

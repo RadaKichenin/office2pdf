@@ -75,21 +75,55 @@ mod text;
 /// Parser for DOCX (Office Open XML Word) documents.
 pub struct DocxParser;
 
-/// The paragraph spacing Word applies when neither a paragraph nor its
-/// style hierarchy specifies `w:spacing w:after`: ECMA-376 leaves the gap
-/// at zero, and a Word PDF export of a document whose `styles.xml` defines
-/// no `Normal` spacing confirms it. Recording it explicitly (rather than
-/// leaving `space_after` unset) also pins the paragraph block's `below`, so
-/// Typst's own 1.2em default block spacing cannot leak into the gap.
+/// The gap Word's built-in `Normal` opens below a paragraph that states no
+/// `w:spacing w:after` anywhere in its style hierarchy — `w:after="160"`.
+///
+/// Measured on native Word exports of a package that states no `w:spacing` at
+/// all (Malgun Gothic 10.5pt, intra-paragraph pitch 18.24pt, paragraph pitch
+/// 26.16pt): patching every `w:pPr` to `w:after="160"` reproduces the
+/// untouched export exactly, `w:after="0"` pulls the page up 24.00pt over the
+/// three gaps and `w:after="240"` pushes it down 12.00pt. Issue #1085, probe
+/// `issue-1085-space-after-declared`.
+pub(super) const WORD_BUILT_IN_NORMAL_SPACE_AFTER_PT: f64 = 8.0;
+
+/// The same gap once the document declares `w:docDefaults/w:pPrDefault`:
+/// ECMA-376 leaves an unstated `w:after` at zero, and the declaration is the
+/// document taking the defaults over from Word's built-in `Normal`.
+///
+/// The element's mere presence is the whole signal — `<w:pPrDefault/>`,
+/// `<w:pPrDefault><w:pPr/></w:pPrDefault>` and a `w:pPr` carrying only
+/// `w:before` all export at the same baselines an explicit `w:after="0"` does,
+/// while a `Normal` style carrying its own `w:pPr` keeps the 8pt (issue #1085,
+/// probes `issue-1085-space-after-pprdefault` and `-default-shape`).
+pub(super) const WORD_DECLARED_DEFAULT_SPACE_AFTER_PT: f64 = 0.0;
+
+/// The `w:spacing w:after` to fall back on, by what `styles.xml` declares.
+///
+/// Recording it explicitly (rather than leaving `space_after` unset) also pins
+/// the paragraph block's `below`, so Typst's own 1.2em default block spacing
+/// cannot leak into the gap.
 ///
 /// Line height is left to the renderer, which derives Word's single-spacing
 /// pitch from the actual font metrics (issues #354, #452).
-pub(super) const WORD_COMPATIBLE_PARAGRAPH_SPACE_AFTER_PT: f64 = 0.0;
+pub(super) fn word_compatible_paragraph_space_after_pt(
+    paragraph_property_defaults_are_declared: bool,
+) -> f64 {
+    if paragraph_property_defaults_are_declared {
+        WORD_DECLARED_DEFAULT_SPACE_AFTER_PT
+    } else {
+        WORD_BUILT_IN_NORMAL_SPACE_AFTER_PT
+    }
+}
 
-fn apply_word_compatible_paragraph_defaults(style: &mut ParagraphStyle) {
+fn apply_word_compatible_paragraph_defaults(
+    style: &mut ParagraphStyle,
+    paragraph_property_defaults_are_declared: bool,
+) {
     style
         .space_after
-        .get_or_insert(WORD_COMPATIBLE_PARAGRAPH_SPACE_AFTER_PT);
+        .get_or_insert(word_compatible_paragraph_space_after_pt(
+            paragraph_property_defaults_are_declared,
+        ));
 }
 
 #[derive(Clone)]
@@ -266,6 +300,11 @@ fn build_zip_preparse_assets(data: &[u8]) -> ZipPreParseAssets {
                 default_paragraph_style_is_defined: styles_xml
                     .as_deref()
                     .is_some_and(styles::scan_defines_default_paragraph_style),
+                // A package with no `word/styles.xml` at all declares no
+                // paragraph defaults either, so it takes the built-in gap.
+                paragraph_property_defaults_are_declared: styles_xml
+                    .as_deref()
+                    .is_some_and(styles::scan_declares_paragraph_property_defaults),
             };
             ZipPreParseAssets {
                 metadata,
@@ -302,6 +341,7 @@ fn build_zip_preparse_assets(data: &[u8]) -> ZipPreParseAssets {
                 word_wraps: WordWrapContext::from_xml(None),
                 fields: FieldContext::default(),
                 default_paragraph_style_is_defined: false,
+                paragraph_property_defaults_are_declared: false,
             },
             math: MathContext::empty(),
             chart_ctx: ChartContext::empty(),
@@ -577,10 +617,10 @@ fn convert_paragraph_element(
                 })));
                 TaggedElement::Plain(pre_blocks)
             } else if let Some(mut paragraph) = paragraph {
-                paragraph
-                    .style
-                    .space_after
-                    .get_or_insert(WORD_COMPATIBLE_PARAGRAPH_SPACE_AFTER_PT);
+                apply_word_compatible_paragraph_defaults(
+                    &mut paragraph.style,
+                    ctx.paragraph_property_defaults_are_declared,
+                );
                 TaggedElement::ListParagraph {
                     info,
                     paragraph: Box::new(paragraph),
@@ -992,6 +1032,10 @@ struct ParagraphFlow {
     /// what breaks Hangul lines at character level rather than keeping each
     /// eojeol whole (issue #833).
     effective_style_is_defined: bool,
+    /// Whether `word/styles.xml` declares `w:docDefaults/w:pPrDefault`, which
+    /// decides the `w:spacing w:after` an unstated gap falls back to
+    /// (issue #1085).
+    paragraph_property_defaults_are_declared: bool,
 }
 
 /// Convert a docx-rs Paragraph to IR blocks, handling page breaks and inline images.
@@ -1017,6 +1061,7 @@ fn convert_paragraph_blocks(
             Some(id) if style_map.contains_key(id) => true,
             _ => ctx.default_paragraph_style_is_defined,
         },
+        paragraph_property_defaults_are_declared: ctx.paragraph_property_defaults_are_declared,
     };
 
     // Emit page break before the paragraph if requested
@@ -1313,7 +1358,10 @@ fn push_paragraph_from_runs(
     if flow.is_rtl {
         style.direction = Some(TextDirection::Rtl);
     }
-    apply_word_compatible_paragraph_defaults(&mut style);
+    apply_word_compatible_paragraph_defaults(
+        &mut style,
+        flow.paragraph_property_defaults_are_declared,
+    );
     // Word's built-in Korean Normal — in force exactly when no document-defined
     // style resolves for the paragraph — breaks Hangul lines at character
     // level, where a document-defined style keeps each eojeol whole. Measured
