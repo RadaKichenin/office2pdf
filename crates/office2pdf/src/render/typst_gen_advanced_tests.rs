@@ -1574,7 +1574,7 @@ fn test_sheet_drawings_overlay_the_grid_at_absolute_offsets() {
     // even one reserved box per row could not match Excel's vertical
     // placement because our printed row heights differ from its print grid
     // (issue #474). All drawings are placed from the sheet's content origin
-    // inside a zero-height box instead.
+    // inside a zero-height block instead.
     let doc = make_doc(vec![sheet_page_with_text_boxes(vec![
         make_sheet_text_box(3, 0.0, 60.0),
         make_sheet_text_box(3, 200.0, 60.0),
@@ -1583,13 +1583,21 @@ fn test_sheet_drawings_overlay_the_grid_at_absolute_offsets() {
     let source = generate_typst(&doc).unwrap().source;
 
     assert_eq!(
-        source.matches("#box(width: 100%, height: 0pt)").count(),
+        source.matches("#block(width: 100%, height: 0pt, spacing: 0pt)").count(),
         1,
         "drawings share one zero-height overlay: {source}"
     );
     assert!(
         !source.contains("#box(width: 100%, height: 60pt)"),
         "no drawing may reserve flow height: {source}"
+    );
+    // A `box` is inline, so the paragraph holding it still lays out a line box
+    // and the grid below drops by a whole line — 13.2pt of Typst's default
+    // 11pt text, regardless of the sheet's own font (issue #1101). Only a
+    // block-level container carries the placements without a strut.
+    assert!(
+        !source.contains("#box(width: 100%, height: 0pt)"),
+        "the overlay must not be inline content: {source}"
     );
     // Row 3's top edge is two 20pt rows down.
     assert_eq!(

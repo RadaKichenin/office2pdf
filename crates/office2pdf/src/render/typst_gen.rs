@@ -851,9 +851,9 @@ fn generate_table_with_anchors(
 
 /// Overlay every worksheet drawing at its absolute sheet coordinates.
 ///
-/// Emitted as a zero-height box at the top of the sheet content so the grid
+/// Emitted as a zero-height block at the top of the sheet content so the grid
 /// below is untouched, matching Excel, where a drawing floats over the cells
-/// rather than displacing them (issues #459, #474, #982).
+/// rather than displacing them (issues #459, #474, #982, #1101).
 fn write_sheet_drawing_overlay(
     out: &mut String,
     charts: &[crate::ir::SheetChart],
@@ -868,7 +868,10 @@ fn write_sheet_drawing_overlay(
     if placed_charts.is_empty() && images.is_empty() && text_boxes.is_empty() {
         return;
     }
-    out.push_str("#box(width: 100%, height: 0pt)[");
+    // Block-level, not a `box`: an inline box still makes its paragraph lay out
+    // a line, which dropped the whole grid by 13.2pt — Typst's default 11pt
+    // text at 1.2 leading, independent of the sheet's own font (issue #1101).
+    out.push_str("#block(width: 100%, height: 0pt, spacing: 0pt)[");
     for sheet_chart in placed_charts {
         let placement = sheet_chart
             .placement
