@@ -1444,7 +1444,8 @@ fn test_slide_table_cell_uses_the_powerpoint_line_box() {
     // PowerPoint's line is a flat 1.2em box, so the two edges sum to 1.2
     // regardless of the face — only where inside it the baseline sits is the
     // face's business. Word's line is the face's own hhea pitch.
-    let (top, bottom) = emitted_line_box_em(&slide).expect("slide cell emits a line box");
+    let (top, bottom) =
+        emitted_slide_line_box_em(&slide, 11.0).expect("slide cell emits a line box");
     assert!(
         (top + bottom - 1.2).abs() < 0.001,
         "a slide cell's line must span 1.2em, got {top} + {bottom}: {slide}"

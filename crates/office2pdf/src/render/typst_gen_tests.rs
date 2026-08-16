@@ -48,10 +48,23 @@ fn make_paragraph(text: &str) -> Block {
 /// The `(top_edge_em, bottom_edge_em)` of the first line box the generator
 /// emits, or `None` when the source declares no fixed text edges.
 fn emitted_line_box_em(source: &str) -> Option<(f64, f64)> {
+    emitted_line_box(source, "em")
+}
+
+/// The same box for a slide's text, which states its edges in points so they
+/// cannot drift with the size in force where the rule lands (issue #1115).
+/// `font_size_pt` is the size the paragraph declares, which is what the box was
+/// derived from.
+fn emitted_slide_line_box_em(source: &str, font_size_pt: f64) -> Option<(f64, f64)> {
+    let (top_pt, bottom_pt) = emitted_line_box(source, "pt")?;
+    Some((top_pt / font_size_pt, bottom_pt / font_size_pt))
+}
+
+fn emitted_line_box(source: &str, unit: &str) -> Option<(f64, f64)> {
     let after_top: &str = source.split_once("top-edge: ")?.1;
-    let (top, rest) = after_top.split_once("em")?;
+    let (top, rest) = after_top.split_once(unit)?;
     let after_bottom: &str = rest.split_once("bottom-edge: -")?.1;
-    let (bottom, _) = after_bottom.split_once("em")?;
+    let (bottom, _) = after_bottom.split_once(unit)?;
     Some((top.parse().ok()?, bottom.parse().ok()?))
 }
 

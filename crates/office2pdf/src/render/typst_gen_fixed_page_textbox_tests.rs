@@ -229,9 +229,9 @@ fn test_fixed_page_text_box_ordered_list_preserves_textbox_styling() {
             .expect("the default family's line metrics must resolve");
     let seat_pt: f64 = ((1.5 * 1.2 - (1.2 - share_top)) * size_pt).round();
     let expected: String = format!(
-        "#set text(top-edge: {}em, bottom-edge: -{}em)",
-        crate::render::typst_gen::fmt::format_f64(seat_pt / size_pt),
-        crate::render::typst_gen::fmt::format_f64((1.5 * 1.2 * size_pt - seat_pt) / size_pt),
+        "#set text(top-edge: {}pt, bottom-edge: -{}pt)",
+        crate::render::typst_gen::fmt::format_f64(seat_pt),
+        crate::render::typst_gen::fmt::format_f64(1.5 * 1.2 * size_pt - seat_pt),
     );
     assert!(
         output.source.contains(&expected),
@@ -1889,8 +1889,8 @@ fn slide_text_takes_powerpoints_flat_1_2em_line() {
     else {
         return; // no font book available (e.g. exotic CI sandbox)
     };
-    let (top, bottom) =
-        emitted_line_box_em(&source).unwrap_or_else(|| panic!("no line box emitted: {source}"));
+    let (top, bottom) = emitted_slide_line_box_em(&source, 18.0)
+        .unwrap_or_else(|| panic!("no line box emitted: {source}"));
 
     assert!(
         (top + bottom - 1.2).abs() < 0.001,
@@ -1920,7 +1920,7 @@ fn slide_baseline_splits_the_lines_extra_leading_evenly() {
     else {
         return;
     };
-    let (top, bottom) = emitted_line_box_em(&source).expect("line box emitted");
+    let (top, bottom) = emitted_slide_line_box_em(&source, size_pt).expect("line box emitted");
     let (share_top, share_bottom) =
         crate::render::pdf::powerpoint_line_box_em("Libertinus Serif").expect("metrics resolve");
     let expected_top: f64 = (share_top * size_pt).round() / size_pt;
@@ -2023,7 +2023,8 @@ fn a_slide_line_seats_its_baseline_on_a_whole_point() {
         let Some(source) = slide_text_box_source(family, size_pt, ParagraphStyle::default()) else {
             return;
         };
-        let (top_em, bottom_em) = emitted_line_box_em(&source).expect("line box emitted");
+        let (top_em, bottom_em) =
+            emitted_slide_line_box_em(&source, size_pt).expect("line box emitted");
         let seat_pt: f64 = top_em * size_pt;
         let unrounded_pt: f64 = model_above_em * size_pt;
 
@@ -2159,8 +2160,8 @@ fn slide_line_advance_em(percent: f64) -> Option<f64> {
             ..ParagraphStyle::default()
         },
     )?;
-    let (top, bottom) =
-        emitted_line_box_em(&source).unwrap_or_else(|| panic!("no line box emitted: {source}"));
+    let (top, bottom) = emitted_slide_line_box_em(&source, 18.0)
+        .unwrap_or_else(|| panic!("no line box emitted: {source}"));
     Some(top + bottom)
 }
 
@@ -2234,8 +2235,10 @@ fn slide_line_spacing_keeps_the_descent_gap_and_moves_the_ascent() {
     ) else {
         return;
     };
-    let (_plain_top, plain_bottom) = emitted_line_box_em(&plain).expect("line box emitted");
-    let (scaled_top, scaled_bottom) = emitted_line_box_em(&scaled).expect("line box emitted");
+    let (_plain_top, plain_bottom) =
+        emitted_slide_line_box_em(&plain, size_pt).expect("line box emitted");
+    let (scaled_top, scaled_bottom) =
+        emitted_slide_line_box_em(&scaled, size_pt).expect("line box emitted");
     let (share_top, share_bottom) =
         crate::render::pdf::powerpoint_line_box_em(family).expect("metrics resolve");
     let gap_pt: f64 = share_bottom * size_pt;
@@ -3186,5 +3189,91 @@ fn a_turned_text_box_inside_the_slide_keeps_its_seat() {
             (want.0 - got.0).abs() < 0.05 && (want.1 - got.1).abs() < 0.05,
             "run {index} sits at {got:?}, a turn about the box centre seats it at {want:?}"
         );
+    }
+}
+
+/// A slide's hard-broken lines advance by the run's own 1.2em box, whatever
+/// the size.
+///
+/// `<a:br/>` reaches the IR as a run carrying no size of its own, so the
+/// paragraph has no size every run agrees on and emits no `#set text(size:)`.
+/// The line box's `em` edges then resolved against Typst's 11pt default rather
+/// than against the size they were computed from, pinning every hard-broken
+/// line under 11pt to a flat `1.2 x 11pt` = 13.20pt — 89% too far apart for a
+/// 6pt caption (issue #1115).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_hard_broken_slide_line_advances_by_its_own_font_size() {
+    const FAMILY: &str = "Arial";
+    const LINE_COUNT: usize = 4;
+
+    for font_size_pt in [6.0_f64, 8.0, 9.0, 10.0, 11.0, 12.0, 14.0] {
+        let mut runs: Vec<Run> = Vec::new();
+        for index in 0..LINE_COUNT {
+            if index > 0 {
+                // What the parser emits for `<a:br/>`: the break marker on its
+                // own run, with no run properties of its own.
+                runs.push(Run {
+                    text: "\u{000B}".to_string(),
+                    style: TextStyle::default(),
+                    href: None,
+                    footnote: None,
+                });
+            }
+            runs.push(Run {
+                text: "Hxg".to_string(),
+                style: TextStyle {
+                    font_family: Some(FAMILY.to_string()),
+                    font_size: Some(font_size_pt),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            });
+        }
+
+        let mut text_box = make_fixed_text_box(
+            72.0,
+            72.0,
+            400.0,
+            200.0,
+            Insets::default(),
+            crate::ir::TextBoxVerticalAlign::Top,
+            vec![Block::Paragraph(Paragraph {
+                style: ParagraphStyle::default(),
+                runs,
+            })],
+        );
+        // `<a:bodyPr wrap="none">`, the shape the probe deck of #1115 measured.
+        if let FixedElementKind::TextBox(ref mut data) = text_box.kind {
+            data.no_wrap = true;
+        }
+        let doc = make_doc(vec![make_fixed_page(960.0, 540.0, vec![text_box])]);
+        let output = generate_typst(&doc).unwrap();
+
+        let mut baselines: Vec<f64> = crate::render::pdf::compiled_text_runs(&output.source, 0)
+            .unwrap_or_else(|error| panic!("compile failed: {error}\n{}", output.source))
+            .into_iter()
+            .filter(|run| run.text.contains("Hxg"))
+            .map(|run| run.baseline_pt)
+            .collect();
+        baselines.sort_by(f64::total_cmp);
+        baselines.dedup_by(|left, right| (*left - *right).abs() < 0.001);
+
+        assert_eq!(
+            baselines.len(),
+            LINE_COUNT,
+            "expected {LINE_COUNT} hard-broken lines at {font_size_pt}pt: {baselines:?}\n{}",
+            output.source
+        );
+        let expected_advance_pt: f64 = 1.2 * font_size_pt;
+        for gap in baselines.windows(2).map(|pair| pair[1] - pair[0]) {
+            assert!(
+                (gap - expected_advance_pt).abs() < 0.01,
+                "a {font_size_pt}pt hard-broken line must advance \
+                 {expected_advance_pt}pt, got {gap}pt: {baselines:?}\n{}",
+                output.source
+            );
+        }
     }
 }

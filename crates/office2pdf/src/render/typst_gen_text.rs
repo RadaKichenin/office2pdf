@@ -594,15 +594,38 @@ pub(super) fn powerpoint_percentage_line_box_em(
     )
 }
 
+/// The same box, stated in the unit that survives the scope it lands in.
+///
+/// An `em` in a `#set text` edge resolves against whatever size is in force
+/// where the rule applies, not against the size the box was derived from. The
+/// paragraph emits a `#set text(size:)` of its own only when every one of its
+/// runs declares the same size, and a `<a:br/>` reaches the IR as a run with no
+/// run properties at all — so one hard break is enough to strip that rule and
+/// leave the edges resolving against Typst's 11pt default. Every hard-broken
+/// line under 11pt then advanced a flat `1.2 x 11pt` = 13.20pt, 89% too far for
+/// a 6pt caption (issue #1115).
+///
+/// Restating the box in points pins it to the size it was computed from — the
+/// paragraph's largest declared size, which is the one PowerPoint's line keys
+/// on. When nothing declares a size there is none to pin to: the box was
+/// derived from the same default an `em` resolves against, so keeping `em`
+/// leaves an inherited size (a slide table's, say) still governing.
 pub(super) fn powerpoint_line_height_settings(
     runs: &[Run],
     style: &ParagraphStyle,
 ) -> Option<String> {
     let (ascent_em, descent_em) = powerpoint_paragraph_line_box_em(runs, style)?;
+    let Some(font_size_pt) = declared_paragraph_font_size_pt(runs) else {
+        return Some(format!(
+            "#set text(top-edge: {}em, bottom-edge: -{}em)\n#set par(leading: 0pt)\n",
+            format_f64(ascent_em),
+            format_f64(descent_em)
+        ));
+    };
     Some(format!(
-        "#set text(top-edge: {}em, bottom-edge: -{}em)\n#set par(leading: 0pt)\n",
-        format_f64(ascent_em),
-        format_f64(descent_em)
+        "#set text(top-edge: {}pt, bottom-edge: -{}pt)\n#set par(leading: 0pt)\n",
+        format_f64(ascent_em * font_size_pt),
+        format_f64(descent_em * font_size_pt)
     ))
 }
 
@@ -881,9 +904,25 @@ fn paragraph_font_size_pt(runs: &[Run]) -> f64 {
     largest_font_size_pt(runs.iter().filter_map(|run| run.style.font_size))
 }
 
+/// The same size, but only when a run actually declares one. `None` says the
+/// paragraph inherits its size, so a length derived from it cannot be stated in
+/// absolute points (issue #1115).
+fn declared_paragraph_font_size_pt(runs: &[Run]) -> Option<f64> {
+    runs.iter()
+        .filter_map(|run| run.style.font_size)
+        .reduce(f64::max)
+}
+
 /// The largest declared size, or Word's default when nothing declares one —
-/// which is also what an `em` resolves against, since the generator emits no
-/// document-wide `#set text(size:)`.
+/// which, in that fallback alone, is also what an `em` resolves against, since
+/// the generator emits no document-wide `#set text(size:)`.
+///
+/// The equivalence does not extend to a declared size. A paragraph states a
+/// `#set text(size:)` only where every run agrees on one, so an `em` length
+/// derived from the largest declared size can still resolve against the 11pt
+/// default — which is what pinned every hard-broken line under 11pt to 13.20pt
+/// (issue #1115). Use [`declared_paragraph_font_size_pt`] and emit points when
+/// the length has to carry the size it was derived from.
 fn largest_font_size_pt(sizes: impl Iterator<Item = f64>) -> f64 {
     let largest: f64 = sizes.fold(f64::NAN, f64::max);
     if largest.is_nan() { 11.0 } else { largest }
