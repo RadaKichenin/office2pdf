@@ -143,8 +143,8 @@ fn fit_page_to_width(
     scale_sheet_page(page, scale, header_footer_scales_with_doc)
 }
 
-/// Multiply a sheet's widths, heights, type sizes, and cell padding by
-/// `scale`.
+/// Multiply a sheet's widths, heights, type sizes, cell padding, and anchored
+/// drawings by `scale`.
 ///
 /// Padding has to scale with the rest: it is a fixed per-row overhead, so
 /// leaving it at full size while the rows shrink costs a constant slice of
@@ -189,6 +189,25 @@ fn scale_sheet_page(
         placement.x_offset_pt *= scale;
         placement.y_offset_pt *= scale;
         placement.print_scale *= scale;
+    }
+    // A picture is anchored to the same columns and rows, so it shrinks with
+    // them too. Scaling the grid alone printed the reported workbook's photo
+    // at 234.95 x 171.05pt against the native export's 192.66 x 140.26 —
+    // 1/0.82 in each axis, the print scale never reaching it — and 84.83pt
+    // further down the page (#1111).
+    //
+    // The scale goes into the frame rather than riding beside it as the
+    // chart's does: a picture carries no text of its own, so there is nothing
+    // in it that a plain resize would leave at full size.
+    for image in &mut page.images {
+        image.x_offset_pt *= scale;
+        image.y_offset_pt *= scale;
+        if let Some(width) = image.image.width.as_mut() {
+            *width *= scale;
+        }
+        if let Some(height) = image.image.height.as_mut() {
+            *height *= scale;
+        }
     }
     for row in &mut page.table.rows {
         if let Some(height) = row.height.as_mut() {

@@ -1670,3 +1670,42 @@ fn structure_horizontally_centered_sheet_insets_its_grid_to_the_native_offset() 
         "grid left edge {grid_left_pt}pt must land within 1pt of the native export's 146pt"
     );
 }
+
+/// A `fitToPage` sheet prints its drawings at the same scale as its grid, so
+/// an anchored picture comes down with the rows and columns it is anchored to.
+///
+/// `issue_1111_fit_to_page_picture.xlsx` is the reported workbook. Its second
+/// sheet declares `<pageSetUpPr fitToPage="true"/>` with `fitToWidth="1"` and
+/// prints at 0.82 on A3 landscape. A native Excel for Mac export of it, staged
+/// and run inside Excel's own sandbox container, draws the photo 192.66 x
+/// 140.26pt with its top 436.57pt from the page's top edge — a 54.00pt top
+/// margin in, so 382.57pt into the printed grid. Leaving the anchor geometry
+/// unscaled drew it 234.95 x 171.05pt, 1/0.82 in each axis (issue #1111).
+///
+/// The horizontal offset is left to the unit test in `xlsx_pagination`: this
+/// sheet also prints `horizontalCentered`, so the export's 63.91pt left edge
+/// is only comparable once the renderer has added the centring inset the IR
+/// does not carry.
+#[test]
+fn structure_fit_to_page_sheet_scales_its_anchored_picture_to_the_native_size() {
+    let pages = sheet_pages("issue_1111_fit_to_page_picture.xlsx");
+    let images: Vec<&office2pdf::ir::SheetImage> =
+        pages.iter().flat_map(|page| page.images.iter()).collect();
+    assert_eq!(images.len(), 1, "the workbook anchors one picture");
+
+    let width: f64 = images[0].image.width.expect("a two-cell anchor sizes");
+    let height: f64 = images[0].image.height.expect("a two-cell anchor sizes");
+    assert!(
+        (width - 192.66).abs() < 0.5,
+        "the picture must print at the export's 192.66pt, got {width}"
+    );
+    assert!(
+        (height - 140.26).abs() < 0.5,
+        "the picture must print at the export's 140.26pt, got {height}"
+    );
+    assert!(
+        (images[0].y_offset_pt - 382.57).abs() < 1.0,
+        "the anchor's top offset must scale with the rows, got {}",
+        images[0].y_offset_pt
+    );
+}
