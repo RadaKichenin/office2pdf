@@ -913,6 +913,40 @@ fn picture_with_effect_bearing_blip_is_still_drawn() {
     );
 }
 
+/// `<a:alphaModFix amt="70000"/>` on that same blip is a transparency effect:
+/// Excel draws the picture at 70% strength over whatever the worksheet shows
+/// beneath it, and its native export wraps the bitmap in a soft mask so the
+/// `#C0392B` bar prints as that colour composited onto white. Emitting the raw
+/// bitmap printed a saturated block against a washed-out ground truth (issue
+/// #1103).
+#[test]
+fn picture_alpha_mod_fix_is_baked_into_the_bitmap() {
+    let pages = sheet_pages("issue_1066_blip_effect_picture.xlsx");
+    let images: Vec<_> = pages.iter().flat_map(|sp| sp.images.iter()).collect();
+    assert_eq!(images.len(), 1, "the drawing anchors one picture");
+
+    let decoded = image::load_from_memory(&images[0].image.data)
+        .expect("the anchored picture must stay a decodable bitmap")
+        .into_rgba8();
+    // The source is a flat three-bar PNG: #C0392B, #27AE60, #2980B9 on white,
+    // every pixel fully opaque. At 70% each of them composites onto the white
+    // page as 0.7 * channel + 0.3 * 255 - the red bar as (211, 116, 107).
+    let red_bar: Vec<&image::Rgba<u8>> = decoded
+        .pixels()
+        .filter(|pixel| pixel[0] == 192 && pixel[1] == 57 && pixel[2] == 43)
+        .collect();
+    assert!(
+        !red_bar.is_empty(),
+        "the source bar colour must survive the alpha bake unchanged"
+    );
+    for pixel in &red_bar {
+        assert_eq!(
+            pixel[3], 179,
+            "70% of an opaque pixel is 178.5, rounded to 179"
+        );
+    }
+}
+
 /// A drawing anchor spans the rows Excel *prints*, not the heights the
 /// worksheet declares. The same fixture's Excel for Mac export draws its
 /// picture 105.00pt tall with its top 90.00pt below the first row — seven and
