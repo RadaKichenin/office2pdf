@@ -790,19 +790,25 @@ fn generate_table_page(
     write_table_page_setup(out, page, &size, ctx);
     out.push('\n');
 
-    if page.charts.is_empty() && page.images.is_empty() && page.text_boxes.is_empty() {
-        generate_table(out, &page.table, ctx)?;
-    } else {
-        generate_table_with_anchors(
-            out,
-            &page.table,
-            &page.charts,
-            &page.images,
-            &page.text_boxes,
-            ctx,
-        )?;
-    }
-    Ok(())
+    // Every glyph Excel prints on a sheet — the grid's cells and the text of
+    // the drawings floating over it alike — advances on the whole-point grid
+    // (issue #1088). The page setup above states no run text, so the scope
+    // opens here.
+    with_sheet_advance_grid(true, || -> Result<(), ConvertError> {
+        if page.charts.is_empty() && page.images.is_empty() && page.text_boxes.is_empty() {
+            generate_table(out, &page.table, ctx)?;
+        } else {
+            generate_table_with_anchors(
+                out,
+                &page.table,
+                &page.charts,
+                &page.images,
+                &page.text_boxes,
+                ctx,
+            )?;
+        }
+        Ok(())
+    })
 }
 
 /// A drawing overlaid on a sheet at its anchor's absolute coordinates.

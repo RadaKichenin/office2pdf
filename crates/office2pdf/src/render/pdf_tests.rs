@@ -808,6 +808,34 @@ fn test_text_advance_em_is_none_for_missing_glyphs() {
     assert_eq!(text_advance_em("Libertinus Serif", false, ""), Some(0.0));
 }
 
+/// A caller that quantizes advances one at a time needs them one at a time.
+///
+/// Ground truth from the typst-assets Libertinus Serif regular `hmtx`, at its
+/// 1000-unit em: `T` 597, `o` 504, `t` 316, `a` 457, `l` 264. Their sum is the
+/// 2.138em [`text_advance_em`] reports, but Excel rounds each one to a whole
+/// point before adding it, and at 10pt those two orders differ by 0.62pt
+/// (issue #1088).
+#[test]
+fn test_glyph_advances_em_reports_each_glyph_separately() {
+    let advances: Vec<f64> = glyph_advances_em("Libertinus Serif", false, "Total")
+        .expect("the embedded Libertinus Serif regular face must resolve");
+    let expected: [f64; 5] = [0.597, 0.504, 0.316, 0.457, 0.264];
+    assert_eq!(advances.len(), expected.len(), "one advance per glyph");
+    for (glyph, (advance, want)) in advances.iter().zip(expected).enumerate() {
+        assert!(
+            (advance - want).abs() < 1e-9,
+            "glyph {glyph} of 'Total' should advance {want}em, got {advance}"
+        );
+    }
+    let sum: f64 = advances.iter().sum();
+    let total: f64 = text_advance_em("Libertinus Serif", false, "Total")
+        .expect("the embedded Libertinus Serif regular face must resolve");
+    assert!(
+        (sum - total).abs() < 1e-9,
+        "the parts must sum to the whole: {sum} against {total}"
+    );
+}
+
 /// PowerPoint splits a line's extra leading evenly above and below the glyphs,
 /// not in the proportion of the face's ascent to its descent.
 ///
