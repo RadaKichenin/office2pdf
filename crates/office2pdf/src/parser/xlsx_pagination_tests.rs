@@ -375,6 +375,39 @@ fn test_fit_to_width_records_the_print_scale_on_an_anchored_chart() {
     assert_eq!(placement.height, 200.0);
 }
 
+/// A picture is anchored to the sheet's columns and rows exactly as a chart
+/// is, so the fit-to-page scale that shrinks them has to shrink it too. The
+/// reported workbook prints at 0.82 and its Excel for Mac export draws the
+/// photo 192.66 x 140.26pt with its top 436.57pt down the page; leaving the
+/// anchor geometry unscaled drew it 234.95 x 171.05pt — 1/0.82 in both axes —
+/// with its top 84.83pt lower (issue #1111).
+///
+/// Unlike a chart, a picture has no text of its own to size, so the scale
+/// belongs in the frame rather than beside it.
+#[test]
+fn test_fit_to_width_scales_an_anchored_picture_with_the_grid() {
+    let mut page = make_page(
+        vec![400.0, 400.0],
+        vec![TableRow {
+            minimum_height: None,
+            cells: vec![cell("left"), cell("right")],
+            height: Some(20.0),
+        }],
+    );
+    let mut picture = sheet_image(100.0, 600.0);
+    picture.y_offset_pt = 40.0;
+    picture.image.height = Some(200.0);
+    page.images = vec![picture];
+
+    let pages = split_sheet_page_by_width(page, None, Some(1), true);
+
+    let picture = &pages[0].images[0];
+    assert_eq!(picture.x_offset_pt, 50.0);
+    assert_eq!(picture.y_offset_pt, 20.0);
+    assert_eq!(picture.image.width, Some(300.0));
+    assert_eq!(picture.image.height, Some(100.0));
+}
+
 /// Excel's auto-fit scale is a whole percent, truncated so the content is
 /// guaranteed to fit. 400/530 = 75.47% must land on 75%, not 75.47% —
 /// otherwise every derived type size is off by a fraction of a point.
