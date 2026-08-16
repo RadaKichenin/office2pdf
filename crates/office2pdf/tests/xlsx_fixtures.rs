@@ -339,10 +339,94 @@ fn structure_any_sheets() {
     // any_sheets.xlsx declares 4 sheets: Visible, Hidden (state="hidden"),
     // VeryHidden (state="veryHidden") and Chart. The hidden pair is out
     // because Excel never prints a hidden sheet (issue #1065) — and empty of
-    // cells besides. `Chart` is a chartsheet, whose page we do not yet build
-    // (issue #1099), so one page is left.
+    // cells besides. `Chart` is a chartsheet, and Excel prints one of those as
+    // a page of its own (issue #1099), so two pages are left.
     let pages = sheet_pages("any_sheets.xlsx");
-    assert_eq!(sheet_names(&pages), vec!["Visible"]);
+    assert_eq!(sheet_names(&pages), vec!["Visible", "Chart"]);
+}
+
+/// A chartsheet prints as one page carrying its chart alone.
+///
+/// Measured on Excel for Mac 16.100 exports of this fixture's `Chart` sheet:
+/// one page, the chart filling it, and — since the chartsheet declares no
+/// `<pageSetup>` — landscape, where the same workbook's `Visible` worksheet
+/// (equally without one) exports portrait.
+#[test]
+fn structure_any_sheets_chartsheet_pages_its_chart_full_page() {
+    let pages = sheet_pages("any_sheets.xlsx");
+    let chart_page = pages
+        .iter()
+        .find(|page| page.name == "Chart")
+        .expect("the chartsheet should contribute a page");
+
+    // No `<pageSetup>`: Letter (the schema's paperSize default, issue #717)
+    // turned on its side by the chartsheet's own landscape default.
+    assert_eq!(
+        (chart_page.size.width, chart_page.size.height),
+        (792.0, 612.0)
+    );
+    // The chartsheet's own `<pageMargins>`: 0.7" sides, 0.75" top and bottom.
+    assert_eq!(
+        (
+            chart_page.margins.left,
+            chart_page.margins.right,
+            chart_page.margins.top,
+            chart_page.margins.bottom,
+        ),
+        (50.4, 50.4, 54.0, 54.0)
+    );
+    // A chartsheet holds no cells at all.
+    assert!(chart_page.table.rows.is_empty());
+
+    assert_eq!(chart_page.charts.len(), 1);
+    let placement = chart_page.charts[0]
+        .placement
+        .expect("a chartsheet's chart is placed, not flowed after the grid");
+    assert_eq!((placement.x_offset_pt, placement.y_offset_pt), (0.0, 0.0));
+    assert_eq!((placement.width, placement.height), (691.2, 504.0));
+
+    // The chart belongs to the chartsheet, not to the worksheet before it: a
+    // native export of `Visible` alone draws no chart at all.
+    let worksheet_page = pages
+        .iter()
+        .find(|page| page.name == "Visible")
+        .expect("the visible worksheet should still page");
+    assert!(worksheet_page.charts.is_empty());
+}
+
+/// Two chartsheet packages whose parts collide by filename, which is how the
+/// worksheet-only rels lookup went wrong in the first place.
+///
+/// `chart_sheet.xlsx` has no `xl/worksheets/_rels/` at all, so its chartsheet
+/// resolved to nothing and its chart fell through to the first worksheet as an
+/// orphan. `SimpleScatterChart.xlsx` has both `xl/worksheets/sheet1.xml` and
+/// `xl/chartsheets/sheet1.xml`, so the chartsheet read the *worksheet's* rels
+/// and printed a second copy of the worksheet's chart instead of its own.
+#[test]
+fn structure_chartsheet_reads_its_own_drawing_relationships() {
+    let pages = sheet_pages("chart_sheet.xlsx");
+    assert_eq!(sheet_names(&pages), vec!["Sheet1", "Chart1"]);
+    assert!(pages[0].charts.is_empty());
+    assert_eq!(pages[1].charts.len(), 1);
+
+    let scatter = sheet_pages("SimpleScatterChart.xlsx");
+    assert_eq!(sheet_names(&scatter), vec!["Sheet1", "Chart1"]);
+    // The worksheet's chart keeps its own anchor; the chartsheet's fills the
+    // page, so the two placements can no longer be the same box.
+    let worksheet_placement = scatter[0].charts[0]
+        .placement
+        .expect("the worksheet chart is anchored");
+    let chartsheet_placement = scatter[1].charts[0]
+        .placement
+        .expect("the chartsheet chart is placed full-page");
+    assert_eq!(
+        (chartsheet_placement.width, chartsheet_placement.height),
+        (691.2, 504.0)
+    );
+    assert_ne!(
+        (worksheet_placement.width, worksheet_placement.height),
+        (chartsheet_placement.width, chartsheet_placement.height)
+    );
 }
 
 // ---------------------------------------------------------------------------
