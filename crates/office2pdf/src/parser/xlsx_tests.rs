@@ -1126,6 +1126,7 @@ fn test_empty_sheet_context_derives_metric_from_normal_font() {
         family: "Calibri".to_string(),
         size_pt: 11.0,
         uses_theme_scheme: false,
+        theme_declares_script_faces: false,
     };
     let calibri_ctx = empty_sheet_context(sheet, Some(&calibri_11), None);
     assert_eq!(resolve_column_unit_pt(sheet, Some(&calibri_11)), 6.0);
@@ -1139,6 +1140,7 @@ fn test_empty_sheet_context_derives_metric_from_normal_font() {
         family: "Calibri".to_string(),
         size_pt: 8.0,
         uses_theme_scheme: false,
+        theme_declares_script_faces: false,
     };
     assert_eq!(resolve_column_unit_pt(sheet, Some(&calibri_8)), 4.0);
     assert_eq!(
@@ -1307,6 +1309,7 @@ fn test_empty_sheet_context_reads_declared_column_widths() {
         family: "Calibri".to_string(),
         size_pt: 11.0,
         uses_theme_scheme: false,
+        theme_declares_script_faces: false,
     };
 
     let ctx = empty_sheet_context(sheet, Some(&calibri_11), None);
@@ -1346,6 +1349,7 @@ fn theme_scheme_normal_font(size_pt: f64) -> NormalFont {
         family: "Calibri".to_string(),
         size_pt,
         uses_theme_scheme: true,
+        theme_declares_script_faces: true,
     }
 }
 
@@ -1429,6 +1433,7 @@ fn a_scheme_less_normal_font_keeps_the_declared_default() {
         family: "Calibri".to_string(),
         size_pt: 11.0,
         uses_theme_scheme: false,
+        theme_declares_script_faces: false,
     };
     assert_eq!(super::default_row_height_pt(sheet, Some(&calibri)), 15.0);
 }
@@ -1478,14 +1483,23 @@ fn a_dimensionless_printed_row_ignores_a_disagreeing_declared_default() {
     }
 }
 
-/// `customHeight` marks the declared default as user-set, and a user-set
-/// height prints through the declared-height compaction: 30 → 28
-/// (probe-measured, issue #1047).
+/// `customHeight` marks the declared default as user-set, so it stays in play
+/// as a declared height and maps like one: 30 → 28 under a Normal font whose
+/// grid compacts (issue #1047).
+///
+/// The Normal font has to be a compacting one for that to be the answer. The
+/// same `defaultRowHeight="30" customHeight="1"` over umya's own scheme
+/// Calibri 11 and Office theme exports 30.00pt tracks natively, one factor
+/// against a byte-identical re-zip control — no compaction at all (#1094).
 #[test]
 fn a_custom_height_printed_default_maps_through_the_grid() {
-    let data = rewrite_sheet_format_pr(
-        &build_xlsx_bytes("Sheet1", &[("A1", "one"), ("A2", "two")]),
-        r#"<sheetFormatPr defaultRowHeight="30" customHeight="1"/>"#,
+    let data = rewrite_first_styles_font(
+        &rewrite_sheet_format_pr(
+            &build_xlsx_bytes("Sheet1", &[("A1", "one"), ("A2", "two")]),
+            r#"<sheetFormatPr defaultRowHeight="30" customHeight="1"/>"#,
+        ),
+        "Calibri",
+        11.0,
     );
     let parser = XlsxParser;
     let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
@@ -1608,5 +1622,125 @@ fn the_other_remapped_family_compacts_too() {
             &[40.0]
         )),
         vec![Some(37.0)]
+    );
+}
+
+// ── Theme-resolved scheme Normal fonts (issue #1094) ─────────────────
+
+/// The probe workbook of issue #1094: a `<scheme val="minor"/>` Normal font
+/// nominally naming Calibri 11, over a full Office theme.
+const THEME_SCHEME_PROBE: &[u8] =
+    include_bytes!("../../../../tests/fixtures/xlsx/issue_1060_sheet_row_line_box_probe.xlsx");
+
+/// Every declared row track a workbook prints, across all of its sheet pages.
+fn printed_row_heights_over_all_pages(data: &[u8]) -> Vec<Option<f64>> {
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(data, &ConvertOptions::default()).unwrap();
+    doc.pages
+        .iter()
+        .filter_map(|page| match page {
+            Page::Sheet(sheet_page) => Some(sheet_page),
+            _ => None,
+        })
+        .flat_map(|sheet_page| sheet_page.table.rows.iter().map(|row| row.height))
+        .collect()
+}
+
+/// Drop the `<a:font script="..."/>` faces from a theme's minor font scheme,
+/// leaving its `<a:latin>` typeface alone — the difference between an Office
+/// theme and the bare one LibreOffice writes.
+fn strip_theme_minor_font_script_faces(data: &[u8]) -> Vec<u8> {
+    let mut archive = zip::ZipArchive::new(Cursor::new(data)).expect("readable zip");
+    let mut out = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index).expect("readable entry");
+        let name = entry.name().to_string();
+        let mut bytes = Vec::new();
+        std::io::Read::read_to_end(&mut entry, &mut bytes).expect("readable entry body");
+        if name.starts_with("xl/theme/") && name.ends_with(".xml") {
+            let xml = String::from_utf8(bytes).expect("theme is utf-8");
+            let start: usize = xml.find("<a:minorFont>").expect("theme has a minor font");
+            let end: usize = xml[start..]
+                .find("</a:minorFont>")
+                .expect("minor font is closed")
+                + start;
+            let stripped: String = strip_script_font_elements(&xml[start..end]);
+            bytes = format!("{}{}{}", &xml[..start], stripped, &xml[end..]).into_bytes();
+        }
+        out.start_file(name, zip::write::FileOptions::default())
+            .expect("writable entry");
+        std::io::Write::write_all(&mut out, &bytes).expect("writable entry body");
+    }
+    out.finish().expect("finished zip").into_inner()
+}
+
+/// Remove every `<a:font script=... />` element from one XML fragment.
+fn strip_script_font_elements(fragment: &str) -> String {
+    let mut kept = String::with_capacity(fragment.len());
+    let mut rest: &str = fragment;
+    while let Some(start) = rest.find("<a:font script=") {
+        kept.push_str(&rest[..start]);
+        let end: usize = rest[start..].find("/>").expect("script font is closed") + start + 2;
+        rest = &rest[end..];
+    }
+    kept.push_str(rest);
+    kept
+}
+
+/// A Normal font that defers its face to the theme scheme is laid out
+/// against whatever that scheme resolves to, and a full Office theme gives
+/// the minor scheme a per-script face list Excel resolves through — not the
+/// Calibri its `<a:latin>` names. The grid then keeps every declared height.
+///
+/// Native Excel-for-Mac export of the probe workbook, baselines read with
+/// `mutool draw -F trace`: its 16 `ht="36"` rows print a 36.00pt track and
+/// its 5 `ht="12"` rows a 12.00pt one (issue #1094).
+#[test]
+fn a_theme_resolved_scheme_normal_font_prints_declared_heights_whole() {
+    let heights: Vec<Option<f64>> = printed_row_heights_over_all_pages(THEME_SCHEME_PROBE);
+
+    assert_eq!(
+        heights
+            .iter()
+            .filter(|height| **height == Some(36.0))
+            .count(),
+        16,
+        "16 ht=36 rows print their declared track, got {heights:?}"
+    );
+    assert_eq!(
+        heights
+            .iter()
+            .filter(|height| **height == Some(12.0))
+            .count(),
+        5,
+        "5 ht=12 rows print their declared track, got {heights:?}"
+    );
+}
+
+/// The theme is what makes the difference, not the scheme flag on its own.
+/// Stripping the same workbook's per-script faces — one factor, nothing else
+/// touched — leaves the minor scheme on its Calibri `<a:latin>`, and the
+/// export compacts every track: 36 -> 33 and 12 -> 11 (issue #1094).
+#[test]
+fn a_scheme_normal_font_over_a_theme_without_script_faces_compacts() {
+    let bare_theme: Vec<u8> = strip_theme_minor_font_script_faces(THEME_SCHEME_PROBE);
+
+    let heights: Vec<Option<f64>> = printed_row_heights_over_all_pages(&bare_theme);
+
+    assert_eq!(
+        heights
+            .iter()
+            .filter(|height| **height == Some(33.0))
+            .count(),
+        16,
+        "16 ht=36 rows compact to 33pt, got {heights:?}"
+    );
+    assert_eq!(
+        heights
+            .iter()
+            .filter(|height| **height == Some(11.0))
+            .count(),
+        5,
+        "5 ht=12 rows compact to 11pt, got {heights:?}"
     );
 }

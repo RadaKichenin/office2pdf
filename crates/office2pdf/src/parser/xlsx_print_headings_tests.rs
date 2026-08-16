@@ -217,6 +217,7 @@ fn test_heading_text_uses_the_workbook_normal_font_and_center_alignment() {
         family: "Verdana".to_string(),
         size_pt: 10.0,
         uses_theme_scheme: false,
+        theme_declares_script_faces: false,
     };
     augment_page_with_print_headings(&mut page, &[337], 1, Some(&verdana));
 

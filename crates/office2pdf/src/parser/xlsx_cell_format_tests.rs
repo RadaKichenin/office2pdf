@@ -149,6 +149,20 @@ fn build_xlsx_formatted(setup: impl FnOnce(&mut umya_spreadsheet::Worksheet)) ->
     cursor.into_inner()
 }
 
+/// The same workbook with a Normal font that names Calibri 11 outright, as
+/// every business golden mock's stylesheet does.
+///
+/// That is the configuration whose printed grid compacts, and the one the
+/// native measurements in the row-track tests below were taken from. umya
+/// writes a `<scheme val="minor"/>` font over a full Office theme instead,
+/// which Excel resolves by script to a face that keeps every declared height
+/// whole (issue #1094).
+fn build_xlsx_formatted_over_a_compacting_grid(
+    setup: impl FnOnce(&mut umya_spreadsheet::Worksheet),
+) -> Vec<u8> {
+    rewrite_first_styles_font(&build_xlsx_formatted(setup), "Calibri", 11.0)
+}
+
 #[test]
 fn test_cell_bold_text() {
     let data = build_xlsx_formatted(|sheet| {
@@ -384,7 +398,7 @@ fn test_cell_border_hair_and_thick_weights() {
 
 #[test]
 fn test_row_height() {
-    let data = build_xlsx_formatted(|sheet| {
+    let data = build_xlsx_formatted_over_a_compacting_grid(|sheet| {
         sheet.get_cell_mut("A1").set_value("Tall row");
         sheet.get_row_dimension_mut(&1).set_height(30.0);
     });
@@ -1175,7 +1189,7 @@ fn test_absent_page_margins_fall_back_to_excel_defaults() {
 
 #[test]
 fn test_row_height_used_even_without_custom_height_flag() {
-    let data = build_xlsx_formatted(|sheet| {
+    let data = build_xlsx_formatted_over_a_compacting_grid(|sheet| {
         sheet.get_cell_mut("A1").set_value("행 높이");
         let row = sheet.get_row_dimension_mut(&1);
         row.set_height(20.0);
@@ -1193,7 +1207,7 @@ fn test_row_height_used_even_without_custom_height_flag() {
 
 #[test]
 fn test_row_without_dimension_uses_sheet_default_height() {
-    let data = build_xlsx_formatted(|sheet| {
+    let data = build_xlsx_formatted_over_a_compacting_grid(|sheet| {
         sheet.get_cell_mut("A1").set_value("첫째 줄");
         sheet.get_cell_mut("A2").set_value("둘째 줄");
         sheet
@@ -1243,7 +1257,7 @@ fn test_wrapping_row_whose_text_fits_takes_the_native_track() {
     // workbooks (issue #710), and 22.32pt against 15.00pt across the Korean
     // ones (issue #709). A single short word cannot wrap, so the row prints
     // its mapped track like any other.
-    let data = build_xlsx_formatted(|sheet| {
+    let data = build_xlsx_formatted_over_a_compacting_grid(|sheet| {
         let cell = sheet.get_cell_mut("A1");
         cell.set_value("OK");
         cell.get_style_mut().get_alignment_mut().set_wrap_text(true);
@@ -1263,7 +1277,7 @@ fn test_wrapping_row_whose_text_fits_takes_the_native_track() {
 
 #[test]
 fn test_wrapping_row_with_custom_height_stays_fixed() {
-    let data = build_xlsx_formatted(|sheet| {
+    let data = build_xlsx_formatted_over_a_compacting_grid(|sheet| {
         let cell = sheet.get_cell_mut("A1");
         cell.set_value("줄바꿈이 있는 긴 텍스트가 이 셀에 들어 있습니다");
         cell.get_style_mut().get_alignment_mut().set_wrap_text(true);
@@ -1282,7 +1296,7 @@ fn test_native_excel_print_height_calibrates_custom_title_rows() {
     // Native Excel PDF output measures a 25.5pt worksheet row as a 23pt
     // printed track. Keeping the raw OOXML value makes both the title row
     // and the table header too tall and pushes the data block down.
-    let data = build_xlsx_formatted(|sheet| {
+    let data = build_xlsx_formatted_over_a_compacting_grid(|sheet| {
         sheet.get_cell_mut("A1").set_value("Dashboard title");
         let row = sheet.get_row_dimension_mut(&1);
         row.set_height(25.5);
@@ -1307,7 +1321,7 @@ fn test_native_excel_print_height_calibrates_default_rows() {
     // `customHeight` is what keeps the declared 15 in play: without it
     // Excel ignores the hint and recomputes the default from the Normal
     // font instead (issue #1047).
-    let data = build_xlsx_formatted(|sheet| {
+    let data = build_xlsx_formatted_over_a_compacting_grid(|sheet| {
         sheet.get_cell_mut("A1").set_value("Title");
         sheet.get_cell_mut("A3").set_value("Header");
         let properties = sheet.get_sheet_format_properties_mut();

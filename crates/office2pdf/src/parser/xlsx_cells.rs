@@ -51,11 +51,18 @@ fn round_half_up_pt(value: f64) -> f64 {
 /// Read the workbook's Normal font (the first `<font>` in `xl/styles.xml`)
 /// straight from the archive; umya does not expose the stylesheet. Excel
 /// derives all column print metrics from this font, not from cell fonts.
+///
+/// The first `<font>` is the Normal font as Excel reads it, not the one the
+/// `Normal` cell style's `cellStyleXfs` entry points at: repointing that
+/// entry at another `fontId`, one factor with a byte-identical re-zip control,
+/// left both the probe workbook of issue #1094 and `03_inventory_en.xlsx`
+/// exporting identically, while editing the first `<font>` moved every track.
 pub(super) fn extract_normal_font(data: &[u8]) -> Option<NormalFont> {
     use quick_xml::events::Event;
     use std::io::Read;
 
     let mut archive = zip::ZipArchive::new(std::io::Cursor::new(data)).ok()?;
+    let theme_declares_script_faces: bool = theme_minor_font_declares_script_faces(&mut archive);
     let mut file = archive.by_name("xl/styles.xml").ok()?;
     let mut xml = String::new();
     file.read_to_string(&mut xml).ok()?;
@@ -92,7 +99,64 @@ pub(super) fn extract_normal_font(data: &[u8]) -> Option<NormalFont> {
         family: name?,
         size_pt: size.unwrap_or(11.0),
         uses_theme_scheme,
+        theme_declares_script_faces,
     })
+}
+
+/// Whether the workbook's theme gives its minor font scheme per-script faces
+/// — the `<a:font script="Hang" .../>` list every Office theme carries, and
+/// which a theme written by LibreOffice or by hand leaves out entirely.
+///
+/// Excel resolves a `<scheme>` font's face through that list rather than
+/// through the scheme's `<a:latin>` typeface, which is what makes the same
+/// declared Calibri 11 lay out against two different faces in two workbooks.
+fn theme_minor_font_declares_script_faces(
+    archive: &mut zip::ZipArchive<std::io::Cursor<&[u8]>>,
+) -> bool {
+    use quick_xml::events::Event;
+    use std::io::Read;
+
+    // Themes are numbered parts; a workbook carries one, and a workbook that
+    // carries none has no scheme to resolve through in the first place.
+    let Some(part): Option<String> = archive
+        .file_names()
+        .find(|name| name.starts_with("xl/theme/") && name.ends_with(".xml"))
+        .map(str::to_string)
+    else {
+        return false;
+    };
+    let mut xml = String::new();
+    if archive
+        .by_name(&part)
+        .ok()
+        .and_then(|mut file| file.read_to_string(&mut xml).ok())
+        .is_none()
+    {
+        return false;
+    }
+
+    let mut reader = quick_xml::Reader::from_str(&xml);
+    let mut in_minor_font: bool = false;
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"minorFont" => {
+                in_minor_font = true;
+            }
+            Ok(Event::End(ref e)) if e.local_name().as_ref() == b"minorFont" => {
+                in_minor_font = false;
+            }
+            Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e))
+                if in_minor_font && e.local_name().as_ref() == b"font" =>
+            {
+                if e.try_get_attribute("script").ok().flatten().is_some() {
+                    return true;
+                }
+            }
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+    false
 }
 
 /// The workbook's Normal font: the `xl/styles.xml` font that cells with no
@@ -111,6 +175,10 @@ pub(super) struct NormalFont {
     /// (Malgun Gothic), and the same declared Calibri 11 gives a 17pt
     /// default row against a scheme-less 15pt (issue #1047).
     pub(super) uses_theme_scheme: bool,
+    /// Whether the workbook's theme gives its minor font scheme per-script
+    /// faces. Only bears on a font that `uses_theme_scheme`: that is the
+    /// list Excel resolves such a font through (issue #1094).
+    pub(super) theme_declares_script_faces: bool,
 }
 
 /// Max digit advance of Calibri (and metrically identical Carlito), Excel's
@@ -867,29 +935,50 @@ const REMAPPED_NORMAL_MIN_SIZE_PT: f64 = 11.0;
 /// | Times New Roman 11, Century Gothic 10 | 40 |
 ///
 /// Nothing else moved it: `defaultRowHeight`, `sheetFormatPr@customHeight`,
-/// the frozen pane, the sheet zoom, the paper size, the theme part and the
-/// fit-to-page scale were each swapped on their own and all left the track
-/// where it was. Declaring the same Calibri 11 through `<scheme val="minor"/>`
-/// instead of by name also left it at 37.
+/// the frozen pane, the sheet zoom, the paper size and the fit-to-page scale
+/// were each swapped on their own and all left the track where it was.
+/// Declaring that workbook's same Calibri 11 through `<scheme val="minor"/>`
+/// instead of by name also left it at 37 — but that is a property of *its*
+/// theme, not of the scheme flag, as the sweep below shows.
 ///
 /// Calibri and Aptos are the faces the standard theme's minor scheme
 /// resolves to, and the two this reference machine has no face of its own
 /// for — issue #1047 measures the same substitution on the dimension-less
-/// path — but that is the reading, not the measurement. Two limits are
-/// known and unmodelled: the step to 0.95 from 14pt up (no tracked workbook
-/// declares one, so those compact at 0.92, a point short at `ht=40`), and
-/// the hand-authored probe package of issue #1094, whose scheme Calibri 11
-/// rows print their declared 36pt whole where every LibreOffice-written
-/// workbook measured here compacts. What that package does differently is
-/// still open; this models the two corpora the repository actually carries.
+/// path — but that is the reading, not the measurement.
+///
+/// What a `<scheme>` font resolves to is the *theme's* business, and the two
+/// corpora write two different themes. Sweeping the probe workbook of issue
+/// #1094 one factor at a time, byte-identical re-zip control each time:
+///
+/// | fonts\[0\] | theme minor scheme | printed track for `ht=36` |
+/// | --- | --- | ---: |
+/// | Calibri 11, `<scheme val="minor"/>` | Office, per-script faces | 36 |
+/// | Calibri 11, no `scheme` | Office, per-script faces | 33 |
+/// | Calibri 11, `<scheme val="minor"/>` | script faces stripped | 33 |
+/// | Calibri 11, `<scheme val="minor"/>` | `script="Hang"` -> Calibri | 33 |
+///
+/// So the scheme flag alone decides nothing. An Office theme names a face per
+/// script and Excel resolves the UI script's — Malgun Gothic on this machine,
+/// the face issue #1047 measures the dimension-less path against — and that
+/// face keeps the grid. A theme listing no script faces leaves the scheme on
+/// its `<a:latin>` Calibri, which compacts exactly as a font naming Calibri
+/// outright does. `03_inventory_en.xlsx` carries such a bare theme, which is
+/// why adding `<scheme val="minor"/>` to *its* Normal font leaves the track at
+/// 37 while the same edit on the probe leaves it at 36.
+///
+/// Two limits are known and unmodelled: the step to 0.95 from 14pt up (no
+/// tracked workbook declares one, so those compact at 0.92, a point short at
+/// `ht=40`), and a scheme font naming no face at all, which resolves to the UI
+/// face whatever the theme lists — that workbook has no `<name>` for
+/// `extract_normal_font` to return, so it lands on the `None` arm here and
+/// compacts. No tracked workbook writes one.
 fn printed_grid_compacts_row_heights(normal_font: Option<&NormalFont>) -> bool {
     match normal_font {
         // Excel's own Normal font is Calibri/Aptos 11; a workbook we cannot
         // read a stylesheet from is laid out against it.
         None => true,
-        // A scheme font is whatever the theme resolves to, which is one of
-        // the remapped faces in every Office theme.
-        Some(font) if font.uses_theme_scheme => true,
+        // Resolved by script to the UI face, which is not one Excel remaps.
+        Some(font) if font.uses_theme_scheme && font.theme_declares_script_faces => false,
         Some(font) => {
             let family: String = font.family.to_ascii_lowercase();
             font.size_pt >= REMAPPED_NORMAL_MIN_SIZE_PT
