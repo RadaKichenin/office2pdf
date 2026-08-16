@@ -1583,7 +1583,9 @@ fn test_sheet_drawings_overlay_the_grid_at_absolute_offsets() {
     let source = generate_typst(&doc).unwrap().source;
 
     assert_eq!(
-        source.matches("#block(width: 100%, height: 0pt, spacing: 0pt)").count(),
+        source
+            .matches("#block(width: 100%, height: 0pt, spacing: 0pt)")
+            .count(),
         1,
         "drawings share one zero-height overlay: {source}"
     );
