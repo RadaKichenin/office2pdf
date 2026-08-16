@@ -15,6 +15,8 @@ pub(crate) mod cond_fmt_raw;
 mod chartsheet;
 #[path = "xlsx_fit_to_page.rs"]
 mod fit_to_page;
+#[path = "xlsx_indent.rs"]
+mod indent;
 #[path = "xlsx_print_headings.rs"]
 mod print_headings;
 #[path = "xlsx_print_options.rs"]
@@ -376,6 +378,10 @@ fn empty_sheet_context(
         normal_font: normal_font.cloned(),
         table_styles: Vec::new(),
         theme: theme.cloned(),
+        // A sheet with no used cells has no cell to indent; drawings anchor
+        // to the grid, which the indent never moves.
+        cell_indents: std::collections::HashMap::new(),
+        indent_unit_pt: resolve_indent_unit_pt(normal_font),
     }
 }
 
@@ -528,6 +534,9 @@ impl XlsxParser {
 
         let metadata = extract_xlsx_metadata(&book);
         let cond_fmt_hints = cond_fmt_raw::extract_cond_fmt_hints(data);
+        // umya drops `<alignment indent="N"/>`, so the levels come from the
+        // package itself (issue #1109).
+        let cell_indents = indent::extract_cell_indents(data);
         // A `cfRule type="expression"` names the workbook's defined names
         // rather than repeating their formulas (issue #852).
         let defined_names = cond_fmt_raw::extract_defined_names(data);
@@ -576,6 +585,7 @@ impl XlsxParser {
                 &defined_names,
                 table_styles.remove(sheet.get_name()).unwrap_or_default(),
                 Some(book.get_theme()),
+                cell_indents.get(sheet.get_name()),
             ) else {
                 // A sheet without used cells can still carry drawings; give
                 // its images a page instead of dropping them.
@@ -826,6 +836,9 @@ impl Parser for XlsxParser {
         // Extract metadata from umya-spreadsheet properties
         let metadata = extract_xlsx_metadata(&book);
         let cond_fmt_hints = cond_fmt_raw::extract_cond_fmt_hints(data);
+        // umya drops `<alignment indent="N"/>`, so the levels come from the
+        // package itself (issue #1109).
+        let cell_indents = indent::extract_cell_indents(data);
         // A `cfRule type="expression"` names the workbook's defined names
         // rather than repeating their formulas (issue #852).
         let defined_names = cond_fmt_raw::extract_defined_names(data);
@@ -872,6 +885,7 @@ impl Parser for XlsxParser {
                 &defined_names,
                 table_styles.remove(sheet.get_name()).unwrap_or_default(),
                 Some(book.get_theme()),
+                cell_indents.get(sheet.get_name()),
             ) else {
                 // A sheet without used cells can still carry drawings; give
                 // its images a page instead of dropping them.
