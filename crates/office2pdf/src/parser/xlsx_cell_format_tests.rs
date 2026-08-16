@@ -1205,8 +1205,13 @@ fn test_row_height_used_even_without_custom_height_flag() {
     );
 }
 
+// The behaviour above is what the code does, not what Excel does: an `ht`
+// with no `customHeight` is a cached auto-height Excel recomputes on load
+// (measured in #1151). Changing it re-points every such row at the recompute,
+// which is only measured for two faces (#1150), so both are wanted first.
+
 #[test]
-fn test_row_without_dimension_uses_sheet_default_height() {
+fn test_row_without_dimension_takes_the_normal_font_recompute() {
     let data = build_xlsx_formatted_over_a_compacting_grid(|sheet| {
         sheet.get_cell_mut("A1").set_value("첫째 줄");
         sheet.get_cell_mut("A2").set_value("둘째 줄");
@@ -1221,8 +1226,10 @@ fn test_row_without_dimension_uses_sheet_default_height() {
     assert_eq!(tp.table.rows[0].height, Some(22.0));
     assert_eq!(
         tp.table.rows[1].height,
-        Some(17.0),
-        "rows without their own ht use the calibrated sheet defaultRowHeight"
+        Some(14.0),
+        "a row without its own ht is recomputed from the Normal font, not from \
+         defaultRowHeight: 11pt Calibri gives a 15pt worksheet row over this \
+         sheet's declared 18, which the compacting grid prints as 14"
     );
 }
 
