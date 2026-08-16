@@ -1004,11 +1004,42 @@ fn generate_table_cell(
         // left edge; a centred or right-aligned one is clipped at its own edge,
         // so anchoring it left would slide its text out of the column
         // (issue #615).
-        let anchor = match cell_horizontal_alignment(cell) {
+        let horizontal_alignment: Option<Alignment> = cell_horizontal_alignment(cell);
+        let anchor = match horizontal_alignment {
             Some(Alignment::Center) => "center",
             Some(Alignment::Right) => "right",
             _ => "left",
         };
+        // Excel cuts the line on the cell's own gridline, and `#place` starts
+        // at the *content* box the inset has already pushed in. A box given
+        // the whole spill width therefore overhangs that gridline by the inset
+        // on the side it is anchored to, and the overhang admits glyphs Excel
+        // does not print: `Wrapping paper` blocked in a 65pt column printed
+        // `Wrapping pap` against the native export's `Wrapping pa`, the extra
+        // `p` fitting in exactly the 3pt of left inset (issue #1105).
+        //
+        // Probe-measured on a native Excel for Mac export (5pt and 12pt runs
+        // blocked left and right in one 65pt column): the last glyph Excel
+        // draws is the last one that *starts* before the gridline, so a glyph
+        // may overhang it but one starting past it is dropped. Clipping at the
+        // inset content edge instead would have cut two glyphs earlier than
+        // the export does, so the gridline is the boundary, not the inset.
+        //
+        // Nothing is lost on the anchored side: the line starts at that same
+        // content edge, so the width given up is width the text never occupies.
+        let spill_inset: Insets = cell.padding.unwrap_or(default_cell_padding);
+        let clip_width_pt: f64 = (spill_width
+            - match horizontal_alignment {
+                // A centred box sits on the content box's centre, which is the
+                // cell's own centre while the two insets match. Only the
+                // difference between them offsets it — as on an icon-set cell,
+                // whose left inset carries the icon's reserve (issue #652) —
+                // and both sides have to give that up to stay inside the cell.
+                Some(Alignment::Center) => (spill_inset.left - spill_inset.right).abs(),
+                Some(Alignment::Right) => spill_inset.right,
+                _ => spill_inset.left,
+            })
+        .max(0.0);
         // `#place` ignores the table's `align:`, so the wrapper must anchor
         // where the cell's effective vertical alignment puts the line. The
         // hardcoded `horizon` centred bottom-aligned titles in tall rows
@@ -1058,7 +1089,7 @@ fn generate_table_cell(
             out,
             "]; place({anchor} + {vertical_anchor}, box(width: {}pt, height: {height}, clip: true)\
              [#box(width: measure(o2p-spill).width)[#o2p-spill]])}}#box(width: 0pt, height: {height})",
-            format_f64(spill_width),
+            format_f64(clip_width_pt),
         );
     } else {
         // A `w:trHeight` floor is `max(floor, content)`, which no Typst row

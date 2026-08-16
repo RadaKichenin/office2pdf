@@ -976,6 +976,42 @@ fn a_picture_anchor_spans_the_printed_row_track() {
     );
 }
 
+/// Excel cuts a blocked cell's unwrapped line at the cell's own gridline, not
+/// at the inset its text starts from. The same fixture holds `Wrapping paper`
+/// in `B4` against a value in `C4`, and its Excel for Mac export prints
+/// `Wrapping pa`: the next `p` begins on the column boundary and is left
+/// undrawn. Sizing the clip box from the *content* edge instead pushed that
+/// boundary a whole left inset further right, which is exactly the room the
+/// extra glyph needed (issue #1105).
+#[test]
+fn a_blocked_cell_clips_its_line_at_the_column_gridline() {
+    let data = load_fixture("issue_1066_blip_effect_picture.xlsx");
+    let (document, _warnings) = XlsxParser
+        .parse(&data, &ConvertOptions::default())
+        .expect("fixture should parse");
+    let source = generate_typst(&document)
+        .expect("fixture should generate Typst")
+        .source;
+
+    // `B4` is the sheet's only spilling cell: every other label fits its own
+    // column. Read past the vertical anchor and the box height, both of which
+    // follow the row's shared line and so need font metrics a bare CI runner
+    // may not have.
+    let clip_box: &str = source
+        .split_once("place(left + ")
+        .and_then(|(_, rest)| rest.split_once(", box(width: "))
+        .map(|(_, width)| width)
+        .expect("the blocked cell must place a left-anchored clip box");
+
+    // 65pt columns laid out from a 3pt left inset: the gridline is 62pt past
+    // the point the line starts at, and 65pt would be a whole inset past it.
+    assert!(
+        clip_box.starts_with("62pt, height:"),
+        "a blocked cell's clip must end on its column's right gridline, got {}: {source}",
+        &clip_box[..clip_box.len().min(24)]
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Worksheet drawing scheme colors resolve against the theme (issue #430)
 // ---------------------------------------------------------------------------
