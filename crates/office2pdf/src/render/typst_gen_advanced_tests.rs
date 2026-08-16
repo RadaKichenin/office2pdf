@@ -640,6 +640,7 @@ fn test_polygon_with_stroke_codegen() {
                 width: 2.0,
                 color: Color::new(0, 0, 0),
                 style: BorderLineStyle::Solid,
+                join: LineJoin::Round,
             }),
         )],
     )]);
@@ -650,7 +651,9 @@ fn test_polygon_with_stroke_codegen() {
         output.source
     );
     assert!(
-        output.source.contains("stroke: 2pt + rgb(0, 0, 0)"),
+        output
+            .source
+            .contains("stroke: (paint: rgb(0, 0, 0), thickness: 2pt, join: \"round\")"),
         "Expected stroke in: {}",
         output.source
     );

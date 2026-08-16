@@ -375,6 +375,7 @@ fn smartart_shape_to_elements(f: SmartArtShapeFields) -> Vec<FixedElement> {
         width: emu_to_pt(f.line_w.max(0)),
         color,
         style: BorderLineStyle::Solid,
+        join: LineJoin::Round,
     });
     out.push(FixedElement {
         x: f.x,
@@ -881,6 +882,8 @@ struct PictureState {
     ln_width_emu: i64,
     ln_color: Option<Color>,
     ln_dash_style: BorderLineStyle,
+    /// The `a:ln` corner join, or `None` when it names none (issue #1090).
+    ln_join: Option<LineJoin>,
 }
 
 impl PictureState {
@@ -945,6 +948,10 @@ struct ShapeState {
     ln_width_emu: i64,
     ln_color: Option<Color>,
     ln_dash_style: BorderLineStyle,
+    /// The `a:ln` corner join, or `None` when it names none, in which case the
+    /// `<a:lnRef>` theme line decides and DrawingML's round default backs it
+    /// (issue #1090).
+    ln_join: Option<LineJoin>,
     /// Arrowhead at line start.
     head_end: ArrowHead,
     /// Arrowhead at line end.
@@ -998,6 +1005,7 @@ impl Default for ShapeState {
             ln_width_emu: 0,
             ln_color: None,
             ln_dash_style: BorderLineStyle::Solid,
+            ln_join: None,
             head_end: ArrowHead::None,
             tail_end: ArrowHead::None,
             adj_values: Vec::new(),
@@ -1026,19 +1034,27 @@ fn finalize_shape(
     shape: &mut ShapeState,
     paragraphs: &mut Vec<PptxParagraphEntry>,
     text_box: PptxTextBoxSettings,
-    theme_line_style_widths: &[i64],
+    theme_line_styles: &[ThemeLineStyle],
 ) -> Vec<FixedElement> {
+    let referenced_line_style: Option<&ThemeLineStyle> = shape
+        .style_ln_idx
+        .and_then(|idx| theme_line_styles.get(idx - 1));
     // Outline width: explicit `<a:ln w>` when present, otherwise the theme
     // line style referenced by `<a:lnRef idx>` (issue #318).
     let effective_ln_width_emu: i64 = if shape.ln_width_emu > 0 {
         shape.ln_width_emu
     } else {
-        shape
-            .style_ln_idx
-            .and_then(|idx| theme_line_style_widths.get(idx - 1).copied())
+        referenced_line_style
+            .map(|style| style.width_emu)
             .unwrap_or(shape.ln_width_emu)
     };
     let effective_ln_width_pt: f64 = emu_to_pt(effective_ln_width_emu);
+    // Corner join: the shape's own `a:ln` child, else the referenced theme
+    // line's, else DrawingML's round default (issue #1090).
+    let effective_ln_join: LineJoin = shape
+        .ln_join
+        .or_else(|| referenced_line_style.and_then(|style| style.join))
+        .unwrap_or_default();
 
     // Resolve effective fill: explicit > noFill > style fallback.
     let effective_fill: Option<Color> = if shape.fill.is_some() {
@@ -1066,6 +1082,7 @@ fn finalize_shape(
             width: effective_ln_width_pt,
             color,
             style: shape.ln_dash_style,
+            join: effective_ln_join,
         });
         // For shapes with text that need a background of their own — a
         // non-rectangular geometry, a pattern fill, or a shadow — emit the
@@ -1249,6 +1266,7 @@ fn finalize_shape(
             width: effective_ln_width_pt,
             color,
             style: shape.ln_dash_style,
+            join: effective_ln_join,
         });
         vec![FixedElement {
             x: emu_to_pt(shape.x),
@@ -1301,6 +1319,7 @@ fn finalize_picture(
         width: emu_to_pt(pic.ln_width_emu),
         color,
         style: pic.ln_dash_style,
+        join: pic.ln_join.unwrap_or_default(),
     });
     let element = selected_asset.and_then(|asset| {
         asset.format().map(|format| {
@@ -2089,12 +2108,16 @@ impl<'a> SlideXmlParser<'a> {
                 self.shape.in_ln = true;
                 self.shape.ln_width_emu = get_attr_i64(e, b"w").unwrap_or(12700);
                 self.shape.ln_dash_style = BorderLineStyle::Solid;
+                self.shape.ln_join = None;
             }
             b"prstDash" if self.shape.in_ln => {
                 self.shape.ln_dash_style = get_attr_str(e, b"val")
                     .as_deref()
                     .map(pptx_dash_to_border_style)
                     .unwrap_or(BorderLineStyle::Solid);
+            }
+            b"round" | b"bevel" | b"miter" if self.shape.in_ln => {
+                self.shape.ln_join = drawingml_line_join(local.as_ref());
             }
             b"tailEnd" if self.shape.in_ln => {
                 self.shape.tail_end = parse_arrow_head(get_attr_str(e, b"type").as_deref());
@@ -2442,6 +2465,7 @@ impl<'a> SlideXmlParser<'a> {
                 self.pic.in_ln = true;
                 self.pic.ln_width_emu = get_attr_i64(e, b"w").unwrap_or(12700);
                 self.pic.ln_dash_style = BorderLineStyle::Solid;
+                self.pic.ln_join = None;
             }
             b"solidFill" if self.in_pic && self.pic.in_ln => {
                 self.solid_fill_ctx = SolidFillCtx::PicLineFill;
@@ -2451,6 +2475,9 @@ impl<'a> SlideXmlParser<'a> {
                     .as_deref()
                     .map(pptx_dash_to_border_style)
                     .unwrap_or(BorderLineStyle::Solid);
+            }
+            b"round" | b"bevel" | b"miter" if self.in_pic && self.pic.in_ln => {
+                self.pic.ln_join = drawingml_line_join(local.as_ref());
             }
             b"blipFill" if self.in_pic => {}
             b"blip" if self.in_pic => {
@@ -2548,6 +2575,9 @@ impl<'a> SlideXmlParser<'a> {
                     .map(pptx_dash_to_border_style)
                     .unwrap_or(BorderLineStyle::Solid);
             }
+            b"round" | b"bevel" | b"miter" if self.in_pic && self.pic.in_ln => {
+                self.pic.ln_join = drawingml_line_join(local.as_ref());
+            }
             _ => return false,
         }
         true
@@ -2618,6 +2648,9 @@ impl<'a> SlideXmlParser<'a> {
                     .as_deref()
                     .map(pptx_dash_to_border_style)
                     .unwrap_or(BorderLineStyle::Solid);
+            }
+            b"round" | b"bevel" | b"miter" if self.shape.in_ln => {
+                self.shape.ln_join = drawingml_line_join(local.as_ref());
             }
             b"tailEnd" if self.shape.in_ln => {
                 self.shape.tail_end = parse_arrow_head(get_attr_str(e, b"type").as_deref());
@@ -2939,7 +2972,7 @@ impl<'a> SlideXmlParser<'a> {
                             &mut self.shape,
                             &mut self.paragraphs,
                             self.text_box,
-                            &self.ctx.theme.line_style_widths,
+                            &self.ctx.theme.line_styles,
                         ));
                     }
                     self.in_shape = false;

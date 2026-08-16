@@ -1026,12 +1026,30 @@ pub enum BorderLineStyle {
     LargeDashDotDot,
 }
 
+/// How a stroke turns a corner.
+///
+/// DrawingML spells this as at most one of `a:round`, `a:bevel` or `a:miter`
+/// inside `a:ln`; naming none of them selects `Round`, which is why that is the
+/// default here (issue #1090).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LineJoin {
+    #[default]
+    Round,
+    Bevel,
+    Miter,
+}
+
 /// A single border side.
+///
+/// `join` describes a DrawingML `a:ln` and only shape and picture outlines
+/// render it; Word and Excel have no corresponding border property, so their
+/// sides leave it at the default and their codegen never writes it out.
 #[derive(Debug, Clone)]
 pub struct BorderSide {
     pub width: f64,
     pub color: Color,
     pub style: BorderLineStyle,
+    pub join: LineJoin,
 }
 
 /// Fractions of the source image cropped away from each edge.

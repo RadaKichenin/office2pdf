@@ -907,6 +907,7 @@ fn test_shadow_silhouette_outsets_by_half_the_outline_width() {
                 width: 3.0,
                 color: Color::new(255, 255, 255),
                 style: BorderLineStyle::Solid,
+                join: LineJoin::Round,
             }),
             rotation_deg: None,
             opacity: None,

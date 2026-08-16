@@ -912,7 +912,7 @@ pub(super) fn parse_drawing_text_boxes(
     theme_fonts: &ThemeFontScheme,
 ) -> Vec<RawTextBoxAnchor> {
     use crate::ir::{
-        Alignment, BorderLineStyle, BorderSide, Paragraph, ParagraphStyle, Run, TextStyle,
+        Alignment, BorderLineStyle, BorderSide, LineJoin, Paragraph, ParagraphStyle, Run, TextStyle,
     };
     use crate::parser::drawingml::{self, SchemeColors};
 
@@ -1160,6 +1160,7 @@ pub(super) fn parse_drawing_text_boxes(
                                     width: border_width,
                                     color,
                                     style: BorderLineStyle::Solid,
+                                    join: LineJoin::Round,
                                 }),
                                 vertical_center,
                             });

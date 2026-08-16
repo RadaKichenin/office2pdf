@@ -880,6 +880,7 @@ fn test_generate_paragraph_with_bottom_border_rule() {
                     width: 0.75,
                     color: Color::new(0x1E, 0x27, 0x61),
                     style: BorderLineStyle::Solid,
+                    join: LineJoin::Round,
                 }),
                 ..CellBorder::default()
             })),
@@ -917,6 +918,7 @@ fn test_generate_paragraph_with_double_bottom_border() {
                     width: 1.0,
                     color: Color::black(),
                     style: BorderLineStyle::Double,
+                    join: LineJoin::Round,
                 }),
                 ..CellBorder::default()
             })),
@@ -1595,6 +1597,7 @@ fn bordered_paragraph_source(width: f64, style: BorderLineStyle, space: f64) -> 
                     width,
                     color: Color::black(),
                     style,
+                    join: LineJoin::Round,
                 }),
                 ..CellBorder::default()
             })),
@@ -1717,6 +1720,7 @@ fn test_generate_heading_with_style_border_rule() {
                     width: 1.5,
                     color: Color::new(0x2E, 0x74, 0xB5),
                     style: BorderLineStyle::Solid,
+                    join: LineJoin::Round,
                 }),
                 ..CellBorder::default()
             })),

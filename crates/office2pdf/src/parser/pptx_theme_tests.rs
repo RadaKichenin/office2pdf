@@ -702,7 +702,74 @@ fn test_parse_theme_line_style_widths() {
   </a:themeElements>
 </a:theme>"#;
     let theme = parse_theme_xml(theme_xml);
-    assert_eq!(theme.line_style_widths, vec![6350, 12700, 19050]);
+    let widths: Vec<i64> = theme
+        .line_styles
+        .iter()
+        .map(|style| style.width_emu)
+        .collect();
+    assert_eq!(widths, vec![6350, 12700, 19050]);
+}
+
+/// Each `lnStyleLst` entry keeps its own corner join, and an entry naming none
+/// stays unstated so the DrawingML round default decides (issue #1090).
+///
+/// PowerPoint's stock themes write `<a:miter lim="800000"/>` on every entry,
+/// so a deck built on one must keep mitering while `customGeo.pptx`'s
+/// join-less theme rounds.
+#[test]
+fn test_parse_theme_line_style_joins() {
+    let theme_xml = r#"<?xml version="1.0"?>
+<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <a:themeElements>
+    <a:clrScheme name="X"><a:dk1><a:srgbClr val="000000"/></a:dk1></a:clrScheme>
+    <a:fontScheme name="X"><a:majorFont><a:latin typeface="Calibri"/></a:majorFont><a:minorFont><a:latin typeface="Calibri"/></a:minorFont></a:fontScheme>
+    <a:fmtScheme name="X">
+      <a:lnStyleLst>
+        <a:ln w="6350"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:miter lim="800000"/></a:ln>
+        <a:ln w="12700"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:bevel/></a:ln>
+        <a:ln w="19050"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:prstDash val="solid"/></a:ln>
+      </a:lnStyleLst>
+    </a:fmtScheme>
+  </a:themeElements>
+</a:theme>"#;
+    let theme = parse_theme_xml(theme_xml);
+    let joins: Vec<Option<LineJoin>> = theme.line_styles.iter().map(|style| style.join).collect();
+    assert_eq!(
+        joins,
+        vec![Some(LineJoin::Miter), Some(LineJoin::Bevel), None]
+    );
+}
+
+/// A `<a:ln>` nested inside a `lnStyleLst` entry — the arrowhead and
+/// compound-line sub-elements can carry one — must not be mistaken for a
+/// fourth entry, which would shift every `<a:lnRef idx>` past its style.
+#[test]
+fn test_theme_line_styles_ignore_nested_lines() {
+    let theme_xml = r#"<?xml version="1.0"?>
+<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <a:themeElements>
+    <a:clrScheme name="X"><a:dk1><a:srgbClr val="000000"/></a:dk1></a:clrScheme>
+    <a:fontScheme name="X"><a:majorFont><a:latin typeface="Calibri"/></a:majorFont><a:minorFont><a:latin typeface="Calibri"/></a:minorFont></a:fontScheme>
+    <a:fmtScheme name="X">
+      <a:lnStyleLst>
+        <a:ln w="6350"><a:miter lim="800000"/><a:extLst><a:ext><a:ln w="99999"><a:bevel/></a:ln></a:ext></a:extLst></a:ln>
+        <a:ln w="12700"><a:round/></a:ln>
+      </a:lnStyleLst>
+    </a:fmtScheme>
+  </a:themeElements>
+</a:theme>"#;
+    let theme = parse_theme_xml(theme_xml);
+    assert_eq!(
+        theme
+            .line_styles
+            .iter()
+            .map(|style| (style.width_emu, style.join))
+            .collect::<Vec<_>>(),
+        vec![
+            (6350, Some(LineJoin::Miter)),
+            (12700, Some(LineJoin::Round))
+        ]
+    );
 }
 
 // ── `<a:effectRef>` resolution (issue #740) ────────────────────────────

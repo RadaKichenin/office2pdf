@@ -831,6 +831,7 @@ fn band_region_border_draws_the_rule_between_rows() {
         width: 0.5,
         color: Color::new(0x44, 0x72, 0xC4),
         style: BorderLineStyle::Solid,
+        join: LineJoin::Round,
     };
     let mut styles = TableStyleMap::new();
     styles.insert(
@@ -941,7 +942,7 @@ fn test_parse_region_borders_from_tc_bdr() {
 // the literal `<a:fill>`/`<a:ln>` the tests above use. The XML in this section
 // is copied from `tests/fixtures/pptx/poi/table-with-theme.pptx`.
 
-/// `make_theme_xml` emits no `<a:fmtScheme>`, so `line_style_widths` comes back
+/// `make_theme_xml` emits no `<a:fmtScheme>`, so `line_styles` comes back
 /// empty and no `lnRef` can resolve. The three widths below are the ones the
 /// fixture's own theme declares — 6350, 12700 and 19050 EMU (0.5pt, 1pt,
 /// 1.5pt).

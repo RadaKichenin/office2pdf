@@ -4,7 +4,7 @@
 //! built with these helpers so the output stays uniform and golden tests
 //! don't drift on formatting details.
 
-use crate::ir::{BorderLineStyle, BorderSide, Color};
+use crate::ir::{BorderLineStyle, BorderSide, Color, LineJoin};
 
 /// Format a Typst `rgb(r, g, b)` color literal.
 pub(super) fn rgb(color: &Color) -> String {
@@ -99,24 +99,45 @@ pub(super) fn drawingml_dash_array_pt(style: BorderLineStyle, width_pt: f64) -> 
     Some(multiples.iter().map(|m| m * w).collect())
 }
 
-/// A DrawingML stroke value, using width-proportional dashes where the style
-/// has a dash rhythm (issue #678).
-pub(super) fn drawingml_stroke_value(side: &BorderSide) -> String {
-    match drawingml_dash_array_pt(side.style, side.width) {
-        Some(array) => {
-            let lengths: Vec<String> = array
-                .iter()
-                .map(|len| format!("{}pt", format_f64(*len)))
-                .collect();
-            format!(
-                "(paint: {}, thickness: {}pt, dash: ({}))",
-                rgb(&side.color),
-                format_f64(side.width),
-                lengths.join(", "),
-            )
-        }
-        None => stroke_value(side, false),
+/// The Typst `join` keyword for a DrawingML corner join.
+fn drawingml_join_name(join: LineJoin) -> &'static str {
+    match join {
+        LineJoin::Round => "round",
+        LineJoin::Bevel => "bevel",
+        LineJoin::Miter => "miter",
     }
+}
+
+/// A DrawingML stroke value, using width-proportional dashes where the style
+/// has a dash rhythm (issue #678) and always naming the corner join (#1090).
+///
+/// The join has to be written out even when it is DrawingML's own default,
+/// because Typst's stroke default is the opposite one: an `a:ln` with no
+/// `a:round`, `a:bevel` or `a:miter` child joins round, and leaving the key off
+/// mitered every outlined shape's corners. That forces the dictionary form on
+/// solid strokes too, which used to take the `Wpt + rgb(...)` shorthand.
+pub(super) fn drawingml_stroke_value(side: &BorderSide) -> String {
+    let mut parts: Vec<String> = vec![
+        format!("paint: {}", rgb(&side.color)),
+        format!("thickness: {}pt", format_f64(side.width)),
+    ];
+    if let Some(array) = drawingml_dash_array_pt(side.style, side.width) {
+        let lengths: Vec<String> = array
+            .iter()
+            .map(|len| format!("{}pt", format_f64(*len)))
+            .collect();
+        parts.push(format!("dash: ({})", lengths.join(", ")));
+    } else if !matches!(side.style, BorderLineStyle::Solid | BorderLineStyle::None) {
+        // Styles with no rhythm of their own — `Double`, and any dashed style
+        // whose width scales the array to nothing — keep the named pattern
+        // `stroke_value` would have given them.
+        parts.push(format!(
+            "dash: \"{}\"",
+            super::border_line_style_to_typst(side.style)
+        ));
+    }
+    parts.push(format!("join: \"{}\"", drawingml_join_name(side.join)));
+    format!("({})", parts.join(", "))
 }
 
 /// Format a float without a trailing `.0` on integral values.

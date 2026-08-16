@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 use super::super::tables::{BorderSideSpec, TableBorderSpec};
 use super::super::{Block, Color, TextStyle, parse_hex_color};
-use crate::ir::{Alignment, BorderLineStyle, BorderSide, CellBorder};
+use crate::ir::{Alignment, BorderLineStyle, BorderSide, CellBorder, LineJoin};
 
 #[derive(Debug, Clone, Default)]
 struct RegionBorders {
@@ -369,6 +369,7 @@ fn parse_border_side(element: &quick_xml::events::BytesStart<'_>) -> Option<Bord
         width,
         color,
         style,
+        join: LineJoin::Round,
     })
 }
 
@@ -751,6 +752,7 @@ mod tests {
                 width: 2.0,
                 color: Color::new(0, 0, 0xFF),
                 style: crate::ir::BorderLineStyle::Solid,
+                join: LineJoin::Round,
             }),
             ..TableBorderSpec::default()
         };

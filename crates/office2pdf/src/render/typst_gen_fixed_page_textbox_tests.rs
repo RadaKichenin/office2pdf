@@ -799,6 +799,7 @@ fn test_fixed_page_text_box_with_fill_and_stroke() {
                     width: 1.0,
                     color: Color { r: 0, g: 0, b: 0 },
                     style: BorderLineStyle::Solid,
+                    join: LineJoin::Round,
                 }),
                 shape_kind: None,
                 no_wrap: false,
@@ -815,7 +816,9 @@ fn test_fixed_page_text_box_with_fill_and_stroke() {
         output.source,
     );
     assert!(
-        output.source.contains("stroke: 1pt + rgb(0, 0, 0)"),
+        output
+            .source
+            .contains("stroke: (paint: rgb(0, 0, 0), thickness: 1pt, join: \"round\")"),
         "Expected stroke in output, got:\n{}",
         output.source,
     );
@@ -1709,6 +1712,7 @@ fn test_fixed_page_text_box_wrapped_centered_paragraph_scales_to_fit_height() {
                     },
                     width: 1.0,
                     style: BorderLineStyle::Solid,
+                    join: LineJoin::Round,
                 }),
                 shape_kind: None,
                 no_wrap: false,

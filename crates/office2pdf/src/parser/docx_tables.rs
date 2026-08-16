@@ -1,8 +1,8 @@
 use super::contexts::{DocxConversionContext, ResolvedTableStyle, apply_table_text_style};
 use super::{
     Alignment, Block, BorderLineStyle, BorderSide, CellBorder, CellVerticalAlign, Color,
-    HyperlinkMap, ImageMap, Insets, MAX_TABLE_DEPTH, StyleMap, Table, TableCell, TableRow,
-    convert_paragraph_blocks, parse_hex_color,
+    HyperlinkMap, ImageMap, Insets, LineJoin, MAX_TABLE_DEPTH, StyleMap, Table, TableCell,
+    TableRow, convert_paragraph_blocks, parse_hex_color,
 };
 use crate::ir::TableBorderPaintModel;
 use crate::parser::units::twips_to_pt;
@@ -1174,6 +1174,7 @@ fn extract_cell_borders(borders_json: &serde_json::Value) -> Option<CellBorder> 
             width: size / 8.0,
             color,
             style,
+            join: LineJoin::Round,
         })
     };
 

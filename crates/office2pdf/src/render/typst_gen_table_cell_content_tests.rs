@@ -1036,11 +1036,13 @@ fn cell_border_width_joins_the_inset() {
             width: 0.5,
             color: Color::new(0, 0, 0),
             style: BorderLineStyle::Solid,
+            join: LineJoin::Round,
         }),
         bottom: Some(BorderSide {
             width: 0.5,
             color: Color::new(0, 0, 0),
             style: BorderLineStyle::Solid,
+            join: LineJoin::Round,
         }),
         left: None,
         right: None,

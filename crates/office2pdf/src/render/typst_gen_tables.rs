@@ -1285,6 +1285,7 @@ fn printed_gridline_side() -> BorderSide {
         width: PRINTED_GRIDLINE_WIDTH_PT,
         color: Color::black(),
         style: BorderLineStyle::Solid,
+        join: LineJoin::Round,
     }
 }
 
@@ -1301,6 +1302,7 @@ fn print_heading_frame_side() -> BorderSide {
         width: 1.0,
         color: Color::black(),
         style: BorderLineStyle::Solid,
+        join: LineJoin::Round,
     }
 }
 

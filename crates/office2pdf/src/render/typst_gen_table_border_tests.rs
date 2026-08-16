@@ -17,21 +17,25 @@ fn test_table_all_borders() {
                 width: 1.0,
                 color: Color::black(),
                 style: BorderLineStyle::Solid,
+                join: LineJoin::Round,
             }),
             bottom: Some(BorderSide {
                 width: 1.0,
                 color: Color::black(),
                 style: BorderLineStyle::Solid,
+                join: LineJoin::Round,
             }),
             left: Some(BorderSide {
                 width: 1.0,
                 color: Color::black(),
                 style: BorderLineStyle::Solid,
+                join: LineJoin::Round,
             }),
             right: Some(BorderSide {
                 width: 1.0,
                 color: Color::black(),
                 style: BorderLineStyle::Solid,
+                join: LineJoin::Round,
             }),
         }),
         ..TableCell::default()
@@ -79,11 +83,13 @@ fn test_table_dashed_border_codegen() {
                 width: 1.0,
                 color: Color::black(),
                 style: BorderLineStyle::Dashed,
+                join: LineJoin::Round,
             }),
             bottom: Some(BorderSide {
                 width: 1.0,
                 color: Color::new(255, 0, 0),
                 style: BorderLineStyle::Dotted,
+                join: LineJoin::Round,
             }),
             left: None,
             right: None,
@@ -128,21 +134,25 @@ fn test_table_double_borders_render_two_oriented_rules() {
                 width: 0.8,
                 color: Color::new(10, 20, 30),
                 style: BorderLineStyle::Double,
+                join: LineJoin::Round,
             }),
             bottom: Some(BorderSide {
                 width: 0.8,
                 color: Color::new(10, 20, 30),
                 style: BorderLineStyle::Double,
+                join: LineJoin::Round,
             }),
             left: Some(BorderSide {
                 width: 0.8,
                 color: Color::new(10, 20, 30),
                 style: BorderLineStyle::Double,
+                join: LineJoin::Round,
             }),
             right: Some(BorderSide {
                 width: 0.8,
                 color: Color::new(10, 20, 30),
                 style: BorderLineStyle::Double,
+                join: LineJoin::Round,
             }),
         }),
         ..TableCell::default()
@@ -252,6 +262,7 @@ fn test_shape_dashed_stroke_codegen() {
                 width: 2.0,
                 color: Color::black(),
                 style: BorderLineStyle::Dashed,
+                join: LineJoin::Round,
             }),
         )],
     )]);
@@ -282,6 +293,7 @@ fn test_shape_dash_dot_stroke_codegen() {
                 width: 1.0,
                 color: Color::new(0, 0, 255),
                 style: BorderLineStyle::DashDot,
+                join: LineJoin::Round,
             }),
         )],
     )]);
@@ -334,6 +346,7 @@ fn test_solid_border_no_dash_param() {
                 width: 1.0,
                 color: Color::black(),
                 style: BorderLineStyle::Solid,
+                join: LineJoin::Round,
             }),
             bottom: None,
             left: None,
@@ -395,6 +408,7 @@ fn solid_side(width: f64) -> BorderSide {
         width,
         color: Color::black(),
         style: BorderLineStyle::Solid,
+        join: LineJoin::Round,
     }
 }
 
@@ -528,6 +542,7 @@ fn test_boundary_band_medium_thick_double_weights() {
                 width: 1.0,
                 color: Color::black(),
                 style: BorderLineStyle::Double,
+                join: LineJoin::Round,
             }),
         )])],
         vec![100.0],
@@ -678,6 +693,7 @@ fn test_boundary_band_patterned_style_keeps_dash_dict() {
                     width: 1.0,
                     color: Color::black(),
                     style: BorderLineStyle::Dashed,
+                    join: LineJoin::Round,
                 }),
                 bottom: None,
                 left: None,
@@ -1040,6 +1056,7 @@ fn test_boundary_band_double_declaration_survives_thin_neighbour() {
                 width: 1.0,
                 color: Color::black(),
                 style: BorderLineStyle::Double,
+                join: LineJoin::Round,
             }),
             left: None,
             right: None,
@@ -1097,6 +1114,7 @@ fn test_boundary_band_solid_thin_outranks_hair_at_equal_width() {
                 width: 1.0,
                 color: Color::black(),
                 style: BorderLineStyle::Dotted,
+                join: LineJoin::Round,
             }),
             bottom: None,
             left: None,
@@ -1432,6 +1450,7 @@ fn test_hair_border_replaces_gridline_not_the_reverse() {
                 width: 1.0,
                 color: Color::black(),
                 style: BorderLineStyle::Dotted,
+                join: LineJoin::Round,
             }),
             bottom: None,
             left: None,
@@ -1565,6 +1584,7 @@ fn test_print_heading_boundary_keeps_both_coincident_bands() {
         width: 1.0,
         color: Color::black(),
         style: BorderLineStyle::Solid,
+        join: LineJoin::Round,
     };
     let cell = |text: &str| TableCell {
         content: vec![Block::Paragraph(Paragraph {
