@@ -1,11 +1,12 @@
 use super::*;
 use crate::ir::ChartAreaOutline;
 use crate::ir::DataLabels;
+use crate::ir::MarkerSymbol;
 use crate::render::typst_gen::diagrams::{
     CHART_AREA_OUTLINE, CHART_AUTOMATIC_LINE, CHART_DEFAULT_TEXT_PT, GAP, LABEL_W, LEGEND_ENTRY_W,
     LEGEND_KEY_LEN_PT, PPTX_LEGEND_KEY_EM, PPTX_LEGEND_KEY_LABEL_GAP_EM,
-    PPTX_LEGEND_KEY_LABEL_GAP_PT, ROW, SERIES_LINE_PT, TICK_GAP, axis_plot_rect,
-    chart_area_title_h, chart_category_band_pt, chart_category_gutter_pt,
+    PPTX_LEGEND_KEY_LABEL_GAP_PT, ROW, SERIES_LINE_PT, SERIES_MARKER_SIZE_PT, TICK_GAP,
+    axis_plot_rect, chart_area_title_h, chart_category_band_pt, chart_category_gutter_pt,
     chart_category_rotated_label_x, chart_category_rotated_label_y, chart_tick_band_pt,
     pptx_column_data_label_seat_pt,
 };
@@ -25,6 +26,7 @@ fn test_codegen_chart_bar_visual_bars() {
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            marker_symbol: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -96,6 +98,7 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            marker_symbol: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -155,6 +158,7 @@ fn test_codegen_chart_pie_draws_a_pie() {
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            marker_symbol: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -219,6 +223,7 @@ fn test_codegen_chart_line_trend_indicators() {
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            marker_symbol: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -360,6 +365,7 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            marker_symbol: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -417,6 +423,7 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            marker_symbol: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -618,6 +625,7 @@ fn test_codegen_chart_line_plot() {
                 data_labels: DataLabels::default(),
                 number_format: None,
                 plot_type: None,
+                marker_symbol: None,
             },
             ChartSeries {
                 name: Some("B".to_string()),
@@ -627,6 +635,7 @@ fn test_codegen_chart_line_plot() {
                 data_labels: DataLabels::default(),
                 number_format: None,
                 plot_type: None,
+                marker_symbol: None,
             },
         ],
         grouping: ChartGrouping::Clustered,
@@ -690,6 +699,7 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            marker_symbol: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -752,6 +762,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
                 data_labels: DataLabels::default(),
                 number_format: None,
                 plot_type: None,
+                marker_symbol: None,
             },
             ChartSeries {
                 name: Some("Tables".to_string()),
@@ -761,6 +772,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
                 data_labels: DataLabels::default(),
                 number_format: None,
                 plot_type: None,
+                marker_symbol: None,
             },
             ChartSeries {
                 name: Some("Graphics".to_string()),
@@ -770,6 +782,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
                 data_labels: DataLabels::default(),
                 number_format: None,
                 plot_type: None,
+                marker_symbol: None,
             },
             ChartSeries {
                 name: Some("Structure".to_string()),
@@ -779,6 +792,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
                 data_labels: DataLabels::default(),
                 number_format: None,
                 plot_type: None,
+                marker_symbol: None,
             },
         ],
         grouping,
@@ -923,6 +937,7 @@ fn legend_chart(position: LegendPosition) -> Chart {
                 data_labels: DataLabels::default(),
                 number_format: None,
                 plot_type: None,
+                marker_symbol: None,
             },
             ChartSeries {
                 name: Some("Tables".to_string()),
@@ -932,6 +947,7 @@ fn legend_chart(position: LegendPosition) -> Chart {
                 data_labels: DataLabels::default(),
                 number_format: None,
                 plot_type: None,
+                marker_symbol: None,
             },
         ],
         grouping: ChartGrouping::Stacked,
@@ -1089,6 +1105,7 @@ fn a_declared_series_fill_reaches_the_bars() {
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            marker_symbol: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -1144,6 +1161,7 @@ fn a_series_without_a_fill_still_takes_the_palette() {
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            marker_symbol: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -1197,6 +1215,7 @@ fn per_point_fills_colour_each_bar_separately() {
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            marker_symbol: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -1249,6 +1268,7 @@ fn axis_titled_chart(category: Option<&str>, value: Option<&str>) -> Chart {
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            marker_symbol: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -1351,6 +1371,7 @@ fn labelled_chart(labels: DataLabels) -> Chart {
             data_labels: labels,
             number_format: None,
             plot_type: None,
+            marker_symbol: None,
         }],
         grouping: ChartGrouping::Stacked,
         legend_position: LegendPosition::Right,
@@ -1448,6 +1469,7 @@ fn pie_chart(values: Vec<f64>) -> Chart {
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            marker_symbol: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -1644,6 +1666,7 @@ fn test_chart_default_gridline_matches_powerpoint() {
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            marker_symbol: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -1802,6 +1825,7 @@ fn tick_mark_chart(
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            marker_symbol: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -2405,6 +2429,7 @@ fn band_layout_chart(
                 data_labels: DataLabels::default(),
                 number_format: None,
                 plot_type: None,
+                marker_symbol: None,
             })
             .collect(),
         grouping,
@@ -2679,6 +2704,7 @@ fn two_series_bar_chart(theme_accent_colors: Vec<crate::ir::Color>) -> Chart {
                 data_labels: DataLabels::default(),
                 number_format: None,
                 plot_type: None,
+                marker_symbol: None,
             },
             ChartSeries {
                 name: Some("Cost".to_string()),
@@ -2688,6 +2714,7 @@ fn two_series_bar_chart(theme_accent_colors: Vec<crate::ir::Color>) -> Chart {
                 data_labels: DataLabels::default(),
                 number_format: None,
                 plot_type: None,
+                marker_symbol: None,
             },
         ],
         grouping: ChartGrouping::Clustered,
@@ -2788,6 +2815,92 @@ fn test_line_series_markers_cycle_by_series_index() {
         squares > 0 && polygons > 0,
         "the two series must draw different marker shapes, got {squares} squares \
          and {polygons} polygons in:\n{source}"
+    );
+}
+
+/// A line chart of two three-point series, each drawing `symbols`.
+fn line_chart_with_markers(symbols: [Option<MarkerSymbol>; 2]) -> Chart {
+    let mut chart = two_series_bar_chart(Vec::new());
+    chart.chart_type = ChartType::Line;
+    chart.categories = vec!["Q1".to_string(), "Q2".to_string(), "Q3".to_string()];
+    chart.series[0].values = vec![4.0, 8.0, 6.0];
+    chart.series[1].values = vec![6.0, 2.0, 5.0];
+    for (series, symbol) in chart.series.iter_mut().zip(symbols) {
+        series.marker_symbol = symbol;
+    }
+    chart
+}
+
+/// How many markers of each shape the source draws, as
+/// `(circles, polygons, squares)`. A line chart draws nothing else as any of
+/// them, so every hit is a marker — in the plot or on a legend key.
+fn marker_shape_counts(source: &str) -> (usize, usize, usize) {
+    let circle: String = format!(
+        "circle(radius: {}pt",
+        format_f64(SERIES_MARKER_SIZE_PT / 2.0)
+    );
+    let square: String = format!("rect(width: {}pt", format_f64(SERIES_MARKER_SIZE_PT));
+    (
+        source.matches(circle.as_str()).count(),
+        source.matches("polygon(").count(),
+        source.matches(square.as_str()).count(),
+    )
+}
+
+#[test]
+fn a_declared_marker_symbol_outranks_the_shape_cycle() {
+    // A series that names its own `<c:marker><c:symbol>` gets that symbol
+    // whatever its index. The cycle only ever stood in for a symbol the file
+    // left automatic, so leaving it in charge drew the fourth series of the
+    // audited workbook as a cross where Excel draws a filled circle (#1107).
+    //
+    // The two declarations here are each the shape the cycle would *not* have
+    // picked: index 0 cycles to a diamond and index 1 to a square.
+    let source = chart_source(line_chart_with_markers([
+        Some(MarkerSymbol::Circle),
+        Some(MarkerSymbol::Triangle),
+    ]));
+
+    // Three points per series, plus one marker on each series' legend key.
+    let markers_per_series: usize = 3 + 1;
+    let (circles, polygons, squares) = marker_shape_counts(&source);
+    assert_eq!(
+        circles, markers_per_series,
+        "the series declaring `circle` must draw one on each point and on its \
+         legend key; got:\n{source}"
+    );
+    assert_eq!(
+        polygons, markers_per_series,
+        "the series declaring `triangle` must draw one on each point and on its \
+         legend key; got:\n{source}"
+    );
+    assert_eq!(
+        squares, 0,
+        "no series may fall back to the cycle's square; got:\n{source}"
+    );
+}
+
+#[test]
+fn a_marker_symbol_of_none_draws_no_marker_at_all() {
+    // `<c:symbol val="none"/>` is a line series asking for a bare line. The
+    // stroke and its legend key stay, so the series is still readable.
+    let source = chart_source(line_chart_with_markers([
+        Some(MarkerSymbol::Off),
+        Some(MarkerSymbol::Off),
+    ]));
+
+    assert_eq!(
+        marker_shape_counts(&source),
+        (0, 0, 0),
+        "a series whose symbol is `none` draws no point marker; got:\n{source}"
+    );
+    assert!(
+        source.contains(&format!(
+            "line(end: ({}pt, 0pt), stroke: {}pt",
+            format_f64(LEGEND_KEY_LEN_PT),
+            format_f64(SERIES_LINE_PT)
+        )),
+        "the legend key still samples the series line; got:\n{source}"
     );
 }
 
@@ -3834,6 +3947,7 @@ fn test_data_table_prints_a_series_number_format() {
             data_labels: DataLabels::default(),
             number_format: Some("0.0%".to_string()),
             plot_type: None,
+            marker_symbol: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -3888,6 +4002,7 @@ fn test_data_table_prints_a_declared_thousands_format() {
             data_labels: DataLabels::default(),
             number_format: Some("#,##0".to_string()),
             plot_type: None,
+            marker_symbol: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -3940,6 +4055,7 @@ fn test_data_table_without_a_number_format_prints_plainly() {
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            marker_symbol: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -3991,6 +4107,7 @@ fn test_a_currency_axis_label_is_escaped() {
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            marker_symbol: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -4044,6 +4161,7 @@ fn single_series_chart(auto_title_deleted: bool) -> Chart {
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            marker_symbol: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -4642,6 +4760,7 @@ fn combo_budget_chart() -> Chart {
         data_labels: DataLabels::default(),
         number_format: None,
         plot_type: None,
+        marker_symbol: None,
     };
     Chart {
         chart_type: ChartType::Column,
@@ -4659,6 +4778,7 @@ fn combo_budget_chart() -> Chart {
                 data_labels: DataLabels::default(),
                 number_format: None,
                 plot_type: Some(ChartType::Line),
+                marker_symbol: None,
             },
         ],
         grouping: ChartGrouping::Stacked,
@@ -4791,4 +4911,28 @@ fn a_combo_legend_draws_each_series_the_way_its_family_plots_it() {
     // for a line one.
     assert!(!entry("Birthday Budget").contains("line(end:"));
     assert!(entry("Amount Spent").contains("line(end:"));
+}
+
+#[test]
+fn an_overlaid_line_series_draws_the_symbol_it_declares() {
+    // The audited workbook's line series names `<c:symbol val="circle"/>`, and
+    // the native Excel export draws a filled circle on each of its points and
+    // on its legend key. Its index put it on the shape cycle's cross instead
+    // (issue #1107).
+    let mut chart = combo_budget_chart();
+    let line_series: &mut ChartSeries = chart.series.last_mut().expect("the line series");
+    line_series.marker_symbol = Some(MarkerSymbol::Circle);
+    let source = chart_source(chart);
+
+    // A point per category, plus the legend key.
+    let (circles, polygons, _) = marker_shape_counts(&source);
+    assert_eq!(
+        circles, 3,
+        "the line series draws a circle on both points and on its legend key; \
+         got:\n{source}"
+    );
+    assert_eq!(
+        polygons, 0,
+        "no marker may fall back to the cycle's shape for this index; got:\n{source}"
+    );
 }
