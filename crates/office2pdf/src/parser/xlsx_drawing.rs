@@ -56,11 +56,8 @@ pub(super) fn extract_charts_with_anchors(data: &[u8]) -> HashMap<String, Vec<Ra
             continue;
         };
         // Sheet target is relative to xl/ (e.g., "worksheets/sheet1.xml")
-        let sheet_full_path = format!("xl/{sheet_target}");
-        let sheet_filename = sheet_full_path.rsplit('/').next().unwrap_or(sheet_target);
-        let sheet_rels_path = format!("xl/worksheets/_rels/{sheet_filename}.rels");
-
-        let sheet_rels_xml = read_zip_entry_string(&mut archive, &sheet_rels_path);
+        let sheet_dir: String = sheet_part_dir(sheet_target);
+        let sheet_rels_xml = read_zip_entry_string(&mut archive, &sheet_rels_path(sheet_target));
         if sheet_rels_xml.is_empty() {
             continue;
         }
@@ -68,8 +65,8 @@ pub(super) fn extract_charts_with_anchors(data: &[u8]) -> HashMap<String, Vec<Ra
         // Find drawing relationship
         let drawing_targets = parse_rels_by_type(&sheet_rels_xml, "drawing");
         for drawing_target in &drawing_targets {
-            // Resolve relative path from worksheets/ to drawings/
-            let drawing_path = resolve_relative_xl_path("xl/worksheets", drawing_target);
+            // Resolve the drawing relative to the sheet's own directory
+            let drawing_path = resolve_relative_xl_path(&sheet_dir, drawing_target);
             let drawing_xml = read_zip_entry_string(&mut archive, &drawing_path);
             if drawing_xml.is_empty() {
                 continue;
@@ -193,14 +190,12 @@ pub(super) fn collect_positioned_chart_paths(
         let Some(sheet_target) = rid_to_target.get(sheet_rid) else {
             continue;
         };
-        let sheet_full_path = format!("xl/{sheet_target}");
-        let sheet_filename = sheet_full_path.rsplit('/').next().unwrap_or(sheet_target);
-        let sheet_rels_path = format!("xl/worksheets/_rels/{sheet_filename}.rels");
-        let sheet_rels_xml = read_zip_entry_string(&mut archive, &sheet_rels_path);
+        let sheet_dir: String = sheet_part_dir(sheet_target);
+        let sheet_rels_xml = read_zip_entry_string(&mut archive, &sheet_rels_path(sheet_target));
         let drawing_targets = parse_rels_by_type(&sheet_rels_xml, "drawing");
 
         for drawing_target in &drawing_targets {
-            let drawing_path = resolve_relative_xl_path("xl/worksheets", drawing_target);
+            let drawing_path = resolve_relative_xl_path(&sheet_dir, drawing_target);
             let drawing_xml = read_zip_entry_string(&mut archive, &drawing_path);
             let anchors = parse_drawing_chart_anchors(&drawing_xml);
             let drawing_filename = drawing_path.rsplit('/').next().unwrap_or(&drawing_path);
@@ -328,6 +323,31 @@ pub(super) fn parse_rels_by_type(xml: &str, type_substring: &str) -> Vec<String>
 /// Resolve a relative path (like `../drawings/drawing1.xml`) against a base directory.
 pub(super) fn resolve_relative_xl_path(base_dir: &str, relative: &str) -> String {
     xml_util::resolve_relative_path(base_dir, relative)
+}
+
+/// The directory holding a sheet part, given the target `xl/workbook.xml.rels`
+/// declares for it. Drawing relationships are relative to this, not to
+/// `xl/worksheets`.
+///
+/// Not every sheet is a worksheet: a chartsheet's part lives under
+/// `xl/chartsheets/`, and assuming the worksheet directory both missed its
+/// drawing outright and — where a worksheet part shares its filename, which
+/// Excel's `sheet1.xml` numbering makes the common case — resolved it to the
+/// *worksheet's* rels, so the chartsheet drew a second copy of the worksheet's
+/// chart (issue #1099).
+pub(super) fn sheet_part_dir(sheet_target: &str) -> String {
+    let full_path: String = resolve_relative_xl_path("xl", sheet_target);
+    full_path
+        .rsplit_once('/')
+        .map(|(dir, _)| dir.to_string())
+        .unwrap_or_else(|| "xl".to_string())
+}
+
+/// The `_rels` part accompanying a sheet part, in the sheet's own directory.
+pub(super) fn sheet_rels_path(sheet_target: &str) -> String {
+    let full_path: String = resolve_relative_xl_path("xl", sheet_target);
+    let filename: &str = full_path.rsplit('/').next().unwrap_or(&full_path);
+    format!("{}/_rels/{filename}.rels", sheet_part_dir(sheet_target))
 }
 
 /// Parse `<xdr:graphicFrame>` chart anchors from a worksheet drawing: the
@@ -530,16 +550,14 @@ pub(super) fn extract_images_with_anchors(data: &[u8]) -> HashMap<String, Vec<Ra
         let Some(sheet_target) = rid_to_target.get(sheet_rid) else {
             continue;
         };
-        let sheet_full_path = format!("xl/{sheet_target}");
-        let sheet_filename = sheet_full_path.rsplit('/').next().unwrap_or(sheet_target);
-        let sheet_rels_path = format!("xl/worksheets/_rels/{sheet_filename}.rels");
-        let sheet_rels_xml = read_zip_entry_string(&mut archive, &sheet_rels_path);
+        let sheet_dir: String = sheet_part_dir(sheet_target);
+        let sheet_rels_xml = read_zip_entry_string(&mut archive, &sheet_rels_path(sheet_target));
         if sheet_rels_xml.is_empty() {
             continue;
         }
 
         for drawing_target in &parse_rels_by_type(&sheet_rels_xml, "drawing") {
-            let drawing_path = resolve_relative_xl_path("xl/worksheets", drawing_target);
+            let drawing_path = resolve_relative_xl_path(&sheet_dir, drawing_target);
             let drawing_xml = read_zip_entry_string(&mut archive, &drawing_path);
             if drawing_xml.is_empty() {
                 continue;
@@ -808,16 +826,14 @@ pub(super) fn extract_text_boxes_with_anchors(
         let Some(sheet_target) = rid_to_target.get(sheet_rid) else {
             continue;
         };
-        let sheet_full_path = format!("xl/{sheet_target}");
-        let sheet_filename = sheet_full_path.rsplit('/').next().unwrap_or(sheet_target);
-        let sheet_rels_path = format!("xl/worksheets/_rels/{sheet_filename}.rels");
-        let sheet_rels_xml = read_zip_entry_string(&mut archive, &sheet_rels_path);
+        let sheet_dir: String = sheet_part_dir(sheet_target);
+        let sheet_rels_xml = read_zip_entry_string(&mut archive, &sheet_rels_path(sheet_target));
         if sheet_rels_xml.is_empty() {
             continue;
         }
 
         for drawing_target in &parse_rels_by_type(&sheet_rels_xml, "drawing") {
-            let drawing_path = resolve_relative_xl_path("xl/worksheets", drawing_target);
+            let drawing_path = resolve_relative_xl_path(&sheet_dir, drawing_target);
             let drawing_xml = read_zip_entry_string(&mut archive, &drawing_path);
             if drawing_xml.is_empty() {
                 continue;

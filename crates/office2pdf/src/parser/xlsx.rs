@@ -11,6 +11,8 @@ use crate::parser::Parser;
 #[path = "xlsx_cond_fmt_raw.rs"]
 pub(crate) mod cond_fmt_raw;
 
+#[path = "xlsx_chartsheet.rs"]
+mod chartsheet;
 #[path = "xlsx_fit_to_page.rs"]
 mod fit_to_page;
 #[path = "xlsx_print_headings.rs"]
@@ -38,8 +40,17 @@ use self::xlsx_hf::*;
 pub(crate) use self::xlsx_cells::{CellPos, CellRange, parse_cell_ref};
 
 /// Parser for XLSX (Office Open XML Excel) spreadsheets.
+/// The margins Excel prints a sheet at when it states none: 0.7" left and
+/// right, 0.75" top and bottom.
+const DEFAULT_PRINT_MARGINS: Margins = Margins {
+    top: 54.0,
+    bottom: 54.0,
+    left: 50.4,
+    right: 50.4,
+};
+
 /// Print margins for a sheet: the worksheet's explicit `<pageMargins>` when
-/// present, otherwise Excel's defaults (0.7" left/right, 0.75" top/bottom).
+/// present, otherwise Excel's defaults.
 /// umya leaves absent margin attributes at 0.0, which is not a value Excel
 /// ever writes, so ≤0 means "not specified".
 fn sheet_print_margins(sheet: &umya_spreadsheet::Worksheet) -> Margins {
@@ -52,10 +63,10 @@ fn sheet_print_margins(sheet: &umya_spreadsheet::Worksheet) -> Margins {
         }
     };
     Margins {
-        top: inches_to_pt(*page_margins.get_top(), 54.0),
-        bottom: inches_to_pt(*page_margins.get_bottom(), 54.0),
-        left: inches_to_pt(*page_margins.get_left(), 50.4),
-        right: inches_to_pt(*page_margins.get_right(), 50.4),
+        top: inches_to_pt(*page_margins.get_top(), DEFAULT_PRINT_MARGINS.top),
+        bottom: inches_to_pt(*page_margins.get_bottom(), DEFAULT_PRINT_MARGINS.bottom),
+        left: inches_to_pt(*page_margins.get_left(), DEFAULT_PRINT_MARGINS.left),
+        right: inches_to_pt(*page_margins.get_right(), DEFAULT_PRINT_MARGINS.right),
     }
 }
 
@@ -463,6 +474,59 @@ fn anchored_chart(
     }
 }
 
+/// The one page a chartsheet prints: its chart alone, filling the printable
+/// area.
+///
+/// The chart's own drawing anchor states a position and an extent, and Excel
+/// ignores both — a chartsheet is a full-page chart. Measured on Excel for Mac
+/// 16.100 exports of `tests/fixtures/xlsx/any_sheets.xlsx`: halving the
+/// drawing's `xdr:ext` and moving its `xdr:pos` each left the exported page
+/// byte-identical, while widening a margin moved and resized the printed chart
+/// (issue #1099).
+///
+/// The fit is to the printable area exactly. Excel insets the chart a further
+/// 3.6-5pt per side — on the fixture, 732.61 x 478.26 inside a 741.2 x 487
+/// printable area — by a rule four one-factor margin probes did not agree on,
+/// so it is left unmodelled rather than guessed at.
+///
+/// A chartsheet has no header or footer of its own in any audited package, and
+/// no cells at all, so the page carries an empty grid.
+fn chartsheet_page(
+    sheet_name: String,
+    setup: &chartsheet::ChartsheetPrintSetup,
+    raw_charts: Vec<xlsx_drawing::RawChartAnchor>,
+) -> SheetPage {
+    let printable_width: f64 =
+        (setup.size.width - setup.margins.left - setup.margins.right).max(0.0);
+    let printable_height: f64 =
+        (setup.size.height - setup.margins.top - setup.margins.bottom).max(0.0);
+    let charts: Vec<crate::ir::SheetChart> = raw_charts
+        .into_iter()
+        .map(|anchor| crate::ir::SheetChart {
+            anchor_row: 0,
+            placement: Some(crate::ir::SheetChartPlacement {
+                x_offset_pt: 0.0,
+                y_offset_pt: 0.0,
+                width: printable_width,
+                height: printable_height,
+                print_scale: 1.0,
+            }),
+            chart: anchor.chart,
+        })
+        .collect();
+    SheetPage {
+        name: sheet_name,
+        size: setup.size,
+        margins: setup.margins,
+        table: Table::default(),
+        header: None,
+        footer: None,
+        charts,
+        images: Vec::new(),
+        text_boxes: Vec::new(),
+    }
+}
+
 pub struct XlsxParser;
 
 impl XlsxParser {
@@ -492,6 +556,8 @@ impl XlsxParser {
         let mut table_styles = tables::extract_table_styles(data);
         let normal_font = extract_normal_font(data);
 
+        let chartsheet_setups = chartsheet::chartsheet_print_setups(data);
+
         let mut chart_map = extract_charts_with_anchors(data);
         let mut image_map = extract_images_with_anchors(data);
         let mut text_box_map = extract_text_boxes_with_anchors(data);
@@ -508,6 +574,18 @@ impl XlsxParser {
                     state = ?sheet.get_state(),
                     "skipping sheet that does not print"
                 );
+                continue;
+            }
+
+            // A chartsheet holds no cells, so it never reaches the grid path.
+            if let Some(setup) = chartsheet_setups.get(sheet.get_name()) {
+                let sheet_name = sheet.get_name().to_string();
+                let raw_charts = chart_map.remove(&sheet_name).unwrap_or_default();
+                chunks.push(Document {
+                    metadata: metadata.clone(),
+                    pages: vec![Page::Sheet(chartsheet_page(sheet_name, setup, raw_charts))],
+                    styles: StyleSheet::default(),
+                });
                 continue;
             }
 
@@ -776,6 +854,8 @@ impl Parser for XlsxParser {
         let mut table_styles = tables::extract_table_styles(data);
         let normal_font = extract_normal_font(data);
 
+        let chartsheet_setups = chartsheet::chartsheet_print_setups(data);
+
         // Extract charts with anchor positions per sheet
         let mut chart_map = extract_charts_with_anchors(data);
         let mut image_map = extract_images_with_anchors(data);
@@ -794,6 +874,14 @@ impl Parser for XlsxParser {
                     state = ?sheet.get_state(),
                     "skipping sheet that does not print"
                 );
+                continue;
+            }
+
+            // A chartsheet holds no cells, so it never reaches the grid path.
+            if let Some(setup) = chartsheet_setups.get(sheet.get_name()) {
+                let sheet_name = sheet.get_name().to_string();
+                let raw_charts = chart_map.remove(&sheet_name).unwrap_or_default();
+                pages.push(Page::Sheet(chartsheet_page(sheet_name, setup, raw_charts)));
                 continue;
             }
 
