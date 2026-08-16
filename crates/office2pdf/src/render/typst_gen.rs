@@ -140,6 +140,9 @@ struct GenCtx {
     /// Whether the enclosing table rests bottom-aligned text on the descender
     /// line, i.e. is a spreadsheet ([`Table::seats_bottom_aligned_text_on_descender`]).
     table_seats_bottom_aligned_text_on_descender: bool,
+    /// Whether that descender seat keeps Excel's minimum gap above the row's
+    /// bottom boundary ([`Table::floors_bottom_aligned_descent`], issue #1097).
+    table_floors_bottom_aligned_descent: bool,
     /// Whether the cell being generated seats its line box on the descender:
     /// the enclosing table is a spreadsheet and the cell's effective vertical
     /// alignment is bottom (issue #618).
@@ -220,6 +223,7 @@ impl GenCtx {
             table_default_vertical_align: None,
             table_box_is_aligned: false,
             table_seats_bottom_aligned_text_on_descender: false,
+            table_floors_bottom_aligned_descent: false,
             cell_seats_text_on_descender: false,
             cell_sheet_row_line: None,
             cell_sheet_seat: None,

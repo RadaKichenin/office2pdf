@@ -396,6 +396,7 @@ fn slice_table_columns(table: &Table, start: usize, end: usize) -> Table {
         use_content_driven_row_heights: table.use_content_driven_row_heights,
         default_vertical_align: table.default_vertical_align,
         seats_bottom_aligned_text_on_descender: table.seats_bottom_aligned_text_on_descender,
+        floors_bottom_aligned_descent: table.floors_bottom_aligned_descent,
         border_paint_model: table.border_paint_model,
         prints_gridlines: table.prints_gridlines,
         prints_headings: table.prints_headings,

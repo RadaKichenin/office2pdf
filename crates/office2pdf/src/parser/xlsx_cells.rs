@@ -1027,6 +1027,29 @@ pub(super) fn native_excel_pdf_row_height(height: f64, normal_font: Option<&Norm
     }
 }
 
+/// Whether Excel holds a bottom-aligned cell's baseline a minimum distance
+/// above its row's bottom boundary in this workbook, instead of resting the
+/// face's rounded descent there whatever the font size (issue #1097).
+///
+/// The floor and the track compaction above are one switch, measured together
+/// on every native Excel-for-Mac export available. Six purpose-built probe
+/// workbooks print their declared tracks whole *and* floor the seat at 4pt;
+/// `09_expense_report_en`, whose grid compacts, prints its Arial Bold 14 title
+/// 3.00pt above its own ruled row boundary — the bare `round(0.211914 x 14)`,
+/// no floor. Nothing measured so far separates the two behaviours, so they
+/// share the one predicate rather than each carrying a guess of its own.
+///
+/// The mechanism behind the split is the open part. A workbook cannot be
+/// pushed from one family to the other by anything the probes varied — the
+/// title's row height, its spill, the cell's border, or the workbook's Normal
+/// font *family and size*, which is Calibri 11 on both sides of the divide.
+/// What differs is the same thing that decides the compaction: whether the
+/// Normal font resolves through a theme that names per-script faces
+/// (issues #1068, #1094).
+pub(super) fn floors_bottom_aligned_descent(normal_font: Option<&NormalFont>) -> bool {
+    !printed_grid_compacts_row_heights(normal_font)
+}
+
 /// Cell insets for spreadsheet tables. Excel's native single-line track is
 /// asymmetric around bottom-aligned text: 1pt above and 1.5pt below. Typst's
 /// default 5pt vertical inset overflowed auto-height rows (issue #396), while
