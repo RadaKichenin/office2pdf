@@ -13,8 +13,10 @@ pub(super) fn generate_table(
         ctx.table_default_vertical_align;
     let enclosing_seats_on_descender: bool = ctx.table_seats_bottom_aligned_text_on_descender;
     let enclosing_box_is_aligned: bool = ctx.table_box_is_aligned;
+    let enclosing_floors_descent: bool = ctx.table_floors_bottom_aligned_descent;
     ctx.table_default_vertical_align = table.default_vertical_align;
     ctx.table_seats_bottom_aligned_text_on_descender = table.seats_bottom_aligned_text_on_descender;
+    ctx.table_floors_bottom_aligned_descent = table.floors_bottom_aligned_descent;
     // `w:tblPr/w:jc` places the table box on the page and says nothing about
     // the text inside it, but Typst inherits `align` into the cells. The cells
     // undo it; a nested table's own answer must not outlive it (issue #843).
@@ -39,6 +41,7 @@ pub(super) fn generate_table(
     };
     ctx.table_default_vertical_align = enclosing_default_vertical_align;
     ctx.table_seats_bottom_aligned_text_on_descender = enclosing_seats_on_descender;
+    ctx.table_floors_bottom_aligned_descent = enclosing_floors_descent;
     ctx.table_box_is_aligned = enclosing_box_is_aligned;
     ctx.table_depth -= 1;
     result
@@ -797,6 +800,7 @@ fn generate_table_cell(
                 track_pt,
                 inset_top_pt: inset.top,
                 inset_bottom_pt: inset.bottom,
+                floors_descent: ctx.table_floors_bottom_aligned_descent,
             }
         });
     ctx.cell_sheet_row_line = row_shared_line.filter(|_| seats_on_row_line).cloned();

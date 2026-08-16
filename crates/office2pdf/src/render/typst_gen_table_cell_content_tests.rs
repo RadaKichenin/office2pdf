@@ -2383,3 +2383,223 @@ fn bottom_aligned_sheet_cell_rests_its_descender_on_the_row_boundary() {
          baseline, which needs `{needle}`: {result}"
     );
 }
+
+/// Excel never seats a bottom-aligned sheet cell's baseline closer than 4pt
+/// to its row's bottom boundary, however small the font — in the workbooks
+/// that floor it at all (issue #1097). Above ~18pt the face's own rounded
+/// descent is already the larger of the two and the floor stops binding.
+///
+/// The table is what six native Excel-for-Mac probe exports measured
+/// (`/Volumes/T7/scratch/issue-1063/probe`), read off a box border on a
+/// neighbouring column: a size sweep from 8pt to 44pt in 40pt and 60pt
+/// tracks, repeated over three workbook Normal fonts, plus 12pt in 20/30/45pt
+/// tracks and Arial *Bold* 14 in a 23pt track. Every one of them lands on
+/// this rule. Arial's `hhea` numbers are written out rather than read from a
+/// face, so the assertion holds on a runner with no Arial installed.
+#[test]
+fn bottom_aligned_sheet_cell_seat_reproduces_the_native_excel_probe() {
+    const ARIAL_DESCENT_EM: f64 = 434.0 / 2048.0;
+
+    // (font size pt, baseline above the row's bottom boundary pt)
+    let measured: [(f64, f64); 23] = [
+        (8.0, 4.0),
+        (9.0, 4.0),
+        (10.0, 4.0),
+        (11.0, 4.0),
+        (12.0, 4.0),
+        (13.0, 4.0),
+        (14.0, 4.0),
+        (15.0, 4.0),
+        (16.0, 4.0),
+        (17.0, 4.0),
+        (18.0, 4.0),
+        (19.0, 4.0),
+        (20.0, 4.0),
+        (21.0, 4.0),
+        (22.0, 5.0),
+        (23.0, 5.0),
+        (24.0, 5.0),
+        (26.0, 6.0),
+        (28.0, 6.0),
+        (30.0, 6.0),
+        (32.0, 7.0),
+        (36.0, 8.0),
+        (44.0, 9.0),
+    ];
+
+    for (font_size_pt, expected_pt) in measured {
+        let seated_pt: f64 = sheet_cell_descent_pt(ARIAL_DESCENT_EM, font_size_pt, true);
+        assert!(
+            (seated_pt - expected_pt).abs() < 1e-9,
+            "Arial {font_size_pt}pt bottom-aligned: Excel prints the baseline \
+             {expected_pt}pt above the row boundary, seated {seated_pt}pt"
+        );
+    }
+}
+
+/// A workbook whose printed grid compacts its declared tracks shows no such
+/// floor: `09_expense_report_en`'s Arial Bold 14 title rests 3.00pt above the
+/// row boundary its own ruled re-export states, which is the bare
+/// `round(0.211914 x 14)` and not the 4pt a purpose-built workbook holds for
+/// the same font, size, alignment and printed track (issue #1097).
+#[test]
+fn a_compacting_workbook_rests_the_bare_rounded_descent_on_the_boundary() {
+    const ARIAL_DESCENT_EM: f64 = 434.0 / 2048.0;
+
+    assert!(
+        (sheet_cell_descent_pt(ARIAL_DESCENT_EM, 14.0, false) - 3.0).abs() < 1e-9,
+        "the compacting family rests its rounded descent on the boundary"
+    );
+    // Where the descent already clears the floor the two families agree, so
+    // the switch can only ever move a small cell.
+    assert!(
+        (sheet_cell_descent_pt(ARIAL_DESCENT_EM, 32.0, false)
+            - sheet_cell_descent_pt(ARIAL_DESCENT_EM, 32.0, true))
+        .abs()
+            < 1e-9,
+        "a 32pt cell seats identically either way"
+    );
+}
+
+/// The floor reaches the emitted line box: a small bottom-aligned cell in a
+/// fixed track of a flooring workbook ends its box 4pt below the baseline,
+/// less the cell's own bottom inset, instead of on its face's 2pt descent
+/// (issue #1097).
+#[test]
+fn a_floored_sheet_cell_ends_its_box_on_excel_minimum_gap() {
+    const FAMILY: &str = "Libertinus Serif";
+    let Some((_ascent_em, descent_em, _pitch_em)) =
+        crate::render::pdf::font_line_metrics_em(FAMILY)
+    else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+    let font_size_pt: f64 = 10.0;
+    let padding = Insets {
+        top: 1.0,
+        right: 3.0,
+        bottom: 1.5,
+        left: 3.0,
+    };
+    let sheet_source = |floors_bottom_aligned_descent: bool| -> String {
+        let table = Table {
+            rows: vec![TableRow {
+                minimum_height: None,
+                cells: vec![TableCell {
+                    content: vec![Block::Paragraph(Paragraph {
+                        style: ParagraphStyle::default(),
+                        runs: vec![Run {
+                            text: "Airfare".to_string(),
+                            style: TextStyle {
+                                font_family: Some(FAMILY.to_string()),
+                                font_size: Some(font_size_pt),
+                                ..TextStyle::default()
+                            },
+                            href: None,
+                            footnote: None,
+                        }],
+                    })],
+                    vertical_align: Some(CellVerticalAlign::Bottom),
+                    ..TableCell::default()
+                }],
+                height: Some(40.0),
+            }],
+            column_widths: vec![72.0],
+            default_cell_padding: Some(padding),
+            default_vertical_align: Some(CellVerticalAlign::Bottom),
+            seats_bottom_aligned_text_on_descender: true,
+            floors_bottom_aligned_descent,
+            border_paint_model: TableBorderPaintModel::CenteredStroke,
+            prints_gridlines: false,
+            prints_headings: false,
+            ..Table::default()
+        };
+        let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+        generate_typst(&doc).unwrap().source
+    };
+
+    // The face's own descent has to be short of the floor for this to say
+    // anything; every text face in the corpus is, at 10pt.
+    let rounded_descent_pt: f64 = (descent_em * font_size_pt).round();
+    assert!(
+        rounded_descent_pt < SHEET_CELL_MIN_DESCENT_SEAT_PT,
+        "{FAMILY} at {font_size_pt}pt must sit under the floor for this test \
+         to discriminate, its rounded descent is {rounded_descent_pt}pt"
+    );
+
+    // Typst rests the box's bottom edge on the inset content bottom, so the
+    // emitted descent is Excel's gap less that inset.
+    let floored: String = format!(
+        "bottom-edge: {}em",
+        format_f64(-(SHEET_CELL_MIN_DESCENT_SEAT_PT - padding.bottom) / font_size_pt)
+    );
+    let bare: String = format!(
+        "bottom-edge: {}em",
+        format_f64(-(rounded_descent_pt - padding.bottom) / font_size_pt)
+    );
+    let flooring: String = sheet_source(true);
+    assert!(
+        flooring.contains(&floored),
+        "a flooring workbook keeps Excel's {SHEET_CELL_MIN_DESCENT_SEAT_PT}pt \
+         gap, which needs `{floored}`: {flooring}"
+    );
+    let compacting: String = sheet_source(false);
+    assert!(
+        compacting.contains(&bare),
+        "a compacting workbook keeps the bare rounded descent, which needs \
+         `{bare}`: {compacting}"
+    );
+}
+
+/// End-to-end pin for the probe workbook behind issue #1097, committed as
+/// `tests/fixtures/xlsx/issue_1097_bottom_seat_floor_probe.xlsx`: seven
+/// `ht=40 customHeight` rows carrying one bottom-aligned Arial cell each at
+/// 8, 10, 12, 14, 18, 24 and 32pt, over a Normal font whose printed grid keeps
+/// its declared tracks.
+///
+/// Its native Excel-for-Mac export prints those seven baselines 4, 4, 4, 4, 4,
+/// 5 and 7pt above their rows' bottom boundaries — the floor for the first
+/// five, the face's own rounded descent for the last two. The cells carry no
+/// border, so the inset under the box is the sheet's plain 1.5pt bottom
+/// padding.
+#[test]
+fn bottom_seat_floor_probe_seats_every_row_where_excel_prints_it() {
+    let Some((_ascent_em, descent_em, _pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Arial")
+    else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+    let data =
+        include_bytes!("../../../../tests/fixtures/xlsx/issue_1097_bottom_seat_floor_probe.xlsx");
+    let (doc, _warnings) = crate::parser::Parser::parse(
+        &crate::parser::xlsx::XlsxParser,
+        data,
+        &crate::config::ConvertOptions::default(),
+    )
+    .expect("the probe workbook parses");
+    let result = generate_typst(&doc).unwrap().source;
+
+    let advances: Vec<(f64, f64, f64, f64)> = cell_line_advances(&result);
+    assert!(
+        !advances.is_empty(),
+        "the probe sheet emits line boxes: {result}"
+    );
+    for size_pt in [8.0_f64, 10.0, 12.0, 14.0, 18.0, 24.0, 32.0] {
+        let gap_pt: f64 = (descent_em * size_pt)
+            .round()
+            .max(SHEET_CELL_MIN_DESCENT_SEAT_PT);
+        // Typst rests the box's bottom edge on the inset content bottom, so
+        // the emitted descent is Excel's gap less the cell's own inset —
+        // `XLSX_CELL_PADDING`'s 1.5pt, with no border share on these cells.
+        const SHEET_CELL_BOTTOM_INSET_PT: f64 = 1.5;
+        let expected_bottom_em: f64 = (gap_pt - SHEET_CELL_BOTTOM_INSET_PT) / size_pt;
+        assert!(
+            advances.iter().any(|(_, bottom_em, _, emitted_size_pt)| {
+                (emitted_size_pt - size_pt).abs() < 1e-9
+                    && (bottom_em - expected_bottom_em).abs() < 5e-5
+            }),
+            "the {size_pt}pt row must seat its baseline {gap_pt}pt above its \
+             row boundary, which needs `bottom-edge: {}em`: {result}",
+            format_f64(-expected_bottom_em)
+        );
+    }
+}
