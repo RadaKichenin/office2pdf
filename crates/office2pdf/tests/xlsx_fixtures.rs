@@ -993,15 +993,22 @@ fn a_blocked_cell_clips_its_line_at_the_column_gridline() {
         .expect("fixture should generate Typst")
         .source;
 
+    // `B4` is the sheet's only spilling cell: every other label fits its own
+    // column. Read past the vertical anchor and the box height, both of which
+    // follow the row's shared line and so need font metrics a bare CI runner
+    // may not have.
+    let clip_box: &str = source
+        .split_once("place(left + ")
+        .and_then(|(_, rest)| rest.split_once(", box(width: "))
+        .map(|(_, width)| width)
+        .expect("the blocked cell must place a left-anchored clip box");
+
     // 65pt columns laid out from a 3pt left inset: the gridline is 62pt past
-    // the point the line starts at.
+    // the point the line starts at, and 65pt would be a whole inset past it.
     assert!(
-        source.contains("place(left + horizon, box(width: 62pt,"),
-        "a blocked cell's clip must end on its column's right gridline: {source}"
-    );
-    assert!(
-        !source.contains("place(left + horizon, box(width: 65pt,"),
-        "a whole-column clip box overhangs that gridline by the left inset: {source}"
+        clip_box.starts_with("62pt, height:"),
+        "a blocked cell's clip must end on its column's right gridline, got {}: {source}",
+        &clip_box[..clip_box.len().min(24)]
     );
 }
 
