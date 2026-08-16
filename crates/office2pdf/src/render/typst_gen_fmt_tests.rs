@@ -1,5 +1,5 @@
 use super::*;
-use crate::ir::{BorderLineStyle, BorderSide, Color};
+use crate::ir::{BorderLineStyle, BorderSide, Color, LineJoin};
 
 #[test]
 fn test_rgb_literal() {
@@ -21,6 +21,7 @@ fn test_stroke_value_solid() {
         width: 1.5,
         color: Color::new(10, 20, 30),
         style: BorderLineStyle::Solid,
+        join: LineJoin::Round,
     };
     assert_eq!(stroke_value(&side, false), "1.5pt + rgb(10, 20, 30)");
     assert_eq!(
@@ -36,6 +37,7 @@ fn test_stroke_value_integral_width_has_no_decimal_point() {
         width: 2.0,
         color: Color::new(0, 0, 0),
         style: BorderLineStyle::Solid,
+        join: LineJoin::Round,
     };
     assert_eq!(stroke_value(&side, false), "2pt + rgb(0, 0, 0)");
 }
@@ -46,6 +48,7 @@ fn test_stroke_value_dashed() {
         width: 0.75,
         color: Color::new(200, 0, 0),
         style: BorderLineStyle::Dashed,
+        join: LineJoin::Round,
     };
     assert_eq!(
         stroke_value(&side, false),
@@ -59,6 +62,7 @@ fn test_stroke_value_dotted() {
         width: 1.0,
         color: Color::new(0, 0, 0),
         style: BorderLineStyle::Dotted,
+        join: LineJoin::Round,
     };
     assert_eq!(
         stroke_value(&side, true),
@@ -77,6 +81,7 @@ fn test_stroke_value_double_preserves_caller_divergence() {
         width: 1.0,
         color: Color::new(5, 6, 7),
         style: BorderLineStyle::Double,
+        join: LineJoin::Round,
     };
     assert_eq!(
         stroke_value(&side, true),
@@ -206,6 +211,79 @@ fn large_dash_dot_is_not_a_dot_pattern() {
     let large_dash_dot = drawingml_dash_array_pt(BorderLineStyle::LargeDashDot, 1.0).unwrap();
     assert_eq!(large_dash_dot[0], 8.0 * dotted[0], "its dash is 8w, not 1w");
     assert_eq!(large_dash_dot.len(), 4, "a dash and a dot, not one dot");
+}
+
+/// A DrawingML `a:ln` that names no join rounds its corners, while Typst's own
+/// stroke default is miter, so the join has to be written out (issue #1090).
+///
+/// Ground truth is a native macOS PowerPoint export of `customGeo.pptx` page
+/// 46, whose title banner takes a theme `a:ln` with no join child: its
+/// `mutool draw -F trace` reports `linejoin="1"` — PDF's round join — against
+/// the `linejoin="0"` our miter default produced.
+#[test]
+fn drawingml_stroke_value_rounds_a_corner_by_default() {
+    let side = BorderSide {
+        width: 3.0,
+        color: Color::new(255, 255, 255),
+        style: BorderLineStyle::Solid,
+        join: LineJoin::Round,
+    };
+    assert_eq!(
+        drawingml_stroke_value(&side),
+        "(paint: rgb(255, 255, 255), thickness: 3pt, join: \"round\")"
+    );
+}
+
+/// Triangulation: `a:bevel` and `a:miter` are their own joins, so the value
+/// cannot be a constant `"round"`.
+#[test]
+fn drawingml_stroke_value_carries_each_stated_join() {
+    let with_join = |join| {
+        drawingml_stroke_value(&BorderSide {
+            width: 1.0,
+            color: Color::new(0, 0, 0),
+            style: BorderLineStyle::Solid,
+            join,
+        })
+    };
+    assert_eq!(
+        with_join(LineJoin::Bevel),
+        "(paint: rgb(0, 0, 0), thickness: 1pt, join: \"bevel\")"
+    );
+    assert_eq!(
+        with_join(LineJoin::Miter),
+        "(paint: rgb(0, 0, 0), thickness: 1pt, join: \"miter\")"
+    );
+}
+
+/// A dashed outline turns its corners the same way a solid one does, so the
+/// join survives alongside the width-proportional dash array of issue #678.
+#[test]
+fn drawingml_stroke_value_keeps_the_join_on_a_dashed_outline() {
+    let side = BorderSide {
+        width: 0.5,
+        color: Color::new(200, 0, 0),
+        style: BorderLineStyle::Dashed,
+        join: LineJoin::Miter,
+    };
+    assert_eq!(
+        drawingml_stroke_value(&side),
+        "(paint: rgb(200, 0, 0), thickness: 0.5pt, dash: (2pt, 1.5pt), join: \"miter\")"
+    );
+}
+
+/// Word table borders and Excel cell borders have no DrawingML join, and
+/// `stroke_value` is theirs: it must keep emitting the plain shorthand rather
+/// than gain a key from a field it does not model.
+#[test]
+fn stroke_value_never_writes_a_join() {
+    let side = BorderSide {
+        width: 1.0,
+        color: Color::new(0, 0, 0),
+        style: BorderLineStyle::Solid,
+        join: LineJoin::Miter,
+    };
+    assert_eq!(stroke_value(&side, true), "1pt + rgb(0, 0, 0)");
 }
 
 /// `DashDotDot` is Word's and Excel's alone once every preset has its own

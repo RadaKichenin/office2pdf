@@ -17,9 +17,9 @@ pub(super) struct ThemeData {
     /// Raw XML of each `<a:fmtScheme>/<a:bgFillStyleLst>` entry, for
     /// `<p:bgRef>` idx ≥ 1001 resolution.
     pub(super) bg_fill_styles: Vec<String>,
-    /// Line widths (EMU) of each `<a:fmtScheme>/<a:lnStyleLst>/<a:ln>` entry,
-    /// for `<a:lnRef idx="N">` outline width resolution.
-    pub(super) line_style_widths: Vec<i64>,
+    /// Each `<a:fmtScheme>/<a:lnStyleLst>/<a:ln>` entry, for
+    /// `<a:lnRef idx="N">` outline resolution.
+    pub(super) line_styles: Vec<ThemeLineStyle>,
     /// Raw XML of each `<a:fmtScheme>/<a:effectStyleLst>/<a:effectStyle>`
     /// entry, for `<a:effectRef idx="N">` resolution.
     pub(super) effect_styles: Vec<String>,
@@ -278,27 +278,68 @@ pub(super) fn parse_theme_xml(xml: &str) -> ThemeData {
     theme.fill_styles = extract_style_list_entries(xml, b"fillStyleLst");
     theme.bg_fill_styles = extract_style_list_entries(xml, b"bgFillStyleLst");
     theme.effect_styles = extract_style_list_entries(xml, b"effectStyleLst");
-    theme.line_style_widths = extract_line_style_widths(xml);
+    theme.line_styles = extract_line_styles(xml);
 
     theme
 }
 
-/// Extract the `w` (EMU) of each `<a:ln>` inside the theme `<a:lnStyleLst>`.
-fn extract_line_style_widths(xml: &str) -> Vec<i64> {
+/// One `<a:ln>` of the theme `<a:lnStyleLst>`, as far as `<a:lnRef>` needs it.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub(super) struct ThemeLineStyle {
+    /// The `w` attribute in EMU; 0 when absent.
+    pub(super) width_emu: i64,
+    /// The stated corner join, or `None` when the entry names none of
+    /// `a:round`, `a:bevel` and `a:miter` (issue #1090).
+    pub(super) join: Option<LineJoin>,
+}
+
+/// Extract each `<a:ln>` inside the theme `<a:lnStyleLst>`.
+///
+/// One walk builds width and join together so the two stay index-aligned with
+/// the `<a:lnRef idx="N">` that selects an entry.
+fn extract_line_styles(xml: &str) -> Vec<ThemeLineStyle> {
     let mut reader = Reader::from_str(xml);
-    let mut widths: Vec<i64> = Vec::new();
+    let mut styles: Vec<ThemeLineStyle> = Vec::new();
     let mut in_list = false;
+    let mut depth: usize = 0;
     loop {
         match reader.read_event() {
             Ok(Event::Start(ref e)) => match e.local_name().as_ref() {
                 b"lnStyleLst" => in_list = true,
                 b"ln" if in_list => {
-                    widths.push(line_width_attr(e));
+                    depth += 1;
+                    if depth == 1 {
+                        styles.push(ThemeLineStyle {
+                            width_emu: line_width_attr(e),
+                            join: None,
+                        });
+                    }
+                }
+                name if in_list && depth == 1 => {
+                    if let Some(join) = drawingml_line_join(name)
+                        && let Some(style) = styles.last_mut()
+                    {
+                        style.join = Some(join);
+                    }
                 }
                 _ => {}
             },
-            Ok(Event::Empty(ref e)) if in_list && e.local_name().as_ref() == b"ln" => {
-                widths.push(line_width_attr(e));
+            Ok(Event::Empty(ref e)) if in_list => match e.local_name().as_ref() {
+                b"ln" if depth == 0 => styles.push(ThemeLineStyle {
+                    width_emu: line_width_attr(e),
+                    join: None,
+                }),
+                name if depth == 1 => {
+                    if let Some(join) = drawingml_line_join(name)
+                        && let Some(style) = styles.last_mut()
+                    {
+                        style.join = Some(join);
+                    }
+                }
+                _ => {}
+            },
+            Ok(Event::End(ref e)) if in_list && e.local_name().as_ref() == b"ln" => {
+                depth = depth.saturating_sub(1);
             }
             Ok(Event::End(ref e)) if e.local_name().as_ref() == b"lnStyleLst" => break,
             Ok(Event::Eof) => break,
@@ -306,7 +347,17 @@ fn extract_line_style_widths(xml: &str) -> Vec<i64> {
             _ => {}
         }
     }
-    widths
+    styles
+}
+
+/// Map an `a:ln` child element name to the corner join it selects.
+pub(super) fn drawingml_line_join(local_name: &[u8]) -> Option<LineJoin> {
+    match local_name {
+        b"round" => Some(LineJoin::Round),
+        b"bevel" => Some(LineJoin::Bevel),
+        b"miter" => Some(LineJoin::Miter),
+        _ => None,
+    }
 }
 
 fn line_width_attr(e: &BytesStart<'_>) -> i64 {

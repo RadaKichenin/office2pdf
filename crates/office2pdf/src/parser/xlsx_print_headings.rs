@@ -17,7 +17,7 @@
 
 use crate::ir::{
     Alignment, Block, BorderLineStyle, BorderSide, CellBorder, CellVerticalAlign, Color, Insets,
-    Paragraph, ParagraphStyle, Run, SheetPage, TableCell, TableRow, TextStyle,
+    LineJoin, Paragraph, ParagraphStyle, Run, SheetPage, TableCell, TableRow, TextStyle,
 };
 
 use super::xlsx_cells::NormalFont;
@@ -78,6 +78,7 @@ fn heading_separator_side() -> BorderSide {
         width: 1.0,
         color: Color::black(),
         style: BorderLineStyle::Solid,
+        join: LineJoin::Round,
     }
 }
 
@@ -88,6 +89,7 @@ fn heading_rule_side() -> BorderSide {
         width: 1.0,
         color: PRINT_HEADING_RULE_GRAY,
         style: BorderLineStyle::Solid,
+        join: LineJoin::Round,
     }
 }
 

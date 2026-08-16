@@ -13,11 +13,11 @@ use crate::error::{ConvertError, ConvertWarning};
 use crate::ir::{
     Alignment, ArrowHead, BaselineShiftEm, Block, BorderLineStyle, BorderSide, CellBorder,
     CellVerticalAlign, Chart, Color, Document, FixedElement, FixedElementKind, FixedPage,
-    GradientFill, ImageClipShape, ImageCrop, ImageData, ImageFormat, Insets, LineSpacing, List,
-    ListItem, ListKind, ListLevelStyle, Page, PageSize, PairKerning, Paragraph, ParagraphStyle,
-    PatternFill, PatternPreset, Run, Shadow, Shape, ShapeKind, SmartArt, SmartArtNode, StyleSheet,
-    TabAlignment, TabLeader, TabStop, Table, TableBorderPaintModel, TableCell, TableRow,
-    TextBoxData, TextBoxVerticalAlign, TextDirection, TextStyle,
+    GradientFill, ImageClipShape, ImageCrop, ImageData, ImageFormat, Insets, LineJoin, LineSpacing,
+    List, ListItem, ListKind, ListLevelStyle, Page, PageSize, PairKerning, Paragraph,
+    ParagraphStyle, PatternFill, PatternPreset, Run, Shadow, Shape, ShapeKind, SmartArt,
+    SmartArtNode, StyleSheet, TabAlignment, TabLeader, TabStop, Table, TableBorderPaintModel,
+    TableCell, TableRow, TextBoxData, TextBoxVerticalAlign, TextDirection, TextStyle,
 };
 use crate::parser::Parser;
 use crate::parser::smartart;
@@ -37,12 +37,12 @@ use self::slides::{PresentationResources, SlideParseContext, parse_single_slide,
 use self::tables::{parse_pptx_table, scale_pptx_table_geometry_to_frame};
 use self::text::*;
 use self::theme::{
-    ColorMapData, ParsedColor, PptxMasterTextStyles, ThemeData, default_color_map,
-    parse_background_color, parse_background_gradient, parse_background_image_rid,
-    parse_background_ref, parse_color_from_empty, parse_color_from_start, parse_effect_list,
-    parse_master_color_map, parse_master_text_styles, parse_shape_gradient_fill,
-    parse_shape_pattern_fill, parse_theme_xml, resolve_effect_ref, resolve_effective_color_map,
-    resolve_scheme_color, resolve_theme_font,
+    ColorMapData, ParsedColor, PptxMasterTextStyles, ThemeData, ThemeLineStyle, default_color_map,
+    drawingml_line_join, parse_background_color, parse_background_gradient,
+    parse_background_image_rid, parse_background_ref, parse_color_from_empty,
+    parse_color_from_start, parse_effect_list, parse_master_color_map, parse_master_text_styles,
+    parse_shape_gradient_fill, parse_shape_pattern_fill, parse_theme_xml, resolve_effect_ref,
+    resolve_effective_color_map, resolve_scheme_color, resolve_theme_font,
 };
 
 #[path = "pptx_custom_geometry.rs"]

@@ -4,7 +4,7 @@ use std::io::{Cursor, Read, Seek};
 use crate::error::ConvertWarning;
 use crate::ir::{
     Block, BorderLineStyle, BorderSide, CellBorder, Color, ColumnLayout, FlowPage, FrameAnchor,
-    HFInline, HeaderFooter, HeaderFooterFrame, HeaderFooterParagraph, Insets, Margins,
+    HFInline, HeaderFooter, HeaderFooterFrame, HeaderFooterParagraph, Insets, LineJoin, Margins,
     PageNumbering, PageSize, PositionedTab, PositionedTabAlignment, PositionedTabRelativeTo, Run,
     TabLeader, TextDirection, TextStyle,
 };
@@ -857,6 +857,7 @@ fn extract_hf_paragraph_border(property: &docx_rs::ParagraphProperty) -> Option<
             width,
             color,
             style,
+            join: LineJoin::Round,
         })
     };
     let border = CellBorder {

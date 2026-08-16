@@ -311,7 +311,7 @@ fn parse_region_style(
 /// its default rather than inventing a width.
 fn theme_line_width_pt(element: &BytesStart<'_>, theme: &ThemeData) -> Option<f64> {
     let index: usize = get_attr_str(element, b"idx")?.parse::<usize>().ok()?;
-    let emu: i64 = *theme.line_style_widths.get(index.checked_sub(1)?)?;
+    let emu: i64 = theme.line_styles.get(index.checked_sub(1)?)?.width_emu;
     Some(emu as f64 / 12700.0)
 }
 
@@ -321,6 +321,7 @@ fn set_region_border(borders: &mut RegionBorders, side: &[u8], width: f64, color
         width,
         color,
         style: BorderLineStyle::Solid,
+        join: LineJoin::Round,
     });
     match side {
         b"left" => borders.left = border,
@@ -609,6 +610,7 @@ fn solid_border(color: Color) -> Option<BorderSide> {
         width: 1.0,
         color,
         style: BorderLineStyle::Solid,
+        join: LineJoin::Round,
     })
 }
 

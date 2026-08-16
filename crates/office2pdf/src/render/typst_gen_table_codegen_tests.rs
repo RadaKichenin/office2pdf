@@ -1,5 +1,5 @@
 use super::*;
-use crate::ir::{BorderSide, CellBorder, Insets, Table, TableCell, TableRow};
+use crate::ir::{BorderSide, CellBorder, Insets, LineJoin, Table, TableCell, TableRow};
 
 /// Helper to create a table cell with plain text.
 pub(super) fn make_text_cell(text: &str) -> TableCell {
@@ -457,11 +457,13 @@ fn test_table_with_cell_borders() {
                 width: 1.0,
                 color: Color::black(),
                 style: BorderLineStyle::Solid,
+                join: LineJoin::Round,
             }),
             bottom: Some(BorderSide {
                 width: 2.0,
                 color: Color::new(255, 0, 0),
                 style: BorderLineStyle::Solid,
+                join: LineJoin::Round,
             }),
             left: None,
             right: None,
@@ -504,6 +506,7 @@ fn test_table_with_partial_cell_borders_does_not_fill_missing_grid_lines() {
                 width: 1.0,
                 color: Color::black(),
                 style: BorderLineStyle::Solid,
+                join: LineJoin::Round,
             }),
             left: None,
             right: None,
@@ -1109,6 +1112,7 @@ fn solid_side(width: f64, color: crate::ir::Color) -> BorderSide {
         width,
         color,
         style: crate::ir::BorderLineStyle::Solid,
+        join: LineJoin::Round,
     }
 }
 

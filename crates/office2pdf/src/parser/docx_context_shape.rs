@@ -22,8 +22,8 @@ use docx_rs::FromXML;
 use quick_xml::events::{BytesStart, Event};
 
 use crate::ir::{
-    ArrowHead, BorderLineStyle, BorderSide, Color, FloatingShape, Insets, Shape, ShapeKind,
-    TextBoxVerticalAlign, WrapMode,
+    ArrowHead, BorderLineStyle, BorderSide, Color, FloatingShape, Insets, LineJoin, Shape,
+    ShapeKind, TextBoxVerticalAlign, WrapMode,
 };
 use crate::parser::units::emu_to_pt;
 use crate::parser::xml_util::parse_hex_color;
@@ -253,6 +253,7 @@ impl ShapeBuilder {
             width,
             color: self.line_color.unwrap_or(Color { r: 0, g: 0, b: 0 }),
             style: BorderLineStyle::Solid,
+            join: LineJoin::Round,
         })
     }
 }

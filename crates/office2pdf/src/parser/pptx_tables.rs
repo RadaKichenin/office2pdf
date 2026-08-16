@@ -832,6 +832,7 @@ impl<'a> PptxTableParser<'a> {
                 width: emu_to_pt(self.border_line_width_emu),
                 color,
                 style: self.border_line_dash_style,
+                join: LineJoin::Round,
             };
             match self.current_border_dir {
                 BorderDir::Left => self.border_left = Some(side),

@@ -858,3 +858,127 @@ fn a_text_shape_rotation_follows_the_declared_angle() {
         }
     }
 }
+
+// ── `a:ln` corner join (issue #1090) ─────────────────────────────────
+
+/// Build a one-shape deck whose outline is the given `<a:ln>` body and return
+/// the parsed stroke.
+fn shape_stroke_for_line(ln_xml: &str) -> BorderSide {
+    let shape = format!(
+        r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="Shape"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill><a:ln w="38100"><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:prstDash val="solid"/>{ln_xml}</a:ln></p:spPr></p:sp>"#
+    );
+    let slide = make_slide_xml(&[shape]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let page = first_fixed_page(&doc);
+    let FixedElementKind::Shape(ref s) = page.elements[0].kind else {
+        panic!("expected a Shape");
+    };
+    s.stroke.as_ref().expect("expected a stroke").clone()
+}
+
+/// An `a:ln` naming none of `a:round`, `a:bevel` or `a:miter` rounds its
+/// corners. Measured on a native macOS PowerPoint export of `customGeo.pptx`
+/// page 46, whose banner takes a theme line with no join child: the export
+/// traces as `linejoin="1"`, PDF's round join (issue #1090).
+#[test]
+fn a_line_without_a_join_child_rounds_its_corners() {
+    assert_eq!(shape_stroke_for_line("").join, LineJoin::Round);
+}
+
+/// Triangulation: each of the three join children is carried through as
+/// itself, so the default above cannot be a constant.
+#[test]
+fn each_stated_join_child_reaches_the_stroke() {
+    assert_eq!(
+        shape_stroke_for_line(r#"<a:miter lim="800000"/>"#).join,
+        LineJoin::Miter
+    );
+    assert_eq!(shape_stroke_for_line("<a:bevel/>").join, LineJoin::Bevel);
+    assert_eq!(shape_stroke_for_line("<a:round/>").join, LineJoin::Round);
+}
+
+/// A theme `<a:lnStyleLst>` entry carries its join to any shape that takes its
+/// outline from `<a:lnRef idx>`. PowerPoint's own themes state
+/// `<a:miter lim="800000"/>` there, so treating the reference as joinless
+/// would round every outline in a deck built on one.
+#[test]
+fn a_theme_line_style_carries_its_join_through_lnref() {
+    let theme_xml = r#"<?xml version="1.0"?>
+<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <a:themeElements>
+    <a:clrScheme name="X">
+      <a:dk1><a:srgbClr val="000000"/></a:dk1><a:lt1><a:srgbClr val="FFFFFF"/></a:lt1>
+      <a:accent1><a:srgbClr val="4472C4"/></a:accent1>
+    </a:clrScheme>
+    <a:fontScheme name="X"><a:majorFont><a:latin typeface="Calibri"/></a:majorFont><a:minorFont><a:latin typeface="Calibri"/></a:minorFont></a:fontScheme>
+    <a:fmtScheme name="X"><a:lnStyleLst>
+      <a:ln w="6350"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:miter lim="800000"/></a:ln>
+      <a:ln w="12700"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:miter lim="800000"/></a:ln>
+      <a:ln w="19050"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:bevel/></a:ln>
+    </a:lnStyleLst></a:fmtScheme>
+  </a:themeElements>
+</a:theme>"#;
+    let styled_shape = |idx: u32, ln: &str| {
+        format!(
+            r#"<p:sp><p:nvSpPr><p:cNvPr id="{idx}" name="S{idx}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="{}"/><a:ext cx="914400" cy="500000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="4472C4"/></a:solidFill>{ln}</p:spPr><p:style><a:lnRef idx="{idx}"><a:schemeClr val="accent1"/></a:lnRef><a:fillRef idx="1"><a:schemeClr val="accent1"/></a:fillRef></p:style></p:sp>"#,
+            idx as i64 * 600_000
+        )
+    };
+    let slide = make_slide_xml(&[
+        // idx 2 → theme miter, no `a:ln` of its own.
+        styled_shape(2, ""),
+        // idx 3 → theme bevel, no `a:ln` of its own.
+        styled_shape(3, ""),
+    ]);
+    let data = build_test_pptx_with_theme(SLIDE_CX, SLIDE_CY, &[slide], theme_xml);
+
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let page = first_fixed_page(&doc);
+    let joins: Vec<LineJoin> = page
+        .elements
+        .iter()
+        .filter_map(|element| match &element.kind {
+            FixedElementKind::Shape(s) => s.stroke.as_ref().map(|stroke| stroke.join),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(joins, vec![LineJoin::Miter, LineJoin::Bevel]);
+}
+
+/// A shape's own `a:ln` overrides the join it would otherwise inherit from the
+/// theme line its `<a:lnRef>` names.
+#[test]
+fn a_stated_join_overrides_the_theme_line_style() {
+    let theme_xml = r#"<?xml version="1.0"?>
+<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <a:themeElements>
+    <a:clrScheme name="X">
+      <a:dk1><a:srgbClr val="000000"/></a:dk1><a:lt1><a:srgbClr val="FFFFFF"/></a:lt1>
+      <a:accent1><a:srgbClr val="4472C4"/></a:accent1>
+    </a:clrScheme>
+    <a:fontScheme name="X"><a:majorFont><a:latin typeface="Calibri"/></a:majorFont><a:minorFont><a:latin typeface="Calibri"/></a:minorFont></a:fontScheme>
+    <a:fmtScheme name="X"><a:lnStyleLst>
+      <a:ln w="6350"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:miter lim="800000"/></a:ln>
+      <a:ln w="12700"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:miter lim="800000"/></a:ln>
+    </a:lnStyleLst></a:fmtScheme>
+  </a:themeElements>
+</a:theme>"#;
+    let shape = r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="S"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="4472C4"/></a:solidFill><a:ln w="25400"><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:round/></a:ln></p:spPr><p:style><a:lnRef idx="2"><a:schemeClr val="accent1"/></a:lnRef><a:fillRef idx="1"><a:schemeClr val="accent1"/></a:fillRef></p:style></p:sp>"#.to_string();
+    let slide = make_slide_xml(&[shape]);
+    let data = build_test_pptx_with_theme(SLIDE_CX, SLIDE_CY, &[slide], theme_xml);
+
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let page = first_fixed_page(&doc);
+    let FixedElementKind::Shape(ref s) = page.elements[0].kind else {
+        panic!("expected a Shape");
+    };
+    assert_eq!(
+        s.stroke.as_ref().expect("expected a stroke").join,
+        LineJoin::Round
+    );
+}

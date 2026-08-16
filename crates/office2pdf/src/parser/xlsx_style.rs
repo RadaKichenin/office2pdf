@@ -1,4 +1,4 @@
-use crate::ir::{BorderLineStyle, BorderSide, CellBorder, Color, TextStyle};
+use crate::ir::{BorderLineStyle, BorderSide, CellBorder, Color, LineJoin, TextStyle};
 use crate::parser::xml_util::parse_argb_color;
 
 /// Resolve a style colour, following `<color theme="N" tint="T"/>` into the
@@ -303,6 +303,7 @@ pub(super) fn extract_border_side(
         width,
         color,
         style,
+        join: LineJoin::Round,
     })
 }
 

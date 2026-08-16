@@ -10,8 +10,8 @@ const MAX_TABLE_DEPTH: usize = 64;
 use crate::ir::{
     Alignment, Block, BorderLineStyle, BorderSide, Caption, CellBorder, CellVerticalAlign, Color,
     ColumnLayout, Document, FloatingImage, FloatingTextBox, ImageData, ImageFormat,
-    ImageParagraphSpacing, Insets, LineSpacing, Page, PageNumbering, PairKerning, Paragraph,
-    ParagraphStyle, Run, StyleSheet, TabAlignment, TabLeader, TabStop, Table, TableCell,
+    ImageParagraphSpacing, Insets, LineJoin, LineSpacing, Page, PageNumbering, PairKerning,
+    Paragraph, ParagraphStyle, Run, StyleSheet, TabAlignment, TabLeader, TabStop, Table, TableCell,
     TableOfContents, TableRow, TextDirection, TextStyle, VerticalTextAlign,
 };
 use crate::parser::Parser;
