@@ -933,3 +933,57 @@ fn structure_rotated_text_box_keeps_each_declared_angle() {
         "one unrotated heading and the 45/90/270 degree rails"
     );
 }
+
+// ---------------------------------------------------------------------------
+// hard_break_line_advance.pptx — one `wrap="none"` caption column per size
+// (6, 8, 9, 10, 11, 12 and 14pt Arial), each holding four single-word lines
+// separated by `<a:br/>` (issue #1115). A `<a:br/>` reaches the IR as a run
+// with no run properties, so the paragraph states no size every run agrees on;
+// the line box then has to carry the size it was derived from itself.
+//
+// A native PowerPoint 16 export of this deck advances each column at
+// 1.16-1.21em — its per-baseline dither around 1.2em — while every column under
+// 11pt used to advance a flat 13.20pt.
+// ---------------------------------------------------------------------------
+
+/// Every caption column states PowerPoint's `1.2 x size` line, whatever the
+/// size its runs declare.
+#[test]
+fn hard_break_columns_state_their_own_line_advance() {
+    let data = load_fixture("hard_break_line_advance.pptx");
+    let (document, _warnings) = PptxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let source = generate_typst(&document).unwrap().source;
+
+    let advances: Vec<f64> = source
+        .match_indices("#set text(top-edge: ")
+        .filter_map(|(offset, needle)| {
+            let rest: &str = &source[offset + needle.len()..];
+            let (top, rest) = rest.split_once("pt, bottom-edge: -")?;
+            let (bottom, _) = rest.split_once("pt)")?;
+            Some(top.parse::<f64>().ok()? + bottom.parse::<f64>().ok()?)
+        })
+        .collect();
+
+    // Seven caption columns plus their seven 14pt labels.
+    let mut expected: Vec<f64> = [6.0, 8.0, 9.0, 10.0, 11.0, 12.0, 14.0]
+        .into_iter()
+        .chain(std::iter::repeat_n(14.0, 7))
+        .map(|size: f64| 1.2 * size)
+        .collect();
+    expected.sort_by(f64::total_cmp);
+    let mut got: Vec<f64> = advances;
+    got.sort_by(f64::total_cmp);
+
+    assert_eq!(got.len(), expected.len(), "line boxes emitted: {got:?}");
+    for (got, want) in got.iter().zip(&expected) {
+        assert!(
+            (got - want).abs() < 0.001,
+            "a slide line spans 1.2 x its size: expected {expected:?}, got {got:?}"
+        );
+    }
+}
+
+#[test]
+fn hard_break_line_advance_smoke() {
+    assert_produces_valid_pdf("hard_break_line_advance.pptx");
+}
