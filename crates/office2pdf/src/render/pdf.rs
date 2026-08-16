@@ -1000,7 +1000,7 @@ pub(crate) fn max_digit_advance_em(family: &str) -> Option<f64> {
     use std::sync::Mutex;
     static ADVANCE_CACHE: OnceLock<Mutex<HashMap<String, Option<f64>>>> = OnceLock::new();
 
-    let advance_for = |font: &typst::text::Font| {
+    face_advance_em(family, &ADVANCE_CACHE, |font| {
         let ttf = font.ttf();
         let upem: f64 = f64::from(ttf.units_per_em()).max(1.0);
         ('0'..='9')
@@ -1012,7 +1012,58 @@ pub(crate) fn max_digit_advance_em(family: &str) -> Option<f64> {
             .fold(None, |widest: Option<f64>, advance_em: f64| {
                 Some(widest.map_or(advance_em, |width| width.max(advance_em)))
             })
-    };
+    })
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn max_digit_advance_em(_family: &str) -> Option<f64> {
+    None
+}
+
+/// Horizontal advance of the space U+0020 on the best face for `family`, in
+/// em units.
+///
+/// Excel prices a cell alignment's `indent` at three spaces of the workbook
+/// Normal font, each rounded to a whole point: eleven one-factor native
+/// Excel-for-Mac exports fix the unit at 3 pt for Calibri 6 and 21 pt for
+/// Courier New 11 (issue #1109). Resolved through the same alias and
+/// substitute chain rendering uses, so the metric tracks the face the glyphs
+/// will actually come from.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn space_advance_em(family: &str) -> Option<f64> {
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+    static ADVANCE_CACHE: OnceLock<Mutex<HashMap<String, Option<f64>>>> = OnceLock::new();
+
+    face_advance_em(family, &ADVANCE_CACHE, |font| {
+        let ttf = font.ttf();
+        let upem: f64 = f64::from(ttf.units_per_em()).max(1.0);
+        ttf.glyph_index(' ')
+            .and_then(|glyph| ttf.glyph_hor_advance(glyph))
+            .map(|advance| f64::from(advance) / upem)
+    })
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn space_advance_em(_family: &str) -> Option<f64> {
+    None
+}
+
+/// One `hmtx`-derived metric of the face `family` resolves to, cached per
+/// family in `cache`.
+///
+/// Shared by the digit and space metrics so both walk the same resolution
+/// order: an in-memory font handed to the converter, then an explicit search
+/// path, then the font set the compiler itself will use.
+#[cfg(not(target_arch = "wasm32"))]
+fn face_advance_em(
+    family: &str,
+    cache: &'static OnceLock<std::sync::Mutex<std::collections::HashMap<String, Option<f64>>>>,
+    advance_for: impl Fn(&typst::text::Font) -> Option<f64>,
+) -> Option<f64> {
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+
     if let Some(font) =
         super::font_subst::active_in_memory_font(family, typst::text::FontVariant::default())
     {
@@ -1022,11 +1073,11 @@ pub(crate) fn max_digit_advance_em(family: &str) -> Option<f64> {
         return best_face(family).and_then(|font| advance_for(&font));
     }
 
-    let cache = ADVANCE_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    let cache = cache.get_or_init(|| Mutex::new(HashMap::new()));
     let key: String = family.to_lowercase();
     if let Some(cached) = cache
         .lock()
-        .expect("digit advance cache mutex should not be poisoned")
+        .expect("face advance cache mutex should not be poisoned")
         .get(&key)
     {
         return *cached;
@@ -1049,14 +1100,9 @@ pub(crate) fn max_digit_advance_em(family: &str) -> Option<f64> {
         .and_then(|font| advance_for(&font));
     cache
         .lock()
-        .expect("digit advance cache mutex should not be poisoned")
+        .expect("face advance cache mutex should not be poisoned")
         .insert(key, advance);
     advance
-}
-
-#[cfg(target_arch = "wasm32")]
-pub(crate) fn max_digit_advance_em(_family: &str) -> Option<f64> {
-    None
 }
 
 /// Total horizontal advance of `text`, in em units, on the face `family`

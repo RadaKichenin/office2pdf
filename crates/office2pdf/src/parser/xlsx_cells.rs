@@ -227,6 +227,83 @@ pub(super) fn column_unit_pt(family: &str, size_pt: f64) -> f64 {
     round_half_up_pt(digit_advance_em(family) * size_pt)
 }
 
+/// Space advance of Calibri (and metrically identical Carlito), Excel's
+/// default Normal font — the last-resort metric when a family is unknown to
+/// the reference table and no real face resolves.
+const CALIBRI_SPACE_ADVANCE_EM: f64 = 0.226074;
+
+/// Reference space advances (U+0020, in em) of the faces Excel itself ships,
+/// read from their `hmtx` tables. Reference-first for the same reason the
+/// digit table above is: the converting machine may substitute a metrically
+/// different face, while Excel's own indent comes from the face Excel
+/// resolves. The family set is kept in step with that table.
+fn reference_space_advance_em(family: &str) -> Option<f64> {
+    match family.to_ascii_lowercase().as_str() {
+        "calibri" | "carlito" => Some(CALIBRI_SPACE_ADVANCE_EM),
+        "arial" | "helvetica" | "liberation sans" => Some(0.277832),
+        "verdana" => Some(0.351562),
+        "courier new" => Some(0.600098),
+        "times new roman" => Some(0.250000),
+        "malgun gothic" | "맑은 고딕" => Some(0.351562),
+        _ => None,
+    }
+}
+
+/// The space advance, in em, of the face `family` names: the reference table
+/// first, then the live face, then Excel's default Normal font.
+fn space_advance_em(family: &str) -> f64 {
+    reference_space_advance_em(family)
+        .or_else(|| crate::render::pdf::space_advance_em(family))
+        .unwrap_or(CALIBRI_SPACE_ADVANCE_EM)
+}
+
+/// One indent level is three spaces (ECMA-376 §18.8.1, `indent`: "an
+/// increment of 1 represents 3 spaces").
+const SPACES_PER_INDENT_LEVEL: f64 = 3.0;
+
+/// Points Excel insets an indented cell's text per `<alignment indent="N"/>`
+/// level: three spaces of the workbook **Normal** font, each rounded to the
+/// whole-point advance grid the column unit already sits on.
+///
+/// Measured over ten Normal fonts in eleven one-factor native Excel-for-Mac
+/// exports, each workbook holding indent-0/indent-N pairs whose only
+/// difference is the level (issue #1109):
+///
+/// | Normal font | space | rounded | unit |
+/// | --- | ---: | ---: | ---: |
+/// | Calibri 6 | 1.36 | 1 | 3 |
+/// | Calibri 8 | 1.81 | 2 | 6 |
+/// | Calibri 11 | 2.49 | 2 | 6 |
+/// | Calibri 14 | 3.17 | 3 | 9 |
+/// | Calibri 16 | 3.62 | 4 | 12 |
+/// | Arial 9 | 2.50 | 3 | 9 |
+/// | Arial 11 | 3.06 | 3 | 9 |
+/// | Arial 20 | 5.56 | 6 | 18 |
+/// | Times New Roman 11 | 2.75 | 3 | 9 |
+/// | Courier New 11 | 6.60 | 7 | 21 |
+///
+/// The rounding is what makes this three *whole-point* spaces rather than
+/// three fractional ones: Calibri 11 prints 6pt where `3 × 2.49` is 7.46,
+/// and Courier New 11 prints 21pt where `3 × 6.60` is 19.8. Cell fonts do
+/// not participate — 8pt, 11pt and 22pt cells in one workbook all moved by
+/// the same unit, as they do for the column metric (issue #366).
+pub(super) fn indent_unit_pt(family: &str, size_pt: f64) -> f64 {
+    SPACES_PER_INDENT_LEVEL * round_half_up_pt(space_advance_em(family) * size_pt)
+}
+
+/// The indent unit for a sheet whose Normal font is `normal_font`.
+///
+/// The fallback is Excel's own default Normal font rather than the dominant
+/// cell font `resolve_column_unit_pt` falls back to: a workbook with no
+/// readable `xl/styles.xml` has no `cellXfs` to carry an indent either, so
+/// nothing reaches this with a level to scale.
+pub(super) fn resolve_indent_unit_pt(normal_font: Option<&NormalFont>) -> f64 {
+    match normal_font {
+        Some(font) => indent_unit_pt(&font.family, font.size_pt),
+        None => indent_unit_pt("Calibri", 11.0),
+    }
+}
+
 /// Width in points of a column with no `<col>` entry.
 ///
 /// With no declared `defaultColWidth` either, Excel prints
@@ -512,6 +589,54 @@ pub(super) struct SheetContext {
     /// (issue #853). Cloned rather than borrowed so the context stays free of
     /// the workbook's lifetime; it is twelve colours and a font scheme.
     pub(super) theme: Option<umya_spreadsheet::structs::drawing::Theme>,
+    /// The alignment indent level of every cell that declares one, read from
+    /// the raw package because umya drops the attribute (issue #1109).
+    pub(super) cell_indents: super::indent::CellIndentLevels,
+    /// Points one indent level insets a cell's text by, from the workbook
+    /// Normal font.
+    pub(super) indent_unit_pt: f64,
+}
+
+impl SheetContext {
+    /// Points the cell at `(col, row)` insets its text by for its alignment
+    /// indent level: nothing for the cells that declare none.
+    pub(super) fn cell_indent_pt(&self, col: u32, row: u32) -> f64 {
+        f64::from(self.cell_indents.get(&(col, row)).copied().unwrap_or(0)) * self.indent_unit_pt
+    }
+}
+
+/// The extra inset an indented cell's text takes, on the side its alignment
+/// anchors to.
+///
+/// Excel takes the indent off the left for a left- or general-aligned text
+/// cell and off the right for a right-aligned one — a general-aligned number
+/// right-aligns, so its indent comes off the right too (probe-measured for
+/// issue #1109).
+///
+/// A centred cell is left alone: its native behaviour splits on whether the
+/// text wraps — an unwrapped centred line moves a whole unit left per level
+/// while a wrapped one stays centred — and Excel's own UI switches alignment
+/// to left rather than let the two combine. Nothing in the reported workbook
+/// carries a centred indent to measure the split on.
+fn indented_cell_padding(
+    base: Insets,
+    indent_pt: f64,
+    alignment: Option<crate::ir::Alignment>,
+) -> Insets {
+    if indent_pt <= 0.0 {
+        return base;
+    }
+    match alignment {
+        Some(crate::ir::Alignment::Center) => base,
+        Some(crate::ir::Alignment::Right) => Insets {
+            right: base.right + indent_pt,
+            ..base
+        },
+        _ => Insets {
+            left: base.left + indent_pt,
+            ..base
+        },
+    }
 }
 
 /// First strong bidi direction of a character: Some(true) for right-to-left
@@ -781,8 +906,10 @@ fn compute_spill_width(
     // Leave room for the horizontal cell inset. Taken from the constant rather
     // than written out, so the threshold cannot drift from the padding the
     // cell is actually laid out with (it did when the sides moved to 3pt for
-    // issue #657).
-    let horizontal_inset: f64 = XLSX_CELL_PADDING.left + XLSX_CELL_PADDING.right;
+    // issue #657). An alignment indent comes out of the same width, so a line
+    // that fits flush may still reach its column edge indented (issue #1109).
+    let horizontal_inset: f64 =
+        XLSX_CELL_PADDING.left + XLSX_CELL_PADDING.right + ctx.cell_indent_pt(col_idx, row_idx);
     if estimate_text_width_pt(runs) <= own_width - horizontal_inset {
         return None;
     }
@@ -1155,6 +1282,7 @@ pub(super) const XLSX_CELL_PADDING: crate::ir::Insets = crate::ir::Insets {
 fn cell_wraps_past_one_line(
     ctx: &SheetContext,
     col_idx: u32,
+    row_idx: u32,
     col_span: u32,
     runs: &[Run],
     umya_cell: Option<&umya_spreadsheet::Cell>,
@@ -1181,7 +1309,8 @@ fn cell_wraps_past_one_line(
         })
         .sum::<f64>()
         - XLSX_CELL_PADDING.left
-        - XLSX_CELL_PADDING.right;
+        - XLSX_CELL_PADDING.right
+        - ctx.cell_indent_pt(col_idx, row_idx);
     estimate_text_width_pt(runs) > available_width
 }
 
@@ -1357,6 +1486,7 @@ pub(super) fn build_rows_for_range(
 
             // umya-spreadsheet tuple is (column, row), both 1-indexed
             let umya_cell = sheet.get_cell((col_idx, row_idx));
+            let cell_indent_pt: f64 = ctx.cell_indent_pt(col_idx, row_idx);
             let mut value = umya_cell
                 .map(|cell| cell.get_formatted_value())
                 .unwrap_or_default();
@@ -1486,7 +1616,7 @@ pub(super) fn build_rows_for_range(
             );
 
             row_wraps_past_one_line |=
-                cell_wraps_past_one_line(ctx, col_idx, col_span, &runs, umya_cell);
+                cell_wraps_past_one_line(ctx, col_idx, row_idx, col_span, &runs, umya_cell);
 
             let content = if runs.is_empty() {
                 Vec::new()
@@ -1508,6 +1638,24 @@ pub(super) fn build_rows_for_range(
                     .find_map(|stripes| stripes.fill_at(col_idx, row_idx))
             });
 
+            // An icon is drawn out of layout at the cell's left edge, so
+            // it consumes no width and a centred value centres in the
+            // whole cell. Excel reserves the icon's advance first and
+            // aligns the value in what remains to its right, which is
+            // where the extra left inset comes from (issue #652).
+            let padding: Option<Insets> = {
+                let base: Insets = match icon_text {
+                    Some(_) => Insets {
+                        left: XLSX_CELL_PADDING.left + ICON_SET_VALUE_RESERVE_PT,
+                        ..XLSX_CELL_PADDING
+                    },
+                    None => XLSX_CELL_PADDING,
+                };
+                let indented: Insets =
+                    indented_cell_padding(base, cell_indent_pt, paragraph_alignment);
+                (indented != XLSX_CELL_PADDING).then_some(indented)
+            };
+
             cells.push(TableCell {
                 content,
                 col_span,
@@ -1515,15 +1663,7 @@ pub(super) fn build_rows_for_range(
                 border,
                 background,
                 data_bar,
-                // An icon is drawn out of layout at the cell's left edge, so
-                // it consumes no width and a centred value centres in the
-                // whole cell. Excel reserves the icon's advance first and
-                // aligns the value in what remains to its right, which is
-                // where the extra left inset comes from (issue #652).
-                padding: icon_text.as_ref().map(|_| Insets {
-                    left: XLSX_CELL_PADDING.left + ICON_SET_VALUE_RESERVE_PT,
-                    ..XLSX_CELL_PADDING
-                }),
+                padding,
                 icon_text,
                 icon_color,
                 spill_width,
@@ -1680,6 +1820,7 @@ fn spill_reach_max_col(
 
 /// Prepare the shared context for processing a sheet (dimensions, merges, styles, etc.).
 /// Returns (SheetContext, row_start, row_end) or None if the sheet is empty.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn prepare_sheet_context(
     sheet: &umya_spreadsheet::Worksheet,
     normal_font: Option<&NormalFont>,
@@ -1687,6 +1828,7 @@ pub(super) fn prepare_sheet_context(
     defined_names: &HashMap<String, String>,
     table_styles: Vec<crate::parser::xlsx::tables::TableStyleRange>,
     theme: Option<&umya_spreadsheet::structs::drawing::Theme>,
+    cell_indents: Option<&super::indent::CellIndentLevels>,
 ) -> Option<(SheetContext, u32, u32)> {
     let (mut max_col, mut max_row) = sheet.get_highest_column_and_row();
     if max_col == 0 || max_row == 0 {
@@ -1709,6 +1851,8 @@ pub(super) fn prepare_sheet_context(
         declared_base_column_width(sheet),
         unit_pt,
     );
+    let cell_indents: super::indent::CellIndentLevels = cell_indents.cloned().unwrap_or_default();
+    let indent_unit_pt: f64 = resolve_indent_unit_pt(normal_font);
     let (merge_tops, merge_skips) = build_merge_maps(sheet);
 
     // Check for print area — limit to that range if defined. Without one,
@@ -1757,6 +1901,8 @@ pub(super) fn prepare_sheet_context(
             normal_font: normal_font.cloned(),
             table_styles,
             theme: theme.cloned(),
+            cell_indents,
+            indent_unit_pt,
         },
         row_start,
         row_end,

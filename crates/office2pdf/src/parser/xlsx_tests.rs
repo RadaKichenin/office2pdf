@@ -830,6 +830,9 @@ mod page_feature_tests;
 #[path = "xlsx_condfmt_tests.rs"]
 mod condfmt_tests;
 
+#[path = "xlsx_indent_tests.rs"]
+mod indent_tests;
+
 #[path = "xlsx_chart_tests.rs"]
 mod chart_tests;
 
