@@ -655,6 +655,19 @@ pub struct ChartSeries {
     /// does name one gets that symbol whatever its index, which is what issue
     /// #1107 was: a fourth series declaring `circle` drew the cycle's cross.
     pub marker_symbol: Option<MarkerSymbol>,
+    /// Weight of the stroke this series is plotted with, from its own
+    /// `<c:spPr><a:ln w="…"/>`, in points.
+    ///
+    /// `None` — no `<a:ln>`, or one stating only a colour — leaves the
+    /// renderer's default weight. A stated width is Excel's: a workbook
+    /// declaring `w="28440"` prints 2.24pt where the flat constant printed
+    /// 2.0pt, thin enough to read beside gridlines that agree to the point
+    /// (issue #1113).
+    ///
+    /// Only the families that plot a line read this — the line, radar and
+    /// mixed-plot polylines and the legend key that samples them. A bar
+    /// series' `<a:ln>` is its outline, which is a separate thing.
+    pub line_width_pt: Option<f64>,
 }
 
 impl ChartSeries {

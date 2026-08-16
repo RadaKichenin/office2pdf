@@ -240,12 +240,25 @@ const CHART_SERIES_COLORS: [&str; 6] = [
 /// away from Excel as toward it.
 pub(super) const SERIES_MARKER_SIZE_PT: f64 = 5.0;
 
-/// Weight a line series' polyline is stroked at.
+/// Weight a line series' polyline is stroked at when the file states none.
 ///
 /// Shared with the legend key, which Excel draws as a sample of the line
 /// itself: a key drawn at some other weight stops standing for its series
 /// (#801).
+///
+/// A default only. A series' own `<a:ln w="…"/>` outranks it — see
+/// [`series_line_pt`] — because Excel prints the declared weight, and a
+/// constant close enough to look right on one workbook is wrong on the next:
+/// #1113 measured 2.24pt against this 2.0pt on the same page whose gridlines
+/// agreed to the point.
 pub(super) const SERIES_LINE_PT: f64 = 2.0;
+
+/// Weight to stroke `series`' polyline and its legend key at.
+///
+/// The declared width, else [`SERIES_LINE_PT`] (issue #1113).
+fn series_line_pt(series: &crate::ir::ChartSeries) -> f64 {
+    series.line_width_pt.unwrap_or(SERIES_LINE_PT)
+}
 
 /// `baseline:` offset that sets the legend key against its label.
 ///
@@ -378,7 +391,10 @@ fn plots_as_line(chart: &Chart, series: &crate::ir::ChartSeries) -> bool {
 
 /// The legend key for a series drawn as a line: a sample of the plotted stroke
 /// carrying the same marker the series draws on each of its points (#801).
-fn line_legend_key(series_index: usize, symbol: Option<MarkerSymbol>, color: &str) -> String {
+///
+/// The whole series, not just its symbol, because the sample has to match the
+/// weight the line is plotted at as well (issue #1113).
+fn line_legend_key(series_index: usize, series: &crate::ir::ChartSeries, color: &str) -> String {
     let key_mid: f64 = SERIES_MARKER_SIZE_PT / 2.0;
     format!(
         "#box(width: {}pt, height: {}pt, baseline: {}pt)[\
@@ -389,10 +405,10 @@ fn line_legend_key(series_index: usize, symbol: Option<MarkerSymbol>, color: &st
         format_f64(LEGEND_KEY_BASELINE_PT),
         format_f64(key_mid),
         format_f64(LEGEND_KEY_LEN_PT),
-        format_f64(SERIES_LINE_PT),
+        format_f64(series_line_pt(series)),
         series_marker_markup(
             series_index,
-            symbol,
+            series.marker_symbol,
             LEGEND_KEY_LEN_PT / 2.0,
             key_mid,
             color
@@ -2574,7 +2590,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
             let _ = writeln!(
                 out,
                 "#place(top + left, path(stroke: {}pt + {color}, {coords}))",
-                format_f64(SERIES_LINE_PT)
+                format_f64(series_line_pt(s))
             );
         }
         for (x, y) in &points {
@@ -2744,7 +2760,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
         // swatch for a column, a stroke-and-marker sample for a line laid over
         // them (issue #1067).
         let key: String = if overlaid[s_index] {
-            line_legend_key(s_index, s.marker_symbol, &color)
+            line_legend_key(s_index, s, &color)
         } else {
             format!(
                 "#box(width: {}pt, height: {}pt, fill: {})",
@@ -2978,7 +2994,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
             let _ = writeln!(
                 out,
                 "#place(top + left, path(stroke: {}pt + {color}, {coords}))",
-                format_f64(SERIES_LINE_PT)
+                format_f64(series_line_pt(s))
             );
         }
         // Point markers: the symbol the series names, else the shape cycle.
@@ -3069,7 +3085,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
                 side_y_shift: 0.0,
             },
         );
-        let key: String = line_legend_key(s_index, s.marker_symbol, &color);
+        let key: String = line_legend_key(s_index, s, &color);
         let _ = writeln!(
             out,
             "#place(top + left, dx: {}pt, dy: {}pt, box[{key}#h({}pt)#text(size: {}pt)[{}]])",
@@ -3263,7 +3279,7 @@ fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64
         let _ = writeln!(
             out,
             "#place(top + left, path(closed: true, stroke: {}pt + {color}, {coords}))",
-            format_f64(SERIES_LINE_PT)
+            format_f64(series_line_pt(series))
         );
         for (x, y) in &points {
             write_series_marker(out, series_index, series.marker_symbol, *x, *y, &color);
@@ -3326,7 +3342,7 @@ fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64
                     side_y_shift: 0.0,
                 },
             );
-            let key: String = line_legend_key(series_index, series.marker_symbol, &color);
+            let key: String = line_legend_key(series_index, series, &color);
             let _ = writeln!(
                 out,
                 "#place(top + left, dx: {}pt, dy: {}pt, box[{key}#h({}pt)#text(size: {}pt)[{}]])",

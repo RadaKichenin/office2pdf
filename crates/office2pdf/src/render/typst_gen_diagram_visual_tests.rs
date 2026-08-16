@@ -27,6 +27,7 @@ fn test_codegen_chart_bar_visual_bars() {
             number_format: None,
             plot_type: None,
             marker_symbol: None,
+            line_width_pt: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -99,6 +100,7 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
             number_format: None,
             plot_type: None,
             marker_symbol: None,
+            line_width_pt: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -159,6 +161,7 @@ fn test_codegen_chart_pie_draws_a_pie() {
             number_format: None,
             plot_type: None,
             marker_symbol: None,
+            line_width_pt: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -224,6 +227,7 @@ fn test_codegen_chart_line_trend_indicators() {
             number_format: None,
             plot_type: None,
             marker_symbol: None,
+            line_width_pt: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -366,6 +370,7 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
             number_format: None,
             plot_type: None,
             marker_symbol: None,
+            line_width_pt: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -424,6 +429,7 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
             number_format: None,
             plot_type: None,
             marker_symbol: None,
+            line_width_pt: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -626,6 +632,7 @@ fn test_codegen_chart_line_plot() {
                 number_format: None,
                 plot_type: None,
                 marker_symbol: None,
+                line_width_pt: None,
             },
             ChartSeries {
                 name: Some("B".to_string()),
@@ -636,6 +643,7 @@ fn test_codegen_chart_line_plot() {
                 number_format: None,
                 plot_type: None,
                 marker_symbol: None,
+                line_width_pt: None,
             },
         ],
         grouping: ChartGrouping::Clustered,
@@ -700,6 +708,7 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
             number_format: None,
             plot_type: None,
             marker_symbol: None,
+            line_width_pt: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -763,6 +772,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
                 number_format: None,
                 plot_type: None,
                 marker_symbol: None,
+                line_width_pt: None,
             },
             ChartSeries {
                 name: Some("Tables".to_string()),
@@ -773,6 +783,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
                 number_format: None,
                 plot_type: None,
                 marker_symbol: None,
+                line_width_pt: None,
             },
             ChartSeries {
                 name: Some("Graphics".to_string()),
@@ -783,6 +794,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
                 number_format: None,
                 plot_type: None,
                 marker_symbol: None,
+                line_width_pt: None,
             },
             ChartSeries {
                 name: Some("Structure".to_string()),
@@ -793,6 +805,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
                 number_format: None,
                 plot_type: None,
                 marker_symbol: None,
+                line_width_pt: None,
             },
         ],
         grouping,
@@ -938,6 +951,7 @@ fn legend_chart(position: LegendPosition) -> Chart {
                 number_format: None,
                 plot_type: None,
                 marker_symbol: None,
+                line_width_pt: None,
             },
             ChartSeries {
                 name: Some("Tables".to_string()),
@@ -948,6 +962,7 @@ fn legend_chart(position: LegendPosition) -> Chart {
                 number_format: None,
                 plot_type: None,
                 marker_symbol: None,
+                line_width_pt: None,
             },
         ],
         grouping: ChartGrouping::Stacked,
@@ -1106,6 +1121,7 @@ fn a_declared_series_fill_reaches_the_bars() {
             number_format: None,
             plot_type: None,
             marker_symbol: None,
+            line_width_pt: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -1162,6 +1178,7 @@ fn a_series_without_a_fill_still_takes_the_palette() {
             number_format: None,
             plot_type: None,
             marker_symbol: None,
+            line_width_pt: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -1216,6 +1233,7 @@ fn per_point_fills_colour_each_bar_separately() {
             number_format: None,
             plot_type: None,
             marker_symbol: None,
+            line_width_pt: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -1269,6 +1287,7 @@ fn axis_titled_chart(category: Option<&str>, value: Option<&str>) -> Chart {
             number_format: None,
             plot_type: None,
             marker_symbol: None,
+            line_width_pt: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -1372,6 +1391,7 @@ fn labelled_chart(labels: DataLabels) -> Chart {
             number_format: None,
             plot_type: None,
             marker_symbol: None,
+            line_width_pt: None,
         }],
         grouping: ChartGrouping::Stacked,
         legend_position: LegendPosition::Right,
@@ -1470,6 +1490,7 @@ fn pie_chart(values: Vec<f64>) -> Chart {
             number_format: None,
             plot_type: None,
             marker_symbol: None,
+            line_width_pt: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -1667,6 +1688,7 @@ fn test_chart_default_gridline_matches_powerpoint() {
             number_format: None,
             plot_type: None,
             marker_symbol: None,
+            line_width_pt: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -1826,6 +1848,7 @@ fn tick_mark_chart(
             number_format: None,
             plot_type: None,
             marker_symbol: None,
+            line_width_pt: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -2430,6 +2453,7 @@ fn band_layout_chart(
                 number_format: None,
                 plot_type: None,
                 marker_symbol: None,
+                line_width_pt: None,
             })
             .collect(),
         grouping,
@@ -2705,6 +2729,7 @@ fn two_series_bar_chart(theme_accent_colors: Vec<crate::ir::Color>) -> Chart {
                 number_format: None,
                 plot_type: None,
                 marker_symbol: None,
+                line_width_pt: None,
             },
             ChartSeries {
                 name: Some("Cost".to_string()),
@@ -2715,6 +2740,7 @@ fn two_series_bar_chart(theme_accent_colors: Vec<crate::ir::Color>) -> Chart {
                 number_format: None,
                 plot_type: None,
                 marker_symbol: None,
+                line_width_pt: None,
             },
         ],
         grouping: ChartGrouping::Clustered,
@@ -3020,6 +3046,119 @@ fn a_line_legend_key_draws_the_series_line_and_its_marker() {
         "the legend key must draw the series line at its own weight; got:\n{source}"
     );
 }
+
+/// The weight of every `path(... stroke: Npt + ...)` the source strokes, in
+/// emission order.
+fn emitted_path_stroke_widths(source: &str) -> Vec<f64> {
+    let mut widths: Vec<f64> = Vec::new();
+    // One `#place(…, path(…))` per line, so the line bounds each match and a
+    // path without a stroke cannot borrow the next one's.
+    for line in source.lines().filter(|line| line.contains("path(")) {
+        let Some(open) = line.find("stroke: ") else {
+            continue;
+        };
+        let value: &str = &line[open + "stroke: ".len()..];
+        let Some(end) = value.find("pt ") else {
+            continue;
+        };
+        if let Ok(width) = value[..end].parse::<f64>() {
+            widths.push(width);
+        }
+    }
+    widths
+}
+
+/// A line chart whose two series declare the weights in `widths`.
+fn line_chart_with_line_widths(widths: [Option<f64>; 2]) -> Chart {
+    let mut chart = two_series_bar_chart(Vec::new());
+    chart.chart_type = ChartType::Line;
+    chart.categories = vec!["Q1".to_string(), "Q2".to_string(), "Q3".to_string()];
+    chart.series[0].values = vec![4.0, 8.0, 6.0];
+    chart.series[1].values = vec![6.0, 2.0, 5.0];
+    for (series, width) in chart.series.iter_mut().zip(widths) {
+        series.line_width_pt = width;
+    }
+    chart
+}
+
+#[test]
+fn a_series_polyline_takes_the_weight_its_line_declares() {
+    // `<a:ln w="28440"/>` is 2.24pt, 12% heavier than the renderer's flat
+    // 2.0pt. Excel prints the declared weight, so a workbook whose gridlines
+    // agree to the point still had its plotted line print visibly thin
+    // (issue #1113).
+    let source = chart_source(line_chart_with_line_widths([Some(2.2394), None]));
+
+    let widths: Vec<f64> = emitted_path_stroke_widths(&source);
+    assert!(
+        widths.contains(&2.2394),
+        "the series declaring 28440 EMU must stroke at 2.2394pt; got {widths:?} in:\n{source}"
+    );
+    assert!(
+        widths.contains(&SERIES_LINE_PT),
+        "the series declaring no weight must keep the default {}pt; got {widths:?} in:\n{source}",
+        format_f64(SERIES_LINE_PT)
+    );
+}
+
+#[test]
+fn a_legend_key_samples_its_series_declared_weight() {
+    // The key stands for the line only while it is drawn at the line's own
+    // weight (#801), so a declared weight has to reach both.
+    let source = chart_source(line_chart_with_line_widths([Some(2.2394), None]));
+
+    for (weight, which) in [
+        (2.2394, "declaring one"),
+        (SERIES_LINE_PT, "declaring none"),
+    ] {
+        assert!(
+            source.contains(&format!(
+                "line(end: ({}pt, 0pt), stroke: {}pt",
+                format_f64(LEGEND_KEY_LEN_PT),
+                format_f64(weight)
+            )),
+            "the legend key of the series {which} must sample it at {}pt; got:\n{source}",
+            format_f64(weight)
+        );
+    }
+}
+
+#[test]
+fn a_declared_weight_reaches_every_family_that_plots_a_line() {
+    // The polyline is emitted from three places — the line family, a line
+    // series inside a bar/column plot area (#1067), and the radar family's
+    // closed polygon. A constant in any one of them still ignores the file.
+    for (chart_type, plot_type, label) in [
+        (ChartType::Line, None, "line"),
+        (
+            ChartType::Other(crate::ir::RADAR_CHART_LABEL.to_string()),
+            None,
+            "radar",
+        ),
+        (
+            ChartType::Column,
+            Some(ChartType::Line),
+            "line over columns",
+        ),
+    ] {
+        let mut chart = line_chart_with_line_widths([Some(2.2394), Some(1.5)]);
+        chart.chart_type = chart_type.clone();
+        for series in chart.series.iter_mut() {
+            series.plot_type = plot_type.clone();
+        }
+        let source = chart_source(chart);
+
+        let widths: Vec<f64> = emitted_path_stroke_widths(&source);
+        for weight in [2.2394, 1.5] {
+            assert!(
+                widths.contains(&weight),
+                "a {label} series declaring {weight}pt must stroke at it; \
+                 got {widths:?} in:\n{source}"
+            );
+        }
+    }
+}
+
 #[test]
 fn every_chart_family_draws_the_default_chart_area_outline() {
     // A `c:chartSpace` with no `c:spPr/a:ln` still takes Office's default chart-area
@@ -3948,6 +4087,7 @@ fn test_data_table_prints_a_series_number_format() {
             number_format: Some("0.0%".to_string()),
             plot_type: None,
             marker_symbol: None,
+            line_width_pt: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -4003,6 +4143,7 @@ fn test_data_table_prints_a_declared_thousands_format() {
             number_format: Some("#,##0".to_string()),
             plot_type: None,
             marker_symbol: None,
+            line_width_pt: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -4056,6 +4197,7 @@ fn test_data_table_without_a_number_format_prints_plainly() {
             number_format: None,
             plot_type: None,
             marker_symbol: None,
+            line_width_pt: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -4108,6 +4250,7 @@ fn test_a_currency_axis_label_is_escaped() {
             number_format: None,
             plot_type: None,
             marker_symbol: None,
+            line_width_pt: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -4162,6 +4305,7 @@ fn single_series_chart(auto_title_deleted: bool) -> Chart {
             number_format: None,
             plot_type: None,
             marker_symbol: None,
+            line_width_pt: None,
         }],
         grouping: ChartGrouping::Clustered,
         legend_position: LegendPosition::Right,
@@ -4761,6 +4905,7 @@ fn combo_budget_chart() -> Chart {
         number_format: None,
         plot_type: None,
         marker_symbol: None,
+        line_width_pt: None,
     };
     Chart {
         chart_type: ChartType::Column,
@@ -4779,6 +4924,7 @@ fn combo_budget_chart() -> Chart {
                 number_format: None,
                 plot_type: Some(ChartType::Line),
                 marker_symbol: None,
+                line_width_pt: None,
             },
         ],
         grouping: ChartGrouping::Stacked,
