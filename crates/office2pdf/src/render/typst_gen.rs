@@ -794,6 +794,15 @@ fn generate_table_page(
     write_table_page_setup(out, page, &size, ctx);
     out.push('\n');
 
+    // `<printOptions horizontalCentered="1"/>` moves the whole printed sheet,
+    // the drawings floating over the grid included, so the inset wraps both.
+    // The page margins themselves stay put: the header and footer keep their
+    // own alignment, which the centering does not touch.
+    let centering_inset_pt: Option<f64> = horizontal_centering_inset_pt(page, &size);
+    if let Some(inset_pt) = centering_inset_pt {
+        let _ = writeln!(out, "#pad(left: {}pt)[", format_f64(inset_pt));
+    }
+
     // Every glyph Excel prints on a sheet — the grid's cells and the text of
     // the drawings floating over it alike — advances on the whole-point grid
     // (issue #1088). The page setup above states no run text, so the scope
@@ -812,7 +821,66 @@ fn generate_table_page(
             )?;
         }
         Ok(())
-    })
+    })?;
+
+    if centering_inset_pt.is_some() {
+        out.push_str("\n]\n");
+    }
+    Ok(())
+}
+
+/// Points Excel prints a horizontally centred sheet left of the exact centre
+/// of its printable width.
+///
+/// Measured on fourteen native Excel-for-Mac exports of one-factor probe
+/// workbooks (issue #1110). Each fills its whole print range solid, so the
+/// export's fill rectangle names the printed grid box directly; `left` below
+/// is that rectangle's left edge and `centre` the exact
+/// `margin + (printable − grid) / 2`. The ten centred rows below come from
+/// nine of the workbooks, one of which splits into two page-columns:
+///
+/// | probe | page | margins | grid | centre | left |
+/// | --- | --- | --- | ---: | ---: | ---: |
+/// | 5 × 60pt | A4 portrait | 0.7in | 300 | 147.5 | **146** |
+/// | 5 × 60pt | A4 portrait | 1.0in | 300 | 147.5 | **146** |
+/// | 5 × 60pt | A4 landscape | 0.7in | 300 | 271.0 | **270** |
+/// | 5 × 60pt | A4 portrait | 0.5in/1.5in | 300 | 111.5 | **110** |
+/// | 3 × 120pt | A4 portrait | 0.7in | 360 | 117.5 | **116** |
+/// | 5 × 63pt | A4 portrait | 0.7in | 315 | 140.0 | **139** |
+/// | 5 × 60pt + empty 60pt print-area column | A4 portrait | 0.7in | 360 | 117.5 | **116** |
+/// | 20 × 180pt at the 0.20 fit scale | A4 landscape | 0.7in | 720 | 61.0 | **60** |
+/// | 10 × 120pt, pages 1-2 (4 columns each) | A4 portrait | 0.7in | 480 | 57.5 | **56** |
+/// | 10 × 120pt, page 3 (2 columns) | A4 portrait | 0.7in | 240 | 177.5 | **176** |
+///
+/// Every one lands on `floor(centre) − 1`. Three of the remaining five
+/// exports are uncentred controls — the first, second and last workbooks above
+/// re-exported with `horizontalCentered="0"` — and print flush at the left
+/// margin instead, so the offset is the centering's alone; one carries
+/// `verticalCentered` only and moves the grid down, not sideways; and the last
+/// adds a trailing `<col width="10"/>` outside both the used range and any
+/// print area, and prints identically to the first, so the width Excel centres
+/// is the printed range and not every declared column.
+///
+/// Three further readings follow from the table: the asymmetric probe centres
+/// between the *margins*, not on the page; the fit-to-page probe centres the
+/// width the scale leaves; and a sheet split into column groups centres each
+/// page by the columns on it. Excel's own whole-point page and margin geometry
+/// is what makes the result an integer — this converter's page is 595.28pt
+/// wide where Excel's A4 is 595 — so the flooring is deliberately not
+/// reproduced and only the measured 1pt is taken off; the residual stays under
+/// 0.7pt on every probe above.
+const HORIZONTAL_CENTERING_BIAS_PT: f64 = 1.0;
+
+/// Points to inset the printed sheet from its left margin, or `None` when the
+/// sheet is not centred or its grid already fills the printable width.
+fn horizontal_centering_inset_pt(page: &SheetPage, size: &PageSize) -> Option<f64> {
+    if !page.table.centers_between_print_margins {
+        return None;
+    }
+    let printable_width_pt: f64 = size.width - page.margins.left - page.margins.right;
+    let grid_width_pt: f64 = page.table.column_widths.iter().sum();
+    let inset_pt: f64 = (printable_width_pt - grid_width_pt) / 2.0 - HORIZONTAL_CENTERING_BIAS_PT;
+    (inset_pt > 0.0).then_some(inset_pt)
 }
 
 /// A drawing overlaid on a sheet at its anchor's absolute coordinates.

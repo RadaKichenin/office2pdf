@@ -725,6 +725,10 @@ xlsx_fixture_tests!(
     issue_1065_hidden_sheet_probe,
     "issue_1065_hidden_sheet_probe.xlsx"
 );
+xlsx_fixture_tests!(
+    issue_1110_horizontal_centered_probe,
+    "issue_1110_horizontal_centered_probe.xlsx"
+);
 
 // --- MIT: Open-Xml-PowerTools (Microsoft) ----------------------------------
 
@@ -1613,5 +1617,56 @@ fn structure_light1_table_style_bands_rules_and_bolds_its_header() {
         header_run.style.bold,
         Some(true),
         "the table style prints its header row bold"
+    );
+}
+
+/// `<printOptions horizontalCentered="1"/>` centres the printed grid between
+/// the print margins; without it the grid prints flush to the left one.
+///
+/// `issue_1110_horizontal_centered_probe.xlsx` is the probe the model was
+/// measured on: five 10-unit columns of the Calibri 11 Normal font — 60pt each
+/// on Excel's whole-point column metric — on A4 portrait with 0.7in margins
+/// and nothing else. A native Excel for Mac export of it, staged and run
+/// inside Excel's own sandbox container, fills the grid box from x=146pt to
+/// x=446pt on the 595pt page (issue #1110).
+#[test]
+fn structure_horizontally_centered_sheet_insets_its_grid_to_the_native_offset() {
+    let data = load_fixture("issue_1110_horizontal_centered_probe.xlsx");
+    let (document, _warnings) = XlsxParser
+        .parse(&data, &ConvertOptions::default())
+        .expect("fixture should parse");
+
+    let pages: Vec<&SheetPage> = document
+        .pages
+        .iter()
+        .filter_map(|page| match page {
+            Page::Sheet(sheet) => Some(sheet),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(pages.len(), 1, "the probe holds one printed page");
+    let page: &SheetPage = pages[0];
+    assert!(
+        page.table.centers_between_print_margins,
+        "the probe declares printOptions horizontalCentered"
+    );
+    assert_eq!(
+        page.table.column_widths,
+        vec![60.0; 5],
+        "Excel's column metric prices 10 units of Calibri 11 at 60pt"
+    );
+
+    let source = generate_typst(&document)
+        .expect("fixture should generate Typst")
+        .source;
+    let inset_pt: f64 = source
+        .split_once("#pad(left: ")
+        .and_then(|(_, rest)| rest.split_once("pt)["))
+        .and_then(|(value, _)| value.parse().ok())
+        .unwrap_or_else(|| panic!("the centred sheet must inset its grid: {source}"));
+    let grid_left_pt: f64 = page.margins.left + inset_pt;
+    assert!(
+        (grid_left_pt - 146.0).abs() < 1.0,
+        "grid left edge {grid_left_pt}pt must land within 1pt of the native export's 146pt"
     );
 }

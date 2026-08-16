@@ -892,6 +892,14 @@ pub struct Table {
     /// from the first row AFTER the strip. Word/PowerPoint tables never set
     /// this.
     pub prints_headings: bool,
+    /// When true, `<printOptions horizontalCentered="1"/>` centres the sheet's
+    /// printed grid between the left and right print margins instead of
+    /// printing it flush to the left one (issue #1110). Only spreadsheet
+    /// tables set this; the columns it centres are the ones on this page, so
+    /// a sheet split into column groups centres each group by its own width,
+    /// as Excel prints it. Word/PowerPoint place a table box with
+    /// [`Self::alignment`] instead.
+    pub centers_between_print_margins: bool,
 }
 
 /// How a table paints borders relative to its grid boundaries.

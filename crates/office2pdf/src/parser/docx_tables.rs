@@ -202,6 +202,7 @@ pub(super) fn convert_table(
         border_paint_model: TableBorderPaintModel::WordPositiveAxisBands,
         prints_gridlines: false,
         prints_headings: false,
+        centers_between_print_margins: false,
     }
 }
 

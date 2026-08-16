@@ -3123,3 +3123,126 @@ fn a_non_wrapping_anchored_frame_sizes_to_its_content() {
     let wrapping = generate_typst(&make_doc(vec![page(true)])).unwrap().source;
     assert!(wrapping.contains("[#block(width: 65.8pt)["), "{wrapping}");
 }
+
+/// A 5 × 60pt grid on A4 portrait with 0.7in margins: the probe workbook of
+/// issue #1110, whose native Excel-for-Mac export puts the printed grid's
+/// left edge at 146pt.
+fn centered_sheet_page(centers: bool, column_widths: Vec<f64>) -> Page {
+    Page::Sheet(SheetPage {
+        name: "Sheet1".to_string(),
+        size: PageSize::default(),
+        margins: Margins {
+            top: 54.0,
+            bottom: 54.0,
+            left: 50.4,
+            right: 50.4,
+        },
+        table: Table {
+            rows: vec![TableRow {
+                minimum_height: None,
+                cells: column_widths.iter().map(|_| TableCell::default()).collect(),
+                height: None,
+            }],
+            column_widths,
+            centers_between_print_margins: centers,
+            ..Table::default()
+        },
+        header: None,
+        footer: None,
+        charts: vec![],
+        images: Vec::new(),
+        text_boxes: Vec::new(),
+    })
+}
+
+/// The inset the emitted `#pad` states, or `None` when the page emits none.
+fn sheet_centering_inset_pt(source: &str) -> Option<f64> {
+    let rest: &str = source.split_once("#pad(left: ")?.1;
+    let value: &str = rest.split_once("pt)[")?.0;
+    value.parse().ok()
+}
+
+#[test]
+fn test_horizontally_centered_sheet_insets_the_grid_from_the_left_margin() {
+    let source = generate_typst(&make_doc(vec![centered_sheet_page(true, vec![60.0; 5])]))
+        .unwrap()
+        .source;
+    let inset_pt: f64 = sheet_centering_inset_pt(&source)
+        .unwrap_or_else(|| panic!("a centred sheet must inset its grid: {source}"));
+
+    // 595.28pt page, 50.4pt margins, 300pt grid: the exact centre is 147.64pt
+    // from the page edge and Excel prints the grid at 146pt (issue #1110).
+    let grid_left_pt: f64 = 50.4 + inset_pt;
+    assert!(
+        (grid_left_pt - 146.0).abs() < 1.0,
+        "grid left edge {grid_left_pt}pt must land within 1pt of Excel's 146pt: {source}"
+    );
+}
+
+#[test]
+fn test_uncentered_sheet_keeps_its_grid_on_the_left_margin() {
+    let source = generate_typst(&make_doc(vec![centered_sheet_page(false, vec![60.0; 5])]))
+        .unwrap()
+        .source;
+    assert_eq!(
+        sheet_centering_inset_pt(&source),
+        None,
+        "a sheet without printOptions horizontalCentered must print flush: {source}"
+    );
+}
+
+#[test]
+fn test_centered_sheet_wider_than_the_printable_width_is_not_inset() {
+    // Nothing is left to centre once the grid fills the page, and a negative
+    // inset would push the first column off the left margin.
+    let source = generate_typst(&make_doc(vec![centered_sheet_page(true, vec![200.0; 5])]))
+        .unwrap()
+        .source;
+    assert_eq!(
+        sheet_centering_inset_pt(&source),
+        None,
+        "an overflowing grid must not be inset: {source}"
+    );
+}
+
+#[test]
+fn test_centered_sheet_moves_its_drawings_with_the_grid() {
+    // Excel centres the printed sheet whole: a drawing floating over the
+    // cells keeps its position relative to them (issue #1110).
+    let Page::Sheet(mut sheet) = centered_sheet_page(true, vec![60.0; 5]) else {
+        unreachable!("centered_sheet_page builds a sheet page")
+    };
+    sheet.text_boxes.push(crate::ir::SheetTextBox {
+        anchor_row: 1,
+        x_offset_pt: 120.0,
+        y_offset_pt: 0.0,
+        width: 40.0,
+        height: 20.0,
+        paragraphs: vec![Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: "floating".to_string(),
+                style: TextStyle::default(),
+                href: None,
+                footnote: None,
+            }],
+        }],
+        fill: None,
+        border: None,
+        vertical_center: false,
+    });
+    let source = generate_typst(&make_doc(vec![Page::Sheet(sheet)]))
+        .unwrap()
+        .source;
+
+    let pad_at: usize = source
+        .find("#pad(left: ")
+        .unwrap_or_else(|| panic!("a centred sheet must inset its grid: {source}"));
+    let overlay_at: usize = source
+        .find("#block(width: 100%, height: 0pt, spacing: 0pt)")
+        .unwrap_or_else(|| panic!("the drawing overlay must be emitted: {source}"));
+    assert!(
+        pad_at < overlay_at,
+        "the drawing overlay must sit inside the centering inset: {source}"
+    );
+}

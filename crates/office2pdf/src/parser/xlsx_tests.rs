@@ -1211,6 +1211,31 @@ fn test_print_options_grid_lines_flags_the_sheet_table() {
 }
 
 #[test]
+fn test_print_options_horizontal_centered_flags_the_sheet_table() {
+    let plain = build_xlsx_bytes("Sheet1", &[("A1", "x"), ("B2", "y")]);
+    let flagged =
+        inject_before_worksheet_close(&plain, r#"<printOptions horizontalCentered="1"/>"#);
+
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&flagged, &ConvertOptions::default()).unwrap();
+    let table = &get_sheet_page(&doc, 0).table;
+    assert!(
+        table.centers_between_print_margins,
+        "printOptions horizontalCentered must set the table's centering flag"
+    );
+    assert!(
+        !table.prints_gridlines && !table.prints_headings,
+        "centering alone must not turn gridlines or headings on"
+    );
+
+    let (doc, _warnings) = parser.parse(&plain, &ConvertOptions::default()).unwrap();
+    assert!(
+        !get_sheet_page(&doc, 0).table.centers_between_print_margins,
+        "a sheet without printOptions must print flush to the left margin"
+    );
+}
+
+#[test]
 fn test_print_options_headings_prepends_gutter_column_and_letter_strip() {
     let plain = build_xlsx_bytes("Sheet1", &[("A1", "x"), ("B2", "y")]);
     let flagged = inject_before_worksheet_close(&plain, r#"<printOptions headings="1"/>"#);

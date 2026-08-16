@@ -92,15 +92,45 @@ fn explicit_grid_lines_set_false_vetoes_grid_lines_but_not_headings() {
 }
 
 #[test]
-fn absent_or_unrelated_print_options_stay_off() {
+fn absent_print_options_stay_off() {
     assert_eq!(
         worksheet_print_options(NO_PRINT_OPTIONS),
         SheetPrintOptions::default()
     );
+}
+
+#[test]
+fn horizontal_centering_reads_on_its_own() {
+    // `horizontalCentered` centres the printed grid between the margins
+    // (issue #1110) and says nothing about gridlines or headings.
+    let options: SheetPrintOptions = worksheet_print_options(CENTERED_ONLY);
+    assert!(options.centers_horizontally);
+    assert!(!options.prints_gridlines);
+    assert!(!options.prints_headings);
+
+    let spelt = CENTERED_ONLY.replace(r#"horizontalCentered="1""#, r#"horizontalCentered="true""#);
+    assert!(worksheet_print_options(&spelt).centers_horizontally);
+
+    let off = CENTERED_ONLY.replace(r#"horizontalCentered="1""#, r#"horizontalCentered="0""#);
+    assert_eq!(worksheet_print_options(&off), SheetPrintOptions::default());
+
+    // Excel's own writer spells every flag out, centering included; a sheet
+    // that declares it false must not be centred.
+    let all_false = r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetData/>
+  <printOptions headings="false" gridLines="false" gridLinesSet="true" horizontalCentered="false" verticalCentered="false"/>
+</worksheet>"#;
     assert_eq!(
-        worksheet_print_options(CENTERED_ONLY),
+        worksheet_print_options(all_false),
         SheetPrintOptions::default()
     );
+}
+
+#[test]
+fn custom_view_horizontal_centering_does_not_leak_to_the_sheet() {
+    // CUSTOM_VIEW_THEN_SHEET_LEVEL centres the saved view, not the sheet.
+    let options: SheetPrintOptions = worksheet_print_options(CUSTOM_VIEW_THEN_SHEET_LEVEL);
+    assert!(!options.centers_horizontally);
 }
 
 #[test]

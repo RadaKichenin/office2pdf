@@ -400,6 +400,7 @@ fn slice_table_columns(table: &Table, start: usize, end: usize) -> Table {
         border_paint_model: table.border_paint_model,
         prints_gridlines: table.prints_gridlines,
         prints_headings: table.prints_headings,
+        centers_between_print_margins: table.centers_between_print_margins,
     }
 }
 
