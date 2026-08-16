@@ -598,6 +598,24 @@ pub enum ChartType {
     Other(String),
 }
 
+/// The point symbol a series' `<c:marker><c:symbol>` names.
+///
+/// Only the values this renderer can actually draw are listed; `dash`, `dot`,
+/// `plus`, `star` and `picture` have no shape here, so a series naming one is
+/// left to the automatic cycle rather than drawn as some other symbol.
+/// ECMA-376 §21.2.3.29 `ST_MarkerStyle` spells all of them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MarkerSymbol {
+    /// `none` — the series draws no point markers at all.
+    Off,
+    Circle,
+    Diamond,
+    Square,
+    Triangle,
+    /// `x` — a diagonal cross.
+    Cross,
+}
+
 /// A data series within a chart.
 #[derive(Debug, Clone)]
 pub struct ChartSeries {
@@ -630,6 +648,13 @@ pub struct ChartSeries {
     /// `None` — the ordinary case — means the chart's own family, which is
     /// what every series of a single-family chart is.
     pub plot_type: Option<ChartType>,
+    /// The point symbol this series' own `<c:marker><c:symbol>` names.
+    ///
+    /// `None` means the file named none this renderer draws, so the automatic
+    /// shape cycle picks one from the series index (issue #635). A file that
+    /// does name one gets that symbol whatever its index, which is what issue
+    /// #1107 was: a fourth series declaring `circle` drew the cycle's cross.
+    pub marker_symbol: Option<MarkerSymbol>,
 }
 
 impl ChartSeries {

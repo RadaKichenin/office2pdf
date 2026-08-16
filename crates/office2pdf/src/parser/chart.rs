@@ -11,6 +11,7 @@ use super::xml_util;
 use crate::ir::{
     AxisTickMark, BarBandLayout, Chart, ChartAreaOutline, ChartGrouping, ChartHost, ChartLine,
     ChartSeries, ChartTextStyle, ChartType, Color, DataLabelPosition, DataLabels, LegendPosition,
+    MarkerSymbol,
 };
 
 /// Mapping from XML chart element tag names to their corresponding `ChartType`.
@@ -805,6 +806,7 @@ fn parse_single_series(
     let mut point_fills: std::collections::BTreeMap<usize, Color> =
         std::collections::BTreeMap::new();
     let mut number_format: Option<String> = None;
+    let mut marker_symbol: Option<MarkerSymbol> = None;
 
     loop {
         match reader.read_event() {
@@ -826,6 +828,9 @@ fn parse_single_series(
                         point_fills.insert(index, color);
                     }
                 }
+                // Consumed whole for the same reason as `<c:dLbls>`: the
+                // marker carries an `<c:spPr>` for the symbol's own fill.
+                b"marker" => marker_symbol = parse_series_marker(reader),
                 // Consumed whole: `<c:dLbls>` carries an `<c:spPr>` of its
                 // own for the label box, which would otherwise be read as the
                 // series fill.
@@ -862,6 +867,7 @@ fn parse_single_series(
             // Filled in by the caller, which knows the family element this
             // series was read inside (issue #1067).
             plot_type: None,
+            marker_symbol,
         },
         categories,
     )
@@ -941,6 +947,55 @@ fn data_label_position_for(value: &str) -> Option<DataLabelPosition> {
         "outEnd" => Some(DataLabelPosition::OutsideEnd),
         "inEnd" => Some(DataLabelPosition::InsideEnd),
         "inBase" => Some(DataLabelPosition::InsideBase),
+        _ => None,
+    }
+}
+
+/// Read a `<c:ser><c:marker>` into the point symbol it names.
+///
+/// Consumed whole whether or not it names one this renderer draws: the element
+/// carries an `<c:spPr>` for the symbol's own fill, which the flat series loop
+/// would otherwise read as the series fill.
+///
+/// The `<c:marker val="1"/>` that sits beside the `<c:ser>` elements of a
+/// `<c:lineChart>` is a different element — `CT_Boolean`, saying whether the
+/// family shows markers at all — and never reaches here, being empty.
+fn parse_series_marker(reader: &mut Reader<&[u8]>) -> Option<MarkerSymbol> {
+    let mut symbol: Option<MarkerSymbol> = None;
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))
+                if e.local_name().as_ref() == b"symbol" =>
+            {
+                symbol = xml_util::get_attr_str(e, b"val")
+                    .as_deref()
+                    .and_then(marker_symbol_for);
+            }
+            Ok(Event::End(ref e)) if e.local_name().as_ref() == b"marker" => break,
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+
+    symbol
+}
+
+/// `<c:symbol val>` as ECMA-376 §21.2.3.29 `ST_MarkerStyle` names the symbols.
+///
+/// `auto` is the file asking for the automatic symbol, so it maps to `None`
+/// like an absent element. `dash`, `dot`, `plus`, `star` and `picture` map
+/// there too, for want of a shape to draw them as: the automatic cycle at
+/// least keeps adjacent series apart, where substituting one named symbol for
+/// another would state something the file did not.
+fn marker_symbol_for(value: &str) -> Option<MarkerSymbol> {
+    match value {
+        "none" => Some(MarkerSymbol::Off),
+        "circle" => Some(MarkerSymbol::Circle),
+        "diamond" => Some(MarkerSymbol::Diamond),
+        "square" => Some(MarkerSymbol::Square),
+        "triangle" => Some(MarkerSymbol::Triangle),
+        "x" => Some(MarkerSymbol::Cross),
         _ => None,
     }
 }

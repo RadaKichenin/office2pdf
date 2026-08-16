@@ -585,6 +585,112 @@ fn test_a_data_label_fill_does_not_shadow_a_declared_series_fill() {
     assert_eq!(chart.series[0].fill, Some(Color::new(0x4f, 0x81, 0xbd)));
 }
 
+// ----- Series point markers (issue #1107) -----
+
+/// The audited workbook's `<c:lineChart>` series carries its marker between
+/// `<c:spPr>` and `<c:dLbls>`; `marker_xml` goes in that slot.
+fn line_series_with_marker(marker_xml: &str) -> String {
+    bar_chart_xml(r#"<c:barDir val="col"/>"#)
+        .replace("c:barChart", "c:lineChart")
+        .replace("<c:barDir val=\"col\"/>", "")
+        .replace("<c:cat>", &format!("{marker_xml}<c:cat>"))
+}
+
+#[test]
+fn test_a_series_marker_symbol_is_read() {
+    // The `Amount Spent` series of the audited workbook, verbatim. It names its
+    // symbol, so nothing about the series' position in the chart may decide it
+    // (issue #1107).
+    let xml = line_series_with_marker(
+        r#"<c:marker><c:symbol val="circle"/><c:size val="5"/><c:spPr><a:solidFill><a:srgbClr val="008889"/></a:solidFill></c:spPr></c:marker>"#,
+    );
+
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
+
+    assert_eq!(chart.series[0].marker_symbol, Some(MarkerSymbol::Circle));
+}
+
+#[test]
+fn test_every_marker_symbol_this_renderer_draws_is_mapped() {
+    for (value, expected) in [
+        ("none", MarkerSymbol::Off),
+        ("circle", MarkerSymbol::Circle),
+        ("diamond", MarkerSymbol::Diamond),
+        ("square", MarkerSymbol::Square),
+        ("triangle", MarkerSymbol::Triangle),
+        ("x", MarkerSymbol::Cross),
+    ] {
+        let xml = line_series_with_marker(&format!(
+            r#"<c:marker><c:symbol val="{value}"/></c:marker>"#
+        ));
+
+        let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
+
+        assert_eq!(
+            chart.series[0].marker_symbol,
+            Some(expected),
+            "<c:symbol val=\"{value}\"/> must parse as {expected:?}"
+        );
+    }
+}
+
+#[test]
+fn test_a_symbol_with_no_shape_here_is_left_to_the_automatic_cycle() {
+    // `auto` is the file asking for the automatic symbol outright; the rest are
+    // symbols this renderer has no shape for, and substituting another named
+    // one would state something the file did not.
+    for value in ["auto", "dash", "dot", "plus", "star", "picture"] {
+        let xml = line_series_with_marker(&format!(
+            r#"<c:marker><c:symbol val="{value}"/></c:marker>"#
+        ));
+
+        let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
+
+        assert_eq!(
+            chart.series[0].marker_symbol, None,
+            "<c:symbol val=\"{value}\"/> has no shape here, so the cycle decides"
+        );
+    }
+}
+
+#[test]
+fn test_a_series_without_a_marker_leaves_the_shape_cycle_to_decide() {
+    let xml = line_series_with_marker("");
+
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
+
+    assert_eq!(chart.series[0].marker_symbol, None);
+}
+
+#[test]
+fn test_a_marker_fill_is_not_mistaken_for_the_series_fill() {
+    // `<c:marker>` carries an `<c:spPr>` for the symbol's own fill. The
+    // series-level match is flat, so without consuming the element that fill
+    // would be read as the series' own — and this series declares none.
+    let xml = line_series_with_marker(
+        r#"<c:marker><c:symbol val="circle"/><c:spPr><a:solidFill><a:srgbClr val="008889"/></a:solidFill></c:spPr></c:marker>"#,
+    );
+
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
+
+    assert_eq!(chart.series[0].fill, None);
+    assert_eq!(chart.series[0].values, vec![23334.0, 8331.0, 4120.0]);
+}
+
+#[test]
+fn test_the_line_family_show_markers_flag_is_not_read_as_a_series_symbol() {
+    // `<c:marker val="1"/>` beside the `<c:ser>` elements is `CT_Boolean`, not
+    // the series' `CT_Marker`. Reading it as a symbol would silence the cycle
+    // for every line chart that shows markers at all.
+    let xml = line_series_with_marker("")
+        .replace("</c:lineChart>", "<c:marker val=\"1\"/></c:lineChart>");
+
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
+
+    assert_eq!(chart.series[0].marker_symbol, None);
+    assert_eq!(chart.series[0].values, vec![23334.0, 8331.0, 4120.0]);
+}
+
 // ----- Unmapped chart families (issue #544) -----
 
 /// Wrap `chart_element` — a whole `<c:fooChart>` — in a chartSpace.

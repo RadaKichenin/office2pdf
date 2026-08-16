@@ -1,5 +1,5 @@
 use super::*;
-use crate::ir::{ChartAreaOutline, DataLabelPosition};
+use crate::ir::{ChartAreaOutline, DataLabelPosition, MarkerSymbol};
 use crate::render::font_subst;
 
 /// How a chart is drawn. Selecting the variant once lets the atomicity decision
@@ -238,7 +238,7 @@ const CHART_SERIES_COLORS: [&str; 6] = [
 /// is not a measurement of Excel, so it does not disprove the report; it means
 /// there was nothing to size against, and guessing would be as likely to move
 /// away from Excel as toward it.
-const SERIES_MARKER_SIZE_PT: f64 = 5.0;
+pub(super) const SERIES_MARKER_SIZE_PT: f64 = 5.0;
 
 /// Weight a line series' polyline is stroked at.
 ///
@@ -287,15 +287,33 @@ const LEGEND_KEY_LABEL_GAP_PT: f64 = 0.0;
 ///
 /// Entries beyond the second remain the order #635 states Excel uses, with
 /// nothing here checking them; that workbook has only two series.
-fn write_series_marker(out: &mut String, series_index: usize, x: f64, y: f64, color: &str) {
-    out.push_str(&series_marker_markup(series_index, x, y, color));
+///
+/// `symbol` is what the series' own `<c:marker><c:symbol>` names, and outranks
+/// the cycle entirely: the sequence only ever stood in for a symbol the file
+/// left automatic (issue #1107).
+fn write_series_marker(
+    out: &mut String,
+    series_index: usize,
+    symbol: Option<MarkerSymbol>,
+    x: f64,
+    y: f64,
+    color: &str,
+) {
+    out.push_str(&series_marker_markup(series_index, symbol, x, y, color));
 }
 
-/// The `#place`d markup for one series marker centred on (`x`, `y`).
+/// The `#place`d markup for one series marker centred on (`x`, `y`), and the
+/// empty string for a series that draws none.
 ///
 /// Returned rather than written so the legend key can embed the same marker the
 /// plot draws, instead of restating the shape cycle (#801).
-fn series_marker_markup(series_index: usize, x: f64, y: f64, color: &str) -> String {
+fn series_marker_markup(
+    series_index: usize,
+    symbol: Option<MarkerSymbol>,
+    x: f64,
+    y: f64,
+    color: &str,
+) -> String {
     let size: f64 = SERIES_MARKER_SIZE_PT;
     let half: f64 = size / 2.0;
     let left: String = format_f64(x - half);
@@ -303,25 +321,42 @@ fn series_marker_markup(series_index: usize, x: f64, y: f64, color: &str) -> Str
     let full: String = format_f64(size);
     let mid: String = format_f64(half);
 
-    let shape: String = match series_index % 4 {
-        // Diamond.
-        0 => format!(
+    let circle = || -> String { format!("circle(radius: {mid}pt, fill: {color}, stroke: none)") };
+    let diamond = || -> String {
+        format!(
             "polygon(fill: {color}, stroke: none, ({mid}pt, 0pt), ({full}pt, {mid}pt), ({mid}pt, {full}pt), (0pt, {mid}pt))"
-        ),
-        // Square.
-        1 => format!("rect(width: {full}pt, height: {full}pt, fill: {color}, stroke: none)"),
-        // Triangle.
-        2 => format!(
+        )
+    };
+    let square = || -> String {
+        format!("rect(width: {full}pt, height: {full}pt, fill: {color}, stroke: none)")
+    };
+    let triangle = || -> String {
+        format!(
             "polygon(fill: {color}, stroke: none, ({mid}pt, 0pt), ({full}pt, {full}pt), (0pt, {full}pt))"
-        ),
-        // Cross, as a filled X.
-        _ => {
-            let thin: String = format_f64(size / 3.0);
-            let thick: String = format_f64(size * 2.0 / 3.0);
-            format!(
-                "polygon(fill: {color}, stroke: none, ({thin}pt, 0pt), ({thick}pt, 0pt), ({thick}pt, {thin}pt), ({full}pt, {thin}pt), ({full}pt, {thick}pt), ({thick}pt, {thick}pt), ({thick}pt, {full}pt), ({thin}pt, {full}pt), ({thin}pt, {thick}pt), (0pt, {thick}pt), (0pt, {thin}pt), ({thin}pt, {thin}pt))"
-            )
-        }
+        )
+    };
+    // A filled X.
+    let cross = || -> String {
+        let thin: String = format_f64(size / 3.0);
+        let thick: String = format_f64(size * 2.0 / 3.0);
+        format!(
+            "polygon(fill: {color}, stroke: none, ({thin}pt, 0pt), ({thick}pt, 0pt), ({thick}pt, {thin}pt), ({full}pt, {thin}pt), ({full}pt, {thick}pt), ({thick}pt, {thick}pt), ({thick}pt, {full}pt), ({thin}pt, {full}pt), ({thin}pt, {thick}pt), (0pt, {thick}pt), (0pt, {thin}pt), ({thin}pt, {thin}pt))"
+        )
+    };
+
+    let shape: String = match symbol {
+        Some(MarkerSymbol::Off) => return String::new(),
+        Some(MarkerSymbol::Circle) => circle(),
+        Some(MarkerSymbol::Diamond) => diamond(),
+        Some(MarkerSymbol::Square) => square(),
+        Some(MarkerSymbol::Triangle) => triangle(),
+        Some(MarkerSymbol::Cross) => cross(),
+        None => match series_index % 4 {
+            0 => diamond(),
+            1 => square(),
+            2 => triangle(),
+            _ => cross(),
+        },
     };
     format!("#place(top + left, dx: {left}pt, dy: {top}pt, {shape})\n")
 }
@@ -343,7 +378,7 @@ fn plots_as_line(chart: &Chart, series: &crate::ir::ChartSeries) -> bool {
 
 /// The legend key for a series drawn as a line: a sample of the plotted stroke
 /// carrying the same marker the series draws on each of its points (#801).
-fn line_legend_key(series_index: usize, color: &str) -> String {
+fn line_legend_key(series_index: usize, symbol: Option<MarkerSymbol>, color: &str) -> String {
     let key_mid: f64 = SERIES_MARKER_SIZE_PT / 2.0;
     format!(
         "#box(width: {}pt, height: {}pt, baseline: {}pt)[\
@@ -355,7 +390,14 @@ fn line_legend_key(series_index: usize, color: &str) -> String {
         format_f64(key_mid),
         format_f64(LEGEND_KEY_LEN_PT),
         format_f64(SERIES_LINE_PT),
-        series_marker_markup(series_index, LEGEND_KEY_LEN_PT / 2.0, key_mid, color).trim_end()
+        series_marker_markup(
+            series_index,
+            symbol,
+            LEGEND_KEY_LEN_PT / 2.0,
+            key_mid,
+            color
+        )
+        .trim_end()
     )
 }
 
@@ -2536,7 +2578,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
             );
         }
         for (x, y) in &points {
-            write_series_marker(out, s_index, *x, *y, &color);
+            write_series_marker(out, s_index, s.marker_symbol, *x, *y, &color);
         }
     }
 
@@ -2702,7 +2744,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
         // swatch for a column, a stroke-and-marker sample for a line laid over
         // them (issue #1067).
         let key: String = if overlaid[s_index] {
-            line_legend_key(s_index, &color)
+            line_legend_key(s_index, s.marker_symbol, &color)
         } else {
             format!(
                 "#box(width: {}pt, height: {}pt, fill: {})",
@@ -2939,9 +2981,9 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
                 format_f64(SERIES_LINE_PT)
             );
         }
-        // Point markers, cycling by series index.
+        // Point markers: the symbol the series names, else the shape cycle.
         for (x, y) in &points {
-            write_series_marker(out, s_index, *x, *y, &color);
+            write_series_marker(out, s_index, s.marker_symbol, *x, *y, &color);
         }
     }
 
@@ -3027,7 +3069,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
                 side_y_shift: 0.0,
             },
         );
-        let key: String = line_legend_key(s_index, &color);
+        let key: String = line_legend_key(s_index, s.marker_symbol, &color);
         let _ = writeln!(
             out,
             "#place(top + left, dx: {}pt, dy: {}pt, box[{key}#h({}pt)#text(size: {}pt)[{}]])",
@@ -3224,7 +3266,7 @@ fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64
             format_f64(SERIES_LINE_PT)
         );
         for (x, y) in &points {
-            write_series_marker(out, series_index, *x, *y, &color);
+            write_series_marker(out, series_index, series.marker_symbol, *x, *y, &color);
         }
     }
 
@@ -3284,20 +3326,7 @@ fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64
                     side_y_shift: 0.0,
                 },
             );
-            let key_mid: f64 = SERIES_MARKER_SIZE_PT / 2.0;
-            let key: String = format!(
-                "#box(width: {}pt, height: {}pt, baseline: {}pt)[\
-                 #place(top + left, dx: 0pt, dy: {}pt, line(end: ({}pt, 0pt), stroke: {}pt + {color}))\
-                 {}]",
-                format_f64(LEGEND_KEY_LEN_PT),
-                format_f64(SERIES_MARKER_SIZE_PT),
-                format_f64(LEGEND_KEY_BASELINE_PT),
-                format_f64(key_mid),
-                format_f64(LEGEND_KEY_LEN_PT),
-                format_f64(SERIES_LINE_PT),
-                series_marker_markup(series_index, LEGEND_KEY_LEN_PT / 2.0, key_mid, &color)
-                    .trim_end()
-            );
+            let key: String = line_legend_key(series_index, series.marker_symbol, &color);
             let _ = writeln!(
                 out,
                 "#place(top + left, dx: {}pt, dy: {}pt, box[{key}#h({}pt)#text(size: {}pt)[{}]])",
