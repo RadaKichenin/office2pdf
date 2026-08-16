@@ -913,6 +913,35 @@ fn picture_with_effect_bearing_blip_is_still_drawn() {
     );
 }
 
+/// A drawing anchor spans the rows Excel *prints*, not the heights the
+/// worksheet declares. The same fixture's Excel for Mac export draws its
+/// picture 105.00pt tall with its top 90.00pt below the first row — seven and
+/// six 15pt tracks — while the sheet declares `defaultRowHeight="18"` and
+/// `ht="16"`, and Excel honours neither: it recomputes 16pt rows from the
+/// Calibri 12 Normal font and prints them at the 15pt track that font's grid
+/// compacts to (issue #1102).
+///
+/// The picture's width is left out on purpose. Excel's columns here measure
+/// 65.00pt in the app and in the export alike, matching ours, and the 11.00pt
+/// the export is narrower comes from a `to` `colOff` that overruns its column
+/// — a separate rule, tracked in #1149.
+#[test]
+fn a_picture_anchor_spans_the_printed_row_track() {
+    let pages = sheet_pages("issue_1066_blip_effect_picture.xlsx");
+    let images: Vec<_> = pages.iter().flat_map(|sp| sp.images.iter()).collect();
+    assert_eq!(images.len(), 1, "the drawing anchors one picture");
+    let height: f64 = images[0].image.height.expect("a two-cell anchor sizes");
+    assert!(
+        (height - 105.0).abs() < 0.01,
+        "seven printed 15pt tracks, got {height}"
+    );
+    assert!(
+        (images[0].y_offset_pt - 90.0).abs() < 0.01,
+        "six printed 15pt tracks above the anchor row, got {}",
+        images[0].y_offset_pt
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Worksheet drawing scheme colors resolve against the theme (issue #430)
 // ---------------------------------------------------------------------------
@@ -938,19 +967,21 @@ fn theme_color_drawing_resolves_scheme_fills() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn theme_color_drawing_anchors_span_the_worksheet_row_heights() {
+fn theme_color_drawing_anchors_span_six_eighteen_point_rows() {
     // The three shapes are `xdr:twoCellAnchor`s spanning rows 3..9 of a sheet
-    // whose default row height is 18pt, so Excel draws them 6 * 18 = 108pt
-    // tall - measured at 108pt on the native export. Anchors resolved through
-    // the compacted PDF grid track instead, which rounds 18pt to 17pt and left
-    // every shape 6pt short (issue #460).
+    // whose rows measure 18pt in the worksheet, so Excel draws them
+    // 6 * 18 = 108pt tall - measured at 108pt on the native export, whose
+    // printed grid keeps that 18pt because this workbook's Normal font
+    // resolves through a per-script theme scheme and so does not compact
+    // (issues #460, #1102). Resolving the anchor through a track that rounded
+    // 18pt to 17pt left every shape 6pt short.
     let pages = sheet_pages("theme_color_drawing.xlsx");
     let boxes: Vec<_> = pages.iter().flat_map(|sp| sp.text_boxes.iter()).collect();
     assert_eq!(boxes.len(), 3, "fixture drawing holds three text boxes");
     for text_box in &boxes {
         assert!(
             (text_box.height - 108.0).abs() < 0.5,
-            "anchor should span six 18pt worksheet rows, got {}",
+            "anchor should span six 18pt rows, got {}",
             text_box.height
         );
     }

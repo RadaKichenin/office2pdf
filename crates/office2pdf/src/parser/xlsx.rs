@@ -226,24 +226,6 @@ fn title_column_indices(print_titles: PrintTitles, ctx: &SheetContext) -> Option
     Some((start_idx as usize, end_idx as usize))
 }
 
-/// The default height of a row that records no height of its own.
-///
-/// Excel does not honour the `sheetFormatPr defaultRowHeight` hint for such
-/// rows unless the sheet marks it `customHeight`: it recomputes the default
-/// from the workbook's Normal font (issue #715). On the `WithDrawing.xlsx`
-/// native export (declared default 15, no `customHeight`) every
-/// dimension-less row lays out at 17pt — an 8-row picture anchor measures
-/// 148pt against the 132pt the declared hint gives — which is the same
-/// recompute the printed grid was later measured to apply, so both paths
-/// read it from one place (issue #1047).
-fn default_row_height_pt(
-    sheet: &umya_spreadsheet::Worksheet,
-    normal_font: Option<&xlsx_cells::NormalFont>,
-) -> f64 {
-    xlsx_cells::recomputed_default_row_height_pt(sheet, normal_font)
-        .unwrap_or_else(|| xlsx_cells::declared_default_row_height_pt(sheet))
-}
-
 /// Convert a raw drawing anchor into a render-ready image: 1-indexed anchor
 /// row plus a size in points resolved against the sheet's column widths and
 /// row heights (twoCellAnchor) or the declared extent (oneCellAnchor).
@@ -265,18 +247,16 @@ fn anchored_image(
             ctx.default_column_width_pt
         }
     };
-    // Excel resolves a drawing's anchor against the worksheet's own row
-    // heights, not against the vertically compacted track its PDF grid
-    // prints. Measured on the native export: a two-cell anchor spanning six
-    // 18pt rows is 108pt tall, while the printed grid rounds those rows to
-    // 17pt each. Running the anchor through the grid conversion left every
-    // shape 6pt short (issue #460).
+    // Excel prints a drawing against the same grid it prints the cells
+    // against, so an anchor spans printed tracks rather than the heights the
+    // worksheet holds. The two agree wherever a workbook's grid does not
+    // compact — `theme_color_drawing.xlsx` spans six 18pt rows for 108pt
+    // either way (issue #460) — and part where it does: the picture of
+    // `issue_1066_blip_effect_picture.xlsx` sits 96.00pt down and 112.00pt
+    // tall in the worksheet over 16pt rows, and 90.00pt down and 105.00pt
+    // tall in the export over the 15pt track (issue #1102).
     let row_height_at = |row_zero_based: u32| -> f64 {
-        sheet
-            .get_row_dimension(&(row_zero_based + 1))
-            .map(|row| *row.get_height())
-            .filter(|height| *height > 0.0)
-            .unwrap_or_else(|| default_row_height_pt(sheet, ctx.normal_font.as_ref()))
+        xlsx_cells::printed_grid_row_height_pt(sheet, row_zero_based + 1, ctx.normal_font.as_ref())
     };
 
     let (width, height): (f64, f64) =
