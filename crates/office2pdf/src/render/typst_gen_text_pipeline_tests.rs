@@ -2332,3 +2332,214 @@ fn test_tracked_run_in_a_substituted_face_stays_unkerned() {
         "a tracked run whose face is substituted stays unkerned: {source}"
     );
 }
+
+// ── Excel's whole-point advance grid (issue #1088) ───────────────
+
+/// A spreadsheet page whose single cell holds `text` in `style`.
+fn sheet_page_with_cell(text: &str, style: TextStyle) -> Page {
+    Page::Sheet(SheetPage {
+        name: String::new(),
+        size: PageSize::default(),
+        margins: Margins::default(),
+        table: Table {
+            rows: vec![TableRow {
+                cells: vec![TableCell {
+                    content: vec![styled_paragraph(text, style)],
+                    ..TableCell::default()
+                }],
+                height: None,
+                minimum_height: None,
+            }],
+            column_widths: vec![400.0],
+            ..Table::default()
+        },
+        header: None,
+        footer: None,
+        charts: vec![],
+        images: Vec::new(),
+        text_boxes: Vec::new(),
+    })
+}
+
+/// The first `tracking:` the generator emitted, in points.
+fn emitted_tracking_pt(source: &str) -> Option<f64> {
+    let after_tracking: &str = source.split_once("tracking: ")?.1;
+    let (value, _) = after_tracking.split_once("pt")?;
+    value.parse().ok()
+}
+
+/// The embedded Libertinus Serif faces make this deterministic on every
+/// target, the same pin the digit-advance (#621) and token-advance (#624)
+/// measurements take.
+///
+/// Ground truth is the face's own `hmtx`, read independently of this crate:
+/// "Total" advances 0.597, 0.504, 0.316, 0.457 and 0.264em. The four that
+/// carry a gap occupy 18.74pt at 10pt against Excel's 6 + 5 + 3 + 5 = 19pt, so
+/// each gap widens by 0.065pt.
+#[test]
+fn test_sheet_cell_line_takes_excels_whole_point_advance_grid() {
+    let doc = make_doc(vec![sheet_page_with_cell(
+        "Total",
+        TextStyle {
+            font_family: Some("Libertinus Serif".to_string()),
+            font_size: Some(10.0),
+            ..TextStyle::default()
+        },
+    )]);
+
+    let source = generate_typst(&doc).unwrap().source;
+    let tracking: f64 =
+        emitted_tracking_pt(&source).unwrap_or_else(|| panic!("no tracking emitted: {source}"));
+    assert!(
+        (tracking - 0.065).abs() < 1e-9,
+        "'Total' at 10pt should be tracked 0.065pt onto the whole-point grid, got {tracking}"
+    );
+}
+
+/// The grid is not a widening: an advance just over a half point rounds *down*
+/// and the line comes out narrower than the face sets it.
+///
+/// "Achievement" at 9pt: its ten gap-carrying advances sum to 45.918pt of
+/// `hmtx` and quantize to 45pt, so each gap loses 0.0918pt. A model that only
+/// ever added width — the direction issue #1088 measures on 9pt Arial — would
+/// get the sign wrong here.
+#[test]
+fn test_sheet_cell_grid_narrows_a_line_whose_advances_round_down() {
+    let doc = make_doc(vec![sheet_page_with_cell(
+        "Achievement",
+        TextStyle {
+            font_family: Some("Libertinus Serif".to_string()),
+            font_size: Some(9.0),
+            ..TextStyle::default()
+        },
+    )]);
+
+    let source = generate_typst(&doc).unwrap().source;
+    let tracking: f64 =
+        emitted_tracking_pt(&source).unwrap_or_else(|| panic!("no tracking emitted: {source}"));
+    assert!(
+        (tracking - -0.0918).abs() < 1e-9,
+        "'Achievement' at 9pt should be tracked -0.0918pt, got {tracking}"
+    );
+}
+
+/// A bold cell is quantized on the bold face's advances, which are not the
+/// regular face's: bold "Total"'s gap-carrying advances sum to 20.67pt at 10pt
+/// and quantize to 22pt, giving 0.3325pt against the regular face's 0.065pt.
+#[test]
+fn test_sheet_cell_grid_measures_the_runs_own_weight() {
+    let doc = make_doc(vec![sheet_page_with_cell(
+        "Total",
+        TextStyle {
+            font_family: Some("Libertinus Serif".to_string()),
+            font_size: Some(10.0),
+            bold: Some(true),
+            ..TextStyle::default()
+        },
+    )]);
+
+    let source = generate_typst(&doc).unwrap().source;
+    let tracking: f64 =
+        emitted_tracking_pt(&source).unwrap_or_else(|| panic!("no tracking emitted: {source}"));
+    assert!(
+        (tracking - 0.3325).abs() < 1e-9,
+        "bold 'Total' at 10pt should be tracked 0.3325pt, got {tracking}"
+    );
+}
+
+/// Excel accumulates the bare `hmtx` advances, so a pair kern landing on top of
+/// the correction would move every glyph after it back off the grid. The run
+/// states the decision on itself rather than leaning on an enclosing rule.
+#[test]
+fn test_sheet_cell_grid_run_is_unkerned_and_unligated() {
+    let doc = make_doc(vec![sheet_page_with_cell(
+        "Total",
+        TextStyle {
+            font_family: Some("Libertinus Serif".to_string()),
+            font_size: Some(10.0),
+            ..TextStyle::default()
+        },
+    )]);
+
+    let source = generate_typst(&doc).unwrap().source;
+    assert!(
+        source.contains("kerning: false"),
+        "a grid-corrected cell run must reach the engine unkerned: {source}"
+    );
+    assert!(
+        source.contains("ligatures: false"),
+        "a ligature would swallow the gaps the correction rides in: {source}"
+    );
+}
+
+/// The grid is Excel's alone. A Word page sets the same run on the face's own
+/// advances, and no native `docx` export puts its glyph origins on whole
+/// points.
+#[test]
+fn test_flow_page_keeps_the_faces_own_advances() {
+    let doc = make_doc(vec![make_flow_page(vec![styled_paragraph(
+        "Total",
+        TextStyle {
+            font_family: Some("Libertinus Serif".to_string()),
+            font_size: Some(10.0),
+            ..TextStyle::default()
+        },
+    )])]);
+
+    let source = generate_typst(&doc).unwrap().source;
+    assert_eq!(
+        emitted_tracking_pt(&source),
+        None,
+        "a Word paragraph must not be tracked onto Excel's grid: {source}"
+    );
+}
+
+/// Typst drops the tracking after a shaped item's last glyph, so a one-glyph
+/// cell has no gap to carry a correction; emitting one would state a spacing
+/// the engine then ignores while costing the run its kerning and ligatures.
+#[test]
+fn test_single_glyph_sheet_cell_is_left_alone() {
+    let doc = make_doc(vec![sheet_page_with_cell(
+        "7",
+        TextStyle {
+            font_family: Some("Libertinus Serif".to_string()),
+            font_size: Some(10.0),
+            ..TextStyle::default()
+        },
+    )]);
+
+    let source = generate_typst(&doc).unwrap().source;
+    assert_eq!(
+        emitted_tracking_pt(&source),
+        None,
+        "a one-glyph cell has no gap to track: {source}"
+    );
+}
+
+/// The correction is anchored on the run's last origin, not on its total width.
+///
+/// A two-glyph cell is where the two anchors separate most: "OK" advances 7.02
+/// and 6.37pt at Libertinus Serif 10pt, and Excel prints the `K` exactly 7pt
+/// after the `O`. Spreading both roundings over the one gap there is — the
+/// anchor that would make the run's *total* advance exact — pulls that gap to
+/// 6.63pt instead, which is how the corresponding Arial cell in the inventory
+/// mock came out 4% wide.
+#[test]
+fn test_sheet_cell_grid_puts_the_last_origin_on_the_grid() {
+    let doc = make_doc(vec![sheet_page_with_cell(
+        "OK",
+        TextStyle {
+            font_family: Some("Libertinus Serif".to_string()),
+            font_size: Some(10.0),
+            ..TextStyle::default()
+        },
+    )]);
+
+    let source = generate_typst(&doc).unwrap().source;
+    let tracking: f64 =
+        emitted_tracking_pt(&source).unwrap_or_else(|| panic!("no tracking emitted: {source}"));
+    assert!(
+        (tracking - -0.02).abs() < 1e-9,
+        "'OK' should be tracked -0.02pt so its second glyph lands 7pt along, got {tracking}"
+    );
+}

@@ -1084,6 +1084,21 @@ pub(crate) fn max_digit_advance_em(_family: &str) -> Option<f64> {
 /// helpers as well.
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn text_advance_em(family: &str, bold: bool, text: &str) -> Option<f64> {
+    Some(glyph_advances_em(family, bold, text)?.iter().sum())
+}
+
+/// Each character of `text` measured on its own, in em units, on the face
+/// `family` resolves to at the requested weight.
+///
+/// [`text_advance_em`] is this sum. A caller that quantizes advances one glyph
+/// at a time — Excel rounds every one to a whole point before accumulating it
+/// (issue #1088) — cannot work from the sum, because rounding the total is a
+/// different number from the total of the rounded parts.
+///
+/// The same caveats hold: kerning and ligatures are ignored, and `None` comes
+/// back when no face resolves or any character lacks a glyph.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn glyph_advances_em(family: &str, bold: bool, text: &str) -> Option<Vec<f64>> {
     use std::collections::HashMap;
     use std::sync::Mutex;
     type ResolvedFaceCache = HashMap<(String, bool), Option<typst::text::Font>>;
@@ -1133,18 +1148,23 @@ pub(crate) fn text_advance_em(family: &str, bold: bool, text: &str) -> Option<f6
     let font: typst::text::Font = font?;
     let ttf = font.ttf();
     let upem: f64 = f64::from(ttf.units_per_em()).max(1.0);
-    let mut total_em: f64 = 0.0;
+    let mut advances_em: Vec<f64> = Vec::with_capacity(text.chars().count());
     for character in text.chars() {
         let glyph_advance: u16 = ttf
             .glyph_index(character)
             .and_then(|glyph| ttf.glyph_hor_advance(glyph))?;
-        total_em += f64::from(glyph_advance) / upem;
+        advances_em.push(f64::from(glyph_advance) / upem);
     }
-    Some(total_em)
+    Some(advances_em)
 }
 
 #[cfg(target_arch = "wasm32")]
 pub(crate) fn text_advance_em(_family: &str, _bold: bool, _text: &str) -> Option<f64> {
+    None
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn glyph_advances_em(_family: &str, _bold: bool, _text: &str) -> Option<Vec<f64>> {
     None
 }
 

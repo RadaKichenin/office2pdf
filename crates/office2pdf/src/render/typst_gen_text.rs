@@ -27,6 +27,27 @@ const EAST_ASIAN_AUTO_SPACE_EM: f64 = 0.25;
 /// sub-point error otherwise compounds across long slide lines (issue #661).
 const POWERPOINT_ADVANCE_GRID_PT: f64 = 0.125;
 
+/// Excel rounds every glyph advance to this grid before accumulating it into a
+/// cell line.
+///
+/// Measured on the ten committed XLSX golden mocks: reconstructing each
+/// line from `round_half_up(hmtx_advance x size)` reproduces all 3,656 glyph
+/// origins of their first pages — Arial, Arial Bold, Malgun Gothic and Malgun
+/// Gothic Bold at 9, 10 and 14pt — to within the 0.23pt the export's own
+/// integer `TJ` offsets can express. Rounding the *running pen position*
+/// instead, the other model that puts origins on whole points, misses: on
+/// `Region` at Malgun Gothic 12 it predicts 53, 60, 67, 74, 77, 84 where the
+/// export prints 53, 60, 66, 73, 76, 83 (issue #1088).
+///
+/// The face's own fractional advances are therefore ~5% narrow on a long line
+/// (19.5pt over 99 glyphs of 9pt Arial), because the rounding is biased upward
+/// for the many advances that land just below a half point.
+///
+/// The whole-point grid is the same quantum Excel's column widths take
+/// (issue #621); Word does not share it — no `docx` golden mock's export puts
+/// its origins on whole points.
+const SHEET_ADVANCE_GRID_PT: f64 = 1.0;
+
 /// Emit the ligature rule every PowerPoint slide follows.
 ///
 /// PowerPoint does not apply the OpenType `liga`/`clig` features. DrawingML has
@@ -2883,7 +2904,7 @@ fn write_run_segment(
         {
             write_powerpoint_grid_run_content(out, &source, &escaped, style)
         }
-        None => write_run_content(out, &escaped, style),
+        None => write_run_content(out, &source, &escaped, style),
     }
 
     for _ in &wrappers {
@@ -2923,10 +2944,10 @@ fn write_powerpoint_grid_run_content(
     escaped: &str,
     style: &TextStyle,
 ) {
-    let wrapped = has_text_properties(style) || needs_kerning_wrapper(style, escaped);
+    let wrapped = has_text_properties(style) || needs_kerning_wrapper(style, escaped, source);
     if wrapped {
         out.push_str("#text(");
-        write_text_params_for_text(out, style, escaped);
+        write_text_params_for_run(out, style, escaped, source);
         out.push_str(")[");
     }
 
@@ -3186,10 +3207,10 @@ fn collect_formatting_wrappers(run: &Run) -> Vec<String> {
 /// Writes the innermost content of a run: either `#text(params)[escaped]`
 /// when text properties are present, or the escaped text directly (with a
 /// `#[...]` safety wrapper when needed to prevent Typst syntax ambiguity).
-fn write_run_content(out: &mut String, escaped: &str, style: &TextStyle) {
-    if has_text_properties(style) || needs_kerning_wrapper(style, escaped) {
+fn write_run_content(out: &mut String, source: &str, escaped: &str, style: &TextStyle) {
+    if has_text_properties(style) || needs_kerning_wrapper(style, escaped, source) {
         out.push_str("#text(");
-        write_text_params_for_text(out, style, escaped);
+        write_text_params_for_run(out, style, escaped, source);
         out.push_str(")[");
         out.push_str(escaped);
         out.push(']');
@@ -3290,23 +3311,45 @@ pub(super) fn write_text_params(out: &mut String, style: &TextStyle) {
 /// for the family it names: a run can declare a face that has no glyph for its
 /// own content (issues #537, #543).
 pub(super) fn write_text_params_for_text(out: &mut String, style: &TextStyle, text: &str) {
-    write_text_params_inner(out, style, KerningText::Known(text));
+    write_text_params_inner(out, style, KerningText::known(text));
+}
+
+/// As [`write_text_params_for_text`], but for a run whose markup form differs
+/// from the text the engine will shape.
+///
+/// The escaping a run goes through adds backslashes and can lift a leading
+/// space into a code-mode string, so the markup is the wrong thing to measure
+/// advances on even though it still answers for the script.
+fn write_text_params_for_run(out: &mut String, style: &TextStyle, escaped: &str, shaped: &str) {
+    write_text_params_inner(out, style, KerningText::Known { escaped, shaped });
 }
 
 /// What the emitter knows about the text a `#text(...)` will cover.
 #[derive(Clone, Copy)]
 enum KerningText<'a> {
-    /// The exact text, so its script decides.
-    Known(&'a str),
+    /// The exact text, so its script decides. `escaped` is the markup form;
+    /// `shaped` is what the engine lays out, and the only one whose glyphs can
+    /// be measured.
+    Known { escaped: &'a str, shaped: &'a str },
     /// The emission site cannot name the text — a list marker's numbering
     /// result, a header field's page number — so the safe answer stands.
     Unknown,
 }
 
+impl<'a> KerningText<'a> {
+    /// Text whose markup and shaped forms are the same.
+    fn known(text: &'a str) -> Self {
+        KerningText::Known {
+            escaped: text,
+            shaped: text,
+        }
+    }
+}
+
 fn write_text_params_inner(out: &mut String, style: &TextStyle, kerning_text: KerningText<'_>) {
     let mut first = true;
     let text: &str = match kerning_text {
-        KerningText::Known(text) => text,
+        KerningText::Known { escaped, .. } => escaped,
         KerningText::Unknown => "",
     };
 
@@ -3331,7 +3374,7 @@ fn write_text_params_inner(out: &mut String, style: &TextStyle, kerning_text: Ke
     if let Some(ref color) = style.color {
         write_param(out, &mut first, &format_color(color));
     }
-    if let Some(spacing) = style.letter_spacing {
+    if let Some(spacing) = effective_letter_spacing(style, kerning_text) {
         write_param(
             out,
             &mut first,
@@ -3396,9 +3439,14 @@ fn kerning_param(style: &TextStyle, kerning_text: KerningText<'_>) -> Option<Str
         //
         // The RTL exemption still wins: switching the `kern` feature off there
         // costs glyphs, which is worse than a word break.
-        if style.letter_spacing.is_some_and(|spacing| spacing != 0.0)
+        //
+        // A spreadsheet run's grid correction is measured from the face's bare
+        // `hmtx` sum, which is also what Excel accumulates: leaving pair
+        // kerning on would move every glyph after a kerned pair off the grid
+        // the correction just put it on (issue #1088).
+        if effective_letter_spacing(style, kerning_text).is_some_and(|spacing| spacing != 0.0)
             && !rtl_shaping_exemption_is_active()
-            && matches!(kerning_text, KerningText::Known(_))
+            && matches!(kerning_text, KerningText::Known { .. })
         {
             return Some("kerning: false".to_string());
         }
@@ -3407,7 +3455,7 @@ fn kerning_param(style: &TextStyle, kerning_text: KerningText<'_>) -> Option<Str
     let kerns: bool = pair_kerning.applies_at(style.font_size)
         || rtl_shaping_exemption_is_active()
         || match kerning_text {
-            KerningText::Known(_) => false,
+            KerningText::Known { .. } => false,
             // Unknown text may be RTL, and switching kerning off there costs
             // glyphs; switching it on costs a fraction of a point of advance.
             KerningText::Unknown => true,
@@ -3441,6 +3489,113 @@ thread_local! {
     /// Whether run emission is currently inside a fixed PowerPoint page and
     /// should use the 1/8pt nominal-advance grid (issue #661).
     static POWERPOINT_ADVANCE_GRID: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Whether run emission is currently inside a spreadsheet page and should
+    /// set its lines on Excel's whole-point advance grid (issue #1088).
+    static SHEET_ADVANCE_GRID: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Run `operation` with Excel's whole-point advance grid in the requested
+/// state, restoring the enclosing state even when generation panics.
+pub(super) fn with_sheet_advance_grid<T>(active: bool, operation: impl FnOnce() -> T) -> T {
+    SHEET_ADVANCE_GRID.with(|grid| {
+        let previous: bool = grid.replace(active);
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(operation));
+        grid.set(previous);
+        match result {
+            Ok(value) => value,
+            Err(panic) => std::panic::resume_unwind(panic),
+        }
+    })
+}
+
+fn sheet_advance_grid_is_active() -> bool {
+    SHEET_ADVANCE_GRID.with(std::cell::Cell::get)
+}
+
+/// The uniform inter-glyph spacing that puts `text` on
+/// [`SHEET_ADVANCE_GRID_PT`], or `None` when this run is not one the grid
+/// applies to.
+///
+/// Typst lays a run out on the face's exact advances, and offers no per-glyph
+/// override; `tracking` is the one lever, and it is uniform. Spreading the
+/// run's rounding delta over its gaps stops the 5% deficit accumulating and
+/// leaves each glyph within the rounding noise: measured against the ten
+/// golden-mock exports, the worst origin lands 1.35pt from the native one and
+/// the median 0.13pt, where the unquantized line reached 19.5pt.
+///
+/// The delta is summed over the advances that *carry a gap* — every glyph but
+/// the last — so the run's last origin lands exactly where Excel puts it. The
+/// last glyph's own advance is deliberately left out: folding it in would make
+/// the run's total width exact instead, at the cost of pushing that whole
+/// rounding into the visible gaps, which on a two-glyph cell is the entire
+/// correction in the one gap there is (`OK` at Arial 10 came out 8.33pt
+/// against the export's 8.00pt).
+///
+/// TODO(issue #1088): a centred or right-aligned line is *placed* from the
+/// total width, so it still sits up to 0.5pt off — the trailing advance needs
+/// its own spacer there, the way `powerpoint_trailing_letter_space_pt` carries
+/// PowerPoint's (issue #1075).
+///
+/// A one-glyph run gets `None`: Typst drops the tracking after a shaped item's
+/// last glyph, so there is no gap to carry the correction.
+fn sheet_advance_grid_tracking_pt(style: &TextStyle, text: &str) -> Option<f64> {
+    if !sheet_advance_grid_is_active() {
+        return None;
+    }
+    let size_pt: f64 = style.font_size.filter(|size| *size > 0.0)?;
+    let bold: bool = matches!(style.bold, Some(true));
+    let family: &str = style.font_family.as_deref()?;
+    // A Korean cell names its face in `font_family` like any other, but a run
+    // that carries a separate East Asian family is measured on the face its
+    // glyphs will actually come from — the Latin one has no glyph for them and
+    // reports nothing.
+    let advances_em: Vec<f64> =
+        crate::render::pdf::glyph_advances_em(family, bold, text).or_else(|| {
+            let east_asian: &str = style.east_asian_font_family.as_deref()?;
+            (!east_asian.eq_ignore_ascii_case(family))
+                .then(|| crate::render::pdf::glyph_advances_em(east_asian, bold, text))
+                .flatten()
+        })?;
+    let gap_advances_em: &[f64] = advances_em.split_last()?.1;
+    if gap_advances_em.is_empty() {
+        return None;
+    }
+
+    let natural_pt: f64 = gap_advances_em
+        .iter()
+        .map(|advance| advance * size_pt)
+        .sum();
+    let quantized_pt: f64 = gap_advances_em
+        .iter()
+        .map(|advance| round_half_up_to_grid(advance * size_pt, SHEET_ADVANCE_GRID_PT))
+        .sum();
+    let gaps: f64 = gap_advances_em.len() as f64;
+    let tracking_pt: f64 = (quantized_pt - natural_pt) / gaps;
+    // An exact fit needs no correction, and emitting `tracking: 0pt` would
+    // still cost the run its ligatures and kerning below.
+    (tracking_pt != 0.0).then_some(tracking_pt)
+}
+
+/// `value` rounded to the nearest multiple of `grid`, halves away from zero —
+/// the rule Excel's own column metrics take (issue #621).
+fn round_half_up_to_grid(value_pt: f64, grid_pt: f64) -> f64 {
+    (value_pt / grid_pt).round() * grid_pt
+}
+
+/// The inter-glyph spacing this run is set with: what the source states, or
+/// the spreadsheet grid's correction where the source states nothing.
+///
+/// Both answers reach the emitted `tracking:` and the kerning decision through
+/// this one function, so a grid-corrected run takes the same "tracking states
+/// its own spacing" rule a `spc`-tracked slide run does.
+fn effective_letter_spacing(style: &TextStyle, kerning_text: KerningText<'_>) -> Option<f64> {
+    if let Some(spacing) = style.letter_spacing {
+        return Some(spacing);
+    }
+    match kerning_text {
+        KerningText::Known { shaped, .. } => sheet_advance_grid_tracking_pt(style, shaped),
+        KerningText::Unknown => None,
+    }
 }
 
 /// Run `operation` with PowerPoint advance snapping in the requested state,
@@ -3534,9 +3689,9 @@ pub(super) fn source_shapes_right_to_left(source: &str) -> bool {
 /// body text of a document Word does not kern, so the decision is stated on
 /// the run rather than document-wide: a document-wide `kerning: false` would
 /// also reach the emission sites that cannot name their text.
-fn needs_kerning_wrapper(style: &TextStyle, text: &str) -> bool {
-    !text.is_empty()
-        && kerning_param(style, KerningText::Known(text))
+fn needs_kerning_wrapper(style: &TextStyle, escaped: &str, shaped: &str) -> bool {
+    !escaped.is_empty()
+        && kerning_param(style, KerningText::Known { escaped, shaped })
             .is_some_and(|param| param.ends_with("false"))
 }
 
