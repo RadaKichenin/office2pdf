@@ -73,6 +73,7 @@ fn test_table_with_default_cell_padding() {
         border_paint_model: TableBorderPaintModel::CenteredStroke,
         prints_gridlines: false,
         prints_headings: false,
+        centers_between_print_margins: false,
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -126,6 +127,7 @@ fn test_table_cell_with_padding_override() {
         border_paint_model: TableBorderPaintModel::CenteredStroke,
         prints_gridlines: false,
         prints_headings: false,
+        centers_between_print_margins: false,
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -156,6 +158,7 @@ fn test_table_alignment_center_wraps_table() {
         border_paint_model: TableBorderPaintModel::CenteredStroke,
         prints_gridlines: false,
         prints_headings: false,
+        centers_between_print_margins: false,
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -867,6 +870,7 @@ fn bottom_aligned_spill_cell_anchors_its_line_box_at_the_bottom() {
         border_paint_model: TableBorderPaintModel::CenteredStroke,
         prints_gridlines: false,
         prints_headings: false,
+        centers_between_print_margins: false,
         ..Table::default()
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
@@ -936,6 +940,7 @@ fn center_aligned_spill_cell_sizes_its_clip_box_from_its_own_font() {
             border_paint_model: TableBorderPaintModel::CenteredStroke,
             prints_gridlines: false,
             prints_headings: false,
+            centers_between_print_margins: false,
             ..Table::default()
         };
         let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
@@ -1025,6 +1030,7 @@ fn a_spill_clip_box_stops_at_the_cell_edge_its_anchor_faces() {
             column_widths: vec![200.0],
             prints_gridlines: false,
             prints_headings: false,
+            centers_between_print_margins: false,
             ..Table::default()
         };
         let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
@@ -1658,6 +1664,7 @@ fn spill_cell_text_is_not_wrapped_by_its_clip_box() {
         column_widths: vec![60.0],
         prints_gridlines: false,
         prints_headings: false,
+        centers_between_print_margins: false,
         ..Table::default()
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
@@ -1781,6 +1788,7 @@ fn a_row_minimum_height_emits_a_strut_rather_than_a_fixed_row() {
         border_paint_model: TableBorderPaintModel::CenteredStroke,
         prints_gridlines: false,
         prints_headings: false,
+        centers_between_print_margins: false,
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
     let result = generate_typst(&doc).unwrap().source;

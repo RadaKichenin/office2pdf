@@ -19,6 +19,10 @@ pub(crate) struct SheetPrintOptions {
     /// conjunction attribute for headings — CT_PrintOptions has no
     /// `headingsSet`.
     pub(crate) prints_headings: bool,
+    /// `horizontalCentered`: centre the printed grid between the left and
+    /// right print margins instead of printing it flush to the left one
+    /// (issue #1110).
+    pub(crate) centers_horizontally: bool,
 }
 
 /// Per-sheet `<printOptions>` flags, keyed by sheet name.
@@ -102,18 +106,21 @@ fn parse_print_options_element(element: &BytesStart<'_>) -> SheetPrintOptions {
     let mut grid_lines: bool = false;
     let mut grid_lines_set: bool = true;
     let mut headings: bool = false;
+    let mut horizontal_centered: bool = false;
     for attribute in element.attributes().flatten() {
         let is_on: bool = matches!(attribute.value.as_ref(), b"1" | b"true");
         match attribute.key.local_name().as_ref() {
             b"gridLines" => grid_lines = is_on,
             b"gridLinesSet" => grid_lines_set = is_on,
             b"headings" => headings = is_on,
+            b"horizontalCentered" => horizontal_centered = is_on,
             _ => {}
         }
     }
     SheetPrintOptions {
         prints_gridlines: grid_lines && grid_lines_set,
         prints_headings: headings,
+        centers_horizontally: horizontal_centered,
     }
 }
 

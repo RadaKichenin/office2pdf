@@ -72,6 +72,7 @@ fn make_page(column_widths: Vec<f64>, rows: Vec<TableRow>) -> SheetPage {
             border_paint_model: TableBorderPaintModel::CenteredStroke,
             prints_gridlines: false,
             prints_headings: false,
+            centers_between_print_margins: false,
         },
         header: None,
         footer: None,
