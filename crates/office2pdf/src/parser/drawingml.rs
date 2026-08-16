@@ -1,5 +1,6 @@
-//! Shared DrawingML color primitives: scheme-color resolution and OOXML
-//! color transforms (tint/shade/lumMod/lumOff/alpha).
+//! Shared DrawingML color primitives: scheme-color resolution, OOXML color
+//! transforms (tint/shade/lumMod/lumOff/alpha), and the picture transparency
+//! `<a:alphaModFix>` declares.
 //!
 //! DrawingML color markup (`<a:srgbClr>`, `<a:schemeClr>`, `<a:sysClr>` with
 //! nested transform children) is identical across pptx, docx, and xlsx parts.
@@ -11,7 +12,7 @@ use std::collections::HashMap;
 use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
 
-use crate::ir::{Color, DeclaredFontClass};
+use crate::ir::{Color, DeclaredFontClass, ImageFormat};
 use crate::parser::xml_util::{get_attr_i64, get_attr_str, parse_hex_color};
 
 /// A format-agnostic view of a theme's color scheme.
@@ -290,6 +291,34 @@ pub(crate) fn theme_accent_palette(colors: &HashMap<String, Color>) -> Vec<Color
     } else {
         Vec::new()
     }
+}
+
+/// Read `<a:alphaModFix amt>` as a 0.0-1.0 transparency factor.
+///
+/// `amt` is a percentage in thousandths of a percent, so the `amt="70000"`
+/// Excel and PowerPoint both write means "draw this picture at 70% strength".
+pub(crate) fn parse_alpha_mod_fix(element: &BytesStart<'_>) -> Option<f64> {
+    get_attr_i64(element, b"amt").map(|amount| (amount as f64 / 100_000.0).clamp(0.0, 1.0))
+}
+
+/// Multiply the image's alpha channel by `alpha` and re-encode as PNG.
+///
+/// Typst has no per-image opacity and background-overlay tricks break on
+/// non-white fills, so `<a:alphaModFix>` is baked into the pixels instead.
+/// Returns `None` for anything the image decoder cannot read — an SVG, or a
+/// metafile already converted to one — leaving the caller on the original
+/// bytes.
+pub(crate) fn apply_image_alpha(data: &[u8], alpha: f64) -> Option<(Vec<u8>, ImageFormat)> {
+    let decoded = image::load_from_memory(data).ok()?;
+    let mut rgba = decoded.into_rgba8();
+    for pixel in rgba.pixels_mut() {
+        pixel[3] = (f64::from(pixel[3]) * alpha).round().clamp(0.0, 255.0) as u8;
+    }
+    let mut out = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::ImageRgba8(rgba)
+        .write_to(&mut out, image::ImageFormat::Png)
+        .ok()?;
+    Some((out.into_inner(), ImageFormat::Png))
 }
 
 /// Parse just the `<a:clrScheme>` palette out of a theme part

@@ -331,9 +331,18 @@ fn drawing_with_blip(blip_markup: &str) -> String {
 fn self_closing_blip_yields_its_embed_relationship() {
     let anchors = parse_drawing_image_anchors(&drawing_with_blip(r#"<a:blip r:embed="rId2"/>"#));
     assert_eq!(anchors.len(), 1, "the anchor holds one picture");
-    assert_eq!(anchors[0].1, "rId2");
+    assert_eq!(anchors[0].1.rid, "rId2");
     assert_eq!(anchors[0].0.from_row, 5);
     assert_eq!(anchors[0].0.from_col, 1);
+}
+
+#[test]
+fn blip_without_a_transparency_effect_has_no_alpha() {
+    let anchors = parse_drawing_image_anchors(&drawing_with_blip(r#"<a:blip r:embed="rId2"/>"#));
+    assert_eq!(
+        anchors[0].1.alpha, None,
+        "a picture with no <a:alphaModFix> prints at full strength"
+    );
 }
 
 #[test]
@@ -346,7 +355,54 @@ fn blip_with_effect_children_still_yields_its_embed_relationship() {
     ));
     assert_eq!(anchors.len(), 1, "the anchor still holds one picture");
     // rId3 is the a14 high-definition layer, not the picture Excel draws.
-    assert_eq!(anchors[0].1, "rId2");
+    assert_eq!(anchors[0].1.rid, "rId2");
     assert_eq!(anchors[0].0.from_row, 5);
     assert_eq!(anchors[0].0.from_col, 1);
+}
+
+/// `<a:alphaModFix amt="70000"/>` makes Excel draw the picture at 70% of its
+/// strength, compositing it onto whatever the worksheet shows beneath. The
+/// amount rides the same blip as `r:embed`, so it has to be picked up while
+/// that element is open (issue #1103).
+#[test]
+fn blip_alpha_mod_fix_is_read_as_a_transparency_factor() {
+    let anchors = parse_drawing_image_anchors(&drawing_with_blip(
+        r#"<a:blip r:embed="rId2"><a:alphaModFix amt="70000"/></a:blip>"#,
+    ));
+    assert_eq!(anchors.len(), 1, "the anchor holds one picture");
+    assert_eq!(anchors[0].1.rid, "rId2");
+    assert_eq!(
+        anchors[0].1.alpha,
+        Some(0.7),
+        "amt is a percentage in thousandths of a percent"
+    );
+}
+
+/// `<a:alphaModFix>` holds nothing but attributes, so a writer is free to
+/// spell it with an explicit end tag. That reaches the reader as a start/end
+/// pair rather than one empty element, exactly the spelling difference that
+/// dropped effect-bearing pictures in #1066.
+#[test]
+fn blip_alpha_mod_fix_written_with_an_explicit_end_tag_is_read() {
+    let anchors = parse_drawing_image_anchors(&drawing_with_blip(
+        r#"<a:blip r:embed="rId2"><a:alphaModFix amt="45000"></a:alphaModFix></a:blip>"#,
+    ));
+    assert_eq!(anchors.len(), 1, "the anchor holds one picture");
+    assert_eq!(anchors[0].1.alpha, Some(0.45));
+}
+
+/// The `a14:imgProps` extension Excel nests inside an effect-bearing blip
+/// carries its own effect markup for the high-definition layer. Only the
+/// blip's own `<a:alphaModFix>` describes the picture Excel draws, the same
+/// rule `r:embed` already follows (issue #1066).
+#[test]
+fn alpha_mod_fix_inside_the_a14_extension_is_not_the_pictures_alpha() {
+    let anchors = parse_drawing_image_anchors(&drawing_with_blip(
+        r#"<a:blip r:embed="rId2"><a:extLst><a:ext uri="{BEBA8EAE-BF5A-486C-A8C5-ECC9F3942E4B}"><a14:imgProps xmlns:a14="http://schemas.microsoft.com/office/drawing/2010/main"><a14:imgLayer r:embed="rId3"><a14:imgEffect><a:alphaModFix amt="20000"/></a14:imgEffect></a14:imgLayer></a14:imgProps></a:ext></a:extLst></a:blip>"#,
+    ));
+    assert_eq!(anchors.len(), 1, "the anchor holds one picture");
+    assert_eq!(
+        anchors[0].1.alpha, None,
+        "the extension layer's amount must not become the picture's alpha"
+    );
 }

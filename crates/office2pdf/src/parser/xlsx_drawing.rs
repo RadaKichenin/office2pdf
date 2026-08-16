@@ -577,8 +577,8 @@ pub(super) fn extract_images_with_anchors(data: &[u8]) -> HashMap<String, Vec<Ra
             let drawing_rels_xml = read_zip_entry_string(&mut archive, &drawing_rels_path);
             let rid_to_media = parse_rels_targets(&drawing_rels_xml);
 
-            for (geometry, rid) in anchors {
-                let Some(media_target) = rid_to_media.get(&rid) else {
+            for (geometry, blip) in anchors {
+                let Some(media_target) = rid_to_media.get(&blip.rid) else {
                     continue;
                 };
                 let media_path = resolve_relative_xl_path(drawing_dir, media_target);
@@ -587,6 +587,17 @@ pub(super) fn extract_images_with_anchors(data: &[u8]) -> HashMap<String, Vec<Ra
                 };
                 let Some((data, format)) = decode_media(&media_path, bytes) else {
                     continue;
+                };
+                // Excel composites a picture carrying `<a:alphaModFix>` onto
+                // the worksheet at that strength. Typst has no per-image
+                // opacity, so the factor is baked into the pixels the way the
+                // pptx picture path already bakes it (issue #1103).
+                let (data, format) = match blip.alpha {
+                    Some(alpha) if alpha < 1.0 => {
+                        crate::parser::drawingml::apply_image_alpha(&data, alpha)
+                            .unwrap_or((data, format))
+                    }
+                    _ => (data, format),
                 };
                 result
                     .entry(sheet_name.clone())
@@ -647,6 +658,16 @@ pub(super) struct ImageAnchorGeometry {
     pub(super) ext_emu: Option<(i64, i64)>,
 }
 
+/// A `<xdr:pic>`'s `<a:blip>`: the media it embeds and how solidly Excel
+/// draws it.
+pub(super) struct PictureBlip {
+    /// The `r:embed` relationship id naming the media part.
+    pub(super) rid: String,
+    /// `<a:alphaModFix amt>` as a 0.0-1.0 factor, when the picture carries a
+    /// transparency effect.
+    pub(super) alpha: Option<f64>,
+}
+
 /// Relationship id in an `<a:blip>`'s `r:embed`, if it carries one.
 ///
 /// Read from the `a:blip` element itself and never from a descendant: the
@@ -664,8 +685,8 @@ fn blip_embed_rid(element: &quick_xml::events::BytesStart<'_>) -> Option<String>
 }
 
 /// Parse `<xdr:pic>` anchors from a worksheet drawing: anchor geometry plus
-/// the blip relationship id.
-pub(super) fn parse_drawing_image_anchors(xml: &str) -> Vec<(ImageAnchorGeometry, String)> {
+/// the picture's blip.
+pub(super) fn parse_drawing_image_anchors(xml: &str) -> Vec<(ImageAnchorGeometry, PictureBlip)> {
     #[derive(Default, Clone, Copy)]
     struct Corner {
         col: u32,
@@ -674,7 +695,7 @@ pub(super) fn parse_drawing_image_anchors(xml: &str) -> Vec<(ImageAnchorGeometry
         row_off: i64,
     }
 
-    let mut result: Vec<(ImageAnchorGeometry, String)> = Vec::new();
+    let mut result: Vec<(ImageAnchorGeometry, PictureBlip)> = Vec::new();
     let mut reader = quick_xml::Reader::from_str(xml);
 
     let mut in_anchor = false;
@@ -685,6 +706,13 @@ pub(super) fn parse_drawing_image_anchors(xml: &str) -> Vec<(ImageAnchorGeometry
     let mut to: Option<Corner> = None;
     let mut ext_emu: Option<(i64, i64)> = None;
     let mut blip_rid: Option<String> = None;
+    let mut blip_alpha: Option<f64> = None;
+    // `<a:alphaModFix>` counts only as the blip's own child. The `a:extLst`
+    // Excel nests inside an effect-bearing blip describes the high-definition
+    // layer, whose effects are not the ones applied to the picture — the same
+    // rule `blip_embed_rid` follows for `r:embed`.
+    let mut in_blip = false;
+    let mut ext_lst_depth: u32 = 0;
 
     loop {
         match reader.read_event() {
@@ -696,6 +724,7 @@ pub(super) fn parse_drawing_image_anchors(xml: &str) -> Vec<(ImageAnchorGeometry
                     to = None;
                     ext_emu = None;
                     blip_rid = None;
+                    blip_alpha = None;
                 }
                 b"from" if in_anchor => corner_target = Some(true),
                 b"to" if in_anchor => {
@@ -710,8 +739,18 @@ pub(super) fn parse_drawing_image_anchors(xml: &str) -> Vec<(ImageAnchorGeometry
                 // A picture carrying an alpha or recolour effect spells its
                 // blip as a start element with children (issue #1066).
                 b"blip" if in_pic => {
+                    in_blip = true;
                     if let Some(rid) = blip_embed_rid(e) {
                         blip_rid = Some(rid);
+                    }
+                }
+                b"extLst" if in_blip => ext_lst_depth += 1,
+                // `a:alphaModFix` holds nothing but attributes, so it reaches
+                // the reader as a start/end pair whenever a writer spells its
+                // end tag out.
+                b"alphaModFix" if in_blip && ext_lst_depth == 0 => {
+                    if let Some(alpha) = crate::parser::drawingml::parse_alpha_mod_fix(e) {
+                        blip_alpha = Some(alpha);
                     }
                 }
                 _ => {}
@@ -742,6 +781,15 @@ pub(super) fn parse_drawing_image_anchors(xml: &str) -> Vec<(ImageAnchorGeometry
                     && let Some(rid) = blip_embed_rid(e)
                 {
                     blip_rid = Some(rid);
+                }
+                // Excel honours the transparency an `<a:alphaModFix>` declares
+                // by drawing the picture through a soft mask (issue #1103).
+                if in_blip
+                    && ext_lst_depth == 0
+                    && local.as_ref() == b"alphaModFix"
+                    && let Some(alpha) = crate::parser::drawingml::parse_alpha_mod_fix(e)
+                {
+                    blip_alpha = Some(alpha);
                 }
             }
             Ok(quick_xml::events::Event::Text(ref t)) => {
@@ -775,13 +823,18 @@ pub(super) fn parse_drawing_image_anchors(xml: &str) -> Vec<(ImageAnchorGeometry
                                 to: to.map(|c| (c.col, c.col_off, c.row, c.row_off)),
                                 ext_emu,
                             },
-                            rid,
+                            PictureBlip {
+                                rid,
+                                alpha: blip_alpha.take(),
+                            },
                         ));
                     }
                     in_anchor = false;
                     in_pic = false;
                     corner_target = None;
                 }
+                b"blip" => in_blip = false,
+                b"extLst" if ext_lst_depth > 0 => ext_lst_depth -= 1,
                 b"from" | b"to" => corner_target = None,
                 b"col" | b"colOff" | b"row" | b"rowOff" => current_field = None,
                 _ => {}
