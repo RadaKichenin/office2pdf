@@ -976,6 +976,35 @@ fn a_picture_anchor_spans_the_printed_row_track() {
     );
 }
 
+/// Excel cuts a blocked cell's unwrapped line at the cell's own gridline, not
+/// at the inset its text starts from. The same fixture holds `Wrapping paper`
+/// in `B4` against a value in `C4`, and its Excel for Mac export prints
+/// `Wrapping pa`: the next `p` begins on the column boundary and is left
+/// undrawn. Sizing the clip box from the *content* edge instead pushed that
+/// boundary a whole left inset further right, which is exactly the room the
+/// extra glyph needed (issue #1105).
+#[test]
+fn a_blocked_cell_clips_its_line_at_the_column_gridline() {
+    let data = load_fixture("issue_1066_blip_effect_picture.xlsx");
+    let (document, _warnings) = XlsxParser
+        .parse(&data, &ConvertOptions::default())
+        .expect("fixture should parse");
+    let source = generate_typst(&document)
+        .expect("fixture should generate Typst")
+        .source;
+
+    // 65pt columns laid out from a 3pt left inset: the gridline is 62pt past
+    // the point the line starts at.
+    assert!(
+        source.contains("place(left + horizon, box(width: 62pt,"),
+        "a blocked cell's clip must end on its column's right gridline: {source}"
+    );
+    assert!(
+        !source.contains("place(left + horizon, box(width: 65pt,"),
+        "a whole-column clip box overhangs that gridline by the left inset: {source}"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Worksheet drawing scheme colors resolve against the theme (issue #430)
 // ---------------------------------------------------------------------------

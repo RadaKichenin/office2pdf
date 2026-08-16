@@ -981,8 +981,10 @@ fn test_spill_width_codegen() {
     });
     let doc = make_doc(vec![page]);
     let output = generate_typst(&doc).unwrap();
+    // The spill width less the left inset the box is anchored behind: the clip
+    // ends on the cell's own gridline, not a whole inset past it (issue #1105).
     assert!(
-        output.source.contains("width: 200pt"),
+        output.source.contains("width: 195pt"),
         "spilled cell must lay text out across the spill width. Got: {}",
         output.source,
     );

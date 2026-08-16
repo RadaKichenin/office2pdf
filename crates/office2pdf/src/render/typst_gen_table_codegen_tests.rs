@@ -873,7 +873,7 @@ fn bottom_aligned_spill_cell_anchors_its_line_box_at_the_bottom() {
     let result = generate_typst(&doc).unwrap().source;
     assert!(
         result.contains(&format!(
-            "place(left + bottom, box(width: 200pt, height: {}pt, clip: true)",
+            "place(left + bottom, box(width: 195pt, height: {}pt, clip: true)",
             format_f64(line_box_height_pt)
         )),
         "bottom cell's spill box must anchor at the bottom, sized to its own line: {result}"
@@ -942,7 +942,7 @@ fn center_aligned_spill_cell_sizes_its_clip_box_from_its_own_font() {
         let result = generate_typst(&doc).unwrap().source;
         assert!(
             result.contains(&format!(
-                "place(left + horizon, box(width: 200pt, height: {}pt, clip: true)",
+                "place(left + horizon, box(width: 195pt, height: {}pt, clip: true)",
                 format_f64(line_box_height_pt)
             )),
             "a centred spill cell stays centred but is sized to its own line \
@@ -955,6 +955,99 @@ fn center_aligned_spill_cell_sizes_its_clip_box_from_its_own_font() {
             )),
             "the in-flow strut must hold the same line height at {font_size}pt: {result}"
         );
+    }
+}
+
+/// Excel cuts an unwrapped line at the cell's own gridline, and `#place`
+/// starts at the *content* box the inset has already pushed in. A clip box
+/// given the whole spill width therefore overhangs the gridline by the inset
+/// on the side it is anchored to, and every glyph in that overhang is one
+/// Excel does not print (issue #1105).
+///
+/// A centred box keeps the whole width instead: it sits on the content box's
+/// centre, which is the cell's own centre while the two insets match. Only
+/// the difference between them offsets it, and only that difference has to
+/// come off — as it does for an icon-set cell, whose left inset carries the
+/// icon's reserve.
+#[test]
+fn a_spill_clip_box_stops_at_the_cell_edge_its_anchor_faces() {
+    let cases: [(Option<Alignment>, Insets, &str, f64); 4] = [
+        // Excel's own 3/3 horizontal inset (issue #657).
+        (None, xlsx_test_padding(3.0), "left", 197.0),
+        (Some(Alignment::Left), xlsx_test_padding(3.0), "left", 197.0),
+        (
+            Some(Alignment::Right),
+            xlsx_test_padding(3.0),
+            "right",
+            197.0,
+        ),
+        (
+            Some(Alignment::Center),
+            xlsx_test_padding(3.0),
+            "center",
+            200.0,
+        ),
+        // An icon-set cell reserves the icon's advance on the left, so its
+        // centre is 9.6pt right of the cell's (issue #652).
+    ];
+    let icon_set_case: (Option<Alignment>, Insets, &str, f64) = (
+        Some(Alignment::Center),
+        xlsx_test_padding(12.6),
+        "center",
+        190.4,
+    );
+
+    for (alignment, padding, anchor, expected_width_pt) in cases.into_iter().chain([icon_set_case])
+    {
+        let cell = TableCell {
+            content: vec![Block::Paragraph(Paragraph {
+                style: ParagraphStyle {
+                    alignment,
+                    ..ParagraphStyle::default()
+                },
+                runs: vec![Run {
+                    text: "Wrapping paper".to_string(),
+                    style: TextStyle::default(),
+                    href: None,
+                    footnote: None,
+                }],
+            })],
+            spill_width: Some(200.0),
+            padding: Some(padding),
+            ..TableCell::default()
+        };
+        let table = Table {
+            rows: vec![TableRow {
+                minimum_height: None,
+                cells: vec![cell],
+                height: Some(23.0),
+            }],
+            column_widths: vec![200.0],
+            prints_gridlines: false,
+            prints_headings: false,
+            ..Table::default()
+        };
+        let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+        let result = generate_typst(&doc).unwrap().source;
+        assert!(
+            result.contains(&format!(
+                "place({anchor} + horizon, box(width: {}pt,",
+                format_f64(expected_width_pt)
+            )),
+            "a {alignment:?} spill cell anchored {anchor} must clip at the cell edge, \
+             not {}pt past it: {result}",
+            format_f64(200.0 - expected_width_pt)
+        );
+    }
+}
+
+/// Excel's horizontal cell inset, as the spill tests above state it.
+fn xlsx_test_padding(left: f64) -> Insets {
+    Insets {
+        top: 1.0,
+        right: 3.0,
+        bottom: 1.5,
+        left,
     }
 }
 
