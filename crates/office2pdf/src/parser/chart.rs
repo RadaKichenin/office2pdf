@@ -807,6 +807,7 @@ fn parse_single_series(
         std::collections::BTreeMap::new();
     let mut number_format: Option<String> = None;
     let mut marker_symbol: Option<MarkerSymbol> = None;
+    let mut line_width_pt: Option<f64> = None;
 
     loop {
         match reader.read_event() {
@@ -818,11 +819,15 @@ fn parse_single_series(
                     values = parsed;
                     number_format = format_code;
                 }
-                // The series' own fill. This match is flat, so it would also
-                // see a `<c:spPr>` nested inside a sibling element; every
-                // element that can carry one is consumed by its own branch
-                // first, leaving only the series-level fill here.
-                b"spPr" => fill = fill.or(parse_solid_fill(reader, b"spPr", scheme)),
+                // The series' own fill and stroke weight. This match is flat,
+                // so it would also see a `<c:spPr>` nested inside a sibling
+                // element; every element that can carry one is consumed by its
+                // own branch first, leaving only the series-level one here.
+                b"spPr" => {
+                    let properties = parse_shape_properties(reader, b"spPr", scheme);
+                    fill = fill.or(properties.fill);
+                    line_width_pt = line_width_pt.or(properties.line_width_pt);
+                }
                 b"dPt" => {
                     if let Some((index, color)) = parse_data_point(reader, scheme) {
                         point_fills.insert(index, color);
@@ -868,6 +873,7 @@ fn parse_single_series(
             // series was read inside (issue #1067).
             plot_type: None,
             marker_symbol,
+            line_width_pt,
         },
         categories,
     )
@@ -1097,21 +1103,63 @@ fn parse_chart_line(
     }
 }
 
+/// What a `<c:spPr>` says about the shape it belongs to.
+#[derive(Debug, Clone, Copy, Default)]
+struct ShapeProperties {
+    /// The first `<a:solidFill>` colour anywhere inside, which for a line
+    /// series is the one nested in its `<a:ln>` — that is where a line states
+    /// its colour.
+    fill: Option<Color>,
+    /// The width `<a:ln w="…">` states, in points. `None` when the element
+    /// carries no `<a:ln>`, or one that names no usable width.
+    line_width_pt: Option<f64>,
+}
+
 /// Read the colour of a solid fill, consuming up to `end_tag`.
-///
-/// A chart part declares no theme of its own, so `<a:schemeClr>` resolves
-/// against the theme of the document the graphic frame sits in, which the
-/// caller supplies (issue #876).
 fn parse_solid_fill(
     reader: &mut Reader<&[u8]>,
     end_tag: &[u8],
     scheme: &SchemeColors<'_>,
 ) -> Option<Color> {
+    parse_shape_properties(reader, end_tag, scheme).fill
+}
+
+/// Read a `<c:spPr>` into the fill colour and stroke weight it states,
+/// consuming up to `end_tag`.
+///
+/// A chart part declares no theme of its own, so `<a:schemeClr>` resolves
+/// against the theme of the document the graphic frame sits in, which the
+/// caller supplies (issue #876).
+fn parse_shape_properties(
+    reader: &mut Reader<&[u8]>,
+    end_tag: &[u8],
+    scheme: &SchemeColors<'_>,
+) -> ShapeProperties {
     let mut in_solid_fill: bool = false;
-    let mut color: Option<Color> = None;
+    let mut properties = ShapeProperties::default();
 
     loop {
         match reader.read_event() {
+            // The first `<a:ln>` is the shape's own; `w` is in EMU
+            // (ECMA-376 §20.1.2.1.15 `ST_LineWidth`), and an `<a:ln>` naming
+            // no `w` states nothing about weight (issue #1113).
+            //
+            // `w="0"` is not a weight either. Office writes it as the
+            // "no outline" idiom, always beside `<a:noFill/>` — both series of
+            // `office2pdf_repository_workbook.xlsx` and `123233_charts.xlsx`
+            // that carry it do — so reading it as a width would stroke nothing
+            // where the shape had been drawn at the default all along.
+            // Suppression itself is a separate question this does not answer.
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))
+                if e.local_name().as_ref() == b"ln" =>
+            {
+                properties.line_width_pt = properties.line_width_pt.or_else(|| {
+                    xml_util::get_attr_str(e, b"w")
+                        .and_then(|width| width.parse::<f64>().ok())
+                        .map(|emu| emu / EMU_PER_POINT)
+                        .filter(|width_pt| *width_pt > 0.0)
+                });
+            }
             Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"solidFill" => {
                 in_solid_fill = true;
             }
@@ -1120,13 +1168,15 @@ fn parse_solid_fill(
                     && matches!(e.local_name().as_ref(), b"srgbClr" | b"schemeClr") =>
             {
                 let parsed = drawingml::parse_color_from_start(reader, e, scheme);
-                color = color.or(parsed.color);
+                properties.fill = properties.fill.or(parsed.color);
             }
             Ok(Event::Empty(ref e))
                 if in_solid_fill
                     && matches!(e.local_name().as_ref(), b"srgbClr" | b"schemeClr") =>
             {
-                color = color.or(drawingml::parse_color_from_empty(e, scheme).color);
+                properties.fill = properties
+                    .fill
+                    .or(drawingml::parse_color_from_empty(e, scheme).color);
             }
             Ok(Event::End(ref e)) if e.local_name().as_ref() == b"solidFill" => {
                 in_solid_fill = false;
@@ -1137,7 +1187,7 @@ fn parse_solid_fill(
         }
     }
 
-    color
+    properties
 }
 
 /// Parse series name from `<c:tx>`.

@@ -691,6 +691,118 @@ fn test_the_line_family_show_markers_flag_is_not_read_as_a_series_symbol() {
     assert_eq!(chart.series[0].values, vec![23334.0, 8331.0, 4120.0]);
 }
 
+// ----- Series stroke weight (issue #1113) -----
+
+/// A `<c:ser>` whose own `<c:spPr>` is `sppr_xml`, in a `<c:lineChart>`.
+fn line_series_with_shape_properties(sppr_xml: &str) -> String {
+    bar_chart_xml(r#"<c:barDir val="col"/>"#)
+        .replace("c:barChart", "c:lineChart")
+        .replace("<c:barDir val=\"col\"/>", "")
+        .replace("<c:tx>", &format!("{sppr_xml}<c:tx>"))
+}
+
+#[test]
+fn test_a_series_line_width_is_read() {
+    // The `Amount Spent` series of the audited workbook, verbatim: 28440 EMU is
+    // 2.24pt, against the renderer's flat 2.0pt constant (issue #1113).
+    let xml = line_series_with_shape_properties(
+        r#"<c:spPr><a:ln w="28440" cap="rnd"><a:solidFill><a:srgbClr val="008889"/></a:solidFill><a:round/></a:ln></c:spPr>"#,
+    );
+
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
+
+    let width = chart.series[0]
+        .line_width_pt
+        .expect("a declared width reaches the model");
+    assert!(
+        (width - 28440.0 / 12700.0).abs() < 1e-9,
+        "28440 EMU is {width}pt, expected {}",
+        28440.0 / 12700.0
+    );
+    // The line's own `<a:solidFill>` is still the series colour: a line series
+    // states its colour nowhere else.
+    assert_eq!(chart.series[0].fill, Some(Color::new(0x00, 0x88, 0x89)));
+}
+
+#[test]
+fn test_every_declared_series_line_width_is_read_as_stated() {
+    // Triangulation: the width is read off the attribute, not matched against
+    // the one workbook that reported the defect.
+    for (emu, expected_pt) in [(9360.0, 0.7370), (19050.0, 1.5), (28440.0, 2.2394)] {
+        let xml = line_series_with_shape_properties(&format!(
+            r#"<c:spPr><a:ln w="{emu}"><a:solidFill><a:srgbClr val="008889"/></a:solidFill></a:ln></c:spPr>"#
+        ));
+
+        let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
+
+        let width = chart.series[0]
+            .line_width_pt
+            .expect("a declared width reaches the model");
+        assert!(
+            (width - expected_pt).abs() < 5e-4,
+            "{emu} EMU must reach the model as {expected_pt}pt, got {width}pt"
+        );
+    }
+}
+
+#[test]
+fn test_a_series_without_a_line_leaves_the_default_weight_to_decide() {
+    let xml = line_series_with_shape_properties(
+        r#"<c:spPr><a:solidFill><a:srgbClr val="008889"/></a:solidFill></c:spPr>"#,
+    );
+
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
+
+    assert_eq!(chart.series[0].line_width_pt, None);
+    assert_eq!(chart.series[0].fill, Some(Color::new(0x00, 0x88, 0x89)));
+}
+
+#[test]
+fn test_a_line_stating_only_a_colour_leaves_the_default_weight() {
+    // `<a:ln>` without `w` states a colour and nothing about weight, so the
+    // renderer's default must still apply rather than a zero-width stroke.
+    let xml = line_series_with_shape_properties(
+        r#"<c:spPr><a:ln><a:solidFill><a:srgbClr val="008889"/></a:solidFill></a:ln></c:spPr>"#,
+    );
+
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
+
+    assert_eq!(chart.series[0].line_width_pt, None);
+}
+
+#[test]
+fn test_a_zero_width_line_is_the_no_outline_idiom_not_a_weight() {
+    // `<a:ln w="0"><a:noFill/></a:ln>` is what Office writes for "no outline"
+    // — `office2pdf_repository_workbook.xlsx` and `123233_charts.xlsx` both
+    // carry it. Reading the 0 as a weight would stroke nothing where the
+    // default had been drawn all along.
+    let xml = line_series_with_shape_properties(
+        r#"<c:spPr><a:solidFill><a:srgbClr val="4f81bd"/></a:solidFill><a:ln w="0"><a:noFill/></a:ln></c:spPr>"#,
+    );
+
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
+
+    assert_eq!(chart.series[0].line_width_pt, None);
+    assert_eq!(chart.series[0].fill, Some(Color::new(0x4f, 0x81, 0xbd)));
+}
+
+#[test]
+fn test_a_marker_line_width_is_not_mistaken_for_the_series_line() {
+    // `<c:marker><c:spPr><a:ln>` is the symbol's outline, not the plotted
+    // line. The series-level match is flat, so without consuming the marker
+    // whole that width would be read as the series' own — and this series
+    // declares none.
+    let xml = line_series_with_shape_properties("").replace(
+        "<c:cat>",
+        r#"<c:marker><c:symbol val="circle"/><c:spPr><a:ln w="9360"><a:solidFill><a:srgbClr val="ffffff"/></a:solidFill></a:ln></c:spPr></c:marker><c:cat>"#,
+    );
+
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
+
+    assert_eq!(chart.series[0].line_width_pt, None);
+    assert_eq!(chart.series[0].values, vec![23334.0, 8331.0, 4120.0]);
+}
+
 // ----- Unmapped chart families (issue #544) -----
 
 /// Wrap `chart_element` — a whole `<c:fooChart>` — in a chartSpace.
