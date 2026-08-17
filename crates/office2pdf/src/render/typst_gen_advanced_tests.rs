@@ -1436,6 +1436,84 @@ fn test_arrow_icon_silhouette_matches_excels_sprite_mask() {
     }
 }
 
+/// Excel's own paint for the green `3Arrows` band, read off the sprite in the
+/// native export of `10_kpi_tracker_en`.
+fn green_arrow_shading() -> crate::ir::IconShading {
+    crate::ir::IconShading {
+        fill_start: Color::new(0x9F, 0xD8, 0xAE),
+        fill_end: Color::new(0x28, 0xA5, 0x4A),
+        outline: Color::new(0x25, 0x5E, 0x1B),
+    }
+}
+
+/// A band Excel shades carries its measured ramp and its own outline colour,
+/// not a flat fill under a `darken(30%)` derivative of it (issue #1134).
+#[test]
+fn test_shaded_arrow_icon_takes_excels_ramp_and_outline() {
+    let mut cell = icon_cell(crate::ir::ICON_ARROW_UP, Color::new(0x59, 0xB0, 0x6D));
+    cell.icon_shading = Some(green_arrow_shading());
+    let output = generate_typst(&make_doc(vec![icon_sheet(cell)])).unwrap();
+    assert!(
+        output.source.contains(
+            "polygon(fill: gradient.linear(angle: 45deg, space: rgb, \
+             rgb(159, 216, 174), rgb(40, 165, 74)), stroke: 0.4pt + rgb(37, 94, 27)"
+        ),
+        "the icon must ramp along the box diagonal under Excel's own outline. Got: {}",
+        output.source,
+    );
+    assert!(
+        !output.source.contains("darken(30%)"),
+        "a measured outline must not also be derived from the fill. Got: {}",
+        output.source,
+    );
+}
+
+/// The ramp runs down the box diagonal for every orientation: Excel shades the
+/// sprite, not the arrow, so flipping or transposing the silhouette leaves the
+/// light corner at the top left.
+#[test]
+fn test_every_shaded_arrow_orientation_ramps_along_the_same_diagonal() {
+    for glyph in [
+        crate::ir::ICON_ARROW_UP,
+        crate::ir::ICON_ARROW_DOWN,
+        crate::ir::ICON_ARROW_RIGHT,
+    ] {
+        let mut cell = icon_cell(glyph, Color::new(0x59, 0xB0, 0x6D));
+        cell.icon_shading = Some(green_arrow_shading());
+        let output = generate_typst(&make_doc(vec![icon_sheet(cell)])).unwrap();
+        assert!(
+            output.source.contains(
+                "gradient.linear(angle: 45deg, space: rgb, rgb(159, 216, 174), rgb(40, 165, 74))"
+            ),
+            "{glyph}: the ramp must keep its direction and stops. Got: {}",
+            output.source,
+        );
+    }
+}
+
+/// A band with no measured shading keeps the flat stand-in, so the sets with
+/// no native export to read are unaffected.
+#[test]
+fn test_unshaded_arrow_icon_keeps_the_flat_fill() {
+    let output = generate_typst(&make_doc(vec![icon_sheet(icon_cell(
+        crate::ir::ICON_ARROW_UP,
+        Color::new(0x68, 0xA4, 0x90),
+    ))]))
+    .unwrap();
+    assert!(
+        output.source.contains(
+            "polygon(fill: rgb(104, 164, 144), stroke: 0.4pt + rgb(104, 164, 144).darken(30%)"
+        ),
+        "an unmeasured band still fills flat. Got: {}",
+        output.source,
+    );
+    assert!(
+        !output.source.contains("gradient"),
+        "and must not invent a ramp. Got: {}",
+        output.source,
+    );
+}
+
 /// A down arrow points the other way, so its tip sits at the bottom.
 #[test]
 fn test_down_arrow_icon_is_flipped() {

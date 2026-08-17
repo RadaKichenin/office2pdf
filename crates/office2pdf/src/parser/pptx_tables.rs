@@ -516,6 +516,7 @@ impl<'a> PptxTableParser<'a> {
             data_bar: None,
             icon_text: None,
             icon_color: None,
+            icon_shading: None,
             spill_width: None,
             vertical_align: self.cell_vertical_align.take(),
             padding: self.cell_padding.take(),

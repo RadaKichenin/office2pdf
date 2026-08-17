@@ -575,6 +575,67 @@ fn test_cond_fmt_icon_set_arrows_explicit() {
     assert_eq!(cell3.icon_color, Some(Color::new(89, 176, 109)));
 }
 
+/// Excel prints a `3Arrows` icon as a shaded sprite, so each band carries the
+/// ramp and the outline colour measured off the native export rather than one
+/// flat colour the renderer has to derive an outline from (issue #1134).
+#[test]
+fn test_cond_fmt_icon_set_arrows_carry_excels_shading() {
+    let data = build_icon_set_fixture(Some("3Arrows"));
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let tp = get_sheet_page(&doc, 0);
+
+    let bands: [(usize, Color, Color, Color); 3] = [
+        (
+            0,
+            Color::new(0xFC, 0xD1, 0xD2),
+            Color::new(0xF0, 0x39, 0x3C),
+            Color::new(0x90, 0x27, 0x1B),
+        ),
+        (
+            1,
+            Color::new(0xFE, 0xFC, 0xF3),
+            Color::new(0xFE, 0xC5, 0x00),
+            Color::new(0xD8, 0x71, 0x03),
+        ),
+        (
+            2,
+            Color::new(0x9F, 0xD8, 0xAE),
+            Color::new(0x28, 0xA5, 0x4A),
+            Color::new(0x25, 0x5E, 0x1B),
+        ),
+    ];
+    for (row, fill_start, fill_end, outline) in bands {
+        assert_eq!(
+            tp.table.rows[row].cells[0].icon_shading,
+            Some(crate::ir::IconShading {
+                fill_start,
+                fill_end,
+                outline,
+            }),
+            "band {row} must carry Excel's measured sprite paint"
+        );
+    }
+}
+
+/// Only the set with a native export to measure is shaded — the grey arrows
+/// have none, so they must not borrow another band's ramp.
+#[test]
+fn test_cond_fmt_unmeasured_icon_sets_carry_no_shading() {
+    for set_type in ["3ArrowsGray", "3TrafficLights1", "3Symbols"] {
+        let data = build_icon_set_fixture(Some(set_type));
+        let parser = XlsxParser;
+        let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+        let tp = get_sheet_page(&doc, 0);
+        for row in 0..3 {
+            assert_eq!(
+                tp.table.rows[row].cells[0].icon_shading, None,
+                "{set_type} band {row} has no export to measure"
+            );
+        }
+    }
+}
+
 #[test]
 fn test_cond_fmt_icon_set_symbols_explicit() {
     let data = build_icon_set_fixture(Some("3Symbols"));
