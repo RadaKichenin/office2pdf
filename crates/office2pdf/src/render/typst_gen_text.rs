@@ -134,11 +134,36 @@ pub(super) fn generate_paragraph(
         // header rule on the same page, declared directly rather than through
         // a style, survived (issue #581).
         //
-        // The wrapper opens only when there is decoration to carry, so an
-        // undecorated heading keeps Typst's own block spacing rather than
-        // inheriting a `#block`'s.
+        // Word spaces and measures it as one too. While the wrapper opened
+        // only for decoration, both the block spacing and the line box were
+        // Typst's own `#set heading` defaults — numbers no `w:spacing`, no
+        // style definition and no Word rule produced — and since Typst
+        // collapses adjacent block spacing to the larger of the two, that
+        // default swallowed the neighbouring paragraph's declared gap as well
+        // (issue #1132).
+        //
+        // A heading resolves `w:spacing` exactly as body copy does, so
+        // `style` already holds the answer and no heading-specific fallback
+        // exists to add. Measured on native Word exports of a package whose
+        // `Heading1` paragraphs state no `w:spacing`: with
+        // `w:docDefaults/w:pPrDefault` declared the export is layout-identical
+        // to one stating `w:before="0" w:after="0"`, and without it identical
+        // to `w:before="0" w:after="160"` — Word's built-in `Normal`, the same
+        // fallback #1085 measured for body paragraphs. Word's built-in
+        // `Heading N` spacing takes no part.
         let decorated = style.background.is_some() || style.border.is_some();
-        if decorated {
+        let line_height_settings: Option<String> =
+            word_line_height_settings(&para.runs, style, line_grid_pitch);
+        // The gaps measure from the line box's edges, so the box has to come
+        // with them: on Typst's glyph-tight default the block ends at the
+        // baseline, and the heading's own descender goes missing from the gap
+        // below it.
+        let wrapped: bool = decorated
+            || style.space_before.is_some()
+            || style.space_after.is_some()
+            || style.line_box.is_some()
+            || line_height_settings.is_some();
+        if wrapped {
             out.push_str("#block(width: 100%");
             write_block_spacing_params(out, style);
             write_block_decoration_params(out, style);
@@ -148,6 +173,10 @@ pub(super) fn generate_paragraph(
                 &style.border,
                 style.border_space.as_deref().copied().unwrap_or_default(),
             );
+            write_line_box_settings(out, style.line_box);
+            if let Some(ref settings) = line_height_settings {
+                out.push_str(settings);
+            }
         }
         // A contents entry is laid out as body text, not as a copy of the
         // heading, so it cannot be built from the heading's rendered content —
@@ -166,18 +195,34 @@ pub(super) fn generate_paragraph(
             ),
             TOC_ENTRY_LABEL
         );
+        // Whichever fixed line box the wrapper just put in force is what a
+        // framed eojeol has to restore inside itself (issue #626); an
+        // unwrapped heading still emits no fixed edges and needs no
+        // correction.
+        let line_box_em: Option<(f64, f64)> = wrapped
+            .then(|| {
+                word_line_box_em(&para.runs, style, line_grid_pitch).or_else(|| {
+                    style
+                        .line_box
+                        .map(|line_box| (line_box.ascent_em, line_box.descent_em))
+                })
+            })
+            .flatten();
         let _ = write!(out, "#heading(level: {level})[");
         generate_runs_with_tabs(
             out,
             &para.runs,
             style.tab_stops.as_deref(),
             paragraph_tab_width_pt,
-            // A heading emits no fixed text edges of its own, so a frame needs
-            // no correction to sit on the surrounding baseline.
-            paragraph_eojeol_wrap(breaks_hangul_at_eojeol, style, None, available_measure_pt),
+            paragraph_eojeol_wrap(
+                breaks_hangul_at_eojeol,
+                style,
+                line_box_em,
+                available_measure_pt,
+            ),
         );
         out.push_str("]\n");
-        if decorated {
+        if wrapped {
             out.push_str("]\n");
         }
         return Ok(());

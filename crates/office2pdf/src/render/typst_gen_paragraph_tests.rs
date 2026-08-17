@@ -1842,11 +1842,98 @@ fn test_generate_heading_with_style_border_rule() {
     );
 }
 
+/// A heading paragraph carrying `style`, with one plain run, following a body
+/// paragraph — the page's first block has its `space_before` hoisted into a
+/// leading `#v()` instead, because Typst drops block spacing at a page top.
+fn heading_source(style: ParagraphStyle) -> String {
+    let doc = make_doc(vec![make_flow_page(vec![
+        make_paragraph("Body copy"),
+        Block::Paragraph(Paragraph {
+            style,
+            runs: vec![Run {
+                text: "Overview".to_string(),
+                style: TextStyle::default(),
+                href: None,
+                footnote: None,
+            }],
+        }),
+    ])]);
+    generate_typst(&doc).unwrap().source
+}
+
+#[test]
+fn every_heading_spacing_reaches_its_block_unchanged() {
+    // A heading resolves `w:spacing` exactly like body copy, so whatever the
+    // style hierarchy resolved has to reach the block. Left off, the gap was
+    // Typst's own `#set heading` default — a number no `w:spacing`, no style
+    // definition and no Word rule produced — and because Typst collapses
+    // adjacent block spacing to the larger of the two, that default also
+    // swallowed the neighbouring paragraph's declared gap (issue #1132).
+    //
+    // Triangulated across values, so no single measured constant can pass.
+    for (before, after, expected) in [
+        (None, Some(8.0), "#block(width: 100%, below: 8pt)"),
+        (
+            Some(14.0),
+            Some(7.0),
+            "#block(width: 100%, above: 14pt, below: 7pt)",
+        ),
+        (
+            Some(6.0),
+            Some(0.0),
+            "#block(width: 100%, above: 6pt, below: 0pt)",
+        ),
+    ] {
+        let source = heading_source(ParagraphStyle {
+            heading_level: Some(1),
+            space_before: before,
+            space_after: after,
+            ..ParagraphStyle::default()
+        });
+        assert!(
+            source.contains(expected),
+            "heading spacing {before:?}/{after:?} should emit {expected}: {source}"
+        );
+        assert!(
+            source.contains("#heading(level: 1)"),
+            "the heading itself must survive the wrapper: {source}"
+        );
+    }
+}
+
+#[test]
+fn a_heading_takes_the_same_line_box_as_body_copy() {
+    // The block's `above`/`below` measure from the line box's edges, so a
+    // heading needs Word's box for them to land where Word puts them: with
+    // Typst's glyph-tight default the wrapper ends at the baseline and the
+    // gap below the heading comes out a descender short (issue #1132).
+    let source = heading_source(ParagraphStyle {
+        heading_level: Some(1),
+        line_box: Some(LineBox {
+            ascent_em: 1.3125,
+            descent_em: 0.4375,
+        }),
+        space_after: Some(8.0),
+        ..ParagraphStyle::default()
+    });
+
+    assert!(
+        source.contains("#set text(top-edge: 1.3125em, bottom-edge: -0.4375em)"),
+        "a heading's line box must reach the output: {source}"
+    );
+    assert!(
+        source.contains("#set par(leading: 0pt)"),
+        "a heading stacks its lines Word's way: {source}"
+    );
+}
+
 #[test]
 fn test_generate_undecorated_heading_keeps_its_bare_form() {
-    // Only a heading that actually carries decoration gets a wrapper; adding
-    // one unconditionally would swap Typst's heading spacing for a block's on
-    // every document that has headings at all (issue #581).
+    // A heading with nothing to carry — no decoration, no resolved
+    // `w:spacing`, no line box — keeps Typst's own heading block, because an
+    // empty wrapper would state nothing the document asked for. Every DOCX
+    // heading does resolve a `w:spacing w:after`, so this is the shape only an
+    // IR built without one takes (issues #581, #1132).
     let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
         style: ParagraphStyle {
             heading_level: Some(2),
