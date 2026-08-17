@@ -88,6 +88,8 @@ jobs:
         run: python3 -m unittest discover -s scripts/tests -p 'test_generate_layout_baselines.py'
       - name: Test layout baseline consumer
         run: python3 -m unittest discover -s scripts/tests -p 'test_check_layout_baselines.py'
+      - name: Test native golden export staging
+        run: python3 -m unittest discover -s scripts/tests -p 'test_export_business_golden_pdfs.py'
       - name: Validate business golden corpus
         run: python3 scripts/validate_business_golden_mocks.py
 
