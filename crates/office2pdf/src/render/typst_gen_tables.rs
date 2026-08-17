@@ -642,6 +642,34 @@ const ARROW_ICON_LENGTH_PT: f64 = 11.0;
 /// Across the shaft the arrow is narrower than it is long.
 const ARROW_ICON_BREADTH_PT: f64 = 10.08;
 
+/// How the arrow's silhouette divides that box, as fractions of the ink the
+/// sprite's soft mask carries.
+///
+/// The mask *is* the silhouette, so it gives the split directly. The up
+/// arrow's is a 12 x 12px bitmap with 11 x 12px of ink:
+///
+/// ```text
+///  0 .....#......
+///  1 ....###.....
+///  2 ...#####....
+///  3 ..#######...
+///  4 .#########..
+///  5 ###########.
+///  6 ...#####....
+///  … ...#####....
+/// 11 ...#####....
+/// ```
+///
+/// The head occupies rows 0-5, half the length; the shaft columns 3-7, 5 of
+/// the 11 ink columns. The hand-picked fractions these replace — 0.45 of the
+/// length, and a 0.28 half-width, so 0.56 of the breadth — gave the shaft 23%
+/// too much breadth under a head 10% too short, which read chunkier than the
+/// native arrow at any resolution that resolves the shaft (issue #1135). The right
+/// arrow's mask is this silhouette transposed, which is how the polygon is
+/// built, so the one split covers all five orientations.
+const ARROW_ICON_SHAFT_BREADTH_FRACTION: f64 = 5.0 / 11.0;
+const ARROW_ICON_HEAD_LENGTH_FRACTION: f64 = 6.0 / 12.0;
+
 /// Diameter of a circular icon-set icon, in points.
 ///
 /// Measured from Excel's export of the audited workbook: 6.72pt printed at
@@ -668,12 +696,12 @@ fn icon_shape(glyph: &str, color: Option<Color>) -> Option<String> {
 /// Build the Typst `polygon` for one of the arrow icon-set glyphs, or `None`
 /// for any other glyph.
 fn arrow_icon_polygon(glyph: &str, color: Option<Color>) -> Option<String> {
-    // Head half-width, shaft half-width, and where the head meets the shaft,
-    // as fractions of the arrow's breadth and length.
+    // The head spans the full breadth; `shaft` is the shaft's half-width and
+    // `neck` is where the head meets it, measured from the tip.
     let breadth: f64 = ARROW_ICON_BREADTH_PT;
     let length: f64 = ARROW_ICON_LENGTH_PT;
-    let shaft: f64 = breadth * 0.28;
-    let neck: f64 = length * 0.45;
+    let shaft: f64 = breadth * ARROW_ICON_SHAFT_BREADTH_FRACTION / 2.0;
+    let neck: f64 = length * ARROW_ICON_HEAD_LENGTH_FRACTION;
 
     // Points of an up arrow, clockwise from the tip.
     let up: Vec<(f64, f64)> = vec![
