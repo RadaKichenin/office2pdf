@@ -27,8 +27,9 @@ use self::lists::{
     write_fixed_text_default_par_settings,
 };
 use self::shapes::{
-    generate_shape, shadow_blur_layers, shadow_outline_outset, write_fill_color,
-    write_gradient_fill, write_shape_stroke, write_text_box_shape_background,
+    generate_shape, shadow_blur_layers, shadow_outline_outset, shadow_ring_corner_radius,
+    shadow_silhouette_corner_radius, write_fill_color, write_gradient_fill, write_shape_stroke,
+    write_text_box_shape_background,
 };
 use self::tables::generate_table;
 use self::text::*;
@@ -1125,15 +1126,21 @@ fn generate_fixed_element(
                 // does, so the silhouette PowerPoint casts is the frame grown
                 // by half that width (issue #1057).
                 let outline_outset: f64 = shadow_outline_outset(&img.stroke);
+                // …and it turns the frame's corners the way that `a:ln`'s
+                // join does, so each ring carries the arc grown by its own
+                // offset rather than a mitre (issue #1138).
+                let silhouette_radius: f64 = shadow_silhouette_corner_radius(&img.stroke);
                 for (blur_expansion, alpha) in shadow_blur_layers(shadow) {
                     let expansion = outline_outset + blur_expansion;
+                    let radius: f64 = shadow_ring_corner_radius(silhouette_radius, blur_expansion);
                     let _ = writeln!(
                         out,
-                        "#place(top + left, dx: {}pt, dy: {}pt, rect(width: {}pt, height: {}pt, fill: rgb({}, {}, {}, {})))",
+                        "#place(top + left, dx: {}pt, dy: {}pt, rect(width: {}pt, height: {}pt, radius: {}pt, fill: rgb({}, {}, {}, {})))",
                         format_f64(dx - expansion),
                         format_f64(dy - expansion),
                         format_f64((elem.width + 2.0 * expansion).max(0.0)),
                         format_f64((elem.height + 2.0 * expansion).max(0.0)),
+                        format_f64(radius),
                         shadow.color.r,
                         shadow.color.g,
                         shadow.color.b,

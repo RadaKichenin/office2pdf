@@ -381,6 +381,75 @@ fn a_bordered_picture_casts_its_shadow_from_the_stroked_frame() {
     );
 }
 
+/// The stroked silhouette turns its corners the way the border's join does, so
+/// a picture's ring stack carries the same arc a shape's does — an outline
+/// half-width under DrawingML's round default, grown by each ring's own offset
+/// (issue #1138). This path emits its rings separately from
+/// `write_shadow_shape`, so it needs its own guard.
+#[test]
+fn a_bordered_picture_rounds_its_shadow_corner_like_the_border_join() {
+    use crate::ir::Shadow;
+
+    let source_with_join = |join: LineJoin| {
+        let doc = make_doc(vec![make_fixed_page(
+            960.0,
+            540.0,
+            vec![FixedElement {
+                x: 100.0,
+                y: 50.0,
+                width: 200.0,
+                height: 120.0,
+                kind: FixedElementKind::Image(ImageData {
+                    rotation_deg: None,
+                    flip_h: false,
+                    flip_v: false,
+                    data: MINIMAL_PNG.to_vec(),
+                    format: ImageFormat::Png,
+                    width: Some(200.0),
+                    height: Some(120.0),
+                    crop: None,
+                    stroke: Some(BorderSide {
+                        width: 3.0,
+                        color: Color {
+                            r: 255,
+                            g: 255,
+                            b: 255,
+                        },
+                        style: BorderLineStyle::Solid,
+                        join,
+                    }),
+                    alignment: None,
+                    clip_shape: None,
+                    // Crisp, so the border's own arc is the whole radius.
+                    shadow: Some(Shadow {
+                        blur_radius: 0.0,
+                        distance: 4.0,
+                        direction: 0.0,
+                        color: Color { r: 0, g: 0, b: 0 },
+                        opacity: 0.38,
+                    }),
+                    paragraph_spacing: None,
+                }),
+            }],
+        )]);
+        generate_typst(&doc).unwrap().source
+    };
+
+    let rounded: String = source_with_join(LineJoin::Round);
+    assert!(
+        rounded.contains("rect(width: 203pt, height: 123pt, radius: 1.5pt"),
+        "a 3pt round-joined border must arc the shadow corner by 1.5pt: \
+         {rounded}"
+    );
+    // Triangulation: a mitre runs out to the corner of the outset frame, so
+    // it leaves the silhouette square.
+    let mitred: String = source_with_join(LineJoin::Miter);
+    assert!(
+        mitred.contains("rect(width: 203pt, height: 123pt, radius: 0pt"),
+        "a mitred border leaves the shadow corner square: {mitred}"
+    );
+}
+
 #[test]
 fn test_fixed_image_with_border_uses_rect_overlay() {
     let doc = make_doc(vec![make_fixed_page(
