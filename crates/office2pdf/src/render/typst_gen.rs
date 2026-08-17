@@ -520,17 +520,28 @@ pub(crate) fn generate_typst_with_options_and_font_context(
     // itself sans is not guessed at by name (issue #891).
     let previous_classes =
         super::font_subst::set_declared_font_classes(doc.styles.declared_font_classes.clone());
+    // `compatibilityMode` is declared once for the package and decides whether
+    // a justified East Asian line may compress to seat one more token, so it
+    // travels with the whole generation rather than with any one paragraph
+    // (issue #1130).
+    let legacy_justification: bool = matches!(
+        doc.styles.word_compatibility_mode,
+        Some(crate::ir::WordCompatibilityMode::Legacy)
+    );
     let generated = super::font_subst::with_font_search_context(font_context, || {
-        let first_pass: TypstOutput =
-            text::with_rtl_shaping_exemption(false, || generate_pages(doc, options))?;
-        // Whether the document shapes right-to-left is answered by the markup
-        // itself, so nothing about the IR has to be modelled to find it — see
-        // `with_rtl_shaping_exemption`. The pass costs one more walk of the IR
-        // for the documents that do, and nothing for the ones that do not.
-        if !text::source_shapes_right_to_left(&first_pass.source) {
-            return Ok(first_pass);
-        }
-        text::with_rtl_shaping_exemption(true, || generate_pages(doc, options))
+        text::with_legacy_word_justification(legacy_justification, || {
+            let first_pass: TypstOutput =
+                text::with_rtl_shaping_exemption(false, || generate_pages(doc, options))?;
+            // Whether the document shapes right-to-left is answered by the
+            // markup itself, so nothing about the IR has to be modelled to find
+            // it — see `with_rtl_shaping_exemption`. The pass costs one more
+            // walk of the IR for the documents that do, and nothing for the
+            // ones that do not.
+            if !text::source_shapes_right_to_left(&first_pass.source) {
+                return Ok(first_pass);
+            }
+            text::with_rtl_shaping_exemption(true, || generate_pages(doc, options))
+        })
     });
     super::font_subst::set_declared_font_classes(previous_classes);
     generated
@@ -2783,6 +2794,14 @@ fn write_page_format_state(out: &mut String) {
     //
     // Only the floor moves; the 150% ceiling is Typst's own default.
     //
+    // Every one of those ten exports declares `compatibilityMode 15`, so this
+    // floor is calibrated on — and governs — Word's post-2013 justification.
+    // The pre-2013 engine has no East Asian compression phase at all, and a
+    // squeeze allowance is the wrong lever to model that with: the breaker
+    // takes any allowance it is given. Such a paragraph gets Typst's first-fit
+    // breaker instead, which never squeezes to seat a token; see
+    // `justified_lines_take_natural_width_only` (issue #1130).
+    //
     // Set for the document, next to the overhang rule above, so every
     // justified paragraph is covered whether it comes through the body, a
     // list or a table cell. It is inert wherever `justify` is false.
@@ -3537,12 +3556,13 @@ fn generate_fixed_text_paragraph(
                         line_spacing: None,
                         ..style.clone()
                     },
+                    &para.runs,
                 );
                 write_common_text_settings(out, &para.runs, "  ");
                 out.push_str(settings);
             }
             None => {
-                write_par_settings(out, style);
+                write_par_settings(out, style, &para.runs);
                 write_common_text_settings(out, &para.runs, "  ");
                 write_fixed_text_default_par_settings(out, style, &para.runs, "  ");
             }
