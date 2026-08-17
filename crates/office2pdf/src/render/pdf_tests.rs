@@ -865,3 +865,44 @@ fn test_powerpoint_line_box_splits_leading_evenly() {
          not {above}em"
     );
 }
+
+#[test]
+fn the_world_hands_typst_the_face_that_kerns_from_the_legacy_table() {
+    // Every face Typst shapes with comes through `World::font`, so that is
+    // where the kern-source choice has to land: a face carrying both sources
+    // must reach the shaper without its GPOS `kern` feature (issue #1116).
+    let base: &[u8] = include_bytes!("../../fonts/NotoSansCJKsc-GB2312.otf");
+    let font = Font::new(
+        Bytes::new(crate::test_support::make_face_carrying_both_kern_sources(
+            base,
+        )),
+        0,
+    )
+    .expect("the rebuilt face parses");
+    assert!(crate::test_support::states_a_gpos_kern_feature(&font));
+
+    let world = MinimalWorld::new_embedded_with_fonts("", &[], std::slice::from_ref(&font));
+    let handed_over = world.font(0).expect("the in-memory face leads the book");
+
+    assert!(
+        !crate::test_support::states_a_gpos_kern_feature(&handed_over),
+        "the compiler must be handed the face that kerns from the legacy table"
+    );
+    assert!(handed_over.ttf().tables().kern.is_some());
+}
+
+#[test]
+fn the_world_hands_typst_a_one_source_face_unchanged() {
+    // A face that states its pairs in GPOS alone has nothing to fall back to,
+    // so it must reach the shaper exactly as it was loaded.
+    let base: &[u8] = include_bytes!("../../fonts/NotoSansCJKsc-GB2312.otf");
+    let font = Font::new(Bytes::new(base.to_vec()), 0).expect("the bundled face parses");
+
+    let world = MinimalWorld::new_embedded_with_fonts("", &[], std::slice::from_ref(&font));
+    let handed_over = world.font(0).expect("the in-memory face leads the book");
+
+    assert!(crate::test_support::states_a_gpos_kern_feature(
+        &handed_over
+    ));
+    assert_eq!(handed_over.data().len(), font.data().len());
+}

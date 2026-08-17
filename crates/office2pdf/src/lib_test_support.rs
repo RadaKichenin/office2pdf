@@ -245,3 +245,102 @@ pub(crate) fn make_table_graphic_frame(
 pub(crate) fn make_test_svg() -> Vec<u8> {
     br##"<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" viewBox="0 0 1 1"><rect width="1" height="1" fill="#ff0000"/></svg>"##.to_vec()
 }
+
+/// A legacy `kern` table holding one horizontal format-0 pair.
+///
+/// The value is the one `Posterama Bold` states for `T`/`A`, which is where
+/// the two kern sources of issue #1116 disagree.
+pub(crate) fn make_legacy_kern_table() -> Vec<u8> {
+    let mut kern: Vec<u8> = Vec::new();
+    kern.extend_from_slice(&0u16.to_be_bytes()); // version
+    kern.extend_from_slice(&1u16.to_be_bytes()); // nTables
+    kern.extend_from_slice(&0u16.to_be_bytes()); // subtable version
+    kern.extend_from_slice(&22u16.to_be_bytes()); // subtable length
+    kern.extend_from_slice(&1u16.to_be_bytes()); // coverage: horizontal, format 0
+    kern.extend_from_slice(&1u16.to_be_bytes()); // nPairs
+    kern.extend_from_slice(&0u16.to_be_bytes()); // searchRange
+    kern.extend_from_slice(&0u16.to_be_bytes()); // entrySelector
+    kern.extend_from_slice(&0u16.to_be_bytes()); // rangeShift
+    kern.extend_from_slice(&1u16.to_be_bytes()); // left glyph
+    kern.extend_from_slice(&2u16.to_be_bytes()); // right glyph
+    kern.extend_from_slice(&(-102i16).to_be_bytes()); // value
+    kern
+}
+
+/// A real, shapeable face carrying both kern sources: `data` with a legacy
+/// `kern` table appended and its table directory rebuilt around the extra
+/// record.
+///
+/// No face the repository ships states its pairs twice, so a test that needs
+/// the shape issue #1116 is about has to build one.
+pub(crate) fn make_face_carrying_both_kern_sources(data: &[u8]) -> Vec<u8> {
+    let read_u16 = |offset: usize| -> usize {
+        usize::from(u16::from_be_bytes(
+            data[offset..offset + 2].try_into().expect("two bytes"),
+        ))
+    };
+    let count: usize = read_u16(4);
+
+    // One more record pushes every table body 16 bytes along. The bodies hold
+    // table-relative offsets only, so they move unchanged.
+    let body_start: usize = 12 + 16 * (count + 1);
+    let mut body: Vec<u8> = Vec::new();
+    let mut records: Vec<([u8; 4], u32, u32)> = Vec::with_capacity(count + 1);
+    for index in 0..count {
+        let record: usize = 12 + 16 * index;
+        let tag: [u8; 4] = data[record..record + 4].try_into().expect("four bytes");
+        let offset: u32 = u32::from_be_bytes(
+            data[record + 8..record + 12]
+                .try_into()
+                .expect("four bytes"),
+        );
+        let length: u32 = u32::from_be_bytes(
+            data[record + 12..record + 16]
+                .try_into()
+                .expect("four bytes"),
+        );
+        while !(body_start + body.len()).is_multiple_of(4) {
+            body.push(0);
+        }
+        records.push((tag, (body_start + body.len()) as u32, length));
+        let start: usize = offset as usize;
+        body.extend_from_slice(&data[start..start + length as usize]);
+    }
+
+    while !(body_start + body.len()).is_multiple_of(4) {
+        body.push(0);
+    }
+    let kern: Vec<u8> = make_legacy_kern_table();
+    records.push((
+        *b"kern",
+        (body_start + body.len()) as u32,
+        kern.len() as u32,
+    ));
+    body.extend_from_slice(&kern);
+
+    // A table directory is stated in tag order.
+    records.sort_by_key(|(tag, _, _)| *tag);
+
+    let mut face: Vec<u8> = Vec::new();
+    face.extend_from_slice(&data[..4]); // sfntVersion
+    face.extend_from_slice(&((count + 1) as u16).to_be_bytes());
+    face.extend_from_slice(&data[6..12]); // searchRange, entrySelector, rangeShift
+    for (tag, offset, length) in &records {
+        face.extend_from_slice(tag);
+        face.extend_from_slice(&0u32.to_be_bytes()); // checkSum
+        face.extend_from_slice(&offset.to_be_bytes());
+        face.extend_from_slice(&length.to_be_bytes());
+    }
+    face.extend_from_slice(&body);
+    face
+}
+
+/// Whether a face still offers the GPOS `kern` feature a shaper would take its
+/// pair adjustments from.
+pub(crate) fn states_a_gpos_kern_feature(font: &typst::text::Font) -> bool {
+    font.ttf().tables().gpos.is_some_and(|gpos| {
+        gpos.features
+            .into_iter()
+            .any(|feature| feature.tag.to_bytes() == *b"kern")
+    })
+}
