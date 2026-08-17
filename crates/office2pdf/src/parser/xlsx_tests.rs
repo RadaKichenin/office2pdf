@@ -1596,6 +1596,127 @@ fn a_dimensionless_printed_row_ignores_a_disagreeing_declared_default() {
     }
 }
 
+// ── Auto-sized rows take their own cells' font (issue #1140) ─────────
+
+/// A cell that carries an explicit font, so the row it sits in is auto-sized
+/// against that font rather than against the workbook's Normal one.
+fn sheet_with_one_cell_font(row_idx: u32, size_pt: f64) -> umya_spreadsheet::Spreadsheet {
+    let mut book = umya_spreadsheet::new_file();
+    let sheet = book.get_sheet_mut(&0).unwrap();
+    sheet
+        .get_sheet_format_properties_mut()
+        .set_default_row_height(15.0);
+    let cell = sheet.get_cell_mut((1u32, row_idx));
+    cell.set_value("가나다");
+    cell.get_style_mut().get_font_mut().set_size(size_pt);
+    book
+}
+
+/// A row that records no `ht` is auto-sized, and Excel sizes it from the
+/// tallest font its own cells carry — not from the workbook's Normal font.
+///
+/// Measured on `issue_1060_sheet_row_line_box_probe.xlsx`, whose Normal font
+/// is a theme-scheme Calibri 11 that none of its cells use. Native
+/// Excel-for-Mac export; AppleScript `row height of row N` and the
+/// `mutool draw -F trace` baseline pitch agree (issue #1140):
+///
+/// | rows | cell font | Excel row |
+/// | --- | --- | ---: |
+/// | 1-6, 8-13 | Malgun Gothic 14 | 20.00pt |
+/// | 15-17 | Malgun Gothic 24 | 35.00pt |
+#[test]
+fn an_auto_row_is_sized_by_its_own_cells_tallest_font() {
+    for (cell_size_pt, expected) in [(14.0, 20.0), (18.0, 27.0), (24.0, 35.0)] {
+        let book = sheet_with_one_cell_font(1, cell_size_pt);
+        let sheet: &umya_spreadsheet::Worksheet = book.get_sheet(&0).unwrap();
+        assert_eq!(
+            xlsx_cells::printed_grid_row_height_pt(sheet, 1, Some(&theme_scheme_normal_font(11.0))),
+            expected,
+            "a row of {cell_size_pt}pt cells"
+        );
+    }
+}
+
+/// Only the row's own cells count. A tall cell one row down leaves this row
+/// on the sheet's recomputed default.
+#[test]
+fn an_auto_row_ignores_another_rows_cell_font() {
+    let book = sheet_with_one_cell_font(2, 24.0);
+    let sheet: &umya_spreadsheet::Worksheet = book.get_sheet(&0).unwrap();
+    assert_eq!(
+        xlsx_cells::printed_grid_row_height_pt(sheet, 1, Some(&theme_scheme_normal_font(11.0))),
+        17.0
+    );
+}
+
+/// The row-cell term only ever raises the track: what Excel gives a row whose
+/// cells are *smaller* than the Normal font is unmeasured, so such a row keeps
+/// the sheet's recomputed default rather than shrinking on a guess.
+#[test]
+fn an_auto_row_of_smaller_cells_keeps_the_recomputed_default() {
+    let book = sheet_with_one_cell_font(1, 8.0);
+    let sheet: &umya_spreadsheet::Worksheet = book.get_sheet(&0).unwrap();
+    assert_eq!(
+        xlsx_cells::printed_grid_row_height_pt(sheet, 1, Some(&theme_scheme_normal_font(11.0))),
+        17.0
+    );
+}
+
+/// A size the face's series does not measure keeps the recomputed default
+/// too — the measured points are too irregular to interpolate between.
+#[test]
+fn an_auto_row_whose_cell_size_is_unmeasured_keeps_the_recomputed_default() {
+    let book = sheet_with_one_cell_font(1, 20.0);
+    let sheet: &umya_spreadsheet::Worksheet = book.get_sheet(&0).unwrap();
+    assert_eq!(
+        xlsx_cells::printed_grid_row_height_pt(sheet, 1, Some(&theme_scheme_normal_font(11.0))),
+        17.0
+    );
+}
+
+/// A recorded `ht` is the row's current worksheet height whatever its cells
+/// hold, so it still outranks the auto-size recompute.
+#[test]
+fn a_recorded_row_height_outranks_its_cells_font() {
+    let mut book = sheet_with_one_cell_font(1, 24.0);
+    let sheet = book.get_sheet_mut(&0).unwrap();
+    sheet.get_row_dimension_mut(&1).set_height(36.0);
+    let sheet: &umya_spreadsheet::Worksheet = book.get_sheet(&0).unwrap();
+    assert_eq!(
+        xlsx_cells::printed_grid_row_height_pt(sheet, 1, Some(&theme_scheme_normal_font(11.0))),
+        36.0
+    );
+}
+
+/// The whole probe workbook end to end: its twelve 14pt auto rows print
+/// Excel's 20pt track and its three 24pt ones Excel's 35pt track, where every
+/// one of them used to print the Normal font's 17pt (issue #1140).
+#[test]
+fn the_probe_workbooks_auto_rows_print_their_own_cell_tracks() {
+    let heights: Vec<Option<f64>> = printed_row_heights_over_all_pages(THEME_SCHEME_PROBE);
+
+    assert_eq!(
+        heights
+            .iter()
+            .filter(|height| **height == Some(20.0))
+            .count(),
+        12,
+        "12 auto rows of Malgun Gothic 14 print a 20pt track, got {heights:?}"
+    );
+    assert_eq!(
+        heights
+            .iter()
+            .filter(|height| **height == Some(35.0))
+            .count(),
+        3,
+        "3 auto rows of Malgun Gothic 24 print a 35pt track, got {heights:?}"
+    );
+    assert!(
+        !heights.contains(&Some(17.0)),
+        "no row keeps the Normal font's own track, got {heights:?}"
+    );
+}
+
 /// `customHeight` marks the declared default as user-set, so it stays in play
 /// as a declared height and maps like one: 30 → 28 under a Normal font whose
 /// grid compacts (issue #1047).
