@@ -1355,6 +1355,87 @@ fn test_arrow_icon_set_renders_as_a_filled_polygon() {
     );
 }
 
+/// Read an arrow polygon's points back out of the generated source. They are
+/// emitted as `(Xpt, Ypt)`; pull them out without a regex dependency.
+fn arrow_polygon_points(source: &str) -> Vec<(f64, f64)> {
+    let points: Vec<(f64, f64)> = source
+        .split('(')
+        .filter_map(|chunk| {
+            let (x, rest) = chunk.split_once("pt, ")?;
+            let (y, _) = rest.split_once("pt)")?;
+            Some((x.parse().ok()?, y.parse().ok()?))
+        })
+        .collect();
+    assert!(!points.is_empty(), "no polygon points in: {source}");
+    points
+}
+
+/// The silhouette an arrow polygon spans: its breadth across the shaft, its
+/// length along the tip, the shaft's width and the head's length. Works for
+/// either vertical orientation — the tip is the lone point at one end of the
+/// length axis, the shaft's base the pair at the other, and the barbs the row
+/// carrying both breadth extremes.
+fn arrow_silhouette(points: &[(f64, f64)]) -> (f64, f64, f64, f64) {
+    let min_x: f64 = points.iter().map(|p| p.0).fold(f64::MAX, f64::min);
+    let max_x: f64 = points.iter().map(|p| p.0).fold(f64::MIN, f64::max);
+    let min_y: f64 = points.iter().map(|p| p.1).fold(f64::MAX, f64::min);
+    let max_y: f64 = points.iter().map(|p| p.1).fold(f64::MIN, f64::max);
+    let row = |y: f64| -> Vec<(f64, f64)> {
+        points
+            .iter()
+            .copied()
+            .filter(|p| (p.1 - y).abs() < 1e-9)
+            .collect()
+    };
+    let (tip_y, base) = if row(min_y).len() == 1 {
+        (min_y, row(max_y))
+    } else {
+        (max_y, row(min_y))
+    };
+    assert_eq!(base.len(), 2, "the shaft's base is two points: {base:?}");
+    let barb_y: f64 = points
+        .iter()
+        .find(|p| (p.0 - min_x).abs() < 1e-9)
+        .expect("a barb reaches the breadth's left edge")
+        .1;
+    (
+        max_x - min_x,
+        max_y - min_y,
+        (base[0].0 - base[1].0).abs(),
+        (barb_y - tip_y).abs(),
+    )
+}
+
+/// The arrow's shaft and head take Excel's fractions of the icon box.
+///
+/// The native export's sprites carry a soft mask, which is the silhouette
+/// itself. The up arrow's is a 12 x 12px bitmap with 11 x 12px of ink: the
+/// head occupies rows 0-5, half the length, and the shaft columns 3-7, 5 of
+/// the 11 ink columns. We used to give the shaft 0.56 of the breadth under a
+/// head 0.45 of the length — 23% too wide and 10% too short (issue #1135).
+#[test]
+fn test_arrow_icon_silhouette_matches_excels_sprite_mask() {
+    for glyph in [crate::ir::ICON_ARROW_UP, crate::ir::ICON_ARROW_DOWN] {
+        let output = generate_typst(&make_doc(vec![icon_sheet(icon_cell(
+            glyph,
+            Color::new(0x68, 0xA4, 0x90),
+        ))]))
+        .unwrap();
+        let (breadth, length, shaft_width, head_length) =
+            arrow_silhouette(&arrow_polygon_points(&output.source));
+        assert!(
+            (shaft_width / breadth - 5.0 / 11.0).abs() < 1e-6,
+            "{glyph}: the shaft spans 5 of the mask's 11 ink columns, \
+             got {shaft_width}pt of {breadth}pt",
+        );
+        assert!(
+            (head_length / length - 6.0 / 12.0).abs() < 1e-6,
+            "{glyph}: the head takes half the arrow's length, \
+             got {head_length}pt of {length}pt",
+        );
+    }
+}
+
 /// A down arrow points the other way, so its tip sits at the bottom.
 #[test]
 fn test_down_arrow_icon_is_flipped() {
@@ -1373,17 +1454,7 @@ fn test_down_arrow_icon_is_flipped() {
     // must hold is that flipping puts the tip at the other end of the same
     // shape.
     let tip = |source: &str, want_min_y: bool| -> (f64, f64) {
-        // Points are emitted as `(Xpt, Ypt)`; pull them out without a regex
-        // dependency.
-        let points: Vec<(f64, f64)> = source
-            .split('(')
-            .filter_map(|chunk| {
-                let (x, rest) = chunk.split_once("pt, ")?;
-                let (y, _) = rest.split_once("pt)")?;
-                Some((x.parse().ok()?, y.parse().ok()?))
-            })
-            .collect();
-        assert!(!points.is_empty(), "no polygon points in: {source}");
+        let points: Vec<(f64, f64)> = arrow_polygon_points(source);
         let extreme = if want_min_y {
             points.iter().map(|p| p.1).fold(f64::MAX, f64::min)
         } else {
