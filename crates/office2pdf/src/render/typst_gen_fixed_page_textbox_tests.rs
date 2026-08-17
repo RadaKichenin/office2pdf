@@ -1904,12 +1904,13 @@ fn slide_text_takes_powerpoints_flat_1_2em_line() {
 }
 
 #[test]
-fn slide_baseline_splits_the_lines_extra_leading_evenly() {
-    // The glyphs take hhea `ascent + descent`; whatever the 1.2em line has
-    // left over is split evenly above and below them, seating the baseline at
-    // `(1.2 + ascent - descent) / 2`. A proportional split on OS/2
-    // `usWinAscent` was tried and measured 0.45-1.12pt low on every frame of
-    // `08_marketing_report_en` (issues #513, #660).
+fn slide_baseline_takes_the_faces_share_of_the_line_box() {
+    // The 1.2em line is shared in the proportion the face's own hhea line —
+    // ascent, descent and line gap — puts its baseline at. Seating it by
+    // Typst's normalised ascender instead left a bottom-anchored box's last
+    // baseline flat on the inset with no descent gap at all (issue #513), and
+    // halving the leading of a face that fits the box misses the golden mocks'
+    // 28pt Arial titles by a whole point (issues #660, #1118).
     //
     // What lands on the page is that share rounded to a whole point, which is
     // where PowerPoint seats a baseline inside its line box; the share itself
@@ -1943,7 +1944,8 @@ fn slide_baseline_splits_the_lines_extra_leading_evenly() {
 }
 
 /// A face whose own line overflows the 1.2em box gets the box shared in its
-/// own proportion, because there is no leading left to halve.
+/// own proportion — the reading of the share that no rounding can hide, since
+/// halving a *negative* leading moves the baseline the wrong way outright.
 ///
 /// Measured on a native PowerPoint 16.112 export of the #841 Contoso deck,
 /// whose titles are set in Posterama Bold (hhea ascender 2134, descender -590
@@ -1951,8 +1953,12 @@ fn slide_baseline_splits_the_lines_extra_leading_evenly() {
 /// Slide 1 sets that face at 50pt with no `<a:lnSpc>`, and its three baselines
 /// pace exactly 60.00pt = 1.2em apart, so the box really is 1.2em there. The
 /// export seats the first one 47.06pt below the frame's content top = 0.9411em;
-/// the proportional share predicts 0.9401em and the even split 0.9770em, which
-/// is 1.79pt low (issue #1020).
+/// the proportional share predicts 0.9401em and halving the leading 0.9770em,
+/// which is 1.79pt low (issue #1020).
+///
+/// Posterama declares no hhea line gap, so the share's denominator is its bare
+/// `ascent + descent` here. A face that declares one gives the gap to its
+/// descent side (issue #1118).
 #[test]
 fn an_overflowing_face_shares_the_line_box_in_its_own_proportion() {
     // New Computer Modern: hhea 1127/-290 per 1000 upem = a 1.417em line.
@@ -1987,11 +1993,12 @@ fn an_overflowing_face_shares_the_line_box_in_its_own_proportion() {
         (above - proportional).abs() < 0.001,
         "an overflowing face seats its baseline at {proportional}em, not {above}em"
     );
-    let even: f64 = (1.2 + ascent_em - descent_em) / 2.0;
+    let halved_leading: f64 = (1.2 + ascent_em - descent_em) / 2.0;
     assert!(
-        above < even - 0.01,
-        "the even split's negative half-leading pushes the baseline down to \
-         {even}em; the proportional share must sit above it, got {above}em"
+        above < halved_leading - 0.01,
+        "halving this face's negative leading pushes the baseline down to \
+         {halved_leading}em; the proportional share must sit above it, got \
+         {above}em"
     );
 }
 
@@ -1999,18 +2006,19 @@ fn an_overflowing_face_shares_the_line_box_in_its_own_proportion() {
 /// top, and gives whatever is left of the 1.2em line to the descent gap.
 ///
 /// Measured on native PowerPoint 16.112 exports of a one-factor probe deck:
-/// four faces spanning the split's two branches — Georgia (1.13623em, fits the
-/// box), Verdana (1.21533em), Avenir Next LT Pro (1.21289em) and Posterama
-/// (1.33008em, all three overflow) — in bottom-anchored boxes with every inset
-/// zeroed, at 8, 11, 14, 18, 24, 28, 32, 36, 40, 44, 48, 54, 72 and 100pt. All
-/// 56 cells land on `1.2 x size - round(share x size)` within the export's
-/// 0.12pt half-grid, and none within 0.12pt of the unrounded share. The seat's
-/// share of the em therefore is *not* constant across sizes: Avenir Next LT Pro
-/// keeps 0.192em under its baseline at 10pt and 0.2625em at 32pt (issue #1074).
+/// four faces — Georgia (1.13623em, fits inside the box), Verdana (1.21533em),
+/// Avenir Next LT Pro (1.21289em) and Posterama (1.33008em, all three overflow
+/// it) — in bottom-anchored boxes with every inset zeroed, at 8, 11, 14, 18, 24,
+/// 28, 32, 36, 40, 44, 48, 54, 72 and 100pt. All 56 cells land on
+/// `1.2 x size - round(share x size)` within the export's 0.12pt half-grid, and
+/// none within 0.12pt of the unrounded share. The seat's share of the em
+/// therefore is *not* constant across sizes: Avenir Next LT Pro keeps 0.192em
+/// under its baseline at 10pt and 0.2625em at 32pt (issue #1074).
 ///
-/// Georgia's cells need the *proportional* share to fit, not the even split a
-/// face that fits the box currently gets — a separate root cause tracked in
-/// #1118. What this asserts is the rounding, which is common to both.
+/// Georgia is the one of the four that fits the box, and its cells need the same
+/// proportional share the other three do — which is why the split no longer
+/// branches on whether the face fits (issue #1118). What this asserts is the
+/// rounding, which is common to every face.
 #[test]
 fn a_slide_line_seats_its_baseline_on_a_whole_point() {
     let family: &str = "Libertinus Serif";
@@ -2074,9 +2082,10 @@ fn a_slide_line_seats_its_baseline_on_a_whole_point() {
 /// split, and the split is a pure function of the face's metrics.
 #[test]
 fn the_contoso_footer_band_lands_on_its_native_baseline() {
-    // Avenir Next LT Pro Bold: hhea ascender 1972, descender -512 per 2048 upem.
+    // Avenir Next LT Pro Bold: hhea ascender 1972, descender -512, no line
+    // gap, per 2048 upem.
     let (above_em, _) =
-        crate::render::pdf::powerpoint_line_box_split_em(1972.0 / 2048.0, 512.0 / 2048.0)
+        crate::render::pdf::powerpoint_line_box_split_em(1972.0 / 2048.0, 512.0 / 2048.0, 0.0)
             .expect("a positive ascent splits the line box");
     let size_pt: f64 = 10.0;
     let (_, below_em) =
@@ -2104,9 +2113,10 @@ fn the_contoso_footer_band_lands_on_its_native_baseline() {
 /// samples agree with both, so this one carries the distinction alone.
 #[test]
 fn the_contoso_scaled_attribution_lands_on_its_native_baseline() {
-    // Avenir Next LT Pro: hhea ascender 1972, descender -512 per 2048 upem.
+    // Avenir Next LT Pro: hhea ascender 1972, descender -512, no line gap, per
+    // 2048 upem.
     let (plain_above, _) =
-        crate::render::pdf::powerpoint_line_box_split_em(1972.0 / 2048.0, 512.0 / 2048.0)
+        crate::render::pdf::powerpoint_line_box_split_em(1972.0 / 2048.0, 512.0 / 2048.0, 0.0)
             .expect("a positive ascent splits the line box");
     let size_pt: f64 = 14.0;
     let (above, _) = crate::render::typst_gen::text::powerpoint_percentage_line_box_em(
@@ -2292,7 +2302,7 @@ fn slide_line_spacing_keeps_the_descent_gap_and_moves_the_ascent() {
 fn the_contoso_footer_title_lands_on_its_native_baseline() {
     // Posterama Bold: hhea ascender 2134, descender -590 per 2048 upem.
     let (plain_above, plain_below) =
-        crate::render::pdf::powerpoint_line_box_split_em(2134.0 / 2048.0, 590.0 / 2048.0)
+        crate::render::pdf::powerpoint_line_box_split_em(2134.0 / 2048.0, 590.0 / 2048.0, 0.0)
             .expect("a positive ascent splits the line box");
     assert!((plain_above + plain_below - 1.2).abs() < 1e-9);
 
@@ -2326,7 +2336,7 @@ fn the_contoso_footer_title_lands_on_its_native_baseline() {
 #[test]
 fn the_contoso_top_anchored_title_lands_on_its_native_baseline() {
     let (plain_above, _) =
-        crate::render::pdf::powerpoint_line_box_split_em(2134.0 / 2048.0, 590.0 / 2048.0)
+        crate::render::pdf::powerpoint_line_box_split_em(2134.0 / 2048.0, 590.0 / 2048.0, 0.0)
             .expect("a positive ascent splits the line box");
     let size_pt: f64 = 38.0;
     let (above, _) = crate::render::typst_gen::text::powerpoint_percentage_line_box_em(
@@ -2368,7 +2378,7 @@ fn the_contoso_top_anchored_title_lands_on_its_native_baseline() {
 fn the_contoso_inherited_slide_titles_land_on_their_native_baselines() {
     // Posterama Bold: hhea ascender 2134, descender -590 per 2048 upem.
     let (plain_above, _) =
-        crate::render::pdf::powerpoint_line_box_split_em(2134.0 / 2048.0, 590.0 / 2048.0)
+        crate::render::pdf::powerpoint_line_box_split_em(2134.0 / 2048.0, 590.0 / 2048.0, 0.0)
             .expect("a positive ascent splits the line box");
     let size_pt: f64 = 38.0;
     let (above, _) = crate::render::typst_gen::text::powerpoint_percentage_line_box_em(

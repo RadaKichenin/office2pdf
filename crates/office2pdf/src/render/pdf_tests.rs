@@ -361,11 +361,13 @@ fn test_path_font_last_resort_bypasses_process_metric_caches() {
     let expected_cap_height = font.metrics().cap_height.get();
     let ascent = f64::from(ttf.ascender()).abs() / upem;
     let descent = f64::from(ttf.descender()).abs() / upem;
+    let line_gap = f64::from(ttf.line_gap()).abs() / upem;
     // What this test pins is which *face* answers, not which split rule: the
-    // rule itself is covered by `test_powerpoint_line_box_splits_leading_evenly`
-    // and `an_overflowing_face_shares_the_line_box_in_its_own_proportion`.
-    let expected_powerpoint =
-        powerpoint_line_box_split_em(ascent, descent).expect("the fixture face declares an ascent");
+    // rule itself is covered by
+    // `test_powerpoint_line_box_shares_the_gap_inclusive_line` and
+    // `an_overflowing_face_shares_the_line_box_in_its_own_proportion`.
+    let expected_powerpoint = powerpoint_line_box_split_em(ascent, descent, line_gap)
+        .expect("the fixture face declares an ascent");
 
     // Native document fonts are materialized into a conversion-local path.
     // Prime the family-only process cache with a miss before that path becomes
@@ -836,21 +838,25 @@ fn test_glyph_advances_em_reports_each_glyph_separately() {
     );
 }
 
-/// PowerPoint splits a line's extra leading evenly above and below the glyphs,
-/// not in the proportion of the face's ascent to its descent.
+/// PowerPoint shares its 1.2em line in the proportion of the face's own hhea
+/// line — **line gap included** — and the ascent side gets only the bare
+/// ascender.
 ///
-/// Both models were fitted to native exports and agree to 0.01pt on the box
-/// *height*, so only the first baseline separates them. Measured on
-/// `08_marketing_report_en` p3, a 17pt top-anchored frame: GT's first baseline
-/// is 142.08pt and the proportional model puts ours at 142.53pt, 0.45pt low.
-/// The even split predicts 142.09pt (issue #660).
+/// Arial is the face that shows the gap term, since it is one of the few in the
+/// corpus that declares one (hhea ascender 1854, descender -434, **line gap
+/// 67** per 2048 upem). Its three candidate shares are:
 ///
-/// For Arial (hhea ascender 1854/2048, descender 434/2048):
+/// - gap-inclusive proportional `1854/2355 x 1.2` = **0.94471em**
+/// - even split `(1.2 + 0.9053 - 0.2119) / 2` = 0.94668em
+/// - gap-free proportional `1854/2288 x 1.2` = 0.97238em
 ///
-/// - even split `(1.2 + 0.9053 - 0.2119) / 2` = **0.9467em**
-/// - proportional `1854/2288 x 1.2` = 0.9724em
+/// The first two differ by 0.002em and only separate at sizes where they round
+/// to different points, which is why #660 could fit the even split to a 17pt
+/// frame. They separate on the 28pt centred titles of the golden mocks, which
+/// [`crate::render::typst_gen_fixed_page_textbox_tests`] pins against the
+/// committed native exports (issue #1118).
 #[test]
-fn test_powerpoint_line_box_splits_leading_evenly() {
+fn test_powerpoint_line_box_shares_the_gap_inclusive_line() {
     let Some((above, below)) = powerpoint_line_box_em("Arial") else {
         return; // no Arial-compatible face on this host
     };
@@ -860,9 +866,191 @@ fn test_powerpoint_line_box_splits_leading_evenly() {
         "the split must still span the 1.2em line, got {above} + {below}"
     );
     assert!(
-        (above - 0.9467).abs() < 0.004,
-        "Arial's first baseline must sit 0.9467em below the box top (even split), \
-         not {above}em"
+        (above - 0.94471).abs() < 0.001,
+        "Arial's first baseline must sit 0.94471em below the box top — its own \
+         share of the box counting the hhea line gap — not {above}em"
+    );
+}
+
+/// Every Arial seat the committed golden-mock exports carry, at the twelve
+/// sizes those decks use.
+///
+/// The figures come from the native PowerPoint 16.111 exports under
+/// `tests/golden_mocks/business/expected/pptx/`, traced with
+/// `mutool draw -F trace`. A frame's content top is its `a:off` plus the
+/// `a:bodyPr` top inset; a centred single-line frame seats its 1.2em line
+/// `(content height - 1.2 x size) / 2` further down. Subtracting that leaves
+/// the seat inside the line, which the exports put on a whole point (#1074).
+///
+/// This is what re-checking #660's `08_marketing_report_en` p3 frame against
+/// its native export turned up, as issue #1118 asked: the 28pt cells separate
+/// the gap-inclusive share from the even split, and the even split is the one
+/// that misses them. Arial's own line gap is what the two disagree about, so
+/// the same table also fixes where PowerPoint puts that gap — a gap given to
+/// the ascent side, or halved across both, lands on 31pt at 32pt where the
+/// exports show 30.
+#[test]
+fn arial_slide_seats_match_the_golden_mock_exports() {
+    // Arial: hhea ascender 1854, descender -434, line gap 67 per 2048 upem.
+    let upem: f64 = 2048.0;
+    let ascent_em: f64 = 1854.0 / upem;
+    let descent_em: f64 = 434.0 / upem;
+    let line_gap_em: f64 = 67.0 / upem;
+
+    let (above, below) = powerpoint_line_box_split_em(ascent_em, descent_em, line_gap_em)
+        .expect("a positive ascent splits the line box");
+    assert!(
+        (above + below - POWERPOINT_LINE_HEIGHT_FACTOR).abs() < 1e-9,
+        "the split must still span the 1.2em line, got {above} + {below}"
+    );
+
+    // (font size pt, the seat the exports put inside the line, in pt).
+    const EXPORTED: [(f64, f64); 12] = [
+        (12.0, 11.04),
+        (12.5, 12.06),
+        (13.0, 11.88),
+        (14.5, 13.92),
+        (15.0, 13.92),
+        (17.0, 16.08),
+        (18.0, 17.04),
+        (19.0, 17.88),
+        (28.0, 26.04),
+        (30.0, 28.08),
+        (32.0, 30.00),
+        (40.0, 37.92),
+    ];
+    // The exports quantise a position to a 0.24pt grid, so a whole-point seat
+    // is within half of that of the measured one or it is a different model.
+    const HALF_GRID_PT: f64 = 0.12 + 1e-9;
+
+    let natural_em: f64 = ascent_em + descent_em + line_gap_em;
+    let rivals: [(&str, f64); 3] = [
+        (
+            "the even split",
+            (POWERPOINT_LINE_HEIGHT_FACTOR + ascent_em - descent_em) / 2.0,
+        ),
+        (
+            "a gap-free proportional share",
+            POWERPOINT_LINE_HEIGHT_FACTOR * ascent_em / (ascent_em + descent_em),
+        ),
+        (
+            "the gap given to the ascent side",
+            POWERPOINT_LINE_HEIGHT_FACTOR * (ascent_em + line_gap_em) / natural_em,
+        ),
+    ];
+    let mut rival_misses: [usize; 3] = [0; 3];
+
+    for (size_pt, export_pt) in EXPORTED {
+        let seat_pt: f64 = (above * size_pt).round();
+        assert!(
+            (seat_pt - export_pt).abs() <= HALF_GRID_PT,
+            "at {size_pt}pt the exports seat the baseline {export_pt}pt into the \
+             line; the split predicts {seat_pt}pt"
+        );
+        for (index, (_, share_em)) in rivals.iter().enumerate() {
+            if ((share_em * size_pt).round() - export_pt).abs() > HALF_GRID_PT {
+                rival_misses[index] += 1;
+            }
+        }
+    }
+
+    // Triangulation: each rival has to be ruled out by this table, or the table
+    // would pass on it too. The even split survives all but the 28pt cells,
+    // which is why it stood until #1118.
+    for ((name, _), misses) in rivals.iter().zip(rival_misses) {
+        assert!(
+            misses > 0,
+            "{name} must be a model this table rules out, but it misses none of \
+             the {} cells",
+            EXPORTED.len()
+        );
+    }
+    assert_eq!(
+        rival_misses[0], 1,
+        "only the 28pt cells separate the even split from the gap-inclusive share"
+    );
+}
+
+/// A face whose own line *fits* inside the 1.2em box is shared like any other
+/// — the extra leading is not halved.
+///
+/// Measured on a native PowerPoint 16.112 export of a one-factor probe deck:
+/// bottom-anchored text boxes with every inset zeroed, traced with
+/// `mutool draw -F trace`, at the 14 sizes below. Georgia is the probe's only
+/// face that fits the box (hhea 1878/-449 per 2048 upem, no line gap, so a
+/// 1.13623em line), which is what lets it tell the two shares apart: its
+/// proportional share is 0.968457em and its even share 0.948877em. A
+/// bottom-anchored box keeps `1.2 x size - round(share x size)` under its last
+/// baseline, the seat being rounded to a whole point (issue #1074).
+///
+/// The even split is outside the export's 0.12pt half-grid at 9 of the 14
+/// sizes and 2.04pt out at 72pt; the proportional share is inside it at all 14.
+/// The five sizes where they agree — 8, 18, 24, 28 and 48 — are the ones where
+/// they round to the same point, which is how the branch survived #660 (issue
+/// #1118).
+#[test]
+fn a_face_that_fits_the_line_box_is_shared_like_any_other() {
+    // Georgia: hhea ascender 1878, descender -449, no line gap, 2048 upem.
+    let upem: f64 = 2048.0;
+    let ascent_em: f64 = 1878.0 / upem;
+    let descent_em: f64 = 449.0 / upem;
+    assert!(
+        ascent_em + descent_em < POWERPOINT_LINE_HEIGHT_FACTOR,
+        "this test needs a face that fits the box, got {}em",
+        ascent_em + descent_em
+    );
+
+    let (above, below) = powerpoint_line_box_split_em(ascent_em, descent_em, 0.0)
+        .expect("a positive ascent splits the line box");
+    assert!(
+        (above + below - POWERPOINT_LINE_HEIGHT_FACTOR).abs() < 1e-9,
+        "the split must still span the 1.2em line, got {above} + {below}"
+    );
+
+    // (font size pt, the gap the export keeps below the last baseline in pt).
+    const PROBE: [(f64, f64); 14] = [
+        (8.0, 1.680),
+        (11.0, 2.160),
+        (14.0, 2.800),
+        (18.0, 4.560),
+        (24.0, 5.920),
+        (28.0, 6.560),
+        (32.0, 7.400),
+        (36.0, 8.200),
+        (40.0, 8.960),
+        (44.0, 9.880),
+        (48.0, 11.560),
+        (54.0, 12.760),
+        (72.0, 16.360),
+        (100.0, 23.120),
+    ];
+    // The exports quantise a position to a 0.24pt grid, so a modelled gap is
+    // within half of that of the measured one or it is a different model. Two
+    // of the 14 sizes land exactly on that half-grid, hence the float slack.
+    const HALF_GRID_PT: f64 = 0.12 + 1e-9;
+    let gap_pt = |share_em: f64, size_pt: f64| -> f64 {
+        POWERPOINT_LINE_HEIGHT_FACTOR * size_pt - (share_em * size_pt).round()
+    };
+
+    let even_em: f64 = (POWERPOINT_LINE_HEIGHT_FACTOR + ascent_em - descent_em) / 2.0;
+    let mut even_misses: usize = 0;
+    for (size_pt, export_pt) in PROBE {
+        let modelled_pt: f64 = gap_pt(above, size_pt);
+        assert!(
+            (modelled_pt - export_pt).abs() <= HALF_GRID_PT,
+            "at {size_pt}pt the export keeps {export_pt}pt under the baseline; \
+             the split predicts {modelled_pt}pt"
+        );
+        if (gap_pt(even_em, size_pt) - export_pt).abs() > HALF_GRID_PT {
+            even_misses += 1;
+        }
+    }
+
+    // Triangulation: without this the even split would pass the loop above at
+    // the five sizes where the two shares round to the same point.
+    assert_eq!(
+        even_misses, 9,
+        "the even split must still be the model this probe rules out"
     );
 }
 
