@@ -296,6 +296,57 @@ fn test_text_box_combined_formatting() {
     assert_eq!(run.style.font_size, Some(18.0));
     assert_eq!(run.style.color, Some(Color::new(255, 0, 0)));
     assert_eq!(run.style.font_family, Some("Arial".to_string()));
+    assert_eq!(
+        run.style.color_alpha, None,
+        "a run whose fill declares no a:alpha is fully opaque"
+    );
+}
+
+/// A run's `a:solidFill` colour may carry `<a:alpha>`, which PowerPoint
+/// composites the ink at. The sensitivity footer a slide master stamps is the
+/// common case: black at `val="50000"` reads as a half-tone, not solid black
+/// (issue #1121).
+#[test]
+fn test_text_box_run_fill_alpha() {
+    let runs_xml = r#"<a:r><a:rPr sz="800"><a:solidFill><a:srgbClr val="000000"><a:alpha val="50000"/></a:srgbClr></a:solidFill></a:rPr><a:t>Sensitivity: Internal</a:t></a:r>"#;
+    let shape = make_formatted_text_box(0, 0, 1_000_000, 500_000, runs_xml);
+    let slide = make_slide_xml(&[shape]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = first_fixed_page(&doc);
+    let blocks = text_box_blocks(&page.elements[0]);
+    let para = match &blocks[0] {
+        Block::Paragraph(p) => p,
+        _ => panic!("Expected Paragraph"),
+    };
+    let run = &para.runs[0];
+    assert_eq!(run.text, "Sensitivity: Internal");
+    assert_eq!(run.style.color, Some(Color::new(0, 0, 0)));
+    assert_eq!(run.style.color_alpha, Some(0.5));
+}
+
+/// Triangulation for [`test_text_box_run_fill_alpha`]: a different alpha on a
+/// different colour, declared through a scheme colour rather than `srgbClr`.
+#[test]
+fn test_text_box_run_fill_alpha_scheme_color() {
+    let runs_xml = r#"<a:r><a:rPr sz="1200"><a:solidFill><a:schemeClr val="accent1"><a:alpha val="30000"/></a:schemeClr></a:solidFill></a:rPr><a:t>Faded accent</a:t></a:r>"#;
+    let shape = make_formatted_text_box(0, 0, 1_000_000, 500_000, runs_xml);
+    let slide = make_slide_xml(&[shape]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = first_fixed_page(&doc);
+    let blocks = text_box_blocks(&page.elements[0]);
+    let para = match &blocks[0] {
+        Block::Paragraph(p) => p,
+        _ => panic!("Expected Paragraph"),
+    };
+    let run = &para.runs[0];
+    assert_eq!(run.text, "Faded accent");
+    assert_eq!(run.style.color_alpha, Some(0.3));
 }
 
 #[test]

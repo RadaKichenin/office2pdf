@@ -987,3 +987,63 @@ fn hard_break_columns_state_their_own_line_advance() {
 fn hard_break_line_advance_smoke() {
     assert_produces_valid_pdf("hard_break_line_advance.pptx");
 }
+
+// ---------------------------------------------------------------------------
+// run-fill-alpha.pptx
+//
+// Three 32pt Arial lines over one `32D6A6` backdrop, declaring the same black
+// `a:solidFill` at `a:alpha` 100%, 50% and 25% (issue #1121). A native
+// PowerPoint 16.112 export composites the ink at exactly those fractions: the
+// darkest pixel of each line reads (0,0,0), (24,106,82) and (37,160,124)
+// against the backdrop's (50,214,166). We used to drop the alpha and print all
+// three as solid black.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn smoke_run_fill_alpha() {
+    assert_produces_valid_pdf("run-fill-alpha.pptx");
+}
+
+/// Each line's declared opacity reaches the IR.
+#[test]
+fn structure_run_fill_alpha_keeps_each_declared_opacity() {
+    let pages = fixed_pages("run-fill-alpha.pptx");
+    assert_eq!(pages.len(), 1);
+    let text_box = pages[0]
+        .elements
+        .iter()
+        .find_map(|element| match &element.kind {
+            FixedElementKind::TextBox(text_box) => Some(text_box),
+            _ => None,
+        })
+        .expect("fixture should contain its label frame");
+    let opacities: Vec<Option<f64>> = text_box
+        .content
+        .iter()
+        .filter_map(|block| match block {
+            Block::Paragraph(paragraph) => Some(paragraph),
+            _ => None,
+        })
+        .map(|paragraph| paragraph.runs[0].style.color_alpha)
+        .collect();
+
+    assert_eq!(opacities, vec![None, Some(0.5), Some(0.25)]);
+}
+
+/// The opacity survives codegen, so the ink composites against the backdrop
+/// instead of printing as solid black.
+#[test]
+fn run_fill_alpha_composites_in_the_generated_source() {
+    let data = load_fixture("run-fill-alpha.pptx");
+    let (document, _warnings) = PptxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let source = generate_typst(&document).unwrap().source;
+
+    assert!(
+        source.contains("fill: rgb(0, 0, 0, 128)"),
+        "the 50% line should composite at 128/255: {source}"
+    );
+    assert!(
+        source.contains("fill: rgb(0, 0, 0, 64)"),
+        "the 25% line should composite at 64/255: {source}"
+    );
+}

@@ -119,6 +119,8 @@ pub(super) fn extract_cell_text_style(
         underline,
         strikethrough,
         color,
+        // `xf/font/color` states no opacity, so cell ink is always opaque.
+        color_alpha: None,
         highlight: None,
         vertical_align: None,
         baseline_shift: None,

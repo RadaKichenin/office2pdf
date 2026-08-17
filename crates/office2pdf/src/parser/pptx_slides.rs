@@ -1731,8 +1731,14 @@ fn apply_solid_fill_color(
             }
         }
         SolidFillCtx::LineFill => shape.ln_color = parsed.color,
-        SolidFillCtx::RunFill => run_style.color = parsed.color,
-        SolidFillCtx::EndParaFill => end_run_style.color = parsed.color,
+        SolidFillCtx::RunFill => {
+            run_style.color = parsed.color;
+            run_style.color_alpha = parsed.alpha;
+        }
+        SolidFillCtx::EndParaFill => {
+            end_run_style.color = parsed.color;
+            end_run_style.color_alpha = parsed.alpha;
+        }
         SolidFillCtx::BulletFill => {
             bullet_def.color = parsed.color.map(PptxBulletColorSource::Explicit);
         }

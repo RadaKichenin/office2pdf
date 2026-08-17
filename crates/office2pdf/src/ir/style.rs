@@ -236,6 +236,16 @@ pub struct TextStyle {
     pub underline: Option<bool>,
     pub strikethrough: Option<bool>,
     pub color: Option<Color>,
+    /// Opacity `color` is composited at, 0.0 (invisible) to 1.0 (opaque).
+    ///
+    /// DrawingML states it as `<a:alpha>` inside the run's `a:solidFill`
+    /// colour, and PowerPoint composites the ink at exactly that fraction: the
+    /// sensitivity footer a slide master stamps at `val="50000"` prints as a
+    /// half-tone of whatever sits behind it, not as solid ink (issue #1121).
+    /// `None` means the run states no alpha, which is fully opaque. Kept beside
+    /// `color` rather than folded into it, because the composite depends on the
+    /// backdrop, which the parser cannot see.
+    pub color_alpha: Option<f64>,
     /// Text highlight background color.
     pub highlight: Option<Color>,
     /// Superscript or subscript vertical alignment.
@@ -294,8 +304,12 @@ impl TextStyle {
         if other.strikethrough.is_some() {
             self.strikethrough = other.strikethrough;
         }
+        // The alpha travels with the colour it applies to: a run that states
+        // its own opaque fill must not keep the half-opacity of the level it
+        // inherits from (issue #1121).
         if other.color.is_some() {
             self.color = other.color;
+            self.color_alpha = other.color_alpha;
         }
         if other.highlight.is_some() {
             self.highlight = other.highlight;

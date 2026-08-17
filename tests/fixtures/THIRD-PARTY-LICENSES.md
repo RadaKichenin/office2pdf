@@ -29,6 +29,7 @@ No attribution required. These files are in the public domain.
   - `docx/10-pages.docx`
   - `pptx/1-slide.pptx`
   - `pptx/pattern-fill.pptx` (modified from `pptx/1-slide.pptx`)
+  - `pptx/run-fill-alpha.pptx` (modified from `pptx/1-slide.pptx`)
   - `pptx/5-slides.pptx`
   - `pptx/10-slides.pptx`
   - `xlsx/100-customers.xlsx`

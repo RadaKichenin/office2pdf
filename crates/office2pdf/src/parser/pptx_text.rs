@@ -285,7 +285,9 @@ impl ListStyleParseState {
     ) {
         let parsed: ParsedColor = parse_color_from_start(reader, e, theme, color_map);
         if let Some(target) = self.active_run_target {
-            self.run_style_mut(target).color = parsed.color;
+            let style: &mut TextStyle = self.run_style_mut(target);
+            style.color = parsed.color;
+            style.color_alpha = parsed.alpha;
         }
     }
 
@@ -297,7 +299,11 @@ impl ListStyleParseState {
     ) {
         let parsed: ParsedColor = parse_color_from_empty(e, theme, color_map);
         if let Some(target) = self.active_run_target {
-            self.run_style_mut(target).color = parsed.color;
+            let style: &mut TextStyle = self.run_style_mut(target);
+            style.color = parsed.color;
+            // A self-closing colour carries no `<a:alpha>` child, so it states
+            // full opacity and clears any inherited half-tone.
+            style.color_alpha = parsed.alpha;
         }
     }
 
@@ -979,6 +985,7 @@ pub(super) fn resolve_pptx_marker_style(
         Some(PptxBulletColorSource::FollowText) | None => {}
         Some(PptxBulletColorSource::Explicit(color)) => {
             style.color = Some(*color);
+            style.color_alpha = None;
         }
     }
 
@@ -1191,6 +1198,9 @@ pub(super) fn apply_pptx_hyperlink_style(
 ) {
     if !has_explicit_color && let Some(color) = resolve_scheme_color(theme, color_map, "hlink") {
         style.color = Some(color);
+        // The theme's hyperlink colour states no alpha, so it replaces an
+        // inherited half-tone rather than being composited at it.
+        style.color_alpha = None;
     }
     if !has_explicit_underline {
         style.underline = Some(true);
