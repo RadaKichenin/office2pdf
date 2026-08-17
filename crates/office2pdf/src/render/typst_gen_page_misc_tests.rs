@@ -3129,7 +3129,8 @@ fn a_non_wrapping_anchored_frame_sizes_to_its_content() {
 
 /// A 5 × 60pt grid on A4 portrait with 0.7in margins: the probe workbook of
 /// issue #1110, whose native Excel-for-Mac export puts the printed grid's
-/// left edge at 146pt.
+/// left edge at 146pt. Its 50.4pt sides reach the renderer on the whole point
+/// Excel prints against (issue #1127).
 fn centered_sheet_page(centers: bool, column_widths: Vec<f64>) -> Page {
     Page::Sheet(SheetPage {
         name: "Sheet1".to_string(),
@@ -3137,8 +3138,8 @@ fn centered_sheet_page(centers: bool, column_widths: Vec<f64>) -> Page {
         margins: Margins {
             top: 54.0,
             bottom: 54.0,
-            left: 50.4,
-            right: 50.4,
+            left: 50.0,
+            right: 50.0,
         },
         table: Table {
             rows: vec![TableRow {
@@ -3173,9 +3174,9 @@ fn test_horizontally_centered_sheet_insets_the_grid_from_the_left_margin() {
     let inset_pt: f64 = sheet_centering_inset_pt(&source)
         .unwrap_or_else(|| panic!("a centred sheet must inset its grid: {source}"));
 
-    // 595.28pt page, 50.4pt margins, 300pt grid: the exact centre is 147.64pt
+    // 595.28pt page, 50pt margins, 300pt grid: the exact centre is 147.64pt
     // from the page edge and Excel prints the grid at 146pt (issue #1110).
-    let grid_left_pt: f64 = 50.4 + inset_pt;
+    let grid_left_pt: f64 = 50.0 + inset_pt;
     assert!(
         (grid_left_pt - 146.0).abs() < 1.0,
         "grid left edge {grid_left_pt}pt must land within 1pt of Excel's 146pt: {source}"

@@ -865,10 +865,13 @@ fn generate_table_page(
 /// between the *margins*, not on the page; the fit-to-page probe centres the
 /// width the scale leaves; and a sheet split into column groups centres each
 /// page by the columns on it. Excel's own whole-point page and margin geometry
-/// is what makes the result an integer — this converter's page is 595.28pt
-/// wide where Excel's A4 is 595 — so the flooring is deliberately not
-/// reproduced and only the measured 1pt is taken off; the residual stays under
-/// 0.7pt on every probe above.
+/// is what makes the result an integer. The margins now reach the page on that
+/// whole point (issue #1127), but this converter's page is still 595.28pt wide
+/// where Excel's A4 is 595, so the flooring is not reproduced end to end and
+/// only the measured 1pt is taken off; the residual stays under 0.7pt on every
+/// probe above. A centred grid's left edge is `(page + left − right − grid)/2`,
+/// so snapping both side margins by the same fraction leaves every reading in
+/// the table exactly where it was.
 const HORIZONTAL_CENTERING_BIAS_PT: f64 = 1.0;
 
 /// Points to inset the printed sheet from its left margin, or `None` when the
