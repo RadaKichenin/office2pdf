@@ -90,6 +90,56 @@ fn sheet_print_margins(sheet: &umya_spreadsheet::Worksheet) -> Margins {
     }
 }
 
+/// The footer margin Excel prints a sheet at when it states none: 0.3".
+const DEFAULT_PRINT_FOOTER_MARGIN_PT: f64 = 21.6;
+
+/// What Excel leaves between `<pageMargins>/@footer` and the bottom of the
+/// footer text's line box, in points.
+///
+/// Measured on Excel-for-Mac exports of one-factor variants of
+/// `tests/fixtures/xlsx/headerFooterTest.xlsx`. A 12pt Calibri footer over a
+/// 0.5in (36pt) footer margin puts its baseline 41pt above the page's bottom
+/// edge; Calibri's `hhea` descender is 0.26855em, so 36 + 2 + 3.22 = 41.22
+/// lands on the whole point Excel prints it at. The same 2pt holds across the
+/// series 6, 8, 12, 14, 20, 40 and 80pt, across Arial, Verdana, Times New
+/// Roman, Aptos and Segoe UI, and at footer margins of 0.3, 0.5, 0.75 and
+/// 1.0in (issue #1142).
+const SHEET_FOOTER_BAND_INSET_PT: f64 = 2.0;
+
+/// Where Excel seats a printed sheet footer: the distance from the page's
+/// bottom edge to the bottom of the footer text's line box.
+///
+/// The band is measured up from the paper, through `<pageMargins>/@footer`,
+/// and neither the bottom margin nor the sheet's own body height moves it —
+/// both probed one factor at a time against native exports. The margin floors
+/// to a whole device point for the same reason [`sheet_print_margins`] does.
+fn sheet_footer_distance_from_edge(sheet: &umya_spreadsheet::Worksheet) -> f64 {
+    let declared_in: f64 = *sheet.get_page_margins().get_footer();
+    let footer_margin_pt: f64 = if declared_in > 0.0 {
+        declared_in * 72.0
+    } else {
+        DEFAULT_PRINT_FOOTER_MARGIN_PT
+    };
+    footer_margin_pt.floor() + SHEET_FOOTER_BAND_INSET_PT
+}
+
+/// Parse a sheet's odd footer and seat it on the page's bottom edge.
+fn sheet_print_footer(
+    sheet: &umya_spreadsheet::Worksheet,
+    sheet_name: &str,
+    normal_font: Option<&xlsx_cells::NormalFont>,
+    warnings: &mut Vec<ConvertWarning>,
+) -> Option<crate::ir::HeaderFooter> {
+    let mut footer = parse_hf_format_string(
+        sheet.get_header_footer().get_odd_footer().get_value(),
+        sheet_name,
+        normal_font,
+        warnings,
+    )?;
+    footer.distance_from_edge = Some(sheet_footer_distance_from_edge(sheet));
+    Some(footer)
+}
+
 /// Map an OOXML worksheet paper-size code to portrait dimensions in points.
 ///
 /// Code 0 is not a paper size — it is the zero umya leaves in an unset
@@ -669,12 +719,8 @@ impl XlsxParser {
                 normal_font.as_ref(),
                 &mut warnings,
             );
-            let sheet_footer = parse_hf_format_string(
-                hf.get_odd_footer().get_value(),
-                &sheet_name,
-                normal_font.as_ref(),
-                &mut warnings,
-            );
+            let sheet_footer =
+                sheet_print_footer(sheet, &sheet_name, normal_font.as_ref(), &mut warnings);
 
             // Pull charts for this sheet
             let mut sheet_charts: Vec<crate::ir::SheetChart> = chart_map
@@ -996,12 +1042,8 @@ impl Parser for XlsxParser {
                 normal_font.as_ref(),
                 &mut warnings,
             );
-            let sheet_footer = parse_hf_format_string(
-                hf.get_odd_footer().get_value(),
-                &sheet_name,
-                normal_font.as_ref(),
-                &mut warnings,
-            );
+            let sheet_footer =
+                sheet_print_footer(sheet, &sheet_name, normal_font.as_ref(), &mut warnings);
 
             // Pull charts for this sheet (if any)
             let mut sheet_charts: Vec<crate::ir::SheetChart> = chart_map

@@ -2326,7 +2326,20 @@ fn write_table_page_setup(out: &mut String, page: &SheetPage, size: &PageSize, c
     }
 
     if let Some(footer) = &page.footer {
-        if hf_needs_stack_offset(footer) {
+        if let Some(band) = sheet_footer_band_pt(footer, page.margins.bottom) {
+            out.push_str(", footer-descent: 0pt, footer: ");
+            if hf_needs_context(footer) {
+                out.push_str("context ");
+            }
+            let _ = write!(
+                out,
+                "block(width: 100%, height: {}pt)[#set text(bottom-edge: {}); #place(bottom, block(width: 100%)[",
+                format_f64(band),
+                sheet_footer_bottom_edge(footer),
+            );
+            generate_hf_content(out, footer, ctx);
+            out.push_str("])]");
+        } else if hf_needs_stack_offset(footer) {
             out.push_str(", footer: context { let footer_content = block(width: 100%)[");
             generate_hf_content(out, footer, ctx);
             out.push_str("]; move(dy: -measure(footer_content).height / 2)[#footer_content] }");
@@ -2342,6 +2355,50 @@ fn write_table_page_setup(out: &mut String, page: &SheetPage, size: &PageSize, c
     }
 
     out.push_str(")\n");
+}
+
+/// The band a seated sheet footer spans, from the bottom margin line down to
+/// the bottom of its text's line box (issue #1142).
+///
+/// Excel measures a printed footer up from the paper through
+/// `<pageMargins>/@footer`, so `footer-descent: 0pt` pins Typst's footer origin
+/// on the bottom margin line and a block spanning the remainder ends where
+/// Excel's footer text ends. `None` leaves the story on Typst's own descent:
+/// either the seat is unknown, or the footer margin reaches past the bottom
+/// margin and there is no band to span.
+fn sheet_footer_band_pt(footer: &HeaderFooter, bottom_margin_pt: f64) -> Option<f64> {
+    footer
+        .distance_from_edge
+        // Keep float noise (54 - 23.000000000000004) out of the emitted source.
+        .map(|distance| ((bottom_margin_pt - distance) * 100.0).round() / 100.0)
+        .filter(|band| *band > 0.0)
+}
+
+/// The `bottom-edge` a seated sheet footer's text takes, as a Typst value.
+///
+/// The band's bottom is where Excel's footer text bottoms out, so what sits
+/// between it and the last baseline is that line's own sub-baseline share —
+/// the face's bare `hhea` descent, which is what the native exports measure
+/// (issue #1142). Typst's `"descender"` is its *normalised* one, a different
+/// quantity, and is only the fallback for a line whose face cannot be read.
+///
+/// The deepest of the footer's paragraphs wins because Excel's left, centre
+/// and right sections share one line — [`generate_hf_content`] lays them out
+/// as one grid row — and a line bottoms out on whichever of its runs reaches
+/// furthest below the baseline. `bottom-edge` is one `set text` value for the
+/// whole story, so a footer that really does stack lines takes the deepest
+/// face's ratio rather than its last line's; the two differ by well under a
+/// point on any face pair measured here.
+fn sheet_footer_bottom_edge(footer: &HeaderFooter) -> String {
+    footer
+        .paragraphs
+        .iter()
+        .filter_map(|paragraph| {
+            text::sheet_line_box_descent_em(&hf_paragraph_metric_runs(paragraph))
+        })
+        .max_by(|a, b| a.total_cmp(b))
+        .map(|descent_em| format!("-{}em", format_f64(descent_em)))
+        .unwrap_or_else(|| "\"descender\"".to_string())
 }
 
 /// Check if a header/footer contains any context-dependent fields (page number or total pages).

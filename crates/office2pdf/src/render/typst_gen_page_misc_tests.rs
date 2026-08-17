@@ -707,6 +707,139 @@ fn test_table_page_with_page_number_footer() {
     );
 }
 
+/// A sheet page carrying a footer seat, for the seating tests below.
+#[cfg(not(target_arch = "wasm32"))]
+fn sheet_page_with_seated_footer(distance_from_edge: Option<f64>, family: Option<&str>) -> Page {
+    Page::Sheet(SheetPage {
+        name: "Sheet1".to_string(),
+        size: PageSize::default(),
+        margins: Margins {
+            top: 54.0,
+            bottom: 54.0,
+            left: 50.0,
+            right: 50.0,
+        },
+        table: make_simple_table(vec![vec!["A"]]),
+        header: None,
+        footer: Some(HeaderFooter {
+            shapes: Vec::new(),
+            distance_from_edge,
+            paragraphs: vec![HeaderFooterParagraph {
+                style: ParagraphStyle {
+                    alignment: Some(Alignment::Left),
+                    ..ParagraphStyle::default()
+                },
+                elements: vec![HFInline::Run(Run {
+                    text: "Sensitivity: Internal".to_string(),
+                    style: TextStyle {
+                        font_family: family.map(str::to_string),
+                        font_size: Some(8.0),
+                        ..TextStyle::default()
+                    },
+                    href: None,
+                    footnote: None,
+                })],
+                border: None,
+                border_space: None,
+                frame: None,
+            }],
+        }),
+        charts: vec![],
+        images: Vec::new(),
+        text_boxes: Vec::new(),
+    })
+}
+
+/// A seated sheet footer grows up from the page's bottom edge, not down from
+/// the bottom margin (issue #1142).
+///
+/// Typst's default `footer-descent` is 30% of the bottom margin, so the band
+/// moved with the body's own geometry: two pages of one workbook sharing
+/// `<pageMargins bottom="0.75" footer="0.3"/>` put the same footer 5.21pt and
+/// 7.13pt off the native export, and the gap differed between them. Pinning
+/// the origin on the bottom margin line and spanning the remainder with a band
+/// makes the seat depend on `@footer` alone.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_seated_sheet_footer_spans_the_gap_to_its_own_margin() {
+    let source = generate_typst(&make_doc(vec![sheet_page_with_seated_footer(
+        Some(23.0),
+        Some("Arial"),
+    )]))
+    .expect("document should generate")
+    .source;
+
+    assert!(
+        source.contains("footer-descent: 0pt"),
+        "the footer origin must sit on the bottom margin line: {source}"
+    );
+    assert!(
+        source.contains("block(width: 100%, height: 31pt)"),
+        "the band must span the 54pt bottom margin down to the 23pt seat: {source}"
+    );
+    assert!(
+        source.contains("#place(bottom"),
+        "the content must rest on the band's bottom: {source}"
+    );
+}
+
+/// Triangulation: the band is measured, not a constant (issue #1142).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_seated_sheet_footer_band_tracks_the_stated_seat() {
+    let source = generate_typst(&make_doc(vec![sheet_page_with_seated_footer(
+        Some(38.0),
+        Some("Arial"),
+    )]))
+    .expect("document should generate")
+    .source;
+
+    assert!(
+        source.contains("block(width: 100%, height: 16pt)"),
+        "a 38pt seat under a 54pt bottom margin leaves a 16pt band: {source}"
+    );
+}
+
+/// The band states the footer face's own `hhea` descent, so the last baseline
+/// lands the descent above the seat (issue #1142).
+///
+/// Arial, because every runner resolves it — through Liberation Sans where the
+/// face itself is absent.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_seated_sheet_footer_states_its_own_bottom_edge() {
+    let (ascender_em, _, pitch_em) =
+        crate::render::pdf::font_line_metrics_em("Arial").expect("Arial metrics should resolve");
+    let expected_em: f64 = pitch_em - ascender_em;
+
+    let source = generate_typst(&make_doc(vec![sheet_page_with_seated_footer(
+        Some(23.0),
+        Some("Arial"),
+    )]))
+    .expect("document should generate")
+    .source;
+
+    assert!(
+        source.contains(&format!("bottom-edge: -{}em", format_f64(expected_em))),
+        "the band must state Arial's own {expected_em}em descent: {source}"
+    );
+}
+
+/// A footer with no seat keeps the old placement, so a `Page::Sheet` built
+/// without one is untouched.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn an_unseated_sheet_footer_keeps_the_default_descent() {
+    let source = generate_typst(&make_doc(vec![sheet_page_with_seated_footer(None, None)]))
+        .expect("document should generate")
+        .source;
+
+    assert!(
+        !source.contains("footer-descent"),
+        "an unseated footer must not pin the origin: {source}"
+    );
+}
+
 #[test]
 fn test_table_page_no_header_footer() {
     let page = Page::Sheet(SheetPage {
