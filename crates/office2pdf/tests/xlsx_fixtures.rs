@@ -196,14 +196,16 @@ fn structure_pr_186_contributor_acceptance_supported_behavior() {
         .expect("A4 should have a top border");
     assert_eq!(top_border.style, BorderLineStyle::Double);
 
-    assert!((statement.margins.top - 28.8).abs() < 0.01);
+    // The sheet declares 0.4in / 0.5in / 0.3in / 0.6in and 0.7in, which reach
+    // the paper on the whole point Excel prints against (issue #1127).
+    assert!((statement.margins.top - 28.0).abs() < 0.01);
     assert!((statement.margins.bottom - 36.0).abs() < 0.01);
-    assert!((statement.margins.left - 21.6).abs() < 0.01);
-    assert!((statement.margins.right - 43.2).abs() < 0.01);
+    assert!((statement.margins.left - 21.0).abs() < 0.01);
+    assert!((statement.margins.right - 43.0).abs() < 0.01);
     assert!((executive.margins.top - 54.0).abs() < 0.01);
     assert!((executive.margins.bottom - 54.0).abs() < 0.01);
-    assert!((executive.margins.left - 50.4).abs() < 0.01);
-    assert!((executive.margins.right - 50.4).abs() < 0.01);
+    assert!((executive.margins.left - 50.0).abs() < 0.01);
+    assert!((executive.margins.right - 50.0).abs() < 0.01);
 }
 
 #[test]
@@ -1618,6 +1620,21 @@ fn structure_light1_table_style_bands_rules_and_bolds_its_header() {
         Some(true),
         "the table style prints its header row bold"
     );
+}
+
+/// `ExcelTables.xlsx` declares a 0.7874in top and bottom margin (56.69pt) and
+/// a 0.7in left and right one (50.4pt). A native Excel-for-Mac export prints
+/// its grid against 56 and 50: the rule above the table's header spans y 56-57
+/// and starts at x 464 = 50 + six 69pt columns, where printing against the
+/// exact margin put them at 56.69-57.69 and 464.4 (issue #1127).
+#[test]
+fn structure_a_fractional_print_margin_lands_on_a_whole_point() {
+    let pages = sheet_pages("ExcelTables.xlsx");
+    let margins = pages[0].margins;
+    assert_eq!(margins.top, 56.0, "56.69pt top prints against 56");
+    assert_eq!(margins.bottom, 56.0);
+    assert_eq!(margins.left, 50.0, "50.4pt left prints against 50");
+    assert_eq!(margins.right, 50.0);
 }
 
 /// `SH001-Table.xlsx` styles its `A1:C3` table `TableStyleMedium2` over an

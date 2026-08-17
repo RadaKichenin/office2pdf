@@ -52,23 +52,41 @@ const DEFAULT_PRINT_MARGINS: Margins = Margins {
 };
 
 /// Print margins for a sheet: the worksheet's explicit `<pageMargins>` when
-/// present, otherwise Excel's defaults.
+/// present, otherwise Excel's defaults, each snapped to the whole device point
+/// Excel prints against.
+///
 /// umya leaves absent margin attributes at 0.0, which is not a value Excel
 /// ever writes, so ≤0 means "not specified".
+///
+/// Excel lays a printed sheet out on whole device points, so a margin the file
+/// states in inches reaches the paper floored. Measured on an Excel-for-Mac
+/// export of `tests/fixtures/xlsx/ExcelTables.xlsx`, which declares a
+/// 0.78740157in top (56.69pt) and a 0.7in left (50.4pt) over 17pt rows: the
+/// grid boundaries are 56, 73, 90, 107 and 124 rather than 56.69, 73.69, …,
+/// and the first table column starts at x 464 = 50 + six 69pt columns rather
+/// than 464.4. Rounding does not fit — 56.69 would round up to 57 — and the
+/// row pitch itself is untouched, so it is the origin alone that moves
+/// (issue #1127).
+///
+/// The far margins follow the same rule, which is what puts the printed page's
+/// far edges on whole points too. No native export measured here paginates
+/// against a fractional bottom margin, so the ≤1pt of printable extent that
+/// gains is inferred from the model rather than observed.
 fn sheet_print_margins(sheet: &umya_spreadsheet::Worksheet) -> Margins {
     let page_margins = sheet.get_page_margins();
-    let inches_to_pt = |inches: f64, default_pt: f64| -> f64 {
-        if inches > 0.0 {
+    let inches_to_printed_pt = |inches: f64, default_pt: f64| -> f64 {
+        let declared_pt: f64 = if inches > 0.0 {
             inches * 72.0
         } else {
             default_pt
-        }
+        };
+        declared_pt.floor()
     };
     Margins {
-        top: inches_to_pt(*page_margins.get_top(), DEFAULT_PRINT_MARGINS.top),
-        bottom: inches_to_pt(*page_margins.get_bottom(), DEFAULT_PRINT_MARGINS.bottom),
-        left: inches_to_pt(*page_margins.get_left(), DEFAULT_PRINT_MARGINS.left),
-        right: inches_to_pt(*page_margins.get_right(), DEFAULT_PRINT_MARGINS.right),
+        top: inches_to_printed_pt(*page_margins.get_top(), DEFAULT_PRINT_MARGINS.top),
+        bottom: inches_to_printed_pt(*page_margins.get_bottom(), DEFAULT_PRINT_MARGINS.bottom),
+        left: inches_to_printed_pt(*page_margins.get_left(), DEFAULT_PRINT_MARGINS.left),
+        right: inches_to_printed_pt(*page_margins.get_right(), DEFAULT_PRINT_MARGINS.right),
     }
 }
 

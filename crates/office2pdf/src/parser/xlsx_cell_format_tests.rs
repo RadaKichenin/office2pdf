@@ -1182,7 +1182,58 @@ fn test_absent_page_margins_fall_back_to_excel_defaults() {
     let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
     let tp = get_sheet_page(&doc, 0);
     assert_eq!(tp.margins.top, 54.0, "Excel default 0.75in top");
-    assert_eq!(tp.margins.left, 50.4, "Excel default 0.7in left");
+    assert_eq!(
+        tp.margins.left, 50.0,
+        "Excel default 0.7in left, on the whole point it prints against"
+    );
+}
+
+// ----- Printed page laid out on whole device points (issue #1127) -----
+
+#[test]
+fn test_a_fractional_print_margin_snaps_to_the_whole_point_below_it() {
+    // Excel lays a printed sheet out on whole device points, so the 2cm
+    // margin a metric Excel writes — 0.7874in, 56.69pt — puts the sheet's
+    // first grid boundary on 56, and every row boundary below it follows from
+    // there. Printing against the exact margin left the whole grid up to 1pt
+    // low.
+    let data = build_xlsx_formatted(|sheet| {
+        sheet.get_cell_mut("A1").set_value("여백 스냅");
+        let margins = sheet.get_page_margins_mut();
+        margins.set_top(0.787_401_575);
+        margins.set_bottom(0.787_401_575);
+        margins.set_left(0.7);
+        margins.set_right(0.7);
+    });
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let tp = get_sheet_page(&doc, 0);
+    assert_eq!(tp.margins.top, 56.0, "56.69pt top prints against 56");
+    assert_eq!(tp.margins.bottom, 56.0);
+    assert_eq!(tp.margins.left, 50.0, "50.4pt left prints against 50");
+    assert_eq!(tp.margins.right, 50.0);
+}
+
+#[test]
+fn test_print_margins_snap_downwards_rather_than_to_the_nearest_point() {
+    // A fraction over a half still prints against the point below it: the
+    // rule is a floor, not a round. A margin already on a whole point is left
+    // exactly where the file puts it.
+    let data = build_xlsx_formatted(|sheet| {
+        sheet.get_cell_mut("A1").set_value("여백 내림");
+        let margins = sheet.get_page_margins_mut();
+        margins.set_top(1.25); // 90pt, already whole
+        margins.set_bottom(0.99); // 71.28pt
+        margins.set_left(1.3); // 93.6pt
+        margins.set_right(0.4); // 28.8pt
+    });
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let tp = get_sheet_page(&doc, 0);
+    assert_eq!(tp.margins.top, 90.0, "a whole margin is left alone");
+    assert_eq!(tp.margins.bottom, 71.0, "71.28pt prints against 71");
+    assert_eq!(tp.margins.left, 93.0, "93.6pt prints against 93");
+    assert_eq!(tp.margins.right, 28.0, "28.8pt prints against 28");
 }
 
 // ----- Row heights without customHeight (issue #303) -----
