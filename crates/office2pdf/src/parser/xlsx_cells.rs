@@ -1545,6 +1545,7 @@ pub(super) fn build_rows_for_range(
             let mut data_bar = None;
             let mut icon_text = None;
             let mut icon_color = None;
+            let mut icon_shading = None;
             if let Some(ovr) = ctx.cond_fmt_overrides.get(&(col_idx, row_idx)) {
                 if ovr.background.is_some() {
                     background = ovr.background;
@@ -1558,6 +1559,7 @@ pub(super) fn build_rows_for_range(
                 data_bar = ovr.data_bar.clone();
                 icon_text = ovr.icon_text.clone();
                 icon_color = ovr.icon_color;
+                icon_shading = ovr.icon_shading;
             }
 
             // Rich-text shared strings carry per-run formatting (bold labels,
@@ -1675,6 +1677,7 @@ pub(super) fn build_rows_for_range(
                 padding,
                 icon_text,
                 icon_color,
+                icon_shading,
                 spill_width,
                 vertical_align: cell_vertical_align,
             });

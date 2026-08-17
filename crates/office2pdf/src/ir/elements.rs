@@ -957,6 +957,24 @@ pub const ICON_ARROW_DOWN_RIGHT: &str = "\u{25E2}"; // ◢ black lower-right tri
 /// renderer recognizes this marker the same way it does the arrows (#536).
 pub const ICON_CIRCLE: &str = "\u{25CF}"; // ● black circle
 
+/// The paint Excel gives one icon-set icon that it prints as a shaded sprite.
+///
+/// Excel's arrows are not flat shapes: the interior ramps between two colours
+/// down the icon box's diagonal, and the silhouette carries a flat outline in a
+/// saturated dark hue of its own that is *not* a darkening of the interior —
+/// the amber band's is `#D87103` against an interior around `#FEE489`.
+/// [`TableCell::icon_color`] can only carry one colour, so a band measured
+/// against a native export carries this beside it (issue #1134).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IconShading {
+    /// Interior colour at the icon box's top-left corner.
+    pub fill_start: Color,
+    /// Interior colour at its bottom-right corner.
+    pub fill_end: Color,
+    /// The silhouette's outline, one flat colour across the whole sprite.
+    pub outline: Color,
+}
+
 /// A data bar rendering within a cell (conditional formatting).
 #[derive(Debug, Clone)]
 pub struct DataBarInfo {
@@ -996,7 +1014,13 @@ pub struct TableCell {
     /// IconSet text symbol prepended to cell content.
     pub icon_text: Option<String>,
     /// Fill color of the IconSet symbol (Excel draws icons in band colors).
+    ///
+    /// This is the band's flat stand-in, and the whole of its paint only for a
+    /// band with no [`Self::icon_shading`].
     pub icon_color: Option<Color>,
+    /// Excel's measured sprite paint for this band, where a native export has
+    /// been read. `None` leaves the icon flat in [`Self::icon_color`].
+    pub icon_shading: Option<IconShading>,
     /// Width in points that an unwrapped cell's single line paints across
     /// before it is clipped. `None` when the text fits its column and needs no
     /// clip box.
@@ -1024,6 +1048,7 @@ impl Default for TableCell {
             data_bar: None,
             icon_text: None,
             icon_color: None,
+            icon_shading: None,
             spill_width: None,
             vertical_align: None,
             padding: None,

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::ir::{Color, DataBarInfo};
+use crate::ir::{Color, DataBarInfo, IconShading};
 use crate::parser::xlsx::cond_fmt_raw::{RawCondFmtHint, RawCondFmtHints};
 use crate::parser::xlsx::xlsx_style::{blend_color, pattern_ink_coverage, resolve_style_color};
 use crate::parser::xlsx::{CellPos, CellRange, parse_cell_ref};
@@ -16,6 +16,7 @@ pub(crate) struct CondFmtOverride {
     pub data_bar: Option<DataBarInfo>,
     pub icon_text: Option<String>,
     pub icon_color: Option<Color>,
+    pub icon_shading: Option<IconShading>,
 }
 
 /// Parse an sqref string (e.g., "A1:C10" or "A1") into a list of CellRanges.
@@ -598,8 +599,7 @@ fn apply_icon_set_rule(
     let set_type: &str = raw_hint
         .and_then(|hint| hint.icon_set_type.as_deref())
         .unwrap_or("");
-    let icons: Vec<(&'static str, Option<Color>)> =
-        icon_set_glyphs(set_type, thresholds.len().max(3));
+    let icons: Vec<IconBand> = icon_set_glyphs(set_type, thresholds.len().max(3));
 
     for range in ranges {
         for row in range.start_row..=range.end_row {
@@ -608,10 +608,11 @@ fn apply_icon_set_rule(
                     && let Some(val) = cell_numeric_value(cell)
                 {
                     let icon_idx: usize = evaluate_icon_index(val, &thresholds, icons.len());
-                    let (glyph, color) = &icons[icon_idx];
+                    let (glyph, color, shading) = &icons[icon_idx];
                     let entry = overrides.entry((col, row)).or_default();
                     entry.icon_text = Some((*glyph).to_string());
                     entry.icon_color = *color;
+                    entry.icon_shading = *shading;
                 }
             }
         }
@@ -638,24 +639,25 @@ const ICON_GREEN: Color = Color {
 };
 /// The arrow sets' own fills, which are not the traffic lights'.
 ///
-/// Excel draws each arrow as a sprite filled with a vertical gradient under a
-/// dark outline, so a flat stand-in needs one colour to represent that ramp.
-/// Measured from the Excel export of `10_kpi_tracker_en`: extract the sprites,
-/// drop the near-white background, then keep only ink pixels whose four
-/// neighbours are also ink — that peels the outline ring, which a plain
-/// dominant-colour sample returns instead of the fill. The mean of what
-/// remains is the colour whose flat area matches the gradient's, and our own
-/// arrow carries a darkened outline of its own, so interior compares with
-/// interior (issue #651).
+/// Excel draws each arrow as a sprite filled with a ramp under a dark outline,
+/// so one flat colour can only stand in for that ramp. Measured from the Excel
+/// export of `10_kpi_tracker_en`: extract the sprites, drop the near-white
+/// background, then keep only ink pixels whose four neighbours are also ink —
+/// that peels the outline ring, which a plain dominant-colour sample returns
+/// instead of the fill. The mean of what remains is the colour whose flat area
+/// matches the gradient's (issue #651).
 ///
-/// | band | gradient | interior mean |
-/// | --- | --- | --- |
-/// | down | `#B9413C` → `#F8A8A9` | `#E77979` |
-/// | right | `#E89A20` → `#FFEDB1` | `#F9D06A` |
-/// | up | `#3B8440` → `#75C68B` | `#59B06D` |
+/// | band | interior mean |
+/// | --- | --- |
+/// | down | `#E77979` |
+/// | right | `#F9D06A` |
+/// | up | `#59B06D` |
 ///
-/// Scoped to `3Arrows`, the only set measured. `4Arrows` and `5Arrows` keep the
-/// shared palette until there is an export to measure them on.
+/// Since #1134 the `3Arrows` bands carry the ramp itself in the shading below,
+/// and these stay beside it as the stand-in the renderer falls back to for a
+/// glyph it cannot draw as a ramped shape. Scoped to `3Arrows`, the only set
+/// measured. `4Arrows` and `5Arrows` keep the shared palette until there is an
+/// export to measure them on.
 const ARROW_ICON_RED: Color = Color {
     r: 231,
     g: 121,
@@ -670,6 +672,86 @@ const ARROW_ICON_GREEN: Color = Color {
     r: 89,
     g: 176,
     b: 109,
+};
+
+/// The same three sprites read as what they are — a ramp under an outline —
+/// rather than averaged into one colour.
+///
+/// Every interior pixel of a sprite is a function of `x + y`: the up arrow's
+/// `#75C68B` recurs at (4,3) and (3,4), its `#70C487` at (5,3) and (4,4), and
+/// so on down all three bitmaps. The ramp therefore runs along the box's
+/// diagonal, and since the sprite's pixel is square to within 0.03% that
+/// diagonal is 45 degrees. A least-squares fit per channel over the interior
+/// pixels — those whose four neighbours are ink and none of them the outline,
+/// so no antialiased rim pixel drags it dark — holds to under 0.75 of a level
+/// on every band, which is what makes two stops the whole model.
+///
+/// The stops below are that fit evaluated at the ends of our own icon box.
+/// A sprite pixel's centre sits at `t = (x + y + 1) / 23` along the box
+/// diagonal, so `t = 0` is `x + y = -1` and `t = 1` is `x + y = 22`; the ink
+/// itself only spans `x + y` of 5 to 16, well inside the fitted range, so the
+/// ends are a parameterisation and not a claim about unpainted corners.
+///
+/// | band | outline | interior at the ends |
+/// | --- | --- | --- |
+/// | down | `#90271B` | `#FCD1D2` → `#F0393C` |
+/// | right | `#D87103` | `#FEFCF3` → `#FEC500` |
+/// | up | `#255E1B` | `#9FD8AE` → `#28A54A` |
+///
+/// The outline is flat across each sprite and is nothing like a darkening of
+/// the interior: `darken(30%)` of the amber band gave `#AE924A`, an olive,
+/// where Excel draws `#D87103` (issue #1134). Scoped to `3Arrows` with the
+/// fills above, for the same reason they are.
+const ARROW_ICON_RED_SHADING: IconShading = IconShading {
+    fill_start: Color {
+        r: 252,
+        g: 209,
+        b: 210,
+    },
+    fill_end: Color {
+        r: 240,
+        g: 57,
+        b: 60,
+    },
+    outline: Color {
+        r: 144,
+        g: 39,
+        b: 27,
+    },
+};
+const ARROW_ICON_YELLOW_SHADING: IconShading = IconShading {
+    fill_start: Color {
+        r: 254,
+        g: 252,
+        b: 243,
+    },
+    fill_end: Color {
+        r: 254,
+        g: 197,
+        b: 0,
+    },
+    outline: Color {
+        r: 216,
+        g: 113,
+        b: 3,
+    },
+};
+const ARROW_ICON_GREEN_SHADING: IconShading = IconShading {
+    fill_start: Color {
+        r: 159,
+        g: 216,
+        b: 174,
+    },
+    fill_end: Color {
+        r: 40,
+        g: 165,
+        b: 74,
+    },
+    outline: Color {
+        r: 37,
+        g: 94,
+        b: 27,
+    },
 };
 
 const ICON_GRAY: Color = Color {
@@ -691,10 +773,30 @@ use crate::ir::{
     ICON_ARROW_UP_RIGHT as ARROW_UP_RIGHT, ICON_CIRCLE as CIRCLE,
 };
 
-/// Map an OOXML iconSet type to per-band (glyph, color) pairs, low band first.
+/// One band of an icon set: the glyph the parser records, the flat colour it
+/// carries, and Excel's sprite paint for the bands read off a native export.
+type IconBand = (&'static str, Option<Color>, Option<IconShading>);
+
+/// A band the renderer fills with one flat colour.
+fn flat_band(glyph: &'static str, color: Color) -> IconBand {
+    (glyph, Some(color), None)
+}
+
+/// A band whose sprite was measured. The flat colour stays beside the shading
+/// as the stand-in any path that cannot ramp falls back to.
+fn shaded_band(glyph: &'static str, color: Color, shading: IconShading) -> IconBand {
+    (glyph, Some(color), Some(shading))
+}
+
+/// A band of an unknown set type, which carries no colour of its own.
+fn uncolored_band(glyph: &'static str) -> IconBand {
+    (glyph, None, None)
+}
+
+/// Map an OOXML iconSet type to per-band [`IconBand`]s, low band first.
 /// An absent attribute means the spec default 3TrafficLights1. Unknown set
 /// types fall back to colored arrows of the requested band count.
-fn icon_set_glyphs(set_type: &str, band_count: usize) -> Vec<(&'static str, Option<Color>)> {
+fn icon_set_glyphs(set_type: &str, band_count: usize) -> Vec<IconBand> {
     let effective_type: &str = if set_type.is_empty() {
         "3TrafficLights1"
     } else {
@@ -702,73 +804,77 @@ fn icon_set_glyphs(set_type: &str, band_count: usize) -> Vec<(&'static str, Opti
     };
     match effective_type {
         "3TrafficLights1" | "3TrafficLights2" | "3Signs" => vec![
-            (CIRCLE, Some(ICON_RED)),
-            (CIRCLE, Some(ICON_YELLOW)),
-            (CIRCLE, Some(ICON_GREEN)),
+            flat_band(CIRCLE, ICON_RED),
+            flat_band(CIRCLE, ICON_YELLOW),
+            flat_band(CIRCLE, ICON_GREEN),
         ],
         "4TrafficLights" => vec![
-            (CIRCLE, Some(ICON_BLACK)),
-            (CIRCLE, Some(ICON_RED)),
-            (CIRCLE, Some(ICON_YELLOW)),
-            (CIRCLE, Some(ICON_GREEN)),
+            flat_band(CIRCLE, ICON_BLACK),
+            flat_band(CIRCLE, ICON_RED),
+            flat_band(CIRCLE, ICON_YELLOW),
+            flat_band(CIRCLE, ICON_GREEN),
         ],
         "3Symbols" | "3Symbols2" => vec![
-            ("✗", Some(ICON_RED)),
-            ("!", Some(ICON_YELLOW)),
-            ("✓", Some(ICON_GREEN)),
+            flat_band("✗", ICON_RED),
+            flat_band("!", ICON_YELLOW),
+            flat_band("✓", ICON_GREEN),
         ],
         "3Flags" => vec![
-            ("⚑", Some(ICON_RED)),
-            ("⚑", Some(ICON_YELLOW)),
-            ("⚑", Some(ICON_GREEN)),
+            flat_band("⚑", ICON_RED),
+            flat_band("⚑", ICON_YELLOW),
+            flat_band("⚑", ICON_GREEN),
         ],
         "3Arrows" => vec![
-            (ARROW_DOWN, Some(ARROW_ICON_RED)),
-            (ARROW_RIGHT, Some(ARROW_ICON_YELLOW)),
-            (ARROW_UP, Some(ARROW_ICON_GREEN)),
+            shaded_band(ARROW_DOWN, ARROW_ICON_RED, ARROW_ICON_RED_SHADING),
+            shaded_band(ARROW_RIGHT, ARROW_ICON_YELLOW, ARROW_ICON_YELLOW_SHADING),
+            shaded_band(ARROW_UP, ARROW_ICON_GREEN, ARROW_ICON_GREEN_SHADING),
         ],
         "3ArrowsGray" => vec![
-            (ARROW_DOWN, Some(ICON_GRAY)),
-            (ARROW_RIGHT, Some(ICON_GRAY)),
-            (ARROW_UP, Some(ICON_GRAY)),
+            flat_band(ARROW_DOWN, ICON_GRAY),
+            flat_band(ARROW_RIGHT, ICON_GRAY),
+            flat_band(ARROW_UP, ICON_GRAY),
         ],
         "4Arrows" => vec![
-            (ARROW_DOWN, Some(ICON_RED)),
-            (ARROW_DOWN_RIGHT, Some(ICON_YELLOW)),
-            (ARROW_UP_RIGHT, Some(ICON_YELLOW)),
-            (ARROW_UP, Some(ICON_GREEN)),
+            flat_band(ARROW_DOWN, ICON_RED),
+            flat_band(ARROW_DOWN_RIGHT, ICON_YELLOW),
+            flat_band(ARROW_UP_RIGHT, ICON_YELLOW),
+            flat_band(ARROW_UP, ICON_GREEN),
         ],
         "4ArrowsGray" => vec![
-            (ARROW_DOWN, Some(ICON_GRAY)),
-            (ARROW_DOWN_RIGHT, Some(ICON_GRAY)),
-            (ARROW_UP_RIGHT, Some(ICON_GRAY)),
-            (ARROW_UP, Some(ICON_GRAY)),
+            flat_band(ARROW_DOWN, ICON_GRAY),
+            flat_band(ARROW_DOWN_RIGHT, ICON_GRAY),
+            flat_band(ARROW_UP_RIGHT, ICON_GRAY),
+            flat_band(ARROW_UP, ICON_GRAY),
         ],
         "5Arrows" => vec![
-            (ARROW_DOWN, Some(ICON_RED)),
-            (ARROW_DOWN_RIGHT, Some(ICON_YELLOW)),
-            (ARROW_RIGHT, Some(ICON_YELLOW)),
-            (ARROW_UP_RIGHT, Some(ICON_YELLOW)),
-            (ARROW_UP, Some(ICON_GREEN)),
+            flat_band(ARROW_DOWN, ICON_RED),
+            flat_band(ARROW_DOWN_RIGHT, ICON_YELLOW),
+            flat_band(ARROW_RIGHT, ICON_YELLOW),
+            flat_band(ARROW_UP_RIGHT, ICON_YELLOW),
+            flat_band(ARROW_UP, ICON_GREEN),
         ],
         "5ArrowsGray" => vec![
-            (ARROW_DOWN, Some(ICON_GRAY)),
-            (ARROW_DOWN_RIGHT, Some(ICON_GRAY)),
-            (ARROW_RIGHT, Some(ICON_GRAY)),
-            (ARROW_UP_RIGHT, Some(ICON_GRAY)),
-            (ARROW_UP, Some(ICON_GRAY)),
+            flat_band(ARROW_DOWN, ICON_GRAY),
+            flat_band(ARROW_DOWN_RIGHT, ICON_GRAY),
+            flat_band(ARROW_RIGHT, ICON_GRAY),
+            flat_band(ARROW_UP_RIGHT, ICON_GRAY),
+            flat_band(ARROW_UP, ICON_GRAY),
         ],
         _ => {
             if band_count >= 5 {
                 vec![
-                    (ARROW_DOWN, None),
-                    (ARROW_DOWN_RIGHT, None),
-                    (ARROW_RIGHT, None),
-                    (ARROW_UP_RIGHT, None),
-                    (ARROW_UP, None),
+                    uncolored_band(ARROW_DOWN),
+                    uncolored_band(ARROW_DOWN_RIGHT),
+                    uncolored_band(ARROW_RIGHT),
+                    uncolored_band(ARROW_UP_RIGHT),
+                    uncolored_band(ARROW_UP),
                 ]
             } else {
-                vec![(ARROW_DOWN, None), (ARROW_RIGHT, None), (ARROW_UP, None)]
+                vec![
+                    uncolored_band(ARROW_DOWN),
+                    uncolored_band(ARROW_RIGHT),
+                    uncolored_band(ARROW_UP),
+                ]
             }
         }
     }

@@ -23,6 +23,7 @@ fn cell(text: &str) -> TableCell {
         data_bar: None,
         icon_text: None,
         icon_color: None,
+        icon_shading: None,
         spill_width: None,
         vertical_align: None,
         padding: None,

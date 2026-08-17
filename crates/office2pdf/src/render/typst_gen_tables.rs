@@ -629,8 +629,9 @@ const DATA_BAR_RIGHT_INSET_PT: f64 = 1.0;
 const ICON_SET_LEFT_INSET_PT: f64 = 2.0;
 
 /// Excel's arrow icon sets are drawn shapes, not characters. Native Excel PDFs
-/// print them as sprites, filled with a vertical gradient and outlined a shade
-/// darker; these constants size the flat vector stand-in.
+/// print them as sprites, ramped along the icon box's diagonal under a flat
+/// outline; these constants size the vector stand-in, whose paint comes from
+/// the band's [`IconShading`] where one was measured.
 ///
 /// Measured from the Excel export of `10_kpi_tracker_en`: the sheet places six
 /// 11 x 11pt `fill_image` sprites, but that is the placement box. Extracting
@@ -677,9 +678,14 @@ const ARROW_ICON_HEAD_LENGTH_FRACTION: f64 = 6.0 / 12.0;
 /// print is a little over half that (#536).
 const CIRCLE_ICON_DIAMETER_PT: f64 = 8.96;
 
+/// Excel shades an arrow sprite along the icon box's diagonal, not down it:
+/// every interior pixel is a function of `x + y`, and the sprite's pixel is
+/// square, so the ramp runs at 45 degrees (issue #1134).
+const ARROW_ICON_GRADIENT_ANGLE_DEG: i32 = 45;
+
 /// The drawn shape for an icon-set glyph, or `None` for the sets that stay
 /// characters — symbols, flags, stars.
-fn icon_shape(glyph: &str, color: Option<Color>) -> Option<String> {
+fn icon_shape(glyph: &str, color: Option<Color>, shading: Option<IconShading>) -> Option<String> {
     if glyph == crate::ir::ICON_CIRCLE {
         let radius: f64 = CIRCLE_ICON_DIAMETER_PT / 2.0;
         let paint: String = color
@@ -690,12 +696,16 @@ fn icon_shape(glyph: &str, color: Option<Color>) -> Option<String> {
             format_f64(radius)
         ));
     }
-    arrow_icon_polygon(glyph, color)
+    arrow_icon_polygon(glyph, color, shading)
 }
 
 /// Build the Typst `polygon` for one of the arrow icon-set glyphs, or `None`
 /// for any other glyph.
-fn arrow_icon_polygon(glyph: &str, color: Option<Color>) -> Option<String> {
+fn arrow_icon_polygon(
+    glyph: &str,
+    color: Option<Color>,
+    shading: Option<IconShading>,
+) -> Option<String> {
     // The head spans the full breadth; `shaft` is the shaft's half-width and
     // `neck` is where the head meets it, measured from the tip.
     let breadth: f64 = ARROW_ICON_BREADTH_PT;
@@ -734,11 +744,26 @@ fn arrow_icon_polygon(glyph: &str, color: Option<Color>) -> Option<String> {
         .map(|(x, y)| format!("({}pt, {}pt)", format_f64(*x), format_f64(*y)))
         .collect::<Vec<String>>()
         .join(", ");
-    let paint: String = color
-        .map(|c| rgb(&c))
-        .unwrap_or_else(|| "black".to_string());
-    let shape: String =
-        format!("polygon(fill: {paint}, stroke: 0.4pt + {paint}.darken(30%), {coordinates})");
+    // A band Excel exported carries its own ramp and its own outline hue; one
+    // that was never measured keeps the flat stand-in under an outline derived
+    // from it, which is close for green and olive for amber (issue #1134).
+    let (fill, outline): (String, String) = match shading {
+        Some(shading) => (
+            format!(
+                "gradient.linear(angle: {ARROW_ICON_GRADIENT_ANGLE_DEG}deg, space: rgb, {}, {})",
+                rgb(&shading.fill_start),
+                rgb(&shading.fill_end),
+            ),
+            rgb(&shading.outline),
+        ),
+        None => {
+            let paint: String = color
+                .map(|c| rgb(&c))
+                .unwrap_or_else(|| "black".to_string());
+            (paint.clone(), format!("{paint}.darken(30%)"))
+        }
+    };
+    let shape: String = format!("polygon(fill: {fill}, stroke: 0.4pt + {outline}, {coordinates})");
     Some(match rotation {
         Some(degrees) => format!("rotate({degrees}deg, {shape})"),
         None => shape,
@@ -983,7 +1008,10 @@ fn generate_table_cell(
             "#place(left + horizon, dx: {}pt, ",
             format_geometry(icon_dx)
         );
-        match (icon_shape(icon, cell.icon_color), cell.icon_color) {
+        match (
+            icon_shape(icon, cell.icon_color, cell.icon_shading),
+            cell.icon_color,
+        ) {
             (Some(polygon), _) => {
                 let _ = write!(out, "{anchor}{polygon})");
             }
