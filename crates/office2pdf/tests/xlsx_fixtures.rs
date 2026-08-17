@@ -1620,6 +1620,94 @@ fn structure_light1_table_style_bands_rules_and_bolds_its_header() {
     );
 }
 
+/// `SH001-Table.xlsx` styles its `A1:C3` table `TableStyleMedium2` over an
+/// accent 1 of `5B9BD5`. A native Excel-for-Mac export prints that style as a
+/// solid `#5B9BD5` header band carrying white bold runs, a `#DDEBF7` band over
+/// the first body row, and `#9BC2E6` 1pt rules at every row boundary plus one
+/// down each of the table's outer edges (issue #1125).
+#[test]
+fn structure_medium2_table_style_fills_rules_and_whitens_its_header() {
+    let pages = sheet_pages("SH001-Table.xlsx");
+    let rows = &pages[0].table.rows;
+    let cell_at = |row: usize, col: usize| -> &TableCell { &rows[row].cells[col] };
+    let accent = Color {
+        r: 0x5b,
+        g: 0x9b,
+        b: 0xd5,
+    };
+    let rule_color = Color {
+        r: 0x9b,
+        g: 0xc2,
+        b: 0xe6,
+    };
+
+    assert_eq!(
+        cell_at(0, 0).background,
+        Some(accent),
+        "A1's header band is the accent itself"
+    );
+    assert_eq!(
+        cell_at(1, 0).background,
+        Some(Color {
+            r: 0xdd,
+            g: 0xeb,
+            b: 0xf7,
+        }),
+        "A2 is the first body band"
+    );
+    assert_eq!(cell_at(2, 0).background, None, "A3 sits between the bands");
+
+    let header_border = cell_at(0, 0).border.as_ref().expect("A1 is ruled");
+    for (side, name) in [
+        (&header_border.top, "above the header"),
+        (&header_border.bottom, "under the header"),
+        (&header_border.left, "down the table's left edge"),
+    ] {
+        let side = side.as_ref().unwrap_or_else(|| panic!("rule {name}"));
+        assert_eq!(side.color, rule_color, "rule {name}");
+        assert_eq!(side.width, 1.0, "rule {name} is a 1pt band");
+        assert_eq!(side.style, BorderLineStyle::Solid, "rule {name}");
+    }
+    assert!(
+        header_border.right.is_none(),
+        "column A is not the table's right edge"
+    );
+
+    let interior = cell_at(1, 1).border.as_ref().expect("B2 is ruled too");
+    assert!(
+        interior.bottom.is_some(),
+        "a Medium table rules every row boundary"
+    );
+    assert!(
+        interior.left.is_none() && interior.right.is_none(),
+        "column B is neither outer edge"
+    );
+    assert_eq!(
+        cell_at(2, 2)
+            .border
+            .as_ref()
+            .and_then(|border| border.right.as_ref())
+            .map(|side| side.color),
+        Some(rule_color),
+        "column C carries the table's right edge"
+    );
+
+    let header_run = match &cell_at(0, 0).content[0] {
+        Block::Paragraph(paragraph) => &paragraph.runs[0],
+        other => panic!("header holds a paragraph, got {other:?}"),
+    };
+    assert_eq!(header_run.style.bold, Some(true));
+    assert_eq!(
+        header_run.style.color,
+        Some(Color {
+            r: 0xff,
+            g: 0xff,
+            b: 0xff,
+        }),
+        "the header runs are printed white on the accent band"
+    );
+}
+
 /// `<printOptions horizontalCentered="1"/>` centres the printed grid between
 /// the print margins; without it the grid prints flush to the left one.
 ///

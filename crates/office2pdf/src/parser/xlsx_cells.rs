@@ -1513,6 +1513,15 @@ pub(super) fn build_rows_for_range(
             {
                 text_style.bold.get_or_insert(true);
             }
+            // A Medium table fills its header row in the accent and prints the
+            // runs on it white; the same precedence applies (issue #1125).
+            if let Some(header_ink) = ctx
+                .table_styles
+                .iter()
+                .find_map(|style| style.header_text_color_at(col_idx, row_idx))
+            {
+                text_style.color.get_or_insert(header_ink);
+            }
             let (cell_alignment, cell_vertical_align) = umya_cell
                 .map(extract_cell_alignment)
                 .unwrap_or((None, None));
