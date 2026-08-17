@@ -828,6 +828,26 @@ pub(super) fn word_line_box_descent_em(runs: &[Run]) -> Option<f64> {
     Some(advance_em - top_em)
 }
 
+/// What sits below the baseline of an Excel sheet header or footer line, in em
+/// of the line's face.
+///
+/// The face's bare `hhea` descender, deliberately *not*
+/// [`word_line_box_descent_em`]: that one carries Word's 1.3x East Asian line
+/// box and the line gap Word keeps above the baseline, neither of which any
+/// Excel export measured here shows. Native Excel-for-Mac exports put a footer
+/// baseline exactly its `hhea` descent above the band Excel seats the text on —
+/// Calibri 0.26855em, Arial 0.21191em, Verdana 0.20996em, Times New Roman
+/// 0.21631em and Aptos 0.28174em all land on the whole point Excel prints
+/// (issue #1142).
+///
+/// `None` when the face's metrics are unknown, which leaves the story on the
+/// renderer's own seat.
+pub(super) fn sheet_line_box_descent_em(runs: &[Run]) -> Option<f64> {
+    let family: &str = east_asian_aware_metric_family(runs)?;
+    let (_, descent_em, _) = crate::render::pdf::font_line_metrics_em(family)?;
+    (descent_em > 0.0).then_some(descent_em)
+}
+
 /// Where Word seats a header story's first baseline, in em below the
 /// `w:pgMar/@w:header` line the header is measured from.
 ///

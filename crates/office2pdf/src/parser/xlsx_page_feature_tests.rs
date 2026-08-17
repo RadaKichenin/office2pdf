@@ -594,6 +594,98 @@ fn build_xlsx_with_footer(footer_str: &str) -> Vec<u8> {
     buf.into_inner()
 }
 
+/// Helper: build an XLSX whose sheet states `<pageMargins>` alongside a footer.
+fn build_xlsx_with_footer_margins(footer_str: &str, footer_in: f64, bottom_in: f64) -> Vec<u8> {
+    let mut book = umya_spreadsheet::new_file();
+    {
+        let sheet = book.get_sheet_mut(&0).unwrap();
+        sheet.get_cell_mut("A1").set_value("Data");
+        sheet
+            .get_header_footer_mut()
+            .get_odd_footer_mut()
+            .set_value(footer_str);
+        let margins = sheet.get_page_margins_mut();
+        margins.set_footer(footer_in);
+        margins.set_bottom(bottom_in);
+    }
+    let mut buf = Cursor::new(Vec::new());
+    umya_spreadsheet::writer::xlsx::write_writer(&book, &mut buf).unwrap();
+    buf.into_inner()
+}
+
+/// Excel measures a printed footer up from the page's bottom edge, through
+/// `<pageMargins>/@footer`, and leaves a further 2pt below the text's line box
+/// (issue #1142).
+///
+/// The 2pt is measured: on Excel-for-Mac exports of one-factor variants of
+/// `tests/fixtures/xlsx/headerFooterTest.xlsx`, a 12pt Calibri footer over a
+/// 0.5in footer margin puts its baseline 41pt above the page's bottom edge —
+/// 36pt of margin, Calibri's 3.22pt `hhea` descent, and 2pt between them. The
+/// same series holds at 6, 8, 14, 20, 40 and 80pt, and across Arial, Verdana,
+/// Times New Roman and Aptos.
+#[test]
+fn a_sheet_footer_is_seated_from_the_page_bottom_edge() {
+    let data = build_xlsx_with_footer_margins("&LSensitivity: Internal", 0.3, 0.75);
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let footer = get_sheet_page(&doc, 0)
+        .footer
+        .as_ref()
+        .expect("the sheet states a footer");
+    assert_eq!(
+        footer.distance_from_edge,
+        Some(23.0),
+        "0.3in floors to 21pt of footer margin, plus Excel's 2pt band inset"
+    );
+}
+
+/// Triangulation for the seat: it tracks `@footer`, and nothing else on the
+/// page moves it (issue #1142).
+#[test]
+fn a_sheet_footer_seat_follows_its_own_margin_not_the_bottom_one() {
+    let parser = XlsxParser;
+    let seat_of = |footer_in: f64, bottom_in: f64| -> Option<f64> {
+        let data = build_xlsx_with_footer_margins("&LSensitivity: Internal", footer_in, bottom_in);
+        let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+        get_sheet_page(&doc, 0)
+            .footer
+            .as_ref()
+            .expect("the sheet states a footer")
+            .distance_from_edge
+    };
+
+    assert_eq!(
+        seat_of(0.5, 0.75),
+        Some(38.0),
+        "0.5in is 36pt plus the inset"
+    );
+    assert_eq!(
+        seat_of(0.5, 1.5),
+        Some(38.0),
+        "doubling the bottom margin must not move the footer"
+    );
+    assert_eq!(
+        seat_of(1.0, 1.5),
+        Some(74.0),
+        "1.0in is 72pt plus the inset"
+    );
+}
+
+/// A sheet that states no `<pageMargins>` takes Excel's own 0.3in default.
+#[test]
+fn a_sheet_footer_without_page_margins_takes_excels_default() {
+    let data = build_xlsx_with_footer("&LSensitivity: Internal");
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let footer = get_sheet_page(&doc, 0)
+        .footer
+        .as_ref()
+        .expect("the sheet states a footer");
+    assert_eq!(footer.distance_from_edge, Some(23.0));
+}
+
 #[test]
 fn test_xlsx_sheet_with_custom_header() {
     let data = build_xlsx_with_header("&CMonthly Report");
