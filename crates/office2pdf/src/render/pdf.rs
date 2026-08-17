@@ -1252,52 +1252,61 @@ pub(crate) fn glyph_advances_em(_family: &str, _bold: bool, _text: &str) -> Opti
 pub(crate) const POWERPOINT_LINE_HEIGHT_FACTOR: f64 = 1.2;
 
 /// PowerPoint's `(above baseline, below baseline)` split of its 1.2em line for
-/// a face with these hhea metrics, both given as positive em fractions.
+/// a face with these hhea metrics, all given as positive em fractions.
 ///
-/// Where the face fits inside the line, PowerPoint splits the **extra leading
-/// evenly** above and below the glyphs: the glyphs take `ascent + descent` and
-/// the remainder of the 1.2em line is halved, seating the baseline at
-/// `(1.2 + ascent - descent) / 2`.
+/// PowerPoint shares the box in the proportion the face's **own** line puts its
+/// baseline at: `1.2 x ascent / (ascent + descent + line gap)`. The line gap
+/// counts toward the line the box is standing in for, but not toward the ascent
+/// side — it lands wholly under the baseline. That is one rule for every face,
+/// whether its natural line fits inside 1.2em or overflows it.
 ///
-/// That replaced a proportional split, `1.2 x winAscent / (winAscent +
-/// winDescent)`. Both reproduce the line's *height* — they must, since both
-/// span 1.2em — so only the first baseline separates them, and the native
-/// exports side with the even split. On `08_marketing_report_en` p3, a 17pt
-/// top-anchored Arial frame, GT's first baseline is 142.08pt; the even split
-/// predicts 142.09 and the proportional one put us at 142.53, 0.45pt low.
-/// Arial's two predictions are 0.9467em and 0.9724em (issue #660).
+/// A face that **overflows** shows the shape of the rule most plainly, since
+/// there the only alternative — halving the leading — has a negative amount to
+/// halve and drives the baseline down against the face's own proportions.
+/// Measured on a native PowerPoint 16.112 export of the #841 Contoso deck, set
+/// in Posterama Bold (hhea 2134 and -590 per 2048 upem, a 1.3301em line): slide
+/// 1 carries no `<a:lnSpc>` and paces its three 50pt baselines exactly 60.00pt
+/// = 1.2em apart, so the box is 1.2em there, and it seats the first 0.9411em
+/// below the content top. The share predicts 0.9401em; halving the leading says
+/// 0.9770em, 1.79pt low at that size, and every one of the deck's 18 titles was
+/// low by 1.8-3.7pt (issue #1020).
 ///
-/// A face whose own line **overflows** 1.2em has no leading to halve, and there
-/// the even split is what fails: subtracting the same absolute amount from both
-/// sides moves the baseline down against the face's own proportions. PowerPoint
-/// shares the box in that proportion instead. Measured on a native PowerPoint
-/// 16.112 export of the #841 Contoso deck, set in Posterama Bold (hhea 2134 and
-/// -590 per 2048 upem, a 1.3301em line): slide 1 carries no `<a:lnSpc>` and
-/// paces its three 50pt baselines exactly 60.00pt = 1.2em apart, so the box is
-/// 1.2em there, and it seats the first 0.9411em below the content top. The
-/// proportional share predicts 0.9401em; the even split says 0.9770em, 1.79pt
-/// low at that size, and every one of the deck's 18 titles was low by 1.8-3.7pt
-/// (issue #1020).
+/// A face that **fits** reads the same way once the whole-point seat of #1074
+/// is accounted for, which is what hid it: a one-factor probe deck of
+/// bottom-anchored boxes with every inset zeroed, exported natively at 14 sizes
+/// from 8 to 100pt, separates the two on Georgia (hhea 1878/-449, no line gap,
+/// a 1.13623em line). Its share is 0.968457em and the halved leading 0.948877em;
+/// the export sits within its 0.12pt half-grid of the share at all 14 sizes and
+/// outside it at 9 of them for the halved leading, by up to 2.04pt. The five
+/// that agree are the ones where the two round to the same point, which is how
+/// a 17pt Arial frame read as halved leading in #660 (issue #1118).
 ///
-/// The metrics are hhea's, not OS/2's `usWin*` pair: the even split needs the
-/// ascent and descent as em fractions rather than as a ratio, and the two
-/// tables disagree about the denominator.
+/// The **line gap** is why that frame read that way rather than simply reading
+/// wrong. Arial declares one (67 per 2048 upem) where Georgia and Verdana
+/// declare none, and at Arial's proportions a gap in the denominator lands
+/// 0.002em from the halved leading — close enough that only a size where the
+/// two round apart can tell them apart. The golden mocks' 28pt centred titles
+/// are such a size, and they side with the gap (issue #1118). Word already
+/// reads the gap the same way round, except that it seats the baseline *below*
+/// it rather than sharing a fixed box: see [`font_line_metrics_em`].
 ///
-/// The below-baseline half is the descent gap a bottom-anchored box keeps under
-/// its last baseline, which we used to drop entirely (issue #513).
+/// The metrics are hhea's, not OS/2's `usWin*` pair, which carries no gap.
+///
+/// The below-baseline share is the descent gap a bottom-anchored box keeps
+/// under its last baseline, which we used to drop entirely (issue #513).
 ///
 /// `None` for a face that declares no ascent, which no split could seat.
-pub(crate) fn powerpoint_line_box_split_em(ascent: f64, descent: f64) -> Option<(f64, f64)> {
+pub(crate) fn powerpoint_line_box_split_em(
+    ascent: f64,
+    descent: f64,
+    line_gap: f64,
+) -> Option<(f64, f64)> {
     if ascent <= 0.0 {
         return None;
     }
-    let natural: f64 = ascent + descent;
-    let above: f64 = if natural <= POWERPOINT_LINE_HEIGHT_FACTOR {
-        (POWERPOINT_LINE_HEIGHT_FACTOR + ascent - descent) / 2.0
-    } else {
-        POWERPOINT_LINE_HEIGHT_FACTOR * ascent / natural
-    };
-    let above: f64 = above.clamp(0.0, POWERPOINT_LINE_HEIGHT_FACTOR);
+    let natural: f64 = ascent + descent + line_gap;
+    let above: f64 = (POWERPOINT_LINE_HEIGHT_FACTOR * ascent / natural)
+        .clamp(0.0, POWERPOINT_LINE_HEIGHT_FACTOR);
     Some((above, POWERPOINT_LINE_HEIGHT_FACTOR - above))
 }
 
@@ -1314,7 +1323,8 @@ pub(crate) fn powerpoint_line_box_em(family: &str) -> Option<(f64, f64)> {
         let upem = f64::from(ttf.units_per_em()).max(1.0);
         let ascent = f64::from(ttf.ascender()).abs() / upem;
         let descent = f64::from(ttf.descender()).abs() / upem;
-        powerpoint_line_box_split_em(ascent, descent)
+        let line_gap = f64::from(ttf.line_gap()).abs() / upem;
+        powerpoint_line_box_split_em(ascent, descent, line_gap)
     };
     if let Some(font) =
         super::font_subst::active_in_memory_font(family, typst::text::FontVariant::default())
@@ -1359,6 +1369,7 @@ pub(crate) fn powerpoint_line_box_em(family: &str) -> Option<(f64, f64)> {
         let upem = f64::from(ttf.units_per_em()).max(1.0);
         let ascent = f64::from(ttf.ascender()).abs() / upem;
         let descent = f64::from(ttf.descender()).abs() / upem;
-        powerpoint_line_box_split_em(ascent, descent)
+        let line_gap = f64::from(ttf.line_gap()).abs() / upem;
+        powerpoint_line_box_split_em(ascent, descent, line_gap)
     })
 }

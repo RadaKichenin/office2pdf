@@ -542,12 +542,11 @@ fn powerpoint_paragraph_line_box_em(runs: &[Run], style: &ParagraphStyle) -> Opt
 /// of the #841 Contoso deck that repeats its 10pt footer band 0.55pt high
 /// (issue #1074).
 ///
-/// The rounding is the whole of that fit only for the three faces that overflow
-/// the box. Georgia fits it, and its cells land on the *proportional* share
-/// rounded, not on the even split
-/// [`crate::render::pdf::powerpoint_line_box_split_em`] hands a fitting face —
-/// which is 2.04pt out at 100pt. That is a separate root cause, tracked in
-/// #1118; this function rounds whichever share it is given.
+/// Georgia is the one of the four that fits the box, and its cells land on the
+/// same proportional share the other three do. Halving a fitting face's extra
+/// leading instead — which is what
+/// [`crate::render::pdf::powerpoint_line_box_split_em`] used to hand it — misses
+/// 9 of Georgia's 14 cells, by up to 2.04pt at 72pt (issue #1118).
 ///
 /// PowerPoint resizes the line from its **top**: the gap the face keeps below
 /// its baseline is the plain line's `1.2em - ascent_em` whatever the
