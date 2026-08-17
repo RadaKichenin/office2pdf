@@ -72,6 +72,7 @@ fn text_style_merge_from_all_none_source_preserves_target() {
         underline: Some(true),
         strikethrough: Some(false),
         color: Some(Color::new(255, 0, 0)),
+        color_alpha: None,
         highlight: Some(Color::new(0, 255, 0)),
         vertical_align: Some(VerticalTextAlign::Superscript),
         baseline_shift: Some(BaselineShiftEm(0.2)),
@@ -99,6 +100,7 @@ fn text_style_merge_from_all_some_source_overwrites_target() {
         underline: Some(true),
         strikethrough: Some(true),
         color: Some(Color::new(255, 0, 0)),
+        color_alpha: None,
         highlight: Some(Color::new(0, 255, 0)),
         vertical_align: Some(VerticalTextAlign::Superscript),
         baseline_shift: Some(BaselineShiftEm(0.2)),
@@ -116,6 +118,7 @@ fn text_style_merge_from_all_some_source_overwrites_target() {
         underline: Some(false),
         strikethrough: Some(false),
         color: Some(Color::new(0, 0, 255)),
+        color_alpha: None,
         highlight: Some(Color::new(128, 128, 128)),
         vertical_align: Some(VerticalTextAlign::Subscript),
         baseline_shift: Some(BaselineShiftEm(-0.25)),
@@ -146,6 +149,7 @@ fn text_style_merge_from_partial_overlap() {
         bold: Some(true),
         italic: None,
         color: Some(Color::new(100, 100, 100)),
+        color_alpha: None,
         ..TextStyle::default()
     };
 

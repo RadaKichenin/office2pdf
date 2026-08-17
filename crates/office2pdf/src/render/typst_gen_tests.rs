@@ -513,6 +513,66 @@ fn test_generate_run_highlight_yellow() {
     );
 }
 
+/// A run whose fill declares an opacity reaches the page with its alpha
+/// channel, so it composites against the backdrop instead of printing as solid
+/// ink (issue #1121).
+#[test]
+fn test_generate_run_fill_alpha() {
+    let source = generated_source_for_run_style(TextStyle {
+        color: Some(Color::new(0, 0, 0)),
+        color_alpha: Some(0.5),
+        ..TextStyle::default()
+    });
+    assert!(
+        source.contains("fill: rgb(0, 0, 0, 128)"),
+        "A half-opacity run should emit a 4-argument rgb. Got: {source}"
+    );
+}
+
+/// Triangulation for [`test_generate_run_fill_alpha`]: a different opacity on a
+/// different colour scales the alpha channel with it.
+#[test]
+fn test_generate_run_fill_alpha_quarter() {
+    let source = generated_source_for_run_style(TextStyle {
+        color: Some(Color::new(255, 0, 0)),
+        color_alpha: Some(0.25),
+        ..TextStyle::default()
+    });
+    assert!(
+        source.contains("fill: rgb(255, 0, 0, 64)"),
+        "A quarter-opacity run should emit a 4-argument rgb. Got: {source}"
+    );
+}
+
+/// A run that states no opacity keeps the 3-argument form, so no existing
+/// output gains a redundant alpha channel.
+#[test]
+fn test_generate_run_without_fill_alpha_stays_opaque() {
+    let source = generated_source_for_run_style(TextStyle {
+        color: Some(Color::new(0, 0, 0)),
+        color_alpha: None,
+        ..TextStyle::default()
+    });
+    assert!(
+        source.contains("fill: rgb(0, 0, 0)"),
+        "An opaque run should emit a 3-argument rgb. Got: {source}"
+    );
+}
+
+/// The Typst source for a one-run paragraph carrying `style`.
+fn generated_source_for_run_style(style: TextStyle) -> String {
+    let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
+        style: ParagraphStyle::default(),
+        runs: vec![Run {
+            text: "Sensitivity: Internal".to_string(),
+            style,
+            href: None,
+            footnote: None,
+        }],
+    })])]);
+    generate_typst(&doc).unwrap().source
+}
+
 #[test]
 fn test_table_cell_vertical_align_center() {
     let table = Table {

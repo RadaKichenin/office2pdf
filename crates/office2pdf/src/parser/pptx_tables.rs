@@ -851,22 +851,30 @@ impl<'a> PptxTableParser<'a> {
     // ── Private helpers: color application ───────────────────────────
 
     fn apply_color_start(&mut self, reader: &mut Reader<&[u8]>, e: &BytesStart) {
-        let color: Option<Color> =
-            parse_color_from_start(reader, e, self.theme, self.color_map).color;
-        self.apply_resolved_color(color);
+        let parsed: ParsedColor = parse_color_from_start(reader, e, self.theme, self.color_map);
+        self.apply_resolved_color(&parsed);
     }
 
     fn apply_color_empty(&mut self, e: &BytesStart) {
-        let color: Option<Color> = parse_color_from_empty(e, self.theme, self.color_map).color;
-        self.apply_resolved_color(color);
+        let parsed: ParsedColor = parse_color_from_empty(e, self.theme, self.color_map);
+        self.apply_resolved_color(&parsed);
     }
 
-    fn apply_resolved_color(&mut self, color: Option<Color>) {
+    fn apply_resolved_color(&mut self, parsed: &ParsedColor) {
+        let color: Option<Color> = parsed.color;
         match self.solid_fill_context {
             SolidFillCtx::ShapeFill => self.cell_background = color,
             SolidFillCtx::LineFill => self.border_line_color = color,
-            SolidFillCtx::RunFill => self.run_style.color = color,
-            SolidFillCtx::EndParaFill => self.paragraph_end_run_style.color = color,
+            // A cell's run states its opacity the same way a slide shape's run
+            // does, so it composites the same way (issue #1121).
+            SolidFillCtx::RunFill => {
+                self.run_style.color = color;
+                self.run_style.color_alpha = parsed.alpha;
+            }
+            SolidFillCtx::EndParaFill => {
+                self.paragraph_end_run_style.color = color;
+                self.paragraph_end_run_style.color_alpha = parsed.alpha;
+            }
             SolidFillCtx::BulletFill => {
                 self.paragraph_bullet_definition.color = color.map(PptxBulletColorSource::Explicit);
             }

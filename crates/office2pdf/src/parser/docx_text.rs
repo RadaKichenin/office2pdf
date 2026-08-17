@@ -292,6 +292,8 @@ pub(super) fn extract_run_style_from_json(rp: &serde_json::Value) -> TextStyle {
                 .and_then(serde_json::Value::as_str)
                 .map(String::from)
         }),
+        // `w:rPr/w:color` is a bare hex value with no opacity channel.
+        color_alpha: None,
         highlight: rp
             .get("highlight")
             .and_then(serde_json::Value::as_str)

@@ -3444,7 +3444,7 @@ fn write_text_params_inner(out: &mut String, style: &TextStyle, kerning_text: Ke
         write_param(out, &mut first, "style: \"italic\"");
     }
     if let Some(ref color) = style.color {
-        write_param(out, &mut first, &format_color(color));
+        write_param(out, &mut first, &format_run_fill(color, style.color_alpha));
     }
     if let Some(spacing) = effective_letter_spacing(style, kerning_text) {
         write_param(
@@ -3777,6 +3777,22 @@ pub(super) fn write_param(out: &mut String, first: &mut bool, param: &str) {
 
 pub(super) fn format_color(color: &Color) -> String {
     format!("fill: {}", rgb(color))
+}
+
+/// A run's fill, composited at the opacity its colour declares.
+///
+/// PowerPoint draws a run whose `a:solidFill` colour carries `<a:alpha>` at
+/// exactly that fraction of the backdrop, so the ink has to reach the page with
+/// its alpha channel intact rather than as the flattened base colour
+/// (issue #1121).
+fn format_run_fill(color: &Color, alpha: Option<f64>) -> String {
+    match alpha {
+        Some(alpha) => format!(
+            "fill: {}",
+            rgb_with_alpha(color, (alpha.clamp(0.0, 1.0) * 255.0).round() as u8)
+        ),
+        None => format_color(color),
+    }
 }
 
 /// The char index Typst reads a *line-leading* markup marker at.
