@@ -278,6 +278,47 @@ pub(super) fn shadow_outline_outset(stroke: &Option<BorderSide>) -> f64 {
         .map_or(0.0, |stroke| (stroke.width / 2.0).max(0.0))
 }
 
+/// The corner radius a square-cornered fill path's shadow silhouette carries,
+/// before the blur ring's own offset grows it.
+///
+/// The silhouette is cast from the *stroked* shape (#1057), so it turns each
+/// corner the way the outline's `a:ln` join does. DrawingML's default is
+/// `a:round` (#1090), whose arc has the stroke's half-width as its radius and
+/// is centred on the fill path's corner — exactly the arc a `#rect` grown by
+/// that half-width and given that radius draws. `a:miter` instead runs the
+/// stroke out to a point that already lies on the grown box's own corner, so
+/// it contributes no arc.
+///
+/// `a:bevel` chamfers the corner. The chamfer's two ends are the round join's
+/// two tangent points, so that arc is the closest circle `#rect`'s single
+/// `radius` can spell: it sits outside the true chamfer by at most
+/// `(2 - sqrt(2)) / 4` of the line width, against the `sqrt(2) / 4` a square
+/// corner overshoots it by.
+///
+/// Distinct from [`shadow_outline_outset`], which is how far the outline
+/// pushes every edge out: a mitred 3pt outline still grows the silhouette by
+/// 1.5pt a side while leaving its corners square.
+pub(super) fn shadow_silhouette_corner_radius(stroke: &Option<BorderSide>) -> f64 {
+    stroke
+        .as_ref()
+        .filter(|stroke| stroke.style != BorderLineStyle::None)
+        .filter(|stroke| stroke.join != LineJoin::Miter)
+        .map_or(0.0, |stroke| (stroke.width / 2.0).max(0.0))
+}
+
+/// The corner radius of one blur ring, given the silhouette's own radius and
+/// how far that ring is offset from it.
+///
+/// A ring is the silhouette dilated by `blur_expansion`, and dilating by a
+/// disc grows a corner arc's radius by the same amount — which is why a square
+/// corner (radius 0) comes out rounded by the offset alone rather than mitred
+/// out to `blur_expansion * sqrt(2)` along the diagonal (issue #1138). The
+/// inner rings erode instead, and eroding past the arc leaves the corner
+/// square, so the radius floors at zero; Typst rejects a negative one.
+pub(super) fn shadow_ring_corner_radius(silhouette_radius: f64, blur_expansion: f64) -> f64 {
+    (silhouette_radius + blur_expansion).max(0.0)
+}
+
 /// Render a shadow approximation: concentric translucent duplicates whose
 /// stacked alphas peak at the core and fade across the blur radius.
 fn write_shadow_shape(out: &mut String, shape: &Shape, width: f64, height: f64, shadow: &Shadow) {
@@ -289,6 +330,7 @@ fn write_shadow_shape(out: &mut String, shape: &Shape, width: f64, height: f64, 
     let dx = shadow.distance * dir_rad.cos();
     let dy = shadow.distance * dir_rad.sin();
     let outline_outset: f64 = shadow_outline_outset(&shape.stroke);
+    let silhouette_radius: f64 = shadow_silhouette_corner_radius(&shape.stroke);
 
     for (blur_expansion, alpha) in shadow_blur_layers(shadow) {
         let expansion = outline_outset + blur_expansion;
@@ -325,16 +367,26 @@ fn write_shadow_shape(out: &mut String, shape: &Shape, width: f64, height: f64, 
                     alpha,
                 );
             }
-            ShapeKind::Rectangle | ShapeKind::Ellipse => {
-                let func = if matches!(shape.kind, ShapeKind::Rectangle) {
-                    "#rect("
-                } else {
-                    "#ellipse("
-                };
-                out.push_str(func);
+            ShapeKind::Rectangle => {
+                let radius: f64 = shadow_ring_corner_radius(silhouette_radius, blur_expansion);
                 let _ = write!(
                     out,
-                    "width: {}pt, height: {}pt, fill: rgb({}, {}, {}, {})",
+                    "#rect(width: {}pt, height: {}pt, radius: {}pt, fill: rgb({}, {}, {}, {}))",
+                    format_f64(layer_width),
+                    format_f64(layer_height),
+                    format_f64(radius),
+                    shadow.color.r,
+                    shadow.color.g,
+                    shadow.color.b,
+                    alpha,
+                );
+            }
+            // An ellipse has no corner for a join to turn, so its silhouette
+            // is the shape scaled by the expansion on both axes.
+            ShapeKind::Ellipse => {
+                let _ = write!(
+                    out,
+                    "#ellipse(width: {}pt, height: {}pt, fill: rgb({}, {}, {}, {}))",
                     format_f64(layer_width),
                     format_f64(layer_height),
                     shadow.color.r,
@@ -342,7 +394,6 @@ fn write_shadow_shape(out: &mut String, shape: &Shape, width: f64, height: f64, 
                     shadow.color.b,
                     alpha,
                 );
-                out.push(')');
             }
             // Line is handled above; any future variants gracefully skip
             // the shadow rather than panicking.

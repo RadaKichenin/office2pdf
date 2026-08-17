@@ -854,31 +854,62 @@ fn test_shape_shadow_blur_renders_layered_rings() {
     );
 }
 
+/// One concentric duplicate of the shadow's silhouette, in points.
+struct ShadowRing {
+    dx: f64,
+    dy: f64,
+    width: f64,
+    height: f64,
+    /// The corner arc's radius. A ring that writes no `radius:` turns a
+    /// square corner, which is the same thing as an arc of radius zero.
+    radius: f64,
+}
+
+/// The length `key` introduces in `fragment`, in points, or `None` when
+/// `fragment` does not carry that key.
+///
+/// Read by key rather than by position: a direction that is a multiple of 90
+/// degrees leaves a cosine residue of about 1e-17 in the offset, which no
+/// exact literal can spell, and a ring writes a variable number of lengths.
+fn optional_pt(fragment: &str, key: &str) -> Option<f64> {
+    let start: usize = fragment.find(key)? + key.len();
+    let rest: &str = &fragment[start..];
+    let end: usize = rest.find("pt")?;
+    rest[..end].trim().parse::<f64>().ok()
+}
+
+fn read_pt(fragment: &str, key: &str) -> f64 {
+    optional_pt(fragment, key)
+        .unwrap_or_else(|| panic!("no `{key}` length in shadow ring: {fragment}"))
+}
+
+/// Every shadow ring in `source`, in emission order — the stack is painted
+/// from the innermost outwards, so the last ring is the widest.
+///
+/// Each ring is emitted on its own line and the shadow colour carries an
+/// alpha, so `rgb(0, 0, 0, ` picks the rings out of a source whose shape fill
+/// and outline are any other colour.
+fn shadow_rings(source: &str) -> Vec<ShadowRing> {
+    let rings: Vec<ShadowRing> = source
+        .lines()
+        .filter(|line| line.contains("rgb(0, 0, 0, "))
+        .map(|line| ShadowRing {
+            dx: read_pt(line, "dx: "),
+            dy: read_pt(line, "dy: "),
+            width: read_pt(line, "width: "),
+            height: read_pt(line, "height: "),
+            radius: optional_pt(line, "radius: ").unwrap_or(0.0),
+        })
+        .collect();
+    assert!(!rings.is_empty(), "no shadow ring in output: {source}");
+    rings
+}
+
 /// The `(dx, dy, width, height)` of the first shadow ring in `source`, in
 /// points.
-///
-/// Read numerically rather than matched as a string: a direction that is a
-/// multiple of 90 degrees leaves a cosine residue of about 1e-17 in the
-/// offset, which no exact literal can spell.
 fn first_shadow_layer_geometry(source: &str) -> (f64, f64, f64, f64) {
-    let shadow_start = source
-        .find("rgb(0, 0, 0, ")
-        .expect("no shadow ring in output");
-    let placement = source[..shadow_start]
-        .rfind("#place(top + left, dx: ")
-        .expect("shadow ring is not placed");
-    let numbers: Vec<f64> = source[placement..shadow_start]
-        .split(|c: char| !(c.is_ascii_digit() || c == '.' || c == '-'))
-        .filter(|token| !token.is_empty())
-        .filter_map(|token| token.parse::<f64>().ok())
-        .collect();
-    assert_eq!(
-        numbers.len(),
-        4,
-        "expected dx, dy, width and height in: {}",
-        &source[placement..shadow_start],
-    );
-    (numbers[0], numbers[1], numbers[2], numbers[3])
+    let ring: &ShadowRing = &shadow_rings(source)[0];
+    (ring.dx, ring.dy, ring.width, ring.height)
 }
 
 #[test]
@@ -987,6 +1018,155 @@ fn test_shadow_silhouette_ignores_outline_when_shape_has_none() {
         dx.abs() < 0.01 && (dy - 1.57).abs() < 0.01,
         "an outline-less shadow sits exactly `dist` away, got dx {dx}pt \
          dy {dy}pt: {source}"
+    );
+}
+
+/// `blurRad="40000"` EMU, the blur the banner's theme effect declares.
+const BANNER_BLUR_RADIUS_PT: f64 = 40000.0 / 12700.0;
+const BANNER_WIDTH_PT: f64 = 612.0;
+const BANNER_HEIGHT_PT: f64 = 77.75;
+
+/// How far the outermost ring reaches past the silhouette, in points: the
+/// declared extent in sigma units, at the measured sigma of `blurRad / 3`.
+fn banner_blur_reach() -> f64 {
+    SHADOW_RING_EXTENT_SIGMA * BANNER_BLUR_RADIUS_PT / 3.0
+}
+
+/// The `customGeo.pptx` page 46 title banner under `stroke`, carrying the
+/// theme's own `<a:outerShdw blurRad="40000" dist="20000" dir="5400000">` —
+/// 3.15pt of blur, 1.57pt down.
+fn banner_shadow_source(stroke: Option<BorderSide>) -> String {
+    use crate::ir::Shadow;
+
+    let elem = FixedElement {
+        x: 60.0,
+        y: 36.0,
+        width: BANNER_WIDTH_PT,
+        height: BANNER_HEIGHT_PT,
+        kind: FixedElementKind::Shape(Shape {
+            kind: ShapeKind::Rectangle,
+            fill: Some(Color::new(79, 129, 189)),
+            gradient_fill: None,
+            pattern_fill: None,
+            stroke,
+            rotation_deg: None,
+            opacity: None,
+            shadow: Some(Shadow {
+                blur_radius: BANNER_BLUR_RADIUS_PT,
+                distance: 1.57,
+                direction: 90.0,
+                color: Color::new(0, 0, 0),
+                opacity: 0.38,
+            }),
+        }),
+    };
+    let doc = make_doc(vec![make_fixed_page(720.0, 540.0, vec![elem])]);
+    generate_typst(&doc).unwrap().source
+}
+
+fn banner_outline(join: LineJoin) -> Option<BorderSide> {
+    Some(BorderSide {
+        width: 3.0,
+        color: Color::new(255, 255, 255),
+        style: BorderLineStyle::Solid,
+        join,
+    })
+}
+
+#[test]
+fn test_shadow_ring_corner_arcs_like_a_round_outline_join() {
+    // PowerPoint casts the shadow from the *stroked* shape (#1057), so the
+    // silhouette turns each corner the way the outline does — an arc of
+    // radius half the line width under DrawingML's round default (#1090).
+    // Offsetting that path outward keeps the arc and grows its radius, so
+    // every ring's corner is round and reaches its own expansion along the
+    // diagonal. A plain `#rect` made each one a mitre reaching
+    // `expansion * sqrt(2)` instead (issue #1138).
+    //
+    // Measured on `customGeo.pptx` page 46 against a native macOS PowerPoint
+    // export, grey sampled outward along the 45-degree diagonal from the
+    // silhouette's bottom-left corner: the export's ramp was spent 1.8pt out
+    // while ours was still visible at 3.6pt and only reached paper at 3.9pt —
+    // the outermost ring's 4.23pt expansion times the sqrt(2) a square corner
+    // adds.
+    let source = banner_shadow_source(banner_outline(LineJoin::Round));
+
+    for ring in shadow_rings(&source) {
+        // Each ring is the silhouette offset by its own expansion, which the
+        // emitted box records as half its growth over the fill path.
+        let expansion: f64 = (ring.width - BANNER_WIDTH_PT) / 2.0;
+        assert!(
+            (ring.radius - expansion.max(0.0)).abs() < 1e-9,
+            "a ring expanded {expansion}pt must carry that as its corner \
+             radius, got {}pt: {source}",
+            ring.radius,
+        );
+    }
+
+    let rings: Vec<ShadowRing> = shadow_rings(&source);
+    let outermost: &ShadowRing = rings.last().expect("no shadow ring");
+    let reach: f64 = banner_blur_reach();
+    assert!(
+        (outermost.radius - (1.5 + reach)).abs() < 0.01,
+        "the outermost ring's arc must be half the 3pt outline plus the \
+         {reach}pt the blur reaches, got {}pt: {source}",
+        outermost.radius,
+    );
+}
+
+#[test]
+fn test_shadow_ring_corner_takes_no_arc_from_a_mitre_join() {
+    // Triangulation on the join: `a:miter` runs the stroke out to a point
+    // that already sits on the corner of the outset box, so it contributes no
+    // arc and only the blur's own offset rounds the ring (issue #1138).
+    let source = banner_shadow_source(banner_outline(LineJoin::Miter));
+
+    let rings: Vec<ShadowRing> = shadow_rings(&source);
+    let outermost: &ShadowRing = rings.last().expect("no shadow ring");
+    let reach: f64 = banner_blur_reach();
+    assert!(
+        (outermost.radius - reach).abs() < 0.01,
+        "a mitred outline leaves the blur's own {reach}pt as the corner \
+         radius, got {}pt: {source}",
+        outermost.radius,
+    );
+    // The silhouette itself still grows by half the line width — the join
+    // decides the corner, not the outset (#1057).
+    assert!(
+        (outermost.width - (BANNER_WIDTH_PT + 2.0 * (1.5 + reach))).abs() < 0.01,
+        "a mitred outline must still outset the silhouette by 1.5pt, got \
+         {}pt wide: {source}",
+        outermost.width,
+    );
+}
+
+#[test]
+fn test_shadow_ring_corner_rounds_by_the_blur_offset_alone_without_an_outline() {
+    // Control for the join: with no `a:ln` the silhouette is the fill path's
+    // own square corner, and the blur offset is all that rounds the ring.
+    // Inside the silhouette the offset is negative and erosion leaves the
+    // corner square, so the radius floors at zero rather than going negative
+    // — which Typst would reject outright (issue #1138).
+    let source = banner_shadow_source(None);
+
+    let rings: Vec<ShadowRing> = shadow_rings(&source);
+    let reach: f64 = banner_blur_reach();
+    let outermost: &ShadowRing = rings.last().expect("no shadow ring");
+    assert!(
+        (outermost.radius - reach).abs() < 0.01,
+        "the outermost ring must round by the {reach}pt it is offset, got \
+         {}pt: {source}",
+        outermost.radius,
+    );
+    assert!(
+        rings.iter().all(|ring| ring.radius >= 0.0),
+        "no ring may carry a negative corner radius: {source}"
+    );
+    assert!(
+        rings[0].radius.abs() < 1e-9,
+        "an eroded ring keeps the fill path's square corner, got {}pt: \
+         {source}",
+        rings[0].radius,
     );
 }
 
