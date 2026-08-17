@@ -1007,6 +1007,21 @@ pub(super) fn recomputed_default_row_height_pt(
         return None;
     }
     let font: &NormalFont = normal_font?;
+    measured_row_height_pt(font, font.size_pt)
+}
+
+/// The row this workbook's recompute gives a `size_pt` line, or `None` where
+/// its Normal font's face has no measured series or the size sits between
+/// the measured points.
+///
+/// The series belongs to the face, and the only faces measured are the two
+/// the Normal font selects — so a row sized by a font of its own is looked
+/// up in the workbook's table at that font's size. On the workbook this was
+/// measured against that is exactly right, because its cells name the very
+/// face its theme scheme resolves to (issue #1140). A row whose cells name
+/// some *other* face has no series of its own here; issue #1150 tracks the
+/// faces left unmeasured.
+fn measured_row_height_pt(font: &NormalFont, size_pt: f64) -> Option<f64> {
     let measured: &[(f64, f64)] = if font.uses_theme_scheme {
         &UI_SCRIPT_FACE_ROW_HEIGHTS
     } else if names_a_substituted_family(font) {
@@ -1016,19 +1031,26 @@ pub(super) fn recomputed_default_row_height_pt(
     };
     measured
         .iter()
-        .find(|(size_pt, _)| (font.size_pt - size_pt).abs() < 0.01)
+        .find(|(measured_size_pt, _)| (size_pt - measured_size_pt).abs() < 0.01)
         .map(|(_, height_pt)| *height_pt)
 }
 
 /// The row a dimension-less row takes under a Normal font that resolves
 /// through the theme's per-script face list — Malgun Gothic on the reference
 /// machine, whose measurement the doc comment above records.
-const UI_SCRIPT_FACE_ROW_HEIGHTS: [(f64, f64); 5] = [
+///
+/// The 24pt entry comes from the other end of the same face: the auto rows of
+/// `issue_1060_sheet_row_line_box_probe.xlsx` whose cells name Malgun Gothic
+/// 24 outright export a 35.00pt track, where its 14pt cells export the 20.00pt
+/// this table already carried from the scheme sweep (issue #1140). The two
+/// agreeing at 14 is what says the scheme resolves to that same face.
+const UI_SCRIPT_FACE_ROW_HEIGHTS: [(f64, f64); 6] = [
     (8.0, 13.0),
     (10.0, 15.0),
     (11.0, 17.0),
     (14.0, 20.0),
     (18.0, 27.0),
+    (24.0, 35.0),
 ];
 
 /// The same recompute under a Normal font that names Calibri or Aptos
@@ -1355,6 +1377,67 @@ pub(super) fn worksheet_default_row_height_pt(
         .unwrap_or_else(|| declared_default_row_height_pt(sheet))
 }
 
+/// The worksheet height of one particular row that records none. Such a row
+/// is auto-sized, and Excel sizes it from the tallest font its *own cells*
+/// carry — the sheet's recomputed default only covers a row whose cells hold
+/// nothing taller.
+///
+/// Native Excel-for-Mac export of `issue_1060_sheet_row_line_box_probe.xlsx`,
+/// whose Normal font is a theme-scheme Calibri 11 that none of its cells use;
+/// AppleScript `row height of row N` and the `mutool draw -F trace` baseline
+/// pitch agree on every row (issue #1140):
+///
+/// | rows | cell font | Excel row |
+/// | --- | --- | ---: |
+/// | 1-6, 8-13 | Malgun Gothic 14 | 20.00pt |
+/// | 15-17 | Malgun Gothic 24 | 35.00pt |
+///
+/// Sizing all fifteen from the Normal font's own 17pt track instead left the
+/// last of them 88.00pt up the page.
+///
+/// The term only ever raises the track. What Excel gives a row whose cells
+/// are *smaller* than the Normal font is not measured here, and neither is a
+/// size the face's series skips, so both keep the sheet default rather than
+/// interpolate between measured points that step irregularly (15pt at 10,
+/// 17pt at 11, 20pt at 14).
+///
+/// A sheet marking its default `customHeight` is left alone as well: that
+/// declared default is honoured for `ht`-less rows (issue #1047), and whether
+/// a tall cell still grows one of them was never exported.
+fn auto_row_height_pt(
+    sheet: &umya_spreadsheet::Worksheet,
+    row_idx: u32,
+    normal_font: Option<&NormalFont>,
+) -> f64 {
+    let sheet_default: f64 = worksheet_default_row_height_pt(sheet, normal_font);
+    if *sheet.get_sheet_format_properties().get_custom_height() {
+        return sheet_default;
+    }
+    let Some(font) = normal_font else {
+        return sheet_default;
+    };
+    let Some(tallest_cell_size_pt) = tallest_cell_font_size_pt(sheet, row_idx) else {
+        return sheet_default;
+    };
+    if tallest_cell_size_pt <= font.size_pt {
+        return sheet_default;
+    }
+    measured_row_height_pt(font, tallest_cell_size_pt)
+        .map_or(sheet_default, |height_pt| height_pt.max(sheet_default))
+}
+
+/// The largest font size any cell of this row states, ignoring cells that
+/// state none — those inherit the Normal font, which the caller already has.
+fn tallest_cell_font_size_pt(sheet: &umya_spreadsheet::Worksheet, row_idx: u32) -> Option<f64> {
+    sheet
+        .get_collection_by_row(&row_idx)
+        .into_iter()
+        .filter_map(|cell| cell.get_style().get_font())
+        .map(|font| *font.get_size())
+        .filter(|size_pt| *size_pt > 0.0)
+        .max_by(f64::total_cmp)
+}
+
 /// The whole-point track a row occupies in Excel's printed grid, whatever its
 /// own content would need.
 ///
@@ -1375,7 +1458,7 @@ pub(super) fn printed_grid_row_height_pt(
         .map(|row| *row.get_height())
         .filter(|height| *height > 0.0);
     native_excel_pdf_row_height(
-        declared_height.unwrap_or_else(|| worksheet_default_row_height_pt(sheet, normal_font)),
+        declared_height.unwrap_or_else(|| auto_row_height_pt(sheet, row_idx, normal_font)),
         normal_font,
     )
 }
