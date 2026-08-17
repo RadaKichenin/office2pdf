@@ -5082,3 +5082,109 @@ fn an_overlaid_line_series_draws_the_symbol_it_declares() {
         "no marker may fall back to the cycle's shape for this index; got:\n{source}"
     );
 }
+
+// ----- Combo plot areas: a scatter marker over a line (issue #1123) -----
+
+/// The cash-flow chart of `Monthly college budget1.xlsx`, reduced to three
+/// months: `<c:lineChart>` draws the month-by-month cash flow and a
+/// `<c:scatterChart>` beside it puts one marker on the selected month.
+///
+/// The scatter series carries a single point because the other twelve are
+/// `#N/A` in the workbook's cache — that is how the template hides the marker
+/// on every month but the selected one.
+fn combo_line_and_scatter_chart() -> Chart {
+    Chart {
+        chart_type: ChartType::Line,
+        hole_size_percent: None,
+        title: None,
+        categories: vec!["jan".to_string(), "feb".to_string(), "mar".to_string()],
+        series: vec![
+            ChartSeries {
+                name: Some("Cash Flow".to_string()),
+                values: vec![169.0, 69.0, 192.0],
+                fill: None,
+                point_fills: Vec::new(),
+                data_labels: DataLabels::default(),
+                number_format: None,
+                plot_type: None,
+                marker_symbol: Some(MarkerSymbol::Off),
+                line_width_pt: None,
+            },
+            ChartSeries {
+                name: Some("Positive Selected Period".to_string()),
+                values: vec![169.0],
+                fill: None,
+                point_fills: Vec::new(),
+                data_labels: DataLabels::default(),
+                number_format: None,
+                plot_type: Some(ChartType::Scatter),
+                marker_symbol: Some(MarkerSymbol::Circle),
+                line_width_pt: None,
+            },
+        ],
+        grouping: ChartGrouping::Clustered,
+        legend_position: LegendPosition::Bottom,
+        has_legend: false,
+        category_axis_title: None,
+        value_axis_title: None,
+        category_axis_major_tick_mark: AxisTickMark::None,
+        value_axis_major_tick_mark: AxisTickMark::None,
+        category_axis_deleted: false,
+        category_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_major_unit: None,
+        major_gridline_line: crate::ir::ChartLine::Automatic,
+        value_axis_deleted: true,
+        bar_band_layout: BarBandLayout::default(),
+        theme_accent_colors: Vec::new(),
+        chart_area_outline: ChartAreaOutline::Default,
+        host: crate::ir::ChartHost::Spreadsheet,
+        text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: None,
+        auto_title_deleted: true,
+    }
+}
+
+#[test]
+fn a_scatter_series_over_a_line_draws_a_plot_not_a_data_table() {
+    let source = chart_source(combo_line_and_scatter_chart());
+
+    // The data-table fallback names the chart's family in place of a plot; a
+    // drawn chart never prints its own type. Reaching it here cost the
+    // workbook a whole extra page (issue #1123).
+    assert!(
+        !source.contains("Scatter Chart"),
+        "a combo with a plottable family must not fall back to a data table; got:\n{source}"
+    );
+    let points = emitted_path_points(&source);
+    assert_eq!(
+        points.len(),
+        3,
+        "the line family draws a polyline through its three months; got:\n{source}"
+    );
+    // One point per category band, left to right, and February's 69 is the
+    // lowest of the three — the plot is scaled to the values, not a table.
+    assert!(points[0].0 < points[1].0 && points[1].0 < points[2].0);
+    assert!(points[1].1 > points[0].1 && points[0].1 > points[2].1);
+}
+
+#[test]
+fn a_one_point_scatter_series_draws_its_marker_and_no_polyline() {
+    let source = chart_source(combo_line_and_scatter_chart());
+
+    // Its single point is a marker on the selected month, not a segment: a
+    // polyline needs two points and the workbook caches `#N/A` for the rest.
+    assert_eq!(
+        source.matches("path(stroke:").count(),
+        1,
+        "only the line family's series draws a polyline; got:\n{source}"
+    );
+    let (circles, _, _) = marker_shape_counts(&source);
+    assert_eq!(
+        circles, 1,
+        "the scatter series draws the circle it declares on its one point; got:\n{source}"
+    );
+}

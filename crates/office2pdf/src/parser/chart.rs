@@ -216,7 +216,20 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
                     // `<c:lineChart>` following a `<c:barChart>` took the type
                     // and the grouping with it, and the columns vanished
                     // (issue #1067).
-                    if !matches!(chart_type, Some(ChartType::Bar | ChartType::Column)) {
+                    //
+                    // A scatter family yields to any family already governing,
+                    // for the same reason at the other end: `<c:scatterChart>`
+                    // carries no `<c:cat>` — each point states its own x — so it
+                    // never declares the category bands the family beside it
+                    // did. Letting the `<c:scatterChart>` that follows the
+                    // `<c:lineChart>` in `Monthly college budget1.xlsx` take the
+                    // type dropped the whole chart to the data-table fallback,
+                    // which no scatter plot exists to spare it (issue #1123).
+                    let yields_to_governing_family: bool =
+                        chart_type.is_some() && matches!(family, ChartType::Scatter);
+                    if !matches!(chart_type, Some(ChartType::Bar | ChartType::Column))
+                        && !yields_to_governing_family
+                    {
                         chart_type = Some(family);
                         grouping = plot.grouping.as_deref().map(chart_grouping_for);
                         // Only the doughnut family writes it.

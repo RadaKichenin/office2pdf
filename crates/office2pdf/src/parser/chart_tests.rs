@@ -2356,3 +2356,130 @@ fn a_single_family_chart_leaves_every_series_on_the_chart_type() {
     assert!(!chart.series.is_empty());
     assert!(chart.series.iter().all(|series| series.plot_type.is_none()));
 }
+
+/// The cash-flow chart of `Monthly college budget1.xlsx`, reduced to three
+/// categories: a `<c:lineChart>` over the months with a `<c:scatterChart>`
+/// laid over it whose marker-only series highlights the selected one.
+///
+/// The scatter family is written last and shares the line's `<c:axId>` pair,
+/// so it plots against the very category axis the line declared.
+fn combo_line_and_scatter_chart_xml() -> String {
+    r#"<?xml version="1.0" encoding="UTF-8"?>
+        <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+            <c:chart><c:plotArea>
+                <c:lineChart>
+                    <c:grouping val="standard"/>
+                    <c:ser>
+                        <c:idx val="0"/>
+                        <c:tx><c:v>Cash Flow</c:v></c:tx>
+                        <c:cat><c:strRef><c:strCache>
+                            <c:pt idx="0"><c:v>jan</c:v></c:pt>
+                            <c:pt idx="1"><c:v>feb</c:v></c:pt>
+                            <c:pt idx="2"><c:v>mar</c:v></c:pt>
+                        </c:strCache></c:strRef></c:cat>
+                        <c:val><c:numRef><c:numCache>
+                            <c:pt idx="0"><c:v>169</c:v></c:pt>
+                            <c:pt idx="1"><c:v>69</c:v></c:pt>
+                            <c:pt idx="2"><c:v>192</c:v></c:pt>
+                        </c:numCache></c:numRef></c:val>
+                    </c:ser>
+                    <c:axId val="96119408"/>
+                    <c:axId val="477185864"/>
+                </c:lineChart>
+                <c:scatterChart>
+                    <c:scatterStyle val="lineMarker"/>
+                    <c:ser>
+                        <c:idx val="1"/>
+                        <c:tx><c:v>Positive Selected Period</c:v></c:tx>
+                        <c:marker><c:symbol val="circle"/><c:size val="14"/></c:marker>
+                        <c:yVal><c:numRef><c:numCache>
+                            <c:pt idx="0"><c:v>169</c:v></c:pt>
+                        </c:numCache></c:numRef></c:yVal>
+                    </c:ser>
+                    <c:axId val="96119408"/>
+                    <c:axId val="477185864"/>
+                </c:scatterChart>
+            </c:plotArea></c:chart>
+        </c:chartSpace>"#
+        .to_string()
+}
+
+/// A `<c:scatterChart>` carries no `<c:cat>` — its points state their own x
+/// values — so it cannot own the category bands the family beside it declared.
+/// Letting it take the chart's type dropped the whole combo to the data-table
+/// fallback, because no scatter plot is drawn (issue #1123).
+#[test]
+fn a_trailing_scatter_chart_leaves_the_line_family_governing() {
+    let chart =
+        parse_chart_xml(&combo_line_and_scatter_chart_xml(), &SchemeColors::empty()).unwrap();
+
+    assert_eq!(chart.chart_type, ChartType::Line);
+    assert_eq!(chart.series.len(), 2);
+    assert_eq!(chart.series[0].plot_type, None);
+    assert_eq!(chart.series[1].plot_type, Some(ChartType::Scatter));
+}
+
+/// The categories stay the line family's month labels rather than being
+/// renumbered from the scatter series' implicit x values.
+#[test]
+fn a_trailing_scatter_chart_keeps_the_line_familys_categories() {
+    let chart =
+        parse_chart_xml(&combo_line_and_scatter_chart_xml(), &SchemeColors::empty()).unwrap();
+
+    assert_eq!(chart.categories, vec!["jan", "feb", "mar"]);
+}
+
+/// Order is not what decides it: a `<c:lineChart>` following a
+/// `<c:scatterChart>` governs the axis just the same.
+#[test]
+fn a_leading_scatter_chart_still_leaves_the_line_family_governing() {
+    let xml: String = combo_line_and_scatter_chart_xml();
+    let line_start: usize = xml.find("<c:lineChart>").unwrap();
+    let line_end: usize = xml.find("</c:lineChart>").unwrap() + "</c:lineChart>".len();
+    let scatter_start: usize = xml.find("<c:scatterChart>").unwrap();
+    let scatter_end: usize = xml.find("</c:scatterChart>").unwrap() + "</c:scatterChart>".len();
+    let swapped: String = format!(
+        "{}{}{}{}{}",
+        &xml[..line_start],
+        &xml[scatter_start..scatter_end],
+        &xml[line_end..scatter_start],
+        &xml[line_start..line_end],
+        &xml[scatter_end..]
+    );
+
+    let chart = parse_chart_xml(&swapped, &SchemeColors::empty()).unwrap();
+
+    assert_eq!(chart.chart_type, ChartType::Line);
+    assert_eq!(chart.series[0].plot_type, Some(ChartType::Scatter));
+    assert_eq!(chart.series[1].plot_type, None);
+}
+
+/// A plot area holding nothing but a `<c:scatterChart>` still reads as one:
+/// the guard only keeps a scatter from taking governance off another family.
+#[test]
+fn a_scatter_only_plot_area_still_reads_as_a_scatter_chart() {
+    let xml: String = combo_line_and_scatter_chart_xml();
+    let line_start: usize = xml.find("<c:lineChart>").unwrap();
+    let line_end: usize = xml.find("</c:lineChart>").unwrap() + "</c:lineChart>".len();
+    let scatter_only: String = format!("{}{}", &xml[..line_start], &xml[line_end..]);
+
+    let chart = parse_chart_xml(&scatter_only, &SchemeColors::empty()).unwrap();
+
+    assert_eq!(chart.chart_type, ChartType::Scatter);
+    assert!(chart.series.iter().all(|series| series.plot_type.is_none()));
+}
+
+/// The bar family still outranks a scatter that follows it, as it does every
+/// other family (issue #1067).
+#[test]
+fn a_trailing_scatter_chart_leaves_the_bar_family_governing() {
+    let xml: String = combo_line_and_scatter_chart_xml()
+        .replace("<c:lineChart>", r#"<c:barChart><c:barDir val="col"/>"#)
+        .replace("</c:lineChart>", "</c:barChart>");
+
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
+
+    assert_eq!(chart.chart_type, ChartType::Column);
+    assert_eq!(chart.series[1].plot_type, Some(ChartType::Scatter));
+}
