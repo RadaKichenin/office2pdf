@@ -280,12 +280,15 @@ overrides that and must still sit on the internal disk: the sandbox cannot
 write to `/Volumes` at all (AppleEvent timeout -1712), which the harness
 enforces.
 
-The same container rule binds every other caller of those AppleScripts. The
-`GENERATE_MICROSOFT_GT=1` exports in `public_visual_audit.rs` and
-`scripts/measure_powerpoint_chart_axis.py` stage the fixtures and the PDFs in
-the driven app's container and copy the results out afterwards; the last
-caller, `scripts/macos/export_business_golden_pdfs.sh`, still stages under the
-checkout (#1128).
+The same container rule binds every other caller of those AppleScripts, and
+every one of them now follows it. The `GENERATE_MICROSOFT_GT=1` exports in
+`public_visual_audit.rs` and `scripts/measure_powerpoint_chart_axis.py` stage
+the fixtures and the PDFs in the driven app's container and copy the results
+out afterwards. `scripts/macos/export_business_golden_pdfs.sh` drives three
+apps, so it uses three stages — `Data/business-golden-export/` in each app's
+own container, removed when the run ends — and copies the PDFs back to its
+stage-root argument, which only the unsandboxed `pdfunite`/`pdfinfo` steps read
+(#1128).
 
 ### Fine-detail analysis (thin and small elements)
 

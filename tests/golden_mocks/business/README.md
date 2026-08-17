@@ -121,6 +121,8 @@ scripts/macos/export_business_golden_pdfs.sh /tmp/office2pdf-business-goldens
 
 Word and PowerPoint export whole documents in source order. Excel exports every visible worksheet with its native print settings, then `pdfunite` losslessly combines the sheet PDFs in workbook order. The staging directory includes `provenance.txt` with Office versions, macOS build, export time, and SHA-256 hashes. Review the staged PDFs visually before replacing any tracked file and then update the matching hashes and metadata in `manifest.json`.
 
+The three apps are sandboxed, so the run copies each format's sources into `~/Library/Containers/<bundle id>/Data/business-golden-export/` — Word, PowerPoint, and Excel each in their own container — exports there, copies the PDFs back to the staging directory, and removes the container stage. Files anywhere else raise a per-file "Grant Access" dialog that stalls the run (#1128), so the staging directory argument is free to sit wherever is convenient.
+
 Run both validator layers after any source or golden update:
 
 ```sh
