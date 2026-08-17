@@ -590,6 +590,12 @@ struct MinimalWorld {
     font_source: FontSource,
     source: Source,
     images: HashMap<String, Bytes>,
+    /// Faces as the shaper is to receive them, by font-book index.
+    ///
+    /// The compiler asks for the same face once per text run and a face that
+    /// carries both kern sources is rebuilt from its own bytes, so the answer
+    /// is memoized for the life of the compilation (issue #1116).
+    shaped_faces: Mutex<HashMap<usize, Font>>,
 }
 
 impl MinimalWorld {
@@ -619,6 +625,7 @@ impl MinimalWorld {
             font_source,
             source,
             images: image_map,
+            shaped_faces: Mutex::new(HashMap::new()),
         }
     }
 
@@ -700,6 +707,7 @@ impl MinimalWorld {
             font_source,
             source,
             images: image_map,
+            shaped_faces: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -744,7 +752,25 @@ impl World for MinimalWorld {
     }
 
     fn font(&self, index: usize) -> Option<Font> {
-        self.font_source.font(index)
+        if let Some(cached) = self
+            .shaped_faces
+            .lock()
+            .expect("shaped face cache mutex should not be poisoned")
+            .get(&index)
+        {
+            return Some(cached.clone());
+        }
+
+        let loaded: Font = self.font_source.font(index)?;
+        // Office positions text through CoreText, which keeps reading a
+        // TrueType face's legacy `kern` table where the shaper would take the
+        // GPOS feature instead (issue #1116).
+        let font: Font = super::font_kern::face_preferring_legacy_kern(&loaded).unwrap_or(loaded);
+        self.shaped_faces
+            .lock()
+            .expect("shaped face cache mutex should not be poisoned")
+            .insert(index, font.clone());
+        Some(font)
     }
 
     fn today(&self, _offset: Option<i64>) -> Option<Datetime> {
