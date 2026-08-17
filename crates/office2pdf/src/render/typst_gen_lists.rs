@@ -543,7 +543,7 @@ pub(super) fn generate_fixed_text_list(
         out.push_str("#block(");
         write_block_params(out, style);
         out.push_str(")[\n");
-        write_fixed_text_list_par_settings(out, style, line_gap_pt);
+        write_fixed_text_list_par_settings(out, style, &paragraph.runs, line_gap_pt);
     }
 
     let align_str: Option<&str> = fixed_text_list_alignment(style.alignment);
@@ -1113,13 +1113,14 @@ fn fixed_text_list_font_size_pt(list: &List) -> f64 {
 fn write_fixed_text_list_par_settings(
     out: &mut String,
     style: &ParagraphStyle,
+    runs: &[Run],
     line_gap_pt: Option<f64>,
 ) {
     write_line_box_settings(out, style.line_box);
     if let Some(gap) = line_gap_pt.filter(|gap| *gap > 0.0) {
         let _ = writeln!(out, "  #set par(leading: {}pt)", format_f64(gap));
     } else {
-        write_par_settings(out, style);
+        write_par_settings(out, style, runs);
         return;
     }
     if matches!(style.alignment, Some(Alignment::Justify)) {

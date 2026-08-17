@@ -12,7 +12,7 @@ use crate::ir::{
     ColumnLayout, Document, FloatingImage, FloatingTextBox, ImageData, ImageFormat,
     ImageParagraphSpacing, Insets, LineJoin, LineSpacing, Page, PageNumbering, PairKerning,
     Paragraph, ParagraphStyle, Run, StyleSheet, TabAlignment, TabLeader, TabStop, Table, TableCell,
-    TableOfContents, TableRow, TextDirection, TextStyle, VerticalTextAlign,
+    TableOfContents, TableRow, TextDirection, TextStyle, VerticalTextAlign, WordCompatibilityMode,
 };
 use crate::parser::Parser;
 
@@ -365,6 +365,7 @@ impl Parser for DocxParser {
         _options: &ConvertOptions,
     ) -> Result<(Document, Vec<ConvertWarning>), ConvertError> {
         let default_tab_stop_pt: Option<f64> = extract_default_tab_stop_pt(data);
+        let word_compatibility_mode: WordCompatibilityMode = extract_compatibility_mode(data);
         let ZipPreParseAssets {
             metadata,
             mut ctx,
@@ -514,6 +515,7 @@ impl Parser for DocxParser {
                         &theme_fonts,
                         &pair_kerning,
                     )),
+                    word_compatibility_mode: Some(word_compatibility_mode),
                     ..StyleSheet::default()
                 },
             },
@@ -535,6 +537,47 @@ fn extract_default_tab_stop_pt(data: &[u8]) -> Option<f64> {
     let value_end: usize = rest[value_start..].find('"')? + value_start;
     let twips: f64 = rest[value_start..value_end].parse().ok()?;
     (twips > 0.0).then_some(twips / 20.0)
+}
+
+/// The layout engine Word lays this package out with, from the
+/// `compatibilityMode` compatibility setting in `word/settings.xml`.
+///
+/// Read from the raw part for the same reason `w:defaultTabStop` is: docx-rs
+/// models `w:compat` only as the flags it writes itself, so the setting cannot
+/// be reached through its document tree.
+///
+/// A package that carries no setting — no `word/settings.xml` at all, or one
+/// with no `compatibilityMode` — is a pre-2013 document to Word, so absence is
+/// [`WordCompatibilityMode::Legacy`] rather than an unknown. The attribute
+/// order is not fixed: native Word writes `w:val` first, docx-rs writes it
+/// last.
+fn extract_compatibility_mode(data: &[u8]) -> WordCompatibilityMode {
+    let Some(mode) = declared_compatibility_mode(data) else {
+        return WordCompatibilityMode::Legacy;
+    };
+    if mode >= 15 {
+        WordCompatibilityMode::Word2013OrLater
+    } else {
+        WordCompatibilityMode::Legacy
+    }
+}
+
+fn declared_compatibility_mode(data: &[u8]) -> Option<u32> {
+    let mut archive = crate::parser::open_zip(data).ok()?;
+    let settings_xml: String = read_zip_text(&mut archive, "word/settings.xml")?;
+    settings_xml
+        .split("<w:compatSetting")
+        .skip(1)
+        // Split on the tag's own end so a setting written open rather than
+        // self-closing cannot swallow the ones after it.
+        .filter_map(|element| element.split_once('>').map(|(attributes, _)| attributes))
+        .find(|attributes| attributes.contains(r#"w:name="compatibilityMode""#))
+        .and_then(|attributes| {
+            let value_start: usize = attributes.find(r#"w:val=""#)? + r#"w:val=""#.len();
+            let rest: &str = &attributes[value_start..];
+            let value_end: usize = rest.find('"')?;
+            rest[..value_end].parse().ok()
+        })
 }
 
 /// Extract content from a StructuredDataTag (SDT), processing its paragraph

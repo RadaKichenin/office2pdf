@@ -1,4 +1,5 @@
 use super::*;
+use crate::ir::WordCompatibilityMode;
 
 #[test]
 fn test_generate_plain_paragraph() {
@@ -266,6 +267,95 @@ fn test_generate_alignment_justify() {
     assert!(
         result.contains("overhang: false"),
         "justified text must not hang punctuation past the margin: {result}"
+    );
+}
+
+/// A justified paragraph in the compatibility mode Word declares, so the
+/// natural-width rule of issue #1130 can be switched on and off around one
+/// paragraph.
+fn justified_paragraph_document(text: &str, mode: WordCompatibilityMode) -> Document {
+    let mut doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
+        style: ParagraphStyle {
+            alignment: Some(Alignment::Justify),
+            ..ParagraphStyle::default()
+        },
+        runs: vec![Run {
+            text: text.to_string(),
+            style: TextStyle::default(),
+            href: None,
+            footnote: None,
+        }],
+    })])]);
+    doc.styles.word_compatibility_mode = Some(mode);
+    doc
+}
+
+/// Word's pre-2013 East Asian justification seats on a line only what fits at
+/// its natural width. Swept over eleven measures either side of the fit
+/// boundary, a native legacy export of the reported fixture refuses a 0.5pt
+/// overrun where Typst's Knuth-Plass breaker squeezes twelve word spaces to
+/// 0.9746 of natural to take one more eojeol (issue #1130).
+#[test]
+fn test_legacy_justified_east_asian_paragraph_breaks_at_natural_width() {
+    let doc = justified_paragraph_document(
+        "본 계약은 2026년 8월 체결되며 ABC 주식회사와 DEF 파트너스는 각각 임원을 파견한다",
+        WordCompatibilityMode::Legacy,
+    );
+    let result = generate_typst(&doc).unwrap().source;
+    assert!(
+        result.contains("par(justify: true"),
+        "the paragraph is still justified: {result}"
+    );
+    assert!(
+        result.contains(r#"set par(linebreaks: "simple")"#),
+        "a legacy East Asian justified line must not compress to seat one more \
+         token: {result}"
+    );
+}
+
+/// At `compatibilityMode 15` Word does take that trade, and its compressed word
+/// space measures 3.6020pt against our 3.6019pt on the reported fixture, so the
+/// Knuth-Plass breaker is what models it (issue #1130).
+#[test]
+fn test_word_2013_justified_east_asian_paragraph_keeps_the_optimized_breaker() {
+    let doc = justified_paragraph_document(
+        "본 계약은 2026년 8월 체결되며 ABC 주식회사와 DEF 파트너스는 각각 임원을 파견한다",
+        WordCompatibilityMode::Word2013OrLater,
+    );
+    let result = generate_typst(&doc).unwrap().source;
+    assert!(
+        !result.contains("linebreaks:"),
+        "modern Word compresses to seat one more token, so the breaker stays: \
+         {result}"
+    );
+}
+
+/// The switch is East Asian, not legacy-wide: the same legacy export takes up
+/// to 2.5pt of overrun on its Latin paragraph, so Latin keeps the breaker that
+/// already reproduces the corpus's compressed English lines (issue #1130).
+#[test]
+fn test_legacy_justified_latin_paragraph_keeps_the_optimized_breaker() {
+    let doc = justified_paragraph_document(
+        "Monthly active users crossed 21,300 in June, up 72% since January.",
+        WordCompatibilityMode::Legacy,
+    );
+    let result = generate_typst(&doc).unwrap().source;
+    assert!(
+        !result.contains("linebreaks:"),
+        "legacy Latin justification compresses, so the breaker stays: {result}"
+    );
+}
+
+/// A presentation and a workbook declare no such setting, and neither is laid
+/// out by Word, so both keep the modern breaker.
+#[test]
+fn test_document_without_a_compatibility_mode_keeps_the_optimized_breaker() {
+    let mut doc = justified_paragraph_document("본 계약은 체결되며", WordCompatibilityMode::Legacy);
+    doc.styles.word_compatibility_mode = None;
+    let result = generate_typst(&doc).unwrap().source;
+    assert!(
+        !result.contains("linebreaks:"),
+        "only a Word package states a compatibility mode: {result}"
     );
 }
 

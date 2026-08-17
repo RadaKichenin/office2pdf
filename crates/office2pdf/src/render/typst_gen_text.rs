@@ -217,7 +217,7 @@ pub(super) fn generate_paragraph(
             style.border_space.as_deref().copied().unwrap_or_default(),
         );
         write_line_box_settings(out, style.line_box);
-        write_par_settings(out, style);
+        write_par_settings(out, style, &para.runs);
         if let Some(ref settings) = line_height_settings {
             out.push_str(settings);
         }
@@ -1585,7 +1585,7 @@ fn write_paragraph_double_border_overlays(
     }
 }
 
-pub(super) fn write_par_settings(out: &mut String, style: &ParagraphStyle) {
+pub(super) fn write_par_settings(out: &mut String, style: &ParagraphStyle, runs: &[Run]) {
     if let Some(ref spacing) = style.line_spacing {
         match spacing {
             LineSpacing::Proportional(factor) => {
@@ -1599,10 +1599,41 @@ pub(super) fn write_par_settings(out: &mut String, style: &ParagraphStyle) {
     }
     if matches!(style.alignment, Some(Alignment::Justify)) {
         out.push_str("  #set par(justify: true)\n");
+        if justified_lines_take_natural_width_only(runs) {
+            out.push_str("  #set par(linebreaks: \"simple\")\n");
+        }
     }
     if matches!(style.direction, Some(TextDirection::Rtl)) {
         out.push_str("  #set text(dir: rtl)\n");
     }
+}
+
+/// Whether this justified paragraph fills each line only up to the width its
+/// content naturally occupies, never borrowing from the word spaces to seat one
+/// more token.
+///
+/// Typst's justified line breaker is Knuth-Plass, which prices a slightly
+/// squeezed line far below a very loose one and so takes that trade whenever
+/// the shrink allowance permits it. Word's does the same under its post-2013
+/// engine: at `compatibilityMode 15` a native export pulls one more eojeol onto
+/// the line and compresses twelve word spaces to 0.9746 of natural to seat it,
+/// which is our own 0.9746 to within 0.0001pt.
+///
+/// Word's pre-2013 East Asian justification has no such phase. Swept over
+/// eleven measures either side of the fit boundary, a native legacy export
+/// seats the extra token only while it fits at natural width and refuses a
+/// 0.5pt overrun — even though the same package's Latin paragraph, in the same
+/// export, takes up to 2.5pt of overrun. So the switch is scoped to East Asian
+/// paragraphs: it is not that legacy Word cannot compress, it is that its East
+/// Asian justification does not (issue #1130).
+///
+/// `linebreaks: "simple"` is Typst's first-fit breaker, which is what Word's
+/// is; a line only ever shrinks under it when a single unbreakable token
+/// overflows the measure, where Word overflows too. Typst already uses it for
+/// every unjustified paragraph, which is why left-aligned Korean text has
+/// always broken where Word breaks it.
+fn justified_lines_take_natural_width_only(runs: &[Run]) -> bool {
+    legacy_word_justification_is_active() && has_east_asian_text(runs)
 }
 
 pub(super) fn write_line_box_settings(out: &mut String, line_box: Option<LineBox>) {
@@ -2051,10 +2082,12 @@ pub(super) enum EojeolWrap {
     Syllable,
     /// Emit each eojeol inside an inline `#box`. A frame is a single object to
     /// UAX #14, so no break opportunity survives inside it. Typst 0.14 offers
-    /// no other lever: `text(lang: "ko")`, `par(linebreaks:)` and
-    /// `text(costs:)` were each measured to leave the breakpoints untouched,
-    /// because typst-layout builds its ICU4X segmenters with default options
-    /// and never consults `Lang::KOREAN`. The repo already uses the same
+    /// no other lever for *removing* one: `text(lang: "ko")`,
+    /// `par(linebreaks:)` and `text(costs:)` were each measured to leave the
+    /// breakpoints untouched, because typst-layout builds its ICU4X segmenters
+    /// with default options and never consults `Lang::KOREAN`.
+    /// `par(linebreaks:)` only picks among the opportunities that exist, which
+    /// is what issue #1130 uses it for. The repo already uses the same
     /// mechanism in the opposite direction, where `#box[]` *creates* a
     /// contingent break for PowerPoint kinsoku (issue #438).
     ///
@@ -3564,6 +3597,34 @@ thread_local! {
     /// Whether run emission is currently inside a spreadsheet page and should
     /// set its lines on Excel's whole-point advance grid (issue #1088).
     static SHEET_ADVANCE_GRID: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Whether the document being generated is laid out by Word's pre-2013
+    /// engine, whose East Asian justification never compresses a line to fit
+    /// one more token. See [`with_legacy_word_justification`].
+    static LEGACY_WORD_JUSTIFICATION: std::cell::Cell<bool> =
+        const { std::cell::Cell::new(false) };
+}
+
+/// Run `operation` with Word's pre-2013 justification in the requested state,
+/// restoring the enclosing state even when generation panics.
+///
+/// This is a *document*-wide switch because `compatibilityMode` is declared
+/// once for the package, in `word/settings.xml`. Which paragraphs it then
+/// governs is a per-paragraph question, answered where the setting is emitted;
+/// see [`write_par_settings`].
+pub(super) fn with_legacy_word_justification<T>(active: bool, operation: impl FnOnce() -> T) -> T {
+    LEGACY_WORD_JUSTIFICATION.with(|legacy| {
+        let previous: bool = legacy.replace(active);
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(operation));
+        legacy.set(previous);
+        match result {
+            Ok(value) => value,
+            Err(panic) => std::panic::resume_unwind(panic),
+        }
+    })
+}
+
+fn legacy_word_justification_is_active() -> bool {
+    LEGACY_WORD_JUSTIFICATION.with(std::cell::Cell::get)
 }
 
 /// Run `operation` with Excel's whole-point advance grid in the requested

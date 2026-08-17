@@ -1290,3 +1290,87 @@ fn test_absent_default_tab_stop_is_none() {
     let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
     assert_eq!(doc.styles.default_tab_stop_pt, None);
 }
+
+/// Rewrites the `compatibilityMode` compatibility setting inside a DOCX's
+/// `word/settings.xml`, replacing the whole `w:compat` element with
+/// `replacement` (empty string removes it).
+fn rewrite_settings_compat(docx_bytes: &[u8], replacement: &str) -> Vec<u8> {
+    let mut archive =
+        zip::ZipArchive::new(std::io::Cursor::new(docx_bytes.to_vec())).expect("read zip");
+    let mut out = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i).expect("zip entry");
+        let name: String = file.name().to_string();
+        let mut content: Vec<u8> = Vec::new();
+        std::io::Read::read_to_end(&mut file, &mut content).expect("read entry");
+        if name == "word/settings.xml" {
+            let xml = String::from_utf8(content).expect("settings utf8");
+            let start: usize = xml.find("<w:compat>").expect("docx-rs writes w:compat");
+            let end: usize = xml.find("</w:compat>").expect("closing tag") + "</w:compat>".len();
+            content = format!("{}{}{}", &xml[..start], replacement, &xml[end..]).into_bytes();
+        }
+        out.start_file(name, zip::write::FileOptions::default())
+            .expect("start entry");
+        std::io::Write::write_all(&mut out, &content).expect("write entry");
+    }
+    out.finish().expect("finish zip").into_inner()
+}
+
+/// The `w:compat` element a package declaring `mode` carries. `value_first`
+/// selects the attribute order native Word writes, which is not the order
+/// docx-rs writes, so both have to read the same (issue #1130).
+fn compat_element(mode: u32, value_first: bool) -> String {
+    const URI: &str = "http://schemas.microsoft.com/office/word";
+    let attributes: String = if value_first {
+        format!(r#"w:val="{mode}" w:name="compatibilityMode" w:uri="{URI}""#)
+    } else {
+        format!(r#"w:name="compatibilityMode" w:uri="{URI}" w:val="{mode}""#)
+    };
+    format!("<w:compat><w:compatSetting {attributes}/></w:compat>")
+}
+
+/// Word 2013's layout engine, which native exports of every business-corpus
+/// source declare.
+#[test]
+fn test_compatibility_mode_15_reads_as_word_2013() {
+    let data = build_docx_bytes(vec![
+        docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text("본문")),
+    ]);
+    let data = rewrite_settings_compat(&data, &compat_element(15, true));
+    let parser = DocxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    assert_eq!(
+        doc.styles.word_compatibility_mode,
+        Some(WordCompatibilityMode::Word2013OrLater)
+    );
+}
+
+#[test]
+fn test_compatibility_mode_before_15_reads_as_legacy() {
+    let data = build_docx_bytes(vec![
+        docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text("본문")),
+    ]);
+    let data = rewrite_settings_compat(&data, &compat_element(14, false));
+    let parser = DocxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    assert_eq!(
+        doc.styles.word_compatibility_mode,
+        Some(WordCompatibilityMode::Legacy)
+    );
+}
+
+/// A package that states no mode is a pre-2013 document to Word, which is the
+/// shape every hand-authored fixture in this repository has.
+#[test]
+fn test_absent_compatibility_mode_reads_as_legacy() {
+    let data = build_docx_bytes(vec![
+        docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text("본문")),
+    ]);
+    let data = rewrite_settings_compat(&data, "");
+    let parser = DocxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    assert_eq!(
+        doc.styles.word_compatibility_mode,
+        Some(WordCompatibilityMode::Legacy)
+    );
+}

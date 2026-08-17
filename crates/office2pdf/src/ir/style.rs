@@ -10,6 +10,24 @@ pub enum DeclaredFontClass {
     Monospace,
 }
 
+/// Which layout engine Word lays a package out with, from the
+/// `compatibilityMode` compatibility setting in `word/settings.xml`.
+///
+/// Word 2013 replaced the layout engine, and justification is one of the parts
+/// that changed. Measured against native Word for Mac on the same Korean
+/// paragraph at eleven measures (issue #1130): declaring mode 15 makes Word
+/// pull one more eojeol onto a justified line and compress its word spaces to
+/// fit, up to at least 3.5pt of overrun, while declaring an earlier mode — or
+/// none, which is how Word treats a pre-2013 document — makes it take only
+/// what fits at natural width and stretch the remainder.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WordCompatibilityMode {
+    /// `compatibilityMode` 15 or higher.
+    Word2013OrLater,
+    /// An earlier declared mode, or no `compatibilityMode` at all.
+    Legacy,
+}
+
 /// Collection of named styles in the document.
 #[derive(Debug, Clone, Default)]
 pub struct StyleSheet {
@@ -27,6 +45,10 @@ pub struct StyleSheet {
     /// contents entry is laid out in this rather than in the heading's own
     /// formatting (issue #610).
     pub default_text: Option<TextStyle>,
+    /// The layout engine Word would use, from `word/settings.xml`. `None` for
+    /// a format that has no such setting — a presentation or a workbook —
+    /// which leaves the modern justification in place for both.
+    pub word_compatibility_mode: Option<WordCompatibilityMode>,
 }
 
 /// A named style that can be referenced by paragraphs/runs.
