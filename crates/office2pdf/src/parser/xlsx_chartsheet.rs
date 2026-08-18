@@ -1,4 +1,5 @@
-//! Print geometry of a chartsheet — a sheet that is one full-page chart.
+//! Print geometry of a chartsheet — a sheet that is one chart and nothing
+//! else.
 //!
 //! ECMA-376 gives `CT_Chartsheet` no cells at all: it carries print settings
 //! and a `<drawing>` and nothing else. Excel prints it as a page of its own,
@@ -19,6 +20,62 @@ use super::xlsx_drawing::{
 pub(super) struct ChartsheetPrintSetup {
     pub(super) size: PageSize,
     pub(super) margins: Margins,
+}
+
+/// Where a chartsheet's chart prints, relative to the printable area's
+/// top-left corner.
+pub(super) struct ChartsheetChartBox {
+    pub(super) x_offset_pt: f64,
+    pub(super) y_offset_pt: f64,
+    pub(super) width: f64,
+    pub(super) height: f64,
+}
+
+/// The gap Excel leaves between a printed chartsheet's printable area and the
+/// chart it seats inside it, in points.
+///
+/// Measured on 58 Excel for Mac 16.100 exports of the `Chart` sheet of
+/// `tests/fixtures/xlsx/any_sheets.xlsx` — four papers, both orientations and
+/// each margin swept in 0.01in steps — reading the chart area's `fill_path`
+/// out of `mutool draw -F trace` (issue #1147).
+const CHART_INSET_PT: f64 = 4.0;
+
+/// The box a chartsheet's chart prints in.
+///
+/// Excel does not fill the printable area with it. The near edges are exact:
+/// every one of the 58 exports starts the chart at `floor(margin) + 4`, the
+/// margin snapping to a whole point first exactly as a worksheet's does
+/// (issue #1191), so a 0.7in margin of 50.4pt puts the chart's left edge on
+/// 54 rather than on 50.4.
+///
+/// The far edges only average that 4pt. Excel lays the chart out on an
+/// internal grid — a whole number of units, each 1.4-4.3pt over these pages —
+/// and how much of the printable area the last unit leaves unspent moves with
+/// the chart's content, not with the page: 0.5in margins on A4 landscape leave
+/// 10.19pt of width over where Letter portrait leaves 1.54pt. One chart cannot
+/// separate that grid from a page rule, so the far edges take the near edges'
+/// inset on the whole point. Against the 58 exports that sizes each axis
+/// 0.89pt out on average and 6.19pt at worst — 0.44pt per edge, since the near
+/// ones are exact — where filling the printable area exactly was 8.84pt out
+/// per axis. Fitting the far constant to this one chart instead does slightly
+/// better (5pt lands 0.30pt per edge), but the residual moves with the chart's
+/// content, so an asymmetry bought on one chart is not a rule; it is tracked
+/// as issue #1221.
+///
+/// A margin Excel cannot print into is not modelled: a chartsheet asking for
+/// zero margins exported against the printer's hardware minimum instead
+/// (19pt and 18pt on the measured machine), which a PDF has no equivalent of.
+pub(super) fn printed_chart_box(setup: &ChartsheetPrintSetup) -> ChartsheetChartBox {
+    let left: f64 = setup.margins.left.floor() + CHART_INSET_PT;
+    let top: f64 = setup.margins.top.floor() + CHART_INSET_PT;
+    let right: f64 = (setup.size.width - setup.margins.right).floor() - CHART_INSET_PT;
+    let bottom: f64 = (setup.size.height - setup.margins.bottom).floor() - CHART_INSET_PT;
+    ChartsheetChartBox {
+        x_offset_pt: left - setup.margins.left,
+        y_offset_pt: top - setup.margins.top,
+        width: (right - left).max(0.0),
+        height: (bottom - top).max(0.0),
+    }
 }
 
 /// Every chartsheet in the workbook, keyed by the name `xl/workbook.xml` gives

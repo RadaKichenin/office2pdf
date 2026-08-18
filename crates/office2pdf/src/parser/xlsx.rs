@@ -567,20 +567,17 @@ fn anchored_chart(
     }
 }
 
-/// The one page a chartsheet prints: its chart alone, filling the printable
-/// area.
+/// The one page a chartsheet prints: its chart alone, seated inside the
+/// printable area.
 ///
 /// The chart's own drawing anchor states a position and an extent, and Excel
-/// ignores both — a chartsheet is a full-page chart. Measured on Excel for Mac
-/// 16.100 exports of `tests/fixtures/xlsx/any_sheets.xlsx`: halving the
-/// drawing's `xdr:ext` and moving its `xdr:pos` each left the exported page
-/// byte-identical, while widening a margin moved and resized the printed chart
-/// (issue #1099).
-///
-/// The fit is to the printable area exactly. Excel insets the chart a further
-/// 3.6-5pt per side — on the fixture, 732.61 x 478.26 inside a 741.2 x 487
-/// printable area — by a rule four one-factor margin probes did not agree on,
-/// so it is left unmodelled rather than guessed at.
+/// ignores both — the anchor plays no part in where the chart lands. Measured
+/// on Excel for Mac 16.100 exports of `tests/fixtures/xlsx/any_sheets.xlsx`:
+/// halving the drawing's `xdr:ext` and moving its `xdr:pos` each left the
+/// exported page byte-identical, while widening a margin moved and resized the
+/// printed chart (issue #1099). The page setup alone therefore says where it
+/// lands — `chartsheet::printed_chart_box`, which insets it from the margins
+/// rather than filling the printable area exactly (issue #1147).
 ///
 /// A chartsheet has no header or footer of its own in any audited package, and
 /// no cells at all, so the page carries an empty grid.
@@ -589,19 +586,16 @@ fn chartsheet_page(
     setup: &chartsheet::ChartsheetPrintSetup,
     raw_charts: Vec<xlsx_drawing::RawChartAnchor>,
 ) -> SheetPage {
-    let printable_width: f64 =
-        (setup.size.width - setup.margins.left - setup.margins.right).max(0.0);
-    let printable_height: f64 =
-        (setup.size.height - setup.margins.top - setup.margins.bottom).max(0.0);
+    let chart_box: chartsheet::ChartsheetChartBox = chartsheet::printed_chart_box(setup);
     let charts: Vec<crate::ir::SheetChart> = raw_charts
         .into_iter()
         .map(|anchor| crate::ir::SheetChart {
             anchor_row: 0,
             placement: Some(crate::ir::SheetChartPlacement {
-                x_offset_pt: 0.0,
-                y_offset_pt: 0.0,
-                width: printable_width,
-                height: printable_height,
+                x_offset_pt: chart_box.x_offset_pt,
+                y_offset_pt: chart_box.y_offset_pt,
+                width: chart_box.width,
+                height: chart_box.height,
                 print_scale: 1.0,
             }),
             chart: anchor.chart,

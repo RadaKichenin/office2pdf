@@ -351,11 +351,11 @@ fn structure_any_sheets() {
 /// A chartsheet prints as one page carrying its chart alone.
 ///
 /// Measured on Excel for Mac 16.100 exports of this fixture's `Chart` sheet:
-/// one page, the chart filling it, and — since the chartsheet declares no
-/// `<pageSetup>` — landscape, where the same workbook's `Visible` worksheet
-/// (equally without one) exports portrait.
+/// one page, the chart seated inside the printable area, and — since the
+/// chartsheet declares no `<pageSetup>` — landscape, where the same workbook's
+/// `Visible` worksheet (equally without one) exports portrait.
 #[test]
-fn structure_any_sheets_chartsheet_pages_its_chart_full_page() {
+fn structure_any_sheets_chartsheet_pages_its_chart_alone() {
     let pages = sheet_pages("any_sheets.xlsx");
     let chart_page = pages
         .iter()
@@ -385,8 +385,18 @@ fn structure_any_sheets_chartsheet_pages_its_chart_full_page() {
     let placement = chart_page.charts[0]
         .placement
         .expect("a chartsheet's chart is placed, not flowed after the grid");
-    assert_eq!((placement.x_offset_pt, placement.y_offset_pt), (0.0, 0.0));
-    assert_eq!((placement.width, placement.height), (691.2, 504.0));
+    // Excel starts the chart 4pt inside each margin, on the whole point, and
+    // stops short of the far margins by as much again — forced onto this
+    // paper, its own box measures 681.82 x 493.18 at (54, 58) inside a
+    // 691.2 x 504 printable area (issue #1147).
+    assert_eq!(
+        (
+            chart_page.margins.left + placement.x_offset_pt,
+            chart_page.margins.top + placement.y_offset_pt,
+        ),
+        (54.0, 58.0)
+    );
+    assert_eq!((placement.width, placement.height), (683.0, 496.0));
 
     // The chart belongs to the chartsheet, not to the worksheet before it: a
     // native export of `Visible` alone draws no chart at all.
@@ -482,17 +492,17 @@ fn structure_chartsheet_reads_its_own_drawing_relationships() {
 
     let scatter = sheet_pages("SimpleScatterChart.xlsx");
     assert_eq!(sheet_names(&scatter), vec!["Sheet1", "Chart1"]);
-    // The worksheet's chart keeps its own anchor; the chartsheet's fills the
+    // The worksheet's chart keeps its own anchor; the chartsheet's takes the
     // page, so the two placements can no longer be the same box.
     let worksheet_placement = scatter[0].charts[0]
         .placement
         .expect("the worksheet chart is anchored");
     let chartsheet_placement = scatter[1].charts[0]
         .placement
-        .expect("the chartsheet chart is placed full-page");
+        .expect("the chartsheet chart is placed by its page setup");
     assert_eq!(
         (chartsheet_placement.width, chartsheet_placement.height),
-        (691.2, 504.0)
+        (683.0, 496.0)
     );
     assert_ne!(
         (worksheet_placement.width, worksheet_placement.height),
