@@ -1014,25 +1014,41 @@ pub(super) fn recomputed_default_row_height_pt(
 /// its Normal font's face has no measured series or the size sits between
 /// the measured points.
 ///
-/// The series belongs to the face, and the only faces measured are the two
-/// the Normal font selects — so a row sized by a font of its own is looked
-/// up in the workbook's table at that font's size. On the workbook this was
-/// measured against that is exactly right, because its cells name the very
-/// face its theme scheme resolves to (issue #1140). A row whose cells name
-/// some *other* face has no series of its own here; issue #1150 tracks the
-/// faces left unmeasured.
+/// The series belongs to the face, so a row sized by a font of its own is
+/// looked up in the workbook's table at that font's size. On the workbook
+/// this was measured against that is exactly right, because its cells name
+/// the very face its theme scheme resolves to (issue #1140). A row whose
+/// cells name some *other* face has no series of its own here.
 fn measured_row_height_pt(font: &NormalFont, size_pt: f64) -> Option<f64> {
     let measured: &[(f64, f64)] = if font.uses_theme_scheme {
         &UI_SCRIPT_FACE_ROW_HEIGHTS
     } else if names_a_substituted_family(font) {
         &SUBSTITUTED_FACE_ROW_HEIGHTS
     } else {
-        return None;
+        named_face_row_heights(&font.family)?
     };
     measured
         .iter()
         .find(|(measured_size_pt, _)| (size_pt - measured_size_pt).abs() < 0.01)
         .map(|(_, height_pt)| *height_pt)
+}
+
+/// The series measured for a Normal font that names `family` outright, or
+/// `None` where no sweep has covered it.
+///
+/// Matched on the whole name, case-insensitively — never as a prefix, unlike
+/// the Calibri/Aptos remap above. `Arial Narrow`, `Arial Black` and
+/// `Arial Unicode MS` are separate faces with row heights of their own, and
+/// lending them Arial's would be a guess wearing a measurement's clothes.
+fn named_face_row_heights(family: &str) -> Option<&'static [(f64, f64)]> {
+    NAMED_FACE_ROW_HEIGHTS
+        .iter()
+        .find(|face| {
+            face.families
+                .iter()
+                .any(|candidate| candidate.eq_ignore_ascii_case(family))
+        })
+        .map(|face| face.heights)
 }
 
 /// The row a dimension-less row takes under a Normal font that resolves
@@ -1075,11 +1091,8 @@ const UI_SCRIPT_FACE_ROW_HEIGHTS: [(f64, f64); 6] = [
 /// `round(16 x 0.92) = 15pt` row. Callers map it through
 /// `native_excel_pdf_row_height`.
 ///
-/// The families the machine renders itself keep the declared hint, because
-/// their own recompute is measured at too few sizes to model: the same sweep
-/// gives Arial 10/12/16 -> 13/16/20, Segoe UI 12/18 -> 16/26, Times New Roman
-/// 9/12 -> 12/16 and Malgun Gothic 10/12/16 -> 15/18/23, none of which follows
-/// the column above (issue #1150).
+/// Every other family the sweep reached has a column of its own, none of them
+/// following this one; `NAMED_FACE_ROW_HEIGHTS` carries them (issue #1150).
 const SUBSTITUTED_FACE_ROW_HEIGHTS: [(f64, f64); 9] = [
     (8.0, 11.0),
     (9.0, 12.0),
@@ -1090,6 +1103,191 @@ const SUBSTITUTED_FACE_ROW_HEIGHTS: [(f64, f64); 9] = [
     (14.0, 19.0),
     (16.0, 21.0),
     (18.0, 24.0),
+];
+
+/// One face's measured recompute, and the Normal-font family names that
+/// select it.
+struct NamedFaceRowHeights {
+    /// Matched whole and case-insensitively by `named_face_row_heights`.
+    families: &'static [&'static str],
+    /// `(Normal font size, recomputed worksheet row height)`, both in points.
+    heights: &'static [(f64, f64)],
+}
+
+/// What Excel recomputes for a dimension-less row under a Normal font that
+/// names its face outright, for every family swept in issue #1150.
+///
+/// Same method as the two tables above and the same base package
+/// (`issue_1066_blip_effect_picture.xlsx`, which declares
+/// `defaultRowHeight="18"`): one `xl/styles.xml` `<font>` per variant with
+/// nothing else touched, reading `standard height of worksheet 1` back
+/// through AppleScript. `scripts/measure_excel_row_height.py` drives it, and
+/// re-running the whole matrix reproduced every column exactly.
+///
+/// The declaration reaches none of these faces, which is the same control
+/// #1047 and #1102 ran and not an inference from theirs: rebuilding the base
+/// with `defaultRowHeight="30"` and re-sweeping Arial, Courier New, Segoe UI
+/// and `나눔명조` returned all four columns unchanged. Individual readings do
+/// land on 18 — four of the six series below read exactly that at 14pt — so a
+/// column agreeing with the declaration at one size says nothing either way.
+///
+/// | family | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 20 | 22 | 24 |
+/// | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+/// | Arial, Times New Roman, Verdana | 11 | 12 | 13 | 14 | 16 | 17 | 18 | 19 | 20 | 22 | 23 | 25 | 28 | 30 |
+/// | Tahoma | 11 | 12 | 13 | 14 | 15 | 17 | 18 | 19 | 20 | 22 | 23 | 25 | 28 | 30 |
+/// | Georgia | 11 | 12 | 13 | 14 | 16 | 17 | 18 | 19 | 21 | 22 | 23 | 25 | 28 | 30 |
+/// | Helvetica, 나눔명조 | 11 | 12 | 13 | 15 | 16 | 17 | 18 | 19 | 21 | 22 | 23 | 26 | 28 | 31 |
+/// | Courier New | 11 | 13 | 14 | 15 | 17 | 18 | 19 | 21 | 22 | 23 | 24 | 27 | 30 | 32 |
+/// | Segoe UI | 11 | 13 | 14 | 16 | 16 | 20 | 21 | 23 | 23 | 25 | 26 | 28 | 31 | 33 |
+///
+/// Segoe UI really does answer the same row at 11 and 12, and again at 15 and
+/// 16; both sweeps read it that way.
+///
+/// Families share a series here only where their columns came back identical
+/// at all fourteen sizes, which is a measurement and not a claim that they
+/// resolve to one face. **Do not extrapolate between the sizes listed, and do
+/// not derive a missing family from its metrics**: read out of the installed
+/// `hhea` tables, Arial and Times New Roman do share a line of 2355 units per
+/// 2048 em, but Verdana's 2489 answers their column all the same, Georgia's
+/// 2327 sits *under* Arial's and prints a taller row at 16, and Courier New's
+/// 2320 is the shortest line of those six faces and gives the tallest column
+/// of the six. Whatever Excel measures here, it is not the face's line box.
+///
+/// `맑은 고딕` and `Malgun Gothic` name the face the theme's per-script list
+/// resolves to on this machine, so a font naming it outright takes the
+/// scheme's own `UI_SCRIPT_FACE_ROW_HEIGHTS`; it agrees with that table at all
+/// six sizes it carries, which is the reading that identifies it, and the two
+/// spellings answer each other at all fourteen. The sweep measured eight
+/// further sizes for that face, which are left out rather than folded in:
+/// extending the scheme table repaginates eleven tracked workbooks with no
+/// ground truth to check the result against.
+///
+/// A spelling is only aliased once it has been swept as its own variant.
+/// `NanumMyeongjo` is not `나눔명조` here: it answers a column of its own that
+/// falls at 13pt (16 at 12, 15 at 13) and at 18pt, reproducibly, so it is left
+/// to the declared hint rather than lent the Korean spelling's series.
+///
+/// A size a family's series skips keeps the declared hint, as it does for
+/// Calibri: nothing here interpolates.
+const NAMED_FACE_ROW_HEIGHTS: [NamedFaceRowHeights; 7] = [
+    NamedFaceRowHeights {
+        families: &["Arial", "Times New Roman", "Verdana"],
+        heights: &[
+            (8.0, 11.0),
+            (9.0, 12.0),
+            (10.0, 13.0),
+            (11.0, 14.0),
+            (12.0, 16.0),
+            (13.0, 17.0),
+            (14.0, 18.0),
+            (15.0, 19.0),
+            (16.0, 20.0),
+            (17.0, 22.0),
+            (18.0, 23.0),
+            (20.0, 25.0),
+            (22.0, 28.0),
+            (24.0, 30.0),
+        ],
+    },
+    NamedFaceRowHeights {
+        families: &["Tahoma"],
+        heights: &[
+            (8.0, 11.0),
+            (9.0, 12.0),
+            (10.0, 13.0),
+            (11.0, 14.0),
+            (12.0, 15.0),
+            (13.0, 17.0),
+            (14.0, 18.0),
+            (15.0, 19.0),
+            (16.0, 20.0),
+            (17.0, 22.0),
+            (18.0, 23.0),
+            (20.0, 25.0),
+            (22.0, 28.0),
+            (24.0, 30.0),
+        ],
+    },
+    NamedFaceRowHeights {
+        families: &["Georgia"],
+        heights: &[
+            (8.0, 11.0),
+            (9.0, 12.0),
+            (10.0, 13.0),
+            (11.0, 14.0),
+            (12.0, 16.0),
+            (13.0, 17.0),
+            (14.0, 18.0),
+            (15.0, 19.0),
+            (16.0, 21.0),
+            (17.0, 22.0),
+            (18.0, 23.0),
+            (20.0, 25.0),
+            (22.0, 28.0),
+            (24.0, 30.0),
+        ],
+    },
+    NamedFaceRowHeights {
+        families: &["Helvetica", "나눔명조"],
+        heights: &[
+            (8.0, 11.0),
+            (9.0, 12.0),
+            (10.0, 13.0),
+            (11.0, 15.0),
+            (12.0, 16.0),
+            (13.0, 17.0),
+            (14.0, 18.0),
+            (15.0, 19.0),
+            (16.0, 21.0),
+            (17.0, 22.0),
+            (18.0, 23.0),
+            (20.0, 26.0),
+            (22.0, 28.0),
+            (24.0, 31.0),
+        ],
+    },
+    NamedFaceRowHeights {
+        families: &["Courier New"],
+        heights: &[
+            (8.0, 11.0),
+            (9.0, 13.0),
+            (10.0, 14.0),
+            (11.0, 15.0),
+            (12.0, 17.0),
+            (13.0, 18.0),
+            (14.0, 19.0),
+            (15.0, 21.0),
+            (16.0, 22.0),
+            (17.0, 23.0),
+            (18.0, 24.0),
+            (20.0, 27.0),
+            (22.0, 30.0),
+            (24.0, 32.0),
+        ],
+    },
+    NamedFaceRowHeights {
+        families: &["Segoe UI"],
+        heights: &[
+            (8.0, 11.0),
+            (9.0, 13.0),
+            (10.0, 14.0),
+            (11.0, 16.0),
+            (12.0, 16.0),
+            (13.0, 20.0),
+            (14.0, 21.0),
+            (15.0, 23.0),
+            (16.0, 23.0),
+            (17.0, 25.0),
+            (18.0, 26.0),
+            (20.0, 28.0),
+            (22.0, 31.0),
+            (24.0, 33.0),
+        ],
+    },
+    NamedFaceRowHeights {
+        families: &["맑은 고딕", "Malgun Gothic"],
+        heights: &UI_SCRIPT_FACE_ROW_HEIGHTS,
+    },
 ];
 
 /// Whether this Normal font names one of the families Excel substitutes a
