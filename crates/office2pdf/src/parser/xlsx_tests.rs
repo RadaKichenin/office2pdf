@@ -1651,9 +1651,9 @@ fn the_substituted_face_recompute_tracks_the_normal_font_size() {
     );
 }
 
-/// A face the machine renders itself is measured at too few sizes to model,
-/// so it keeps the declared hint — as does a size neither table lists, and a
-/// workbook with no readable stylesheet (issues #1047, #1150).
+/// A family no sweep has measured keeps the declared hint — as does a size
+/// its family's series skips, and a workbook with no readable stylesheet
+/// (issues #1047, #1150).
 #[test]
 fn an_unmeasured_normal_font_keeps_the_declared_default() {
     let mut book = umya_spreadsheet::new_file();
@@ -1668,7 +1668,7 @@ fn an_unmeasured_normal_font_keeps_the_declared_default() {
     assert_eq!(
         xlsx_cells::worksheet_default_row_height_pt(
             sheet,
-            Some(&substituted_face_normal_font("Segoe UI", 12.0))
+            Some(&substituted_face_normal_font("Wingdings", 12.0))
         ),
         15.0
     );
@@ -1680,8 +1680,214 @@ fn an_unmeasured_normal_font_keeps_the_declared_default() {
         15.0
     );
     assert_eq!(
+        xlsx_cells::worksheet_default_row_height_pt(
+            sheet,
+            Some(&substituted_face_normal_font("Arial", 10.5))
+        ),
+        15.0,
+        "a size between Arial's measured points has no series entry"
+    );
+    assert_eq!(
         xlsx_cells::worksheet_default_row_height_pt(sheet, None),
         15.0
+    );
+}
+
+/// Every family the issue #1150 sweep measured, at every size it measured.
+///
+/// One `xl/styles.xml` `<font>` per variant over
+/// `issue_1066_blip_effect_picture.xlsx`, reading `standard height of
+/// worksheet 1` back through AppleScript
+/// (`scripts/measure_excel_row_height.py`). Whole columns, not spot checks:
+/// no family here follows another's curve, so a size sampled from one proves
+/// nothing about the rest.
+#[test]
+fn every_measured_face_recomputes_its_own_series() {
+    let measured: [(&str, [f64; 14]); 8] = [
+        (
+            "Arial",
+            [
+                11.0, 12.0, 13.0, 14.0, 16.0, 17.0, 18.0, 19.0, 20.0, 22.0, 23.0, 25.0, 28.0, 30.0,
+            ],
+        ),
+        (
+            "Times New Roman",
+            [
+                11.0, 12.0, 13.0, 14.0, 16.0, 17.0, 18.0, 19.0, 20.0, 22.0, 23.0, 25.0, 28.0, 30.0,
+            ],
+        ),
+        (
+            "Verdana",
+            [
+                11.0, 12.0, 13.0, 14.0, 16.0, 17.0, 18.0, 19.0, 20.0, 22.0, 23.0, 25.0, 28.0, 30.0,
+            ],
+        ),
+        (
+            "Tahoma",
+            [
+                11.0, 12.0, 13.0, 14.0, 15.0, 17.0, 18.0, 19.0, 20.0, 22.0, 23.0, 25.0, 28.0, 30.0,
+            ],
+        ),
+        (
+            "Georgia",
+            [
+                11.0, 12.0, 13.0, 14.0, 16.0, 17.0, 18.0, 19.0, 21.0, 22.0, 23.0, 25.0, 28.0, 30.0,
+            ],
+        ),
+        (
+            "Helvetica",
+            [
+                11.0, 12.0, 13.0, 15.0, 16.0, 17.0, 18.0, 19.0, 21.0, 22.0, 23.0, 26.0, 28.0, 31.0,
+            ],
+        ),
+        (
+            "Courier New",
+            [
+                11.0, 13.0, 14.0, 15.0, 17.0, 18.0, 19.0, 21.0, 22.0, 23.0, 24.0, 27.0, 30.0, 32.0,
+            ],
+        ),
+        (
+            "Segoe UI",
+            [
+                11.0, 13.0, 14.0, 16.0, 16.0, 20.0, 21.0, 23.0, 23.0, 25.0, 26.0, 28.0, 31.0, 33.0,
+            ],
+        ),
+    ];
+    let sizes: [f64; 14] = [
+        8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 20.0, 22.0, 24.0,
+    ];
+    for (family, heights) in measured {
+        for (size_pt, expected) in sizes.iter().zip(heights) {
+            let mut book = umya_spreadsheet::new_file();
+            let sheet = book.get_sheet_mut(&0).unwrap();
+            sheet
+                .get_sheet_format_properties_mut()
+                .set_default_row_height(18.0);
+            assert_eq!(
+                xlsx_cells::worksheet_default_row_height_pt(
+                    sheet,
+                    Some(&substituted_face_normal_font(family, *size_pt))
+                ),
+                expected,
+                "{size_pt}pt {family} Normal font"
+            );
+        }
+    }
+}
+
+/// The Korean faces the same sweep measured. `나눔명조` answered Helvetica's
+/// column at all fourteen sizes, and `맑은 고딕` the theme scheme's — the
+/// reading that the scheme resolves to that face on the reference machine
+/// (issues #1047, #1150).
+#[test]
+fn a_normal_font_naming_a_korean_face_recomputes_its_measured_series() {
+    for (family, size_pt, expected) in [
+        ("나눔명조", 11.0, 15.0),
+        ("나눔명조", 12.0, 16.0),
+        ("나눔명조", 16.0, 21.0),
+        ("맑은 고딕", 10.0, 15.0),
+        ("맑은 고딕", 11.0, 17.0),
+        ("Malgun Gothic", 14.0, 20.0),
+        ("Malgun Gothic", 18.0, 27.0),
+    ] {
+        let mut book = umya_spreadsheet::new_file();
+        let sheet = book.get_sheet_mut(&0).unwrap();
+        sheet
+            .get_sheet_format_properties_mut()
+            .set_default_row_height(18.0);
+        assert_eq!(
+            xlsx_cells::worksheet_default_row_height_pt(
+                sheet,
+                Some(&substituted_face_normal_font(family, size_pt))
+            ),
+            expected,
+            "{size_pt}pt {family} Normal font"
+        );
+    }
+}
+
+/// Two spellings of one family are aliased only where the sweep read them as
+/// one column. `Malgun Gothic` answers `맑은 고딕` at all fourteen sizes;
+/// `NanumMyeongjo` answers a column of its own — 16 at 12pt against 15 at
+/// 13pt, reproduced across two runs — so it keeps the declared hint instead
+/// of borrowing `나눔명조`'s series (issue #1150).
+#[test]
+fn an_ascii_spelling_is_aliased_only_where_it_was_measured() {
+    let mut book = umya_spreadsheet::new_file();
+    let sheet = book.get_sheet_mut(&0).unwrap();
+    sheet
+        .get_sheet_format_properties_mut()
+        .set_default_row_height(15.0);
+    assert_eq!(
+        xlsx_cells::worksheet_default_row_height_pt(
+            sheet,
+            Some(&substituted_face_normal_font("NanumMyeongjo", 12.0))
+        ),
+        15.0
+    );
+}
+
+/// A family name is matched whole and case-insensitively, never as a prefix:
+/// `Arial Narrow` and `Arial Black` are different faces with row heights of
+/// their own, and nothing has measured them.
+#[test]
+fn a_measured_family_matches_the_whole_name_only() {
+    let mut book = umya_spreadsheet::new_file();
+    let sheet = book.get_sheet_mut(&0).unwrap();
+    sheet
+        .get_sheet_format_properties_mut()
+        .set_default_row_height(15.0);
+    assert_eq!(
+        xlsx_cells::worksheet_default_row_height_pt(
+            sheet,
+            Some(&substituted_face_normal_font("arial", 10.0))
+        ),
+        13.0,
+        "the corpus writes the family lower-cased too"
+    );
+    for unmeasured in ["Arial Narrow", "Arial Black", "Arial Unicode MS"] {
+        assert_eq!(
+            xlsx_cells::worksheet_default_row_height_pt(
+                sheet,
+                Some(&substituted_face_normal_font(unmeasured, 10.0))
+            ),
+            15.0,
+            "{unmeasured} is not Arial"
+        );
+    }
+}
+
+/// The declared hint loses to a measured family exactly as it loses to
+/// Calibri, and `customHeight` restores it exactly as it does there
+/// (issue #1150).
+#[test]
+fn a_measured_family_overrides_the_declared_default_unless_custom() {
+    for declared in [12.75, 15.0, 18.0, 30.0] {
+        let mut book = umya_spreadsheet::new_file();
+        let sheet = book.get_sheet_mut(&0).unwrap();
+        sheet
+            .get_sheet_format_properties_mut()
+            .set_default_row_height(declared);
+        assert_eq!(
+            xlsx_cells::worksheet_default_row_height_pt(
+                sheet,
+                Some(&substituted_face_normal_font("Arial", 10.0))
+            ),
+            13.0,
+            "declared {declared} must not reach a 10pt Arial row"
+        );
+    }
+    let mut book = umya_spreadsheet::new_file();
+    let sheet = book.get_sheet_mut(&0).unwrap();
+    let properties = sheet.get_sheet_format_properties_mut();
+    properties.set_default_row_height(30.0);
+    properties.set_custom_height(true);
+    assert_eq!(
+        xlsx_cells::worksheet_default_row_height_pt(
+            sheet,
+            Some(&substituted_face_normal_font("Arial", 10.0))
+        ),
+        30.0
     );
 }
 
