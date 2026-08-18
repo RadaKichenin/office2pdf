@@ -1030,10 +1030,11 @@ fn picture_alpha_mod_fix_is_baked_into_the_bitmap() {
 /// Calibri 12 Normal font and prints them at the 15pt track that font's grid
 /// compacts to (issue #1102).
 ///
-/// The picture's width is left out on purpose. Excel's columns here measure
-/// 65.00pt in the app and in the export alike, matching ours, and the 11.00pt
-/// the export is narrower comes from a `to` `colOff` that overruns its column
-/// — a separate rule, tracked in #1149.
+/// The picture's width is asserted separately, by
+/// `a_picture_width_drops_the_whole_point_part_of_an_overrunning_col_offset`:
+/// Excel's columns here measure 65.00pt in the app and in the export alike,
+/// matching ours, and the 11.00pt the export is narrower is entirely the
+/// overrunning `to` `colOff` rule of issue #1149.
 #[test]
 fn a_picture_anchor_spans_the_printed_row_track() {
     let pages = sheet_pages("issue_1066_blip_effect_picture.xlsx");
@@ -1048,6 +1049,26 @@ fn a_picture_anchor_spans_the_printed_row_track() {
         (images[0].y_offset_pt - 90.0).abs() < 0.01,
         "six printed 15pt tracks above the anchor row, got {}",
         images[0].y_offset_pt
+    );
+}
+
+/// Excel does not add a `twoCellAnchor`'s `to` `xdr:colOff` to the spanned
+/// columns as written once that offset overruns the column it sits in: it
+/// drops the whole-point part of the overrun. The same fixture's anchor runs
+/// from col 1 at 11880 EMU (0.935pt) to col 3 at 963720 EMU (75.883pt) over
+/// 65.00pt columns, so the offset overruns by 10.883pt and Excel takes 11.00pt
+/// of that back — its export measures the picture 193.948pt wide against the
+/// 204.948pt the plain sum gives (issue #1149).
+#[test]
+fn a_picture_width_drops_the_whole_point_part_of_an_overrunning_col_offset() {
+    let pages = sheet_pages("issue_1066_blip_effect_picture.xlsx");
+    let images: Vec<_> = pages.iter().flat_map(|sp| sp.images.iter()).collect();
+    assert_eq!(images.len(), 1, "the drawing anchors one picture");
+    let width: f64 = images[0].image.width.expect("a two-cell anchor sizes");
+    assert!(
+        (width - 193.948).abs() < 0.01,
+        "two 65pt columns less a 0.935pt `from` offset plus a 64.883pt \
+         normalised `to` offset, got {width}"
     );
 }
 

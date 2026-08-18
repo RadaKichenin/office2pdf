@@ -1113,6 +1113,126 @@ fn test_drawing_only_sheet_resolves_anchors_with_normal_font_metric() {
     }
 }
 
+// ── Overrunning `to` column offsets (issue #1149) ────────────────────
+
+/// The width `anchored_image` resolves for the anchor of
+/// `tests/fixtures/xlsx/issue_1066_blip_effect_picture.xlsx` — `from` col 1 at
+/// 11880 EMU (0.935pt), `to` col 3 — on a sheet whose columns all measure the
+/// requested width. Calibri 11 prices a character unit at 6pt, the same unit
+/// that workbook's Calibri 12 Normal font resolves to, so a declared width of
+/// `W` characters lands on the `6W` points Excel reported for it.
+fn overrun_sweep_picture_width_pt(
+    declared_width_chars: Option<f64>,
+    base_column_width_chars: Option<u32>,
+    to_col_off_emu: i64,
+) -> f64 {
+    let mut book = umya_spreadsheet::new_file();
+    {
+        let sheet = book.get_sheet_mut(&0).unwrap();
+        if let Some(base_width) = base_column_width_chars {
+            sheet
+                .get_sheet_format_properties_mut()
+                .set_base_column_width(base_width);
+        }
+        // Cover the whole span the anchor touches, `to` column included: an
+        // undeclared column falls through to the default width instead.
+        if let Some(width) = declared_width_chars {
+            for col in 1..=4u32 {
+                sheet
+                    .get_column_dimension_by_number_mut(&col)
+                    .set_width(width);
+            }
+        }
+    }
+    let sheet: &umya_spreadsheet::Worksheet = book.get_sheet(&0).unwrap();
+    let normal_font = NormalFont {
+        family: "Calibri".to_string(),
+        size_pt: 11.0,
+        uses_theme_scheme: false,
+        theme_declares_script_faces: false,
+    };
+    let ctx: SheetContext = empty_sheet_context(sheet, Some(&normal_font), None);
+    let placed: crate::ir::SheetImage = anchored_image(
+        xlsx_drawing::RawImageAnchor {
+            from_row: 6,
+            from_col: 1,
+            from_col_off_emu: 11_880,
+            from_row_off_emu: 0,
+            to: Some((3, to_col_off_emu, 13, 0)),
+            ext_emu: None,
+            data: Vec::new(),
+            format: crate::ir::ImageFormat::Png,
+        },
+        sheet,
+        &ctx,
+    );
+    placed.image.width.expect("a two-cell anchor sizes")
+}
+
+/// Sweeping the column width under a fixed 963720 EMU (75.883pt) `to` offset.
+/// Excel adds the offset as written only from 78pt up — once the column is
+/// wider than the offset; below that the picture comes out `3W - 1.052` wide,
+/// the offset behaving as if it stopped just short of the column's far edge.
+/// Every width here is `width of picture 1` read back through AppleScript from
+/// an Excel for Mac export of a one-factor variant (issue #1149).
+#[test]
+fn the_to_column_offset_stops_growing_once_it_overruns_its_column() {
+    // (declared `<col width>`, `baseColWidth`, column pt, Excel picture width)
+    let measured: [(Option<f64>, Option<u32>, f64, f64); 9] = [
+        (Some(5.0), None, 30.0, 88.948),
+        (Some(8.0), None, 48.0, 142.948),
+        (None, Some(10), 65.0, 193.948),
+        (Some(12.0), None, 72.0, 214.948),
+        (Some(12.5), None, 75.0, 223.948),
+        (Some(13.0), None, 78.0, 230.948),
+        (Some(16.0), None, 96.0, 266.948),
+        (Some(20.0), None, 120.0, 314.948),
+        (None, Some(20), 125.0, 324.948),
+    ];
+    for (declared, base_width, column_pt, expected) in measured {
+        let width: f64 = overrun_sweep_picture_width_pt(declared, base_width, 963_720);
+        assert!(
+            (width - expected).abs() < 0.001,
+            "{column_pt}pt columns: expected {expected}, got {width}"
+        );
+    }
+}
+
+/// Sweeping the offset instead, with the columns held at 65pt. The offset is
+/// taken as written while it stays inside the column, and past that edge the
+/// effective offset stays within half a point of the column width however far
+/// the anchor overruns — 2000000 EMU is 157.480pt of offset and still prints
+/// 194.545pt wide. Excel for Mac measurements again (issue #1149).
+#[test]
+fn an_overrunning_to_column_offset_keeps_only_the_fractional_overrun() {
+    // (`xdr:colOff` EMU, Excel picture width over 65pt columns)
+    let measured: [(i64, f64); 16] = [
+        (0, 129.065),
+        (400_000, 160.561),
+        (800_000, 192.057),
+        (823_000, 193.868),
+        (825_500, 194.065),
+        (830_000, 194.419),
+        (840_000, 194.206),
+        (850_000, 193.994),
+        (860_000, 193.781),
+        (870_000, 193.568),
+        (880_000, 194.356),
+        (900_000, 193.931),
+        (963_720, 193.948),
+        (1_100_000, 193.679),
+        (1_500_000, 194.175),
+        (2_000_000, 194.545),
+    ];
+    for (col_off_emu, expected) in measured {
+        let width: f64 = overrun_sweep_picture_width_pt(None, Some(10), col_off_emu);
+        assert!(
+            (width - expected).abs() < 0.001,
+            "colOff {col_off_emu}: expected {expected}, got {width}"
+        );
+    }
+}
+
 /// Triangulation for issue #620: the empty-sheet context must derive its
 /// metric from whatever Normal font it is given — not a hardcoded value —
 /// and fall back to the legacy 5.25pt unit only when no Normal font is

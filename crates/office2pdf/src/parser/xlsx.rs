@@ -296,6 +296,44 @@ fn title_column_indices(print_titles: PrintTitles, ctx: &SheetContext) -> Option
     Some((start_idx as usize, end_idx as usize))
 }
 
+/// Excel's reading of a `twoCellAnchor`'s `to` `xdr:colOff`, which is a
+/// position inside the `to` column and not an unbounded extension of it.
+///
+/// The offset counts as written while it stays inside the column. Past its far
+/// edge Excel gives the whole-point part of the overrun back, leaving the
+/// effective offset within half a point of the column width however far the
+/// anchor overruns:
+///
+/// ```text
+/// eff = off                              off <= width
+/// eff = off - round(off - width)         otherwise
+/// ```
+///
+/// Measured on Excel for Mac exports of `issue_1066_blip_effect_picture.xlsx`,
+/// one factor per variant, reading `width of picture 1` back through
+/// AppleScript: a 9-width column sweep under a fixed 963720 EMU offset, and a
+/// 16-sample offset sweep over 65pt columns where the picture stops growing at
+/// 830000 EMU and then wanders half a point either side of 194pt all the way
+/// to 2000000. Adding the offset as written left that fixture's picture 11.00pt
+/// wider than the export, the deviation issue #1102 measured and could not
+/// attribute.
+///
+/// A whole-point quantity is being subtracted from a fractional one somewhere
+/// in Excel's normalisation; the rule is empirical and no claim is made about
+/// which of its internal quantities that is. The `from` offset and both row
+/// offsets are left alone — no sweep covers an overrun on those, and every
+/// well-formed anchor keeps its offsets inside their track anyway (issue
+/// #1149).
+fn normalized_to_col_offset_pt(offset_pt: f64, column_width_pt: f64) -> f64 {
+    if offset_pt <= column_width_pt {
+        return offset_pt;
+    }
+    // The overrun is positive here, so rounding away from zero is half-up -
+    // the convention the rest of the column model rounds by. No sample sits
+    // exactly on a half point, so the tie itself is unmeasured.
+    offset_pt - (offset_pt - column_width_pt).round()
+}
+
 /// Convert a raw drawing anchor into a render-ready image: 1-indexed anchor
 /// row plus a size in points resolved against the sheet's column widths and
 /// row heights (twoCellAnchor) or the declared extent (oneCellAnchor).
@@ -331,9 +369,10 @@ fn anchored_image(
 
     let (width, height): (f64, f64) =
         if let Some((to_col, to_col_off, to_row, to_row_off)) = anchor.to {
+            let to_column_pt: f64 = column_width_at(to_col);
             let width: f64 = (anchor.from_col..to_col).map(column_width_at).sum::<f64>()
                 - anchor.from_col_off_emu as f64 / EMU_PER_PT
-                + to_col_off as f64 / EMU_PER_PT;
+                + normalized_to_col_offset_pt(to_col_off as f64 / EMU_PER_PT, to_column_pt);
             let height: f64 = (anchor.from_row..to_row).map(row_height_at).sum::<f64>()
                 - anchor.from_row_off_emu as f64 / EMU_PER_PT
                 + to_row_off as f64 / EMU_PER_PT;
