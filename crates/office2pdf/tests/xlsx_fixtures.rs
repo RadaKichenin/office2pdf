@@ -436,6 +436,35 @@ fn structure_any_sheets_chart_chrome_takes_its_declared_colour() {
     assert_eq!(chart.category_axis_line, expected, "category axis");
 }
 
+/// The chartsheet's chart declares a `<c:title>` that names no text, so Excel
+/// supplies the string itself and prints it above a shortened plot.
+///
+/// `xl/charts/chart1.xml` writes `<c:title>` with a `c:layout`, a `c:overlay`,
+/// a `c:spPr` and a `c:txPr` — and no `<c:tx>` anywhere — beside
+/// `<c:autoTitleDeleted val="0"/>`. An Excel for Mac 16.100 export of the
+/// `Chart` sheet, forced to Letter landscape, prints the placeholder at 14pt
+/// centred over the chart box and starts the topmost gridline 44.20pt below
+/// the box's top edge (issue #1146).
+#[test]
+fn structure_any_sheets_chart_declares_an_automatic_title() {
+    let pages = sheet_pages("any_sheets.xlsx");
+    let chart = &pages
+        .iter()
+        .find(|page| page.name == "Chart")
+        .expect("the chartsheet should contribute a page")
+        .charts
+        .first()
+        .expect("the chartsheet carries its chart")
+        .chart;
+
+    assert!(chart.has_automatic_title);
+    assert!(!chart.auto_title_deleted);
+    // The part names no string of its own, and neither series is named, so
+    // nothing in the file can supply one.
+    assert_eq!(chart.title, None);
+    assert!(chart.series.iter().all(|series| series.name.is_none()));
+}
+
 /// Two chartsheet packages whose parts collide by filename, which is how the
 /// worksheet-only rels lookup went wrong in the first place.
 ///

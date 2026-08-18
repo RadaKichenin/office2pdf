@@ -146,6 +146,10 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
     // one was asked for (issue #762).
     let mut has_legend: bool = false;
     let mut auto_title_deleted: bool = false;
+    // `<c:title>` present but naming no text of its own. Office supplies the
+    // string for one of those, so the element's absence and its emptiness are
+    // different states and `title` alone cannot tell them apart (issue #1146).
+    let mut has_automatic_title: bool = false;
     let mut category_axis: Axis = Axis::default();
     let mut value_axis: Axis = Axis::default();
     // `c:chartSpace/c:spPr` is a *sibling* of `c:chart`, and the schema puts it
@@ -177,7 +181,9 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
                     has_legend = !deleted;
                     legend_position = legend_position.or(position);
                 } else if tag == b"title" && title.is_none() {
-                    title = parse_chart_title(&mut reader);
+                    let (text, names_own_text) = parse_chart_title(&mut reader);
+                    title = text;
+                    has_automatic_title = !names_own_text;
                 } else if tag == b"catAx" {
                     category_axis = parse_axis(&mut reader, b"catAx", scheme);
                 } else if tag == b"valAx" {
@@ -249,6 +255,11 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
             Ok(Event::Empty(ref e)) if e.local_name().as_ref() == b"legend" => {
                 has_legend = true;
             }
+            // `<c:title/>` with no children names no text either, which is the
+            // whole condition for an automatic title.
+            Ok(Event::Empty(ref e)) if e.local_name().as_ref() == b"title" && title.is_none() => {
+                has_automatic_title = true;
+            }
             // `CT_Boolean`, so always self-closing; an earlier arm already
             // owns every `Start` event in this loop.
             Ok(Event::Empty(ref e)) if e.local_name().as_ref() == b"autoTitleDeleted" => {
@@ -310,6 +321,7 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
         legend_position: legend_position.unwrap_or_default(),
         has_legend,
         auto_title_deleted,
+        has_automatic_title,
         category_axis_title: category_axis.title,
         value_axis_title: value_axis.title,
         category_axis_major_tick_mark: category_axis.major_tick_mark,
@@ -557,7 +569,7 @@ fn parse_axis(reader: &mut Reader<&[u8]>, end_tag: &[u8], scheme: &SchemeColors<
     loop {
         match reader.read_event() {
             Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"title" => {
-                axis.title = axis.title.or_else(|| parse_chart_title(reader));
+                axis.title = axis.title.or_else(|| parse_chart_title(reader).0);
             }
             Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"txPr" => {
                 axis.text_style = parse_axis_text_properties(reader, scheme);
@@ -655,9 +667,15 @@ fn axis_tick_mark_for(value: &str) -> AxisTickMark {
 }
 
 /// Parse the chart title text from `<c:title>`.
-fn parse_chart_title(reader: &mut Reader<&[u8]>) -> Option<String> {
+///
+/// Returns the text and whether the element named text of its own — a
+/// `<c:tx>`. A title without one is *automatic*: it carries the formatting for
+/// a string the application supplies (issue #1146), so an empty result there
+/// means something different from an empty `<c:tx>`.
+fn parse_chart_title(reader: &mut Reader<&[u8]>) -> (Option<String>, bool) {
     let mut text = String::new();
     let mut in_t = false;
+    let mut names_own_text = false;
     let mut depth = 1u32;
 
     loop {
@@ -666,6 +684,8 @@ fn parse_chart_title(reader: &mut Reader<&[u8]>) -> Option<String> {
                 let local = e.local_name();
                 if local.as_ref() == b"title" {
                     depth += 1;
+                } else if local.as_ref() == b"tx" {
+                    names_own_text = true;
                 } else if local.as_ref() == b"t" {
                     in_t = true;
                 }
@@ -692,11 +712,12 @@ fn parse_chart_title(reader: &mut Reader<&[u8]>) -> Option<String> {
     }
 
     let trimmed = text.trim().to_string();
-    if trimmed.is_empty() {
+    let title: Option<String> = if trimmed.is_empty() {
         None
     } else {
         Some(trimmed)
-    }
+    };
+    (title, names_own_text)
 }
 
 /// Plot-area settings that sit beside `<c:ser>` inside a chart type element.

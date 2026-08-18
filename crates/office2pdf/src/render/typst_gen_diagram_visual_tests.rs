@@ -52,6 +52,7 @@ fn test_codegen_chart_bar_visual_bars() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
         auto_title_deleted: false,
+        has_automatic_title: false,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -125,6 +126,7 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
         auto_title_deleted: false,
+        has_automatic_title: false,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -186,6 +188,7 @@ fn test_codegen_chart_pie_draws_a_pie() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
         auto_title_deleted: false,
+        has_automatic_title: false,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -252,6 +255,7 @@ fn test_codegen_chart_line_trend_indicators() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
         auto_title_deleted: false,
+        has_automatic_title: false,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -305,6 +309,7 @@ fn test_codegen_chart_empty_series() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
         auto_title_deleted: false,
+        has_automatic_title: false,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -395,6 +400,7 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
         auto_title_deleted: false,
+        has_automatic_title: false,
     }));
     let doc = make_doc(vec![make_flow_page(content)]);
 
@@ -454,6 +460,7 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
         auto_title_deleted: false,
+        has_automatic_title: false,
     }));
     let doc = make_doc(vec![make_flow_page(content)]);
 
@@ -669,6 +676,7 @@ fn test_codegen_chart_line_plot() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
         auto_title_deleted: false,
+        has_automatic_title: false,
     })])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -733,6 +741,7 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
         auto_title_deleted: false,
+        has_automatic_title: false,
     })])]);
 
     let pages = page_texts(&doc);
@@ -834,6 +843,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
         auto_title_deleted: false,
+        has_automatic_title: false,
     }
 }
 
@@ -988,6 +998,7 @@ fn legend_chart(position: LegendPosition) -> Chart {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
         auto_title_deleted: false,
+        has_automatic_title: false,
     }
 }
 
@@ -1146,6 +1157,7 @@ fn a_declared_series_fill_reaches_the_bars() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
         auto_title_deleted: false,
+        has_automatic_title: false,
     };
 
     let source = chart_source(chart);
@@ -1203,6 +1215,7 @@ fn a_series_without_a_fill_still_takes_the_palette() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
         auto_title_deleted: false,
+        has_automatic_title: false,
     };
 
     let source = chart_source(chart);
@@ -1258,6 +1271,7 @@ fn per_point_fills_colour_each_bar_separately() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
         auto_title_deleted: false,
+        has_automatic_title: false,
     };
 
     let source = chart_source(chart);
@@ -1312,6 +1326,7 @@ fn axis_titled_chart(category: Option<&str>, value: Option<&str>) -> Chart {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
         auto_title_deleted: false,
+        has_automatic_title: false,
     }
 }
 
@@ -1416,6 +1431,7 @@ fn labelled_chart(labels: DataLabels) -> Chart {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
         auto_title_deleted: false,
+        has_automatic_title: false,
     }
 }
 
@@ -1515,6 +1531,7 @@ fn pie_chart(values: Vec<f64>) -> Chart {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
         auto_title_deleted: false,
+        has_automatic_title: false,
     }
 }
 
@@ -1713,6 +1730,7 @@ fn test_chart_default_gridline_matches_powerpoint() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
         auto_title_deleted: false,
+        has_automatic_title: false,
     })])]);
 
     let source = generate_typst(&doc).unwrap().source;
@@ -1873,6 +1891,7 @@ fn tick_mark_chart(
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
         auto_title_deleted: false,
+        has_automatic_title: false,
     }
 }
 
@@ -2479,6 +2498,7 @@ fn band_layout_chart(
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
         auto_title_deleted: false,
+        has_automatic_title: false,
     }
 }
 
@@ -2766,6 +2786,7 @@ fn two_series_bar_chart(theme_accent_colors: Vec<crate::ir::Color>) -> Chart {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
         auto_title_deleted: false,
+        has_automatic_title: false,
     }
 }
 
@@ -4112,6 +4133,7 @@ fn test_data_table_prints_a_series_number_format() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
         auto_title_deleted: false,
+        has_automatic_title: false,
     };
     let source = chart_source(chart);
 
@@ -4168,6 +4190,7 @@ fn test_data_table_prints_a_declared_thousands_format() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
         auto_title_deleted: false,
+        has_automatic_title: false,
     };
     let source = chart_source(chart);
 
@@ -4222,6 +4245,7 @@ fn test_data_table_without_a_number_format_prints_plainly() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
         auto_title_deleted: false,
+        has_automatic_title: false,
     };
     let source = chart_source(chart);
 
@@ -4275,6 +4299,7 @@ fn test_a_currency_axis_label_is_escaped() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: Some("\"$\"#,##0".to_string()),
         auto_title_deleted: false,
+        has_automatic_title: false,
     };
     let source = chart_source(chart);
 
@@ -4330,6 +4355,7 @@ fn single_series_chart(auto_title_deleted: bool) -> Chart {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
         auto_title_deleted,
+        has_automatic_title: false,
     }
 }
 
@@ -4351,6 +4377,177 @@ fn test_a_chart_that_keeps_its_automatic_title_still_gets_one() {
         source.contains("Serie 1"),
         "the automatic title must survive: {source}"
     );
+}
+
+// ----- Automatic chart title (issue #1146) -----
+
+/// A `<c:title>` naming no text is Office's automatic title: the part carries
+/// the formatting and the application supplies the string.
+///
+/// `tests/fixtures/xlsx/any_sheets.xlsx` writes one over two unnamed series.
+/// An Excel for Mac 16.100 export of its `Chart` chartsheet, forced to Letter
+/// landscape, prints the placeholder centred at the top of the chart box and
+/// starts the plot below it: the chart box runs y 58..551.18 and the topmost
+/// gridline sits at y 102.20, where without a title it would sit within about
+/// 10pt of the box top.
+fn automatic_title_chart(series_names: &[Option<&str>], auto_title_deleted: bool) -> Chart {
+    Chart {
+        chart_type: ChartType::Column,
+        hole_size_percent: None,
+        title: None,
+        categories: vec!["Q1".to_string(), "Q2".to_string(), "Q3".to_string()],
+        series: series_names
+            .iter()
+            .map(|name| ChartSeries {
+                name: name.map(str::to_string),
+                values: vec![1.0, 3.0, 5.0],
+                fill: None,
+                point_fills: Vec::new(),
+                data_labels: DataLabels::default(),
+                number_format: None,
+                plot_type: None,
+                marker_symbol: None,
+                line_width_pt: None,
+            })
+            .collect(),
+        grouping: ChartGrouping::Clustered,
+        legend_position: LegendPosition::Bottom,
+        has_legend: true,
+        category_axis_title: None,
+        value_axis_title: None,
+        category_axis_major_tick_mark: AxisTickMark::None,
+        value_axis_major_tick_mark: AxisTickMark::None,
+        category_axis_deleted: false,
+        category_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_line: crate::ir::ChartLine::Automatic,
+        value_axis_major_unit: None,
+        major_gridline_line: crate::ir::ChartLine::Automatic,
+        value_axis_deleted: false,
+        bar_band_layout: BarBandLayout::default(),
+        theme_accent_colors: Vec::new(),
+        chart_area_outline: ChartAreaOutline::Default,
+        host: crate::ir::ChartHost::default(),
+        text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        value_axis_number_format: None,
+        auto_title_deleted,
+        has_automatic_title: true,
+    }
+}
+
+#[test]
+fn an_automatic_title_over_unnamed_series_prints_the_placeholder() {
+    let source = chart_source(automatic_title_chart(&[None, None], false));
+
+    assert!(
+        source.contains("Chart Title"),
+        "an automatic title must be drawn: {source}"
+    );
+}
+
+/// The placeholder is only for charts the series cannot name: a lone named
+/// series still lends its name, exactly as it did before (issue #883).
+#[test]
+fn a_lone_named_series_still_outranks_the_placeholder() {
+    let source = chart_source(automatic_title_chart(&[Some("Serie 1")], false));
+
+    assert!(
+        source.contains("Serie 1"),
+        "the series name is the automatic title where there is one: {source}"
+    );
+    assert!(
+        !source.contains("Chart Title"),
+        "the placeholder must not double the series name: {source}"
+    );
+}
+
+/// Two named series cannot name the chart between them, so Office falls back
+/// to the placeholder there too.
+#[test]
+fn two_named_series_still_get_the_placeholder() {
+    let source = chart_source(automatic_title_chart(&[Some("Left"), Some("Right")], false));
+
+    assert!(
+        source.contains("Chart Title"),
+        "a multi-series chart takes the placeholder: {source}"
+    );
+}
+
+/// `<c:autoTitleDeleted val="1"/>` declines the automatic title whatever the
+/// application would have supplied for it.
+#[test]
+fn a_declined_automatic_title_prints_no_placeholder() {
+    let source = chart_source(automatic_title_chart(&[None, None], true));
+
+    assert!(
+        !source.contains("Chart Title"),
+        "a declined automatic title must not be drawn: {source}"
+    );
+}
+
+/// A chart declaring no `<c:title>` gets nothing — the placeholder follows the
+/// element, not the absence of a title.
+#[test]
+fn a_chart_declaring_no_title_element_prints_no_placeholder() {
+    let mut chart = automatic_title_chart(&[None, None], false);
+    chart.has_automatic_title = false;
+
+    let source = chart_source(chart);
+
+    assert!(
+        !source.contains("Chart Title"),
+        "no title element means no title: {source}"
+    );
+}
+
+/// The placeholder takes its band out of the plot, so the plot starts below it
+/// rather than running the whole frame the way it does untitled.
+#[test]
+fn an_automatic_title_shortens_the_plot_by_its_band() {
+    let titled = automatic_title_chart(&[None, None], false);
+    let mut untitled = automatic_title_chart(&[None, None], false);
+    untitled.has_automatic_title = false;
+
+    let titled_source: String = framed_chart_source(&titled, 400.0, 300.0);
+    let untitled_source: String = framed_chart_source(&untitled, 400.0, 300.0);
+    let band: f64 = chart_area_title_h(&titled);
+
+    assert_eq!(
+        block_height(&titled_source, "#block(width: 400pt, height: "),
+        Some(band),
+        "the title takes a {band}pt band: {titled_source}"
+    );
+    assert_eq!(
+        block_height(&untitled_source, "#block(width: 400pt, height: "),
+        None,
+        "an untitled chart emits no band at all: {untitled_source}"
+    );
+
+    let box_height = |source: &str| block_height(source, "#box(width: 400pt, height: ");
+    assert_eq!(
+        box_height(&untitled_source)
+            .zip(box_height(&titled_source))
+            .map(|(untitled, titled)| untitled - titled),
+        Some(band),
+        "and the plot box gives up exactly that much"
+    );
+
+    let (_, _, _, titled_plot) = plot_rect(&emitted_lines(&titled_source));
+    let (_, _, _, untitled_plot) = plot_rect(&emitted_lines(&untitled_source));
+    assert!(
+        titled_plot < untitled_plot,
+        "so the plotting rectangle itself is shorter: {titled_plot}pt against {untitled_plot}pt"
+    );
+}
+
+/// The height of the first block or box the source opens with `prefix`.
+fn block_height(source: &str, prefix: &str) -> Option<f64> {
+    source
+        .lines()
+        .find_map(|line| line.strip_prefix(prefix))
+        .and_then(leading_pt)
 }
 
 /// The axes and gridlines draw with the line the part declares, and fall back
@@ -4953,6 +5150,7 @@ fn combo_budget_chart() -> Chart {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
         auto_title_deleted: true,
+        has_automatic_title: false,
     }
 }
 
@@ -5145,6 +5343,7 @@ fn combo_line_and_scatter_chart() -> Chart {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
         auto_title_deleted: true,
+        has_automatic_title: false,
     }
 }
 
