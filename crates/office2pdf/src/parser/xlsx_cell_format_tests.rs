@@ -1236,10 +1236,22 @@ fn test_print_margins_snap_downwards_rather_than_to_the_nearest_point() {
     assert_eq!(tp.margins.right, 28.0, "28.8pt prints against 28");
 }
 
-// ----- Row heights without customHeight (issue #303) -----
+// ----- Row heights without customHeight (issues #303, #1151) -----
 
 #[test]
-fn test_row_height_used_even_without_custom_height_flag() {
+fn test_recorded_ht_without_custom_height_is_recomputed_from_the_normal_font() {
+    // An `ht` a row records without `customHeight` is a cached auto-height,
+    // and Excel recomputes the row from the Normal font on load rather than
+    // printing the cached number.
+    //
+    // Measured on `issue_1066_blip_effect_picture.xlsx`, whose rows 1, 3, 4
+    // and 5 carry `ht="16"` and no `customHeight` while row 7 carries no
+    // dimension at all. Sweeping the Normal font size one variant per export
+    // and reading `height of row 1` and `height of row 7` back through
+    // AppleScript answers the same number for both at every size — 11, 12, 14,
+    // 15, 16, 17, 19, 21, 24 for Calibri 8, 9, 10, 11, 12, 13, 14, 16, 18 —
+    // and neither is 16 except where the recompute happens to land there
+    // (issue #1151).
     let data = build_xlsx_formatted_over_a_compacting_grid(|sheet| {
         sheet.get_cell_mut("A1").set_value("행 높이");
         let row = sheet.get_row_dimension_mut(&1);
@@ -1251,15 +1263,90 @@ fn test_row_height_used_even_without_custom_height_flag() {
     let tp = get_sheet_page(&doc, 0);
     assert_eq!(
         tp.table.rows[0].height,
-        Some(18.0),
-        "recorded ht is calibrated to the native PDF track even without customHeight"
+        Some(14.0),
+        "the cached ht is inert: 11pt Calibri recomputes a 15pt worksheet row, \
+         which this compacting grid prints as a 14pt track"
     );
 }
 
-// The behaviour above is what the code does, not what Excel does: an `ht`
-// with no `customHeight` is a cached auto-height Excel recomputes on load
-// (measured in #1151). Changing it re-points every such row at the recompute,
-// which is only measured for two faces (#1150), so both are wanted first.
+#[test]
+fn test_recorded_ht_with_custom_height_stays_the_declared_track() {
+    // The same height with the flag set is a fixed track, and still reaches
+    // the page calibrated to the native PDF grid (issue #303).
+    let data = build_xlsx_formatted_over_a_compacting_grid(|sheet| {
+        sheet.get_cell_mut("A1").set_value("행 높이");
+        let row = sheet.get_row_dimension_mut(&1);
+        row.set_height(20.0);
+        row.set_custom_height(true);
+    });
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let tp = get_sheet_page(&doc, 0);
+    assert_eq!(
+        tp.table.rows[0].height,
+        Some(18.0),
+        "a customHeight row keeps its declared 20pt, compacted to an 18pt track"
+    );
+}
+
+#[test]
+fn test_a_row_auto_grown_by_an_unmeasured_font_size_keeps_its_cached_ht() {
+    // A row Excel auto-grew around a large font is written as an `ht` with no
+    // `customHeight`, and Excel recomputes very nearly the same height on
+    // load. The face series stop well short of every size a title uses —
+    // Calibri's ends at 18 — so a 24pt row has no modelled track of its own,
+    // and falling back to the Normal font's 15pt one would print it at half
+    // the height its own text needs. The row's cached `ht` is what Excel last
+    // measured for that text, so it stands in.
+    let data = build_xlsx_formatted_over_a_compacting_grid(|sheet| {
+        let cell = sheet.get_cell_mut("A1");
+        cell.set_value("분기 실적 요약");
+        cell.get_style_mut().get_font_mut().set_size(24.0);
+        let row = sheet.get_row_dimension_mut(&1);
+        row.set_height(32.0);
+        row.set_custom_height(false);
+    });
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let tp = get_sheet_page(&doc, 0);
+    assert_eq!(
+        tp.table.rows[0].height,
+        Some(29.0),
+        "no series covers Calibri 24, so the cached 32pt stands and this \
+         compacting grid prints it as a 29pt track"
+    );
+}
+
+#[test]
+fn test_recorded_ht_survives_where_the_normal_font_recompute_is_unmeasured() {
+    // No sweep covers this face, so nothing here knows what Excel recomputes
+    // for it. The row's own cached `ht` is Excel's last recompute of that very
+    // row, which is a closer hint than the sheet's `defaultRowHeight` — and
+    // keeping the declared number where nothing is measured is the same
+    // convention the face tables follow for a size their series skips.
+    let data = rewrite_first_styles_font(
+        &build_xlsx_formatted(|sheet| {
+            sheet.get_cell_mut("A1").set_value("행 높이");
+            sheet
+                .get_sheet_format_properties_mut()
+                .set_default_row_height(30.0);
+            let row = sheet.get_row_dimension_mut(&1);
+            row.set_height(20.0);
+            row.set_custom_height(false);
+        }),
+        "Comic Sans MS",
+        11.0,
+    );
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let tp = get_sheet_page(&doc, 0);
+    assert_eq!(
+        tp.table.rows[0].height,
+        Some(20.0),
+        "an unmeasured face keeps the cached ht rather than falling back to the \
+         sheet's declared defaultRowHeight"
+    );
+}
 
 #[test]
 fn test_row_without_dimension_takes_the_normal_font_recompute() {

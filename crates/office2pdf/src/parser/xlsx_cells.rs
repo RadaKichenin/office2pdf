@@ -1534,9 +1534,8 @@ fn cell_wraps_past_one_line(
     estimate_text_width_pt(runs) > available_width
 }
 
-/// The height a row prints at. A recorded `ht` is the current worksheet
-/// height even when `customHeight` is false; rows without one use the sheet's
-/// defaultRowHeight. Fixed tracks are calibrated to native Excel's PDF grid.
+/// The height a row prints at: the fixed track of
+/// `printed_grid_row_height_pt`, calibrated to native Excel's PDF grid.
 /// Exception: auto-sized rows (customHeight=false) whose wrapped text needs a
 /// second line stay content-driven — our text metrics differ slightly from
 /// Excel's and a fixed height could clip a wrapped line.
@@ -1575,10 +1574,10 @@ pub(super) fn worksheet_default_row_height_pt(
         .unwrap_or_else(|| declared_default_row_height_pt(sheet))
 }
 
-/// The worksheet height of one particular row that records none. Such a row
-/// is auto-sized, and Excel sizes it from the tallest font its *own cells*
-/// carry — the sheet's recomputed default only covers a row whose cells hold
-/// nothing taller.
+/// The worksheet height of one particular auto-sized row — one recording no
+/// `ht`, or recording one without `customHeight`. Excel sizes such a row from
+/// the tallest font its *own cells* carry; the sheet's recomputed default only
+/// covers a row whose cells hold nothing taller.
 ///
 /// Native Excel-for-Mac export of `issue_1060_sheet_row_line_box_probe.xlsx`,
 /// whose Normal font is a theme-scheme Calibri 11 that none of its cells use;
@@ -1595,33 +1594,48 @@ pub(super) fn worksheet_default_row_height_pt(
 ///
 /// The term only ever raises the track. What Excel gives a row whose cells
 /// are *smaller* than the Normal font is not measured here, and neither is a
-/// size the face's series skips, so both keep the sheet default rather than
-/// interpolate between measured points that step irregularly (15pt at 10,
-/// 17pt at 11, 20pt at 14).
+/// size the face's series skips, so neither is interpolated between measured
+/// points that step irregularly (15pt at 10, 17pt at 11, 20pt at 14). A row
+/// holding something taller than the Normal font at a size no series covers
+/// falls back to its own cached `ht` where it has one: that is the height
+/// Excel last measured for this very text, and the sheet default would print
+/// a 24pt title into a 15pt row.
 ///
 /// A sheet marking its default `customHeight` is left alone as well: that
 /// declared default is honoured for `ht`-less rows (issue #1047), and whether
 /// a tall cell still grows one of them was never exported.
+///
+/// `cached_height_pt` is the `ht` such a row records without `customHeight` —
+/// Excel's own last recompute of it, kept as the base only where this
+/// workbook's Normal font has no measured recompute of its own (issue #1151).
 fn auto_row_height_pt(
     sheet: &umya_spreadsheet::Worksheet,
     row_idx: u32,
     normal_font: Option<&NormalFont>,
+    cached_height_pt: Option<f64>,
 ) -> f64 {
-    let sheet_default: f64 = worksheet_default_row_height_pt(sheet, normal_font);
+    let base_height_pt: f64 = match cached_height_pt {
+        Some(cached_height_pt) => {
+            recomputed_default_row_height_pt(sheet, normal_font).unwrap_or(cached_height_pt)
+        }
+        None => worksheet_default_row_height_pt(sheet, normal_font),
+    };
     if *sheet.get_sheet_format_properties().get_custom_height() {
-        return sheet_default;
+        return base_height_pt;
     }
     let Some(font) = normal_font else {
-        return sheet_default;
+        return base_height_pt;
     };
     let Some(tallest_cell_size_pt) = tallest_cell_font_size_pt(sheet, row_idx) else {
-        return sheet_default;
+        return base_height_pt;
     };
     if tallest_cell_size_pt <= font.size_pt {
-        return sheet_default;
+        return base_height_pt;
     }
+    let unmeasured_height_pt: f64 = cached_height_pt.unwrap_or(base_height_pt);
     measured_row_height_pt(font, tallest_cell_size_pt)
-        .map_or(sheet_default, |height_pt| height_pt.max(sheet_default))
+        .unwrap_or(unmeasured_height_pt)
+        .max(base_height_pt)
 }
 
 /// The largest font size any cell of this row states, ignoring cells that
@@ -1646,19 +1660,32 @@ fn tallest_cell_font_size_pt(sheet: &umya_spreadsheet::Worksheet, row_idx: u32) 
 /// and the export draws it 90.00pt down and 105.00pt tall over the 15pt track
 /// those rows compact to — six and seven of each, the ratio exact
 /// (issue #1102).
+///
+/// A recorded `ht` is that track only when the row marks it `customHeight`.
+/// Without the flag it is a cached auto-height that Excel discards, sizing the
+/// row from the Normal font on load as it does a row recording nothing at all:
+/// swept one Normal font size per export of the same workbook, whose rows 1,
+/// 3, 4 and 5 carry `ht="16"` and no `customHeight` while row 7 carries no
+/// dimension, `height of row 1` and `height of row 7` answer the same number
+/// at every size, and neither is 16 except where the recompute lands there
+/// (issue #1151).
 pub(super) fn printed_grid_row_height_pt(
     sheet: &umya_spreadsheet::Worksheet,
     row_idx: u32,
     normal_font: Option<&NormalFont>,
 ) -> f64 {
-    let declared_height: Option<f64> = sheet
-        .get_row_dimension(&row_idx)
+    let dimension: Option<&umya_spreadsheet::structs::Row> = sheet.get_row_dimension(&row_idx);
+    let declared_height: Option<f64> = dimension
         .map(|row| *row.get_height())
         .filter(|height| *height > 0.0);
-    native_excel_pdf_row_height(
-        declared_height.unwrap_or_else(|| auto_row_height_pt(sheet, row_idx, normal_font)),
-        normal_font,
-    )
+    let is_custom_height: bool = dimension
+        .map(|row| *row.get_custom_height())
+        .unwrap_or(false);
+    let worksheet_height: f64 = match (is_custom_height, declared_height) {
+        (true, Some(height)) => height,
+        (_, cached_height) => auto_row_height_pt(sheet, row_idx, normal_font, cached_height),
+    };
+    native_excel_pdf_row_height(worksheet_height, normal_font)
 }
 
 /// The outline a merged range prints: each side taken from the members that
