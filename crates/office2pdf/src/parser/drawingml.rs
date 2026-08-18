@@ -25,10 +25,36 @@ pub(crate) struct SchemeColors<'a> {
     pub(crate) aliases: &'a HashMap<String, String>,
 }
 
+/// The `<a:clrScheme>` slot a background or text scheme name stands for when
+/// nothing maps it onto one.
+///
+/// A theme names its slots `dk1`/`lt1`/`dk2`/`lt2`, while the parts that *use*
+/// a colour name them `tx1`/`bg1`/`tx2`/`bg2`. PowerPoint bridges the two with
+/// the slide master's `<p:clrMap>`, which is why [`SchemeColors::aliases`]
+/// exists — but a workbook and a document carry no such part, and neither does
+/// a chart part in any host, so for them the pairing is implicit and this is
+/// where it lives (ECMA-376 §20.1.6.2).
+///
+/// Without it `<a:schemeClr val="tx1">` resolved to nothing, and every chart
+/// frame and major gridline that names it fell back to the renderer's built-in
+/// grey — RGB 134 against the RGB 217 the file asked for (issue #1145).
+fn light_dark_slot_for(scheme_name: &str) -> Option<&'static str> {
+    match scheme_name {
+        "tx1" => Some("dk1"),
+        "bg1" => Some("lt1"),
+        "tx2" => Some("dk2"),
+        "bg2" => Some("lt2"),
+        _ => None,
+    }
+}
+
 /// Resolve a scheme color name (e.g. `accent1`, `bg1`) against the theme.
 ///
 /// The alias map is consulted first; if the aliased entry is missing, the raw
-/// name is tried so a partially populated theme still resolves.
+/// name is tried so a partially populated theme still resolves. Only once both
+/// spellings have missed does the implicit [`light_dark_slot_for`] pairing
+/// apply, so a declared map — including one that swaps the pair for a
+/// light-on-dark master — always outranks it.
 pub(crate) fn resolve_scheme_color(scheme: &SchemeColors<'_>, scheme_name: &str) -> Option<Color> {
     let mapped_name = scheme
         .aliases
@@ -36,11 +62,12 @@ pub(crate) fn resolve_scheme_color(scheme: &SchemeColors<'_>, scheme_name: &str)
         .map(String::as_str)
         .unwrap_or(scheme_name);
 
-    scheme
-        .colors
-        .get(mapped_name)
-        .copied()
-        .or_else(|| scheme.colors.get(scheme_name).copied())
+    let named = |name: &str| -> Option<Color> { scheme.colors.get(name).copied() };
+
+    named(mapped_name)
+        .or_else(|| named(scheme_name))
+        .or_else(|| light_dark_slot_for(mapped_name).and_then(named))
+        .or_else(|| light_dark_slot_for(scheme_name).and_then(named))
 }
 
 #[derive(Debug, Clone, Copy)]

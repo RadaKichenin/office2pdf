@@ -63,6 +63,110 @@ fn resolve_scheme_color_falls_back_to_unaliased_name() {
     );
 }
 
+/// `<a:clrScheme>` names its slots `dk1`/`lt1`/`dk2`/`lt2`, but the parts that
+/// *use* a colour name them `tx1`/`bg1`/`tx2`/`bg2`. PowerPoint bridges the two
+/// with the slide master's `<p:clrMap>`; Word and Excel carry no such part, so
+/// nothing maps them and the pair has to be understood implicitly (#1145).
+#[test]
+fn text_and_background_names_resolve_onto_the_theme_light_dark_slots() {
+    let (colors, aliases) = scheme_with(
+        &[
+            ("dk1", Color::new(0, 0, 0)),
+            ("lt1", Color::new(255, 255, 255)),
+            ("dk2", Color::new(0x44, 0x54, 0x6A)),
+            ("lt2", Color::new(0xE7, 0xE6, 0xE6)),
+        ],
+        &[],
+    );
+    let scheme = SchemeColors {
+        colors: &colors,
+        aliases: &aliases,
+    };
+
+    assert_eq!(
+        resolve_scheme_color(&scheme, "tx1"),
+        Some(Color::new(0, 0, 0))
+    );
+    assert_eq!(
+        resolve_scheme_color(&scheme, "bg1"),
+        Some(Color::new(255, 255, 255))
+    );
+    assert_eq!(
+        resolve_scheme_color(&scheme, "tx2"),
+        Some(Color::new(0x44, 0x54, 0x6A))
+    );
+    assert_eq!(
+        resolve_scheme_color(&scheme, "bg2"),
+        Some(Color::new(0xE7, 0xE6, 0xE6))
+    );
+    // The implicit pairing is exactly those four names; nothing else acquires
+    // a slot it was never given.
+    assert_eq!(resolve_scheme_color(&scheme, "tx3"), None);
+    assert_eq!(resolve_scheme_color(&scheme, "accent1"), None);
+}
+
+/// A deck whose `<p:clrMap>` swaps the pair — a light-on-dark master — must
+/// keep its own mapping, not the implicit one.
+#[test]
+fn a_declared_alias_outranks_the_implicit_light_dark_pairing() {
+    let (colors, aliases) = scheme_with(
+        &[
+            ("dk1", Color::new(0, 0, 0)),
+            ("lt1", Color::new(255, 255, 255)),
+        ],
+        &[("tx1", "lt1"), ("bg1", "dk1")],
+    );
+    let scheme = SchemeColors {
+        colors: &colors,
+        aliases: &aliases,
+    };
+
+    assert_eq!(
+        resolve_scheme_color(&scheme, "tx1"),
+        Some(Color::new(255, 255, 255))
+    );
+    assert_eq!(
+        resolve_scheme_color(&scheme, "bg1"),
+        Some(Color::new(0, 0, 0))
+    );
+}
+
+/// PowerPoint's fallback colour map, used when no master declares one, spells
+/// every entry as itself. The identity has to fall through to the light/dark
+/// slot the same way an absent map does.
+#[test]
+fn an_identity_alias_still_reaches_the_light_dark_slot() {
+    let (colors, aliases) = scheme_with(&[("dk1", Color::new(17, 17, 17))], &[("tx1", "tx1")]);
+    let scheme = SchemeColors {
+        colors: &colors,
+        aliases: &aliases,
+    };
+
+    assert_eq!(
+        resolve_scheme_color(&scheme, "tx1"),
+        Some(Color::new(17, 17, 17))
+    );
+}
+
+/// A theme that names the slot under the using spelling is still read that
+/// way: the implicit pairing is a fallback, not a redirect.
+#[test]
+fn a_theme_keyed_by_the_using_name_keeps_winning() {
+    let (colors, aliases) = scheme_with(
+        &[("tx1", Color::new(1, 2, 3)), ("dk1", Color::new(4, 5, 6))],
+        &[],
+    );
+    let scheme = SchemeColors {
+        colors: &colors,
+        aliases: &aliases,
+    };
+
+    assert_eq!(
+        resolve_scheme_color(&scheme, "tx1"),
+        Some(Color::new(1, 2, 3))
+    );
+}
+
 #[test]
 fn tint_blends_toward_white() {
     // OOXML tint 0.4: channel = 255 - (255 - c) * 0.4
