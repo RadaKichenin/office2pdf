@@ -1914,6 +1914,17 @@ const AREA_TITLE_H: f64 = 19.0;
 /// Size of the chart-area title when the chart declares no `c:txPr`.
 const CHART_AREA_TITLE_PT: f64 = 11.0;
 
+/// The string Office prints for an automatic title no series can name.
+///
+/// The part holds the title's face, size and colour but not its text, so the
+/// running application supplies it — and supplies it in *its own* UI language,
+/// not the chart's: `tests/fixtures/xlsx/any_sheets.xlsx` declares
+/// `<c:lang val="ru-RU"/>` and a Korean Excel for Mac 16.100 exports it as
+/// "차트 제목". No language in the package predicts that, so the English
+/// placeholder is written for every one of them; what the layout turns on is
+/// that a string is printed and takes a band, not which one (issue #1146).
+const AUTOMATIC_CHART_TITLE: &str = "Chart Title";
+
 /// What Office scales the chart's text size by for the chart-area title: the
 /// 18pt `bar-chart.pptx` declares comes back as a 22pt title.
 const CHART_AREA_TITLE_SCALE: f64 = 1.2;
@@ -2239,15 +2250,23 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
             .fold(0.0_f64, f64::max),
     };
 
-    // Chart-area title: the explicit chart title, else the automatic one
-    // Office derives from a single series' name — unless the chart declined
-    // that with `<c:autoTitleDeleted val="1"/>` (issue #883).
+    // Chart-area title: the explicit chart title, else the automatic one —
+    // unless the chart declined that with `<c:autoTitleDeleted val="1"/>`
+    // (issue #883).
+    //
+    // Office derives the automatic title from a lone series' name where there
+    // is one. Where there is not — several series, or one that names itself
+    // nothing — it still prints the title a `<c:title>` without a `<c:tx>`
+    // asks for, as the placeholder string it writes into a new chart (#1146).
     let area_title: Option<&str> = chart.title.as_deref().or_else(|| {
-        if series.len() == 1 && !chart.auto_title_deleted {
-            series[0].name.as_deref()
-        } else {
-            None
+        if chart.auto_title_deleted {
+            return None;
         }
+        let from_lone_series: Option<&str> = match series {
+            [only] => only.name.as_deref(),
+            _ => None,
+        };
+        from_lone_series.or(chart.has_automatic_title.then_some(AUTOMATIC_CHART_TITLE))
     });
     let title_h: f64 = if area_title.is_some() {
         chart_area_title_h(chart)

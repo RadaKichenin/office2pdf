@@ -1034,6 +1034,7 @@ fn test_document_requests_font_families_true_for_a_chart_only_document() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
         auto_title_deleted: false,
+        has_automatic_title: false,
     };
 
     let doc = Document {

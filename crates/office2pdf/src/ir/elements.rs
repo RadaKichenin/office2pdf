@@ -326,9 +326,18 @@ pub struct Chart {
     /// `<c:valAx><c:numFmt formatCode>` — how the value axis prints its tick
     /// labels. Outranks a series' cache format for the axis (issue #865).
     pub value_axis_number_format: Option<String>,
-    /// `<c:autoTitleDeleted val="1"/>` — the chart declines the title Office
-    /// would otherwise derive from its single series' name (issue #883).
+    /// `<c:autoTitleDeleted val="1"/>` — the chart declines the automatic
+    /// title Office would otherwise supply: its single series' name, or the
+    /// placeholder printed when nothing names one (issues #883 and #1146).
     pub auto_title_deleted: bool,
+    /// Whether `<c:title>` is present but names no text of its own — it
+    /// carries no `<c:tx>`.
+    ///
+    /// The application then supplies the string: a lone named series lends its
+    /// name, and any other chart gets the placeholder Office writes into a new
+    /// chart. A part carrying no `<c:title>` at all, or one whose title names
+    /// its own text, leaves this false (issue #1146).
+    pub has_automatic_title: bool,
 }
 
 /// Run properties a `c:txPr` declares for the strings it governs.

@@ -1874,7 +1874,8 @@ fn test_the_cache_format_is_kept_beside_the_declared_ones() {
 }
 
 /// `<c:autoTitleDeleted val="1"/>` is how a chart declines the automatic title
-/// Office would otherwise draw from its single series' name (issue #883).
+/// Office would otherwise draw — from its single series' name here, or from
+/// the placeholder where nothing names one (issues #883 and #1146).
 fn single_series_chart_xml(extra: &str) -> String {
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -1921,6 +1922,82 @@ fn test_auto_title_deleted_zero_keeps_the_title() {
     )
     .expect("chart parses");
     assert!(!chart.auto_title_deleted);
+}
+
+/// A `<c:title>` that carries no `<c:tx>` is Office's *automatic* title: the
+/// element supplies the formatting and the application supplies the string.
+/// `tests/fixtures/xlsx/any_sheets.xlsx` writes exactly that — a `c:layout`,
+/// an `c:overlay`, an `c:spPr` and a `c:txPr`, and no text anywhere (#1146).
+const AUTOMATIC_TITLE_XML: &str = r#"<c:title><c:layout/><c:overlay val="0"/>
+    <c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1400"/></a:pPr>
+    <a:endParaRPr lang="ru-RU"/></a:p></c:txPr></c:title>"#;
+
+#[test]
+fn test_a_title_naming_no_text_is_automatic() {
+    let chart = parse_chart_xml(
+        &single_series_chart_xml(&format!(
+            r#"{AUTOMATIC_TITLE_XML}<c:autoTitleDeleted val="0"/>"#
+        )),
+        &SchemeColors::empty(),
+    )
+    .expect("chart parses");
+
+    assert!(chart.has_automatic_title);
+    assert_eq!(chart.title, None);
+}
+
+/// Triangulation: a title that names its own text is not automatic, so the
+/// flag cannot simply follow the element's presence.
+#[test]
+fn test_a_title_naming_its_own_text_is_not_automatic() {
+    let chart = parse_chart_xml(
+        &single_series_chart_xml(
+            r#"<c:title><c:tx><c:rich><a:p><a:r><a:t>Quarterly sales</a:t></a:r></a:p></c:rich></c:tx></c:title>"#,
+        ),
+        &SchemeColors::empty(),
+    )
+    .expect("chart parses");
+
+    assert!(!chart.has_automatic_title);
+    assert_eq!(chart.title.as_deref(), Some("Quarterly sales"));
+}
+
+/// A `<c:title/>` with no children at all names no text either, so it asks for
+/// the same automatic title the formatted one does.
+#[test]
+fn test_an_empty_title_element_is_automatic() {
+    let chart = parse_chart_xml(
+        &single_series_chart_xml(r#"<c:title/><c:autoTitleDeleted val="0"/>"#),
+        &SchemeColors::empty(),
+    )
+    .expect("chart parses");
+
+    assert!(chart.has_automatic_title);
+    assert_eq!(chart.title, None);
+}
+
+/// A chart carrying no `<c:title>` at all declares no automatic title either.
+#[test]
+fn test_a_chart_without_a_title_element_declares_no_automatic_title() {
+    let chart = parse_chart_xml(&single_series_chart_xml(""), &SchemeColors::empty())
+        .expect("chart parses");
+
+    assert!(!chart.has_automatic_title);
+}
+
+/// An axis title is a `<c:title>` too, and it names its own text — it must not
+/// be read as the chart's, in either direction.
+#[test]
+fn test_an_axis_title_is_not_the_charts_automatic_title() {
+    let xml = single_series_chart_xml("").replace(
+        "</c:plotArea>",
+        r#"<c:catAx><c:axId val="1"/><c:title><c:tx><c:rich><a:p><a:r><a:t>Quarter</a:t></a:r></a:p></c:rich></c:tx></c:title></c:catAx></c:plotArea>"#,
+    );
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).expect("chart parses");
+
+    assert!(!chart.has_automatic_title);
+    assert_eq!(chart.title, None);
+    assert_eq!(chart.category_axis_title.as_deref(), Some("Quarter"));
 }
 
 /// A series that names its fill through a theme colour resolves it against the
