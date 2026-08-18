@@ -2053,6 +2053,60 @@ fn an_axis_and_its_gridlines_keep_the_line_they_declare() {
     }
 }
 
+/// The chart frame and the major gridlines resolve `tx1` the same way the
+/// labels beside them do, even though nothing maps it onto a theme slot.
+///
+/// `tests/fixtures/xlsx/any_sheets.xlsx` states this one stroke three times —
+/// on `c:chartSpace/c:spPr`, on `c:catAx/c:spPr` and on
+/// `c:valAx/c:majorGridlines` — as `tx1` lifted by lumMod 15% / lumOff 85%,
+/// which over the theme's black `dk1` is #D9D9D9. A workbook carries no
+/// `<p:clrMap>` to turn `tx1` into `dk1`, so the colour resolved to nothing and
+/// all three fell back to the renderer's built-in grey, RGB 134 (issue #1145).
+#[test]
+fn a_text_slot_line_colour_resolves_against_the_theme() {
+    let line = r#"<c:spPr><a:ln w="9525" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="tx1"><a:lumMod val="15000"/><a:lumOff val="85000"/></a:schemeClr></a:solidFill><a:round/></a:ln><a:effectLst/></c:spPr>"#;
+    let gridlines = format!("<c:majorGridlines>{line}</c:majorGridlines>");
+    let xml = chart_space_with(line).replace(
+        "</c:plotArea>",
+        &format!(
+            r#"<c:catAx><c:axId val="1"/>{line}</c:catAx><c:valAx><c:axId val="2"/>{gridlines}</c:valAx></c:plotArea>"#
+        ),
+    );
+    // The theme keys its slots the way `<a:clrScheme>` does; `tx1` appears
+    // nowhere in it.
+    let colors: std::collections::HashMap<String, Color> =
+        [("dk1".to_string(), Color::new(0, 0, 0))]
+            .into_iter()
+            .collect();
+    let aliases: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let scheme = SchemeColors {
+        colors: &colors,
+        aliases: &aliases,
+    };
+
+    let chart = parse_chart_xml(&xml, &scheme).expect("chart parses");
+
+    let lifted = Color::new(0xD9, 0xD9, 0xD9);
+    assert_eq!(
+        chart.chart_area_outline,
+        ChartAreaOutline::Explicit {
+            width_pt: Some(0.75),
+            color: Some(lifted),
+        },
+        "the chart frame"
+    );
+    let expected = ChartLine::Explicit {
+        width_pt: Some(0.75),
+        color: Some(lifted),
+    };
+    for (label, line) in [
+        ("category axis", chart.category_axis_line),
+        ("major gridlines", chart.major_gridline_line),
+    ] {
+        assert_eq!(line, expected, "{label}");
+    }
+}
+
 /// `<a:ln><a:noFill/></a:ln>` suppresses the line, which is not the same as
 /// declaring none — the deck in #841 writes exactly that on its value axis and
 /// the reference draws no vertical rule there, where we drew the automatic

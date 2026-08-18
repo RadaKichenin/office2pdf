@@ -14,7 +14,8 @@ use office2pdf::internal::Parser;
 use office2pdf::internal::XlsxParser;
 use office2pdf::internal::generate_typst;
 use office2pdf::ir::{
-    Alignment, Block, BorderLineStyle, Color, HFInline, Page, SheetPage, TableCell,
+    Alignment, Block, BorderLineStyle, ChartAreaOutline, ChartLine, Color, HFInline, Page,
+    SheetPage, TableCell,
 };
 
 // ---------------------------------------------------------------------------
@@ -394,6 +395,45 @@ fn structure_any_sheets_chartsheet_pages_its_chart_full_page() {
         .find(|page| page.name == "Visible")
         .expect("the visible worksheet should still page");
     assert!(worksheet_page.charts.is_empty());
+}
+
+/// The chart frame and the value axis' major gridlines take the colour the
+/// part declares, not the renderer's built-in grey.
+///
+/// This workbook's `xl/charts/chart1.xml` states one stroke three times — for
+/// the chart space's frame, for the category axis, and for the value axis'
+/// major gridlines — as `<a:schemeClr val="tx1">` lifted by lumMod 15% /
+/// lumOff 85%. The workbook theme's `dk1` is black, so that is #D9D9D9, and a
+/// `mutool draw -F trace` of the Excel for Mac 16.100 export of the `Chart`
+/// sheet draws every one of them at `.8509804` on all three channels. A
+/// workbook carries no colour map to turn `tx1` into `dk1`, so the colour
+/// resolved to nothing and all three came out at RGB 134 (issue #1145).
+#[test]
+fn structure_any_sheets_chart_chrome_takes_its_declared_colour() {
+    let pages = sheet_pages("any_sheets.xlsx");
+    let chart = &pages
+        .iter()
+        .find(|page| page.name == "Chart")
+        .expect("the chartsheet should contribute a page")
+        .charts
+        .first()
+        .expect("the chartsheet carries its chart")
+        .chart;
+
+    let declared = Color::new(0xD9, 0xD9, 0xD9);
+    assert_eq!(
+        chart.chart_area_outline,
+        ChartAreaOutline::Explicit {
+            width_pt: Some(0.75),
+            color: Some(declared),
+        },
+    );
+    let expected = ChartLine::Explicit {
+        width_pt: Some(0.75),
+        color: Some(declared),
+    };
+    assert_eq!(chart.major_gridline_line, expected, "major gridlines");
+    assert_eq!(chart.category_axis_line, expected, "category axis");
 }
 
 /// Two chartsheet packages whose parts collide by filename, which is how the
