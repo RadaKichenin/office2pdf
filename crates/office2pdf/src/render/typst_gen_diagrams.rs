@@ -1172,6 +1172,43 @@ const AVENIR_NEXT_LT_PRO_CHART_ADVANCE: [u16; 95] = [
     1300, 737, 909, 649, 1190, 999, 1528, 991, 999, 905, 614, 455, 614, 1364,
 ];
 
+/// The `hhea` ascent and descent of the same two faces, in their shared
+/// 2048-unit em, as `(ascent, descent)` with the descent positive.
+///
+/// Read out of the very font files the advance tables above were extracted
+/// from: Calibri 1950/-550 and Avenir Next LT Pro 1972/-512, both with a zero
+/// line gap. [`excel_column_value_gutter_pt`] spends this on the clearance
+/// Excel leaves between a value label and the plot, so a runner without the
+/// face would otherwise size that clearance from whatever substitute it
+/// resolved and move the plot with it.
+const CALIBRI_CHART_LINE_METRICS_EM: (f64, f64) = (1950.0 / 2048.0, 550.0 / 2048.0);
+const AVENIR_NEXT_LT_PRO_CHART_LINE_METRICS_EM: (f64, f64) = (1972.0 / 2048.0, 512.0 / 2048.0);
+
+/// The `hhea` ascent and descent of `family`, in em units and with the descent
+/// positive, in the source Office face where one is part of the calibration.
+///
+/// The line gap is deliberately left out: it is what separates two lines, not
+/// part of the box one line occupies, and the seven faces this was measured
+/// across only agree once it is excluded (Arial is the one of them that
+/// declares a non-zero gap).
+fn chart_face_line_metrics_em(family: &str, bold: bool) -> Option<(f64, f64)> {
+    let normalized: String = family
+        .chars()
+        .filter(|character| character.is_ascii_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect();
+    if !bold {
+        match normalized.as_str() {
+            "calibri" => return Some(CALIBRI_CHART_LINE_METRICS_EM),
+            "avenirnextltpro" => return Some(AVENIR_NEXT_LT_PRO_CHART_LINE_METRICS_EM),
+            _ => {}
+        }
+    }
+    let ascent_em: f64 = crate::render::pdf::font_hhea_ascender_em(family)?;
+    let (_, descent_em, _) = crate::render::pdf::font_line_metrics_em(family)?;
+    Some((ascent_em, descent_em))
+}
+
 /// Advance one chart string in the source Office face where a native metric is
 /// part of the calibration, otherwise in the face rendering resolves locally.
 fn chart_text_advance_em(family: &str, bold: bool, text: &str) -> Option<f64> {
@@ -1405,14 +1442,169 @@ pub(super) fn chart_tick_band_pt(chart: &Chart) -> f64 {
     }
 }
 
+/// Excel's automatic column-plot layout, in three measured parts.
+///
+/// Native Excel for Mac 16.112 exports of the #1166 workbook, re-exported once
+/// per varied factor — seven faces, five value-axis sizes and four number
+/// formats, 21 exports in all — put the widest value tick label's first glyph
+/// exactly [`EXCEL_VALUE_LABEL_EDGE_PAD_PT`] inside the chart frame in every
+/// one of them, whatever the size, the face or how wide the label is. The plot
+/// then starts the label's own advance plus a clearance later.
+///
+/// That clearance is not a plain multiple of the size: at 9pt it measures
+/// 9.22pt in Segoe UI against 8.34pt in Calibri. It is a multiple of the
+/// *face's* line box, and splitting the box into its ascent and descent
+/// identifies it — a least-squares fit over the seven faces lands on 0.8334 and
+/// 0.4981, which are 5/6 and 1/2 within the exports' own scatter. Every one of
+/// the 21 exports then sits within 0.015pt of the model.
+///
+/// PowerPoint's own column layout is a different regime — the #841 deck
+/// reserves 46.98pt where this predicts 31.49 — so it keeps
+/// [`CHART_COLUMN_VALUE_GUTTER_PT`], which was fitted to it.
+const EXCEL_VALUE_LABEL_EDGE_PAD_PT: f64 = 6.5;
+const EXCEL_VALUE_LABEL_ASCENT_FRACTION: f64 = 5.0 / 6.0;
+const EXCEL_VALUE_LABEL_DESCENT_FRACTION: f64 = 0.5;
+
+/// The largest value the value axis has to reach, before it is rounded up to a
+/// whole number of major units.
+///
+/// A line laid over the columns reads against the same axis, so the axis has to
+/// reach it too — but it is no part of any stack. A stacked bar is read against
+/// its category's total, so the axis must cover the tallest stack rather than
+/// the largest single segment.
+fn chart_auto_max_value(chart: &Chart) -> f64 {
+    let overlaid: Vec<bool> = chart
+        .series
+        .iter()
+        .map(|series| plots_as_line(chart, series))
+        .collect();
+    let overlay_max: f64 = chart
+        .series
+        .iter()
+        .zip(&overlaid)
+        .filter(|(_, is_line)| **is_line)
+        .flat_map(|(series, _)| series.values.iter())
+        .copied()
+        .fold(0.0_f64, f64::max);
+    let bar_series = || {
+        chart
+            .series
+            .iter()
+            .zip(&overlaid)
+            .filter(|(_, is_line)| !**is_line)
+            .map(|(series, _)| series)
+    };
+    match chart.grouping {
+        ChartGrouping::PercentStacked => 100.0,
+        ChartGrouping::Stacked => (0..chart.categories.len())
+            .map(|index| category_total(bar_series(), index))
+            .fold(overlay_max, f64::max),
+        ChartGrouping::Clustered => chart
+            .series
+            .iter()
+            .flat_map(|series| series.values.iter())
+            .copied()
+            .fold(0.0_f64, f64::max),
+    }
+}
+
+/// The tick labels a column plot's value axis prints, from zero upwards.
+///
+/// Safe to ask before the plot exists, which is what lets the gutter be sized
+/// from the labels: a column chart's value axis runs *vertically*, and
+/// [`chart_auto_axis`] only consults the plot width for a horizontal
+/// PowerPoint axis. Its scale therefore depends on the data alone.
+fn chart_value_axis_labels(chart: &Chart) -> Vec<String> {
+    let auto_axis: (f64, f64) = if matches!(chart.grouping, ChartGrouping::PercentStacked) {
+        (100.0, 20.0)
+    } else {
+        nice_axis(chart_auto_max_value(chart))
+    };
+    let (nice_max, step) = axis_with_stated_unit(auto_axis, chart.value_axis_major_unit);
+    let number_format: Option<&str> = chart_value_number_format(chart);
+    major_units(nice_max, step)
+        .into_iter()
+        .map(|tick| chart_value_label_formatted(tick, number_format))
+        .collect()
+}
+
+/// Width of the widest value tick label, set in the value axis' own face and
+/// size, or `None` where that face cannot be measured.
+fn chart_column_value_label_widest_pt(chart: &Chart) -> Option<f64> {
+    let bold: bool = chart
+        .text_style
+        .resolved_bold(chart.value_axis_text_style)
+        .unwrap_or(false);
+    let family: &str = chart
+        .text_font_family
+        .as_deref()
+        .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_FAMILY);
+    let widest_em: f64 = chart_value_axis_labels(chart)
+        .iter()
+        .filter_map(|label| chart_text_advance_em(family, bold, label))
+        .fold(0.0_f64, f64::max);
+    (widest_em > 0.0).then(|| widest_em * chart_axis_text_pt(chart, chart.value_axis_text_style))
+}
+
+/// Clearance Excel leaves between a value tick label and the plot's left edge.
+fn excel_value_label_plot_gap_pt(chart: &Chart) -> Option<f64> {
+    let bold: bool = chart
+        .text_style
+        .resolved_bold(chart.value_axis_text_style)
+        .unwrap_or(false);
+    let family: &str = chart
+        .text_font_family
+        .as_deref()
+        .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_FAMILY);
+    let (ascent_em, descent_em) = chart_face_line_metrics_em(family, bold)?;
+    Some(
+        (EXCEL_VALUE_LABEL_ASCENT_FRACTION * ascent_em
+            + EXCEL_VALUE_LABEL_DESCENT_FRACTION * descent_em)
+            * chart_axis_text_pt(chart, chart.value_axis_text_style),
+    )
+}
+
+/// The left gutter Excel gives a column plot whose value labels run down that
+/// edge, or `None` where the labels or the face cannot be measured.
+fn excel_column_value_gutter_pt(chart: &Chart) -> Option<f64> {
+    Some(
+        EXCEL_VALUE_LABEL_EDGE_PAD_PT
+            + chart_column_value_label_widest_pt(chart)?
+            + excel_value_label_plot_gap_pt(chart)?,
+    )
+}
+
 /// The left band a column plot's value tick labels need.
 fn chart_column_value_gutter_pt(chart: &Chart) -> f64 {
-    if chart.text_style.size_pt.is_some() || chart.value_axis_text_style.size_pt.is_some() {
-        CHART_COLUMN_VALUE_GUTTER_PT
-            + CHART_COLUMN_VALUE_GUTTER_EM * chart_axis_text_pt(chart, chart.value_axis_text_style)
-    } else {
-        TICK_GAP + GAP
+    if chart.text_style.size_pt.is_none() && chart.value_axis_text_style.size_pt.is_none() {
+        return TICK_GAP + GAP;
     }
+    if chart.host == crate::ir::ChartHost::Spreadsheet
+        && let Some(gutter) = excel_column_value_gutter_pt(chart)
+    {
+        return gutter;
+    }
+    CHART_COLUMN_VALUE_GUTTER_PT
+        + CHART_COLUMN_VALUE_GUTTER_EM * chart_axis_text_pt(chart, chart.value_axis_text_style)
+}
+
+/// The box one vertical value tick label is right-aligned in, as
+/// `(left edge, width)` inside the chart frame.
+///
+/// Excel ends that box where the clearance before the plot begins, so the
+/// widest label starts on the frame inset the exports measure. Sizing it from
+/// [`chart_tick_band_pt`] instead left the #1166 labels 2.63pt short of the
+/// export's, and would leave a short-labelled plot overlapping them once the
+/// gutter itself follows the labels.
+fn chart_column_value_label_box(chart: &Chart) -> (f64, f64) {
+    let left: f64 = chart_column_value_label_x(chart);
+    if chart.host == crate::ir::ChartHost::Spreadsheet
+        && let Some(gutter) = excel_column_value_gutter_pt(chart)
+        && let Some(gap) = excel_value_label_plot_gap_pt(chart)
+    {
+        return (left, (gutter - gap - left).max(0.0));
+    }
+    (left, chart_tick_band_pt(chart))
 }
 
 /// Left edge of a vertical value-axis tick-label box.
@@ -2229,26 +2421,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
     let overlay_slots: Vec<usize> = (0..series.len()).filter(|index| overlaid[*index]).collect();
     let bar_series = || bar_slots.iter().map(|index| &series[*index]);
 
-    // A line over the columns reads against the same axis, so the axis has to
-    // reach it too — but it is no part of any stack.
-    let overlay_max: f64 = overlay_slots
-        .iter()
-        .flat_map(|index| series[*index].values.iter())
-        .copied()
-        .fold(0.0_f64, f64::max);
-    // A stacked bar is read against its category's total, so the axis must
-    // cover the tallest stack rather than the largest single segment.
-    let auto_max_value: f64 = match chart.grouping {
-        ChartGrouping::PercentStacked => 100.0,
-        ChartGrouping::Stacked => (0..categories)
-            .map(|index| category_total(bar_series(), index))
-            .fold(overlay_max, f64::max),
-        ChartGrouping::Clustered => series
-            .iter()
-            .flat_map(|s| s.values.iter())
-            .copied()
-            .fold(0.0_f64, f64::max),
-    };
+    let auto_max_value: f64 = chart_auto_max_value(chart);
 
     // Chart-area title: the explicit chart title, else the automatic one —
     // unless the chart declined that with `<c:autoTitleDeleted val="1"/>`
@@ -2337,6 +2510,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
     // Gridlines + value tick labels. The gridlines take the line
     // `<c:majorGridlines><c:spPr><a:ln>` declares, if it declares one (#900).
     let gridline_stroke = chart_chrome_stroke(chart.major_gridline_line);
+    let (label_box_x, label_box_w): (f64, f64) = chart_column_value_label_box(chart);
     let major_units: Vec<f64> = major_units(nice_max, step);
     for tick in &major_units {
         let frac: f64 = tick / nice_max;
@@ -2382,14 +2556,14 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 let _ = writeln!(
                     out,
                     "#place(top + left, dx: {}pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(right + horizon)[#text(size: {}pt{})[{}]]])",
-                    format_f64(chart_column_value_label_x(chart)),
+                    format_f64(label_box_x),
                     format_f64(
                         y - chart_label_box_h(chart_axis_text_pt(
                             chart,
                             chart.value_axis_text_style
                         )) / 2.0
                     ),
-                    format_f64(chart_tick_band_pt(chart)),
+                    format_f64(label_box_w),
                     format_f64(chart_label_box_h(chart_axis_text_pt(
                         chart,
                         chart.value_axis_text_style
