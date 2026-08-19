@@ -3791,11 +3791,16 @@ fn generate_fixed_text_paragraph(
             // `breaks_hangul_at_eojeol` documents the same exclusion.
             EojeolWrap::Syllable,
             available_width_pt,
+            true,
         );
     }
     // The line is placed by the width PowerPoint measured, which carries a
     // letter-space after its last glyph that Typst's shaping drops (#1075).
     // It goes inside the `no_wrap` box so that box's own width carries it too.
+    //
+    // This is the paragraph's *last* line only. Every line before a hard break
+    // needs the same reserve, and `generate_powerpoint_runs_with_tabs` writes
+    // those inside the paragraph markup, where each `#linebreak()` is (#1174).
     if let Some(spacing) = powerpoint_trailing_letter_space_pt(style, &para.runs) {
         let _ = write!(out, "#h({}pt)", format_f64(spacing));
     }

@@ -3002,6 +3002,163 @@ fn an_untracked_centred_slide_line_trails_nothing() {
     }
 }
 
+/// The two lines of a tracked slide title, built twice: page 1 puts them in
+/// one paragraph split by a PPTX `<a:br/>` marker, page 2 gives each line a
+/// paragraph of its own. Both boxes have the same geometry, so a line must land
+/// on the same origin either way — PowerPoint measures a hard-broken line
+/// exactly as it measures a paragraph's only line.
+///
+/// `trailing_break` reproduces the shape the #841 deck's slide-13 title has:
+/// a `<a:br/>` after the last visible line, which puts an empty third line at
+/// the end of the paragraph.
+#[cfg(not(target_arch = "wasm32"))]
+fn tracked_two_line_title_source(
+    first_spacing: Option<f64>,
+    second_spacing: Option<f64>,
+    alignment: Alignment,
+    trailing_break: bool,
+) -> String {
+    let run = |text: &str, letter_spacing: Option<f64>| Run {
+        text: text.to_string(),
+        style: TextStyle {
+            font_family: Some("Arial".to_string()),
+            font_size: Some(38.0),
+            bold: Some(true),
+            letter_spacing,
+            ..TextStyle::default()
+        },
+        href: None,
+        footnote: None,
+    };
+    let paragraph = |runs: Vec<Run>| {
+        Block::Paragraph(Paragraph {
+            style: ParagraphStyle {
+                alignment: Some(alignment),
+                ..ParagraphStyle::default()
+            },
+            runs,
+        })
+    };
+    let slide = |content: Vec<Block>| {
+        make_fixed_page(
+            960.0,
+            540.0,
+            vec![make_fixed_text_box(
+                60.0,
+                40.0,
+                600.0,
+                200.0,
+                Insets::default(),
+                crate::ir::TextBoxVerticalAlign::Top,
+                content,
+            )],
+        )
+    };
+
+    let second: String = match trailing_break {
+        true => "RAPPORT\u{000B}".to_string(),
+        false => "RAPPORT".to_string(),
+    };
+    let doc = make_doc(vec![
+        slide(vec![paragraph(vec![
+            run("PROSJEKT\u{000B}", first_spacing),
+            run(&second, second_spacing),
+        ])]),
+        slide(vec![
+            paragraph(vec![run("PROSJEKT", first_spacing)]),
+            paragraph(vec![run("RAPPORT", second_spacing)]),
+        ]),
+    ]);
+    generate_typst(&doc).unwrap().source
+}
+
+/// The left edge of the line that carries `word`, on `page_index`.
+#[cfg(not(target_arch = "wasm32"))]
+fn compiled_line_origin_pt(source: &str, page_index: usize, word: &str) -> f64 {
+    crate::render::pdf::compiled_text_runs(source, page_index)
+        .unwrap_or_else(|error| panic!("compile failed: {error}\n{source}"))
+        .iter()
+        .filter(|run| run.text.contains(word))
+        .map(|run| run.left_pt)
+        .reduce(f64::min)
+        .unwrap_or_else(|| panic!("no run carries {word:?} on page {page_index}:\n{source}"))
+}
+
+/// PowerPoint measures *every* line of a paragraph with a letter-space after
+/// its last glyph, not just the paragraph's last one, and places a centred or
+/// right-aligned line from that width. #1120 trailed the space once per
+/// paragraph, which left slide 13 of the #841 deck — one centred 38pt title
+/// paragraph broken by `a:br` at `spc="300"` — half a letter-space right of a
+/// native PowerPoint 16.112 export on both of its lines: `PROSJEKT` at
+/// 131.198pt against 129.720pt and `RAPPORTSTATUS` at 54.461pt against
+/// 53.086pt, while the single-line slide number on the same slide matched to
+/// 0.04pt (issue #1174).
+///
+/// The two lines are tracked differently on purpose: the space a line reserves
+/// is the one its own last run declares, not the paragraph's or its
+/// neighbour's.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_hard_broken_tracked_slide_line_reserves_its_own_trailing_letter_space() {
+    for alignment in [Alignment::Center, Alignment::Right] {
+        let source: String = tracked_two_line_title_source(Some(3.0), Some(1.0), alignment, false);
+
+        for word in ["PROSJEKT", "RAPPORT"] {
+            let broken_pt: f64 = compiled_line_origin_pt(&source, 0, word);
+            let separate_pt: f64 = compiled_line_origin_pt(&source, 1, word);
+
+            assert!(
+                (broken_pt - separate_pt).abs() <= 0.01,
+                "{alignment:?} {word:?}: a hard-broken line must land where the same \
+                 line as its own paragraph lands, got {broken_pt}pt against \
+                 {separate_pt}pt\n{source}"
+            );
+        }
+    }
+}
+
+/// The #841 deck's title paragraph ends with a `<a:br/>`, so its last line
+/// carries no glyph at all and the paragraph-final space #1120 emits lands on
+/// that empty line. Both *visible* lines must still reserve their own.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_trailing_hard_break_does_not_absorb_a_visible_line_letter_space() {
+    let source: String =
+        tracked_two_line_title_source(Some(3.0), Some(3.0), Alignment::Center, true);
+
+    for word in ["PROSJEKT", "RAPPORT"] {
+        let broken_pt: f64 = compiled_line_origin_pt(&source, 0, word);
+        let separate_pt: f64 = compiled_line_origin_pt(&source, 1, word);
+
+        assert!(
+            (broken_pt - separate_pt).abs() <= 0.01,
+            "{word:?}: an empty trailing line must not take the reserve off the \
+             line above it, got {broken_pt}pt against {separate_pt}pt\n{source}"
+        );
+    }
+}
+
+/// A left-aligned line starts at the content edge whatever its width, and an
+/// untracked one has no letter-space to reserve. Neither may gain a spacer:
+/// one that reaches a hard-broken line would only widen it towards a wrap.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn an_untracked_or_left_aligned_hard_broken_paragraph_trails_nothing() {
+    for (first, second, alignment) in [
+        (Some(3.0), Some(3.0), Alignment::Left),
+        (None, None, Alignment::Center),
+        (Some(0.0), Some(0.0), Alignment::Center),
+    ] {
+        let source: String = tracked_two_line_title_source(first, second, alignment, false);
+
+        assert!(
+            !source.contains("]#h("),
+            "no reserve is due here (spacing {first:?}/{second:?}, \
+             {alignment:?}): {source}"
+        );
+    }
+}
+
 /// The #841 Contoso deck's slide number, against a native PowerPoint 16.112
 /// export of the same file.
 ///

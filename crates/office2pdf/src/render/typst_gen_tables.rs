@@ -2863,6 +2863,11 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
                     paragraph_default_tab_width_pt(style, cell.default_tab_width_pt),
                     eojeol_wrap,
                     cell.available_measure_pt,
+                    // A PPTX table cell reserves no trailing letter-space at
+                    // all — #1075 reached the text-box path only — so giving
+                    // its hard-broken lines one would leave the cell's last
+                    // line the odd one out.
+                    false,
                 );
             } else {
                 generate_runs_with_tabs(
