@@ -114,6 +114,10 @@ struct GenCtx {
     images: Vec<ImageAsset>,
     next_image_id: usize,
     next_text_box_id: usize,
+    /// How many sheet drawing layers have been written. Each needs its own
+    /// label, because the layer is a page foreground that has to recognise
+    /// its own sheet's first printed page (issue #1168).
+    next_sheet_drawing_layer_id: usize,
     table_depth: usize,
     /// Active section's Word document-grid line pitch, in points.
     line_grid_pitch: Option<f64>,
@@ -227,6 +231,7 @@ impl GenCtx {
             images: Vec::new(),
             next_image_id: 0,
             next_text_box_id: 0,
+            next_sheet_drawing_layer_id: 0,
             table_depth: 0,
             table_uses_powerpoint_line_box: false,
             line_grid_pitch: None,
@@ -817,32 +822,44 @@ fn generate_table_page(
     let size = resolve_page_size(&page.size, options);
     ctx.breaks_hangul_at_eojeol = false;
     ctx.available_measure_pt = None;
-    write_table_page_setup(out, page, &size, ctx);
-    out.push('\n');
 
     // `<printOptions horizontalCentered="1"/>` moves the whole printed sheet,
-    // the drawings floating over the grid included, so the inset wraps both.
+    // the drawings floating over the grid included, so the inset reaches both.
+    // The grid takes it from the `#pad` below; the drawing layer sits outside
+    // that flow and carries it in its own offsets instead.
     // The page margins themselves stay put: the header and footer keep their
     // own alignment, which the centering does not touch.
     let centering_inset_pt: Option<f64> = horizontal_centering_inset_pt(page, &size);
+
+    // Every glyph Excel prints on a sheet — the grid's cells and the text of
+    // the drawings floating over it alike — advances on the whole-point grid
+    // (issue #1088). The drawing layer goes into the page setup, so its scope
+    // has to open before that; the page setup itself states no run text.
+    let drawings: Option<SheetDrawingLayer> =
+        with_sheet_advance_grid(true, || sheet_drawing_layer(page, centering_inset_pt, ctx));
+
+    write_table_page_setup(
+        out,
+        page,
+        &size,
+        ctx,
+        drawings.as_ref().map(|layer| layer.foreground.as_str()),
+    );
+    out.push('\n');
+
     if let Some(inset_pt) = centering_inset_pt {
         let _ = writeln!(out, "#pad(left: {}pt)[", format_f64(inset_pt));
     }
 
-    // Every glyph Excel prints on a sheet — the grid's cells and the text of
-    // the drawings floating over it alike — advances on the whole-point grid
-    // (issue #1088). The page setup above states no run text, so the scope
-    // opens here.
     with_sheet_advance_grid(true, || -> Result<(), ConvertError> {
-        if page.charts.is_empty() && page.images.is_empty() && page.text_boxes.is_empty() {
+        if drawings.is_none() && page.charts.is_empty() {
             generate_table(out, &page.table, ctx)?;
         } else {
-            generate_table_with_anchors(
+            generate_sheet_grid(
                 out,
                 &page.table,
                 &page.charts,
-                &page.images,
-                &page.text_boxes,
+                drawings.as_ref().map(|layer| layer.marker.as_str()),
                 ctx,
             )?;
         }
@@ -919,23 +936,21 @@ enum SheetAnchor<'a> {
     TextBox(&'a crate::ir::SheetTextBox),
 }
 
-/// Render a sheet's grid with its drawings overlaid at their anchors.
-fn generate_table_with_anchors(
+/// Render a sheet's grid, under the marker its drawing layer is pinned to and
+/// above the charts no drawing anchors.
+fn generate_sheet_grid(
     out: &mut String,
     table: &Table,
     charts: &[crate::ir::SheetChart],
-    images: &[crate::ir::SheetImage],
-    text_boxes: &[crate::ir::SheetTextBox],
+    drawing_marker: Option<&str>,
     ctx: &mut GenCtx,
 ) -> Result<(), ConvertError> {
-    // Excel overlays drawings on the grid at absolute worksheet
-    // coordinates. Threading them through the row flow could never match
-    // that, because our printed row heights are not Excel's: on the
-    // regression fixture the two rows above the anchor occupy 47.3pt here
-    // against Excel's 36pt, leaving the shapes 11pt low however carefully
-    // they were sequenced (issue #474). Place them from the sheet's content
-    // origin instead, reserving no flow height.
-    write_sheet_drawing_overlay(out, charts, images, text_boxes, ctx);
+    // The marker is what pins the drawing layer to this sheet's first printed
+    // page; see [`sheet_drawing_layer`]. It leads the grid because the sheet's
+    // content origin is where the drawings' offsets are measured from.
+    if let Some(marker) = drawing_marker {
+        out.push_str(marker);
+    }
 
     generate_table(out, table, ctx)?;
     out.push('\n');
@@ -950,65 +965,132 @@ fn generate_table_with_anchors(
     Ok(())
 }
 
-/// Overlay every worksheet drawing at its absolute sheet coordinates.
+/// A sheet's floating drawings, as the two pieces of markup that place them.
+struct SheetDrawingLayer {
+    /// The `#set page(foreground: …)` value that paints them.
+    foreground: String,
+    /// The zero-height, labelled block the foreground recognises the sheet's
+    /// first printed page by. Emitted at the top of the sheet's content.
+    marker: String,
+}
+
+/// Build the layer that floats every worksheet drawing over the grid.
 ///
-/// Emitted as a zero-height block at the top of the sheet content so the grid
-/// below is untouched, matching Excel, where a drawing floats over the cells
-/// rather than displacing them (issues #459, #474, #982, #1101).
-fn write_sheet_drawing_overlay(
-    out: &mut String,
-    charts: &[crate::ir::SheetChart],
-    images: &[crate::ir::SheetImage],
-    text_boxes: &[crate::ir::SheetTextBox],
+/// Excel overlays drawings on the grid at absolute worksheet coordinates.
+/// Threading them through the row flow could never match that, because our
+/// printed row heights are not Excel's: on the regression fixture the two rows
+/// above the anchor occupy 47.3pt here against Excel's 36pt, leaving the shapes
+/// 11pt low however carefully they were sequenced (issue #474). They are placed
+/// from the sheet's content origin instead, reserving no flow height (issues
+/// #459, #982, #1101).
+///
+/// The layer is the *page foreground* rather than flow content, because Excel
+/// floats a drawing above the cells and Typst paints in document order. A
+/// zero-height block of `#place`d drawings ahead of the grid reserves no space,
+/// but it also keeps no z-order claim over what follows: every cell fill landed
+/// on top of it, and a picture anchored inside a filled panel was painted and
+/// then covered (issue #1168). Moving that block after the grid would paint in
+/// the right order but anchor to the wrong place — a sheet taller than one page
+/// breaks across regions, and a `#place` after the grid resolves against the
+/// last of them, so the drawings would leave the page they belong on. The page
+/// foreground paints above the whole body and is anchored to a page rather than
+/// to a flow position, which is both properties at once.
+///
+/// A foreground applies to every page the sheet spans, so the markup queries
+/// [`SheetDrawingLayer::marker`] and draws only on the page that carries it.
+/// Its offsets are page-relative where the flow's were content-relative, so the
+/// margins and any centering inset are folded into them here.
+fn sheet_drawing_layer(
+    page: &SheetPage,
+    centering_inset_pt: Option<f64>,
     ctx: &mut GenCtx,
-) {
-    let placed_charts: Vec<&crate::ir::SheetChart> = charts
+) -> Option<SheetDrawingLayer> {
+    let placed_charts: Vec<&crate::ir::SheetChart> = page
+        .charts
         .iter()
         .filter(|chart| chart.placement.is_some())
         .collect();
-    if placed_charts.is_empty() && images.is_empty() && text_boxes.is_empty() {
-        return;
+    if placed_charts.is_empty() && page.images.is_empty() && page.text_boxes.is_empty() {
+        return None;
     }
+
+    let label: String = format!("o2p-sheet-drawings-{}", ctx.next_sheet_drawing_layer_id);
+    ctx.next_sheet_drawing_layer_id += 1;
     // Block-level, not a `box`: an inline box still makes its paragraph lay out
     // a line, which dropped the whole grid by 13.2pt — Typst's default 11pt
     // text at 1.2 leading, independent of the sheet's own font (issue #1101).
-    out.push_str("#block(width: 100%, height: 0pt, spacing: 0pt)[");
+    let marker: String =
+        format!("#block(width: 100%, height: 0pt, spacing: 0pt)[#metadata(none)<{label}>]");
+
+    let left_pt: f64 = page.margins.left + centering_inset_pt.unwrap_or(0.0);
+    let top_pt: f64 = page.margins.top;
+
+    let mut foreground = String::new();
+    // Typst has no z-index, so the page a foreground belongs to is decided by
+    // introspection: the marker's own page against the one being painted.
+    let _ = write!(
+        foreground,
+        "context {{ let marker = query(<{label}>); \
+         if marker.len() != 0 and marker.first().location().page() == here().page() ["
+    );
     for sheet_chart in placed_charts {
         let placement = sheet_chart
             .placement
-            .expect("only placed charts reach the overlay");
-        let _ = write!(
-            out,
-            "#place(top + left, dy: {}pt)[",
-            format_f64(placement.y_offset_pt)
+            .expect("only placed charts reach the drawing layer");
+        write_placed_sheet_drawing(
+            &mut foreground,
+            &SheetAnchor::Chart(sheet_chart),
+            left_pt,
+            top_pt + placement.y_offset_pt,
+            ctx,
         );
-        write_placed_sheet_anchor(out, &SheetAnchor::Chart(sheet_chart), ctx);
-        out.push(']');
     }
-    for sheet_image in images {
-        let _ = write!(
-            out,
-            "#place(top + left, dy: {}pt)[",
-            format_f64(sheet_image.y_offset_pt)
+    for sheet_image in &page.images {
+        write_placed_sheet_drawing(
+            &mut foreground,
+            &SheetAnchor::Image(sheet_image),
+            left_pt,
+            top_pt + sheet_image.y_offset_pt,
+            ctx,
         );
-        write_placed_sheet_anchor(out, &SheetAnchor::Image(sheet_image), ctx);
-        out.push(']');
     }
-    for text_box in text_boxes {
-        let _ = write!(
-            out,
-            "#place(top + left, dy: {}pt)[",
-            format_f64(text_box.y_offset_pt)
+    for text_box in &page.text_boxes {
+        write_placed_sheet_drawing(
+            &mut foreground,
+            &SheetAnchor::TextBox(text_box),
+            left_pt,
+            top_pt + text_box.y_offset_pt,
+            ctx,
         );
-        write_placed_sheet_anchor(out, &SheetAnchor::TextBox(text_box), ctx);
-        out.push(']');
     }
-    out.push_str("]\n");
+    foreground.push_str("] }");
+
+    Some(SheetDrawingLayer { foreground, marker })
 }
 
-/// Place one drawing at its horizontal offset, inside the absolute overlay
+/// Place one drawing at `dy` from the page top, inside the drawing layer's
+/// markup block. `left_pt` is what the drawing's own horizontal offset is
+/// measured from.
+fn write_placed_sheet_drawing(
+    out: &mut String,
+    anchor: &SheetAnchor,
+    left_pt: f64,
+    dy_pt: f64,
+    ctx: &mut GenCtx,
+) {
+    let _ = write!(out, "#place(top + left, dy: {}pt)[", format_f64(dy_pt));
+    write_placed_sheet_anchor(out, anchor, left_pt, ctx);
+    out.push(']');
+}
+
+/// Place one drawing at its horizontal offset, inside the vertical `#place`
 /// the caller opened.
-fn write_placed_sheet_anchor(out: &mut String, anchor: &SheetAnchor, ctx: &mut GenCtx) {
+fn write_placed_sheet_anchor(
+    out: &mut String,
+    anchor: &SheetAnchor,
+    left_pt: f64,
+    ctx: &mut GenCtx,
+) {
     match anchor {
         SheetAnchor::Chart(sheet_chart) => {
             let Some(placement) = sheet_chart.placement else {
@@ -1020,7 +1102,7 @@ fn write_placed_sheet_anchor(out: &mut String, anchor: &SheetAnchor, ctx: &mut G
             let _ = write!(
                 out,
                 "#place(top + left, dx: {}pt)[",
-                format_f64(placement.x_offset_pt),
+                format_f64(left_pt + placement.x_offset_pt),
             );
             // A fitted sheet prints its drawings shrunk whole, so the chart is
             // laid out at its full frame and the transform brings its text down
@@ -1050,7 +1132,7 @@ fn write_placed_sheet_anchor(out: &mut String, anchor: &SheetAnchor, ctx: &mut G
             let _ = write!(
                 out,
                 "#place(top + left, dx: {}pt)[#box(width: {}pt, height: {}pt",
-                format_f64(text_box.x_offset_pt),
+                format_f64(left_pt + text_box.x_offset_pt),
                 format_f64(text_box.width),
                 format_f64(text_box.height),
             );
@@ -1090,7 +1172,8 @@ fn write_placed_sheet_anchor(out: &mut String, anchor: &SheetAnchor, ctx: &mut G
             if let Some((clip_width, image_height)) = clip {
                 let _ = write!(
                     out,
-                    "#place(top + left)[#box(width: {}pt, height: {}pt, clip: true)[#place(top + left, dx: {}pt)[",
+                    "#place(top + left, dx: {}pt)[#box(width: {}pt, height: {}pt, clip: true)[#place(top + left, dx: {}pt)[",
+                    format_f64(left_pt),
                     format_f64(clip_width),
                     format_f64(image_height),
                     format_f64(sheet_image.x_offset_pt),
@@ -1101,7 +1184,7 @@ fn write_placed_sheet_anchor(out: &mut String, anchor: &SheetAnchor, ctx: &mut G
                 let _ = write!(
                     out,
                     "#place(top + left, dx: {}pt)[",
-                    format_f64(sheet_image.x_offset_pt),
+                    format_f64(left_pt + sheet_image.x_offset_pt),
                 );
                 generate_image(out, &sheet_image.image, ctx);
                 out.push(']');
@@ -2312,8 +2395,18 @@ fn generate_page_anchored_hf_frames(
 }
 
 /// Write the full page setup for a SheetPage, including optional header/footer.
-fn write_table_page_setup(out: &mut String, page: &SheetPage, size: &PageSize, ctx: &mut GenCtx) {
-    if page.header.is_none() && page.footer.is_none() {
+/// Write a sheet page's `#set page(…)`. `drawing_foreground`, when present, is
+/// the markup that floats the sheet's drawings above its grid — the page
+/// foreground is the only layer that paints after a body preceding it in the
+/// source (issue #1168).
+fn write_table_page_setup(
+    out: &mut String,
+    page: &SheetPage,
+    size: &PageSize,
+    ctx: &mut GenCtx,
+    drawing_foreground: Option<&str>,
+) {
+    if page.header.is_none() && page.footer.is_none() && drawing_foreground.is_none() {
         write_page_setup(out, size, &page.margins);
         return;
     }
@@ -2366,6 +2459,11 @@ fn write_table_page_setup(out: &mut String, page: &SheetPage, size: &PageSize, c
             generate_hf_content(out, footer, ctx);
             out.push(']');
         }
+    }
+
+    if let Some(foreground) = drawing_foreground {
+        out.push_str(", foreground: ");
+        out.push_str(foreground);
     }
 
     out.push_str(")\n");

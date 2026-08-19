@@ -940,18 +940,27 @@ fn test_table_page_with_anchored_chart_overlays_the_grid() {
     // Excel floats an anchored chart over the cells, so the grid keeps every
     // row in one table instead of being cut into segments around it (#982).
     assert_eq!(src.matches("#table(").count(), 1);
-    let overlay: usize = src
-        .find("#place(top + left, dy: 60pt)")
-        .expect("the chart is placed at its anchor's vertical offset");
-    assert!(
-        src[overlay..].starts_with("#place(top + left, dy: 60pt)[#place(top + left, dx: 40pt)["),
-        "the chart is placed at its anchor's horizontal offset too"
+    // The anchor's offsets are the sheet content origin's, and the drawing
+    // layer measures from the page corner, so each carries its margin.
+    let margin: f64 = crate::defaults::DEFAULT_MARGIN_PT;
+    let placement: String = format!(
+        "#place(top + left, dy: {}pt)[#place(top + left, dx: {}pt)[",
+        margin + 60.0,
+        margin + 40.0
     );
+    let overlay: usize = src
+        .find(&placement)
+        .unwrap_or_else(|| panic!("the chart is placed at its anchor's offsets: {src}"));
+    // The drawings float in the page foreground, which paints above the whole
+    // body however early in the source it is declared (issue #1168).
+    let foreground: usize = src
+        .find(", foreground: ")
+        .expect("the drawing layer is the sheet's page foreground");
     let chart_pos: usize = src.find("Sales").expect("the chart's title");
     let table_pos: usize = src.find("#table(").expect("the sheet grid");
     assert!(
-        overlay < chart_pos && chart_pos < table_pos,
-        "the chart is drawn in the overlay that precedes the grid"
+        foreground < overlay && overlay < chart_pos && chart_pos < table_pos,
+        "the chart is drawn in the page foreground the grid follows"
     );
     // The anchor sizes the chart, the way a slide's graphicFrame extent does:
     // its title band and plot box together fill the anchored 200x120pt.
@@ -977,8 +986,9 @@ fn test_fitted_sheet_draws_the_whole_chart_shrunk() {
         "a sheet printed at full size wraps the chart in no transform"
     );
     let wrapper: &str = "#scale(x: 82%, y: 82%, origin: top + left)[";
+    let dx_pt: f64 = crate::defaults::DEFAULT_MARGIN_PT + 40.0;
     assert!(
-        fitted.contains(&format!("#place(top + left, dx: 40pt)[{wrapper}")),
+        fitted.contains(&format!("#place(top + left, dx: {dx_pt}pt)[{wrapper}")),
         "the fitted sheet shrinks the drawing from the anchor's top-left corner"
     );
     // The chart still lays itself out at the anchor's full frame and its own
@@ -3375,14 +3385,205 @@ fn test_centered_sheet_moves_its_drawings_with_the_grid() {
         .unwrap()
         .source;
 
-    let pad_at: usize = source
-        .find("#pad(left: ")
+    // The grid takes the inset from a `#pad`, but the drawing layer floats in
+    // the page foreground, outside that flow, so it has to carry the same
+    // inset in its own offsets (issue #1168).
+    let inset_pt: f64 = sheet_centering_inset_pt(&source)
         .unwrap_or_else(|| panic!("a centred sheet must inset its grid: {source}"));
-    let overlay_at: usize = source
-        .find("#block(width: 100%, height: 0pt, spacing: 0pt)")
-        .unwrap_or_else(|| panic!("the drawing overlay must be emitted: {source}"));
+    let dx: String = format!("dx: {}pt", 50.0 + inset_pt + 120.0);
     assert!(
-        pad_at < overlay_at,
-        "the drawing overlay must sit inside the centering inset: {source}"
+        source.contains(&dx),
+        "the drawing must move with the centred grid ({dx}): {source}"
+    );
+}
+
+/// A sheet whose grid is one filled panel, with a picture anchored inside it.
+///
+/// Modelled on the reported workbook's `Gift budget and tracker` sheet, whose
+/// photo sits inside a pale `#F8F0F1` panel (issue #1168).
+#[cfg(not(target_arch = "wasm32"))]
+fn sheet_with_a_picture_over_a_filled_panel() -> Page {
+    use crate::ir::{Color, ImageData, ImageFormat, SheetImage};
+
+    const PANEL: Color = Color {
+        r: 0xF8,
+        g: 0xF0,
+        b: 0xF1,
+    };
+    /// A 1x1 opaque PNG, enough for the layout engine to place a picture.
+    const PIXEL_PNG: &[u8] = &[
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44,
+        0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00, 0x00, 0x90,
+        0x77, 0x53, 0xDE, 0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41, 0x54, 0x08, 0xD7, 0x63, 0xF8,
+        0xCF, 0xC0, 0x00, 0x00, 0x03, 0x01, 0x01, 0x00, 0x18, 0xDD, 0x8D, 0xB0, 0x00, 0x00, 0x00,
+        0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+    ];
+
+    let panel_row = |height_pt: f64| TableRow {
+        minimum_height: None,
+        height: Some(height_pt),
+        cells: vec![TableCell {
+            content: Vec::new(),
+            background: Some(PANEL),
+            ..TableCell::default()
+        }],
+    };
+
+    Page::Sheet(SheetPage {
+        name: "Gift budget and tracker".to_string(),
+        size: PageSize::default(),
+        margins: Margins::default(),
+        table: Table {
+            rows: vec![panel_row(200.0), panel_row(40.0), panel_row(40.0)],
+            column_widths: vec![200.0],
+            ..Table::default()
+        },
+        header: None,
+        footer: None,
+        charts: Vec::new(),
+        images: vec![SheetImage {
+            anchor_row: 1,
+            x_offset_pt: 20.0,
+            y_offset_pt: 10.0,
+            clip_width_pt: None,
+            image: ImageData {
+                data: PIXEL_PNG.to_vec(),
+                format: ImageFormat::Png,
+                width: Some(120.0),
+                height: Some(90.0),
+                rotation_deg: None,
+                flip_h: false,
+                flip_v: false,
+                crop: None,
+                stroke: None,
+                alignment: None,
+                clip_shape: None,
+                shadow: None,
+                paragraph_spacing: None,
+            },
+        }],
+        text_boxes: Vec::new(),
+    })
+}
+
+/// Excel floats a drawing above the cells, so a picture anchored inside a
+/// filled panel stays visible. Painting the drawing before the grid put every
+/// cell fill on top of it and the picture disappeared entirely (issue #1168).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn test_anchored_sheet_picture_paints_above_the_cell_fills() {
+    use crate::render::pdf::{PaintedKind, compiled_paint_sequence};
+
+    let doc = make_doc(vec![sheet_with_a_picture_over_a_filled_panel()]);
+    let output = generate_typst(&doc).unwrap();
+    let painted =
+        compiled_paint_sequence(&output.source, &output.images, 0).expect("the sheet compiles");
+
+    let picture_at: usize = painted
+        .iter()
+        .position(|item| item.kind == PaintedKind::Image)
+        .unwrap_or_else(|| panic!("the sheet's picture is painted: {painted:?}"));
+    let picture = painted[picture_at];
+    let covering: Vec<usize> = painted
+        .iter()
+        .enumerate()
+        .filter(|(index, item)| {
+            *index != picture_at && item.kind == PaintedKind::Shape && item.covers(&picture)
+        })
+        .map(|(index, _)| index)
+        .collect();
+
+    // Without a fill that reaches over the picture the ordering is untestable,
+    // so the panel's coverage is asserted before the order it is painted in.
+    assert!(
+        !covering.is_empty(),
+        "the panel fills must cover the picture's box for this to test anything: {painted:?}"
+    );
+    assert!(
+        covering.iter().all(|index| *index < picture_at),
+        "cell fills at {covering:?} paint over the picture at {picture_at}: {painted:?}"
+    );
+}
+
+/// The same sheet, with `row_count` panel rows of `row_height_pt` each, so a
+/// tall one breaks across printed pages the way Typst paginates any grid.
+#[cfg(not(target_arch = "wasm32"))]
+fn sheet_with_a_picture_over_rows(row_count: usize, row_height_pt: f64) -> Page {
+    let Page::Sheet(mut sheet) = sheet_with_a_picture_over_a_filled_panel() else {
+        unreachable!("sheet_with_a_picture_over_a_filled_panel builds a sheet page")
+    };
+    let row = sheet.table.rows[1].clone();
+    sheet.table.rows = std::iter::repeat_n(row, row_count)
+        .map(|mut row| {
+            row.height = Some(row_height_pt);
+            row
+        })
+        .collect();
+    Page::Sheet(sheet)
+}
+
+/// Excel prints a drawing on the page its anchor sits on. A sheet taller than
+/// one page breaks across regions, and a `#place` following the grid resolves
+/// against the last of them — which is why the drawings float in the page
+/// foreground rather than simply being emitted after the grid (issue #1168).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn test_a_sheet_taller_than_one_page_keeps_its_drawing_on_the_first() {
+    use crate::render::pdf::{PaintedKind, compiled_paint_sequence};
+
+    let doc = make_doc(vec![sheet_with_a_picture_over_rows(20, 100.0)]);
+    let output = generate_typst(&doc).unwrap();
+    let pictures_on = |page_index: usize| -> usize {
+        compiled_paint_sequence(&output.source, &output.images, page_index)
+            .unwrap_or_else(|error| panic!("page {page_index} compiles: {error}"))
+            .iter()
+            .filter(|item| item.kind == PaintedKind::Image)
+            .count()
+    };
+
+    assert_eq!(
+        pictures_on(0),
+        1,
+        "the anchored picture prints on the sheet's first page"
+    );
+    assert_eq!(
+        pictures_on(1),
+        0,
+        "the picture must not repeat on, or move to, a continuation page"
+    );
+}
+
+/// A `#set page` rule carries forward, so a sheet that declares no drawings
+/// still inherits the previous sheet's foreground. It must draw nothing there:
+/// the layer recognises its own sheet by the marker in its content (#1168).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn test_a_later_sheet_does_not_repeat_the_previous_sheets_drawings() {
+    use crate::render::pdf::{PaintedKind, compiled_paint_sequence};
+
+    let Page::Sheet(mut plain) = sheet_with_a_picture_over_a_filled_panel() else {
+        unreachable!("sheet_with_a_picture_over_a_filled_panel builds a sheet page")
+    };
+    plain.name = "Data".to_string();
+    plain.images.clear();
+
+    let doc = make_doc(vec![
+        sheet_with_a_picture_over_a_filled_panel(),
+        Page::Sheet(plain),
+    ]);
+    let output = generate_typst(&doc).unwrap();
+    let pictures_on = |page_index: usize| -> usize {
+        compiled_paint_sequence(&output.source, &output.images, page_index)
+            .unwrap_or_else(|error| panic!("page {page_index} compiles: {error}"))
+            .iter()
+            .filter(|item| item.kind == PaintedKind::Image)
+            .count()
+    };
+
+    assert_eq!(pictures_on(0), 1, "the first sheet keeps its picture");
+    assert_eq!(
+        pictures_on(1),
+        0,
+        "a sheet with no drawings of its own prints none"
     );
 }

@@ -1725,7 +1725,7 @@ fn test_sheet_drawings_overlay_the_grid_at_absolute_offsets() {
     // even one reserved box per row could not match Excel's vertical
     // placement because our printed row heights differ from its print grid
     // (issue #474). All drawings are placed from the sheet's content origin
-    // inside a zero-height block instead.
+    // instead, in a page foreground that reserves no flow height at all.
     let doc = make_doc(vec![sheet_page_with_text_boxes(vec![
         make_sheet_text_box(3, 0.0, 60.0),
         make_sheet_text_box(3, 200.0, 60.0),
@@ -1733,12 +1733,16 @@ fn test_sheet_drawings_overlay_the_grid_at_absolute_offsets() {
     ])]);
     let source = generate_typst(&doc).unwrap().source;
 
+    // The sheet's content origin is its top-left margin corner, and the
+    // foreground's offsets are measured from the page corner instead, so the
+    // margins are what the two coordinate systems differ by.
+    let margin: f64 = crate::defaults::DEFAULT_MARGIN_PT;
     assert_eq!(
         source
             .matches("#block(width: 100%, height: 0pt, spacing: 0pt)")
             .count(),
         1,
-        "drawings share one zero-height overlay: {source}"
+        "the drawing layer is pinned by one zero-height marker: {source}"
     );
     assert!(
         !source.contains("#box(width: 100%, height: 60pt)"),
@@ -1747,20 +1751,21 @@ fn test_sheet_drawings_overlay_the_grid_at_absolute_offsets() {
     // A `box` is inline, so the paragraph holding it still lays out a line box
     // and the grid below drops by a whole line — 13.2pt of Typst's default
     // 11pt text, regardless of the sheet's own font (issue #1101). Only a
-    // block-level container carries the placements without a strut.
+    // block-level container carries the marker without a strut.
     assert!(
         !source.contains("#box(width: 100%, height: 0pt)"),
-        "the overlay must not be inline content: {source}"
+        "the marker must not be inline content: {source}"
     );
     // Row 3's top edge is two 20pt rows down.
     assert_eq!(
-        source.matches("dy: 40pt").count(),
+        source.matches(&format!("dy: {}pt", margin + 40.0)).count(),
         3,
         "same-row drawings share one vertical origin: {source}"
     );
-    for dx in ["dx: 0pt", "dx: 200pt", "dx: 400pt"] {
+    for x_offset in [0.0, 200.0, 400.0] {
+        let dx: String = format!("dx: {}pt", margin + x_offset);
         assert!(
-            source.contains(dx),
+            source.contains(&dx),
             "each drawing keeps its own horizontal offset ({dx}): {source}"
         );
     }

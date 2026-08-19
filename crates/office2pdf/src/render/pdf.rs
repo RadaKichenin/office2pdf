@@ -502,6 +502,166 @@ pub(crate) fn compiled_image_boxes(
     Ok(boxes)
 }
 
+/// What one primitive a compiled page paints is.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PaintedKind {
+    /// A filled or stroked shape: a cell background, a rule, a border band.
+    Shape,
+    /// A raster or vector picture.
+    Image,
+    /// A run of glyphs.
+    Text,
+}
+
+/// One primitive a compiled page paints, and the box it covers.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct PaintedPrimitive {
+    pub kind: PaintedKind,
+    /// Page-space bounding box in points, as `(min x, min y, max x, max y)`.
+    pub bounds: (f64, f64, f64, f64),
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+impl PaintedPrimitive {
+    /// Whether this primitive's box contains all of `other`'s.
+    pub fn covers(&self, other: &PaintedPrimitive) -> bool {
+        self.bounds.0 <= other.bounds.0
+            && self.bounds.1 <= other.bounds.1
+            && self.bounds.2 >= other.bounds.2
+            && self.bounds.3 >= other.bounds.3
+    }
+}
+
+/// Every primitive the compiled document paints on `page_index`, in the order
+/// it paints them.
+///
+/// A later entry covers an earlier one wherever the two overlap, which is the
+/// only way to read z-order: the emitted markup shows document order, and
+/// Typst's page foreground paints after a body that precedes it in the source
+/// (issue #1168).
+#[cfg(all(test, not(target_arch = "wasm32")))]
+pub(crate) fn compiled_paint_sequence(
+    typst_source: &str,
+    images: &[ImageAsset],
+    page_index: usize,
+) -> Result<Vec<PaintedPrimitive>, ConvertError> {
+    use typst::layout::{Frame, FrameItem, Transform};
+    use typst::visualize::Geometry;
+
+    fn place(transform: Transform, x: f64, y: f64) -> (f64, f64) {
+        (
+            transform.sx.get() * x + transform.kx.get() * y + transform.tx.to_pt(),
+            transform.ky.get() * x + transform.sy.get() * y + transform.ty.to_pt(),
+        )
+    }
+
+    /// The box `(0, 0)`-`(width, height)` spans once `transform` has moved and
+    /// turned it. A turned box reports the box around its turned corners,
+    /// which is all a coverage test needs.
+    fn transformed_bounds(transform: Transform, width: f64, height: f64) -> (f64, f64, f64, f64) {
+        let corners: [(f64, f64); 4] = [
+            place(transform, 0.0, 0.0),
+            place(transform, width, 0.0),
+            place(transform, width, height),
+            place(transform, 0.0, height),
+        ];
+        corners.iter().fold(
+            (f64::MAX, f64::MAX, f64::MIN, f64::MIN),
+            |bounds, corner| {
+                (
+                    bounds.0.min(corner.0),
+                    bounds.1.min(corner.1),
+                    bounds.2.max(corner.0),
+                    bounds.3.max(corner.1),
+                )
+            },
+        )
+    }
+
+    fn collect(frame: &Frame, transform: Transform, out: &mut Vec<PaintedPrimitive>) {
+        for (position, item) in frame.items() {
+            let at: Transform = transform.pre_concat(Transform::translate(position.x, position.y));
+            match item {
+                FrameItem::Group(group) => {
+                    collect(&group.frame, at.pre_concat(group.transform), out);
+                }
+                FrameItem::Image(_, size, _) => out.push(PaintedPrimitive {
+                    kind: PaintedKind::Image,
+                    bounds: transformed_bounds(at, size.x.to_pt(), size.y.to_pt()),
+                }),
+                FrameItem::Shape(shape, _) => {
+                    let bounds: (f64, f64, f64, f64) = match &shape.geometry {
+                        Geometry::Line(to) => {
+                            let end: (f64, f64) = place(at, to.x.to_pt(), to.y.to_pt());
+                            let start: (f64, f64) = place(at, 0.0, 0.0);
+                            (
+                                start.0.min(end.0),
+                                start.1.min(end.1),
+                                start.0.max(end.0),
+                                start.1.max(end.1),
+                            )
+                        }
+                        Geometry::Rect(size) => {
+                            transformed_bounds(at, size.x.to_pt(), size.y.to_pt())
+                        }
+                        Geometry::Curve(curve) => {
+                            let box_ = curve.bbox();
+                            let min: (f64, f64) = place(at, box_.min.x.to_pt(), box_.min.y.to_pt());
+                            let max: (f64, f64) = place(at, box_.max.x.to_pt(), box_.max.y.to_pt());
+                            (
+                                min.0.min(max.0),
+                                min.1.min(max.1),
+                                min.0.max(max.0),
+                                min.1.max(max.1),
+                            )
+                        }
+                    };
+                    out.push(PaintedPrimitive {
+                        kind: PaintedKind::Shape,
+                        bounds,
+                    });
+                }
+                FrameItem::Text(text) => {
+                    let width: f64 = text.width().to_pt();
+                    let size: f64 = text.size.to_pt();
+                    // A run's origin is its baseline, so the box it inks runs
+                    // from roughly one em above it down to its descender.
+                    let top: (f64, f64) = place(at, 0.0, -size);
+                    let bottom: (f64, f64) = place(at, width, size / 4.0);
+                    out.push(PaintedPrimitive {
+                        kind: PaintedKind::Text,
+                        bounds: (
+                            top.0.min(bottom.0),
+                            top.1.min(bottom.1),
+                            top.0.max(bottom.0),
+                            top.1.max(bottom.1),
+                        ),
+                    });
+                }
+                FrameItem::Link(..) | FrameItem::Tag(_) => {}
+            }
+        }
+    }
+
+    let world = MinimalWorld::new(typst_source, images, &[]);
+    let warned = typst::compile::<typst::layout::PagedDocument>(&world);
+    let document = warned.output.map_err(|errors| {
+        let messages: Vec<String> = errors.iter().map(|e| e.message.to_string()).collect();
+        ConvertError::Render(format!("Typst compilation failed: {}", messages.join("; ")))
+    })?;
+    let page = document.pages.get(page_index).ok_or_else(|| {
+        ConvertError::Render(format!(
+            "page {page_index} is past the document's {} pages",
+            document.pages.len()
+        ))
+    })?;
+    let mut painted: Vec<PaintedPrimitive> = Vec::new();
+    collect(&page.frame, Transform::identity(), &mut painted);
+    Ok(painted)
+}
+
 /// Convert the current system time to a Typst `Datetime` in UTC.
 ///
 /// Uses `std::time::SystemTime` to avoid an external chrono dependency.
