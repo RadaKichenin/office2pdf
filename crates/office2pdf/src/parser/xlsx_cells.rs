@@ -605,6 +605,33 @@ impl SheetContext {
     }
 }
 
+/// The insets a cell is laid out with before any indent, for the way its text
+/// aligns horizontally.
+///
+/// [`XLSX_CELL_PADDING`] is Excel's text box, and a left- or right-aligned run
+/// sits against one of its two edges, so it takes the box as it stands. A
+/// centred run does not centre in that box: Excel centres it on the column
+/// itself. Over the ten business mocks the 570 centred runs match a symmetric
+/// split of the same total to a mean of +0.012pt and the asymmetric box to
+/// +0.512pt — exactly the half point the asymmetry would move them by
+/// (issue #1157).
+///
+/// Splitting the total rather than dropping the inset keeps the width the cell
+/// has for wrapping unchanged, so only the centre moves.
+fn aligned_cell_padding(alignment: Option<crate::ir::Alignment>) -> Insets {
+    match alignment {
+        Some(crate::ir::Alignment::Center) => {
+            let half: f64 = (XLSX_CELL_PADDING.left + XLSX_CELL_PADDING.right) / 2.0;
+            Insets {
+                left: half,
+                right: half,
+                ..XLSX_CELL_PADDING
+            }
+        }
+        _ => XLSX_CELL_PADDING,
+    }
+}
+
 /// The extra inset an indented cell's text takes, on the side its alignment
 /// anchors to.
 ///
@@ -1450,23 +1477,6 @@ pub(super) fn floors_bottom_aligned_descent(normal_font: Option<&NormalFont>) ->
     !printed_grid_compacts_row_heights(normal_font)
 }
 
-/// Cell insets for spreadsheet tables. Excel's native single-line track is
-/// asymmetric around bottom-aligned text: 1pt above and 1.5pt below. Typst's
-/// default 5pt vertical inset overflowed auto-height rows (issue #396), while
-/// a 1pt bottom inset left them about 0.5pt short (issue #411).
-///
-/// The 3pt sides are Excel's documented 4px inset at 96 DPI, and they were
-/// checked against its own exports: with 2pt, the two purely left-aligned text
-/// columns across the business mocks landed exactly 1.00pt left of Excel, and
-/// 3pt puts them exactly on it (issue #657).
-///
-/// Both sides moved together, not just the left. Excel's right inset measures
-/// ~2.4pt in those exports, inside the same quantisation band as 3pt, and
-/// leaving the right at 2pt would make the pair asymmetric — which shifts
-/// every *centred* run by half the difference. Measured over all ten business
-/// mocks, 3/3 improves every workbook and regresses none, taking the mean
-/// absolute x error over 428 text runs from 1.454pt to 1.013pt; 3/2 instead
-/// pushed centred and right-aligned columns further out.
 /// Horizontal space an icon-set icon takes before its cell's value.
 ///
 /// Excel reserves the icon's advance and then aligns the value in what is left
@@ -1485,9 +1495,33 @@ pub(super) fn floors_bottom_aligned_descent(normal_font: Option<&NormalFont>) ->
 /// shape of this is per-icon-set, once there is something to measure it on.
 const ICON_SET_VALUE_RESERVE_PT: f64 = 9.6;
 
+/// Cell insets for spreadsheet tables. Excel's native single-line track is
+/// asymmetric around bottom-aligned text: 1pt above and 1.5pt below. Typst's
+/// default 5pt vertical inset overflowed auto-height rows (issue #396), while
+/// a 1pt bottom inset left them about 0.5pt short (issue #411).
+///
+/// The sides are asymmetric too — 3pt left against 2pt right — measured on the
+/// ten native Excel for Mac exports under
+/// `tests/golden_mocks/business/expected/xlsx/`. With this pair the 139
+/// left-aligned runs sit on Excel's pen origin to a median of 0.000pt and the
+/// 135 right-aligned ones on its pen end to a mean of +0.006pt; a 3pt right
+/// inset leaves those same right-aligned runs a whole point short (-0.994pt).
+///
+/// Issue #657 set both sides to 3pt on the reading that an asymmetric pair
+/// moves every *centred* run by half the difference. That much is right, and
+/// it is why [`aligned_cell_padding`] splits this total evenly for a centred
+/// cell; what it got wrong was carrying the symmetry over to the right-aligned
+/// case, where Excel's own export puts the edge a whole point further out
+/// (issue #1157).
+///
+/// The 5pt total is also the `+5` the default column-width formula carries at
+/// the Calibri 11 workbook default — the column formula and the text box are
+/// the same padding seen from two sides. The pair is not a constant of
+/// Excel's: it steps with the cell font's whole-point digit advance, which
+/// nothing in this corpus is large enough to reach (issue #1232).
 pub(super) const XLSX_CELL_PADDING: crate::ir::Insets = crate::ir::Insets {
     top: 1.0,
-    right: 3.0,
+    right: 2.0,
     bottom: 1.5,
     left: 3.0,
 };
@@ -1963,12 +1997,13 @@ pub(super) fn build_rows_for_range(
             // aligns the value in what remains to its right, which is
             // where the extra left inset comes from (issue #652).
             let padding: Option<Insets> = {
+                let aligned: Insets = aligned_cell_padding(paragraph_alignment);
                 let base: Insets = match icon_text {
                     Some(_) => Insets {
-                        left: XLSX_CELL_PADDING.left + ICON_SET_VALUE_RESERVE_PT,
-                        ..XLSX_CELL_PADDING
+                        left: aligned.left + ICON_SET_VALUE_RESERVE_PT,
+                        ..aligned
                     },
-                    None => XLSX_CELL_PADDING,
+                    None => aligned,
                 };
                 let indented: Insets =
                     indented_cell_padding(base, cell_indent_pt, paragraph_alignment);

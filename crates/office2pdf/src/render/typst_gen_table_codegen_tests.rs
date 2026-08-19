@@ -977,7 +977,9 @@ fn center_aligned_spill_cell_sizes_its_clip_box_from_its_own_font() {
 #[test]
 fn a_spill_clip_box_stops_at_the_cell_edge_its_anchor_faces() {
     let cases: [(Option<Alignment>, Insets, &str, f64); 4] = [
-        // Excel's own 3/3 horizontal inset (issue #657).
+        // A symmetric synthetic pair, which is what exercises the rule: the
+        // real sheet box is 3pt left against 2pt right (issue #1157), and the
+        // asymmetric case is the icon-set one below.
         (None, xlsx_test_padding(3.0), "left", 197.0),
         (Some(Alignment::Left), xlsx_test_padding(3.0), "left", 197.0),
         (

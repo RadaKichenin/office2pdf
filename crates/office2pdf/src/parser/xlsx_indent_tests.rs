@@ -353,6 +353,13 @@ fn test_indent_narrows_the_width_a_line_has_before_it_spills() {
     // that fits flush no longer fits indented and Excel paints it on into the
     // empty neighbour. Measured on the probe series as a wrap: a string that
     // stayed on one line flush broke in two at indent 2.
+    //
+    // The string is chosen to clear both thresholds by several points, so the
+    // test tracks the behaviour rather than a rounding edge: `Nine chars`
+    // prices at 47.26pt against the 55pt this 60pt column leaves flush and the
+    // 43pt it leaves at indent 2. The earlier `Nine char` (42.65pt) cleared the
+    // indented threshold by 0.35pt and stopped spilling the moment the right
+    // inset narrowed by a point (issue #1157).
     let styles = styles_with_alignments(
         "Calibri",
         11.0,
@@ -365,13 +372,13 @@ fn test_indent_narrows_the_width_a_line_has_before_it_spills() {
     let flush = build_xlsx_with_styles_and_sheet(
         &styles,
         &format!(
-            "{columns}<sheetData><row r=\"1\"><c r=\"A1\" s=\"1\" t=\"inlineStr\"><is><t>Nine char</t></is></c></row></sheetData>"
+            "{columns}<sheetData><row r=\"1\"><c r=\"A1\" s=\"1\" t=\"inlineStr\"><is><t>Nine chars</t></is></c></row></sheetData>"
         ),
     );
     let indented = build_xlsx_with_styles_and_sheet(
         &styles,
         &format!(
-            "{columns}<sheetData><row r=\"1\"><c r=\"A1\" s=\"2\" t=\"inlineStr\"><is><t>Nine char</t></is></c></row></sheetData>"
+            "{columns}<sheetData><row r=\"1\"><c r=\"A1\" s=\"2\" t=\"inlineStr\"><is><t>Nine chars</t></is></c></row></sheetData>"
         ),
     );
 
