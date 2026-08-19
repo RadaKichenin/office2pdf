@@ -227,6 +227,76 @@ pub(super) fn column_unit_pt(family: &str, size_pt: f64) -> f64 {
     round_half_up_pt(digit_advance_em(family) * size_pt)
 }
 
+/// Points Excel starts a cell's text right of the cell's own left gridline.
+///
+/// The inset is not the constant [`XLSX_CELL_PADDING`] states: it is a whole
+/// point that steps with the *cell* font's own column unit, so a title starts
+/// further in than the body line under it in the same column.
+///
+/// One native Excel for Mac export of a one-factor probe (issue #1165): 37
+/// rows of one left-aligned `8` in a 65pt column, one (family, size) each,
+/// boxed ruler cells printing the column gridlines as border fills so the
+/// boundary is drawn rather than inferred. Pen origins from
+/// `mutool draw -F trace`, every one a whole point off the ruled boundary:
+///
+/// | family | size | inset |
+/// | --- | --- | ---: |
+/// | Calibri | 6, 7, 8 | 2 |
+/// | Calibri | 9 - 16 | 3 |
+/// | Calibri | 17 - 24 | 4 |
+/// | Calibri | 25 - 32 | 5 |
+/// | Calibri | 33, 36 | 6 |
+/// | Arial | 8 | 2 |
+/// | Arial | 10 - 14 | 3 |
+/// | Arial | 16 - 20 | 4 |
+/// | Arial | 24 | 5 |
+/// | Arial | 32 | 6 |
+/// | Times New Roman | 11, 16 | 3 |
+/// | Times New Roman | 18 | 4 |
+/// | Verdana | 10, 11 | 3 |
+/// | Century Gothic | 14 | 3 |
+/// | Century Gothic | 24 | 5 |
+/// | Century Gothic | 30 | 6 |
+/// | Segoe UI | 11, 14 | 3 |
+///
+/// The step is not at the same size in each family — Calibri 16 takes 3 where
+/// Arial 16 takes 4 — so the driver is not the point size. It is the
+/// whole-point digit advance the column-width model already carries, a
+/// quarter of it: `ceil(unit / 4) + 1`. All 37 rows fit exactly, and the
+/// Calibri 11 controls that bracket the sweep both read 3.
+///
+/// The same rule accounts for the corpus residual that filed the issue: the
+/// reported workbook's column B steps 3pt from a Segoe UI 14 body line
+/// (unit 8, inset 3) to a Century Gothic 30 title (unit 17, inset 6), and its
+/// column F steps 2pt from Segoe UI 11 (unit 6, inset 3) to Century Gothic 24
+/// (unit 13, inset 5) — the 3.0pt and 2.0pt the native export was measured to
+/// carry.
+///
+/// This probe read the left inset only. Issue #1232's own probe, which read
+/// both sides of the same step, has the right inset one point behind it at
+/// every size, which is why a centred run stays on the column's own centre
+/// whatever its font. Only the left side moves here; the right side's step is
+/// that issue.
+pub(super) fn cell_left_inset_pt(family: &str, size_pt: f64) -> f64 {
+    (column_unit_pt(family, size_pt) / 4.0).ceil() + 1.0
+}
+
+/// The left inset of a cell laid out in `style`: the font the cell states,
+/// else the workbook Normal font it inherits, else Excel's own Calibri 11
+/// default — the same fallback order the cell's runs resolve through.
+fn styled_cell_left_inset_pt(style: &TextStyle, normal_font: Option<&NormalFont>) -> f64 {
+    let family: &str = style
+        .font_family
+        .as_deref()
+        .or_else(|| normal_font.map(|font| font.family.as_str()))
+        .unwrap_or("Calibri");
+    let size_pt: f64 = style
+        .font_size
+        .or_else(|| normal_font.map(|font| font.size_pt))
+        .unwrap_or(11.0);
+    cell_left_inset_pt(family, size_pt)
+}
+
 /// Space advance of Calibri (and metrically identical Carlito), Excel's
 /// default Normal font — the last-resort metric when a family is unknown to
 /// the reference table and no real face resolves.
@@ -608,27 +678,27 @@ impl SheetContext {
 /// The insets a cell is laid out with before any indent, for the way its text
 /// aligns horizontally.
 ///
-/// [`XLSX_CELL_PADDING`] is Excel's text box, and a left- or right-aligned run
-/// sits against one of its two edges, so it takes the box as it stands. A
-/// centred run does not centre in that box: Excel centres it on the column
-/// itself. Over the ten business mocks the 570 centred runs match a symmetric
-/// split of the same total to a mean of +0.012pt and the asymmetric box to
-/// +0.512pt — exactly the half point the asymmetry would move them by
+/// `box_insets` is Excel's text box for this cell's own font, and a left- or
+/// right-aligned run sits against one of its two edges, so it takes the box as
+/// it stands. A centred run does not centre in that box: Excel centres it on
+/// the column itself. Over the ten business mocks the 570 centred runs match a
+/// symmetric split of the same total to a mean of +0.012pt and the asymmetric
+/// box to +0.512pt — exactly the half point the asymmetry would move them by
 /// (issue #1157).
 ///
 /// Splitting the total rather than dropping the inset keeps the width the cell
 /// has for wrapping unchanged, so only the centre moves.
-fn aligned_cell_padding(alignment: Option<crate::ir::Alignment>) -> Insets {
+fn aligned_cell_padding(box_insets: Insets, alignment: Option<crate::ir::Alignment>) -> Insets {
     match alignment {
         Some(crate::ir::Alignment::Center) => {
-            let half: f64 = (XLSX_CELL_PADDING.left + XLSX_CELL_PADDING.right) / 2.0;
+            let half: f64 = (box_insets.left + box_insets.right) / 2.0;
             Insets {
                 left: half,
                 right: half,
-                ..XLSX_CELL_PADDING
+                ..box_insets
             }
         }
-        _ => XLSX_CELL_PADDING,
+        _ => box_insets,
     }
 }
 
@@ -890,6 +960,7 @@ fn compute_spill_width(
     cell_alignment: Option<crate::ir::Alignment>,
     col_span: u32,
     umya_cell: Option<&umya_spreadsheet::Cell>,
+    left_inset_pt: f64,
 ) -> Option<f64> {
     if runs.is_empty() {
         return None;
@@ -930,13 +1001,15 @@ fn compute_spill_width(
     }
 
     let own_width: f64 = *ctx.column_widths.get((col_idx - ctx.col_start) as usize)?;
-    // Leave room for the horizontal cell inset. Taken from the constant rather
-    // than written out, so the threshold cannot drift from the padding the
-    // cell is actually laid out with (it did when the sides moved to 3pt for
-    // issue #657). An alignment indent comes out of the same width, so a line
-    // that fits flush may still reach its column edge indented (issue #1109).
+    // Leave room for the horizontal cell inset. Passed in rather than written
+    // out, so the threshold cannot drift from the padding the cell is actually
+    // laid out with (it did when the sides moved to 3pt for issue #657), and
+    // so a large-font cell prices the wider inset its own font takes
+    // (issue #1165). An alignment indent comes out of the same width, so a
+    // line that fits flush may still reach its column edge indented
+    // (issue #1109).
     let horizontal_inset: f64 =
-        XLSX_CELL_PADDING.left + XLSX_CELL_PADDING.right + ctx.cell_indent_pt(col_idx, row_idx);
+        left_inset_pt + XLSX_CELL_PADDING.right + ctx.cell_indent_pt(col_idx, row_idx);
     if estimate_text_width_pt(runs) <= own_width - horizontal_inset {
         return None;
     }
@@ -1516,9 +1589,14 @@ const ICON_SET_VALUE_RESERVE_PT: f64 = 9.6;
 ///
 /// The 5pt total is also the `+5` the default column-width formula carries at
 /// the Calibri 11 workbook default — the column formula and the text box are
-/// the same padding seen from two sides. The pair is not a constant of
-/// Excel's: it steps with the cell font's whole-point digit advance, which
-/// nothing in this corpus is large enough to reach (issue #1232).
+/// the same padding seen from two sides.
+///
+/// Neither side is a constant of Excel's: both step with the cell font's
+/// whole-point digit advance, and this pair is what that step gives a Calibri
+/// 11 cell. The left side is priced per cell by [`cell_left_inset_pt`]
+/// (issue #1165), and the constant here is what a cell inherits for its
+/// vertical insets, its right side and the table default; the right side's own
+/// step is issue #1232.
 pub(super) const XLSX_CELL_PADDING: crate::ir::Insets = crate::ir::Insets {
     top: 1.0,
     right: 2.0,
@@ -1540,6 +1618,7 @@ fn cell_wraps_past_one_line(
     col_span: u32,
     runs: &[Run],
     umya_cell: Option<&umya_spreadsheet::Cell>,
+    left_inset_pt: f64,
 ) -> bool {
     if runs.is_empty() {
         return false;
@@ -1562,7 +1641,7 @@ fn cell_wraps_past_one_line(
                 .unwrap_or(0.0)
         })
         .sum::<f64>()
-        - XLSX_CELL_PADDING.left
+        - left_inset_pt
         - XLSX_CELL_PADDING.right
         - ctx.cell_indent_pt(col_idx, row_idx);
     estimate_text_width_pt(runs) > available_width
@@ -1864,6 +1943,12 @@ pub(super) fn build_rows_for_range(
             {
                 text_style.color.get_or_insert(header_ink);
             }
+            // Excel prices the cell's text box from the cell's own font, so a
+            // title starts further inside its column than the body line under
+            // it. Read before the runs take the style, and used for the width
+            // the line has as well as for where it starts (issue #1165).
+            let cell_left_inset: f64 =
+                styled_cell_left_inset_pt(&text_style, ctx.normal_font.as_ref());
             let (cell_alignment, cell_vertical_align) = umya_cell
                 .map(extract_cell_alignment)
                 .unwrap_or((None, None));
@@ -1966,10 +2051,18 @@ pub(super) fn build_rows_for_range(
                 paragraph_alignment,
                 col_span,
                 umya_cell,
+                cell_left_inset,
             );
 
-            row_wraps_past_one_line |=
-                cell_wraps_past_one_line(ctx, col_idx, row_idx, col_span, &runs, umya_cell);
+            row_wraps_past_one_line |= cell_wraps_past_one_line(
+                ctx,
+                col_idx,
+                row_idx,
+                col_span,
+                &runs,
+                umya_cell,
+                cell_left_inset,
+            );
 
             let content = if runs.is_empty() {
                 Vec::new()
@@ -1997,7 +2090,13 @@ pub(super) fn build_rows_for_range(
             // aligns the value in what remains to its right, which is
             // where the extra left inset comes from (issue #652).
             let padding: Option<Insets> = {
-                let aligned: Insets = aligned_cell_padding(paragraph_alignment);
+                let aligned: Insets = aligned_cell_padding(
+                    Insets {
+                        left: cell_left_inset,
+                        ..XLSX_CELL_PADDING
+                    },
+                    paragraph_alignment,
+                );
                 let base: Insets = match icon_text {
                     Some(_) => Insets {
                         left: aligned.left + ICON_SET_VALUE_RESERVE_PT,
@@ -2155,7 +2254,8 @@ fn spill_reach_max_col(
             style.font_size.unwrap_or(11.0),
         );
         let own_width: f64 = column_width_pt(col);
-        let horizontal_inset: f64 = XLSX_CELL_PADDING.left + XLSX_CELL_PADDING.right;
+        let horizontal_inset: f64 =
+            styled_cell_left_inset_pt(&style, normal_font) + XLSX_CELL_PADDING.right;
         if estimate <= own_width - horizontal_inset {
             continue;
         }
