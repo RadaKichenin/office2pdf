@@ -448,6 +448,50 @@ fn structure_any_sheets_chart_chrome_takes_its_declared_colour() {
     assert_eq!(chart.category_axis_line, expected, "category axis");
 }
 
+/// Both axes' labels take the colour their own `c:txPr` declares.
+///
+/// Each `<c:catAx>`/`<c:valAx>` gives its `<a:defRPr>` an
+/// `<a:solidFill><a:schemeClr val="tx1"><a:lumMod val="65000"/><a:lumOff
+/// val="35000"/></a:schemeClr></a:solidFill>`, which over the theme's black
+/// `dk1` is #595959. The Excel for Mac 16 export of the `Chart` sheet draws
+/// all eleven tick and category labels at `.3490196` on all three channels;
+/// the transforms were children of the colour element and were dropped, so
+/// every one of them came out pure black (issue #1160).
+///
+/// The chart space's own `c:txPr` states a bare `<a:defRPr/>`, so its colour
+/// stays `None` — the axes are the only scopes this workbook colours that the
+/// renderer reads.
+#[test]
+fn structure_any_sheets_chart_labels_take_their_declared_colour() {
+    let pages = sheet_pages("any_sheets.xlsx");
+    let chart = &pages
+        .iter()
+        .find(|page| page.name == "Chart")
+        .expect("the chartsheet should contribute a page")
+        .charts
+        .first()
+        .expect("the chartsheet carries its chart")
+        .chart;
+
+    let declared = Some(Color::new(0x59, 0x59, 0x59));
+    assert_eq!(
+        chart.category_axis_text_style.color, declared,
+        "category axis labels"
+    );
+    assert_eq!(
+        chart.value_axis_text_style.color, declared,
+        "value axis labels"
+    );
+    assert_eq!(
+        chart.text_style.color, None,
+        "the chart space declares no colour of its own"
+    );
+    // The same `a:defRPr` states `sz="900"`, which is what proves the run
+    // properties around the colour still read after it is consumed.
+    assert_eq!(chart.category_axis_text_style.size_pt, Some(9.0));
+    assert_eq!(chart.value_axis_text_style.size_pt, Some(9.0));
+}
+
 /// The chartsheet's chart declares a `<c:title>` that names no text, so Excel
 /// supplies the string itself and prints it above a shortened plot.
 ///

@@ -380,6 +380,26 @@ fn parse_chart_text_properties(
     let mut in_solid_fill: bool = false;
     loop {
         match reader.read_event() {
+            // A colour element written with children keeps its transforms
+            // there, so its start tag alone is not the colour: the
+            // `<a:schemeClr val="tx1">` every string of the workbook in #1160
+            // names is lifted by lumMod 65% / lumOff 35% to #595959, and
+            // reading only the tag printed all of them pure black. This has to
+            // precede the shared start/empty arm below, which cannot consume
+            // the children (issue #1160).
+            Ok(Event::Start(ref e))
+                if in_solid_fill
+                    && matches!(
+                        e.local_name().as_ref(),
+                        b"srgbClr" | b"schemeClr" | b"sysClr"
+                    ) =>
+            {
+                // Parsed even once a colour is known, because the element has
+                // to be consumed either way to leave the reader on its sibling
+                // — `<a:latin>` follows `<a:solidFill>` inside `<a:defRPr>`.
+                let parsed = drawingml::parse_color_from_start(reader, e, scheme);
+                style.color = style.color.or(parsed.color);
+            }
             Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
                 match e.local_name().as_ref() {
                     b"bodyPr" => {
