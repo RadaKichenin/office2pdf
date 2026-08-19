@@ -168,6 +168,7 @@ fn build_xlsx_with_anchored_chart(
 
     let sheet_filename = sheet_target.rsplit('/').next().unwrap();
     let sheet_rels_path = format!("xl/worksheets/_rels/{sheet_filename}.rels");
+    let sheet_part_path = format!("xl/{sheet_target}");
 
     let mut out_buf = Vec::new();
     {
@@ -178,8 +179,24 @@ fn build_xlsx_with_anchored_chart(
         for i in 0..archive.len() {
             let mut entry = archive.by_index(i).unwrap();
             let name = entry.name().to_string();
-            writer.start_file(name, options).unwrap();
-            std::io::copy(&mut entry, &mut writer).unwrap();
+            writer.start_file(&name, options).unwrap();
+            if name == sheet_part_path {
+                // The relationship alone attaches nothing: Excel puts a
+                // drawing on a sheet through the body's `<drawing r:id>`
+                // element, so a package without it prints no chart (#1158).
+                let mut sheet_xml = String::new();
+                std::io::Read::read_to_string(&mut entry, &mut sheet_xml).unwrap();
+                use std::io::Write;
+                writer
+                    .write_all(
+                        sheet_xml
+                            .replace("</worksheet>", r#"<drawing r:id="rId1"/></worksheet>"#)
+                            .as_bytes(),
+                    )
+                    .unwrap();
+            } else {
+                std::io::copy(&mut entry, &mut writer).unwrap();
+            }
         }
 
         writer.start_file(&sheet_rels_path, options).unwrap();

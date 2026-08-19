@@ -812,6 +812,10 @@ xlsx_fixture_tests!(
     issue_1110_horizontal_centered_probe,
     "issue_1110_horizontal_centered_probe.xlsx"
 );
+xlsx_fixture_tests!(
+    issue_1158_unreferenced_drawing_rel,
+    "issue_1158_unreferenced_drawing_rel.xlsx"
+);
 
 // --- MIT: Open-Xml-PowerTools (Microsoft) ----------------------------------
 
@@ -1915,4 +1919,111 @@ fn structure_fit_to_page_sheet_scales_its_anchored_picture_to_the_native_size() 
         "the anchor's top offset must scale with the rows, got {}",
         images[0].y_offset_pt
     );
+}
+
+// ---------------------------------------------------------------------------
+// A drawing relationship no sheet element references
+// ---------------------------------------------------------------------------
+
+/// Rewrite one part of an XLSX package, leaving every other entry byte-for-byte
+/// as it was. The patch runs on the named part's UTF-8 text.
+fn repackage_xlsx_part(data: &[u8], part: &str, patch: impl Fn(&str) -> String) -> Vec<u8> {
+    let mut archive =
+        zip::ZipArchive::new(std::io::Cursor::new(data)).expect("fixture should be a ZIP");
+    let mut rebuilt = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    let mut patched = false;
+
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index).expect("entry should be readable");
+        let name: String = entry.name().to_string();
+        let mut bytes: Vec<u8> = Vec::new();
+        std::io::Read::read_to_end(&mut entry, &mut bytes).expect("entry should decompress");
+
+        rebuilt
+            .start_file(&name, zip::write::FileOptions::default())
+            .expect("entry should be writable");
+        if name == part {
+            let xml: String = String::from_utf8(bytes).expect("the part should be UTF-8 XML");
+            let replacement: String = patch(&xml);
+            assert_ne!(replacement, xml, "the patch must change {part}");
+            patched = true;
+            std::io::Write::write_all(&mut rebuilt, replacement.as_bytes())
+                .expect("patched part should be writable");
+        } else {
+            std::io::Write::write_all(&mut rebuilt, &bytes).expect("entry should be writable");
+        }
+    }
+
+    assert!(patched, "{part} should exist in the package");
+    rebuilt.finish().expect("package should close").into_inner()
+}
+
+/// Parse XLSX bytes held in memory and return the sheet pages.
+fn sheet_pages_of(data: &[u8]) -> Vec<SheetPage> {
+    let (doc, _warnings) = XlsxParser
+        .parse(data, &ConvertOptions::default())
+        .expect("package should parse");
+    doc.pages
+        .into_iter()
+        .filter_map(|page| match page {
+            Page::Sheet(sheet) => Some(sheet),
+            _ => None,
+        })
+        .collect()
+}
+
+/// A `/drawing` relationship attaches nothing on its own: the sheet body's
+/// `<drawing r:id="...">` element is what puts a drawing on the grid.
+///
+/// `issue_1158_unreferenced_drawing_rel.xlsx` is
+/// `issue_1066_blip_effect_picture.xlsx` with only that element removed — the
+/// relationship, `xl/drawings/drawing1.xml`, `xl/media/image1.png` and the
+/// content types are all still there. Excel for Mac exports it as the grid
+/// alone, its `mutool draw -F trace` holding no `fill_image` at all where the
+/// base package's holds one. Resolving the drawing through the relationship
+/// instead still drew the picture, taking the export's 0.155% ink coverage to
+/// 2.914% (issue #1158).
+#[test]
+fn a_drawing_relationship_no_sheet_element_names_prints_no_picture() {
+    let pages: Vec<SheetPage> = sheet_pages("issue_1158_unreferenced_drawing_rel.xlsx");
+
+    let images: Vec<&office2pdf::ir::SheetImage> =
+        pages.iter().flat_map(|page| page.images.iter()).collect();
+    assert!(
+        images.is_empty(),
+        "an unreferenced drawing relationship must print nothing, got {} picture(s)",
+        images.len()
+    );
+    // The grid itself is untouched — this is a drawing rule, not a parse
+    // failure that swallowed the sheet.
+    assert_eq!(sheet_names(&pages), vec!["Budget"]);
+    assert!(
+        total_rows(&pages) > 0,
+        "the worksheet's rows must still print"
+    );
+}
+
+/// The same rule for a chart. `SimpleScatterChart.xlsx`'s worksheet anchors
+/// `xl/charts/chart1.xml` through `xl/drawings/drawing1.xml`; its chartsheet
+/// anchors `chart2.xml` through `drawing2.xml`. Dropping the worksheet's
+/// `<drawing>` element must drop that chart entirely — not re-place it after
+/// the grid as the unanchored-chart fallback does for a chart part no drawing
+/// reaches at all (issue #1158).
+#[test]
+fn a_drawing_relationship_no_sheet_element_names_prints_no_chart() {
+    let data: Vec<u8> = repackage_xlsx_part(
+        &load_fixture("SimpleScatterChart.xlsx"),
+        "xl/worksheets/sheet1.xml",
+        |xml| xml.replace(r#"<drawing r:id="rId1"/>"#, ""),
+    );
+    let pages: Vec<SheetPage> = sheet_pages_of(&data);
+
+    assert_eq!(sheet_names(&pages), vec!["Sheet1", "Chart1"]);
+    assert!(
+        pages[0].charts.is_empty(),
+        "the worksheet names no drawing, so it prints no chart, got {}",
+        pages[0].charts.len()
+    );
+    // The chartsheet still names its own drawing, so its chart is unaffected.
+    assert_eq!(pages[1].charts.len(), 1);
 }

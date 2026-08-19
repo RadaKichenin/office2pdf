@@ -57,13 +57,14 @@ pub(super) fn extract_charts_with_anchors(data: &[u8]) -> HashMap<String, Vec<Ra
         };
         // Sheet target is relative to xl/ (e.g., "worksheets/sheet1.xml")
         let sheet_dir: String = sheet_part_dir(sheet_target);
+        let sheet_xml = read_zip_entry_string(&mut archive, &sheet_part_path(sheet_target));
         let sheet_rels_xml = read_zip_entry_string(&mut archive, &sheet_rels_path(sheet_target));
         if sheet_rels_xml.is_empty() {
             continue;
         }
 
-        // Find drawing relationship
-        let drawing_targets = parse_rels_by_type(&sheet_rels_xml, "drawing");
+        // Find the drawings the sheet body names
+        let drawing_targets = sheet_drawing_targets(&sheet_xml, &sheet_rels_xml);
         for drawing_target in &drawing_targets {
             // Resolve the drawing relative to the sheet's own directory
             let drawing_path = resolve_relative_xl_path(&sheet_dir, drawing_target);
@@ -135,7 +136,7 @@ pub(super) fn extract_charts_with_anchors(data: &[u8]) -> HashMap<String, Vec<Ra
 
     if chart_paths.len() > positioned_count {
         // Some charts weren't found via drawing anchors — parse them as unanchored
-        let positioned_charts: HashSet<String> = collect_positioned_chart_paths(&result, data);
+        let positioned_charts: HashSet<String> = collect_drawing_reachable_chart_paths(data);
 
         let first_sheet = sheet_rids
             .first()
@@ -166,11 +167,14 @@ pub(super) fn extract_charts_with_anchors(data: &[u8]) -> HashMap<String, Vec<Ra
     result
 }
 
-/// Collect the set of chart XML paths that were already positioned via drawing anchors.
-pub(super) fn collect_positioned_chart_paths(
-    chart_map: &HashMap<String, Vec<RawChartAnchor>>,
-    data: &[u8],
-) -> HashSet<String> {
+/// Every chart XML path a sheet's drawing part reaches, whether or not the
+/// sheet prints that drawing.
+///
+/// The unanchored fallback above exists for a chart part no drawing reaches at
+/// all. A chart behind a drawing whose relationship the sheet body never names
+/// is a different case: Excel prints nothing for it (issue #1158), so it must
+/// count as reached here rather than reappear after the grid.
+pub(super) fn collect_drawing_reachable_chart_paths(data: &[u8]) -> HashSet<String> {
     // Re-trace the drawing → chart resolution to find which chart paths are covered.
     // This is intentionally conservative — if we can't determine the path, we skip.
     let Ok(mut archive) = crate::parser::open_zip(data) else {
@@ -183,10 +187,7 @@ pub(super) fn collect_positioned_chart_paths(
     let workbook_rels_xml = read_zip_entry_string(&mut archive, "xl/_rels/workbook.xml.rels");
     let rid_to_target = parse_rels_targets(&workbook_rels_xml);
 
-    for (sheet_name, sheet_rid) in &sheet_rids {
-        if !chart_map.contains_key(sheet_name) {
-            continue;
-        }
+    for (_, sheet_rid) in &sheet_rids {
         let Some(sheet_target) = rid_to_target.get(sheet_rid) else {
             continue;
         };
@@ -348,6 +349,65 @@ pub(super) fn sheet_rels_path(sheet_target: &str) -> String {
     let full_path: String = resolve_relative_xl_path("xl", sheet_target);
     let filename: &str = full_path.rsplit('/').next().unwrap_or(&full_path);
     format!("{}/_rels/{filename}.rels", sheet_part_dir(sheet_target))
+}
+
+/// The sheet part itself, given the target `xl/workbook.xml.rels` declares.
+pub(super) fn sheet_part_path(sheet_target: &str) -> String {
+    resolve_relative_xl_path("xl", sheet_target)
+}
+
+/// The drawing parts one sheet prints, as relationship targets in the order
+/// its body names them.
+///
+/// A drawing is attached to a sheet by its `<drawing r:id="...">` element; the
+/// relationship on its own attaches nothing.
+/// `tests/fixtures/xlsx/issue_1158_unreferenced_drawing_rel.xlsx` is
+/// `issue_1066_blip_effect_picture.xlsx` with that one element removed and the
+/// relationship, `xl/drawings/drawing1.xml`, `xl/media/image1.png` and the
+/// content types all left in place: Excel for Mac prints it as the grid alone,
+/// where reading the relationships instead still drew the picture (issue
+/// #1158).
+///
+/// Going through the element also stops `drawingHF` coming through, whose
+/// relationship type contains `drawing` as a substring: a header/footer
+/// drawing is named by its own `<drawingHF>` element and is not part of the
+/// grid.
+pub(super) fn sheet_drawing_targets(sheet_xml: &str, sheet_rels_xml: &str) -> Vec<String> {
+    let rid_to_target: HashMap<String, String> = parse_rels_targets(sheet_rels_xml);
+    parse_sheet_drawing_rids(sheet_xml)
+        .into_iter()
+        .filter_map(|rid| rid_to_target.get(&rid).cloned())
+        .collect()
+}
+
+/// The relationship ids a sheet body's `<drawing>` elements name, in order.
+///
+/// `CT_Worksheet` and `CT_Chartsheet` both carry the element, so a worksheet
+/// and a chartsheet resolve their drawings the same way.
+fn parse_sheet_drawing_rids(sheet_xml: &str) -> Vec<String> {
+    let mut rids: Vec<String> = Vec::new();
+    let mut reader = quick_xml::Reader::from_str(sheet_xml);
+
+    loop {
+        match reader.read_event() {
+            Ok(quick_xml::events::Event::Start(ref e))
+            | Ok(quick_xml::events::Event::Empty(ref e)) => {
+                // `legacyDrawing`, `legacyDrawingHF` and `drawingHF` are
+                // elements of their own, so the local name has to match
+                // exactly rather than by prefix.
+                if e.local_name().as_ref() == b"drawing"
+                    && let Some(rid) = xml_util::get_attr_str(e, b"id")
+                {
+                    rids.push(rid);
+                }
+            }
+            Ok(quick_xml::events::Event::Eof) => break,
+            Err(_) => break,
+            _ => {}
+        }
+    }
+
+    rids
 }
 
 /// Parse `<xdr:graphicFrame>` chart anchors from a worksheet drawing: the
@@ -551,12 +611,13 @@ pub(super) fn extract_images_with_anchors(data: &[u8]) -> HashMap<String, Vec<Ra
             continue;
         };
         let sheet_dir: String = sheet_part_dir(sheet_target);
+        let sheet_xml = read_zip_entry_string(&mut archive, &sheet_part_path(sheet_target));
         let sheet_rels_xml = read_zip_entry_string(&mut archive, &sheet_rels_path(sheet_target));
         if sheet_rels_xml.is_empty() {
             continue;
         }
 
-        for drawing_target in &parse_rels_by_type(&sheet_rels_xml, "drawing") {
+        for drawing_target in &sheet_drawing_targets(&sheet_xml, &sheet_rels_xml) {
             let drawing_path = resolve_relative_xl_path(&sheet_dir, drawing_target);
             let drawing_xml = read_zip_entry_string(&mut archive, &drawing_path);
             if drawing_xml.is_empty() {
@@ -880,12 +941,13 @@ pub(super) fn extract_text_boxes_with_anchors(
             continue;
         };
         let sheet_dir: String = sheet_part_dir(sheet_target);
+        let sheet_xml = read_zip_entry_string(&mut archive, &sheet_part_path(sheet_target));
         let sheet_rels_xml = read_zip_entry_string(&mut archive, &sheet_rels_path(sheet_target));
         if sheet_rels_xml.is_empty() {
             continue;
         }
 
-        for drawing_target in &parse_rels_by_type(&sheet_rels_xml, "drawing") {
+        for drawing_target in &sheet_drawing_targets(&sheet_xml, &sheet_rels_xml) {
             let drawing_path = resolve_relative_xl_path(&sheet_dir, drawing_target);
             let drawing_xml = read_zip_entry_string(&mut archive, &drawing_path);
             if drawing_xml.is_empty() {

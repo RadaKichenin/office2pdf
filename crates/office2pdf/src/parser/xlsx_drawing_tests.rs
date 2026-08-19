@@ -406,3 +406,83 @@ fn alpha_mod_fix_inside_the_a14_extension_is_not_the_pictures_alpha() {
         "the extension layer's amount must not become the picture's alpha"
     );
 }
+
+/// One worksheet `_rels` part declaring a grid drawing, a header/footer
+/// drawing and a legacy VML drawing — the three relationship types whose URIs
+/// a `contains("drawing")` test cannot tell apart.
+const SHEET_RELS_WITH_THREE_DRAWING_KINDS: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawingHF" Target="../drawings/drawing2.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing" Target="../drawings/vmlDrawing1.vml"/>
+</Relationships>"#;
+
+/// A worksheet body naming the given elements after its `<sheetData>`.
+fn worksheet_with(elements: &str) -> String {
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData>
+  {elements}
+</worksheet>"#
+    )
+}
+
+#[test]
+fn a_sheet_drawing_element_resolves_its_relationship_target() {
+    let targets = sheet_drawing_targets(
+        &worksheet_with(r#"<drawing r:id="rId1"/>"#),
+        SHEET_RELS_WITH_THREE_DRAWING_KINDS,
+    );
+    assert_eq!(targets, vec!["../drawings/drawing1.xml".to_string()]);
+}
+
+/// The defect of issue #1158: the relationship survives, the drawing part and
+/// its media survive, and only the `<drawing>` element is gone. Excel prints
+/// the grid alone, so nothing must resolve.
+#[test]
+fn a_drawing_relationship_the_sheet_never_names_resolves_to_nothing() {
+    let targets = sheet_drawing_targets(
+        &worksheet_with(r#"<pageSetup paperSize="9" orientation="portrait"/>"#),
+        SHEET_RELS_WITH_THREE_DRAWING_KINDS,
+    );
+    assert!(
+        targets.is_empty(),
+        "an unreferenced relationship attaches nothing, got {targets:?}"
+    );
+}
+
+/// `drawingHF` and `vmlDrawing` both contain `drawing` in their relationship
+/// type. Neither is a grid drawing, and each is named by an element of its own.
+#[test]
+fn header_footer_and_legacy_drawings_are_not_grid_drawings() {
+    let targets = sheet_drawing_targets(
+        &worksheet_with(r#"<drawingHF r:id="rId2"/><legacyDrawing r:id="rId3"/>"#),
+        SHEET_RELS_WITH_THREE_DRAWING_KINDS,
+    );
+    assert!(
+        targets.is_empty(),
+        "only `<drawing>` puts a part on the grid, got {targets:?}"
+    );
+}
+
+/// A sheet may name more than one drawing, and the body's order is the paint
+/// order — not whatever order the `_rels` part happens to list.
+#[test]
+fn multiple_drawing_elements_resolve_in_body_order() {
+    let rels = r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+      <Relationship Id="rIdA" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>
+      <Relationship Id="rIdB" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing2.xml"/>
+    </Relationships>"#;
+    let targets = sheet_drawing_targets(
+        &worksheet_with(r#"<drawing r:id="rIdB"/><drawing r:id="rIdA"/>"#),
+        rels,
+    );
+    assert_eq!(
+        targets,
+        vec![
+            "../drawings/drawing2.xml".to_string(),
+            "../drawings/drawing1.xml".to_string()
+        ]
+    );
+}
