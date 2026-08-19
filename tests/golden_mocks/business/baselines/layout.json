@@ -826,10 +826,10 @@
     },
     {
      "baseline": {
-      "mean_abs_dy": 0.34,
-      "worst_dy": 0.96,
-      "worst_dy_signed": 0.96,
-      "worst_line": "2,300+$1.8M99.98%"
+      "mean_abs_dy": 0.03,
+      "worst_dy": 0.06,
+      "worst_dy_signed": -0.06,
+      "worst_line": "enterprisetenantsARR,+19%MoMconversionsuccessrate"
      },
      "dx0": {
       "mean_abs": 0.0,
@@ -841,7 +841,7 @@
       "large_shifts": []
      },
      "lines": {
-      "deviant": 1,
+      "deviant": 0,
       "extra": 0,
       "extra_text": [],
       "gt": 3,
@@ -853,7 +853,7 @@
      "noise_floor": 0.12,
      "pitch": {
       "pairs": 2,
-      "worst_delta": 1.02
+      "worst_delta": 0.04
      },
      "rects": {
       "gt_count": 5,
@@ -1480,10 +1480,10 @@
     },
     {
      "baseline": {
-      "mean_abs_dy": 0.34,
-      "worst_dy": 0.96,
-      "worst_dy_signed": 0.96,
-      "worst_line": "872,300+38%"
+      "mean_abs_dy": 0.03,
+      "worst_dy": 0.06,
+      "worst_dy_signed": -0.06,
+      "worst_line": "employeesacross4officesenterprisecustomersmarketshare(segmen"
      },
      "dx0": {
       "mean_abs": 0.0,
@@ -1495,7 +1495,7 @@
       "large_shifts": []
      },
      "lines": {
-      "deviant": 1,
+      "deviant": 0,
       "extra": 0,
       "extra_text": [],
       "gt": 3,
@@ -1507,7 +1507,7 @@
      "noise_floor": 0.12,
      "pitch": {
       "pairs": 2,
-      "worst_delta": 1.02
+      "worst_delta": 0.04
      },
      "rects": {
       "gt_count": 5,
@@ -1847,10 +1847,10 @@
     },
     {
      "baseline": {
-      "mean_abs_dy": 0.34,
-      "worst_dy": 0.96,
-      "worst_dy_signed": 0.96,
-      "worst_line": "$412K18,200$22.6"
+      "mean_abs_dy": 0.03,
+      "worst_dy": 0.06,
+      "worst_dy_signed": -0.06,
+      "worst_line": "totalspend(-3%vsplan)MQLs(+31%YoY)blendedCAC,-18%"
      },
      "dx0": {
       "mean_abs": 0.0,
@@ -1862,7 +1862,7 @@
       "large_shifts": []
      },
      "lines": {
-      "deviant": 1,
+      "deviant": 0,
       "extra": 0,
       "extra_text": [],
       "gt": 3,
@@ -1874,7 +1874,7 @@
      "noise_floor": 0.12,
      "pitch": {
       "pairs": 2,
-      "worst_delta": 1.02
+      "worst_delta": 0.04
      },
      "rects": {
       "gt_count": 5,
@@ -2122,10 +2122,10 @@
     },
     {
      "baseline": {
-      "mean_abs_dy": 0.25,
-      "worst_dy": 1.08,
-      "worst_dy_signed": 1.08,
-      "worst_line": "$490/mo$1,490/moCustom"
+      "mean_abs_dy": 0.1,
+      "worst_dy": 0.4,
+      "worst_dy_signed": -0.4,
+      "worst_line": "\u2022Communitysupport\u2022Prioritysupport(8\u00d75)\u2022DedicatedTAM,24\u00d77"
      },
      "dx0": {
       "mean_abs": 0.0,
@@ -2137,7 +2137,7 @@
       "large_shifts": []
      },
      "lines": {
-      "deviant": 3,
+      "deviant": 2,
       "extra": 0,
       "extra_text": [],
       "gt": 7,
@@ -2149,7 +2149,7 @@
      "noise_floor": 0.12,
      "pitch": {
       "pairs": 6,
-      "worst_delta": 1.12
+      "worst_delta": 0.56
      },
      "rects": {
       "gt_count": 5,
@@ -2189,8 +2189,8 @@
       "worst_line": "4\ucd94\uac00\uc0ac\uc6a9\uc790\ud32950\uc7783450,000"
      },
      "dx0": {
-      "mean_abs": 0.47,
-      "worst": -1.56
+      "mean_abs": 0.2,
+      "worst": -0.56
      },
      "instances": {
       "large_shift_count": 0,
@@ -2226,7 +2226,7 @@
       ]
      },
      "width": {
-      "mean_abs_pct": 0.76,
+      "mean_abs_pct": 0.72,
       "worst_pct": 2.45
      },
      "wraps": {
@@ -2236,14 +2236,14 @@
     },
     {
      "baseline": {
-      "mean_abs_dy": 1.88,
-      "worst_dy": 3.0,
-      "worst_dy_signed": -3.0,
+      "mean_abs_dy": 2.88,
+      "worst_dy": 4.0,
+      "worst_dy_signed": -4.0,
       "worst_line": "1,350,000"
      },
      "dx0": {
-      "mean_abs": 0.57,
-      "worst": -0.8
+      "mean_abs": 0.41,
+      "worst": 0.49
      },
      "instances": {
       "large_shift_count": 0,
@@ -2251,7 +2251,7 @@
       "large_shifts": []
      },
      "lines": {
-      "deviant": 6,
+      "deviant": 8,
       "extra": 0,
       "extra_text": [],
       "gt": 8,
@@ -2450,8 +2450,8 @@
       "samples": []
      },
      "width": {
-      "mean_abs_pct": 0.17,
-      "worst_pct": 0.18
+      "mean_abs_pct": 0.05,
+      "worst_pct": 0.11
      },
      "wraps": {
       "count": 0,
@@ -2501,8 +2501,8 @@
       "samples": []
      },
      "width": {
-      "mean_abs_pct": 0.17,
-      "worst_pct": 0.18
+      "mean_abs_pct": 0.05,
+      "worst_pct": 0.11
      },
      "wraps": {
       "count": 0,
@@ -2623,7 +2623,7 @@
    "pages": [
     {
      "baseline": {
-      "mean_abs_dy": 3.0,
+      "mean_abs_dy": 3.11,
       "worst_dy": 5.0,
       "worst_dy_signed": -5.0,
       "worst_line": "E-1200\uc815\ud558\uc724\uacbd\uc601\uc9c0\uc6d03,200,000380,0003,580,000560,000"
@@ -2638,7 +2638,7 @@
       "large_shifts": []
      },
      "lines": {
-      "deviant": 8,
+      "deviant": 9,
       "extra": 0,
       "extra_text": [],
       "gt": 9,
@@ -2650,7 +2650,7 @@
      "noise_floor": 0.5,
      "pitch": {
       "pairs": 8,
-      "worst_delta": 2.0
+      "worst_delta": 3.0
      },
      "rects": {
       "gt_count": 18,
@@ -2664,7 +2664,7 @@
       "samples": []
      },
      "width": {
-      "mean_abs_pct": 0.46,
+      "mean_abs_pct": 0.51,
       "worst_pct": 1.9
      },
      "wraps": {
@@ -2674,14 +2674,14 @@
     },
     {
      "baseline": {
-      "mean_abs_dy": 2.0,
-      "worst_dy": 4.0,
-      "worst_dy_signed": -4.0,
+      "mean_abs_dy": 3.0,
+      "worst_dy": 5.0,
+      "worst_dy_signed": -5.0,
       "worst_line": "3,020,000"
      },
      "dx0": {
-      "mean_abs": 0.68,
-      "worst": -0.8
+      "mean_abs": 0.17,
+      "worst": 0.2
      },
      "instances": {
       "large_shift_count": 0,
@@ -2689,7 +2689,7 @@
       "large_shifts": []
      },
      "lines": {
-      "deviant": 5,
+      "deviant": 7,
       "extra": 0,
       "extra_text": [],
       "gt": 7,
@@ -2857,7 +2857,7 @@
    "pages": [
     {
      "baseline": {
-      "mean_abs_dy": 2.75,
+      "mean_abs_dy": 2.88,
       "worst_dy": 6.0,
       "worst_dy_signed": -6.0,
       "worst_line": "6\ud55c\ub3c4\uc724\u00d7\u00d7\u25cb\u25cb\u25cb60.0%"
@@ -2883,7 +2883,7 @@
       ]
      },
      "lines": {
-      "deviant": 7,
+      "deviant": 8,
       "extra": 0,
       "extra_text": [],
       "gt": 10,
@@ -2895,7 +2895,7 @@
      "noise_floor": 0.5,
      "pitch": {
       "pairs": 7,
-      "worst_delta": 1.0
+      "worst_delta": 2.0
      },
      "rects": {
       "gt_count": 20,
@@ -2931,7 +2931,7 @@
    "pages": [
     {
      "baseline": {
-      "mean_abs_dy": 1.25,
+      "mean_abs_dy": 1.34,
       "worst_dy": 2.02,
       "worst_dy_signed": -2.02,
       "worst_line": "\uacbd\uc601\uc9c0\uc6d094,000,00024.7%"
@@ -2946,7 +2946,7 @@
       "large_shifts": []
      },
      "lines": {
-      "deviant": 9,
+      "deviant": 10,
       "extra": 0,
       "extra_text": [],
       "gt": 12,
@@ -2958,7 +2958,7 @@
      "noise_floor": 0.5,
      "pitch": {
       "pairs": 11,
-      "worst_delta": 2.0
+      "worst_delta": 3.0
      },
      "rects": {
       "gt_count": 18,
@@ -2972,7 +2972,7 @@
       "samples": []
      },
      "width": {
-      "mean_abs_pct": 0.26,
+      "mean_abs_pct": 0.25,
       "worst_pct": 1.49
      },
      "wraps": {
@@ -2998,8 +2998,8 @@
       "worst_line": "BusinessTripExpenseReport\u2014Berlin,June2026"
      },
      "dx0": {
-      "mean_abs": 0.31,
-      "worst": -1.0
+      "mean_abs": 0.2,
+      "worst": 0.44
      },
      "instances": {
       "large_shift_count": 0,
@@ -3086,7 +3086,7 @@
       "gt_count": 16,
       "matched": 0,
       "mean_center_delta": 0.0,
-      "out_count": 103
+      "out_count": 97
      },
      "reflow": {
       "gt_lines": 0,
@@ -3113,11 +3113,11 @@
   "xlsx": 0.5
  },
  "office2pdf_version": "office2pdf 0.6.7",
- "repository_commit": "b51c9a4adbfeeef604d1ca0aece817a74623e58b-dirty",
+ "repository_commit": "2cc5238f4a4cabf040bf69802f4070a7e662752a-dirty",
  "schema_version": 2,
  "summary": {
   "cases": 30,
-  "deviant_lines": 195,
+  "deviant_lines": 198,
   "extra_lines": 0,
   "large_shifts": 4,
   "missing_lines": 0,
