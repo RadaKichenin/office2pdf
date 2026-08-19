@@ -1096,15 +1096,19 @@ pub(super) struct SheetCellSeat {
     pub floors_descent: bool,
 }
 
-/// The baseline Excel prints for one line of `ascent_em`/`descent_em` set at
-/// `font_size_pt` in a `track_pt` row, as an offset below the track's **top
-/// boundary** (issue #1063).
+/// The baseline Excel prints for one line of a face whose bare `hhea` numbers
+/// are `ascent_em`/`descent_em`/`line_gap_em`, set at `font_size_pt` in a
+/// `track_pt` row, as an offset below the track's **top boundary**
+/// (issues #1063, #1161).
 ///
-/// Excel lays a printed sheet out in whole device points, so the line box is
-/// the face's `hhea` ascent and descent each rounded to a point; it is centred
-/// in the row's own track — not in the cell's inset content box, which four
-/// native probe exports show has no say in the vertical seat — and an odd
-/// leftover point goes to the space *above* the line.
+/// Excel lays a printed sheet out in whole device points, and it rounds the
+/// three `hhea` numbers into points **separately** before composing the line
+/// box: the ascender truncated, the line gap rounded up, the descender
+/// rounded. The box is the three added together, the baseline sits the gap
+/// plus the ascent below its top, and the box is centred in the row's own
+/// track — not in the cell's inset content box, which four native probe
+/// exports show has no say in the vertical seat — with an odd leftover point
+/// going to the space *above* the line.
 ///
 /// Measured on native Excel-for-Mac exports of purpose-built probe workbooks
 /// (`/Volumes/T7/scratch/issue-1063/probe`, reproduced in
@@ -1112,21 +1116,28 @@ pub(super) struct SheetCellSeat {
 /// sweep from 12pt to 60pt at Arial 10, a font-size sweep from 8pt to 44pt in
 /// 40pt and 60pt tracks, and a border/no-border and Normal-font pairing that
 /// changed nothing. All 28 samples land on this rule exactly.
+///
+/// Those probes are Arial-only, and Arial's 67/2048 line gap makes the
+/// separate rounding indistinguishable from folding the gap into the ascender
+/// first: the two readings differ by 1pt in the ascent and 2pt in the box,
+/// which cancel in the centred seat. A face declaring **no** line gap
+/// separates them, and the folded reading then seats every line a point low —
+/// Segoe UI, Century Gothic and Calibri all measured that way on the workbook
+/// of #1161, reproduced in
+/// `sheet_cell_line_seat_reproduces_a_face_with_no_line_gap`.
 pub(super) fn sheet_cell_baseline_from_track_top_pt(
     track_pt: f64,
     ascent_em: f64,
     descent_em: f64,
+    line_gap_em: f64,
     font_size_pt: f64,
 ) -> f64 {
-    let ascent_pt: f64 = (ascent_em * font_size_pt).round();
+    let ascent_pt: f64 = (ascent_em * font_size_pt).floor();
+    let line_gap_pt: f64 = (line_gap_em * font_size_pt).ceil();
     let descent_pt: f64 = (descent_em * font_size_pt).round();
-    // The line's half-height above the baseline, which is what the probe's
-    // centred sweep observes directly; the box it implies is twice the
-    // remainder, and is even by construction, so the parity of the leftover
-    // tracks the parity of the track alone.
-    let half_line_pt: f64 = ((ascent_pt - descent_pt) / 2.0).round();
-    let line_pt: f64 = 2.0 * (ascent_pt - half_line_pt);
-    ((track_pt - line_pt) / 2.0).ceil() + ascent_pt
+    let above_baseline_pt: f64 = line_gap_pt + ascent_pt;
+    let line_pt: f64 = above_baseline_pt + descent_pt;
+    ((track_pt - line_pt) / 2.0).ceil() + above_baseline_pt
 }
 
 /// The gap Excel never closes between a bottom-aligned sheet cell's baseline
@@ -1383,10 +1394,15 @@ pub(super) fn word_cell_line_box(
             // this far below the track's top boundary.
             let content_mid_pt: f64 =
                 (seat.inset_top_pt + (seat.track_pt - seat.inset_bottom_pt)) / 2.0;
+            // `font_line_metrics_em` folds the line gap into `ascender_em`,
+            // where Word wants it; Excel rounds the gap into whole points on
+            // its own, so split it back out here (issue #1161).
+            let line_gap_em: f64 = crate::render::pdf::font_line_gap_em(family).unwrap_or(0.0);
             let baseline_pt: f64 = sheet_cell_baseline_from_track_top_pt(
                 seat.track_pt,
-                ascender_em,
+                ascender_em - line_gap_em,
                 descender_em,
+                line_gap_em,
                 font_size,
             );
             let top_em: f64 = advance_em / 2.0 + (baseline_pt - content_mid_pt) / font_size;

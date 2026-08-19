@@ -933,6 +933,33 @@ pub(crate) fn font_cap_height_em(family: &str) -> Option<f64> {
     best_face(family).map(|font| font.metrics().cap_height.get())
 }
 
+/// The best face for `family`'s bare `hhea` line gap, in em units.
+///
+/// [`font_line_metrics_em`] folds the gap into its first element, because that
+/// is where Word puts the baseline. Excel does not: it rounds the ascender,
+/// the line gap and the descender into whole points *separately* before it
+/// composes a printed sheet cell's line box, so that path needs the gap on its
+/// own (issue #1161).
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn font_line_gap_em(family: &str) -> Option<f64> {
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+    static LINE_GAP_CACHE: OnceLock<Mutex<HashMap<String, Option<f64>>>> = OnceLock::new();
+    cached_family_metric(&LINE_GAP_CACHE, family, |font| {
+        let ttf = font.ttf();
+        let upem = f64::from(ttf.units_per_em()).max(1.0);
+        Some(f64::from(ttf.line_gap()) / upem)
+    })
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn font_line_gap_em(family: &str) -> Option<f64> {
+    let font = best_face(family)?;
+    let ttf = font.ttf();
+    let upem = f64::from(ttf.units_per_em()).max(1.0);
+    Some(f64::from(ttf.line_gap()) / upem)
+}
+
 /// Line metrics of the best face for `family`, in em units:
 /// `(above baseline, below baseline, Word single-line pitch)`.
 ///

@@ -2198,8 +2198,9 @@ fn row_spanning_cell_keeps_its_declared_alignment_in_a_tight_row() {
 /// runner with no Arial installed.
 #[test]
 fn sheet_cell_line_seat_reproduces_the_native_excel_probe() {
-    const ARIAL_ASCENT_EM: f64 = (1854.0 + 67.0) / 2048.0;
+    const ARIAL_ASCENT_EM: f64 = 1854.0 / 2048.0;
     const ARIAL_DESCENT_EM: f64 = 434.0 / 2048.0;
+    const ARIAL_LINE_GAP_EM: f64 = 67.0 / 2048.0;
 
     // (track height pt, font size pt, baseline below the track's top edge pt)
     let measured: [(f64, f64, f64); 28] = [
@@ -2241,12 +2242,77 @@ fn sheet_cell_line_seat_reproduces_the_native_excel_probe() {
             track_pt,
             ARIAL_ASCENT_EM,
             ARIAL_DESCENT_EM,
+            ARIAL_LINE_GAP_EM,
             font_size_pt,
         );
         assert!(
             (seated_pt - expected_pt).abs() < 1e-9,
             "Arial {font_size_pt}pt in a {track_pt}pt track: Excel prints the \
              baseline {expected_pt}pt below the track top, seated {seated_pt}pt"
+        );
+    }
+}
+
+/// Faces whose `hhea` declares no line gap, which the Arial-only probe of
+/// #1063 could not separate from the ascender.
+///
+/// Excel rounds the three `hhea` numbers into whole points separately — the
+/// ascender truncated, the line gap rounded up, the descender rounded — and a
+/// face with a zero line gap therefore keeps a line box one point shorter than
+/// folding the gap into the ascender before rounding produces. Arial's 67/2048
+/// gap hid that: over every sample of the #1063 sweep the two readings differ
+/// by 2pt in the box and 1pt in the ascent, which cancel in the centred seat.
+///
+/// Measured on native Excel-for-Mac exports of the workbook attached to #982,
+/// whose row tracks the export rules with its own background bands, and on the
+/// committed GT of `01_quotation_ko`, whose tracks it rules with thin borders
+/// (issue #1161). Each face's `hhea` numbers are written out rather than read
+/// from a face, so the assertion holds on a runner with none of them
+/// installed.
+#[test]
+fn sheet_cell_line_seat_reproduces_a_face_with_no_line_gap() {
+    const SEGOE_UI: (f64, f64, f64) = (2210.0 / 2048.0, 514.0 / 2048.0, 0.0);
+    const CENTURY_GOTHIC: (f64, f64, f64) = (2060.0 / 2048.0, 451.0 / 2048.0, 0.0);
+    const CALIBRI: (f64, f64, f64) = (1950.0 / 2048.0, 550.0 / 2048.0, 0.0);
+    const MALGUN_GOTHIC: (f64, f64, f64) = (2229.0 / 2048.0, 495.0 / 2048.0, 0.0);
+    /// A face's bare `hhea` ascender, descender and line gap, in em units,
+    /// paired with the track height, font size and measured baseline.
+    type SeatSample = ((f64, f64, f64), f64, f64, f64);
+
+    // (face metrics, track height pt, font size pt, baseline below the track's
+    // top edge pt)
+    let measured: [SeatSample; 8] = [
+        // "Gift budget and tracker", the five 30pt body rows.
+        (SEGOE_UI, 30.0, 11.0, 19.0),
+        // The same sheet's 49pt column-header row.
+        (SEGOE_UI, 49.0, 12.0, 29.0),
+        // Its two 49pt title rows, both centred on the same seat.
+        (CENTURY_GOTHIC, 49.0, 24.0, 34.0),
+        // The "Start" sheet's 39pt body rows.
+        (CALIBRI, 39.0, 11.0, 23.0),
+        // The same sheet's bold 14pt "Note:" row, on Calibri's own metrics.
+        (CALIBRI, 39.0, 14.0, 24.0),
+        // `tests/golden_mocks/business/expected/xlsx/01_quotation_ko.pdf`
+        // page 2, whose thin borders rule every track: the 23pt amount header,
+        // the four 15pt item rows and the three 14pt summary rows.
+        (MALGUN_GOTHIC, 23.0, 10.0, 16.0),
+        (MALGUN_GOTHIC, 15.0, 10.0, 12.0),
+        (MALGUN_GOTHIC, 14.0, 10.0, 11.0),
+    ];
+
+    for ((ascent_em, descent_em, line_gap_em), track_pt, font_size_pt, expected_pt) in measured {
+        let seated_pt: f64 = sheet_cell_baseline_from_track_top_pt(
+            track_pt,
+            ascent_em,
+            descent_em,
+            line_gap_em,
+            font_size_pt,
+        );
+        assert!(
+            (seated_pt - expected_pt).abs() < 1e-9,
+            "a {font_size_pt}pt line of a face with ascent {ascent_em}em in a \
+             {track_pt}pt track: Excel prints the baseline {expected_pt}pt below \
+             the track top, seated {seated_pt}pt"
         );
     }
 }
@@ -2262,6 +2328,7 @@ fn fixed_track_sheet_cell_seats_its_centred_line_on_the_track() {
     else {
         return; // no font book available (e.g. exotic CI sandbox)
     };
+    let line_gap_em: f64 = crate::render::pdf::font_line_gap_em(FAMILY).unwrap_or(0.0);
     let font_size_pt: f64 = 10.0;
     let track_pt: f64 = 14.0;
     let padding = Insets {
@@ -2307,8 +2374,13 @@ fn fixed_track_sheet_cell_seats_its_centred_line_on_the_track() {
     // Typst centres the fixed line box in the cell's inset content area, so
     // the emitted ascent is what decides where the baseline lands.
     let content_mid_pt: f64 = (padding.top + (track_pt - padding.bottom)) / 2.0;
-    let baseline_pt: f64 =
-        sheet_cell_baseline_from_track_top_pt(track_pt, ascent_em, descent_em, font_size_pt);
+    let baseline_pt: f64 = sheet_cell_baseline_from_track_top_pt(
+        track_pt,
+        ascent_em - line_gap_em,
+        descent_em,
+        line_gap_em,
+        font_size_pt,
+    );
     let expected_top_em: f64 = pitch_em / 2.0 + (baseline_pt - content_mid_pt) / font_size_pt;
     let needle: String = format!("top-edge: {}em", format_f64(expected_top_em));
     assert!(
