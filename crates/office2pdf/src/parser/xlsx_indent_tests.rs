@@ -204,9 +204,12 @@ fn test_indent_unit_ignores_the_cell_font_and_follows_the_workbook_normal_font()
     let data =
         build_xlsx_with_styles_and_sheet(styles, &sheet_with_cells(&[("A1", 1, "Indented")]));
 
+    // The cell's own text box is what the indent stacks on, and that box does
+    // follow the cell font (issue #1165); the level's own unit does not.
+    let cell_box_left_pt: f64 = super::super::xlsx_cells::cell_left_inset_pt("Calibri", 22.0);
     let padding = first_cell_padding(&data).expect("an indented cell states its own padding");
     assert!(
-        (padding.left - (XLSX_CELL_PADDING.left + CALIBRI_11_INDENT_UNIT_PT)).abs() < 0.01,
+        (padding.left - (cell_box_left_pt + CALIBRI_11_INDENT_UNIT_PT)).abs() < 0.01,
         "a 22pt cell under an 11pt Normal font still indents by the Normal font's unit, got {}",
         padding.left
     );

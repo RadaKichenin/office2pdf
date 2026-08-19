@@ -1,4 +1,10 @@
-//! The horizontal box Excel lays a cell's text out in (issue #1157).
+//! The horizontal box Excel lays a cell's text out in (issues #1157, #1165).
+//!
+//! The box's left edge steps with the cell's own font — 37 rows of a
+//! one-factor native Excel for Mac probe, tabulated on `cell_left_inset_pt`,
+//! which the sweep below asserts on the families whose digit advance the
+//! reference table carries. The figures under it fix the Calibri 11 pair the
+//! step reduces to at the workbook default.
 //!
 //! Measured against the ten native Excel for Mac exports under
 //! `tests/golden_mocks/business/expected/xlsx/`, one `fill_text` per cell in a
@@ -129,5 +135,134 @@ fn test_sheet_table_carries_excels_cell_text_box() {
     assert!(
         source.contains("inset: (top: 1pt, right: 2pt, bottom: 1.5pt, left: 3pt)"),
         "the measured text box should reach the renderer, got:\n{source}"
+    );
+}
+
+/// A one-cell workbook whose cell states `family` at `size_pt`, left-aligned.
+fn workbook_with_cell_font(family: &str, size_pt: f64) -> Vec<u8> {
+    let mut book = umya_spreadsheet::new_file();
+    {
+        let sheet = book.get_sheet_mut(&0).unwrap();
+        let cell = sheet.get_cell_mut("B3");
+        cell.set_value("2026");
+        let style = cell.get_style_mut();
+        style
+            .get_alignment_mut()
+            .set_horizontal(umya_spreadsheet::HorizontalAlignmentValues::Left);
+        let font = style.get_font_mut();
+        font.set_name(family);
+        font.set_size(size_pt);
+    }
+    let mut cursor = Cursor::new(Vec::new());
+    umya_spreadsheet::writer::xlsx::write_writer(&book, &mut cursor).unwrap();
+    cursor.into_inner()
+}
+
+/// Every row of the issue #1165 probe whose family the reference digit table
+/// carries, so the expectation is the same on any machine. Century Gothic and
+/// Segoe UI are measured in the module doc but resolve through the live font
+/// set, which CI does not ship.
+const MEASURED_LEFT_INSETS: &[(&str, f64, f64)] = &[
+    ("Calibri", 6.0, 2.0),
+    ("Calibri", 7.0, 2.0),
+    ("Calibri", 8.0, 2.0),
+    ("Calibri", 9.0, 3.0),
+    ("Calibri", 10.0, 3.0),
+    ("Calibri", 11.0, 3.0),
+    ("Calibri", 12.0, 3.0),
+    ("Calibri", 14.0, 3.0),
+    ("Calibri", 16.0, 3.0),
+    ("Calibri", 17.0, 4.0),
+    ("Calibri", 20.0, 4.0),
+    ("Calibri", 24.0, 4.0),
+    ("Calibri", 25.0, 5.0),
+    ("Calibri", 28.0, 5.0),
+    ("Calibri", 32.0, 5.0),
+    ("Calibri", 33.0, 6.0),
+    ("Calibri", 36.0, 6.0),
+    ("Arial", 8.0, 2.0),
+    ("Arial", 10.0, 3.0),
+    ("Arial", 12.0, 3.0),
+    ("Arial", 14.0, 3.0),
+    ("Arial", 16.0, 4.0),
+    ("Arial", 18.0, 4.0),
+    ("Arial", 20.0, 4.0),
+    ("Arial", 24.0, 5.0),
+    ("Arial", 32.0, 6.0),
+    ("Times New Roman", 11.0, 3.0),
+    ("Times New Roman", 16.0, 3.0),
+    ("Times New Roman", 18.0, 4.0),
+    ("Verdana", 10.0, 3.0),
+    ("Verdana", 11.0, 3.0),
+];
+
+#[test]
+fn test_left_inset_steps_with_the_cell_fonts_own_column_unit() {
+    for &(family, size_pt, expected_left) in MEASURED_LEFT_INSETS {
+        let padding: Insets = first_cell_padding(&workbook_with_cell_font(family, size_pt));
+
+        assert!(
+            (padding.left - expected_left).abs() < 0.01,
+            "{family} {size_pt} starts {expected_left}pt inside its column in Excel's own \
+             export, got {}",
+            padding.left,
+        );
+    }
+}
+
+#[test]
+fn test_a_title_cell_starts_further_in_than_the_body_line_below_it() {
+    // The shape the issue reported: one column, a body line and a title, the
+    // title's origin further right than the body's. Both sizes are probe rows,
+    // and their 3pt step is the one the reported workbook's column B carries.
+    let body: Insets = first_cell_padding(&workbook_with_cell_font("Arial", 14.0));
+    let title: Insets = first_cell_padding(&workbook_with_cell_font("Arial", 32.0));
+
+    assert!(
+        (title.left - body.left - 3.0).abs() < 0.01,
+        "Excel starts a 32pt title three points right of a 14pt body line in the same \
+         column, got {} against {}",
+        title.left,
+        body.left,
+    );
+}
+
+#[test]
+fn test_the_cell_font_drives_the_inset_not_the_workbook_normal_font() {
+    // The workbook Normal font stays Calibri 11, whose inset is 3pt; only the
+    // cell's own font is larger.
+    let padding: Insets = first_cell_padding(&workbook_with_cell_font("Arial", 32.0));
+
+    assert!(
+        (padding.left - 6.0).abs() < 0.01,
+        "the cell's own Arial 32 takes a 6pt inset whatever the Normal font is, got {}",
+        padding.left,
+    );
+}
+
+#[test]
+fn test_a_centred_cell_holds_the_column_centre_at_any_cell_font() {
+    let mut book = umya_spreadsheet::new_file();
+    {
+        let sheet = book.get_sheet_mut(&0).unwrap();
+        let cell = sheet.get_cell_mut("B3");
+        cell.set_value("2026");
+        let style = cell.get_style_mut();
+        style
+            .get_alignment_mut()
+            .set_horizontal(umya_spreadsheet::HorizontalAlignmentValues::Center);
+        style.get_font_mut().set_size(32.0);
+    }
+    let mut cursor = Cursor::new(Vec::new());
+    umya_spreadsheet::writer::xlsx::write_writer(&book, &mut cursor).unwrap();
+
+    let padding: Insets = first_cell_padding(&cursor.into_inner());
+
+    assert!(
+        (padding.left - padding.right).abs() < 0.01,
+        "a centred run sits on the column's own centre whatever its font size, got \
+         left {} right {}",
+        padding.left,
+        padding.right,
     );
 }
