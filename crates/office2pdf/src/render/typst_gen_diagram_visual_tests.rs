@@ -3761,6 +3761,102 @@ fn an_explicit_powerpoint_column_value_axis_keeps_the_native_label_inset() {
     );
 }
 
+/// The #1166 workbook's anchored column chart, restated in Calibri.
+///
+/// `Gift Budget and Tracker1.xlsx` (attached to #982) plots a stacked column
+/// chart on a 1015.98 x 307.97pt frame whose value axis runs $0..$200 in $20
+/// steps. Its own face is Segoe UI, which no runner is guaranteed to have; the
+/// probe series below re-exported the same workbook with the chart's face
+/// switched to Calibri, whose advances this crate holds natively, so every
+/// figure is assertable wherever the tests run.
+fn excel_gift_column_chart(size_pt: f64, number_format: Option<&str>) -> Chart {
+    let mut chart = two_series_bar_chart(Vec::new());
+    chart.chart_type = ChartType::Column;
+    chart.host = crate::ir::ChartHost::Spreadsheet;
+    chart.categories = vec!["Jan".to_string()];
+    chart.series.truncate(1);
+    // The overlaid line series reaches 180, which is what puts the automatic
+    // axis at 200 in steps of 20 and so gives the $0..$200 labels.
+    chart.series[0].values = vec![180.0];
+    chart.has_legend = false;
+    chart.title = None;
+    chart.auto_title_deleted = true;
+    chart.text_font_family = Some("Calibri".to_string());
+    chart.value_axis_number_format = number_format.map(str::to_string);
+    chart.value_axis_text_style.size_pt = Some(size_pt);
+    chart
+}
+
+/// The frame `Gift Budget and Tracker1.xlsx` anchors its chart in, in the
+/// chart's own points. The sheet prints at a 0.82 fit-to-page scale, so on the
+/// page it measures 833.10 x 252.54pt.
+const EXCEL_GIFT_CHART_FRAME: (f64, f64) = (1015.9784, 307.9732);
+
+#[test]
+fn a_framed_excel_column_chart_seats_its_plot_where_excel_measures_it() {
+    // Native Excel for Mac 16.112 exports of the #1166 workbook, one factor
+    // changed per variant, measured off `mutool draw -F trace` as the value
+    // gridlines' left end relative to the chart frame. Excel seats the widest
+    // tick label 6.5pt inside the frame whatever the size or the label, then
+    // leaves 5/6 of the face's ascent plus half its descent before the plot.
+    //
+    // The size series and the number-format series both have to be here: a
+    // model fitted to one alone can trade the label's own width against the
+    // clearance after it and still reproduce that series exactly.
+    let measurements = [
+        (7.0, Some("\\$#,##0"), 27.1941),
+        (9.0, Some("\\$#,##0"), 33.0891),
+        (11.0, Some("\\$#,##0"), 39.0068),
+        (14.0, Some("\\$#,##0"), 47.8684),
+        (18.0, Some("\\$#,##0"), 59.7010),
+        (9.0, None, 28.5291),
+        (9.0, Some("\\$#,##0.0000"), 53.5991),
+    ];
+
+    for (size_pt, number_format, expected_left) in measurements {
+        let chart = excel_gift_column_chart(size_pt, number_format);
+        let actual_left = axis_plot_rect(&chart, EXCEL_GIFT_CHART_FRAME, false).0;
+        assert!(
+            (actual_left - expected_left).abs() <= 0.05,
+            "{size_pt}pt {number_format:?}: plot left {actual_left}pt, Excel's {expected_left}pt"
+        );
+    }
+}
+
+#[test]
+fn an_excel_column_value_label_ends_where_excel_ends_it() {
+    // The same exports place every widest label's first glyph 6.5pt inside the
+    // frame. The labels are right-aligned in their box, so the box has to end
+    // where the clearance before the plot begins; sizing it independently of
+    // the gutter is what left the #1166 labels 2.63pt short of Excel's.
+    let chart = excel_gift_column_chart(9.0, Some("\\$#,##0"));
+    let source = framed_chart_source(&chart, EXCEL_GIFT_CHART_FRAME.0, EXCEL_GIFT_CHART_FRAME.1);
+    let widest = source
+        .lines()
+        .find(|line| line.contains("align(right + horizon)") && line.ends_with(r"[\$100]]])"))
+        .expect("the $100 value-axis label is emitted");
+    let dx: f64 = leading_pt(widest.split_once("dx: ").expect("the label is placed").1)
+        .expect("the label's dx is a measurement");
+    let box_w: f64 = leading_pt(
+        widest
+            .split_once("box(width: ")
+            .expect("the label sits in a box")
+            .1,
+    )
+    .expect("the label box's width is a measurement");
+    // Calibri advances `$100` at 2.027344em, so 6.5pt of frame inset plus the
+    // label is 24.746pt — where Excel's own widest label starts and ends.
+    assert!(
+        (dx + box_w - 24.746).abs() <= 0.01,
+        "the value-label box ends at {}pt, Excel's at 24.746pt: {widest}",
+        dx + box_w
+    );
+    assert!(
+        (dx - 0.0).abs() < 1e-9,
+        "the spreadsheet label box keeps its origin: {widest}"
+    );
+}
+
 #[test]
 fn a_non_powerpoint_or_unsized_column_keeps_its_existing_label_origin() {
     let mut spreadsheet = crowded_column_chart();
