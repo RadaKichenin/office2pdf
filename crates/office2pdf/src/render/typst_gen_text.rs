@@ -1890,14 +1890,22 @@ pub(super) fn generate_runs_with_tabs(
     );
 }
 
-/// Emit fixed-page PowerPoint runs, correcting the line before each explicit
-/// break when both adjacent explicit segments fit one physical line.
+/// Emit fixed-page PowerPoint runs, giving each explicitly broken segment
+/// PowerPoint's own line box when every one of them fits a physical line.
 ///
-/// PowerPoint gives the following line its own full line box. Typst normally
-/// advances by the preceding line's descent plus the following line's ascent,
-/// so a 12.5pt line followed by a 10pt line advances 12.69pt instead of 12pt.
-/// Replacing the preceding segment's bottom edge with the following line's
-/// descent makes the transition exactly the following line's 1.2em box.
+/// Every line owns a 1.2em box at **its own** size, so a break advances by the
+/// preceding line's descent plus the following line's seat and a column of
+/// same-size lines paces at exactly `1.2 x size`. Typst would otherwise pace
+/// the stack by the *face's* edges, which are not PowerPoint's box.
+///
+/// A native PowerPoint 16 export of nine-line hard-broken columns measures the
+/// same-size case at `1.2 x size` for every size probed — 6, 6.5, 8, 8.5, 9,
+/// 9.2, 9.5, 9.8, 10.5, 11.5, 12.25 and 20pt — in a text box and in a table
+/// cell alike, which is what retired the 10pt line-box floor this path used to
+/// carry (issue #1172). The floor was fitted to one 9.5pt table cell that
+/// advances 12.00pt natively, but that cell follows a *13pt* line: the same
+/// export paces a nine-line 9.5pt column at 11.37pt, and the 12.00pt is the
+/// taller preceding line's descent, not a floor.
 ///
 /// The width guard is essential: an edge set on a segment that wraps would
 /// affect every physical line in it, not only the one before the hard break.
@@ -1963,17 +1971,10 @@ pub(super) fn generate_powerpoint_runs_with_tabs(
         Some(Alignment::Right) => "top + right",
         _ => "top + left",
     };
-    for (index, (line, source)) in lines.iter().zip(&line_sources).enumerate() {
+    for (line, source) in lines.iter().zip(&line_sources) {
         let line_size_pt: f64 = line.max_font_size_pt();
         let top_pt: f64 = top_em * line_size_pt;
-        let line_height_pt: f64 = match lines.get(index + 1) {
-            Some(next) => {
-                let next_top_pt: f64 = top_em * next.max_font_size_pt();
-                let next_advance_pt: f64 = (top_em + bottom_em) * next.line_box_font_size_pt();
-                top_pt + next_advance_pt - next_top_pt
-            }
-            None => top_pt + bottom_em * line_size_pt,
-        };
+        let line_height_pt: f64 = top_pt + bottom_em * line_size_pt;
         let _ = writeln!(
             out,
             "  box(width: {width}pt, height: {height}pt)[#place({anchor}, dy: {top}pt)[#text(top-edge: \"baseline\", bottom-edge: \"baseline\")[{source}]]],",
@@ -2082,13 +2083,6 @@ impl PowerPointHardBreakLine {
             .reduce(f64::max)
             .or(self.fallback_font_size_pt)
             .unwrap_or(12.0)
-    }
-
-    /// PowerPoint's line box does not shrink below the 10pt body-text floor.
-    /// The original slide 16 cell carries a 9.5pt run but advances exactly
-    /// 12pt in the native export, the same as its 10pt counterpart on slide 4.
-    fn line_box_font_size_pt(&self) -> f64 {
-        self.max_font_size_pt().max(10.0)
     }
 }
 
