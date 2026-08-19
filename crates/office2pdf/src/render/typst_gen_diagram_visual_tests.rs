@@ -5483,3 +5483,156 @@ fn a_one_point_scatter_series_draws_its_marker_and_no_polyline() {
         "the scatter series draws the circle it declares on its one point; got:\n{source}"
     );
 }
+
+/// The `(width, height, key-to-label gap)` of every legend key the source draws
+/// as a filled box, in the order written.
+///
+/// A line series' key is a stroke and a marker rather than a box, so it is not
+/// collected here — [`LEGEND_KEY_LEN_PT`] is what sizes that one.
+fn emitted_legend_key_boxes(source: &str) -> Vec<(f64, f64, f64)> {
+    source
+        .lines()
+        .filter_map(|line| {
+            let after: &str = line.split_once("box[#box(width: ")?.1;
+            // A line series' key opens the same way but takes a `baseline:`
+            // after its height and paints its marker inside a nested block, so
+            // the filled keys are the ones whose height is followed *directly*
+            // by the colour. Merely containing a fill is not enough — the
+            // nested marker carries one of its own.
+            let height: &str = after.split_once("height: ")?.1;
+            if !height.split_once("pt")?.1.starts_with(", fill: ") {
+                return None;
+            }
+            Some((
+                leading_pt(after)?,
+                leading_pt(height)?,
+                leading_pt(after.split_once("#h(")?.1)?,
+            ))
+        })
+        .collect()
+}
+
+/// The #1169 workbook's bottom legend, restated in a face the crate measures
+/// natively.
+///
+/// `Gift Budget and Tracker1.xlsx` (attached to #982) puts three bar series and
+/// one overlaid line series in a bottom legend set in 9pt Segoe UI, which no
+/// runner is guaranteed to have. Calibri's `hhea` metrics are compiled in — see
+/// [`CALIBRI_CHART_LINE_METRICS_EM`] — so a legend restated in it is assertable
+/// wherever the tests run.
+fn excel_bottom_legend_chart(family: &str, size_pt: f64) -> Chart {
+    let mut chart = two_series_bar_chart(Vec::new());
+    chart.chart_type = ChartType::Column;
+    chart.host = crate::ir::ChartHost::Spreadsheet;
+    chart.categories = vec!["Jan".to_string()];
+    chart.has_legend = true;
+    chart.legend_position = LegendPosition::Bottom;
+    chart.title = None;
+    chart.auto_title_deleted = true;
+    chart.text_font_family = Some(family.to_string());
+    chart.text_style.size_pt = Some(size_pt);
+    chart
+}
+
+#[test]
+fn an_excel_bar_legend_key_is_the_flat_bar_excel_draws() {
+    // Native Excel for Mac 16.112 exports of the #1169 workbook, one factor
+    // changed per variant — five legend sizes and four faces against a
+    // layout-identical re-zip control — draw a bar series' key as a wide flat
+    // rectangle, never the 9pt square this renderer drew.
+    //
+    // Its width and the space before the label never move: 19.2000pt and
+    // 2.0250pt in all ten exports, and 19.200pt again in the unrelated
+    // `WithChart.xlsx` export, whose chart frame is under half as wide. Only
+    // the height follows the legend's text, and it follows the face as well as
+    // the size: 0.45 of the face's bare `hhea` line box.
+    //
+    // Calibri's box is 2500/2048 em, so 0.45 of it is 4.9438pt at 9pt against
+    // the export's 4.9512 and 9.8877pt at 18pt against its 9.8902 — both inside
+    // the 0.0122pt the GT's own 0.82 print scale can resolve.
+    let measurements = [(9.0_f64, 4.9512_f64), (18.0, 9.8902)];
+
+    for (size_pt, expected_height_pt) in measurements {
+        let source: String = chart_source(excel_bottom_legend_chart("Calibri", size_pt));
+        let keys: Vec<(f64, f64, f64)> = emitted_legend_key_boxes(&source);
+        assert_eq!(
+            keys.len(),
+            2,
+            "each of the two bar series takes a legend key; got:\n{source}"
+        );
+        for (width_pt, height_pt, gap_pt) in keys {
+            assert!(
+                (width_pt - 19.2).abs() <= 0.01,
+                "{size_pt}pt: the key is {width_pt}pt wide, Excel's 19.2pt; got:\n{source}"
+            );
+            assert!(
+                (height_pt - expected_height_pt).abs() <= 0.02,
+                "{size_pt}pt: the key is {height_pt}pt tall, Excel's {expected_height_pt}pt; \
+                 got:\n{source}"
+            );
+            assert!(
+                (gap_pt - 2.025).abs() <= 0.005,
+                "{size_pt}pt: the key leaves {gap_pt}pt before its label, Excel's 2.025pt; \
+                 got:\n{source}"
+            );
+        }
+    }
+}
+
+#[test]
+fn an_excel_legend_key_keeps_one_length_across_both_families() {
+    // The #1169 chart carries three bar series and one line laid over them, and
+    // the export gives every one of the four keys the same 19.200pt span: the
+    // bar keys as a filled rectangle, the line key as a stroke from 412.910 to
+    // 432.110 in the `WithChart.xlsx` export. Sizing the two families apart
+    // would put a 19.2pt bar key beside a 20pt line key in one legend row.
+    let mut chart = excel_bottom_legend_chart("Calibri", 9.0);
+    chart.series[1].plot_type = Some(ChartType::Line);
+    let source: String = chart_source(chart);
+
+    let keys: Vec<(f64, f64, f64)> = emitted_legend_key_boxes(&source);
+    assert_eq!(
+        keys.len(),
+        1,
+        "only the column series takes a filled key; got:\n{source}"
+    );
+    assert!(
+        (keys[0].0 - LEGEND_KEY_LEN_PT).abs() <= 0.01,
+        "the bar key spans {}pt where the line key spans {}pt; got:\n{source}",
+        keys[0].0,
+        format_f64(LEGEND_KEY_LEN_PT)
+    );
+    assert!(
+        source.contains(&format!(
+            "line(end: ({}pt, 0pt)",
+            format_f64(LEGEND_KEY_LEN_PT)
+        )),
+        "the overlaid line's key samples the series across the same span; got:\n{source}"
+    );
+}
+
+#[test]
+fn a_powerpoint_legend_key_keeps_its_own_square() {
+    // PowerPoint's automatic layout is a separate regime — its key is a square
+    // scaled from chart text (#804) and was fitted to native 16.112 exports —
+    // so the Excel measurement must not reach it.
+    let mut chart = excel_bottom_legend_chart("Calibri", 12.0);
+    chart.host = crate::ir::ChartHost::Presentation;
+    let source: String = chart_source(chart);
+
+    let keys: Vec<(f64, f64, f64)> = emitted_legend_key_boxes(&source);
+    assert!(
+        !keys.is_empty(),
+        "the legend draws its keys; got:\n{source}"
+    );
+    for (width_pt, height_pt, _) in keys {
+        assert!(
+            (width_pt - height_pt).abs() < 1e-9,
+            "a PowerPoint key stays square; got {width_pt}pt by {height_pt}pt in:\n{source}"
+        );
+        assert!(
+            (width_pt - PPTX_LEGEND_KEY_EM * 12.0).abs() <= 0.01,
+            "a PowerPoint key keeps its own text-scaled side; got {width_pt}pt in:\n{source}"
+        );
+    }
+}

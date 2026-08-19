@@ -272,11 +272,21 @@ fn series_line_pt(series: &crate::ir::ChartSeries) -> f64 {
 /// zero and 4.32pt at -2.
 pub(super) const LEGEND_KEY_BASELINE_PT: f64 = -0.5;
 
-/// Length of a line series' legend key.
+/// Length of a legend key, whichever family the series plots as.
 ///
-/// Measured on the native Excel export of `WithChart.xlsx` at 150 DPI: the two
-/// keys run 20.16pt and 20.64pt, either side of a 20pt nominal.
-pub(super) const LEGEND_KEY_LEN_PT: f64 = 20.0;
+/// Read off two unrelated native Excel for Mac 16.112 exports as exactly
+/// 19.20pt: the `WithChart.xlsx` line keys span 412.910 to 432.110 on a
+/// 443.50pt chart frame, and the #1169 workbook's bar keys span the same
+/// 19.200pt on a 1015.98pt one. It does not move with the legend's size or
+/// face — ten one-factor exports of that workbook, five sizes and four faces,
+/// all report 19.2000pt — so one constant serves both families and every
+/// frame.
+///
+/// The 20.0 this replaced came from colour-masking the same `WithChart.xlsx`
+/// export at 150 DPI (#801), where one pixel is 0.48pt: it reported 20.16 and
+/// 20.64 for the two keys of a legend whose keys are identical, which is the
+/// signature of a measurement the render could not resolve.
+pub(super) const LEGEND_KEY_LEN_PT: f64 = 19.2;
 
 /// Explicit space between a legend key and its label.
 ///
@@ -285,6 +295,26 @@ pub(super) const LEGEND_KEY_LEN_PT: f64 = 20.0;
 /// chart text resolves its declared theme face (#668), so a compensating
 /// negative gap would overfit the current fallback (#804).
 const LEGEND_KEY_LABEL_GAP_PT: f64 = 0.0;
+
+/// The space Excel leaves between a legend key and its label.
+///
+/// Measured from the key's right edge to the label's first pen position, which
+/// is what `#h()` sets here. Constant across the ten one-factor exports of the
+/// #1169 workbook — every size and every face reports 2.0250pt — and 2.0247pt
+/// again in the unrelated `WithChart.xlsx` export.
+const EXCEL_LEGEND_KEY_LABEL_GAP_PT: f64 = 2.025;
+
+/// The share of the legend face's line box Excel gives a filled key's height.
+///
+/// The key is a flat bar, not a square: 5.39pt tall for the 9pt Segoe UI legend
+/// of the #1169 workbook against a 19.2pt width. The height is the only part of
+/// the key that moves, and it follows the face as well as the size — 4.9512pt
+/// in Calibri where Segoe UI gives 5.3902 at the same 9pt — which identifies it
+/// as a share of [`chart_face_line_metrics_em`]'s bare `hhea` box rather than
+/// of the size. Fitting all ten exports gives 0.4498 (Segoe UI 6/9/12/18/24pt,
+/// Calibri 9/18pt, Arial and Georgia at 9pt), inside the 0.0122pt the GT's own
+/// 0.82 print scale can resolve of a flat 0.45.
+const EXCEL_LEGEND_KEY_LINE_BOX_SHARE: f64 = 0.45;
 
 /// Marker shape for the `index`-th series, when the file asks for a default
 /// marker rather than naming a `c:symbol`.
@@ -2215,7 +2245,12 @@ fn write_chart_title(
 ///
 /// Falls back to the floor for any name that cannot be measured — wasm has no
 /// font search — so an entry is never narrower than its text.
-fn legend_entry_widths(chart: &Chart, key_len_pt: f64, names: &[String]) -> Vec<f64> {
+fn legend_entry_widths(
+    chart: &Chart,
+    key_len_pt: f64,
+    key_label_gap_pt: f64,
+    names: &[String],
+) -> Vec<f64> {
     let size_pt: f64 = chart_text_pt(chart);
     let family: &str = chart
         .text_font_family
@@ -2228,23 +2263,67 @@ fn legend_entry_widths(chart: &Chart, key_len_pt: f64, names: &[String]) -> Vec<
                 chart_text_advance_em(family, false, name).map_or(0.0, |advance| advance * size_pt);
             // A gutter after the label keeps neighbouring entries apart rather
             // than butting the next key against the last glyph.
-            (key_len_pt + LEGEND_KEY_LABEL_GAP_PT + label + GAP).max(LEGEND_ENTRY_W)
+            (key_len_pt + key_label_gap_pt + label + GAP).max(LEGEND_ENTRY_W)
         })
         .collect()
 }
 
-/// PowerPoint scales an axis chart's square legend key and its following gap
-/// with chart text. Other hosts retain the Excel-calibrated legacy metrics.
-fn axis_legend_entry_metrics(chart: &Chart) -> (f64, f64) {
+/// The key box one entry of an axis chart's legend draws, and the space it
+/// leaves before its label.
+struct LegendKeyMetrics {
+    width_pt: f64,
+    height_pt: f64,
+    label_gap_pt: f64,
+}
+
+/// The legend key metrics of the host the chart came from.
+///
+/// PowerPoint scales an axis chart's *square* key and its following gap with
+/// chart text (#804). Excel draws a flat bar instead — [`LEGEND_KEY_LEN_PT`]
+/// wide whatever the text, [`EXCEL_LEGEND_KEY_LINE_BOX_SHARE`] of the legend
+/// face's line box tall — and leaves [`EXCEL_LEGEND_KEY_LABEL_GAP_PT`] before
+/// the label (#1169). A Word-hosted chart has never been measured against a
+/// native export, so it keeps the legacy square.
+fn axis_legend_entry_metrics(chart: &Chart) -> LegendKeyMetrics {
+    let size_pt: f64 = chart_text_pt(chart);
     if matches!(chart.host, crate::ir::ChartHost::Presentation) {
-        let size_pt = chart_text_pt(chart);
-        (
-            PPTX_LEGEND_KEY_EM * size_pt,
-            (PPTX_LEGEND_KEY_LABEL_GAP_PT + PPTX_LEGEND_KEY_LABEL_GAP_EM * size_pt).max(0.0),
-        )
-    } else {
-        (9.0, LEGEND_KEY_LABEL_GAP_PT)
+        let side_pt: f64 = PPTX_LEGEND_KEY_EM * size_pt;
+        return LegendKeyMetrics {
+            width_pt: side_pt,
+            height_pt: side_pt,
+            label_gap_pt: (PPTX_LEGEND_KEY_LABEL_GAP_PT + PPTX_LEGEND_KEY_LABEL_GAP_EM * size_pt)
+                .max(0.0),
+        };
     }
+    if matches!(chart.host, crate::ir::ChartHost::Spreadsheet)
+        && let Some(height_pt) = excel_legend_key_height_pt(chart)
+    {
+        return LegendKeyMetrics {
+            width_pt: LEGEND_KEY_LEN_PT,
+            height_pt,
+            label_gap_pt: EXCEL_LEGEND_KEY_LABEL_GAP_PT,
+        };
+    }
+    LegendKeyMetrics {
+        width_pt: 9.0,
+        height_pt: 9.0,
+        label_gap_pt: LEGEND_KEY_LABEL_GAP_PT,
+    }
+}
+
+/// The height Excel gives a filled legend key, or `None` where the legend's
+/// face resolves to nothing measurable.
+///
+/// Falling back rather than substituting a nominal box keeps a font-search-free
+/// build (notably wasm) on the shape it always drew instead of sizing the key
+/// from a face the export never used.
+fn excel_legend_key_height_pt(chart: &Chart) -> Option<f64> {
+    let family: &str = chart
+        .text_font_family
+        .as_deref()
+        .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_FAMILY);
+    let (ascent_em, descent_em) = chart_face_line_metrics_em(family, false)?;
+    Some(EXCEL_LEGEND_KEY_LINE_BOX_SHARE * (ascent_em + descent_em) * chart_text_pt(chart))
 }
 
 /// Width of the widest entry in a PowerPoint right-side axis legend.
@@ -2906,14 +2985,11 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 .unwrap_or_else(|| format!("Series {}", index + 1))
         })
         .collect();
-    let entry_widths: Vec<f64> = legend_entry_widths(chart, LEGEND_KEY_LEN_PT, &legend_names);
-    let (legend_key_size_pt, legend_key_label_gap_pt) = axis_legend_entry_metrics(chart);
-    let right_inset = powerpoint_right_legend_inset(
-        chart,
-        &legend_names,
-        legend_key_size_pt,
-        legend_key_label_gap_pt,
-    );
+    let key: LegendKeyMetrics = axis_legend_entry_metrics(chart);
+    let entry_widths: Vec<f64> =
+        legend_entry_widths(chart, key.width_pt, key.label_gap_pt, &legend_names);
+    let right_inset =
+        powerpoint_right_legend_inset(chart, &legend_names, key.width_pt, key.label_gap_pt);
     let legend_entries: usize = if chart.has_legend { series.len() } else { 0 };
     for (s_index, s) in series.iter().enumerate().take(legend_entries) {
         let color: String = series_color(s, s_index, 0, &chart.theme_accent_colors);
@@ -2952,22 +3028,22 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
         // Each series' key is drawn the way its family plots it: a filled
         // swatch for a column, a stroke-and-marker sample for a line laid over
         // them (issue #1067).
-        let key: String = if overlaid[s_index] {
+        let key_markup: String = if overlaid[s_index] {
             line_legend_key(s_index, s, &color)
         } else {
             format!(
                 "#box(width: {}pt, height: {}pt, fill: {})",
-                format_f64(legend_key_size_pt),
-                format_f64(legend_key_size_pt),
+                format_f64(key.width_pt),
+                format_f64(key.height_pt),
                 color
             )
         };
         let _ = writeln!(
             out,
-            "#place(top + left, dx: {}pt, dy: {}pt, box[{key}#h({}pt)#text(size: {}pt)[{}]])",
+            "#place(top + left, dx: {}pt, dy: {}pt, box[{key_markup}#h({}pt)#text(size: {}pt)[{}]])",
             format_f64(entry_x),
             format_f64(entry_y),
-            format_f64(legend_key_label_gap_pt),
+            format_f64(key.label_gap_pt),
             format_f64(chart_text_pt(chart)),
             escape_typst(name)
         );
@@ -3255,7 +3331,12 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
                 .unwrap_or_else(|| format!("Series {}", index + 1))
         })
         .collect();
-    let entry_widths: Vec<f64> = legend_entry_widths(chart, LEGEND_KEY_LEN_PT, &legend_names);
+    let entry_widths: Vec<f64> = legend_entry_widths(
+        chart,
+        LEGEND_KEY_LEN_PT,
+        LEGEND_KEY_LABEL_GAP_PT,
+        &legend_names,
+    );
     let legend_entries: usize = if chart.has_legend { series.len() } else { 0 };
     for (s_index, s) in series.iter().enumerate().take(legend_entries) {
         let color: String = series_color(s, s_index, 0, &chart.theme_accent_colors);
@@ -3517,7 +3598,12 @@ fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64
                 .unwrap_or_else(|| format!("Series {}", index + 1))
         })
         .collect();
-    let entry_widths: Vec<f64> = legend_entry_widths(chart, LEGEND_KEY_LEN_PT, &legend_names);
+    let entry_widths: Vec<f64> = legend_entry_widths(
+        chart,
+        LEGEND_KEY_LEN_PT,
+        LEGEND_KEY_LABEL_GAP_PT,
+        &legend_names,
+    );
     if chart.has_legend {
         for (series_index, series) in chart.series.iter().enumerate() {
             let color: String = series_color(series, series_index, 0, &chart.theme_accent_colors);
@@ -3659,7 +3745,12 @@ fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, 
     // duplicates the slice labels, so one the file never asked for is doubly
     // visible (issue #762).
     let entries: usize = chart.categories.len().max(series.values.len());
-    let entry_widths: Vec<f64> = legend_entry_widths(chart, LEGEND_KEY_LEN_PT, &chart.categories);
+    let entry_widths: Vec<f64> = legend_entry_widths(
+        chart,
+        LEGEND_KEY_LEN_PT,
+        LEGEND_KEY_LABEL_GAP_PT,
+        &chart.categories,
+    );
     let legend_entries: usize = if chart.has_legend { entries } else { 0 };
     for (index, category) in chart.categories.iter().enumerate().take(legend_entries) {
         let color: String = category_color(
