@@ -1077,6 +1077,114 @@ pub(super) fn sheet_row_line_advance_pt(
     Some(advance_em * font_size_pt)
 }
 
+/// The baseline-to-baseline advance Excel gives a sheet cell's lines when it
+/// sets more than one — a wrapped cell, or one carrying its own line breaks —
+/// for a face and size the sweep below measured (issue #1163).
+///
+/// **It is not the face's `hhea` line**, which is what the cell's box spans,
+/// and no rounding of that line reproduces it: Arial and Times New Roman
+/// declare the same 2355/2048 line yet advance 29pt against 27pt at 24pt,
+/// while Verdana's taller 2489 advances 30pt there. The best fit over the
+/// whole sweep of `ROUND(ascender) + ROUND(line gap) + ROUND(descender) + c`,
+/// across every combination of floor/ceil/round and the `hhea`, `OS/2 win`
+/// and `OS/2 typo` metric sets, misses 36 of 126 samples; a per-face
+/// `ROUND(k x size + c)` misses 9 of Segoe UI's 21 alone. So this is a
+/// measured table, exactly as the row-height recompute in
+/// `parser::xlsx_cells` is, and for the same reason.
+///
+/// **Method.** Native Excel-for-Mac exports of purpose-built probe workbooks
+/// (`/Volumes/T7/scratch/issue-1163`, built with openpyxl): one wrapped,
+/// top-aligned cell per (face, size) in a fixed track far taller than its
+/// text, read back with `mutool draw -F stext`. Every block advances by one
+/// constant whole number of points.
+///
+/// Four factors were swept and none of them moves it:
+///
+/// - **the workbook's Normal font** — the same 126-cell sweep exported under
+///   `fonts[0]` of Arial 10, Segoe UI 10 and Calibri 11 returns the identical
+///   table, so the advance keys on the *cell's* face, and the printed grid's
+///   `x0.92` compaction (which Calibri 11 turns on) does not reach it
+/// - **the row's track** — Arial 14 advances 17.00pt in 60, 90, 120, 160, 200
+///   and 240pt tracks alike
+/// - **the characters** — a Malgun Gothic column set in Korean answers its
+///   Latin twin at all fourteen sizes, the same independence issue #1060
+///   measured for the line box itself
+/// - **the column width** — the large-size batch was exported twice at two
+///   different widths, wrapping at different points, and agreed everywhere
+///
+/// **Confirmed against a real workbook.** The sheet of #1163 prints at a 0.82
+/// fit-to-page scale, and its three wrapped cells measure 17.22, 13.12 and
+/// 31.16pt between baselines — 21.00, 16.00 and 38.00pt unscaled, which is
+/// exactly what this table gives Segoe UI 14, Segoe UI 12 and Century Gothic
+/// 30.
+///
+/// `None` for a family or size the sweep did not reach, which leaves the
+/// caller on the face's `hhea` line. **Nothing here interpolates**, and no
+/// family may be lent another's column: Arial and Times New Roman share a
+/// `hhea` line and diverge here, Aptos and Aptos Narrow were each swept in
+/// full before being paired, and so were `Malgun Gothic` and `맑은 고딕`.
+pub(super) fn sheet_wrapped_line_advance_pt(family: &str, font_size_pt: f64) -> Option<f64> {
+    let advances: &[f64; SHEET_ADVANCE_SIZES_PT.len()] = &SHEET_WRAPPED_LINE_ADVANCES
+        .iter()
+        .find(|face| {
+            face.families
+                .iter()
+                .any(|candidate| candidate.eq_ignore_ascii_case(family))
+        })?
+        .advances_pt;
+    SHEET_ADVANCE_SIZES_PT
+        .iter()
+        .position(|size_pt| (font_size_pt - size_pt).abs() < 0.01)
+        .map(|index| advances[index])
+}
+
+/// The font sizes [`SHEET_WRAPPED_LINE_ADVANCES`] states an advance for, in
+/// points. Every series carries one entry per size, in this order.
+const SHEET_ADVANCE_SIZES_PT: [f64; 21] = [
+    8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 20.0, 22.0, 24.0, 26.0, 28.0,
+    30.0, 32.0, 36.0, 40.0, 48.0,
+];
+
+/// One face's measured advances, and the family names that select it.
+struct SheetLineAdvances {
+    /// Matched whole and case-insensitively, never as a prefix.
+    families: &'static [&'static str],
+    /// One advance in points per entry of [`SHEET_ADVANCE_SIZES_PT`].
+    advances_pt: [f64; SHEET_ADVANCE_SIZES_PT.len()],
+}
+
+/// What the sweep described on [`sheet_wrapped_line_advance_pt`] measured, one
+/// series per face.
+#[rustfmt::skip]
+const SHEET_WRAPPED_LINE_ADVANCES: [SheetLineAdvances; 13] = [
+    SheetLineAdvances { families: &["Arial"], advances_pt:
+        [11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 21.0, 22.0, 24.0, 27.0, 29.0, 32.0, 33.0, 35.0, 38.0, 43.0, 46.0, 56.0] },
+    SheetLineAdvances { families: &["Times New Roman"], advances_pt:
+        [11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0, 21.0, 23.0, 26.0, 27.0, 30.0, 32.0, 34.0, 37.0, 41.0, 46.0, 54.0] },
+    SheetLineAdvances { families: &["Verdana"], advances_pt:
+        [11.0, 12.0, 13.0, 14.0, 16.0, 17.0, 18.0, 19.0, 20.0, 22.0, 23.0, 25.0, 28.0, 30.0, 32.0, 35.0, 37.0, 40.0, 45.0, 49.0, 59.0] },
+    SheetLineAdvances { families: &["Tahoma"], advances_pt:
+        [11.0, 12.0, 13.0, 14.0, 15.0, 17.0, 18.0, 19.0, 20.0, 22.0, 23.0, 25.0, 28.0, 30.0, 32.0, 35.0, 37.0, 40.0, 44.0, 49.0, 59.0] },
+    SheetLineAdvances { families: &["Georgia"], advances_pt:
+        [11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 20.0, 21.0, 22.0, 23.0, 26.0, 28.0, 31.0, 33.0, 36.0, 37.0, 42.0, 47.0, 56.0] },
+    SheetLineAdvances { families: &["Courier New"], advances_pt:
+        [11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0, 21.0, 24.0, 26.0, 28.0, 31.0, 32.0, 35.0, 38.0, 42.0, 46.0, 55.0] },
+    SheetLineAdvances { families: &["Helvetica"], advances_pt:
+        [11.0, 12.0, 13.0, 15.0, 16.0, 17.0, 18.0, 19.0, 21.0, 22.0, 22.0, 25.0, 27.0, 30.0, 32.0, 34.0, 37.0, 39.0, 44.0, 49.0, 59.0] },
+    SheetLineAdvances { families: &["Segoe UI"], advances_pt:
+        [11.0, 13.0, 14.0, 16.0, 16.0, 20.0, 21.0, 23.0, 23.0, 25.0, 26.0, 28.0, 31.0, 33.0, 38.0, 40.0, 43.0, 45.0, 50.0, 57.0, 67.0] },
+    SheetLineAdvances { families: &["Calibri"], advances_pt:
+        [11.0, 12.0, 14.0, 14.0, 15.0, 16.0, 18.0, 19.0, 20.0, 22.0, 23.0, 25.0, 28.0, 30.0, 33.0, 36.0, 38.0, 40.0, 45.0, 50.0, 60.0] },
+    SheetLineAdvances { families: &["Aptos", "Aptos Narrow"], advances_pt:
+        [11.0, 12.0, 13.0, 14.0, 15.0, 17.0, 18.0, 19.0, 21.0, 22.0, 23.0, 26.0, 28.0, 31.0, 32.0, 35.0, 37.0, 40.0, 45.0, 50.0, 60.0] },
+    SheetLineAdvances { families: &["Century Gothic"], advances_pt:
+        [11.0, 12.0, 13.0, 14.0, 16.0, 17.0, 18.0, 19.0, 21.0, 22.0, 23.0, 25.0, 28.0, 30.0, 33.0, 35.0, 38.0, 40.0, 45.0, 50.0, 60.0] },
+    SheetLineAdvances { families: &["Malgun Gothic", "맑은 고딕"], advances_pt:
+        [13.0, 14.0, 15.0, 17.0, 18.0, 19.0, 20.0, 22.0, 23.0, 26.0, 27.0, 30.0, 32.0, 35.0, 37.0, 40.0, 44.0, 47.0, 52.0, 59.0, 69.0] },
+    SheetLineAdvances { families: &["Gulim"], advances_pt:
+        [12.0, 13.0, 14.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 22.0, 23.0, 25.0, 27.0, 30.0, 32.0, 34.0, 36.0, 40.0, 44.0, 49.0, 59.0] },
+];
+
 /// Where a spreadsheet cell's fixed row track sits, so the cell's line can be
 /// seated on the baseline the native export prints (issue #1063).
 ///
@@ -1188,9 +1296,12 @@ pub(super) fn sheet_cell_descent_pt(
 pub(super) struct CellLineBox {
     pub top_em: f64,
     pub bottom_em: f64,
-    /// Zero except when the box is re-seated on the descender: the surplus
-    /// removed below the baseline moves here, so multi-line
-    /// baseline-to-baseline advance is unchanged (issue #618).
+    /// Zero for a Word or PowerPoint cell whose box is not re-seated on the
+    /// descender. It carries the surplus that seat removes from below the
+    /// baseline, so multi-line advance is unchanged (issue #618) — and, in a
+    /// spreadsheet cell, whatever Excel's measured wrapped-line pitch adds to
+    /// the face's hhea box, which is independent of that seat and applies to
+    /// top- and centre-aligned cells alike (issue #1163).
     pub leading_pt: f64,
     pub font_size_pt: f64,
 }
@@ -1228,9 +1339,21 @@ pub(super) struct CellLineBox {
 /// descent rests on the track's own bottom boundary. The box's height, and
 /// with it the row's advance, is unchanged (issue #1063).
 ///
+/// When `sheet_print_scale` is `Some` — any cell of a spreadsheet, carrying
+/// the sheet's `fitToWidth` factor — a face and size
+/// [`sheet_wrapped_line_advance_pt`] measured pace their *lines* on Excel's
+/// own pitch instead of on that box, and the difference leaves the box
+/// untouched and rides as leading. So a sheet cell's leading is non-zero
+/// whatever its vertical alignment, where every seat above leaves it at zero
+/// (issue #1163).
+///
 /// A **slide's** table cell does not come here: it paces on PowerPoint's flat
 /// 1.2em line via [`powerpoint_line_height_settings`], like the slide's own
 /// text boxes (issue #663).
+// Same shape as `word_cell_line_box`, which this only formats the result of;
+// grouping the arguments would have to split both, and the sheet's three are
+// each read on their own inside the box.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn word_cell_line_box_settings(
     runs: &[Run],
     style: &ParagraphStyle,
@@ -1239,6 +1362,7 @@ pub(super) fn word_cell_line_box_settings(
     seats_text_on_descender: bool,
     sheet_row_line: Option<&SheetRowLine>,
     sheet_seat: Option<SheetCellSeat>,
+    sheet_print_scale: Option<f64>,
 ) -> Option<String> {
     let line_box: CellLineBox = word_cell_line_box(
         runs,
@@ -1248,6 +1372,7 @@ pub(super) fn word_cell_line_box_settings(
         seats_text_on_descender,
         sheet_row_line,
         sheet_seat,
+        sheet_print_scale,
     )?;
     Some(format!(
         // The descent is negated here rather than written behind a literal
@@ -1273,6 +1398,7 @@ pub(super) fn word_cell_line_box(
     seats_text_on_descender: bool,
     sheet_row_line: Option<&SheetRowLine>,
     sheet_seat: Option<SheetCellSeat>,
+    sheet_print_scale: Option<f64>,
 ) -> Option<CellLineBox> {
     if style.line_box.is_some() {
         return None;
@@ -1408,6 +1534,23 @@ pub(super) fn word_cell_line_box(
             let top_em: f64 = advance_em / 2.0 + (baseline_pt - content_mid_pt) / font_size;
             (top_em, advance_em - top_em, leading_pt)
         }
+    };
+    // Excel paces a sheet cell's *lines* on a measured per-face advance that
+    // is not the face's hhea line, so the surplus rides as leading rather than
+    // inside the box: the box, and with it every seat measured against it,
+    // stays exactly where issues #618/#839/#1063 put it, and only a cell that
+    // sets a second line can see the difference (issue #1163).
+    // Excel evaluates that advance at the size the cell *declares* and prints
+    // it through the sheet's `fitToWidth` scale, which the parser has already
+    // folded into `font_size`; the scaled advance is no whole number of points.
+    let leading_pt: f64 = match sheet_print_scale
+        .filter(|scale| *scale > 0.0)
+        .and_then(|scale| {
+            sheet_wrapped_line_advance_pt(family, font_size / scale)
+                .map(|advance_pt| advance_pt * scale)
+        }) {
+        Some(advance_pt) => advance_pt - (top_em + bottom_em) * font_size,
+        None => leading_pt,
     };
     Some(CellLineBox {
         top_em,

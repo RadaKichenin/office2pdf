@@ -144,6 +144,10 @@ struct GenCtx {
     /// Whether that descender seat keeps Excel's minimum gap above the row's
     /// bottom boundary ([`Table::floors_bottom_aligned_descent`], issue #1097).
     table_floors_bottom_aligned_descent: bool,
+    /// The `fitToWidth` scale already folded into this table's sizes, from
+    /// [`Table::print_scale`]. `None` on an unscaled sheet and off a sheet
+    /// entirely; [`GenCtx::sheet_print_scale`] resolves the two apart.
+    table_print_scale: Option<f64>,
     /// Whether the cell being generated seats its line box on the descender:
     /// the enclosing table is a spreadsheet and the cell's effective vertical
     /// alignment is bottom (issue #618).
@@ -208,6 +212,15 @@ struct GenCtx {
 }
 
 impl GenCtx {
+    /// The scale a spreadsheet cell's line advance must be read through:
+    /// `Some(1.0)` on an unscaled sheet, `Some(the fitToWidth factor)` on a
+    /// fitted one, and `None` off a sheet, where Excel's advance does not
+    /// apply at all (issue #1163).
+    fn sheet_print_scale(&self) -> Option<f64> {
+        self.table_seats_bottom_aligned_text_on_descender
+            .then(|| self.table_print_scale.unwrap_or(1.0))
+    }
+
     fn new() -> Self {
         Self {
             flow_section_index: 0,
@@ -225,6 +238,7 @@ impl GenCtx {
             table_box_is_aligned: false,
             table_seats_bottom_aligned_text_on_descender: false,
             table_floors_bottom_aligned_descent: false,
+            table_print_scale: None,
             cell_seats_text_on_descender: false,
             cell_sheet_row_line: None,
             cell_sheet_seat: None,

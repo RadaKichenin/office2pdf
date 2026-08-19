@@ -886,6 +886,11 @@ fn spreadsheet_rows_share_one_line_box_whatever_script() {
 /// legitimately split the same line differently. Script invariance itself is
 /// pinned by [`spreadsheet_rows_share_one_line_box_whatever_script`], which
 /// compares a Korean row against its Latin twin directly.
+///
+/// The advance itself is Excel's own measured per-face pitch since issue
+/// #1163, not the bare hhea line: every cell of this probe sets a single line,
+/// so nothing it measured could separate the two. What it still rules out —
+/// Word's 1.3x East Asian box — is further away than ever.
 #[test]
 fn sheet_row_line_box_probe_takes_the_bare_hhea_line_for_every_row() {
     let Some((_ascender, _descender, word_pitch_em)) =
@@ -910,11 +915,16 @@ fn sheet_row_line_box_probe_takes_the_bare_hhea_line_for_every_row() {
     );
     for (top_em, bottom_em, leading_pt, size_pt) in advances {
         let advance_pt: f64 = (top_em + bottom_em) * size_pt + leading_pt;
+        // Excel's own measured pitch wherever the sweep of issue #1163 reached
+        // this size, and the face's bare hhea line where it did not — never
+        // Word's East Asian box, which is what this probe rules out.
+        let expected_pt: f64 = sheet_wrapped_line_advance_pt("Malgun Gothic", size_pt)
+            .unwrap_or(word_pitch_em * size_pt);
         assert!(
-            (advance_pt - word_pitch_em * size_pt).abs() < 1e-9,
-            "every probe row advances by the bare hhea line, not Word's East \
-             Asian box: {advance_pt}pt against {}pt at {size_pt}pt",
-            word_pitch_em * size_pt
+            (advance_pt - expected_pt).abs() < 1e-9,
+            "every probe row advances by {expected_pt}pt at {size_pt}pt, not by \
+             Word's East Asian {}pt: {advance_pt}pt",
+            1.3 * word_pitch_em * size_pt
         );
     }
 }
@@ -2674,4 +2684,178 @@ fn bottom_seat_floor_probe_seats_every_row_where_excel_prints_it() {
             format_f64(-expected_bottom_em)
         );
     }
+}
+
+/// Excel's wrapped-cell line advance, checked against a real workbook rather
+/// than against the probe sweep the table was built from (issue #1163).
+///
+/// The sheet of that issue prints at a 0.82 fit-to-page scale, and
+/// `mutool draw -F stext` reads three wrapped cells on its second page: the
+/// merged `B4:D4` panel at Segoe UI 14 advancing 17.22pt between baselines,
+/// the `Amount budgeted` column header at Segoe UI 12 advancing 13.12pt, and
+/// the `GIFT BUDGET AND TRACKER` title at Century Gothic 30 advancing
+/// 31.16pt. Unscaled those are 21.00, 16.00 and 38.00pt.
+///
+/// Our own box — the face's bare `hhea` line — gives 18.62, 15.96 and 36.78pt
+/// there, which is why the panel's eighth line landed 12.87pt high while the
+/// header 0.03pt away read as agreement.
+#[test]
+fn sheet_wrapped_line_advance_reproduces_the_native_excel_export() {
+    const FIT_TO_PAGE_SCALE: f64 = 0.82;
+
+    // (family, font size pt, advance measured on the scaled page pt)
+    let measured: [(&str, f64, f64); 3] = [
+        ("Segoe UI", 14.0, 17.22),
+        ("Segoe UI", 12.0, 13.12),
+        ("Century Gothic", 30.0, 31.16),
+    ];
+
+    for (family, font_size_pt, scaled_advance_pt) in measured {
+        let advance_pt: f64 = sheet_wrapped_line_advance_pt(family, font_size_pt)
+            .unwrap_or_else(|| panic!("{family} {font_size_pt}pt must carry a measured advance"));
+        assert!(
+            (advance_pt * FIT_TO_PAGE_SCALE - scaled_advance_pt).abs() < 0.005,
+            "{family} {font_size_pt}pt advances {scaled_advance_pt}pt on the native \
+             export's 0.82 page, so {} unscaled; the table gives {advance_pt}",
+            scaled_advance_pt / FIT_TO_PAGE_SCALE
+        );
+    }
+}
+
+/// A family or a size the sweep never reached states nothing, and the caller
+/// keeps the face's `hhea` line rather than an interpolated guess.
+#[test]
+fn an_unswept_face_or_size_states_no_sheet_advance() {
+    assert!(
+        sheet_wrapped_line_advance_pt("Libertinus Serif", 10.0).is_none(),
+        "a family outside the sweep must state no advance"
+    );
+    assert!(
+        sheet_wrapped_line_advance_pt("Segoe UI", 19.0).is_none(),
+        "a size between two measured points must not be interpolated"
+    );
+    assert!(
+        sheet_wrapped_line_advance_pt("Arial Narrow", 10.0).is_none(),
+        "a family name must match whole, not as a prefix of a swept one"
+    );
+    assert_eq!(
+        sheet_wrapped_line_advance_pt("segoe ui", 14.0),
+        Some(21.0),
+        "a family name matches case-insensitively"
+    );
+}
+
+/// A spreadsheet cell that sets more than one line advances them on Excel's
+/// measured pitch: the box keeps the face's `hhea` edges, and the difference
+/// rides as leading so a single-line cell — and every seat measured against
+/// its box — is untouched (issue #1163).
+#[test]
+fn wrapped_sheet_cell_paces_its_lines_on_excels_advance() {
+    let Some((family, font_size_pt, advance_pt)) = swept_face_with_metrics() else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+    let (_ascender_em, _descender_em, pitch_em) =
+        crate::render::pdf::font_line_metrics_em(family).expect("metrics resolved above");
+
+    let result: String = sheet_paragraph_source(family, font_size_pt);
+    let [(top_em, bottom_em, leading_pt, size_pt)] = cell_line_advances(&result)[..] else {
+        panic!("the sheet cell emits exactly one line box: {result}");
+    };
+    assert!(
+        ((top_em + bottom_em) - pitch_em).abs() < 1e-9,
+        "the box must stay the face's own hhea line, {pitch_em}em: {result}"
+    );
+    assert!(
+        (((top_em + bottom_em) * size_pt + leading_pt) - advance_pt).abs() < 1e-9,
+        "{family} {font_size_pt}pt must advance {advance_pt}pt between baselines, so \
+         leading must carry the {}pt the {}pt box falls short: {result}",
+        advance_pt - pitch_em * font_size_pt,
+        pitch_em * font_size_pt
+    );
+}
+
+/// Triangulation: the same paragraph in a **Word** table keeps Word's own
+/// line, which the box carries whole with no leading at all. Excel's advance
+/// is a spreadsheet treatment and must not leak into `<w:tbl>`.
+#[test]
+fn word_table_cell_keeps_its_hhea_advance() {
+    let Some((family, font_size_pt, _advance_pt)) = swept_face_with_metrics() else {
+        return;
+    };
+    let result: String = word_table_paragraph_source(family, font_size_pt);
+    assert!(
+        result.contains("#set par(leading: 0pt)"),
+        "a Word table cell must carry its whole advance inside the box: {result}"
+    );
+}
+
+/// The first family of the sweep whose metrics this runner can resolve, with a
+/// size the sweep measured and the advance it measured there. `None` on a
+/// runner carrying none of them.
+fn swept_face_with_metrics() -> Option<(&'static str, f64, f64)> {
+    const FONT_SIZE_PT: f64 = 14.0;
+    [
+        "Arial",
+        "Helvetica",
+        "Times New Roman",
+        "Verdana",
+        "Tahoma",
+        "Georgia",
+        "Courier New",
+        "Calibri",
+        "Segoe UI",
+        "Century Gothic",
+        "Malgun Gothic",
+    ]
+    .into_iter()
+    .find(|family| crate::render::pdf::font_line_metrics_em(family).is_some())
+    .and_then(|family| {
+        sheet_wrapped_line_advance_pt(family, FONT_SIZE_PT)
+            .map(|advance_pt| (family, FONT_SIZE_PT, advance_pt))
+    })
+}
+
+/// One centred cell of a spreadsheet, in a track with room for its line, whose
+/// text is long enough to wrap in the column it is given.
+fn sheet_paragraph_source(family: &str, font_size_pt: f64) -> String {
+    wrapping_cell_source(family, font_size_pt, true)
+}
+
+/// The same cell in a Word table.
+fn word_table_paragraph_source(family: &str, font_size_pt: f64) -> String {
+    wrapping_cell_source(family, font_size_pt, false)
+}
+
+fn wrapping_cell_source(family: &str, font_size_pt: f64, in_sheet: bool) -> String {
+    let cell = TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: "Fill out as much as you can at the beginning of each new year.".to_string(),
+                style: TextStyle {
+                    font_family: Some(family.to_string()),
+                    font_size: Some(font_size_pt),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })],
+        vertical_align: Some(CellVerticalAlign::Center),
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            minimum_height: None,
+            cells: vec![cell],
+            // Far taller than one line, so the row is not the tight regime of
+            // issue #839 where every cell shares one box.
+            height: Some(120.0),
+        }],
+        column_widths: vec![90.0],
+        seats_bottom_aligned_text_on_descender: in_sheet,
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    generate_typst(&doc).unwrap().source
 }

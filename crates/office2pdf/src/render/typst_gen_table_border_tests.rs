@@ -948,6 +948,9 @@ fn test_boundary_band_auto_row_verticals_paint_concrete_twin_bands() {
         false,
         None,
         None,
+        // `boundary_band_table` leaves the spreadsheet marker off, which is
+        // what the codegen passes for this table.
+        None,
     ) else {
         return; // no font book available (e.g. exotic CI sandbox)
     };

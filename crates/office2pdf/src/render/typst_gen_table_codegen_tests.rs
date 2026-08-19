@@ -74,6 +74,7 @@ fn test_table_with_default_cell_padding() {
         prints_gridlines: false,
         prints_headings: false,
         centers_between_print_margins: false,
+        print_scale: None,
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -128,6 +129,7 @@ fn test_table_cell_with_padding_override() {
         prints_gridlines: false,
         prints_headings: false,
         centers_between_print_margins: false,
+        print_scale: None,
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -159,6 +161,7 @@ fn test_table_alignment_center_wraps_table() {
         prints_gridlines: false,
         prints_headings: false,
         centers_between_print_margins: false,
+        print_scale: None,
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -1792,6 +1795,7 @@ fn a_row_minimum_height_emits_a_strut_rather_than_a_fixed_row() {
         prints_gridlines: false,
         prints_headings: false,
         centers_between_print_margins: false,
+        print_scale: None,
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
     let result = generate_typst(&doc).unwrap().source;
