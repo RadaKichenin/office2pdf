@@ -1047,3 +1047,56 @@ fn run_fill_alpha_composites_in_the_generated_source() {
         "the 25% line should composite at 64/255: {source}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// hard_break_wrapped_line_advance.pptx — `hard_break_line_advance.pptx` with
+// `<a:bodyPr wrap="none">` changed to `wrap="square"` (issue #1172). A wrapping
+// box paces its hard-broken lines through a measured `#stack` of per-line
+// boxes, a different path from the `#set text` edges the `wrap="none"` deck
+// takes, and that path floored every line box at 10pt: each column under 10pt
+// advanced a flat 12.00pt where the native export paces it at `1.2 x size`.
+// ---------------------------------------------------------------------------
+
+/// Every stacked line box spans `1.2 x` the size of the line it holds.
+#[test]
+fn wrapped_hard_break_columns_stack_their_own_line_box() {
+    let data = load_fixture("hard_break_wrapped_line_advance.pptx");
+    let (document, _warnings) = PptxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let source = generate_typst(&document).unwrap().source;
+
+    let mut heights: Vec<f64> = source
+        .match_indices("pt, height: ")
+        .filter_map(|(offset, needle)| {
+            let rest: &str = &source[offset + needle.len()..];
+            let (height, tail) = rest.split_once("pt)[#place(")?;
+            let _ = tail;
+            height.parse::<f64>().ok()
+        })
+        .collect();
+    heights.sort_by(f64::total_cmp);
+
+    // Four stacked lines per caption column; the 14pt labels carry no break.
+    let mut expected: Vec<f64> = [6.0_f64, 8.0, 9.0, 10.0, 11.0, 12.0, 14.0]
+        .into_iter()
+        .flat_map(|size| std::iter::repeat_n(1.2 * size, 4))
+        .collect();
+    expected.sort_by(f64::total_cmp);
+
+    assert_eq!(
+        heights.len(),
+        expected.len(),
+        "stacked line boxes emitted: {heights:?}"
+    );
+    for (got, want) in heights.iter().zip(&expected) {
+        assert!(
+            (got - want).abs() < 0.001,
+            "a wrapping box's hard-broken line spans 1.2 x its size: \
+             expected {expected:?}, got {heights:?}"
+        );
+    }
+}
+
+#[test]
+fn hard_break_wrapped_line_advance_smoke() {
+    assert_produces_valid_pdf("hard_break_wrapped_line_advance.pptx");
+}

@@ -2482,12 +2482,20 @@ fn consecutive_slide_paragraphs_keep_powerpoints_full_line_advance() {
     }
 }
 
-/// A hard break starts a PowerPoint line whose own largest run sets the full
-/// 1.2em advance. Typst normally combines the preceding line's descent with
-/// the following line's ascent, which is wrong when the sizes differ (#683).
+/// A hard break between two sizes clears the preceding line: the advance is
+/// that line's descent plus the following line's seat, not the following
+/// line's whole 1.2em box.
+///
+/// #683 read one gap of a two-line block and concluded the following line owns
+/// the whole box — 12.00pt for 12.5pt over 10pt. A nine-line probe of the same
+/// pair paces it at 12.96pt and its 10pt-over-12.5pt partner at 14.04pt, where
+/// the whole-box reading gives 12.00 and 15.00; the two sum to `1.2 x 22.5`
+/// either way, so only the boundary between them was ever in question. The
+/// half-point tolerances below are what separates the two models, and the
+/// 0.36pt inside them is the paragraph-wide seat share tracked in #1252.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
-fn powerpoint_hard_break_advance_uses_the_following_lines_font_size() {
+fn powerpoint_hard_break_advance_clears_the_line_above_it() {
     let family = "Arial";
     let doc = make_doc(vec![make_fixed_page(
         960.0,
@@ -2560,19 +2568,26 @@ fn powerpoint_hard_break_advance_uses_the_following_lines_font_size() {
         output.source
     );
     assert!(
-        (baselines[1] - baselines[0] - 12.0).abs() < 0.01,
-        "the 10pt following line must own a 12pt advance: {baselines:?}\n{}",
+        (baselines[1] - baselines[0] - 12.96).abs() < 0.5,
+        "the 12.5pt line's descent must carry the 10pt line to the export's \
+         12.96pt, not to its own 12.00pt box: {baselines:?}\n{}",
         output.source
     );
     assert!(
-        (baselines[2] - baselines[1] - 15.0).abs() < 0.01,
-        "the 12.5pt following line must own a 15pt advance: {baselines:?}\n{}",
+        (baselines[2] - baselines[1] - 14.04).abs() < 0.5,
+        "the 10pt line's descent must carry the 12.5pt line to the export's \
+         14.04pt, not to its own 15.00pt box: {baselines:?}\n{}",
         output.source
     );
 }
 
-/// A proportional `<a:lnSpc>` scales the following line's complete box; the
-/// hard-break correction must preserve that paragraph-level multiplier.
+/// A proportional `<a:lnSpc>` scales the box both sides of the break are cut
+/// from, so the hard-break stack must carry that paragraph-level multiplier.
+///
+/// The export paces this 12.5pt-over-10pt pair at 19.50pt under `val="150000"`
+/// against 12.96pt plain — 1.5x to within its own dither. The 0.80pt short of
+/// it is the paragraph-wide seat share of #1252; a following line owning the
+/// whole scaled box would give 18.00pt.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn powerpoint_hard_break_preserves_proportional_line_spacing() {
@@ -2632,8 +2647,9 @@ fn powerpoint_hard_break_preserves_proportional_line_spacing() {
         .baseline_pt;
 
     assert!(
-        (small_baseline - large_baseline - 18.0).abs() < 0.01,
-        "the 1.5 x 1.2em box of the 10pt following line must advance 18pt: \
+        (small_baseline - large_baseline - 19.5).abs() < 1.0,
+        "the scaled box must carry the break to the export's 19.5pt, not to \
+         the 18pt the 10pt line's own scaled box would give: \
          {large_baseline}, {small_baseline}\n{}",
         output.source
     );
@@ -3202,8 +3218,74 @@ fn a_turned_text_box_inside_the_slide_keeps_its_seat() {
     }
 }
 
+/// The baselines a slide text box seats one hard-broken line per entry of
+/// `sizes_pt` on, in reading order. `wraps` picks the `<a:bodyPr wrap>` the box
+/// declares: the two settings take different code paths, and each has had this
+/// same advance wrong for its own reason (issues #1115, #1172).
+#[cfg(not(target_arch = "wasm32"))]
+fn hard_broken_slide_baselines(family: &str, sizes_pt: &[f64], wraps: bool) -> Vec<f64> {
+    let mut runs: Vec<Run> = Vec::new();
+    for (index, size_pt) in sizes_pt.iter().enumerate() {
+        if index > 0 {
+            // What the parser emits for `<a:br/>`: the break marker on its
+            // own run, with no run properties of its own.
+            runs.push(Run {
+                text: "\u{000B}".to_string(),
+                style: TextStyle::default(),
+                href: None,
+                footnote: None,
+            });
+        }
+        runs.push(Run {
+            text: format!("Hxg{index}"),
+            style: TextStyle {
+                font_family: Some(family.to_string()),
+                font_size: Some(*size_pt),
+                ..TextStyle::default()
+            },
+            href: None,
+            footnote: None,
+        });
+    }
+
+    let mut text_box = make_fixed_text_box(
+        72.0,
+        72.0,
+        400.0,
+        200.0,
+        Insets::default(),
+        crate::ir::TextBoxVerticalAlign::Top,
+        vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs,
+        })],
+    );
+    if let FixedElementKind::TextBox(ref mut data) = text_box.kind {
+        data.no_wrap = !wraps;
+    }
+    let doc = make_doc(vec![make_fixed_page(960.0, 540.0, vec![text_box])]);
+    let output = generate_typst(&doc).unwrap();
+
+    let mut baselines: Vec<f64> = crate::render::pdf::compiled_text_runs(&output.source, 0)
+        .unwrap_or_else(|error| panic!("compile failed: {error}\n{}", output.source))
+        .into_iter()
+        .filter(|run| run.text.contains("Hxg"))
+        .map(|run| run.baseline_pt)
+        .collect();
+    baselines.sort_by(f64::total_cmp);
+    baselines.dedup_by(|left, right| (*left - *right).abs() < 0.001);
+    assert_eq!(
+        baselines.len(),
+        sizes_pt.len(),
+        "expected {} hard-broken lines for {sizes_pt:?}: {baselines:?}\n{}",
+        sizes_pt.len(),
+        output.source
+    );
+    baselines
+}
+
 /// A slide's hard-broken lines advance by the run's own 1.2em box, whatever
-/// the size.
+/// the size — in a box that wraps and in one that does not.
 ///
 /// `<a:br/>` reaches the IR as a run carrying no size of its own, so the
 /// paragraph has no size every run agrees on and emits no `#set text(size:)`.
@@ -3211,79 +3293,31 @@ fn a_turned_text_box_inside_the_slide_keeps_its_seat() {
 /// than against the size they were computed from, pinning every hard-broken
 /// line under 11pt to a flat `1.2 x 11pt` = 13.20pt — 89% too far apart for a
 /// 6pt caption (issue #1115).
+///
+/// A wrapping box paces the same lines through a measured `#stack` instead,
+/// which floored each line box at 10pt and so advanced every line under 10pt a
+/// flat 12.00pt (issue #1172). Native PowerPoint 16 paces a nine-line column at
+/// `1.2 x size` at every size probed — 6, 6.5, 8, 8.5, 9, 9.2, 9.5, 9.8, 10.5,
+/// 11.5, 12.25 and 20pt, in a text box and in a table cell alike.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn a_hard_broken_slide_line_advances_by_its_own_font_size() {
     const FAMILY: &str = "Arial";
     const LINE_COUNT: usize = 4;
 
-    for font_size_pt in [6.0_f64, 8.0, 9.0, 10.0, 11.0, 12.0, 14.0] {
-        let mut runs: Vec<Run> = Vec::new();
-        for index in 0..LINE_COUNT {
-            if index > 0 {
-                // What the parser emits for `<a:br/>`: the break marker on its
-                // own run, with no run properties of its own.
-                runs.push(Run {
-                    text: "\u{000B}".to_string(),
-                    style: TextStyle::default(),
-                    href: None,
-                    footnote: None,
-                });
+    for wraps in [false, true] {
+        for font_size_pt in [6.0_f64, 8.0, 9.0, 10.0, 11.0, 12.0, 14.0] {
+            let baselines: Vec<f64> =
+                hard_broken_slide_baselines(FAMILY, &[font_size_pt; LINE_COUNT], wraps);
+            let expected_advance_pt: f64 = 1.2 * font_size_pt;
+            for gap in baselines.windows(2).map(|pair| pair[1] - pair[0]) {
+                assert!(
+                    (gap - expected_advance_pt).abs() < 0.01,
+                    "a {font_size_pt}pt hard-broken line must advance \
+                     {expected_advance_pt}pt in a box that wraps={wraps}, \
+                     got {gap}pt: {baselines:?}"
+                );
             }
-            runs.push(Run {
-                text: "Hxg".to_string(),
-                style: TextStyle {
-                    font_family: Some(FAMILY.to_string()),
-                    font_size: Some(font_size_pt),
-                    ..TextStyle::default()
-                },
-                href: None,
-                footnote: None,
-            });
-        }
-
-        let mut text_box = make_fixed_text_box(
-            72.0,
-            72.0,
-            400.0,
-            200.0,
-            Insets::default(),
-            crate::ir::TextBoxVerticalAlign::Top,
-            vec![Block::Paragraph(Paragraph {
-                style: ParagraphStyle::default(),
-                runs,
-            })],
-        );
-        // `<a:bodyPr wrap="none">`, the shape the probe deck of #1115 measured.
-        if let FixedElementKind::TextBox(ref mut data) = text_box.kind {
-            data.no_wrap = true;
-        }
-        let doc = make_doc(vec![make_fixed_page(960.0, 540.0, vec![text_box])]);
-        let output = generate_typst(&doc).unwrap();
-
-        let mut baselines: Vec<f64> = crate::render::pdf::compiled_text_runs(&output.source, 0)
-            .unwrap_or_else(|error| panic!("compile failed: {error}\n{}", output.source))
-            .into_iter()
-            .filter(|run| run.text.contains("Hxg"))
-            .map(|run| run.baseline_pt)
-            .collect();
-        baselines.sort_by(f64::total_cmp);
-        baselines.dedup_by(|left, right| (*left - *right).abs() < 0.001);
-
-        assert_eq!(
-            baselines.len(),
-            LINE_COUNT,
-            "expected {LINE_COUNT} hard-broken lines at {font_size_pt}pt: {baselines:?}\n{}",
-            output.source
-        );
-        let expected_advance_pt: f64 = 1.2 * font_size_pt;
-        for gap in baselines.windows(2).map(|pair| pair[1] - pair[0]) {
-            assert!(
-                (gap - expected_advance_pt).abs() < 0.01,
-                "a {font_size_pt}pt hard-broken line must advance \
-                 {expected_advance_pt}pt, got {gap}pt: {baselines:?}\n{}",
-                output.source
-            );
         }
     }
 }

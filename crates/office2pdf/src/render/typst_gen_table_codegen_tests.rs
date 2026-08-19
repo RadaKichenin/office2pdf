@@ -1469,16 +1469,28 @@ fn test_slide_table_cell_uses_the_powerpoint_line_box() {
     }
 }
 
-/// A hard break inside a centred slide-table cell takes the next line's box.
+/// A hard break inside a centred slide-table cell clears the taller line above
+/// it, not just the following line's own box.
 ///
 /// The original slide 16 cell in `office2pdf_introduction_ko.pptx` is the
 /// awkward boundary case: 13pt `DOCX` followed by 9.5pt `Word`. PowerPoint's
-/// native export advances exactly 12pt, the same floor as a 10pt next line.
+/// native export advances exactly 12.00pt, well past the 11.40pt the 9.5pt
+/// line's own 1.2em box would give — a probe deck alternating the same two
+/// sizes nine lines deep reads 12.00pt four times over, in a text box and in a
+/// table cell alike. #683 fitted a 10pt line-box floor to that one number;
+/// `1.2 x max(9.5, 10)` reaches 12.00 by coincidence, and the same floor paced
+/// every hard-broken line under 10pt at a flat 12.00pt (issue #1172). What
+/// actually carries the gap is the 13pt line's descent.
+///
+/// The 0.37pt that remains is the paragraph-wide seat share, tracked in #1252;
+/// the tolerance here is the half point that separates a preceding line's
+/// descent from no descent at all.
+///
 /// This compiles the real table-cell path so its vertical centring and line
 /// box cannot make a source-only assertion pass by accident (issue #683).
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
-fn slide_table_hard_break_uses_the_following_lines_size_floor() {
+fn slide_table_hard_break_clears_the_taller_line_above_it() {
     let family = "Arial";
     let cell = TableCell {
         content: vec![Block::Paragraph(Paragraph {
@@ -1553,9 +1565,16 @@ fn slide_table_hard_break_uses_the_following_lines_size_floor() {
         .expect("Word run")
         .baseline_pt;
 
+    let advance_pt: f64 = word_baseline - docx_baseline;
     assert!(
-        (word_baseline - docx_baseline - 12.0).abs() < 0.01,
-        "the 9.5pt following line must own PowerPoint's measured 12pt advance: \
+        advance_pt > 1.2 * 9.5 + 0.5,
+        "the 13pt line's descent must push the 9.5pt line past its own 11.4pt \
+         box: {docx_baseline}, {word_baseline}\n{}",
+        output.source
+    );
+    assert!(
+        (advance_pt - 12.0).abs() < 0.5,
+        "the break must land within half a point of the native export's 12pt: \
          {docx_baseline}, {word_baseline}\n{}",
         output.source
     );
