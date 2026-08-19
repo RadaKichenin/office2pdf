@@ -1911,6 +1911,15 @@ pub(super) fn generate_runs_with_tabs(
 /// affect every physical line in it, not only the one before the hard break.
 /// Unmeasured containers and segments too close to the wrapping boundary keep
 /// their existing, internally consistent Typst line boxes.
+///
+/// `reserves_trailing_letter_space` says whether the caller places a line by
+/// the width PowerPoint measured, letter-space after the last glyph included;
+/// every decline above then routes through [`generate_powerpoint_inline_runs`],
+/// which writes that reserve on the lines a hard break ends. The per-line box
+/// path never needs it: [`powerpoint_hard_break_line_fits`] declines any
+/// tracked run, so a paragraph reaching the stack has no letter-space to
+/// reserve.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn generate_powerpoint_runs_with_tabs(
     out: &mut String,
     runs: &[Run],
@@ -1919,9 +1928,23 @@ pub(super) fn generate_powerpoint_runs_with_tabs(
     default_tab_width_pt: f64,
     eojeol_wrap: EojeolWrap,
     available_measure_pt: Option<f64>,
+    reserves_trailing_letter_space: bool,
 ) {
+    let inline = |out: &mut String, lines: Option<&[PowerPointHardBreakLine]>| {
+        generate_powerpoint_inline_runs(
+            out,
+            runs,
+            lines,
+            style,
+            tab_stops,
+            default_tab_width_pt,
+            eojeol_wrap,
+            reserves_trailing_letter_space,
+        );
+    };
+
     let Some(lines) = split_runs_on_hard_breaks(runs) else {
-        generate_runs_with_tabs(out, runs, tab_stops, default_tab_width_pt, eojeol_wrap);
+        inline(out, None);
         return;
     };
     let Some(measure_pt) = available_measure_pt
@@ -1933,18 +1956,18 @@ pub(super) fn generate_powerpoint_runs_with_tabs(
         })
         .filter(|measure| *measure > 0.0)
     else {
-        generate_runs_with_tabs(out, runs, tab_stops, default_tab_width_pt, eojeol_wrap);
+        inline(out, Some(&lines));
         return;
     };
     let Some((top_em, bottom_em)) = powerpoint_paragraph_line_box_em(runs, style) else {
-        generate_runs_with_tabs(out, runs, tab_stops, default_tab_width_pt, eojeol_wrap);
+        inline(out, Some(&lines));
         return;
     };
     if !lines
         .iter()
         .all(|line| powerpoint_hard_break_line_fits(line, measure_pt))
     {
-        generate_runs_with_tabs(out, runs, tab_stops, default_tab_width_pt, eojeol_wrap);
+        inline(out, Some(&lines));
         return;
     }
 
@@ -1985,6 +2008,70 @@ pub(super) fn generate_powerpoint_runs_with_tabs(
         );
     }
     out.push(')');
+}
+
+/// Emit the paragraph as ordinary inline markup, giving every hard-broken line
+/// but the last the letter-space PowerPoint measures after its own last glyph.
+///
+/// PowerPoint measures *each* line that way, not just the paragraph's final
+/// one, and places a centred or right-aligned line from that width
+/// ([`powerpoint_trailing_letter_space_pt`]). #1120 trailed the space once,
+/// after the whole paragraph, so a paragraph broken by `<a:br/>` reserved it on
+/// its last line alone: slide 13 of the #841 deck — one centred 38pt title at
+/// `spc="300"` — sat half a letter-space right of a native PowerPoint 16.112
+/// export on both of its visible lines (issue #1174).
+///
+/// The last line is deliberately absent: its space is written by the caller,
+/// after the paragraph's whole markup, so that a `no_wrap` box carries it
+/// inside its own width.
+///
+/// `lines` is the hard-break split the caller already computed, or `None` when
+/// the paragraph has no break at all. Splitting is otherwise pure overhead: a
+/// paragraph that needs no per-line space emits exactly the markup one pass
+/// over `runs` produces.
+#[allow(clippy::too_many_arguments)]
+fn generate_powerpoint_inline_runs(
+    out: &mut String,
+    runs: &[Run],
+    lines: Option<&[PowerPointHardBreakLine]>,
+    style: &ParagraphStyle,
+    tab_stops: Option<&[TabStop]>,
+    default_tab_width_pt: f64,
+    eojeol_wrap: EojeolWrap,
+    reserves_trailing_letter_space: bool,
+) {
+    let broken: Option<&[PowerPointHardBreakLine]> = reserves_trailing_letter_space
+        .then_some(lines)
+        .flatten()
+        .filter(|lines| {
+            lines.split_last().is_some_and(|(_, leading)| {
+                leading
+                    .iter()
+                    .any(|line| powerpoint_trailing_letter_space_pt(style, &line.runs).is_some())
+            })
+        });
+    let Some(lines) = broken else {
+        generate_runs_with_tabs(out, runs, tab_stops, default_tab_width_pt, eojeol_wrap);
+        return;
+    };
+
+    for (index, line) in lines.iter().enumerate() {
+        if index > 0 {
+            out.push_str("#linebreak()");
+        }
+        generate_runs_with_tabs(
+            out,
+            &line.runs,
+            tab_stops,
+            default_tab_width_pt,
+            eojeol_wrap,
+        );
+        if index + 1 < lines.len()
+            && let Some(spacing) = powerpoint_trailing_letter_space_pt(style, &line.runs)
+        {
+            let _ = write!(out, "#h({}pt)", format_f64(spacing));
+        }
+    }
 }
 
 /// Whether this explicit segment is safely narrower than its physical line.
