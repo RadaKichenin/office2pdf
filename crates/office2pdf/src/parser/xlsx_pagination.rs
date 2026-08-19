@@ -167,6 +167,11 @@ fn scale_sheet_page(
             scale_header_footer_font_sizes(header_footer, scale);
         }
     }
+    // Every size below is multiplied by the scale outright. The factor itself
+    // rides on the table because a rule Excel evaluates at the declared size
+    // and scales afterwards cannot be recovered from the products — the
+    // wrapped-line advance of issue #1163 is one.
+    page.table.print_scale = Some(page.table.print_scale.unwrap_or(1.0) * scale);
     for width in &mut page.table.column_widths {
         *width *= scale;
     }
@@ -420,6 +425,7 @@ fn slice_table_columns(table: &Table, start: usize, end: usize) -> Table {
         prints_gridlines: table.prints_gridlines,
         prints_headings: table.prints_headings,
         centers_between_print_margins: table.centers_between_print_margins,
+        print_scale: table.print_scale,
     }
 }
 

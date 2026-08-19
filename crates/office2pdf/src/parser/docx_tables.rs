@@ -203,6 +203,7 @@ pub(super) fn convert_table(
         prints_gridlines: false,
         prints_headings: false,
         centers_between_print_margins: false,
+        print_scale: None,
     }
 }
 

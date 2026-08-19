@@ -14,9 +14,11 @@ pub(super) fn generate_table(
     let enclosing_seats_on_descender: bool = ctx.table_seats_bottom_aligned_text_on_descender;
     let enclosing_box_is_aligned: bool = ctx.table_box_is_aligned;
     let enclosing_floors_descent: bool = ctx.table_floors_bottom_aligned_descent;
+    let enclosing_print_scale: Option<f64> = ctx.table_print_scale;
     ctx.table_default_vertical_align = table.default_vertical_align;
     ctx.table_seats_bottom_aligned_text_on_descender = table.seats_bottom_aligned_text_on_descender;
     ctx.table_floors_bottom_aligned_descent = table.floors_bottom_aligned_descent;
+    ctx.table_print_scale = table.print_scale;
     // `w:tblPr/w:jc` places the table box on the page and says nothing about
     // the text inside it, but Typst inherits `align` into the cells. The cells
     // undo it; a nested table's own answer must not outlive it (issue #843).
@@ -42,6 +44,7 @@ pub(super) fn generate_table(
     ctx.table_default_vertical_align = enclosing_default_vertical_align;
     ctx.table_seats_bottom_aligned_text_on_descender = enclosing_seats_on_descender;
     ctx.table_floors_bottom_aligned_descent = enclosing_floors_descent;
+    ctx.table_print_scale = enclosing_print_scale;
     ctx.table_box_is_aligned = enclosing_box_is_aligned;
     ctx.table_depth -= 1;
     result
@@ -1215,6 +1218,7 @@ fn spill_line_box_height_pt(cell: &TableCell, ctx: &GenCtx) -> Option<f64> {
         ctx.cell_seats_text_on_descender,
         ctx.cell_sheet_row_line.as_ref(),
         ctx.cell_sheet_seat,
+        ctx.sheet_print_scale(),
     )?;
     Some((line_box.top_em + line_box.bottom_em) * line_box.font_size_pt)
 }
@@ -1983,6 +1987,7 @@ fn auto_row_frame_height_estimate_pt(
                 false,
                 None,
                 None,
+                ctx.sheet_print_scale(),
             )?;
             let inset: Insets = cell_inset_with_border(cell, default_cell_padding);
             Some(
@@ -2568,6 +2573,7 @@ fn generate_cell_content(
             seats_text_on_descender: ctx.cell_seats_text_on_descender,
             sheet_row_line: ctx.cell_sheet_row_line.clone(),
             sheet_seat: ctx.cell_sheet_seat,
+            sheet_print_scale: ctx.sheet_print_scale(),
             in_spill_cell: ctx.in_spill_cell,
             uses_powerpoint_line_box: ctx.table_uses_powerpoint_line_box,
             stacks_multiple_blocks,
@@ -2640,6 +2646,12 @@ struct CellParagraphCtx<'a> {
     /// The fixed sheet track the cell sits in, so its line seats where Excel
     /// prints it (issue #1063). `None` outside that regime.
     sheet_seat: Option<SheetCellSeat>,
+    /// `Some(fit-to-page scale)` when this cell belongs to a spreadsheet,
+    /// whose lines advance on Excel's own measured per-face pitch rather than
+    /// on the face's hhea line (issue #1163) — the scale because Excel reads
+    /// that pitch at the cell's declared size. `None` off a sheet; the marker
+    /// is the same one the descender seat keys on.
+    sheet_print_scale: Option<f64>,
     /// Whether this paragraph is inside a spill cell's clipped wrapper, where
     /// the `#place` anchor already carries the cell's horizontal alignment.
     /// A `width: 100%` block inside that wrapper is not just redundant: the
@@ -2733,6 +2745,7 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
             cell.seats_text_on_descender,
             cell.sheet_row_line.as_ref(),
             cell.sheet_seat,
+            cell.sheet_print_scale,
         )
     };
     // Whichever fixed edges the block wrapper below puts in force — the
@@ -2748,6 +2761,7 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
         cell.seats_text_on_descender,
         cell.sheet_row_line.as_ref(),
         cell.sheet_seat,
+        cell.sheet_print_scale,
     )
     .map(|line_box| (line_box.top_em, line_box.bottom_em))
     .or_else(|| {
@@ -2777,6 +2791,7 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
                 cell.seats_text_on_descender,
                 cell.sheet_row_line.as_ref(),
                 cell.sheet_seat,
+                cell.sheet_print_scale,
             )
             .map(|line_box| (line_box.top_em + line_box.bottom_em) * line_box.font_size_pt)
         }
