@@ -1748,6 +1748,131 @@ fn an_axis_declaring_no_tx_pr_inherits_the_chart_space_one() {
     );
 }
 
+// ----- A run colour's transform children (issue #1160) -----
+
+/// The `<a:defRPr>` Excel writes for every chart string in
+/// `Gift Budget and Tracker1.xlsx`: a scheme colour whose luminance transforms
+/// are children of the colour element, followed by the face.
+fn def_rpr_with_text_slot_colour() -> &'static str {
+    r#"<a:defRPr sz="900" b="0" i="0" u="none" strike="noStrike" kern="1200" baseline="0">
+           <a:solidFill><a:schemeClr val="tx1"><a:lumMod val="65000"/><a:lumOff val="35000"/></a:schemeClr></a:solidFill>
+           <a:latin typeface="Segoe UI"/>
+       </a:defRPr>"#
+}
+
+/// A theme keying its slots the way `<a:clrScheme>` does — a workbook carries
+/// no `<p:clrMap>`, so `tx1` reaches `dk1` through the implicit pairing.
+fn black_text_slot_scheme() -> (
+    std::collections::HashMap<String, Color>,
+    std::collections::HashMap<String, String>,
+) {
+    (
+        [("dk1".to_string(), Color::new(0, 0, 0))]
+            .into_iter()
+            .collect(),
+        std::collections::HashMap::new(),
+    )
+}
+
+/// `<a:schemeClr val="tx1">` carrying lumMod 65% / lumOff 35% is #595959, not
+/// black: the transforms are the colour element's children, so reading only
+/// its start tag drops them and every chart string prints a shade too dark
+/// (issue #1160).
+#[test]
+fn a_chart_text_colour_applies_its_luminance_transforms() {
+    let (colors, aliases) = black_text_slot_scheme();
+    let scheme = SchemeColors {
+        colors: &colors,
+        aliases: &aliases,
+    };
+    let xml = chart_space_with(&format!(
+        "<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr>{}</a:pPr><a:endParaRPr lang=\"en-US\"/></a:p></c:txPr>",
+        def_rpr_with_text_slot_colour()
+    ));
+
+    let chart = parse_chart_xml(&xml, &scheme).expect("chart parses");
+
+    assert_eq!(chart.text_style.color, Some(Color::new(0x59, 0x59, 0x59)));
+}
+
+/// Consuming the colour element must not swallow what follows it inside the
+/// same `<a:defRPr>`: Excel writes `<a:latin>` after `<a:solidFill>`.
+#[test]
+fn a_chart_text_colour_leaves_the_face_after_it_readable() {
+    let (colors, aliases) = black_text_slot_scheme();
+    let scheme = SchemeColors {
+        colors: &colors,
+        aliases: &aliases,
+    };
+    let xml = chart_space_with(&format!(
+        "<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr>{}</a:pPr></a:p></c:txPr>",
+        def_rpr_with_text_slot_colour()
+    ));
+
+    let chart = parse_chart_xml(&xml, &scheme).expect("chart parses");
+
+    assert_eq!(chart.text_font_family.as_deref(), Some("Segoe UI"));
+    assert_eq!(chart.text_style.size_pt, Some(9.0));
+}
+
+/// An axis' own `c:txPr` reads the transforms the same way — the chart in
+/// #1160 states them on every scope, not just the chart space.
+#[test]
+fn an_axis_text_colour_applies_its_luminance_transforms() {
+    let (colors, aliases) = black_text_slot_scheme();
+    let scheme = SchemeColors {
+        colors: &colors,
+        aliases: &aliases,
+    };
+    let tx_pr = format!(
+        "<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr>{}</a:pPr></a:p></c:txPr>",
+        def_rpr_with_text_slot_colour()
+    );
+    let xml = chart_space_with("").replace(
+        "</c:plotArea>",
+        &format!(
+            "<c:catAx><c:axId val=\"1\"/>{tx_pr}</c:catAx><c:valAx><c:axId val=\"2\"/>{tx_pr}</c:valAx></c:plotArea>"
+        ),
+    );
+
+    let chart = parse_chart_xml(&xml, &scheme).expect("chart parses");
+
+    let lifted = Some(Color::new(0x59, 0x59, 0x59));
+    assert_eq!(chart.category_axis_text_style.color, lifted);
+    assert_eq!(chart.value_axis_text_style.color, lifted);
+}
+
+/// Triangulation: a colour element with no children is still read from its own
+/// attributes, and one stating a transform-free scheme slot still resolves to
+/// the theme colour itself.
+#[test]
+fn a_chart_text_colour_without_transforms_is_unchanged() {
+    let (colors, aliases) = black_text_slot_scheme();
+    let scheme = SchemeColors {
+        colors: &colors,
+        aliases: &aliases,
+    };
+
+    for (fill, expected) in [
+        (
+            r#"<a:srgbClr val="C6FC15"/>"#,
+            Some(Color::new(0xC6, 0xFC, 0x15)),
+        ),
+        (r#"<a:schemeClr val="tx1"/>"#, Some(Color::new(0, 0, 0))),
+        (
+            r#"<a:srgbClr val="C6FC15"><a:alpha val="100000"/></a:srgbClr>"#,
+            Some(Color::new(0xC6, 0xFC, 0x15)),
+        ),
+    ] {
+        let xml = chart_space_with(&format!(
+            "<c:txPr><a:p><a:pPr><a:defRPr sz=\"900\"><a:solidFill>{fill}</a:solidFill></a:defRPr></a:pPr></a:p></c:txPr>"
+        ));
+        let chart = parse_chart_xml(&xml, &scheme).expect("chart parses");
+        assert_eq!(chart.text_style.color, expected, "fill {fill}");
+        assert_eq!(chart.text_style.size_pt, Some(9.0), "fill {fill}");
+    }
+}
+
 /// `<c:formatCode>` inside the numeric cache is how a chart states that its
 /// values are percentages, currency or dates. Without it the data-table
 /// fallback printed the stored fraction — `0.024` where the source, and every
