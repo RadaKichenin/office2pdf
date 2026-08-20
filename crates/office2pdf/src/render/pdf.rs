@@ -1438,90 +1438,138 @@ pub(crate) fn glyph_advances_em(_family: &str, _bold: bool, _text: &str) -> Opti
 /// Arial, Calibri, and Malgun Gothic (issues #485, #513).
 pub(crate) const POWERPOINT_LINE_HEIGHT_FACTOR: f64 = 1.2;
 
+/// The `(above baseline, below baseline)` split of a unit line for one face,
+/// from the OS/2 `usWinAscent`/`usWinDescent` pair PowerPoint measures it by.
+///
+/// `None` for a face that declares no ascent, which no split could seat.
+fn powerpoint_face_unit_line(ascent: f64, descent: f64) -> Option<(f64, f64)> {
+    let natural: f64 = ascent + descent;
+    if ascent <= 0.0 || natural <= 0.0 {
+        return None;
+    }
+    Some((ascent / natural, descent / natural))
+}
+
 /// PowerPoint's `(above baseline, below baseline)` split of its 1.2em line for
-/// a face with these hhea metrics, all given as positive em fractions.
+/// a line set in `faces`, each given as a positive `(ascent, descent)` pair of
+/// em fractions.
 ///
-/// PowerPoint shares the box in the proportion the face's **own** line puts its
-/// baseline at: `1.2 x ascent / (ascent + descent + line gap)`. The line gap
-/// counts toward the line the box is standing in for, but not toward the ascent
-/// side — it lands wholly under the baseline. That is one rule for every face,
-/// whether its natural line fits inside 1.2em or overflows it.
+/// **Every font on the line shares one box, and each is normalised to a unit
+/// line before they are compared.** The line takes the largest normalised
+/// ascent and the largest normalised descent of its faces, then scales that
+/// pair back down to the 1.2em the advance is fixed at. With a single face the
+/// two steps cancel and the share is just `1.2 x ascent / (ascent + descent)`.
 ///
-/// A face that **overflows** shows the shape of the rule most plainly, since
-/// there the only alternative — halving the leading — has a negative amount to
-/// halve and drives the baseline down against the face's own proportions.
-/// Measured on a native PowerPoint 16.112 export of the #841 Contoso deck, set
-/// in Posterama Bold (hhea 2134 and -590 per 2048 upem, a 1.3301em line): slide
-/// 1 carries no `<a:lnSpc>` and paces its three 50pt baselines exactly 60.00pt
-/// = 1.2em apart, so the box is 1.2em there, and it seats the first 0.9411em
-/// below the content top. The share predicts 0.9401em; halving the leading says
-/// 0.9770em, 1.79pt low at that size, and every one of the deck's 18 titles was
-/// low by 1.8-3.7pt (issue #1020).
+/// **The metrics are OS/2's `usWin*` pair, and the hhea line gap plays no
+/// part.** Both halves of that were measured together, because a corpus frame
+/// cannot separate them: a native PowerPoint 16.111 probe deck of 14
+/// top-anchored, zero-inset boxes at 11-61pt, exported once per face, puts
+/// Arial (hhea 1854/-434/**67**, usWin 1854/434 per 2048 upem) on 0.97238em —
+/// its gap-free share — at all 14 sizes, and the gap-inclusive 0.94471em
+/// outside the export's 0.12pt half-grid at 12 of them. Nine further faces land
+/// on their own gap-free share the same way, and Yu Gothic — the one whose
+/// usWin pair differs from hhea's (2017/619 against 1802/-455/1024) — sides
+/// with usWin, which hhea cannot express at all (issue #1176).
+///
+/// **The paragraph mark counts as a font on the line.** The same probe with
+/// only the `<a:endParaRPr>` typeface varied moves every seat: an Arial run
+/// whose mark is Calibri (usWin 1950/550) seats at 0.94377em, one whose mark is
+/// Verdana at 0.97621em, Malgun Gothic 0.97420em, MS Gothic 0.98306em and
+/// Meiryo 0.88107em — 70 cells, all inside the half-grid, none of them the run
+/// face's own share. That is why the golden mocks read as Arial's *gap-inclusive*
+/// share for 500 issues: their marks carry no typeface and fall to the theme's
+/// minor Latin font, Calibri, whose deeper descent pushes the shared box down
+/// to 0.94377em — 0.001em from the gap-inclusive 0.94471em #1118 fitted, and
+/// on the same whole point at every size those decks use.
+///
+/// A face that **overflows** the box is shared like any other. Measured on a
+/// native PowerPoint 16.112 export of the #841 Contoso deck, set in Posterama
+/// Bold (usWin 2134/590 per 2048 upem, a 1.3301em line): slide 1 carries no
+/// `<a:lnSpc>` and paces its three 50pt baselines exactly 60.00pt = 1.2em
+/// apart, so the box is 1.2em there, and it seats the first 0.9411em below the
+/// content top. The share predicts 0.9401em; halving the leading says 0.9770em,
+/// 1.79pt low at that size, and every one of the deck's 18 titles was low by
+/// 1.8-3.7pt (issue #1020).
 ///
 /// A face that **fits** reads the same way once the whole-point seat of #1074
 /// is accounted for, which is what hid it: a one-factor probe deck of
 /// bottom-anchored boxes with every inset zeroed, exported natively at 14 sizes
-/// from 8 to 100pt, separates the two on Georgia (hhea 1878/-449, no line gap,
-/// a 1.13623em line). Its share is 0.968457em and the halved leading 0.948877em;
-/// the export sits within its 0.12pt half-grid of the share at all 14 sizes and
-/// outside it at 9 of them for the halved leading, by up to 2.04pt. The five
-/// that agree are the ones where the two round to the same point, which is how
-/// a 17pt Arial frame read as halved leading in #660 (issue #1118).
+/// from 8 to 100pt, separates the two on Georgia (usWin 1878/449, a 1.13623em
+/// line). Its share is 0.968457em and the halved leading 0.948877em; the export
+/// sits within its 0.12pt half-grid of the share at all 14 sizes and outside it
+/// at 9 of them for the halved leading, by up to 2.04pt. The five that agree
+/// are the ones where the two round to the same point, which is how a 17pt
+/// Arial frame read as halved leading in #660 (issue #1118).
 ///
-/// The **line gap** is why that frame read that way rather than simply reading
-/// wrong. Arial declares one (67 per 2048 upem) where Georgia and Verdana
-/// declare none, and at Arial's proportions a gap in the denominator lands
-/// 0.002em from the halved leading — close enough that only a size where the
-/// two round apart can tell them apart. The golden mocks' 28pt centred titles
-/// are such a size, and they side with the gap (issue #1118). Word already
-/// reads the gap the same way round, except that it seats the baseline *below*
-/// it rather than sharing a fixed box: see [`font_line_metrics_em`].
-///
-/// The metrics are hhea's, not OS/2's `usWin*` pair, which carries no gap.
+/// Word reads the hhea gap instead, and seats the baseline *below* it rather
+/// than sharing a fixed box: see [`font_line_metrics_em`].
 ///
 /// The below-baseline share is the descent gap a bottom-anchored box keeps
 /// under its last baseline, which we used to drop entirely (issue #513).
 ///
-/// `None` for a face that declares no ascent, which no split could seat.
-pub(crate) fn powerpoint_line_box_split_em(
-    ascent: f64,
-    descent: f64,
-    line_gap: f64,
-) -> Option<(f64, f64)> {
-    if ascent <= 0.0 {
+/// `None` when no face declares an ascent, which no split could seat.
+pub(crate) fn powerpoint_line_box_split_em<I>(faces: I) -> Option<(f64, f64)>
+where
+    I: IntoIterator<Item = (f64, f64)>,
+{
+    let mut above_share: f64 = 0.0;
+    let mut below_share: f64 = 0.0;
+    let mut seated: bool = false;
+    for (ascent, descent) in faces {
+        let Some((above, below)) = powerpoint_face_unit_line(ascent, descent) else {
+            continue;
+        };
+        seated = true;
+        above_share = above_share.max(above);
+        below_share = below_share.max(below);
+    }
+    let natural: f64 = above_share + below_share;
+    if !seated || natural <= 0.0 {
         return None;
     }
-    let natural: f64 = ascent + descent + line_gap;
-    let above: f64 = (POWERPOINT_LINE_HEIGHT_FACTOR * ascent / natural)
+    let above: f64 = (POWERPOINT_LINE_HEIGHT_FACTOR * above_share / natural)
         .clamp(0.0, POWERPOINT_LINE_HEIGHT_FACTOR);
     Some((above, POWERPOINT_LINE_HEIGHT_FACTOR - above))
 }
 
-/// [`powerpoint_line_box_split_em`] for the best face resolved for `family`.
+/// The `(ascent, descent)` pair PowerPoint measures a face's line box by, as
+/// positive em fractions: OS/2's `usWin*` pair, falling back to hhea's for a
+/// face carrying no `OS/2` table at all.
+fn powerpoint_face_metrics_em(font: &typst::text::Font) -> (f64, f64) {
+    let ttf = font.ttf();
+    let upem: f64 = f64::from(ttf.units_per_em()).max(1.0);
+    if let Some(os2) = ttf.tables().os2 {
+        let ascent: f64 = f64::from(os2.windows_ascender()).max(0.0);
+        let descent: f64 = f64::from(os2.windows_descender());
+        if ascent > 0.0 {
+            return (ascent / upem, descent.abs() / upem);
+        }
+    }
+    let hhea = ttf.tables().hhea;
+    (
+        f64::from(hhea.ascender).abs() / upem,
+        f64::from(hhea.descender).abs() / upem,
+    )
+}
+
+/// The `(ascent, descent)` pair the best face resolved for `family` measures
+/// its line box by, as positive em fractions.
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) fn powerpoint_line_box_em(family: &str) -> Option<(f64, f64)> {
+fn powerpoint_family_metrics_em(family: &str) -> Option<(f64, f64)> {
     use std::collections::HashMap;
     use std::sync::Mutex;
-    type LineBoxEm = Option<(f64, f64)>;
-    static CACHE: OnceLock<Mutex<HashMap<String, LineBoxEm>>> = OnceLock::new();
+    type FaceMetricsEm = Option<(f64, f64)>;
+    static CACHE: OnceLock<Mutex<HashMap<String, FaceMetricsEm>>> = OnceLock::new();
 
-    let split_for = |font: &typst::text::Font| {
-        let ttf = font.ttf();
-        let upem = f64::from(ttf.units_per_em()).max(1.0);
-        let ascent = f64::from(ttf.ascender()).abs() / upem;
-        let descent = f64::from(ttf.descender()).abs() / upem;
-        let line_gap = f64::from(ttf.line_gap()).abs() / upem;
-        powerpoint_line_box_split_em(ascent, descent, line_gap)
-    };
     if let Some(font) =
         super::font_subst::active_in_memory_font(family, typst::text::FontVariant::default())
     {
-        return split_for(&font);
+        return Some(powerpoint_face_metrics_em(&font));
     }
     if super::font_subst::active_font_search_paths().is_some() {
         return best_face(family)
             .or_else(|| best_face(crate::defaults::TYPST_DEFAULT_FONT_FAMILY))
-            .and_then(|font| split_for(&font));
+            .map(|font| powerpoint_face_metrics_em(&font));
     }
 
     let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
@@ -1539,24 +1587,35 @@ pub(crate) fn powerpoint_line_box_em(family: &str) -> Option<(f64, f64)> {
     // lookup must end there too.
     // Otherwise a missing Office face can collapse consecutive paragraphs to
     // the fallback font's glyph height (issue #705).
-    let split: Option<(f64, f64)> = best_face(family)
+    let metrics: Option<(f64, f64)> = best_face(family)
         .or_else(|| best_face(crate::defaults::TYPST_DEFAULT_FONT_FAMILY))
-        .and_then(|font| split_for(&font));
+        .map(|font| powerpoint_face_metrics_em(&font));
     cache
         .lock()
         .expect("metrics cache mutex should not be poisoned")
-        .insert(key, split);
-    split
+        .insert(key, metrics);
+    metrics
 }
 
 #[cfg(target_arch = "wasm32")]
+fn powerpoint_family_metrics_em(family: &str) -> Option<(f64, f64)> {
+    best_face(family).map(|font| powerpoint_face_metrics_em(&font))
+}
+
+/// [`powerpoint_line_box_split_em`] for the best face resolved for `family`.
 pub(crate) fn powerpoint_line_box_em(family: &str) -> Option<(f64, f64)> {
-    best_face(family).and_then(|font| {
-        let ttf = font.ttf();
-        let upem = f64::from(ttf.units_per_em()).max(1.0);
-        let ascent = f64::from(ttf.ascender()).abs() / upem;
-        let descent = f64::from(ttf.descender()).abs() / upem;
-        let line_gap = f64::from(ttf.line_gap()).abs() / upem;
-        powerpoint_line_box_split_em(ascent, descent, line_gap)
-    })
+    powerpoint_line_box_em_for_families(std::slice::from_ref(&family))
+}
+
+/// [`powerpoint_line_box_split_em`] for every font on one line — the runs' and
+/// the paragraph mark's — named in `families`.
+///
+/// A family that resolves to no face contributes nothing rather than voiding
+/// the line: the box is still the one the faces that did resolve share.
+pub(crate) fn powerpoint_line_box_em_for_families(families: &[&str]) -> Option<(f64, f64)> {
+    powerpoint_line_box_split_em(
+        families
+            .iter()
+            .filter_map(|family| powerpoint_family_metrics_em(family)),
+    )
 }

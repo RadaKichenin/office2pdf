@@ -359,14 +359,22 @@ fn test_path_font_last_resort_bypasses_process_metric_caches() {
     );
     let expected_hhea_ascender = f64::from(ttf.tables().hhea.ascender) / upem;
     let expected_cap_height = font.metrics().cap_height.get();
-    let ascent = f64::from(ttf.ascender()).abs() / upem;
-    let descent = f64::from(ttf.descender()).abs() / upem;
-    let line_gap = f64::from(ttf.line_gap()).abs() / upem;
+    // PowerPoint measures a line box from OS/2's usWin pair (issue #1176).
+    let (ascent, descent) = match ttf.tables().os2 {
+        Some(os2) if os2.windows_ascender() > 0 => (
+            f64::from(os2.windows_ascender()).abs() / upem,
+            f64::from(os2.windows_descender()).abs() / upem,
+        ),
+        _ => (
+            f64::from(ttf.tables().hhea.ascender).abs() / upem,
+            f64::from(ttf.tables().hhea.descender).abs() / upem,
+        ),
+    };
     // What this test pins is which *face* answers, not which split rule: the
     // rule itself is covered by
-    // `test_powerpoint_line_box_shares_the_gap_inclusive_line` and
+    // `test_powerpoint_line_box_shares_every_font_on_the_line` and
     // `an_overflowing_face_shares_the_line_box_in_its_own_proportion`.
-    let expected_powerpoint = powerpoint_line_box_split_em(ascent, descent, line_gap)
+    let expected_powerpoint = powerpoint_line_box_split_em([(ascent, descent)])
         .expect("the fixture face declares an ascent");
 
     // Native document fonts are materialized into a conversion-local path.
@@ -838,25 +846,28 @@ fn test_glyph_advances_em_reports_each_glyph_separately() {
     );
 }
 
-/// PowerPoint shares its 1.2em line in the proportion of the face's own hhea
-/// line — **line gap included** — and the ascent side gets only the bare
-/// ascender.
+/// PowerPoint shares its 1.2em line across **every font on the line**, each
+/// normalised to a unit line by its OS/2 `usWin*` pair first.
 ///
-/// Arial is the face that shows the gap term, since it is one of the few in the
-/// corpus that declares one (hhea ascender 1854, descender -434, **line gap
-/// 67** per 2048 upem). Its three candidate shares are:
+/// Arial is the face that shows the metric source, since it is one of the few
+/// in the corpus declaring an hhea line gap (1854/-434/**67** per 2048 upem,
+/// usWin 1854/434). Its candidate shares are:
 ///
-/// - gap-inclusive proportional `1854/2355 x 1.2` = **0.94471em**
+/// - gap-free proportional `1854/2288 x 1.2` = **0.97238em**
 /// - even split `(1.2 + 0.9053 - 0.2119) / 2` = 0.94668em
-/// - gap-free proportional `1854/2288 x 1.2` = 0.97238em
+/// - gap-inclusive proportional `1854/2355 x 1.2` = 0.94471em
 ///
-/// The first two differ by 0.002em and only separate at sizes where they round
-/// to different points, which is why #660 could fit the even split to a 17pt
-/// frame. They separate on the 28pt centred titles of the golden mocks, which
-/// [`crate::render::typst_gen_fixed_page_textbox_tests`] pins against the
-/// committed native exports (issue #1118).
+/// A native PowerPoint 16.111 probe of 14 top-anchored, zero-inset boxes at
+/// 11-61pt, every one of whose paragraph marks declares Arial too, lands on the
+/// gap-free share at all 14 sizes and outside the export's 0.12pt half-grid of
+/// the other two at 12 of them (issue #1176).
+///
+/// The mark is what the golden mocks change: theirs declare no typeface, so the
+/// line also carries the theme's minor Latin font, and the shared box moves.
+/// [`arial_slide_seats_match_the_golden_mock_exports`] pins that pair against
+/// the committed native exports.
 #[test]
-fn test_powerpoint_line_box_shares_the_gap_inclusive_line() {
+fn test_powerpoint_line_box_shares_every_font_on_the_line() {
     let Some((above, below)) = powerpoint_line_box_em("Arial") else {
         return; // no Arial-compatible face on this host
     };
@@ -866,9 +877,102 @@ fn test_powerpoint_line_box_shares_the_gap_inclusive_line() {
         "the split must still span the 1.2em line, got {above} + {below}"
     );
     assert!(
-        (above - 0.94471).abs() < 0.001,
-        "Arial's first baseline must sit 0.94471em below the box top — its own \
-         share of the box counting the hhea line gap — not {above}em"
+        (above - 0.97238).abs() < 0.001,
+        "a line whose only face is Arial must seat its first baseline 0.97238em \
+         below the box top — Arial's share of the box counting no line gap — \
+         not {above}em"
+    );
+
+    let Some((shared_above, _)) = powerpoint_line_box_em_for_families(&["Arial", "Calibri"]) else {
+        return; // no Calibri-compatible face on this host
+    };
+    assert!(
+        shared_above < above - 0.02,
+        "adding Calibri — whose 0.936em share is the deeper of the two — must \
+         pull the shared box down from Arial's own {above}em, not leave it at \
+         {shared_above}em"
+    );
+    assert!(
+        (shared_above - 0.94377).abs() < 0.001,
+        "an Arial line whose paragraph mark is Calibri seats at 0.94377em, not \
+         {shared_above}em"
+    );
+}
+
+/// Every Malgun Gothic seat the committed Korean golden-mock exports carry, at
+/// the eleven sizes those four decks use.
+///
+/// Malgun Gothic overflows the box (usWin 2229/495 per 2048 upem, a 1.33008em
+/// line) and its own share of it is 0.98194em, which seats every one of these
+/// frames a whole point low — 1.0-1.1pt, growing with size, so a share error
+/// rather than a rounding one (issue #1176). Inverting the eleven whole-point
+/// seats bounds the share to `[0.9375, 0.94643)`.
+///
+/// What lands inside that interval is the box Malgun Gothic shares with the
+/// paragraph mark. These decks declare no typeface on any `<a:endParaRPr>`, so
+/// the mark falls to the theme's minor Latin font, Calibri (usWin 1950/550):
+/// Malgun keeps the taller normalised ascent and Calibri the deeper normalised
+/// descent, and renormalising the pair to 1.2em gives 0.94573em.
+///
+/// The figures come from the native PowerPoint 16.111 exports under
+/// `tests/golden_mocks/business/expected/pptx/`, traced with
+/// `mutool draw -F trace`, the same way
+/// [`arial_slide_seats_match_the_golden_mock_exports`] reads the English decks.
+#[test]
+fn malgun_slide_seats_match_the_korean_golden_mock_exports() {
+    let upem: f64 = 2048.0;
+    // Malgun Gothic: usWinAscent 2229, usWinDescent 495.
+    let malgun: (f64, f64) = (2229.0 / upem, 495.0 / upem);
+    // Calibri, the theme's minor Latin font: usWinAscent 1950, usWinDescent 550.
+    let calibri: (f64, f64) = (1950.0 / upem, 550.0 / upem);
+
+    let (above, below) = powerpoint_line_box_split_em([malgun, calibri])
+        .expect("a positive ascent splits the line box");
+    assert!(
+        (above + below - POWERPOINT_LINE_HEIGHT_FACTOR).abs() < 1e-9,
+        "the split must still span the 1.2em line, got {above} + {below}"
+    );
+
+    // (font size pt, the seat the exports put inside the line, in pt).
+    const EXPORTED: [(f64, f64); 11] = [
+        (11.0, 9.96),
+        (12.5, 12.06),
+        (13.0, 11.88),
+        (15.0, 14.04),
+        (16.0, 14.88),
+        (17.0, 16.08),
+        (18.0, 17.04),
+        (28.0, 26.04),
+        (32.0, 30.00),
+        (38.0, 36.00),
+        (40.0, 37.92),
+    ];
+    // The exports quantise a position to a 0.24pt grid, so a whole-point seat
+    // is within half of that of the measured one or it is a different model.
+    const HALF_GRID_PT: f64 = 0.12 + 1e-9;
+
+    let malgun_alone: f64 = powerpoint_line_box_split_em([malgun])
+        .expect("a positive ascent splits the line box")
+        .0;
+    let mut malgun_alone_misses: usize = 0;
+    for (size_pt, export_pt) in EXPORTED {
+        let seat_pt: f64 = (above * size_pt).round();
+        assert!(
+            (seat_pt - export_pt).abs() <= HALF_GRID_PT,
+            "at {size_pt}pt the Korean exports seat the baseline {export_pt}pt \
+             into the line; the shared box predicts {seat_pt}pt"
+        );
+        if ((malgun_alone * size_pt).round() - export_pt).abs() > HALF_GRID_PT {
+            malgun_alone_misses += 1;
+        }
+    }
+
+    // Triangulation: Malgun's own share has to be a model this table rules out,
+    // or the table would pass without the mark's face in the box at all.
+    assert_eq!(
+        malgun_alone_misses, 10,
+        "Malgun Gothic's own {malgun_alone}em share must miss ten of the eleven \
+         cells — 12.5pt is the one size where the two round together"
     );
 }
 
@@ -882,22 +986,23 @@ fn test_powerpoint_line_box_shares_the_gap_inclusive_line() {
 /// `(content height - 1.2 x size) / 2` further down. Subtracting that leaves
 /// the seat inside the line, which the exports put on a whole point (#1074).
 ///
-/// This is what re-checking #660's `08_marketing_report_en` p3 frame against
-/// its native export turned up, as issue #1118 asked: the 28pt cells separate
-/// the gap-inclusive share from the even split, and the even split is the one
-/// that misses them. Arial's own line gap is what the two disagree about, so
-/// the same table also fixes where PowerPoint puts that gap — a gap given to
-/// the ascent side, or halved across both, lands on 31pt at 32pt where the
-/// exports show 30.
+/// None of these frames is set in Arial alone. Their paragraph marks declare no
+/// typeface, so each line also carries the theme's minor Latin font, Calibri,
+/// and the box the two share seats at 0.94377em rather than Arial's own
+/// 0.97238em (issue #1176). That shared value is 0.001em from the gap-inclusive
+/// 0.94471em #1118 fitted to this same table, and rounds to the same point at
+/// all twelve sizes — which is why reading the gap as the difference held for
+/// as long as it did.
 #[test]
 fn arial_slide_seats_match_the_golden_mock_exports() {
-    // Arial: hhea ascender 1854, descender -434, line gap 67 per 2048 upem.
     let upem: f64 = 2048.0;
-    let ascent_em: f64 = 1854.0 / upem;
-    let descent_em: f64 = 434.0 / upem;
-    let line_gap_em: f64 = 67.0 / upem;
+    // Arial: usWinAscent 1854, usWinDescent 434 (hhea also declares a 67-unit
+    // line gap, which PowerPoint's box does not read).
+    let arial: (f64, f64) = (1854.0 / upem, 434.0 / upem);
+    // Calibri, the theme's minor Latin font: usWinAscent 1950, usWinDescent 550.
+    let calibri: (f64, f64) = (1950.0 / upem, 550.0 / upem);
 
-    let (above, below) = powerpoint_line_box_split_em(ascent_em, descent_em, line_gap_em)
+    let (above, below) = powerpoint_line_box_split_em([arial, calibri])
         .expect("a positive ascent splits the line box");
     assert!(
         (above + below - POWERPOINT_LINE_HEIGHT_FACTOR).abs() < 1e-9,
@@ -923,6 +1028,9 @@ fn arial_slide_seats_match_the_golden_mock_exports() {
     // is within half of that of the measured one or it is a different model.
     const HALF_GRID_PT: f64 = 0.12 + 1e-9;
 
+    let ascent_em: f64 = arial.0;
+    let descent_em: f64 = arial.1;
+    let line_gap_em: f64 = 67.0 / upem;
     let natural_em: f64 = ascent_em + descent_em + line_gap_em;
     let rivals: [(&str, f64); 3] = [
         (
@@ -930,7 +1038,7 @@ fn arial_slide_seats_match_the_golden_mock_exports() {
             (POWERPOINT_LINE_HEIGHT_FACTOR + ascent_em - descent_em) / 2.0,
         ),
         (
-            "a gap-free proportional share",
+            "Arial's own gap-free share, with no mark on the line",
             POWERPOINT_LINE_HEIGHT_FACTOR * ascent_em / (ascent_em + descent_em),
         ),
         (
@@ -967,7 +1075,7 @@ fn arial_slide_seats_match_the_golden_mock_exports() {
     }
     assert_eq!(
         rival_misses[0], 1,
-        "only the 28pt cells separate the even split from the gap-inclusive share"
+        "only the 28pt cells separate the even split from the shared box"
     );
 }
 
@@ -1000,7 +1108,7 @@ fn a_face_that_fits_the_line_box_is_shared_like_any_other() {
         ascent_em + descent_em
     );
 
-    let (above, below) = powerpoint_line_box_split_em(ascent_em, descent_em, 0.0)
+    let (above, below) = powerpoint_line_box_split_em([(ascent_em, descent_em)])
         .expect("a positive ascent splits the line box");
     assert!(
         (above + below - POWERPOINT_LINE_HEIGHT_FACTOR).abs() < 1e-9,

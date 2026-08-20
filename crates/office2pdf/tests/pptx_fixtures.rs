@@ -1100,3 +1100,68 @@ fn wrapped_hard_break_columns_stack_their_own_line_box() {
 fn hard_break_wrapped_line_advance_smoke() {
     assert_produces_valid_pdf("hard_break_wrapped_line_advance.pptx");
 }
+
+// ---------------------------------------------------------------------------
+// Paragraph mark face (issue #1176)
+// ---------------------------------------------------------------------------
+
+/// Parse a business golden-mock deck and return its slides.
+fn golden_mock_pages(name: &str) -> Vec<FixedPage> {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/golden_mocks/business/sources/pptx")
+        .join(name);
+    let data = std::fs::read(path).expect("golden mock deck should exist");
+    let (doc, _warnings) = PptxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    doc.pages
+        .into_iter()
+        .filter_map(|page| match page {
+            Page::Fixed(fixed) => Some(fixed),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The Korean golden mocks set every run in Malgun Gothic and leave every
+/// `<a:endParaRPr>` without a typeface, so each paragraph mark falls to the
+/// theme's minor Latin font.
+///
+/// PowerPoint shares one 1.2em line box across every font on the line, the mark
+/// included, and that Calibri mark is what seats these titles 0.94573em into
+/// the box rather than at Malgun's own 0.98194em share — a whole point higher
+/// at every size the four decks use (issue #1176). The face has to survive
+/// parsing for the renderer to be able to share the box with it.
+#[test]
+fn structure_korean_golden_mock_marks_take_the_theme_minor_latin_font() {
+    let pages = golden_mock_pages("02_quarterly_review_ko.pptx");
+    let mut checked: usize = 0;
+    for page in &pages {
+        for element in &page.elements {
+            let FixedElementKind::TextBox(text_box) = &element.kind else {
+                continue;
+            };
+            for block in &text_box.content {
+                let Block::Paragraph(para) = block else {
+                    continue;
+                };
+                if !para
+                    .runs
+                    .iter()
+                    .any(|run| run.style.font_family.as_deref() == Some("Malgun Gothic"))
+                {
+                    continue;
+                }
+                assert_eq!(
+                    para.style.paragraph_mark_font_family.as_deref(),
+                    Some("Calibri"),
+                    "a Malgun Gothic paragraph whose mark declares no typeface \
+                     must carry the theme's minor Latin font"
+                );
+                checked += 1;
+            }
+        }
+    }
+    assert!(
+        checked >= 3,
+        "the deck should contribute several Malgun Gothic paragraphs, got {checked}"
+    );
+}

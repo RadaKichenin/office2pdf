@@ -592,9 +592,12 @@ impl<'a> PptxTableParser<'a> {
         );
         let mut paragraph_runs: Vec<Run> = std::mem::take(&mut self.runs);
         insert_hangul_kinsoku_break_markers(&mut paragraph_runs);
+        let mut paragraph_style: ParagraphStyle = self.paragraph_style.clone();
+        paragraph_style.paragraph_mark_font_family =
+            pptx_paragraph_mark_font_family(&self.paragraph_end_run_style, self.theme);
         self.cell_text_entries.push(PptxParagraphEntry {
             paragraph: Paragraph {
-                style: self.paragraph_style.clone(),
+                style: paragraph_style,
                 runs: paragraph_runs,
             },
             list_marker: resolved_list_marker,

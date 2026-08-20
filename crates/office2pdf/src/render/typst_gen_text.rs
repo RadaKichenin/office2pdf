@@ -555,16 +555,47 @@ fn powerpoint_paragraph_line_box_em(runs: &[Run], style: &ParagraphStyle) -> Opt
         Some(LineSpacing::Proportional(factor)) if factor > 0.0 => factor,
         Some(_) => return None,
     };
-    let family: &str = runs
-        .iter()
-        .find_map(|run| run.style.font_family.as_deref())
-        .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_FAMILY);
-    let (ascent_em, _descent_em) = crate::render::pdf::powerpoint_line_box_em(family)?;
+    let families: Vec<&str> = powerpoint_line_families(runs, style);
+    let (ascent_em, _descent_em) =
+        crate::render::pdf::powerpoint_line_box_em_for_families(&families)?;
     Some(powerpoint_percentage_line_box_em(
         ascent_em,
         paragraph_font_size_pt(runs),
         percent,
     ))
+}
+
+/// Every font on a slide paragraph's line: the families its runs declare, plus
+/// the one its paragraph mark ends up in.
+///
+/// PowerPoint shares one 1.2em box across all of them — see
+/// [`crate::render::pdf::powerpoint_line_box_split_em`], which measures the
+/// mark's part of it. A run declaring no family of its own rides whatever the
+/// line already has rather than dragging the renderer's default face into the
+/// box; when nothing names a family, that default is the only face there is.
+fn powerpoint_line_families<'a>(runs: &'a [Run], style: &'a ParagraphStyle) -> Vec<&'a str> {
+    let mut families: Vec<&str> = Vec::new();
+    let mut push = |family: &'a str| {
+        if !family.is_empty()
+            && !families
+                .iter()
+                .any(|seen| seen.eq_ignore_ascii_case(family))
+        {
+            families.push(family);
+        }
+    };
+    for run in runs {
+        if let Some(family) = run.style.font_family.as_deref() {
+            push(family);
+        }
+    }
+    if let Some(mark) = style.paragraph_mark_font_family.as_deref() {
+        push(mark);
+    }
+    if families.is_empty() {
+        families.push(crate::defaults::TYPST_DEFAULT_FONT_FAMILY);
+    }
+    families
 }
 
 /// The `(above baseline, below baseline)` split, in em, of a line an

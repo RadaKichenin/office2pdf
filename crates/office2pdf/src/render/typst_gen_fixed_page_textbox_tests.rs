@@ -1905,12 +1905,13 @@ fn slide_text_takes_powerpoints_flat_1_2em_line() {
 
 #[test]
 fn slide_baseline_takes_the_faces_share_of_the_line_box() {
-    // The 1.2em line is shared in the proportion the face's own hhea line —
-    // ascent, descent and line gap — puts its baseline at. Seating it by
-    // Typst's normalised ascender instead left a bottom-anchored box's last
-    // baseline flat on the inset with no descent gap at all (issue #513), and
-    // halving the leading of a face that fits the box misses the golden mocks'
-    // 28pt Arial titles by a whole point (issues #660, #1118).
+    // The 1.2em line is shared in the proportion the face's own OS/2 `usWin*`
+    // pair puts its baseline at — a paragraph naming one family and no
+    // paragraph-mark face has only that one font on the line (issue #1176).
+    // Seating it by Typst's normalised ascender instead left a bottom-anchored
+    // box's last baseline flat on the inset with no descent gap at all (issue
+    // #513), and halving the leading of a face that fits the box misses the
+    // golden mocks' 28pt Arial titles by a whole point (issues #660, #1118).
     //
     // What lands on the page is that share rounded to a whole point, which is
     // where PowerPoint seats a baseline inside its line box; the share itself
@@ -1956,9 +1957,10 @@ fn slide_baseline_takes_the_faces_share_of_the_line_box() {
 /// the proportional share predicts 0.9401em and halving the leading 0.9770em,
 /// which is 1.79pt low (issue #1020).
 ///
-/// Posterama declares no hhea line gap, so the share's denominator is its bare
-/// `ascent + descent` here. A face that declares one gives the gap to its
-/// descent side (issue #1118).
+/// Posterama's `usWin*` pair is that same 2134/590, which is the pair the share
+/// is really taken from — an hhea line gap plays no part in it either way
+/// (issue #1176). This face is one where the two agree, so reading hhea below
+/// is equivalent; the assertion under it says so rather than assuming it.
 #[test]
 fn an_overflowing_face_shares_the_line_box_in_its_own_proportion() {
     // New Computer Modern: hhea 1127/-290 per 1000 upem = a 1.417em line.
@@ -1977,6 +1979,17 @@ fn an_overflowing_face_shares_the_line_box_in_its_own_proportion() {
         "this test reads the bare hhea descent out of Word's gap-inclusive \
          split, which only holds for a face with no hhea line gap: \
          {word_top_em} against {ascent_em}"
+    );
+    // And the hhea pair it just read has to be the `usWin*` one PowerPoint
+    // measures, or the proportional share below is derived from the wrong
+    // numbers even when it happens to agree (issue #1176).
+    let usual_split: (f64, f64) =
+        crate::render::pdf::powerpoint_line_box_split_em([(ascent_em, descent_em)])
+            .expect("a positive ascent splits the line box");
+    assert!(
+        (usual_split.0 - above).abs() < 1e-9,
+        "this face's hhea pair must be its usWin pair for the derivation below \
+         to hold: {usual_split:?} against ({above}, {below})"
     );
     let natural_em: f64 = ascent_em + descent_em;
     assert!(
@@ -2085,7 +2098,7 @@ fn the_contoso_footer_band_lands_on_its_native_baseline() {
     // Avenir Next LT Pro Bold: hhea ascender 1972, descender -512, no line
     // gap, per 2048 upem.
     let (above_em, _) =
-        crate::render::pdf::powerpoint_line_box_split_em(1972.0 / 2048.0, 512.0 / 2048.0, 0.0)
+        crate::render::pdf::powerpoint_line_box_split_em([(1972.0 / 2048.0, 512.0 / 2048.0)])
             .expect("a positive ascent splits the line box");
     let size_pt: f64 = 10.0;
     let (_, below_em) =
@@ -2116,7 +2129,7 @@ fn the_contoso_scaled_attribution_lands_on_its_native_baseline() {
     // Avenir Next LT Pro: hhea ascender 1972, descender -512, no line gap, per
     // 2048 upem.
     let (plain_above, _) =
-        crate::render::pdf::powerpoint_line_box_split_em(1972.0 / 2048.0, 512.0 / 2048.0, 0.0)
+        crate::render::pdf::powerpoint_line_box_split_em([(1972.0 / 2048.0, 512.0 / 2048.0)])
             .expect("a positive ascent splits the line box");
     let size_pt: f64 = 14.0;
     let (above, _) = crate::render::typst_gen::text::powerpoint_percentage_line_box_em(
@@ -2132,6 +2145,66 @@ fn the_contoso_scaled_attribution_lands_on_its_native_baseline() {
         (baseline_pt - 513.60).abs() <= 0.24,
         "the scaled attribution must land on the native 513.60pt baseline within \
          the export's 0.24pt position grid, got {baseline_pt}pt"
+    );
+}
+
+/// The paragraph mark's face reaches the emitted line box.
+///
+/// PowerPoint's 1.2em box is shared by every font on the line and the mark —
+/// the empty run `<a:endParaRPr>` describes — is one of them, so a mark set in
+/// a deeper-descended face seats the text higher than the run's own share
+/// would (issue #1176). The golden mocks' Korean titles are that case: Malgun
+/// Gothic runs with bare marks, which fall to the theme's Calibri.
+///
+/// Both faces here are Typst's own embedded ones so the test does not depend on
+/// what the host has installed, and the size is chosen as the first one where
+/// the two models round to different points — a size where they agree would
+/// pass without the mark reaching the box at all.
+#[test]
+fn the_paragraph_mark_face_moves_the_emitted_line_box() {
+    let run_family: &str = "Libertinus Serif";
+    let mark_family: &str = "DejaVu Sans Mono";
+    let Some((alone_em, _)) = crate::render::pdf::powerpoint_line_box_em(run_family) else {
+        return;
+    };
+    let Some((shared_em, _)) =
+        crate::render::pdf::powerpoint_line_box_em_for_families(&[run_family, mark_family])
+    else {
+        return;
+    };
+
+    let size_pt: f64 = (8..=72)
+        .map(f64::from)
+        .find(|size| (alone_em * size).round() != (shared_em * size).round())
+        .expect("the two faces must round apart at some slide size");
+
+    let bare: String = slide_text_box_source(run_family, size_pt, ParagraphStyle::default())
+        .expect("the run face resolves");
+    let marked: String = slide_text_box_source(
+        run_family,
+        size_pt,
+        ParagraphStyle {
+            paragraph_mark_font_family: Some(mark_family.into()),
+            ..ParagraphStyle::default()
+        },
+    )
+    .expect("the run face resolves");
+
+    let (bare_top_em, _) = emitted_slide_line_box_em(&bare, size_pt)
+        .unwrap_or_else(|| panic!("no line box emitted: {bare}"));
+    let (marked_top_em, _) = emitted_slide_line_box_em(&marked, size_pt)
+        .unwrap_or_else(|| panic!("no line box emitted: {marked}"));
+
+    assert_eq!(
+        (bare_top_em * size_pt).round(),
+        (alone_em * size_pt).round(),
+        "a paragraph with no mark face keeps the run face's own share at \
+         {size_pt}pt"
+    );
+    assert_eq!(
+        (marked_top_em * size_pt).round(),
+        (shared_em * size_pt).round(),
+        "the mark's face must share the box at {size_pt}pt"
     );
 }
 
@@ -2151,7 +2224,7 @@ fn the_split_differs_between_fonts_while_the_line_does_not() {
     assert!((mono.0 + mono.1 - 1.2).abs() < 0.000_001);
     assert!(
         (serif.0 - mono.0).abs() > 0.001,
-        "two faces with different hhea ascent/descent should seat the baseline \
+        "two faces with different usWin ascent/descent should seat the baseline \
          differently: {serif:?} vs {mono:?}"
     );
     assert!(
@@ -2302,7 +2375,7 @@ fn slide_line_spacing_keeps_the_descent_gap_and_moves_the_ascent() {
 fn the_contoso_footer_title_lands_on_its_native_baseline() {
     // Posterama Bold: hhea ascender 2134, descender -590 per 2048 upem.
     let (plain_above, plain_below) =
-        crate::render::pdf::powerpoint_line_box_split_em(2134.0 / 2048.0, 590.0 / 2048.0, 0.0)
+        crate::render::pdf::powerpoint_line_box_split_em([(2134.0 / 2048.0, 590.0 / 2048.0)])
             .expect("a positive ascent splits the line box");
     assert!((plain_above + plain_below - 1.2).abs() < 1e-9);
 
@@ -2336,7 +2409,7 @@ fn the_contoso_footer_title_lands_on_its_native_baseline() {
 #[test]
 fn the_contoso_top_anchored_title_lands_on_its_native_baseline() {
     let (plain_above, _) =
-        crate::render::pdf::powerpoint_line_box_split_em(2134.0 / 2048.0, 590.0 / 2048.0, 0.0)
+        crate::render::pdf::powerpoint_line_box_split_em([(2134.0 / 2048.0, 590.0 / 2048.0)])
             .expect("a positive ascent splits the line box");
     let size_pt: f64 = 38.0;
     let (above, _) = crate::render::typst_gen::text::powerpoint_percentage_line_box_em(
@@ -2378,7 +2451,7 @@ fn the_contoso_top_anchored_title_lands_on_its_native_baseline() {
 fn the_contoso_inherited_slide_titles_land_on_their_native_baselines() {
     // Posterama Bold: hhea ascender 2134, descender -590 per 2048 upem.
     let (plain_above, _) =
-        crate::render::pdf::powerpoint_line_box_split_em(2134.0 / 2048.0, 590.0 / 2048.0, 0.0)
+        crate::render::pdf::powerpoint_line_box_split_em([(2134.0 / 2048.0, 590.0 / 2048.0)])
             .expect("a positive ascent splits the line box");
     let size_pt: f64 = 38.0;
     let (above, _) = crate::render::typst_gen::text::powerpoint_percentage_line_box_em(
@@ -2585,9 +2658,18 @@ fn powerpoint_hard_break_advance_clears_the_line_above_it() {
 /// from, so the hard-break stack must carry that paragraph-level multiplier.
 ///
 /// The export paces this 12.5pt-over-10pt pair at 19.50pt under `val="150000"`
-/// against 12.96pt plain — 1.5x to within its own dither. The 0.80pt short of
-/// it is the paragraph-wide seat share of #1252; a following line owning the
-/// whole scaled box would give 18.00pt.
+/// against 12.96pt plain — 1.5x to within its own dither. A following line
+/// owning the whole scaled box would give 18.00pt, and the paragraph carrying
+/// no multiplier at all 12.60pt, so this stack has to land well clear of both.
+///
+/// It lands 1.00pt short of the export, which is two open defects and not this
+/// one: the paragraph-wide seat share of #1252, and the percentage split of
+/// #1254. The corrected 0.97238em share (#1176) makes the second of those
+/// exactly measurable here — scaling *both* sides by the percentage predicts
+/// `4.5 + 15 = 19.50pt`, the export's own figure, where holding the descent
+/// fixed and resizing from the top gives the 18.50pt below. The same
+/// both-sides rule misses the 85% Arial 38pt cell of #1024 by a whole point,
+/// so it is not a change to make from one cell.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn powerpoint_hard_break_preserves_proportional_line_spacing() {
@@ -2646,11 +2728,17 @@ fn powerpoint_hard_break_preserves_proportional_line_spacing() {
         .expect("Small run")
         .baseline_pt;
 
+    let advance_pt: f64 = small_baseline - large_baseline;
     assert!(
-        (small_baseline - large_baseline - 19.5).abs() < 1.0,
-        "the scaled box must carry the break to the export's 19.5pt, not to \
-         the 18pt the 10pt line's own scaled box would give: \
-         {large_baseline}, {small_baseline}\n{}",
+        (advance_pt - 19.5).abs() < 1.05,
+        "the scaled box must carry the break to within #1252 and #1254's \
+         residual of the export's 19.5pt: {large_baseline}, {small_baseline}\n{}",
+        output.source
+    );
+    assert!(
+        advance_pt > 18.25,
+        "the break must be paced by the *paragraph's* scaled box, not by the \
+         18pt the 10pt line's own scaled box would give: {advance_pt}pt\n{}",
         output.source
     );
 }
