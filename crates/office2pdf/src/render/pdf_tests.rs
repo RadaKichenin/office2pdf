@@ -883,9 +883,17 @@ fn test_powerpoint_line_box_shares_every_font_on_the_line() {
          not {above}em"
     );
 
-    let Some((shared_above, _)) = powerpoint_line_box_em_for_families(&["Arial", "Calibri"]) else {
-        return; // no Calibri-compatible face on this host
-    };
+    // The mark's face is stated as a metric pair rather than resolved by name:
+    // a host with no Calibri-compatible face substitutes one whose metrics are
+    // not Calibri's, and the substitution rather than the rule would decide the
+    // assertion. Resolution by name is covered by
+    // `the_paragraph_mark_face_moves_the_emitted_line_box`, which uses only
+    // faces Typst embeds.
+    let upem: f64 = 2048.0;
+    let arial: (f64, f64) = (1854.0 / upem, 434.0 / upem);
+    let calibri: (f64, f64) = (1950.0 / upem, 550.0 / upem);
+    let (shared_above, _) = powerpoint_line_box_split_em([arial, calibri])
+        .expect("a positive ascent splits the line box");
     assert!(
         shared_above < above - 0.02,
         "adding Calibri — whose 0.936em share is the deeper of the two — must \
