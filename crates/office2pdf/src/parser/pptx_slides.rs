@@ -3003,7 +3003,9 @@ impl<'a> SlideXmlParser<'a> {
                 );
                 let mut paragraph_runs = std::mem::take(&mut self.runs);
                 insert_hangul_kinsoku_break_markers(&mut paragraph_runs);
-                let paragraph_style: ParagraphStyle = self.para_style.clone();
+                let mut paragraph_style: ParagraphStyle = self.para_style.clone();
+                paragraph_style.paragraph_mark_font_family =
+                    pptx_paragraph_mark_font_family(&self.para_end_run_style, self.ctx.theme);
                 // `a:tab pos` is measured from the text origin — the box edge
                 // plus `lIns` — not from the box edge itself: the native
                 // export of customGeo.pptx page 46 lands its value run at

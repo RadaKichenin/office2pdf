@@ -902,3 +902,61 @@ fn a_direct_shadow_wins_over_the_effect_ref() {
     let shadow = first_shape_shadow(&slide).expect("the direct shadow survives");
     assert_eq!(shadow.color, Color::new(0, 0xFF, 0));
 }
+
+/// The paragraph mark's family reaches the IR, because PowerPoint's line box is
+/// shared by every font on the line and the mark is one of them (issue #1176).
+///
+/// A mark that declares no typeface inherits the presentation's default text
+/// style, whose `<a:latin typeface="+mn-lt"/>` names the theme's minor Latin
+/// font — so it is that face, not the run's and not the renderer's default,
+/// that shares the box with the text.
+#[test]
+fn a_bare_paragraph_mark_takes_the_theme_minor_latin_font() {
+    let runs_xml = r#"<a:r><a:rPr sz="4000"><a:latin typeface="Malgun Gothic"/><a:ea typeface="Malgun Gothic"/></a:rPr><a:t>2025년 4분기</a:t></a:r><a:endParaRPr lang="en-US" sz="4000"/>"#;
+    let shape = make_formatted_text_box(0, 0, 10_000_000, 1_000_000, runs_xml);
+    let slide = make_slide_xml(&[shape]);
+    let theme_xml = make_theme_xml(&standard_theme_colors(), "Calibri Light", "Calibri");
+    let data = build_test_pptx_with_theme(SLIDE_CX, SLIDE_CY, &[slide], &theme_xml);
+
+    let (doc, _warnings) = PptxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let page = first_fixed_page(&doc);
+    let blocks = text_box_blocks(&page.elements[0]);
+    let Block::Paragraph(para) = &blocks[0] else {
+        panic!("Expected Paragraph");
+    };
+
+    assert_eq!(
+        para.runs[0].style.font_family.as_deref(),
+        Some("Malgun Gothic"),
+        "the run keeps its own face"
+    );
+    assert_eq!(
+        para.style.paragraph_mark_font_family.as_deref(),
+        Some("Calibri"),
+        "a mark declaring no typeface falls to the theme's minor Latin font"
+    );
+}
+
+/// A mark that names its own typeface keeps it — the theme fallback applies
+/// only when nothing else does (issue #1176).
+#[test]
+fn a_paragraph_mark_keeps_the_typeface_it_declares() {
+    let runs_xml = r#"<a:r><a:rPr sz="4000"><a:latin typeface="Malgun Gothic"/></a:rPr><a:t>2025년</a:t></a:r><a:endParaRPr lang="en-US" sz="4000"><a:latin typeface="Verdana"/></a:endParaRPr>"#;
+    let shape = make_formatted_text_box(0, 0, 10_000_000, 1_000_000, runs_xml);
+    let slide = make_slide_xml(&[shape]);
+    let theme_xml = make_theme_xml(&standard_theme_colors(), "Calibri Light", "Calibri");
+    let data = build_test_pptx_with_theme(SLIDE_CX, SLIDE_CY, &[slide], &theme_xml);
+
+    let (doc, _warnings) = PptxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let page = first_fixed_page(&doc);
+    let blocks = text_box_blocks(&page.elements[0]);
+    let Block::Paragraph(para) = &blocks[0] else {
+        panic!("Expected Paragraph");
+    };
+
+    assert_eq!(
+        para.style.paragraph_mark_font_family.as_deref(),
+        Some("Verdana"),
+        "the mark's own typeface must beat the theme fallback"
+    );
+}

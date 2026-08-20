@@ -64,6 +64,9 @@ pub(super) fn extract_paragraph_style(prop: &docx_rs::ParagraphProperty) -> Para
         background: None,
         border,
         border_space,
+        // Word does not share a fixed line box across a
+        // paragraph's fonts, so its paragraph mark carries no line-box role.
+        paragraph_mark_font_family: None,
     }
 }
 

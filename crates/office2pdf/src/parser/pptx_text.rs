@@ -50,6 +50,27 @@ pub(super) fn apply_typeface_to_style(
     style.font_family = Some(resolve_theme_font(&typeface, theme));
 }
 
+/// The family a paragraph's mark — the empty run `<a:endParaRPr>` describes —
+/// ends up set in, given the mark's resolved style.
+///
+/// A mark that declares no typeface inherits the presentation's default text
+/// style, whose `<a:latin typeface="+mn-lt"/>` names the theme's minor Latin
+/// font. That fallback has to be the real face rather than the renderer's own
+/// default, because PowerPoint shares one line box across every font on the
+/// line and the mark is one of them: the golden mocks' bare marks are what
+/// pull an Arial frame's first baseline from the face's own 0.97238em share
+/// down to the 0.94377em the exports show (issue #1176).
+pub(super) fn pptx_paragraph_mark_font_family(
+    end_run_style: &TextStyle,
+    theme: &ThemeData,
+) -> Option<Box<str>> {
+    end_run_style
+        .font_family
+        .clone()
+        .or_else(|| theme.minor_font.clone())
+        .map(String::into_boxed_str)
+}
+
 // ── List style parser state machine ──────────────────────────────────
 
 /// Which paragraph-level container the parser is currently inside.
