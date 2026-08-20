@@ -112,6 +112,8 @@ fn bar_chart() -> crate::ir::Chart {
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_major_unit: None,
+        value_axis_min: None,
+        value_axis_max: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: crate::ir::BarBandLayout::default(),

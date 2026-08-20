@@ -343,6 +343,8 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
         category_axis_line: category_axis.line,
         value_axis_line: value_axis.line,
         value_axis_major_unit: value_axis.major_unit,
+        value_axis_min: value_axis.min,
+        value_axis_max: value_axis.max,
         // Office hangs the gridlines off whichever axis they run across; the
         // value axis carries the horizontal set our renderer draws.
         major_gridline_line: match value_axis.gridline {
@@ -643,6 +645,10 @@ struct Axis {
     gridline: ChartLine,
     /// `<c:majorUnit>` — the tick interval this axis states.
     major_unit: Option<f64>,
+    /// `<c:scaling><c:min>` — the value this axis starts at.
+    min: Option<f64>,
+    /// `<c:scaling><c:max>` — the value this axis ends at.
+    max: Option<f64>,
 }
 
 /// The `formatCode` a `<c:numFmt>` states, when it states one that is not
@@ -654,6 +660,38 @@ fn explicit_format_code(element: &quick_xml::events::BytesStart<'_>) -> Option<S
     let code = xml_util::get_attr_str(element, b"formatCode")?;
     let code = code.trim();
     (!code.is_empty() && !code.eq_ignore_ascii_case("General")).then(|| code.to_string())
+}
+
+/// Read a `<c:scaling>` body, reporting the interval it fixes the axis to.
+///
+/// `<c:min>` and `<c:max>` are optional and independent: a part may fix one
+/// end and leave the other to the automatic scale. A bound that is not a
+/// finite number is dropped rather than propagated as a NaN that would make
+/// every plotted position vanish (issue #1184).
+///
+/// TODO(orientation): `<c:orientation val="maxMin"/>` reverses the axis, which
+/// the renderer does not model, so it is read past here.
+fn parse_axis_scaling(reader: &mut Reader<&[u8]>) -> (Option<f64>, Option<f64>) {
+    let mut min: Option<f64> = None;
+    let mut max: Option<f64> = None;
+    let bound = |element: &quick_xml::events::BytesStart<'_>| -> Option<f64> {
+        xml_util::get_attr_str(element, b"val")
+            .and_then(|value| value.parse::<f64>().ok())
+            .filter(|value| value.is_finite())
+    };
+    loop {
+        match reader.read_event() {
+            Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e)) => match e.local_name().as_ref() {
+                b"min" => min = bound(e).or(min),
+                b"max" => max = bound(e).or(max),
+                _ => {}
+            },
+            Ok(Event::End(ref e)) if e.local_name().as_ref() == b"scaling" => break,
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+    (min, max)
 }
 
 /// Read an axis element, consuming it to `end_tag`.
@@ -677,6 +715,14 @@ fn parse_axis(reader: &mut Reader<&[u8]>, end_tag: &[u8], scheme: &SchemeColors<
             }
             Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"majorGridlines" => {
                 axis.gridline = parse_chart_line(reader, b"majorGridlines", scheme);
+            }
+            // `<c:scaling>` is the only place an axis states a bound, and it
+            // holds `<c:orientation>` too, so it is consumed as a body rather
+            // than matched flat: `min`/`max` mean nothing outside it (#1184).
+            Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"scaling" => {
+                let (min, max) = parse_axis_scaling(reader);
+                axis.min = min;
+                axis.max = max;
             }
             // Office writes `<c:majorTickMark val="out"/>` self-closing, so the
             // `Start` arm alone would never see it.

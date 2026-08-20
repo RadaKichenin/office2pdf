@@ -2423,6 +2423,83 @@ fn a_stated_major_unit_reaches_the_model() {
     assert!((unit - 0.2).abs() < 1e-9, "expected 0.2, got {unit}");
 }
 
+/// `<c:scaling><c:min>` and `<c:max>` fix the value axis to an interval, which
+/// is how a chart puts zero inside its plot rather than on the edge.
+///
+/// `xl/charts/chart1.xml` of the workbook in #1123 scales its `january cash
+/// flow:` bar around zero — `<c:min val="-400"/><c:max val="400"/>` — so
+/// Excel draws the axis line down the middle of the plot. Reading the bounds
+/// past left every plotted value measured against `[0, auto]`, so the negative
+/// series had nowhere to go (issue #1184).
+#[test]
+fn a_stated_value_axis_scaling_reaches_the_model() {
+    let xml = bar_chart_xml(r#"<c:barDir val="bar"/><c:grouping val="stacked"/>"#).replace(
+        "</c:plotArea>",
+        r#"<c:valAx><c:axId val="2"/>
+             <c:scaling><c:orientation val="minMax"/><c:max val="400"/><c:min val="-400"/></c:scaling>
+             <c:majorUnit val="400"/>
+           </c:valAx></c:plotArea>"#,
+    );
+
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).expect("chart parses");
+
+    assert_eq!(chart.value_axis_min, Some(-400.0));
+    assert_eq!(chart.value_axis_max, Some(400.0));
+}
+
+/// The two bounds are independent: `chart2.xml` of the same workbook fixes only
+/// the maximum and leaves the minimum to the automatic scale (issue #1184).
+#[test]
+fn one_stated_bound_leaves_the_other_to_the_auto_scale() {
+    let xml = bar_chart_xml(r#"<c:barDir val="col"/><c:grouping val="clustered"/>"#).replace(
+        "</c:plotArea>",
+        r#"<c:valAx><c:axId val="2"/>
+             <c:scaling><c:orientation val="minMax"/><c:max val="1000"/></c:scaling>
+           </c:valAx></c:plotArea>"#,
+    );
+
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).expect("chart parses");
+
+    assert_eq!(chart.value_axis_max, Some(1000.0));
+    assert_eq!(chart.value_axis_min, None);
+}
+
+/// A category axis states its own `<c:scaling>` too, and it carries no bounds —
+/// so the value axis' interval must not be picked up from it.
+#[test]
+fn a_category_axis_scaling_does_not_bound_the_value_axis() {
+    let xml = bar_chart_xml(r#"<c:barDir val="col"/><c:grouping val="clustered"/>"#).replace(
+        "</c:plotArea>",
+        r#"<c:catAx><c:axId val="1"/>
+             <c:scaling><c:orientation val="minMax"/></c:scaling>
+           </c:catAx>
+           <c:valAx><c:axId val="2"/>
+             <c:scaling><c:orientation val="minMax"/><c:min val="-50"/></c:scaling>
+           </c:valAx></c:plotArea>"#,
+    );
+
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).expect("chart parses");
+
+    assert_eq!(chart.value_axis_min, Some(-50.0));
+    assert_eq!(chart.value_axis_max, None);
+}
+
+/// An axis that states no scaling bounds leaves both ends automatic.
+#[test]
+fn an_unstated_value_axis_scaling_is_none() {
+    let xml = bar_chart_xml(r#"<c:barDir val="col"/><c:grouping val="clustered"/>"#).replace(
+        "</c:plotArea>",
+        r#"<c:valAx><c:axId val="2"/>
+             <c:scaling><c:orientation val="minMax"/></c:scaling>
+           </c:valAx></c:plotArea>"#,
+    );
+
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).expect("chart parses");
+
+    assert_eq!(chart.value_axis_min, None);
+    assert_eq!(chart.value_axis_max, None);
+}
+
 /// An axis that states none leaves the interval to the auto-scale.
 #[test]
 fn an_unstated_major_unit_is_none() {

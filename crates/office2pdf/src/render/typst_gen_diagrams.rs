@@ -1495,6 +1495,189 @@ const EXCEL_VALUE_LABEL_EDGE_PAD_PT: f64 = 6.5;
 const EXCEL_VALUE_LABEL_ASCENT_FRACTION: f64 = 5.0 / 6.0;
 const EXCEL_VALUE_LABEL_DESCENT_FRACTION: f64 = 0.5;
 
+/// The interval a value axis spans, and the interval between its ticks.
+///
+/// Every plotted position is a share of this interval rather than of the data,
+/// which is what lets zero sit inside the plot: a `<c:valAx><c:scaling>` fixing
+/// the axis to -400..400 puts zero halfway across, and a value below it draws
+/// on the far side rather than collapsing onto the plot's edge (issue #1184).
+#[derive(Clone, Copy, Debug)]
+struct ValueScale {
+    /// The value the axis starts at — the plot's floor for a vertical axis and
+    /// its left edge for a horizontal one.
+    min: f64,
+    /// The value the axis ends at.
+    max: f64,
+    /// The interval between two major ticks.
+    step: f64,
+}
+
+impl ValueScale {
+    /// Where `value` sits along the axis: 0 at [`Self::min`] and 1 at
+    /// [`Self::max`]. Clamped, so a point outside a stated interval draws on
+    /// the plot's edge rather than outside the plot.
+    fn fraction(&self, value: f64) -> f64 {
+        let span: f64 = self.max - self.min;
+        if !span.is_finite() || span <= 0.0 {
+            return 0.0;
+        }
+        ((value - self.min) / span).clamp(0.0, 1.0)
+    }
+
+    /// Where the value-zero line lands: the baseline every bar grows from, and
+    /// the line the category axis stands on.
+    fn zero_fraction(&self) -> f64 {
+        self.fraction(0.0)
+    }
+
+    /// The values the gridlines, the tick marks and the tick labels all land
+    /// on, from the axis minimum up.
+    ///
+    /// Indexed rather than accumulated: stepping a float drifts, and a tick a
+    /// hair off zero would print as `-0` beside the axis standing on it.
+    fn ticks(&self) -> Vec<f64> {
+        if !self.step.is_finite() || self.step <= 0.0 || self.max <= self.min {
+            return Vec::new();
+        }
+        // A part is free to state a unit far finer than its own interval, so
+        // the count is bounded rather than trusted.
+        let count: usize = (((self.max - self.min) / self.step + 1e-6).floor())
+            .clamp(0.0, MAX_AXIS_TICKS as f64) as usize;
+        (0..=count)
+            .map(|index| {
+                let tick: f64 = self.min + index as f64 * self.step;
+                if tick.abs() < self.step * 1e-9 {
+                    0.0
+                } else {
+                    tick
+                }
+            })
+            .collect()
+    }
+}
+
+/// Ceiling on how many major ticks one axis draws, so a `<c:majorUnit>` far
+/// finer than the interval it divides cannot generate an unbounded axis.
+const MAX_AXIS_TICKS: usize = 1000;
+
+/// Resolve the interval and tick spacing the value axis is drawn on.
+///
+/// `auto_axis` is the `(maximum, step)` the host's automatic scale chose. What
+/// the part states outranks it: `<c:majorUnit>` sets the interval (issue #882),
+/// and `<c:scaling><c:min>`/`<c:max>` fix either end of the axis (issue #1184).
+/// An end the part leaves out keeps the automatic one.
+fn chart_value_scale(chart: &Chart, auto_axis: (f64, f64)) -> ValueScale {
+    let data_min: f64 = chart_auto_min_value(chart);
+    // An axis reaching below zero has to count out its whole span rather than
+    // the positive half of it: a chart whose data is entirely negative has an
+    // automatic maximum of zero, and a step chosen from that would tick the
+    // axis once per unit.
+    let auto_axis: (f64, f64) = if data_min < 0.0 {
+        let top: f64 = if chart_auto_max_value(chart) > 0.0 {
+            auto_axis.0
+        } else {
+            0.0
+        };
+        let step: f64 = nice_axis(top - data_min).1;
+        // Both ends of an axis crossing zero land on a whole unit, so the
+        // maximum the positive half of the data chose is raised to one.
+        ((top / step - 1e-9).ceil().max(0.0) * step, step)
+    } else {
+        auto_axis
+    };
+    let (auto_max, auto_step) = axis_with_stated_unit(auto_axis, chart.value_axis_major_unit);
+
+    let stated = |bound: Option<f64>| bound.filter(|value| value.is_finite());
+    let stated_unit: Option<f64> = chart
+        .value_axis_major_unit
+        .filter(|unit| unit.is_finite() && *unit > 0.0);
+    let (stated_min, stated_max) = (stated(chart.value_axis_min), stated(chart.value_axis_max));
+    let min: f64 = stated_min.unwrap_or_else(|| automatic_axis_minimum(data_min, auto_step));
+    let max: f64 = stated_max.unwrap_or(auto_max);
+
+    // A stated interval carries its own automatic unit: Excel counts out the
+    // interval, not the data behind it. `chart3.xml` of the #1123 workbook
+    // fixes its axis to 0..0.5 over a 0.408 maximum and the export ticks every
+    // 10%; taking the unit from the data gives 5% and twice the ticks (#1184).
+    let step: f64 = match (stated_unit, stated_min.or(stated_max)) {
+        (Some(unit), _) => unit,
+        (None, Some(_)) => nice_axis(max - min).1,
+        (None, None) => auto_step,
+    };
+    // Re-seated on the final unit so an automatic minimum still lands on one.
+    let min: f64 = stated_min.unwrap_or_else(|| automatic_axis_minimum(data_min, step));
+    if max > min {
+        return ValueScale { min, max, step };
+    }
+    // A part stating a maximum at or below its minimum describes no interval
+    // at all, so the automatic scale is the only thing left to draw against.
+    ValueScale {
+        min: automatic_axis_minimum(data_min, auto_step),
+        max: auto_max,
+        step: auto_step,
+    }
+}
+
+/// The automatic axis minimum for data reaching down to `data_min`.
+///
+/// Zero unless the data goes below it, so every chart with no negative value
+/// keeps the plot-floor baseline it has always had. Below zero it mirrors
+/// [`nice_axis`]: the data is cleared by [`AXIS_HEADROOM_DIVISOR`] so the
+/// deepest bar stops short of the plot's edge, then rounded outwards to a whole
+/// major unit so the ticks stay on the unit the axis counts in (issue #1184).
+fn automatic_axis_minimum(data_min: f64, step: f64) -> f64 {
+    if !data_min.is_finite() || data_min >= 0.0 || !step.is_finite() || step <= 0.0 {
+        return 0.0;
+    }
+    let cleared: f64 = data_min + data_min / AXIS_HEADROOM_DIVISOR;
+    (cleared / step + 1e-9).floor() * step
+}
+
+/// The most negative value the value axis has to reach down to.
+///
+/// The mirror of [`chart_auto_max_value`]: a stacked category's negative
+/// segments hang from zero as a stack of their own, so the axis has to clear
+/// their sum rather than the deepest single one. A line laid over the columns
+/// reads against the same axis and takes no part in any stack.
+fn chart_auto_min_value(chart: &Chart) -> f64 {
+    let overlaid: Vec<bool> = chart
+        .series
+        .iter()
+        .map(|series| plots_as_line(chart, series))
+        .collect();
+    let overlay_min: f64 = chart
+        .series
+        .iter()
+        .zip(&overlaid)
+        .filter(|(_, is_line)| **is_line)
+        .flat_map(|(series, _)| series.values.iter())
+        .copied()
+        .fold(0.0_f64, f64::min);
+    match chart.grouping {
+        // Every stack is rescaled to fill the axis, so the scale is the
+        // percentage itself and has no negative end.
+        ChartGrouping::PercentStacked => 0.0,
+        ChartGrouping::Stacked => (0..chart.categories.len())
+            .map(|index| {
+                chart
+                    .series
+                    .iter()
+                    .zip(&overlaid)
+                    .filter(|(_, is_line)| !**is_line)
+                    .filter_map(|(series, _)| series.values.get(index).copied())
+                    .filter(|value| *value < 0.0)
+                    .sum::<f64>()
+            })
+            .fold(overlay_min, f64::min),
+        ChartGrouping::Clustered => chart
+            .series
+            .iter()
+            .flat_map(|series| series.values.iter())
+            .copied()
+            .fold(0.0_f64, f64::min),
+    }
+}
+
 /// The largest value the value axis has to reach, before it is rounded up to a
 /// whole number of major units.
 ///
@@ -1538,21 +1721,24 @@ fn chart_auto_max_value(chart: &Chart) -> f64 {
     }
 }
 
-/// The tick labels a column plot's value axis prints, from zero upwards.
+/// The tick labels a column plot's value axis prints, from the axis minimum
+/// up — which is zero only until a `<c:scaling><c:min>` or negative data puts
+/// it lower (issue #1184).
 ///
 /// Safe to ask before the plot exists, which is what lets the gutter be sized
 /// from the labels: a column chart's value axis runs *vertically*, and
 /// [`chart_auto_axis`] only consults the plot width for a horizontal
-/// PowerPoint axis. Its scale therefore depends on the data alone.
+/// PowerPoint axis. Its scale therefore depends on the data and on what the
+/// part states, never on the plot's own size.
 fn chart_value_axis_labels(chart: &Chart) -> Vec<String> {
     let auto_axis: (f64, f64) = if matches!(chart.grouping, ChartGrouping::PercentStacked) {
         (100.0, 20.0)
     } else {
         nice_axis(chart_auto_max_value(chart))
     };
-    let (nice_max, step) = axis_with_stated_unit(auto_axis, chart.value_axis_major_unit);
     let number_format: Option<&str> = chart_value_number_format(chart);
-    major_units(nice_max, step)
+    chart_value_scale(chart, auto_axis)
+        .ticks()
         .into_iter()
         .map(|tick| chart_value_label_formatted(tick, number_format))
         .collect()
@@ -2643,7 +2829,13 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
     } else {
         chart_auto_axis(chart, horizontal, plot_w, auto_max_value)
     };
-    let (nice_max, step) = axis_with_stated_unit(auto_axis, chart.value_axis_major_unit);
+    // The interval every plotted position is a share of. A part stating
+    // `<c:scaling><c:min>`/`<c:max>` fixes it; otherwise it is the automatic
+    // scale, which reaches below zero only when the data does (issue #1184).
+    let scale: ValueScale = chart_value_scale(chart, auto_axis);
+    // Where the value-zero line lands across the plot: the baseline the bars
+    // grow from, and the line the category axis stands on.
+    let zero_frac: f64 = scale.zero_fraction();
     // Decided once for the whole axis: labels all slant or none do, so a short
     // label in a crowded axis still hangs with its neighbours (issue #884).
     let category_labels_rotated: bool = chart_category_labels_rotated(chart, frame);
@@ -2673,9 +2865,9 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
     // `<c:majorGridlines><c:spPr><a:ln>` declares, if it declares one (#900).
     let gridline_stroke = chart_chrome_stroke(chart.major_gridline_line);
     let (label_box_x, label_box_w): (f64, f64) = chart_column_value_label_box(chart);
-    let major_units: Vec<f64> = major_units(nice_max, step);
+    let major_units: Vec<f64> = scale.ticks();
     for tick in &major_units {
-        let frac: f64 = tick / nice_max;
+        let frac: f64 = scale.fraction(*tick);
         if horizontal {
             let x: f64 = plot_x + frac * plot_w;
             if let Some(stroke) = gridline_stroke.as_deref() {
@@ -2748,8 +2940,11 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
     let bar_thickness: f64 = bars.thickness;
     for (cat_index, category) in chart.categories.iter().enumerate() {
         let group_start: f64 = cat_index as f64 * row;
-        // Fraction of the axis already consumed by the segments below.
-        let mut stack_base: f64 = 0.0;
+        // The running totals the next segment stacks on. Positives and
+        // negatives grow away from zero as two separate stacks, which is how
+        // Office stacks a category holding both (issue #1184).
+        let mut stack_positive: f64 = 0.0;
+        let mut stack_negative: f64 = 0.0;
         let category_total: f64 = category_total(bar_series(), cat_index);
         for (band_slot, s_index) in bar_slots.iter().copied().enumerate() {
             let s: &crate::ir::ChartSeries = &series[s_index];
@@ -2764,7 +2959,31 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 ChartGrouping::PercentStacked => 0.0,
                 _ => value,
             };
-            let frac: f64 = (value / nice_max).clamp(0.0, 1.0);
+            // Where this segment starts and ends in value space: on zero for a
+            // clustered bar, and on the stack below it for a stacked one.
+            let base: f64 = if !stacked {
+                0.0
+            } else if value < 0.0 {
+                stack_negative
+            } else {
+                stack_positive
+            };
+            let end: f64 = base + value;
+            if stacked {
+                if value < 0.0 {
+                    stack_negative = end;
+                } else {
+                    stack_positive = end;
+                }
+            }
+            let (near_frac, far_frac): (f64, f64) = {
+                let base_frac: f64 = scale.fraction(base);
+                let end_frac: f64 = scale.fraction(end);
+                (base_frac.min(end_frac), base_frac.max(end_frac))
+            };
+            // The share of the axis the segment covers, which is its own length
+            // whichever side of the zero line it falls on.
+            let frac: f64 = far_frac - near_frac;
             // The palette is assigned over every series the chart declares, so
             // the colour keeps the series' own index while the band position
             // counts only the columns.
@@ -2777,7 +2996,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 let _ = writeln!(
                     out,
                     "#place(top + left, dx: {}pt, dy: {}pt, rect(width: {}pt, height: {}pt, fill: {}, stroke: none))",
-                    format_f64(plot_x + stack_base * plot_w),
+                    format_f64(plot_x + near_frac * plot_w),
                     format_f64(row_top + offset),
                     format_f64(bar_w.max(0.0)),
                     format_f64(bar_thickness),
@@ -2789,7 +3008,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                     out,
                     "#place(top + left, dx: {}pt, dy: {}pt, rect(width: {}pt, height: {}pt, fill: {}, stroke: none))",
                     format_f64(plot_x + group_start + offset),
-                    format_f64(plot_y + plot_h - bar_h - stack_base * plot_h),
+                    format_f64(plot_y + (1.0 - far_frac) * plot_h),
                     format_f64(bar_thickness),
                     format_f64(bar_h.max(0.0)),
                     color
@@ -2804,7 +3023,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 let position = s.data_labels.position;
                 let (label_x, label_y, label_w) = if horizontal {
                     let row_top: f64 = plot.dy + plot_h - (cat_index as f64 + 1.0) * row;
-                    let bar_start: f64 = plot_x + stack_base * plot_w;
+                    let bar_start: f64 = plot_x + near_frac * plot_w;
                     let bar_w: f64 = frac * plot_w;
                     let x: f64 = match position {
                         DataLabelPosition::Center => bar_start,
@@ -2822,8 +3041,8 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                         w,
                     )
                 } else {
-                    let bar_top: f64 = plot_y + plot_h - stack_base * plot_h - frac * plot_h;
-                    let bar_bottom: f64 = plot_y + plot_h - stack_base * plot_h;
+                    let bar_top: f64 = plot_y + (1.0 - far_frac) * plot_h;
+                    let bar_bottom: f64 = plot_y + (1.0 - near_frac) * plot_h;
                     let y: f64 = match position {
                         DataLabelPosition::Center => {
                             (bar_top + bar_bottom) / 2.0 - label_line_h / 2.0
@@ -2845,9 +3064,6 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                     chart_data_label_fill(chart),
                     escape_typst(&label)
                 );
-            }
-            if stacked {
-                stack_base += frac;
             }
         }
         // Category label, which goes with the axis it labels.
@@ -2921,7 +3137,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
             .take(categories)
             .enumerate()
             .map(|(cat_index, value)| {
-                let frac: f64 = (value / nice_max).clamp(0.0, 1.0);
+                let frac: f64 = scale.fraction(*value);
                 if horizontal {
                     // Bar charts run their categories bottom-up and place from
                     // the plot box's own top edge, as the column loop above does.
@@ -2977,11 +3193,20 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
             chart_chrome_stroke(chart.category_axis_line),
         )
     };
+    // The category axis stands on the value-zero line, which coincides with the
+    // plot's own edge only while the value axis starts at zero. A bar chart's
+    // category axis is the vertical one and a column chart's the horizontal
+    // one, so which edge leaves its seat depends on the orientation (#1184).
+    let (left_axis_x, bottom_axis_y): (f64, f64) = if horizontal {
+        (plot_x + zero_frac * plot_w, plot_y + plot_h)
+    } else {
+        (plot_x, plot_y + (1.0 - zero_frac) * plot_h)
+    };
     if let (true, Some(stroke)) = (left_axis_drawn, left_stroke.as_deref()) {
-        write_left_axis_line(out, plot_x, plot_y, plot_h, stroke);
+        write_left_axis_line(out, left_axis_x, plot_y, plot_h, stroke);
     }
     if let (true, Some(stroke)) = (bottom_axis_drawn, bottom_stroke.as_deref()) {
-        write_bottom_axis_line(out, plot_x, plot_y + plot_h, plot_w, stroke);
+        write_bottom_axis_line(out, plot_x, bottom_axis_y, plot_w, stroke);
     }
     if value_axis_drawn
         && let Some(reach) = tick_reach(
@@ -2991,7 +3216,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
     {
         // Every value tick sits on its own gridline, both being one major unit.
         for tick in &major_units {
-            let frac: f64 = tick / nice_max;
+            let frac: f64 = scale.fraction(*tick);
             if horizontal {
                 if let Some(stroke) = bottom_stroke.as_deref() {
                     write_tick_under_plot(
@@ -3022,11 +3247,11 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
             let offset: f64 = boundary as f64 * row;
             if horizontal {
                 if let Some(stroke) = left_stroke.as_deref() {
-                    write_tick_left_of_plot(out, plot_x, plot_y + offset, reach, stroke);
+                    write_tick_left_of_plot(out, left_axis_x, plot_y + offset, reach, stroke);
                 }
             } else {
                 if let Some(stroke) = bottom_stroke.as_deref() {
-                    write_tick_under_plot(out, plot_x + offset, plot_y + plot_h, reach, stroke);
+                    write_tick_under_plot(out, plot_x + offset, bottom_axis_y, reach, stroke);
                 }
             }
         }
@@ -3207,7 +3432,10 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
         .flat_map(|s| s.values.iter())
         .copied()
         .fold(0.0_f64, f64::max);
-    let (nice_max, step) = axis_with_stated_unit(nice_axis(max_value), chart.value_axis_major_unit);
+    // As in `generate_chart_axis`, the axis spans the interval the part states
+    // and only otherwise the automatic one, so a point below zero has a floor
+    // to dip towards (issue #1184).
+    let scale: ValueScale = chart_value_scale(chart, nice_axis(max_value));
 
     if let Some(title) = chart.title.as_deref() {
         write_chart_title(out, chart, title, frame, None);
@@ -3258,9 +3486,9 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
     // Horizontal gridlines + value tick labels, with the line
     // `<c:majorGridlines>` declares when it declares one (#900).
     let gridline_stroke = chart_chrome_stroke(chart.major_gridline_line);
-    let major_units: Vec<f64> = major_units(nice_max, step);
+    let major_units: Vec<f64> = scale.ticks();
     for tick in &major_units {
-        let y: f64 = plot_y + (1.0 - tick / nice_max) * plot_h;
+        let y: f64 = plot_y + (1.0 - scale.fraction(*tick)) * plot_h;
         if let Some(stroke) = gridline_stroke.as_deref() {
             let _ = writeln!(
                 out,
@@ -3310,8 +3538,10 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
     // the band width still has to be safe if that ever changes.
     let band_w: f64 = plot_w / categories.max(1) as f64;
     let point_x = |index: usize| -> f64 { plot_x + (index as f64 + 0.5) * band_w };
-    let point_y =
-        |value: f64| -> f64 { plot_y + (1.0 - (value / nice_max).clamp(0.0, 1.0)) * plot_h };
+    let point_y = |value: f64| -> f64 { plot_y + (1.0 - scale.fraction(value)) * plot_h };
+    // The category axis stands on the value-zero line, wherever the interval
+    // puts it (issue #1184).
+    let category_axis_y: f64 = plot_y + (1.0 - scale.zero_fraction()) * plot_h;
 
     // Category axis labels.
     if category_axis_drawn {
@@ -3365,7 +3595,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
         write_left_axis_line(out, plot_x, plot_y, plot_h, stroke);
     }
     if let (true, Some(stroke)) = (category_axis_drawn, category_stroke.as_deref()) {
-        write_bottom_axis_line(out, plot_x, plot_y + plot_h, plot_w, stroke);
+        write_bottom_axis_line(out, plot_x, category_axis_y, plot_w, stroke);
     }
     if value_axis_drawn
         && let Some(reach) = tick_reach(
@@ -3375,7 +3605,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
     {
         // Every value tick sits on its own gridline, both being one major unit.
         for tick in &major_units {
-            let y: f64 = plot_y + (1.0 - tick / nice_max) * plot_h;
+            let y: f64 = plot_y + (1.0 - scale.fraction(*tick)) * plot_h;
             if let Some(stroke) = value_stroke.as_deref() {
                 write_tick_left_of_plot(out, plot_x, y, reach, stroke);
             }
@@ -3395,7 +3625,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
                 write_tick_under_plot(
                     out,
                     plot_x + boundary as f64 * band_w,
-                    plot_y + plot_h,
+                    category_axis_y,
                     reach,
                     stroke,
                 );

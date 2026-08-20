@@ -283,6 +283,16 @@ pub struct Chart {
     /// `<c:valAx><c:majorUnit>` — the tick interval the part states.
     /// `None` leaves the interval to the automatic scale (issue #882).
     pub value_axis_major_unit: Option<f64>,
+    /// `<c:valAx><c:scaling><c:min>` — the value the axis starts at.
+    ///
+    /// `None` leaves that end to the automatic scale, which starts at zero
+    /// unless the data reaches below it. A stated minimum is what puts zero
+    /// inside the plot rather than on its edge, and the category axis is drawn
+    /// on the value-zero line wherever that lands (issue #1184).
+    pub value_axis_min: Option<f64>,
+    /// `<c:valAx><c:scaling><c:max>` — the value the axis ends at. `None`
+    /// leaves that end to the automatic scale (issue #1184).
+    pub value_axis_max: Option<f64>,
     /// What `<c:majorGridlines><c:spPr>` says about the gridlines' line.
     pub major_gridline_line: ChartLine,
     /// Whether `<c:catAx><c:delete>` switched the category axis off.
