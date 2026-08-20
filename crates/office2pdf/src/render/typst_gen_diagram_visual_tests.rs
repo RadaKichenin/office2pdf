@@ -13,7 +13,7 @@ use crate::render::typst_gen::diagrams::{
 
 #[test]
 fn test_codegen_chart_bar_visual_bars() {
-    let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Chart {
+    let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Box::new(Chart {
         chart_type: ChartType::Bar,
         hole_size_percent: None,
         title: Some("Sales Report".to_string()),
@@ -53,7 +53,8 @@ fn test_codegen_chart_bar_visual_bars() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
-    })])]);
+        plot_area_layout: None,
+    }))])]);
 
     let output = generate_typst(&doc).unwrap();
     assert!(
@@ -87,7 +88,7 @@ fn test_codegen_chart_bar_visual_bars() {
 
 #[test]
 fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
-    let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Chart {
+    let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Box::new(Chart {
         chart_type: ChartType::Bar,
         hole_size_percent: None,
         title: Some("My Bar Chart".to_string()),
@@ -127,7 +128,8 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
-    })])]);
+        plot_area_layout: None,
+    }))])]);
 
     let output = generate_typst(&doc).unwrap();
     // Bars carry no in-plot value labels (like PowerPoint), so the raw float
@@ -149,7 +151,7 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
 
 #[test]
 fn test_codegen_chart_pie_draws_a_pie() {
-    let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Chart {
+    let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Box::new(Chart {
         chart_type: ChartType::Pie,
         hole_size_percent: None,
         title: Some("Market Share".to_string()),
@@ -189,7 +191,8 @@ fn test_codegen_chart_pie_draws_a_pie() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
-    })])]);
+        plot_area_layout: None,
+    }))])]);
 
     let output = generate_typst(&doc).unwrap();
 
@@ -216,7 +219,7 @@ fn test_codegen_chart_pie_draws_a_pie() {
 
 #[test]
 fn test_codegen_chart_line_trend_indicators() {
-    let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Chart {
+    let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Box::new(Chart {
         chart_type: ChartType::Line,
         hole_size_percent: None,
         title: Some("Trends".to_string()),
@@ -256,7 +259,8 @@ fn test_codegen_chart_line_trend_indicators() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
-    })])]);
+        plot_area_layout: None,
+    }))])]);
 
     let output = generate_typst(&doc).unwrap();
     // Multi-point line charts now render as an axis-scaled polyline plot
@@ -280,7 +284,7 @@ fn test_codegen_chart_line_trend_indicators() {
 
 #[test]
 fn test_codegen_chart_empty_series() {
-    let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Chart {
+    let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Box::new(Chart {
         chart_type: ChartType::Line,
         hole_size_percent: None,
         title: Some("Empty".to_string()),
@@ -310,7 +314,8 @@ fn test_codegen_chart_empty_series() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
-    })])]);
+        plot_area_layout: None,
+    }))])]);
 
     let output = generate_typst(&doc).unwrap();
     assert!(
@@ -357,7 +362,7 @@ fn page_holding(pages: &[String], marker: &str) -> usize {
 #[test]
 fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
     let mut content: Vec<Block> = page_filler(30);
-    content.push(Block::Chart(Chart {
+    content.push(Block::Chart(Box::new(Chart {
         chart_type: ChartType::Column,
         hole_size_percent: None,
         title: Some("Quarterly Units Shipped".to_string()),
@@ -401,7 +406,8 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
-    }));
+        plot_area_layout: None,
+    })));
     let doc = make_doc(vec![make_flow_page(content)]);
 
     let pages = page_texts(&doc);
@@ -421,7 +427,7 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
     // bottom border at the page end and re-opens with a fresh top border, so
     // one chart reads as two.
     let mut content: Vec<Block> = page_filler(30);
-    content.push(Block::Chart(Chart {
+    content.push(Block::Chart(Box::new(Chart {
         chart_type: ChartType::Pie,
         hole_size_percent: None,
         title: Some("Fixture Documents by Format".to_string()),
@@ -461,7 +467,8 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
-    }));
+        plot_area_layout: None,
+    })));
     let doc = make_doc(vec![make_flow_page(content)]);
 
     let pages = page_texts(&doc);
@@ -624,7 +631,7 @@ fn test_smartart_codegen_special_chars() {
 
 #[test]
 fn test_codegen_chart_line_plot() {
-    let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Chart {
+    let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Box::new(Chart {
         chart_type: ChartType::Line,
         hole_size_percent: None,
         title: None,
@@ -677,7 +684,8 @@ fn test_codegen_chart_line_plot() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
-    })])]);
+        plot_area_layout: None,
+    }))])]);
 
     let output = generate_typst(&doc).unwrap();
     assert!(
@@ -702,7 +710,7 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
     // Typst runs it off the page edge and the overflow is never drawn. Such a
     // chart stays breakable so every row survives.
     let categories: Vec<String> = (1..=60).map(|i| format!("Category{i:03}")).collect();
-    let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Chart {
+    let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Box::new(Chart {
         chart_type: ChartType::Scatter,
         hole_size_percent: None,
         title: Some("Sixty Sample Sites".to_string()),
@@ -742,7 +750,8 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
-    })])]);
+        plot_area_layout: None,
+    }))])]);
 
     let pages = page_texts(&doc);
 
@@ -844,11 +853,12 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        plot_area_layout: None,
     }
 }
 
 fn chart_source(chart: Chart) -> String {
-    let doc = make_doc(vec![make_flow_page(vec![Block::Chart(chart)])]);
+    let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Box::new(chart))])]);
     generate_typst(&doc).unwrap().source
 }
 
@@ -999,6 +1009,7 @@ fn legend_chart(position: LegendPosition) -> Chart {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        plot_area_layout: None,
     }
 }
 
@@ -1158,6 +1169,7 @@ fn a_declared_series_fill_reaches_the_bars() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        plot_area_layout: None,
     };
 
     let source = chart_source(chart);
@@ -1216,6 +1228,7 @@ fn a_series_without_a_fill_still_takes_the_palette() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        plot_area_layout: None,
     };
 
     let source = chart_source(chart);
@@ -1272,6 +1285,7 @@ fn per_point_fills_colour_each_bar_separately() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        plot_area_layout: None,
     };
 
     let source = chart_source(chart);
@@ -1327,6 +1341,7 @@ fn axis_titled_chart(category: Option<&str>, value: Option<&str>) -> Chart {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        plot_area_layout: None,
     }
 }
 
@@ -1432,6 +1447,7 @@ fn labelled_chart(labels: DataLabels) -> Chart {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        plot_area_layout: None,
     }
 }
 
@@ -1532,6 +1548,7 @@ fn pie_chart(values: Vec<f64>) -> Chart {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        plot_area_layout: None,
     }
 }
 
@@ -1691,7 +1708,7 @@ fn a_zero_slice_carries_no_label() {
 /// (issue #673).
 #[test]
 fn test_chart_default_gridline_matches_powerpoint() {
-    let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Chart {
+    let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Box::new(Chart {
         chart_type: ChartType::Bar,
         hole_size_percent: None,
         title: None,
@@ -1731,7 +1748,8 @@ fn test_chart_default_gridline_matches_powerpoint() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
-    })])]);
+        plot_area_layout: None,
+    }))])]);
 
     let source = generate_typst(&doc).unwrap().source;
     assert!(
@@ -1892,6 +1910,7 @@ fn tick_mark_chart(
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        plot_area_layout: None,
     }
 }
 
@@ -2499,6 +2518,7 @@ fn band_layout_chart(
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        plot_area_layout: None,
     }
 }
 
@@ -2787,6 +2807,7 @@ fn two_series_bar_chart(theme_accent_colors: Vec<crate::ir::Color>) -> Chart {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        plot_area_layout: None,
     }
 }
 
@@ -4230,6 +4251,7 @@ fn test_data_table_prints_a_series_number_format() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        plot_area_layout: None,
     };
     let source = chart_source(chart);
 
@@ -4287,6 +4309,7 @@ fn test_data_table_prints_a_declared_thousands_format() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        plot_area_layout: None,
     };
     let source = chart_source(chart);
 
@@ -4342,6 +4365,7 @@ fn test_data_table_without_a_number_format_prints_plainly() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        plot_area_layout: None,
     };
     let source = chart_source(chart);
 
@@ -4396,6 +4420,7 @@ fn test_a_currency_axis_label_is_escaped() {
         value_axis_number_format: Some("\"$\"#,##0".to_string()),
         auto_title_deleted: false,
         has_automatic_title: false,
+        plot_area_layout: None,
     };
     let source = chart_source(chart);
 
@@ -4452,6 +4477,7 @@ fn single_series_chart(auto_title_deleted: bool) -> Chart {
         value_axis_number_format: None,
         auto_title_deleted,
         has_automatic_title: false,
+        plot_area_layout: None,
     }
 }
 
@@ -4530,6 +4556,7 @@ fn automatic_title_chart(series_names: &[Option<&str>], auto_title_deleted: bool
         value_axis_number_format: None,
         auto_title_deleted,
         has_automatic_title: true,
+        plot_area_layout: None,
     }
 }
 
@@ -5247,6 +5274,7 @@ fn combo_budget_chart() -> Chart {
         value_axis_number_format: None,
         auto_title_deleted: true,
         has_automatic_title: false,
+        plot_area_layout: None,
     }
 }
 
@@ -5440,6 +5468,7 @@ fn combo_line_and_scatter_chart() -> Chart {
         value_axis_number_format: None,
         auto_title_deleted: true,
         has_automatic_title: false,
+        plot_area_layout: None,
     }
 }
 
@@ -5635,4 +5664,184 @@ fn a_powerpoint_legend_key_keeps_its_own_square() {
             "a PowerPoint key keeps its own text-scaled side; got {width_pt}pt in:\n{source}"
         );
     }
+}
+
+// ----- The plot rectangle c:plotArea/c:layout states (issue #1182) -----
+
+/// The chart area the reported workbook's drawing anchor gives its
+/// `january income:` bar chart, in points before the sheet's print scale:
+/// `SheetChartPlacement { width: 307.98527559055117, height: 207.52251968503936 }`.
+const MONTHLY_BUDGET_CHART_FRAME: (f64, f64) = (307.98527559055117, 207.52251968503936);
+
+/// That chart's `c:plotArea/c:layout/c:manualLayout`, verbatim.
+const MONTHLY_BUDGET_PLOT_LAYOUT: crate::ir::ChartPlotAreaLayout = crate::ir::ChartPlotAreaLayout {
+    x: 0.3022229818508113,
+    y: 0.34625485336714895,
+    width: 0.6413931113556166,
+    height: 0.5571170578930364,
+};
+
+/// The `january income:` bar chart of
+/// `tests/fixtures/xlsx/issue_1181_fit_to_height.xlsx`: five categories, one
+/// series, no legend and no title. The template anchors it over the cells that
+/// print `january income:` and `$1,225`, which is why its plot area starts a
+/// third of the way down the chart.
+fn monthly_budget_income_chart() -> Chart {
+    let mut chart = bar_chart_at(
+        None,
+        &[
+            "financial aid",
+            "wages (after-tax)",
+            "family help",
+            "from savings",
+            "other",
+        ],
+    );
+    chart.series.truncate(1);
+    chart.series[0].name = None;
+    chart.series[0].values = vec![
+        0.0,
+        0.3673469387755102,
+        0.16326530612244897,
+        0.40816326530612246,
+        0.061224489795918366,
+    ];
+    chart.has_legend = false;
+    chart.host = crate::ir::ChartHost::Spreadsheet;
+    chart.plot_area_layout = Some(MONTHLY_BUDGET_PLOT_LAYOUT);
+    chart
+}
+
+/// A stated inner plot rectangle seats the plot where Excel seats it.
+///
+/// Measured on a native Excel for Mac 16 export of the workbook, staged and run
+/// inside Excel's own sandbox container, traced with `mutool draw -F trace`.
+/// The sheet prints at 0.78, so every figure below is the printed one divided
+/// by that scale.
+///
+/// The chart area is 240.23 x 161.87pt printed, which is exactly this frame at
+/// 0.78. Inside it the bars start at 152.75pt against a chart-area left edge of
+/// 80.14pt, the value ticks run 0%-50% at a 30.82pt pitch — a 154.09pt plot —
+/// the five category bands are 18.04pt apart for a 90.18pt plot, and the top
+/// band's bar sits at 181.24pt. Undoing the scale gives (93.09, 71.87) for the
+/// origin and 197.55 x 115.62pt for the extent, which is the frame times the
+/// four fractions to within 0.03pt.
+#[test]
+fn a_stated_plot_rectangle_seats_the_plot_where_excel_seats_it() {
+    let chart: Chart = monthly_budget_income_chart();
+
+    let actual = axis_plot_rect(&chart, MONTHLY_BUDGET_CHART_FRAME, false);
+
+    let expected = (93.09, 71.87, 290.65, 187.49);
+    let errors = [
+        ("left", actual.0, expected.0),
+        ("top", actual.1, expected.1),
+        ("right", actual.2, expected.2),
+        ("bottom", actual.3, expected.3),
+    ]
+    .map(|(edge, actual, expected)| (edge, actual, expected, (actual - expected).abs()));
+    assert!(
+        errors.iter().all(|(_, _, _, error)| *error <= 0.1),
+        "plot edges against the native export: {errors:?}"
+    );
+}
+
+/// The fractions are of the chart area, not of one particular frame: the same
+/// chart in a frame of another size lands on the same fractions of it.
+///
+/// Triangulation against a fix that hardcoded the reported chart's numbers.
+#[test]
+fn a_stated_plot_rectangle_scales_with_the_frame() {
+    let chart: Chart = monthly_budget_income_chart();
+    let frame: (f64, f64) = (480.0, 320.0);
+
+    let (left, top, right, bottom) = axis_plot_rect(&chart, frame, false);
+
+    let layout = MONTHLY_BUDGET_PLOT_LAYOUT;
+    let expected = (
+        layout.x * frame.0,
+        layout.y * frame.1,
+        (layout.x + layout.width) * frame.0,
+        (layout.y + layout.height) * frame.1,
+    );
+    for (edge, actual, expected) in [
+        ("left", left, expected.0),
+        ("top", top, expected.1),
+        ("right", right, expected.2),
+        ("bottom", bottom, expected.3),
+    ] {
+        assert!(
+            (actual - expected).abs() <= 0.01,
+            "{edge} edge: {actual} against {expected}"
+        );
+    }
+}
+
+/// A chart that states no layout keeps the automatic one, which fills the
+/// frame it was given less its chrome. Without this the fix would be free to
+/// move every chart in the corpus.
+#[test]
+fn a_chart_without_a_stated_rectangle_keeps_the_automatic_plot() {
+    let mut chart: Chart = monthly_budget_income_chart();
+    chart.plot_area_layout = None;
+
+    let (left, top, right, bottom) = axis_plot_rect(&chart, MONTHLY_BUDGET_CHART_FRAME, false);
+
+    assert!(
+        top < 1.0,
+        "the automatic plot still starts at the frame's top edge, got {top}"
+    );
+    assert!(
+        (bottom - (MONTHLY_BUDGET_CHART_FRAME.1 - chart_tick_band_pt(&chart))).abs() <= 0.01,
+        "the automatic plot still ends above the tick band, got {bottom}"
+    );
+    assert!(
+        (left - chart_category_gutter_pt(&chart)).abs() <= 0.01,
+        "the automatic plot still starts right of the category gutter, got {left}"
+    );
+    assert!(
+        (right - MONTHLY_BUDGET_CHART_FRAME.0).abs() <= 0.01,
+        "the automatic plot still reaches the frame's right edge, got {right}"
+    );
+}
+
+/// Everything the plot holds moves with it: the bars fill the stated rectangle
+/// and the category labels stay against its left edge.
+///
+/// The bars and the labels are placed from the box's own edges rather than from
+/// the plot's origin, so a displaced plot that left them behind would draw the
+/// bars over the cells the chart floats above — which is what #1182 reports.
+#[test]
+fn the_bars_and_category_labels_follow_a_stated_plot_rectangle() {
+    let chart: Chart = monthly_budget_income_chart();
+    let (left, top, _, bottom) = axis_plot_rect(&chart, MONTHLY_BUDGET_CHART_FRAME, false);
+
+    let source: String = framed_chart_source(
+        &chart,
+        MONTHLY_BUDGET_CHART_FRAME.0,
+        MONTHLY_BUDGET_CHART_FRAME.1,
+    );
+
+    let bars: Vec<PlacedRect> = emitted_rects(&source);
+    assert_eq!(bars.len(), chart.categories.len(), "one bar per category");
+    for bar in &bars {
+        assert!(
+            (bar.dx - left).abs() <= 0.01,
+            "every bar starts on the plot's left edge, got {bar:?}"
+        );
+        assert!(
+            bar.dy >= top - 0.01 && bar.dy + bar.height <= bottom + 0.01,
+            "every bar stands inside the plot, got {bar:?} for {top}..{bottom}"
+        );
+    }
+
+    let label: PlacedBox = placed_box_holding(&source, "from savings");
+    assert!(
+        label.dx + label.width <= left + 0.01,
+        "the category labels stay left of the plot, got {label:?}"
+    );
+    assert!(
+        label.dy >= top - 0.01 && label.dy + label.height <= bottom + 0.01,
+        "each category label sits beside its own band, got {label:?}"
+    );
 }

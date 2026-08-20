@@ -2104,6 +2104,93 @@ fn axis_plot_insets(chart: &Chart, frame: Option<(f64, f64)>) -> (f64, f64) {
     }
 }
 
+/// What the frame leaves the plot box: the title block is emitted above the
+/// box rather than inside it, so a framed chart's box gets what remains
+/// beneath it.
+fn axis_content_frame(frame: Option<(f64, f64)>, title_h: f64) -> Option<(f64, f64)> {
+    frame.map(|(width, height)| (width, (height - title_h).max(MIN_PLOT_PT)))
+}
+
+/// Where the plot sits when the chart states no rectangle of its own: hard
+/// against the chrome its labels and its legend reserve.
+fn automatic_plot_origin(chart: &Chart, content_frame: Option<(f64, f64)>) -> (f64, f64) {
+    let legend: LegendBox = axis_legend_box(chart);
+    let (gutter_w, _) = axis_label_gutters(chart, content_frame);
+    let (inset_top, _) = axis_plot_insets(chart, content_frame);
+    (legend.left + gutter_w, legend.top + inset_top)
+}
+
+/// The plotting rectangle `c:plotArea/c:layout/c:manualLayout` states, in the
+/// plot box's own coordinates.
+///
+/// The fractions are of the whole chart area, whose top edge is `title_h` above
+/// the box, so the stated `y` comes back down by that much.
+///
+/// Nothing here is clamped to the frame, because Excel does not clamp it
+/// either: `chart1.xml` of `tests/fixtures/xlsx/issue_1181_fit_to_height.xlsx`
+/// states `x` 0.092 with `w` 1, and the native export draws that plot a full
+/// chart-area width from 9.2% in — 11.35pt of printed plot past the chart's own
+/// right edge, with the plot-area fill measuring 123.381pt against a 123.3807pt
+/// chart area. (Excel does pull a plot back in eventually: probes at `x` 0.5 and
+/// at `w` 0.9 both landed their right edge on the same 309.26pt of a chart area
+/// running 80.14..320.36pt. What sets that limit is not established, and no
+/// chart in the corpus reaches it, so the stated fractions are taken as
+/// written.)
+///
+/// `None` for a chart that states no rectangle, and for an unframed one: a
+/// flowed chart sizes itself from its own content, so there is no chart area to
+/// take a fraction of.
+fn stated_plot_rect(
+    chart: &Chart,
+    frame: Option<(f64, f64)>,
+    title_h: f64,
+) -> Option<(f64, f64, f64, f64)> {
+    let layout: crate::ir::ChartPlotAreaLayout = chart.plot_area_layout?;
+    let (frame_w, frame_h) = frame?;
+    Some((
+        layout.x * frame_w,
+        layout.y * frame_h - title_h,
+        layout.width * frame_w,
+        layout.height * frame_h,
+    ))
+}
+
+/// The plotting rectangle of a framed axis plot, in the plot box's own
+/// coordinates.
+struct AxisPlot {
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    /// How far a stated rectangle moved the plot off the automatic origin.
+    ///
+    /// Zero for every chart that states none. The bars, the category labels and
+    /// the value tick labels are placed from the box's own edges rather than
+    /// from the plot's origin, so this is what carries them along with a plot
+    /// the file put somewhere else (issue #1182).
+    dx: f64,
+    dy: f64,
+}
+
+/// Lay out the plotting rectangle: the one `c:plotArea/c:layout` states, else
+/// the automatic one that fills the frame less its chrome.
+fn axis_plot_layout(chart: &Chart, frame: Option<(f64, f64)>, title_h: f64) -> AxisPlot {
+    let content_frame: Option<(f64, f64)> = axis_content_frame(frame, title_h);
+    let (auto_x, auto_y) = automatic_plot_origin(chart, content_frame);
+    let (x, y, width, height) = stated_plot_rect(chart, frame, title_h).unwrap_or_else(|| {
+        let (width, height) = axis_plot_size(chart, content_frame);
+        (auto_x, auto_y, width, height)
+    });
+    AxisPlot {
+        x,
+        y,
+        width,
+        height,
+        dx: x - auto_x,
+        dy: y - auto_y,
+    }
+}
+
 #[cfg(test)]
 pub(super) fn axis_plot_rect(
     chart: &Chart,
@@ -2115,14 +2202,10 @@ pub(super) fn axis_plot_rect(
     } else {
         0.0
     };
-    let content_frame = (frame.0, (frame.1 - title_h).max(MIN_PLOT_PT));
-    let legend = axis_legend_box(chart);
-    let (gutter_w, _) = axis_label_gutters(chart, Some(content_frame));
-    let (plot_w, plot_h) = axis_plot_size(chart, Some(content_frame));
-    let (inset_top, _) = axis_plot_insets(chart, Some(content_frame));
-    let left = legend.left + gutter_w;
-    let top = title_h + legend.top + inset_top;
-    (left, top, left + plot_w, top + plot_h)
+    let plot = axis_plot_layout(chart, Some(frame), title_h);
+    // The box sits `title_h` below the frame's own top edge.
+    let top = title_h + plot.y;
+    (plot.x, top, plot.x + plot.width, top + plot.height)
 }
 
 /// Smallest plotting rectangle worth drawing, in points.
@@ -2529,10 +2612,10 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
         write_chart_title(out, chart, title, frame, Some(title_h));
     }
 
-    // The fixed-height title block is emitted above the plot box, so a framed
-    // chart's box gets exactly what remains beneath it.
-    let frame: Option<(f64, f64)> =
-        frame.map(|(width, height)| (width, (height - title_h).max(MIN_PLOT_PT)));
+    // The chart area the fractions of a stated plot rectangle are taken of,
+    // kept before the title band comes off it.
+    let chart_area: Option<(f64, f64)> = frame;
+    let frame: Option<(f64, f64)> = axis_content_frame(frame, title_h);
     let (total_w, total_h) = match frame {
         Some(extent) => extent,
         None => chart_axis_extent(chart),
@@ -2546,10 +2629,13 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
         chart_area_stroke(&chart.chart_area_outline, chart.host)
     );
 
-    // Plot-area origin (top-left of the plotting rectangle), shifted by
-    // whatever the legend reserves on the left or above.
+    // The plotting rectangle: the one `c:plotArea/c:layout` states, else the
+    // automatic one, whose origin is shifted by whatever the legend reserves on
+    // the left or above (issue #1182).
     let legend: LegendBox = axis_legend_box(chart);
-    let (plot_w, plot_h) = axis_plot_size(chart, frame);
+    let plot: AxisPlot = axis_plot_layout(chart, chart_area, title_h);
+    let (plot_x, plot_y): (f64, f64) = (plot.x, plot.y);
+    let (plot_w, plot_h): (f64, f64) = (plot.width, plot.height);
     let auto_axis: (f64, f64) = if matches!(chart.grouping, ChartGrouping::PercentStacked) {
         // Every stack fills the plot, so the axis is the percentage scale
         // itself and needs no rounding.
@@ -2558,12 +2644,9 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
         chart_auto_axis(chart, horizontal, plot_w, auto_max_value)
     };
     let (nice_max, step) = axis_with_stated_unit(auto_axis, chart.value_axis_major_unit);
-    let (gutter_w, _) = axis_label_gutters(chart, frame);
-    let (inset_top, _) = axis_plot_insets(chart, frame);
     // Decided once for the whole axis: labels all slant or none do, so a short
     // label in a crowded axis still hangs with its neighbours (issue #884).
     let category_labels_rotated: bool = chart_category_labels_rotated(chart, frame);
-    let (plot_x, plot_y) = (legend.left + gutter_w, legend.top + inset_top);
     // Pitch of one category along the category axis. `ROW` is the intrinsic
     // value; a framed chart divides the axis it actually got, so widening the
     // frame widens the bars rather than leaving them stranded at one end.
@@ -2635,7 +2718,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 let _ = writeln!(
                     out,
                     "#place(top + left, dx: {}pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(right + horizon)[#text(size: {}pt{})[{}]]])",
-                    format_f64(label_box_x),
+                    format_f64(label_box_x + plot.dx),
                     format_f64(
                         y - chart_label_box_h(chart_axis_text_pt(
                             chart,
@@ -2689,7 +2772,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
             let offset: f64 = bars.lead + band_slot as f64 * bars.step;
             if horizontal {
                 // Bar charts stack categories bottom-up.
-                let row_top: f64 = plot_h - (cat_index as f64 + 1.0) * row;
+                let row_top: f64 = plot.dy + plot_h - (cat_index as f64 + 1.0) * row;
                 let bar_w: f64 = frac * plot_w;
                 let _ = writeln!(
                     out,
@@ -2720,7 +2803,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 // because an outside label would land on the segment above.
                 let position = s.data_labels.position;
                 let (label_x, label_y, label_w) = if horizontal {
-                    let row_top: f64 = plot_h - (cat_index as f64 + 1.0) * row;
+                    let row_top: f64 = plot.dy + plot_h - (cat_index as f64 + 1.0) * row;
                     let bar_start: f64 = plot_x + stack_base * plot_w;
                     let bar_w: f64 = frac * plot_w;
                     let x: f64 = match position {
@@ -2772,10 +2855,11 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
             continue;
         }
         if horizontal {
-            let row_top: f64 = plot_h - (cat_index as f64 + 1.0) * row;
+            let row_top: f64 = plot.dy + plot_h - (cat_index as f64 + 1.0) * row;
             let _ = writeln!(
                 out,
-                "#place(top + left, dx: 0pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(right + horizon)[#text(size: {}pt{})[{}]]])",
+                "#place(top + left, dx: {}pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(right + horizon)[#text(size: {}pt{})[{}]]])",
+                format_f64(plot.dx),
                 format_f64(row_top),
                 format_f64(chart_category_label_box_w(chart)),
                 format_f64(row),
@@ -2843,7 +2927,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                     // the plot box's own top edge, as the column loop above does.
                     (
                         plot_x + frac * plot_w,
-                        plot_h - (cat_index as f64 + 0.5) * row,
+                        plot.dy + plot_h - (cat_index as f64 + 0.5) * row,
                     )
                 } else {
                     (

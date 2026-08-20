@@ -14,8 +14,8 @@ use office2pdf::internal::Parser;
 use office2pdf::internal::XlsxParser;
 use office2pdf::internal::generate_typst;
 use office2pdf::ir::{
-    Alignment, Block, BorderLineStyle, ChartAreaOutline, ChartLine, Color, HFInline, Page,
-    SheetPage, TableCell,
+    Alignment, Block, BorderLineStyle, ChartAreaOutline, ChartLine, ChartPlotAreaLayout, Color,
+    HFInline, Page, SheetPage, TableCell,
 };
 
 // ---------------------------------------------------------------------------
@@ -2009,6 +2009,57 @@ fn structure_fit_to_page_sheet_without_declared_bounds_fits_its_rows_on_one_page
         (body_track - 14.82).abs() < 0.01,
         "a 19pt track must print at the export's 14.82pt, got {body_track}"
     );
+}
+
+/// Every chart in the same workbook states where its plot area sits inside the
+/// chart area, because the template floats each chart over the cells that print
+/// its heading — `january income:` and `$1,225` for this one — and the chart's
+/// own area is unfilled, so those cells show through the top third of it.
+///
+/// A native Excel for Mac 16 export of the workbook, staged and run inside
+/// Excel's own sandbox container and traced with `mutool draw -F trace`, puts
+/// this chart's bars at 152.75pt with its value ticks 30.82pt apart, on a chart
+/// area running 80.14..320.36pt of the printed page. The sheet prints at 0.78,
+/// so that is a 240.23pt chart area holding a 154.09pt plot 72.61pt in — this
+/// placement times these fractions, to within 0.03pt. Ignoring the layout drew
+/// the plot from the frame's own top-left instead, over the heading
+/// (issue #1182).
+#[test]
+fn structure_monthly_budget_bar_chart_states_where_its_plot_sits() {
+    let pages = sheet_pages("issue_1181_fit_to_height.xlsx");
+    let budget: &SheetPage = pages
+        .iter()
+        .find(|page| page.name == "Monthly college budget")
+        .expect("the reported sheet should print");
+    let income = budget
+        .charts
+        .iter()
+        .find(|chart| chart.chart.categories.iter().any(|c| c == "from savings"))
+        .expect("the january income chart should reach the IR");
+
+    assert_eq!(
+        income.chart.plot_area_layout,
+        Some(ChartPlotAreaLayout {
+            x: 0.3022229818508113,
+            y: 0.34625485336714895,
+            width: 0.6413931113556166,
+            height: 0.5571170578930364,
+        })
+    );
+
+    // The chart area those fractions are of, and the scale the whole drawing
+    // comes down by: 307.99 x 207.52pt at 0.78 is the export's 240.23 x
+    // 161.87pt.
+    let placement = income.placement.expect("the anchor places the chart");
+    for (axis, actual, expected) in [
+        ("width", placement.width * placement.print_scale, 240.23),
+        ("height", placement.height * placement.print_scale, 161.87),
+    ] {
+        assert!(
+            (actual - expected).abs() <= 0.05,
+            "the {axis} of the printed chart area: {actual} against the export's {expected}"
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -10,8 +10,8 @@ use super::drawingml::{self, SchemeColors};
 use super::xml_util;
 use crate::ir::{
     AxisTickMark, BarBandLayout, Chart, ChartAreaOutline, ChartGrouping, ChartHost, ChartLine,
-    ChartSeries, ChartTextStyle, ChartType, Color, DataLabelPosition, DataLabels, LegendPosition,
-    MarkerSymbol,
+    ChartPlotAreaLayout, ChartSeries, ChartTextStyle, ChartType, Color, DataLabelPosition,
+    DataLabels, LegendPosition, MarkerSymbol,
 };
 
 /// Mapping from XML chart element tag names to their corresponding `ChartType`.
@@ -163,6 +163,12 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
     // its own inside `c:plotArea`, and a flat loop would read that one (#668).
     let mut text_font_family: Option<String> = None;
     let mut text_style: ChartTextStyle = ChartTextStyle::default();
+    // `c:layout` is written by the title, the legend and every data-label group
+    // as well, so the plot area's own is told from theirs by where it sits. The
+    // elements that carry the others consume their own subtrees before this
+    // loop sees them, but the marker keeps that from being an assumption (#1182).
+    let mut in_plot_area: bool = false;
+    let mut plot_area_layout: Option<ChartPlotAreaLayout> = None;
 
     loop {
         match reader.read_event() {
@@ -175,6 +181,10 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
                     let (family, style, _) = parse_chart_text_properties(&mut reader, scheme);
                     text_font_family = family;
                     text_style = style;
+                } else if tag == b"plotArea" {
+                    in_plot_area = true;
+                } else if tag == b"layout" && in_plot_area && plot_area_layout.is_none() {
+                    plot_area_layout = parse_plot_area_layout(&mut reader);
                 } else if tag == b"legend" {
                     // Declared, unless the element switches itself off.
                     let (deleted, position) = parse_legend(&mut reader);
@@ -270,6 +280,9 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
                     .as_deref()
                     .map(legend_position_for);
             }
+            Ok(Event::End(ref e)) if e.local_name().as_ref() == b"plotArea" => {
+                in_plot_area = false;
+            }
             Ok(Event::End(ref e)) if e.local_name().as_ref() == b"chart" => {
                 chart_element_ended = true;
             }
@@ -322,6 +335,7 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
         has_legend,
         auto_title_deleted,
         has_automatic_title,
+        plot_area_layout,
         category_axis_title: category_axis.title,
         value_axis_title: value_axis.title,
         category_axis_major_tick_mark: category_axis.major_tick_mark,
@@ -356,6 +370,68 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
         category_axis_text_style: category_axis.text_style,
         value_axis_text_style: value_axis.text_style,
         value_axis_number_format: value_axis.number_format,
+    })
+}
+
+/// Read `c:plotArea/c:layout` into the rectangle it gives the plotting area.
+///
+/// Only the shape Excel and PowerPoint write for a plot the user dragged or
+/// resized is taken: `layoutTarget="inner"`, both modes `edge`, and all four
+/// values present. `factor` — the `ST_LayoutMode` default, and so what an
+/// omitted mode means — offsets the automatic layout instead of naming an edge,
+/// and `outer` measures the plot area with its tick labels rather than the
+/// plotting rectangle. Reading either as an edge fraction would move the plot
+/// somewhere nothing asked for, so anything else keeps the automatic layout
+/// (issue #1182).
+fn parse_plot_area_layout(reader: &mut Reader<&[u8]>) -> Option<ChartPlotAreaLayout> {
+    let mut layout_target: Option<String> = None;
+    let mut x_mode: Option<String> = None;
+    let mut y_mode: Option<String> = None;
+    let mut x: Option<f64> = None;
+    let mut y: Option<f64> = None;
+    let mut width: Option<f64> = None;
+    let mut height: Option<f64> = None;
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
+                let local = e.local_name();
+                let value = || xml_util::get_attr_str(e, b"val");
+                let number = || value().and_then(|raw| raw.parse::<f64>().ok());
+                match local.as_ref() {
+                    b"layoutTarget" => layout_target = value(),
+                    b"xMode" => x_mode = value(),
+                    b"yMode" => y_mode = value(),
+                    b"x" => x = number(),
+                    b"y" => y = number(),
+                    b"w" => width = number(),
+                    b"h" => height = number(),
+                    _ => {}
+                }
+            }
+            Ok(Event::End(ref e)) if e.local_name().as_ref() == b"layout" => break,
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+
+    if layout_target.as_deref() != Some("inner")
+        || x_mode.as_deref() != Some("edge")
+        || y_mode.as_deref() != Some("edge")
+    {
+        return None;
+    }
+    let (x, y, width, height) = (x?, y?, width?, height?);
+    // A plot with no extent draws nothing, and a non-finite fraction would take
+    // the whole placement with it.
+    if !(x.is_finite() && y.is_finite() && width > 0.0 && height > 0.0) {
+        return None;
+    }
+    Some(ChartPlotAreaLayout {
+        x,
+        y,
+        width,
+        height,
     })
 }
 

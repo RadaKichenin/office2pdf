@@ -141,7 +141,11 @@ pub enum Block {
     FloatingShape(FloatingShape),
     List(List),
     MathEquation(MathEquation),
-    Chart(Chart),
+    /// Boxed for the same reason [`super::document::FixedElementKind::Chart`]
+    /// is: `Chart` is much the largest variant, and carrying it inline made
+    /// every `Block` of every flow page pay for it (clippy's
+    /// `large_enum_variant`).
+    Chart(Box<Chart>),
     /// A `TOC` field's result, computed at render time from the document's own
     /// headings or captions.
     TableOfContents(TableOfContents),
@@ -338,6 +342,38 @@ pub struct Chart {
     /// chart. A part carrying no `<c:title>` at all, or one whose title names
     /// its own text, leaves this false (issue #1146).
     pub has_automatic_title: bool,
+    /// Where `c:plotArea/c:layout/c:manualLayout` puts the inner plot
+    /// rectangle inside the chart area. `None` for the automatic layout, which
+    /// is every chart that states nothing and every layout this does not model
+    /// (issue #1182). See [`ChartPlotAreaLayout`].
+    pub plot_area_layout: Option<ChartPlotAreaLayout>,
+}
+
+/// The inner plot rectangle `c:plotArea/c:layout/c:manualLayout` states, as
+/// fractions of the chart area's own width and height.
+///
+/// Measured against native Excel for Mac 16 exports of
+/// `tests/fixtures/xlsx/issue_1181_fit_to_height.xlsx`, whose four charts each
+/// carry one of these. Rewriting a single value of the `january income:` bar
+/// chart's layout and re-exporting moves the plot exactly as this reads it:
+/// `c:x` 0.30222 -> 0.1 slid the bars 48.58pt left across a 240.23pt printed
+/// chart area (0.20222 x 240.23 = 48.58), and `c:w` 0.64139 -> 0.4 scaled every
+/// bar by 0.6236, which is 0.4/0.64139 and not the 0.288 a right-edge reading
+/// of `c:w` predicts. `c:y` and `c:h` behave the same way down the frame.
+///
+/// So `x`/`y` are the plot's top-left corner and `w`/`h` are its size, both as
+/// fractions of the chart area — not offsets from the automatic layout, which
+/// is what the `factor` modes mean and what the parser declines to read.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ChartPlotAreaLayout {
+    /// `c:x` — left edge, as a fraction of the chart area's width.
+    pub x: f64,
+    /// `c:y` — top edge, as a fraction of the chart area's height.
+    pub y: f64,
+    /// `c:w` — width, as a fraction of the chart area's width.
+    pub width: f64,
+    /// `c:h` — height, as a fraction of the chart area's height.
+    pub height: f64,
 }
 
 /// Run properties a `c:txPr` declares for the strings it governs.

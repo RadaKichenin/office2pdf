@@ -1035,6 +1035,7 @@ fn test_document_requests_font_families_true_for_a_chart_only_document() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        plot_area_layout: None,
     };
 
     let doc = Document {
@@ -1044,7 +1045,7 @@ fn test_document_requests_font_families_true_for_a_chart_only_document() {
             first_footer: None,
             size: crate::ir::PageSize::default(),
             margins: crate::ir::Margins::default(),
-            content: vec![Block::Chart(chart.clone())],
+            content: vec![Block::Chart(Box::new(chart.clone()))],
             header: None,
             footer: None,
             columns: None,
@@ -1093,7 +1094,7 @@ fn test_document_requests_font_families_true_for_a_chart_only_document() {
             first_footer: None,
             size: crate::ir::PageSize::default(),
             margins: crate::ir::Margins::default(),
-            content: vec![Block::Chart(chart)],
+            content: vec![Block::Chart(Box::new(chart))],
             header: None,
             footer: None,
             columns: None,

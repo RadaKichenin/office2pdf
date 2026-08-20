@@ -380,6 +380,7 @@ fn test_drawings_shift_with_the_inset_grid() {
             value_axis_number_format: None,
             auto_title_deleted: false,
             has_automatic_title: false,
+            plot_area_layout: None,
         },
     });
 
