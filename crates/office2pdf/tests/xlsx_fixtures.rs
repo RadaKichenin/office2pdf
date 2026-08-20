@@ -1965,6 +1965,52 @@ fn structure_fit_to_page_sheet_scales_its_anchored_picture_to_the_native_size() 
     );
 }
 
+/// A `fitToPage` sheet that names neither `fitToWidth` nor `fitToHeight` takes
+/// ECMA-376's default of one page in *both* directions, and Excel scales it by
+/// whichever bound is tighter.
+///
+/// `issue_1181_fit_to_height.xlsx` is the reported workbook. Its
+/// `Monthly college budget` sheet declares `<pageSetUpPr fitToPage="1"/>` and a
+/// bare `<pageSetup paperSize="8" scale="85" orientation="portrait"/>`, and
+/// prints 73 rows of A1:R73 whose printed tracks total 1372pt against A3
+/// portrait's 1082.55pt of printable height. A native Excel for Mac export of
+/// it, staged and run inside Excel's own sandbox container, is a single A3 page
+/// drawn at 0.78 — `mutool draw -F trace` reports a `.78` text transform and a
+/// 14.82pt pitch across the 19pt tracks. Bounding the columns alone left the
+/// sheet at the width fit's 0.89, a 16.91pt pitch and a second page
+/// (issue #1181).
+#[test]
+fn structure_fit_to_page_sheet_without_declared_bounds_fits_its_rows_on_one_page() {
+    let pages = sheet_pages("issue_1181_fit_to_height.xlsx");
+    let budget: &SheetPage = pages
+        .iter()
+        .find(|page| page.name == "Monthly college budget")
+        .expect("the reported sheet should print");
+
+    let printable_height: f64 = budget.size.height - budget.margins.top - budget.margins.bottom;
+    let printed_height: f64 = budget.table.rows.iter().filter_map(|row| row.height).sum();
+    assert!(
+        printed_height <= printable_height,
+        "the fitted sheet must stand on one page: {printed_height}pt of rows against \
+         {printable_height}pt of printable height"
+    );
+
+    // Excel's 0.78 over the sheet's 19pt tracks, which the export measures at
+    // 14.82pt. Asserting the pitch rather than the ratio keeps the check on
+    // what the page shows.
+    let tracks: Vec<f64> = budget
+        .table
+        .rows
+        .iter()
+        .filter_map(|row| row.height)
+        .collect();
+    let body_track: f64 = tracks[tracks.len() - 1];
+    assert!(
+        (body_track - 14.82).abs() < 0.01,
+        "a 19pt track must print at the export's 14.82pt, got {body_track}"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // A drawing relationship no sheet element references
 // ---------------------------------------------------------------------------

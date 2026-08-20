@@ -16,6 +16,23 @@ use crate::ir::{Block, HFInline, HeaderFooter, SheetPage, Table, TableCell, Tabl
 /// on the last page (clipped, the pre-pagination behavior).
 const MAX_COLUMN_GROUPS: usize = 12;
 
+/// What one sheet's `<pageSetUpPr fitToPage="1"/>` asks pagination to scale it
+/// onto. Both directions are bounded separately and Excel obeys the tighter of
+/// the two.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub(super) struct SheetFit {
+    /// `fitToWidth` when it binds; `None` leaves the column direction free.
+    pub(super) pages_wide: Option<u32>,
+    /// `fitToHeight` when it binds; `None` leaves the row direction free.
+    pub(super) pages_tall: Option<u32>,
+    /// The printed grid height of the *whole* sheet in points, which is what
+    /// the row bound is measured against. The page handed to pagination may
+    /// carry one streaming chunk or one explicit-break segment of that sheet,
+    /// so its own rows cannot supply the total. Unread when `pages_tall` is
+    /// `None`.
+    pub(super) sheet_height_pt: f64,
+}
+
 /// Split a sheet page into column groups that each fit the printable width.
 /// Returns the page unchanged when everything fits. `title_columns` is the
 /// 0-based inclusive-exclusive range of print-title columns (from
@@ -23,10 +40,10 @@ const MAX_COLUMN_GROUPS: usize = 12;
 pub(super) fn split_sheet_page_by_width(
     page: SheetPage,
     title_columns: Option<(usize, usize)>,
-    fit_to_width: Option<u32>,
+    fit: SheetFit,
     header_footer_scales_with_doc: bool,
 ) -> Vec<SheetPage> {
-    let page: SheetPage = fit_page_to_width(page, fit_to_width, header_footer_scales_with_doc);
+    let page: SheetPage = fit_page_to_pages(page, fit, header_footer_scales_with_doc);
     let printable_width: f64 = page.size.width - page.margins.left - page.margins.right;
     let total_width: f64 = page.table.column_widths.iter().sum();
     if total_width <= printable_width || page.table.column_widths.len() <= 1 {
@@ -105,12 +122,20 @@ pub(super) fn split_sheet_page_by_width(
 }
 
 /// Concatenate the repeated title columns before a column group's table.
-/// Shrink a sheet until its columns fit the pages `fitToWidth` allows.
+/// Shrink a sheet until it fits the pages `fitToWidth` and `fitToHeight`
+/// allow.
 ///
 /// A sheet with `<pageSetUpPr fitToPage="1"/>` and `fitToWidth="1"` asks Excel
 /// to scale it onto one page wide rather than to spill the overflow onto a
 /// second strip. Reading neither attribute printed the repository workbook on
 /// 53 pages where Excel prints 23 (issue #530).
+///
+/// `fitToHeight` bounds the row direction the same way, and ECMA-376 defaults
+/// it to one page just as it defaults `fitToWidth`, so a sheet naming neither
+/// is asking to be squeezed onto a single page both ways. Excel obeys the
+/// tighter of the two bounds: the reported college-budget workbook fits A3's
+/// width at 0.89 and its height at 0.78, and its native export is one page at
+/// 0.78 (issue #1181).
 ///
 /// Excel scales the whole sheet, not the columns alone, so the row heights and
 /// the type scale with the widths — the audited sheet's 10pt body text prints
@@ -118,29 +143,44 @@ pub(super) fn split_sheet_page_by_width(
 ///
 /// Excel never scales *up* to fill a page, so a sheet that already fits is
 /// left alone.
-fn fit_page_to_width(
+fn fit_page_to_pages(
     page: SheetPage,
-    fit_to_width: Option<u32>,
+    fit: SheetFit,
     header_footer_scales_with_doc: bool,
 ) -> SheetPage {
-    let Some(pages_wide) = fit_to_width.filter(|pages| *pages > 0) else {
-        return page;
-    };
     let printable_width: f64 = page.size.width - page.margins.left - page.margins.right;
     let total_width: f64 = page.table.column_widths.iter().sum();
-    if printable_width <= 0.0 || total_width <= 0.0 {
+    let printable_height: f64 = page.size.height - page.margins.top - page.margins.bottom;
+    let Some(scale) = [
+        fit_scale(fit.pages_wide, printable_width, total_width),
+        fit_scale(fit.pages_tall, printable_height, fit.sheet_height_pt),
+    ]
+    .into_iter()
+    .flatten()
+    .reduce(f64::min) else {
         return page;
-    }
-    // Excel's auto-fit scale is a whole percent, truncated rather than rounded
-    // so the content is guaranteed to fit. Keeping the raw ratio leaves every
-    // derived type size a fraction of a point off the printed sheet — the
-    // audited sheet came out at 7.55pt against Excel's 7.50pt.
-    let exact_scale: f64 = (printable_width * f64::from(pages_wide)) / total_width;
-    let scale: f64 = (exact_scale * 100.0).floor() / 100.0;
+    };
     if scale >= 1.0 {
         return page;
     }
     scale_sheet_page(page, scale, header_footer_scales_with_doc)
+}
+
+/// The scale that fits `total_pt` of sheet into `pages` pages of `printable_pt`,
+/// or `None` when that direction is unconstrained — either unbounded by the
+/// file (a declared zero is Excel's "as many pages as it takes") or unmeasurable.
+///
+/// Excel's auto-fit scale is a whole percent, truncated rather than rounded so
+/// the content is guaranteed to fit. Keeping the raw ratio leaves every derived
+/// type size a fraction of a point off the printed sheet — the audited sheet
+/// came out at 7.55pt against Excel's 7.50pt.
+fn fit_scale(pages: Option<u32>, printable_pt: f64, total_pt: f64) -> Option<f64> {
+    let pages: u32 = pages.filter(|pages| *pages > 0)?;
+    if printable_pt <= 0.0 || total_pt <= 0.0 {
+        return None;
+    }
+    let exact_scale: f64 = (printable_pt * f64::from(pages)) / total_pt;
+    Some((exact_scale * 100.0).floor() / 100.0)
 }
 
 /// Multiply a sheet's widths, heights, type sizes, cell padding, and anchored
