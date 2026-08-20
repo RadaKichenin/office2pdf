@@ -40,6 +40,8 @@ fn test_codegen_chart_bar_visual_bars() {
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_major_unit: None,
+        value_axis_min: None,
+        value_axis_max: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -115,6 +117,8 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_major_unit: None,
+        value_axis_min: None,
+        value_axis_max: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -178,6 +182,8 @@ fn test_codegen_chart_pie_draws_a_pie() {
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_major_unit: None,
+        value_axis_min: None,
+        value_axis_max: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -246,6 +252,8 @@ fn test_codegen_chart_line_trend_indicators() {
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_major_unit: None,
+        value_axis_min: None,
+        value_axis_max: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -301,6 +309,8 @@ fn test_codegen_chart_empty_series() {
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_major_unit: None,
+        value_axis_min: None,
+        value_axis_max: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -393,6 +403,8 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_major_unit: None,
+        value_axis_min: None,
+        value_axis_max: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -454,6 +466,8 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_major_unit: None,
+        value_axis_min: None,
+        value_axis_max: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -671,6 +685,8 @@ fn test_codegen_chart_line_plot() {
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_major_unit: None,
+        value_axis_min: None,
+        value_axis_max: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -737,6 +753,8 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_major_unit: None,
+        value_axis_min: None,
+        value_axis_max: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -837,6 +855,8 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_major_unit: None,
+        value_axis_min: None,
+        value_axis_max: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout {
@@ -880,7 +900,15 @@ fn emitted_axis_ticks_at_size(source: &str, size_pt: f64) -> Vec<f64> {
         .filter(|line| line.contains("#place") && line.contains(&marker))
         .filter_map(|line| {
             let after = line.rsplit_once(marker.as_str())?.1;
-            after.split_once(']')?.0.parse::<f64>().ok()
+            // A minus sign reaches the markup escaped — Typst reads a bare `-`
+            // before digits as its own Unicode minus — so the label is read
+            // back through the same escape (issue #1184).
+            after
+                .split_once(']')?
+                .0
+                .replace('\\', "")
+                .parse::<f64>()
+                .ok()
         })
         .collect()
 }
@@ -996,6 +1024,8 @@ fn legend_chart(position: LegendPosition) -> Chart {
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_major_unit: None,
+        value_axis_min: None,
+        value_axis_max: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -1156,6 +1186,8 @@ fn a_declared_series_fill_reaches_the_bars() {
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_major_unit: None,
+        value_axis_min: None,
+        value_axis_max: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -1215,6 +1247,8 @@ fn a_series_without_a_fill_still_takes_the_palette() {
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_major_unit: None,
+        value_axis_min: None,
+        value_axis_max: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -1272,6 +1306,8 @@ fn per_point_fills_colour_each_bar_separately() {
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_major_unit: None,
+        value_axis_min: None,
+        value_axis_max: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -1328,6 +1364,8 @@ fn axis_titled_chart(category: Option<&str>, value: Option<&str>) -> Chart {
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_major_unit: None,
+        value_axis_min: None,
+        value_axis_max: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -1434,6 +1472,8 @@ fn labelled_chart(labels: DataLabels) -> Chart {
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_major_unit: None,
+        value_axis_min: None,
+        value_axis_max: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -1535,6 +1575,8 @@ fn pie_chart(values: Vec<f64>) -> Chart {
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_major_unit: None,
+        value_axis_min: None,
+        value_axis_max: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -1735,6 +1777,8 @@ fn test_chart_default_gridline_matches_powerpoint() {
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_major_unit: None,
+        value_axis_min: None,
+        value_axis_max: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -1897,6 +1941,8 @@ fn tick_mark_chart(
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_major_unit: None,
+        value_axis_min: None,
+        value_axis_max: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -2505,6 +2551,8 @@ fn band_layout_chart(
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_major_unit: None,
+        value_axis_min: None,
+        value_axis_max: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: layout,
@@ -2794,6 +2842,8 @@ fn two_series_bar_chart(theme_accent_colors: Vec<crate::ir::Color>) -> Chart {
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_major_unit: None,
+        value_axis_min: None,
+        value_axis_max: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -4238,6 +4288,8 @@ fn test_data_table_prints_a_series_number_format() {
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_major_unit: None,
+        value_axis_min: None,
+        value_axis_max: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -4296,6 +4348,8 @@ fn test_data_table_prints_a_declared_thousands_format() {
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_major_unit: None,
+        value_axis_min: None,
+        value_axis_max: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -4352,6 +4406,8 @@ fn test_data_table_without_a_number_format_prints_plainly() {
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_major_unit: None,
+        value_axis_min: None,
+        value_axis_max: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -4407,6 +4463,8 @@ fn test_a_currency_axis_label_is_escaped() {
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_major_unit: None,
+        value_axis_min: None,
+        value_axis_max: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -4464,6 +4522,8 @@ fn single_series_chart(auto_title_deleted: bool) -> Chart {
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_major_unit: None,
+        value_axis_min: None,
+        value_axis_max: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -4543,6 +4603,8 @@ fn automatic_title_chart(series_names: &[Option<&str>], auto_title_deleted: bool
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_major_unit: None,
+        value_axis_min: None,
+        value_axis_max: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
@@ -5258,6 +5320,8 @@ fn combo_budget_chart() -> Chart {
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_major_unit: None,
+        value_axis_min: None,
+        value_axis_max: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout {
@@ -5455,6 +5519,8 @@ fn combo_line_and_scatter_chart() -> Chart {
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_major_unit: None,
+        value_axis_min: None,
+        value_axis_max: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: true,
         bar_band_layout: BarBandLayout::default(),
@@ -5843,5 +5909,336 @@ fn the_bars_and_category_labels_follow_a_stated_plot_rectangle() {
     assert!(
         label.dy >= top - 0.01 && label.dy + label.height <= bottom + 0.01,
         "each category label sits beside its own band, got {label:?}"
+    );
+}
+
+// ----- A value axis fixed to its own interval (issue #1184) -----
+
+/// The `january cash flow:` chart of `xl/charts/chart1.xml` in the workbook of
+/// #1123: a stacked bar over three categories whose value axis is fixed to
+/// −400..400 in one major unit of 400, so value zero sits at the middle of the
+/// plot rather than on its left edge.
+///
+/// Gridlines are suppressed so the only lines in the generated source are the
+/// two axes — the automatic gridlines the renderer draws regardless are #1271's
+/// defect, not this one's.
+fn cash_flow_bar_chart() -> Chart {
+    let mut chart = stacked_support_chart(ChartGrouping::Stacked);
+    chart.chart_type = ChartType::Bar;
+    chart.title = None;
+    chart.has_legend = false;
+    // Non-numeric so `emitted_axis_ticks` cannot mistake a category label for a
+    // value tick; the workbook's own categories are the automatic 1, 2, 3.
+    chart.categories = vec!["one".to_string(), "two".to_string(), "three".to_string()];
+    chart.series.truncate(2);
+    chart.series[0].name = Some("Positive".to_string());
+    chart.series[0].values = vec![0.0, 169.0, 169.0];
+    chart.series[1].name = Some("Negative".to_string());
+    chart.series[1].values = vec![0.0, 0.0, -169.0];
+    chart.value_axis_min = Some(-400.0);
+    chart.value_axis_max = Some(400.0);
+    chart.value_axis_major_unit = Some(400.0);
+    chart.major_gridline_line = crate::ir::ChartLine::Suppressed;
+    chart
+}
+
+/// The `dx`/`dy` a `#place` line puts its content at.
+fn place_origin(line: &str) -> Option<(f64, f64)> {
+    let dx: f64 = line
+        .split("dx: ")
+        .nth(1)?
+        .split("pt")
+        .next()?
+        .trim()
+        .parse()
+        .ok()?;
+    let dy: f64 = line
+        .split("dy: ")
+        .nth(1)?
+        .split("pt")
+        .next()?
+        .trim()
+        .parse()
+        .ok()?;
+    Some((dx, dy))
+}
+
+/// Origin and length of the one vertical axis line in the generated source.
+fn vertical_axis_line(source: &str) -> (f64, f64, f64) {
+    let line: &str = source
+        .lines()
+        .find(|line| line.contains("line(end: (0pt, "))
+        .unwrap_or_else(|| panic!("no vertical axis line in:\n{source}"));
+    let (dx, dy) = place_origin(line).expect("the axis line is placed");
+    let length: f64 = line
+        .split("line(end: (0pt, ")
+        .nth(1)
+        .and_then(|rest| rest.split("pt").next())
+        .and_then(|value| value.parse().ok())
+        .expect("the axis line states its length");
+    (dx, dy, length)
+}
+
+/// Origin and length of the one horizontal axis line in the generated source.
+fn horizontal_axis_line(source: &str) -> (f64, f64, f64) {
+    let line: &str = source
+        .lines()
+        .find(|line| line.contains("pt, 0pt), stroke:"))
+        .unwrap_or_else(|| panic!("no horizontal axis line in:\n{source}"));
+    let (dx, dy) = place_origin(line).expect("the axis line is placed");
+    let length: f64 = line
+        .split("line(end: (")
+        .nth(1)
+        .and_then(|rest| rest.split("pt").next())
+        .and_then(|value| value.parse().ok())
+        .expect("the axis line states its length");
+    (dx, dy, length)
+}
+
+/// Every drawn bar as `(dx, dy, width, height)`, skipping the empty rectangles
+/// a zero-valued point still emits.
+fn drawn_bars(source: &str) -> Vec<(f64, f64, f64, f64)> {
+    source
+        .lines()
+        .filter(|line| line.contains("rect(width: "))
+        .filter_map(|line| {
+            let (dx, dy) = place_origin(line)?;
+            let width: f64 = line
+                .split("rect(width: ")
+                .nth(1)?
+                .split("pt")
+                .next()?
+                .parse()
+                .ok()?;
+            let height: f64 = line
+                .split(", height: ")
+                .nth(1)?
+                .split("pt")
+                .next()?
+                .parse()
+                .ok()?;
+            Some((dx, dy, width, height))
+        })
+        .filter(|(_, _, width, height)| *width > 0.01 && *height > 0.01)
+        .collect()
+}
+
+/// A stated `<c:min>`/`<c:max>` puts the category axis on the value-zero line
+/// rather than on the plot's edge (issue #1184).
+///
+/// On a −400..400 axis zero is the middle of the plot, which is where Excel's
+/// own export draws the axis of the `january cash flow:` chart.
+#[test]
+fn a_stated_axis_interval_seats_the_category_axis_on_value_zero() {
+    let source: String = chart_source(cash_flow_bar_chart());
+
+    // A bar chart's value axis runs along the bottom, so the horizontal line is
+    // the value axis and gives the plot's own left edge and width.
+    let (plot_x, _, plot_w) = horizontal_axis_line(&source);
+    let (category_axis_x, _, _) = vertical_axis_line(&source);
+
+    let expected: f64 = plot_x + plot_w / 2.0;
+    assert!(
+        (category_axis_x - expected).abs() < 0.01,
+        "the category axis must stand on value zero, halfway across a −400..400 plot: \
+         expected {expected}, got {category_axis_x} (plot {plot_x}..{})",
+        plot_x + plot_w
+    );
+}
+
+/// A negative segment draws on the far side of zero instead of collapsing onto
+/// the plot floor (issue #1184).
+#[test]
+fn a_negative_stacked_segment_draws_on_the_far_side_of_zero() {
+    let source: String = chart_source(cash_flow_bar_chart());
+
+    let (plot_x, _, plot_w) = horizontal_axis_line(&source);
+    let zero_x: f64 = plot_x + plot_w / 2.0;
+    // 169 of the 800 the axis spans.
+    let expected_w: f64 = 169.0 / 800.0 * plot_w;
+
+    let bars: Vec<(f64, f64, f64, f64)> = drawn_bars(&source);
+    assert_eq!(
+        bars.len(),
+        3,
+        "two positive segments and one negative one are drawn, got {bars:?}"
+    );
+    for (dx, _, width, _) in &bars {
+        assert!(
+            (width - expected_w).abs() < 0.01,
+            "every 169-unit segment spans the same share of the axis: \
+             expected {expected_w}, got {width} at dx {dx}"
+        );
+    }
+
+    let positives: usize = bars
+        .iter()
+        .filter(|(dx, _, _, _)| (dx - zero_x).abs() < 0.01)
+        .count();
+    assert_eq!(
+        positives, 2,
+        "both +169 segments start on the zero line, got {bars:?}"
+    );
+
+    let negative: &(f64, f64, f64, f64) = bars
+        .iter()
+        .find(|(dx, _, _, _)| *dx < zero_x - 0.01)
+        .unwrap_or_else(|| panic!("the −169 segment must reach left of zero, got {bars:?}"));
+    assert!(
+        (negative.0 + negative.2 - zero_x).abs() < 0.01,
+        "the −169 segment must end on the zero line, got {negative:?} against zero at {zero_x}"
+    );
+}
+
+/// The ticks run from the stated minimum in the stated unit, so a −400..400
+/// axis at 400 a unit is labelled −400, 0, 400 (issue #1184).
+#[test]
+fn a_stated_axis_interval_ticks_from_its_own_minimum() {
+    let ticks: Vec<f64> = emitted_axis_ticks(&chart_source(cash_flow_bar_chart()));
+
+    assert_eq!(ticks, vec![-400.0, 0.0, 400.0], "got {ticks:?}");
+}
+
+/// A stated interval with no `<c:majorUnit>` takes its tick interval from that
+/// interval rather than from the data behind it (issue #1184).
+///
+/// `xl/charts/chart3.xml` of the workbook in #1123 fixes its value axis to
+/// 0..0.5 over a 0.408 maximum, and the native Excel export ticks 0%, 10%, 20%,
+/// 30%, 40%, 50%. Sizing the unit from the data gives 5% and twice as many
+/// ticks.
+#[test]
+fn a_stated_interval_takes_its_unit_from_the_interval() {
+    let mut chart = stacked_support_chart(ChartGrouping::Clustered);
+    chart.title = None;
+    chart.has_legend = false;
+    chart.series.truncate(1);
+    chart.series[0].values = vec![0.408, 0.367, 0.163];
+    chart.value_axis_min = Some(0.0);
+    chart.value_axis_max = Some(0.5);
+    chart.major_gridline_line = crate::ir::ChartLine::Suppressed;
+
+    let ticks: Vec<f64> = emitted_axis_ticks(&chart_source(chart));
+
+    assert_eq!(
+        ticks.len(),
+        6,
+        "0..0.5 in tenths is six ticks, got {ticks:?}"
+    );
+    assert!(
+        (ticks[1] - 0.1).abs() < 1e-9 && (ticks[5] - 0.5).abs() < 1e-9,
+        "got {ticks:?}"
+    );
+}
+
+/// Data that reaches below zero pulls the automatic minimum down with it, which
+/// is what lets a line dip under its category axis (issue #1184).
+///
+/// `xl/charts/chart2.xml` of the same workbook states only its maximum, so the
+/// floor its June (−771) and September (−721) points need has to come from the
+/// automatic scale.
+#[test]
+fn automatic_scaling_reaches_below_zero_for_negative_data() {
+    let mut chart = stacked_support_chart(ChartGrouping::Clustered);
+    chart.title = None;
+    chart.has_legend = false;
+    chart.series.truncate(1);
+    chart.series[0].values = vec![109.0, -771.0, 34.0];
+    chart.major_gridline_line = crate::ir::ChartLine::Suppressed;
+
+    let source: String = chart_source(chart);
+    let ticks: Vec<f64> = emitted_axis_ticks(&source);
+    let axis_min: f64 = ticks.iter().copied().fold(f64::INFINITY, f64::min);
+    assert!(
+        axis_min <= -771.0,
+        "the axis has to reach the −771 point, got {ticks:?}"
+    );
+
+    // A column chart's value axis is the vertical one, so the horizontal line
+    // is the category axis and it must have left the plot floor.
+    let (_, plot_y, plot_h) = vertical_axis_line(&source);
+    let (_, category_axis_y, _) = horizontal_axis_line(&source);
+    assert!(
+        category_axis_y > plot_y + 0.01 && category_axis_y < plot_y + plot_h - 0.01,
+        "the category axis must stand on zero inside the plot: got {category_axis_y} \
+         in {plot_y}..{}",
+        plot_y + plot_h
+    );
+
+    // The −771 bar hangs from the axis rather than growing up from the floor.
+    let bars: Vec<(f64, f64, f64, f64)> = drawn_bars(&source);
+    assert!(
+        bars.iter()
+            .any(|(_, dy, _, height)| (dy - category_axis_y).abs() < 0.01 && *height > 1.0),
+        "the −771 column must start on the axis and hang below it, got {bars:?} \
+         against an axis at {category_axis_y}"
+    );
+}
+
+/// Positive-only data keeps the axis it always had: zero on the plot floor and
+/// the category axis drawn there (issue #1184 must not move an ordinary chart).
+#[test]
+fn positive_only_data_keeps_the_category_axis_on_the_plot_floor() {
+    let mut chart = stacked_support_chart(ChartGrouping::Stacked);
+    chart.major_gridline_line = crate::ir::ChartLine::Suppressed;
+    let source: String = chart_source(chart);
+
+    let (_, plot_y, plot_h) = vertical_axis_line(&source);
+    let (_, category_axis_y, _) = horizontal_axis_line(&source);
+
+    assert!(
+        (category_axis_y - (plot_y + plot_h)).abs() < 0.01,
+        "an all-positive chart draws its category axis on the plot floor: \
+         expected {}, got {category_axis_y}",
+        plot_y + plot_h
+    );
+}
+
+/// A line point below zero dips under the category axis instead of flattening
+/// onto the plot floor (issue #1184).
+#[test]
+fn a_line_point_below_zero_dips_under_the_category_axis() {
+    let mut chart = stacked_support_chart(ChartGrouping::Clustered);
+    chart.chart_type = ChartType::Line;
+    chart.title = None;
+    chart.has_legend = false;
+    chart.categories = vec![
+        "jun".to_string(),
+        "jul".to_string(),
+        "aug".to_string(),
+        "sep".to_string(),
+    ];
+    chart.series.truncate(1);
+    chart.series[0].values = vec![-771.0, 109.0, 34.0, -721.0];
+    chart.value_axis_max = Some(1000.0);
+    chart.value_axis_major_unit = Some(200.0);
+    chart.major_gridline_line = crate::ir::ChartLine::Suppressed;
+
+    let source: String = chart_source(chart);
+    let (_, category_axis_y, _) = horizontal_axis_line(&source);
+
+    let path_line: &str = source
+        .lines()
+        .find(|line| line.contains("path(stroke:"))
+        .unwrap_or_else(|| panic!("no series polyline in:\n{source}"));
+    let point_ys: Vec<f64> = path_line
+        .split("pt, ")
+        .skip(1)
+        .filter_map(|chunk| chunk.split("pt)").next()?.trim().parse::<f64>().ok())
+        .collect();
+    assert_eq!(point_ys.len(), 4, "four points, got {point_ys:?} ");
+
+    let lowest: f64 = point_ys.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    assert!(
+        lowest > category_axis_y + 1.0,
+        "a −771 point must sit below the category axis at {category_axis_y}, got {point_ys:?}"
+    );
+    // The two positive points stay above it.
+    assert_eq!(
+        point_ys
+            .iter()
+            .filter(|y| **y < category_axis_y - 1.0)
+            .count(),
+        2,
+        "the +109 and +34 points stay above the axis, got {point_ys:?}"
     );
 }

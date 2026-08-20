@@ -1022,6 +1022,8 @@ fn test_document_requests_font_families_true_for_a_chart_only_document() {
         category_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_line: crate::ir::ChartLine::Automatic,
         value_axis_major_unit: None,
+        value_axis_min: None,
+        value_axis_max: None,
         major_gridline_line: crate::ir::ChartLine::Automatic,
         value_axis_deleted: false,
         bar_band_layout: crate::ir::BarBandLayout::default(),
