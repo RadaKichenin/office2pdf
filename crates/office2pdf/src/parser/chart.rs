@@ -791,6 +791,11 @@ fn parse_chart_title(reader: &mut Reader<&[u8]>) -> (Option<String>, bool) {
                     text.push_str(s.as_ref());
                 }
             }
+            Ok(Event::GeneralRef(ref reference)) if in_t => {
+                if let Some(s) = xml_util::decode_general_ref(reference) {
+                    text.push_str(&s);
+                }
+            }
             Ok(Event::End(ref e)) => {
                 let local = e.local_name();
                 if local.as_ref() == b"t" {
@@ -1048,6 +1053,11 @@ fn parse_data_labels(reader: &mut Reader<&[u8]>, scheme: &SchemeColors<'_>) -> D
             Ok(Event::Text(ref text)) if in_separator => {
                 if let Ok(value) = text.xml_content() {
                     separator.push_str(value.as_ref());
+                }
+            }
+            Ok(Event::GeneralRef(ref reference)) if in_separator => {
+                if let Some(value) = xml_util::decode_general_ref(reference) {
+                    separator.push_str(&value);
                 }
             }
             Ok(Event::End(ref e)) => match e.local_name().as_ref() {
@@ -1337,6 +1347,11 @@ fn parse_series_text(reader: &mut Reader<&[u8]>) -> Option<String> {
                     text.push_str(s.as_ref());
                 }
             }
+            Ok(Event::GeneralRef(ref reference)) if in_v => {
+                if let Some(s) = xml_util::decode_general_ref(reference) {
+                    text.push_str(&s);
+                }
+            }
             Ok(Event::End(ref e)) => match e.local_name().as_ref() {
                 b"v" => in_v = false,
                 b"tx" => break,
@@ -1357,7 +1372,8 @@ fn parse_series_text(reader: &mut Reader<&[u8]>) -> Option<String> {
 
 /// Parse category labels from `<c:cat>` (either `<c:strRef>` or `<c:strLit>`).
 fn parse_category_data(reader: &mut Reader<&[u8]>) -> Vec<String> {
-    let mut categories = Vec::new();
+    let mut categories: Vec<String> = Vec::new();
+    let mut current_text = String::new();
     let mut in_v = false;
 
     loop {
@@ -1365,15 +1381,35 @@ fn parse_category_data(reader: &mut Reader<&[u8]>) -> Vec<String> {
             Ok(Event::Start(ref e)) => {
                 if e.local_name().as_ref() == b"v" {
                     in_v = true;
+                    current_text.clear();
                 }
             }
+            // One label is one `<c:v>`, not one text event. The reader splits a
+            // text node at every entity reference, so a label collected event by
+            // event turned `room &amp; board` into the two labels `room ` and
+            // ` board` — three of six categories doubled, and every bar past the
+            // first labelled with a neighbour's word (issue #1183).
             Ok(Event::Text(ref t)) if in_v => {
                 if let Ok(s) = t.xml_content() {
-                    categories.push(s.as_ref().to_string());
+                    current_text.push_str(s.as_ref());
+                }
+            }
+            Ok(Event::GeneralRef(ref reference)) if in_v => {
+                if let Some(s) = xml_util::decode_general_ref(reference) {
+                    current_text.push_str(&s);
                 }
             }
             Ok(Event::End(ref e)) => match e.local_name().as_ref() {
-                b"v" => in_v = false,
+                b"v" => {
+                    in_v = false;
+                    // A `<c:v>` holding nothing names no label. Excel writes a
+                    // blank category as a gap in the `<c:pt idx>` sequence
+                    // rather than an empty element, so this only guards a
+                    // hand-written part.
+                    if !current_text.is_empty() {
+                        categories.push(std::mem::take(&mut current_text));
+                    }
+                }
                 b"cat" | b"xVal" => break,
                 _ => {}
             },
@@ -1413,6 +1449,11 @@ fn parse_value_data(reader: &mut Reader<&[u8]>) -> (Vec<f64>, Option<String>) {
             Ok(Event::Text(ref t)) if in_v || in_format_code => {
                 if let Ok(s) = t.xml_content() {
                     current_text.push_str(s.as_ref());
+                }
+            }
+            Ok(Event::GeneralRef(ref reference)) if in_v || in_format_code => {
+                if let Some(s) = xml_util::decode_general_ref(reference) {
+                    current_text.push_str(&s);
                 }
             }
             Ok(Event::End(ref e)) => match e.local_name().as_ref() {

@@ -3191,7 +3191,7 @@ fn parse_slide_xml_inner<'a>(
                 }
             }
             Ok(Event::GeneralRef(ref reference)) => {
-                if let Some(text) = decode_pptx_general_ref(reference) {
+                if let Some(text) = crate::parser::xml_util::decode_general_ref(reference) {
                     parser.handle_text(&text);
                 }
             }

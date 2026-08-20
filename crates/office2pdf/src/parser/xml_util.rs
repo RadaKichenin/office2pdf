@@ -24,6 +24,18 @@ pub(crate) fn get_attr_i64(e: &quick_xml::events::BytesStart, key: &[u8]) -> Opt
     get_attr_str(e, key).and_then(|v| v.parse().ok())
 }
 
+/// Resolve one `Event::GeneralRef` back to the text it stands for.
+///
+/// The reader splits a text node at every entity or character reference, so a
+/// loop that reads only `Event::Text` deletes the character the reference
+/// encodes — `room &amp; board` arrived as two text events with the `&` gone
+/// (issue #1183).
+pub(crate) fn decode_general_ref(reference: &quick_xml::events::BytesRef<'_>) -> Option<String> {
+    let decoded = reference.decode().ok()?;
+    let wrapped: String = format!("&{};", decoded.as_ref());
+    Some(quick_xml::escape::unescape(&wrapped).ok()?.into_owned())
+}
+
 /// Skip an XML element and all its children, consuming events until the
 /// matching end tag is found. `end_tag` is the local name of the element.
 pub(crate) fn skip_element(reader: &mut Reader<&[u8]>, end_tag: &[u8]) {
