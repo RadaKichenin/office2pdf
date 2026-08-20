@@ -171,24 +171,50 @@ fn worksheet_paper_size(code: u32) -> PageSize {
     PageSize { width, height }
 }
 
-/// The number of pages wide a sheet asks to be scaled onto, if it asks.
+/// What a sheet asks its fit-to-page scale to be measured against, if it asks.
 ///
-/// `fitToWidth` counts for nothing unless `<pageSetUpPr fitToPage="1"/>` is
-/// also set — Excel writes the attribute into sheets that print at 100% too
-/// (issue #530). `fit_to_page::sheets_fit_to_width` has already applied that
-/// gate and ECMA-376's default of one page wide.
+/// `fitToWidth` and `fitToHeight` count for nothing unless `<pageSetUpPr
+/// fitToPage="1"/>` is also set — Excel writes them into sheets that print at
+/// 100% too (issue #530). `fit_to_page::sheets_fit_to_page` has already
+/// applied that gate and ECMA-376's default of one page in each direction. A
+/// zero is Excel's "as many pages as it takes", so it bounds nothing.
 ///
-/// `fitToHeight="0"` leaves the row direction free, which is the shape the
-/// audited workbooks use; only the width bound is modelled here. A zero here
-/// is Excel's unconstrained width, so it scales nothing.
-fn sheet_fit_to_width(
+/// The row bound is measured against the whole printed sheet rather than the
+/// page handed to pagination, which may hold one streaming chunk or one
+/// explicit-break segment of it. The height itself is only summed when that
+/// bound binds, since it walks every printed row.
+fn sheet_fit(
+    sheet: &umya_spreadsheet::Worksheet,
     sheet_name: &str,
     fitting_sheets: &std::collections::HashMap<String, fit_to_page::SheetFitToPage>,
-) -> Option<u32> {
-    fitting_sheets
-        .get(sheet_name)
-        .map(|fit| fit.pages_wide)
-        .filter(|pages| *pages > 0)
+    printed_rows: (u32, u32),
+    normal_font: Option<&xlsx_cells::NormalFont>,
+) -> xlsx_pagination::SheetFit {
+    let declared: Option<&fit_to_page::SheetFitToPage> = fitting_sheets.get(sheet_name);
+    let bound = |pages: u32| -> Option<u32> { (pages > 0).then_some(pages) };
+    let pages_tall: Option<u32> = declared.and_then(|fit| bound(fit.pages_tall));
+    xlsx_pagination::SheetFit {
+        pages_wide: declared.and_then(|fit| bound(fit.pages_wide)),
+        pages_tall,
+        sheet_height_pt: pages_tall.map_or(0.0, |_| {
+            printed_sheet_height_pt(sheet, printed_rows, normal_font)
+        }),
+    }
+}
+
+/// The printed grid height of every row a sheet prints, in points.
+///
+/// This is the same track a drawing anchor is measured against, not the
+/// heights the worksheet holds: Excel prints its rows compacted or truncated
+/// to whole device points and paginates against what it printed.
+fn printed_sheet_height_pt(
+    sheet: &umya_spreadsheet::Worksheet,
+    (row_start, row_end): (u32, u32),
+    normal_font: Option<&xlsx_cells::NormalFont>,
+) -> f64 {
+    (row_start..=row_end)
+        .map(|row| xlsx_cells::printed_grid_row_height_pt(sheet, row, normal_font))
+        .sum()
 }
 
 /// Whether the sheet's header and footer shrink with its fit-to-page scale.
@@ -641,7 +667,7 @@ impl XlsxParser {
         // A `cfRule type="expression"` names the workbook's defined names
         // rather than repeating their formulas (issue #852).
         let defined_names = cond_fmt_raw::extract_defined_names(data);
-        let fitting_sheets = fit_to_page::sheets_fit_to_width(data);
+        let fitting_sheets = fit_to_page::sheets_fit_to_page(data);
         let print_options_by_sheet = print_options::sheets_print_options(data);
         let mut table_styles = tables::extract_table_styles(data);
         let normal_font = extract_normal_font(data);
@@ -797,7 +823,13 @@ impl XlsxParser {
                     title_column_indices(print_titles, &ctx),
                     sheet_print_options.prints_headings,
                 );
-            let fit_to_width: Option<u32> = sheet_fit_to_width(&sheet_name, &fitting_sheets);
+            let fit: xlsx_pagination::SheetFit = sheet_fit(
+                sheet,
+                &sheet_name,
+                &fitting_sheets,
+                (row_start, row_end),
+                ctx.normal_font.as_ref(),
+            );
             let header_footer_scales_with_doc: bool =
                 sheet_header_footer_scales_with_doc(&sheet_name, &fitting_sheets);
 
@@ -893,7 +925,7 @@ impl XlsxParser {
                     pages: xlsx_pagination::split_sheet_page_by_width(
                         sheet_page,
                         title_columns,
-                        fit_to_width,
+                        fit,
                         header_footer_scales_with_doc,
                     )
                     .into_iter()
@@ -941,7 +973,7 @@ impl Parser for XlsxParser {
         // A `cfRule type="expression"` names the workbook's defined names
         // rather than repeating their formulas (issue #852).
         let defined_names = cond_fmt_raw::extract_defined_names(data);
-        let fitting_sheets = fit_to_page::sheets_fit_to_width(data);
+        let fitting_sheets = fit_to_page::sheets_fit_to_page(data);
         let print_options_by_sheet = print_options::sheets_print_options(data);
         let mut table_styles = tables::extract_table_styles(data);
         let normal_font = extract_normal_font(data);
@@ -1047,7 +1079,13 @@ impl Parser for XlsxParser {
                     title_column_indices(print_titles, &ctx),
                     sheet_print_options.prints_headings,
                 );
-            let fit_to_width: Option<u32> = sheet_fit_to_width(sheet.get_name(), &fitting_sheets);
+            let fit: xlsx_pagination::SheetFit = sheet_fit(
+                sheet,
+                sheet.get_name(),
+                &fitting_sheets,
+                (row_start, row_end),
+                ctx.normal_font.as_ref(),
+            );
             let header_footer_scales_with_doc: bool =
                 sheet_header_footer_scales_with_doc(sheet.get_name(), &fitting_sheets);
             // Only the rows named by `_xlnm.Print_Titles` repeat on later
@@ -1162,7 +1200,7 @@ impl Parser for XlsxParser {
                     xlsx_pagination::split_sheet_page_by_width(
                         sheet_page,
                         title_columns,
-                        fit_to_width,
+                        fit,
                         header_footer_scales_with_doc,
                     )
                     .into_iter()
@@ -1286,7 +1324,7 @@ impl Parser for XlsxParser {
                         xlsx_pagination::split_sheet_page_by_width(
                             sheet_page,
                             title_columns,
-                            fit_to_width,
+                            fit,
                             header_footer_scales_with_doc,
                         )
                         .into_iter()

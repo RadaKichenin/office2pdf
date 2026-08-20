@@ -46,6 +46,16 @@ fn cell_text(cell: &TableCell) -> String {
         .collect()
 }
 
+/// A sheet bounded in the column direction only — the shape every audited
+/// `fitToWidth` workbook declares, with `fitToHeight="0"` leaving the rows
+/// free.
+fn fit_to_width(pages_wide: u32) -> SheetFit {
+    SheetFit {
+        pages_wide: Some(pages_wide),
+        ..SheetFit::default()
+    }
+}
+
 fn make_page(column_widths: Vec<f64>, rows: Vec<TableRow>) -> SheetPage {
     SheetPage {
         name: "Sheet1".to_string(),
@@ -129,7 +139,7 @@ fn test_narrow_sheet_stays_single_page() {
             height: None,
         }],
     );
-    let pages = split_sheet_page_by_width(page, None, None, true);
+    let pages = split_sheet_page_by_width(page, None, SheetFit::default(), true);
     assert_eq!(pages.len(), 1);
 }
 
@@ -144,7 +154,7 @@ fn test_wide_sheet_splits_into_column_groups() {
             height: None,
         }],
     );
-    let pages = split_sheet_page_by_width(page, None, None, true);
+    let pages = split_sheet_page_by_width(page, None, SheetFit::default(), true);
     assert_eq!(pages.len(), 3);
     assert_eq!(pages[0].table.column_widths.len(), 2);
     assert_eq!(pages[1].table.column_widths.len(), 2);
@@ -171,7 +181,7 @@ fn test_merge_straddling_boundary_truncates_and_blanks_continuation() {
             height: None,
         }],
     );
-    let pages = split_sheet_page_by_width(page, None, None, true);
+    let pages = split_sheet_page_by_width(page, None, SheetFit::default(), true);
     assert_eq!(pages.len(), 2);
 
     let first_row = &pages[0].table.rows[0];
@@ -205,7 +215,7 @@ fn test_merge_spill_width_is_clamped_to_the_column_group() {
             height: None,
         }],
     );
-    let pages = split_sheet_page_by_width(page, None, None, true);
+    let pages = split_sheet_page_by_width(page, None, SheetFit::default(), true);
     assert_eq!(pages.len(), 2);
 
     // Page 1 keeps two of the four merged columns, so the line may run 300pt.
@@ -230,7 +240,7 @@ fn test_unmerged_spill_width_is_clamped_to_the_remaining_group_width() {
             height: None,
         }],
     );
-    let pages = split_sheet_page_by_width(page, None, None, true);
+    let pages = split_sheet_page_by_width(page, None, SheetFit::default(), true);
     assert_eq!(pages.len(), 2);
 
     // The cell sits at the group's left edge, so 300pt of the group remain.
@@ -258,7 +268,7 @@ fn test_charts_stay_on_first_column_group() {
         }),
         chart: bar_chart(),
     }];
-    let pages = split_sheet_page_by_width(page, None, None, true);
+    let pages = split_sheet_page_by_width(page, None, SheetFit::default(), true);
     assert_eq!(pages.len(), 2);
     assert_eq!(pages[0].charts.len(), 1);
     assert!(pages[1].charts.is_empty());
@@ -277,7 +287,7 @@ fn test_pathologically_wide_sheet_is_capped() {
             height: None,
         }],
     );
-    let pages = split_sheet_page_by_width(page, None, None, true);
+    let pages = split_sheet_page_by_width(page, None, SheetFit::default(), true);
     assert_eq!(pages.len(), 12);
     let total_columns: usize = pages.iter().map(|p| p.table.column_widths.len()).sum();
     assert_eq!(total_columns, 100);
@@ -296,7 +306,7 @@ fn test_fit_to_width_scales_columns_onto_one_page() {
             height: Some(20.0),
         }],
     );
-    let pages = split_sheet_page_by_width(page, None, Some(1), true);
+    let pages = split_sheet_page_by_width(page, None, fit_to_width(1), true);
     assert_eq!(pages.len(), 1);
     assert_eq!(pages[0].table.column_widths, vec![200.0, 200.0]);
     assert_eq!(pages[0].table.rows[0].height, Some(10.0));
@@ -327,7 +337,7 @@ fn test_fit_to_width_scales_an_anchored_chart_with_the_grid() {
         chart: bar_chart(),
     }];
 
-    let pages = split_sheet_page_by_width(page, None, Some(1), true);
+    let pages = split_sheet_page_by_width(page, None, fit_to_width(1), true);
 
     let placement = pages[0].charts[0]
         .placement
@@ -368,7 +378,7 @@ fn test_fit_to_width_records_the_print_scale_on_an_anchored_chart() {
         chart: bar_chart(),
     }];
 
-    let pages = split_sheet_page_by_width(page, None, Some(1), true);
+    let pages = split_sheet_page_by_width(page, None, fit_to_width(1), true);
 
     let placement = pages[0].charts[0]
         .placement
@@ -402,7 +412,7 @@ fn test_fit_to_width_scales_an_anchored_picture_with_the_grid() {
     picture.image.height = Some(200.0);
     page.images = vec![picture];
 
-    let pages = split_sheet_page_by_width(page, None, Some(1), true);
+    let pages = split_sheet_page_by_width(page, None, fit_to_width(1), true);
 
     let picture = &pages[0].images[0];
     assert_eq!(picture.x_offset_pt, 50.0);
@@ -425,7 +435,7 @@ fn test_fit_to_width_truncates_scale_to_whole_percent() {
         paragraph.runs[0].style.font_size = Some(10.0);
     }
     let page = make_page(vec![530.0], vec![row]);
-    let pages = split_sheet_page_by_width(page, None, Some(1), true);
+    let pages = split_sheet_page_by_width(page, None, fit_to_width(1), true);
     assert_eq!(pages.len(), 1);
     assert_eq!(pages[0].table.column_widths, vec![397.5]);
     let Block::Paragraph(paragraph) = &pages[0].table.rows[0].cells[0].content[0] else {
@@ -445,7 +455,7 @@ fn test_fit_to_width_does_not_upscale_a_sheet_that_already_fits() {
             height: Some(20.0),
         }],
     );
-    let pages = split_sheet_page_by_width(page, None, Some(1), true);
+    let pages = split_sheet_page_by_width(page, None, fit_to_width(1), true);
     assert_eq!(pages.len(), 1);
     assert_eq!(pages[0].table.column_widths, vec![100.0, 100.0]);
     assert_eq!(pages[0].table.rows[0].height, Some(20.0));
@@ -463,10 +473,175 @@ fn test_fit_to_width_two_pages_scales_then_splits() {
             height: None,
         }],
     );
-    let pages = split_sheet_page_by_width(page, None, Some(2), true);
+    let pages = split_sheet_page_by_width(page, None, fit_to_width(2), true);
     assert_eq!(pages.len(), 2);
     assert_eq!(pages[0].table.column_widths, vec![200.0, 200.0]);
     assert_eq!(pages[1].table.column_widths, vec![200.0, 200.0]);
+}
+
+/// `fitToHeight` bounds the row direction the way `fitToWidth` bounds the
+/// columns: 1400pt of sheet on a 700pt printable height scales to half size
+/// and stays on one page. The page's own rows do not supply that total — it
+/// is the whole sheet's, measured before pagination.
+#[test]
+fn test_fit_to_height_scales_rows_onto_one_page() {
+    let page = make_page(
+        vec![100.0, 100.0],
+        vec![TableRow {
+            minimum_height: None,
+            cells: vec![cell("left"), cell("right")],
+            height: Some(20.0),
+        }],
+    );
+    let fit = SheetFit {
+        pages_tall: Some(1),
+        sheet_height_pt: 1400.0,
+        ..SheetFit::default()
+    };
+    let pages = split_sheet_page_by_width(page, None, fit, true);
+    assert_eq!(pages.len(), 1);
+    assert_eq!(pages[0].table.rows[0].height, Some(10.0));
+    assert_eq!(pages[0].table.column_widths, vec![50.0, 50.0]);
+}
+
+/// Excel scales a fitted sheet by the tighter of its two bounds, not by
+/// whichever one it reads first. The reported college-budget workbook fits
+/// A3's width at 0.89 and its height at 0.78, and Excel prints it at 0.78
+/// (issue #1181).
+#[test]
+fn test_fit_to_page_takes_the_tighter_of_the_two_bounds() {
+    let tighter_in_rows = SheetFit {
+        pages_wide: Some(1),
+        pages_tall: Some(1),
+        // 400pt of columns on a 400pt printable width needs no shrink;
+        // 1400pt of rows on a 700pt printable height needs half.
+        sheet_height_pt: 1400.0,
+    };
+    let pages = split_sheet_page_by_width(
+        make_page(
+            vec![200.0, 200.0],
+            vec![TableRow {
+                minimum_height: None,
+                cells: vec![cell("left"), cell("right")],
+                height: Some(20.0),
+            }],
+        ),
+        None,
+        tighter_in_rows,
+        true,
+    );
+    assert_eq!(pages[0].table.column_widths, vec![100.0, 100.0]);
+    assert_eq!(pages[0].table.rows[0].height, Some(10.0));
+
+    let tighter_in_columns = SheetFit {
+        pages_wide: Some(1),
+        pages_tall: Some(1),
+        // 800pt of columns on 400pt needs half; 875pt of rows on 700pt
+        // needs only 0.80.
+        sheet_height_pt: 875.0,
+    };
+    let pages = split_sheet_page_by_width(
+        make_page(
+            vec![400.0, 400.0],
+            vec![TableRow {
+                minimum_height: None,
+                cells: vec![cell("left"), cell("right")],
+                height: Some(20.0),
+            }],
+        ),
+        None,
+        tighter_in_columns,
+        true,
+    );
+    assert_eq!(pages[0].table.column_widths, vec![200.0, 200.0]);
+    assert_eq!(pages[0].table.rows[0].height, Some(10.0));
+}
+
+/// `fitToHeight="0"` is Excel's "as many pages tall as it takes", so a sheet
+/// far past the printable height keeps its metrics and spills. This is the
+/// shape every audited `fitToWidth` workbook declares, and the fix for
+/// issue #1181 must not start shrinking them.
+#[test]
+fn test_an_unbounded_fit_to_height_leaves_the_rows_alone() {
+    let page = make_page(
+        vec![100.0, 100.0],
+        vec![TableRow {
+            minimum_height: None,
+            cells: vec![cell("left"), cell("right")],
+            height: Some(20.0),
+        }],
+    );
+    let unbounded = SheetFit {
+        pages_wide: Some(1),
+        pages_tall: None,
+        sheet_height_pt: 1400.0,
+    };
+    let pages = split_sheet_page_by_width(page, None, unbounded, true);
+    assert_eq!(pages[0].table.rows[0].height, Some(20.0));
+    assert_eq!(pages[0].table.column_widths, vec![100.0, 100.0]);
+}
+
+/// The row bound truncates to a whole percent for the same reason the column
+/// bound does: 700/900 = 77.78% has to land on 77%, so the content is
+/// guaranteed to fit rather than to overshoot by a fraction of a point.
+#[test]
+fn test_fit_to_height_truncates_scale_to_whole_percent() {
+    let page = make_page(
+        vec![100.0],
+        vec![TableRow {
+            minimum_height: None,
+            cells: vec![cell("only")],
+            height: Some(100.0),
+        }],
+    );
+    let fit = SheetFit {
+        pages_tall: Some(1),
+        sheet_height_pt: 900.0,
+        ..SheetFit::default()
+    };
+    let pages = split_sheet_page_by_width(page, None, fit, true);
+    assert_eq!(pages[0].table.rows[0].height, Some(77.0));
+}
+
+/// `fitToHeight="2"` asks for two pages tall, so a sheet twice the printable
+/// height already fits and is left alone.
+#[test]
+fn test_fit_to_height_counts_the_pages_it_is_given() {
+    let page = make_page(
+        vec![100.0],
+        vec![TableRow {
+            minimum_height: None,
+            cells: vec![cell("only")],
+            height: Some(40.0),
+        }],
+    );
+    let fit = SheetFit {
+        pages_tall: Some(2),
+        sheet_height_pt: 1400.0,
+        ..SheetFit::default()
+    };
+    let pages = split_sheet_page_by_width(page, None, fit, true);
+    assert_eq!(pages[0].table.rows[0].height, Some(40.0));
+}
+
+/// A sheet shorter than its printable height is never stretched to fill it.
+#[test]
+fn test_fit_to_height_does_not_upscale_a_short_sheet() {
+    let page = make_page(
+        vec![100.0],
+        vec![TableRow {
+            minimum_height: None,
+            cells: vec![cell("only")],
+            height: Some(20.0),
+        }],
+    );
+    let fit = SheetFit {
+        pages_tall: Some(1),
+        sheet_height_pt: 20.0,
+        ..SheetFit::default()
+    };
+    let pages = split_sheet_page_by_width(page, None, fit, true);
+    assert_eq!(pages[0].table.rows[0].height, Some(20.0));
 }
 
 /// Cell padding is part of the sheet's printed metrics. Leaving it at full
@@ -489,7 +664,7 @@ fn test_fit_to_width_scales_cell_padding() {
             height: Some(20.0),
         }],
     );
-    let pages = split_sheet_page_by_width(page, None, Some(1), true);
+    let pages = split_sheet_page_by_width(page, None, fit_to_width(1), true);
     let padding = pages[0].table.rows[0].cells[0]
         .padding
         .expect("padding survives the fit");
@@ -522,7 +697,7 @@ fn test_width_split_repeats_the_heading_gutter_and_keeps_the_flag() {
     );
     page.table.prints_headings = true;
 
-    let pages = split_sheet_page_by_width(page, Some((0, 1)), None, true);
+    let pages = split_sheet_page_by_width(page, Some((0, 1)), SheetFit::default(), true);
     assert_eq!(pages.len(), 2);
     for split_page in &pages {
         assert!(
@@ -552,7 +727,7 @@ fn test_first_group_packs_against_the_full_printable_width() {
             height: None,
         }],
     );
-    let pages = split_sheet_page_by_width(page, Some((0, 1)), None, true);
+    let pages = split_sheet_page_by_width(page, Some((0, 1)), SheetFit::default(), true);
     // 23+180+190 = 393 <= 400 fits page 1; the 200pt column overflows to
     // page 2 behind the repeated 23pt title column.
     assert_eq!(pages.len(), 2);
@@ -622,7 +797,7 @@ fn a_scaled_sheet_scales_its_footer_with_it() {
             footnote: None,
         },
     ]));
-    let pages = split_sheet_page_by_width(page, None, Some(1), true);
+    let pages = split_sheet_page_by_width(page, None, fit_to_width(1), true);
 
     assert_eq!(pages.len(), 1);
     // 400 + 400 onto a 400pt printable width: scale 0.5.
@@ -657,7 +832,7 @@ fn an_unscaled_sheet_leaves_its_footer_alone() {
         href: None,
         footnote: None,
     }]));
-    let pages = split_sheet_page_by_width(page, None, Some(1), true);
+    let pages = split_sheet_page_by_width(page, None, fit_to_width(1), true);
 
     assert_eq!(footer_run_sizes(&pages[0]), vec![Some(8.0)]);
 }

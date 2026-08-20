@@ -27,22 +27,22 @@ const FITTING_WITHOUT_FIT_TO_WIDTH: &str = r#"<worksheet xmlns="http://schemas.o
 
 #[test]
 fn reads_the_flag_that_gates_the_fit_attributes() {
-    assert_eq!(worksheet_fit_to_width(FITTING), Some(1));
+    assert_eq!(worksheet_fit_to_page(FITTING), Some((1, 0)));
 }
 
 #[test]
 fn fit_to_width_alone_does_not_ask_excel_to_scale() {
     // Both sheets carry `fitToWidth="1"`; only the first asks to be scaled.
-    assert_eq!(worksheet_fit_to_width(NOT_FITTING), None);
-    assert_eq!(worksheet_fit_to_width(NO_SHEET_PR), None);
+    assert_eq!(worksheet_fit_to_page(NOT_FITTING), None);
+    assert_eq!(worksheet_fit_to_page(NO_SHEET_PR), None);
 }
 
 #[test]
 fn accepts_the_boolean_spelt_out() {
     let spelt = FITTING.replace(r#"fitToPage="1""#, r#"fitToPage="true""#);
-    assert_eq!(worksheet_fit_to_width(&spelt), Some(1));
+    assert_eq!(worksheet_fit_to_page(&spelt), Some((1, 0)));
     let off = FITTING.replace(r#"fitToPage="1""#, r#"fitToPage="0""#);
-    assert_eq!(worksheet_fit_to_width(&off), None);
+    assert_eq!(worksheet_fit_to_page(&off), None);
 }
 
 /// ECMA-376 defaults `fitToWidth` to 1, so a `fitToPage` sheet that omits the
@@ -50,8 +50,8 @@ fn accepts_the_boolean_spelt_out() {
 #[test]
 fn an_omitted_fit_to_width_defaults_to_one_page() {
     assert_eq!(
-        worksheet_fit_to_width(FITTING_WITHOUT_FIT_TO_WIDTH),
-        Some(1)
+        worksheet_fit_to_page(FITTING_WITHOUT_FIT_TO_WIDTH),
+        Some((1, 0))
     );
 }
 
@@ -60,9 +60,52 @@ fn an_omitted_fit_to_width_defaults_to_one_page() {
 #[test]
 fn a_declared_fit_to_width_is_read_as_written() {
     let two = FITTING.replace(r#"fitToWidth="1""#, r#"fitToWidth="2""#);
-    assert_eq!(worksheet_fit_to_width(&two), Some(2));
+    assert_eq!(worksheet_fit_to_page(&two), Some((2, 0)));
     let three = FITTING.replace(r#"fitToWidth="1""#, r#"fitToWidth="3""#);
-    assert_eq!(worksheet_fit_to_width(&three), Some(3));
+    assert_eq!(worksheet_fit_to_page(&three), Some((3, 0)));
+}
+
+/// The reported college-budget workbook of issue #1181: `fitToPage` is set and
+/// `<pageSetup>` names neither `fitToWidth` nor `fitToHeight`.
+const FITTING_WITHOUT_EITHER_BOUND: &str = r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetPr codeName="Sheet1"><tabColor theme="4"/><pageSetUpPr fitToPage="1"/></sheetPr>
+  <sheetData/>
+  <pageSetup paperSize="8" scale="85" orientation="portrait"/>
+</worksheet>"#;
+
+/// ECMA-376 §18.3.1.63 defaults `fitToHeight` to 1 exactly as it defaults
+/// `fitToWidth`, so a `fitToPage` sheet naming neither asks to be squeezed onto
+/// a single page both ways — which is what Excel's own export of the reported
+/// workbook does (issue #1181).
+#[test]
+fn an_omitted_fit_to_height_defaults_to_one_page() {
+    assert_eq!(
+        worksheet_fit_to_page(FITTING_WITHOUT_EITHER_BOUND),
+        Some((1, 1))
+    );
+}
+
+/// A declared row count is honoured as written, so the default above cannot be
+/// a hardcoded 1.
+#[test]
+fn a_declared_fit_to_height_is_read_as_written() {
+    for pages_tall in [2, 3, 7] {
+        let declared = FITTING_WITHOUT_EITHER_BOUND.replace(
+            r#"scale="85""#,
+            &format!(r#"scale="85" fitToHeight="{pages_tall}""#),
+        );
+        assert_eq!(worksheet_fit_to_page(&declared), Some((1, pages_tall)));
+    }
+}
+
+/// `fitToHeight="0"` is Excel's "as many pages tall as it takes", and it has to
+/// stay distinguishable from the absent attribute above: the audited
+/// fit-to-width workbooks all declare it and must keep spilling down the page.
+#[test]
+fn an_explicit_zero_fit_to_height_leaves_the_height_unbounded() {
+    let zero =
+        FITTING_WITHOUT_EITHER_BOUND.replace(r#"scale="85""#, r#"scale="85" fitToHeight="0""#);
+    assert_eq!(worksheet_fit_to_page(&zero), Some((1, 0)));
 }
 
 /// `fitToWidth="0"` is Excel's "as many pages wide as it takes" — the width is
@@ -70,7 +113,7 @@ fn a_declared_fit_to_width_is_read_as_written() {
 #[test]
 fn an_explicit_zero_fit_to_width_leaves_the_width_unbounded() {
     let zero = FITTING.replace(r#"fitToWidth="1""#, r#"fitToWidth="0""#);
-    assert_eq!(worksheet_fit_to_width(&zero), Some(0));
+    assert_eq!(worksheet_fit_to_page(&zero), Some((0, 0)));
 }
 
 /// `<pageSetup>` is a sibling that follows `<sheetData>`, so the scan cannot
@@ -81,7 +124,7 @@ fn reads_page_setup_declared_after_the_cells() {
         "<sheetData/>",
         r#"<sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData>"#,
     );
-    assert_eq!(worksheet_fit_to_width(&with_cells), Some(1));
+    assert_eq!(worksheet_fit_to_page(&with_cells), Some((1, 0)));
 }
 
 /// `headerFooter/@scaleWithDoc` defaults to 1, so Excel shrinks the header and
