@@ -903,6 +903,7 @@ fn test_table_page_with_anchored_chart_overlays_the_grid() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        plot_area_layout: None,
     };
 
     let page = Page::Sheet(SheetPage {
@@ -1056,6 +1057,7 @@ fn sheet_source_with_chart_print_scale(print_scale: f64) -> String {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        plot_area_layout: None,
     };
 
     let page = Page::Sheet(SheetPage {
@@ -1127,6 +1129,7 @@ fn test_table_page_with_chart_at_end() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        plot_area_layout: None,
     };
 
     let page = Page::Sheet(SheetPage {

@@ -125,6 +125,7 @@ fn bar_chart() -> crate::ir::Chart {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        plot_area_layout: None,
     }
 }
 

@@ -2739,3 +2739,119 @@ fn a_trailing_scatter_chart_leaves_the_bar_family_governing() {
     assert_eq!(chart.chart_type, ChartType::Column);
     assert_eq!(chart.series[1].plot_type, Some(ChartType::Scatter));
 }
+
+/// The `january income:` bar chart of `tests/fixtures/xlsx/issue_1181_fit_to_height.xlsx`
+/// (`xl/charts/chart3.xml`), whose plot area states where it sits inside the
+/// chart area. `LAYOUT` is spliced out so a test can vary it (issue #1182).
+fn manual_plot_layout_chart_xml(layout: &str) -> String {
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+        <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+            <c:chart>
+                <c:plotArea>
+                    {layout}
+                    <c:barChart>
+                        <c:barDir val="bar"/>
+                        <c:grouping val="clustered"/>
+                        <c:ser>
+                            <c:idx val="0"/>
+                            <c:cat>
+                                <c:strRef><c:strCache>
+                                    <c:pt idx="0"><c:v>financial aid</c:v></c:pt>
+                                    <c:pt idx="1"><c:v>from savings</c:v></c:pt>
+                                </c:strCache></c:strRef>
+                            </c:cat>
+                            <c:val>
+                                <c:numRef><c:numCache>
+                                    <c:pt idx="0"><c:v>0</c:v></c:pt>
+                                    <c:pt idx="1"><c:v>0.40816326530612246</c:v></c:pt>
+                                </c:numCache></c:numRef>
+                            </c:val>
+                        </c:ser>
+                    </c:barChart>
+                </c:plotArea>
+            </c:chart>
+        </c:chartSpace>"#
+    )
+}
+
+/// The layout element the reported workbook writes, verbatim.
+const REPORTED_MANUAL_LAYOUT: &str = r#"<c:layout><c:manualLayout>
+    <c:layoutTarget val="inner"/><c:xMode val="edge"/><c:yMode val="edge"/>
+    <c:x val="0.30222298185081131"/><c:y val="0.34625485336714895"/>
+    <c:w val="0.64139311135561661"/><c:h val="0.55711705789303645"/>
+</c:manualLayout></c:layout>"#;
+
+/// An edge-mode inner manual layout reaches the IR as the four fractions it
+/// states (issue #1182).
+#[test]
+fn a_plot_area_manual_layout_reaches_the_ir_as_stated() {
+    let xml: String = manual_plot_layout_chart_xml(REPORTED_MANUAL_LAYOUT);
+
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
+
+    assert_eq!(
+        chart.plot_area_layout,
+        Some(crate::ir::ChartPlotAreaLayout {
+            x: 0.3022229818508113,
+            y: 0.34625485336714895,
+            width: 0.6413931113556166,
+            height: 0.5571170578930364,
+        })
+    );
+}
+
+/// A plot area that states no layout at all keeps the automatic one.
+#[test]
+fn a_plot_area_without_a_layout_states_no_rectangle() {
+    let xml: String = manual_plot_layout_chart_xml("<c:layout/>");
+
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
+
+    assert_eq!(chart.plot_area_layout, None);
+}
+
+/// Only the modes this models are read. `factor` — the `ST_LayoutMode` default,
+/// so also what an omitted `c:xMode` means — offsets the *automatic* layout by
+/// the value rather than naming an edge, and `layoutTarget="outer"` measures the
+/// plot area with its tick labels rather than the plotting rectangle. Reading
+/// either as an edge fraction of the chart area would move the plot to a place
+/// nothing asked for, so both keep the automatic layout.
+#[test]
+fn a_layout_this_does_not_model_keeps_the_automatic_rectangle() {
+    let factor_mode: String = REPORTED_MANUAL_LAYOUT.replace(r#"<c:xMode val="edge"/>"#, "");
+    let outer_target: String = REPORTED_MANUAL_LAYOUT.replace(
+        r#"<c:layoutTarget val="inner"/>"#,
+        r#"<c:layoutTarget val="outer"/>"#,
+    );
+    let no_target: String = REPORTED_MANUAL_LAYOUT.replace(r#"<c:layoutTarget val="inner"/>"#, "");
+    let partial: String = REPORTED_MANUAL_LAYOUT
+        .replace(r#"<c:w val="0.64139311135561661"/>"#, "")
+        .replace(r#"<c:h val="0.55711705789303645"/>"#, "");
+
+    for (case, layout) in [
+        ("xMode omitted", factor_mode),
+        ("outer target", outer_target),
+        ("no layoutTarget", no_target),
+        ("no size", partial),
+    ] {
+        let xml: String = manual_plot_layout_chart_xml(&layout);
+        let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
+        assert_eq!(chart.plot_area_layout, None, "{case}");
+    }
+}
+
+/// `c:layout` is written by the title, the legend and every data-label group
+/// too, and only the plot area's own says where the plot sits.
+#[test]
+fn a_title_manual_layout_is_not_the_plot_areas() {
+    let titled: String = manual_plot_layout_chart_xml("<c:layout/>").replace(
+        "<c:plotArea>",
+        &format!("<c:title>{REPORTED_MANUAL_LAYOUT}</c:title><c:plotArea>"),
+    );
+
+    let chart = parse_chart_xml(&titled, &SchemeColors::empty()).unwrap();
+
+    assert_eq!(chart.plot_area_layout, None);
+}

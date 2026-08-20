@@ -256,7 +256,7 @@ fn test_parse_docx_with_bar_chart() {
     let chart_blocks: Vec<&Chart> = content
         .iter()
         .filter_map(|block| match block {
-            Block::Chart(chart) => Some(chart),
+            Block::Chart(chart) => Some(chart.as_ref()),
             _ => None,
         })
         .collect();
@@ -330,7 +330,7 @@ fn test_parse_docx_with_pie_chart() {
     let chart_blocks: Vec<&Chart> = content
         .iter()
         .filter_map(|block| match block {
-            Block::Chart(chart) => Some(chart),
+            Block::Chart(chart) => Some(chart.as_ref()),
             _ => None,
         })
         .collect();

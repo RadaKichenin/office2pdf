@@ -425,7 +425,7 @@ impl Parser for DocxParser {
                     // Inject charts for this body child
                     let chs = chart_ctx.take(idx);
                     for ch in chs {
-                        tagged.push(TaggedElement::Plain(vec![Block::Chart(ch)]));
+                        tagged.push(TaggedElement::Plain(vec![Block::Chart(Box::new(ch))]));
                     }
                     tagged
                 }
