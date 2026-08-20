@@ -2148,6 +2148,63 @@ fn the_contoso_scaled_attribution_lands_on_its_native_baseline() {
     );
 }
 
+/// An unwrapped 32pt slide label lands on its native first baseline.
+///
+/// `tests/fixtures/pptx/run-fill-alpha.pptx` seats its `txBox="1"` frame at
+/// `a:off y="2133600"` under the default `tIns` of 45720 EMU, putting the
+/// content top on 171.60pt, and sets all three of its paragraphs in 32pt Arial
+/// at a width none of them wraps at. None writes an `<a:endParaRPr>`, so each
+/// mark resolves through `presentation.xml`'s `<a:defaultTextStyle>`, whose
+/// `<a:latin typeface="+mn-lt"/>` names the theme's minor Latin font — here
+/// `Calisto MT` — and shares the line box with the run. A native PowerPoint
+/// 16.112 export puts the first baseline on 202.56pt.
+///
+/// The two faces settle on 0.963654em, a 31pt seat at this size, which is also
+/// where Arial's own 0.972378em share rounds: a frame this shallow cannot tell
+/// the mark's contribution apart, and no claim about it is made here. What it
+/// does separate is the **metric source**. Folding Arial's 67/2048 hhea line
+/// gap into the descent gives 0.944713em and a 30pt seat, landing the line on
+/// 201.60pt — 0.96pt high, four times the export's 0.24pt position grid
+/// (issue #1179).
+#[test]
+fn the_unwrapped_label_lands_on_its_native_first_baseline() {
+    const EMU_PER_PT: f64 = 12700.0;
+    const NATIVE_BASELINE_PT: f64 = 202.56;
+    const SIZE_PT: f64 = 32.0;
+    let content_top_pt: f64 = (2133600.0 + 45720.0) / EMU_PER_PT;
+    let baseline_of = |above_em: f64| -> f64 {
+        let (seat_em, _) = crate::render::typst_gen::text::powerpoint_percentage_line_box_em(
+            above_em, SIZE_PT, 1.0,
+        );
+        content_top_pt + seat_em * SIZE_PT
+    };
+
+    // Arial usWin 1854/434 and Calisto MT usWin 1894/470, both per 2048 upem.
+    let (shared_above, _) = crate::render::pdf::powerpoint_line_box_split_em([
+        (1854.0 / 2048.0, 434.0 / 2048.0),
+        (1894.0 / 2048.0, 470.0 / 2048.0),
+    ])
+    .expect("a positive ascent splits the line box");
+    let baseline_pt: f64 = baseline_of(shared_above);
+    assert!(
+        (baseline_pt - NATIVE_BASELINE_PT).abs() <= 0.24,
+        "the unwrapped 32pt label must land on the native {NATIVE_BASELINE_PT}pt \
+         baseline within the export's 0.24pt position grid, got {baseline_pt}pt"
+    );
+
+    // Triangulation: the reading this issue measured against, Arial's hhea pair
+    // with its line gap folded in, is a whole point short of that.
+    let (gap_inclusive_above, _) =
+        crate::render::pdf::powerpoint_line_box_split_em([(1854.0 / 2048.0, 501.0 / 2048.0)])
+            .expect("a positive ascent splits the line box");
+    let gap_inclusive_pt: f64 = baseline_of(gap_inclusive_above);
+    assert!(
+        (gap_inclusive_pt - NATIVE_BASELINE_PT).abs() > 0.24,
+        "folding the hhea line gap into the box must not reach the native \
+         baseline, got {gap_inclusive_pt}pt"
+    );
+}
+
 /// The paragraph mark's face reaches the emitted line box.
 ///
 /// PowerPoint's 1.2em box is shared by every font on the line and the mark —
