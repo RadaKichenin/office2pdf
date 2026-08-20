@@ -2855,3 +2855,130 @@ fn a_title_manual_layout_is_not_the_plot_areas() {
 
     assert_eq!(chart.plot_area_layout, None);
 }
+
+/// The `january expenses:` chart of the workbook behind issue #1183 caches six
+/// category labels, three of which hold an escaped `&`. The reader splits a
+/// text node at every entity reference, so a label read one `Event::Text` at a
+/// time arrives as two labels with the `&` — the reference between them —
+/// dropped: six categories printed as nine, each `X & Y` bar labelled with a
+/// neighbour's word.
+fn escaped_ampersand_category_chart_xml() -> String {
+    r#"<?xml version="1.0" encoding="UTF-8"?>
+        <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+            <c:chart>
+                <c:plotArea>
+                    <c:barChart>
+                        <c:barDir val="bar"/>
+                        <c:grouping val="clustered"/>
+                        <c:ser>
+                            <c:idx val="0"/>
+                            <c:tx><c:strRef><c:strCache>
+                                <c:pt idx="0"><c:v>room &amp; board</c:v></c:pt>
+                            </c:strCache></c:strRef></c:tx>
+                            <c:cat>
+                                <c:strRef><c:strCache>
+                                    <c:pt idx="0"><c:v>room &amp; board</c:v></c:pt>
+                                    <c:pt idx="1"><c:v>tuition &amp; fees</c:v></c:pt>
+                                    <c:pt idx="2"><c:v>books &amp; supplies</c:v></c:pt>
+                                    <c:pt idx="3"><c:v>transportation</c:v></c:pt>
+                                    <c:pt idx="4"><c:v>discretionary</c:v></c:pt>
+                                    <c:pt idx="5"><c:v>other expenses</c:v></c:pt>
+                                </c:strCache></c:strRef>
+                            </c:cat>
+                            <c:val>
+                                <c:numRef><c:numCache>
+                                    <c:pt idx="0"><c:v>6780</c:v></c:pt>
+                                    <c:pt idx="1"><c:v>2050</c:v></c:pt>
+                                    <c:pt idx="2"><c:v>1155</c:v></c:pt>
+                                    <c:pt idx="3"><c:v>2473</c:v></c:pt>
+                                    <c:pt idx="4"><c:v>4053</c:v></c:pt>
+                                    <c:pt idx="5"><c:v>2938</c:v></c:pt>
+                                </c:numCache></c:numRef>
+                            </c:val>
+                        </c:ser>
+                    </c:barChart>
+                </c:plotArea>
+            </c:chart>
+        </c:chartSpace>"#
+        .to_string()
+}
+
+#[test]
+fn a_category_label_holding_an_escaped_ampersand_stays_one_label() {
+    let chart = parse_chart_xml(
+        &escaped_ampersand_category_chart_xml(),
+        &SchemeColors::empty(),
+    )
+    .unwrap();
+
+    assert_eq!(
+        chart.categories,
+        vec![
+            "room & board",
+            "tuition & fees",
+            "books & supplies",
+            "transportation",
+            "discretionary",
+            "other expenses",
+        ]
+    );
+}
+
+/// One label per bar: the category count has to match the values it names, or
+/// every label past the first `&` slides onto the wrong bar.
+#[test]
+fn escaped_category_labels_stay_one_per_value() {
+    let chart = parse_chart_xml(
+        &escaped_ampersand_category_chart_xml(),
+        &SchemeColors::empty(),
+    )
+    .unwrap();
+
+    assert_eq!(chart.categories.len(), chart.series[0].values.len());
+}
+
+/// A series name reads through the same `<c:v>`, so its `&` was deleted too —
+/// silently, since a name is one string and never split into two.
+#[test]
+fn a_series_name_keeps_an_escaped_ampersand() {
+    let chart = parse_chart_xml(
+        &escaped_ampersand_category_chart_xml(),
+        &SchemeColors::empty(),
+    )
+    .unwrap();
+
+    assert_eq!(chart.series[0].name.as_deref(), Some("room & board"));
+}
+
+/// A chart title is `<a:t>` rather than `<c:v>`, and lost its `&` the same way.
+#[test]
+fn a_chart_title_keeps_an_escaped_ampersand() {
+    let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+        <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+            <c:chart>
+                <c:title><c:tx><c:rich><a:p><a:r>
+                    <a:t>Room &amp; board</a:t>
+                </a:r></a:p></c:rich></c:tx></c:title>
+                <c:plotArea>
+                    <c:barChart>
+                        <c:barDir val="col"/>
+                        <c:ser>
+                            <c:idx val="0"/>
+                            <c:cat><c:strRef><c:strCache>
+                                <c:pt idx="0"><c:v>Q1</c:v></c:pt>
+                            </c:strCache></c:strRef></c:cat>
+                            <c:val><c:numRef><c:numCache>
+                                <c:pt idx="0"><c:v>100</c:v></c:pt>
+                            </c:numCache></c:numRef></c:val>
+                        </c:ser>
+                    </c:barChart>
+                </c:plotArea>
+            </c:chart>
+        </c:chartSpace>"#;
+
+    let chart = parse_chart_xml(xml, &SchemeColors::empty()).unwrap();
+
+    assert_eq!(chart.title.as_deref(), Some("Room & board"));
+}

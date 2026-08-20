@@ -368,7 +368,7 @@ impl<'a> PptxTableParser<'a> {
 
     fn handle_general_ref(&mut self, reference: &quick_xml::events::BytesRef<'_>) {
         if self.is_in_text
-            && let Some(decoded) = decode_pptx_general_ref(reference)
+            && let Some(decoded) = crate::parser::xml_util::decode_general_ref(reference)
         {
             self.run_text.push_str(&decoded);
         }

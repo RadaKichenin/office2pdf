@@ -907,15 +907,6 @@ pub(super) fn decode_pptx_text_event(text: &quick_xml::events::BytesText<'_>) ->
     Some(unescaped.into_owned())
 }
 
-pub(super) fn decode_pptx_general_ref(
-    reference: &quick_xml::events::BytesRef<'_>,
-) -> Option<String> {
-    let decoded = reference.decode().ok()?;
-    let wrapped = format!("&{};", decoded.as_ref());
-    let unescaped = unescape_xml_text(&wrapped).ok()?;
-    Some(unescaped.into_owned())
-}
-
 fn normalize_pptx_run_boundary_spacing(previous: Option<&Run>, run: &mut Run) {
     let Some(previous) = previous else {
         return;
