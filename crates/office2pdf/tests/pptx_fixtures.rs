@@ -1048,6 +1048,45 @@ fn run_fill_alpha_composites_in_the_generated_source() {
     );
 }
 
+/// A paragraph that writes no `<a:endParaRPr>` at all still puts its mark in
+/// the theme's minor Latin font.
+///
+/// PowerPoint shares one 1.2em line box across every font on the line, the
+/// paragraph mark included, so the mark's face decides where the baseline sits
+/// inside it. The golden mocks' Korean titles carry a bare `<a:endParaRPr>`
+/// (issue #1176); these three paragraphs omit the element entirely, and the
+/// mark still has to end up where `presentation.xml`'s `<a:defaultTextStyle>`
+/// puts it — its `<a:latin typeface="+mn-lt"/>` names this deck's `Calisto MT`,
+/// whose usWin descent is deeper than the runs' Arial and so moves the shared
+/// box (issue #1179).
+#[test]
+fn structure_run_fill_alpha_marks_take_the_theme_minor_latin_font() {
+    let pages = fixed_pages("run-fill-alpha.pptx");
+    let text_box = pages[0]
+        .elements
+        .iter()
+        .find_map(|element| match &element.kind {
+            FixedElementKind::TextBox(text_box) => Some(text_box),
+            _ => None,
+        })
+        .expect("fixture should contain its label frame");
+    let mark_families: Vec<Option<&str>> = text_box
+        .content
+        .iter()
+        .filter_map(|block| match block {
+            Block::Paragraph(paragraph) => Some(paragraph),
+            _ => None,
+        })
+        .map(|paragraph| paragraph.style.paragraph_mark_font_family.as_deref())
+        .collect();
+
+    assert_eq!(
+        mark_families,
+        vec![Some("Calisto MT"); 3],
+        "a mark declaring nothing must fall to the theme's minor Latin font"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // hard_break_wrapped_line_advance.pptx — `hard_break_line_advance.pptx` with
 // `<a:bodyPr wrap="none">` changed to `wrap="square"` (issue #1172). A wrapping
