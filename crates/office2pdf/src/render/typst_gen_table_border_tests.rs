@@ -1642,3 +1642,117 @@ fn test_print_heading_boundary_keeps_both_coincident_bands() {
         "an ordinary table must still resolve the tie to a single owner"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Excel background bleed (issue #1190)
+//
+// The shading under those bands follows the same boundary convention: Excel
+// paints a cell's background over its box *plus* the 1pt strip on its bottom
+// and right grid boundaries, so neighbouring shadings overlap by exactly the
+// strip a border then covers. Typst's own cell `fill:` stops on the boundary,
+// so codegen must add that strip as an overlay.
+// ---------------------------------------------------------------------------
+
+/// The `#D9D9D9` band `TableStyleLight1` prints, as measured on a native
+/// Excel-for-Mac export of `tests/fixtures/xlsx/ExcelTables.xlsx`.
+fn banded_cell(text: &str) -> TableCell {
+    TableCell {
+        background: Some(Color::new(0xd9, 0xd9, 0xd9)),
+        ..plain_text_cell(text)
+    }
+}
+
+#[test]
+fn test_boundary_band_background_bleeds_past_its_bottom_and_right_boundaries() {
+    let table = boundary_band_table(
+        vec![fixed_row(vec![banded_cell("Anton"), plain_text_cell("44")])],
+        vec![69.0, 69.0],
+    );
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    // The track itself still comes from Typst's own cell fill.
+    assert!(
+        result.contains("table.cell(fill: rgb(217, 217, 217))"),
+        "the cell must keep filling its own box: {result}"
+    );
+    // Bottom strip: 1pt tall, sitting on the row's bottom boundary
+    // (inset.bottom below the content box, plus its own height), and running
+    // the full cell width plus the corner block the right strip shares.
+    assert!(
+        result.contains(
+            "#place(bottom + left, dx: -5pt, dy: 6pt, rect(width: 100% + 11pt, height: 1pt, fill: rgb(217, 217, 217), stroke: none))"
+        ),
+        "the background must bleed 1pt past the bottom boundary: {result}"
+    );
+    // Right strip: 1pt wide on the column boundary, as tall as the 20pt row
+    // frame plus that same corner block.
+    assert!(
+        result.contains(
+            "#place(top + right, dx: 6pt, dy: -5pt, rect(width: 1pt, height: 21pt, fill: rgb(217, 217, 217), stroke: none))"
+        ),
+        "the background must bleed 1pt past the right boundary: {result}"
+    );
+    // An unshaded neighbour paints nothing.
+    assert_eq!(
+        result.matches("rect(width: 1pt").count(),
+        1,
+        "only the shaded cell may bleed: {result}"
+    );
+}
+
+/// The bleed's vertical run obeys the same extent rule the vertical border
+/// bands do: a relative height inside `#place` resolves against the page in an
+/// auto-sized row, so the strip is painted as concrete twins instead.
+#[test]
+fn test_boundary_band_background_bleed_paints_twins_in_an_auto_row() {
+    let table = boundary_band_table(
+        vec![TableRow {
+            minimum_height: None,
+            cells: vec![banded_cell("Anton")],
+            height: None,
+        }],
+        vec![69.0],
+    );
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    // `plain_text_cell` declares no font family, so no line metrics exist and
+    // the extent falls back to the ambient text size.
+    assert!(
+        result.contains(
+            "#place(top + right, dx: 6pt, dy: -5pt, rect(width: 1pt, height: 1.2em + 11pt, fill: rgb(217, 217, 217), stroke: none))"
+        ),
+        "the top twin must hang from the row's top boundary: {result}"
+    );
+    assert!(
+        result.contains(
+            "#place(bottom + right, dx: 6pt, dy: 6pt, rect(width: 1pt, height: 1.2em + 11pt, fill: rgb(217, 217, 217), stroke: none))"
+        ),
+        "the bottom twin must rise from 1pt past the bottom boundary: {result}"
+    );
+}
+
+/// The bleed belongs to Excel's convention alone: Word's own band model
+/// (issue #724) was measured on borders only, and PowerPoint and Word tables
+/// keep Typst's centred strokes.
+#[test]
+fn test_word_and_centred_stroke_tables_do_not_bleed_their_fills() {
+    for model in [
+        TableBorderPaintModel::WordPositiveAxisBands,
+        TableBorderPaintModel::CenteredStroke,
+    ] {
+        let table = Table {
+            rows: vec![fixed_row(vec![banded_cell("Anton")])],
+            column_widths: vec![69.0],
+            border_paint_model: model,
+            ..Table::default()
+        };
+        let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+        let result = generate_typst(&doc).unwrap().source;
+        assert!(
+            !result.contains("rect(width: 1pt"),
+            "{model:?} must keep filling the cell box exactly: {result}"
+        );
+    }
+}

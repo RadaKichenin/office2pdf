@@ -898,8 +898,15 @@ fn generate_table_cell(
     }
 
     if let Some(band) = &boundary_band {
+        let inset: Insets = cell_inset_with_border(cell, default_cell_padding);
+        // The shading goes down before the bands, so a border still paints
+        // over the strip the two share.
+        if band.paint_model == TableBorderPaintModel::ExcelBoundaryBands
+            && let Some(background) = &cell.background
+        {
+            write_excel_background_bleed(out, background, inset, &band.vertical_extent);
+        }
         if let Some(border) = band.painted_border {
-            let inset: Insets = cell_inset_with_border(cell, default_cell_padding);
             match band.paint_model {
                 TableBorderPaintModel::ExcelBoundaryBands => {
                     write_boundary_anchored_border_overlays(
@@ -2061,7 +2068,7 @@ fn write_word_horizontal_border(out: &mut String, side: &BorderSide, inset: Inse
             } else {
                 inset.bottom + painted_side.width + inward_offset
             };
-            write_word_band_rect(
+            write_band_rect(
                 out,
                 align,
                 &format!("{}pt", format_geometry(-inset.left)),
@@ -2154,7 +2161,7 @@ fn write_word_vertical_band_rect(
     let width: String = format!("{}pt", format_geometry(width));
     match *vertical_extent {
         VerticalBandExtent::FrameHeight(frame_height_pt) => {
-            write_word_band_rect(
+            write_band_rect(
                 out,
                 align,
                 &dx,
@@ -2166,7 +2173,7 @@ fn write_word_vertical_band_rect(
         }
         VerticalBandExtent::TwinBands(frame_estimate_pt) => {
             let height: String = format!("{}pt", format_geometry(frame_estimate_pt));
-            write_word_band_rect(
+            write_band_rect(
                 out,
                 align,
                 &dx,
@@ -2175,7 +2182,7 @@ fn write_word_vertical_band_rect(
                 &height,
                 color,
             );
-            write_word_band_rect(
+            write_band_rect(
                 out,
                 &align.replacen("top", "bottom", 1),
                 &dx,
@@ -2187,7 +2194,7 @@ fn write_word_vertical_band_rect(
         }
         VerticalBandExtent::TwinBandsEmFallback => {
             let height: String = format!("1.2em + {}pt", format_geometry(inset.top + inset.bottom));
-            write_word_band_rect(
+            write_band_rect(
                 out,
                 align,
                 &dx,
@@ -2196,7 +2203,7 @@ fn write_word_vertical_band_rect(
                 &height,
                 color,
             );
-            write_word_band_rect(
+            write_band_rect(
                 out,
                 &align.replacen("top", "bottom", 1),
                 &dx,
@@ -2256,7 +2263,10 @@ fn write_word_patterned_vertical_band(
     }
 }
 
-fn write_word_band_rect(
+/// Place one axis-aligned band rectangle, out of layout, at `align` shifted by
+/// `dx`/`dy`. Every boundary-anchored paint paints one of these: Word's border
+/// rectangles and Excel's background bleed alike.
+fn write_band_rect(
     out: &mut String,
     align: &str,
     dx: &str,
@@ -2367,28 +2377,106 @@ fn write_vertical_boundary_band(
     vertical_extent: &VerticalBandExtent,
 ) {
     let top_anchor: String = format!("top + {horizontal_anchor}");
+    let (length, twins): (String, bool) = vertical_band_run(vertical_extent, inset);
+    if twins {
+        write_vertical_twin_bands(out, side, dx, inset, &top_anchor, &length);
+    } else {
+        write_boundary_band_line(out, &top_anchor, dx, -inset.top, "90deg", &length, side);
+    }
+}
+
+/// The concrete length one boundary-anchored vertical run takes, and whether
+/// it must be painted as twins because that length only estimates the row's
+/// frame.
+fn vertical_band_run(vertical_extent: &VerticalBandExtent, inset: Insets) -> (String, bool) {
     match *vertical_extent {
-        VerticalBandExtent::FrameHeight(frame_height_pt) => {
-            let length: String = format!(
+        VerticalBandExtent::FrameHeight(frame_height_pt) => (
+            format!(
                 "{}pt",
                 format_geometry(frame_height_pt + BAND_RUN_END_EXTENSION_PT)
-            );
-            write_boundary_band_line(out, &top_anchor, dx, -inset.top, "90deg", &length, side);
-        }
-        VerticalBandExtent::TwinBands(frame_estimate_pt) => {
-            let length: String = format!(
+            ),
+            false,
+        ),
+        VerticalBandExtent::TwinBands(frame_estimate_pt) => (
+            format!(
                 "{}pt",
                 format_geometry(frame_estimate_pt + BAND_RUN_END_EXTENSION_PT)
-            );
-            write_vertical_twin_bands(out, side, dx, inset, &top_anchor, &length);
-        }
-        VerticalBandExtent::TwinBandsEmFallback => {
-            let length: String = format!(
+            ),
+            true,
+        ),
+        VerticalBandExtent::TwinBandsEmFallback => (
+            format!(
                 "1.2em + {}pt",
                 format_geometry(inset.top + inset.bottom + BAND_RUN_END_EXTENSION_PT)
-            );
-            write_vertical_twin_bands(out, side, dx, inset, &top_anchor, &length);
-        }
+            ),
+            true,
+        ),
+    }
+}
+
+/// Paint the two strips by which Excel's cell background overruns its own grid
+/// rect: the shading covers its box **plus** the 1pt boundary band on the
+/// bottom and right edges, so neighbouring shadings overlap by exactly the
+/// strip a border then paints over (issue #1190, the fill half of the #619
+/// probe). Typst's cell `fill:` covers the track exactly, so the overrun is
+/// painted here.
+///
+/// Only the +y/+x edges bleed, which is what keeps the strips harmless: every
+/// band sharing one of them — this cell's own, and both neighbours' — is
+/// emitted after these rects and stays on top of them.
+fn write_excel_background_bleed(
+    out: &mut String,
+    background: &Color,
+    inset: Insets,
+    vertical_extent: &VerticalBandExtent,
+) {
+    let bleed: String = format!("{}pt", format_geometry(BAND_RUN_END_EXTENSION_PT));
+    // The bottom strip runs the cell's full width plus the corner block it
+    // shares with the right one, exactly as a horizontal border band does.
+    write_band_rect(
+        out,
+        "bottom + left",
+        &format!("{}pt", format_geometry(-inset.left)),
+        &format!(
+            "{}pt",
+            format_geometry(inset.bottom + BAND_RUN_END_EXTENSION_PT)
+        ),
+        &format!(
+            "100% + {}pt",
+            format_geometry(inset.left + inset.right + BAND_RUN_END_EXTENSION_PT)
+        ),
+        &bleed,
+        background,
+    );
+    // The right strip spans the row frame, and takes a concrete length for the
+    // same reason [`VerticalBandExtent`] gives.
+    let dx: String = format!(
+        "{}pt",
+        format_geometry(inset.right + BAND_RUN_END_EXTENSION_PT)
+    );
+    let (height, twins): (String, bool) = vertical_band_run(vertical_extent, inset);
+    write_band_rect(
+        out,
+        "top + right",
+        &dx,
+        &format!("{}pt", format_geometry(-inset.top)),
+        &bleed,
+        &height,
+        background,
+    );
+    if twins {
+        write_band_rect(
+            out,
+            "bottom + right",
+            &dx,
+            &format!(
+                "{}pt",
+                format_geometry(inset.bottom + BAND_RUN_END_EXTENSION_PT)
+            ),
+            &bleed,
+            &height,
+            background,
+        );
     }
 }
 
