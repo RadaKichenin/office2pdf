@@ -228,6 +228,7 @@ pub(super) fn load_chart_data<R: Read + std::io::Seek>(
     slide_path: &str,
     archive: &mut ZipArchive<R>,
     scheme: &crate::parser::drawingml::SchemeColors<'_>,
+    theme_fonts: &crate::parser::drawingml::ThemeFontScheme,
 ) -> ChartMap {
     let mut charts = ChartMap::new();
 
@@ -258,8 +259,17 @@ pub(super) fn load_chart_data<R: Read + std::io::Seek>(
         };
 
         if let Ok(chart_xml) = read_zip_entry(archive, &chart_path)
-            && let Some(chart) = chart_parser::parse_chart_xml(&chart_xml, scheme)
+            && let Some(mut chart) = chart_parser::parse_chart_xml(&chart_xml, scheme)
         {
+            // The shapes the chart's own drawing part lays over it, which the
+            // chart XML can only name through a relationship (issue #1186).
+            chart.user_shapes = crate::parser::chart_drawing::load_chart_user_shapes(
+                archive,
+                &chart_path,
+                &chart_xml,
+                scheme,
+                theme_fonts,
+            );
             charts.insert(id.clone(), chart);
         }
     }

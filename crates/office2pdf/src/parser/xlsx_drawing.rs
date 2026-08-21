@@ -47,6 +47,15 @@ pub(super) fn extract_charts_with_anchors(data: &[u8]) -> HashMap<String, Vec<Ra
         colors: &theme_colors,
         aliases: &no_aliases,
     };
+    // A chart's `<c:userShapes>` part is an ordinary drawing, so its
+    // `<a:schemeClr>` resolves the way a worksheet drawing's does — through
+    // the background/text aliases a spreadsheet has no `<clrMap>` to state
+    // (issue #1186).
+    let drawing_aliases: HashMap<String, String> = xlsx_scheme_aliases();
+    let drawing_scheme = crate::parser::drawingml::SchemeColors {
+        colors: &theme_colors,
+        aliases: &drawing_aliases,
+    };
 
     // Step 3: For each sheet, find its drawing and extract chart anchors
     let mut result: HashMap<String, Vec<RawChartAnchor>> = HashMap::new();
@@ -97,6 +106,13 @@ pub(super) fn extract_charts_with_anchors(data: &[u8]) -> HashMap<String, Vec<Ra
                     chart.host = crate::ir::ChartHost::Spreadsheet;
                     chart.text_font_family =
                         theme_fonts.resolve_chart_text_typeface(chart.text_font_family.as_deref());
+                    chart.user_shapes = crate::parser::chart_drawing::load_chart_user_shapes(
+                        &mut archive,
+                        &chart_path,
+                        &chart_xml,
+                        &drawing_scheme,
+                        &theme_fonts,
+                    );
                     result
                         .entry(sheet_name.clone())
                         .or_default()
@@ -153,6 +169,13 @@ pub(super) fn extract_charts_with_anchors(data: &[u8]) -> HashMap<String, Vec<Ra
                 chart.host = crate::ir::ChartHost::Spreadsheet;
                 chart.text_font_family =
                     theme_fonts.resolve_chart_text_typeface(chart.text_font_family.as_deref());
+                chart.user_shapes = crate::parser::chart_drawing::load_chart_user_shapes(
+                    &mut archive,
+                    path,
+                    &chart_xml,
+                    &drawing_scheme,
+                    &theme_fonts,
+                );
                 result
                     .entry(first_sheet.clone())
                     .or_default()
@@ -274,7 +297,7 @@ pub(super) fn parse_workbook_sheet_rids(xml: &str) -> Vec<(String, String)> {
 }
 
 /// Parse a .rels file to get Id → Target mapping.
-pub(super) fn parse_rels_targets(xml: &str) -> HashMap<String, String> {
+pub(in crate::parser) fn parse_rels_targets(xml: &str) -> HashMap<String, String> {
     xml_util::parse_rels_id_target(xml)
 }
 
@@ -990,7 +1013,7 @@ fn legacy_scheme_fallback(val: &str) -> Option<crate::ir::Color> {
 
 /// Resolve a parsed drawing color, falling back to the legacy light/dark
 /// mapping for scheme colors the theme could not resolve.
-fn resolved_or_legacy(
+pub(in crate::parser) fn resolved_or_legacy(
     parsed: Option<crate::ir::Color>,
     element_name: &[u8],
     e: &quick_xml::events::BytesStart<'_>,
@@ -1010,7 +1033,7 @@ fn resolved_or_legacy(
 /// reader: Excel writes shape-label run properties as a self-closing
 /// element, which quick-xml reports as `Empty`, and reading them on `Start`
 /// alone dropped every attribute (issue #466).
-fn apply_run_properties(
+pub(in crate::parser) fn apply_run_properties(
     style: &mut crate::ir::TextStyle,
     element: &quick_xml::events::BytesStart<'_>,
 ) {

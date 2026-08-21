@@ -383,6 +383,7 @@ fn test_drawings_shift_with_the_inset_grid() {
             auto_title_deleted: false,
             has_automatic_title: false,
             plot_area_layout: None,
+            user_shapes: Vec::new(),
         },
     });
 

@@ -1221,7 +1221,7 @@ const AVENIR_NEXT_LT_PRO_CHART_LINE_METRICS_EM: (f64, f64) = (1972.0 / 2048.0, 5
 /// part of the box one line occupies, and the seven faces this was measured
 /// across only agree once it is excluded (Arial is the one of them that
 /// declares a non-zero gap).
-fn chart_face_line_metrics_em(family: &str, bold: bool) -> Option<(f64, f64)> {
+pub(super) fn chart_face_line_metrics_em(family: &str, bold: bool) -> Option<(f64, f64)> {
     let normalized: String = family
         .chars()
         .filter(|character| character.is_ascii_alphanumeric())
@@ -2505,6 +2505,212 @@ fn write_chart_title(
     }
 }
 
+/// Draw the shapes `<c:userShapes>` lays over the chart.
+///
+/// `area` is the chart area the anchors' fractions are of, and `title_h` the
+/// band of it the chart-area title took above the box this writes into: a
+/// shape is anchored to the whole area, not to what the title left.
+///
+/// **The placement is measured, not read off the schema.** Native Excel for
+/// Mac 16 exports of `tests/fixtures/xlsx/issue_1181_fit_to_height.xlsx`,
+/// staged inside Excel's own sandbox container and traced with
+/// `mutool draw -F trace`, with one factor of the `CASH FLOW` caption's own
+/// anchor rewritten at a time. Its chart area is 786.7 x 75.55pt and the sheet
+/// prints at 0.78; every figure below is in unscaled points:
+///
+/// | rewritten | the caption moves |
+/// | --- | --- |
+/// | `cdr:from/cdr:x` 0 -> 0.05 | 39.34pt right, which is 0.05 x 786.7 |
+/// | `cdr:from/cdr:y` 0.17913 -> 0.25 | 5.00pt down (13.53 -> 18.89 unrounded) |
+/// | `cdr:from/cdr:y` 0.17913 -> 0.3 | 9.00pt down (13.53 -> 22.67 unrounded) |
+/// | `a:bodyPr@lIns` 7.2 -> 0 | 7.20pt left |
+/// | `a:bodyPr@tIns` 3.6 -> 0 | 4.00pt up |
+/// | `a:rPr@sz` 1500 -> 1000 / 2000 / 3000 / 4000 | 4.00 up / 5.00 down / 15.00 down / 24.00 down |
+/// | `cdr:to/cdr:y` 0.50958 -> 0.9 | nothing |
+/// | `a:latin@typeface` Cambria -> Arial | nothing |
+///
+/// So the horizontal is exact — the fraction of the area's width, plus the
+/// left inset unrounded — while every vertical term is a whole point on its
+/// own: the corner's offset into the area, the top inset, and the ascent the
+/// first baseline sits below the text's top edge. The size sweep is what
+/// identifies that last one: `round(0.9502 x size)` for the 0.95020em ascent
+/// [`chart_face_line_metrics_em`] reads for Cambria is 10/14/19/29/38pt at
+/// 10/15/20/30/40pt, whose steps are exactly the measured -4/0/+5/+15/+24.
+/// Rounding the sum of the terms instead predicts +14 at 30pt, and a flat
+/// 1.0em ascent predicts +25 at 40pt; the export contradicts both. The shape's
+/// own height never enters — `cdr:to` at 0.9 left the caption where it was.
+///
+/// Two things this fixture cannot settle. Which table the ascent comes from:
+/// Cambria's `hhea` ascender and its `usWinAscent` are the same 1946/2048, so
+/// the sweep does not separate them, and the reader takes the `hhea` one every
+/// other chart face is measured from. And whether the ascent is the face's at
+/// all: Arial's 0.90527em rounds to the same 14pt at 15pt, which is why
+/// swapping the typeface moved nothing.
+///
+/// `<a:bodyPr@anchor>` is not modelled: the only shape available to measure
+/// carries `<a:spAutoFit/>`, so Excel sizes its box to the text and `ctr`
+/// exports identically to `t`.
+///
+/// Every plot variant calls this. The bordered-table fallback
+/// [`generate_chart_body`] drops to for a chart it cannot plot does not: that
+/// box is a placeholder listing the series, not a chart area, so a fraction of
+/// it would put the shape somewhere the file never asked for.
+fn write_chart_user_shapes(out: &mut String, chart: &Chart, area: (f64, f64), title_h: f64) {
+    let (area_w, area_h): (f64, f64) = area;
+    for shape in &chart.user_shapes {
+        let left: f64 = shape.from.0 * area_w;
+        let top: f64 = (shape.from.1 * area_h).round() - title_h;
+        let (width, height): (f64, f64) = match shape.extent {
+            crate::ir::ChartUserShapeExtent::Corner { x, y } => (
+                ((x - shape.from.0) * area_w).max(0.0),
+                ((y - shape.from.1) * area_h).max(0.0),
+            ),
+            crate::ir::ChartUserShapeExtent::Size { width, height } => (width, height),
+        };
+
+        let mut box_args: String = format!(
+            "width: {}pt, height: {}pt",
+            format_f64(width),
+            format_f64(height)
+        );
+        if let Some(fill) = shape.fill {
+            let _ = write!(box_args, ", fill: {}", fmt::rgb(&fill));
+        }
+        if let Some(ref border) = shape.border {
+            let _ = write!(
+                box_args,
+                ", stroke: {}pt + {}",
+                format_f64(border.width),
+                fmt::rgb(&border.color)
+            );
+        }
+        let _ = write!(
+            out,
+            "#place(top + left, dx: {}pt, dy: {}pt, box({box_args})[",
+            format_f64(left),
+            format_f64(top)
+        );
+        write_chart_user_shape_text(out, shape, width);
+        out.push_str("])\n");
+    }
+}
+
+/// The text body of one user shape, seated inside its box.
+///
+/// The body is `place`d rather than laid out as the box's content so that a
+/// `<a:bodyPr wrap="none"/>` line can run past the box's own width, which is
+/// what Excel draws: the reported caption's box is 91pt wide and holds 80pt of
+/// glyphs inside 14.4pt of insets, so wrapping it would break `CASH FLOW`
+/// across two lines.
+///
+/// Each paragraph carries the line box its first run's face and size give it,
+/// as a fixed `top-edge`/`bottom-edge` pair, which is what puts the first
+/// baseline where [`write_chart_user_shapes`] measured it. Office shares one
+/// line box across the runs of a line, so a paragraph mixing sizes takes the
+/// first run's rather than growing per run.
+fn write_chart_user_shape_text(out: &mut String, shape: &crate::ir::ChartUserShape, box_w: f64) {
+    if shape.paragraphs.is_empty() {
+        return;
+    }
+    let insets: crate::ir::Insets = shape.text_insets;
+    // A wrapping body is bounded by what the insets leave of the box; a
+    // `wrap="none"` one is not bounded at all.
+    let text_w: String = if shape.no_wrap {
+        "auto".to_string()
+    } else {
+        format!(
+            "{}pt",
+            format_f64((box_w - insets.left - insets.right).max(0.0))
+        )
+    };
+    let _ = write!(
+        out,
+        "#place(top + left, dx: {}pt, dy: {}pt, box(width: {text_w})[",
+        format_f64(insets.left),
+        format_f64(insets.top.round())
+    );
+
+    for paragraph in &shape.paragraphs {
+        let (above_pt, below_pt): (f64, f64) = chart_user_shape_line_box_pt(paragraph);
+        let _ = write!(
+            out,
+            "#block(above: 0pt, below: 0pt)[#set text(top-edge: {}pt, bottom-edge: -{}pt);#set par(leading: 0pt);",
+            format_f64(above_pt),
+            format_f64(below_pt)
+        );
+        let alignment: Option<&str> = match paragraph.style.alignment {
+            Some(crate::ir::Alignment::Center) => Some("center"),
+            Some(crate::ir::Alignment::Right) => Some("right"),
+            _ => None,
+        };
+        if let Some(alignment) = alignment {
+            let _ = write!(out, "#align({alignment})[");
+        }
+        for run in &paragraph.runs {
+            out.push_str(&chart_user_shape_run_markup(run));
+        }
+        if alignment.is_some() {
+            out.push(']');
+        }
+        out.push(']');
+    }
+
+    // Closes the body box opened above, and the `place` holding it.
+    out.push_str("])");
+}
+
+/// The `(above, below)` baseline split one user-shape paragraph's line takes,
+/// in points.
+///
+/// The ascent is rounded to a whole point because Excel seats the baseline
+/// there; the descent is not, because a single-line caption is all that was
+/// measured and it only sets the advance to a second line.
+fn chart_user_shape_line_box_pt(paragraph: &crate::ir::Paragraph) -> (f64, f64) {
+    let run: Option<&crate::ir::Run> = paragraph.runs.first();
+    let size_pt: f64 = run
+        .and_then(|run| run.style.font_size)
+        .unwrap_or(CHART_USER_SHAPE_DEFAULT_SIZE_PT);
+    let family: &str = run
+        .and_then(|run| run.style.font_family.as_deref())
+        .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_FAMILY);
+    let bold: bool = run.and_then(|run| run.style.bold).unwrap_or(false);
+    let (ascent_em, descent_em): (f64, f64) = chart_face_line_metrics_em(family, bold)
+        .unwrap_or(CHART_USER_SHAPE_FALLBACK_LINE_METRICS_EM);
+    ((ascent_em * size_pt).round(), descent_em * size_pt)
+}
+
+/// Size a user-shape run is set at when it declares none — DrawingML's own
+/// default body size.
+const CHART_USER_SHAPE_DEFAULT_SIZE_PT: f64 = 18.0;
+
+/// Line metrics for a face no font search can resolve, as wasm's cannot.
+/// Calibri's, which is what an Office file that names nothing else lands on.
+const CHART_USER_SHAPE_FALLBACK_LINE_METRICS_EM: (f64, f64) = CALIBRI_CHART_LINE_METRICS_EM;
+
+/// One user-shape run, as the `text` call that draws it.
+fn chart_user_shape_run_markup(run: &crate::ir::Run) -> String {
+    let mut args: Vec<String> = Vec::new();
+    if let Some(size) = run.style.font_size {
+        args.push(format!("size: {}pt", format_f64(size)));
+    }
+    if run.style.bold == Some(true) {
+        args.push("weight: \"bold\"".to_string());
+    }
+    if run.style.italic == Some(true) {
+        args.push("style: \"italic\"".to_string());
+    }
+    if let Some(color) = run.style.color {
+        args.push(format!("fill: {}", fmt::rgb(&color)));
+    }
+    if let Some(family) = run.style.font_family.as_deref() {
+        args.push(format!(
+            "font: {}",
+            font_subst::font_for_mixed_script_text(family, &run.text)
+        ));
+    }
+    format!("#text({})[{}]", args.join(", "), escape_typst(&run.text))
+}
+
 /// Width each legend entry occupies when the legend runs across the chart.
 ///
 /// The key, the gap to the label, and the label itself measured in the face the
@@ -3358,6 +3564,12 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
         );
     }
 
+    write_chart_user_shapes(
+        out,
+        chart,
+        chart_area.unwrap_or((total_w, total_h + title_h)),
+        title_h,
+    );
     out.push_str("]\n");
 }
 
@@ -3443,14 +3655,16 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
     }
     // As in `generate_chart_axis`: the title sits above the box, so a framed
     // chart spends its height out of the frame rather than on top of it.
-    let frame: Option<(f64, f64)> = frame.map(|(width, height)| {
-        let title_h: f64 = if chart.title.is_some() {
-            chart_area_title_h(chart)
-        } else {
-            0.0
-        };
-        (width, (height - title_h).max(MIN_PLOT_PT))
-    });
+    let title_h: f64 = if chart.title.is_some() {
+        chart_area_title_h(chart)
+    } else {
+        0.0
+    };
+    // The chart area a user shape's fractions are of, kept before the title
+    // band comes off it (issue #1186).
+    let chart_area: Option<(f64, f64)> = frame;
+    let frame: Option<(f64, f64)> =
+        frame.map(|(width, height)| (width, (height - title_h).max(MIN_PLOT_PT)));
 
     let legend: LegendBox = LegendBox::new(chart.legend_position, LINE_LEGEND_ROW_H, LEGEND_W);
     // A framed chart fills its `<p:graphicFrame>`; a flowed one keeps the
@@ -3685,6 +3899,12 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
         );
     }
 
+    write_chart_user_shapes(
+        out,
+        chart,
+        chart_area.unwrap_or((total_w, total_h + title_h)),
+        title_h,
+    );
     out.push_str("]\n");
 }
 
@@ -3752,14 +3972,16 @@ fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64
     };
     // As elsewhere: the title is drawn above the box, so a framed chart takes
     // its height out of the frame.
-    let frame: Option<(f64, f64)> = frame.map(|(width, height)| {
-        let title_h: f64 = if chart.title.is_some() {
-            chart_area_title_h(chart)
-        } else {
-            0.0
-        };
-        (width, (height - title_h).max(MIN_PLOT_PT))
-    });
+    let title_h: f64 = if chart.title.is_some() {
+        chart_area_title_h(chart)
+    } else {
+        0.0
+    };
+    // The chart area a user shape's fractions are of, kept before the title
+    // band comes off it (issue #1186).
+    let chart_area: Option<(f64, f64)> = frame;
+    let frame: Option<(f64, f64)> =
+        frame.map(|(width, height)| (width, (height - title_h).max(MIN_PLOT_PT)));
     let (total_w, total_h) = match frame {
         Some(extent) => extent,
         None => (
@@ -3948,6 +4170,12 @@ fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64
         }
     }
 
+    write_chart_user_shapes(
+        out,
+        chart,
+        chart_area.unwrap_or((total_w, total_h + title_h)),
+        title_h,
+    );
     out.push_str("]\n");
 }
 
@@ -3977,14 +4205,16 @@ fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, 
     };
     // As elsewhere: the title is drawn above the box, so a framed chart takes
     // its height out of the frame.
-    let frame: Option<(f64, f64)> = frame.map(|(width, height)| {
-        let title_h: f64 = if chart.title.is_some() {
-            chart_area_title_h(chart)
-        } else {
-            0.0
-        };
-        (width, (height - title_h).max(MIN_PLOT_PT))
-    });
+    let title_h: f64 = if chart.title.is_some() {
+        chart_area_title_h(chart)
+    } else {
+        0.0
+    };
+    // The chart area a user shape's fractions are of, kept before the title
+    // band comes off it (issue #1186).
+    let chart_area: Option<(f64, f64)> = frame;
+    let frame: Option<(f64, f64)> =
+        frame.map(|(width, height)| (width, (height - title_h).max(MIN_PLOT_PT)));
     let (total_w, total_h) = match frame {
         Some(extent) => extent,
         None => (
@@ -4097,6 +4327,12 @@ fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, 
         );
     }
 
+    write_chart_user_shapes(
+        out,
+        chart,
+        chart_area.unwrap_or((total_w, total_h + title_h)),
+        title_h,
+    );
     out.push_str("]\n");
 }
 

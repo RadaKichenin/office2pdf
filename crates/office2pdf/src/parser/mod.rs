@@ -1,4 +1,6 @@
 pub(crate) mod chart;
+#[path = "chart_drawing.rs"]
+pub(crate) mod chart_drawing;
 pub(crate) mod cond_fmt;
 pub mod docx;
 pub(crate) mod drawingml;

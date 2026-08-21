@@ -26,7 +26,7 @@ mod tables;
 #[path = "xlsx_cells.rs"]
 mod xlsx_cells;
 #[path = "xlsx_drawing.rs"]
-mod xlsx_drawing;
+pub(in crate::parser) mod xlsx_drawing;
 #[path = "xlsx_hf.rs"]
 mod xlsx_hf;
 #[path = "xlsx_pagination.rs"]
