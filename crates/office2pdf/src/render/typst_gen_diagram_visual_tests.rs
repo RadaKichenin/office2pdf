@@ -7,8 +7,8 @@ use crate::render::typst_gen::diagrams::{
     LEGEND_KEY_LEN_PT, PPTX_LEGEND_KEY_EM, PPTX_LEGEND_KEY_LABEL_GAP_EM,
     PPTX_LEGEND_KEY_LABEL_GAP_PT, ROW, SERIES_LINE_PT, SERIES_MARKER_SIZE_PT, TICK_GAP,
     axis_plot_rect, chart_area_title_h, chart_category_band_pt, chart_category_gutter_pt,
-    chart_category_rotated_label_x, chart_category_rotated_label_y, chart_tick_band_pt,
-    pptx_column_data_label_seat_pt,
+    chart_category_rotated_label_x, chart_category_rotated_label_y, chart_face_line_metrics_em,
+    chart_tick_band_pt, pptx_column_data_label_seat_pt,
 };
 
 #[test]
@@ -56,6 +56,7 @@ fn test_codegen_chart_bar_visual_bars() {
         auto_title_deleted: false,
         has_automatic_title: false,
         plot_area_layout: None,
+        user_shapes: Vec::new(),
     }))])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -133,6 +134,7 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
         auto_title_deleted: false,
         has_automatic_title: false,
         plot_area_layout: None,
+        user_shapes: Vec::new(),
     }))])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -198,6 +200,7 @@ fn test_codegen_chart_pie_draws_a_pie() {
         auto_title_deleted: false,
         has_automatic_title: false,
         plot_area_layout: None,
+        user_shapes: Vec::new(),
     }))])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -268,6 +271,7 @@ fn test_codegen_chart_line_trend_indicators() {
         auto_title_deleted: false,
         has_automatic_title: false,
         plot_area_layout: None,
+        user_shapes: Vec::new(),
     }))])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -325,6 +329,7 @@ fn test_codegen_chart_empty_series() {
         auto_title_deleted: false,
         has_automatic_title: false,
         plot_area_layout: None,
+        user_shapes: Vec::new(),
     }))])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -419,6 +424,7 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
         auto_title_deleted: false,
         has_automatic_title: false,
         plot_area_layout: None,
+        user_shapes: Vec::new(),
     })));
     let doc = make_doc(vec![make_flow_page(content)]);
 
@@ -482,6 +488,7 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
         auto_title_deleted: false,
         has_automatic_title: false,
         plot_area_layout: None,
+        user_shapes: Vec::new(),
     })));
     let doc = make_doc(vec![make_flow_page(content)]);
 
@@ -701,6 +708,7 @@ fn test_codegen_chart_line_plot() {
         auto_title_deleted: false,
         has_automatic_title: false,
         plot_area_layout: None,
+        user_shapes: Vec::new(),
     }))])]);
 
     let output = generate_typst(&doc).unwrap();
@@ -769,6 +777,7 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
         auto_title_deleted: false,
         has_automatic_title: false,
         plot_area_layout: None,
+        user_shapes: Vec::new(),
     }))])]);
 
     let pages = page_texts(&doc);
@@ -874,6 +883,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
         auto_title_deleted: false,
         has_automatic_title: false,
         plot_area_layout: None,
+        user_shapes: Vec::new(),
     }
 }
 
@@ -1040,6 +1050,7 @@ fn legend_chart(position: LegendPosition) -> Chart {
         auto_title_deleted: false,
         has_automatic_title: false,
         plot_area_layout: None,
+        user_shapes: Vec::new(),
     }
 }
 
@@ -1202,6 +1213,7 @@ fn a_declared_series_fill_reaches_the_bars() {
         auto_title_deleted: false,
         has_automatic_title: false,
         plot_area_layout: None,
+        user_shapes: Vec::new(),
     };
 
     let source = chart_source(chart);
@@ -1263,6 +1275,7 @@ fn a_series_without_a_fill_still_takes_the_palette() {
         auto_title_deleted: false,
         has_automatic_title: false,
         plot_area_layout: None,
+        user_shapes: Vec::new(),
     };
 
     let source = chart_source(chart);
@@ -1322,6 +1335,7 @@ fn per_point_fills_colour_each_bar_separately() {
         auto_title_deleted: false,
         has_automatic_title: false,
         plot_area_layout: None,
+        user_shapes: Vec::new(),
     };
 
     let source = chart_source(chart);
@@ -1380,6 +1394,7 @@ fn axis_titled_chart(category: Option<&str>, value: Option<&str>) -> Chart {
         auto_title_deleted: false,
         has_automatic_title: false,
         plot_area_layout: None,
+        user_shapes: Vec::new(),
     }
 }
 
@@ -1488,6 +1503,7 @@ fn labelled_chart(labels: DataLabels) -> Chart {
         auto_title_deleted: false,
         has_automatic_title: false,
         plot_area_layout: None,
+        user_shapes: Vec::new(),
     }
 }
 
@@ -1591,6 +1607,7 @@ fn pie_chart(values: Vec<f64>) -> Chart {
         auto_title_deleted: false,
         has_automatic_title: false,
         plot_area_layout: None,
+        user_shapes: Vec::new(),
     }
 }
 
@@ -1793,6 +1810,7 @@ fn test_chart_default_gridline_matches_powerpoint() {
         auto_title_deleted: false,
         has_automatic_title: false,
         plot_area_layout: None,
+        user_shapes: Vec::new(),
     }))])]);
 
     let source = generate_typst(&doc).unwrap().source;
@@ -1957,6 +1975,7 @@ fn tick_mark_chart(
         auto_title_deleted: false,
         has_automatic_title: false,
         plot_area_layout: None,
+        user_shapes: Vec::new(),
     }
 }
 
@@ -2567,6 +2586,7 @@ fn band_layout_chart(
         auto_title_deleted: false,
         has_automatic_title: false,
         plot_area_layout: None,
+        user_shapes: Vec::new(),
     }
 }
 
@@ -2858,6 +2878,7 @@ fn two_series_bar_chart(theme_accent_colors: Vec<crate::ir::Color>) -> Chart {
         auto_title_deleted: false,
         has_automatic_title: false,
         plot_area_layout: None,
+        user_shapes: Vec::new(),
     }
 }
 
@@ -4304,6 +4325,7 @@ fn test_data_table_prints_a_series_number_format() {
         auto_title_deleted: false,
         has_automatic_title: false,
         plot_area_layout: None,
+        user_shapes: Vec::new(),
     };
     let source = chart_source(chart);
 
@@ -4364,6 +4386,7 @@ fn test_data_table_prints_a_declared_thousands_format() {
         auto_title_deleted: false,
         has_automatic_title: false,
         plot_area_layout: None,
+        user_shapes: Vec::new(),
     };
     let source = chart_source(chart);
 
@@ -4422,6 +4445,7 @@ fn test_data_table_without_a_number_format_prints_plainly() {
         auto_title_deleted: false,
         has_automatic_title: false,
         plot_area_layout: None,
+        user_shapes: Vec::new(),
     };
     let source = chart_source(chart);
 
@@ -4479,6 +4503,7 @@ fn test_a_currency_axis_label_is_escaped() {
         auto_title_deleted: false,
         has_automatic_title: false,
         plot_area_layout: None,
+        user_shapes: Vec::new(),
     };
     let source = chart_source(chart);
 
@@ -4538,6 +4563,7 @@ fn single_series_chart(auto_title_deleted: bool) -> Chart {
         auto_title_deleted,
         has_automatic_title: false,
         plot_area_layout: None,
+        user_shapes: Vec::new(),
     }
 }
 
@@ -4619,6 +4645,7 @@ fn automatic_title_chart(series_names: &[Option<&str>], auto_title_deleted: bool
         auto_title_deleted,
         has_automatic_title: true,
         plot_area_layout: None,
+        user_shapes: Vec::new(),
     }
 }
 
@@ -5339,6 +5366,7 @@ fn combo_budget_chart() -> Chart {
         auto_title_deleted: true,
         has_automatic_title: false,
         plot_area_layout: None,
+        user_shapes: Vec::new(),
     }
 }
 
@@ -5535,6 +5563,7 @@ fn combo_line_and_scatter_chart() -> Chart {
         auto_title_deleted: true,
         has_automatic_title: false,
         plot_area_layout: None,
+        user_shapes: Vec::new(),
     }
 }
 
@@ -6241,4 +6270,209 @@ fn a_line_point_below_zero_dips_under_the_category_axis() {
         2,
         "the +109 and +34 points stay above the axis, got {point_ys:?}"
     );
+}
+
+// ----- The shapes a chart lays over itself (issue #1186) -----
+
+/// The chart area the reported workbook's drawing anchor gives its cash-flow
+/// line chart, in points before the sheet's 0.78 print scale:
+/// `SheetChartPlacement { width: 786.7143307086615, height: 75.54897637795276 }`.
+/// The native export prints it 613.63 x 58.93pt, which is exactly that at 0.78.
+const CASH_FLOW_CHART_FRAME: (f64, f64) = (786.7143307086615, 75.54897637795276);
+
+/// The `CASH FLOW` caption `xl/drawings/drawing2.xml` anchors over that chart,
+/// verbatim: the whole left edge of the chart area, an eighth of its width, and
+/// a third of its height down from the top.
+fn cash_flow_caption() -> crate::ir::ChartUserShape {
+    crate::ir::ChartUserShape {
+        from: (0.0, 0.17913),
+        extent: crate::ir::ChartUserShapeExtent::Corner {
+            x: 0.11685,
+            y: 0.50958,
+        },
+        paragraphs: vec![Paragraph {
+            style: ParagraphStyle {
+                space_before: Some(0.0),
+                space_after: Some(0.0),
+                ..ParagraphStyle::default()
+            },
+            runs: vec![Run {
+                text: "CASH FLOW".to_string(),
+                style: TextStyle {
+                    font_family: Some("Cambria".to_string()),
+                    font_size: Some(15.0),
+                    bold: Some(true),
+                    color: Some(Color::new(0x24, 0x67, 0x78)),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        }],
+        text_insets: crate::ir::Insets {
+            top: 3.6,
+            right: 7.2,
+            bottom: 3.6,
+            left: 7.2,
+        },
+        fill: None,
+        border: None,
+        no_wrap: true,
+    }
+}
+
+fn cash_flow_chart_with_caption() -> Chart {
+    let mut chart: Chart = combo_line_and_scatter_chart();
+    chart.host = crate::ir::ChartHost::Spreadsheet;
+    chart.user_shapes = vec![cash_flow_caption()];
+    chart
+}
+
+/// The line the generator wrote for the caption.
+fn caption_markup(source: &str) -> String {
+    source
+        .lines()
+        .find(|line| line.contains("[CASH FLOW]"))
+        .unwrap_or_else(|| panic!("nothing draws the caption in:\n{source}"))
+        .to_string()
+}
+
+/// A user shape's box is its anchor's fractions of the chart area, with the
+/// corner's offset down the area rounded to a whole point — which is what the
+/// native export moves the caption by when `cdr:from/cdr:y` is rewritten:
+/// 0.17913 -> 0.25 -> 0.3 shifts it 5.00 then 9.00pt, the steps between 14, 19
+/// and 23, not the 5.35 and 9.13 of the unrounded fractions.
+#[test]
+fn a_user_shape_takes_its_box_from_the_chart_area_fractions() {
+    let chart: Chart = cash_flow_chart_with_caption();
+    let source: String =
+        framed_chart_source(&chart, CASH_FLOW_CHART_FRAME.0, CASH_FLOW_CHART_FRAME.1);
+    let caption: PlacedBox = placed_box_holding(&source, "CASH FLOW");
+
+    assert_eq!(
+        caption.dx, 0.0,
+        "the caption starts on the chart's left edge"
+    );
+    assert_eq!(
+        caption.dy,
+        (0.17913 * CASH_FLOW_CHART_FRAME.1).round(),
+        "the corner's offset down the area is a whole point, got {caption:?}"
+    );
+    assert!(
+        (caption.width - 0.11685 * CASH_FLOW_CHART_FRAME.0).abs() < 0.01,
+        "the box spans `cdr:to` minus `cdr:from` across the area, got {caption:?}"
+    );
+    assert!(
+        (caption.height - (0.50958 - 0.17913) * CASH_FLOW_CHART_FRAME.1).abs() < 0.01,
+        "and the same down it, got {caption:?}"
+    );
+}
+
+/// The text's own seat inside that box: the left inset exactly, the top inset
+/// rounded to a whole point, and a first baseline a whole-point ascent below
+/// the line's top edge.
+///
+/// Every term is one factor of the native export. Rewriting `lIns="0"` moves
+/// the caption 7.20pt left; `tIns="0"` moves it 4.00pt up, which is the whole
+/// point 3.6 rounds to; and sweeping `a:rPr@sz` over 10/15/20/30/40pt moves the
+/// baseline by -4.00/0/+5.00/+15.00/+24.00pt, the steps of `round(0.9502 x sz)`
+/// for the 0.95020em ascent Cambria is measured at.
+#[test]
+fn a_user_shape_seats_its_text_where_the_native_export_seats_it() {
+    let chart: Chart = cash_flow_chart_with_caption();
+    let source: String =
+        framed_chart_source(&chart, CASH_FLOW_CHART_FRAME.0, CASH_FLOW_CHART_FRAME.1);
+    let caption: String = caption_markup(&source);
+
+    let inner: &str = caption
+        .split_once("pt)[")
+        .expect("the caption's box opens")
+        .1;
+    assert!(
+        inner.contains("dx: 7.2pt"),
+        "the pen starts at the left inset, unrounded: {caption}"
+    );
+    assert!(
+        inner.contains("dy: 4pt"),
+        "the top inset is a whole point: {caption}"
+    );
+
+    let Some((ascent_em, _)) = chart_face_line_metrics_em("Cambria", true) else {
+        return; // no font search: wasm resolves no face to measure
+    };
+    let above_pt: f64 = (ascent_em * 15.0).round();
+    assert!(
+        caption.contains(&format!("top-edge: {}pt", format_f64(above_pt))),
+        "the first baseline sits a whole-point ascent below the text's top: {caption}"
+    );
+    if (ascent_em - 0.9502).abs() < 0.0005 {
+        // Cambria itself resolved, so the three terms are the export's own:
+        // 14 + 4 + 14 = 32pt from the chart area's top to the baseline.
+        assert_eq!(
+            (0.17913 * CASH_FLOW_CHART_FRAME.1).round() + 4.0 + above_pt,
+            32.0
+        );
+    }
+}
+
+/// `<a:bodyPr wrap="none"/>` lets the line run past the shape's own width: the
+/// caption is 80pt of glyphs in a 91.93pt box whose insets leave 77.53pt, so a
+/// bounded body would break `CASH FLOW` across two lines. A body that does not
+/// state it stays inside those insets.
+#[test]
+fn a_wrap_none_body_is_not_bounded_by_the_shape_it_sits_in() {
+    let mut chart: Chart = cash_flow_chart_with_caption();
+    let unbounded: String = caption_markup(&framed_chart_source(
+        &chart,
+        CASH_FLOW_CHART_FRAME.0,
+        CASH_FLOW_CHART_FRAME.1,
+    ));
+    assert!(
+        unbounded.contains("box(width: auto)"),
+        "a `wrap=\"none\"` body takes no width: {unbounded}"
+    );
+
+    chart.user_shapes[0].no_wrap = false;
+    let bounded: String = caption_markup(&framed_chart_source(
+        &chart,
+        CASH_FLOW_CHART_FRAME.0,
+        CASH_FLOW_CHART_FRAME.1,
+    ));
+    let inner_w: f64 = 0.11685 * CASH_FLOW_CHART_FRAME.0 - 7.2 - 7.2;
+    assert!(
+        bounded.contains(&format!("box(width: {}pt)", format_f64(inner_w))),
+        "a wrapping body is bounded by what the insets leave: {bounded}"
+    );
+}
+
+/// The run's own properties reach the page: Excel sets this caption in 15pt
+/// bold Cambria at `#246778`, the theme's `accent1` at half the luminance.
+#[test]
+fn a_user_shape_run_keeps_its_size_weight_face_and_colour() {
+    let chart: Chart = cash_flow_chart_with_caption();
+    let source: String =
+        framed_chart_source(&chart, CASH_FLOW_CHART_FRAME.0, CASH_FLOW_CHART_FRAME.1);
+    let caption: String = caption_markup(&source);
+
+    for expected in [
+        "size: 15pt",
+        "weight: \"bold\"",
+        "fill: rgb(36, 103, 120)",
+        "Cambria",
+    ] {
+        assert!(
+            caption.contains(expected),
+            "the caption should carry {expected}: {caption}"
+        );
+    }
+}
+
+/// A chart naming no user shapes emits nothing for them, so no existing output
+/// moves.
+#[test]
+fn a_chart_with_no_user_shapes_draws_none() {
+    let chart: Chart = combo_line_and_scatter_chart();
+    let source: String =
+        framed_chart_source(&chart, CASH_FLOW_CHART_FRAME.0, CASH_FLOW_CHART_FRAME.1);
+    assert!(!source.contains("top-edge"), "no shape body: {source}");
 }

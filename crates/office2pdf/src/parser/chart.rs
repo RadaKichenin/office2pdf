@@ -336,6 +336,10 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
         auto_title_deleted,
         has_automatic_title,
         plot_area_layout,
+        // The chart part names the drawing its user shapes live in through a
+        // relationship, which only the package that holds it can resolve — as
+        // with the theme above, the loader fills these in (issue #1186).
+        user_shapes: Vec::new(),
         category_axis_title: category_axis.title,
         value_axis_title: value_axis.title,
         category_axis_major_tick_mark: category_axis.major_tick_mark,

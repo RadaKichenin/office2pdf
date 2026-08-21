@@ -128,6 +128,7 @@ fn bar_chart() -> crate::ir::Chart {
         auto_title_deleted: false,
         has_automatic_title: false,
         plot_area_layout: None,
+        user_shapes: Vec::new(),
     }
 }
 

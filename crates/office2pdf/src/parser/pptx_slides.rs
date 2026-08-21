@@ -473,7 +473,7 @@ fn collect_chart_elements<R: Read + std::io::Seek>(
         colors: &theme.colors,
         aliases: &color_map.aliases,
     };
-    let chart_data = load_chart_data(slide_path, archive, &chart_scheme);
+    let chart_data = load_chart_data(slide_path, archive, &chart_scheme, &theme_fonts);
     chart_refs
         .iter()
         .filter_map(|c_ref| {

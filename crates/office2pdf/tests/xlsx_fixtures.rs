@@ -14,8 +14,8 @@ use office2pdf::internal::Parser;
 use office2pdf::internal::XlsxParser;
 use office2pdf::internal::generate_typst;
 use office2pdf::ir::{
-    Alignment, Block, BorderLineStyle, ChartAreaOutline, ChartLine, ChartPlotAreaLayout, Color,
-    HFInline, Page, SheetPage, TableCell,
+    Alignment, Block, BorderLineStyle, ChartAreaOutline, ChartLine, ChartPlotAreaLayout,
+    ChartUserShapeExtent, Color, HFInline, Page, SheetPage, TableCell,
 };
 
 // ---------------------------------------------------------------------------
@@ -2167,4 +2167,77 @@ fn a_drawing_relationship_no_sheet_element_names_prints_no_chart() {
     );
     // The chartsheet still names its own drawing, so its chart is unaffected.
     assert_eq!(pages[1].charts.len(), 1);
+}
+
+/// The same workbook's cash-flow chart carries a drawing part of its own:
+/// `xl/charts/chart2.xml` ends with `<c:userShapes r:id="rId3"/>`, and the
+/// `xl/drawings/drawing2.xml` behind it anchors the `CASH FLOW` caption Excel
+/// prints left of the plot. Nothing followed that relationship, so the caption
+/// was missing from the page (issue #1186).
+///
+/// A native Excel for Mac 16 export of the worksheet, staged and run inside
+/// Excel's own sandbox container and traced with `mutool draw -F trace`, prints
+/// the chart area 87.59..701.22pt across the page — 613.63pt at the sheet's
+/// 0.78, which is this anchor's 786.71pt — and sets the caption in 11.7pt
+/// Cambria Bold, the 15pt this run declares at that same scale.
+#[test]
+fn structure_monthly_budget_cash_flow_chart_carries_its_caption() {
+    let pages = sheet_pages("issue_1181_fit_to_height.xlsx");
+    let budget: &SheetPage = pages
+        .iter()
+        .find(|page| page.name == "Monthly college budget")
+        .expect("the reported sheet should print");
+    let cash_flow = budget
+        .charts
+        .iter()
+        .find(|chart| chart.chart.categories.iter().any(|c| c.trim() == "jan"))
+        .expect("the cash-flow chart should reach the IR");
+
+    let shapes = &cash_flow.chart.user_shapes;
+    assert_eq!(shapes.len(), 1, "the drawing part anchors one shape");
+    assert_eq!(shapes[0].from, (0.0, 0.17913));
+    assert_eq!(
+        shapes[0].extent,
+        ChartUserShapeExtent::Corner {
+            x: 0.11685,
+            y: 0.50958
+        }
+    );
+    // `wrap="none"`: the caption is 80pt of glyphs in a box whose insets leave
+    // 77pt, and Excel runs it on past the box rather than breaking it.
+    assert!(shapes[0].no_wrap);
+
+    let runs = &shapes[0].paragraphs[0].runs;
+    assert_eq!(runs.len(), 1);
+    assert_eq!(runs[0].text, "CASH FLOW");
+    assert_eq!(runs[0].style.font_size, Some(15.0));
+    assert_eq!(runs[0].style.bold, Some(true));
+    // `<a:latin typeface="+mj-lt"/>` against the workbook theme, and
+    // `accent1` at half the luminance — both as the export prints them.
+    assert_eq!(runs[0].style.font_family.as_deref(), Some("Cambria"));
+    assert_eq!(runs[0].style.color, Some(Color::new(0x24, 0x67, 0x78)));
+
+    // The chart area those fractions are of, at the export's own scale.
+    let placement = cash_flow.placement.expect("the anchor places the chart");
+    for (axis, actual, expected) in [
+        ("width", placement.width * placement.print_scale, 613.63),
+        ("height", placement.height * placement.print_scale, 58.93),
+    ] {
+        assert!(
+            (actual - expected).abs() <= 0.05,
+            "the {axis} of the printed chart area: {actual} against the export's {expected}"
+        );
+    }
+}
+
+/// And the caption reaches the page: the workbook has to compile, and its text
+/// layer has to carry the string, which is the whole of what issue #1186
+/// reports missing.
+#[test]
+fn text_content_monthly_budget_cash_flow_caption() {
+    let text: String = pdf_text("issue_1181_fit_to_height.xlsx");
+    assert!(
+        text.contains("CASH FLOW"),
+        "the chart's own drawing part prints its caption; got:\n{text}"
+    );
 }

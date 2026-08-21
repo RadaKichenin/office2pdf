@@ -357,6 +357,13 @@ pub struct Chart {
     /// is every chart that states nothing and every layout this does not model
     /// (issue #1182). See [`ChartPlotAreaLayout`].
     pub plot_area_layout: Option<ChartPlotAreaLayout>,
+    /// The shapes the drawing part behind `<c:userShapes>` lays over the
+    /// chart, in the order that part states them (issue #1186).
+    ///
+    /// Empty for a chart naming no such part — which the chart XML alone
+    /// cannot settle, since the relationship it names is resolved by whichever
+    /// package holds it, exactly as [`Chart::theme_accent_colors`] is.
+    pub user_shapes: Vec<ChartUserShape>,
 }
 
 /// The inner plot rectangle `c:plotArea/c:layout/c:manualLayout` states, as
@@ -384,6 +391,53 @@ pub struct ChartPlotAreaLayout {
     pub width: f64,
     /// `c:h` — height, as a fraction of the chart area's height.
     pub height: f64,
+}
+
+/// A shape the drawing part behind `<c:userShapes>` places over a chart.
+///
+/// Charts carry their own drawing layer: `c:chartSpace/c:userShapes` names a
+/// part full of `cdr:` anchors, each holding an ordinary DrawingML shape, and
+/// Office draws them over the finished chart. The `CASH FLOW` caption printed
+/// left of the cash-flow plot in `tests/fixtures/xlsx/issue_1181_fit_to_height.xlsx`
+/// is one (issue #1186).
+///
+/// Both anchor kinds put the shape's corner at a fraction of the chart area,
+/// and differ only in how they state its size — see [`ChartUserShapeExtent`].
+/// The `<a:xfrm>` Office caches beside the anchor is not read: it records the
+/// resolved rectangle from whenever the shape was last edited, and that
+/// workbook's cache is 5.00pt wider than its anchor states — 96.93pt against
+/// the 91.93pt of `0.11685 x 786.7`.
+#[derive(Debug, Clone)]
+pub struct ChartUserShape {
+    /// `cdr:from` — the shape's top-left corner, as `(x, y)` fractions of the
+    /// chart area's width and height.
+    pub from: (f64, f64),
+    /// How far the shape reaches from that corner.
+    pub extent: ChartUserShapeExtent,
+    /// The shape's text body, one entry per `<a:p>`.
+    pub paragraphs: Vec<Paragraph>,
+    /// `<a:bodyPr>`'s text insets in points, defaulting to the DrawingML pair
+    /// (0.1in left and right, 0.05in top and bottom).
+    pub text_insets: Insets,
+    /// `<a:solidFill>` on the shape itself, if it states one.
+    pub fill: Option<Color>,
+    /// `<a:ln>` on the shape itself, if it states one.
+    pub border: Option<BorderSide>,
+    /// `<a:bodyPr wrap="none"/>` — the text runs on past the shape's own
+    /// width instead of wrapping inside it, which is how Excel draws the
+    /// reported caption.
+    pub no_wrap: bool,
+}
+
+/// How a chart drawing's anchor states the size of the shape it holds.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ChartUserShapeExtent {
+    /// `<cdr:relSizeAnchor>` states the opposite corner, as fractions of the
+    /// chart area, so the shape scales with the chart.
+    Corner { x: f64, y: f64 },
+    /// `<cdr:absSizeAnchor>` states a size in EMU, held here in points, which
+    /// stays put however the chart is resized.
+    Size { width: f64, height: f64 },
 }
 
 /// Run properties a `c:txPr` declares for the strings it governs.
