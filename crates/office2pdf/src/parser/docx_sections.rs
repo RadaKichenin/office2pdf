@@ -12,10 +12,11 @@ use crate::ir::{
 use super::contexts::WrapContext;
 use super::media::extract_drawing_image;
 use super::{
-    ImageMap, NumberingMap, ParagraphItem, ResolvedStyle, TaggedElement,
-    extract_column_layout_from_section_property, extract_paragraph_style, extract_run_style,
-    extract_tab_stop_overrides, flatten_tracked_changes, group_into_lists, merge_paragraph_style,
-    merge_text_style, read_zip_text,
+    DOC_DEFAULT_STYLE_ID, ImageMap, NumberingMap, ParagraphItem, ResolvedStyle, StyleMap,
+    TaggedElement, extract_column_layout_from_section_property, extract_paragraph_style,
+    extract_run_style, extract_tab_stop_overrides, flatten_tracked_changes, get_paragraph_style_id,
+    group_into_lists, merge_paragraph_style, merge_text_style, read_zip_text,
+    word_compatible_paragraph_space_after_pt,
 };
 use crate::parser::units::twips_to_pt;
 use crate::parser::xml_util::parse_hex_color;
@@ -25,6 +26,21 @@ use crate::parser::xml_util::parse_hex_color;
 pub(super) struct HeaderFooterAssets {
     headers: HashMap<String, HeaderFooter>,
     footers: HashMap<String, HeaderFooter>,
+}
+
+/// What a header or footer paragraph resolves its unstated paragraph
+/// properties through.
+///
+/// A story's paragraphs take the same cascade the body's do, so the style map
+/// has to be built — which needs the docx-rs parse — before the parts are
+/// converted (issue #1195).
+#[derive(Clone, Copy)]
+pub(super) struct HeaderFooterStyleContext<'a> {
+    pub(super) style_map: &'a StyleMap,
+    /// Whether `word/styles.xml` declares `w:docDefaults/w:pPrDefault`, which
+    /// decides the `w:spacing w:after` an unstated gap falls back to
+    /// (issue #1085).
+    pub(super) paragraph_property_defaults_are_declared: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -69,6 +85,7 @@ fn scan_header_footer_relationships(
 
 pub(super) fn build_header_footer_assets<R: Read + Seek>(
     archive: &mut zip::ZipArchive<R>,
+    styles: HeaderFooterStyleContext<'_>,
 ) -> HeaderFooterAssets {
     let rels_xml = match read_zip_text(archive, "word/_rels/document.xml.rels") {
         Some(xml) => xml,
@@ -93,7 +110,9 @@ pub(super) fn build_header_footer_assets<R: Read + Seek>(
             continue;
         };
         let anchors = scan_hf_anchors(&xml, &theme_colors);
-        if let Some(converted) = convert_docx_header(&header, &images, &simple_fields, &anchors) {
+        if let Some(converted) =
+            convert_docx_header(&header, &images, &simple_fields, &anchors, styles)
+        {
             assets.headers.insert(relationship_id, converted);
         }
     }
@@ -109,9 +128,14 @@ pub(super) fn build_header_footer_assets<R: Read + Seek>(
             continue;
         };
         let anchors = scan_hf_anchors(&xml, &theme_colors);
-        if let Some(converted) =
-            convert_docx_footer(&footer, &images, &bidi_paragraphs, &simple_fields, &anchors)
-        {
+        if let Some(converted) = convert_docx_footer(
+            &footer,
+            &images,
+            &bidi_paragraphs,
+            &simple_fields,
+            &anchors,
+            styles,
+        ) {
             assets.footers.insert(relationship_id, converted);
         }
     }
@@ -345,10 +369,11 @@ pub(super) fn build_flow_page_from_section(
     numberings: &NumberingMap,
     header_footer_assets: &HeaderFooterAssets,
     overrides: SectionOverrides,
-    doc_default_style: Option<&ResolvedStyle>,
+    styles: HeaderFooterStyleContext<'_>,
     warnings: &mut Vec<ConvertWarning>,
 ) -> FlowPage {
     let (size, margins) = extract_page_setup(section_prop);
+    let doc_default_style: Option<&ResolvedStyle> = styles.style_map.get(DOC_DEFAULT_STYLE_ID);
     let content = group_into_lists(elements, numberings);
 
     for block in &content {
@@ -388,24 +413,24 @@ pub(super) fn build_flow_page_from_section(
         });
     }
 
-    let mut header = extract_docx_header(section_prop, header_footer_assets);
+    let mut header = extract_docx_header(section_prop, header_footer_assets, styles);
     if let Some(header) = &mut header {
         header.distance_from_edge = Some(twips_to_pt(section_prop.page_margin.header));
         apply_doc_default_text_style(header, doc_default_style);
     }
-    let mut footer = extract_docx_footer(section_prop, header_footer_assets);
+    let mut footer = extract_docx_footer(section_prop, header_footer_assets, styles);
     if let Some(footer) = &mut footer {
         footer.distance_from_edge = Some(twips_to_pt(section_prop.page_margin.footer));
         apply_doc_default_text_style(footer, doc_default_style);
     }
     // The first-page stories take the same edge distance and default style the
     // whole-section ones do; only which story is chosen differs (issue #846).
-    let mut first_header = extract_docx_first_header(section_prop, header_footer_assets);
+    let mut first_header = extract_docx_first_header(section_prop, header_footer_assets, styles);
     if let Some(first_header) = &mut first_header {
         first_header.distance_from_edge = Some(twips_to_pt(section_prop.page_margin.header));
         apply_doc_default_text_style(first_header, doc_default_style);
     }
-    let mut first_footer = extract_docx_first_footer(section_prop, header_footer_assets);
+    let mut first_footer = extract_docx_first_footer(section_prop, header_footer_assets, styles);
     if let Some(first_footer) = &mut first_footer {
         first_footer.distance_from_edge = Some(twips_to_pt(section_prop.page_margin.footer));
         apply_doc_default_text_style(first_footer, doc_default_style);
@@ -464,6 +489,7 @@ fn convert_docx_header(
     images: &ImageMap,
     simple_fields: &[Vec<SimpleFieldMarker>],
     anchors: &[HfAnchorBox],
+    styles: HeaderFooterStyleContext<'_>,
 ) -> Option<HeaderFooter> {
     let shapes = hf_anchored_shapes(anchors);
     let mut anchors = anchors.iter();
@@ -481,8 +507,13 @@ fn convert_docx_header(
                 images,
                 false,
                 simple_fields.get(index).map(Vec::as_slice).unwrap_or(&[]),
+                styles,
             )];
-            converted.extend(hf_anchored_text_box_paragraphs(paragraph, &mut anchors));
+            converted.extend(hf_anchored_text_box_paragraphs(
+                paragraph,
+                &mut anchors,
+                styles,
+            ));
             converted
         })
         .collect::<Vec<_>>();
@@ -504,6 +535,7 @@ fn convert_docx_footer(
     bidi_paragraphs: &[bool],
     simple_fields: &[Vec<SimpleFieldMarker>],
     anchors: &[HfAnchorBox],
+    styles: HeaderFooterStyleContext<'_>,
 ) -> Option<HeaderFooter> {
     let shapes = hf_anchored_shapes(anchors);
     let mut anchors = anchors.iter();
@@ -521,8 +553,13 @@ fn convert_docx_footer(
                 images,
                 bidi_paragraphs.get(index).copied().unwrap_or(false),
                 simple_fields.get(index).map(Vec::as_slice).unwrap_or(&[]),
+                styles,
             )];
-            converted.extend(hf_anchored_text_box_paragraphs(paragraph, &mut anchors));
+            converted.extend(hf_anchored_text_box_paragraphs(
+                paragraph,
+                &mut anchors,
+                styles,
+            ));
             converted
         })
         .collect::<Vec<_>>();
@@ -547,6 +584,7 @@ fn convert_docx_footer(
 pub(super) fn extract_docx_first_header(
     section_prop: &docx_rs::SectionProperty,
     assets: &HeaderFooterAssets,
+    styles: HeaderFooterStyleContext<'_>,
 ) -> Option<HeaderFooter> {
     if !section_prop.title_pg {
         return None;
@@ -560,7 +598,7 @@ pub(super) fn extract_docx_first_header(
                 .first_header
                 .as_ref()
                 .and_then(|(_relationship_id, header)| {
-                    convert_docx_header(header, &ImageMap::new(), &[], &[])
+                    convert_docx_header(header, &ImageMap::new(), &[], &[], styles)
                 })
         })
 }
@@ -569,6 +607,7 @@ pub(super) fn extract_docx_first_header(
 pub(super) fn extract_docx_first_footer(
     section_prop: &docx_rs::SectionProperty,
     assets: &HeaderFooterAssets,
+    styles: HeaderFooterStyleContext<'_>,
 ) -> Option<HeaderFooter> {
     if !section_prop.title_pg {
         return None;
@@ -582,7 +621,7 @@ pub(super) fn extract_docx_first_footer(
                 .first_footer
                 .as_ref()
                 .and_then(|(_relationship_id, footer)| {
-                    convert_docx_footer(footer, &ImageMap::new(), &[], &[], &[])
+                    convert_docx_footer(footer, &ImageMap::new(), &[], &[], &[], styles)
                 })
         })
 }
@@ -592,6 +631,7 @@ pub(super) fn extract_docx_first_footer(
 fn extract_docx_header(
     section_prop: &docx_rs::SectionProperty,
     assets: &HeaderFooterAssets,
+    styles: HeaderFooterStyleContext<'_>,
 ) -> Option<HeaderFooter> {
     section_prop
         .header_reference
@@ -602,7 +642,7 @@ fn extract_docx_header(
                 .header
                 .as_ref()
                 .and_then(|(_relationship_id, header)| {
-                    convert_docx_header(header, &ImageMap::new(), &[], &[])
+                    convert_docx_header(header, &ImageMap::new(), &[], &[], styles)
                 })
         })
         .or_else(|| {
@@ -616,7 +656,7 @@ fn extract_docx_header(
                 .first_header
                 .as_ref()
                 .and_then(|(_relationship_id, header)| {
-                    convert_docx_header(header, &ImageMap::new(), &[], &[])
+                    convert_docx_header(header, &ImageMap::new(), &[], &[], styles)
                 })
         })
         .or_else(|| {
@@ -630,7 +670,7 @@ fn extract_docx_header(
                 .even_header
                 .as_ref()
                 .and_then(|(_relationship_id, header)| {
-                    convert_docx_header(header, &ImageMap::new(), &[], &[])
+                    convert_docx_header(header, &ImageMap::new(), &[], &[], styles)
                 })
         })
 }
@@ -640,6 +680,7 @@ fn extract_docx_header(
 fn extract_docx_footer(
     section_prop: &docx_rs::SectionProperty,
     assets: &HeaderFooterAssets,
+    styles: HeaderFooterStyleContext<'_>,
 ) -> Option<HeaderFooter> {
     section_prop
         .footer_reference
@@ -650,7 +691,7 @@ fn extract_docx_footer(
                 .footer
                 .as_ref()
                 .and_then(|(_relationship_id, footer)| {
-                    convert_docx_footer(footer, &ImageMap::new(), &[], &[], &[])
+                    convert_docx_footer(footer, &ImageMap::new(), &[], &[], &[], styles)
                 })
         })
         .or_else(|| {
@@ -664,7 +705,7 @@ fn extract_docx_footer(
                 .first_footer
                 .as_ref()
                 .and_then(|(_relationship_id, footer)| {
-                    convert_docx_footer(footer, &ImageMap::new(), &[], &[], &[])
+                    convert_docx_footer(footer, &ImageMap::new(), &[], &[], &[], styles)
                 })
         })
         .or_else(|| {
@@ -678,7 +719,7 @@ fn extract_docx_footer(
                 .even_footer
                 .as_ref()
                 .and_then(|(_relationship_id, footer)| {
-                    convert_docx_footer(footer, &ImageMap::new(), &[], &[], &[])
+                    convert_docx_footer(footer, &ImageMap::new(), &[], &[], &[], styles)
                 })
         })
 }
@@ -717,6 +758,35 @@ fn apply_doc_default_text_style(
     }
 }
 
+/// The `w:spacing w:after` a header or footer paragraph resolves to, in points.
+///
+/// The same cascade a body paragraph takes: its own `w:pPr`, then the style it
+/// names — or the document's default paragraph style where it names none — and
+/// finally Word's fallback for a gap nothing states, which is the built-in
+/// `Normal`'s 8pt until the package declares `w:pPrDefault` (issue #1085).
+///
+/// A footer needs it because Word keeps the last paragraph's gap between the
+/// story's last line and `w:pgMar/@w:footer`; a header records it for the same
+/// reason a body paragraph does, so the two stories resolve alike (issue #1195).
+fn hf_space_after_pt(
+    explicit_pt: Option<f64>,
+    property: &docx_rs::ParagraphProperty,
+    styles: HeaderFooterStyleContext<'_>,
+) -> f64 {
+    explicit_pt
+        .or_else(|| {
+            get_paragraph_style_id(property)
+                .and_then(|style_id| styles.style_map.get(style_id))
+                .or_else(|| styles.style_map.get(DOC_DEFAULT_STYLE_ID))
+                .and_then(|resolved| resolved.paragraph.space_after)
+        })
+        .unwrap_or_else(|| {
+            word_compatible_paragraph_space_after_pt(
+                styles.paragraph_property_defaults_are_declared,
+            )
+        })
+}
+
 /// Convert a docx-rs Paragraph into a HeaderFooterParagraph.
 /// Detects PAGE/NUMPAGES field codes within runs and emits page counter inlines.
 fn convert_hf_paragraph(
@@ -724,10 +794,16 @@ fn convert_hf_paragraph(
     images: &ImageMap,
     is_bidi: bool,
     simple_fields: &[SimpleFieldMarker],
+    styles: HeaderFooterStyleContext<'_>,
 ) -> HeaderFooterParagraph {
     let explicit_style = extract_paragraph_style(&paragraph.property);
     let explicit_tab_overrides = extract_tab_stop_overrides(&paragraph.property.tabs);
     let mut style = merge_paragraph_style(&explicit_style, explicit_tab_overrides.as_deref(), None);
+    style.space_after = Some(hf_space_after_pt(
+        style.space_after,
+        &paragraph.property,
+        styles,
+    ));
     if is_bidi || paragraph.property.bidi == Some(true) {
         style.direction = Some(TextDirection::Rtl);
     }
@@ -1019,6 +1095,7 @@ fn hf_anchored_shapes(anchors: &[HfAnchorBox]) -> Vec<crate::ir::HeaderFooterSha
 fn hf_anchored_text_box_paragraphs(
     paragraph: &docx_rs::Paragraph,
     anchors: &mut std::slice::Iter<'_, HfAnchorBox>,
+    styles: HeaderFooterStyleContext<'_>,
 ) -> Vec<HeaderFooterParagraph> {
     let mut framed: Vec<HeaderFooterParagraph> = Vec::new();
     for child in &paragraph.children {
@@ -1042,7 +1119,8 @@ fn hf_anchored_text_box_paragraphs(
                 let docx_rs::TextBoxContentChild::Paragraph(inner) = text_box_child else {
                     continue;
                 };
-                let mut converted = convert_hf_paragraph(inner, &ImageMap::new(), false, &[]);
+                let mut converted =
+                    convert_hf_paragraph(inner, &ImageMap::new(), false, &[], styles);
                 if !hf_paragraph_carries_text(&converted) {
                     continue;
                 }
