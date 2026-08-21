@@ -30,6 +30,30 @@ fn module_inventory_table(style_info: &str) -> String {
     )
 }
 
+/// The one-factor probe's table part: the `G1:I4` range of
+/// `tests/fixtures/xlsx/ExcelTables.xlsx`, whose `headerRowCount` defaults to
+/// 1, restyled through each built-in style in turn (issue #1189).
+fn probe_table(style_name: &str) -> String {
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" id="1"
+               name="Probe" displayName="Probe" ref="G1:I4" totalsRowCount="0">
+          <tableStyleInfo name="{style_name}" showRowStripes="1" showColumnStripes="0"/>
+        </table>"#
+    )
+}
+
+/// The band a style lays over the probe table's three body rows, top to
+/// bottom, and the fill it lays over its header row.
+fn probe_fills(style_name: &str) -> (Option<Color>, Vec<Option<Color>>) {
+    let style = parse_table_part(&probe_table(style_name), &palette())
+        .unwrap_or_else(|| panic!("{style_name} paints its table"));
+    (
+        style.fill_at(7, 1),
+        (2..=4).map(|row| style.fill_at(7, row)).collect(),
+    )
+}
+
 /// The colours a native Excel-for-Mac export prints for a theme colour tinted
 /// by each amount the built-in table styles use.
 ///
@@ -151,59 +175,312 @@ fn a_table_that_asks_for_no_row_stripes_keeps_the_rest_of_its_style() {
     assert!(style.border_at(1, 4).is_some());
 }
 
+/// The colours the probe's accent 1 resolves to, at each tint the built-in
+/// table styles use, plus the two `lt1` shades their accent-less members take.
+fn accent() -> Color {
+    Color::new(0x4f, 0x81, 0xbd)
+}
+fn accent_light_band() -> Color {
+    Color::new(0xdc, 0xe6, 0xf1)
+}
+fn accent_dark_band() -> Color {
+    Color::new(0xb8, 0xcc, 0xe4)
+}
+fn accent_rule() -> Color {
+    Color::new(0x95, 0xb3, 0xd7)
+}
+fn neutral_light_band() -> Color {
+    Color::new(0xd9, 0xd9, 0xd9)
+}
+fn neutral_dark_band() -> Color {
+    Color::new(0xa6, 0xa6, 0xa6)
+}
+
+/// One side's colour and width, for comparing a rule against its measurement.
+fn ruled(side: &Option<BorderSide>) -> Option<(Color, f64)> {
+    side.as_ref().map(|side| (side.color, side.width))
+}
+
 #[test]
-fn a_later_medium_band_bands_its_rows_and_paints_nothing_else() {
-    // The same probe shows Medium8..28 painting something else entirely —
-    // Medium9 fills every row in two tints, Medium15 boxes the table in 2pt
-    // rules, Medium22 bands in greys — so only the banding issue #532
-    // resolved for them stands, and the band-one header treatment must not
-    // leak onto them.
+fn medium_band_two_fills_every_body_row_in_two_tints() {
+    // `Medium9` prints `#B8CCE4`, `#DCE6F1`, `#B8CCE4` over the probe's three
+    // body rows under a solid accent header — the accent at 60% over a
+    // whole-table 80%, not one 80% stripe with white between (issue #1189).
+    assert_eq!(
+        probe_fills("TableStyleMedium9"),
+        (
+            Some(accent()),
+            vec![
+                Some(accent_dark_band()),
+                Some(accent_light_band()),
+                Some(accent_dark_band())
+            ]
+        )
+    );
+
+    // `Medium8` opens the band on the dark style: a `dk1` header over the two
+    // `lt1` shades, 35% and 15%.
+    assert_eq!(
+        probe_fills("TableStyleMedium8"),
+        (
+            Some(Color::black()),
+            vec![
+                Some(neutral_dark_band()),
+                Some(neutral_light_band()),
+                Some(neutral_dark_band())
+            ]
+        )
+    );
+}
+
+#[test]
+fn medium_band_two_seams_its_rows_in_white() {
+    // A 3pt white rule under the header, 1pt between the body rows and 1pt
+    // down each boundary between the columns — nothing above the header, at
+    // its foot, or down either outer edge (issue #1189).
+    let style = parse_table_part(&probe_table("TableStyleMedium9"), &palette()).unwrap();
+    let white = Color::white();
+
+    let header = style.border_at(7, 1).expect("the header is seamed");
+    assert_eq!(ruled(&header.bottom), Some((white, 3.0)));
+    assert!(header.top.is_none(), "band 2 leaves the table's top clear");
+    assert!(header.left.is_none(), "band 2 rules no left edge");
+
+    let body = style.border_at(7, 2).expect("a body row is seamed");
+    assert_eq!(ruled(&body.bottom), Some((white, 1.0)));
+
+    assert_eq!(
+        style.border_at(8, 2).and_then(|border| ruled(&border.left)),
+        Some((white, 1.0)),
+        "the boundary between columns G and H is seamed"
+    );
+    assert!(
+        style
+            .border_at(9, 2)
+            .and_then(|border| border.right)
+            .is_none(),
+        "band 2 leaves the table's right edge clear"
+    );
+
+    assert!(
+        style.border_at(7, 4).is_none(),
+        "band 2 leaves the table's foot and left edge clear"
+    );
+}
+
+#[test]
+fn medium_band_three_bands_in_grey_inside_a_two_point_box() {
+    // `Medium15` and `Medium16` both band `#D9D9D9` over the 1st and 3rd body
+    // rows and rule in `#000000`, 2pt above the header, under it and at the
+    // foot (issue #1189).
+    assert_eq!(
+        probe_fills("TableStyleMedium16"),
+        (
+            Some(accent()),
+            vec![Some(neutral_light_band()), None, Some(neutral_light_band())]
+        ),
+        "band 3 bands in grey even under an accent header"
+    );
+    assert_eq!(
+        probe_fills("TableStyleMedium15"),
+        (
+            Some(Color::black()),
+            vec![Some(neutral_light_band()), None, Some(neutral_light_band())]
+        )
+    );
+
+    let accent_member = parse_table_part(&probe_table("TableStyleMedium16"), &palette()).unwrap();
+    let black = Color::black();
+    let header = accent_member.border_at(7, 1).expect("the header is boxed");
+    assert_eq!(ruled(&header.top), Some((black, 2.0)));
+    assert_eq!(ruled(&header.bottom), Some((black, 2.0)));
+    assert!(
+        header.left.is_none(),
+        "the accent member draws no verticals"
+    );
+    assert!(
+        accent_member.border_at(7, 2).is_none(),
+        "nor any rule between its body rows"
+    );
+    assert_eq!(
+        accent_member
+            .border_at(7, 4)
+            .and_then(|border| ruled(&border.bottom)),
+        Some((black, 2.0)),
+        "the foot closes the box"
+    );
+
+    // The accent-less member adds a 1pt rule between the body rows and one
+    // down each outer edge.
+    let neutral_member = parse_table_part(&probe_table("TableStyleMedium15"), &palette()).unwrap();
+    let neutral_header = neutral_member.border_at(7, 1).expect("the header is boxed");
+    assert_eq!(ruled(&neutral_header.left), Some((black, 1.0)));
+    let body = neutral_member.border_at(7, 2).expect("a body row is ruled");
+    assert_eq!(ruled(&body.bottom), Some((black, 1.0)));
+    assert_eq!(
+        neutral_member
+            .border_at(8, 2)
+            .and_then(|border| ruled(&border.left)),
+        Some((black, 1.0)),
+        "the accent-less member rules every column boundary"
+    );
+    assert_eq!(
+        neutral_member
+            .border_at(9, 2)
+            .and_then(|border| ruled(&border.right)),
+        Some((black, 1.0))
+    );
+}
+
+#[test]
+fn medium_band_four_fills_every_row_and_rules_every_boundary() {
+    // `Medium23` fills its header in the accent at 80% — the same fill its
+    // body rows alternate off — and rules `#95B3D7` at every row boundary and
+    // every column boundary (issue #1189).
+    assert_eq!(
+        probe_fills("TableStyleMedium23"),
+        (
+            Some(accent_light_band()),
+            vec![
+                Some(accent_dark_band()),
+                Some(accent_light_band()),
+                Some(accent_dark_band())
+            ]
+        )
+    );
+
+    let accent_member = parse_table_part(&probe_table("TableStyleMedium23"), &palette()).unwrap();
+    let header = accent_member.border_at(7, 1).expect("the header is ruled");
+    assert_eq!(ruled(&header.top), Some((accent_rule(), 1.0)));
+    assert_eq!(ruled(&header.bottom), Some((accent_rule(), 1.0)));
+    assert_eq!(ruled(&header.left), Some((accent_rule(), 1.0)));
+    assert_eq!(
+        accent_member
+            .border_at(7, 4)
+            .and_then(|border| ruled(&border.bottom)),
+        Some((accent_rule(), 1.0)),
+        "the foot is ruled too"
+    );
+    assert_eq!(
+        accent_member
+            .border_at(8, 2)
+            .and_then(|border| ruled(&border.left)),
+        Some((accent_rule(), 1.0)),
+        "band 4 rules every column boundary, interiors included"
+    );
+
+    // `Medium22` bands in the two `lt1` shades under a `#D9D9D9` header and
+    // rules the same extent in `#000000`.
+    assert_eq!(
+        probe_fills("TableStyleMedium22"),
+        (
+            Some(neutral_light_band()),
+            vec![
+                Some(neutral_dark_band()),
+                Some(neutral_light_band()),
+                Some(neutral_dark_band())
+            ]
+        )
+    );
+    let neutral_member = parse_table_part(&probe_table("TableStyleMedium22"), &palette()).unwrap();
+    let interior = neutral_member.border_at(8, 2).expect("column H is ruled");
+    assert_eq!(
+        ruled(&interior.left),
+        Some((Color::black(), 1.0)),
+        "the accent-less member rules in `dk1`"
+    );
+    assert!(
+        interior.right.is_none(),
+        "each interior boundary is ruled once, by the column to its right"
+    );
+}
+
+#[test]
+fn later_medium_bands_print_their_header_runs_in_the_measured_ink() {
+    // White bold in bands 2 and 3, black bold on band 4's light header.
     for style_name in [
+        "TableStyleMedium8",
         "TableStyleMedium9",
         "TableStyleMedium16",
-        "TableStyleMedium23",
     ] {
-        let paint = built_in_table_style(style_name, &palette())
-            .unwrap_or_else(|| panic!("{style_name} keeps its banding"));
-
+        let style = parse_table_part(&probe_table(style_name), &palette()).unwrap();
         assert_eq!(
-            paint.stripe,
-            Some(tint(palette().accents[0], 0.8)),
+            style.header_text_color_at(7, 1),
+            Some(Color::white()),
             "{style_name}"
         );
-        assert_eq!(paint.rule, None, "{style_name} rules nothing we measured");
+        assert!(style.bolds_header_at(7, 1), "{style_name}");
+    }
+    for style_name in ["TableStyleMedium22", "TableStyleMedium23"] {
+        let style = parse_table_part(&probe_table(style_name), &palette()).unwrap();
         assert_eq!(
-            paint.header, None,
-            "{style_name} paints no header we measured"
+            style.header_text_color_at(7, 1),
+            Some(Color::black()),
+            "{style_name}"
         );
+        assert!(style.bolds_header_at(7, 1), "{style_name}");
+    }
+}
+
+#[test]
+fn a_style_past_the_last_built_in_medium_index_is_unresolved() {
+    // Excel's Medium family ends at 28, so anything past it is a name we have
+    // no measurement for.
+    for style in ["TableStyleMedium29", "TableStyleMedium35"] {
+        assert_eq!(built_in_table_style(style, &palette()), None, "{style}");
     }
 }
 
 #[test]
 fn medium_styles_walk_the_accents_in_bands_of_seven() {
-    // Medium2..7 take accent 1..6; Medium8 restarts the band on the dark
-    // style, and Medium9 is accent 1 again.
+    // Every band opens on its accent-less member and runs accent 1 through 6:
+    // Medium2..7, then Medium9..14, Medium16..21 and Medium23..28. Bands 1..3
+    // fill the header in the accent itself; band 4 fills it at the 80% tint
+    // its body rows band off (issue #1189).
     for (style, accent_index) in [
         ("TableStyleMedium2", 0),
         ("TableStyleMedium7", 5),
         ("TableStyleMedium9", 0),
         ("TableStyleMedium14", 5),
+        ("TableStyleMedium16", 0),
+        ("TableStyleMedium21", 5),
     ] {
-        let expected = tint(palette().accents[accent_index], 0.8);
-
         assert_eq!(
-            built_in_table_style(style, &palette()).and_then(|paint| paint.stripe),
-            Some(expected),
-            "{style} should stripe in accent {}",
+            built_in_table_style(style, &palette()).and_then(|paint| paint.header),
+            Some(HeaderPaint {
+                fill: palette().accents[accent_index],
+                text: Color::white(),
+            }),
+            "{style} should paint in accent {}",
+            accent_index + 1
+        );
+    }
+    for (style, accent_index) in [("TableStyleMedium23", 0), ("TableStyleMedium28", 5)] {
+        assert_eq!(
+            built_in_table_style(style, &palette()).and_then(|paint| paint.header),
+            Some(HeaderPaint {
+                fill: tint(palette().accents[accent_index], 0.8),
+                text: Color::black(),
+            }),
+            "{style} should paint in accent {}",
             accent_index + 1
         );
     }
 
-    for dark_style in ["TableStyleMedium8", "TableStyleMedium15"] {
+    // The accent-less members fill their header in `dk1`, except band 4's,
+    // which takes the same `lt1` shaded 15% its light rows band with.
+    for (dark_style, expected) in [
+        ("TableStyleMedium1", Color::black()),
+        ("TableStyleMedium8", Color::black()),
+        ("TableStyleMedium15", Color::black()),
+        ("TableStyleMedium22", neutral_light_band()),
+    ] {
         assert_eq!(
-            built_in_table_style(dark_style, &palette()),
-            None,
-            "{dark_style} opens an unmeasured band on the dark style"
+            built_in_table_style(dark_style, &palette())
+                .and_then(|paint| paint.header)
+                .map(|header| header.fill),
+            Some(expected),
+            "{dark_style} opens its band on the accent-less style"
         );
     }
 }
@@ -216,10 +493,11 @@ fn medium_band_one_opens_on_the_dark_style() {
     assert_eq!(
         built_in_table_style("TableStyleMedium1", &palette()),
         Some(TableStylePaint {
+            body: None,
             stripe: Some(Color::new(0xd9, 0xd9, 0xd9)),
             rule: Some(TableRule {
                 color: Color::black(),
-                extent: RuleExtent::EveryRowAndOuterEdges,
+                extent: MEDIUM_BAND_ONE_RULES,
             }),
             header: Some(HeaderPaint {
                 fill: Color::black(),
@@ -331,10 +609,11 @@ fn light_band_one_walks_the_accents_like_medium_does() {
     assert_eq!(
         built_in_table_style("TableStyleLight1", &palette()),
         Some(TableStylePaint {
+            body: None,
             stripe: Some(Color::new(0xd9, 0xd9, 0xd9)),
             rule: Some(TableRule {
                 color: Color::black(),
-                extent: RuleExtent::HeaderAndFoot,
+                extent: LIGHT_BAND_ONE_RULES,
             }),
             header: None,
         })
@@ -348,10 +627,11 @@ fn light_band_one_walks_the_accents_like_medium_does() {
         assert_eq!(
             built_in_table_style(style, &palette()),
             Some(TableStylePaint {
+                body: None,
                 stripe: Some(tint(accent, 0.8)),
                 rule: Some(TableRule {
                     color: accent,
-                    extent: RuleExtent::HeaderAndFoot,
+                    extent: LIGHT_BAND_ONE_RULES,
                 }),
                 header: None,
             }),

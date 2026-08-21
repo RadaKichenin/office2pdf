@@ -1875,6 +1875,112 @@ fn structure_medium2_table_style_fills_rules_and_whitens_its_header() {
     );
 }
 
+/// `table-multiple.xlsx` styles its `A1:C5` table `TableStyleMedium9` over an
+/// accent 1 of `4F81BD`. That style opens the Medium family's second band,
+/// which fills **every** body row in two tints — `#B8CCE4` over a whole-table
+/// `#DCE6F1` — under a solid accent header, and seams the rows apart in white:
+/// 3pt under the header, 1pt between the body rows and 1pt down each boundary
+/// between the columns (issue #1189).
+#[test]
+fn structure_medium9_table_style_fills_every_row_and_seams_them_in_white() {
+    let pages = sheet_pages("table-multiple.xlsx");
+    let rows = &pages[0].table.rows;
+    let cell_at = |row: usize, col: usize| -> &TableCell { &rows[row].cells[col] };
+    let white = Color {
+        r: 0xff,
+        g: 0xff,
+        b: 0xff,
+    };
+    let light_band = Color {
+        r: 0xdc,
+        g: 0xe6,
+        b: 0xf1,
+    };
+    let dark_band = Color {
+        r: 0xb8,
+        g: 0xcc,
+        b: 0xe4,
+    };
+
+    assert_eq!(
+        cell_at(0, 0).background,
+        Some(Color {
+            r: 0x4f,
+            g: 0x81,
+            b: 0xbd,
+        }),
+        "A1's header band is the accent itself"
+    );
+    assert_eq!(
+        (1..=4)
+            .map(|row| cell_at(row, 0).background)
+            .collect::<Vec<_>>(),
+        vec![
+            Some(dark_band),
+            Some(light_band),
+            Some(dark_band),
+            Some(light_band)
+        ],
+        "every body row is filled, alternating between the two tints"
+    );
+
+    let header_border = cell_at(0, 0).border.as_ref().expect("A1 is seamed");
+    let seam = header_border
+        .bottom
+        .as_ref()
+        .expect("a seam runs under the header");
+    assert_eq!(seam.color, white, "band 2 seams in white");
+    assert_eq!(seam.width, 3.0, "the header seam is a 3pt band");
+    assert_eq!(seam.style, BorderLineStyle::Solid);
+    assert!(
+        header_border.top.is_none(),
+        "band 2 leaves the table's top clear"
+    );
+    assert!(header_border.left.is_none(), "band 2 rules no left edge");
+
+    let body_border = cell_at(1, 0).border.as_ref().expect("A2 is seamed");
+    assert_eq!(
+        body_border
+            .bottom
+            .as_ref()
+            .map(|side| (side.color, side.width)),
+        Some((white, 1.0)),
+        "a 1pt seam runs between the body rows"
+    );
+    assert_eq!(
+        cell_at(1, 1)
+            .border
+            .as_ref()
+            .and_then(|border| border.left.as_ref())
+            .map(|side| (side.color, side.width)),
+        Some((white, 1.0)),
+        "the boundary between columns A and B is seamed"
+    );
+    assert!(
+        cell_at(1, 2)
+            .border
+            .as_ref()
+            .and_then(|border| border.right.as_ref())
+            .is_none(),
+        "band 2 leaves the table's right edge clear"
+    );
+    assert!(
+        cell_at(4, 0).border.is_none(),
+        "band 2 leaves the table's foot and left edge clear"
+    );
+
+    let header_run = match &cell_at(0, 0).content[0] {
+        Block::Paragraph(paragraph) => &paragraph.runs[0],
+        other => panic!("header holds a paragraph, got {other:?}"),
+    };
+    assert_eq!(header_run.style.bold, Some(true));
+    assert_eq!(
+        header_run.style.color,
+        Some(white),
+        "the header runs are printed white on the accent band"
+    );
+}
+
 /// `<printOptions horizontalCentered="1"/>` centres the printed grid between
 /// the print margins; without it the grid prints flush to the left one.
 ///
