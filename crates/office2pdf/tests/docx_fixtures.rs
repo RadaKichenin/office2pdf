@@ -671,6 +671,80 @@ fn structure_unit_test_headers() {
     );
 }
 
+/// A footer paragraph resolves `w:spacing w:after` through the cascade a body
+/// paragraph takes, because Word keeps the last one between the footer's last
+/// line and `w:pgMar/@w:footer` (issue #1195).
+///
+/// `unit_test_headers.docx` declares no `w:docDefaults/w:pPrDefault` and its
+/// `Footer` style states no `w:spacing`, so the gap resolves to Word's built-in
+/// `Normal` `w:after="160"` = 8pt (issue #1085). Its native export puts the
+/// footer baseline 46.56pt above the page bottom, against the 38.54pt an
+/// unreserved band produces.
+#[test]
+fn footer_paragraph_resolves_the_built_in_space_after() {
+    let pages = flow_pages("unit_test_headers.docx");
+    let footer = pages
+        .iter()
+        .find_map(|page| page.footer.as_ref())
+        .expect("the fixture has a footer");
+    let last = footer
+        .paragraphs
+        .last()
+        .expect("the footer has a paragraph");
+
+    assert_eq!(
+        last.style.space_after,
+        Some(8.0),
+        "a package with no `w:pPrDefault` resolves Word's built-in 8pt"
+    );
+}
+
+/// The control for the resolution above: a package that declares
+/// `<w:pPrDefault/>` takes the paragraph defaults over from Word's built-in
+/// `Normal`, leaving the unstated gap at the spec's zero — its committed ground
+/// truth prints the footer where an unreserved band already put it.
+#[test]
+fn footer_paragraph_takes_the_declared_default_space_after() {
+    let pages = flow_pages("../../golden_mocks/business/sources/docx/05_technical_manual_en.docx");
+    let footer = pages
+        .iter()
+        .find_map(|page| page.footer.as_ref())
+        .expect("the manual has a footer");
+    let last = footer
+        .paragraphs
+        .last()
+        .expect("the footer has a paragraph");
+
+    assert_eq!(
+        last.style.space_after,
+        Some(0.0),
+        "a declared `w:pPrDefault` leaves the unstated gap at zero"
+    );
+}
+
+/// A footer paragraph naming a style that states its own `w:spacing w:after`
+/// takes that value, not the document default — `HeaderFooterUnicode` declares
+/// `w:after="200"` on `w:pPrDefault` and `w:after="0"` on the `Footer` style
+/// its footer paragraphs reference.
+#[test]
+fn footer_paragraph_prefers_its_own_style_over_the_document_default() {
+    let pages = flow_pages("HeaderFooterUnicode.docx");
+    let footer = pages
+        .iter()
+        .find_map(|page| page.footer.as_ref())
+        .expect("the fixture has a footer");
+    let last = footer
+        .paragraphs
+        .last()
+        .expect("the footer has a paragraph");
+
+    assert_eq!(
+        last.style.space_after,
+        Some(0.0),
+        "the `Footer` style's own `w:after=\"0\"` outranks the 10pt document default"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // unit_test_lists.docx
 // ---------------------------------------------------------------------------

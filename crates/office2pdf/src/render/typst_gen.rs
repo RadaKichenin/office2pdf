@@ -1688,6 +1688,36 @@ struct FlowFooterValue {
     wants_zero_descent: bool,
 }
 
+/// Round a point measurement to hundredths, keeping float noise (62.35 - 35.4)
+/// out of the emitted source.
+fn round_to_hundredths(value_pt: f64) -> f64 {
+    (value_pt * 100.0).round() / 100.0
+}
+
+/// The gap the footer's last drawn paragraph reserves below its last line, in
+/// points.
+///
+/// Word bottom-anchors a footer story on `w:pgMar/@w:footer` and then keeps the
+/// last paragraph's resolved `w:spacing w:after` between its last line and that
+/// anchor, exactly as it keeps that gap below a body paragraph. A package
+/// stating no `w:docDefaults/w:pPrDefault` resolves Word's built-in `Normal`
+/// 8pt there, which is why an unreserved band printed a whole `w:after` low
+/// (issue #1195).
+///
+/// The paragraph asked is the last one the story actually draws: a
+/// page-anchored frame is positioned against the page rather than laid out
+/// above the anchor, so its gap is not what sits there. A story stating no gap
+/// at all — every format but DOCX — reserves nothing and keeps the band it had.
+fn hf_trailing_space_after_pt(hf: &HeaderFooter) -> f64 {
+    hf.paragraphs
+        .iter()
+        .rev()
+        .find(|paragraph| hf_paragraph_is_emitted(paragraph))
+        .and_then(|paragraph| paragraph.style.space_after)
+        .filter(|gap| *gap > 0.0)
+        .unwrap_or(0.0)
+}
+
 /// Build the `#set page(footer: …)` value for one footer story (issue #846).
 fn flow_footer_value(footer: &HeaderFooter, page: &FlowPage, ctx: &mut GenCtx) -> FlowFooterValue {
     let mut value = String::new();
@@ -1701,8 +1731,7 @@ fn flow_footer_value(footer: &HeaderFooter, page: &FlowPage, ctx: &mut GenCtx) -
     // box.
     let footer_band: Option<f64> = footer
         .distance_from_edge
-        // Keep float noise (62.35 - 35.4) out of the emitted source.
-        .map(|distance| ((page.margins.bottom - distance) * 100.0).round() / 100.0)
+        .map(|distance| round_to_hundredths(page.margins.bottom - distance))
         .filter(|band| *band > 0.0);
     if let Some(band) = footer_band {
         if hf_needs_context(footer) {
@@ -1720,10 +1749,17 @@ fn flow_footer_value(footer: &HeaderFooter, page: &FlowPage, ctx: &mut GenCtx) -
             .and_then(|runs| text::word_line_box_descent_em(&runs))
             .map(|descent_em| format!("-{}em", format_f64(descent_em)))
             .unwrap_or_else(|| "\"descender\"".to_string());
+        // Word reserves the last paragraph's own `w:spacing w:after` between
+        // its last line and that anchor, so the drawn band stops that far above
+        // `w:pgMar/@w:footer` rather than on it. A gap deeper than the band
+        // itself would invert the block, so the band is as far as the story can
+        // be lifted (issue #1195).
+        let drawn_band: f64 =
+            round_to_hundredths((band - hf_trailing_space_after_pt(footer)).max(0.0));
         let _ = write!(
             value,
             "block(width: 100%, height: {}pt)[#set text(bottom-edge: {bottom_edge}); #place(bottom, block(width: 100%)[",
-            format_f64(band)
+            format_f64(drawn_band)
         );
         generate_flow_hf_content(&mut value, footer, ctx);
         value.push_str("])]");

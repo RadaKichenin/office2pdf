@@ -1408,6 +1408,11 @@ fn a_first_header_without_title_pg_is_not_used() {
         )
     };
     let assets = super::sections::HeaderFooterAssets::default();
+    let style_map = super::StyleMap::new();
+    let styles = super::sections::HeaderFooterStyleContext {
+        style_map: &style_map,
+        paragraph_property_defaults_are_declared: false,
+    };
 
     let declared = docx_rs::SectionProperty::new().first_header(story(), "rId9");
     assert!(
@@ -1416,14 +1421,14 @@ fn a_first_header_without_title_pg_is_not_used() {
          coupling changed and the test below proves nothing"
     );
     assert!(
-        super::sections::extract_docx_first_header(&declared, &assets).is_some(),
+        super::sections::extract_docx_first_header(&declared, &assets, styles).is_some(),
         "titlePg with a first story resolves it"
     );
 
     let undeclared = docx_rs::SectionProperty::new().first_header_without_title_pg(story(), "rId9");
     assert!(!undeclared.title_pg);
     assert!(
-        super::sections::extract_docx_first_header(&undeclared, &assets).is_none(),
+        super::sections::extract_docx_first_header(&undeclared, &assets, styles).is_none(),
         "a first story without titlePg is not a first-page story"
     );
 }

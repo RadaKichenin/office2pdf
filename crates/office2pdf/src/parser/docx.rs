@@ -39,7 +39,8 @@ use self::media::{
 #[cfg(test)]
 use self::sections::extract_page_size;
 use self::sections::{
-    HeaderFooterAssets, SectionOverrides, build_flow_page_from_section, build_header_footer_assets,
+    HeaderFooterAssets, HeaderFooterStyleContext, SectionOverrides, build_flow_page_from_section,
+    build_header_footer_assets,
 };
 use self::styles::{
     DOC_DEFAULT_STYLE_ID, PairKerningRules, ResolvedStyle, StyleMap, TabStopOverride,
@@ -235,7 +236,6 @@ struct ZipPreParseAssets {
     chart_ctx: ChartContext,
     column_layouts: Vec<Option<ColumnLayout>>,
     page_numbering: Vec<Option<PageNumbering>>,
-    header_footer_assets: HeaderFooterAssets,
     metafile_images: ImageMap,
     theme_fonts: ThemeFonts,
     default_paragraph_style_id: Option<String>,
@@ -282,7 +282,6 @@ fn build_zip_preparse_assets(data: &[u8]) -> ZipPreParseAssets {
                 .unwrap_or_default();
             let bidi = BidiContext::from_xml(doc_xml.as_deref());
             let small_caps = SmallCapsContext::from_xml(doc_xml.as_deref());
-            let header_footer_assets = build_header_footer_assets(&mut archive);
             let metafile_images = build_document_metafile_image_map(&mut archive);
             let ctx = DocxConversionContext {
                 notes,
@@ -313,7 +312,6 @@ fn build_zip_preparse_assets(data: &[u8]) -> ZipPreParseAssets {
                 chart_ctx,
                 column_layouts,
                 page_numbering,
-                header_footer_assets,
                 metafile_images,
                 theme_fonts: theme_xml
                     .as_deref()
@@ -347,7 +345,6 @@ fn build_zip_preparse_assets(data: &[u8]) -> ZipPreParseAssets {
             chart_ctx: ChartContext::empty(),
             column_layouts: Vec::new(),
             page_numbering: Vec::new(),
-            header_footer_assets: HeaderFooterAssets::default(),
             metafile_images: ImageMap::new(),
             theme_fonts: ThemeFonts::default(),
             default_paragraph_style_id: None,
@@ -373,7 +370,6 @@ impl Parser for DocxParser {
             mut chart_ctx,
             column_layouts,
             page_numbering,
-            header_footer_assets,
             metafile_images,
             theme_fonts,
             default_paragraph_style_id,
@@ -401,6 +397,20 @@ impl Parser for DocxParser {
             &style_word_wraps,
             &pair_kerning,
         );
+
+        let header_footer_styles = HeaderFooterStyleContext {
+            style_map: &style_map,
+            paragraph_property_defaults_are_declared: ctx.paragraph_property_defaults_are_declared,
+        };
+
+        // The header and footer parts are converted only now: their paragraphs
+        // resolve `w:spacing w:after` through the same style cascade the body
+        // takes, and that map needs the docx-rs parse above (issue #1195). The
+        // archive is opened a second time for it rather than kept alive across
+        // the parse; the parts themselves are still read exactly once.
+        let header_footer_assets: HeaderFooterAssets = crate::parser::open_zip(data)
+            .map(|mut archive| build_header_footer_assets(&mut archive, header_footer_styles))
+            .unwrap_or_default();
         let mut warnings: Vec<ConvertWarning> = Vec::new();
 
         let mut elements: Vec<TaggedElement> = Vec::new();
@@ -480,7 +490,7 @@ impl Parser for DocxParser {
                         column_layout,
                         page_numbering: page_numbering.get(section_layout_index).copied().flatten(),
                     },
-                    style_map.get(DOC_DEFAULT_STYLE_ID),
+                    header_footer_styles,
                     &mut warnings,
                 )));
                 section_layout_index += 1;
@@ -500,7 +510,7 @@ impl Parser for DocxParser {
                 column_layout: final_column_layout,
                 page_numbering: page_numbering.get(section_layout_index).copied().flatten(),
             },
-            style_map.get(DOC_DEFAULT_STYLE_ID),
+            header_footer_styles,
             &mut warnings,
         )));
 

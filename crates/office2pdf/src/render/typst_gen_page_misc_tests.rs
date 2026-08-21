@@ -2799,7 +2799,20 @@ fn malgun(size_pt: f64) -> TextStyle {
 /// `w:pgMar/@w:footer` = 35.40pt on A4.
 #[cfg(not(target_arch = "wasm32"))]
 fn doc_with_footer_run(text: &str, style: TextStyle) -> Document {
+    doc_with_spaced_footer_run(text, style, None)
+}
+
+/// The same footer, with the paragraph's resolved `w:spacing w:after` stated.
+#[cfg(not(target_arch = "wasm32"))]
+fn doc_with_spaced_footer_run(
+    text: &str,
+    style: TextStyle,
+    space_after_pt: Option<f64>,
+) -> Document {
     use crate::ir::HeaderFooter;
+
+    let mut paragraph = header_text_paragraph(text, style);
+    paragraph.style.space_after = space_after_pt;
 
     make_doc(vec![Page::Flow(FlowPage {
         first_header: None,
@@ -2816,13 +2829,64 @@ fn doc_with_footer_run(text: &str, style: TextStyle) -> Document {
         footer: Some(HeaderFooter {
             shapes: Vec::new(),
             distance_from_edge: Some(35.4),
-            paragraphs: vec![header_text_paragraph(text, style)],
+            paragraphs: vec![paragraph],
         }),
         columns: None,
         line_grid_pitch: None,
         line_grid_snaps_lines: false,
         page_numbering: None,
     })])
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+/// Word reserves the footer's last paragraph's own `w:spacing w:after` between
+/// its last line and the `w:footer` anchor, so a stated gap lifts the whole
+/// band by exactly that much.
+///
+/// `tests/fixtures/docx/unit_test_headers.docx` states no `w:pPrDefault`, so
+/// its footer resolves Word's built-in `Normal` `w:after="160"` = 8pt; the
+/// native export puts that footer baseline 46.56pt above the page bottom
+/// against the 38.54pt an unreserved band produces — the gap is that 8pt
+/// (issue #1195).
+#[test]
+fn test_footer_band_reserves_the_last_paragraph_space_after() {
+    let unreserved: f64 = baselines_of(
+        &doc_with_spaced_footer_run("- 1 -", arial(8.0), Some(0.0)),
+        "- 1 -",
+    )[0];
+
+    for reserved_pt in [8.0, 16.0] {
+        let baseline: f64 = baselines_of(
+            &doc_with_spaced_footer_run("- 1 -", arial(8.0), Some(reserved_pt)),
+            "- 1 -",
+        )[0];
+        assert!(
+            (unreserved - baseline - reserved_pt).abs() < 0.01,
+            "a {reserved_pt}pt `w:after` must lift the footer by {reserved_pt}pt: \
+             {unreserved}pt unreserved against {baseline}pt reserved"
+        );
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+/// A story stating no gap at all — every non-DOCX footer, whose paragraphs
+/// carry no `w:spacing` — keeps the band it always had.
+#[test]
+fn test_footer_band_without_a_stated_space_after_is_unchanged() {
+    let unstated: f64 = baselines_of(
+        &doc_with_spaced_footer_run("- 1 -", arial(8.0), None),
+        "- 1 -",
+    )[0];
+    let zero: f64 = baselines_of(
+        &doc_with_spaced_footer_run("- 1 -", arial(8.0), Some(0.0)),
+        "- 1 -",
+    )[0];
+
+    assert!(
+        (unstated - zero).abs() < 0.01,
+        "an unstated gap must seat the band where a zero one does: \
+         {unstated}pt against {zero}pt"
+    );
 }
 
 #[cfg(not(target_arch = "wasm32"))]
