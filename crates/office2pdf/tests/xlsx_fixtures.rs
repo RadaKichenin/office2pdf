@@ -2347,3 +2347,36 @@ fn text_content_monthly_budget_cash_flow_caption() {
         "the chart's own drawing part prints its caption; got:\n{text}"
     );
 }
+
+/// Excel paints a cell's background 1pt past its bottom and right grid
+/// boundaries, so a shading meets the rule below it and the column edge to its
+/// right instead of leaving a pale seam (issue #1190). A native Excel-for-Mac
+/// export of `ExcelTables.xlsx` prints the `#D9D9D9` band over the table's
+/// first body row at x 464-534, y 73-91, where the 69pt column track ends at
+/// 533 and the 17pt row track at 90.
+#[test]
+fn structure_light1_table_band_bleeds_past_its_bottom_and_right_boundaries() {
+    let data = load_fixture("ExcelTables.xlsx");
+    let (document, _warnings) = XlsxParser
+        .parse(&data, &ConvertOptions::default())
+        .expect("fixture should parse");
+    let source = generate_typst(&document)
+        .expect("fixture should generate Typst")
+        .source;
+
+    // The sheet's default cell inset is (top: 1, right: 2, bottom: 1.5,
+    // left: 3), so the bottom boundary lies 1.5pt below the content box and
+    // the right one 2pt beyond it.
+    assert!(
+        source.contains(
+            "#place(bottom + left, dx: -3pt, dy: 2.5pt, rect(width: 100% + 6pt, height: 1pt, fill: rgb(217, 217, 217), stroke: none))"
+        ),
+        "the band must reach the rule below it: {source}"
+    );
+    assert!(
+        source.contains(
+            "#place(top + right, dx: 3pt, dy: -1pt, rect(width: 1pt, height: 18pt, fill: rgb(217, 217, 217), stroke: none))"
+        ),
+        "the band must reach the column edge to its right: {source}"
+    );
+}
