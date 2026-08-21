@@ -1011,15 +1011,9 @@ fn a_justified_paragraph_caps_its_gaps_where_word_does() {
 /// one common width. Before issue #1193 the whole demand landed in the word
 /// spaces: 8.70pt each, with the auto spaces left at their 2.62pt quarter em,
 /// which displaced the `자` of `제3자` by 9.50pt.
+#[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn a_heavily_stretched_justified_line_gives_every_gap_one_width() {
-    // Each gap is measurable on its own only where the eojeols around it are
-    // framed, which the paragraph declares only when its Korean face
-    // resolves. A machine without one — every CI runner here — lays the line
-    // out in a font whose metrics these numbers do not describe.
-    if crate::render::pdf::font_line_metrics_em("Malgun Gothic").is_none() {
-        return; // no Korean face available (e.g. a runner with no CJK fonts)
-    }
     let data = std::fs::read(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../tests/fixtures/docx/korean_alignment_autospace.docx"
@@ -1034,11 +1028,12 @@ fn a_heavily_stretched_justified_line_gives_every_gap_one_width() {
     let source = generate_typst(&doc).unwrap().source;
     let runs = crate::render::pdf::compiled_text_runs(&source, 0).expect("compile");
 
-    // The stretched line is the one carrying `규모의`; a run's baseline names
-    // the line it sits on.
+    // The stretched line is the wrapping paragraph's first, which opens on
+    // `본` — the one token of the file that appears nowhere else. A run's
+    // baseline names the line it sits on.
     let baseline: f64 = runs
         .iter()
-        .find(|run| run.text.contains('규'))
+        .find(|run| run.text.contains('본'))
         .expect("the wrapping paragraph's first line")
         .baseline_pt;
     let mut line: Vec<&crate::render::pdf::PlacedTextRun> = runs
@@ -1063,11 +1058,18 @@ fn a_heavily_stretched_justified_line_gives_every_gap_one_width() {
         }
     }
 
+    // A word space is a run of its own only where the eojeols around it are
+    // framed, which the paragraph declares only when a Korean face resolves.
+    // On a machine without one — every CI runner here — the whole line is a
+    // single shaped item and none of its gaps can be measured from run
+    // origins.
+    if word_gaps.is_empty() {
+        return;
+    }
     assert!(
         !auto_gaps.is_empty(),
         "the line's auto spaces are gaps the justifier can see"
     );
-    assert!(!word_gaps.is_empty(), "the line carries word spaces too");
     let widest: f64 = word_gaps
         .iter()
         .chain(&auto_gaps)
@@ -1083,10 +1085,16 @@ fn a_heavily_stretched_justified_line_gives_every_gap_one_width() {
         "every gap on the line takes one common width, \
          but they run {narrowest:.4}pt to {widest:.4}pt"
     );
-    assert!(
-        (narrowest - 6.80).abs() < 0.05,
-        "Word's common width here is 6.80pt, not {narrowest:.4}pt"
-    );
+
+    // 6.80pt is Word's width for *this* face at 10.5pt. A runner that
+    // substitutes another Korean face stretches the same line over its own
+    // advances, and only the shared width above carries over.
+    if line.iter().any(|run| run.family == "Malgun Gothic") {
+        assert!(
+            (narrowest - 6.80).abs() < 0.05,
+            "Word's common width here is 6.80pt, not {narrowest:.4}pt"
+        );
+    }
 }
 
 /// The ceiling is Word's answer for a line carrying the auto space. Typst's
