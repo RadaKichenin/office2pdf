@@ -72,6 +72,11 @@ pub struct TypstOutput {
 
 /// Maximum nesting depth for tables-within-tables, matching the parser limit.
 const MAX_TABLE_DEPTH: usize = 64;
+/// How far a justified line may squeeze its spaces, as a share of the space's
+/// own width. Calibrated on the corpus in [`write_page_format_state`], which
+/// is where the measurements behind it are recorded.
+pub(super) const JUSTIFIED_SPACING_FLOOR: &str = "80%";
+
 /// Typst's line box leaves more top leading than Word/LibreOffice text frames.
 const FLOATING_TEXT_BOX_TOP_LEADING_COMPENSATION_PT: f64 = 6.0;
 
@@ -2968,7 +2973,10 @@ fn write_page_format_state(out: &mut String) {
     // whose lines Word genuinely compresses keep their 0.9344/0.9639/0.9653
     // spaces against Word's 0.9332/0.9634/0.9636.
     //
-    // Only the floor moves; the 150% ceiling is Typst's own default.
+    // Only the floor moves; the 150% ceiling is Typst's own default. A
+    // paragraph carrying the East Asian/Latin auto space states its own
+    // ceiling over this one, which is Word's rather than Typst's; see
+    // `write_east_asian_justification_limits` (issue #1193).
     //
     // Every one of those ten exports declares `compatibilityMode 15`, so this
     // floor is calibrated on — and governs — Word's post-2013 justification.
@@ -2983,7 +2991,7 @@ fn write_page_format_state(out: &mut String) {
     // list or a table cell. It is inert wherever `justify` is false.
     let _ = writeln!(
         out,
-        "#set par(justification-limits: (spacing: (min: 80%, max: 150%)))"
+        "#set par(justification-limits: (spacing: (min: {JUSTIFIED_SPACING_FLOOR}, max: 150%)))"
     );
     let _ = writeln!(
         out,

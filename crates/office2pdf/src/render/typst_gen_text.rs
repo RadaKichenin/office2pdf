@@ -22,6 +22,15 @@ const EAST_ASIAN_AUTO_SPACE_CHAR: char = '\u{E001}';
 /// size. Measured as exactly a quarter em on a native export at two sizes.
 const EAST_ASIAN_AUTO_SPACE_EM: f64 = 0.25;
 
+/// The character the auto space is drawn with: a no-break space, so the
+/// boundary it marks stays as unbreakable as the eojeol frame kept it.
+const EAST_ASIAN_AUTO_SPACE_GLYPH: &str = "\u{00A0}";
+
+/// How wide Word lets an expandable gap of a justified line grow before it
+/// levels every gap on that line to one common width, in ems of the gap's own
+/// text (issue #1053).
+const EAST_ASIAN_JUSTIFIED_GAP_CEILING_EM: f64 = 0.5;
+
 /// PowerPoint snaps nominal glyph advances to this grid before accumulating
 /// them into a line. Typst keeps the font's exact fractional advances, so the
 /// sub-point error otherwise compounds across long slide lines (issue #661).
@@ -103,15 +112,42 @@ pub(super) fn write_powerpoint_advance_grid_helpers(out: &mut String) {
     );
 }
 
-/// The auto space sized against the *run*, not the paragraph. It is emitted
-/// between the run's `#text(size:)` calls rather than inside one, so an `em`
-/// there would resolve against the paragraph's default size instead — 11pt
+/// The auto space sized against the *run*, not the paragraph. The width is
+/// emitted in points wherever the run states a size, because an `em` in the
+/// wrapper would resolve against the paragraph's default size instead — 11pt
 /// where the run is 10.5pt, which is 0.12pt too wide at every boundary.
+///
+/// It is a no-break space carrying its own `spacing`, not an `#h()` spacer,
+/// because a justified line has to be able to stretch it. Typst's justifier
+/// reaches a line's *glyphs* alone — `Line::stretchability` sums the text
+/// items and skips every spacing item — so a spacer stays rigid and the whole
+/// of a line's stretch demand lands in the word spaces: 8.70pt against Word's
+/// 6.81pt on the line issue #1193 measured, with the auto spaces left at
+/// their quarter em against Word's 6.80pt.
+///
+/// `text(spacing:)` restates the space's own advance, so the quarter em is
+/// still the width the line breaks on and nothing re-wraps; and U+00A0 is
+/// Unicode line-break class GL, which forbids a break on either side of it,
+/// which is what keeps the mid-word break that #521's frame existed to
+/// prevent from reopening. See [`write_east_asian_justification_limits`] for
+/// the ceiling that makes the stretch match Word's.
 fn east_asian_auto_space(run: &Run) -> String {
-    match run.style.font_size {
-        Some(size) => format!("#h({}pt)", format_f64(size * EAST_ASIAN_AUTO_SPACE_EM)),
-        None => format!("#h({EAST_ASIAN_AUTO_SPACE_EM}em)"),
+    let width: String = match run.style.font_size {
+        Some(size) => format!("{}pt", format_f64(size * EAST_ASIAN_AUTO_SPACE_EM)),
+        None => format!("{EAST_ASIAN_AUTO_SPACE_EM}em"),
+    };
+    let mut params: String = String::new();
+    write_text_params_for_run(
+        &mut params,
+        &run.style,
+        EAST_ASIAN_AUTO_SPACE_GLYPH,
+        EAST_ASIAN_AUTO_SPACE_GLYPH,
+    );
+    if !params.is_empty() {
+        params.push_str(", ");
     }
+    let _ = write!(params, "spacing: {width}");
+    format!("#text({params})[\\u{{00A0}}]")
 }
 
 pub(super) fn generate_paragraph(
@@ -1857,10 +1893,54 @@ pub(super) fn write_par_settings(out: &mut String, style: &ParagraphStyle, runs:
         if justified_lines_take_natural_width_only(runs) {
             out.push_str("  #set par(linebreaks: \"simple\")\n");
         }
+        write_east_asian_justification_limits(out, runs);
     }
     if matches!(style.direction, Some(TextDirection::Rtl)) {
         out.push_str("  #set text(dir: rtl)\n");
     }
+}
+
+/// State the ceiling Word puts on every expandable gap of a justified line
+/// carrying the East Asian/Latin auto space.
+///
+/// Word distributes a line's stretch demand in three phases (measured over
+/// demands from 6.2pt to 300.2pt, issue #1053): the word spaces fill to half
+/// an em, then the auto spaces take the remainder, then *every* expandable
+/// gap on the line sits at one common width. Typst's justifier fills the gaps
+/// in proportion to their stretchability and, once that is spent, adds what
+/// is left equally to every justifiable glyph — so a ceiling stated as a
+/// length rather than a multiple of each gap's own width brings a 0.352em
+/// word space and a 0.25em auto space to the same half em together, and
+/// Word's common width falls out of the equal remainder. Measured on the
+/// #1193 line: 6.803pt for both kinds against Word's 6.8065pt and 6.8028pt,
+/// where the rigid quarter em gave 8.70pt and 2.62pt.
+///
+/// The phases in between are not separable — one ratio drives every gap — so
+/// an ordinary justified line, whose demand never reaches the ceiling, now
+/// moves its auto spaces where Word leaves them: 0.27pt per gap on the
+/// fixture's second line, against 4.18pt per gap the other way before.
+///
+/// `justification-limits` rejects a ratio of zero, so the smallest positive
+/// one stands in for "no ratio term": at 0.0001% it adds 4 nanopoints to a
+/// 10.5pt space. The `em` resolves against each glyph's own size rather than
+/// the paragraph's, so a line mixing sizes caps each gap at its own half em.
+/// The floor stays [`JUSTIFIED_SPACING_FLOOR`], which is calibrated on the
+/// corpus and has nothing to do with this ceiling.
+///
+/// Scoped to the paragraphs that carry the auto space: Typst's line breaker
+/// prices a line against the allowance it is given, so a document-wide
+/// ceiling would move breaks in every justified Latin paragraph as well.
+pub(super) fn write_east_asian_justification_limits(out: &mut String, runs: &[Run]) {
+    if !runs
+        .iter()
+        .any(|run| run.text.contains(EAST_ASIAN_AUTO_SPACE_CHAR))
+    {
+        return;
+    }
+    let _ = writeln!(
+        out,
+        "  #set par(justification-limits: (spacing: (min: {JUSTIFIED_SPACING_FLOOR}, max: 0.0001% + {EAST_ASIAN_JUSTIFIED_GAP_CEILING_EM}em)))"
+    );
 }
 
 /// Whether this justified paragraph fills each line only up to the width its
@@ -2434,9 +2514,15 @@ pub(super) enum EojeolWrap {
     /// there, because the paragraph was already inside a box. A frame leaves
     /// the text layer untouched, so it is the mechanism here too.
     ///
-    /// The other two markers this file uses are stripped before emission and
-    /// never reach the text layer: U+E001 for auto-space and U+200B for the
-    /// kinsoku break.
+    /// U+200B, the kinsoku break marker, is stripped before emission and
+    /// never reaches the text layer. U+E001 is stripped too, but what
+    /// replaces it does not: since issue #1193 the auto space is drawn with a
+    /// U+00A0, so a boundary does put a character in the text stream. That is
+    /// not the #664 hazard, because the gap already extracted as a space
+    /// without one — `pdftotext` reads the fixture's justified line
+    /// identically from Word's own export, from our output before the change
+    /// and from our output after it, and neither `pdftotext` nor `mutool`
+    /// reports a U+00A0 in any of the three.
     ///
     /// `line_box_em` is the paragraph's fixed `(top-edge, bottom-edge)` when
     /// it declares them, so the frame can restore them; see
@@ -2602,16 +2688,24 @@ fn write_eojeol_pieces(
     }
 }
 
-/// The characters a Word line may end at, which therefore close an eojeol.
+/// The characters that close an eojeol, so a frame never spans one.
 ///
-/// A tab is among them, so a frame can never straddle a
-/// [`split_runs_on_tabs`] segment. A no-break space cannot host a break at
-/// all, but it still separates words, and treating it as a boundary keeps a
-/// whole run of them out of one token.
+/// Most are the characters a Word line may end at. A tab is among them, so a
+/// frame can never straddle a [`split_runs_on_tabs`] segment. A no-break
+/// space cannot host a break at all, but it still separates words, and
+/// treating it as a boundary keeps a whole run of them out of one token.
+///
+/// The East Asian auto space is the one entry that is not a break
+/// opportunity. It closes a token because a frame is laid out at its natural
+/// width, which freezes every gap inside it: left within the frame the auto
+/// space could take no part in the line's justification, and the whole of a
+/// stretched line's demand landed in its word spaces (issue #1193). Outside
+/// it the boundary is still unbreakable, because the space
+/// [`east_asian_auto_space`] emits there is U+00A0.
 fn is_eojeol_delimiter(ch: char) -> bool {
     matches!(
         ch,
-        ' ' | '\u{00A0}' | '\t' | '\n' | PPTX_SOFT_LINE_BREAK_CHAR
+        ' ' | '\u{00A0}' | '\t' | '\n' | PPTX_SOFT_LINE_BREAK_CHAR | EAST_ASIAN_AUTO_SPACE_CHAR
     )
 }
 

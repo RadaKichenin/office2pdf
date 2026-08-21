@@ -1125,6 +1125,7 @@ fn write_fixed_text_list_par_settings(
     }
     if matches!(style.alignment, Some(Alignment::Justify)) {
         out.push_str("  #set par(justify: true)\n");
+        write_east_asian_justification_limits(out, runs);
     }
     if matches!(style.direction, Some(TextDirection::Rtl)) {
         out.push_str("  #set text(dir: rtl)\n");
