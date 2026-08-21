@@ -25,6 +25,8 @@ pub(super) struct TableStyleRange {
     /// First body row — the table's first row plus its header rows.
     first_body_row: u32,
     end_row: u32,
+    /// The fill every body row takes, where the style paints one.
+    body: Option<Color>,
     stripe: Option<Color>,
     rule: Option<TableRule>,
     header: Option<HeaderPaint>,
@@ -35,7 +37,9 @@ impl TableStyleRange {
     ///
     /// A header row takes the style's own fill. Below it Excel shades the
     /// first body row and every second one after it, so the band alternates
-    /// from the top of the body rather than from row 1.
+    /// from the top of the body rather than from row 1. The rows between them
+    /// take the style's whole-table fill where it declares one — the later
+    /// Medium bands fill every row, in two tints (issue #1189).
     pub(super) fn fill_at(&self, col: u32, row: u32) -> Option<Color> {
         if !(self.start_col..=self.end_col).contains(&col)
             || !(self.start_row..=self.end_row).contains(&row)
@@ -47,17 +51,19 @@ impl TableStyleRange {
         if row < self.first_body_row {
             return self.header.map(|header| header.fill);
         }
-        let fill: Color = self.stripe?;
-        (row - self.first_body_row)
-            .is_multiple_of(2)
-            .then_some(fill)
+        if (row - self.first_body_row).is_multiple_of(2) {
+            self.stripe.or(self.body)
+        } else {
+            self.body
+        }
     }
 
     /// The style's own rules at `(col, row)`.
     ///
-    /// Every rule is a 1pt band, which is the paint issue #619 measured every
-    /// thin Excel border to be. How far they run is the family's to say — see
-    /// [`RuleExtent`].
+    /// Which boundaries carry one, and at what width, is the band's to say —
+    /// see [`RuleExtent`]. A 1pt rule is the paint issue #619 measured every
+    /// thin Excel border to be; the heavier ones are the 2pt and 3pt bands the
+    /// later Medium bands draw (issue #1189).
     pub(super) fn border_at(&self, col: u32, row: u32) -> Option<CellBorder> {
         let rule: TableRule = self.rule?;
         if !(self.start_col..=self.end_col).contains(&col)
@@ -65,25 +71,45 @@ impl TableStyleRange {
         {
             return None;
         }
-        let side = || BorderSide {
-            width: 1.0,
+        let side = |width: f64| BorderSide {
+            width,
             color: rule.color,
             style: BorderLineStyle::Solid,
             join: LineJoin::Round,
         };
-        let closes_row: bool = match rule.extent {
-            // The second rule closes the header, so a table declaring
-            // `headerRowCount="0"` — where `first_body_row` is `start_row` —
-            // has no row to hang it on and prints only the outer two.
-            RuleExtent::HeaderAndFoot => row + 1 == self.first_body_row || row == self.end_row,
-            RuleExtent::EveryRowAndOuterEdges => true,
+        let extent: RuleExtent = rule.extent;
+        // The header rule closes the last header row, so a table declaring
+        // `headerRowCount="0"` — where `first_body_row` is `start_row` — has
+        // no row to hang it on. It is looked up before the foot so that a
+        // table whose only row is its header still prints the header seam.
+        let bottom_width: Option<f64> = if row + 1 == self.first_body_row {
+            extent.under_header
+        } else if row == self.end_row {
+            extent.foot
+        } else if row >= self.first_body_row {
+            extent.between_body
+        } else {
+            // Between two header rows, which no measured style rules.
+            None
         };
-        let draws_verticals: bool = matches!(rule.extent, RuleExtent::EveryRowAndOuterEdges);
+        // Each interior column boundary is ruled once, by the column to its
+        // right, so the two neighbours never lay two bands on it.
+        let left_width: Option<f64> = if col == self.start_col {
+            extent.left_edge
+        } else {
+            extent.between_columns
+        };
         let border = CellBorder {
-            top: (row == self.start_row).then(side),
-            bottom: closes_row.then(side),
-            left: (draws_verticals && col == self.start_col).then(side),
-            right: (draws_verticals && col == self.end_col).then(side),
+            top: (row == self.start_row)
+                .then_some(extent.top)
+                .flatten()
+                .map(side),
+            bottom: bottom_width.map(side),
+            left: left_width.map(side),
+            right: (col == self.end_col)
+                .then_some(extent.right_edge)
+                .flatten()
+                .map(side),
         };
         let CellBorder {
             top,
@@ -96,18 +122,21 @@ impl TableStyleRange {
 
     /// Whether `(col, row)` sits in a header row this style prints bold.
     ///
-    /// Gated on the same `rule` as [`Self::border_at`]: a style family whose
-    /// header treatment is unresolved leaves the header alone entirely rather
-    /// than bolding it into a header that is otherwise unpainted.
+    /// Gated on the same `rule` as [`Self::border_at`], so a style resolved
+    /// from banding alone would leave its header alone entirely rather than
+    /// bolding it into a header that is otherwise unpainted. Every measured
+    /// band rules something, so the gate only guards a future one.
     pub(super) fn bolds_header_at(&self, col: u32, row: u32) -> bool {
         self.rule.is_some() && self.is_header_cell(col, row)
     }
 
     /// The ink a header row's runs take, where the style states one.
     ///
-    /// Only a style that fills the header states one — a Medium table prints
-    /// white on its accent band. A Light header sits on the sheet's own
-    /// background, and the export leaves its runs black.
+    /// Only a style that fills the header states one: the Medium family's
+    /// first three bands print white on their accent band and its fourth
+    /// prints black on the far lighter one it fills instead. A Light header
+    /// sits on the sheet's own background and carries no fill, so the export
+    /// leaves its runs black by default.
     pub(super) fn header_text_color_at(&self, col: u32, row: u32) -> Option<Color> {
         self.header
             .filter(|_| self.is_header_cell(col, row))
@@ -135,44 +164,133 @@ struct StylePalette {
 
 /// What a built-in table style paints over its range.
 ///
-/// A family whose banding is measured but whose header and rules are not — the
-/// `TableStyleMedium8`..`28` mapping of issue #532 — resolves a `stripe` and
-/// leaves the other two `None`, which leaves its header row alone too.
+/// A family whose paint is unmeasured — the Light family's later bands and the
+/// Dark family — resolves to no `TableStylePaint` at all rather than to a
+/// guess, which leaves its table exactly as the cell records style it.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct TableStylePaint {
+    /// The fill every body row takes, under the banding. The later Medium
+    /// bands fill their whole table and band a second tint over alternate
+    /// rows; the first band fills nothing under its stripe (issue #1189).
+    body: Option<Color>,
     /// The banded-row fill, painted where `showRowStripes` asks for it.
     stripe: Option<Color>,
-    /// The rules the style lays over the table's row boundaries.
+    /// The rules the style lays over the table's boundaries.
     rule: Option<TableRule>,
     /// The header row's own paint, where the style gives it one.
     header: Option<HeaderPaint>,
 }
 
-/// A style's rules: one colour, and how far through the table they run.
+/// A style's rules: one colour, and the extent it draws them over.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct TableRule {
     color: Color,
     extent: RuleExtent,
 }
 
-/// How far a style's rules run.
+/// How far a style's rules run: the width in points it draws at each of the
+/// table's boundaries, `None` at every boundary it leaves clear.
 #[derive(Debug, Clone, Copy, PartialEq)]
-enum RuleExtent {
-    /// Above the header row, under it, and at the table's foot — nothing
-    /// between the body rows, and no verticals. The Light band's treatment.
-    HeaderAndFoot,
-    /// Every row boundary, plus a vertical down the table's own left and
-    /// right edges. The Medium band's treatment; a native `TableStyleMedium2`
-    /// export lays five horizontals over a four-row table and two verticals
-    /// spanning its full height (issue #1125).
-    EveryRowAndOuterEdges,
+struct RuleExtent {
+    /// Above the table's first row.
+    top: Option<f64>,
+    /// Under its last header row.
+    under_header: Option<f64>,
+    /// Between two of its body rows.
+    between_body: Option<f64>,
+    /// Under its last row.
+    foot: Option<f64>,
+    /// Down its own left edge.
+    left_edge: Option<f64>,
+    /// Down its own right edge.
+    right_edge: Option<f64>,
+    /// Between two of its columns.
+    between_columns: Option<f64>,
 }
+
+/// No rule anywhere, which every measured extent below is written against.
+const NO_RULES: RuleExtent = RuleExtent {
+    top: None,
+    under_header: None,
+    between_body: None,
+    foot: None,
+    left_edge: None,
+    right_edge: None,
+    between_columns: None,
+};
+
+/// `TableStyleLight1`..`7`: one 1pt rule above the header row, one under it
+/// and one at the table's foot — nothing between the body rows, and no
+/// verticals (issue #1080).
+const LIGHT_BAND_ONE_RULES: RuleExtent = RuleExtent {
+    top: Some(1.0),
+    under_header: Some(1.0),
+    foot: Some(1.0),
+    ..NO_RULES
+};
+
+/// `TableStyleMedium1`..`7`: a 1pt rule at every row boundary and one down
+/// each outer edge — five horizontals over a four-row table and two verticals
+/// spanning its full height (issue #1125).
+const MEDIUM_BAND_ONE_RULES: RuleExtent = RuleExtent {
+    top: Some(1.0),
+    under_header: Some(1.0),
+    between_body: Some(1.0),
+    foot: Some(1.0),
+    left_edge: Some(1.0),
+    right_edge: Some(1.0),
+    ..NO_RULES
+};
+
+/// `TableStyleMedium8`..`14`: a 3pt seam under the header, a 1pt seam between
+/// the body rows and one down each boundary *between* the columns. The table's
+/// own top, foot and outer edges stay clear, so the band reads as filled rows
+/// held apart by the sheet's background (issue #1189).
+const MEDIUM_BAND_TWO_RULES: RuleExtent = RuleExtent {
+    under_header: Some(3.0),
+    between_body: Some(1.0),
+    between_columns: Some(1.0),
+    ..NO_RULES
+};
+
+/// `TableStyleMedium15`, the accent-less member of band 3: the 2pt box its
+/// accented siblings draw, plus a 1pt rule between the body rows and one down
+/// every column boundary (issue #1189).
+const MEDIUM_BAND_THREE_NEUTRAL_RULES: RuleExtent = RuleExtent {
+    top: Some(2.0),
+    under_header: Some(2.0),
+    between_body: Some(1.0),
+    foot: Some(2.0),
+    left_edge: Some(1.0),
+    right_edge: Some(1.0),
+    between_columns: Some(1.0),
+};
+
+/// `TableStyleMedium16`..`21`: a 2pt rule above the header, under it and at
+/// the table's foot, and nothing else — no verticals and no interior rules
+/// (issue #1189).
+const MEDIUM_BAND_THREE_ACCENT_RULES: RuleExtent = RuleExtent {
+    top: Some(2.0),
+    under_header: Some(2.0),
+    foot: Some(2.0),
+    ..NO_RULES
+};
+
+/// `TableStyleMedium22`..`28`: a 1pt rule at every row boundary and at every
+/// column boundary, interior verticals included — band 1's extent with the
+/// interiors ruled too, and the same for every member of the band (issue
+/// #1189).
+const MEDIUM_BAND_FOUR_RULES: RuleExtent = RuleExtent {
+    between_columns: Some(1.0),
+    ..MEDIUM_BAND_ONE_RULES
+};
 
 /// The paint a style lays over its header row.
 ///
-/// The Medium band fills the row in its accent and sets the runs on it white;
-/// the Light band fills nothing, so it carries no `HeaderPaint` at all and its
-/// header keeps the sheet's own ink.
+/// Bands 1..3 of the Medium family fill the row in the style's own colour and
+/// set the runs on it white; band 4 fills it at the 80% tint its body rows
+/// band off and prints them black. The Light band fills nothing, so it carries
+/// no `HeaderPaint` at all and its header keeps the sheet's own ink.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct HeaderPaint {
     fill: Color,
@@ -181,17 +299,65 @@ struct HeaderPaint {
 
 /// The tint a banded row takes off its style's accent.
 const BAND_TINT: f64 = 0.8;
+/// The darker of the two tints a band that fills every row alternates between
+/// — `#B8CCE4` against a `4F81BD` accent 1 (issue #1189).
+const DARK_BAND_TINT: f64 = 0.6;
 /// The tint the Medium band's rules take off the same accent.
 const RULE_TINT: f64 = 0.4;
 /// The shade an accent-less style bands with, off `lt1`. Negative, because a
 /// neutral style darkens its background where an accented one lightens.
 const NEUTRAL_BAND_TINT: f64 = -0.15;
+/// The deeper shade the accent-less member of a band that fills every row
+/// takes — `#A6A6A6` off a white `lt1`, which is where its accented siblings
+/// take [`DARK_BAND_TINT`] (issue #1189).
+const NEUTRAL_DARK_BAND_TINT: f64 = -0.35;
+
+/// The colours one member of a style band resolves its paint from.
+///
+/// Each band runs one accent-less member followed by accent 1 through 6. An
+/// accented member walks a single ramp off its accent; the accent-less one
+/// walks the same positions off `lt1` and `dk1` instead, giving `#D9D9D9` and
+/// `#A6A6A6` where an accent gives `#DCE6F1` and `#B8CCE4`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct MemberColors {
+    /// The style's own colour, which bands 1..3 fill their header row with.
+    strong: Color,
+    /// The lighter of the two body tints, and the only one a band that leaves
+    /// alternate rows clear paints.
+    light_band: Color,
+    /// The darker body tint, banded over the light one by the bands that fill
+    /// every row.
+    dark_band: Color,
+    /// The colour a band rules in when it rules in its own.
+    rule: Color,
+}
+
+impl MemberColors {
+    fn resolve(accent: Option<Color>, palette: &StylePalette) -> Self {
+        match accent {
+            Some(accent) => Self {
+                strong: accent,
+                light_band: tint(accent, BAND_TINT),
+                dark_band: tint(accent, DARK_BAND_TINT),
+                rule: tint(accent, RULE_TINT),
+            },
+            None => Self {
+                strong: palette.dark,
+                light_band: tint(palette.light, NEUTRAL_BAND_TINT),
+                dark_band: tint(palette.light, NEUTRAL_DARK_BAND_TINT),
+                rule: palette.dark,
+            },
+        }
+    }
+}
 
 /// Excel's built-in table styles derive their paint from the theme palette.
 ///
 /// Each family runs in bands of seven: one accent-less style followed by
-/// accent 1 through 6. Only each family's first band is measured, from native
-/// Excel-for-Mac exports of one table restyled through every member.
+/// accent 1 through 6. Every band below is measured from native Excel-for-Mac
+/// exports of one table restyled through each member of it — the later Medium
+/// bands off `tests/fixtures/xlsx/table-multiple.xlsx`, whose three columns
+/// and four body rows tell an interior vertical apart from an outer edge.
 ///
 /// `TableStyleLight1`..`7` band the body, rule above the header row, under it
 /// and at the table's foot, and print the header bold. The accent-less member
@@ -205,12 +371,25 @@ const NEUTRAL_BAND_TINT: f64 = -0.15;
 /// row boundary and down both outer edges. `Medium1` opens that band on the
 /// dark style, filling and ruling in `dk1` (issue #1125).
 ///
-/// TODO(unverified): the same probe shows every later band painting something
-/// else entirely — `Light8` fills its header row solid and rules every row,
-/// `Medium9` fills all four rows in two tints, `Medium15` boxes the table in
-/// 2pt rules, `Medium22` bands in greys. The Medium ones keep the banding
-/// issue #532 resolved for them and nothing more; the Light ones and the Dark
-/// family stay unpainted rather than guessed at.
+/// The Medium family's three later bands paint something else again, and each
+/// of them fills or rules more than band 1 does (issue #1189):
+///
+/// - `Medium8`..`14` keep the accent header and fill **every** body row, in
+///   two tints — the accent at 60% over a whole-table 80% — then seam the rows
+///   apart in `lt1`: 3pt under the header, 1pt between the body rows and 1pt
+///   between the columns.
+/// - `Medium15`..`21` keep the accent header, band `lt1` shaded 15% over
+///   alternate rows whichever member they are, and box the table in 2pt `dk1`
+///   rules above the header, under it and at its foot. The accent-less member
+///   adds a 1pt rule between the body rows and one down every column boundary.
+/// - `Medium22`..`28` fill every row in the same two tints as band 2 but hand
+///   the header the light one, print its runs black, and rule 1pt at every row
+///   boundary and every column boundary.
+///
+/// TODO(unverified): the Light family's later bands paint something else
+/// again — `Light8` fills its header row solid and rules every row, `Light15`
+/// boxes the whole table — and the Dark family is not measured at all. Both
+/// stay unpainted rather than guessed at.
 fn built_in_table_style(style_name: &str, palette: &StylePalette) -> Option<TableStylePaint> {
     let (index, is_medium): (usize, bool) = match style_name.strip_prefix("TableStyleMedium") {
         Some(digits) => (digits.parse().ok()?, true),
@@ -220,48 +399,92 @@ fn built_in_table_style(style_name: &str, palette: &StylePalette) -> Option<Tabl
         ),
     };
 
-    let within_band: usize = (index.checked_sub(1)?) % 7;
+    let band: usize = (index.checked_sub(1)?) / 7;
+    let within_band: usize = (index - 1) % 7;
     let accent: Option<Color> = match within_band.checked_sub(1) {
         Some(accent_index) => Some(*palette.accents.get(accent_index)?),
         // The band opens on the accent-less style: the neutral one in the
         // Light family, the dark one in the Medium family.
         None => None,
     };
+    let colors: MemberColors = MemberColors::resolve(accent, palette);
 
-    if index > 7 {
-        return match (is_medium, accent) {
-            (true, Some(accent)) => Some(TableStylePaint {
-                stripe: Some(tint(accent, BAND_TINT)),
-                rule: None,
-                header: None,
+    if !is_medium {
+        // Only the Light family's first band is measured.
+        if band > 0 {
+            return None;
+        }
+        return Some(TableStylePaint {
+            body: None,
+            stripe: Some(colors.light_band),
+            // A Light table rules in its own colour, not at the 40% tint the
+            // Medium band takes.
+            rule: Some(TableRule {
+                color: colors.strong,
+                extent: LIGHT_BAND_ONE_RULES,
             }),
-            _ => None,
-        };
+            header: None,
+        });
     }
 
-    let (fill, rule_color): (Color, Color) = match accent {
-        Some(accent) if is_medium => (accent, tint(accent, RULE_TINT)),
-        Some(accent) => (accent, accent),
-        None => (palette.dark, palette.dark),
-    };
-    Some(TableStylePaint {
-        stripe: Some(match accent {
-            Some(accent) => tint(accent, BAND_TINT),
-            None => tint(palette.light, NEUTRAL_BAND_TINT),
-        }),
-        rule: Some(TableRule {
-            color: rule_color,
-            extent: if is_medium {
-                RuleExtent::EveryRowAndOuterEdges
-            } else {
-                RuleExtent::HeaderAndFoot
-            },
-        }),
-        header: is_medium.then_some(HeaderPaint {
+    let white_header = |fill: Color| {
+        Some(HeaderPaint {
             fill,
             text: Color::white(),
+        })
+    };
+    match band {
+        0 => Some(TableStylePaint {
+            body: None,
+            stripe: Some(colors.light_band),
+            rule: Some(TableRule {
+                color: colors.rule,
+                extent: MEDIUM_BAND_ONE_RULES,
+            }),
+            header: white_header(colors.strong),
         }),
-    })
+        1 => Some(TableStylePaint {
+            body: Some(colors.light_band),
+            stripe: Some(colors.dark_band),
+            // The seams are the sheet's own background showing between the
+            // filled rows, which both measured members print `#FFFFFF`.
+            rule: Some(TableRule {
+                color: palette.light,
+                extent: MEDIUM_BAND_TWO_RULES,
+            }),
+            header: white_header(colors.strong),
+        }),
+        2 => Some(TableStylePaint {
+            body: None,
+            // Band 3 bands in `lt1` shaded 15% under an accent header as well
+            // as under a dark one: both measured members print `#D9D9D9`.
+            stripe: Some(tint(palette.light, NEUTRAL_BAND_TINT)),
+            rule: Some(TableRule {
+                color: palette.dark,
+                extent: if accent.is_some() {
+                    MEDIUM_BAND_THREE_ACCENT_RULES
+                } else {
+                    MEDIUM_BAND_THREE_NEUTRAL_RULES
+                },
+            }),
+            header: white_header(colors.strong),
+        }),
+        3 => Some(TableStylePaint {
+            body: Some(colors.light_band),
+            stripe: Some(colors.dark_band),
+            rule: Some(TableRule {
+                color: colors.rule,
+                extent: MEDIUM_BAND_FOUR_RULES,
+            }),
+            header: Some(HeaderPaint {
+                fill: colors.light_band,
+                text: Color::black(),
+            }),
+        }),
+        // Excel's Medium family ends at 28, so a higher index is a name no
+        // built-in style carries.
+        _ => None,
+    }
 }
 
 /// Excel's integer HLS range.
@@ -404,21 +627,23 @@ fn parse_table_part(xml: &str, palette: &StylePalette) -> Option<TableStyleRange
     let (start_col, start_row, end_col, end_row) = range?;
     let paint: TableStylePaint = paint?;
     let first_body_row: u32 = start_row + header_rows;
-    let stripe: Option<Color> = paint
-        .stripe
-        .filter(|_| shows_row_stripes && first_body_row <= end_row);
-    (stripe.is_some() || paint.rule.is_some() || paint.header.is_some()).then_some(
-        TableStyleRange {
+    let has_body_rows: bool = first_body_row <= end_row;
+    // `showRowStripes` scopes the banded tint alone: a band-2 table with it
+    // off keeps the whole-table fill under it, as it keeps its rules.
+    let stripe: Option<Color> = paint.stripe.filter(|_| shows_row_stripes && has_body_rows);
+    let body: Option<Color> = paint.body.filter(|_| has_body_rows);
+    (stripe.is_some() || body.is_some() || paint.rule.is_some() || paint.header.is_some())
+        .then_some(TableStyleRange {
             start_col,
             end_col,
             start_row,
             first_body_row,
             end_row,
+            body,
             stripe,
             rule: paint.rule,
             header: paint.header,
-        },
-    )
+        })
 }
 
 /// Parse an `A4:H175`-style range into `(start_col, start_row, end_col, end_row)`.
