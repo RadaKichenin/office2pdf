@@ -702,7 +702,7 @@ fn the_auto_space_marker_becomes_a_quarter_of_the_runs_size() {
     let result = generate_typst(&doc).unwrap().source;
 
     assert!(
-        result.contains("#h(2.625pt)"),
+        result.contains("spacing: 2.625pt)[\\u{00A0}]"),
         "0.25 x 10.5pt should reach the output as points: {result}"
     );
     assert!(
@@ -715,7 +715,10 @@ fn the_auto_space_marker_becomes_a_quarter_of_the_runs_size() {
 fn the_auto_space_scales_with_the_run_not_the_document() {
     // Triangulation: a different run size must produce a different gap, so a
     // single measured constant cannot pass.
-    for (size, expected) in [(9.5, "#h(2.375pt)"), (16.0, "#h(4pt)")] {
+    for (size, expected) in [
+        (9.5, "spacing: 2.375pt)[\\u{00A0}]"),
+        (16.0, "spacing: 4pt)[\\u{00A0}]"),
+    ] {
         let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
             style: ParagraphStyle::default(),
             runs: vec![Run {
@@ -953,18 +956,15 @@ fn only_the_tokens_carrying_hangul_are_framed() {
     );
 }
 
-/// The auto space of issue #521 marks a boundary *inside* one eojeol, so it
-/// must stay inside the frame — Typst maps every `#h()` to a space in the
-/// paragraph text, which would otherwise reopen a mid-word break opportunity.
+/// The auto space of issue #521 marks a boundary *inside* one eojeol, and
+/// nothing may break there. It used to hold that by sitting inside the eojeol
+/// frame, because Typst maps every `#h()` to a space in the paragraph text;
+/// a frame is laid out at its natural width, though, so the gap could take no
+/// part in a justified line's stretch (issue #1193). It is emitted outside
+/// the frame now, and what forbids the break is the character itself: U+00A0
+/// is Unicode line-break class GL, which allows no break on either side.
 #[test]
-fn the_east_asian_auto_space_stays_inside_the_eojeol() {
-    // The `#box(…)` form this looks for is the frame that restores a *fixed*
-    // line box, which the paragraph only declares when its Korean face
-    // resolves. A machine without one — every CI runner here — emits the bare
-    // `#box[` instead, so the premise cannot hold.
-    if crate::render::pdf::font_line_metrics_em("Malgun Gothic").is_none() {
-        return; // no Korean face available (e.g. a runner with no CJK fonts)
-    }
+fn the_east_asian_auto_space_cannot_host_a_break() {
     let doc = make_doc(vec![make_flow_page(vec![korean_paragraph(
         "2026\u{E001}년 계약",
         None,
@@ -972,13 +972,148 @@ fn the_east_asian_auto_space_stays_inside_the_eojeol() {
     )])]);
     let result = generate_typst(&doc).unwrap().source;
 
-    let framed: &str = result
-        .split_once("#box(")
-        .expect("an eojeol frame should be emitted")
-        .1;
     assert!(
-        framed.contains("#h(2.625pt)"),
-        "the auto space belongs inside the frame: {result}"
+        !result.contains("#h(2.625pt)"),
+        "a spacer is a breakable space in the paragraph text: {result}"
+    );
+    assert!(
+        result.contains("spacing: 2.625pt)[\\u{00A0}]"),
+        "the boundary takes a quarter-em no-break space: {result}"
+    );
+}
+
+/// Word spreads a justified line's stretch demand over the East Asian/Latin
+/// auto spaces as well as the word spaces, and past half an em per gap it
+/// sets every expandable gap on the line to one common width (issue #1053).
+/// A rigid `#h()` could take none of it, so the paragraph states the ceiling
+/// that lets Typst's justifier reproduce that (issue #1193).
+#[test]
+fn a_justified_paragraph_caps_its_gaps_where_word_does() {
+    let doc = make_doc(vec![make_flow_page(vec![korean_paragraph(
+        "2026\u{E001}년 계약 조건",
+        Some(Alignment::Justify),
+        Some("Malgun Gothic"),
+    )])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains(
+            "#set par(justification-limits: (spacing: (min: 80%, max: 0.0001% + 0.5em)))"
+        ),
+        "every gap on the line stops at its own half em: {result}"
+    );
+}
+
+/// Word's phase 3, measured on `korean_alignment_autospace.docx`: the first
+/// line of the wrapping justified paragraph stretches 55.06pt to a 453.61pt
+/// measure, and its native Word export puts all sixteen gaps — eleven word
+/// spaces at 6.8065pt and five East Asian/Latin auto spaces at 6.8028pt — at
+/// one common width. Before issue #1193 the whole demand landed in the word
+/// spaces: 8.70pt each, with the auto spaces left at their 2.62pt quarter em,
+/// which displaced the `자` of `제3자` by 9.50pt.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_heavily_stretched_justified_line_gives_every_gap_one_width() {
+    let data = std::fs::read(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/docx/korean_alignment_autospace.docx"
+    ))
+    .expect("fixture");
+    let (doc, _warnings) = crate::parser::Parser::parse(
+        &crate::parser::docx::DocxParser,
+        &data,
+        &crate::config::ConvertOptions::default(),
+    )
+    .expect("parse");
+    let source = generate_typst(&doc).unwrap().source;
+    let runs = crate::render::pdf::compiled_text_runs(&source, 0).expect("compile");
+
+    // The stretched line is the wrapping paragraph's first, which opens on
+    // `본` — the one token of the file that appears nowhere else. A run's
+    // baseline names the line it sits on.
+    let baseline: f64 = runs
+        .iter()
+        .find(|run| run.text.contains('본'))
+        .expect("the wrapping paragraph's first line")
+        .baseline_pt;
+    let mut line: Vec<&crate::render::pdf::PlacedTextRun> = runs
+        .iter()
+        .filter(|run| (run.baseline_pt - baseline).abs() < 0.01)
+        .collect();
+    line.sort_by(|left, right| left.left_pt.total_cmp(&right.left_pt));
+
+    // A gap is a run holding nothing but a space, and the width the line gave
+    // it is the distance to whatever it sits before.
+    let mut word_gaps: Vec<f64> = Vec::new();
+    let mut auto_gaps: Vec<f64> = Vec::new();
+    for (index, run) in line.iter().enumerate() {
+        let Some(next) = line.get(index + 1) else {
+            break;
+        };
+        let width: f64 = next.left_pt - run.left_pt;
+        match run.text.as_str() {
+            " " => word_gaps.push(width),
+            "\u{00A0}" => auto_gaps.push(width),
+            _ => {}
+        }
+    }
+
+    // A word space is a run of its own only where the eojeols around it are
+    // framed, which the paragraph declares only when a Korean face resolves.
+    // On a machine without one — every CI runner here — the whole line is a
+    // single shaped item and none of its gaps can be measured from run
+    // origins.
+    if word_gaps.is_empty() {
+        return;
+    }
+    assert!(
+        !auto_gaps.is_empty(),
+        "the line's auto spaces are gaps the justifier can see"
+    );
+    let widest: f64 = word_gaps
+        .iter()
+        .chain(&auto_gaps)
+        .copied()
+        .fold(f64::MIN, f64::max);
+    let narrowest: f64 = word_gaps
+        .iter()
+        .chain(&auto_gaps)
+        .copied()
+        .fold(f64::MAX, f64::min);
+    assert!(
+        widest - narrowest < 0.05,
+        "every gap on the line takes one common width, \
+         but they run {narrowest:.4}pt to {widest:.4}pt"
+    );
+
+    // 6.80pt is Word's width for *this* face at 10.5pt. A runner that
+    // substitutes another Korean face stretches the same line over its own
+    // advances, and only the shared width above carries over.
+    if line.iter().any(|run| run.family == "Malgun Gothic") {
+        assert!(
+            (narrowest - 6.80).abs() < 0.05,
+            "Word's common width here is 6.80pt, not {narrowest:.4}pt"
+        );
+    }
+}
+
+/// The ceiling is Word's answer for a line carrying the auto space. Typst's
+/// line breaker prices a line against the allowance it is given, so stating
+/// it where no auto space exists would move breaks in ordinary justified
+/// paragraphs for nothing.
+#[test]
+fn a_justified_paragraph_without_the_auto_space_keeps_the_document_ceiling() {
+    let doc = make_doc(vec![make_flow_page(vec![korean_paragraph(
+        "계약 조건 확인",
+        Some(Alignment::Justify),
+        Some("Malgun Gothic"),
+    )])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert_eq!(
+        result.matches("justification-limits").count(),
+        1,
+        "only the document-wide rule states a ceiling: {result}"
     );
 }
 
