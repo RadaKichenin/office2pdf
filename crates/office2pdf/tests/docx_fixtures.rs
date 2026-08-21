@@ -299,6 +299,9 @@ fn acceptance_pr_187_contributor_acceptance_style_inherited_numbering() {
     }
 }
 
+/// The fixture's only `w:rFonts` is the one `word/numbering.xml` names for the
+/// bullet glyph, so every text run resolves the face Word falls back to — a
+/// serif, measured against a native export in issue #1196.
 #[test]
 fn acceptance_pr_187_contributor_acceptance_uses_word_compatible_default_font() {
     let pages = flow_pages(PR_187_FIXTURE);
@@ -308,7 +311,7 @@ fn acceptance_pr_187_contributor_acceptance_uses_word_compatible_default_font() 
     assert_eq!(runs.len(), 8, "fixture text inventory should remain stable");
     assert!(
         runs.iter()
-            .all(|run| run.style.font_family.as_deref() == Some("Arial")),
+            .all(|run| run.style.font_family.as_deref() == Some("Times New Roman")),
         "all text without an OOXML font should use the DOCX fallback: {runs:#?}"
     );
 }
@@ -697,6 +700,46 @@ fn footer_paragraph_resolves_the_built_in_space_after() {
         Some(8.0),
         "a package with no `w:pPrDefault` resolves Word's built-in 8pt"
     );
+}
+
+/// A package naming no `w:rFonts` anywhere resolves the same Latin face Word
+/// falls back to, which is a serif — Times New Roman — not a sans (issue
+/// #1196).
+///
+/// `unit_test_headers.docx` states no `w:rFonts` in `w:docDefaults`, none on
+/// any style, and none on any run, and it carries no `word/theme/theme1.xml`
+/// for a `minorHAnsi` slot to resolve through. `pdffonts` on its native macOS
+/// Word 16 export embeds `TimesNewRomanPSMT` and `TimesNewRomanPS-BoldMT`;
+/// ours embedded `ArialMT` and `Arial-BoldMT`, which reads sans against the
+/// GT's serif and set the 24pt `Heading1` line 11% wide — 417.41pt of visible
+/// ink against the GT's 375.96pt.
+#[test]
+fn a_package_naming_no_rfonts_resolves_words_serif_fallback() {
+    let pages = flow_pages("unit_test_headers.docx");
+    let blocks = all_blocks(&pages);
+    let body_runs = all_runs(&blocks);
+    assert!(!body_runs.is_empty(), "the fixture has body runs");
+
+    let story_runs: Vec<&Run> = pages
+        .iter()
+        .flat_map(|page| page.header.iter().chain(page.footer.iter()))
+        .flat_map(|story| story.paragraphs.iter())
+        .flat_map(|paragraph| paragraph.elements.iter())
+        .filter_map(|element| match element {
+            HFInline::Run(run) => Some(run),
+            _ => None,
+        })
+        .collect();
+    assert!(!story_runs.is_empty(), "the fixture has header/footer runs");
+
+    for run in body_runs.into_iter().chain(story_runs) {
+        assert_eq!(
+            run.style.font_family.as_deref(),
+            Some("Times New Roman"),
+            "run {:?} must take Word's fallback face",
+            run.text
+        );
+    }
 }
 
 /// The control for the resolution above: a package that declares

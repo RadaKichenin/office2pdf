@@ -998,7 +998,10 @@ fn cjk_punctuation_is_not_a_boundary() {
 /// written as raw XML because docx-rs always writes a `Normal` definition
 /// into the styles part it builds — and whether the default paragraph style
 /// is *defined at all* is exactly the factor these tests vary (issue #732).
-fn build_docx_with_raw_styles(styles_xml: &str, body_xml: &str) -> Vec<u8> {
+///
+/// Shared with the style tests, which vary `w:docDefaults/w:rPrDefault/w:rFonts`
+/// the same way (issue #1196).
+pub(super) fn build_docx_with_raw_styles(styles_xml: &str, body_xml: &str) -> Vec<u8> {
     use std::io::Write;
     use zip::ZipWriter;
     use zip::write::FileOptions;

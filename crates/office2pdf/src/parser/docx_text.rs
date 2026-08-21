@@ -6,9 +6,21 @@ use crate::ir::{BorderLineStyle, BorderSide, CellBorder, Insets, LineJoin, Run};
 use crate::parser::units::{half_points_to_pt, twips_to_pt};
 use crate::parser::xml_util;
 
-// Word supplies an application- and locale-dependent sans face when the
-// package omits one; Arial gives the parser a stable cross-platform baseline.
-const WORD_COMPATIBLE_DEFAULT_FONT: &str = "Arial";
+// Word's fallback for a package that resolves no Latin face at all — no
+// `w:rFonts` in `w:docDefaults`, none on a style, none on a run, and no theme
+// slot to resolve through — is a serif, not a sans. `pdffonts` on a native
+// macOS Word 16 export of `tests/fixtures/docx/unit_test_headers.docx`, which
+// is exactly that package, embeds `TimesNewRomanPSMT` and
+// `TimesNewRomanPS-BoldMT`; the `Arial` this named before rendered the page
+// sans and set its 24pt `Heading1` line 11% wide — 417.41pt of visible ink
+// against the export's 375.96pt (issue #1196).
+//
+// Unmeasured: whether a package that carries a `word/theme/theme1.xml` while
+// still naming no `w:rFonts` takes `minorHAnsi` instead. Nothing reaches the
+// theme without an attribute naming a slot — `resolve_theme_font_family`
+// requires one — so both readings agree on every package that has no theme
+// part, which is every fixture in the corpus of this shape.
+const WORD_COMPATIBLE_DEFAULT_FONT: &str = "Times New Roman";
 
 /// Map a `w:jc` value onto the IR's alignment.
 ///

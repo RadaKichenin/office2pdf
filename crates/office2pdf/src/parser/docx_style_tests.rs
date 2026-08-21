@@ -415,6 +415,47 @@ fn test_doc_default_theme_font_resolves_via_theme() {
 }
 
 #[test]
+fn test_doc_default_falls_back_to_words_face_only_when_none_resolves() {
+    // Triangulation for issue #1196 on a package of a different shape from the
+    // fixture that measured it: raw `word/styles.xml`, no header, no footer,
+    // no theme part. The fallback is what a package resolving nothing takes,
+    // so a `w:docDefaults` that does name a face must keep it.
+    const STYLES_TEMPLATE: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:docDefaults>
+    <w:rPrDefault>
+      <w:rPr>{FONTS}<w:sz w:val="20"/></w:rPr>
+    </w:rPrDefault>
+  </w:docDefaults>
+  <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
+    <w:name w:val="Normal"/>
+  </w:style>
+</w:styles>"#;
+    let body_xml = r#"<w:p><w:r><w:t>Quarterly revenue held flat.</w:t></w:r></w:p>"#;
+
+    for (fonts_xml, expected) in [
+        ("", "Times New Roman"),
+        (
+            r#"<w:rFonts w:ascii="Verdana" w:hAnsi="Verdana"/>"#,
+            "Verdana",
+        ),
+    ] {
+        let styles_xml = STYLES_TEMPLATE.replace("{FONTS}", fonts_xml);
+        let data = super::page_feature_tests::build_docx_with_raw_styles(&styles_xml, body_xml);
+
+        let (doc, _warnings) = DocxParser
+            .parse(&data, &ConvertOptions::default())
+            .expect("the package parses");
+
+        assert_eq!(
+            first_run(&doc).style.font_family.as_deref(),
+            Some(expected),
+            "a `w:rPrDefault` of {fonts_xml:?} must resolve {expected}"
+        );
+    }
+}
+
+#[test]
 fn test_paragraph_shading_extracted_as_background() {
     // Word paints w:pPr/w:shd behind the whole paragraph (code blocks in
     // the CLI-manual fixture); the fill must reach the IR (issue #351).
