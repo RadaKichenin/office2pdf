@@ -222,15 +222,21 @@ fn test_parse_error_includes_library_name() {
 
 // ----- Text style defaults -----
 
+/// docx-rs builds a package that names no `w:rFonts` and carries no theme
+/// part, so its runs resolve the face Word falls back to — a serif, measured
+/// against a native export in issue #1196.
 #[test]
-fn test_docx_without_font_uses_word_compatible_sans_default() {
+fn test_docx_without_font_uses_words_serif_fallback() {
     let data = build_docx_bytes(vec![
         docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_text("Plain text")),
     ]);
     let parser = DocxParser;
     let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
 
-    assert_eq!(first_run(&doc).style.font_family.as_deref(), Some("Arial"));
+    assert_eq!(
+        first_run(&doc).style.font_family.as_deref(),
+        Some("Times New Roman")
+    );
 }
 
 #[test]
@@ -418,7 +424,11 @@ fn test_plain_text_has_only_docx_default_font() {
     assert!(run.style.font_size.is_none());
     assert!(run.style.letter_spacing.is_none());
     assert!(run.style.color.is_none());
-    assert_eq!(run.style.font_family.as_deref(), Some("Arial"));
+    assert_eq!(
+        run.style.font_family.as_deref(),
+        Some("Times New Roman"),
+        "the package names no `w:rFonts`, so the run takes Word's fallback"
+    );
 }
 
 // ----- Paragraph formatting tests (US-005) -----
