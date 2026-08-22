@@ -2510,7 +2510,11 @@ fn bottom_aligned_sheet_cell_seat_reproduces_the_native_excel_probe() {
     ];
 
     for (font_size_pt, expected_pt) in measured {
-        let seated_pt: f64 = sheet_cell_descent_pt(ARIAL_DESCENT_EM, font_size_pt, true);
+        let seated_pt: f64 = sheet_cell_descent_pt(
+            ARIAL_DESCENT_EM,
+            font_size_pt,
+            SHEET_CELL_MIN_DESCENT_SEAT_PT,
+        );
         assert!(
             (seated_pt - expected_pt).abs() < 1e-9,
             "Arial {font_size_pt}pt bottom-aligned: Excel prints the baseline \
@@ -2519,24 +2523,56 @@ fn bottom_aligned_sheet_cell_seat_reproduces_the_native_excel_probe() {
     }
 }
 
-/// A workbook whose printed grid compacts its declared tracks shows no such
-/// floor: `09_expense_report_en`'s Arial Bold 14 title rests 3.00pt above the
-/// row boundary its own ruled re-export states, which is the bare
-/// `round(0.211914 x 14)` and not the 4pt a purpose-built workbook holds for
-/// the same font, size, alignment and printed track (issue #1097).
+/// A workbook whose printed grid compacts its declared tracks floors the same
+/// seat one point lower (issue #1199).
+///
+/// Read off native Excel-for-Mac re-exports of `10_kpi_tracker_en.xlsx` with
+/// its A11 note ruled by a thin box border, so Excel prints the row's own
+/// boundaries: the note's `sz` swept over eleven sizes seats every one of them
+/// at `max(3, round(0.211914 x size))`. Issue #1097 read this family as
+/// unfloored from its single 14pt sample, whose bare rounded descent is
+/// already 3 and so cannot separate the two readings.
 #[test]
-fn a_compacting_workbook_rests_the_bare_rounded_descent_on_the_boundary() {
+fn a_compacting_workbook_floors_the_same_seat_a_point_lower() {
     const ARIAL_DESCENT_EM: f64 = 434.0 / 2048.0;
 
-    assert!(
-        (sheet_cell_descent_pt(ARIAL_DESCENT_EM, 14.0, false) - 3.0).abs() < 1e-9,
-        "the compacting family rests its rounded descent on the boundary"
-    );
-    // Where the descent already clears the floor the two families agree, so
+    // (font size pt, baseline above the row's bottom boundary pt)
+    let measured: [(f64, f64); 11] = [
+        (8.0, 3.0),
+        (9.0, 3.0),
+        (10.0, 3.0),
+        (11.0, 3.0),
+        (12.0, 3.0),
+        (13.0, 3.0),
+        (14.0, 3.0),
+        (16.0, 3.0),
+        (18.0, 4.0),
+        (20.0, 4.0),
+        (24.0, 5.0),
+    ];
+
+    for (font_size_pt, expected_pt) in measured {
+        let seated_pt: f64 = sheet_cell_descent_pt(
+            ARIAL_DESCENT_EM,
+            font_size_pt,
+            COMPACTED_SHEET_CELL_MIN_DESCENT_SEAT_PT,
+        );
+        assert!(
+            (seated_pt - expected_pt).abs() < 1e-9,
+            "Arial {font_size_pt}pt bottom-aligned in a compacting workbook: \
+             Excel prints the baseline {expected_pt}pt above the row boundary, \
+             seated {seated_pt}pt"
+        );
+    }
+
+    // Where the descent already clears both floors the two families agree, so
     // the switch can only ever move a small cell.
     assert!(
-        (sheet_cell_descent_pt(ARIAL_DESCENT_EM, 32.0, false)
-            - sheet_cell_descent_pt(ARIAL_DESCENT_EM, 32.0, true))
+        (sheet_cell_descent_pt(
+            ARIAL_DESCENT_EM,
+            32.0,
+            COMPACTED_SHEET_CELL_MIN_DESCENT_SEAT_PT
+        ) - sheet_cell_descent_pt(ARIAL_DESCENT_EM, 32.0, SHEET_CELL_MIN_DESCENT_SEAT_PT))
         .abs()
             < 1e-9,
         "a 32pt cell seats identically either way"
@@ -2544,9 +2580,9 @@ fn a_compacting_workbook_rests_the_bare_rounded_descent_on_the_boundary() {
 }
 
 /// The floor reaches the emitted line box: a small bottom-aligned cell in a
-/// fixed track of a flooring workbook ends its box 4pt below the baseline,
+/// fixed track ends its box on its workbook's own floor below the baseline,
 /// less the cell's own bottom inset, instead of on its face's 2pt descent
-/// (issue #1097).
+/// (issues #1097, #1199).
 #[test]
 fn a_floored_sheet_cell_ends_its_box_on_excel_minimum_gap() {
     const FAMILY: &str = "Libertinus Serif";
@@ -2562,7 +2598,7 @@ fn a_floored_sheet_cell_ends_its_box_on_excel_minimum_gap() {
         bottom: 1.5,
         left: 3.0,
     };
-    let sheet_source = |floors_bottom_aligned_descent: bool| -> String {
+    let sheet_source = |bottom_aligned_descent_floor_pt: f64| -> String {
         let table = Table {
             rows: vec![TableRow {
                 minimum_height: None,
@@ -2589,7 +2625,7 @@ fn a_floored_sheet_cell_ends_its_box_on_excel_minimum_gap() {
             default_cell_padding: Some(padding),
             default_vertical_align: Some(CellVerticalAlign::Bottom),
             seats_bottom_aligned_text_on_descender: true,
-            floors_bottom_aligned_descent,
+            bottom_aligned_descent_floor_pt,
             border_paint_model: TableBorderPaintModel::CenteredStroke,
             prints_gridlines: false,
             prints_headings: false,
@@ -2599,36 +2635,37 @@ fn a_floored_sheet_cell_ends_its_box_on_excel_minimum_gap() {
         generate_typst(&doc).unwrap().source
     };
 
-    // The face's own descent has to be short of the floor for this to say
+    // The face's own descent has to be short of both floors for this to say
     // anything; every text face in the corpus is, at 10pt.
     let rounded_descent_pt: f64 = (descent_em * font_size_pt).round();
     assert!(
-        rounded_descent_pt < SHEET_CELL_MIN_DESCENT_SEAT_PT,
-        "{FAMILY} at {font_size_pt}pt must sit under the floor for this test \
+        rounded_descent_pt < COMPACTED_SHEET_CELL_MIN_DESCENT_SEAT_PT,
+        "{FAMILY} at {font_size_pt}pt must sit under both floors for this test \
          to discriminate, its rounded descent is {rounded_descent_pt}pt"
     );
 
     // Typst rests the box's bottom edge on the inset content bottom, so the
     // emitted descent is Excel's gap less that inset.
-    let floored: String = format!(
-        "bottom-edge: {}em",
-        format_f64(-(SHEET_CELL_MIN_DESCENT_SEAT_PT - padding.bottom) / font_size_pt)
-    );
-    let bare: String = format!(
-        "bottom-edge: {}em",
-        format_f64(-(rounded_descent_pt - padding.bottom) / font_size_pt)
-    );
-    let flooring: String = sheet_source(true);
+    let emitted_bottom_edge = |gap_pt: f64| -> String {
+        format!(
+            "bottom-edge: {}em",
+            format_f64(-(gap_pt - padding.bottom) / font_size_pt)
+        )
+    };
+    let floored: String = emitted_bottom_edge(SHEET_CELL_MIN_DESCENT_SEAT_PT);
+    let compacted: String = emitted_bottom_edge(COMPACTED_SHEET_CELL_MIN_DESCENT_SEAT_PT);
+    let flooring: String = sheet_source(SHEET_CELL_MIN_DESCENT_SEAT_PT);
     assert!(
         flooring.contains(&floored),
-        "a flooring workbook keeps Excel's {SHEET_CELL_MIN_DESCENT_SEAT_PT}pt \
-         gap, which needs `{floored}`: {flooring}"
+        "a workbook keeping its declared tracks keeps Excel's \
+         {SHEET_CELL_MIN_DESCENT_SEAT_PT}pt gap, which needs `{floored}`: {flooring}"
     );
-    let compacting: String = sheet_source(false);
+    let compacting: String = sheet_source(COMPACTED_SHEET_CELL_MIN_DESCENT_SEAT_PT);
     assert!(
-        compacting.contains(&bare),
-        "a compacting workbook keeps the bare rounded descent, which needs \
-         `{bare}`: {compacting}"
+        compacting.contains(&compacted),
+        "a compacting workbook keeps its own \
+         {COMPACTED_SHEET_CELL_MIN_DESCENT_SEAT_PT}pt gap, which needs \
+         `{compacted}`: {compacting}"
     );
 }
 

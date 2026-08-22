@@ -51,6 +51,9 @@ mod text;
 // The DOCX table min-content measurement routes East Asian codepoints to the
 // run's `w:eastAsia` face the same way rendering does (issue #624).
 pub(crate) use self::text::is_cjk_like;
+pub(crate) use self::text::{
+    COMPACTED_SHEET_CELL_MIN_DESCENT_SEAT_PT, SHEET_CELL_MIN_DESCENT_SEAT_PT,
+};
 
 /// An image asset to be embedded in the Typst compilation.
 #[derive(Debug, Clone)]
@@ -151,8 +154,9 @@ struct GenCtx {
     /// line, i.e. is a spreadsheet ([`Table::seats_bottom_aligned_text_on_descender`]).
     table_seats_bottom_aligned_text_on_descender: bool,
     /// Whether that descender seat keeps Excel's minimum gap above the row's
-    /// bottom boundary ([`Table::floors_bottom_aligned_descent`], issue #1097).
-    table_floors_bottom_aligned_descent: bool,
+    /// bottom boundary ([`Table::bottom_aligned_descent_floor_pt`], issues
+    /// #1097 and #1199).
+    table_bottom_aligned_descent_floor_pt: f64,
     /// The `fitToWidth` scale already folded into this table's sizes, from
     /// [`Table::print_scale`]. `None` on an unscaled sheet and off a sheet
     /// entirely; [`GenCtx::sheet_print_scale`] resolves the two apart.
@@ -247,7 +251,7 @@ impl GenCtx {
             table_default_vertical_align: None,
             table_box_is_aligned: false,
             table_seats_bottom_aligned_text_on_descender: false,
-            table_floors_bottom_aligned_descent: false,
+            table_bottom_aligned_descent_floor_pt: 0.0,
             table_print_scale: None,
             cell_seats_text_on_descender: false,
             cell_sheet_row_line: None,

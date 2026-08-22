@@ -884,7 +884,7 @@ impl XlsxParser {
                         use_content_driven_row_heights: false,
                         default_vertical_align: Some(crate::ir::CellVerticalAlign::Bottom),
                         seats_bottom_aligned_text_on_descender: true,
-                        floors_bottom_aligned_descent: floors_bottom_aligned_descent(
+                        bottom_aligned_descent_floor_pt: bottom_aligned_descent_floor_pt(
                             ctx.normal_font.as_ref(),
                         ),
                         border_paint_model: TableBorderPaintModel::ExcelBoundaryBands,
@@ -1173,7 +1173,7 @@ impl Parser for XlsxParser {
                         use_content_driven_row_heights: false,
                         default_vertical_align: Some(crate::ir::CellVerticalAlign::Bottom),
                         seats_bottom_aligned_text_on_descender: true,
-                        floors_bottom_aligned_descent: floors_bottom_aligned_descent(
+                        bottom_aligned_descent_floor_pt: bottom_aligned_descent_floor_pt(
                             ctx.normal_font.as_ref(),
                         ),
                         border_paint_model: TableBorderPaintModel::ExcelBoundaryBands,
@@ -1284,7 +1284,7 @@ impl Parser for XlsxParser {
                             use_content_driven_row_heights: false,
                             default_vertical_align: Some(crate::ir::CellVerticalAlign::Bottom),
                             seats_bottom_aligned_text_on_descender: true,
-                            floors_bottom_aligned_descent: floors_bottom_aligned_descent(
+                            bottom_aligned_descent_floor_pt: bottom_aligned_descent_floor_pt(
                                 ctx.normal_font.as_ref(),
                             ),
                             border_paint_model: TableBorderPaintModel::ExcelBoundaryBands,

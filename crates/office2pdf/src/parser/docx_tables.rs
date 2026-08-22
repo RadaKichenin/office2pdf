@@ -198,7 +198,7 @@ pub(super) fn convert_table(
         default_vertical_align: None,
         // Word GT has not verified descender seating for bottom cells (#618).
         seats_bottom_aligned_text_on_descender: false,
-        floors_bottom_aligned_descent: false,
+        bottom_aligned_descent_floor_pt: 0.0,
         border_paint_model: TableBorderPaintModel::WordPositiveAxisBands,
         prints_gridlines: false,
         prints_headings: false,

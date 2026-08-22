@@ -1527,17 +1527,22 @@ pub(super) fn native_excel_pdf_row_height(height: f64, normal_font: Option<&Norm
     }
 }
 
-/// Whether Excel holds a bottom-aligned cell's baseline a minimum distance
-/// above its row's bottom boundary in this workbook, instead of resting the
-/// face's rounded descent there whatever the font size (issue #1097).
+/// How far above its row's bottom boundary Excel holds a bottom-aligned
+/// cell's baseline in this workbook, however small the font, in points
+/// (issues #1097, #1199).
 ///
 /// The floor and the track compaction above are one switch, measured together
 /// on every native Excel-for-Mac export available. Six purpose-built probe
-/// workbooks print their declared tracks whole *and* floor the seat at 4pt;
-/// `09_expense_report_en`, whose grid compacts, prints its Arial Bold 14 title
-/// 3.00pt above its own ruled row boundary — the bare `round(0.211914 x 14)`,
-/// no floor. Nothing measured so far separates the two behaviours, so they
-/// share the one predicate rather than each carrying a guess of its own.
+/// workbooks print their declared tracks whole and floor the seat at 4pt; the
+/// compacting corpus workbooks floor it at 3pt, read off a ruled re-export of
+/// `10_kpi_tracker_en`'s note cell over an eleven-size sweep. Nothing measured
+/// so far separates the two behaviours, so they share the one predicate rather
+/// than each carrying a guess of its own.
+///
+/// Issue #1097 read the compacting family as having no floor, from the one
+/// sample then available — `09_expense_report_en`'s Arial Bold 14 title, whose
+/// bare `round(0.211914 x 14)` is already 3 and so cannot tell a 3pt floor
+/// from none. The sizes at or under 11pt can, and #1199 measured them.
 ///
 /// The mechanism behind the split is the open part. A workbook cannot be
 /// pushed from one family to the other by anything the probes varied — the
@@ -1546,8 +1551,12 @@ pub(super) fn native_excel_pdf_row_height(height: f64, normal_font: Option<&Norm
 /// What differs is the same thing that decides the compaction: whether the
 /// Normal font resolves through a theme that names per-script faces
 /// (issues #1068, #1094).
-pub(super) fn floors_bottom_aligned_descent(normal_font: Option<&NormalFont>) -> bool {
-    !printed_grid_compacts_row_heights(normal_font)
+pub(super) fn bottom_aligned_descent_floor_pt(normal_font: Option<&NormalFont>) -> f64 {
+    if printed_grid_compacts_row_heights(normal_font) {
+        crate::render::typst_gen::COMPACTED_SHEET_CELL_MIN_DESCENT_SEAT_PT
+    } else {
+        crate::render::typst_gen::SHEET_CELL_MIN_DESCENT_SEAT_PT
+    }
 }
 
 /// Horizontal space an icon-set icon takes before its cell's value.
