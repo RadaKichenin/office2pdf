@@ -181,6 +181,20 @@ pub fn substitutes(font_family: &str) -> Option<&'static [&'static str]> {
     let normalized_family = normalized_lookup_key(font_family);
     match normalized_family.as_str() {
         "calibri" => Some(&["Carlito", "Liberation Sans"]),
+        // `Calibri Light` is the `majorHAnsi` face of every Office theme since
+        // 2013, so it is the face every built-in `Heading N` resolves to. It
+        // needs its own entry even where Office ships it: Typst keys its font
+        // book on the family name with style suffixes trimmed, so `calibril.ttf`
+        // is indexed under `Calibri` at weight 300 and the stated name matches
+        // nothing. Without an entry the run got no chain and, through
+        // `best_face`, no metrics either — so `word_line_height_settings` left
+        // a theme-headed paragraph on Typst's glyph-tight line box and the gap
+        // below the heading came out a descender short (issue #1197).
+        //
+        // `Calibri` leads because the light member declares Calibri's own hhea
+        // line — both are 1950/-550/0 on 2048 upem — so it reproduces the line
+        // box exactly.
+        "calibri light" => Some(&["Calibri", "Carlito", "Liberation Sans"]),
         "carlito" => Some(&["Calibri", "Liberation Sans", "Arimo", "Arial"]),
         "cambria" => Some(&["Caladea", "Liberation Serif"]),
         "arial" => Some(&["Liberation Sans", "Arimo"]),
