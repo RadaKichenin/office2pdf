@@ -1266,9 +1266,9 @@ pub(super) struct SheetCellSeat {
     pub inset_top_pt: f64,
     /// The cell's own bottom inset.
     pub inset_bottom_pt: f64,
-    /// Whether the bottom seat keeps [`SHEET_CELL_MIN_DESCENT_SEAT_PT`] under
-    /// the baseline however small the font (issue #1097).
-    pub floors_descent: bool,
+    /// The gap the bottom seat keeps under the baseline however small the
+    /// font, in points — this workbook's floor (issues #1097, #1199).
+    pub descent_floor_pt: f64,
 }
 
 /// The baseline Excel prints for one line of a face whose bare `hhea` numbers
@@ -1316,8 +1316,8 @@ pub(super) fn sheet_cell_baseline_from_track_top_pt(
 }
 
 /// The gap Excel never closes between a bottom-aligned sheet cell's baseline
-/// and its row's bottom boundary, in the workbooks that floor it at all
-/// (issue #1097).
+/// and its row's bottom boundary, in the workbooks whose printed grid keeps
+/// its declared row tracks (issue #1097).
 ///
 /// Flat across every factor probed: the row's track height (12, 13, 14, 15,
 /// 16, 17, 18, 20, 22, 25, 30, 40, 45 and 60pt all give 4.00), the cell's own
@@ -1325,34 +1325,51 @@ pub(super) fn sheet_cell_baseline_from_track_top_pt(
 /// and Arial 20 all give 4.00). So it is one distance, not a face's metric in
 /// disguise — though only Arial cells were measured, so a face whose descent
 /// is far from Arial's could yet show it as something else.
-pub(super) const SHEET_CELL_MIN_DESCENT_SEAT_PT: f64 = 4.0;
+pub(crate) const SHEET_CELL_MIN_DESCENT_SEAT_PT: f64 = 4.0;
+
+/// The same gap in the workbooks whose printed grid compacts its declared
+/// tracks, which floor one point lower (issue #1199).
+///
+/// Measured on native Excel-for-Mac exports of `10_kpi_tracker_en.xlsx`, whose
+/// A11 note is the corpus's one bottom-aligned cell small enough to tell a
+/// floor from a bare descent. Ruling that cell with a thin box border makes
+/// Excel print its row's own boundaries, so the seat is read rather than
+/// inferred; a re-export with only the border added moves no text, and one
+/// sweeping the note's `sz` over eleven sizes gives:
+///
+/// | size | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 16 | 18 | 20 | 24 |
+/// | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+/// | seat | 3 | 3 | 3 | 3 | 3 | 3 | 3 | 3 | 4 | 4 | 5 |
+///
+/// which is `max(3, round(0.211914 x size))` at every one of them. Issue #1097
+/// read this family as having no floor at all from its one available sample,
+/// `09_expense_report_en`'s Arial Bold 14 title at 3.00pt — a size whose bare
+/// rounded descent is already 3, so it cannot separate the two readings. The
+/// four sizes at or under 11 can, and they floor.
+pub(crate) const COMPACTED_SHEET_CELL_MIN_DESCENT_SEAT_PT: f64 = 3.0;
 
 /// The descent Excel rests a bottom-aligned sheet cell's last line on: the
 /// face's `hhea` descent at a whole number of points, sitting on the row's own
-/// bottom boundary (issue #1063) — but never closer to that boundary than
-/// [`SHEET_CELL_MIN_DESCENT_SEAT_PT`] where the workbook floors it at all
-/// (issue #1097).
+/// bottom boundary (issue #1063) — but never closer to that boundary than the
+/// workbook's own floor (issues #1097, #1199).
 ///
 /// The boundary itself, with no inset under it: over the probe's size sweep
 /// the fitted inset is 0.00-0.14pt.
 ///
-/// `floors_descent` is the workbook-wide switch
-/// `xlsx_cells::floors_bottom_aligned_descent` reads, which carries the
-/// measurement behind it. Where it is set, the seat reproduces the native
-/// probes at every size from 8pt to 44pt; where it is not, the bare rounded
-/// descent reproduces `09_expense_report_en`'s 14pt title, which rests 3.00pt
-/// above its own ruled row boundary against this floor's 4pt.
+/// `descent_floor_pt` is the workbook-wide distance
+/// `xlsx_cells::bottom_aligned_descent_floor_pt` reads, which carries the
+/// measurement behind it: [`SHEET_CELL_MIN_DESCENT_SEAT_PT`] where the printed
+/// grid keeps its declared tracks, and
+/// [`COMPACTED_SHEET_CELL_MIN_DESCENT_SEAT_PT`] where it compacts them. Both
+/// families reproduce their native probes at every size swept; they differ
+/// only under a font small enough for the two floors to separate, which on
+/// Arial is 11pt and below.
 pub(super) fn sheet_cell_descent_pt(
     descent_em: f64,
     font_size_pt: f64,
-    floors_descent: bool,
+    descent_floor_pt: f64,
 ) -> f64 {
-    let descent_pt: f64 = (descent_em * font_size_pt).round();
-    if floors_descent {
-        descent_pt.max(SHEET_CELL_MIN_DESCENT_SEAT_PT)
-    } else {
-        descent_pt
-    }
+    (descent_em * font_size_pt).round().max(descent_floor_pt)
 }
 
 /// A table-cell paragraph's fixed line box, resolved at the paragraph's own
@@ -1573,7 +1590,7 @@ pub(super) fn word_cell_line_box(
             // Excel rests the descender on the row boundary itself, one inset
             // lower.
             let bottom_em: f64 =
-                (sheet_cell_descent_pt(descender_em, font_size, seat.floors_descent)
+                (sheet_cell_descent_pt(descender_em, font_size, seat.descent_floor_pt)
                     - seat.inset_bottom_pt)
                     / font_size;
             (

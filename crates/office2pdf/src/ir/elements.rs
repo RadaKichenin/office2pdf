@@ -988,12 +988,12 @@ pub struct Table {
     /// this: Word's and PowerPoint's bottom-cell seating is unverified against
     /// native GT, so their emission must not change (issue #618).
     pub seats_bottom_aligned_text_on_descender: bool,
-    /// When true, that descender seat never comes closer than Excel's minimum
-    /// gap to the row's bottom boundary, however small the font (issue #1097).
-    /// Only spreadsheet tables set this, and only those whose printed grid
-    /// keeps its declared row tracks — the workbooks whose grid compacts show
-    /// no such floor.
-    pub floors_bottom_aligned_descent: bool,
+    /// The gap that descender seat never comes closer than to the row's bottom
+    /// boundary, in points, however small the font (issues #1097, #1199). Both
+    /// families of workbook floor it; a printed grid that keeps its declared
+    /// row tracks floors one point higher than one that compacts them. Zero
+    /// for Word and PowerPoint tables, which take no descender seat at all.
+    pub bottom_aligned_descent_floor_pt: f64,
     /// How borders are painted relative to the nominal grid boundary.
     pub border_paint_model: TableBorderPaintModel,
     /// When true, `<printOptions gridLines="1"/>` asks Excel to print its

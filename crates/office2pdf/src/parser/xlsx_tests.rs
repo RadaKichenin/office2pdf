@@ -2178,30 +2178,42 @@ fn a_remapped_normal_font_compacts_a_declared_row_height() {
     );
 }
 
-fn table_floors_bottom_aligned_descent(data: &[u8]) -> bool {
+fn table_bottom_aligned_descent_floor_pt(data: &[u8]) -> f64 {
     let parser = XlsxParser;
     let (doc, _warnings) = parser.parse(data, &ConvertOptions::default()).unwrap();
-    get_sheet_page(&doc, 0).table.floors_bottom_aligned_descent
+    get_sheet_page(&doc, 0)
+        .table
+        .bottom_aligned_descent_floor_pt
 }
 
 /// The workbooks that keep their declared tracks are the ones that hold a
 /// bottom-aligned cell's baseline 4pt clear of the row boundary: every native
-/// probe export measures the two together, and the corpus workbook — which
-/// compacts — shows neither (issue #1097).
+/// probe export measures the two together (issue #1097).
 #[test]
-fn a_kept_normal_font_floors_the_bottom_aligned_seat() {
-    assert!(table_floors_bottom_aligned_descent(
-        &build_xlsx_with_normal_font_and_row_heights("Segoe UI", 10.0, &[40.0])
-    ));
+fn a_kept_normal_font_floors_the_bottom_aligned_seat_at_four_points() {
+    assert_eq!(
+        table_bottom_aligned_descent_floor_pt(&build_xlsx_with_normal_font_and_row_heights(
+            "Segoe UI",
+            10.0,
+            &[40.0]
+        )),
+        4.0
+    );
 }
 
-/// And a remapped Normal font, whose grid compacts, rests the bare rounded
-/// descent on the boundary instead (issue #1097).
+/// And a remapped Normal font, whose grid compacts, floors it a point lower —
+/// measured over an eleven-size sweep of a ruled native re-export
+/// (issue #1199).
 #[test]
-fn a_remapped_normal_font_leaves_the_bottom_aligned_seat_unfloored() {
-    assert!(!table_floors_bottom_aligned_descent(
-        &build_xlsx_with_normal_font_and_row_heights("Calibri", 11.0, &[40.0])
-    ));
+fn a_remapped_normal_font_floors_the_bottom_aligned_seat_at_three_points() {
+    assert_eq!(
+        table_bottom_aligned_descent_floor_pt(&build_xlsx_with_normal_font_and_row_heights(
+            "Calibri",
+            11.0,
+            &[40.0]
+        )),
+        3.0
+    );
 }
 
 /// The compaction belongs to the face Excel substitutes, not to the family
