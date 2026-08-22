@@ -581,38 +581,51 @@ fn test_document_requests_font_families_false_when_all_runs_use_defaults() {
     assert!(!document_requests_font_families(&doc));
 }
 
+/// Both families whose static substitution chain is complete enough to skip
+/// the availability scan: Arial, and the Times New Roman a DOCX naming no
+/// `w:rFonts` resolves (issue #1196).
+///
+/// The skip is what keeps a package that states no font at all from reporting
+/// a substitution on every host that does not install the face — the scan is
+/// the only thing that emits `FallbackUsed`, and before #1196 the synthetic
+/// default was Arial, so no such package ever reached it.
 #[test]
-fn test_document_requests_font_families_false_for_context_free_arial() {
-    let doc = Document {
-        metadata: crate::ir::Metadata::default(),
-        pages: vec![Page::Flow(crate::ir::FlowPage {
-            first_header: None,
-            first_footer: None,
-            size: crate::ir::PageSize::default(),
-            margins: crate::ir::Margins::default(),
-            content: vec![Block::Paragraph(Paragraph {
-                style: crate::ir::ParagraphStyle::default(),
-                runs: vec![crate::ir::Run {
-                    text: "DOCX default text".to_string(),
-                    style: crate::ir::TextStyle {
-                        font_family: Some("Arial".to_string()),
-                        ..crate::ir::TextStyle::default()
-                    },
-                    href: None,
-                    footnote: None,
-                }],
+fn test_document_requests_font_families_false_for_context_free_families() {
+    for family in ["Arial", "Times New Roman"] {
+        let doc = Document {
+            metadata: crate::ir::Metadata::default(),
+            pages: vec![Page::Flow(crate::ir::FlowPage {
+                first_header: None,
+                first_footer: None,
+                size: crate::ir::PageSize::default(),
+                margins: crate::ir::Margins::default(),
+                content: vec![Block::Paragraph(Paragraph {
+                    style: crate::ir::ParagraphStyle::default(),
+                    runs: vec![crate::ir::Run {
+                        text: "DOCX default text".to_string(),
+                        style: crate::ir::TextStyle {
+                            font_family: Some(family.to_string()),
+                            ..crate::ir::TextStyle::default()
+                        },
+                        href: None,
+                        footnote: None,
+                    }],
+                })],
+                header: None,
+                footer: None,
+                columns: None,
+                line_grid_pitch: None,
+                line_grid_snaps_lines: false,
+                page_numbering: None,
             })],
-            header: None,
-            footer: None,
-            columns: None,
-            line_grid_pitch: None,
-            line_grid_snaps_lines: false,
-            page_numbering: None,
-        })],
-        styles: crate::ir::StyleSheet::default(),
-    };
+            styles: crate::ir::StyleSheet::default(),
+        };
 
-    assert!(!document_requests_font_families(&doc));
+        assert!(
+            !document_requests_font_families(&doc),
+            "{family} resolves through its static chain and needs no scan"
+        );
+    }
 }
 
 #[test]

@@ -1047,11 +1047,23 @@ fn header_footer_requests_font_family(header_footer: &HeaderFooter) -> bool {
 }
 
 fn font_family_uses_context_free_fallbacks(font_family: &str, _text: &str) -> bool {
-    // Arial's static substitution chain is sufficient for Typst to select the
-    // installed face. Avoid the separate availability scan for this ubiquitous
-    // family, including the synthetic DOCX default.
-    font_family.eq_ignore_ascii_case("Arial")
+    // These two families' static substitution chains are sufficient for Typst
+    // to select the installed face, so the separate availability scan is
+    // skipped for them. Both are ubiquitous, and Times New Roman is also the
+    // face a DOCX naming no `w:rFonts` resolves (issue #1196) — the role Arial
+    // held before, and the reason the skip has to move with it. Without it,
+    // every package that states no font at all reports a substitution on any
+    // host that does not install the face: the scan is what emits
+    // `ConvertWarning::FallbackUsed`, and a synthetic default is not a request
+    // the document made.
+    CONTEXT_FREE_FALLBACK_FAMILIES
+        .iter()
+        .any(|family| font_family.eq_ignore_ascii_case(family))
 }
+
+/// Families the availability scan skips; see
+/// [`font_family_uses_context_free_fallbacks`].
+const CONTEXT_FREE_FALLBACK_FAMILIES: [&str; 2] = ["Arial", "Times New Roman"];
 
 /// A family as declared, paired with the script of the text it was declared
 /// over. Both halves decide which face the run ends up in.
