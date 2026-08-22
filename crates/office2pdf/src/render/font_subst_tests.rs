@@ -15,6 +15,34 @@ fn test_calibri_substitutes() {
 }
 
 #[test]
+fn calibri_light_resolves_through_the_calibri_chain() {
+    // `Calibri Light` is the `majorHAnsi` face of every Office theme since
+    // 2013, so it is the face of every built-in `Heading N`. Keyed on the exact
+    // name it matched nothing, so a theme-headed run got no substitute chain
+    // and no metrics at all (issue #1197).
+    let subs = substitutes("Calibri Light").expect("Calibri Light should have substitutes");
+    assert_eq!(subs, &["Calibri", "Carlito", "Liberation Sans"]);
+    assert_eq!(
+        subs[0], "Calibri",
+        "the base family carries Calibri Light's own hhea metrics, so it leads"
+    );
+}
+
+#[test]
+fn calibri_light_and_calibri_read_the_same_line_metrics() {
+    // Both faces declare hhea 1950/-550/0 on 2048 upem, so whichever member of
+    // the shared chain a host resolves, the two families must agree — that
+    // equality is what lets a theme-headed paragraph take Word's line box
+    // (issue #1197).
+    let Some(calibri) = crate::render::pdf::font_line_metrics_em("Calibri") else {
+        return; // no Calibri-compatible face on this host
+    };
+    let light = crate::render::pdf::font_line_metrics_em("Calibri Light")
+        .expect("Calibri Light must resolve wherever Calibri does");
+    assert_eq!(light, calibri);
+}
+
+#[test]
 fn test_carlito_substitutes_stay_sans_serif() {
     let subs = substitutes("Carlito").expect("Carlito should have substitutes");
     assert_eq!(subs, &["Calibri", "Liberation Sans", "Arimo", "Arial"]);

@@ -1927,6 +1927,57 @@ fn a_heading_takes_the_same_line_box_as_body_copy() {
     );
 }
 
+/// A heading paragraph in `family`, following a body paragraph, with the
+/// `w:spacing w:after` a real `Heading N` resolves.
+fn theme_heading_source(family: &str) -> String {
+    let doc = make_doc(vec![make_flow_page(vec![
+        make_paragraph("Body copy"),
+        Block::Paragraph(Paragraph {
+            style: ParagraphStyle {
+                heading_level: Some(1),
+                space_after: Some(8.0),
+                ..ParagraphStyle::default()
+            },
+            runs: vec![Run {
+                text: "Overview".to_string(),
+                style: TextStyle {
+                    font_family: Some(family.to_string()),
+                    font_size: Some(16.0),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        }),
+    ])]);
+    generate_typst(&doc).unwrap().source
+}
+
+#[test]
+fn a_theme_major_face_heading_takes_the_base_family_line_box() {
+    // `Calibri Light` is the `majorHAnsi` face of every Office theme since
+    // 2013, so a built-in `Heading N` resolves to it. Typst indexes the
+    // installed face under the trimmed family `Calibri`, so the stated name
+    // matched no face: `font_line_metrics_em` answered `None`, the heading got
+    // no fixed line box, and its block ended on the baseline with the
+    // descender missing from the gap below it (issue #1197).
+    if crate::render::pdf::font_line_metrics_em("Calibri").is_none() {
+        return; // no Calibri-compatible face on this host
+    }
+    let light: String = theme_heading_source("Calibri Light");
+    let regular: String = theme_heading_source("Calibri");
+
+    let light_box = emitted_line_box_em(&light)
+        .unwrap_or_else(|| panic!("a Calibri Light heading needs Word's line box: {light}"));
+    let regular_box = emitted_line_box_em(&regular)
+        .unwrap_or_else(|| panic!("a Calibri heading needs Word's line box: {regular}"));
+    assert_eq!(
+        light_box, regular_box,
+        "Calibri Light declares Calibri's own hhea metrics, so the two headings \
+         share one line box"
+    );
+}
+
 #[test]
 fn test_generate_undecorated_heading_keeps_its_bare_form() {
     // A heading with nothing to carry — no decoration, no resolved
