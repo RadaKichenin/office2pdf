@@ -14,15 +14,13 @@
 use quick_xml::Reader;
 use quick_xml::events::Event;
 
+use crate::ir::Subpath;
 use crate::parser::xml_util::get_attr_i64;
 
 /// Points sampled per cubic or quadratic segment. Sixteen keeps a full circle
 /// — four segments, so 64 points — within about 0.2% of its radius, well under
 /// a printed point at slide sizes.
 const CURVE_SAMPLES: usize = 16;
-
-/// The smallest number of distinct vertices that can enclose an area.
-const MIN_POLYGON_VERTICES: usize = 3;
 
 /// Flatten the `<a:pathLst>` of a `<a:custGeom>` into vertices normalized to
 /// the shape's bounding box.
@@ -32,8 +30,8 @@ const MIN_POLYGON_VERTICES: usize = 3;
 /// still leaves the caller's parse in step.
 ///
 /// Returns an empty vector when nothing usable was found — no path, a
-/// degenerate coordinate space, or fewer than three distinct points in any
-/// subpath. The caller keeps its rectangle fallback for those.
+/// degenerate coordinate space, or a subpath with too few points to draw.
+/// The caller keeps its rectangle fallback for those.
 ///
 /// **Every** subpath is returned, each as its own polygon. A geometry's
 /// subpaths come from separate `<a:path>` elements and from a `moveTo`
@@ -44,10 +42,14 @@ const MIN_POLYGON_VERTICES: usize = 3;
 /// carves a hole rather than painting solid because the caller hands every
 /// subpath to one [`crate::ir::ShapeKind::Path`], which fills even-odd
 /// (issue #870).
-pub(crate) fn parse_custom_geometry(reader: &mut Reader<&[u8]>) -> Vec<Vec<(f64, f64)>> {
+pub(crate) fn parse_custom_geometry(reader: &mut Reader<&[u8]>) -> Vec<Subpath> {
     let mut depth: usize = 1;
-    let mut paths: Vec<Vec<(f64, f64)>> = Vec::new();
+    let mut paths: Vec<Subpath> = Vec::new();
     let mut current: Vec<(f64, f64)> = Vec::new();
+    // `a:close` on the subpath being collected. It must travel with the
+    // vertices rather than be inferred from them: an elbow connector's last
+    // point is nowhere near its first, and so is a spiral's (issue #1205).
+    let mut current_closed: bool = false;
     let mut path_width: f64 = 0.0;
     let mut path_height: f64 = 0.0;
     // `a:pt` children accumulate here; a curve command reads its control
@@ -62,7 +64,13 @@ pub(crate) fn parse_custom_geometry(reader: &mut Reader<&[u8]>) -> Vec<Vec<(f64,
                 depth += 1;
                 match element.local_name().as_ref() {
                     b"path" => {
-                        flush_path(&mut paths, &mut current, path_width, path_height);
+                        flush_path(
+                            &mut paths,
+                            &mut current,
+                            &mut current_closed,
+                            path_width,
+                            path_height,
+                        );
                         path_width = get_attr_i64(element, b"w").unwrap_or(0) as f64;
                         path_height = get_attr_i64(element, b"h").unwrap_or(0) as f64;
                     }
@@ -82,9 +90,15 @@ pub(crate) fn parse_custom_geometry(reader: &mut Reader<&[u8]>) -> Vec<Vec<(f64,
                         pending_points.push((x as f64, y as f64));
                     }
                 }
-                b"close" => close_path(&mut current),
+                b"close" => close_path(&mut current, &mut current_closed),
                 b"path" => {
-                    flush_path(&mut paths, &mut current, path_width, path_height);
+                    flush_path(
+                        &mut paths,
+                        &mut current,
+                        &mut current_closed,
+                        path_width,
+                        path_height,
+                    );
                     path_width = 0.0;
                     path_height = 0.0;
                 }
@@ -93,9 +107,15 @@ pub(crate) fn parse_custom_geometry(reader: &mut Reader<&[u8]>) -> Vec<Vec<(f64,
             Ok(Event::End(ref element)) => {
                 depth -= 1;
                 match element.local_name().as_ref() {
-                    b"close" => close_path(&mut current),
+                    b"close" => close_path(&mut current, &mut current_closed),
                     b"path" => {
-                        flush_path(&mut paths, &mut current, path_width, path_height);
+                        flush_path(
+                            &mut paths,
+                            &mut current,
+                            &mut current_closed,
+                            path_width,
+                            path_height,
+                        );
                         path_width = 0.0;
                         path_height = 0.0;
                     }
@@ -110,7 +130,13 @@ pub(crate) fn parse_custom_geometry(reader: &mut Reader<&[u8]>) -> Vec<Vec<(f64,
                             // end of one outline to the start of the next,
                             // painting the wedge between (issue #866).
                             if kind == Command::Move && !current.is_empty() {
-                                flush_path(&mut paths, &mut current, path_width, path_height);
+                                flush_path(
+                                    &mut paths,
+                                    &mut current,
+                                    &mut current_closed,
+                                    path_width,
+                                    path_height,
+                                );
                             }
                             apply_command(kind, &pending_points, &mut current);
                             pending_points.clear();
@@ -125,9 +151,15 @@ pub(crate) fn parse_custom_geometry(reader: &mut Reader<&[u8]>) -> Vec<Vec<(f64,
             _ => {}
         }
     }
-    flush_path(&mut paths, &mut current, path_width, path_height);
+    flush_path(
+        &mut paths,
+        &mut current,
+        &mut current_closed,
+        path_width,
+        path_height,
+    );
 
-    paths.retain(|path| path.len() >= MIN_POLYGON_VERTICES);
+    paths.retain(Subpath::encloses_or_draws);
     paths
 }
 
@@ -207,9 +239,13 @@ fn sample_cubic(
     }
 }
 
-/// `a:close` returns to the subpath's first point. The polygon renderer closes
-/// the outline itself, so the duplicate vertex is dropped.
-fn close_path(current: &mut Vec<(f64, f64)>) {
+/// `a:close` returns to the subpath's first point. The renderer closes the
+/// outline itself, so the duplicate vertex is dropped.
+fn close_path(current: &mut Vec<(f64, f64)>, closed: &mut bool) {
+    if current.is_empty() {
+        return;
+    }
+    *closed = true;
     if let (Some(first), Some(last)) = (current.first().copied(), current.last().copied())
         && (first.0 - last.0).abs() < f64::EPSILON
         && (first.1 - last.1).abs() < f64::EPSILON
@@ -221,8 +257,9 @@ fn close_path(current: &mut Vec<(f64, f64)>) {
 /// Normalize the collected points against the path's declared coordinate space
 /// and bank them, leaving `current` empty for the next path.
 fn flush_path(
-    paths: &mut Vec<Vec<(f64, f64)>>,
+    paths: &mut Vec<Subpath>,
     current: &mut Vec<(f64, f64)>,
+    closed: &mut bool,
     width: f64,
     height: f64,
 ) {
@@ -230,15 +267,17 @@ fn flush_path(
         return;
     }
     let points = std::mem::take(current);
+    let was_closed: bool = std::mem::take(closed);
     if width <= 0.0 || height <= 0.0 {
         return;
     }
-    paths.push(
-        points
+    paths.push(Subpath {
+        vertices: points
             .into_iter()
             .map(|(x, y)| (x / width, y / height))
             .collect(),
-    );
+        closed: was_closed,
+    });
 }
 
 #[cfg(test)]

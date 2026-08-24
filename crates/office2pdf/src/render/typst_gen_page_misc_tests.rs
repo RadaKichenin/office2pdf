@@ -3193,7 +3193,12 @@ fn a_behind_text_header_banner_is_drawn_on_the_background_layer() {
     let banner = HeaderFooterShape {
         shape: Shape {
             kind: ShapeKind::Path {
-                subpaths: vec![vec![(0.0, 0.0), (1.0, 0.0), (1.0, 0.65), (0.0, 1.0)]],
+                subpaths: vec![crate::ir::Subpath::closed_outline(vec![
+                    (0.0, 0.0),
+                    (1.0, 0.0),
+                    (1.0, 0.65),
+                    (0.0, 1.0),
+                ])],
             },
             fill: None,
             gradient_fill: Some(GradientFill {

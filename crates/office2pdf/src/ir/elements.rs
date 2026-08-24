@@ -1655,16 +1655,56 @@ pub enum ShapeKind {
     Polygon {
         vertices: Vec<(f64, f64)>,
     },
-    /// Several closed subpaths filled as one path under the even-odd rule, so
-    /// an inner boundary carves a hole rather than painting solid.
+    /// Several subpaths filled as one path under the even-odd rule, so an
+    /// inner boundary carves a hole rather than painting solid.
     ///
     /// This is what a DrawingML `a:custGeom` is: its `a:pathLst` may hold
     /// separate `a:path` elements, and one `a:path` may hold several subpaths.
-    /// Vertices are normalized to 0.0–1.0 of the bounding box, like
+    /// Vertices are normalized to 0.0-1.0 of the bounding box, like
     /// [`ShapeKind::Polygon`] (issue #870).
     Path {
-        subpaths: Vec<Vec<(f64, f64)>>,
+        subpaths: Vec<Subpath>,
     },
+}
+
+/// One outline of a custom geometry.
+///
+/// Vertices are normalized to 0.0-1.0 of the shape's bounding box.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Subpath {
+    pub vertices: Vec<(f64, f64)>,
+    /// Whether `a:close` ended the outline, so its stroke joins the last
+    /// vertex back to the first. An open polyline must not be closed: the
+    /// elbow connectors of the deck on issue #1205 are three-segment
+    /// `moveTo lnTo lnTo lnTo` paths, and closing them draws a diagonal the
+    /// deck never declared. A fill still treats an open outline as closed,
+    /// which is what PowerPoint does.
+    pub closed: bool,
+}
+
+impl Subpath {
+    /// An outline that returns to its own start.
+    pub fn closed_outline(vertices: Vec<(f64, f64)>) -> Self {
+        Self {
+            vertices,
+            closed: true,
+        }
+    }
+
+    /// An outline that stops at its last vertex.
+    pub fn open_outline(vertices: Vec<(f64, f64)>) -> Self {
+        Self {
+            vertices,
+            closed: false,
+        }
+    }
+
+    /// A closed outline needs three vertices to enclose an area; an open one
+    /// draws a line from two.
+    pub(crate) fn encloses_or_draws(&self) -> bool {
+        let needed: usize = if self.closed { 3 } else { 2 };
+        self.vertices.len() >= needed
+    }
 }
 
 /// Arrowhead decoration on a line endpoint.

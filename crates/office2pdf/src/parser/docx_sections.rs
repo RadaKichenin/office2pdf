@@ -1745,10 +1745,10 @@ mod anchor_tests {
         assert_eq!(subpaths.len(), 1);
         // The wedge's right edge stops at 1896461/2906395 of the path box,
         // and the path box is stretched onto the shape's extent.
-        let right_edge: f64 = subpaths[0][2].1;
+        let right_edge: f64 = subpaths[0].vertices[2].1;
         assert!((right_edge - 0.6525).abs() < 0.001, "{right_edge}");
         assert!(
-            (subpaths[0][3].1 - 1.0).abs() < 0.001,
+            (subpaths[0].vertices[3].1 - 1.0).abs() < 0.001,
             "the left edge drops to the bottom"
         );
     }

@@ -2,7 +2,7 @@ use super::*;
 
 /// Drive the parser the way the slide parser does: positioned just after the
 /// `<a:custGeom>` start tag.
-fn parse(xml: &str) -> Vec<Vec<(f64, f64)>> {
+fn parse_subpaths(xml: &str) -> Vec<Subpath> {
     let mut reader = Reader::from_str(xml);
     loop {
         match reader.read_event() {
@@ -14,6 +14,15 @@ fn parse(xml: &str) -> Vec<Vec<(f64, f64)>> {
             _ => {}
         }
     }
+}
+
+/// The vertices alone, for the tests whose subject is the geometry rather
+/// than whether each outline closes.
+fn parse(xml: &str) -> Vec<Vec<(f64, f64)>> {
+    parse_subpaths(xml)
+        .into_iter()
+        .map(|subpath| subpath.vertices)
+        .collect()
 }
 
 fn close_to(actual: (f64, f64), expected: (f64, f64)) -> bool {
@@ -150,12 +159,22 @@ fn a_geometry_with_no_usable_path_returns_nothing() {
     // A self-closing `<a:custGeom/>` is not covered here: it arrives as an
     // empty element, which the caller handles without opening a subtree, so
     // this function never sees one.
-    // Two points enclose no area.
+    // A lone `moveTo` draws nothing: one point is neither an area nor a line.
+    assert!(
+        parse(
+            r#"<a:custGeom><a:pathLst><a:path w="100" h="100">
+                <a:moveTo><a:pt x="0" y="0"/></a:moveTo>
+            </a:path></a:pathLst></a:custGeom>"#
+        )
+        .is_empty()
+    );
+    // Two points enclose no area, so a closed outline of two is dropped.
     assert!(
         parse(
             r#"<a:custGeom><a:pathLst><a:path w="100" h="100">
                 <a:moveTo><a:pt x="0" y="0"/></a:moveTo>
                 <a:lnTo><a:pt x="100" y="100"/></a:lnTo>
+                <a:close/>
             </a:path></a:pathLst></a:custGeom>"#
         )
         .is_empty()
@@ -270,4 +289,79 @@ fn a_single_subpath_is_unchanged_by_the_split() {
     .expect("usable polygon");
 
     assert_eq!(vertices.len(), 4);
+}
+
+/// `a:close` is what tells the outline to return to its start. A path that
+/// states none is a polyline: the elbow connectors of the deck on issue #1205
+/// end at their last point, and joining that back to the first draws a
+/// diagonal across the slide.
+#[test]
+fn an_unclosed_path_stays_open() {
+    let subpaths = parse_subpaths(
+        r#"<a:custGeom><a:pathLst><a:path w="1000" h="1000">
+            <a:moveTo><a:pt x="0" y="0"/></a:moveTo>
+            <a:lnTo><a:pt x="0" y="1000"/></a:lnTo>
+            <a:lnTo><a:pt x="1000" y="1000"/></a:lnTo>
+            <a:lnTo><a:pt x="1000" y="0"/></a:lnTo>
+        </a:path></a:pathLst></a:custGeom>"#,
+    );
+
+    assert_eq!(subpaths.len(), 1);
+    assert!(!subpaths[0].closed, "no a:close was stated");
+    assert_eq!(subpaths[0].vertices.len(), 4);
+}
+
+/// The same path with `a:close` is a ring.
+#[test]
+fn a_closed_path_is_marked_closed() {
+    let subpaths = parse_subpaths(
+        r#"<a:custGeom><a:pathLst><a:path w="1000" h="1000">
+            <a:moveTo><a:pt x="0" y="0"/></a:moveTo>
+            <a:lnTo><a:pt x="0" y="1000"/></a:lnTo>
+            <a:lnTo><a:pt x="1000" y="1000"/></a:lnTo>
+            <a:close/>
+        </a:path></a:pathLst></a:custGeom>"#,
+    );
+
+    assert_eq!(subpaths.len(), 1);
+    assert!(subpaths[0].closed);
+}
+
+/// One `<a:path>` can hold a closed outline and an open one, and each keeps
+/// its own answer rather than the last one seen.
+#[test]
+fn openness_is_tracked_per_subpath() {
+    let subpaths = parse_subpaths(
+        r#"<a:custGeom><a:pathLst><a:path w="1000" h="1000">
+            <a:moveTo><a:pt x="0" y="0"/></a:moveTo>
+            <a:lnTo><a:pt x="200" y="0"/></a:lnTo>
+            <a:lnTo><a:pt x="200" y="200"/></a:lnTo>
+            <a:close/>
+            <a:moveTo><a:pt x="400" y="400"/></a:moveTo>
+            <a:lnTo><a:pt x="900" y="400"/></a:lnTo>
+            <a:lnTo><a:pt x="900" y="900"/></a:lnTo>
+        </a:path></a:pathLst></a:custGeom>"#,
+    );
+
+    assert_eq!(subpaths.len(), 2, "got {subpaths:?}");
+    assert!(subpaths[0].closed, "the first outline stated a:close");
+    assert!(!subpaths[1].closed, "the second did not");
+}
+
+/// Two points enclose nothing but still draw a line, so an open two-point
+/// subpath survives. The deck on issue #1205 draws each connector's vertical
+/// leg exactly that way — `moveTo` then one `lnTo`, with `<a:noFill/>`.
+#[test]
+fn an_open_two_point_subpath_is_kept() {
+    let subpaths = parse_subpaths(
+        r#"<a:custGeom><a:pathLst><a:path w="1000" h="1000">
+            <a:moveTo><a:pt x="500" y="0"/></a:moveTo>
+            <a:lnTo><a:pt x="500" y="1000"/></a:lnTo>
+        </a:path></a:pathLst></a:custGeom>"#,
+    );
+
+    assert_eq!(subpaths.len(), 1, "the line is not dropped: {subpaths:?}");
+    assert!(!subpaths[0].closed);
+    assert!(close_to(subpaths[0].vertices[0], (0.5, 0.0)));
+    assert!(close_to(subpaths[0].vertices[1], (0.5, 1.0)));
 }

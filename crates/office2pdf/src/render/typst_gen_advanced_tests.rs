@@ -2107,8 +2107,18 @@ fn test_multi_subpath_shape_fills_even_odd() {
             100.0,
             ShapeKind::Path {
                 subpaths: vec![
-                    vec![(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)],
-                    vec![(0.25, 0.25), (0.75, 0.25), (0.75, 0.75), (0.25, 0.75)],
+                    crate::ir::Subpath::closed_outline(vec![
+                        (0.0, 0.0),
+                        (1.0, 0.0),
+                        (1.0, 1.0),
+                        (0.0, 1.0),
+                    ]),
+                    crate::ir::Subpath::closed_outline(vec![
+                        (0.25, 0.25),
+                        (0.75, 0.25),
+                        (0.75, 0.75),
+                        (0.25, 0.75),
+                    ]),
                 ],
             },
             Some(Color::new(0, 128, 0)),
@@ -2136,6 +2146,40 @@ fn test_multi_subpath_shape_fills_even_odd() {
     );
 }
 
+/// An open subpath is drawn without `curve.close()`, so a stroked polyline
+/// stops at its last point. The elbow connectors of the deck on issue #1205
+/// are unclosed `moveTo lnTo lnTo lnTo` paths, and closing them drew a
+/// diagonal back across the slide.
+#[test]
+fn test_open_subpath_is_not_closed() {
+    let doc = make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![make_shape_element(
+            0.0,
+            0.0,
+            100.0,
+            100.0,
+            ShapeKind::Path {
+                subpaths: vec![crate::ir::Subpath::open_outline(vec![
+                    (0.0, 0.0),
+                    (0.0, 1.0),
+                    (1.0, 1.0),
+                ])],
+            },
+            None,
+            None,
+        )],
+    )]);
+    let source = generate_typst(&doc).unwrap().source;
+
+    assert_eq!(source.matches("curve.move(").count(), 1, "got {source}");
+    assert!(
+        !source.contains("curve.close()"),
+        "an unclosed path must not be closed: {source}"
+    );
+}
+
 /// A single-subpath geometry still draws as one closed outline, so the change
 /// does not turn every custom shape into a hole-carving path.
 #[test]
@@ -2149,7 +2193,11 @@ fn test_single_subpath_shape_still_closes_its_outline() {
             100.0,
             100.0,
             ShapeKind::Path {
-                subpaths: vec![vec![(0.0, 0.0), (1.0, 0.0), (1.0, 1.0)]],
+                subpaths: vec![crate::ir::Subpath::closed_outline(vec![
+                    (0.0, 0.0),
+                    (1.0, 0.0),
+                    (1.0, 1.0),
+                ])],
             },
             Some(Color::new(0, 0, 255)),
             None,
