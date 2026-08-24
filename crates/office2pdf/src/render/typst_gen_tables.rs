@@ -681,6 +681,15 @@ const ARROW_ICON_HEAD_LENGTH_FRACTION: f64 = 6.0 / 12.0;
 /// print is a little over half that (#536).
 const CIRCLE_ICON_DIAMETER_PT: f64 = 8.96;
 
+/// How wide Excel draws an arrow's outline, in points.
+///
+/// The sprite's outline is exactly one of its own pixels wide everywhere and
+/// lies wholly inside the silhouette: in `10_kpi_tracker_en`'s up arrow the
+/// bottom row is the outline hue across, the shaft's side columns likewise,
+/// and the interior ramp starts one pixel in. The bitmap is 12px over the
+/// [`ARROW_ICON_LENGTH_PT`] box, so that pixel is 0.917pt (issue #1201).
+const ARROW_ICON_OUTLINE_WIDTH_PT: f64 = ARROW_ICON_LENGTH_PT / 12.0;
+
 /// Excel shades an arrow sprite along the icon box's diagonal, not down it:
 /// every interior pixel is a function of `x + y`, and the sprite's pixel is
 /// square, so the ramp runs at 45 degrees (issue #1134).
@@ -742,11 +751,13 @@ fn arrow_icon_polygon(
         _ => return None,
     };
 
-    let coordinates: String = points
-        .iter()
-        .map(|(x, y)| format!("({}pt, {}pt)", format_f64(*x), format_f64(*y)))
-        .collect::<Vec<String>>()
-        .join(", ");
+    let coordinates = |points: &[(f64, f64)]| -> String {
+        points
+            .iter()
+            .map(|(x, y)| format!("({}pt, {}pt)", format_f64(*x), format_f64(*y)))
+            .collect::<Vec<String>>()
+            .join(", ")
+    };
     // A band Excel exported carries its own ramp and its own outline hue; one
     // that was never measured keeps the flat stand-in under an outline derived
     // from it, which is close for green and olive for amber (issue #1134).
@@ -766,11 +777,84 @@ fn arrow_icon_polygon(
             (paint.clone(), format!("{paint}.darken(30%)"))
         }
     };
-    let shape: String = format!("polygon(fill: {fill}, stroke: 0.4pt + {outline}, {coordinates})");
+    // Typst has no inset stroke, so the outline is stroked on a path inset by
+    // half its width: mitring the corners that way puts the stroke's outer
+    // edge back on the silhouette, with none of it over the page. Stroking
+    // the silhouette itself painted less than a quarter of Excel's outline
+    // inward and spilled the rest outward (issue #1201).
+    let ring: Vec<(f64, f64)> = inset_polygon(&points, ARROW_ICON_OUTLINE_WIDTH_PT / 2.0);
+    // The ramp stays on the silhouette rather than the inset path: a 45deg
+    // gradient runs over its own shape's box, and the fractions #1134 measured
+    // are of the sprite's full box, not of what the outline leaves (issue
+    // #1201).
+    //
+    // Superimposing the two takes a box, and it is the silhouette's own
+    // extent: `#place`'s `horizon` centres whatever element it is given, so a
+    // box of any other size would move the icon off the row's centre line.
+    let extent =
+        |axis: fn(&(f64, f64)) -> f64| -> f64 { points.iter().map(axis).fold(0.0, f64::max) };
+    let shape: String = format!(
+        "box(width: {width}pt, height: {height}pt)\
+         [#place(top + left, polygon(fill: {fill}, stroke: none, {silhouette}))\
+         #place(top + left, polygon(stroke: {stroke}pt + {outline}, {ring}))]",
+        width = format_f64(extent(|point| point.0)),
+        height = format_f64(extent(|point| point.1)),
+        silhouette = coordinates(&points),
+        stroke = format_f64(ARROW_ICON_OUTLINE_WIDTH_PT),
+        ring = coordinates(&ring),
+    );
     Some(match rotation {
         Some(degrees) => format!("rotate({degrees}deg, {shape})"),
         None => shape,
     })
+}
+
+/// A closed polygon's vertices moved `distance` toward its interior, each
+/// corner landing where its two neighbouring offset edges meet.
+///
+/// Offsetting the result back out by the same distance reproduces the input,
+/// which is what makes a `2 * distance` stroke on it cover exactly the input's
+/// outermost band and nothing beyond it. The interior's side of each edge is
+/// read from the signed area rather than assumed, so the flipped and
+/// transposed arrows inset inward too.
+fn inset_polygon(points: &[(f64, f64)], distance: f64) -> Vec<(f64, f64)> {
+    let count: usize = points.len();
+    let twice_signed_area: f64 = (0..count)
+        .map(|index| {
+            let (x0, y0) = points[index];
+            let (x1, y1) = points[(index + 1) % count];
+            x0 * y1 - x1 * y0
+        })
+        .sum();
+    let winding: f64 = if twice_signed_area > 0.0 { 1.0 } else { -1.0 };
+    // The inward unit normal of the edge leaving vertex `index`.
+    let normal = |index: usize| -> (f64, f64) {
+        let (x0, y0) = points[index];
+        let (x1, y1) = points[(index + 1) % count];
+        let (dx, dy) = (x1 - x0, y1 - y0);
+        let length: f64 = dx.hypot(dy);
+        (-dy / length * winding, dx / length * winding)
+    };
+    (0..count)
+        .map(|index| {
+            let (x, y) = points[index];
+            let (arriving_x, arriving_y) = normal((index + count - 1) % count);
+            let (leaving_x, leaving_y) = normal(index);
+            // Both offset edges are `distance` along their own normal, so
+            // their meeting point lies on the normals' sum, scaled to keep
+            // that distance. A straight-through vertex has the two normals
+            // equal, which the same expression carries.
+            let (sum_x, sum_y) = (arriving_x + leaving_x, arriving_y + leaving_y);
+            let projection: f64 = sum_x * arriving_x + sum_y * arriving_y;
+            if projection.abs() < 1e-9 {
+                // An edge doubling straight back on itself has no interior to
+                // move into; leave the vertex where it is.
+                return (x, y);
+            }
+            let scale: f64 = distance / projection;
+            (x + sum_x * scale, y + sum_y * scale)
+        })
+        .collect()
 }
 
 #[allow(clippy::too_many_arguments)]
