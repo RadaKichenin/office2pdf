@@ -202,14 +202,16 @@ fn test_icon_text_codegen() {
         "Icon color should tint the icon glyph. Got: {}",
         output.source,
     );
-    // Excel anchors the icon at the cell's left edge on the value's own
-    // line. An in-flow icon wraps narrow cells onto a second line, doubling
-    // the row height (issue #367) — the icon must be placed out of layout.
-    // The `dx` that carries it back out of the cell's inset is this cell's
-    // own (issue #1087); which offset that is belongs to the tests below.
+    // Excel anchors the icon at the cell's left edge, on its own seat below
+    // the row's top boundary. An in-flow icon wraps narrow cells onto a
+    // second line, doubling the row height (issue #367) — the icon must be
+    // placed out of layout. The `dx` and `dy` that carry it back out of the
+    // cell's inset are this cell's own (issues #1087, #1202); which offsets
+    // those are belongs to the tests below.
     assert!(
-        output.source.contains("#place(left + horizon, dx: ")
-            && output.source.contains("pt, text("),
+        output.source.contains("#place(top + left, dx: ")
+            && output.source.contains("pt, dy: ")
+            && output.source.contains("text("),
         "Icon must be placed out of layout at the cell's left edge. Got: {}",
         output.source,
     );
@@ -1594,11 +1596,16 @@ fn test_arrow_icon_outline_is_stroked_inside_the_silhouette() {
     }
 }
 
-/// The silhouette stays the icon's layout box: `#place`'s `horizon` centres
-/// the element it is given, so an outline that changed the box's size would
-/// move the icon off the row's centre line as well (issue #1201).
+/// The arrow's layout box is Excel's 11 x 11pt sprite box, whatever the
+/// silhouette in it spans.
+///
+/// The box is what the row seats (issue #1202), and the silhouette is flush
+/// with its top-left corner because the mask's padding column falls on the
+/// right and the transposed one's padding row at the bottom. An outline
+/// stroked outside the silhouette would therefore leave the sprite's own
+/// extent, which is what #1201 kept it inside of.
 #[test]
-fn test_arrow_icon_box_stays_the_silhouettes_own_size() {
+fn test_arrow_icon_box_is_excels_sprite_box() {
     for glyph in [
         crate::ir::ICON_ARROW_UP,
         crate::ir::ICON_ARROW_DOWN,
@@ -1610,15 +1617,22 @@ fn test_arrow_icon_box_stays_the_silhouettes_own_size() {
         ))]))
         .unwrap()
         .source;
-        let silhouette: Vec<(f64, f64)> = arrow_polygon_points(&source);
-        let extent = |axis: fn(&(f64, f64)) -> f64| -> f64 {
-            silhouette.iter().map(axis).fold(f64::MIN, f64::max)
-        };
         assert_eq!(
             icon_box_size(&source),
-            (extent(|p| p.0), extent(|p| p.1)),
-            "{glyph}: the box is the silhouette's own extent. Got: {source}",
+            (11.0, 11.0),
+            "{glyph}: the box is the sprite's own. Got: {source}",
         );
+        let silhouette: Vec<(f64, f64)> = arrow_polygon_points(&source);
+        for axis in [0, 1] {
+            let start: f64 = silhouette
+                .iter()
+                .map(|point| if axis == 0 { point.0 } else { point.1 })
+                .fold(f64::MAX, f64::min);
+            assert_eq!(
+                start, 0.0,
+                "{glyph}: the ink is flush with the box on axis {axis}. Got: {source}",
+            );
+        }
     }
 }
 
@@ -1786,7 +1800,7 @@ fn test_icon_set_icon_anchors_at_the_cells_left_inset() {
     assert!(
         output
             .source
-            .contains("#place(left + horizon, dx: -10.6pt, box("),
+            .contains("#place(top + left, dx: -10.6pt, dy: 0pt, box("),
         "the icon must be pulled back to 2pt inside the cell boundary. Got: {}",
         output.source,
     );
@@ -1807,7 +1821,7 @@ fn test_icon_anchor_follows_the_cells_own_inset() {
     assert!(
         output
             .source
-            .contains("#place(left + horizon, dx: -1pt, box("),
+            .contains("#place(top + left, dx: -1pt, dy: 0pt, box("),
         "a 3pt inset leaves only 1pt to pull back. Got: {}",
         output.source,
     );
@@ -1824,11 +1838,157 @@ fn test_character_and_disc_icons_share_the_left_inset_anchor() {
         assert!(
             output
                 .source
-                .contains("#place(left + horizon, dx: -10.6pt,"),
+                .contains("#place(top + left, dx: -10.6pt, dy: 0pt,"),
             "{glyph} must anchor at the cell's left inset too. Got: {}",
             output.source,
         );
     }
+}
+
+/// The alignment, `dx` and `dy` of the `#place` an icon is drawn by.
+///
+/// Only the icon's placement carries offsets in these fixtures, so the first
+/// `#place(<align>, dx: …` in the source is it.
+fn icon_placement(source: &str) -> (String, f64, f64) {
+    source
+        .match_indices("#place(")
+        .find_map(|(index, marker)| {
+            let call: &str = &source[index + marker.len()..];
+            let (align, rest) = call.split_once(", dx: ")?;
+            let (dx, rest) = rest.split_once("pt, ")?;
+            let (dy, _) = rest.strip_prefix("dy: ")?.split_once("pt, ")?;
+            Some((align.to_string(), dx.parse().ok()?, dy.parse().ok()?))
+        })
+        .unwrap_or_else(|| panic!("no placed icon in: {source}"))
+}
+
+/// The icon's own top edge, measured down from its row's top boundary: the
+/// cell's inset, the placement's `dy`, and where in the drawn shape the ink
+/// starts.
+fn icon_top_below_row_boundary(source: &str, inset: Insets, ink_top_in_shape: f64) -> f64 {
+    let (align, _, dy) = icon_placement(source);
+    assert_eq!(
+        align, "top + left",
+        "the icon is seated from the row's top edge, not centred on it: {source}",
+    );
+    inset.top + dy + ink_top_in_shape
+}
+
+/// Excel seats an icon-set icon's sprite box a whole point below its row's
+/// top boundary, whatever the row's height.
+///
+/// Measured on the native export of `10_kpi_tracker_en` (issue #1202): the
+/// `KPI` sheet's six `3Arrows` sprites are placed
+/// `transform="11 0 0 11 386 <y>"` with y = 133, 147, 161, 175, 189 and 203,
+/// while the thin row rules under them fill 132-133, 146-147, … — so every
+/// box starts 1.00pt below the boundary its rule is anchored on. The 14pt
+/// tracks do not centre an 11pt box there; that would put it at 1.5pt.
+#[test]
+fn test_icon_sprite_box_seats_one_point_below_the_rows_top_boundary() {
+    for glyph in [
+        crate::ir::ICON_ARROW_UP,
+        crate::ir::ICON_ARROW_DOWN,
+        crate::ir::ICON_ARROW_RIGHT,
+    ] {
+        let mut cell = icon_cell(glyph, Color::new(0x59, 0xB0, 0x6D));
+        cell.padding = Some(icon_cell_inset());
+        let source: String = generate_typst(&make_doc(vec![icon_sheet(cell)]))
+            .unwrap()
+            .source;
+        // Every arrow's ink starts at the top of the box it is drawn in: the
+        // sprite's blank row falls at the bottom, never above the arrow.
+        let ink_top: f64 = arrow_polygon_points(&source)
+            .iter()
+            .map(|point| point.1)
+            .fold(f64::MAX, f64::min);
+        let top: f64 = icon_top_below_row_boundary(&source, icon_cell_inset(), ink_top);
+        assert!(
+            (top - 1.0).abs() < 1e-9,
+            "{glyph}: the icon starts {top}pt below the row's top edge, not 1pt. Got: {source}",
+        );
+    }
+}
+
+/// The seat is measured from the row boundary, so a cell laid out with a
+/// different vertical inset needs a different `dy` to land the icon in the
+/// same place — as the left anchor already does horizontally (issue #1087).
+#[test]
+fn test_icon_seat_follows_the_cells_own_vertical_inset() {
+    for inset_top in [0.0, 1.0, 2.5] {
+        let inset = Insets {
+            top: inset_top,
+            ..icon_cell_inset()
+        };
+        let mut cell = icon_cell(crate::ir::ICON_ARROW_UP, Color::new(0x59, 0xB0, 0x6D));
+        cell.padding = Some(inset);
+        let source: String = generate_typst(&make_doc(vec![icon_sheet(cell)]))
+            .unwrap()
+            .source;
+        let ink_top: f64 = arrow_polygon_points(&source)
+            .iter()
+            .map(|point| point.1)
+            .fold(f64::MAX, f64::min);
+        let top: f64 = icon_top_below_row_boundary(&source, inset, ink_top);
+        assert!(
+            (top - 1.0).abs() < 1e-9,
+            "a {inset_top}pt inset must still leave the icon 1pt below the boundary, \
+             got {top}pt. Source: {source}",
+        );
+    }
+}
+
+/// A sprite shorter than its box keeps its ink against the box's top instead
+/// of being re-centred in it.
+///
+/// The up and down arrows ink all 12 rows of the 12 x 12px bitmap; the right
+/// one inks rows 0-10 and leaves row 11 blank, so its ink is 10.08pt in an
+/// 11pt box and hangs from the top. Centring that shorter shape on the row
+/// dropped it a further (11.00 - 10.08) / 2 = 0.46pt, for 0.71pt in total
+/// (issue #1202).
+#[test]
+fn test_short_arrow_icon_hangs_from_its_sprite_boxs_top() {
+    let mut cell = icon_cell(crate::ir::ICON_ARROW_RIGHT, Color::new(0x59, 0xB0, 0x6D));
+    cell.padding = Some(icon_cell_inset());
+    let source: String = generate_typst(&make_doc(vec![icon_sheet(cell)]))
+        .unwrap()
+        .source;
+    let points: Vec<(f64, f64)> = arrow_polygon_points(&source);
+    let ink_height: f64 = points.iter().map(|point| point.1).fold(f64::MIN, f64::max);
+    assert!(
+        (ink_height - 10.08).abs() < 1e-9,
+        "the right arrow's ink is 0.92pt short of the box: {source}",
+    );
+    let (_, box_height) = icon_box_size(&source);
+    assert!(
+        (box_height - 11.0).abs() < 1e-9,
+        "and is drawn in the sprite's own 11pt box, got {box_height}pt: {source}",
+    );
+    let top: f64 = icon_top_below_row_boundary(&source, icon_cell_inset(), 0.0);
+    assert!(
+        (top - 1.0).abs() < 1e-9,
+        "so the box's top, not the ink's centre, is what the row seats: {top}pt",
+    );
+}
+
+/// A disc has no native export to read, so it keeps the middle of the sprite
+/// box Excel seats — the flush-top ink is a measured property of the arrow
+/// masks, not of the box (issue #1202).
+#[test]
+fn test_disc_icon_centres_in_the_sprite_box() {
+    let mut cell = icon_cell(crate::ir::ICON_CIRCLE, Color::new(0x62, 0xC1, 0x7A));
+    cell.padding = Some(icon_cell_inset());
+    let source: String = generate_typst(&make_doc(vec![icon_sheet(cell)]))
+        .unwrap()
+        .source;
+    assert!(
+        source.contains("box(height: 11pt)[#place(left + horizon, circle(radius: 4.48pt"),
+        "the disc sits in the middle of the 11pt sprite box. Got: {source}",
+    );
+    let top: f64 = icon_top_below_row_boundary(&source, icon_cell_inset(), 0.0);
+    assert!(
+        (top - 1.0).abs() < 1e-9,
+        "whose own top is still 1pt below the row boundary: {top}pt",
+    );
 }
 
 /// A worksheet text box anchored after `anchor_row` at `x_offset_pt`.
