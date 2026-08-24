@@ -1,6 +1,7 @@
 use std::fmt::Write;
 
 use super::*;
+use crate::ir::Subpath;
 
 pub(super) fn generate_shape(out: &mut String, shape: &Shape, width: f64, height: f64) {
     // Render shadow as offset duplicate before main shape
@@ -569,6 +570,31 @@ fn write_shadow_shape(out: &mut String, shape: &Shape, width: f64, height: f64, 
                     alpha,
                 );
             }
+            // A custom geometry casts its own outline. Only a closed
+            // subpath is a filled region: an unclosed polyline is stroked,
+            // and filling it would paint the area an elbow connector merely
+            // brackets (issues #1205, #1305).
+            //
+            // Like the polygon arm above, the silhouette is the outline
+            // scaled onto the expanded layer box rather than offset from it,
+            // which is the approximation #1206 tracks.
+            ShapeKind::Path { subpaths } => {
+                let closed: Vec<&Subpath> =
+                    subpaths.iter().filter(|subpath| subpath.closed).collect();
+                if closed.is_empty() {
+                    out.push_str("]\n");
+                    continue;
+                }
+                let _ = write!(
+                    out,
+                    "#curve(fill-rule: \"even-odd\", fill: rgb({}, {}, {}, {})",
+                    shadow.color.r, shadow.color.g, shadow.color.b, alpha,
+                );
+                for subpath in closed {
+                    write_curve_subpath(out, layer_width, layer_height, subpath);
+                }
+                out.push(')');
+            }
             // Line is handled above; any future variants gracefully skip
             // the shadow rather than panicking.
             _ => {}
@@ -649,7 +675,7 @@ fn write_subpath_curve(
     shape: &Shape,
     width: f64,
     height: f64,
-    subpaths: &[Vec<(f64, f64)>],
+    subpaths: &[Subpath],
 ) {
     out.push_str("#curve(fill-rule: \"even-odd\"");
     if let Some(pattern) = &shape.pattern_fill {
@@ -668,9 +694,14 @@ fn write_subpath_curve(
     out.push_str(")\n");
 }
 
-/// One closed subpath as `curve.move` / `curve.line` … / `curve.close`.
-fn write_curve_subpath(out: &mut String, width: f64, height: f64, vertices: &[(f64, f64)]) {
-    for (index, (vx, vy)) in vertices.iter().enumerate() {
+/// One subpath as `curve.move` / `curve.line` …, closed with `curve.close`
+/// only when the geometry said `a:close`.
+///
+/// Typst closes an open curve for filling but not for stroking, which is what
+/// DrawingML does: an unclosed connector's outline stops at its last point
+/// (issue #1205).
+fn write_curve_subpath(out: &mut String, width: f64, height: f64, subpath: &Subpath) {
+    for (index, (vx, vy)) in subpath.vertices.iter().enumerate() {
         let verb: &str = if index == 0 { "move" } else { "line" };
         let _ = write!(
             out,
@@ -680,7 +711,9 @@ fn write_curve_subpath(out: &mut String, width: f64, height: f64, vertices: &[(f
             format_f64(vy * height),
         );
     }
-    out.push_str(", curve.close()");
+    if subpath.closed {
+        out.push_str(", curve.close()");
+    }
 }
 
 /// Generate a Typst `#polygon(...)` for an arbitrary polygon shape.

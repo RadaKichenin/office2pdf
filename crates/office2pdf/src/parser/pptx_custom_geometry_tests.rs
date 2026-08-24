@@ -1,19 +1,39 @@
 use super::*;
 
+/// A square shape box, so a test that declares its own `<a:path w= h=>`
+/// coordinate space is unaffected by the extent behind it.
+const UNIT_EXTENT: ShapeExtent = ShapeExtent {
+    width: 1000.0,
+    height: 1000.0,
+};
+
 /// Drive the parser the way the slide parser does: positioned just after the
 /// `<a:custGeom>` start tag.
-fn parse(xml: &str) -> Vec<Vec<(f64, f64)>> {
+fn parse_subpaths_in(xml: &str, extent: ShapeExtent) -> Vec<Subpath> {
     let mut reader = Reader::from_str(xml);
     loop {
         match reader.read_event() {
             Ok(Event::Start(ref element)) if element.local_name().as_ref() == b"custGeom" => {
-                return parse_custom_geometry(&mut reader);
+                return parse_custom_geometry(&mut reader, extent);
             }
             Ok(Event::Eof) => panic!("custGeom not found"),
             Err(error) => panic!("{error}"),
             _ => {}
         }
     }
+}
+
+fn parse_subpaths(xml: &str) -> Vec<Subpath> {
+    parse_subpaths_in(xml, UNIT_EXTENT)
+}
+
+/// The vertices alone, for the tests whose subject is the geometry rather
+/// than whether each outline closes.
+fn parse(xml: &str) -> Vec<Vec<(f64, f64)>> {
+    parse_subpaths(xml)
+        .into_iter()
+        .map(|subpath| subpath.vertices)
+        .collect()
 }
 
 fn close_to(actual: (f64, f64), expected: (f64, f64)) -> bool {
@@ -150,24 +170,36 @@ fn a_geometry_with_no_usable_path_returns_nothing() {
     // A self-closing `<a:custGeom/>` is not covered here: it arrives as an
     // empty element, which the caller handles without opening a subtree, so
     // this function never sees one.
-    // Two points enclose no area.
+    // A lone `moveTo` draws nothing: one point is neither an area nor a line.
+    assert!(
+        parse(
+            r#"<a:custGeom><a:pathLst><a:path w="100" h="100">
+                <a:moveTo><a:pt x="0" y="0"/></a:moveTo>
+            </a:path></a:pathLst></a:custGeom>"#
+        )
+        .is_empty()
+    );
+    // Two points enclose no area, so a closed outline of two is dropped.
     assert!(
         parse(
             r#"<a:custGeom><a:pathLst><a:path w="100" h="100">
                 <a:moveTo><a:pt x="0" y="0"/></a:moveTo>
                 <a:lnTo><a:pt x="100" y="100"/></a:lnTo>
+                <a:close/>
             </a:path></a:pathLst></a:custGeom>"#
         )
         .is_empty()
     );
-    // A path that declares no coordinate space cannot be normalized.
+    // A path that declares no coordinate space and sits in a shape with no
+    // box either cannot be normalized against anything.
     assert!(
-        parse(
+        parse_subpaths_in(
             r#"<a:custGeom><a:pathLst><a:path>
                 <a:moveTo><a:pt x="0" y="0"/></a:moveTo>
                 <a:lnTo><a:pt x="100" y="0"/></a:lnTo>
                 <a:lnTo><a:pt x="100" y="100"/></a:lnTo>
-            </a:path></a:pathLst></a:custGeom>"#
+            </a:path></a:pathLst></a:custGeom>"#,
+            ShapeExtent::new(0.0, 0.0),
         )
         .is_empty()
     );
@@ -184,7 +216,7 @@ fn the_reader_stops_at_the_end_of_the_geometry() {
     loop {
         match reader.read_event() {
             Ok(Event::Start(ref element)) if element.local_name().as_ref() == b"custGeom" => {
-                let _ = parse_custom_geometry(&mut reader);
+                let _ = parse_custom_geometry(&mut reader, UNIT_EXTENT);
                 break;
             }
             Ok(Event::Eof) => panic!("custGeom not found"),
@@ -270,4 +302,452 @@ fn a_single_subpath_is_unchanged_by_the_split() {
     .expect("usable polygon");
 
     assert_eq!(vertices.len(), 4);
+}
+
+/// `a:close` is what tells the outline to return to its start. A path that
+/// states none is a polyline: the elbow connectors of the deck on issue #1205
+/// end at their last point, and joining that back to the first draws a
+/// diagonal across the slide.
+#[test]
+fn an_unclosed_path_stays_open() {
+    let subpaths = parse_subpaths(
+        r#"<a:custGeom><a:pathLst><a:path w="1000" h="1000">
+            <a:moveTo><a:pt x="0" y="0"/></a:moveTo>
+            <a:lnTo><a:pt x="0" y="1000"/></a:lnTo>
+            <a:lnTo><a:pt x="1000" y="1000"/></a:lnTo>
+            <a:lnTo><a:pt x="1000" y="0"/></a:lnTo>
+        </a:path></a:pathLst></a:custGeom>"#,
+    );
+
+    assert_eq!(subpaths.len(), 1);
+    assert!(!subpaths[0].closed, "no a:close was stated");
+    assert_eq!(subpaths[0].vertices.len(), 4);
+}
+
+/// The same path with `a:close` is a ring.
+#[test]
+fn a_closed_path_is_marked_closed() {
+    let subpaths = parse_subpaths(
+        r#"<a:custGeom><a:pathLst><a:path w="1000" h="1000">
+            <a:moveTo><a:pt x="0" y="0"/></a:moveTo>
+            <a:lnTo><a:pt x="0" y="1000"/></a:lnTo>
+            <a:lnTo><a:pt x="1000" y="1000"/></a:lnTo>
+            <a:close/>
+        </a:path></a:pathLst></a:custGeom>"#,
+    );
+
+    assert_eq!(subpaths.len(), 1);
+    assert!(subpaths[0].closed);
+}
+
+/// One `<a:path>` can hold a closed outline and an open one, and each keeps
+/// its own answer rather than the last one seen.
+#[test]
+fn openness_is_tracked_per_subpath() {
+    let subpaths = parse_subpaths(
+        r#"<a:custGeom><a:pathLst><a:path w="1000" h="1000">
+            <a:moveTo><a:pt x="0" y="0"/></a:moveTo>
+            <a:lnTo><a:pt x="200" y="0"/></a:lnTo>
+            <a:lnTo><a:pt x="200" y="200"/></a:lnTo>
+            <a:close/>
+            <a:moveTo><a:pt x="400" y="400"/></a:moveTo>
+            <a:lnTo><a:pt x="900" y="400"/></a:lnTo>
+            <a:lnTo><a:pt x="900" y="900"/></a:lnTo>
+        </a:path></a:pathLst></a:custGeom>"#,
+    );
+
+    assert_eq!(subpaths.len(), 2, "got {subpaths:?}");
+    assert!(subpaths[0].closed, "the first outline stated a:close");
+    assert!(!subpaths[1].closed, "the second did not");
+}
+
+/// Two points enclose nothing but still draw a line, so an open two-point
+/// subpath survives. The deck on issue #1205 draws each connector's vertical
+/// leg exactly that way — `moveTo` then one `lnTo`, with `<a:noFill/>`.
+#[test]
+fn an_open_two_point_subpath_is_kept() {
+    let subpaths = parse_subpaths(
+        r#"<a:custGeom><a:pathLst><a:path w="1000" h="1000">
+            <a:moveTo><a:pt x="500" y="0"/></a:moveTo>
+            <a:lnTo><a:pt x="500" y="1000"/></a:lnTo>
+        </a:path></a:pathLst></a:custGeom>"#,
+    );
+
+    assert_eq!(subpaths.len(), 1, "the line is not dropped: {subpaths:?}");
+    assert!(!subpaths[0].closed);
+    assert!(close_to(subpaths[0].vertices[0], (0.5, 0.0)));
+    assert!(close_to(subpaths[0].vertices[1], (0.5, 1.0)));
+}
+
+/// A path that declares no `w`/`h` is in the shape's own coordinate space, so
+/// it normalizes against the extent. Every guide-driven geometry takes this
+/// form, since its guides already compute EMU in the shape's units
+/// (issue #1205).
+#[test]
+fn a_path_without_a_coordinate_space_normalizes_against_the_extent() {
+    let subpaths = parse_subpaths_in(
+        r#"<a:custGeom><a:pathLst><a:path>
+            <a:moveTo><a:pt x="0" y="0"/></a:moveTo>
+            <a:lnTo><a:pt x="200" y="0"/></a:lnTo>
+            <a:lnTo><a:pt x="200" y="50"/></a:lnTo>
+            <a:close/>
+        </a:path></a:pathLst></a:custGeom>"#,
+        ShapeExtent::new(400.0, 200.0),
+    );
+
+    let vertices: &Vec<(f64, f64)> = &subpaths[0].vertices;
+    assert!(close_to(vertices[1], (0.5, 0.0)), "got {:?}", vertices[1]);
+    assert!(close_to(vertices[2], (0.5, 0.25)), "got {:?}", vertices[2]);
+}
+
+/// A declared `<a:path w= h=>` still wins over the extent, so the geometries
+/// that already worked are untouched.
+#[test]
+fn a_declared_coordinate_space_still_wins_over_the_extent() {
+    let subpaths = parse_subpaths_in(
+        r#"<a:custGeom><a:pathLst><a:path w="200" h="200">
+            <a:moveTo><a:pt x="0" y="0"/></a:moveTo>
+            <a:lnTo><a:pt x="100" y="0"/></a:lnTo>
+            <a:lnTo><a:pt x="100" y="50"/></a:lnTo>
+            <a:close/>
+        </a:path></a:pathLst></a:custGeom>"#,
+        ShapeExtent::new(4000.0, 8000.0),
+    );
+
+    let vertices: &Vec<(f64, f64)> = &subpaths[0].vertices;
+    assert!(close_to(vertices[1], (0.5, 0.0)), "got {:?}", vertices[1]);
+    assert!(close_to(vertices[2], (0.5, 0.25)), "got {:?}", vertices[2]);
+}
+
+/// A coordinate may be a guide name rather than a number. Reading only
+/// numbers left the geometry empty and the caller's rectangle fallback
+/// standing in for it (issue #1205).
+#[test]
+fn a_vertex_may_name_a_guide() {
+    let subpaths = parse_subpaths_in(
+        r#"<a:custGeom>
+            <a:avLst><a:gd name="adj" fmla="val 5400"/></a:avLst>
+            <a:gdLst>
+                <a:gd name="left" fmla="val 0"/>
+                <a:gd name="inset" fmla="*/ adj w 21600"/>
+                <a:gd name="bottom" fmla="val h"/>
+            </a:gdLst>
+            <a:pathLst><a:path>
+                <a:moveTo><a:pt x="left" y="left"/></a:moveTo>
+                <a:lnTo><a:pt x="inset" y="left"/></a:lnTo>
+                <a:lnTo><a:pt x="inset" y="bottom"/></a:lnTo>
+                <a:close/>
+            </a:path></a:pathLst>
+        </a:custGeom>"#,
+        ShapeExtent::new(400.0, 200.0),
+    );
+
+    assert_eq!(subpaths.len(), 1, "got {subpaths:?}");
+    let vertices: &Vec<(f64, f64)> = &subpaths[0].vertices;
+    // 5400/21600 of the width is a quarter of it.
+    assert!(close_to(vertices[0], (0.0, 0.0)), "got {:?}", vertices[0]);
+    assert!(close_to(vertices[1], (0.25, 0.0)), "got {:?}", vertices[1]);
+    assert!(close_to(vertices[2], (0.25, 1.0)), "got {:?}", vertices[2]);
+}
+
+/// The built-in variables work without an `<a:gdLst>` at all — `<a:pt x="r"
+/// y="b"/>` is the shape's bottom-right corner.
+#[test]
+fn a_vertex_may_name_a_built_in_variable() {
+    let subpaths = parse_subpaths_in(
+        r#"<a:custGeom><a:pathLst><a:path>
+            <a:moveTo><a:pt x="l" y="t"/></a:moveTo>
+            <a:lnTo><a:pt x="r" y="t"/></a:lnTo>
+            <a:lnTo><a:pt x="hc" y="b"/></a:lnTo>
+            <a:close/>
+        </a:path></a:pathLst></a:custGeom>"#,
+        ShapeExtent::new(400.0, 200.0),
+    );
+
+    let vertices: &Vec<(f64, f64)> = &subpaths[0].vertices;
+    assert!(close_to(vertices[0], (0.0, 0.0)), "got {:?}", vertices[0]);
+    assert!(close_to(vertices[1], (1.0, 0.0)), "got {:?}", vertices[1]);
+    assert!(close_to(vertices[2], (0.5, 1.0)), "got {:?}", vertices[2]);
+}
+
+/// A guide list is read in document order, so a `<a:pt>` may depend on a
+/// chain of them — which is how a hundred-entry list turns one adjust value
+/// into a corner inset.
+#[test]
+fn a_chain_of_guides_resolves_before_the_path_reads_it() {
+    let subpaths = parse_subpaths_in(
+        r#"<a:custGeom>
+            <a:avLst><a:gd name="f0" fmla="val 2160"/></a:avLst>
+            <a:gdLst>
+                <a:gd name="f1" fmla="pin 0 f0 10800"/>
+                <a:gd name="f2" fmla="val ss"/>
+                <a:gd name="f3" fmla="*/ f2 1 21600"/>
+                <a:gd name="f4" fmla="*/ f1 f3 1"/>
+                <a:gd name="f5" fmla="val 0"/>
+            </a:gdLst>
+            <a:pathLst><a:path>
+                <a:moveTo><a:pt x="f5" y="f5"/></a:moveTo>
+                <a:lnTo><a:pt x="f4" y="f5"/></a:lnTo>
+                <a:lnTo><a:pt x="f4" y="f4"/></a:lnTo>
+                <a:close/>
+            </a:path></a:pathLst>
+        </a:custGeom>"#,
+        ShapeExtent::new(1000.0, 500.0),
+    );
+
+    // 2160 * min(1000, 500) / 21600 is 50.
+    let vertices: &Vec<(f64, f64)> = &subpaths[0].vertices;
+    assert!(close_to(vertices[1], (0.05, 0.0)), "got {:?}", vertices[1]);
+    assert!(close_to(vertices[2], (0.05, 0.1)), "got {:?}", vertices[2]);
+}
+
+/// A vertex naming something nothing defines is dropped rather than defaulted
+/// to the shape's corner, which would drag the outline through it.
+#[test]
+fn a_vertex_naming_an_undefined_guide_is_dropped() {
+    let subpaths = parse_subpaths_in(
+        r#"<a:custGeom><a:pathLst><a:path>
+            <a:moveTo><a:pt x="l" y="t"/></a:moveTo>
+            <a:lnTo><a:pt x="r" y="t"/></a:lnTo>
+            <a:lnTo><a:pt x="nowhere" y="t"/></a:lnTo>
+            <a:lnTo><a:pt x="r" y="b"/></a:lnTo>
+            <a:close/>
+        </a:path></a:pathLst></a:custGeom>"#,
+        ShapeExtent::new(400.0, 200.0),
+    );
+
+    let vertices: &Vec<(f64, f64)> = &subpaths[0].vertices;
+    assert_eq!(vertices.len(), 3, "the unresolved vertex is skipped");
+    assert!(close_to(vertices[2], (1.0, 1.0)), "got {:?}", vertices[2]);
+}
+
+/// `<a:arcTo>` draws the elliptical arc that starts at the pen's current
+/// point. Skipping it squared off every corner it was drawing (issue #1205).
+///
+/// The quarter here starts at the rightmost point of a circle of radius 50
+/// centred on (50, 50) and sweeps a quarter turn, so it must end at the
+/// bottom of that circle with every sampled point one radius from the centre.
+#[test]
+fn an_arc_segment_follows_its_ellipse() {
+    let subpaths = parse_subpaths(
+        r#"<a:custGeom><a:pathLst><a:path w="100" h="100">
+            <a:moveTo><a:pt x="100" y="50"/></a:moveTo>
+            <a:arcTo wR="50" hR="50" stAng="0" swAng="5400000"/>
+        </a:path></a:pathLst></a:custGeom>"#,
+    );
+
+    let vertices: &Vec<(f64, f64)> = &subpaths[0].vertices;
+    assert!(
+        vertices.len() > 10,
+        "the arc must contribute many vertices, got {}",
+        vertices.len()
+    );
+    for (x, y) in vertices {
+        let radius: f64 = ((x - 0.5).powi(2) + (y - 0.5).powi(2)).sqrt();
+        assert!(
+            (radius - 0.5).abs() < 1e-9,
+            "({x}, {y}) is {radius} from the centre, not 0.5"
+        );
+    }
+    let last: (f64, f64) = *vertices.last().expect("the arc ends somewhere");
+    assert!(
+        close_to(last, (0.5, 1.0)),
+        "a quarter turn from the right reaches the bottom, got {last:?}"
+    );
+}
+
+/// A negative `swAng` sweeps the other way, which is how a corner turns back
+/// on itself.
+#[test]
+fn a_negative_swing_sweeps_the_other_way() {
+    let subpaths = parse_subpaths(
+        r#"<a:custGeom><a:pathLst><a:path w="100" h="100">
+            <a:moveTo><a:pt x="100" y="50"/></a:moveTo>
+            <a:arcTo wR="50" hR="50" stAng="0" swAng="-5400000"/>
+        </a:path></a:pathLst></a:custGeom>"#,
+    );
+
+    let last: (f64, f64) = *subpaths[0].vertices.last().expect("the arc ends somewhere");
+    assert!(close_to(last, (0.5, 0.0)), "got {last:?}");
+}
+
+/// `wR` and `hR` are independent radii, so an arc may be elliptical.
+#[test]
+fn an_arc_may_be_elliptical() {
+    let subpaths = parse_subpaths(
+        r#"<a:custGeom><a:pathLst><a:path w="100" h="100">
+            <a:moveTo><a:pt x="100" y="20"/></a:moveTo>
+            <a:arcTo wR="80" hR="20" stAng="0" swAng="5400000"/>
+        </a:path></a:pathLst></a:custGeom>"#,
+    );
+
+    let vertices: &Vec<(f64, f64)> = &subpaths[0].vertices;
+    for (x, y) in vertices {
+        // Centred on (20, 20) with radii 80 and 20, in a 100 x 100 space.
+        let ellipse: f64 = ((x - 0.2) / 0.8).powi(2) + ((y - 0.2) / 0.2).powi(2);
+        assert!(
+            (ellipse - 1.0).abs() < 1e-9,
+            "({x}, {y}) is off the ellipse"
+        );
+    }
+    let last: (f64, f64) = *vertices.last().expect("the arc ends somewhere");
+    assert!(close_to(last, (0.2, 0.4)), "got {last:?}");
+}
+
+/// A full turn is sampled as densely as four Bezier quarters, so a circle
+/// drawn as one arc and one drawn as four curves print the same.
+#[test]
+fn a_full_turn_is_sampled_like_four_bezier_quarters() {
+    let subpaths = parse_subpaths(
+        r#"<a:custGeom><a:pathLst><a:path w="100" h="100">
+            <a:moveTo><a:pt x="100" y="50"/></a:moveTo>
+            <a:arcTo wR="50" hR="50" stAng="0" swAng="21600000"/>
+            <a:close/>
+        </a:path></a:pathLst></a:custGeom>"#,
+    );
+
+    assert_eq!(
+        subpaths[0].vertices.len(),
+        1 + 4 * CURVE_SAMPLES,
+        "the start point plus sixteen samples per quarter"
+    );
+}
+
+/// An arc with no pen position has no ellipse to sit on, so it is skipped
+/// rather than anchored at the origin.
+#[test]
+fn an_arc_without_a_start_point_is_skipped() {
+    assert!(
+        parse(
+            r#"<a:custGeom><a:pathLst><a:path w="100" h="100">
+                <a:arcTo wR="50" hR="50" stAng="0" swAng="5400000"/>
+            </a:path></a:pathLst></a:custGeom>"#
+        )
+        .is_empty()
+    );
+}
+
+/// An arc resolves its radii and angles through the guide list as a vertex
+/// does — the form issue #1205 was reported against, where every one of the
+/// four attributes is a guide name.
+#[test]
+fn an_arc_may_name_guides_for_its_radii_and_angles() {
+    let subpaths = parse_subpaths_in(
+        r#"<a:custGeom>
+            <a:gdLst>
+                <a:gd name="radius" fmla="val 50"/>
+                <a:gd name="right" fmla="val 100"/>
+                <a:gd name="middle" fmla="val 50"/>
+                <a:gd name="from" fmla="val 0"/>
+                <a:gd name="quarter" fmla="val 5400000"/>
+            </a:gdLst>
+            <a:pathLst><a:path>
+                <a:moveTo><a:pt x="right" y="middle"/></a:moveTo>
+                <a:arcTo wR="radius" hR="radius" stAng="from" swAng="quarter"/>
+            </a:path></a:pathLst>
+        </a:custGeom>"#,
+        ShapeExtent::new(100.0, 100.0),
+    );
+
+    let last: (f64, f64) = *subpaths[0].vertices.last().expect("the arc ends somewhere");
+    assert!(close_to(last, (0.5, 1.0)), "got {last:?}");
+}
+
+/// The whole of issue #1205: a rounded rectangle written as four `arcTo`
+/// corners joined by straight edges, with every coordinate a guide name and
+/// no `<a:path w= h=>` — the shape LibreOffice writes for a PowerPoint
+/// `roundRect`. The corners must be arcs, not right angles.
+#[test]
+fn a_guide_driven_rounded_rectangle_turns_its_corners() {
+    // 400 x 200 with a 40-unit corner radius: 2160/21600 of the short side.
+    let extent = ShapeExtent::new(400.0, 200.0);
+    let subpaths = parse_subpaths_in(
+        r#"<a:custGeom>
+            <a:avLst><a:gd name="f0" fmla="val 2160"/></a:avLst>
+            <a:gdLst>
+                <a:gd name="adj" fmla="pin 0 f0 10800"/>
+                <a:gd name="unit" fmla="*/ ss 1 21600"/>
+                <a:gd name="rad" fmla="*/ adj unit 1"/>
+                <a:gd name="zero" fmla="val 0"/>
+                <a:gd name="right" fmla="val w"/>
+                <a:gd name="bottom" fmla="val h"/>
+                <a:gd name="near_right" fmla="+- right 0 rad"/>
+                <a:gd name="near_bottom" fmla="+- bottom 0 rad"/>
+                <a:gd name="quarter" fmla="val 5400000"/>
+                <a:gd name="half" fmla="val 10800000"/>
+                <a:gd name="three_quarters" fmla="val 16200000"/>
+                <a:gd name="back" fmla="val -5400000"/>
+            </a:gdLst>
+            <a:pathLst><a:path>
+                <a:moveTo><a:pt x="rad" y="zero"/></a:moveTo>
+                <a:arcTo wR="rad" hR="rad" stAng="three_quarters" swAng="back"/>
+                <a:lnTo><a:pt x="zero" y="near_bottom"/></a:lnTo>
+                <a:arcTo wR="rad" hR="rad" stAng="half" swAng="back"/>
+                <a:lnTo><a:pt x="near_right" y="bottom"/></a:lnTo>
+                <a:arcTo wR="rad" hR="rad" stAng="quarter" swAng="back"/>
+                <a:lnTo><a:pt x="right" y="rad"/></a:lnTo>
+                <a:arcTo wR="rad" hR="rad" stAng="zero" swAng="back"/>
+                <a:close/>
+            </a:path></a:pathLst>
+        </a:custGeom>"#,
+        extent,
+    );
+
+    assert_eq!(subpaths.len(), 1, "got {subpaths:?}");
+    assert!(subpaths[0].closed);
+    let vertices: &Vec<(f64, f64)> = &subpaths[0].vertices;
+
+    // 2160 * min(400, 200) / 21600 is 20 units, which is 0.05 of the width
+    // and 0.1 of the height once normalized.
+    let radius_x: f64 = 0.05;
+    let radius_y: f64 = 0.10;
+
+    // No vertex sits in a corner square outside the arc that rounds it: a
+    // square-cornered rectangle would put one at (0, 0) itself.
+    for corner in [(0.0, 0.0), (0.0, 1.0), (1.0, 1.0), (1.0, 0.0)] {
+        let hub: (f64, f64) = (
+            if corner.0 == 0.0 {
+                radius_x
+            } else {
+                1.0 - radius_x
+            },
+            if corner.1 == 0.0 {
+                radius_y
+            } else {
+                1.0 - radius_y
+            },
+        );
+        let mut on_the_arc: usize = 0;
+        for (x, y) in vertices {
+            // Inclusive: the arc's own endpoints sit exactly on the corner
+            // square's edges.
+            let inside_corner: bool =
+                (x - corner.0).abs() <= radius_x + 1e-9 && (y - corner.1).abs() <= radius_y + 1e-9;
+            if !inside_corner {
+                continue;
+            }
+            let offset: f64 = ((x - hub.0) / radius_x).powi(2) + ((y - hub.1) / radius_y).powi(2);
+            assert!(
+                (offset - 1.0).abs() < 1e-6,
+                "({x}, {y}) is inside corner {corner:?} but off its arc"
+            );
+            on_the_arc += 1;
+        }
+        assert!(
+            on_the_arc >= CURVE_SAMPLES,
+            "corner {corner:?} is turned by {on_the_arc} vertices, not an arc"
+        );
+    }
+
+    // The straight edges are still straight and still reach the box.
+    assert!(
+        vertices.iter().any(|(x, _)| *x < 1e-9),
+        "the left edge touches x = 0: {vertices:?}"
+    );
+    assert!(
+        vertices.iter().any(|(x, _)| (x - 1.0).abs() < 1e-9),
+        "the right edge touches x = 1"
+    );
+    assert!(vertices.iter().any(|(_, y)| *y < 1e-9));
+    assert!(vertices.iter().any(|(_, y)| (y - 1.0).abs() < 1e-9));
 }
