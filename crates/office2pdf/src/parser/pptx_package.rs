@@ -505,7 +505,13 @@ fn image_format_from_ext(path: &str) -> Option<ImageFormat> {
 
 fn normalize_slide_image_asset(target: &str, data: Vec<u8>) -> (Vec<u8>, SlideImageSource) {
     if let Some(format) = image_format_from_ext(target) {
-        return (data, SlideImageSource::Supported(format));
+        if format == ImageFormat::Svg {
+            return (data, SlideImageSource::Supported(format));
+        }
+        return match validated_raster_format(&data) {
+            Some(actual_format) => (data, SlideImageSource::Supported(actual_format)),
+            None => (data, SlideImageSource::Unsupported),
+        };
     }
 
     if target.to_ascii_lowercase().ends_with(".emf")
@@ -515,6 +521,20 @@ fn normalize_slide_image_asset(target: &str, data: Vec<u8>) -> (Vec<u8>, SlideIm
     }
 
     (data, SlideImageSource::Unsupported)
+}
+
+fn validated_raster_format(data: &[u8]) -> Option<ImageFormat> {
+    let detected = image::guess_format(data).ok()?;
+    let format = match detected {
+        image::ImageFormat::Png => ImageFormat::Png,
+        image::ImageFormat::Jpeg => ImageFormat::Jpeg,
+        image::ImageFormat::Gif => ImageFormat::Gif,
+        image::ImageFormat::Bmp => ImageFormat::Bmp,
+        image::ImageFormat::Tiff => ImageFormat::Tiff,
+        _ => return None,
+    };
+    image::load_from_memory_with_format(data, detected).ok()?;
+    Some(format)
 }
 
 fn is_image_relationship(rel_type: Option<&str>, target: &str) -> bool {

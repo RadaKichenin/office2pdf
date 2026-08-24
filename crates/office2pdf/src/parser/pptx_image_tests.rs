@@ -756,6 +756,37 @@ fn test_wdp_only_picture_emits_unsupported_warning() {
 }
 
 #[test]
+fn test_malformed_png_is_omitted_with_warning() {
+    let pic = make_pic_xml(0, 0, 1_000_000, 1_000_000, "rId3");
+    let slide_xml = make_slide_xml(&[pic]);
+    let slide_images = vec![TestSlideImage {
+        rid: "rId3".to_string(),
+        path: "../media/image1.png".to_string(),
+        data: b"not a png".to_vec(),
+        relationship_type: None,
+    }];
+    let data = build_test_pptx_with_images(SLIDE_CX, SLIDE_CY, &[(slide_xml, slide_images)]);
+    let parser = PptxParser;
+    let (doc, warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = first_fixed_page(&doc);
+    assert!(
+        page.elements.is_empty(),
+        "Malformed image must not reach the renderer"
+    );
+    assert!(
+        warnings.iter().any(|warning| matches!(
+            warning,
+            ConvertWarning::UnsupportedElement { format, element }
+                if format == "PPTX"
+                    && element.contains("image omitted")
+                    && element.contains("image1.png")
+        )),
+        "Expected an omission warning for malformed PNG, got: {warnings:?}"
+    );
+}
+
+#[test]
 fn test_image_dimensions_preserved() {
     let bmp_data = make_test_bmp();
     let pic = make_pic_xml(0, 0, 2_540_000, 1_270_000, "rId3");
