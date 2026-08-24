@@ -2038,7 +2038,15 @@ impl<'a> SlideXmlParser<'a> {
             // A picture can crop to a custom shape as well as a preset one
             // (issue #872).
             b"custGeom" if self.in_pic && self.pic.in_sp_pr => {
-                self.pic.custom_geometry = super::custom_geometry::parse_custom_geometry(reader);
+                // `<a:xfrm>` precedes the geometry in `<p:spPr>`, so the box a
+                // guide formula measures against is already known.
+                self.pic.custom_geometry = super::custom_geometry::parse_custom_geometry(
+                    reader,
+                    super::geometry_guides::ShapeExtent::new(
+                        self.pic.cx as f64,
+                        self.pic.cy as f64,
+                    ),
+                );
             }
             b"effectLst" if self.in_pic && self.pic.in_sp_pr => {
                 self.pic.shadow = parse_effect_list(reader, self.ctx.theme, self.ctx.color_map);
@@ -2062,7 +2070,13 @@ impl<'a> SlideXmlParser<'a> {
             // a rectangle, so its fill renders as it did before
             // (issues #855, #866, #870).
             b"custGeom" if self.shape.in_sp_pr && self.shape.prst_geom.is_none() => {
-                self.shape.custom_geometry = super::custom_geometry::parse_custom_geometry(reader);
+                self.shape.custom_geometry = super::custom_geometry::parse_custom_geometry(
+                    reader,
+                    super::geometry_guides::ShapeExtent::new(
+                        self.shape.cx as f64,
+                        self.shape.cy as f64,
+                    ),
+                );
                 self.shape.prst_geom = Some("rect".to_string());
             }
             b"noFill" if self.shape.in_sp_pr && !self.shape.in_ln && !self.in_rpr => {

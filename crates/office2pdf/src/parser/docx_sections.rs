@@ -1326,8 +1326,23 @@ fn scan_hf_anchors(xml: &str, theme_colors: &HashMap<String, Color>) -> Vec<HfAn
                     }
                 }
                 b"custGeom" => {
-                    let subpaths =
-                        crate::parser::pptx::custom_geometry::parse_custom_geometry(&mut reader);
+                    // `<wp:extent>` precedes the graphic, so the box a guide
+                    // formula measures against is already known. Points are
+                    // fine here: only the ratio survives normalization.
+                    let extent = crate::parser::pptx::geometry_guides::ShapeExtent::new(
+                        current
+                            .as_ref()
+                            .and_then(|anchor| anchor.width_pt)
+                            .unwrap_or(0.0),
+                        current
+                            .as_ref()
+                            .and_then(|anchor| anchor.height_pt)
+                            .unwrap_or(0.0),
+                    );
+                    let subpaths = crate::parser::pptx::custom_geometry::parse_custom_geometry(
+                        &mut reader,
+                        extent,
+                    );
                     if let Some(anchor) = current.as_mut()
                         && !subpaths.is_empty()
                     {

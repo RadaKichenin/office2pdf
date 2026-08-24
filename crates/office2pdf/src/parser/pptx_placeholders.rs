@@ -442,8 +442,12 @@ fn scan_layer_placeholders(
                 } else if e.local_name().as_ref() == b"custGeom"
                     && current.as_ref().is_some_and(|state| state.in_sp_pr)
                 {
+                    let extent = super::geometry_guides::ShapeExtent::new(
+                        current.as_ref().and_then(|state| state.cx).unwrap_or(0) as f64,
+                        current.as_ref().and_then(|state| state.cy).unwrap_or(0) as f64,
+                    );
                     let subpaths: Vec<crate::ir::Subpath> =
-                        super::custom_geometry::parse_custom_geometry(&mut reader);
+                        super::custom_geometry::parse_custom_geometry(&mut reader, extent);
                     if let Some(state) = current.as_mut() {
                         state.shape_geometry = subpaths;
                     }

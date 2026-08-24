@@ -47,6 +47,8 @@ use self::theme::{
 
 #[path = "pptx_custom_geometry.rs"]
 pub(crate) mod custom_geometry;
+#[path = "pptx_geometry_guides.rs"]
+pub(crate) mod geometry_guides;
 #[path = "pptx_package.rs"]
 mod package;
 #[path = "pptx_placeholders.rs"]

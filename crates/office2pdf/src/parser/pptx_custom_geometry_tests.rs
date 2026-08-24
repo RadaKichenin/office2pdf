@@ -1,19 +1,30 @@
 use super::*;
 
+/// A square shape box, so a test that declares its own `<a:path w= h=>`
+/// coordinate space is unaffected by the extent behind it.
+const UNIT_EXTENT: ShapeExtent = ShapeExtent {
+    width: 1000.0,
+    height: 1000.0,
+};
+
 /// Drive the parser the way the slide parser does: positioned just after the
 /// `<a:custGeom>` start tag.
-fn parse_subpaths(xml: &str) -> Vec<Subpath> {
+fn parse_subpaths_in(xml: &str, extent: ShapeExtent) -> Vec<Subpath> {
     let mut reader = Reader::from_str(xml);
     loop {
         match reader.read_event() {
             Ok(Event::Start(ref element)) if element.local_name().as_ref() == b"custGeom" => {
-                return parse_custom_geometry(&mut reader);
+                return parse_custom_geometry(&mut reader, extent);
             }
             Ok(Event::Eof) => panic!("custGeom not found"),
             Err(error) => panic!("{error}"),
             _ => {}
         }
     }
+}
+
+fn parse_subpaths(xml: &str) -> Vec<Subpath> {
+    parse_subpaths_in(xml, UNIT_EXTENT)
 }
 
 /// The vertices alone, for the tests whose subject is the geometry rather
@@ -179,14 +190,16 @@ fn a_geometry_with_no_usable_path_returns_nothing() {
         )
         .is_empty()
     );
-    // A path that declares no coordinate space cannot be normalized.
+    // A path that declares no coordinate space and sits in a shape with no
+    // box either cannot be normalized against anything.
     assert!(
-        parse(
+        parse_subpaths_in(
             r#"<a:custGeom><a:pathLst><a:path>
                 <a:moveTo><a:pt x="0" y="0"/></a:moveTo>
                 <a:lnTo><a:pt x="100" y="0"/></a:lnTo>
                 <a:lnTo><a:pt x="100" y="100"/></a:lnTo>
-            </a:path></a:pathLst></a:custGeom>"#
+            </a:path></a:pathLst></a:custGeom>"#,
+            ShapeExtent::new(0.0, 0.0),
         )
         .is_empty()
     );
@@ -203,7 +216,7 @@ fn the_reader_stops_at_the_end_of_the_geometry() {
     loop {
         match reader.read_event() {
             Ok(Event::Start(ref element)) if element.local_name().as_ref() == b"custGeom" => {
-                let _ = parse_custom_geometry(&mut reader);
+                let _ = parse_custom_geometry(&mut reader, UNIT_EXTENT);
                 break;
             }
             Ok(Event::Eof) => panic!("custGeom not found"),
@@ -364,4 +377,146 @@ fn an_open_two_point_subpath_is_kept() {
     assert!(!subpaths[0].closed);
     assert!(close_to(subpaths[0].vertices[0], (0.5, 0.0)));
     assert!(close_to(subpaths[0].vertices[1], (0.5, 1.0)));
+}
+
+/// A path that declares no `w`/`h` is in the shape's own coordinate space, so
+/// it normalizes against the extent. Every guide-driven geometry takes this
+/// form, since its guides already compute EMU in the shape's units
+/// (issue #1205).
+#[test]
+fn a_path_without_a_coordinate_space_normalizes_against_the_extent() {
+    let subpaths = parse_subpaths_in(
+        r#"<a:custGeom><a:pathLst><a:path>
+            <a:moveTo><a:pt x="0" y="0"/></a:moveTo>
+            <a:lnTo><a:pt x="200" y="0"/></a:lnTo>
+            <a:lnTo><a:pt x="200" y="50"/></a:lnTo>
+            <a:close/>
+        </a:path></a:pathLst></a:custGeom>"#,
+        ShapeExtent::new(400.0, 200.0),
+    );
+
+    let vertices: &Vec<(f64, f64)> = &subpaths[0].vertices;
+    assert!(close_to(vertices[1], (0.5, 0.0)), "got {:?}", vertices[1]);
+    assert!(close_to(vertices[2], (0.5, 0.25)), "got {:?}", vertices[2]);
+}
+
+/// A declared `<a:path w= h=>` still wins over the extent, so the geometries
+/// that already worked are untouched.
+#[test]
+fn a_declared_coordinate_space_still_wins_over_the_extent() {
+    let subpaths = parse_subpaths_in(
+        r#"<a:custGeom><a:pathLst><a:path w="200" h="200">
+            <a:moveTo><a:pt x="0" y="0"/></a:moveTo>
+            <a:lnTo><a:pt x="100" y="0"/></a:lnTo>
+            <a:lnTo><a:pt x="100" y="50"/></a:lnTo>
+            <a:close/>
+        </a:path></a:pathLst></a:custGeom>"#,
+        ShapeExtent::new(4000.0, 8000.0),
+    );
+
+    let vertices: &Vec<(f64, f64)> = &subpaths[0].vertices;
+    assert!(close_to(vertices[1], (0.5, 0.0)), "got {:?}", vertices[1]);
+    assert!(close_to(vertices[2], (0.5, 0.25)), "got {:?}", vertices[2]);
+}
+
+/// A coordinate may be a guide name rather than a number. Reading only
+/// numbers left the geometry empty and the caller's rectangle fallback
+/// standing in for it (issue #1205).
+#[test]
+fn a_vertex_may_name_a_guide() {
+    let subpaths = parse_subpaths_in(
+        r#"<a:custGeom>
+            <a:avLst><a:gd name="adj" fmla="val 5400"/></a:avLst>
+            <a:gdLst>
+                <a:gd name="left" fmla="val 0"/>
+                <a:gd name="inset" fmla="*/ adj w 21600"/>
+                <a:gd name="bottom" fmla="val h"/>
+            </a:gdLst>
+            <a:pathLst><a:path>
+                <a:moveTo><a:pt x="left" y="left"/></a:moveTo>
+                <a:lnTo><a:pt x="inset" y="left"/></a:lnTo>
+                <a:lnTo><a:pt x="inset" y="bottom"/></a:lnTo>
+                <a:close/>
+            </a:path></a:pathLst>
+        </a:custGeom>"#,
+        ShapeExtent::new(400.0, 200.0),
+    );
+
+    assert_eq!(subpaths.len(), 1, "got {subpaths:?}");
+    let vertices: &Vec<(f64, f64)> = &subpaths[0].vertices;
+    // 5400/21600 of the width is a quarter of it.
+    assert!(close_to(vertices[0], (0.0, 0.0)), "got {:?}", vertices[0]);
+    assert!(close_to(vertices[1], (0.25, 0.0)), "got {:?}", vertices[1]);
+    assert!(close_to(vertices[2], (0.25, 1.0)), "got {:?}", vertices[2]);
+}
+
+/// The built-in variables work without an `<a:gdLst>` at all — `<a:pt x="r"
+/// y="b"/>` is the shape's bottom-right corner.
+#[test]
+fn a_vertex_may_name_a_built_in_variable() {
+    let subpaths = parse_subpaths_in(
+        r#"<a:custGeom><a:pathLst><a:path>
+            <a:moveTo><a:pt x="l" y="t"/></a:moveTo>
+            <a:lnTo><a:pt x="r" y="t"/></a:lnTo>
+            <a:lnTo><a:pt x="hc" y="b"/></a:lnTo>
+            <a:close/>
+        </a:path></a:pathLst></a:custGeom>"#,
+        ShapeExtent::new(400.0, 200.0),
+    );
+
+    let vertices: &Vec<(f64, f64)> = &subpaths[0].vertices;
+    assert!(close_to(vertices[0], (0.0, 0.0)), "got {:?}", vertices[0]);
+    assert!(close_to(vertices[1], (1.0, 0.0)), "got {:?}", vertices[1]);
+    assert!(close_to(vertices[2], (0.5, 1.0)), "got {:?}", vertices[2]);
+}
+
+/// A guide list is read in document order, so a `<a:pt>` may depend on a
+/// chain of them — which is how a hundred-entry list turns one adjust value
+/// into a corner inset.
+#[test]
+fn a_chain_of_guides_resolves_before_the_path_reads_it() {
+    let subpaths = parse_subpaths_in(
+        r#"<a:custGeom>
+            <a:avLst><a:gd name="f0" fmla="val 2160"/></a:avLst>
+            <a:gdLst>
+                <a:gd name="f1" fmla="pin 0 f0 10800"/>
+                <a:gd name="f2" fmla="val ss"/>
+                <a:gd name="f3" fmla="*/ f2 1 21600"/>
+                <a:gd name="f4" fmla="*/ f1 f3 1"/>
+                <a:gd name="f5" fmla="val 0"/>
+            </a:gdLst>
+            <a:pathLst><a:path>
+                <a:moveTo><a:pt x="f5" y="f5"/></a:moveTo>
+                <a:lnTo><a:pt x="f4" y="f5"/></a:lnTo>
+                <a:lnTo><a:pt x="f4" y="f4"/></a:lnTo>
+                <a:close/>
+            </a:path></a:pathLst>
+        </a:custGeom>"#,
+        ShapeExtent::new(1000.0, 500.0),
+    );
+
+    // 2160 * min(1000, 500) / 21600 is 50.
+    let vertices: &Vec<(f64, f64)> = &subpaths[0].vertices;
+    assert!(close_to(vertices[1], (0.05, 0.0)), "got {:?}", vertices[1]);
+    assert!(close_to(vertices[2], (0.05, 0.1)), "got {:?}", vertices[2]);
+}
+
+/// A vertex naming something nothing defines is dropped rather than defaulted
+/// to the shape's corner, which would drag the outline through it.
+#[test]
+fn a_vertex_naming_an_undefined_guide_is_dropped() {
+    let subpaths = parse_subpaths_in(
+        r#"<a:custGeom><a:pathLst><a:path>
+            <a:moveTo><a:pt x="l" y="t"/></a:moveTo>
+            <a:lnTo><a:pt x="r" y="t"/></a:lnTo>
+            <a:lnTo><a:pt x="nowhere" y="t"/></a:lnTo>
+            <a:lnTo><a:pt x="r" y="b"/></a:lnTo>
+            <a:close/>
+        </a:path></a:pathLst></a:custGeom>"#,
+        ShapeExtent::new(400.0, 200.0),
+    );
+
+    let vertices: &Vec<(f64, f64)> = &subpaths[0].vertices;
+    assert_eq!(vertices.len(), 3, "the unresolved vertex is skipped");
+    assert!(close_to(vertices[2], (1.0, 1.0)), "got {:?}", vertices[2]);
 }

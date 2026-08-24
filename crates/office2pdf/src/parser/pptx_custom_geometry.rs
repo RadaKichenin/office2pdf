@@ -10,12 +10,20 @@
 //! fill rule. Curves are sampled rather than preserved: at the sizes these
 //! decorations print, the sampling error is far below the rectangle it
 //! replaces.
+//!
+//! A coordinate is not always a number. A geometry round-tripped through
+//! LibreOffice states each one as a guide name — `<a:pt x="f38" y="f37"/>` —
+//! and puts the arithmetic in the `<a:gdLst>` beside it, so the whole path
+//! read as empty and the rectangle fallback stood in for a shape the deck had
+//! fully described (issue #1205). Both forms resolve through
+//! [`GuideList`].
 
 use quick_xml::Reader;
-use quick_xml::events::Event;
+use quick_xml::events::{BytesStart, Event};
 
 use crate::ir::Subpath;
-use crate::parser::xml_util::get_attr_i64;
+use crate::parser::pptx::geometry_guides::{GuideList, ShapeExtent};
+use crate::parser::xml_util::{get_attr_i64, get_attr_str};
 
 /// Points sampled per cubic or quadratic segment. Sixteen keeps a full circle
 /// — four segments, so 64 points — within about 0.2% of its radius, well under
@@ -24,6 +32,12 @@ const CURVE_SAMPLES: usize = 16;
 
 /// Flatten the `<a:pathLst>` of a `<a:custGeom>` into vertices normalized to
 /// the shape's bounding box.
+///
+/// `extent` is the shape's own box. It is what the `w`, `h` and `ss` a guide
+/// formula names evaluate to, and it is the coordinate space of an
+/// `<a:path>` that declares none of its own — which is the form every
+/// guide-driven geometry takes. Its units only have to match the geometry's
+/// own, since the result is normalized against the same box.
 ///
 /// The reader is positioned just after the `<a:custGeom>` start tag and is
 /// consumed through its end tag either way, so a geometry this cannot express
@@ -42,16 +56,13 @@ const CURVE_SAMPLES: usize = 16;
 /// carves a hole rather than painting solid because the caller hands every
 /// subpath to one [`crate::ir::ShapeKind::Path`], which fills even-odd
 /// (issue #870).
-pub(crate) fn parse_custom_geometry(reader: &mut Reader<&[u8]>) -> Vec<Subpath> {
+pub(crate) fn parse_custom_geometry(
+    reader: &mut Reader<&[u8]>,
+    extent: ShapeExtent,
+) -> Vec<Subpath> {
     let mut depth: usize = 1;
-    let mut paths: Vec<Subpath> = Vec::new();
-    let mut current: Vec<(f64, f64)> = Vec::new();
-    // `a:close` on the subpath being collected. It must travel with the
-    // vertices rather than be inferred from them: an elbow connector's last
-    // point is nowhere near its first, and so is a spiral's (issue #1205).
-    let mut current_closed: bool = false;
-    let mut path_width: f64 = 0.0;
-    let mut path_height: f64 = 0.0;
+    let mut builder = SubpathBuilder::new(extent);
+    let mut guides = GuideList::new(extent);
     // `a:pt` children accumulate here; a curve command reads its control
     // points from the list once the command closes.
     let mut pending_points: Vec<(f64, f64)> = Vec::new();
@@ -63,17 +74,7 @@ pub(crate) fn parse_custom_geometry(reader: &mut Reader<&[u8]>) -> Vec<Subpath> 
             Ok(Event::Start(ref element)) => {
                 depth += 1;
                 match element.local_name().as_ref() {
-                    b"path" => {
-                        flush_path(
-                            &mut paths,
-                            &mut current,
-                            &mut current_closed,
-                            path_width,
-                            path_height,
-                        );
-                        path_width = get_attr_i64(element, b"w").unwrap_or(0) as f64;
-                        path_height = get_attr_i64(element, b"h").unwrap_or(0) as f64;
-                    }
+                    b"path" => builder.start_path(element),
                     other => {
                         if let Some(kind) = Command::from_tag(other) {
                             command = Some(kind);
@@ -83,42 +84,24 @@ pub(crate) fn parse_custom_geometry(reader: &mut Reader<&[u8]>) -> Vec<Subpath> 
                 }
             }
             Ok(Event::Empty(ref element)) => match element.local_name().as_ref() {
+                // `<a:gd>` appears in both `<a:avLst>` and `<a:gdLst>`, in the
+                // order a later formula may name an earlier one, and both
+                // precede the `<a:pathLst>` that reads them.
+                b"gd" => define_guide(element, &mut guides),
                 b"pt" => {
-                    if let (Some(x), Some(y)) =
-                        (get_attr_i64(element, b"x"), get_attr_i64(element, b"y"))
-                    {
-                        pending_points.push((x as f64, y as f64));
+                    if let Some(point) = resolve_point(element, &guides) {
+                        pending_points.push(point);
                     }
                 }
-                b"close" => close_path(&mut current, &mut current_closed),
-                b"path" => {
-                    flush_path(
-                        &mut paths,
-                        &mut current,
-                        &mut current_closed,
-                        path_width,
-                        path_height,
-                    );
-                    path_width = 0.0;
-                    path_height = 0.0;
-                }
+                b"close" => builder.close(),
+                b"path" => builder.end_path(),
                 _ => {}
             },
             Ok(Event::End(ref element)) => {
                 depth -= 1;
                 match element.local_name().as_ref() {
-                    b"close" => close_path(&mut current, &mut current_closed),
-                    b"path" => {
-                        flush_path(
-                            &mut paths,
-                            &mut current,
-                            &mut current_closed,
-                            path_width,
-                            path_height,
-                        );
-                        path_width = 0.0;
-                        path_height = 0.0;
-                    }
+                    b"close" => builder.close(),
+                    b"path" => builder.end_path(),
                     other => {
                         if let Some(kind) = command.take()
                             && Command::from_tag(other) == Some(kind)
@@ -129,16 +112,10 @@ pub(crate) fn parse_custom_geometry(reader: &mut Reader<&[u8]>) -> Vec<Subpath> 
                             // deck on #866 — and concatenating them joined the
                             // end of one outline to the start of the next,
                             // painting the wedge between (issue #866).
-                            if kind == Command::Move && !current.is_empty() {
-                                flush_path(
-                                    &mut paths,
-                                    &mut current,
-                                    &mut current_closed,
-                                    path_width,
-                                    path_height,
-                                );
+                            if kind == Command::Move {
+                                builder.start_subpath();
                             }
-                            apply_command(kind, &pending_points, &mut current);
+                            apply_command(kind, &pending_points, builder.vertices());
                             pending_points.clear();
                         }
                     }
@@ -151,16 +128,124 @@ pub(crate) fn parse_custom_geometry(reader: &mut Reader<&[u8]>) -> Vec<Subpath> 
             _ => {}
         }
     }
-    flush_path(
-        &mut paths,
-        &mut current,
-        &mut current_closed,
-        path_width,
-        path_height,
-    );
 
-    paths.retain(Subpath::encloses_or_draws);
-    paths
+    builder.finish()
+}
+
+/// Bind one `<a:gd name= fmla=>`.
+fn define_guide(element: &BytesStart, guides: &mut GuideList) {
+    if let (Some(name), Some(formula)) = (
+        get_attr_str(element, b"name"),
+        get_attr_str(element, b"fmla"),
+    ) {
+        guides.define(&name, &formula);
+    }
+}
+
+/// Read one `<a:pt x= y=>`, resolving each coordinate through the guides.
+///
+/// A point whose coordinates do not resolve is dropped rather than defaulted:
+/// substituting zero would stake a vertex at the shape's top-left corner and
+/// drag the outline through it.
+fn resolve_point(element: &BytesStart, guides: &GuideList) -> Option<(f64, f64)> {
+    let x: f64 = guides.resolve(&get_attr_str(element, b"x")?)?;
+    let y: f64 = guides.resolve(&get_attr_str(element, b"y")?)?;
+    Some((x, y))
+}
+
+/// Accumulates subpaths, and knows the coordinate space each one normalizes
+/// against.
+struct SubpathBuilder {
+    extent: ShapeExtent,
+    paths: Vec<Subpath>,
+    vertices: Vec<(f64, f64)>,
+    /// `a:close` on the subpath being collected. It must travel with the
+    /// vertices rather than be inferred from them: an elbow connector's last
+    /// point is nowhere near its first, and so is a spiral's (issue #1205).
+    closed: bool,
+    /// The `<a:path w= h=>` coordinate space, or the shape's own extent when
+    /// the path declares none.
+    space: ShapeExtent,
+}
+
+impl SubpathBuilder {
+    fn new(extent: ShapeExtent) -> Self {
+        Self {
+            extent,
+            paths: Vec::new(),
+            vertices: Vec::new(),
+            closed: false,
+            space: extent,
+        }
+    }
+
+    fn vertices(&mut self) -> &mut Vec<(f64, f64)> {
+        &mut self.vertices
+    }
+
+    /// `<a:path>`: bank whatever the previous one left and read the new
+    /// coordinate space.
+    ///
+    /// `w`/`h` default to 0, which DrawingML reads as "the shape's own
+    /// space" — the form a guide-driven geometry uses, since its guides are
+    /// already in the shape's units.
+    fn start_path(&mut self, element: &BytesStart) {
+        self.start_subpath();
+        let width: f64 = get_attr_i64(element, b"w").unwrap_or(0) as f64;
+        let height: f64 = get_attr_i64(element, b"h").unwrap_or(0) as f64;
+        self.space = if width > 0.0 && height > 0.0 {
+            ShapeExtent::new(width, height)
+        } else {
+            self.extent
+        };
+    }
+
+    fn end_path(&mut self) {
+        self.start_subpath();
+        self.space = self.extent;
+    }
+
+    /// Bank the subpath in hand, if any, and begin the next.
+    fn start_subpath(&mut self) {
+        if self.vertices.is_empty() {
+            return;
+        }
+        let vertices: Vec<(f64, f64)> = std::mem::take(&mut self.vertices);
+        let closed: bool = std::mem::take(&mut self.closed);
+        if !self.space.is_usable() {
+            return;
+        }
+        self.paths.push(Subpath {
+            vertices: vertices
+                .into_iter()
+                .map(|(x, y)| (x / self.space.width, y / self.space.height))
+                .collect(),
+            closed,
+        });
+    }
+
+    /// `a:close` returns to the subpath's first point. The renderer closes the
+    /// outline itself, so the duplicate vertex is dropped.
+    fn close(&mut self) {
+        if self.vertices.is_empty() {
+            return;
+        }
+        self.closed = true;
+        if let (Some(first), Some(last)) = (
+            self.vertices.first().copied(),
+            self.vertices.last().copied(),
+        ) && (first.0 - last.0).abs() < f64::EPSILON
+            && (first.1 - last.1).abs() < f64::EPSILON
+        {
+            self.vertices.pop();
+        }
+    }
+
+    fn finish(mut self) -> Vec<Subpath> {
+        self.start_subpath();
+        self.paths.retain(Subpath::encloses_or_draws);
+        self.paths
+    }
 }
 
 /// The drawing commands a path can carry. `close` is handled separately: it
@@ -237,47 +322,6 @@ fn sample_cubic(
             axis(start.1, control_one.1, control_two.1, end.1),
         ));
     }
-}
-
-/// `a:close` returns to the subpath's first point. The renderer closes the
-/// outline itself, so the duplicate vertex is dropped.
-fn close_path(current: &mut Vec<(f64, f64)>, closed: &mut bool) {
-    if current.is_empty() {
-        return;
-    }
-    *closed = true;
-    if let (Some(first), Some(last)) = (current.first().copied(), current.last().copied())
-        && (first.0 - last.0).abs() < f64::EPSILON
-        && (first.1 - last.1).abs() < f64::EPSILON
-    {
-        current.pop();
-    }
-}
-
-/// Normalize the collected points against the path's declared coordinate space
-/// and bank them, leaving `current` empty for the next path.
-fn flush_path(
-    paths: &mut Vec<Subpath>,
-    current: &mut Vec<(f64, f64)>,
-    closed: &mut bool,
-    width: f64,
-    height: f64,
-) {
-    if current.is_empty() {
-        return;
-    }
-    let points = std::mem::take(current);
-    let was_closed: bool = std::mem::take(closed);
-    if width <= 0.0 || height <= 0.0 {
-        return;
-    }
-    paths.push(Subpath {
-        vertices: points
-            .into_iter()
-            .map(|(x, y)| (x / width, y / height))
-            .collect(),
-        closed: was_closed,
-    });
 }
 
 #[cfg(test)]
