@@ -41,6 +41,8 @@ mod diagrams;
 mod fmt;
 #[path = "typst_gen_lists.rs"]
 mod lists;
+#[path = "typst_gen_shadow_outline.rs"]
+mod shadow_outline;
 #[path = "typst_gen_shapes.rs"]
 mod shapes;
 #[path = "typst_gen_tables.rs"]

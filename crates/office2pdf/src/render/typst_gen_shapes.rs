@@ -1,5 +1,6 @@
 use std::fmt::Write;
 
+use super::shadow_outline::{CornerReach, OffsetCorner, arc_beziers, offset_ring};
 use super::*;
 use crate::ir::Subpath;
 
@@ -188,7 +189,7 @@ pub(super) const SHADOW_RING_EXTENT_SIGMA: f64 = 2.6;
 /// (Abramowitz & Stegun 26.2.17). Its error is under 8e-8, far below the
 /// 1/255 an alpha byte can carry, and it avoids pulling in a crate for one
 /// function.
-fn standard_normal_cdf(z: f64) -> f64 {
+pub(super) fn standard_normal_cdf(z: f64) -> f64 {
     if z < 0.0 {
         return 1.0 - standard_normal_cdf(-z);
     }
@@ -494,9 +495,29 @@ fn write_shadow_shape(out: &mut String, shape: &Shape, width: f64, height: f64, 
     let outline_outset: f64 = shadow_outline_outset(&shape.stroke);
     let silhouette_radius: f64 = shadow_silhouette_corner_radius(&shape.stroke);
     let blur_sigma: f64 = shadow_blur_sigma(shadow);
+    // A polygon and a custom geometry both cast the shadow of their own
+    // outline, so both take the same silhouette: closed rings in the shape's
+    // frame, each offset rather than scaled (issue #1206).
+    let outline_rings: Option<Vec<OutlineRing>> = shadow_outline_rings(&shape.kind, width, height);
 
     for (blur_expansion, alpha) in shadow_blur_layers(shadow) {
         let expansion = outline_outset + blur_expansion;
+        if let Some(rings) = &outline_rings {
+            write_offset_ring_layer(
+                out,
+                rings,
+                RingGeometry {
+                    expansion,
+                    blur_expansion,
+                    blur_sigma,
+                    silhouette_radius,
+                },
+                shadow,
+                alpha,
+                (dx, dy),
+            );
+            continue;
+        }
         let layer_width = (width + 2.0 * expansion).max(0.0);
         let layer_height = (height + 2.0 * expansion).max(0.0);
         let _ = write!(
@@ -506,16 +527,6 @@ fn write_shadow_shape(out: &mut String, shape: &Shape, width: f64, height: f64, 
             format_f64(dy - expansion),
         );
         match &shape.kind {
-            ShapeKind::Polygon { vertices } => {
-                out.push_str("#polygon(");
-                write_polygon_vertices(out, layer_width, layer_height, vertices);
-                let _ = write!(
-                    out,
-                    ", fill: rgb({}, {}, {}, {})",
-                    shadow.color.r, shadow.color.g, shadow.color.b, alpha,
-                );
-                out.push(')');
-            }
             ShapeKind::RoundedRectangle { radius_fraction } => {
                 // The outline's join cannot square a corner the fill path
                 // already curves, so the silhouette's arc is the shape's own
@@ -570,37 +581,233 @@ fn write_shadow_shape(out: &mut String, shape: &Shape, width: f64, height: f64, 
                     alpha,
                 );
             }
-            // A custom geometry casts its own outline. Only a closed
-            // subpath is a filled region: an unclosed polyline is stroked,
-            // and filling it would paint the area an elbow connector merely
-            // brackets (issues #1205, #1305).
-            //
-            // Like the polygon arm above, the silhouette is the outline
-            // scaled onto the expanded layer box rather than offset from it,
-            // which is the approximation #1206 tracks.
-            ShapeKind::Path { subpaths } => {
-                let closed: Vec<&Subpath> =
-                    subpaths.iter().filter(|subpath| subpath.closed).collect();
-                if closed.is_empty() {
-                    out.push_str("]\n");
-                    continue;
-                }
-                let _ = write!(
-                    out,
-                    "#curve(fill-rule: \"even-odd\", fill: rgb({}, {}, {}, {})",
-                    shadow.color.r, shadow.color.g, shadow.color.b, alpha,
-                );
-                for subpath in closed {
-                    write_curve_subpath(out, layer_width, layer_height, subpath);
-                }
-                out.push(')');
-            }
-            // Line is handled above; any future variants gracefully skip
-            // the shadow rather than panicking.
+            // Polygon, Path and Line are handled above; any future variants
+            // gracefully skip the shadow rather than panicking.
             _ => {}
         }
         out.push_str("]\n");
     }
+}
+
+/// One closed ring of a shadow silhouette, in the shape's own frame.
+struct OutlineRing {
+    vertices: Vec<(f64, f64)>,
+    /// A ring the fill rule leaves empty. Dilating the shape shrinks its
+    /// holes, so a hole offsets the other way.
+    hole: bool,
+}
+
+/// How far one ring of the stack sits from the fill path, and what the blur
+/// under it looks like.
+struct RingGeometry {
+    /// The whole signed offset from the fill path: the outline's outset plus
+    /// this ring's own share of the blur.
+    expansion: f64,
+    /// This ring's share alone, which is what the blur's contour is measured
+    /// from.
+    blur_expansion: f64,
+    blur_sigma: f64,
+    /// The arc the outline's join leaves on the silhouette itself, which is
+    /// all a crisp shadow has to follow.
+    silhouette_radius: f64,
+}
+
+/// The closed rings a shape's shadow silhouette is made of, or `None` for a
+/// kind whose silhouette is a box or an ellipse instead.
+///
+/// Only a closed subpath is a filled region: an unclosed polyline is stroked,
+/// and filling it would paint the area an elbow connector merely brackets
+/// (issues #1205, #1305).
+fn shadow_outline_rings(kind: &ShapeKind, width: f64, height: f64) -> Option<Vec<OutlineRing>> {
+    let rings: Vec<Vec<(f64, f64)>> = match kind {
+        ShapeKind::Polygon { vertices } => vec![scale_vertices(vertices, width, height)],
+        ShapeKind::Path { subpaths } => subpaths
+            .iter()
+            .filter(|subpath| subpath.closed)
+            .map(|subpath| scale_vertices(&subpath.vertices, width, height))
+            .collect(),
+        _ => return None,
+    };
+    // Under the even-odd rule a ring is a hole exactly when an odd number of
+    // the others enclose it.
+    Some(
+        rings
+            .iter()
+            .enumerate()
+            .map(|(index, vertices)| OutlineRing {
+                hole: vertices.first().is_some_and(|&point| {
+                    rings
+                        .iter()
+                        .enumerate()
+                        .filter(|&(other, _)| other != index)
+                        .filter(|(_, ring)| ring_contains(ring, point))
+                        .count()
+                        % 2
+                        == 1
+                }),
+                vertices: vertices.clone(),
+            })
+            .collect(),
+    )
+}
+
+fn scale_vertices(vertices: &[(f64, f64)], width: f64, height: f64) -> Vec<(f64, f64)> {
+    vertices
+        .iter()
+        .map(|(vx, vy)| (vx * width, vy * height))
+        .collect()
+}
+
+/// Whether `point` is inside `ring`, by crossing count.
+fn ring_contains(ring: &[(f64, f64)], point: (f64, f64)) -> bool {
+    let mut inside: bool = false;
+    for index in 0..ring.len() {
+        let (ax, ay): (f64, f64) = ring[index];
+        let (bx, by): (f64, f64) = ring[(index + 1) % ring.len()];
+        if (ay > point.1) != (by > point.1) && point.0 < (bx - ax) * (point.1 - ay) / (by - ay) + ax
+        {
+            inside = !inside;
+        }
+    }
+    inside
+}
+
+/// Write one ring of the stack as the silhouette's outline offset by
+/// `geometry.expansion` — a Minkowski dilation, not a copy scaled onto an
+/// expanded bounding box (issue #1206).
+///
+/// The coordinates are written relative to the outline's own bounding box so
+/// none of them goes negative, and `#place` carries the difference.
+fn write_offset_ring_layer(
+    out: &mut String,
+    rings: &[OutlineRing],
+    geometry: RingGeometry,
+    shadow: &Shadow,
+    alpha: u8,
+    origin: (f64, f64),
+) {
+    // A crisp shadow has no ramp to follow, so its one ring is the silhouette
+    // itself, turned by whichever join the outline declares (#1090).
+    let reach: CornerReach = if geometry.blur_sigma > 0.0 {
+        CornerReach::Blurred {
+            sigma: geometry.blur_sigma,
+            expansion: geometry.blur_expansion,
+        }
+    } else if geometry.silhouette_radius > 0.0 {
+        CornerReach::Round
+    } else {
+        CornerReach::Mitre
+    };
+    let corners: Vec<Vec<OffsetCorner>> = rings
+        .iter()
+        .map(|ring| {
+            let sign: f64 = if ring.hole { -1.0 } else { 1.0 };
+            offset_ring(
+                &ring.vertices,
+                sign * geometry.expansion,
+                match reach {
+                    CornerReach::Blurred { sigma, expansion } => CornerReach::Blurred {
+                        sigma,
+                        expansion: sign * expansion,
+                    },
+                    other => other,
+                },
+            )
+        })
+        .filter(|corners| !corners.is_empty())
+        .collect();
+    if corners.is_empty() {
+        return;
+    }
+
+    let segments: Vec<Vec<RingSegment>> = corners
+        .iter()
+        .map(|corners| ring_segments(corners))
+        .collect();
+    let (left, top): (f64, f64) = segments
+        .iter()
+        .flatten()
+        .flat_map(RingSegment::points)
+        .fold((f64::MAX, f64::MAX), |(left, top), (x, y)| {
+            (left.min(x), top.min(y))
+        });
+    let _ = write!(
+        out,
+        "#place(top + left, dx: {}pt, dy: {}pt)[#curve(fill-rule: \"even-odd\", fill: rgb({}, {}, {}, {})",
+        format_f64(origin.0 + left),
+        format_f64(origin.1 + top),
+        shadow.color.r,
+        shadow.color.g,
+        shadow.color.b,
+        alpha,
+    );
+    for ring in &segments {
+        for segment in ring {
+            segment.write(out, (left, top));
+        }
+        out.push_str(", curve.close()");
+    }
+    out.push_str(")]\n");
+}
+
+/// One drawn step of a ring's outline.
+enum RingSegment {
+    Move((f64, f64)),
+    Line((f64, f64)),
+    Cubic((f64, f64), (f64, f64), (f64, f64)),
+}
+
+impl RingSegment {
+    fn points(&self) -> Vec<(f64, f64)> {
+        match self {
+            RingSegment::Move(point) | RingSegment::Line(point) => vec![*point],
+            // A cubic never leaves its own control hull, so bounding the four
+            // points bounds the curve.
+            RingSegment::Cubic(first, second, end) => vec![*first, *second, *end],
+        }
+    }
+
+    fn write(&self, out: &mut String, offset: (f64, f64)) {
+        let at = |(x, y): (f64, f64)| -> String {
+            format!(
+                "({}pt, {}pt)",
+                format_f64(x - offset.0),
+                format_f64(y - offset.1),
+            )
+        };
+        let _ = match self {
+            RingSegment::Move(point) => write!(out, ", curve.move({})", at(*point)),
+            RingSegment::Line(point) => write!(out, ", curve.line({})", at(*point)),
+            RingSegment::Cubic(first, second, end) => write!(
+                out,
+                ", curve.cubic({}, {}, {})",
+                at(*first),
+                at(*second),
+                at(*end),
+            ),
+        };
+    }
+}
+
+/// The drawn steps of one offset ring: a straight run into every corner, and
+/// the arc that turns it.
+fn ring_segments(corners: &[OffsetCorner]) -> Vec<RingSegment> {
+    let mut segments: Vec<RingSegment> = Vec::with_capacity(2 * corners.len());
+    for (index, corner) in corners.iter().enumerate() {
+        segments.push(if index == 0 {
+            RingSegment::Move(corner.entry)
+        } else {
+            RingSegment::Line(corner.entry)
+        });
+        if let Some(arc) = &corner.arc {
+            segments.extend(
+                arc_beziers(arc)
+                    .into_iter()
+                    .map(|(first, second, end)| RingSegment::Cubic(first, second, end)),
+            );
+        }
+    }
+    segments
 }
 
 /// Write fill color, using rgb with 4 args when opacity is set, rgb with 3 args otherwise.
