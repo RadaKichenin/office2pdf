@@ -1557,7 +1557,9 @@ fn first_shadow_ring_points(source: &str) -> Vec<(f64, f64)> {
         })
         .collect();
     let points: Vec<(f64, f64)> = lengths
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|pair| (dx + pair[0], dy + pair[1]))
         .collect();
     assert!(!points.is_empty(), "no ring coordinates in: {line}");

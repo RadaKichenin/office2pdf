@@ -1249,7 +1249,9 @@ fn shadow_ring_outlines(source: &str) -> Vec<Vec<(f64, f64)>> {
                 })
                 .collect();
             lengths
-                .chunks_exact(2)
+                .as_chunks::<2>()
+                .0
+                .iter()
                 .map(|pair| (dx + pair[0], dy + pair[1]))
                 .collect()
         })
