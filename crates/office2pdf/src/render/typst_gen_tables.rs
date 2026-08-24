@@ -631,6 +631,26 @@ const DATA_BAR_RIGHT_INSET_PT: f64 = 1.0;
 /// ground truth in this corpus and share the anchor.
 const ICON_SET_LEFT_INSET_PT: f64 = 2.0;
 
+/// The side of the square box Excel prints an icon-set sprite in, in points.
+///
+/// Every `3Arrows` sprite of the native `10_kpi_tracker_en` export is placed
+/// `transform="11 0 0 11 386 …"`, carrying a 12 x 12px bitmap. Where the ink
+/// sits inside that box is the sprite's own business: the up and down arrows
+/// fill it, the right one leaves its bottom row blank (issue #651).
+const ICON_SET_BOX_SIZE_PT: f64 = 11.0;
+
+/// How far below its row's top boundary Excel seats that box, in points.
+///
+/// Measured on the same export (issue #1202): the six sprites sit at
+/// y = 133, 147, 161, 175, 189 and 203, and the thin row rules over them fill
+/// 132-133, 146-147, … — Excel's boundary-anchored `[B, B + 1]` band, so the
+/// boundaries are 132, 146, … and every box starts one whole point below one.
+/// The 14pt tracks do not centre it: an 11pt box centred there would start
+/// 1.5pt down, and centring the *ink* — which is what `horizon` did — put the
+/// vertical arrows 0.25pt low and the right one, 0.92pt short of its box, a
+/// further 0.46pt.
+const ICON_SET_TOP_INSET_PT: f64 = 1.0;
+
 /// Excel's arrow icon sets are drawn shapes, not characters. Native Excel PDFs
 /// print them as sprites, ramped along the icon box's diagonal under a flat
 /// outline; these constants size the vector stand-in, whose paint comes from
@@ -642,7 +662,10 @@ const ICON_SET_LEFT_INSET_PT: f64 = 2.0;
 /// arrow and 12 x 11px for the right one — 10.08 x 11.00pt of actual arrow,
 /// with about a pixel of padding on the narrow axis. Sizing to the 11 x 11 box
 /// instead would give the ink the size of the whole sprite (issue #651).
-const ARROW_ICON_LENGTH_PT: f64 = 11.0;
+///
+/// Along its length the arrow does span the whole box, so this is
+/// [`ICON_SET_BOX_SIZE_PT`] itself; only the breadth is short of it.
+const ARROW_ICON_LENGTH_PT: f64 = ICON_SET_BOX_SIZE_PT;
 /// Across the shaft the arrow is narrower than it is long.
 const ARROW_ICON_BREADTH_PT: f64 = 10.08;
 
@@ -695,6 +718,19 @@ const ARROW_ICON_OUTLINE_WIDTH_PT: f64 = ARROW_ICON_LENGTH_PT / 12.0;
 /// square, so the ramp runs at 45 degrees (issue #1134).
 const ARROW_ICON_GRADIENT_ANGLE_DEG: i32 = 45;
 
+/// Seat an icon whose ink is shorter than Excel's sprite box in the middle of
+/// that box, so every set shares one placement.
+///
+/// The box is what the row seats, and only the arrows' masks say their ink
+/// hangs from its top. A set with no native export to read keeps the middle,
+/// which is where a shape drawn in a square sprite lands (issue #1202).
+fn icon_sprite_box(content: &str) -> String {
+    format!(
+        "box(height: {}pt)[#place(left + horizon, {content})]",
+        format_f64(ICON_SET_BOX_SIZE_PT),
+    )
+}
+
 /// The drawn shape for an icon-set glyph, or `None` for the sets that stay
 /// characters — symbols, flags, stars.
 fn icon_shape(glyph: &str, color: Option<Color>, shading: Option<IconShading>) -> Option<String> {
@@ -703,10 +739,10 @@ fn icon_shape(glyph: &str, color: Option<Color>, shading: Option<IconShading>) -
         let paint: String = color
             .map(|c| rgb(&c))
             .unwrap_or_else(|| "black".to_string());
-        return Some(format!(
+        return Some(icon_sprite_box(&format!(
             "circle(radius: {}pt, fill: {paint}, stroke: none)",
             format_f64(radius)
-        ));
+        )));
     }
     arrow_icon_polygon(glyph, color, shading)
 }
@@ -788,17 +824,18 @@ fn arrow_icon_polygon(
     // are of the sprite's full box, not of what the outline leaves (issue
     // #1201).
     //
-    // Superimposing the two takes a box, and it is the silhouette's own
-    // extent: `#place`'s `horizon` centres whatever element it is given, so a
-    // box of any other size would move the icon off the row's centre line.
-    let extent =
-        |axis: fn(&(f64, f64)) -> f64| -> f64 { points.iter().map(axis).fold(0.0, f64::max) };
+    // Superimposing the two takes a box, and it is the sprite's own 11 x 11pt
+    // one rather than the silhouette's extent. The silhouette is flush with
+    // its top-left corner already — the padding column of the up and down
+    // masks falls on the right and the padding row of the transposed one at
+    // the bottom (#651, #1135) — so seating the box seats the ink, and a
+    // sprite short of the box keeps its ink against the top instead of being
+    // re-centred there (issue #1202).
     let shape: String = format!(
-        "box(width: {width}pt, height: {height}pt)\
+        "box(width: {size}pt, height: {size}pt)\
          [#place(top + left, polygon(fill: {fill}, stroke: none, {silhouette}))\
          #place(top + left, polygon(stroke: {stroke}pt + {outline}, {ring}))]",
-        width = format_f64(extent(|point| point.0)),
-        height = format_f64(extent(|point| point.1)),
+        size = format_f64(ICON_SET_BOX_SIZE_PT),
         silhouette = coordinates(&points),
         stroke = format_f64(ARROW_ICON_OUTLINE_WIDTH_PT),
         ring = coordinates(&ring),
@@ -1092,15 +1129,23 @@ fn generate_table_cell(
         // so arrows are re-drawn as polygons.
         // The circle sets are drawn discs for the same reason (#536).
         //
-        // `#place` starts at the *content* box, which that value reserve has
-        // already pushed inward, so the icon has to be pulled back out to the
-        // cell's own icon inset — otherwise it rides along with the value and
-        // the gap Excel leaves between the two collapses (issue #1087).
-        let icon_dx: f64 =
-            ICON_SET_LEFT_INSET_PT - cell_inset_with_border(cell, default_cell_padding).left;
+        // `#place` starts at the *content* box, which the cell's inset — and,
+        // on the left, that value reserve — has already pushed inward, so both
+        // offsets are the cell's own inset undone and Excel's put in its
+        // place. Left alone, the icon rides along with the value and the gap
+        // Excel leaves between the two collapses (issue #1087).
+        //
+        // Vertically the anchor is the row's top boundary, not its centre
+        // line: Excel seats the sprite's box `ICON_SET_TOP_INSET_PT` below the
+        // boundary whatever the track's height, and the ink hangs inside that
+        // box wherever the sprite puts it (issue #1202).
+        let cell_inset: Insets = cell_inset_with_border(cell, default_cell_padding);
+        let icon_dx: f64 = ICON_SET_LEFT_INSET_PT - cell_inset.left;
+        let icon_dy: f64 = ICON_SET_TOP_INSET_PT - cell_inset.top;
         let anchor: String = format!(
-            "#place(left + horizon, dx: {}pt, ",
-            format_geometry(icon_dx)
+            "#place(top + left, dx: {}pt, dy: {}pt, ",
+            format_geometry(icon_dx),
+            format_geometry(icon_dy),
         );
         match (
             icon_shape(icon, cell.icon_color, cell.icon_shading),
@@ -1112,13 +1157,20 @@ fn generate_table_cell(
             (None, Some(color)) => {
                 let _ = write!(
                     out,
-                    "{anchor}text(fill: {}, weight: \"bold\")[{}])",
-                    rgb(&color),
-                    icon
+                    "{anchor}{})",
+                    icon_sprite_box(&format!(
+                        "text(fill: {}, weight: \"bold\")[{}]",
+                        rgb(&color),
+                        icon
+                    ))
                 );
             }
             (None, None) => {
-                let _ = write!(out, "{anchor}text(weight: \"bold\")[{icon}])");
+                let _ = write!(
+                    out,
+                    "{anchor}{})",
+                    icon_sprite_box(&format!("text(weight: \"bold\")[{icon}]"))
+                );
             }
         }
     }
