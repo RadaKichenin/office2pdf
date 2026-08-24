@@ -16,19 +16,23 @@
 //! and puts the arithmetic in the `<a:gdLst>` beside it, so the whole path
 //! read as empty and the rectangle fallback stood in for a shape the deck had
 //! fully described (issue #1205). Both forms resolve through
-//! [`GuideList`].
+//! [`GuideList`], and `<a:arcTo>` resolves its radii and angles the same way.
 
 use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
 
 use crate::ir::Subpath;
-use crate::parser::pptx::geometry_guides::{GuideList, ShapeExtent};
+use crate::parser::pptx::geometry_guides::{GuideList, ShapeExtent, to_radians};
 use crate::parser::xml_util::{get_attr_i64, get_attr_str};
 
 /// Points sampled per cubic or quadratic segment. Sixteen keeps a full circle
 /// — four segments, so 64 points — within about 0.2% of its radius, well under
 /// a printed point at slide sizes.
 const CURVE_SAMPLES: usize = 16;
+
+/// The most points one `<a:arcTo>` may contribute. `swAng` is unbounded, and
+/// a spiral of many turns must not sample itself into a megabyte of vertices.
+const MAX_ARC_SAMPLES: usize = 512;
 
 /// Flatten the `<a:pathLst>` of a `<a:custGeom>` into vertices normalized to
 /// the shape's bounding box.
@@ -75,6 +79,7 @@ pub(crate) fn parse_custom_geometry(
                 depth += 1;
                 match element.local_name().as_ref() {
                     b"path" => builder.start_path(element),
+                    b"arcTo" => apply_arc(element, &guides, builder.vertices()),
                     other => {
                         if let Some(kind) = Command::from_tag(other) {
                             command = Some(kind);
@@ -93,6 +98,10 @@ pub(crate) fn parse_custom_geometry(
                         pending_points.push(point);
                     }
                 }
+                // An arc carries its whole definition in its attributes and
+                // starts wherever the pen already is, so it applies the
+                // moment it is read rather than waiting for child points.
+                b"arcTo" => apply_arc(element, &guides, builder.vertices()),
                 b"close" => builder.close(),
                 b"path" => builder.end_path(),
                 _ => {}
@@ -151,6 +160,68 @@ fn resolve_point(element: &BytesStart, guides: &GuideList) -> Option<(f64, f64)>
     let x: f64 = guides.resolve(&get_attr_str(element, b"x")?)?;
     let y: f64 = guides.resolve(&get_attr_str(element, b"y")?)?;
     Some((x, y))
+}
+
+/// Append the elliptical arc of one `<a:arcTo wR= hR= stAng= swAng=>`.
+///
+/// The arc starts at the pen's current point, so the ellipse is the one whose
+/// point at `stAng` is already there: its centre is that point stepped back
+/// along the radii. From there the arc sweeps `swAng`. Both angles are in
+/// 60000ths of a degree, and both turn clockwise on the page, which the
+/// y-down coordinate space gives without a sign flip.
+///
+/// Skipping the segment squared off every corner it was drawing: a freeform
+/// rounded rectangle came out a plain rectangle, outline, fill and shadow
+/// silhouette alike (issue #1205).
+fn apply_arc(element: &BytesStart, guides: &GuideList, current: &mut Vec<(f64, f64)>) {
+    let attribute = |key: &[u8]| -> Option<f64> { guides.resolve(&get_attr_str(element, key)?) };
+    let (
+        Some(start),
+        Some(radius_x),
+        Some(radius_y),
+        Some(start_angle_units),
+        Some(swing_angle_units),
+    ) = (
+        current.last().copied(),
+        attribute(b"wR"),
+        attribute(b"hR"),
+        attribute(b"stAng"),
+        attribute(b"swAng"),
+    )
+    else {
+        return;
+    };
+
+    let start_angle: f64 = to_radians(start_angle_units);
+    let swing: f64 = to_radians(swing_angle_units);
+    if !(start_angle.is_finite()
+        && swing.is_finite()
+        && radius_x.is_finite()
+        && radius_y.is_finite())
+    {
+        return;
+    }
+    let centre: (f64, f64) = (
+        start.0 - radius_x * start_angle.cos(),
+        start.1 - radius_y * start_angle.sin(),
+    );
+
+    let samples: usize = arc_sample_count(swing);
+    for step in 1..=samples {
+        let angle: f64 = start_angle + swing * (step as f64 / samples as f64);
+        current.push((
+            centre.0 + radius_x * angle.cos(),
+            centre.1 + radius_y * angle.sin(),
+        ));
+    }
+}
+
+/// Sample an arc at the rate a Bezier quarter-circle is sampled at, so a
+/// corner arc and a corner curve print the same smoothness.
+fn arc_sample_count(swing: f64) -> usize {
+    let quarter_turns: f64 = swing.abs() / std::f64::consts::FRAC_PI_2;
+    let samples: f64 = (quarter_turns * CURVE_SAMPLES as f64).ceil();
+    (samples as usize).clamp(1, MAX_ARC_SAMPLES)
 }
 
 /// Accumulates subpaths, and knows the coordinate space each one normalizes

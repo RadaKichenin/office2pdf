@@ -520,3 +520,234 @@ fn a_vertex_naming_an_undefined_guide_is_dropped() {
     assert_eq!(vertices.len(), 3, "the unresolved vertex is skipped");
     assert!(close_to(vertices[2], (1.0, 1.0)), "got {:?}", vertices[2]);
 }
+
+/// `<a:arcTo>` draws the elliptical arc that starts at the pen's current
+/// point. Skipping it squared off every corner it was drawing (issue #1205).
+///
+/// The quarter here starts at the rightmost point of a circle of radius 50
+/// centred on (50, 50) and sweeps a quarter turn, so it must end at the
+/// bottom of that circle with every sampled point one radius from the centre.
+#[test]
+fn an_arc_segment_follows_its_ellipse() {
+    let subpaths = parse_subpaths(
+        r#"<a:custGeom><a:pathLst><a:path w="100" h="100">
+            <a:moveTo><a:pt x="100" y="50"/></a:moveTo>
+            <a:arcTo wR="50" hR="50" stAng="0" swAng="5400000"/>
+        </a:path></a:pathLst></a:custGeom>"#,
+    );
+
+    let vertices: &Vec<(f64, f64)> = &subpaths[0].vertices;
+    assert!(
+        vertices.len() > 10,
+        "the arc must contribute many vertices, got {}",
+        vertices.len()
+    );
+    for (x, y) in vertices {
+        let radius: f64 = ((x - 0.5).powi(2) + (y - 0.5).powi(2)).sqrt();
+        assert!(
+            (radius - 0.5).abs() < 1e-9,
+            "({x}, {y}) is {radius} from the centre, not 0.5"
+        );
+    }
+    let last: (f64, f64) = *vertices.last().expect("the arc ends somewhere");
+    assert!(
+        close_to(last, (0.5, 1.0)),
+        "a quarter turn from the right reaches the bottom, got {last:?}"
+    );
+}
+
+/// A negative `swAng` sweeps the other way, which is how a corner turns back
+/// on itself.
+#[test]
+fn a_negative_swing_sweeps_the_other_way() {
+    let subpaths = parse_subpaths(
+        r#"<a:custGeom><a:pathLst><a:path w="100" h="100">
+            <a:moveTo><a:pt x="100" y="50"/></a:moveTo>
+            <a:arcTo wR="50" hR="50" stAng="0" swAng="-5400000"/>
+        </a:path></a:pathLst></a:custGeom>"#,
+    );
+
+    let last: (f64, f64) = *subpaths[0].vertices.last().expect("the arc ends somewhere");
+    assert!(close_to(last, (0.5, 0.0)), "got {last:?}");
+}
+
+/// `wR` and `hR` are independent radii, so an arc may be elliptical.
+#[test]
+fn an_arc_may_be_elliptical() {
+    let subpaths = parse_subpaths(
+        r#"<a:custGeom><a:pathLst><a:path w="100" h="100">
+            <a:moveTo><a:pt x="100" y="20"/></a:moveTo>
+            <a:arcTo wR="80" hR="20" stAng="0" swAng="5400000"/>
+        </a:path></a:pathLst></a:custGeom>"#,
+    );
+
+    let vertices: &Vec<(f64, f64)> = &subpaths[0].vertices;
+    for (x, y) in vertices {
+        // Centred on (20, 20) with radii 80 and 20, in a 100 x 100 space.
+        let ellipse: f64 = ((x - 0.2) / 0.8).powi(2) + ((y - 0.2) / 0.2).powi(2);
+        assert!(
+            (ellipse - 1.0).abs() < 1e-9,
+            "({x}, {y}) is off the ellipse"
+        );
+    }
+    let last: (f64, f64) = *vertices.last().expect("the arc ends somewhere");
+    assert!(close_to(last, (0.2, 0.4)), "got {last:?}");
+}
+
+/// A full turn is sampled as densely as four Bezier quarters, so a circle
+/// drawn as one arc and one drawn as four curves print the same.
+#[test]
+fn a_full_turn_is_sampled_like_four_bezier_quarters() {
+    let subpaths = parse_subpaths(
+        r#"<a:custGeom><a:pathLst><a:path w="100" h="100">
+            <a:moveTo><a:pt x="100" y="50"/></a:moveTo>
+            <a:arcTo wR="50" hR="50" stAng="0" swAng="21600000"/>
+            <a:close/>
+        </a:path></a:pathLst></a:custGeom>"#,
+    );
+
+    assert_eq!(
+        subpaths[0].vertices.len(),
+        1 + 4 * CURVE_SAMPLES,
+        "the start point plus sixteen samples per quarter"
+    );
+}
+
+/// An arc with no pen position has no ellipse to sit on, so it is skipped
+/// rather than anchored at the origin.
+#[test]
+fn an_arc_without_a_start_point_is_skipped() {
+    assert!(
+        parse(
+            r#"<a:custGeom><a:pathLst><a:path w="100" h="100">
+                <a:arcTo wR="50" hR="50" stAng="0" swAng="5400000"/>
+            </a:path></a:pathLst></a:custGeom>"#
+        )
+        .is_empty()
+    );
+}
+
+/// An arc resolves its radii and angles through the guide list as a vertex
+/// does — the form issue #1205 was reported against, where every one of the
+/// four attributes is a guide name.
+#[test]
+fn an_arc_may_name_guides_for_its_radii_and_angles() {
+    let subpaths = parse_subpaths_in(
+        r#"<a:custGeom>
+            <a:gdLst>
+                <a:gd name="radius" fmla="val 50"/>
+                <a:gd name="right" fmla="val 100"/>
+                <a:gd name="middle" fmla="val 50"/>
+                <a:gd name="from" fmla="val 0"/>
+                <a:gd name="quarter" fmla="val 5400000"/>
+            </a:gdLst>
+            <a:pathLst><a:path>
+                <a:moveTo><a:pt x="right" y="middle"/></a:moveTo>
+                <a:arcTo wR="radius" hR="radius" stAng="from" swAng="quarter"/>
+            </a:path></a:pathLst>
+        </a:custGeom>"#,
+        ShapeExtent::new(100.0, 100.0),
+    );
+
+    let last: (f64, f64) = *subpaths[0].vertices.last().expect("the arc ends somewhere");
+    assert!(close_to(last, (0.5, 1.0)), "got {last:?}");
+}
+
+/// The whole of issue #1205: a rounded rectangle written as four `arcTo`
+/// corners joined by straight edges, with every coordinate a guide name and
+/// no `<a:path w= h=>` — the shape LibreOffice writes for a PowerPoint
+/// `roundRect`. The corners must be arcs, not right angles.
+#[test]
+fn a_guide_driven_rounded_rectangle_turns_its_corners() {
+    // 400 x 200 with a 40-unit corner radius: 2160/21600 of the short side.
+    let extent = ShapeExtent::new(400.0, 200.0);
+    let subpaths = parse_subpaths_in(
+        r#"<a:custGeom>
+            <a:avLst><a:gd name="f0" fmla="val 2160"/></a:avLst>
+            <a:gdLst>
+                <a:gd name="adj" fmla="pin 0 f0 10800"/>
+                <a:gd name="unit" fmla="*/ ss 1 21600"/>
+                <a:gd name="rad" fmla="*/ adj unit 1"/>
+                <a:gd name="zero" fmla="val 0"/>
+                <a:gd name="right" fmla="val w"/>
+                <a:gd name="bottom" fmla="val h"/>
+                <a:gd name="near_right" fmla="+- right 0 rad"/>
+                <a:gd name="near_bottom" fmla="+- bottom 0 rad"/>
+                <a:gd name="quarter" fmla="val 5400000"/>
+                <a:gd name="half" fmla="val 10800000"/>
+                <a:gd name="three_quarters" fmla="val 16200000"/>
+                <a:gd name="back" fmla="val -5400000"/>
+            </a:gdLst>
+            <a:pathLst><a:path>
+                <a:moveTo><a:pt x="rad" y="zero"/></a:moveTo>
+                <a:arcTo wR="rad" hR="rad" stAng="three_quarters" swAng="back"/>
+                <a:lnTo><a:pt x="zero" y="near_bottom"/></a:lnTo>
+                <a:arcTo wR="rad" hR="rad" stAng="half" swAng="back"/>
+                <a:lnTo><a:pt x="near_right" y="bottom"/></a:lnTo>
+                <a:arcTo wR="rad" hR="rad" stAng="quarter" swAng="back"/>
+                <a:lnTo><a:pt x="right" y="rad"/></a:lnTo>
+                <a:arcTo wR="rad" hR="rad" stAng="zero" swAng="back"/>
+                <a:close/>
+            </a:path></a:pathLst>
+        </a:custGeom>"#,
+        extent,
+    );
+
+    assert_eq!(subpaths.len(), 1, "got {subpaths:?}");
+    assert!(subpaths[0].closed);
+    let vertices: &Vec<(f64, f64)> = &subpaths[0].vertices;
+
+    // 2160 * min(400, 200) / 21600 is 20 units, which is 0.05 of the width
+    // and 0.1 of the height once normalized.
+    let radius_x: f64 = 0.05;
+    let radius_y: f64 = 0.10;
+
+    // No vertex sits in a corner square outside the arc that rounds it: a
+    // square-cornered rectangle would put one at (0, 0) itself.
+    for corner in [(0.0, 0.0), (0.0, 1.0), (1.0, 1.0), (1.0, 0.0)] {
+        let hub: (f64, f64) = (
+            if corner.0 == 0.0 {
+                radius_x
+            } else {
+                1.0 - radius_x
+            },
+            if corner.1 == 0.0 {
+                radius_y
+            } else {
+                1.0 - radius_y
+            },
+        );
+        let mut on_the_arc: usize = 0;
+        for (x, y) in vertices {
+            // Inclusive: the arc's own endpoints sit exactly on the corner
+            // square's edges.
+            let inside_corner: bool =
+                (x - corner.0).abs() <= radius_x + 1e-9 && (y - corner.1).abs() <= radius_y + 1e-9;
+            if !inside_corner {
+                continue;
+            }
+            let offset: f64 = ((x - hub.0) / radius_x).powi(2) + ((y - hub.1) / radius_y).powi(2);
+            assert!(
+                (offset - 1.0).abs() < 1e-6,
+                "({x}, {y}) is inside corner {corner:?} but off its arc"
+            );
+            on_the_arc += 1;
+        }
+        assert!(
+            on_the_arc >= CURVE_SAMPLES,
+            "corner {corner:?} is turned by {on_the_arc} vertices, not an arc"
+        );
+    }
+
+    // The straight edges are still straight and still reach the box.
+    assert!(
+        vertices.iter().any(|(x, _)| *x < 1e-9),
+        "the left edge touches x = 0: {vertices:?}"
+    );
+    assert!(
+        vertices.iter().any(|(x, _)| (x - 1.0).abs() < 1e-9),
+        "the right edge touches x = 1"
+    );
+    assert!(vertices.iter().any(|(_, y)| *y < 1e-9));
+    assert!(vertices.iter().any(|(_, y)| (y - 1.0).abs() < 1e-9));
+}

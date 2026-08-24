@@ -570,6 +570,31 @@ fn write_shadow_shape(out: &mut String, shape: &Shape, width: f64, height: f64, 
                     alpha,
                 );
             }
+            // A custom geometry casts its own outline. Only a closed
+            // subpath is a filled region: an unclosed polyline is stroked,
+            // and filling it would paint the area an elbow connector merely
+            // brackets (issues #1205, #1305).
+            //
+            // Like the polygon arm above, the silhouette is the outline
+            // scaled onto the expanded layer box rather than offset from it,
+            // which is the approximation #1206 tracks.
+            ShapeKind::Path { subpaths } => {
+                let closed: Vec<&Subpath> =
+                    subpaths.iter().filter(|subpath| subpath.closed).collect();
+                if closed.is_empty() {
+                    out.push_str("]\n");
+                    continue;
+                }
+                let _ = write!(
+                    out,
+                    "#curve(fill-rule: \"even-odd\", fill: rgb({}, {}, {}, {})",
+                    shadow.color.r, shadow.color.g, shadow.color.b, alpha,
+                );
+                for subpath in closed {
+                    write_curve_subpath(out, layer_width, layer_height, subpath);
+                }
+                out.push(')');
+            }
             // Line is handled above; any future variants gracefully skip
             // the shadow rather than panicking.
             _ => {}

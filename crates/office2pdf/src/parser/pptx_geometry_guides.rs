@@ -165,7 +165,7 @@ fn apply(operator: &str, operands: &[f64]) -> Option<f64> {
 }
 
 /// DrawingML states an angle in 60000ths of a degree.
-fn to_radians(angle_units: f64) -> f64 {
+pub(crate) fn to_radians(angle_units: f64) -> f64 {
     (angle_units / ANGLE_UNITS_PER_TURN) * std::f64::consts::TAU
 }
 

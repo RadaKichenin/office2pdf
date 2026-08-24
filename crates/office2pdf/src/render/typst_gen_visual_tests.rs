@@ -677,6 +677,107 @@ fn test_shape_shadow_codegen() {
     );
 }
 
+/// A custom-geometry shape casts the shadow of its own outline. Before the
+/// `<a:custGeom>` path was understood, these shapes fell back to a rectangle
+/// and got a rectangle's shadow; once the path arrived the shadow vanished
+/// altogether, because no silhouette knew how to follow it (issue #1205).
+#[test]
+fn test_path_shape_casts_its_outline_as_a_shadow() {
+    use crate::ir::{Shadow, Subpath};
+
+    let elem = FixedElement {
+        x: 10.0,
+        y: 20.0,
+        width: 200.0,
+        height: 150.0,
+        kind: FixedElementKind::Shape(Shape {
+            kind: ShapeKind::Path {
+                subpaths: vec![Subpath::closed_outline(vec![
+                    (0.5, 0.0),
+                    (1.0, 1.0),
+                    (0.0, 1.0),
+                ])],
+            },
+            fill: Some(Color::new(255, 0, 0)),
+            gradient_fill: None,
+            pattern_fill: None,
+            stroke: None,
+            rotation_deg: None,
+            opacity: None,
+            shadow: Some(Shadow {
+                blur_radius: 0.0,
+                distance: 3.0,
+                direction: 90.0,
+                color: Color::new(0, 0, 0),
+                opacity: 0.35,
+            }),
+        }),
+    };
+    let doc = make_doc(vec![make_fixed_page(720.0, 540.0, vec![elem])]);
+    let source = generate_typst(&doc).unwrap().source;
+
+    let shadow_pos = source
+        .find("rgb(0, 0, 0, ")
+        .unwrap_or_else(|| panic!("no shadow layer in {source}"));
+    let main_pos = source
+        .find("rgb(255, 0, 0)")
+        .expect("the shape itself still draws");
+    assert!(shadow_pos < main_pos, "the shadow sits under the shape");
+    assert!(
+        source[..shadow_pos].ends_with("even-odd\", fill: "),
+        "the shadow is a curve following the path, not a rectangle: {source}"
+    );
+    assert_eq!(
+        source.matches("curve.move(").count(),
+        2,
+        "one outline for the shadow and one for the shape: {source}"
+    );
+}
+
+/// An unclosed subpath is a stroked polyline, not a filled region, so it
+/// contributes no silhouette. Filling it would paint the area an elbow
+/// connector merely brackets (issue #1205).
+#[test]
+fn test_open_subpath_casts_no_shadow_silhouette() {
+    use crate::ir::{Shadow, Subpath};
+
+    let elem = FixedElement {
+        x: 10.0,
+        y: 20.0,
+        width: 200.0,
+        height: 150.0,
+        kind: FixedElementKind::Shape(Shape {
+            kind: ShapeKind::Path {
+                subpaths: vec![Subpath::open_outline(vec![
+                    (0.0, 0.0),
+                    (0.0, 1.0),
+                    (1.0, 1.0),
+                ])],
+            },
+            fill: None,
+            gradient_fill: None,
+            pattern_fill: None,
+            stroke: None,
+            rotation_deg: None,
+            opacity: None,
+            shadow: Some(Shadow {
+                blur_radius: 0.0,
+                distance: 3.0,
+                direction: 90.0,
+                color: Color::new(0, 0, 0),
+                opacity: 0.35,
+            }),
+        }),
+    };
+    let doc = make_doc(vec![make_fixed_page(720.0, 540.0, vec![elem])]);
+    let source = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        !source.contains("rgb(0, 0, 0, "),
+        "an open polyline casts no filled silhouette: {source}"
+    );
+}
+
 #[test]
 fn test_shape_no_shadow_no_extra_output() {
     let elem = FixedElement {
