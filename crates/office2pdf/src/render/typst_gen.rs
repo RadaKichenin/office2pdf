@@ -27,9 +27,9 @@ use self::lists::{
     write_fixed_text_default_par_settings,
 };
 use self::shapes::{
-    generate_shape, shadow_blur_layers, shadow_outline_outset, shadow_ring_corner_radius,
-    shadow_silhouette_corner_radius, write_fill_color, write_gradient_fill, write_shape_stroke,
-    write_text_box_shape_background,
+    clamp_ring_corner_radius, generate_shape, shadow_blur_layers, shadow_blur_sigma,
+    shadow_outline_outset, shadow_ring_corner_radius, shadow_silhouette_corner_radius,
+    write_fill_color, write_gradient_fill, write_shape_stroke, write_text_box_shape_background,
 };
 use self::tables::generate_table;
 use self::text::*;
@@ -1236,16 +1236,26 @@ fn generate_fixed_element(
                 // join does, so each ring carries the arc grown by its own
                 // offset rather than a mitre (issue #1138).
                 let silhouette_radius: f64 = shadow_silhouette_corner_radius(&img.stroke);
+                // …and each ring follows the blurred silhouette's own
+                // iso-coverage contour, which turns inside the dilated one
+                // wherever two edges meet (issue #1204).
+                let blur_sigma: f64 = shadow_blur_sigma(shadow);
                 for (blur_expansion, alpha) in shadow_blur_layers(shadow) {
                     let expansion = outline_outset + blur_expansion;
-                    let radius: f64 = shadow_ring_corner_radius(silhouette_radius, blur_expansion);
+                    let layer_width: f64 = (elem.width + 2.0 * expansion).max(0.0);
+                    let layer_height: f64 = (elem.height + 2.0 * expansion).max(0.0);
+                    let radius: f64 = clamp_ring_corner_radius(
+                        shadow_ring_corner_radius(silhouette_radius, blur_expansion, blur_sigma),
+                        layer_width,
+                        layer_height,
+                    );
                     let _ = writeln!(
                         out,
                         "#place(top + left, dx: {}pt, dy: {}pt, rect(width: {}pt, height: {}pt, radius: {}pt, fill: rgb({}, {}, {}, {})))",
                         format_f64(dx - expansion),
                         format_f64(dy - expansion),
-                        format_f64((elem.width + 2.0 * expansion).max(0.0)),
-                        format_f64((elem.height + 2.0 * expansion).max(0.0)),
+                        format_f64(layer_width),
+                        format_f64(layer_height),
                         format_f64(radius),
                         shadow.color.r,
                         shadow.color.g,

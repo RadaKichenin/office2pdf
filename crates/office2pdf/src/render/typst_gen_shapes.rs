@@ -209,6 +209,30 @@ fn standard_normal_cdf(z: f64) -> f64 {
     1.0 - density * poly
 }
 
+/// The standard normal density, the companion of [`standard_normal_cdf`].
+fn standard_normal_pdf(z: f64) -> f64 {
+    (-0.5 * z * z).exp() / (2.0 * std::f64::consts::PI).sqrt()
+}
+
+/// The inverse of [`standard_normal_cdf`], by bisection over its own values.
+///
+/// Only wanted to bracket the corner solve below, where the answer is finally
+/// spelled as a length in points; 60 halvings of an 80-wide bracket leave far
+/// less than that can carry, and it avoids fitting a second rational
+/// approximation for a function called a handful of times per shadow.
+fn standard_normal_quantile(probability: f64) -> f64 {
+    let (mut low, mut high): (f64, f64) = (-40.0, 40.0);
+    for _ in 0..60 {
+        let middle: f64 = 0.5 * (low + high);
+        if standard_normal_cdf(middle) < probability {
+            low = middle;
+        } else {
+            high = middle;
+        }
+    }
+    0.5 * (low + high)
+}
+
 /// Ring boundaries in sigma units, outermost coverage first, paired with the
 /// coverage each ring's band must compound to.
 ///
@@ -232,12 +256,17 @@ fn shadow_ring_bands() -> Vec<(f64, f64)> {
         .collect()
 }
 
+/// The blur's standard deviation in points, zero for a crisp shadow.
+pub(super) fn shadow_blur_sigma(shadow: &Shadow) -> f64 {
+    (SHADOW_BLUR_SIGMA_PER_RADIUS * shadow.blur_radius).max(0.0)
+}
+
 pub(super) fn shadow_blur_layers(shadow: &Shadow) -> Vec<(f64, u8)> {
     let opacity = shadow.opacity.clamp(0.0, 1.0);
     if shadow.blur_radius <= 0.0 {
         return vec![(0.0, (opacity * 255.0).round() as u8)];
     }
-    let sigma: f64 = SHADOW_BLUR_SIGMA_PER_RADIUS * shadow.blur_radius;
+    let sigma: f64 = shadow_blur_sigma(shadow);
     // Coverage target for the region covered by rings k.. is
     // `opacity * cdf_k`; solving outermost-in, ring k's own alpha is
     // 1 - (1 - target_k) / (1 - target_{k+1}).
@@ -306,17 +335,149 @@ pub(super) fn shadow_silhouette_corner_radius(stroke: &Option<BorderSide>) -> f6
         .map_or(0.0, |stroke| (stroke.width / 2.0).max(0.0))
 }
 
-/// The corner radius of one blur ring, given the silhouette's own radius and
-/// how far that ring is offset from it.
+/// How far the Gaussian's tail is followed when integrating over the corner
+/// arc, in sigma. `phi(6)` is 6e-9, five orders under the 1/255 an alpha byte
+/// can carry, so nothing outside that window survives being written out.
+const SHADOW_CORNER_TAIL_SIGMA: f64 = 6.0;
+
+/// Simpson intervals across that window. Against a 4096-interval reference
+/// over the whole quadrant the worst error on a sweep of arc radii from 0 to
+/// 100 sigma was 1.6e-5 of coverage, again far under one alpha level.
+const SHADOW_CORNER_QUADRATURE_STEPS: usize = 32;
+
+/// The coverage a Gaussian blur leaves on a convex right-angle corner's
+/// diagonal, as a fraction of the shadow's own opacity.
 ///
-/// A ring is the silhouette dilated by `blur_expansion`, and dilating by a
-/// disc grows a corner arc's radius by the same amount — which is why a square
-/// corner (radius 0) comes out rounded by the offset alone rather than mitred
-/// out to `blur_expansion * sqrt(2)` along the diagonal (issue #1138). The
-/// inner rings erode instead, and eroding past the arc leaves the corner
-/// square, so the radius floors at zero; Typst rejects a negative one.
-pub(super) fn shadow_ring_corner_radius(silhouette_radius: f64, blur_expansion: f64) -> f64 {
-    (silhouette_radius + blur_expansion).max(0.0)
+/// Both arguments are in sigma: `axis_offset` is how far the sample sits
+/// outside the corner arc's centre along each axis — so `axis_offset *
+/// sqrt(2)` out along the 45-degree bisector — and `arc_radius` is the
+/// silhouette's own corner arc. The silhouette near that corner is the
+/// quadrant behind the arc's centre grown by the arc, so a Gaussian sample
+/// lands inside it exactly when its distance to that quadrant is at most the
+/// arc radius.
+///
+/// Splitting on which axes the sample overshoots gives three terms: neither
+/// (the quadrant itself), one (a strip of width `arc_radius` past a single
+/// edge), and both — which leaves the bivariate normal's mass over a quarter
+/// disc. That last has no elementary form, so it is integrated over the
+/// arc's angle, where the integrand is one Gaussian bump whose width does not
+/// shrink as the radius grows.
+fn blurred_corner_coverage(axis_offset: f64, arc_radius: f64) -> f64 {
+    let beyond_edge: f64 = standard_normal_cdf(-axis_offset);
+    if arc_radius <= 0.0 {
+        // A square silhouette corner: the two axes are independent, so the
+        // coverage is exactly the product of the two edges' own tails.
+        return beyond_edge * beyond_edge;
+    }
+    let within_strip: f64 = standard_normal_cdf(arc_radius - axis_offset);
+    let outside_both: f64 = beyond_edge * (2.0 * within_strip - beyond_edge);
+
+    // Only the angles whose sample sits within the Gaussian's tail of the
+    // arc contribute; clipping to them keeps the quadrature's step fine
+    // enough however wide the arc is.
+    let low_sine: f64 = ((axis_offset - SHADOW_CORNER_TAIL_SIGMA) / arc_radius).clamp(0.0, 1.0);
+    let high_sine: f64 = ((axis_offset + SHADOW_CORNER_TAIL_SIGMA) / arc_radius).clamp(0.0, 1.0);
+    if high_sine <= low_sine {
+        return outside_both;
+    }
+    let (start, end): (f64, f64) = (low_sine.asin(), high_sine.asin());
+    let step: f64 = (end - start) / SHADOW_CORNER_QUADRATURE_STEPS as f64;
+    let mut total: f64 = 0.0;
+    for index in 0..=SHADOW_CORNER_QUADRATURE_STEPS {
+        let angle: f64 = start + step * index as f64;
+        let weight: f64 = if index == 0 || index == SHADOW_CORNER_QUADRATURE_STEPS {
+            1.0
+        } else if index % 2 == 1 {
+            4.0
+        } else {
+            2.0
+        };
+        total += weight
+            * standard_normal_pdf(arc_radius * angle.sin() - axis_offset)
+            * (standard_normal_cdf(arc_radius * angle.cos() - axis_offset) - beyond_edge)
+            * arc_radius
+            * angle.cos();
+    }
+    outside_both + total * step / 3.0
+}
+
+/// Where along a convex corner's diagonal the blurred coverage falls to
+/// `coverage`, as an offset per axis in sigma — the inverse of
+/// [`blurred_corner_coverage`] in its first argument, which is monotone.
+///
+/// Bracketed by the two shapes the silhouette sits between: it contains the
+/// bare quadrant, whose contour is the product of the two edge tails, and is
+/// contained in that quadrant dilated by the arc, whose contour is the
+/// equidistant one. Bisection inside that bracket needs no expansion step and
+/// cannot walk off a flat tail.
+fn blurred_corner_axis_offset(coverage: f64, arc_radius: f64) -> f64 {
+    let square_corner: f64 = -standard_normal_quantile(coverage.clamp(0.0, 1.0).sqrt());
+    let dilated: f64 = (arc_radius + standard_normal_quantile(1.0 - coverage.clamp(0.0, 1.0)))
+        / std::f64::consts::SQRT_2;
+    let (mut low, mut high): (f64, f64) = (square_corner.min(dilated), square_corner.max(dilated));
+    for _ in 0..32 {
+        let middle: f64 = 0.5 * (low + high);
+        if blurred_corner_coverage(middle, arc_radius) > coverage {
+            low = middle;
+        } else {
+            high = middle;
+        }
+    }
+    0.5 * (low + high)
+}
+
+/// The corner radius of one blur ring, given the silhouette's own radius, how
+/// far that ring is offset from it, and the blur's sigma.
+///
+/// A ring's alpha is solved from the 1-D Gaussian tail at its own offset, so
+/// the ring's boundary has to be the *iso-coverage* contour of the blurred
+/// silhouette at that tail. Along an edge that contour is the equidistant one
+/// — the silhouette dilated by the offset, which is why a square corner comes
+/// out rounded by the offset alone rather than mitred out to
+/// `blur_expansion * sqrt(2)` along the diagonal (issue #1138).
+///
+/// At a convex corner it is not. An isotropic Gaussian's coverage there is the
+/// product of the two edges' own tails, a quarter at a square corner against
+/// the half a single edge keeps, so the contour turns inside the equidistant
+/// one and the arc that follows it is wider. Dilating by a disc instead
+/// reproduces the edge's value at the same signed distance and leaves the
+/// corner about twice as dense as PowerPoint draws it (issue #1204): measured
+/// on `customGeo.pptx` page 46 against a native macOS PowerPoint export at
+/// 1200 DPI, grey outward along the 45-degree diagonal from the silhouette's
+/// bottom-left corner read 238.3 in the export against the dilated stack's
+/// 229.1, while both agreed to a level along the bottom edge.
+///
+/// A `#rect` carries one radius, so the arc is fitted where the two models
+/// differ most — on the diagonal. A ring reaching `offset + arc` past the
+/// corner on each axis reaches `sqrt(2) * (offset + arc - radius) + radius`
+/// along the bisector, and setting that equal to the contour's own reach
+/// there gives the `2 + sqrt(2)` below. The correction vanishes as the
+/// silhouette's arc grows past the blur's scale, where the boundary is
+/// locally straight and the equidistant contour is right again.
+///
+/// The radius still floors at zero: Typst rejects a negative one.
+pub(super) fn shadow_ring_corner_radius(
+    silhouette_radius: f64,
+    blur_expansion: f64,
+    blur_sigma: f64,
+) -> f64 {
+    let dilated: f64 = (silhouette_radius + blur_expansion).max(0.0);
+    if blur_sigma <= 0.0 {
+        // A crisp shadow has no ramp to follow; the ring *is* the silhouette.
+        return dilated;
+    }
+    let arc_radius: f64 = (silhouette_radius / blur_sigma).max(0.0);
+    let offset: f64 = blur_expansion / blur_sigma;
+    let coverage: f64 = standard_normal_cdf(-offset);
+    let contour: f64 = blurred_corner_axis_offset(coverage, arc_radius);
+    ((2.0 + std::f64::consts::SQRT_2) * blur_sigma * (offset + arc_radius - contour)).max(0.0)
+}
+
+/// A corner arc can never bite deeper than half the box it turns, whatever the
+/// contour asks for; Typst would clamp it anyway, and a ring degenerate enough
+/// to hit this carries almost no alpha.
+pub(super) fn clamp_ring_corner_radius(radius: f64, width: f64, height: f64) -> f64 {
+    radius.clamp(0.0, 0.5 * width.min(height))
 }
 
 /// Render a shadow approximation: concentric translucent duplicates whose
@@ -331,6 +492,7 @@ fn write_shadow_shape(out: &mut String, shape: &Shape, width: f64, height: f64, 
     let dy = shadow.distance * dir_rad.sin();
     let outline_outset: f64 = shadow_outline_outset(&shape.stroke);
     let silhouette_radius: f64 = shadow_silhouette_corner_radius(&shape.stroke);
+    let blur_sigma: f64 = shadow_blur_sigma(shadow);
 
     for (blur_expansion, alpha) in shadow_blur_layers(shadow) {
         let expansion = outline_outset + blur_expansion;
@@ -354,7 +516,15 @@ fn write_shadow_shape(out: &mut String, shape: &Shape, width: f64, height: f64, 
                 out.push(')');
             }
             ShapeKind::RoundedRectangle { radius_fraction } => {
-                let radius = (radius_fraction * width.min(height) + expansion).max(0.0);
+                // The outline's join cannot square a corner the fill path
+                // already curves, so the silhouette's arc is the shape's own
+                // plus the half-width the stroke adds (#1057).
+                let silhouette_arc: f64 = radius_fraction * width.min(height) + outline_outset;
+                let radius = clamp_ring_corner_radius(
+                    shadow_ring_corner_radius(silhouette_arc, blur_expansion, blur_sigma),
+                    layer_width,
+                    layer_height,
+                );
                 let _ = write!(
                     out,
                     "#rect(width: {}pt, height: {}pt, radius: {}pt, fill: rgb({}, {}, {}, {}))",
@@ -368,7 +538,11 @@ fn write_shadow_shape(out: &mut String, shape: &Shape, width: f64, height: f64, 
                 );
             }
             ShapeKind::Rectangle => {
-                let radius: f64 = shadow_ring_corner_radius(silhouette_radius, blur_expansion);
+                let radius: f64 = clamp_ring_corner_radius(
+                    shadow_ring_corner_radius(silhouette_radius, blur_expansion, blur_sigma),
+                    layer_width,
+                    layer_height,
+                );
                 let _ = write!(
                     out,
                     "#rect(width: {}pt, height: {}pt, radius: {}pt, fill: rgb({}, {}, {}, {}))",
