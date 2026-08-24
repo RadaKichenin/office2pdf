@@ -1355,19 +1355,63 @@ fn test_arrow_icon_set_renders_as_a_filled_polygon() {
     );
 }
 
-/// Read an arrow polygon's points back out of the generated source. They are
-/// emitted as `(Xpt, Ypt)`; pull them out without a regex dependency.
-fn arrow_polygon_points(source: &str) -> Vec<(f64, f64)> {
-    let points: Vec<(f64, f64)> = source
-        .split('(')
-        .filter_map(|chunk| {
-            let (x, rest) = chunk.split_once("pt, ")?;
-            let (y, _) = rest.split_once("pt)")?;
-            Some((x.parse().ok()?, y.parse().ok()?))
+/// Every `polygon(...)` the generated source draws, in emission order, as its
+/// own points. They are emitted as `(Xpt, Ypt)`; pull them out without a regex
+/// dependency, stopping at the first chunk past a polygon's coordinate list.
+fn polygon_point_sets(source: &str) -> Vec<Vec<(f64, f64)>> {
+    source
+        .split("polygon(")
+        .skip(1)
+        .map(|call| {
+            let mut points: Vec<(f64, f64)> = Vec::new();
+            for chunk in call.split('(') {
+                let point: Option<(f64, f64)> = chunk.split_once("pt, ").and_then(|(x, rest)| {
+                    let (y, _) = rest.split_once("pt)")?;
+                    Some((x.trim().parse().ok()?, y.parse().ok()?))
+                });
+                match point {
+                    Some(point) => points.push(point),
+                    None if points.is_empty() => continue,
+                    None => break,
+                }
+            }
+            points
         })
-        .collect();
-    assert!(!points.is_empty(), "no polygon points in: {source}");
-    points
+        .filter(|points| !points.is_empty())
+        .collect()
+}
+
+/// Read an arrow's silhouette back out of the generated source: the filled
+/// polygon, which is emitted before the outline ring stroked inside it.
+fn arrow_polygon_points(source: &str) -> Vec<(f64, f64)> {
+    let sets: Vec<Vec<(f64, f64)>> = polygon_point_sets(source);
+    assert!(!sets.is_empty(), "no polygon points in: {source}");
+    sets.into_iter().next().expect("checked non-empty")
+}
+
+/// Read the path the arrow's outline is stroked on (issue #1201).
+fn arrow_outline_points(source: &str) -> Vec<(f64, f64)> {
+    let sets: Vec<Vec<(f64, f64)>> = polygon_point_sets(source);
+    assert_eq!(
+        sets.len(),
+        2,
+        "an arrow is one filled silhouette under one outline ring: {source}"
+    );
+    sets.into_iter().nth(1).expect("checked length")
+}
+
+/// The layout box the icon's shapes are superimposed in, read back out of the
+/// generated source. Every document's preamble carries a `box(width: 1fr, …)`
+/// of its own, so take the first box measured in points.
+fn icon_box_size(source: &str) -> (f64, f64) {
+    source
+        .match_indices("box(width: ")
+        .find_map(|(index, marker)| {
+            let (width, rest) = source[index + marker.len()..].split_once("pt, height: ")?;
+            let (height, _) = rest.split_once("pt)")?;
+            Some((width.parse().ok()?, height.parse().ok()?))
+        })
+        .unwrap_or_else(|| panic!("no icon box in: {source}"))
 }
 
 /// The silhouette an arrow polygon spans: its breadth across the shaft, its
@@ -1456,9 +1500,14 @@ fn test_shaded_arrow_icon_takes_excels_ramp_and_outline() {
     assert!(
         output.source.contains(
             "polygon(fill: gradient.linear(angle: 45deg, space: rgb, \
-             rgb(159, 216, 174), rgb(40, 165, 74)), stroke: 0.4pt + rgb(37, 94, 27)"
+             rgb(159, 216, 174), rgb(40, 165, 74)), stroke: none"
         ),
-        "the icon must ramp along the box diagonal under Excel's own outline. Got: {}",
+        "the icon must ramp along the box diagonal. Got: {}",
+        output.source,
+    );
+    assert!(
+        output.source.contains("pt + rgb(37, 94, 27)"),
+        "and carry Excel's own outline hue. Got: {}",
         output.source,
     );
     assert!(
@@ -1466,6 +1515,111 @@ fn test_shaded_arrow_icon_takes_excels_ramp_and_outline() {
         "a measured outline must not also be derived from the fill. Got: {}",
         output.source,
     );
+}
+
+/// The perpendicular distance each ring edge sits inside the silhouette edge
+/// it follows, both endpoints reported separately so a corner that mitered the
+/// wrong way shows up.
+fn outline_inset_per_edge(silhouette: &[(f64, f64)], ring: &[(f64, f64)]) -> Vec<f64> {
+    let count: usize = silhouette.len();
+    let twice_area: f64 = (0..count)
+        .map(|index| {
+            let (x0, y0) = silhouette[index];
+            let (x1, y1) = silhouette[(index + 1) % count];
+            x0 * y1 - x1 * y0
+        })
+        .sum();
+    let winding: f64 = if twice_area > 0.0 { 1.0 } else { -1.0 };
+    (0..count)
+        .flat_map(|index| {
+            let (x0, y0) = silhouette[index];
+            let (x1, y1) = silhouette[(index + 1) % count];
+            let (dx, dy) = (x1 - x0, y1 - y0);
+            let length: f64 = dx.hypot(dy);
+            let normal: (f64, f64) = (-dy / length * winding, dx / length * winding);
+            [ring[index], ring[(index + 1) % count]]
+                .map(|(x, y)| (x - x0) * normal.0 + (y - y0) * normal.1)
+        })
+        .collect()
+}
+
+/// Excel's sprite draws the arrow's outline one whole sprite pixel wide and
+/// wholly inside the silhouette: the up arrow's bottom row is the outline hue
+/// across, its shaft's side columns likewise, and the interior ramp starts one
+/// pixel in. The sprite is 12px in an 11pt box, so that pixel is 0.92pt.
+///
+/// A Typst stroke is centred on its path, so a 0.4pt stroke on the silhouette
+/// itself painted 0.2pt of outline inward and spilled 0.2pt over the page,
+/// where Excel paints none (issue #1201). Stroking the full width on a path
+/// inset by half of it puts the stroke's outer edge back on the silhouette.
+#[test]
+fn test_arrow_icon_outline_is_stroked_inside_the_silhouette() {
+    // One sprite pixel: the 12px bitmap prints in Excel's 11pt box.
+    let width: f64 = 11.0 / 12.0;
+    for glyph in [
+        crate::ir::ICON_ARROW_UP,
+        crate::ir::ICON_ARROW_DOWN,
+        crate::ir::ICON_ARROW_RIGHT,
+    ] {
+        let mut cell = icon_cell(glyph, Color::new(0x59, 0xB0, 0x6D));
+        cell.icon_shading = Some(green_arrow_shading());
+        let source: String = generate_typst(&make_doc(vec![icon_sheet(cell)]))
+            .unwrap()
+            .source;
+
+        let stroke: String = format!("stroke: {width}pt + rgb(37, 94, 27)");
+        assert!(
+            source.contains(&stroke),
+            "{glyph}: the outline is one sprite pixel wide. Want {stroke} in: {source}",
+        );
+        let silhouette: Vec<(f64, f64)> = arrow_polygon_points(&source);
+        let ring: Vec<(f64, f64)> = arrow_outline_points(&source);
+        assert_eq!(
+            ring.len(),
+            silhouette.len(),
+            "{glyph}: the ring follows every silhouette edge: {source}",
+        );
+        for (edge, inset) in outline_inset_per_edge(&silhouette, &ring)
+            .into_iter()
+            .enumerate()
+        {
+            assert!(
+                (inset - width / 2.0).abs() < 1e-9,
+                "{glyph}: edge {} sits {inset}pt inside the silhouette, \
+                 so the stroke's outer edge misses it by {}pt",
+                edge / 2,
+                inset - width / 2.0,
+            );
+        }
+    }
+}
+
+/// The silhouette stays the icon's layout box: `#place`'s `horizon` centres
+/// the element it is given, so an outline that changed the box's size would
+/// move the icon off the row's centre line as well (issue #1201).
+#[test]
+fn test_arrow_icon_box_stays_the_silhouettes_own_size() {
+    for glyph in [
+        crate::ir::ICON_ARROW_UP,
+        crate::ir::ICON_ARROW_DOWN,
+        crate::ir::ICON_ARROW_RIGHT,
+    ] {
+        let source: String = generate_typst(&make_doc(vec![icon_sheet(icon_cell(
+            glyph,
+            Color::new(0x68, 0xA4, 0x90),
+        ))]))
+        .unwrap()
+        .source;
+        let silhouette: Vec<(f64, f64)> = arrow_polygon_points(&source);
+        let extent = |axis: fn(&(f64, f64)) -> f64| -> f64 {
+            silhouette.iter().map(axis).fold(f64::MIN, f64::max)
+        };
+        assert_eq!(
+            icon_box_size(&source),
+            (extent(|p| p.0), extent(|p| p.1)),
+            "{glyph}: the box is the silhouette's own extent. Got: {source}",
+        );
+    }
 }
 
 /// The ramp runs down the box diagonal for every orientation: Excel shades the
@@ -1501,10 +1655,17 @@ fn test_unshaded_arrow_icon_keeps_the_flat_fill() {
     ))]))
     .unwrap();
     assert!(
-        output.source.contains(
-            "polygon(fill: rgb(104, 164, 144), stroke: 0.4pt + rgb(104, 164, 144).darken(30%)"
-        ),
+        output
+            .source
+            .contains("polygon(fill: rgb(104, 164, 144), stroke: none"),
         "an unmeasured band still fills flat. Got: {}",
+        output.source,
+    );
+    assert!(
+        output
+            .source
+            .contains("pt + rgb(104, 164, 144).darken(30%)"),
+        "under an outline derived from that fill. Got: {}",
         output.source,
     );
     assert!(
@@ -1625,7 +1786,7 @@ fn test_icon_set_icon_anchors_at_the_cells_left_inset() {
     assert!(
         output
             .source
-            .contains("#place(left + horizon, dx: -10.6pt, polygon("),
+            .contains("#place(left + horizon, dx: -10.6pt, box("),
         "the icon must be pulled back to 2pt inside the cell boundary. Got: {}",
         output.source,
     );
@@ -1646,7 +1807,7 @@ fn test_icon_anchor_follows_the_cells_own_inset() {
     assert!(
         output
             .source
-            .contains("#place(left + horizon, dx: -1pt, polygon("),
+            .contains("#place(left + horizon, dx: -1pt, box("),
         "a 3pt inset leaves only 1pt to pull back. Got: {}",
         output.source,
     );
