@@ -2511,8 +2511,10 @@ fn bottom_aligned_sheet_cell_seat_reproduces_the_native_excel_probe() {
 
     for (font_size_pt, expected_pt) in measured {
         let seated_pt: f64 = sheet_cell_descent_pt(
+            "Arial",
             ARIAL_DESCENT_EM,
             font_size_pt,
+            None,
             SHEET_CELL_MIN_DESCENT_SEAT_PT,
         );
         assert!(
@@ -2553,8 +2555,10 @@ fn a_compacting_workbook_floors_the_same_seat_a_point_lower() {
 
     for (font_size_pt, expected_pt) in measured {
         let seated_pt: f64 = sheet_cell_descent_pt(
+            "Arial",
             ARIAL_DESCENT_EM,
             font_size_pt,
+            None,
             COMPACTED_SHEET_CELL_MIN_DESCENT_SEAT_PT,
         );
         assert!(
@@ -2569,14 +2573,203 @@ fn a_compacting_workbook_floors_the_same_seat_a_point_lower() {
     // the switch can only ever move a small cell.
     assert!(
         (sheet_cell_descent_pt(
+            "Arial",
             ARIAL_DESCENT_EM,
             32.0,
+            None,
             COMPACTED_SHEET_CELL_MIN_DESCENT_SEAT_PT
-        ) - sheet_cell_descent_pt(ARIAL_DESCENT_EM, 32.0, SHEET_CELL_MIN_DESCENT_SEAT_PT))
+        ) - sheet_cell_descent_pt(
+            "Arial",
+            ARIAL_DESCENT_EM,
+            32.0,
+            None,
+            SHEET_CELL_MIN_DESCENT_SEAT_PT
+        ))
         .abs()
             < 1e-9,
         "a 32pt cell seats identically either way"
     );
+}
+
+/// A Korean face does not seat on its rounded `hhea` descent: Malgun Gothic
+/// rests its baseline up to 4pt further above the row boundary than that rule
+/// gives, and Gulim and Batang up to 3pt (issue #1208).
+///
+/// Measured on native Excel-for-Mac exports of purpose-built probe workbooks
+/// (`/Volumes/T7/scratch/issue-1208/probe`, built with openpyxl): one
+/// bottom-aligned cell per (face, size) in an auto-height row, each ruled by a
+/// thin box border so Excel prints the row's own boundaries instead of leaving
+/// them to be inferred. Malgun Gothic's column was swept a second time in
+/// fixed 60pt tracks and answered the same seat at all fifteen sizes, which is
+/// what rules out reading the seat as an ascent measured down from the row's
+/// top — a 60pt track would then seat it 25pt lower than a 35pt one.
+///
+/// No `round(descent x size)` reproduces this column whatever the constant:
+/// 14pt seating at 4pt needs `descent < 0.3214`, and 40pt seating at 14pt
+/// needs `descent >= 0.3375`. So it is a measured series, exactly as the
+/// wrapped-line advance beside it is.
+///
+/// The sizes at or under the workbook's own 4pt floor are left out of the
+/// table: the probe workbook floors at 4pt, so it cannot tell a face value of
+/// 4 from a floored one, and the floor is what differs between the two
+/// workbook families (issue #1199).
+#[test]
+fn a_korean_sheet_face_seats_on_its_measured_series() {
+    const MALGUN_DESCENT_EM: f64 = 495.0 / 2048.0;
+    const GULIM_DESCENT_EM: f64 = 145.0 / 1024.0;
+
+    // (font size pt, baseline above the row's bottom boundary pt)
+    let malgun: [(f64, f64); 21] = [
+        (8.0, 4.0),
+        (9.0, 4.0),
+        (10.0, 4.0),
+        (11.0, 4.0),
+        (12.0, 4.0),
+        (13.0, 4.0),
+        (14.0, 4.0),
+        (15.0, 5.0),
+        (16.0, 5.0),
+        (17.0, 6.0),
+        (18.0, 6.0),
+        (20.0, 7.0),
+        (22.0, 7.0),
+        (24.0, 8.0),
+        (26.0, 8.0),
+        (28.0, 9.0),
+        (30.0, 10.0),
+        (32.0, 11.0),
+        (36.0, 12.0),
+        (40.0, 14.0),
+        (48.0, 16.0),
+    ];
+    let gulim: [(f64, f64); 21] = [
+        (8.0, 4.0),
+        (9.0, 4.0),
+        (10.0, 4.0),
+        (11.0, 4.0),
+        (12.0, 4.0),
+        (13.0, 4.0),
+        (14.0, 4.0),
+        (15.0, 4.0),
+        (16.0, 4.0),
+        (17.0, 4.0),
+        (18.0, 4.0),
+        (20.0, 4.0),
+        (22.0, 4.0),
+        (24.0, 4.0),
+        (26.0, 5.0),
+        (28.0, 5.0),
+        (30.0, 5.0),
+        (32.0, 7.0),
+        (36.0, 7.0),
+        (40.0, 8.0),
+        (48.0, 10.0),
+    ];
+
+    for (family, descent_em, measured) in [
+        ("Malgun Gothic", MALGUN_DESCENT_EM, malgun),
+        ("맑은 고딕", MALGUN_DESCENT_EM, malgun),
+        ("Gulim", GULIM_DESCENT_EM, gulim),
+        ("굴림", GULIM_DESCENT_EM, gulim),
+        ("Batang", GULIM_DESCENT_EM, gulim),
+        ("바탕", GULIM_DESCENT_EM, gulim),
+    ] {
+        for (font_size_pt, expected_pt) in measured {
+            let seated_pt: f64 = sheet_cell_descent_pt(
+                family,
+                descent_em,
+                font_size_pt,
+                None,
+                SHEET_CELL_MIN_DESCENT_SEAT_PT,
+            );
+            assert!(
+                (seated_pt - expected_pt).abs() < 1e-9,
+                "{family} {font_size_pt}pt bottom-aligned: Excel prints the \
+                 baseline {expected_pt}pt above the row boundary, seated \
+                 {seated_pt}pt"
+            );
+        }
+    }
+}
+
+/// Excel reads that series at the size the cell *declares*, then prints it
+/// through the sheet's `fitToWidth` scale — the same way it reads a wrapped
+/// line's advance (issue #1163). The parser folds the scale into the font
+/// size before codegen sees it, so a scaled sheet would otherwise look up the
+/// wrong entry, or miss the table entirely and fall back to the rounded
+/// descent.
+#[test]
+fn a_scaled_sheet_reads_the_seat_at_the_declared_size() {
+    const MALGUN_DESCENT_EM: f64 = 495.0 / 2048.0;
+    let scale: f64 = 0.5;
+
+    let seated_pt: f64 = sheet_cell_descent_pt(
+        "Malgun Gothic",
+        MALGUN_DESCENT_EM,
+        // A 24pt cell on a sheet printing at half scale.
+        24.0 * scale,
+        Some(scale),
+        SHEET_CELL_MIN_DESCENT_SEAT_PT,
+    );
+    assert!(
+        (seated_pt - 8.0 * scale).abs() < 1e-9,
+        "a half-scale 24pt Malgun cell seats at half of its 8pt sheet-space \
+         seat, seated {seated_pt}pt"
+    );
+}
+
+/// Every other face the same sweep reached stays on the rounded `hhea`
+/// descent, so the measured series is an exception list and not a replacement
+/// (issue #1208).
+///
+/// The same probe swept Arial, Verdana, Georgia, Times New Roman, Tahoma,
+/// Courier New, Century Gothic, Calibri, Aptos and MS Gothic over the same
+/// twenty-one sizes — two hundred and ten samples — and
+/// `max(4, round(descent x size))` reproduces every one of them. MS Gothic
+/// sitting here rather than beside Malgun Gothic is why the exception is not
+/// "East Asian faces".
+#[test]
+fn a_face_the_rounded_descent_reproduces_keeps_it() {
+    // The `hhea` descents are written out rather than read from a face, so the
+    // assertion holds on a runner with none of them installed.
+    let conforming: [(&str, f64); 10] = [
+        ("Arial", 434.0 / 2048.0),
+        ("Verdana", 430.0 / 2048.0),
+        ("Georgia", 449.0 / 2048.0),
+        ("Times New Roman", 443.0 / 2048.0),
+        ("Tahoma", 423.0 / 2048.0),
+        ("Courier New", 615.0 / 2048.0),
+        ("Century Gothic", 451.0 / 2048.0),
+        ("Calibri", 550.0 / 2048.0),
+        ("Aptos", 577.0 / 2048.0),
+        ("MS Gothic", 36.0 / 256.0),
+    ];
+
+    // The sizes the sweep covered.
+    let swept_sizes_pt: [f64; 21] = [
+        8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 20.0, 22.0, 24.0, 26.0,
+        28.0, 30.0, 32.0, 36.0, 40.0, 48.0,
+    ];
+
+    for (family, descent_em) in conforming {
+        for font_size_pt in swept_sizes_pt {
+            let seated_pt: f64 = sheet_cell_descent_pt(
+                family,
+                descent_em,
+                font_size_pt,
+                None,
+                SHEET_CELL_MIN_DESCENT_SEAT_PT,
+            );
+            let rule_pt: f64 = (descent_em * font_size_pt)
+                .round()
+                .max(SHEET_CELL_MIN_DESCENT_SEAT_PT);
+            assert!(
+                (seated_pt - rule_pt).abs() < 1e-9,
+                "{family} {font_size_pt}pt still seats on its rounded descent \
+                 {rule_pt}pt, seated {seated_pt}pt"
+            );
+        }
+    }
 }
 
 /// The floor reaches the emitted line box: a small bottom-aligned cell in a

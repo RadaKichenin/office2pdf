@@ -1351,7 +1351,9 @@ pub(crate) const COMPACTED_SHEET_CELL_MIN_DESCENT_SEAT_PT: f64 = 3.0;
 /// The descent Excel rests a bottom-aligned sheet cell's last line on: the
 /// face's `hhea` descent at a whole number of points, sitting on the row's own
 /// bottom boundary (issue #1063) — but never closer to that boundary than the
-/// workbook's own floor (issues #1097, #1199).
+/// workbook's own floor (issues #1097, #1199), and never on that rounded
+/// descent at all for a face [`sheet_cell_measured_seat_pt`] measured a seat
+/// of its own for (issue #1208).
 ///
 /// The boundary itself, with no inset under it: over the probe's size sweep
 /// the fitted inset is 0.00-0.14pt.
@@ -1365,12 +1367,104 @@ pub(crate) const COMPACTED_SHEET_CELL_MIN_DESCENT_SEAT_PT: f64 = 3.0;
 /// only under a font small enough for the two floors to separate, which on
 /// Arial is 11pt and below.
 pub(super) fn sheet_cell_descent_pt(
+    family: &str,
     descent_em: f64,
     font_size_pt: f64,
+    print_scale: Option<f64>,
     descent_floor_pt: f64,
 ) -> f64 {
-    (descent_em * font_size_pt).round().max(descent_floor_pt)
+    // Excel reads the seat at the size the cell declares and prints it through
+    // the sheet's `fitToWidth` scale, which the parser has already folded into
+    // `font_size_pt` — the same treatment a wrapped line's advance needs
+    // (issue #1163). Only the measured series is read that way; the rounded
+    // descent keeps evaluating at the printed size, where issue #1238 tracks
+    // the same question for every whole-point rule Excel snaps in sheet space.
+    let scale: f64 = print_scale.filter(|scale| *scale > 0.0).unwrap_or(1.0);
+    sheet_cell_measured_seat_pt(family, font_size_pt / scale)
+        .map(|seat_pt| seat_pt * scale)
+        .unwrap_or_else(|| (descent_em * font_size_pt).round())
+        .max(descent_floor_pt)
 }
+
+/// The seat measured for `family` at `font_size_pt`, or `None` where no sweep
+/// reached that face and size or where the sweep could only see the workbook's
+/// own floor (issue #1208).
+///
+/// **Method.** Native Excel-for-Mac exports of purpose-built probe workbooks
+/// (`/Volumes/T7/scratch/issue-1208/probe`, built with openpyxl): one
+/// bottom-aligned cell per (face, size) in an auto-height row, each ruled by a
+/// thin box border so Excel prints the row's own boundaries rather than
+/// leaving them to be inferred, and the baseline read back with
+/// `mutool draw -F trace`. A border-free control block reproduced the same
+/// baselines, so ruling the cell moves nothing.
+///
+/// **The seat does not depend on the track.** Malgun Gothic's column was swept
+/// a second time in fixed 60pt tracks and answered the same seat at all
+/// fifteen sizes of that run. That is what rules out reading the seat as an
+/// ascent measured down from the row's *top*, which fits the auto rows of
+/// issue #1208's fixture just as well but would put a 60pt track's baseline
+/// 25pt lower than a 35pt one's.
+///
+/// **No rounded descent fits these three faces.** Malgun Gothic seats 4pt at
+/// 14pt, which needs a descent under 0.3214em, and 14pt at 40pt, which needs
+/// one of at least 0.3375em. So this is a measured table, exactly as
+/// [`SHEET_WRAPPED_LINE_ADVANCES`] is, and it shares that sweep's size axis.
+///
+/// **It is an exception list, not a replacement.** The same probe swept Arial,
+/// Verdana, Georgia, Times New Roman, Tahoma, Courier New, Century Gothic,
+/// Calibri, Aptos and MS Gothic over the same twenty-one sizes, and
+/// `max(floor, round(descent x size))` reproduces all two hundred and ten of
+/// those samples. MS Gothic conforming is why the exception cannot be stated
+/// as "an East Asian face".
+///
+/// `None` below each series' first entry, because the probe workbook floors at
+/// [`SHEET_CELL_MIN_DESCENT_SEAT_PT`] and so cannot tell a face value of 4pt
+/// from a floored one — and the floor is exactly what differs between the two
+/// workbook families (issue #1199). The rounded descent stands in there, and
+/// on all three faces it lands at or under both floors (3pt at the largest
+/// such size on each), so the family's own floor decides as it did before.
+///
+/// **Nothing here interpolates**, and no family may be lent another's column:
+/// Gulim and Batang share their `hhea` metrics but were each swept in full
+/// before being given the same numbers. Each Korean alias rides with the face
+/// `font_subst` resolves it to rather than a sweep of its own, the same
+/// pairing [`SHEET_WRAPPED_LINE_ADVANCES`] makes for `맑은 고딕`.
+fn sheet_cell_measured_seat_pt(family: &str, font_size_pt: f64) -> Option<f64> {
+    let seats: &[Option<f64>; SHEET_ADVANCE_SIZES_PT.len()] = &SHEET_CELL_SEATS
+        .iter()
+        .find(|face| {
+            face.families
+                .iter()
+                .any(|candidate| candidate.eq_ignore_ascii_case(family))
+        })?
+        .seats_pt;
+    SHEET_ADVANCE_SIZES_PT
+        .iter()
+        .position(|size_pt| (font_size_pt - size_pt).abs() < 0.01)
+        .and_then(|index| seats[index])
+}
+
+/// One face's measured bottom-aligned seats, and the family names that select
+/// it.
+struct SheetCellSeats {
+    /// Matched whole and case-insensitively, never as a prefix.
+    families: &'static [&'static str],
+    /// One seat in points per entry of [`SHEET_ADVANCE_SIZES_PT`], which this
+    /// series shares because both were swept on one probe.
+    seats_pt: [Option<f64>; SHEET_ADVANCE_SIZES_PT.len()],
+}
+
+/// What the sweep described on [`sheet_cell_measured_seat_pt`] measured, one
+/// series per face that the rounded descent does not reproduce.
+#[rustfmt::skip]
+const SHEET_CELL_SEATS: [SheetCellSeats; 3] = [
+    SheetCellSeats { families: &["Malgun Gothic", "맑은 고딕"], seats_pt:
+        [None, None, None, None, None, None, None, Some(5.0), Some(5.0), Some(6.0), Some(6.0), Some(7.0), Some(7.0), Some(8.0), Some(8.0), Some(9.0), Some(10.0), Some(11.0), Some(12.0), Some(14.0), Some(16.0)] },
+    SheetCellSeats { families: &["Gulim", "굴림"], seats_pt:
+        [None, None, None, None, None, None, None, None, None, None, None, None, None, None, Some(5.0), Some(5.0), Some(5.0), Some(7.0), Some(7.0), Some(8.0), Some(10.0)] },
+    SheetCellSeats { families: &["Batang", "바탕"], seats_pt:
+        [None, None, None, None, None, None, None, None, None, None, None, None, None, None, Some(5.0), Some(5.0), Some(5.0), Some(7.0), Some(7.0), Some(8.0), Some(10.0)] },
+];
 
 /// A table-cell paragraph's fixed line box, resolved at the paragraph's own
 /// font size — or at the row's shared family and size when a tight
@@ -1589,10 +1683,14 @@ pub(super) fn word_cell_line_box(
             // Typst rests the box's bottom edge on the inset content bottom;
             // Excel rests the descender on the row boundary itself, one inset
             // lower.
-            let bottom_em: f64 =
-                (sheet_cell_descent_pt(descender_em, font_size, seat.descent_floor_pt)
-                    - seat.inset_bottom_pt)
-                    / font_size;
+            let bottom_em: f64 = (sheet_cell_descent_pt(
+                family,
+                descender_em,
+                font_size,
+                sheet_print_scale,
+                seat.descent_floor_pt,
+            ) - seat.inset_bottom_pt)
+                / font_size;
             (
                 top_em,
                 bottom_em,
