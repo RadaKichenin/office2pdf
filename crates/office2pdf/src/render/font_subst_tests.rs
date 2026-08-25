@@ -220,8 +220,9 @@ fn test_pretendard_substitutes() {
 fn test_font_with_fallbacks_known_font() {
     let result = font_with_fallbacks_for_text("Calibri", "");
     assert_eq!(
-        result, r#"("Calibri", "Carlito", "Liberation Sans")"#,
-        "Known font should produce Typst array with original + substitutes"
+        result, r#"("Calibri", "Carlito", "Liberation Sans", "Arimo", "DejaVu Sans", "Helvetica")"#,
+        "Known font should produce Typst array with original + substitutes, \
+         ending on its own class so an absent Carlito cannot land it on a serif"
     );
 }
 
@@ -230,7 +231,7 @@ fn test_carlito_font_with_fallbacks_emits_sans_chain() {
     let result = font_with_fallbacks_for_text("Carlito", "");
     assert_eq!(
         result,
-        r#"("Carlito", "Calibri", "Liberation Sans", "Arimo", "Arial")"#
+        r#"("Carlito", "Calibri", "Liberation Sans", "Arimo", "Arial", "DejaVu Sans", "Helvetica")"#
     );
 }
 
@@ -265,6 +266,72 @@ fn missing_typewriter_face_resolves_to_an_available_monospace_face() {
         resolve_available_fallback("Lucida Sans Typewriter", TextScript::Latin, &context);
 
     assert_eq!(fallback.as_deref(), Some("DejaVu Sans Mono"));
+}
+
+#[test]
+fn a_listed_family_whose_substitutes_are_all_absent_keeps_its_own_class() {
+    // Every name in the substitution table is a real font, so a chain of them
+    // can run out: a host with neither Carlito nor Liberation Sans left a
+    // Calibri run — the `minorFont` of every default Office theme, and so the
+    // face an XLSX chart draws its labels in — with nothing but the engine's
+    // default, which is a serif for a family whose own PANOSE says sans
+    // (issue #1213).
+    //
+    // One case per class, and more than one family per class, so the rule is
+    // "end on the family's own class" rather than a patch for Calibri.
+    let sans_only_host: FontSearchContext =
+        FontSearchContext::for_test(Vec::new(), &["Libertinus Serif", "DejaVu Sans"], &[], &[]);
+    for family in ["Calibri", "Calibri Light", "Verdana", "Corbel"] {
+        assert_eq!(
+            resolve_available_fallback(family, TextScript::Latin, &sans_only_host).as_deref(),
+            Some("DejaVu Sans"),
+            "{family} must reach an available sans rather than the default serif"
+        );
+    }
+
+    // The class has to be the family's own, not whichever face happens to be
+    // installed: a serif family on the same host must not take the sans.
+    let mixed_host: FontSearchContext =
+        FontSearchContext::for_test(Vec::new(), &["DejaVu Sans", "DejaVu Serif"], &[], &[]);
+    for family in ["Cambria", "Times New Roman"] {
+        assert_eq!(
+            resolve_available_fallback(family, TextScript::Latin, &mixed_host).as_deref(),
+            Some("DejaVu Serif"),
+            "{family} is a serif and must stay one"
+        );
+    }
+
+    let fixed_pitch_host: FontSearchContext =
+        FontSearchContext::for_test(Vec::new(), &["DejaVu Sans", "Cousine"], &[], &[]);
+    for family in ["Consolas", "Courier New"] {
+        assert_eq!(
+            resolve_available_fallback(family, TextScript::Latin, &fixed_pitch_host).as_deref(),
+            Some("Cousine"),
+            "{family} is fixed pitch and must stay fixed pitch"
+        );
+    }
+}
+
+#[test]
+fn the_class_tail_follows_the_metric_compatible_substitutes() {
+    // The tail is a last resort, not a preference: Carlito and Liberation Sans
+    // are metric-compatible with Calibri and a generic sans is not, so the
+    // order the table states has to survive the addition (issue #1213).
+    let chain: Vec<String> = family_candidates("Calibri");
+    let position = |family: &str| {
+        chain
+            .iter()
+            .position(|candidate| candidate == family)
+            .unwrap_or_else(|| panic!("{family} should be in the chain: {chain:?}"))
+    };
+
+    assert!(position("Carlito") < position("Arimo"));
+    assert!(position("Liberation Sans") < position("Arimo"));
+    assert!(position("Arimo") < position("Helvetica"));
+    assert!(
+        chain.iter().all(|candidate| !candidate.contains("Serif")),
+        "a sans family must not gain a serif candidate: {chain:?}"
+    );
 }
 
 #[test]
@@ -330,9 +397,12 @@ fn missing_cjk_coverage_reports_notdef_instead_of_staying_silent() {
 }
 
 #[test]
-fn test_font_with_fallbacks_single_substitute() {
+fn test_font_with_fallbacks_single_named_substitute_then_the_class_tail() {
     let result = font_with_fallbacks_for_text("Comic Sans MS", "");
-    assert_eq!(result, r#"("Comic Sans MS", "Comic Neue")"#);
+    assert_eq!(
+        result,
+        r#"("Comic Sans MS", "Comic Neue", "Liberation Sans", "Arimo", "DejaVu Sans", "Helvetica")"#
+    );
 }
 
 // Family names come from parsed OOXML, i.e. document-controlled input. A name

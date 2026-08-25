@@ -3381,6 +3381,35 @@ fn chart_text_is_set_in_the_face_the_chart_declares() {
 }
 
 #[test]
+fn a_chart_face_keeps_its_class_when_none_of_its_substitutes_are_installed() {
+    // `Calibri` maps to Carlito and Liberation Sans, and a host may have
+    // neither — macOS ships no metric-compatible clone and the CI image
+    // installs no fonts. The chain then ran out and every string the chart
+    // draws took the engine's default serif (issue #1213).
+    let mut chart = two_series_bar_chart(Vec::new());
+    chart.categories = vec!["Q1".to_string(), "Q2".to_string()];
+    chart.series[0].values = vec![4.0, 8.0];
+    chart.series[1].values = vec![2.0, 6.0];
+    chart.title = Some("Sales".to_string());
+    chart.text_font_family = Some("Calibri".to_string());
+
+    let source: String = chart_source(chart);
+    let set_line: &str = source
+        .lines()
+        .find(|line| line.starts_with("#set text(font: "))
+        .expect("the chart sets a face");
+
+    assert!(
+        set_line.contains("\"Helvetica\"") || set_line.contains("\"DejaVu Sans\""),
+        "the chain must end on a generic sans, not on the engine's serif: {set_line}"
+    );
+    assert!(
+        !set_line.contains("Serif"),
+        "a sans face must never gain a serif candidate: {set_line}"
+    );
+}
+
+#[test]
 fn a_chart_naming_no_face_sets_none() {
     // A chart whose package has no theme keeps the renderer's existing
     // behaviour rather than naming a face nothing resolves.
