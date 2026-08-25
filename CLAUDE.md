@@ -337,7 +337,8 @@ are reproducible without a native export (#634).
 export poisons every downstream number silently: the workbook-per-sheet
 duplication of #616 survived because nothing checked the GT itself. The gate
 detects page-sequence periodicity (the duplication signature), implausible page
-counts against the source's worksheet count, and GT-side font substitutions —
+counts against the worksheets the source would actually print (hidden sheets
+excluded, #1211), and GT-side font substitutions —
 the last so an exporter's Arial-to-Liberation swap is never filed as a converter
 defect. Exits non-zero only when the GT cannot be trusted at all.
 

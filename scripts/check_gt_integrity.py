@@ -13,8 +13,11 @@ Three checks, each aimed at a failure this corpus has actually seen:
    worksheet produces a perfectly periodic page sequence. This is what would
    have caught #616 the day it was written.
 2. **Page-count plausibility** — for XLSX, compare the GT page count against the
-   workbook's worksheet count. A GT with fewer pages than sheets cannot be
-   complete; an exact multiple is the duplication signature again.
+   worksheets the workbook would actually print. A GT with fewer pages than
+   those cannot be complete; an exact multiple is the duplication signature
+   again. Sheets marked `hidden` or `veryHidden` are excluded, because Excel
+   never pages them (issue #1065) and counting them failed correct exports of
+   every workbook carrying a hidden lookup sheet (issue #1211).
 3. **Font census** — list the fonts the GT actually embeds and compare against
    the families the source declares. A substitution (Calibri rendered as Malgun
    Gothic) or lost emphasis is a *GT-side* artefact; reporting it here stops an
@@ -93,16 +96,56 @@ def detect_periodicity(hashes: list[str]) -> int | None:
     return None
 
 
-def worksheet_count(source: Path) -> int | None:
-    """Worksheets declared by an XLSX, or None for other formats."""
+# `state` is optional on `<sheet>`; ECMA-376's ST_SheetState defaults it to
+# `visible`. `veryHidden` differs from `hidden` only in keeping the sheet out
+# of Excel's unhide dialog — neither ever reaches paper (issue #1065).
+HIDDEN_SHEET_STATES = frozenset({"hidden", "veryhidden"})
+
+# `<sheets>`, `<sheetPr>` and `<sheetView>` share the prefix, so the word
+# boundary is what makes this select sheet declarations alone. The optional
+# prefix group covers producers that write the main namespace explicitly.
+SHEET_ELEMENT = re.compile(r"<(?:[\w.-]+:)?sheet\b[^>]*>")
+SHEET_STATE_ATTRIBUTE = re.compile(r'\bstate\s*=\s*"([^"]*)"')
+
+
+def sheet_states(workbook_xml: str) -> list[str]:
+    """The visibility state of every sheet the workbook declares, in order."""
+    states: list[str] = []
+    for element in SHEET_ELEMENT.findall(workbook_xml):
+        state = SHEET_STATE_ATTRIBUTE.search(element)
+        states.append(state.group(1).strip().lower() if state else "visible")
+    return states
+
+
+def printable_sheet_count(workbook_xml: str) -> int:
+    """Sheets Excel would put on paper: every declared sheet bar the hidden ones.
+
+    Counting the hidden ones made this gate reject correct exports: a native
+    export of a workbook with a hidden lookup sheet — an ordinary template
+    shape — legitimately has fewer pages than the workbook declares sheets, and
+    the gate called that INVALID (issue #1211).
+    """
+    return sum(
+        1 for state in sheet_states(workbook_xml) if state not in HIDDEN_SHEET_STATES
+    )
+
+
+def hidden_sheet_count(workbook_xml: str) -> int:
+    """Sheets the workbook hides, reported so a low page count explains itself."""
+    return sum(
+        1 for state in sheet_states(workbook_xml) if state in HIDDEN_SHEET_STATES
+    )
+
+
+def read_workbook_xml(source: Path) -> str | None:
+    """`xl/workbook.xml` from an XLSX, or None for other or unreadable formats."""
     if source.suffix.lower() != ".xlsx":
         return None
     try:
         with zipfile.ZipFile(source) as archive:
-            workbook = archive.read("xl/workbook.xml").decode("utf-8", "replace")
+            return archive.read("xl/workbook.xml").decode("utf-8", "replace")
     except (OSError, KeyError, zipfile.BadZipFile):
         return None
-    return len(re.findall(r"<sheet\b", workbook))
 
 
 def declared_fonts(source: Path) -> set[str]:
@@ -156,7 +199,8 @@ def check(gt: Path, source: Path | None) -> dict:
     result: dict = {
         "pages": len(hashes),
         "periodicity": period,
-        "worksheets": None,
+        "printable_worksheets": None,
+        "hidden_worksheets": None,
         "font_substitutions": [],
         "invalid": False,
     }
@@ -164,15 +208,22 @@ def check(gt: Path, source: Path | None) -> dict:
         result["invalid"] = True
 
     if source is not None:
-        sheets = worksheet_count(source)
-        result["worksheets"] = sheets
-        if sheets:
-            # Fewer pages than sheets cannot be a complete export.
-            if len(hashes) < sheets:
-                result["invalid"] = True
-            # An exact multiple is the duplication signature again.
-            elif sheets > 1 and len(hashes) % sheets == 0 and len(hashes) // sheets > 1:
-                result["suspicious_multiple"] = len(hashes) // sheets
+        workbook_xml = read_workbook_xml(source)
+        if workbook_xml is not None:
+            sheets = printable_sheet_count(workbook_xml)
+            result["printable_worksheets"] = sheets
+            result["hidden_worksheets"] = hidden_sheet_count(workbook_xml)
+            if sheets:
+                # Fewer pages than sheets cannot be a complete export.
+                if len(hashes) < sheets:
+                    result["invalid"] = True
+                # An exact multiple is the duplication signature again.
+                elif (
+                    sheets > 1
+                    and len(hashes) % sheets == 0
+                    and len(hashes) // sheets > 1
+                ):
+                    result["suspicious_multiple"] = len(hashes) // sheets
         declared = declared_fonts(source)
         embedded = embedded_fonts(gt)
         if declared and embedded:
@@ -183,8 +234,12 @@ def check(gt: Path, source: Path | None) -> dict:
 
 def render_report(result: dict) -> str:
     lines = ["## GT integrity", "", f"Pages: {result['pages']}"]
-    if result["worksheets"] is not None:
-        lines.append(f"Worksheets declared by source: {result['worksheets']}")
+    if result["printable_worksheets"] is not None:
+        lines.append(f"Printable worksheets in source: {result['printable_worksheets']}")
+    if result.get("hidden_worksheets"):
+        lines.append(
+            f"Hidden worksheets, which Excel never prints: {result['hidden_worksheets']}"
+        )
     lines.append("")
 
     if result["periodicity"] is not None:
@@ -197,7 +252,7 @@ def render_report(result: dict) -> str:
         ]
     elif result["invalid"]:
         lines += [
-            "**INVALID — fewer pages than the source has worksheets.**",
+            "**INVALID — fewer pages than the source has printable worksheets.**",
             "",
             "The export cannot be complete, so page-indexed comparisons will be",
             "misaligned. Re-export before measuring.",
