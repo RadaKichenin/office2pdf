@@ -1204,3 +1204,134 @@ fn structure_korean_golden_mock_marks_take_the_theme_minor_latin_font() {
         "the deck should contribute several Malgun Gothic paragraphs, got {checked}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// polygon_shadow_offset.pptx — six preset polygons (rect control, a tall
+// triangle, a diamond, a right arrow, a five-pointed star and a chevron),
+// each filled `C00000` with no outline and a black `a:outerShdw` at
+// `blurRad` 254000 EMU (20pt) and `dist` 0, so every shadow's silhouette is
+// the fill path itself (issue #1206).
+//
+// A native macOS PowerPoint 16 export flattens each shadow to its own bitmap
+// whose alpha mask is a plain Gaussian blur of the polygon at sigma =
+// blurRad/3: sampled against an exact convolution the residual is 0.33-0.53
+// alpha levels rms over the whole mask, never past 2.8 of 255. Our ring stack
+// used to scale the vertices onto an expanded bounding box, which put the
+// triangle's apex 4x short of where an offset leaves it.
+// ---------------------------------------------------------------------------
+
+/// The absolute page coordinates of every shadow ring in `source`, one entry
+/// per ring, in emission order.
+fn shadow_ring_outlines(source: &str) -> Vec<Vec<(f64, f64)>> {
+    source
+        .lines()
+        // The rect control's rings are a `#rect` box, not an outline.
+        .filter(|line| line.contains("rgb(0, 0, 0, ") && line.contains("curve.move("))
+        .map(|line| {
+            let read = |key: &str| -> f64 {
+                let rest: &str = &line[line.find(key).expect("a placement") + key.len()..];
+                rest[..rest.find("pt").expect("a length")]
+                    .trim()
+                    .parse::<f64>()
+                    .expect("a number")
+            };
+            let (dx, dy): (f64, f64) = (read("dx: "), read("dy: "));
+            let body: &str = &line[line.find("curve.move(").expect("an outline")..];
+            let lengths: Vec<f64> = body
+                .split("pt")
+                .filter_map(|fragment| {
+                    let start: usize = fragment
+                        .rfind(|character: char| {
+                            !character.is_ascii_digit() && character != '.' && character != '-'
+                        })
+                        .map_or(0, |index| index + 1);
+                    fragment[start..].parse::<f64>().ok()
+                })
+                .collect();
+            lengths
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|pair| (dx + pair[0], dy + pair[1]))
+                .collect()
+        })
+        .collect()
+}
+
+/// The tall triangle's rings follow its outline offset outward, so the flat
+/// base moves by the ring's own distance while the sharp apex rises further —
+/// far enough for both slanted edges to clear it, yet held inside the mitre
+/// point by the corner's iso-coverage contour.
+#[test]
+fn polygon_shadow_rings_offset_the_outline_they_follow() {
+    let data = load_fixture("polygon_shadow_offset.pptx");
+    let (document, _warnings) = PptxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let source = generate_typst(&document).unwrap().source;
+    let rings: Vec<Vec<(f64, f64)>> = shadow_ring_outlines(&source);
+    assert_eq!(
+        rings.len(),
+        5 * 24,
+        "five polygon shadow stacks of 24 rings each, beside the rect control's",
+    );
+
+    // Ring coordinates are relative to the shape's own frame; the triangle
+    // is the only 120x240 one, so its base runs the full 120pt.
+    let widest: &Vec<(f64, f64)> = rings
+        .iter()
+        .filter(|ring| {
+            let low: f64 = ring.iter().fold(f64::MAX, |low, point| low.min(point.1));
+            let high: f64 = ring.iter().fold(f64::MIN, |high, point| high.max(point.1));
+            high - low > 240.0
+        })
+        .max_by(|left, right| {
+            let extent =
+                |ring: &Vec<(f64, f64)>| ring.iter().fold(f64::MIN, |low, point| low.max(point.1));
+            extent(left).total_cmp(&extent(right))
+        })
+        .expect("the triangle's ring stack");
+
+    let sigma: f64 = 20.0 / 3.0;
+    let reach: f64 = 2.6 * sigma;
+    let base: f64 = widest.iter().fold(f64::MIN, |low, point| low.max(point.1));
+    assert!(
+        (base - (240.0 + reach)).abs() < 0.05,
+        "the flat base reaches {base:.3}pt, expected {:.3}pt",
+        240.0 + reach,
+    );
+
+    // The slanted edge is where a scale gives itself away: it moves the flat
+    // base by the full reach while pushing this one out by only a quarter of
+    // it, because a vertex travels in proportion to its distance from the
+    // centre rather than perpendicular to its own edge.
+    let slant: f64 = widest
+        .iter()
+        .map(|&(x, y)| {
+            // Outward perpendicular distance from the line (60, 0) - (0, 240).
+            (-240.0 * (x - 60.0) - 60.0 * y) / (240.0_f64).hypot(60.0)
+        })
+        .fold(f64::MIN, f64::max);
+    assert!(
+        (slant - reach).abs() < 0.05,
+        "the slanted edge clears its own line by {slant:.3}pt, expected {reach:.3}pt; \
+         a scale reaches only 4.20pt",
+    );
+
+    // The sharp apex rises further than the reach — both slanted edges have
+    // to clear it — but the blur's own contour holds it well inside the mitre
+    // point a straight-edged offset would leave.
+    let half_angle: f64 = (60.0_f64).atan2(240.0);
+    let apex: f64 = widest
+        .iter()
+        .fold(f64::MAX, |high, point| high.min(point.1));
+    let mitre_apex: f64 = -reach / half_angle.sin();
+    assert!(
+        apex < 0.0 && apex > mitre_apex + 1.0,
+        "the apex reaches {apex:.3}pt: clear of the shape and inside the mitre's \
+         {mitre_apex:.3}pt",
+    );
+}
+
+#[test]
+fn polygon_shadow_offset_smoke() {
+    assert_produces_valid_pdf("polygon_shadow_offset.pptx");
+}

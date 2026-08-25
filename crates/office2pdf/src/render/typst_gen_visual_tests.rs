@@ -1527,3 +1527,250 @@ fn test_shape_shadow_without_blur_keeps_single_duplicate() {
         "zero blur keeps the single offset duplicate: {source}"
     );
 }
+
+// ── Polygon shadow silhouette tests (issue #1206) ─────────────────
+
+/// Every point the first shadow ring in `source` draws, in page
+/// coordinates: a ring writes its outline relative to its own `#place`, so
+/// the placement has to be added back before any of it can be compared to
+/// the shape it sits under.
+fn first_shadow_ring_points(source: &str) -> Vec<(f64, f64)> {
+    let line: &str = source
+        .lines()
+        .find(|line| line.contains("rgb(0, 0, 0, "))
+        .unwrap_or_else(|| panic!("no shadow ring in output: {source}"));
+    let (dx, dy): (f64, f64) = (read_pt(line, "dx: "), read_pt(line, "dy: "));
+    let body: &str = &line[line
+        .find("curve.move(")
+        .unwrap_or_else(|| panic!("the ring should follow an outline, not a box: {line}"))..];
+    // Every length in a ring body is one coordinate of a point, written in
+    // order, so reading the `pt` lengths off pairs them up.
+    let lengths: Vec<f64> = body
+        .split("pt")
+        .filter_map(|fragment| {
+            let start: usize = fragment
+                .rfind(|character: char| {
+                    !character.is_ascii_digit() && character != '.' && character != '-'
+                })
+                .map_or(0, |index| index + 1);
+            fragment[start..].parse::<f64>().ok()
+        })
+        .collect();
+    let points: Vec<(f64, f64)> = lengths
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|pair| (dx + pair[0], dy + pair[1]))
+        .collect();
+    assert!(!points.is_empty(), "no ring coordinates in: {line}");
+    points
+}
+
+fn triangle_shadow_source(stroke: Option<BorderSide>, blur_radius: f64) -> String {
+    use crate::ir::Shadow;
+
+    let elem = FixedElement {
+        x: 0.0,
+        y: 0.0,
+        width: 120.0,
+        height: 240.0,
+        kind: FixedElementKind::Shape(Shape {
+            kind: ShapeKind::Polygon {
+                vertices: vec![(0.5, 0.0), (1.0, 1.0), (0.0, 1.0)],
+            },
+            fill: Some(Color::new(192, 0, 0)),
+            gradient_fill: None,
+            pattern_fill: None,
+            stroke,
+            rotation_deg: None,
+            opacity: None,
+            shadow: Some(Shadow {
+                blur_radius,
+                distance: 0.0,
+                direction: 0.0,
+                color: Color::new(0, 0, 0),
+                opacity: 1.0,
+            }),
+        }),
+    };
+    let doc = make_doc(vec![make_fixed_page(720.0, 540.0, vec![elem])]);
+    generate_typst(&doc).unwrap().source
+}
+
+/// The defect #1206 reports. A ring is the silhouette pushed out by a fixed
+/// distance, so a sharp apex has to rise by `outset / sin(half-angle)` — far
+/// enough for both slanted edges to clear it. Scaling the vertices onto an
+/// expanded bounding box lifts it by the outset alone, which is 4x short on
+/// this triangle, and moves the slanted edges by less than the outset while
+/// the horizontal base moves by exactly it.
+#[test]
+fn test_polygon_shadow_offsets_its_outline_instead_of_scaling_it() {
+    let source: String = triangle_shadow_source(
+        Some(BorderSide {
+            width: 8.0,
+            color: Color::new(0, 0, 0),
+            style: BorderLineStyle::Solid,
+            join: LineJoin::Miter,
+        }),
+        0.0,
+    );
+    let points: Vec<(f64, f64)> = first_shadow_ring_points(&source);
+    let outset: f64 = 4.0;
+    let half_angle: f64 = (60.0_f64).atan2(240.0);
+
+    let top: f64 = points.iter().fold(f64::MAX, |top, point| top.min(point.1));
+    let expected_top: f64 = -outset / half_angle.sin();
+    assert!(
+        (top - expected_top).abs() < 0.05,
+        "apex at {top:.3}pt, expected {expected_top:.3}pt; a scale would say {:.3}pt",
+        -outset,
+    );
+
+    let bottom: f64 = points
+        .iter()
+        .fold(f64::MIN, |bottom, point| bottom.max(point.1));
+    assert!(
+        (bottom - (240.0 + outset)).abs() < 0.05,
+        "the flat base moves by the outset itself, not {:.3}pt",
+        bottom - 240.0,
+    );
+}
+
+/// A blurred ring turns its corners on the iso-coverage contour, so it is a
+/// curve rather than the straight-edged `#polygon` the shape itself draws.
+#[test]
+fn test_polygon_shadow_ring_follows_a_curve_while_the_shape_stays_a_polygon() {
+    let source: String = triangle_shadow_source(None, 12.0);
+    let ring: &str = source
+        .lines()
+        .find(|line| line.contains("rgb(0, 0, 0, "))
+        .unwrap_or_else(|| panic!("no shadow ring in: {source}"));
+    assert!(
+        ring.contains("#curve(fill-rule: \"even-odd\"") && ring.contains("curve.cubic("),
+        "the ring should arc its corners: {ring}",
+    );
+    assert!(
+        source.contains("#polygon("),
+        "the shape itself still draws as a polygon: {source}",
+    );
+}
+
+/// Under a blur the widest ring reaches `2.6 sigma` past the silhouette along
+/// every edge, and the corner arc keeps it inside that — never out at the
+/// mitre point a straight-edged offset would leave.
+#[test]
+fn test_blurred_polygon_ring_reaches_its_edges_but_not_its_mitre() {
+    let blur_radius: f64 = 30.0;
+    let source: String = triangle_shadow_source(None, blur_radius);
+    let sigma: f64 = blur_radius / 3.0;
+    let reach: f64 = 2.6 * sigma;
+    let widest: Vec<(f64, f64)> = {
+        let line: &str = source
+            .lines()
+            .rfind(|line| line.contains("rgb(0, 0, 0, "))
+            .expect("a ring stack");
+        first_shadow_ring_points(line)
+    };
+
+    let bottom: f64 = widest
+        .iter()
+        .fold(f64::MIN, |bottom, point| bottom.max(point.1));
+    assert!(
+        (bottom - (240.0 + reach)).abs() < 0.05,
+        "the base edge should reach {:.3}pt, not {bottom:.3}pt",
+        240.0 + reach,
+    );
+
+    let half_angle: f64 = (60.0_f64).atan2(240.0);
+    let mitre_top: f64 = -reach / half_angle.sin();
+    let top: f64 = widest.iter().fold(f64::MAX, |top, point| top.min(point.1));
+    assert!(
+        top > mitre_top + 1.0 && top < 0.0,
+        "the apex reaches {top:.3}pt: inside the mitre's {mitre_top:.3}pt but still clear of the shape",
+    );
+}
+
+/// A `custGeom` shadow follows the same offset. Its hole is a hole in the
+/// material too, so dilating the shape has to shrink it rather than grow it.
+#[test]
+fn test_path_shadow_shrinks_a_hole_while_it_grows_the_outline() {
+    use crate::ir::{Shadow, Subpath};
+
+    let elem = FixedElement {
+        x: 0.0,
+        y: 0.0,
+        width: 200.0,
+        height: 200.0,
+        kind: FixedElementKind::Shape(Shape {
+            kind: ShapeKind::Path {
+                subpaths: vec![
+                    Subpath::closed_outline(vec![(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]),
+                    Subpath::closed_outline(vec![
+                        (0.25, 0.25),
+                        (0.75, 0.25),
+                        (0.75, 0.75),
+                        (0.25, 0.75),
+                    ]),
+                ],
+            },
+            fill: Some(Color::new(192, 0, 0)),
+            gradient_fill: None,
+            pattern_fill: None,
+            stroke: Some(BorderSide {
+                width: 10.0,
+                color: Color::new(0, 0, 0),
+                style: BorderLineStyle::Solid,
+                join: LineJoin::Miter,
+            }),
+            rotation_deg: None,
+            opacity: None,
+            shadow: Some(Shadow {
+                blur_radius: 0.0,
+                distance: 0.0,
+                direction: 0.0,
+                color: Color::new(0, 0, 0),
+                opacity: 1.0,
+            }),
+        }),
+    };
+    let doc = make_doc(vec![make_fixed_page(720.0, 540.0, vec![elem])]);
+    let source: String = generate_typst(&doc).unwrap().source;
+    let points: Vec<(f64, f64)> = first_shadow_ring_points(&source);
+    let outset: f64 = 5.0;
+
+    let outer_left: f64 = points
+        .iter()
+        .fold(f64::MAX, |left, point| left.min(point.0));
+    assert!(
+        (outer_left + outset).abs() < 0.05,
+        "the outline grows to {outer_left:.3}pt, expected {:.3}pt",
+        -outset,
+    );
+    // The hole's own left edge sits at 50pt; a shrinking hole moves it in.
+    let hole_left: f64 = points
+        .iter()
+        .filter(|point| point.0 > 0.0 && point.0 < 100.0)
+        .fold(f64::MAX, |left, point| left.min(point.0));
+    assert!(
+        (hole_left - (50.0 + outset)).abs() < 0.05,
+        "the hole's edge is at {hole_left:.3}pt, expected {:.3}pt",
+        50.0 + outset,
+    );
+}
+
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn test_blurred_polygon_shadow_compiles_to_pdf() {
+    let source: String = triangle_shadow_source(
+        Some(BorderSide {
+            width: 3.0,
+            color: Color::new(0, 0, 0),
+            style: BorderLineStyle::Solid,
+            join: LineJoin::Round,
+        }),
+        24.0,
+    );
+    let pdf = crate::render::pdf::compile_to_pdf(&source, &[], None, &[], false, false)
+        .expect("an arc-cornered shadow ring should compile as Typst");
+    assert!(pdf.starts_with(b"%PDF"));
+}
