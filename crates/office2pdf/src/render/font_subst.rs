@@ -12,8 +12,9 @@
 //! Every name in the table is itself a font a host may not have, so each
 //! listed family also states its own class and its chain ends on that class's
 //! generic faces. Without that a Calibri run on a machine carrying neither
-//! Carlito nor Liberation Sans still landed on the default serif (issue
-//! #1213).
+//! Carlito nor Liberation Sans still landed on the default serif. An East
+//! Asian family states its class as such and gains nothing: no Latin generic
+//! carries its glyphs (issue #1213).
 //!
 //! Only PPTX populates the declared-class map today; DOCX `w:family` in
 //! `word/fontTable.xml` is not read yet, so a DOCX face still relies on the
@@ -60,6 +61,13 @@ enum FamilyClass {
     SansSerif,
     Serif,
     Monospace,
+    /// An East Asian family, which the generic chains cannot stand in for:
+    /// every face in them is Latin and carries none of the family's glyphs.
+    /// Appending one would also hand a metrics lookup a Latin line box for a
+    /// Korean line, because [`family_candidates`] takes the metrics of the
+    /// first candidate that resolves. These families' own substitutes already
+    /// end on faces of their script.
+    EastAsian,
 }
 
 impl FamilyClass {
@@ -70,6 +78,7 @@ impl FamilyClass {
             Self::SansSerif => SANS_SERIF_SUBSTITUTES,
             Self::Serif => SERIF_SUBSTITUTES,
             Self::Monospace => MONOSPACE_SUBSTITUTES,
+            Self::EastAsian => &[],
         }
     }
 }
@@ -221,7 +230,7 @@ fn fallback_candidates(font_family: &str, context: Option<&FontSearchContext>) -
 /// Every name here is a font a host may simply not have, and once the last one
 /// is missing the family has nothing left — see [`class_tail`] (issue #1213).
 fn table_entry(normalized_family: &str) -> Option<(FamilyClass, &'static [&'static str])> {
-    use FamilyClass::{Monospace, SansSerif, Serif};
+    use FamilyClass::{EastAsian, Monospace, SansSerif, Serif};
     Some(match normalized_family {
         "calibri" => (SansSerif, &["Carlito", "Liberation Sans"]),
         // `Calibri Light` is the `majorHAnsi` face of every Office theme since
@@ -274,7 +283,7 @@ fn table_entry(normalized_family: &str) -> Option<(FamilyClass, &'static [&'stat
             ],
         ),
         "pretendard" => (
-            SansSerif,
+            EastAsian,
             &[
                 "Apple SD Gothic Neo",
                 "Noto Sans CJK KR",
@@ -287,7 +296,7 @@ fn table_entry(normalized_family: &str) -> Option<(FamilyClass, &'static [&'stat
         ),
         // Korean font names → English equivalents + fallbacks
         "malgun gothic" => (
-            SansSerif,
+            EastAsian,
             &[
                 "Malgun Gothic",
                 "Apple SD Gothic Neo",
@@ -296,7 +305,7 @@ fn table_entry(normalized_family: &str) -> Option<(FamilyClass, &'static [&'stat
             ],
         ),
         "gulim" => (
-            SansSerif,
+            EastAsian,
             &[
                 "Gulim",
                 "Apple SD Gothic Neo",
@@ -306,7 +315,7 @@ fn table_entry(normalized_family: &str) -> Option<(FamilyClass, &'static [&'stat
             ],
         ),
         "dotum" => (
-            SansSerif,
+            EastAsian,
             &[
                 "Dotum",
                 "Apple SD Gothic Neo",
@@ -316,7 +325,7 @@ fn table_entry(normalized_family: &str) -> Option<(FamilyClass, &'static [&'stat
             ],
         ),
         "batang" => (
-            Serif,
+            EastAsian,
             &[
                 "Batang",
                 "Noto Serif CJK KR",
@@ -325,7 +334,7 @@ fn table_entry(normalized_family: &str) -> Option<(FamilyClass, &'static [&'stat
             ],
         ),
         "gungsuh" => (
-            Serif,
+            EastAsian,
             &[
                 "Gungsuh",
                 "Noto Serif CJK KR",
@@ -334,7 +343,7 @@ fn table_entry(normalized_family: &str) -> Option<(FamilyClass, &'static [&'stat
             ],
         ),
         "nanum gothic" => (
-            SansSerif,
+            EastAsian,
             &[
                 "Nanum Gothic",
                 "Apple SD Gothic Neo",
@@ -344,7 +353,7 @@ fn table_entry(normalized_family: &str) -> Option<(FamilyClass, &'static [&'stat
             ],
         ),
         "nanum myeongjo" => (
-            Serif,
+            EastAsian,
             &[
                 "Nanum Myeongjo",
                 "Noto Serif CJK KR",
@@ -355,21 +364,21 @@ fn table_entry(normalized_family: &str) -> Option<(FamilyClass, &'static [&'stat
         ),
         // Japanese font names → English equivalents + fallbacks
         "ms gothic" => (
-            SansSerif,
+            EastAsian,
             &["MS Gothic", "Noto Sans CJK JP", "Hiragino Sans"],
         ),
         "ms mincho" => (
-            Serif,
+            EastAsian,
             &["MS Mincho", "Noto Serif CJK JP", "Hiragino Mincho ProN"],
         ),
-        "meiryo" => (SansSerif, &["Meiryo", "Noto Sans CJK JP", "Hiragino Sans"]),
+        "meiryo" => (EastAsian, &["Meiryo", "Noto Sans CJK JP", "Hiragino Sans"]),
         "yu gothic" => (
-            SansSerif,
+            EastAsian,
             &["Yu Gothic", "Noto Sans CJK JP", "Hiragino Sans"],
         ),
         // Chinese font names → English equivalents + fallbacks
         "microsoft yahei" => (
-            SansSerif,
+            EastAsian,
             &[
                 "Microsoft YaHei",
                 "Noto Sans CJK SC",
@@ -378,7 +387,7 @@ fn table_entry(normalized_family: &str) -> Option<(FamilyClass, &'static [&'stat
             ],
         ),
         "simsun" => (
-            Serif,
+            EastAsian,
             &["SimSun", "Noto Serif CJK SC", "STSong", "Arial Unicode MS"],
         ),
         // Noto CJK families are common in documents authored on Linux or with
@@ -388,7 +397,7 @@ fn table_entry(normalized_family: &str) -> Option<(FamilyClass, &'static [&'stat
         // Short names ("Noto Sans KR") are the Google Fonts per-language
         // builds of the same designs.
         "noto sans cjk kr" | "noto sans kr" => (
-            SansSerif,
+            EastAsian,
             &[
                 "Noto Sans CJK KR",
                 "Noto Sans KR",
@@ -398,7 +407,7 @@ fn table_entry(normalized_family: &str) -> Option<(FamilyClass, &'static [&'stat
             ],
         ),
         "noto sans cjk sc" | "noto sans sc" => (
-            SansSerif,
+            EastAsian,
             &[
                 "Noto Sans CJK SC",
                 "Noto Sans SC",
@@ -409,7 +418,7 @@ fn table_entry(normalized_family: &str) -> Option<(FamilyClass, &'static [&'stat
             ],
         ),
         "noto sans cjk tc" | "noto sans tc" => (
-            SansSerif,
+            EastAsian,
             &[
                 "Noto Sans CJK TC",
                 "Noto Sans TC",
@@ -419,7 +428,7 @@ fn table_entry(normalized_family: &str) -> Option<(FamilyClass, &'static [&'stat
             ],
         ),
         "noto sans cjk jp" | "noto sans jp" => (
-            SansSerif,
+            EastAsian,
             &[
                 "Noto Sans CJK JP",
                 "Noto Sans JP",
@@ -430,7 +439,7 @@ fn table_entry(normalized_family: &str) -> Option<(FamilyClass, &'static [&'stat
             ],
         ),
         "noto serif cjk kr" | "noto serif kr" => (
-            Serif,
+            EastAsian,
             &[
                 "Noto Serif CJK KR",
                 "Noto Serif KR",
@@ -440,7 +449,7 @@ fn table_entry(normalized_family: &str) -> Option<(FamilyClass, &'static [&'stat
             ],
         ),
         "noto serif cjk sc" | "noto serif sc" => (
-            Serif,
+            EastAsian,
             &[
                 "Noto Serif CJK SC",
                 "Noto Serif SC",
@@ -450,11 +459,11 @@ fn table_entry(normalized_family: &str) -> Option<(FamilyClass, &'static [&'stat
             ],
         ),
         "noto serif cjk tc" | "noto serif tc" => (
-            Serif,
+            EastAsian,
             &["Noto Serif CJK TC", "Noto Serif TC", "Arial Unicode MS"],
         ),
         "noto serif cjk jp" | "noto serif jp" => (
-            Serif,
+            EastAsian,
             &[
                 "Noto Serif CJK JP",
                 "Noto Serif JP",
@@ -492,9 +501,10 @@ fn inferred_class(normalized_family: &str) -> Option<FamilyClass> {
 /// exhausts them lands on its own class instead of on the engine's default
 /// face — a serif, whatever the family was (issue #1213).
 ///
-/// Only a family the table lists has a tail to add. One the table does not
-/// list is already answered with its class chain and nothing else, so there is
-/// nothing left to append.
+/// Empty for two kinds of family. One the table does not list is already
+/// answered with its class chain and nothing else, so there is nothing left to
+/// append. An East Asian one has no Latin generic that can stand in for it —
+/// see [`FamilyClass::EastAsian`].
 fn class_tail(normalized_family: &str) -> &'static [&'static str] {
     match table_entry(normalized_family) {
         Some((class, _)) => class.substitutes(),

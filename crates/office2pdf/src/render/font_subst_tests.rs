@@ -313,6 +313,53 @@ fn a_listed_family_whose_substitutes_are_all_absent_keeps_its_own_class() {
 }
 
 #[test]
+fn an_east_asian_family_gains_no_latin_tail() {
+    // The tail keeps a family's class, and no Latin generic can do that for an
+    // East Asian face: it carries none of the glyphs. `family_candidates` is
+    // also the metrics path and takes the first candidate that resolves, so a
+    // tail here would answer a Korean line with a Latin line box on any host
+    // without a Korean font — which is every stock CI runner (issue #1213).
+    let latin_only_host: FontSearchContext = FontSearchContext::for_test(
+        Vec::new(),
+        &[
+            "DejaVu Sans",
+            "Liberation Sans",
+            "Liberation Serif",
+            "DejaVu Serif",
+        ],
+        &[],
+        &[],
+    );
+
+    for family in [
+        "Malgun Gothic",
+        "맑은 고딕",
+        "Batang",
+        "Noto Sans CJK KR",
+        "SimSun",
+    ] {
+        let chain: Vec<String> =
+            with_font_search_context(Some(&latin_only_host), || family_candidates(family));
+        let latin_generic: Option<&String> = chain.iter().find(|candidate| {
+            SANS_SERIF_SUBSTITUTES.contains(&candidate.as_str())
+                || SERIF_SUBSTITUTES.contains(&candidate.as_str())
+        });
+        assert_eq!(
+            latin_generic, None,
+            "{family} must not resolve through a Latin generic: {chain:?}"
+        );
+    }
+
+    // And the substitution report keeps saying so rather than naming a face
+    // that cannot write the script.
+    assert_eq!(
+        resolve_available_fallback("Malgun Gothic", TextScript::Korean, &latin_only_host)
+            .as_deref(),
+        Some(".notdef")
+    );
+}
+
+#[test]
 fn the_class_tail_follows_the_metric_compatible_substitutes() {
     // The tail is a last resort, not a preference: Carlito and Liberation Sans
     // are metric-compatible with Calibri and a generic sans is not, so the
