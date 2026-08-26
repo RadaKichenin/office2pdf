@@ -232,17 +232,24 @@ pub enum ChartAreaFill {
     Solid(Color),
 }
 
-/// The application whose package a chart came out of.
+/// The Office application and surface a chart came from.
 ///
 /// Excel and PowerPoint disagree about what "the automatic chart-area outline"
 /// is: Excel draws one and PowerPoint draws none, so the same
 /// [`ChartAreaOutline::Default`] has to resolve differently depending on where
-/// the chart part was found. The chart part itself says nothing about this —
-/// only the loader that opened the package knows (issue #823).
+/// the chart part was found (issue #823). Excel also gives an anchored
+/// worksheet chart and a chartsheet different legend geometry even though
+/// both chart parts live in the same package (issue #1315). The chart part
+/// itself says nothing about either distinction; only the loader knows.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ChartHost {
-    /// A chart in a workbook.
+    /// A chart anchored to a worksheet.
     Spreadsheet,
+    /// A chart occupying an Excel chartsheet.
+    ///
+    /// Excel gives chartsheet chrome a separate layout regime from an
+    /// anchored worksheet chart even though both live in a workbook.
+    SpreadsheetChartsheet,
     /// A chart on a slide.
     Presentation,
     /// A chart in a document. Its automatic outline is unmeasured, so it keeps
@@ -348,8 +355,8 @@ pub struct Chart {
     /// which package this came from substitutes the face, exactly as it does
     /// for [`Chart::theme_accent_colors`] (issue #668).
     pub text_font_family: Option<String>,
-    /// Which application's package this chart came out of, which decides what
-    /// its automatic chart-area outline is (issue #823).
+    /// Which Office application and surface this chart came from, used for
+    /// host-specific chart chrome (issues #823 and #1315).
     pub host: ChartHost,
     /// Run properties `c:chartSpace/c:txPr` declares, which govern every string
     /// the chart draws unless a more specific `c:txPr` overrides them.

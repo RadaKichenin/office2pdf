@@ -615,16 +615,20 @@ fn chartsheet_page(
     let chart_box: chartsheet::ChartsheetChartBox = chartsheet::printed_chart_box(setup);
     let charts: Vec<crate::ir::SheetChart> = raw_charts
         .into_iter()
-        .map(|anchor| crate::ir::SheetChart {
-            anchor_row: 0,
-            placement: Some(crate::ir::SheetChartPlacement {
-                x_offset_pt: chart_box.x_offset_pt,
-                y_offset_pt: chart_box.y_offset_pt,
-                width: chart_box.width,
-                height: chart_box.height,
-                print_scale: 1.0,
-            }),
-            chart: anchor.chart,
+        .map(|anchor| {
+            let mut chart = anchor.chart;
+            chart.host = crate::ir::ChartHost::SpreadsheetChartsheet;
+            crate::ir::SheetChart {
+                anchor_row: 0,
+                placement: Some(crate::ir::SheetChartPlacement {
+                    x_offset_pt: chart_box.x_offset_pt,
+                    y_offset_pt: chart_box.y_offset_pt,
+                    width: chart_box.width,
+                    height: chart_box.height,
+                    print_scale: 1.0,
+                }),
+                chart,
+            }
         })
         .collect();
     SheetPage {

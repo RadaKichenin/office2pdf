@@ -757,9 +757,9 @@ pub(super) const CHART_AREA_OUTLINE: &str = CHART_AUTOMATIC_LINE;
 fn automatic_chart_area_stroke(host: crate::ir::ChartHost) -> &'static str {
     match host {
         crate::ir::ChartHost::Presentation => "none",
-        crate::ir::ChartHost::Spreadsheet | crate::ir::ChartHost::WordProcessing => {
-            CHART_AREA_OUTLINE
-        }
+        crate::ir::ChartHost::Spreadsheet
+        | crate::ir::ChartHost::SpreadsheetChartsheet
+        | crate::ir::ChartHost::WordProcessing => CHART_AREA_OUTLINE,
     }
 }
 
@@ -1807,8 +1807,10 @@ fn chart_column_value_gutter_pt(chart: &Chart) -> f64 {
     if chart.text_style.size_pt.is_none() && chart.value_axis_text_style.size_pt.is_none() {
         return TICK_GAP + GAP;
     }
-    if chart.host == crate::ir::ChartHost::Spreadsheet
-        && let Some(gutter) = excel_column_value_gutter_pt(chart)
+    if matches!(
+        chart.host,
+        crate::ir::ChartHost::Spreadsheet | crate::ir::ChartHost::SpreadsheetChartsheet
+    ) && let Some(gutter) = excel_column_value_gutter_pt(chart)
     {
         return gutter;
     }
@@ -1826,8 +1828,10 @@ fn chart_column_value_gutter_pt(chart: &Chart) -> f64 {
 /// gutter itself follows the labels.
 fn chart_column_value_label_box(chart: &Chart) -> (f64, f64) {
     let left: f64 = chart_column_value_label_x(chart);
-    if chart.host == crate::ir::ChartHost::Spreadsheet
-        && let Some(gutter) = excel_column_value_gutter_pt(chart)
+    if matches!(
+        chart.host,
+        crate::ir::ChartHost::Spreadsheet | crate::ir::ChartHost::SpreadsheetChartsheet
+    ) && let Some(gutter) = excel_column_value_gutter_pt(chart)
         && let Some(gap) = excel_value_label_plot_gap_pt(chart)
     {
         return (left, (gutter - gap - left).max(0.0));
@@ -2909,15 +2913,19 @@ struct LegendKeyMetrics {
 
 /// The legend key metrics of the host the chart came from.
 ///
-/// PowerPoint scales an axis chart's *square* key and its following gap with
-/// chart text (#804). Excel draws a flat bar instead — [`LEGEND_KEY_LEN_PT`]
-/// wide whatever the text, [`EXCEL_LEGEND_KEY_LINE_BOX_SHARE`] of the legend
-/// face's line box tall — and leaves [`EXCEL_LEGEND_KEY_LABEL_GAP_PT`] before
-/// the label (#1169). A Word-hosted chart has never been measured against a
-/// native export, so it keeps the legacy square.
+/// PowerPoint and an Excel chartsheet scale an axis chart's *square* key and
+/// its following gap with chart text (#804, #1315). An Excel chart anchored to
+/// a worksheet draws a flat bar instead — [`LEGEND_KEY_LEN_PT`] wide whatever
+/// the text, [`EXCEL_LEGEND_KEY_LINE_BOX_SHARE`] of the legend face's line box
+/// tall — and leaves [`EXCEL_LEGEND_KEY_LABEL_GAP_PT`] before the label
+/// (#1169). A Word-hosted chart has never been measured against a native
+/// export, so it keeps the legacy square.
 fn axis_legend_entry_metrics(chart: &Chart) -> LegendKeyMetrics {
     let size_pt: f64 = chart_text_pt(chart);
-    if matches!(chart.host, crate::ir::ChartHost::Presentation) {
+    if matches!(
+        chart.host,
+        crate::ir::ChartHost::Presentation | crate::ir::ChartHost::SpreadsheetChartsheet
+    ) {
         let side_pt: f64 = PPTX_LEGEND_KEY_EM * size_pt;
         return LegendKeyMetrics {
             width_pt: side_pt,
