@@ -28,6 +28,9 @@ import probe_harness
 
 
 SLIDE_XML = '<p:sld><a:bodyPr anchor="t"/><a:spcAft val="1000"/></p:sld>'
+EXCEL_EXPORTER = (
+    Path(__file__).resolve().parent.parent / "macos" / "export_excel_pdfs.applescript"
+)
 
 
 def write_base_package(path: Path, slide_xml: str = SLIDE_XML, extra: dict | None = None) -> None:
@@ -378,6 +381,35 @@ class ExportTest(unittest.TestCase):
         self.assertTrue(str(probe_harness.applescript_for(".xlsx")).endswith("export_excel_pdfs.applescript"))
         with self.assertRaisesRegex(probe_harness.ProbeError, "odt"):
             probe_harness.applescript_for(".odt")
+
+    def test_excel_export_walks_chartsheets_in_workbook_order(self):
+        # The exporter itself requires macOS and Excel, so portable CI pins the
+        # workbook-order enumeration feeding the tested PDF-union path (#1316).
+        source = EXCEL_EXPORTER.read_text()
+        self.assertIn(
+            "set workbookSheets to get every sheet of openedWorkbook",
+            source,
+        )
+        self.assertIn(
+            "repeat with sheetIndex from 1 to (count workbookSheets)",
+            source,
+        )
+        self.assertIn(
+            "set currentSheet to item sheetIndex of workbookSheets",
+            source,
+        )
+        self.assertIn(
+            'outputId & "-sheet-" & my paddedIndex(sheetIndex)',
+            source,
+        )
+        self.assertNotIn("count worksheets of openedWorkbook", source)
+
+    def test_a_visible_chartsheet_satisfies_the_excel_export_contract(self):
+        source = EXCEL_EXPORTER.read_text()
+        self.assertIn(
+            'if visibleSheetCount is 0 then error "workbook has no visible sheets"',
+            source,
+        )
 
     def test_the_office_backend_refuses_an_external_volume_stage(self):
         # The Office sandbox cannot write to external volumes; a save there
