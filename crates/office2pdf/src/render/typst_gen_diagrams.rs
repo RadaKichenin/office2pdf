@@ -2290,9 +2290,9 @@ fn axis_plot_insets(chart: &Chart, frame: Option<(f64, f64)>) -> (f64, f64) {
     }
 }
 
-/// What the frame leaves the plot box: the title block is emitted above the
-/// box rather than inside it, so a framed chart's box gets what remains
-/// beneath it.
+/// What the full chart-area frame leaves its inner content box after the title
+/// takes its band. The chart-area outline itself stays around both boxes; see
+/// [`write_chart_area_start`] (issue #1216).
 fn axis_content_frame(frame: Option<(f64, f64)>, title_h: f64) -> Option<(f64, f64)> {
     frame.map(|(width, height)| (width, (height - title_h).max(MIN_PLOT_PT)))
 }
@@ -2573,6 +2573,72 @@ fn write_chart_title(
                 title_size, attrs, escaped_title,
             );
         }
+    }
+}
+
+/// Open a chart area's one outer outline and its title-bearing content stack.
+///
+/// `c:chartSpace/c:spPr` is a sibling of `c:chart`, so its stroke encloses the
+/// title as well as the plot. A titled chart therefore opens the full-area box
+/// first, writes the title inside it, and gives an un-stroked inner box the
+/// remaining content extent. An untitled chart keeps the single-box markup it
+/// had before (issue #1216).
+///
+/// `fixed_title_band` preserves the axis plot's measured fixed-height title.
+/// The line, radar and pie families keep their existing intrinsic title plus
+/// 4pt gap; only the ownership of the surrounding stroke changes.
+fn write_chart_area_start(
+    out: &mut String,
+    chart: &Chart,
+    title: Option<&str>,
+    chart_area: Option<(f64, f64)>,
+    content_extent: (f64, f64),
+    title_h: f64,
+    fixed_title_band: bool,
+) -> bool {
+    let wraps_title: bool = title.is_some();
+    if let Some(title) = title {
+        let (area_w, area_h): (f64, f64) =
+            chart_area.unwrap_or((content_extent.0, content_extent.1 + title_h));
+        let _ = writeln!(
+            out,
+            "#box(width: {}pt, height: {}pt, stroke: {})[",
+            format_f64(area_w),
+            format_f64(area_h),
+            chart_area_stroke(&chart.chart_area_outline, chart.host)
+        );
+        write_chart_title(
+            out,
+            chart,
+            title,
+            chart_area,
+            fixed_title_band.then_some(title_h),
+        );
+        if !fixed_title_band {
+            out.push_str("#v(4pt)\n");
+        }
+    }
+
+    let content_stroke: String = if wraps_title {
+        "none".to_string()
+    } else {
+        chart_area_stroke(&chart.chart_area_outline, chart.host)
+    };
+    let _ = writeln!(
+        out,
+        "#box(width: {}pt, height: {}pt, stroke: {})[",
+        format_f64(content_extent.0),
+        format_f64(content_extent.1),
+        content_stroke
+    );
+    wraps_title
+}
+
+/// Close the inner content box and, for a titled chart, its full-area wrapper.
+fn write_chart_area_end(out: &mut String, wraps_title: bool) {
+    out.push_str("]\n");
+    if wraps_title {
+        out.push_str("]\n");
     }
 }
 
@@ -3071,9 +3137,6 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
     } else {
         0.0
     };
-    if let Some(title) = area_title {
-        write_chart_title(out, chart, title, frame, Some(title_h));
-    }
 
     // The chart area the fractions of a stated plot rectangle are taken of,
     // kept before the title band comes off it.
@@ -3083,13 +3146,14 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
         Some(extent) => extent,
         None => chart_axis_extent(chart),
     };
-
-    let _ = writeln!(
+    let wraps_title: bool = write_chart_area_start(
         out,
-        "#box(width: {}pt, height: {}pt, stroke: {})[",
-        format_f64(total_w),
-        format_f64(total_h),
-        chart_area_stroke(&chart.chart_area_outline, chart.host)
+        chart,
+        area_title,
+        chart_area,
+        (total_w, total_h),
+        title_h,
+        true,
     );
 
     // The plotting rectangle: the one `c:plotArea/c:layout` states, else the
@@ -3641,7 +3705,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
         chart_area.unwrap_or((total_w, total_h + title_h)),
         title_h,
     );
-    out.push_str("]\n");
+    write_chart_area_end(out, wraps_title);
 }
 
 fn generate_chart_bar(out: &mut String, chart: &Chart) {
@@ -3720,12 +3784,8 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
     // to dip towards (issue #1184).
     let scale: ValueScale = chart_value_scale(chart, nice_axis(max_value));
 
-    if let Some(title) = chart.title.as_deref() {
-        write_chart_title(out, chart, title, frame, None);
-        out.push_str("#v(4pt)\n");
-    }
-    // As in `generate_chart_axis`: the title sits above the box, so a framed
-    // chart spends its height out of the frame rather than on top of it.
+    // As in `generate_chart_axis`: the title takes a band from the content,
+    // while the full chart-area outline stays around both (issue #1216).
     let title_h: f64 = if chart.title.is_some() {
         chart_area_title_h(chart)
     } else {
@@ -3756,12 +3816,14 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
             legend.top + PLOT_H + CAT_GAP + legend.bottom,
         ),
     };
-    let _ = writeln!(
+    let wraps_title: bool = write_chart_area_start(
         out,
-        "#box(width: {}pt, height: {}pt, stroke: {})[",
-        format_f64(total_w),
-        format_f64(total_h),
-        chart_area_stroke(&chart.chart_area_outline, chart.host)
+        chart,
+        chart.title.as_deref(),
+        chart_area,
+        (total_w, total_h),
+        title_h,
+        false,
     );
 
     // `<c:delete val="1"/>` switches an axis off; see `generate_chart_axis`.
@@ -3976,7 +4038,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
         chart_area.unwrap_or((total_w, total_h + title_h)),
         title_h,
     );
-    out.push_str("]\n");
+    write_chart_area_end(out, wraps_title);
 }
 
 /// Whether the chart part declared `<c:radarChart>`.
@@ -4031,18 +4093,13 @@ fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64
         return;
     }
 
-    if let Some(title) = chart.title.as_deref() {
-        write_chart_title(out, chart, title, frame, None);
-        out.push_str("#v(4pt)\n");
-    }
-
     let legend: LegendBox = if chart.has_legend {
         LegendBox::new(chart.legend_position, RADAR_LEGEND_ROW_H, LEGEND_ENTRY_W)
     } else {
         LegendBox::hidden()
     };
-    // As elsewhere: the title is drawn above the box, so a framed chart takes
-    // its height out of the frame.
+    // The title takes its band from the content, while the chart-area outline
+    // remains around the original full frame (issue #1216).
     let title_h: f64 = if chart.title.is_some() {
         chart_area_title_h(chart)
     } else {
@@ -4069,12 +4126,14 @@ fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64
     let centre_x: f64 = legend.left + span_w / 2.0;
     let centre_y: f64 = legend.top + span_h / 2.0;
 
-    let _ = writeln!(
+    let wraps_title: bool = write_chart_area_start(
         out,
-        "#box(width: {}pt, height: {}pt, stroke: {})[",
-        format_f64(total_w),
-        format_f64(total_h),
-        chart_area_stroke(&chart.chart_area_outline, chart.host)
+        chart,
+        chart.title.as_deref(),
+        chart_area,
+        (total_w, total_h),
+        title_h,
+        false,
     );
 
     // Office puts the first category at twelve o'clock and runs clockwise, the
@@ -4247,7 +4306,7 @@ fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64
         chart_area.unwrap_or((total_w, total_h + title_h)),
         title_h,
     );
-    out.push_str("]\n");
+    write_chart_area_end(out, wraps_title);
 }
 
 /// Render a pie chart as a circle of wedges, each sized by its share of the
@@ -4264,18 +4323,13 @@ fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, 
         return;
     }
 
-    if let Some(title) = chart.title.as_deref() {
-        write_chart_title(out, chart, title, frame, None);
-        out.push_str("#v(4pt)\n");
-    }
-
     let legend: LegendBox = if chart.has_legend {
         LegendBox::new(chart.legend_position, PIE_LEGEND_ROW_H, LEGEND_ENTRY_W)
     } else {
         LegendBox::hidden()
     };
-    // As elsewhere: the title is drawn above the box, so a framed chart takes
-    // its height out of the frame.
+    // The title takes its band from the content, while the chart-area outline
+    // remains around the original full frame (issue #1216).
     let title_h: f64 = if chart.title.is_some() {
         chart_area_title_h(chart)
     } else {
@@ -4301,12 +4355,14 @@ fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, 
     let centre_x: f64 = legend.left + (total_w - legend.left - legend.right) / 2.0;
     let centre_y: f64 = legend.top + (total_h - legend.top - legend.bottom) / 2.0;
 
-    let _ = writeln!(
+    let wraps_title: bool = write_chart_area_start(
         out,
-        "#box(width: {}pt, height: {}pt, stroke: {})[",
-        format_f64(total_w),
-        format_f64(total_h),
-        chart_area_stroke(&chart.chart_area_outline, chart.host)
+        chart,
+        chart.title.as_deref(),
+        chart_area,
+        (total_w, total_h),
+        title_h,
+        false,
     );
 
     // Office starts the first wedge at twelve o'clock and sweeps clockwise.
@@ -4404,7 +4460,7 @@ fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, 
         chart_area.unwrap_or((total_w, total_h + title_h)),
         title_h,
     );
-    out.push_str("]\n");
+    write_chart_area_end(out, wraps_title);
 }
 
 /// Emit one filled wedge from `start` through `sweep` radians.
