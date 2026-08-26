@@ -118,6 +118,7 @@ fn bar_chart() -> crate::ir::Chart {
         value_axis_deleted: false,
         bar_band_layout: crate::ir::BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,

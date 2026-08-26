@@ -214,6 +214,24 @@ pub enum ChartAreaOutline {
     },
 }
 
+/// What `c:chartSpace/c:spPr` asks Office to paint behind the whole chart.
+///
+/// The declaration belongs to the chart space, outside `c:chart`, so it covers
+/// the title as well as the plot. Absence and `<a:noFill/>` stay distinct even
+/// though both currently render transparently: absence leaves the host's
+/// automatic behavior available, while `noFill` explicitly disables it
+/// (issue #1217).
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum ChartAreaFill {
+    /// No top-level fill declaration in the chart area's `c:spPr`.
+    #[default]
+    Unspecified,
+    /// A top-level `<a:noFill/>` explicitly makes the chart area transparent.
+    Transparent,
+    /// A top-level `<a:solidFill>` with a literal or theme-resolved colour.
+    Solid(Color),
+}
+
 /// The application whose package a chart came out of.
 ///
 /// Excel and PowerPoint disagree about what "the automatic chart-area outline"
@@ -317,6 +335,9 @@ pub struct Chart {
     /// What the chart area's own outline should be, from
     /// `c:chartSpace/c:spPr/a:ln` (#637).
     pub chart_area_outline: ChartAreaOutline,
+    /// What the chart area's own background should be, from the top-level fill
+    /// inside `c:chartSpace/c:spPr` (#1217).
+    pub chart_area_fill: ChartAreaFill,
     /// The face every string the chart draws is set in, from
     /// `c:chartSpace/c:txPr/a:p/a:pPr/a:defRPr/a:latin@typeface`.
     ///

@@ -1,5 +1,5 @@
 use super::*;
-use crate::ir::{ChartAreaOutline, DataLabelPosition, MarkerSymbol};
+use crate::ir::{ChartAreaFill, ChartAreaOutline, DataLabelPosition, MarkerSymbol};
 use crate::render::font_subst;
 
 /// How a chart is drawn. Selecting the variant once lets the atomicity decision
@@ -789,6 +789,18 @@ fn chart_area_stroke(outline: &ChartAreaOutline, host: crate::ir::ChartHost) -> 
                 |c| format!("rgb({}, {}, {})", c.r, c.g, c.b)
             )
         ),
+    }
+}
+
+/// The Typst `fill:` argument for the outermost chart-area box.
+///
+/// A stated solid fill belongs to the full chart space, including its title.
+/// Both an absent fill and explicit `noFill` preserve today's transparent
+/// output, while remaining distinct in the IR for host defaults (#1217).
+fn chart_area_fill(fill: &ChartAreaFill) -> String {
+    match fill {
+        ChartAreaFill::Unspecified | ChartAreaFill::Transparent => "none".to_string(),
+        ChartAreaFill::Solid(color) => format!("rgb({}, {}, {})", color.r, color.g, color.b),
     }
 }
 
@@ -2578,11 +2590,11 @@ fn write_chart_title(
 
 /// Open a chart area's one outer outline and its title-bearing content stack.
 ///
-/// `c:chartSpace/c:spPr` is a sibling of `c:chart`, so its stroke encloses the
-/// title as well as the plot. A titled chart therefore opens the full-area box
-/// first, writes the title inside it, and gives an un-stroked inner box the
-/// remaining content extent. An untitled chart keeps the single-box markup it
-/// had before (issue #1216).
+/// `c:chartSpace/c:spPr` is a sibling of `c:chart`, so its stroke and fill
+/// enclose the title as well as the plot. A titled chart therefore opens the
+/// full-area box first, writes the title inside it, and gives an unstyled inner
+/// box the remaining content extent. An untitled chart keeps one box (#1216,
+/// #1217).
 ///
 /// `fixed_title_band` preserves the axis plot's measured fixed-height title.
 /// The line, radar and pie families keep their existing intrinsic title plus
@@ -2602,9 +2614,10 @@ fn write_chart_area_start(
             chart_area.unwrap_or((content_extent.0, content_extent.1 + title_h));
         let _ = writeln!(
             out,
-            "#box(width: {}pt, height: {}pt, stroke: {})[",
+            "#box(width: {}pt, height: {}pt, fill: {}, stroke: {})[",
             format_f64(area_w),
             format_f64(area_h),
+            chart_area_fill(&chart.chart_area_fill),
             chart_area_stroke(&chart.chart_area_outline, chart.host)
         );
         write_chart_title(
@@ -2624,11 +2637,17 @@ fn write_chart_area_start(
     } else {
         chart_area_stroke(&chart.chart_area_outline, chart.host)
     };
+    let content_fill: String = if wraps_title {
+        "none".to_string()
+    } else {
+        chart_area_fill(&chart.chart_area_fill)
+    };
     let _ = writeln!(
         out,
-        "#box(width: {}pt, height: {}pt, stroke: {})[",
+        "#box(width: {}pt, height: {}pt, fill: {}, stroke: {})[",
         format_f64(content_extent.0),
         format_f64(content_extent.1),
+        content_fill,
         content_stroke
     );
     wraps_title

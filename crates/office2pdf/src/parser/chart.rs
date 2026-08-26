@@ -9,9 +9,9 @@ use quick_xml::events::Event;
 use super::drawingml::{self, SchemeColors};
 use super::xml_util;
 use crate::ir::{
-    AxisTickMark, BarBandLayout, Chart, ChartAreaOutline, ChartGrouping, ChartHost, ChartLine,
-    ChartPlotAreaLayout, ChartSeries, ChartTextStyle, ChartType, Color, DataLabelPosition,
-    DataLabels, LegendPosition, MarkerSymbol,
+    AxisTickMark, BarBandLayout, Chart, ChartAreaFill, ChartAreaOutline, ChartGrouping, ChartHost,
+    ChartLine, ChartPlotAreaLayout, ChartSeries, ChartTextStyle, ChartType, Color,
+    DataLabelPosition, DataLabels, LegendPosition, MarkerSymbol,
 };
 
 /// Mapping from XML chart element tag names to their corresponding `ChartType`.
@@ -157,6 +157,7 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
     // marker a `c:spPr` belonging to `c:plotArea` would be read as the chart
     // area's own (#637).
     let mut chart_element_ended: bool = false;
+    let mut chart_area_fill: ChartAreaFill = ChartAreaFill::Unspecified;
     let mut chart_area_outline: ChartAreaOutline = ChartAreaOutline::Default;
     // `c:chartSpace/c:txPr` is a sibling of `c:chart` for the same reason
     // `c:spPr` is, so it needs the same marker: an axis carries a `c:txPr` of
@@ -179,7 +180,8 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
                 let local = e.local_name();
                 let tag: &[u8] = local.as_ref();
                 if tag == b"spPr" && chart_element_ended {
-                    chart_area_outline = parse_chart_area_outline(&mut reader, scheme);
+                    (chart_area_fill, chart_area_outline) =
+                        parse_chart_area_properties(&mut reader, scheme);
                 } else if tag == b"txPr" && chart_element_ended {
                     let (family, style, _) = parse_chart_text_properties(&mut reader, scheme);
                     text_font_family = family;
@@ -369,6 +371,7 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
         // does. Whoever loaded this XML fills these in, since only they know
         // which theme part applies.
         theme_accent_colors: Vec::new(),
+        chart_area_fill,
         chart_area_outline,
         // As with the theme, the chart part does not know which application's
         // package holds it; the loader sets this (issue #823).
@@ -565,21 +568,24 @@ fn read_def_rpr_into(element: &quick_xml::events::BytesStart<'_>, style: &mut Ch
     }
 }
 
-/// Read `c:chartSpace/c:spPr` into what it says about the chart-area outline.
+/// Read `c:chartSpace/c:spPr` into the chart area's fill and outline.
 ///
-/// Only `a:ln` matters here. Its absence is not the same as `<a:noFill/>`:
-/// absent means Office's default outline, `noFill` means none at all, and an
-/// explicit line means that line (#637).
-fn parse_chart_area_outline(
+/// A top-level fill paints the whole chart, while a fill nested in `a:ln`
+/// colours only the outline. Keeping those contexts separate prevents the
+/// line colour from becoming the background when no area fill exists (#1217).
+/// The outline's absent / no-fill / explicit states remain as defined in #637.
+fn parse_chart_area_properties(
     reader: &mut Reader<&[u8]>,
     scheme: &SchemeColors<'_>,
-) -> ChartAreaOutline {
+) -> (ChartAreaFill, ChartAreaOutline) {
+    let mut fill: ChartAreaFill = ChartAreaFill::Unspecified;
     let mut in_line: bool = false;
     let mut saw_line: bool = false;
     let mut suppressed: bool = false;
     let mut width_pt: Option<f64> = None;
-    let mut color: Option<Color> = None;
-    let mut in_solid_fill: bool = false;
+    let mut line_color: Option<Color> = None;
+    let mut in_area_solid_fill: bool = false;
+    let mut in_line_solid_fill: bool = false;
 
     loop {
         match reader.read_event() {
@@ -599,23 +605,43 @@ fn parse_chart_area_outline(
             {
                 suppressed = true;
             }
-            Ok(Event::Start(ref e)) if in_line && e.local_name().as_ref() == b"solidFill" => {
-                in_solid_fill = true;
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))
+                if !in_line && e.local_name().as_ref() == b"noFill" =>
+            {
+                fill = ChartAreaFill::Transparent;
+            }
+            Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"solidFill" => {
+                if in_line {
+                    in_line_solid_fill = true;
+                } else {
+                    in_area_solid_fill = true;
+                }
             }
             Ok(Event::End(ref e)) if e.local_name().as_ref() == b"solidFill" => {
-                in_solid_fill = false;
+                in_area_solid_fill = false;
+                in_line_solid_fill = false;
             }
             Ok(Event::Start(ref e))
-                if in_solid_fill
+                if (in_area_solid_fill || in_line_solid_fill)
                     && matches!(e.local_name().as_ref(), b"srgbClr" | b"schemeClr") =>
             {
-                color = color.or(drawingml::parse_color_from_start(reader, e, scheme).color);
+                let parsed = drawingml::parse_color_from_start(reader, e, scheme).color;
+                if in_line_solid_fill {
+                    line_color = line_color.or(parsed);
+                } else if let Some(color) = parsed {
+                    fill = ChartAreaFill::Solid(color);
+                }
             }
             Ok(Event::Empty(ref e))
-                if in_solid_fill
+                if (in_area_solid_fill || in_line_solid_fill)
                     && matches!(e.local_name().as_ref(), b"srgbClr" | b"schemeClr") =>
             {
-                color = color.or(drawingml::parse_color_from_empty(e, scheme).color);
+                let parsed = drawingml::parse_color_from_empty(e, scheme).color;
+                if in_line_solid_fill {
+                    line_color = line_color.or(parsed);
+                } else if let Some(color) = parsed {
+                    fill = ChartAreaFill::Solid(color);
+                }
             }
             Ok(Event::End(ref e)) if e.local_name().as_ref() == b"ln" => {
                 in_line = false;
@@ -626,13 +652,18 @@ fn parse_chart_area_outline(
         }
     }
 
-    if !saw_line {
+    let outline: ChartAreaOutline = if !saw_line {
         ChartAreaOutline::Default
     } else if suppressed {
         ChartAreaOutline::Suppressed
     } else {
-        ChartAreaOutline::Explicit { width_pt, color }
-    }
+        ChartAreaOutline::Explicit {
+            width_pt,
+            color: line_color,
+        }
+    };
+
+    (fill, outline)
 }
 
 /// EMU in one point. `a:ln/@w` is in EMU.
