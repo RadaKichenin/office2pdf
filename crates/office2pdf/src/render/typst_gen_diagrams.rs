@@ -2420,12 +2420,54 @@ const AUTOMATIC_CHART_TITLE: &str = "Chart Title";
 /// 18pt `bar-chart.pptx` declares comes back as a 22pt title.
 const CHART_AREA_TITLE_SCALE: f64 = 1.2;
 
+/// Band a chart-area title of a size its own `c:txPr` states takes, above the
+/// plot's own inset.
+///
+/// Measured against twelve Excel for Mac 16.100 exports of the `Chart`
+/// chartsheet of `tests/fixtures/xlsx/any_sheets.xlsx`, forced to Letter
+/// landscape, with the title's `sz` rewritten one value at a time and nothing
+/// else touched. `mutool draw -F trace` puts the chart area's top edge at
+/// 58.00pt on every one of them, and the topmost major gridline — the plot
+/// box's top — this far below it:
+///
+/// | title `sz` | plot top below the chart area |
+/// | ---: | ---: |
+/// | 7 | 32.09 |
+/// | 8 | 33.83 |
+/// | 9 | 35.56 |
+/// | 10 | 37.28 |
+/// | 11 | 39.02 |
+/// | 12 | 40.75 |
+/// | 14 | 44.20 |
+/// | 16 | 47.66 |
+/// | 18 | 51.12 |
+/// | 24 | 61.50 |
+/// | 32 | 75.33 |
+/// | 36 | 82.24 |
+///
+/// A thirteenth export with the `<c:title>` element removed altogether starts
+/// its plot 11.00pt below the same edge, which is the inset the plot takes on
+/// its own account — [`axis_plot_insets`] models that separately, so it comes
+/// off before the band is fitted. The least-squares line through the twelve is
+/// then `8.994 + 1.72912 em`, and no export sits further than 0.007pt from it.
+const CHART_TITLE_BAND_PT: f64 = 8.994;
+const CHART_TITLE_BAND_EM: f64 = 1.72912;
+
 /// The chart-area title's size.
 ///
+/// A `c:title` stating a size in its own `c:txPr` states the printed size:
+/// `any_sheets.xlsx` writes `sz="1400"` there and Excel prints
+/// `trm="14 0 0 14"`. [`CHART_AREA_TITLE_SCALE`] belongs to the chart space's
+/// size, which Office scales *into* a title size, and applying it to a size
+/// the title already states would scale it twice (issue #1215).
+///
 /// A chart declaring nothing keeps [`CHART_AREA_TITLE_PT`], which is what
-/// [`AREA_TITLE_H`] was measured against; one that declares a size gets that
-/// size scaled the way Office scales it (issue #669).
+/// [`AREA_TITLE_H`] was measured against; one whose chart space declares a
+/// size gets that size scaled the way Office scales it (issue #669).
 fn chart_area_title_pt(chart: &Chart) -> f64 {
+    if let Some(stated) = chart.title_text_style.size_pt {
+        return stated;
+    }
     chart
         .text_style
         .size_pt
@@ -2438,17 +2480,42 @@ fn chart_area_title_pt(chart: &Chart) -> f64 {
 
 /// Height the chart-area title block takes.
 ///
-/// [`AREA_TITLE_H`] preserves charts that declare no text size. Native
-/// PowerPoint 16.112 exports at 10, 12, 18, 24, and 36pt establish the explicit
-/// size relationship used here (#706). It changes only the title/plot chrome,
-/// not the horizontal PowerPoint automatic axis scale resolved by
-/// [`powerpoint_nice_axis`].
+/// A title stating its own size is measured directly against Excel — see
+/// [`CHART_TITLE_BAND_PT`]. [`AREA_TITLE_H`] preserves charts that declare no
+/// text size at all. Native PowerPoint 16.112 exports at 10, 12, 18, 24, and
+/// 36pt establish the explicit chart-space size relationship in between (#706).
+/// It changes only the title/plot chrome, not the horizontal PowerPoint
+/// automatic axis scale resolved by [`powerpoint_nice_axis`].
 pub(super) fn chart_area_title_h(chart: &Chart) -> f64 {
-    if chart.text_style.size_pt.is_some() {
+    if chart.title_text_style.size_pt.is_some() {
+        CHART_TITLE_BAND_PT + CHART_TITLE_BAND_EM * chart_area_title_pt(chart)
+    } else if chart.text_style.size_pt.is_some() {
         CHART_PLOT_TOP_PAD_PT + CHART_PLOT_TOP_PAD_EM * chart_text_pt(chart)
     } else {
         AREA_TITLE_H / CHART_AREA_TITLE_PT * chart_area_title_pt(chart)
     }
+}
+
+/// Every `text` argument the chart-area title carries beyond its size.
+///
+/// The title's own `c:txPr` weight overrides the chart space's weight. The
+/// weight the title has always been drawn with is the fallback when neither
+/// states one, so a chart that says nothing does not change. The colour
+/// resolves the same way — the title's own `c:txPr` over the chart space's —
+/// and stays empty where neither states one, leaving the black it was drawn in
+/// (issue #1215).
+fn chart_area_title_attrs(chart: &Chart) -> String {
+    let bold: bool = chart
+        .title_text_style
+        .bold
+        .or(chart.text_style.bold)
+        .unwrap_or(true);
+    let weight: &str = if bold { ", weight: \"bold\"" } else { "" };
+    let fill: String = match chart.text_style.resolved_color(chart.title_text_style) {
+        Some(color) => format!(", fill: {}", fmt::rgb(&color)),
+        None => String::new(),
+    };
+    format!("{weight}{fill}")
 }
 
 /// Draw a chart title in the width of the chart that owns it.
@@ -2466,40 +2533,44 @@ fn write_chart_title(
 ) {
     let escaped_title: String = escape_typst(title);
     let title_size: String = format_f64(chart_area_title_pt(chart));
+    let attrs: String = chart_area_title_attrs(chart);
     match (frame, fixed_height) {
         (Some((width, _)), Some(height)) => {
             let _ = writeln!(
                 out,
-                "#block(width: {}pt, height: {}pt, above: 0pt, below: 0pt)[#align(center + horizon)[#text(size: {}pt, weight: \"bold\")[{}]]]",
+                "#block(width: {}pt, height: {}pt, above: 0pt, below: 0pt)[#align(center + horizon)[#text(size: {}pt{})[{}]]]",
                 format_f64(width),
                 format_f64(height),
                 title_size,
+                attrs,
                 escaped_title,
             );
         }
         (None, Some(height)) => {
             let _ = writeln!(
                 out,
-                "#block(width: 100%, height: {}pt, above: 0pt, below: 0pt)[#align(center + horizon)[#text(size: {}pt, weight: \"bold\")[{}]]]",
+                "#block(width: 100%, height: {}pt, above: 0pt, below: 0pt)[#align(center + horizon)[#text(size: {}pt{})[{}]]]",
                 format_f64(height),
                 title_size,
+                attrs,
                 escaped_title,
             );
         }
         (Some((width, _)), None) => {
             let _ = writeln!(
                 out,
-                "#block(width: {}pt)[#align(center)[#text(size: {}pt, weight: \"bold\")[{}]]]",
+                "#block(width: {}pt)[#align(center)[#text(size: {}pt{})[{}]]]",
                 format_f64(width),
                 title_size,
+                attrs,
                 escaped_title,
             );
         }
         (None, None) => {
             let _ = writeln!(
                 out,
-                "#align(center)[#text(size: {}pt, weight: \"bold\")[{}]]",
-                title_size, escaped_title,
+                "#align(center)[#text(size: {}pt{})[{}]]",
+                title_size, attrs, escaped_title,
             );
         }
     }

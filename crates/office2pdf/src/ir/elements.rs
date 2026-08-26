@@ -333,6 +333,14 @@ pub struct Chart {
     /// Run properties `c:chartSpace/c:txPr` declares, which govern every string
     /// the chart draws unless a more specific `c:txPr` overrides them.
     pub text_style: ChartTextStyle,
+    /// What `c:title/c:txPr` declares for the chart-area title alone.
+    ///
+    /// Office writes the title's size, weight and colour here rather than on
+    /// the chart space, so a title reading its size off `text_style` gets the
+    /// wrong one — `tests/fixtures/xlsx/any_sheets.xlsx` states a bare
+    /// `<a:defRPr/>` for the chart space and `sz="1400" b="0"` over a #595959
+    /// fill for the title (issue #1215).
+    pub title_text_style: ChartTextStyle,
     /// What `c:catAx/c:txPr` declares for the category labels alone.
     pub category_axis_text_style: ChartTextStyle,
     /// What `c:valAx/c:txPr` declares for the value tick labels alone.

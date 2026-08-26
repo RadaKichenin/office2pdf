@@ -163,6 +163,9 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
     // its own inside `c:plotArea`, and a flat loop would read that one (#668).
     let mut text_font_family: Option<String> = None;
     let mut text_style: ChartTextStyle = ChartTextStyle::default();
+    // `c:title/c:txPr` governs the title alone; the chart space's governs
+    // everything else and is a poor stand-in for it (issue #1215).
+    let mut title_text_style: ChartTextStyle = ChartTextStyle::default();
     // `c:layout` is written by the title, the legend and every data-label group
     // as well, so the plot area's own is told from theirs by where it sits. The
     // elements that carry the others consume their own subtrees before this
@@ -191,9 +194,10 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
                     has_legend = !deleted;
                     legend_position = legend_position.or(position);
                 } else if tag == b"title" && title.is_none() {
-                    let (text, names_own_text) = parse_chart_title(&mut reader);
+                    let (text, names_own_text, style) = parse_chart_title(&mut reader, scheme);
                     title = text;
                     has_automatic_title = !names_own_text;
+                    title_text_style = style;
                 } else if tag == b"catAx" {
                     category_axis = parse_axis(&mut reader, b"catAx", scheme);
                 } else if tag == b"valAx" {
@@ -373,6 +377,7 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
         // needs the package theme, which only the loader has.
         text_font_family,
         text_style,
+        title_text_style,
         category_axis_text_style: category_axis.text_style,
         value_axis_text_style: value_axis.text_style,
         value_axis_number_format: value_axis.number_format,
@@ -707,7 +712,7 @@ fn parse_axis(reader: &mut Reader<&[u8]>, end_tag: &[u8], scheme: &SchemeColors<
     loop {
         match reader.read_event() {
             Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"title" => {
-                axis.title = axis.title.or_else(|| parse_chart_title(reader).0);
+                axis.title = axis.title.or_else(|| parse_chart_title(reader, scheme).0);
             }
             Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"txPr" => {
                 axis.text_style = parse_axis_text_properties(reader, scheme);
@@ -812,16 +817,25 @@ fn axis_tick_mark_for(value: &str) -> AxisTickMark {
     }
 }
 
-/// Parse the chart title text from `<c:title>`.
+/// Parse the chart title text and its own run properties from `<c:title>`.
 ///
-/// Returns the text and whether the element named text of its own — a
-/// `<c:tx>`. A title without one is *automatic*: it carries the formatting for
-/// a string the application supplies (issue #1146), so an empty result there
-/// means something different from an empty `<c:tx>`.
-fn parse_chart_title(reader: &mut Reader<&[u8]>) -> (Option<String>, bool) {
+/// Returns the text, whether the element named text of its own — a `<c:tx>` —
+/// and what its `<c:txPr>` declares. A title without a `<c:tx>` is
+/// *automatic*: it carries the formatting for a string the application
+/// supplies (issue #1146), so an empty result there means something different
+/// from an empty `<c:tx>`.
+///
+/// The `<c:txPr>` is the title's own, and outranks the chart space's for the
+/// string it governs: `any_sheets.xlsx` states `sz="1400" b="0"` in grey there
+/// beside a chart space that states nothing at all (issue #1215).
+fn parse_chart_title(
+    reader: &mut Reader<&[u8]>,
+    scheme: &SchemeColors<'_>,
+) -> (Option<String>, bool, ChartTextStyle) {
     let mut text = String::new();
     let mut in_t = false;
     let mut names_own_text = false;
+    let mut style: ChartTextStyle = ChartTextStyle::default();
     let mut depth = 1u32;
 
     loop {
@@ -830,6 +844,10 @@ fn parse_chart_title(reader: &mut Reader<&[u8]>) -> (Option<String>, bool) {
                 let local = e.local_name();
                 if local.as_ref() == b"title" {
                     depth += 1;
+                } else if local.as_ref() == b"txPr" {
+                    // Consumes through `</c:txPr>`, so the reader comes back on
+                    // the title's next sibling.
+                    style = parse_chart_text_style(reader, scheme);
                 } else if local.as_ref() == b"tx" {
                     names_own_text = true;
                 } else if local.as_ref() == b"t" {
@@ -868,7 +886,7 @@ fn parse_chart_title(reader: &mut Reader<&[u8]>) -> (Option<String>, bool) {
     } else {
         Some(trimmed)
     };
-    (title, names_own_text)
+    (title, names_own_text, style)
 }
 
 /// Plot-area settings that sit beside `<c:ser>` inside a chart type element.

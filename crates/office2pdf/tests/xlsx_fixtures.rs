@@ -522,6 +522,41 @@ fn structure_any_sheets_chart_declares_an_automatic_title() {
     assert!(chart.series.iter().all(|series| series.name.is_none()));
 }
 
+/// The title's own `<c:txPr>` states its size, its weight and its colour, and
+/// all three have to survive the parse.
+///
+/// `xl/charts/chart1.xml` gives `<c:title>` a `<c:txPr>` whose `<a:defRPr>`
+/// carries `sz="1400" b="0"` over an `<a:schemeClr val="tx1">` lifted by
+/// lumMod 65% / lumOff 35% — #595959 against the theme's black `dk1`. The
+/// Excel for Mac 16.100 export of the `Chart` sheet draws the placeholder at
+/// `trm="14 0 0 14"` in `.3490196` grey. The subtree was read for its text
+/// alone and everything beside it thrown away, so the title printed at the
+/// renderer's own 11pt, bold and black (issue #1215).
+#[test]
+fn structure_any_sheets_chart_title_carries_its_own_run_properties() {
+    let pages = sheet_pages("any_sheets.xlsx");
+    let chart = &pages
+        .iter()
+        .find(|page| page.name == "Chart")
+        .expect("the chartsheet should contribute a page")
+        .charts
+        .first()
+        .expect("the chartsheet carries its chart")
+        .chart;
+
+    assert_eq!(chart.title_text_style.size_pt, Some(14.0), "declared size");
+    assert_eq!(chart.title_text_style.bold, Some(false), "declared weight");
+    assert_eq!(
+        chart.title_text_style.color,
+        Some(Color::new(0x59, 0x59, 0x59)),
+        "declared colour"
+    );
+    // The chart space's own `c:txPr` is a bare `<a:defRPr/>`, so nothing here
+    // could have come from it.
+    assert_eq!(chart.text_style.size_pt, None);
+    assert_eq!(chart.text_style.bold, None);
+}
+
 /// Two chartsheet packages whose parts collide by filename, which is how the
 /// worksheet-only rels lookup went wrong in the first place.
 ///
