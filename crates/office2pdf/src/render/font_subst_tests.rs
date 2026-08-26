@@ -334,6 +334,29 @@ fn the_class_tail_follows_the_metric_compatible_substitutes() {
 }
 
 #[test]
+fn the_class_tail_cannot_outrank_an_available_family_substitute() {
+    // Source priority chooses between the family's own substitutes, but the
+    // generic class tail is a last resort. An Office-bundled generic must not
+    // jump ahead of an installed metric-compatible stand-in (issue #1213).
+    let context =
+        FontSearchContext::for_test(Vec::new(), &["Carlito", "Helvetica"], &["Helvetica"], &[]);
+    let painted: String = with_font_search_context(Some(&context), || {
+        font_with_fallbacks_for_text("Calibri", "Sales")
+    });
+    let carlito: usize = painted
+        .find("\"Carlito\"")
+        .expect("Calibri's own substitute is present");
+    let helvetica: usize = painted
+        .find("\"Helvetica\"")
+        .expect("the generic sans tail is present");
+
+    assert!(
+        carlito < helvetica,
+        "the generic class tail must follow the family's substitutes: {painted}"
+    );
+}
+
+#[test]
 fn a_metrics_lookup_stops_at_the_metric_compatible_substitutes() {
     // A metrics lookup resolves one face and reads its numbers whole, so the
     // generic tail must not reach it: those numbers are the stand-in's, not the

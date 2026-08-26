@@ -202,42 +202,40 @@ fn fallback_candidates(
         candidates.push(alias.to_string());
     }
 
-    // The family's own substitutes first, then the generic chain for its
-    // class. The tail only ever answers where every name before it is missing
-    // from the host, so it never displaces a metric-compatible stand-in
-    // (issue #1213).
+    // Rank the family's own substitutes by source, then rank the generic class
+    // tail separately. The tail is a last resort and must never jump ahead of
+    // a metric-compatible stand-in merely because its file came from a
+    // higher-priority search path (issue #1213).
     let normalized_family: String = normalized_lookup_key(requested);
-    let tail: &[&str] = match purpose {
-        ChainPurpose::Paint => class_tail(&normalized_family),
-        ChainPurpose::Metrics => &[],
-    };
-    let mut ordered: Vec<&'static str> = Vec::new();
-    for sub in substitutes(requested)
-        .unwrap_or(&[])
-        .iter()
-        .chain(tail)
-        .copied()
-    {
-        let already_named: bool = sub.eq_ignore_ascii_case(requested)
-            || candidates
-                .iter()
-                .any(|candidate| candidate.eq_ignore_ascii_case(sub))
-            || ordered.iter().any(|kept| kept.eq_ignore_ascii_case(sub));
-        if !already_named {
-            ordered.push(sub);
+    let mut append_ranked_group = |group: &'static [&'static str]| {
+        let mut ordered: Vec<&'static str> = Vec::new();
+        for sub in group.iter().copied() {
+            let already_named: bool = sub.eq_ignore_ascii_case(requested)
+                || candidates
+                    .iter()
+                    .any(|candidate| candidate.eq_ignore_ascii_case(sub))
+                || ordered.iter().any(|kept| kept.eq_ignore_ascii_case(sub));
+            if !already_named {
+                ordered.push(sub);
+            }
         }
-    }
 
-    let mut ranked_subs: Vec<(u8, usize, &'static str)> = ordered
-        .iter()
-        .enumerate()
-        .map(|(index, sub)| {
-            let rank = context.map(|ctx| ctx.family_source_rank(sub)).unwrap_or(2);
-            (rank, index, *sub)
-        })
-        .collect();
-    ranked_subs.sort_by_key(|(rank, index, _)| (*rank, *index));
-    candidates.extend(ranked_subs.into_iter().map(|(_, _, sub)| sub.to_string()));
+        let mut ranked: Vec<(u8, usize, &'static str)> = ordered
+            .iter()
+            .enumerate()
+            .map(|(index, sub)| {
+                let rank = context.map(|ctx| ctx.family_source_rank(sub)).unwrap_or(2);
+                (rank, index, *sub)
+            })
+            .collect();
+        ranked.sort_by_key(|(rank, index, _)| (*rank, *index));
+        candidates.extend(ranked.into_iter().map(|(_, _, sub)| sub.to_string()));
+    };
+
+    append_ranked_group(substitutes(requested).unwrap_or(&[]));
+    if purpose == ChainPurpose::Paint {
+        append_ranked_group(class_tail(&normalized_family));
+    }
 
     candidates
 }

@@ -3382,10 +3382,9 @@ fn chart_text_is_set_in_the_face_the_chart_declares() {
 
 #[test]
 fn a_chart_face_keeps_its_class_when_none_of_its_substitutes_are_installed() {
-    // `Calibri` maps to Carlito and Liberation Sans, and a host may have
-    // neither — macOS ships no metric-compatible clone and the CI image
-    // installs no fonts. The chain then ran out and every string the chart
-    // draws took the engine's default serif (issue #1213).
+    // `Calibri` maps to Carlito and Liberation Sans, and either face may be
+    // absent from a host. The exhausted chain then sent every chart string to
+    // the engine's default serif (issue #1213).
     let mut chart = two_series_bar_chart(Vec::new());
     chart.categories = vec!["Q1".to_string(), "Q2".to_string()];
     chart.series[0].values = vec![4.0, 8.0];
