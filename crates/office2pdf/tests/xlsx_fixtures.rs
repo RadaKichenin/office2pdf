@@ -240,10 +240,11 @@ fn acceptance_pr_186_contributor_acceptance_carlito_fallback() {
     let output = generate_typst(&document).expect("fixture should generate Typst");
 
     assert!(
-        output
-            .source
-            .contains(r#"font: ("Carlito", "Calibri", "Liberation Sans", "Arimo", "Arial")"#),
-        "Carlito should retain a sans-serif fallback chain: {}",
+        output.source.contains(
+            r#"font: ("Carlito", "Calibri", "Liberation Sans", "Arimo", "Arial", "DejaVu Sans", "Helvetica")"#
+        ),
+        "Carlito should retain a sans-serif fallback chain, ending on the generic \
+         sans faces so a host with none of the named ones still keeps the class: {}",
         output.source
     );
 }

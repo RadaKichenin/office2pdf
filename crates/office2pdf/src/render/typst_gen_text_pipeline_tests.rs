@@ -1012,8 +1012,28 @@ fn a_justified_paragraph_caps_its_gaps_where_word_does() {
 /// spaces: 8.70pt each, with the auto spaces left at their 2.62pt quarter em,
 /// which displaced the `자` of `제3자` by 9.50pt.
 #[cfg(not(target_arch = "wasm32"))]
+fn host_can_shape_korean_family(family: &str) -> bool {
+    let context = crate::render::font_context::resolve_font_search_context(&[]);
+    let candidates: Vec<String> =
+        crate::render::font_subst::with_font_search_context(Some(&context), || {
+            crate::render::font_subst::family_candidates(family)
+        });
+    candidates.iter().any(|candidate| {
+        context.covers_script(candidate, crate::render::font_subst::TextScript::Korean)
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn a_heavily_stretched_justified_line_gives_every_gap_one_width() {
+    // The fixture is set in Malgun Gothic throughout. If neither that family
+    // nor one of its metric candidates carries Hangul, the ASCII spaces can
+    // still resolve through the Latin painting tail while the eojeols cannot
+    // be shaped. That split line is not the Word line this test measures.
+    if !host_can_shape_korean_family("Malgun Gothic") {
+        return;
+    }
+
     let data = std::fs::read(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../tests/fixtures/docx/korean_alignment_autospace.docx"
@@ -1059,10 +1079,9 @@ fn a_heavily_stretched_justified_line_gives_every_gap_one_width() {
     }
 
     // A word space is a run of its own only where the eojeols around it are
-    // framed, which the paragraph declares only when a Korean face resolves.
-    // On a machine without one — every CI runner here — the whole line is a
-    // single shaped item and none of its gaps can be measured from run
-    // origins.
+    // framed. The coverage guard proves the chain can shape the Hangul; this
+    // second guard keeps the measurement honest if the compiled line still
+    // contains no separately placed word-space runs.
     if word_gaps.is_empty() {
         return;
     }

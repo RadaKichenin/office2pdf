@@ -9,6 +9,13 @@
 //! chain and a sans-serif one a sans chain, so a missing face does not land on
 //! the document's default serif. The requested family remains first.
 //!
+//! Every name in the table is itself a font a host may not have, so each
+//! listed family also states its own class, and the list Typst paints from
+//! ends on that class's generic faces. Without that a Calibri run on a machine
+//! carrying neither Carlito nor Liberation Sans still landed on the default
+//! serif. A metrics lookup gets no such tail — see [`ChainPurpose`] (issue
+//! #1213).
+//!
 //! Only PPTX populates the declared-class map today; DOCX `w:family` in
 //! `word/fontTable.xml` is not read yet, so a DOCX face still relies on the
 //! table and the name (issue #891).
@@ -42,10 +49,41 @@ const MONOSPACE_SUBSTITUTES: &[&str] = &[
 /// against (issue #848).
 const SANS_SERIF_SUBSTITUTES: &[&str] = &["Liberation Sans", "Arimo", "DejaVu Sans", "Helvetica"];
 
-/// Where a family that declares itself serif lands when it is missing. Only a
-/// declared class reaches this — an unclassified family already falls through
-/// to the document's default face, which is a serif (issue #891).
+/// Where a family that is known to be serif lands when it is missing. A
+/// family with no class signal at all still falls through to the document's
+/// default face, which is itself a serif (issue #891).
 const SERIF_SUBSTITUTES: &[&str] = &["Liberation Serif", "Tinos", "DejaVu Serif"];
+
+/// The class a family belongs to, and so the generic chain its own chain ends
+/// on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum FamilyClass {
+    SansSerif,
+    Serif,
+    Monospace,
+}
+
+impl FamilyClass {
+    /// The faces that keep the class when nothing closer to the family is
+    /// installed.
+    fn substitutes(self) -> &'static [&'static str] {
+        match self {
+            Self::SansSerif => SANS_SERIF_SUBSTITUTES,
+            Self::Serif => SERIF_SUBSTITUTES,
+            Self::Monospace => MONOSPACE_SUBSTITUTES,
+        }
+    }
+}
+
+impl From<DeclaredFontClass> for FamilyClass {
+    fn from(class: DeclaredFontClass) -> Self {
+        match class {
+            DeclaredFontClass::SansSerif => Self::SansSerif,
+            DeclaredFontClass::Monospace => Self::Monospace,
+            DeclaredFontClass::Serif => Self::Serif,
+        }
+    }
+}
 
 thread_local! {
     static ACTIVE_FONT_CONTEXT: RefCell<Option<FontSearchContext>> = const { RefCell::new(None) };
@@ -64,16 +102,13 @@ pub(crate) fn set_declared_font_classes(
     DECLARED_FONT_CLASSES.with(|cell| cell.replace(classes))
 }
 
-/// The substitutes a document-declared class asks for, if it declared one.
-fn declared_class_substitutes(normalized_family: &str) -> Option<&'static [&'static str]> {
+/// The class the document itself declared for a family, if it declared one.
+fn declared_class(normalized_family: &str) -> Option<FamilyClass> {
     DECLARED_FONT_CLASSES.with(|cell| {
         cell.borrow()
             .get(normalized_family)
-            .map(|class| match class {
-                DeclaredFontClass::SansSerif => SANS_SERIF_SUBSTITUTES,
-                DeclaredFontClass::Monospace => MONOSPACE_SUBSTITUTES,
-                DeclaredFontClass::Serif => SERIF_SUBSTITUTES,
-            })
+            .copied()
+            .map(FamilyClass::from)
     })
 }
 
@@ -134,7 +169,30 @@ fn alias_family(font_family: &str) -> Option<&'static str> {
     }
 }
 
-fn fallback_candidates(font_family: &str, context: Option<&FontSearchContext>) -> Vec<String> {
+/// What a candidate list is being built for.
+///
+/// The two answers differ once a family's own substitutes are exhausted.
+/// Painting wants the class tail: Typst walks the list per glyph, so a face of
+/// the family's own class beats falling through to the engine's default serif.
+/// Reading a family's *metrics* does not — [`family_candidates`] takes the
+/// numbers of the first candidate that resolves, whole, and a generic class
+/// face's numbers are not the family's. A fit-to-page sheet whose Normal font
+/// is `Trebuchet MS` re-scaled by 13% on a host without Ubuntu once the tail
+/// handed its column unit Liberation Sans's digit advance, and a Korean footer
+/// on a host without a Korean font reported a Latin line box (issue #1213).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ChainPurpose {
+    /// Choosing the faces Typst paints with.
+    Paint,
+    /// Resolving one face to read its metrics from.
+    Metrics,
+}
+
+fn fallback_candidates(
+    font_family: &str,
+    context: Option<&FontSearchContext>,
+    purpose: ChainPurpose,
+) -> Vec<String> {
     let mut candidates: Vec<String> = Vec::new();
     let requested = font_family.trim();
 
@@ -144,43 +202,54 @@ fn fallback_candidates(font_family: &str, context: Option<&FontSearchContext>) -
         candidates.push(alias.to_string());
     }
 
-    if let Some(subs) = substitutes(requested) {
-        let mut ranked_subs: Vec<(u8, usize, &'static str)> = subs
+    // Rank the family's own substitutes by source, then rank the generic class
+    // tail separately. The tail is a last resort and must never jump ahead of
+    // a metric-compatible stand-in merely because its file came from a
+    // higher-priority search path (issue #1213).
+    let normalized_family: String = normalized_lookup_key(requested);
+    let mut append_ranked_group = |group: &'static [&'static str]| {
+        let mut ordered: Vec<&'static str> = Vec::new();
+        for sub in group.iter().copied() {
+            let already_named: bool = sub.eq_ignore_ascii_case(requested)
+                || candidates
+                    .iter()
+                    .any(|candidate| candidate.eq_ignore_ascii_case(sub))
+                || ordered.iter().any(|kept| kept.eq_ignore_ascii_case(sub));
+            if !already_named {
+                ordered.push(sub);
+            }
+        }
+
+        let mut ranked: Vec<(u8, usize, &'static str)> = ordered
             .iter()
             .enumerate()
-            .filter_map(|(index, sub)| {
-                if sub.eq_ignore_ascii_case(requested)
-                    || candidates
-                        .iter()
-                        .any(|candidate| candidate.eq_ignore_ascii_case(sub))
-                {
-                    return None;
-                }
+            .map(|(index, sub)| {
                 let rank = context.map(|ctx| ctx.family_source_rank(sub)).unwrap_or(2);
-                Some((rank, index, *sub))
+                (rank, index, *sub)
             })
             .collect();
-        ranked_subs.sort_by_key(|(rank, index, _)| (*rank, *index));
-        for (_, _, sub) in ranked_subs {
-            candidates.push(sub.to_string());
-        }
+        ranked.sort_by_key(|(rank, index, _)| (*rank, *index));
+        candidates.extend(ranked.into_iter().map(|(_, _, sub)| sub.to_string()));
+    };
+
+    append_ranked_group(substitutes(requested).unwrap_or(&[]));
+    if purpose == ChainPurpose::Paint {
+        append_ranked_group(class_tail(&normalized_family));
     }
 
     candidates
 }
 
-/// Return metric- or family-class-compatible substitutes for a font family.
+/// The substitution table's entry for a family it lists: the class the family
+/// belongs to, and the faces that stand in for it, in preference order.
 ///
-/// Returns `None` if no substitution is defined and the name provides no
-/// reliable family-class signal.
-///
-/// The returned slice is ordered by preference. Explicit mappings preserve the
-/// known family's intent; class-derived mappings preserve the family class the
-/// name declares — fixed pitch, or sans-serif.
-pub fn substitutes(font_family: &str) -> Option<&'static [&'static str]> {
-    let normalized_family = normalized_lookup_key(font_family);
-    match normalized_family.as_str() {
-        "calibri" => Some(&["Carlito", "Liberation Sans"]),
+/// The class travels with the faces because a chain of real fonts can run out.
+/// Every name here is a font a host may simply not have, and once the last one
+/// is missing the family has nothing left — see [`class_tail`] (issue #1213).
+fn table_entry(normalized_family: &str) -> Option<(FamilyClass, &'static [&'static str])> {
+    use FamilyClass::{Monospace, SansSerif, Serif};
+    Some(match normalized_family {
+        "calibri" => (SansSerif, &["Carlito", "Liberation Sans"]),
         // `Calibri Light` is the `majorHAnsi` face of every Office theme since
         // 2013, so it is the face every built-in `Heading N` resolves to. It
         // needs its own entry even where Office ships it: Typst keys its font
@@ -194,182 +263,290 @@ pub fn substitutes(font_family: &str) -> Option<&'static [&'static str]> {
         // `Calibri` leads because the light member declares Calibri's own hhea
         // line — both are 1950/-550/0 on 2048 upem — so it reproduces the line
         // box exactly.
-        "calibri light" => Some(&["Calibri", "Carlito", "Liberation Sans"]),
-        "carlito" => Some(&["Calibri", "Liberation Sans", "Arimo", "Arial"]),
-        "cambria" => Some(&["Caladea", "Liberation Serif"]),
-        "arial" => Some(&["Liberation Sans", "Arimo"]),
-        "times new roman" => Some(&["Liberation Serif", "Tinos"]),
-        "courier new" => Some(&["Liberation Mono", "Cousine"]),
-        "comic sans ms" => Some(&["Comic Neue"]),
-        "verdana" => Some(&["DejaVu Sans"]),
-        "georgia" => Some(&["DejaVu Serif"]),
-        "consolas" => Some(&["Inconsolata"]),
-        "trebuchet ms" => Some(&["Ubuntu"]),
-        "impact" => Some(&["Oswald"]),
-        "raleway" => Some(&[
-            "Helvetica",
-            "Arial",
-            "Arial Unicode MS",
-            "Apple SD Gothic Neo",
-            "Noto Sans CJK KR",
-            "Malgun Gothic",
-            "Liberation Sans",
-        ]),
-        "lato" => Some(&[
-            "Helvetica",
-            "Arial",
-            "Arial Unicode MS",
-            "Apple SD Gothic Neo",
-            "Noto Sans CJK KR",
-            "Malgun Gothic",
-            "Liberation Sans",
-        ]),
-        "pretendard" => Some(&[
-            "Apple SD Gothic Neo",
-            "Noto Sans CJK KR",
-            "Malgun Gothic",
-            "Arial Unicode MS",
-            "Helvetica",
-            "Arial",
-            "Liberation Sans",
-        ]),
+        "calibri light" => (SansSerif, &["Calibri", "Carlito", "Liberation Sans"]),
+        "carlito" => (SansSerif, &["Calibri", "Liberation Sans", "Arimo", "Arial"]),
+        "cambria" => (Serif, &["Caladea", "Liberation Serif"]),
+        "arial" => (SansSerif, &["Liberation Sans", "Arimo"]),
+        "times new roman" => (Serif, &["Liberation Serif", "Tinos"]),
+        "courier new" => (Monospace, &["Liberation Mono", "Cousine"]),
+        "comic sans ms" => (SansSerif, &["Comic Neue"]),
+        "verdana" => (SansSerif, &["DejaVu Sans"]),
+        "georgia" => (Serif, &["DejaVu Serif"]),
+        "consolas" => (Monospace, &["Inconsolata"]),
+        "trebuchet ms" => (SansSerif, &["Ubuntu"]),
+        "impact" => (SansSerif, &["Oswald"]),
+        "raleway" => (
+            SansSerif,
+            &[
+                "Helvetica",
+                "Arial",
+                "Arial Unicode MS",
+                "Apple SD Gothic Neo",
+                "Noto Sans CJK KR",
+                "Malgun Gothic",
+                "Liberation Sans",
+            ],
+        ),
+        "lato" => (
+            SansSerif,
+            &[
+                "Helvetica",
+                "Arial",
+                "Arial Unicode MS",
+                "Apple SD Gothic Neo",
+                "Noto Sans CJK KR",
+                "Malgun Gothic",
+                "Liberation Sans",
+            ],
+        ),
+        "pretendard" => (
+            SansSerif,
+            &[
+                "Apple SD Gothic Neo",
+                "Noto Sans CJK KR",
+                "Malgun Gothic",
+                "Arial Unicode MS",
+                "Helvetica",
+                "Arial",
+                "Liberation Sans",
+            ],
+        ),
         // Korean font names → English equivalents + fallbacks
-        "malgun gothic" => Some(&[
-            "Malgun Gothic",
-            "Apple SD Gothic Neo",
-            "Noto Sans CJK KR",
-            "Arial Unicode MS",
-        ]),
-        "gulim" => Some(&[
-            "Gulim",
-            "Apple SD Gothic Neo",
-            "Noto Sans CJK KR",
-            "Malgun Gothic",
-            "Arial Unicode MS",
-        ]),
-        "dotum" => Some(&[
-            "Dotum",
-            "Apple SD Gothic Neo",
-            "Noto Sans CJK KR",
-            "Malgun Gothic",
-            "Arial Unicode MS",
-        ]),
-        "batang" => Some(&[
-            "Batang",
-            "Noto Serif CJK KR",
-            "Apple Myungjo",
-            "Arial Unicode MS",
-        ]),
-        "gungsuh" => Some(&[
-            "Gungsuh",
-            "Noto Serif CJK KR",
-            "Apple Myungjo",
-            "Arial Unicode MS",
-        ]),
-        "nanum gothic" => Some(&[
-            "Nanum Gothic",
-            "Apple SD Gothic Neo",
-            "Noto Sans CJK KR",
-            "Malgun Gothic",
-            "Arial Unicode MS",
-        ]),
-        "nanum myeongjo" => Some(&[
-            "Nanum Myeongjo",
-            "Noto Serif CJK KR",
-            "Apple Myungjo",
-            "Batang",
-            "Arial Unicode MS",
-        ]),
+        "malgun gothic" => (
+            SansSerif,
+            &[
+                "Malgun Gothic",
+                "Apple SD Gothic Neo",
+                "Noto Sans CJK KR",
+                "Arial Unicode MS",
+            ],
+        ),
+        "gulim" => (
+            SansSerif,
+            &[
+                "Gulim",
+                "Apple SD Gothic Neo",
+                "Noto Sans CJK KR",
+                "Malgun Gothic",
+                "Arial Unicode MS",
+            ],
+        ),
+        "dotum" => (
+            SansSerif,
+            &[
+                "Dotum",
+                "Apple SD Gothic Neo",
+                "Noto Sans CJK KR",
+                "Malgun Gothic",
+                "Arial Unicode MS",
+            ],
+        ),
+        "batang" => (
+            Serif,
+            &[
+                "Batang",
+                "Noto Serif CJK KR",
+                "Apple Myungjo",
+                "Arial Unicode MS",
+            ],
+        ),
+        "gungsuh" => (
+            Serif,
+            &[
+                "Gungsuh",
+                "Noto Serif CJK KR",
+                "Apple Myungjo",
+                "Arial Unicode MS",
+            ],
+        ),
+        "nanum gothic" => (
+            SansSerif,
+            &[
+                "Nanum Gothic",
+                "Apple SD Gothic Neo",
+                "Noto Sans CJK KR",
+                "Malgun Gothic",
+                "Arial Unicode MS",
+            ],
+        ),
+        "nanum myeongjo" => (
+            Serif,
+            &[
+                "Nanum Myeongjo",
+                "Noto Serif CJK KR",
+                "Apple Myungjo",
+                "Batang",
+                "Arial Unicode MS",
+            ],
+        ),
         // Japanese font names → English equivalents + fallbacks
-        "ms gothic" => Some(&["MS Gothic", "Noto Sans CJK JP", "Hiragino Sans"]),
-        "ms mincho" => Some(&["MS Mincho", "Noto Serif CJK JP", "Hiragino Mincho ProN"]),
-        "meiryo" => Some(&["Meiryo", "Noto Sans CJK JP", "Hiragino Sans"]),
-        "yu gothic" => Some(&["Yu Gothic", "Noto Sans CJK JP", "Hiragino Sans"]),
+        "ms gothic" => (
+            SansSerif,
+            &["MS Gothic", "Noto Sans CJK JP", "Hiragino Sans"],
+        ),
+        "ms mincho" => (
+            Serif,
+            &["MS Mincho", "Noto Serif CJK JP", "Hiragino Mincho ProN"],
+        ),
+        "meiryo" => (SansSerif, &["Meiryo", "Noto Sans CJK JP", "Hiragino Sans"]),
+        "yu gothic" => (
+            SansSerif,
+            &["Yu Gothic", "Noto Sans CJK JP", "Hiragino Sans"],
+        ),
         // Chinese font names → English equivalents + fallbacks
-        "microsoft yahei" => Some(&[
-            "Microsoft YaHei",
-            "Noto Sans CJK SC",
-            "PingFang SC",
-            "Arial Unicode MS",
-        ]),
-        "simsun" => Some(&["SimSun", "Noto Serif CJK SC", "STSong", "Arial Unicode MS"]),
+        "microsoft yahei" => (
+            SansSerif,
+            &[
+                "Microsoft YaHei",
+                "Noto Sans CJK SC",
+                "PingFang SC",
+                "Arial Unicode MS",
+            ],
+        ),
+        "simsun" => (
+            Serif,
+            &["SimSun", "Noto Serif CJK SC", "STSong", "Arial Unicode MS"],
+        ),
         // Noto CJK families are common in documents authored on Linux or with
         // Google Fonts, but are rarely installed on macOS/Windows. Without a
         // chain the renderer emits a one-element font stack and Typst's own
         // fallback picks a regular-only face, silently dropping bold/italic.
         // Short names ("Noto Sans KR") are the Google Fonts per-language
         // builds of the same designs.
-        "noto sans cjk kr" | "noto sans kr" => Some(&[
-            "Noto Sans CJK KR",
-            "Noto Sans KR",
-            "Apple SD Gothic Neo",
-            "Malgun Gothic",
-            "Arial Unicode MS",
-        ]),
-        "noto sans cjk sc" | "noto sans sc" => Some(&[
-            "Noto Sans CJK SC",
-            "Noto Sans SC",
-            "PingFang SC",
-            "Microsoft YaHei",
-            "Apple SD Gothic Neo",
-            "Arial Unicode MS",
-        ]),
-        "noto sans cjk tc" | "noto sans tc" => Some(&[
-            "Noto Sans CJK TC",
-            "Noto Sans TC",
-            "PingFang TC",
-            "Microsoft JhengHei",
-            "Arial Unicode MS",
-        ]),
-        "noto sans cjk jp" | "noto sans jp" => Some(&[
-            "Noto Sans CJK JP",
-            "Noto Sans JP",
-            "Hiragino Sans",
-            "Yu Gothic",
-            "Meiryo",
-            "Arial Unicode MS",
-        ]),
-        "noto serif cjk kr" | "noto serif kr" => Some(&[
-            "Noto Serif CJK KR",
-            "Noto Serif KR",
-            "Apple Myungjo",
-            "Batang",
-            "Arial Unicode MS",
-        ]),
-        "noto serif cjk sc" | "noto serif sc" => Some(&[
-            "Noto Serif CJK SC",
-            "Noto Serif SC",
-            "STSong",
-            "SimSun",
-            "Arial Unicode MS",
-        ]),
-        "noto serif cjk tc" | "noto serif tc" => {
-            Some(&["Noto Serif CJK TC", "Noto Serif TC", "Arial Unicode MS"])
-        }
-        "noto serif cjk jp" | "noto serif jp" => Some(&[
-            "Noto Serif CJK JP",
-            "Noto Serif JP",
-            "Hiragino Mincho ProN",
-            "Yu Mincho",
-            "Arial Unicode MS",
-        ]),
-        "corbel" | "candara" => Some(SANS_SERIF_SUBSTITUTES),
-        // The document's own declaration outranks anything read off the name,
-        // and a name token is consulted only when it declared nothing (issue
-        // #891). An `if let` match guard would say this more directly but is
-        // unstable on the MSRV.
-        _ => declared_class_substitutes(&normalized_family)
-            // Monospace first: a name carrying both tokens, as "… Sans Mono"
-            // does, is fixed-pitch.
-            .or_else(|| {
-                family_name_declares_monospace(&normalized_family).then_some(MONOSPACE_SUBSTITUTES)
-            })
-            .or_else(|| {
-                (family_name_declares_sans_serif(&normalized_family)
-                    || family_name_is_known_sans_serif_brand(&normalized_family))
-                .then_some(SANS_SERIF_SUBSTITUTES)
-            }),
+        "noto sans cjk kr" | "noto sans kr" => (
+            SansSerif,
+            &[
+                "Noto Sans CJK KR",
+                "Noto Sans KR",
+                "Apple SD Gothic Neo",
+                "Malgun Gothic",
+                "Arial Unicode MS",
+            ],
+        ),
+        "noto sans cjk sc" | "noto sans sc" => (
+            SansSerif,
+            &[
+                "Noto Sans CJK SC",
+                "Noto Sans SC",
+                "PingFang SC",
+                "Microsoft YaHei",
+                "Apple SD Gothic Neo",
+                "Arial Unicode MS",
+            ],
+        ),
+        "noto sans cjk tc" | "noto sans tc" => (
+            SansSerif,
+            &[
+                "Noto Sans CJK TC",
+                "Noto Sans TC",
+                "PingFang TC",
+                "Microsoft JhengHei",
+                "Arial Unicode MS",
+            ],
+        ),
+        "noto sans cjk jp" | "noto sans jp" => (
+            SansSerif,
+            &[
+                "Noto Sans CJK JP",
+                "Noto Sans JP",
+                "Hiragino Sans",
+                "Yu Gothic",
+                "Meiryo",
+                "Arial Unicode MS",
+            ],
+        ),
+        "noto serif cjk kr" | "noto serif kr" => (
+            Serif,
+            &[
+                "Noto Serif CJK KR",
+                "Noto Serif KR",
+                "Apple Myungjo",
+                "Batang",
+                "Arial Unicode MS",
+            ],
+        ),
+        "noto serif cjk sc" | "noto serif sc" => (
+            Serif,
+            &[
+                "Noto Serif CJK SC",
+                "Noto Serif SC",
+                "STSong",
+                "SimSun",
+                "Arial Unicode MS",
+            ],
+        ),
+        "noto serif cjk tc" | "noto serif tc" => (
+            Serif,
+            &["Noto Serif CJK TC", "Noto Serif TC", "Arial Unicode MS"],
+        ),
+        "noto serif cjk jp" | "noto serif jp" => (
+            Serif,
+            &[
+                "Noto Serif CJK JP",
+                "Noto Serif JP",
+                "Hiragino Mincho ProN",
+                "Yu Mincho",
+                "Arial Unicode MS",
+            ],
+        ),
+        "corbel" | "candara" => (SansSerif, SANS_SERIF_SUBSTITUTES),
+        _ => return None,
+    })
+}
+
+/// The class a family the table does not list states for itself: the class the
+/// document declared for it, then a class token in its own name, then a
+/// known-brand match on its first word.
+///
+/// The document's own declaration outranks anything read off the name (issue
+/// #891).
+fn inferred_class(normalized_family: &str) -> Option<FamilyClass> {
+    declared_class(normalized_family)
+        // Monospace first: a name carrying both tokens, as "… Sans Mono"
+        // does, is fixed-pitch.
+        .or_else(|| {
+            family_name_declares_monospace(normalized_family).then_some(FamilyClass::Monospace)
+        })
+        .or_else(|| {
+            (family_name_declares_sans_serif(normalized_family)
+                || family_name_is_known_sans_serif_brand(normalized_family))
+            .then_some(FamilyClass::SansSerif)
+        })
+}
+
+/// The generic chain a family's own substitutes end on when Typst paints with
+/// them, so a family that exhausts them lands on its own class instead of on
+/// the engine's default face — a serif, whatever the family was (issue #1213).
+///
+/// Only a family the table lists has a tail to add. One the table does not
+/// list is already answered with its class chain and nothing else, so there is
+/// nothing left to append. See [`ChainPurpose`] for why a metrics lookup gets
+/// no tail at all.
+fn class_tail(normalized_family: &str) -> &'static [&'static str] {
+    match table_entry(normalized_family) {
+        Some((class, _)) => class.substitutes(),
+        None => &[],
     }
+}
+
+/// Return metric- or family-class-compatible substitutes for a font family.
+///
+/// Returns `None` if no substitution is defined and the name provides no
+/// reliable family-class signal.
+///
+/// The returned slice is ordered by preference. Explicit mappings preserve the
+/// known family's intent; class-derived mappings preserve the class the
+/// document declared for the family, or failing that the one its own name
+/// declares — fixed pitch, or sans-serif. The generic tail a listed family
+/// falls back on once these are exhausted is [`class_tail`], which the chain
+/// builders append; it stands in for the class rather than for the family, so
+/// it is not reported here.
+pub fn substitutes(font_family: &str) -> Option<&'static [&'static str]> {
+    let normalized_family = normalized_lookup_key(font_family);
+    if let Some((_, families)) = table_entry(&normalized_family) {
+        return Some(families);
+    }
+    inferred_class(&normalized_family).map(FamilyClass::substitutes)
 }
 
 /// OOXML may provide no usable family class beyond the requested name. A
@@ -667,7 +844,11 @@ fn latin_family_chain(
             .iter()
             .map(|face| (*face).to_string()),
     );
-    families.extend(fallback_candidates(font_family, context));
+    families.extend(fallback_candidates(
+        font_family,
+        context,
+        ChainPurpose::Paint,
+    ));
     append_last_resort(&mut families, context);
     families
 }
@@ -692,7 +873,11 @@ pub(crate) fn font_for_mixed_script_text(font_family: &str, text: &str) -> Strin
     ACTIVE_FONT_CONTEXT.with(|active_context| {
         let context = active_context.borrow();
         let mut families: Vec<String> = vec![font_family.to_string()];
-        families.extend(fallback_candidates(font_family, context.as_ref()));
+        families.extend(fallback_candidates(
+            font_family,
+            context.as_ref(),
+            ChainPurpose::Paint,
+        ));
         families.extend(
             script_fallbacks(font_family, text)
                 .iter()
@@ -825,7 +1010,11 @@ pub(crate) fn family_candidates(font_family: &str) -> Vec<String> {
     ACTIVE_FONT_CONTEXT.with(|active_context| {
         let context = active_context.borrow();
         let mut candidates: Vec<String> = vec![font_family.to_string()];
-        candidates.extend(fallback_candidates(font_family, context.as_ref()));
+        candidates.extend(fallback_candidates(
+            font_family,
+            context.as_ref(),
+            ChainPurpose::Metrics,
+        ));
         append_last_resort(&mut candidates, context.as_ref());
         candidates
     })
@@ -924,8 +1113,16 @@ fn east_asian_family_chain(
             .iter()
             .map(|face| (*face).to_string()),
     );
-    families.extend(fallback_candidates(east_asian_family, context));
-    families.extend(fallback_candidates(latin_family, context));
+    families.extend(fallback_candidates(
+        east_asian_family,
+        context,
+        ChainPurpose::Paint,
+    ));
+    families.extend(fallback_candidates(
+        latin_family,
+        context,
+        ChainPurpose::Paint,
+    ));
     append_last_resort(&mut families, context);
     families
 }
@@ -1233,7 +1430,11 @@ fn resolve_available_fallback(
         .fallbacks(family_is_serif(font_family))
         .iter()
         .map(|face| (*face).to_string())
-        .chain(fallback_candidates(font_family, Some(context)))
+        .chain(fallback_candidates(
+            font_family,
+            Some(context),
+            ChainPurpose::Paint,
+        ))
         .chain(context.last_resort_font_family().map(str::to_string))
         .find(|candidate| family_covers_or_is_unindexed(context, candidate, script))
         .or_else(|| (script != TextScript::Latin).then(|| ".notdef".to_string()))
