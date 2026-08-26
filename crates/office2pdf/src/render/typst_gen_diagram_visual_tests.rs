@@ -50,6 +50,7 @@ fn test_codegen_chart_bar_visual_bars() {
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -128,6 +129,7 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -194,6 +196,7 @@ fn test_codegen_chart_pie_draws_a_pie() {
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -265,6 +268,7 @@ fn test_codegen_chart_line_trend_indicators() {
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -323,6 +327,7 @@ fn test_codegen_chart_empty_series() {
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -418,6 +423,7 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -482,6 +488,7 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -702,6 +709,7 @@ fn test_codegen_chart_line_plot() {
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -771,6 +779,7 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -877,6 +886,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -1044,6 +1054,7 @@ fn legend_chart(position: LegendPosition) -> Chart {
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -1207,6 +1218,7 @@ fn a_declared_series_fill_reaches_the_bars() {
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -1269,6 +1281,7 @@ fn a_series_without_a_fill_still_takes_the_palette() {
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -1329,6 +1342,7 @@ fn per_point_fills_colour_each_bar_separately() {
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -1388,6 +1402,7 @@ fn axis_titled_chart(category: Option<&str>, value: Option<&str>) -> Chart {
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -1497,6 +1512,7 @@ fn labelled_chart(labels: DataLabels) -> Chart {
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -1601,6 +1617,7 @@ fn pie_chart(values: Vec<f64>) -> Chart {
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -1804,6 +1821,7 @@ fn test_chart_default_gridline_matches_powerpoint() {
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -1969,6 +1987,7 @@ fn tick_mark_chart(
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -2580,6 +2599,7 @@ fn band_layout_chart(
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -2872,6 +2892,7 @@ fn two_series_bar_chart(theme_accent_colors: Vec<crate::ir::Color>) -> Chart {
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -3497,6 +3518,187 @@ fn a_chart_declaring_no_size_keeps_the_eleven_point_title() {
     let mut chart = sized_bar_chart(18.0);
     chart.text_style = crate::ir::ChartTextStyle::default();
     assert!(chart_source(chart).contains("#text(size: 11pt, weight: \"bold\")[Sales]"));
+}
+
+// ----- A `c:title`'s own `c:txPr` (issue #1215) -----
+
+fn title_run_style(
+    size_pt: Option<f64>,
+    bold: Option<bool>,
+    color: Option<crate::ir::Color>,
+) -> crate::ir::ChartTextStyle {
+    crate::ir::ChartTextStyle {
+        size_pt,
+        bold,
+        letter_spacing_hundredths: None,
+        color,
+        ellipsis_overflow: false,
+    }
+}
+
+/// A chart whose space asks for 18pt and whose title states its own properties.
+fn own_title_style_chart(title_style: crate::ir::ChartTextStyle) -> Chart {
+    let mut chart = sized_bar_chart(18.0);
+    chart.title_text_style = title_style;
+    chart
+}
+
+/// A size the title states itself is the printed size, not something to scale.
+///
+/// `tests/fixtures/xlsx/any_sheets.xlsx` states `sz="1400"` on the title's own
+/// `c:txPr`, and the Excel for Mac 16.100 export prints it at
+/// `trm="14 0 0 14"`. The 1.2 factor belongs to the chart space's size, which
+/// Office scales *into* a title size; a title size is already that.
+#[test]
+fn a_title_stating_its_own_size_prints_it_unscaled() {
+    let source: String = chart_source(own_title_style_chart(title_run_style(
+        Some(14.0),
+        None,
+        None,
+    )));
+
+    assert!(
+        source.contains("#text(size: 14pt, weight: \"bold\")[Sales]"),
+        "the title must take its own 14pt, got:\n{source}"
+    );
+    assert!(
+        !source.contains("21.6pt"),
+        "and must not scale the chart space's 18pt on top of it:\n{source}"
+    );
+}
+
+/// The same rule at another size, so nothing can pass by returning 14.
+#[test]
+fn another_title_size_prints_unscaled_too() {
+    let source: String = chart_source(own_title_style_chart(title_run_style(
+        Some(9.0),
+        None,
+        None,
+    )));
+
+    assert!(
+        source.contains("#text(size: 9pt, weight: \"bold\")[Sales]"),
+        "the title must take its own 9pt, got:\n{source}"
+    );
+}
+
+/// `b="0"` on the title's own run properties prints a regular title.
+#[test]
+fn a_title_stating_regular_weight_is_not_drawn_bold() {
+    let source: String = chart_source(own_title_style_chart(title_run_style(
+        Some(14.0),
+        Some(false),
+        None,
+    )));
+
+    assert!(
+        source.contains("#text(size: 14pt)[Sales]"),
+        "a title declaring b=\"0\" must print regular, got:\n{source}"
+    );
+}
+
+/// `b="1"` prints bold, and so does a title that states no weight at all —
+/// the bold every chart has always been drawn with stays the fallback.
+#[test]
+fn a_title_stating_no_weight_keeps_the_bold_it_had() {
+    for stated in [None, Some(true)] {
+        let source: String = chart_source(own_title_style_chart(title_run_style(
+            Some(14.0),
+            stated,
+            None,
+        )));
+        assert!(
+            source.contains("#text(size: 14pt, weight: \"bold\")[Sales]"),
+            "b={stated:?} must still print bold, got:\n{source}"
+        );
+    }
+}
+
+/// When the title states no weight, the chart space's weight still governs it
+/// before the renderer falls back to the legacy bold title.
+#[test]
+fn a_title_without_its_own_weight_inherits_the_chart_spaces_regular_weight() {
+    let mut chart = own_title_style_chart(title_run_style(Some(14.0), None, None));
+    chart.text_style.bold = Some(false);
+    let source: String = chart_source(chart);
+
+    assert!(
+        source.contains("#text(size: 14pt)[Sales]"),
+        "the chart-space b=\"0\" must make an unstated title regular, got:\n{source}"
+    );
+    assert!(
+        !source.contains("#text(size: 14pt, weight: \"bold\")[Sales]"),
+        "the legacy fallback must not outrank chart-space formatting:\n{source}"
+    );
+}
+
+/// The title takes the colour its own `a:solidFill` states.
+#[test]
+fn a_title_stating_a_colour_is_drawn_in_it() {
+    let source: String = chart_source(own_title_style_chart(title_run_style(
+        Some(14.0),
+        Some(false),
+        Some(crate::ir::Color::new(0x59, 0x59, 0x59)),
+    )));
+
+    assert!(
+        source.contains("#text(size: 14pt, fill: rgb(89, 89, 89))[Sales]"),
+        "the title must take its declared grey, got:\n{source}"
+    );
+}
+
+/// The band a stated title size takes, against native Excel.
+///
+/// Twelve Excel for Mac 16.100 exports of the `Chart` chartsheet of
+/// `tests/fixtures/xlsx/any_sheets.xlsx`, forced to Letter landscape, with the
+/// title's own `sz` rewritten one value at a time and nothing else touched.
+/// Measured with `mutool draw -F trace` as the topmost major gridline's device
+/// y less the chart area's own top edge, and with the title band separated out
+/// by a thirteenth export whose `<c:title>` element is removed altogether —
+/// that one starts its plot 11.00pt below the same edge, which is the plot's
+/// own inset with no title above it at all:
+///
+/// | title `sz` | plot top below the chart area | less the 11.00pt inset |
+/// | ---: | ---: | ---: |
+/// | 7 | 32.09 | 21.09 |
+/// | 8 | 33.83 | 22.83 |
+/// | 9 | 35.56 | 24.56 |
+/// | 10 | 37.28 | 26.28 |
+/// | 11 | 39.02 | 28.02 |
+/// | 12 | 40.75 | 29.75 |
+/// | 14 | 44.20 | 33.20 |
+/// | 16 | 47.66 | 36.66 |
+/// | 18 | 51.12 | 40.12 |
+/// | 24 | 61.50 | 50.50 |
+/// | 32 | 75.33 | 64.33 |
+/// | 36 | 82.24 | 71.24 |
+///
+/// A least-squares line over all twelve is 8.994 + 1.72912 em, and no export
+/// is further than 0.007pt from it.
+#[test]
+fn a_stated_title_size_takes_the_band_excel_gives_it() {
+    for (size_pt, band) in [(9.0, 24.56), (14.0, 33.20), (36.0, 71.24)] {
+        let chart = own_title_style_chart(title_run_style(Some(size_pt), Some(false), None));
+        let measured: f64 = chart_area_title_h(&chart);
+        assert!(
+            (measured - band).abs() < 0.01,
+            "a {size_pt}pt title takes {band}pt, got {measured}pt"
+        );
+    }
+}
+
+/// A chart whose title states no size of its own is untouched by all of this.
+#[test]
+fn a_title_stating_no_size_keeps_the_band_it_had() {
+    let mut chart = sized_bar_chart(18.0);
+    let before: f64 = chart_area_title_h(&chart);
+    chart.title_text_style = title_run_style(None, Some(false), None);
+
+    assert_eq!(
+        chart_area_title_h(&chart),
+        before,
+        "the band follows a stated size, not a stated weight"
+    );
 }
 
 #[test]
@@ -4347,6 +4549,7 @@ fn test_data_table_prints_a_series_number_format() {
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -4408,6 +4611,7 @@ fn test_data_table_prints_a_declared_thousands_format() {
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -4467,6 +4671,7 @@ fn test_data_table_without_a_number_format_prints_plainly() {
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -4525,6 +4730,7 @@ fn test_a_currency_axis_label_is_escaped() {
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: Some("\"$\"#,##0".to_string()),
@@ -4585,6 +4791,7 @@ fn single_series_chart(auto_title_deleted: bool) -> Chart {
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -4667,6 +4874,7 @@ fn automatic_title_chart(series_names: &[Option<&str>], auto_title_deleted: bool
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -5388,6 +5596,7 @@ fn combo_budget_chart() -> Chart {
         host: crate::ir::ChartHost::Spreadsheet,
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -5585,6 +5794,7 @@ fn combo_line_and_scatter_chart() -> Chart {
         host: crate::ir::ChartHost::Spreadsheet,
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,

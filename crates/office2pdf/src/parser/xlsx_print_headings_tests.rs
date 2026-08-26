@@ -377,6 +377,7 @@ fn test_drawings_shift_with_the_inset_grid() {
             host: crate::ir::ChartHost::default(),
             text_font_family: None,
             text_style: crate::ir::ChartTextStyle::default(),
+            title_text_style: crate::ir::ChartTextStyle::default(),
             category_axis_text_style: crate::ir::ChartTextStyle::default(),
             value_axis_text_style: crate::ir::ChartTextStyle::default(),
             value_axis_number_format: None,
