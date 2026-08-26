@@ -19,16 +19,20 @@ on run argv
                     open workbook workbook file name inputPath update links do not update links read only true ignore read only recommended true
                     set openedWorkbook to active workbook
                     set visibleSheetCount to 0
+                    -- Excel keeps worksheets and chart sheets in one workbook-order
+                    -- `sheets` collection. Materialize it once so the PDF suffix is
+                    -- the stable workbook index consumed by the later sorted union.
+                    set workbookSheets to get every sheet of openedWorkbook
 
-                    repeat with sheetIndex from 1 to (count worksheets of openedWorkbook)
-                        set currentSheet to worksheet sheetIndex of openedWorkbook
+                    repeat with sheetIndex from 1 to (count workbookSheets)
+                        set currentSheet to item sheetIndex of workbookSheets
                         if visible of currentSheet is sheet visible then
                             set visibleSheetCount to visibleSheetCount + 1
                             set outputPath to outputDirectory & "/" & outputId & "-sheet-" & my paddedIndex(sheetIndex) & ".pdf"
                             set outputFile to my createEmptyFile(outputPath)
                             -- Excel's PDF save as always exports every visible sheet of the
                             -- workbook, so hiding the others is the only way to scope the
-                            -- export to just this worksheet.
+                            -- export to just this worksheet or chart sheet.
                             set hiddenSheetNames to my hideOtherVisibleSheets(openedWorkbook, name of currentSheet)
                             save as currentSheet filename outputFile file format PDF file format
                             my waitForNonEmptyFile(outputPath)
@@ -36,7 +40,7 @@ on run argv
                         end if
                     end repeat
 
-                    if visibleSheetCount is 0 then error "workbook has no visible worksheets"
+                    if visibleSheetCount is 0 then error "workbook has no visible sheets"
                     close openedWorkbook saving no
                 end timeout
             on error errorMessage number errorNumber
