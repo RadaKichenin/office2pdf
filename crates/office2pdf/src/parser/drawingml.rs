@@ -1,11 +1,12 @@
-//! Shared DrawingML color primitives: scheme-color resolution, OOXML color
-//! transforms (tint/shade/lumMod/lumOff/alpha), and the picture transparency
-//! `<a:alphaModFix>` declares.
+//! Shared DrawingML primitives: scheme-color resolution, OOXML color
+//! transforms (tint/shade/lumMod/lumOff/alpha), picture transparency, and
+//! validation of raster media before it reaches the renderer.
 //!
 //! DrawingML color markup (`<a:srgbClr>`, `<a:schemeClr>`, `<a:sysClr>` with
 //! nested transform children) is identical across pptx, docx, and xlsx parts.
 //! This module holds the single implementation; format parsers supply their
-//! own theme palette and alias map through [`SchemeColors`].
+//! own theme palette and alias map through [`SchemeColors`]. Raster picture
+//! parts likewise share one sniff-and-decode validation path here.
 
 use std::collections::HashMap;
 
@@ -14,6 +15,26 @@ use quick_xml::events::{BytesStart, Event};
 
 use crate::ir::{Color, DeclaredFontClass, ImageFormat};
 use crate::parser::xml_util::{get_attr_i64, get_attr_str, parse_hex_color};
+
+/// Detect and fully decode a supported raster image.
+///
+/// OOXML relationship targets are only labels: a `.png` part can still hold
+/// corrupt bytes or bytes in another supported format. Sniffing followed by a
+/// complete decode keeps malformed media out of Typst while preserving the
+/// payload's actual format for both PPTX and XLSX.
+pub(crate) fn validated_raster_format(data: &[u8]) -> Option<ImageFormat> {
+    let detected = image::guess_format(data).ok()?;
+    let format = match detected {
+        image::ImageFormat::Png => ImageFormat::Png,
+        image::ImageFormat::Jpeg => ImageFormat::Jpeg,
+        image::ImageFormat::Gif => ImageFormat::Gif,
+        image::ImageFormat::Bmp => ImageFormat::Bmp,
+        image::ImageFormat::Tiff => ImageFormat::Tiff,
+        _ => return None,
+    };
+    image::load_from_memory_with_format(data, detected).ok()?;
+    Some(format)
+}
 
 /// A format-agnostic view of a theme's color scheme.
 ///
