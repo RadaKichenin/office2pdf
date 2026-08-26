@@ -14,7 +14,7 @@ use office2pdf::internal::Parser;
 use office2pdf::internal::XlsxParser;
 use office2pdf::internal::generate_typst;
 use office2pdf::ir::{
-    Alignment, Block, BorderLineStyle, ChartAreaOutline, ChartLine, ChartPlotAreaLayout,
+    Alignment, Block, BorderLineStyle, ChartAreaOutline, ChartHost, ChartLine, ChartPlotAreaLayout,
     ChartUserShapeExtent, Color, HFInline, Page, SheetPage, TableCell,
 };
 
@@ -385,6 +385,11 @@ fn structure_any_sheets_chartsheet_pages_its_chart_alone() {
     assert!(chart_page.table.rows.is_empty());
 
     assert_eq!(chart_page.charts.len(), 1);
+    assert_eq!(
+        chart_page.charts[0].chart.host,
+        ChartHost::SpreadsheetChartsheet,
+        "the renderer must be able to distinguish a chartsheet from an anchored worksheet chart"
+    );
     let placement = chart_page.charts[0]
         .placement
         .expect("a chartsheet's chart is placed, not flowed after the grid");

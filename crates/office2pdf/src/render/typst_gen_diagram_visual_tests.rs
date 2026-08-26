@@ -4488,12 +4488,17 @@ fn a_slide_chart_draws_no_automatic_area_outline() {
 #[test]
 fn a_workbook_chart_keeps_the_measured_excel_outline() {
     // #637 measured this against a native Excel export and it must not move.
-    let source: String = chart_source(framed_bar_chart_on(crate::ir::ChartHost::Spreadsheet));
-    let box_line: &str = chart_area_box_line(&source);
-    assert!(
-        box_line.contains(CHART_AREA_OUTLINE),
-        "a workbook chart keeps Excel's automatic border, got: {box_line}"
-    );
+    for host in [
+        crate::ir::ChartHost::Spreadsheet,
+        crate::ir::ChartHost::SpreadsheetChartsheet,
+    ] {
+        let source: String = chart_source(framed_bar_chart_on(host));
+        let box_line: &str = chart_area_box_line(&source);
+        assert!(
+            box_line.contains(CHART_AREA_OUTLINE),
+            "a workbook chart keeps Excel's automatic border on {host:?}, got: {box_line}"
+        );
+    }
 }
 
 #[test]
@@ -4503,6 +4508,7 @@ fn an_explicit_outline_survives_on_every_host() {
     for host in [
         crate::ir::ChartHost::Presentation,
         crate::ir::ChartHost::Spreadsheet,
+        crate::ir::ChartHost::SpreadsheetChartsheet,
         crate::ir::ChartHost::WordProcessing,
     ] {
         let mut chart = framed_bar_chart_on(host);
@@ -6089,6 +6095,41 @@ fn an_excel_bar_legend_key_is_the_flat_bar_excel_draws() {
                 (gap_pt - 2.025).abs() <= 0.005,
                 "{size_pt}pt: the key leaves {gap_pt}pt before its label, Excel's 2.025pt; \
                  got:\n{source}"
+            );
+        }
+    }
+}
+
+#[test]
+fn an_excel_chartsheet_legend_key_scales_as_a_square_with_its_text() {
+    // Excel for Mac 16.100 gives the `any_sheets.xlsx` chartsheet a native
+    // 4.9433pt square key at 9pt, followed by a 2.0967pt gap. The shared
+    // PowerPoint factors resolve to 4.9437pt and 2.096895pt respectively,
+    // inside 0.0004pt of that export; unlike the 19.2pt flat key Excel uses
+    // for an anchored worksheet chart, both dimensions scale with text
+    // (#1315).
+    for size_pt in [9.0_f64, 18.0] {
+        let mut chart = excel_bottom_legend_chart("Calibri", size_pt);
+        chart.host = crate::ir::ChartHost::SpreadsheetChartsheet;
+        let source: String = chart_source(chart);
+        let keys: Vec<(f64, f64, f64)> = emitted_legend_key_boxes(&source);
+        assert_eq!(
+            keys.len(),
+            2,
+            "each of the two bar series takes a legend key; got:\n{source}"
+        );
+        let expected_side_pt: f64 = PPTX_LEGEND_KEY_EM * size_pt;
+        let expected_gap_pt: f64 =
+            PPTX_LEGEND_KEY_LABEL_GAP_PT + PPTX_LEGEND_KEY_LABEL_GAP_EM * size_pt;
+        for (width_pt, height_pt, gap_pt) in keys {
+            assert!(
+                (width_pt - expected_side_pt).abs() <= 0.01
+                    && (height_pt - expected_side_pt).abs() <= 0.01,
+                "{size_pt}pt: a chartsheet key must be the {expected_side_pt}pt square Excel draws, got {width_pt}pt by {height_pt}pt in:\n{source}"
+            );
+            assert!(
+                (gap_pt - expected_gap_pt).abs() <= 0.005,
+                "{size_pt}pt: a chartsheet key leaves {expected_gap_pt}pt before its label, got {gap_pt}pt in:\n{source}"
             );
         }
     }
