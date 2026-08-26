@@ -4240,6 +4240,59 @@ fn framed_line_radar_and_pie_charts_center_their_titles_in_the_frame() {
     }
 }
 
+/// `c:chartSpace/c:spPr` belongs to the whole chart space, not only to the
+/// plot left after the title takes its band. Every plot family must therefore
+/// open the full framed outline before it writes the title (issue #1216).
+#[test]
+fn every_plot_family_draws_a_titled_chart_inside_its_full_area_outline() {
+    let mut axis = bar_chart_at(Some(14.0), &["Q1", "Q2"]);
+    axis.title = Some("Axis title".to_string());
+
+    let mut line = two_series_bar_chart(Vec::new());
+    line.chart_type = ChartType::Line;
+    line.title = Some("Line title".to_string());
+    line.categories = vec!["Q1".to_string(), "Q2".to_string()];
+    line.series[0].values = vec![1.0, 2.0];
+    line.series[1].values = vec![2.0, 1.0];
+
+    let mut radar = radar_chart();
+    radar.title = Some("Radar title".to_string());
+
+    let mut pie = pie_chart(vec![60.0, 40.0]);
+    pie.title = Some("Pie title".to_string());
+
+    let outline = ChartAreaOutline::Explicit {
+        width_pt: Some(2.0),
+        color: Some(crate::ir::Color::new(0xd9, 0xd9, 0xd9)),
+    };
+    let area_start = "#box(width: 321pt, height: 240pt, stroke: 2pt + rgb(217, 217, 217))[";
+
+    for (family, title, mut chart) in [
+        ("axis", "Axis title", axis),
+        ("line", "Line title", line),
+        ("radar", "Radar title", radar),
+        ("pie", "Pie title", pie),
+    ] {
+        chart.chart_area_outline = outline.clone();
+        let source = framed_chart_source(&chart, 321.0, 240.0);
+        let area_position = source.find(area_start).unwrap_or_else(|| {
+            panic!("the {family} chart must outline its full frame, got:\n{source}")
+        });
+        let title_position = source
+            .find(title)
+            .unwrap_or_else(|| panic!("the {family} chart must print its title: {source}"));
+        assert!(
+            area_position < title_position,
+            "the {family} title must sit inside the chart-area outline, got:\n{source}"
+        );
+        assert_eq!(
+            source.matches("stroke: 2pt + rgb(217, 217, 217))[").count(),
+            1,
+            "the {family} chart must draw exactly one area outline, got:\n{source}"
+        );
+    }
+}
+
 #[test]
 fn a_flowed_chart_title_keeps_its_container_width() {
     let mut chart = bar_chart_at(Some(18.0), &["Q1", "Q2"]);
@@ -4973,7 +5026,10 @@ fn an_automatic_title_shortens_the_plot_by_its_band() {
         "an untitled chart emits no band at all: {untitled_source}"
     );
 
-    let box_height = |source: &str| block_height(source, "#box(width: 400pt, height: ");
+    // A titled chart now opens the full chart-area box first and the shortened
+    // content box inside it. The last matching box is therefore the one whose
+    // height must still give up the band (issue #1216).
+    let box_height = |source: &str| last_block_height(source, "#box(width: 400pt, height: ");
     assert_eq!(
         box_height(&untitled_source)
             .zip(box_height(&titled_source))
@@ -4996,6 +5052,15 @@ fn block_height(source: &str, prefix: &str) -> Option<f64> {
         .lines()
         .find_map(|line| line.strip_prefix(prefix))
         .and_then(leading_pt)
+}
+
+/// The height of the last block or box the source opens with `prefix`.
+fn last_block_height(source: &str, prefix: &str) -> Option<f64> {
+    source
+        .lines()
+        .filter_map(|line| line.strip_prefix(prefix))
+        .filter_map(leading_pt)
+        .next_back()
 }
 
 /// The axes and gridlines draw with the line the part declares, and fall back
