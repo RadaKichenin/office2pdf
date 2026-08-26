@@ -1502,6 +1502,71 @@ fn a_chart_with_no_chart_space_line_takes_the_default_outline() {
     // that one up and report the chart area as red (#637).
     let chart =
         parse_chart_xml(&chart_space_with(""), &SchemeColors::empty()).expect("chart parses");
+    assert_eq!(chart.chart_area_fill, ChartAreaFill::Unspecified);
+    assert_eq!(chart.chart_area_outline, ChartAreaOutline::Default);
+}
+
+#[test]
+fn a_chart_space_no_fill_is_distinct_from_an_unspecified_fill() {
+    let chart = parse_chart_xml(
+        &chart_space_with("<c:spPr><a:noFill/><a:ln><a:noFill/></a:ln></c:spPr>"),
+        &SchemeColors::empty(),
+    )
+    .expect("chart parses");
+
+    assert_eq!(chart.chart_area_fill, ChartAreaFill::Transparent);
+    assert_eq!(chart.chart_area_outline, ChartAreaOutline::Suppressed);
+}
+
+#[test]
+fn a_chart_space_fill_does_not_take_the_lines_colour() {
+    let chart = parse_chart_xml(
+        &chart_space_with(
+            r#"<c:spPr>
+                 <a:solidFill><a:srgbClr val="123456"/></a:solidFill>
+                 <a:ln w="9360"><a:solidFill><a:srgbClr val="d9d9d9"/></a:solidFill></a:ln>
+               </c:spPr>"#,
+        ),
+        &SchemeColors::empty(),
+    )
+    .expect("chart parses");
+
+    assert_eq!(
+        chart.chart_area_fill,
+        ChartAreaFill::Solid(Color::new(0x12, 0x34, 0x56))
+    );
+    assert_eq!(
+        chart.chart_area_outline,
+        ChartAreaOutline::Explicit {
+            width_pt: Some(9360.0 / 12700.0),
+            color: Some(Color::new(0xd9, 0xd9, 0xd9)),
+        }
+    );
+}
+
+#[test]
+fn a_chart_space_fill_resolves_a_transformed_theme_colour() {
+    let colors: std::collections::HashMap<String, Color> =
+        [("bg1".to_string(), Color::new(0xFF, 0xFF, 0xFF))]
+            .into_iter()
+            .collect();
+    let aliases: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let scheme = SchemeColors {
+        colors: &colors,
+        aliases: &aliases,
+    };
+    let chart = parse_chart_xml(
+        &chart_space_with(
+            r#"<c:spPr><a:solidFill><a:schemeClr val="bg1"><a:lumMod val="50000"/></a:schemeClr></a:solidFill></c:spPr>"#,
+        ),
+        &scheme,
+    )
+    .expect("chart parses");
+
+    assert_eq!(
+        chart.chart_area_fill,
+        ChartAreaFill::Solid(Color::new(128, 128, 128))
+    );
     assert_eq!(chart.chart_area_outline, ChartAreaOutline::Default);
 }
 

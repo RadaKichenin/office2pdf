@@ -1,7 +1,7 @@
 use super::*;
-use crate::ir::ChartAreaOutline;
 use crate::ir::DataLabels;
 use crate::ir::MarkerSymbol;
+use crate::ir::{ChartAreaFill, ChartAreaOutline};
 use crate::render::typst_gen::diagrams::{
     CHART_AREA_OUTLINE, CHART_AUTOMATIC_LINE, CHART_DEFAULT_TEXT_PT, GAP, LABEL_W, LEGEND_ENTRY_W,
     LEGEND_KEY_LEN_PT, PPTX_LEGEND_KEY_EM, PPTX_LEGEND_KEY_LABEL_GAP_EM,
@@ -46,6 +46,7 @@ fn test_codegen_chart_bar_visual_bars() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
@@ -125,6 +126,7 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
@@ -192,6 +194,7 @@ fn test_codegen_chart_pie_draws_a_pie() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
@@ -264,6 +267,7 @@ fn test_codegen_chart_line_trend_indicators() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
@@ -323,6 +327,7 @@ fn test_codegen_chart_empty_series() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
@@ -419,6 +424,7 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
@@ -484,6 +490,7 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
@@ -705,6 +712,7 @@ fn test_codegen_chart_line_plot() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
@@ -775,6 +783,7 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
@@ -882,6 +891,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
             overlap_percent: 100.0,
         },
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
@@ -1050,6 +1060,7 @@ fn legend_chart(position: LegendPosition) -> Chart {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
@@ -1214,6 +1225,7 @@ fn a_declared_series_fill_reaches_the_bars() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
@@ -1277,6 +1289,7 @@ fn a_series_without_a_fill_still_takes_the_palette() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
@@ -1338,6 +1351,7 @@ fn per_point_fills_colour_each_bar_separately() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
@@ -1398,6 +1412,7 @@ fn axis_titled_chart(category: Option<&str>, value: Option<&str>) -> Chart {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
@@ -1508,6 +1523,7 @@ fn labelled_chart(labels: DataLabels) -> Chart {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
@@ -1613,6 +1629,7 @@ fn pie_chart(values: Vec<f64>) -> Chart {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
@@ -1817,6 +1834,7 @@ fn test_chart_default_gridline_matches_powerpoint() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
@@ -1983,6 +2001,7 @@ fn tick_mark_chart(
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
@@ -2595,6 +2614,7 @@ fn band_layout_chart(
         value_axis_deleted: false,
         bar_band_layout: layout,
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
@@ -2888,6 +2908,7 @@ fn two_series_bar_chart(theme_accent_colors: Vec<crate::ir::Color>) -> Chart {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors,
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
@@ -3322,6 +3343,64 @@ fn every_chart_family_draws_the_default_chart_area_outline() {
             source.matches(&outline).count(),
             1,
             "{kind}: only the chart-area box may carry the outline; got:\n{source}"
+        );
+    }
+}
+
+#[test]
+fn every_chart_family_paints_a_declared_chart_area_fill_once() {
+    for chart_type in [ChartType::Bar, ChartType::Line, ChartType::Pie] {
+        let kind: String = format!("{chart_type:?}");
+        let mut chart = two_series_bar_chart(Vec::new());
+        chart.chart_type = chart_type;
+        chart.categories = vec!["Q1".to_string(), "Q2".to_string()];
+        chart.series[0].values = vec![4.0, 8.0];
+        chart.series[1].values = vec![6.0, 2.0];
+        chart.chart_area_fill = ChartAreaFill::Solid(crate::ir::Color::new(0x12, 0x34, 0x56));
+        let source = chart_source(chart);
+
+        assert_eq!(
+            source.matches("fill: rgb(18, 52, 86)").count(),
+            1,
+            "{kind}: only the outermost chart-area box may carry the fill; got:\n{source}"
+        );
+    }
+}
+
+#[test]
+fn a_titled_chart_paints_the_full_area_but_not_its_inner_content_box() {
+    let mut chart = bar_chart_at(Some(14.0), &["Q1", "Q2"]);
+    chart.title = Some("Sales".to_string());
+    chart.chart_area_fill = ChartAreaFill::Solid(crate::ir::Color::new(0x12, 0x34, 0x56));
+    let source = framed_chart_source(&chart, 321.0, 240.0);
+    let area_start = "#box(width: 321pt, height: 240pt, fill: rgb(18, 52, 86), stroke:";
+    let area_position = source
+        .find(area_start)
+        .unwrap_or_else(|| panic!("the full chart area must carry the fill, got:\n{source}"));
+    let title_position = source
+        .find("Sales")
+        .unwrap_or_else(|| panic!("the title must be emitted, got:\n{source}"));
+
+    assert!(
+        area_position < title_position,
+        "the fill must wrap the title"
+    );
+    assert_eq!(source.matches("fill: rgb(18, 52, 86)").count(), 1);
+    assert!(
+        source[title_position..].contains("fill: none, stroke: none"),
+        "the nested content box must not repaint the area; got:\n{source}"
+    );
+}
+
+#[test]
+fn absent_and_explicitly_transparent_chart_area_fills_stay_transparent() {
+    for fill in [ChartAreaFill::Unspecified, ChartAreaFill::Transparent] {
+        let mut chart = two_series_bar_chart(Vec::new());
+        chart.chart_area_fill = fill;
+        let source = chart_source(chart);
+        assert!(
+            source.contains("fill: none, stroke:"),
+            "{fill:?} must leave the chart area transparent; got:\n{source}"
         );
     }
 }
@@ -4265,7 +4344,8 @@ fn every_plot_family_draws_a_titled_chart_inside_its_full_area_outline() {
         width_pt: Some(2.0),
         color: Some(crate::ir::Color::new(0xd9, 0xd9, 0xd9)),
     };
-    let area_start = "#box(width: 321pt, height: 240pt, stroke: 2pt + rgb(217, 217, 217))[";
+    let area_start =
+        "#box(width: 321pt, height: 240pt, fill: none, stroke: 2pt + rgb(217, 217, 217))[";
 
     for (family, title, mut chart) in [
         ("axis", "Axis title", axis),
@@ -4598,6 +4678,7 @@ fn test_data_table_prints_a_series_number_format() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
@@ -4660,6 +4741,7 @@ fn test_data_table_prints_a_declared_thousands_format() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
@@ -4720,6 +4802,7 @@ fn test_data_table_without_a_number_format_prints_plainly() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
@@ -4779,6 +4862,7 @@ fn test_a_currency_axis_label_is_escaped() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
@@ -4840,6 +4924,7 @@ fn single_series_chart(auto_title_deleted: bool) -> Chart {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
@@ -4923,6 +5008,7 @@ fn automatic_title_chart(series_names: &[Option<&str>], auto_title_deleted: bool
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
@@ -5657,6 +5743,7 @@ fn combo_budget_chart() -> Chart {
             overlap_percent: 100.0,
         },
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::Spreadsheet,
         text_font_family: None,
@@ -5855,6 +5942,7 @@ fn combo_line_and_scatter_chart() -> Chart {
         value_axis_deleted: true,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::Spreadsheet,
         text_font_family: None,

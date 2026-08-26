@@ -449,6 +449,34 @@ fn structure_any_sheets_chart_chrome_takes_its_declared_colour() {
     assert_eq!(chart.category_axis_line, expected, "category axis");
 }
 
+/// `c:chartSpace/c:spPr` paints the whole chart area before it draws the
+/// title, plot, and legend. The real fixture declares theme `bg1`, which is
+/// white on white and hides a dropped fill, so this package-local mutation
+/// gives only that outer fill a colour no other element uses (issue #1217).
+#[test]
+fn a_chart_space_solid_fill_paints_the_chart_area_box() {
+    let data = repackage_xlsx_part(
+        &load_fixture("any_sheets.xlsx"),
+        "xl/charts/chart1.xml",
+        |xml| {
+            xml.replace(
+                r#"<c:spPr><a:solidFill><a:schemeClr val="bg1"/></a:solidFill><a:ln w="9525""#,
+                r#"<c:spPr><a:solidFill><a:srgbClr val="123456"/></a:solidFill><a:ln w="9525""#,
+            )
+        },
+    );
+    let (document, _warnings) = XlsxParser
+        .parse(&data, &ConvertOptions::default())
+        .expect("the patched fixture should parse");
+    let source = generate_typst(&document)
+        .expect("the patched fixture should generate Typst")
+        .source;
+    assert!(
+        source.contains("fill: rgb(18, 52, 86)"),
+        "the chart-space solid fill must paint the chart-area box; got:\n{source}"
+    );
+}
+
 /// Both axes' labels take the colour their own `c:txPr` declares.
 ///
 /// Each `<c:catAx>`/`<c:valAx>` gives its `<a:defRPr>` an

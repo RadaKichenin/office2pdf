@@ -1194,6 +1194,7 @@ fn test_document_requests_font_families_true_for_a_chart_only_document() {
         value_axis_deleted: false,
         bar_band_layout: crate::ir::BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: crate::ir::ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: Some("Pretendard".to_string()),
