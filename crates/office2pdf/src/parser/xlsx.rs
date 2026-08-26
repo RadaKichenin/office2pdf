@@ -673,13 +673,13 @@ impl XlsxParser {
         let normal_font = extract_normal_font(data);
 
         let chartsheet_setups = chartsheet::chartsheet_print_setups(data);
+        let mut warnings = Vec::new();
 
         let mut chart_map = extract_charts_with_anchors(data);
-        let mut image_map = extract_images_with_anchors(data);
+        let mut image_map = extract_images_with_anchors(data, &mut warnings);
         let mut text_box_map = extract_text_boxes_with_anchors(data);
 
         let mut chunks = Vec::new();
-        let mut warnings = Vec::new();
 
         for sheet in book.get_sheet_collection() {
             // Sheets the caller excluded by name, and hidden ones nobody
@@ -979,15 +979,15 @@ impl Parser for XlsxParser {
         let normal_font = extract_normal_font(data);
 
         let chartsheet_setups = chartsheet::chartsheet_print_setups(data);
+        let mut warnings = Vec::new();
 
         // Extract charts with anchor positions per sheet
         let mut chart_map = extract_charts_with_anchors(data);
-        let mut image_map = extract_images_with_anchors(data);
+        let mut image_map = extract_images_with_anchors(data, &mut warnings);
         let mut text_box_map = extract_text_boxes_with_anchors(data);
 
         let sheet_count = book.get_sheet_collection().len();
         let mut pages = Vec::with_capacity(sheet_count);
-        let mut warnings = Vec::new();
 
         for sheet in book.get_sheet_collection() {
             // Sheets the caller excluded by name, and hidden ones nobody
