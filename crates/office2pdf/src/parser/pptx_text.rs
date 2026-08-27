@@ -652,6 +652,13 @@ pub(super) struct PptxTextBoxSettings {
     pub(super) vertical_align: TextBoxVerticalAlign,
     pub(super) no_wrap: bool,
     pub(super) auto_fit: bool,
+    /// PowerPoint's completed normal-autofit answer, as a fraction of each
+    /// run's declared font size. `None` leaves font sizes unscaled; dynamic
+    /// fitting is requested only when both saved autofit values are absent.
+    pub(super) normal_autofit_font_scale: Option<f64>,
+    /// Fraction subtracted from the original percentage line spacing by
+    /// normal autofit.
+    pub(super) normal_autofit_line_spacing_reduction: Option<f64>,
     pub(super) text_rotation_deg: Option<f64>,
 }
 
@@ -662,8 +669,86 @@ impl Default for PptxTextBoxSettings {
             vertical_align: TextBoxVerticalAlign::Top,
             no_wrap: false,
             auto_fit: false,
+            normal_autofit_font_scale: None,
+            normal_autofit_line_spacing_reduction: None,
             text_rotation_deg: None,
         }
+    }
+}
+
+impl PptxTextBoxSettings {
+    pub(super) fn requests_dynamic_autofit(&self) -> bool {
+        self.auto_fit
+            && self.normal_autofit_font_scale.is_none()
+            && self.normal_autofit_line_spacing_reduction.is_none()
+    }
+}
+
+fn parse_drawingml_percentage(value: &str) -> Option<f64> {
+    let percentage: f64 = if let Some(percent) = value.strip_suffix('%') {
+        percent.trim().parse::<f64>().ok()? / 100.0
+    } else {
+        value.trim().parse::<i64>().ok()? as f64 / 100_000.0
+    };
+    percentage.is_finite().then_some(percentage)
+}
+
+pub(super) fn extract_pptx_normal_autofit(
+    element: &quick_xml::events::BytesStart,
+    settings: &mut PptxTextBoxSettings,
+) {
+    settings.auto_fit = true;
+    settings.normal_autofit_font_scale = get_attr_str(element, b"fontScale")
+        .and_then(|value| parse_drawingml_percentage(&value))
+        .filter(|value| (0.01..=1.0).contains(value));
+    settings.normal_autofit_line_spacing_reduction = get_attr_str(element, b"lnSpcReduction")
+        .and_then(|value| parse_drawingml_percentage(&value))
+        .filter(|value| (0.0..=1.0).contains(value));
+}
+
+fn scale_pptx_text_style_font_size(style: &mut TextStyle, font_scale: f64) {
+    if let Some(font_size) = style.font_size.as_mut() {
+        *font_size *= font_scale;
+    }
+}
+
+/// Apply PowerPoint's saved normal-autofit result after run inheritance and
+/// bullet sizing have resolved, so every painted size takes the same scale.
+pub(super) fn apply_pptx_saved_normal_autofit(
+    entries: &mut [PptxParagraphEntry],
+    settings: &PptxTextBoxSettings,
+) {
+    for entry in entries {
+        if let Some(font_scale) = settings.normal_autofit_font_scale {
+            for run in &mut entry.paragraph.runs {
+                scale_pptx_text_style_font_size(&mut run.style, font_scale);
+            }
+            match entry.list_marker.as_mut() {
+                Some(PptxListMarker::Ordered {
+                    marker_style: Some(style),
+                    ..
+                })
+                | Some(PptxListMarker::Unordered {
+                    marker_style: Some(style),
+                    ..
+                }) => scale_pptx_text_style_font_size(style, font_scale),
+                _ => {}
+            }
+        }
+
+        let Some(reduction) = settings.normal_autofit_line_spacing_reduction else {
+            continue;
+        };
+        let retained_spacing: f64 = 1.0 - reduction;
+        entry.paragraph.style.line_spacing = match entry.paragraph.style.line_spacing {
+            Some(LineSpacing::Proportional(factor)) => {
+                Some(LineSpacing::Proportional(factor * retained_spacing))
+            }
+            // ECMA-376 limits lnSpcReduction to percentage line spacing;
+            // point-based a:spcPts is an absolute rule and stays unchanged.
+            Some(LineSpacing::Exact(points)) => Some(LineSpacing::Exact(points)),
+            None => Some(LineSpacing::Proportional(retained_spacing)),
+        };
     }
 }
 

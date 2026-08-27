@@ -918,3 +918,100 @@ fn sp_auto_fit_does_not_shrink_text_but_norm_autofit_does() {
         );
     }
 }
+
+fn parse_normal_autofit_text_box(attributes: &str, paragraphs_xml: &str) -> TextBoxData {
+    let shape = format!(
+        r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="T"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="4000000" cy="2000000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr><p:txBody><a:bodyPr><a:normAutofit {attributes}/></a:bodyPr><a:lstStyle/>{paragraphs_xml}</p:txBody></p:sp>"#
+    );
+    let slide = make_slide_xml(&[shape]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let Page::Fixed(mut page) = doc.pages.into_iter().next().expect("one slide") else {
+        panic!("expected a fixed page");
+    };
+    let FixedElementKind::TextBox(text_box) = page.elements.remove(0).kind else {
+        panic!("expected a text box");
+    };
+    text_box
+}
+
+#[test]
+fn normal_autofit_applies_powerpoints_saved_font_scale() {
+    for (attributes, expected_font_size) in [
+        (r#"fontScale="90000""#, 32.4),
+        (r#"fontScale="75.000%""#, 27.0),
+    ] {
+        let text_box = parse_normal_autofit_text_box(
+            attributes,
+            r#"<a:p><a:r><a:rPr sz="3600"/><a:t>Scaled title</a:t></a:r></a:p>"#,
+        );
+        let Block::Paragraph(paragraph) = &text_box.content[0] else {
+            panic!("expected a paragraph");
+        };
+
+        assert_eq!(paragraph.runs[0].style.font_size, Some(expected_font_size));
+        assert!(
+            !text_box.auto_fit,
+            "a saved fontScale is PowerPoint's completed answer, not a request to shrink again"
+        );
+    }
+}
+
+#[test]
+fn normal_autofit_scales_explicit_list_marker_sizes_too() {
+    let text_box = parse_normal_autofit_text_box(
+        r#"fontScale="90000""#,
+        r#"<a:p><a:pPr><a:buSzPts val="1500"/><a:buChar char="•"/></a:pPr><a:r><a:rPr sz="2000"/><a:t>Scaled bullet</a:t></a:r></a:p>"#,
+    );
+    let Block::List(list) = &text_box.content[0] else {
+        panic!("expected a list");
+    };
+
+    assert_eq!(list.items[0].content[0].runs[0].style.font_size, Some(18.0));
+    assert_eq!(
+        list.level_styles[&0]
+            .marker_style
+            .as_ref()
+            .and_then(|style| style.font_size),
+        Some(13.5)
+    );
+}
+
+#[test]
+fn normal_autofit_reduces_only_percentage_line_spacing() {
+    let text_box = parse_normal_autofit_text_box(
+        r#"fontScale="80000" lnSpcReduction="20.000%""#,
+        concat!(
+            r#"<a:p><a:pPr><a:lnSpc><a:spcPct val="120000"/></a:lnSpc></a:pPr><a:r><a:rPr sz="2000"/><a:t>Percentage</a:t></a:r></a:p>"#,
+            r#"<a:p><a:pPr><a:lnSpc><a:spcPts val="1800"/></a:lnSpc></a:pPr><a:r><a:rPr sz="2000"/><a:t>Exact</a:t></a:r></a:p>"#,
+            r#"<a:p><a:r><a:rPr sz="2000"/><a:t>Default percentage</a:t></a:r></a:p>"#,
+        ),
+    );
+
+    let paragraphs: Vec<&Paragraph> = text_box
+        .content
+        .iter()
+        .map(|block| match block {
+            Block::Paragraph(paragraph) => paragraph,
+            other => panic!("expected a paragraph, got {other:?}"),
+        })
+        .collect();
+    assert!(matches!(
+        paragraphs[0].style.line_spacing,
+        Some(LineSpacing::Proportional(value)) if (value - 0.96).abs() < 1e-9
+    ));
+    assert!(matches!(
+        paragraphs[1].style.line_spacing,
+        Some(LineSpacing::Exact(value)) if (value - 18.0).abs() < 1e-9
+    ));
+    assert!(matches!(
+        paragraphs[2].style.line_spacing,
+        Some(LineSpacing::Proportional(value)) if (value - 0.8).abs() < 1e-9
+    ));
+    for paragraph in &paragraphs {
+        assert_eq!(paragraph.runs[0].style.font_size, Some(16.0));
+    }
+    assert!(!text_box.auto_fit);
+}
