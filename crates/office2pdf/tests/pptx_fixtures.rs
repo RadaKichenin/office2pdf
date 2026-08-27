@@ -468,6 +468,37 @@ pptx_fixture_tests!(shapes, "shapes.pptx");
 pptx_fixture_tests!(custom_geo, "customGeo.pptx");
 
 #[test]
+fn custom_geo_slide_6_title_uses_its_saved_normal_autofit_scale() {
+    let pages = fixed_pages("customGeo.pptx");
+    let page = &pages[5];
+    let (text_box, run) = page
+        .elements
+        .iter()
+        .find_map(|element| {
+            let FixedElementKind::TextBox(text_box) = &element.kind else {
+                return None;
+            };
+            text_box.content.iter().find_map(|block| {
+                let Block::Paragraph(paragraph) = block else {
+                    return None;
+                };
+                paragraph
+                    .runs
+                    .iter()
+                    .find(|run| run.text == "ELA Standards Framework")
+                    .map(|run| (text_box, run))
+            })
+        })
+        .expect("slide 6 title run");
+
+    assert_eq!(run.style.font_size, Some(32.4));
+    assert!(
+        !text_box.auto_fit,
+        "fontScale=90000 already states PowerPoint's fitted size"
+    );
+}
+
+#[test]
 fn custom_geo_slide_6_callout_uses_its_geometry_text_rectangle() {
     let pages = fixed_pages("customGeo.pptx");
     let page = &pages[5];

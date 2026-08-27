@@ -3664,8 +3664,9 @@ fn single_line_fit_paragraph(text_box: &TextBoxData, inner_height_pt: f64) -> Op
     // Only a file that asked for it gets its text scaled. A box barely one
     // line tall used to qualify on its own, which overrode the declared size:
     // an 8pt label in a 9.6pt box came out at 4.9pt where the reference keeps
-    // 8pt and lets the text overflow (issue #898). `auto_fit` is
-    // `<a:normAutofit/>` alone, since #904.
+    // 8pt and lets the text overflow (issue #898). `auto_fit` represents the
+    // dynamic fallback for `<a:normAutofit/>` without saved `fontScale` or
+    // `lnSpcReduction`; the parser has already applied saved results.
     text_box.auto_fit.then_some(paragraph)
 }
 

@@ -1073,6 +1073,7 @@ fn finalize_shape(
         .any(|entry| !entry.paragraph.runs.is_empty());
 
     if has_text {
+        apply_pptx_saved_normal_autofit(paragraphs, &text_box);
         let blocks: Vec<Block> = group_pptx_text_blocks(std::mem::take(paragraphs));
         // Use explicit line color, falling back to style-based color from
         // <p:style><a:lnRef> - unless <a:ln><a:noFill/> disabled the line.
@@ -1221,7 +1222,7 @@ fn finalize_shape(
                     stroke: None,
                     shape_kind: None,
                     no_wrap: text_box.no_wrap,
-                    auto_fit: text_box.auto_fit,
+                    auto_fit: text_box.requests_dynamic_autofit(),
                     text_rotation_deg: text_box.text_rotation_deg,
                     // A preset's geometry rotates independently from an
                     // explicit vertical text body. Composing the same xfrm
@@ -1250,7 +1251,7 @@ fn finalize_shape(
                     stroke,
                     shape_kind: None,
                     no_wrap: text_box.no_wrap,
-                    auto_fit: text_box.auto_fit,
+                    auto_fit: text_box.requests_dynamic_autofit(),
                     text_rotation_deg: text_box.text_rotation_deg,
                     shape_rotation_deg: shape.rotation_deg,
                 }),
@@ -2219,7 +2220,7 @@ impl<'a> SlideXmlParser<'a> {
             // shape to the text and leaves the run's declared size alone
             // (ECMA-376 §21.1.2.1.2 / §21.1.2.1.3, issue #898).
             b"normAutofit" if self.in_shape && self.in_txbody => {
-                self.text_box.auto_fit = true;
+                extract_pptx_normal_autofit(e, &mut self.text_box);
             }
             b"lstStyle" if self.in_shape && self.in_txbody => {
                 let local_defaults =
@@ -2639,7 +2640,7 @@ impl<'a> SlideXmlParser<'a> {
             // shape to the text and leaves the run's declared size alone
             // (ECMA-376 §21.1.2.1.2 / §21.1.2.1.3, issue #898).
             b"normAutofit" if self.in_shape && self.in_txbody => {
-                self.text_box.auto_fit = true;
+                extract_pptx_normal_autofit(e, &mut self.text_box);
             }
             b"prstGeom" if self.in_pic && self.pic.in_sp_pr => {
                 self.pic.prst_geom = get_attr_str(e, b"prst");
