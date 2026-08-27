@@ -396,16 +396,16 @@ pub(super) fn prst_to_shape_kind(
             vertices: regular_polygon_vertices(8),
         },
         "rightArrow" | "arrow" => ShapeKind::Polygon {
-            vertices: arrow_vertices(ArrowDir::Right),
+            vertices: arrow_vertices(ArrowDir::Right, width, height, adj_values),
         },
         "leftArrow" => ShapeKind::Polygon {
-            vertices: arrow_vertices(ArrowDir::Left),
+            vertices: arrow_vertices(ArrowDir::Left, width, height, adj_values),
         },
         "upArrow" => ShapeKind::Polygon {
-            vertices: arrow_vertices(ArrowDir::Up),
+            vertices: arrow_vertices(ArrowDir::Up, width, height, adj_values),
         },
         "downArrow" => ShapeKind::Polygon {
-            vertices: arrow_vertices(ArrowDir::Down),
+            vertices: arrow_vertices(ArrowDir::Down, width, height, adj_values),
         },
         "star4" => ShapeKind::Polygon {
             vertices: star_vertices(4),
@@ -494,15 +494,37 @@ fn regular_polygon_vertices(n: usize) -> Vec<(f64, f64)> {
 }
 
 /// Generate arrow polygon vertices (7-point arrow) in normalized coordinates.
-fn arrow_vertices(dir: ArrowDir) -> Vec<(f64, f64)> {
+fn arrow_vertices(dir: ArrowDir, width: f64, height: f64, adj_values: &[f64]) -> Vec<(f64, f64)> {
+    let width = width.max(0.0);
+    let height = height.max(0.0);
+    let short_side = width.min(height);
+    let (length, cross) = match dir {
+        ArrowDir::Right | ArrowDir::Left => (width, height),
+        ArrowDir::Up | ArrowDir::Down => (height, width),
+    };
+    let shaft_thickness = (adj_values.first().copied().unwrap_or(50_000.0) * short_side
+        / 100_000.0)
+        .clamp(0.0, cross);
+    let head_length = (adj_values.get(1).copied().unwrap_or(50_000.0) * short_side / 100_000.0)
+        .clamp(0.0, length);
+    let shaft_half = if cross > f64::EPSILON {
+        shaft_thickness / (2.0 * cross)
+    } else {
+        0.0
+    };
+    let shoulder = if length > f64::EPSILON {
+        (length - head_length) / length
+    } else {
+        0.0
+    };
     let right: Vec<(f64, f64)> = vec![
-        (0.0, 0.25),
-        (0.6, 0.25),
-        (0.6, 0.0),
+        (0.0, 0.5 - shaft_half),
+        (shoulder, 0.5 - shaft_half),
+        (shoulder, 0.0),
         (1.0, 0.5),
-        (0.6, 1.0),
-        (0.6, 0.75),
-        (0.0, 0.75),
+        (shoulder, 1.0),
+        (shoulder, 0.5 + shaft_half),
+        (0.0, 0.5 + shaft_half),
     ];
     match dir {
         ArrowDir::Right => right,
