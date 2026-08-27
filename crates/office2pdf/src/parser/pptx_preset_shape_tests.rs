@@ -638,6 +638,123 @@ fn test_shape_round_rect_default_adj() {
 }
 
 #[test]
+fn pie_preset_uses_adjusted_sector_angles_including_wraparound() {
+    let cases = [
+        (
+            [9_000_000.0, 16_200_000.0],
+            (0.172_673_165, 0.877_964_473),
+            (0.5, 0.0),
+            (0.0, 0.5),
+        ),
+        (
+            [16_200_000.0, 1_800_000.0],
+            (0.5, 0.0),
+            (0.827_326_835, 0.877_964_473),
+            (1.0, 0.5),
+        ),
+    ];
+
+    for (adjustments, expected_start, expected_end, expected_cardinal) in cases {
+        let kind = prst_to_shape_kind(
+            "pie",
+            200.0,
+            100.0,
+            false,
+            false,
+            ArrowHead::None,
+            ArrowHead::None,
+            &adjustments,
+        );
+        let ShapeKind::Path { subpaths } = kind else {
+            panic!("pie should retain its adjusted elliptical sector outline");
+        };
+        assert_eq!(subpaths.len(), 1);
+        assert!(subpaths[0].closed);
+
+        let vertices = &subpaths[0].vertices;
+        let has_vertex = |expected: (f64, f64), tolerance: f64| {
+            vertices.iter().any(|actual| {
+                (actual.0 - expected.0).abs() < tolerance
+                    && (actual.1 - expected.1).abs() < tolerance
+            })
+        };
+        assert!(
+            has_vertex(expected_start, 1e-6),
+            "missing adjusted arc start"
+        );
+        assert!(has_vertex(expected_end, 1e-6), "missing adjusted arc end");
+        assert!(
+            has_vertex(expected_cardinal, 0.01),
+            "the arc should sweep through its intervening cardinal point"
+        );
+        assert!(
+            has_vertex((0.5, 0.5), 1e-6),
+            "the sector should close at centre"
+        );
+        assert!(
+            vertices.len() > 20,
+            "the curved edge should be sampled instead of drawn as a chord"
+        );
+    }
+}
+
+#[test]
+fn pie_preset_uses_standard_defaults_and_equal_angles_mean_a_full_sweep() {
+    let default_kind = prst_to_shape_kind(
+        "pie",
+        100.0,
+        100.0,
+        false,
+        false,
+        ArrowHead::None,
+        ArrowHead::None,
+        &[],
+    );
+    let ShapeKind::Path {
+        subpaths: default_subpaths,
+    } = default_kind
+    else {
+        panic!("the default pie should be a sector path");
+    };
+    let default_vertices = &default_subpaths[0].vertices;
+    let default_has = |expected: (f64, f64)| {
+        default_vertices.iter().any(|actual| {
+            (actual.0 - expected.0).abs() < 1e-6 && (actual.1 - expected.1).abs() < 1e-6
+        })
+    };
+    assert!(default_has((1.0, 0.5)));
+    assert!(default_has((0.5, 0.0)));
+    assert!(default_has((0.5, 0.5)));
+
+    let full_kind = prst_to_shape_kind(
+        "pie",
+        100.0,
+        100.0,
+        false,
+        false,
+        ArrowHead::None,
+        ArrowHead::None,
+        &[0.0, 0.0],
+    );
+    let ShapeKind::Path {
+        subpaths: full_subpaths,
+    } = full_kind
+    else {
+        panic!("equal pie angles should retain the standard full sweep");
+    };
+    let full_vertices = &full_subpaths[0].vertices;
+    for cardinal in [(1.0, 0.5), (0.5, 1.0), (0.0, 0.5), (0.5, 0.0)] {
+        assert!(
+            full_vertices.iter().any(|actual| {
+                (actual.0 - cardinal.0).abs() < 1e-6 && (actual.1 - cardinal.1).abs() < 1e-6
+            }),
+            "full sweep should include cardinal {cardinal:?}"
+        );
+    }
+    assert_eq!(full_vertices.last(), Some(&(0.5, 0.5)));
+}
+
+#[test]
 fn wedge_round_rect_callout_matches_the_fixture_bottom_pointer() {
     let kind = prst_to_shape_kind(
         "wedgeRoundRectCallout",
