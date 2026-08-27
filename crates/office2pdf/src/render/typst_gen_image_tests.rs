@@ -325,8 +325,8 @@ fn test_image_with_border_renders_box_stroke() {
 /// A bordered picture casts its shadow from the same stroked silhouette a
 /// shape does — the frame grown by half the line width, then offset by `dist`
 /// (issue #1057, measured on a native PowerPoint export; see
-/// `shadow_outline_outset`). The picture path builds its ring stack separately
-/// from `write_shadow_shape`, so it needs its own guard.
+/// `shadow_outline_outset`). The picture path builds its crisp duplicate
+/// separately from `write_shadow_shape`, so it needs its own guard.
 #[test]
 fn a_bordered_picture_casts_its_shadow_from_the_stroked_frame() {
     use crate::ir::Shadow;
@@ -382,10 +382,10 @@ fn a_bordered_picture_casts_its_shadow_from_the_stroked_frame() {
 }
 
 /// The stroked silhouette turns its corners the way the border's join does, so
-/// a picture's ring stack carries the same arc a shape's does — an outline
-/// half-width under DrawingML's round default, grown by each ring's own offset
-/// (issue #1138). This path emits its rings separately from
-/// `write_shadow_shape`, so it needs its own guard.
+/// a picture's crisp duplicate carries the same arc a shape's does — an outline
+/// half-width under DrawingML's round default (issue #1138). This path emits
+/// the duplicate separately from `write_shadow_shape`, so it needs its own
+/// guard.
 #[test]
 fn a_bordered_picture_rounds_its_shadow_corner_like_the_border_join() {
     use crate::ir::Shadow;
@@ -450,13 +450,11 @@ fn a_bordered_picture_rounds_its_shadow_corner_like_the_border_join() {
     );
 }
 
-/// A blurred picture's rings follow the same blurred-silhouette contour a
-/// shape's do — wider at the corner than the dilated arc, because an isotropic
-/// Gaussian loses coverage to both axes where two edges meet (issue #1204).
-/// This path builds its ring stack separately from `write_shadow_shape`, so it
-/// needs its own guard.
+/// A blurred picture uses the same continuous Gaussian asset as a shape.
+/// This path is emitted separately from `write_shadow_shape`, so it needs its
+/// own guard (issues #1204, #1309).
 #[test]
-fn a_blurred_picture_arcs_its_shadow_corner_past_the_dilated_silhouette() {
+fn a_blurred_picture_uses_one_filtered_frame_asset() {
     use crate::ir::Shadow;
 
     let doc = make_doc(vec![make_fixed_page(
@@ -491,25 +489,24 @@ fn a_blurred_picture_arcs_its_shadow_corner_past_the_dilated_silhouette() {
             }),
         }],
     )]);
-    let source = generate_typst(&doc).unwrap().source;
-
-    // The outermost ring reaches 2.6 sigma past an unstroked frame, and a
-    // square corner blurred by that sigma turns an arc wider still.
-    let reach: f64 = 2.6 * (40000.0 / 12700.0) / 3.0;
-    let outermost: &str = source
-        .lines()
-        .rfind(|line| line.contains("rgb(0, 0, 0, "))
-        .expect("no shadow ring in the picture's output");
-    let radius: f64 = {
-        let start: usize = outermost.find("radius: ").expect("no radius") + "radius: ".len();
-        let rest: &str = &outermost[start..];
-        rest[..rest.find("pt").expect("no unit")]
-            .parse::<f64>()
-            .expect("unparsable radius")
-    };
+    let output = generate_typst(&doc).unwrap();
+    let shadow = output
+        .images
+        .iter()
+        .find(|image| image.path.ends_with(".svg"))
+        .expect("one generated shadow SVG");
+    let svg = std::str::from_utf8(&shadow.data).unwrap();
     assert!(
-        radius > reach + 0.5,
-        "a blurred picture's outermost ring must arc past the {reach}pt it          is dilated by, got {radius}pt: {source}"
+        svg.contains("<feGaussianBlur")
+            && svg.contains("<rect")
+            && svg.contains("width=\"200\"")
+            && svg.contains("height=\"120\""),
+        "the picture frame itself must feed one Gaussian filter: {svg}"
+    );
+    assert!(
+        output.source.find(&shadow.path) < output.source.find("#image(\"img-1.png\""),
+        "the filtered shadow must sit before the picture: {}",
+        output.source,
     );
 }
 

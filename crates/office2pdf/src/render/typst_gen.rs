@@ -27,9 +27,9 @@ use self::lists::{
     write_fixed_text_default_par_settings,
 };
 use self::shapes::{
-    clamp_ring_corner_radius, generate_shape, shadow_blur_layers, shadow_blur_sigma,
-    shadow_outline_outset, shadow_ring_corner_radius, shadow_silhouette_corner_radius,
-    write_fill_color, write_gradient_fill, write_shape_stroke, write_text_box_shape_background,
+    clamp_ring_corner_radius, generate_shape, shadow_alpha, shadow_outline_outset,
+    shadow_silhouette_corner_radius, write_fill_color, write_gradient_fill, write_shape_stroke,
+    write_text_box_shape_background,
 };
 use self::tables::generate_table;
 use self::text::*;
@@ -275,6 +275,17 @@ impl GenCtx {
         let id = self.next_image_id;
         self.next_image_id += 1;
         let path = format!("img-{id}.{ext}");
+        self.images.push(ImageAsset {
+            path: path.clone(),
+            data,
+        });
+        path
+    }
+
+    fn add_generated_svg(&mut self, data: Vec<u8>) -> String {
+        let id = self.next_image_id;
+        self.next_image_id += 1;
+        let path = format!("img-{id}.svg");
         self.images.push(ImageAsset {
             path: path.clone(),
             data,
@@ -1224,46 +1235,52 @@ fn generate_fixed_element(
         FixedElementKind::TextBox(text_box) => generate_fixed_text_box(out, elem, text_box, ctx)?,
         FixedElementKind::Image(img) => {
             if let Some(ref shadow) = img.shadow {
-                // Match the shape-shadow approximation: concentric
-                // translucent duplicates whose stacked alphas fade across
-                // the blur radius (Typst has no blur primitive).
                 let dir_rad = shadow.direction.to_radians();
                 let dx = shadow.distance * dir_rad.cos();
                 let dy = shadow.distance * dir_rad.sin();
-                // A picture's `a:ln` straddles its frame exactly as a shape's
-                // does, so the silhouette PowerPoint casts is the frame grown
-                // by half that width (issue #1057).
-                let outline_outset: f64 = shadow_outline_outset(&img.stroke);
-                // …and it turns the frame's corners the way that `a:ln`'s
-                // join does, so each ring carries the arc grown by its own
-                // offset rather than a mitre (issue #1138).
-                let silhouette_radius: f64 = shadow_silhouette_corner_radius(&img.stroke);
-                // …and each ring follows the blurred silhouette's own
-                // iso-coverage contour, which turns inside the dilated one
-                // wherever two edges meet (issue #1204).
-                let blur_sigma: f64 = shadow_blur_sigma(shadow);
-                for (blur_expansion, alpha) in shadow_blur_layers(shadow) {
-                    let expansion = outline_outset + blur_expansion;
-                    let layer_width: f64 = (elem.width + 2.0 * expansion).max(0.0);
-                    let layer_height: f64 = (elem.height + 2.0 * expansion).max(0.0);
-                    let radius: f64 = clamp_ring_corner_radius(
-                        shadow_ring_corner_radius(silhouette_radius, blur_expansion, blur_sigma),
-                        layer_width,
-                        layer_height,
-                    );
-                    let _ = writeln!(
+                if shadow.blur_radius > 0.0 {
+                    // SVG filters are rasterised by Typst at four samples per
+                    // output point, giving pictures the same continuous
+                    // Gaussian ramp as geometric shapes (issue #1309).
+                    shapes::write_blurred_shadow_asset(
                         out,
-                        "#place(top + left, dx: {}pt, dy: {}pt, rect(width: {}pt, height: {}pt, radius: {}pt, fill: rgb({}, {}, {}, {})))",
-                        format_f64(dx - expansion),
-                        format_f64(dy - expansion),
-                        format_f64(layer_width),
-                        format_f64(layer_height),
-                        format_f64(radius),
-                        shadow.color.r,
-                        shadow.color.g,
-                        shadow.color.b,
-                        alpha,
+                        ctx,
+                        &ShapeKind::Rectangle,
+                        (elem.width, elem.height),
+                        &img.stroke,
+                        shadow,
+                        (dx, dy),
                     );
+                } else {
+                    // A picture's `a:ln` straddles its frame exactly as a shape's
+                    // does, so the silhouette PowerPoint casts is the frame grown
+                    // by half that width (issue #1057).
+                    let outline_outset: f64 = shadow_outline_outset(&img.stroke);
+                    // …and it turns the frame's corners the way that `a:ln`'s
+                    // join does, so the shadow duplicate carries the same arc
+                    // rather than a mitre (issue #1138).
+                    let silhouette_radius: f64 = shadow_silhouette_corner_radius(&img.stroke);
+                    let alpha: u8 = shadow_alpha(shadow);
+                    {
+                        let expansion = outline_outset;
+                        let layer_width: f64 = (elem.width + 2.0 * expansion).max(0.0);
+                        let layer_height: f64 = (elem.height + 2.0 * expansion).max(0.0);
+                        let radius: f64 =
+                            clamp_ring_corner_radius(silhouette_radius, layer_width, layer_height);
+                        let _ = writeln!(
+                            out,
+                            "#place(top + left, dx: {}pt, dy: {}pt, rect(width: {}pt, height: {}pt, radius: {}pt, fill: rgb({}, {}, {}, {})))",
+                            format_f64(dx - expansion),
+                            format_f64(dy - expansion),
+                            format_f64(layer_width),
+                            format_f64(layer_height),
+                            format_f64(radius),
+                            shadow.color.r,
+                            shadow.color.g,
+                            shadow.color.b,
+                            alpha,
+                        );
+                    }
                 }
             }
             // `a:xfrm/@rot` and `@flipH`/`@flipV` on a `p:pic` (issues #682,
@@ -1339,7 +1356,7 @@ fn generate_fixed_element(
             }
         }
         FixedElementKind::Shape(shape) => {
-            generate_shape(out, shape, elem.width, elem.height);
+            generate_shape(out, shape, elem.width, elem.height, ctx);
         }
         FixedElementKind::Table(table) => {
             let enclosing = ctx.table_uses_powerpoint_line_box;
@@ -2186,7 +2203,7 @@ fn generate_page_anchored_hf_shapes(
     hf: &HeaderFooter,
     page_size: &PageSize,
     behind_text: bool,
-    _ctx: &mut GenCtx,
+    ctx: &mut GenCtx,
 ) {
     for shape in &hf.shapes {
         if shape.behind_text != behind_text || !is_page_anchored_frame(&shape.frame) {
@@ -2219,7 +2236,7 @@ fn generate_page_anchored_hf_shapes(
             format_f64(shape.width),
             format_f64(shape.height)
         );
-        generate_shape(out, &shape.shape, shape.width, shape.height);
+        generate_shape(out, &shape.shape, shape.width, shape.height, ctx);
         out.push_str("]]");
     }
 }
@@ -2953,7 +2970,7 @@ fn generate_floating_anchor_group(
         }
 
         match block {
-            Block::FloatingShape(shape) => generate_floating_shape_overlay(out, shape),
+            Block::FloatingShape(shape) => generate_floating_shape_overlay(out, shape, ctx),
             Block::FloatingTextBox(text_box) => {
                 generate_floating_text_box_overlay(out, text_box, ctx)?;
             }
@@ -3232,7 +3249,7 @@ fn generate_block(out: &mut String, block: &Block, ctx: &mut GenCtx) -> Result<(
         }
         Block::FloatingTextBox(ftb) => generate_floating_text_box(out, ftb, ctx),
         Block::FloatingShape(fs) => {
-            generate_floating_shape(out, fs);
+            generate_floating_shape(out, fs, ctx);
             Ok(())
         }
         Block::List(list) => {
@@ -3512,20 +3529,20 @@ fn generate_floating_text_box(
 /// anchor to the current flow position instead, the `#place` is wrapped in a
 /// zero-size `#box`, whose top-left sits exactly where the anchoring paragraph
 /// is laid out. Word-processing shapes use `wrapNone`, so no float is needed.
-fn generate_floating_shape(out: &mut String, fs: &FloatingShape) {
+fn generate_floating_shape(out: &mut String, fs: &FloatingShape, ctx: &mut GenCtx) {
     out.push_str("#box(width: 0pt, height: 0pt)[\n");
-    generate_floating_shape_overlay(out, fs);
+    generate_floating_shape_overlay(out, fs, ctx);
     out.push_str("]\n");
 }
 
-fn generate_floating_shape_overlay(out: &mut String, fs: &FloatingShape) {
+fn generate_floating_shape_overlay(out: &mut String, fs: &FloatingShape, ctx: &mut GenCtx) {
     let _ = write!(
         out,
         "#place(top + left, dx: {}pt, dy: {}pt)[",
         format_f64(fs.offset_x),
         format_f64(fs.offset_y)
     );
-    shapes::generate_shape(out, &fs.shape, fs.width, fs.height);
+    shapes::generate_shape(out, &fs.shape, fs.width, fs.height, ctx);
     out.push_str("]\n");
 }
 
