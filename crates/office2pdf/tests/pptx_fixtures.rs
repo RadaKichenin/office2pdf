@@ -468,6 +468,47 @@ pptx_fixture_tests!(shapes, "shapes.pptx");
 pptx_fixture_tests!(custom_geo, "customGeo.pptx");
 
 #[test]
+fn custom_geo_slide_5_keeps_a_latin_typeface_scoped_to_its_declaring_run() {
+    let pages = fixed_pages("customGeo.pptx");
+    let page = &pages[4];
+    let paragraph = page
+        .elements
+        .iter()
+        .filter_map(|element| match &element.kind {
+            FixedElementKind::TextBox(text_box) => Some(&text_box.content),
+            _ => None,
+        })
+        .flat_map(|content| content.iter())
+        .find_map(|block| {
+            let Block::Paragraph(paragraph) = block else {
+                return None;
+            };
+            paragraph
+                .runs
+                .iter()
+                .any(|run| run.text.starts_with("the state board of education"))
+                .then_some(paragraph)
+        })
+        .expect("slide 5 standards body paragraph");
+
+    assert_eq!(paragraph.runs.len(), 4);
+    for run in &paragraph.runs[..3] {
+        assert_eq!(
+            run.style.font_family.as_deref(),
+            Some("Calibri"),
+            "a complex-script typeface must not replace the inherited Latin family for {:?}",
+            run.text
+        );
+    }
+    assert_eq!(paragraph.runs[3].text, ".");
+    assert_eq!(
+        paragraph.runs[3].style.font_family.as_deref(),
+        Some("Times New Roman"),
+        "the final punctuation run keeps the Latin family it explicitly declares"
+    );
+}
+
+#[test]
 fn custom_geo_slide_6_title_uses_its_saved_normal_autofit_scale() {
     let pages = fixed_pages("customGeo.pptx");
     let page = &pages[5];

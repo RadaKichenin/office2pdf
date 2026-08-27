@@ -44,10 +44,22 @@ pub(super) fn apply_typeface_to_style(
     let Some(typeface) = get_attr_str(element, b"typeface") else {
         return;
     };
-    if typeface.trim().is_empty() || style.font_family.is_some() {
+    if typeface.trim().is_empty() {
         return;
     }
-    style.font_family = Some(resolve_theme_font(&typeface, theme));
+    let resolved = || resolve_theme_font(&typeface, theme);
+    match element.local_name().as_ref() {
+        b"latin" if style.font_family.is_none() => style.font_family = Some(resolved()),
+        b"ea" if style.east_asian_font_family.is_none() => {
+            style.east_asian_font_family = Some(resolved());
+        }
+        // TextStyle does not yet carry DrawingML's complex-script slot. It
+        // must not be folded into the Latin slot: the issue #1333 fixture puts
+        // `<a:cs typeface="Times New Roman"/>` on text that inherits Calibri,
+        // while only its final punctuation declares `<a:latin>`.
+        b"cs" => {}
+        _ => {}
+    }
 }
 
 /// The family a paragraph's mark — the empty run `<a:endParaRPr>` describes —
