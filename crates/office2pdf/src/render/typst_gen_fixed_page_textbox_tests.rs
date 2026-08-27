@@ -2870,6 +2870,107 @@ fn powerpoint_hard_break_keeps_normal_edges_when_the_segment_soft_wraps() {
     }
 }
 
+/// An automatic wrap sizes each physical line from the runs that actually
+/// landed on it. Using the paragraph's largest run for every line makes the
+/// final 12pt line inherit the preceding 20pt line's full advance (#1329).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn powerpoint_soft_wrap_uses_each_lines_own_largest_font_size() {
+    let family = "Libertinus Serif";
+    let large_size_pt = 20.0;
+    let small_size_pt = 12.0;
+    let line_spacing = 0.9;
+    let large_word_width_pt = ["Standards", "Statements"]
+        .into_iter()
+        .map(|word| {
+            crate::render::pdf::text_advance_em(family, true, word)
+                .expect("the embedded bold face must resolve")
+                * large_size_pt
+        })
+        .fold(0.0, f64::max);
+    let small_line_width_pt = crate::render::pdf::text_advance_em(family, true, "by Grade Level")
+        .expect("the embedded bold face must resolve")
+        * small_size_pt;
+    let measure_pt = large_word_width_pt.max(small_line_width_pt) + 4.0;
+
+    let doc = make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![make_fixed_text_box(
+            72.0,
+            72.0,
+            measure_pt,
+            140.0,
+            Insets::default(),
+            crate::ir::TextBoxVerticalAlign::Top,
+            vec![Block::Paragraph(Paragraph {
+                style: ParagraphStyle {
+                    alignment: Some(Alignment::Center),
+                    line_spacing: Some(LineSpacing::Proportional(line_spacing)),
+                    ..ParagraphStyle::default()
+                },
+                runs: vec![
+                    Run {
+                        text: "Standards Statements ".to_string(),
+                        style: TextStyle {
+                            font_family: Some(family.to_string()),
+                            font_size: Some(large_size_pt),
+                            bold: Some(true),
+                            ..TextStyle::default()
+                        },
+                        href: None,
+                        footnote: None,
+                    },
+                    Run {
+                        text: "by Grade Level".to_string(),
+                        style: TextStyle {
+                            font_family: Some(family.to_string()),
+                            font_size: Some(small_size_pt),
+                            bold: Some(true),
+                            ..TextStyle::default()
+                        },
+                        href: None,
+                        footnote: None,
+                    },
+                ],
+            })],
+        )],
+    )]);
+    let output = generate_typst(&doc).unwrap();
+    let runs = crate::render::pdf::compiled_text_runs(&output.source, 0)
+        .unwrap_or_else(|error| panic!("compile failed: {error}\n{}", output.source));
+    let baseline_of = |needle: &str| -> f64 {
+        runs.iter()
+            .find(|run| run.text == needle)
+            .unwrap_or_else(|| panic!("missing {needle:?} in {runs:?}\n{}", output.source))
+            .baseline_pt
+    };
+    let first_large_baseline = baseline_of("Standards");
+    let second_large_baseline = baseline_of("Statements");
+    let small_baseline = baseline_of("by");
+    assert!(
+        first_large_baseline < second_large_baseline && second_large_baseline < small_baseline,
+        "the probe must wrap onto three lines: {runs:?}\n{}",
+        output.source
+    );
+
+    let (plain_ascent_em, _) = crate::render::pdf::powerpoint_line_box_em(family)
+        .expect("the embedded face's PowerPoint metrics must resolve");
+    let (_, large_bottom_em) =
+        powerpoint_percentage_line_box_em(plain_ascent_em, large_size_pt, line_spacing);
+    let (small_top_em, _) =
+        powerpoint_percentage_line_box_em(plain_ascent_em, small_size_pt, line_spacing);
+    let expected_transition_pt = large_bottom_em * large_size_pt + small_top_em * small_size_pt;
+    let transition_pt = small_baseline - second_large_baseline;
+    assert!(
+        (transition_pt - expected_transition_pt).abs() < 0.01,
+        "the final line must take the preceding 20pt descent plus its own 12pt seat: \
+         expected {expected_transition_pt}pt, got {transition_pt}pt; \
+         baselines=({first_large_baseline}, {second_large_baseline}, {small_baseline})\n{}",
+        output.source
+    );
+}
+
 /// PowerPoint rounds every nominal glyph advance to the nearest 1/8pt before
 /// it decides where a line ends. Ten 17pt Libertinus `o` glyphs are a stable,
 /// environment-free edge case: their exact Typst advances fit this box, while

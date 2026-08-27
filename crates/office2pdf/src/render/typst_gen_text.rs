@@ -556,6 +556,83 @@ impl<'a> WordRunLineMetrics<'a> {
     }
 }
 
+/// A line-box override attached to one run rather than the whole paragraph.
+/// Typst then takes the greatest top and bottom among only the runs that land
+/// on each physical line.
+#[derive(Clone, Copy)]
+enum RunLineBox {
+    Em { top: f64, bottom: f64 },
+    Points { top: f64, bottom: f64 },
+}
+
+#[derive(Clone, Copy)]
+enum RunLineMetrics<'a> {
+    Word(WordRunLineMetrics<'a>),
+    PowerPoint(PowerPointRunLineMetrics),
+}
+
+impl RunLineMetrics<'_> {
+    fn line_box(self, run: &Run) -> Option<RunLineBox> {
+        match self {
+            Self::Word(metrics) => metrics
+                .line_box_em(run)
+                .map(|(top, bottom)| RunLineBox::Em { top, bottom }),
+            Self::PowerPoint(metrics) => metrics
+                .line_box_pt(run)
+                .map(|(top, bottom)| RunLineBox::Points { top, bottom }),
+        }
+    }
+}
+
+/// PowerPoint line metrics for an automatically wrapped paragraph whose runs
+/// declare different sizes.
+///
+/// The paragraph-wide family set still decides the baseline share, preserving
+/// the existing font model. Only the size varies per run, allowing Typst to
+/// derive each physical line from the largest run that actually landed there
+/// instead of imposing the paragraph maximum on every line (#1329).
+#[derive(Clone, Copy)]
+struct PowerPointRunLineMetrics {
+    plain_ascent_em: f64,
+    line_spacing: f64,
+}
+
+impl PowerPointRunLineMetrics {
+    fn for_mixed_declared_sizes(runs: &[Run], style: &ParagraphStyle) -> Option<Self> {
+        let visible_runs: Vec<&Run> = runs
+            .iter()
+            .filter(|run| run.footnote.is_none() && !run.text.is_empty())
+            .collect();
+        if visible_runs.is_empty() || visible_runs.iter().any(|run| run.style.font_size.is_none()) {
+            return None;
+        }
+        let first_size: f64 = visible_runs[0].style.font_size?;
+        if !visible_runs.iter().any(|run| {
+            run.style
+                .font_size
+                .is_some_and(|size| (size - first_size).abs() > f64::EPSILON)
+        }) {
+            return None;
+        }
+
+        let (plain_ascent_em, line_spacing) = powerpoint_paragraph_line_model(runs, style)?;
+        Some(Self {
+            plain_ascent_em,
+            line_spacing,
+        })
+    }
+
+    fn line_box_pt(self, run: &Run) -> Option<(f64, f64)> {
+        let font_size_pt: f64 = run.style.font_size?;
+        let (top_em, bottom_em) = powerpoint_percentage_line_box_em(
+            self.plain_ascent_em,
+            font_size_pt,
+            self.line_spacing,
+        );
+        Some((top_em * font_size_pt, bottom_em * font_size_pt))
+    }
+}
+
 /// Line-box settings for a slide's text: PowerPoint's flat 1.2em line, split
 /// by [`crate::render::pdf::powerpoint_line_box_split_em`], and zero leading
 /// between lines.
@@ -575,14 +652,24 @@ impl<'a> WordRunLineMetrics<'a> {
 /// instead moved nothing between single-line paragraphs — a slide's code block
 /// is one `<a:p>` per line — so the lines overlapped (issue #541).
 ///
-/// The seat inside that line is measured in whole points rather than in em, so
-/// this needs the paragraph's font size; the largest declared size is the one
-/// the line box already keys on, and a run set smaller inside the same
-/// paragraph rides the same line.
+/// The seat inside that line is measured in whole points rather than in em.
+/// Paragraph-wide callers therefore resolve it against the largest declared
+/// size. An automatically wrapped mixed-size paragraph instead attaches the
+/// resulting point edges to each run, so Typst chooses the largest run that
+/// actually lands on each physical line.
 ///
 /// `None` when the paragraph carries its own line box, when its spacing is an
 /// absolute `a:spcPts` advance, or when the font's metrics are unknown.
 fn powerpoint_paragraph_line_box_em(runs: &[Run], style: &ParagraphStyle) -> Option<(f64, f64)> {
+    let (ascent_em, percent) = powerpoint_paragraph_line_model(runs, style)?;
+    Some(powerpoint_percentage_line_box_em(
+        ascent_em,
+        paragraph_font_size_pt(runs),
+        percent,
+    ))
+}
+
+fn powerpoint_paragraph_line_model(runs: &[Run], style: &ParagraphStyle) -> Option<(f64, f64)> {
     if style.line_box.is_some() {
         return None;
     }
@@ -594,11 +681,7 @@ fn powerpoint_paragraph_line_box_em(runs: &[Run], style: &ParagraphStyle) -> Opt
     let families: Vec<&str> = powerpoint_line_families(runs, style);
     let (ascent_em, _descent_em) =
         crate::render::pdf::powerpoint_line_box_em_for_families(&families)?;
-    Some(powerpoint_percentage_line_box_em(
-        ascent_em,
-        paragraph_font_size_pt(runs),
-        percent,
-    ))
+    Some((ascent_em, percent))
 }
 
 /// Every font on a slide paragraph's line: the families its runs declare, plus
@@ -2266,6 +2349,20 @@ fn generate_powerpoint_inline_runs(
     eojeol_wrap: EojeolWrap,
     reserves_trailing_letter_space: bool,
 ) {
+    if lines.is_none() {
+        let run_line_metrics = PowerPointRunLineMetrics::for_mixed_declared_sizes(runs, style)
+            .map(RunLineMetrics::PowerPoint);
+        generate_runs_with_tabs_and_metrics(
+            out,
+            runs,
+            tab_stops,
+            default_tab_width_pt,
+            eojeol_wrap,
+            run_line_metrics,
+        );
+        return;
+    }
+
     let broken: Option<&[PowerPointHardBreakLine]> = reserves_trailing_letter_space
         .then_some(lines)
         .flatten()
@@ -2478,7 +2575,7 @@ fn generate_word_runs_with_tabs(
         tab_stops,
         default_tab_width_pt,
         eojeol_wrap,
-        metrics,
+        metrics.map(RunLineMetrics::Word),
     );
 }
 
@@ -2488,10 +2585,10 @@ fn generate_runs_with_tabs_and_metrics(
     tab_stops: Option<&[TabStop]>,
     default_tab_width_pt: f64,
     eojeol_wrap: EojeolWrap,
-    word_line_metrics: Option<WordRunLineMetrics<'_>>,
+    run_line_metrics: Option<RunLineMetrics<'_>>,
 ) {
     if !paragraph_contains_tabs(runs) {
-        generate_runs_with_metrics(out, runs, eojeol_wrap, word_line_metrics);
+        generate_runs_with_metrics(out, runs, eojeol_wrap, run_line_metrics);
         return;
     }
 
@@ -2500,7 +2597,7 @@ fn generate_runs_with_tabs_and_metrics(
 
     for (index, segment) in segments.iter().enumerate() {
         let _ = write!(out, "  let tab_segment_{index} = [");
-        generate_runs_with_metrics(out, segment, eojeol_wrap, word_line_metrics);
+        generate_runs_with_metrics(out, segment, eojeol_wrap, run_line_metrics);
         out.push_str("]\n");
 
         if index == 0 {
@@ -2718,7 +2815,7 @@ fn generate_runs_with_metrics(
     out: &mut String,
     runs: &[Run],
     eojeol_wrap: EojeolWrap,
-    word_line_metrics: Option<WordRunLineMetrics<'_>>,
+    run_line_metrics: Option<RunLineMetrics<'_>>,
 ) {
     let EojeolWrap::Eojeol {
         line_box_em,
@@ -2726,7 +2823,7 @@ fn generate_runs_with_metrics(
     } = eojeol_wrap
     else {
         for (index, run) in runs.iter().enumerate() {
-            generate_run_at_with_metrics(out, run, index == 0, word_line_metrics);
+            generate_run_at_with_metrics(out, run, index == 0, run_line_metrics);
         }
         return;
     };
@@ -2752,7 +2849,7 @@ fn generate_runs_with_metrics(
         } else {
             None
         };
-        write_eojeol_pieces(out, pieces, seat_bottom_pt, word_line_metrics);
+        write_eojeol_pieces(out, pieces, seat_bottom_pt, run_line_metrics);
         if *framed {
             write_eojeol_frame_close(out, line_box_em);
         }
@@ -2776,7 +2873,7 @@ fn write_eojeol_pieces(
     out: &mut String,
     pieces: &[EojeolPiece],
     seat_bottom_pt: Option<f64>,
-    word_line_metrics: Option<WordRunLineMetrics<'_>>,
+    run_line_metrics: Option<RunLineMetrics<'_>>,
 ) {
     let mut pending: Option<(usize, Run)> = None;
     for piece in pieces {
@@ -2791,7 +2888,7 @@ fn write_eojeol_pieces(
                         &previous,
                         false,
                         seat_bottom_pt,
-                        word_line_metrics,
+                        run_line_metrics,
                     );
                 }
                 pending = Some((piece.run_index, piece.run.clone()));
@@ -2799,7 +2896,7 @@ fn write_eojeol_pieces(
         }
     }
     if let Some((_, previous)) = pending {
-        generate_run_seated_with_metrics(out, &previous, false, seat_bottom_pt, word_line_metrics);
+        generate_run_seated_with_metrics(out, &previous, false, seat_bottom_pt, run_line_metrics);
     }
 }
 
@@ -3390,9 +3487,9 @@ fn generate_run_at_with_metrics(
     out: &mut String,
     run: &Run,
     opens_line: bool,
-    word_line_metrics: Option<WordRunLineMetrics<'_>>,
+    run_line_metrics: Option<RunLineMetrics<'_>>,
 ) {
-    generate_run_seated_with_metrics(out, run, opens_line, None, word_line_metrics);
+    generate_run_seated_with_metrics(out, run, opens_line, None, run_line_metrics);
 }
 
 /// As [`generate_run_at`], plus the descent the run's line box carries below
@@ -3412,7 +3509,7 @@ fn generate_run_seated_with_metrics(
     run: &Run,
     opens_line: bool,
     seat_bottom_pt: Option<f64>,
-    word_line_metrics: Option<WordRunLineMetrics<'_>>,
+    run_line_metrics: Option<RunLineMetrics<'_>>,
 ) {
     if let Some(ref content) = run.footnote {
         // The note's runs carry the style its `w:pStyle` and `w:rPr` resolved
@@ -3426,15 +3523,26 @@ fn generate_run_seated_with_metrics(
         return;
     }
 
-    let line_box_em: Option<(f64, f64)> =
-        word_line_metrics.and_then(|metrics| metrics.line_box_em(run));
-    if let Some((top_em, bottom_em)) = line_box_em {
-        let _ = write!(
-            out,
-            "#text(top-edge: {}em, bottom-edge: -{}em)[",
-            format_f64(top_em),
-            format_f64(bottom_em)
-        );
+    let run_line_box: Option<RunLineBox> =
+        run_line_metrics.and_then(|metrics| metrics.line_box(run));
+    match run_line_box {
+        Some(RunLineBox::Em { top, bottom }) => {
+            let _ = write!(
+                out,
+                "#text(top-edge: {}em, bottom-edge: -{}em)[",
+                format_f64(top),
+                format_f64(bottom)
+            );
+        }
+        Some(RunLineBox::Points { top, bottom }) => {
+            let _ = write!(
+                out,
+                "#text(top-edge: {}pt, bottom-edge: -{}pt)[",
+                format_f64(top),
+                format_f64(bottom)
+            );
+        }
+        None => {}
     }
 
     if run.text.contains(PPTX_SOFT_LINE_BREAK_CHAR)
@@ -3446,7 +3554,7 @@ fn generate_run_seated_with_metrics(
         write_run_segment(out, run, &run.text, opens_line, seat_bottom_pt);
     }
 
-    if line_box_em.is_some() {
+    if run_line_box.is_some() {
         out.push(']');
     }
 }
