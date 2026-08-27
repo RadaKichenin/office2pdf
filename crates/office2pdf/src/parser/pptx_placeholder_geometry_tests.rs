@@ -600,7 +600,7 @@ fn assert_is_the_triangle(kind: &ShapeKind) {
     };
     assert_eq!(subpaths.len(), 1, "one <a:path> yields one subpath");
     let expected: [(f64, f64); 3] = [(0.0, 1.0), (0.5, 0.0), (1.0, 1.0)];
-    let vertices: &Vec<(f64, f64)> = &subpaths[0];
+    let vertices: &Vec<(f64, f64)> = &subpaths[0].vertices;
     for want in expected {
         assert!(
             vertices

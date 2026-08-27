@@ -9,9 +9,9 @@ use quick_xml::events::Event;
 use super::drawingml::{self, SchemeColors};
 use super::xml_util;
 use crate::ir::{
-    AxisTickMark, BarBandLayout, Chart, ChartAreaOutline, ChartGrouping, ChartHost, ChartLine,
-    ChartPlotAreaLayout, ChartSeries, ChartTextStyle, ChartType, Color, DataLabelPosition,
-    DataLabels, LegendPosition, MarkerSymbol,
+    AxisTickMark, BarBandLayout, Chart, ChartAreaFill, ChartAreaOutline, ChartGrouping, ChartHost,
+    ChartLine, ChartPlotAreaLayout, ChartSeries, ChartTextStyle, ChartType, Color,
+    DataLabelPosition, DataLabels, LegendPosition, MarkerSymbol,
 };
 
 /// Mapping from XML chart element tag names to their corresponding `ChartType`.
@@ -157,12 +157,19 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
     // marker a `c:spPr` belonging to `c:plotArea` would be read as the chart
     // area's own (#637).
     let mut chart_element_ended: bool = false;
+    let mut chart_area_fill: ChartAreaFill = ChartAreaFill::Unspecified;
     let mut chart_area_outline: ChartAreaOutline = ChartAreaOutline::Default;
     // `c:chartSpace/c:txPr` is a sibling of `c:chart` for the same reason
     // `c:spPr` is, so it needs the same marker: an axis carries a `c:txPr` of
     // its own inside `c:plotArea`, and a flat loop would read that one (#668).
     let mut text_font_family: Option<String> = None;
     let mut text_style: ChartTextStyle = ChartTextStyle::default();
+    // `c:title/c:txPr` governs the title alone; the chart space's governs
+    // everything else and is a poor stand-in for it (issue #1215).
+    let mut title_text_style: ChartTextStyle = ChartTextStyle::default();
+    // A legend can override the chart space's run properties independently of
+    // its position and visibility (issue #1236).
+    let mut legend_text_style: ChartTextStyle = ChartTextStyle::default();
     // `c:layout` is written by the title, the legend and every data-label group
     // as well, so the plot area's own is told from theirs by where it sits. The
     // elements that carry the others consume their own subtrees before this
@@ -176,7 +183,8 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
                 let local = e.local_name();
                 let tag: &[u8] = local.as_ref();
                 if tag == b"spPr" && chart_element_ended {
-                    chart_area_outline = parse_chart_area_outline(&mut reader, scheme);
+                    (chart_area_fill, chart_area_outline) =
+                        parse_chart_area_properties(&mut reader, scheme);
                 } else if tag == b"txPr" && chart_element_ended {
                     let (family, style, _) = parse_chart_text_properties(&mut reader, scheme);
                     text_font_family = family;
@@ -187,13 +195,15 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
                     plot_area_layout = parse_plot_area_layout(&mut reader);
                 } else if tag == b"legend" {
                     // Declared, unless the element switches itself off.
-                    let (deleted, position) = parse_legend(&mut reader);
+                    let (deleted, position, style) = parse_legend(&mut reader, scheme);
                     has_legend = !deleted;
                     legend_position = legend_position.or(position);
+                    legend_text_style = style;
                 } else if tag == b"title" && title.is_none() {
-                    let (text, names_own_text) = parse_chart_title(&mut reader);
+                    let (text, names_own_text, style) = parse_chart_title(&mut reader, scheme);
                     title = text;
                     has_automatic_title = !names_own_text;
+                    title_text_style = style;
                 } else if tag == b"catAx" {
                     category_axis = parse_axis(&mut reader, b"catAx", scheme);
                 } else if tag == b"valAx" {
@@ -365,6 +375,7 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
         // does. Whoever loaded this XML fills these in, since only they know
         // which theme part applies.
         theme_accent_colors: Vec::new(),
+        chart_area_fill,
         chart_area_outline,
         // As with the theme, the chart part does not know which application's
         // package holds it; the loader sets this (issue #823).
@@ -373,6 +384,8 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
         // needs the package theme, which only the loader has.
         text_font_family,
         text_style,
+        title_text_style,
+        legend_text_style,
         category_axis_text_style: category_axis.text_style,
         value_axis_text_style: value_axis.text_style,
         value_axis_number_format: value_axis.number_format,
@@ -560,21 +573,24 @@ fn read_def_rpr_into(element: &quick_xml::events::BytesStart<'_>, style: &mut Ch
     }
 }
 
-/// Read `c:chartSpace/c:spPr` into what it says about the chart-area outline.
+/// Read `c:chartSpace/c:spPr` into the chart area's fill and outline.
 ///
-/// Only `a:ln` matters here. Its absence is not the same as `<a:noFill/>`:
-/// absent means Office's default outline, `noFill` means none at all, and an
-/// explicit line means that line (#637).
-fn parse_chart_area_outline(
+/// A top-level fill paints the whole chart, while a fill nested in `a:ln`
+/// colours only the outline. Keeping those contexts separate prevents the
+/// line colour from becoming the background when no area fill exists (#1217).
+/// The outline's absent / no-fill / explicit states remain as defined in #637.
+fn parse_chart_area_properties(
     reader: &mut Reader<&[u8]>,
     scheme: &SchemeColors<'_>,
-) -> ChartAreaOutline {
+) -> (ChartAreaFill, ChartAreaOutline) {
+    let mut fill: ChartAreaFill = ChartAreaFill::Unspecified;
     let mut in_line: bool = false;
     let mut saw_line: bool = false;
     let mut suppressed: bool = false;
     let mut width_pt: Option<f64> = None;
-    let mut color: Option<Color> = None;
-    let mut in_solid_fill: bool = false;
+    let mut line_color: Option<Color> = None;
+    let mut in_area_solid_fill: bool = false;
+    let mut in_line_solid_fill: bool = false;
 
     loop {
         match reader.read_event() {
@@ -594,23 +610,43 @@ fn parse_chart_area_outline(
             {
                 suppressed = true;
             }
-            Ok(Event::Start(ref e)) if in_line && e.local_name().as_ref() == b"solidFill" => {
-                in_solid_fill = true;
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))
+                if !in_line && e.local_name().as_ref() == b"noFill" =>
+            {
+                fill = ChartAreaFill::Transparent;
+            }
+            Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"solidFill" => {
+                if in_line {
+                    in_line_solid_fill = true;
+                } else {
+                    in_area_solid_fill = true;
+                }
             }
             Ok(Event::End(ref e)) if e.local_name().as_ref() == b"solidFill" => {
-                in_solid_fill = false;
+                in_area_solid_fill = false;
+                in_line_solid_fill = false;
             }
             Ok(Event::Start(ref e))
-                if in_solid_fill
+                if (in_area_solid_fill || in_line_solid_fill)
                     && matches!(e.local_name().as_ref(), b"srgbClr" | b"schemeClr") =>
             {
-                color = color.or(drawingml::parse_color_from_start(reader, e, scheme).color);
+                let parsed = drawingml::parse_color_from_start(reader, e, scheme).color;
+                if in_line_solid_fill {
+                    line_color = line_color.or(parsed);
+                } else if let Some(color) = parsed {
+                    fill = ChartAreaFill::Solid(color);
+                }
             }
             Ok(Event::Empty(ref e))
-                if in_solid_fill
+                if (in_area_solid_fill || in_line_solid_fill)
                     && matches!(e.local_name().as_ref(), b"srgbClr" | b"schemeClr") =>
             {
-                color = color.or(drawingml::parse_color_from_empty(e, scheme).color);
+                let parsed = drawingml::parse_color_from_empty(e, scheme).color;
+                if in_line_solid_fill {
+                    line_color = line_color.or(parsed);
+                } else if let Some(color) = parsed {
+                    fill = ChartAreaFill::Solid(color);
+                }
             }
             Ok(Event::End(ref e)) if e.local_name().as_ref() == b"ln" => {
                 in_line = false;
@@ -621,13 +657,18 @@ fn parse_chart_area_outline(
         }
     }
 
-    if !saw_line {
+    let outline: ChartAreaOutline = if !saw_line {
         ChartAreaOutline::Default
     } else if suppressed {
         ChartAreaOutline::Suppressed
     } else {
-        ChartAreaOutline::Explicit { width_pt, color }
-    }
+        ChartAreaOutline::Explicit {
+            width_pt,
+            color: line_color,
+        }
+    };
+
+    (fill, outline)
 }
 
 /// EMU in one point. `a:ln/@w` is in EMU.
@@ -707,7 +748,7 @@ fn parse_axis(reader: &mut Reader<&[u8]>, end_tag: &[u8], scheme: &SchemeColors<
     loop {
         match reader.read_event() {
             Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"title" => {
-                axis.title = axis.title.or_else(|| parse_chart_title(reader).0);
+                axis.title = axis.title.or_else(|| parse_chart_title(reader, scheme).0);
             }
             Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"txPr" => {
                 axis.text_style = parse_axis_text_properties(reader, scheme);
@@ -764,15 +805,19 @@ fn parse_axis(reader: &mut Reader<&[u8]>, end_tag: &[u8], scheme: &SchemeColors<
 }
 
 /// Consume a `<c:legend>` body, reporting whether it switches itself off and
-/// which edge it names.
+/// which edge it names, and the run properties its entries take.
 ///
 /// `<c:legend><c:delete val="1"/></c:legend>` is how Office records a legend
 /// that was turned off but whose settings were kept, the same shape the axes
 /// use. The position comes back from here too because this consumes the body,
 /// so `<c:legendPos>` never reaches the caller's loop (issue #762).
-fn parse_legend(reader: &mut Reader<&[u8]>) -> (bool, Option<LegendPosition>) {
+fn parse_legend(
+    reader: &mut Reader<&[u8]>,
+    scheme: &SchemeColors<'_>,
+) -> (bool, Option<LegendPosition>, ChartTextStyle) {
     let mut deleted = false;
     let mut position: Option<LegendPosition> = None;
+    let mut style: ChartTextStyle = ChartTextStyle::default();
     loop {
         match reader.read_event() {
             Ok(Event::Empty(ref e)) => match e.local_name().as_ref() {
@@ -784,12 +829,20 @@ fn parse_legend(reader: &mut Reader<&[u8]>) -> (bool, Option<LegendPosition>) {
                 }
                 _ => {}
             },
+            Ok(Event::Start(ref e)) => match e.local_name().as_ref() {
+                // A `c:legendEntry` can carry a `c:txPr` for one overridden
+                // entry. Do not promote that narrower scope to every entry in
+                // the legend merely because we encounter it first.
+                b"legendEntry" => xml_util::skip_element(reader, b"legendEntry"),
+                b"txPr" => style = parse_chart_text_style(reader, scheme),
+                _ => {}
+            },
             Ok(Event::End(ref e)) if e.local_name().as_ref() == b"legend" => break,
             Ok(Event::Eof) | Err(_) => break,
             _ => {}
         }
     }
-    (deleted, position)
+    (deleted, position, style)
 }
 
 /// Read a `CT_Boolean` element's own state.
@@ -812,16 +865,25 @@ fn axis_tick_mark_for(value: &str) -> AxisTickMark {
     }
 }
 
-/// Parse the chart title text from `<c:title>`.
+/// Parse the chart title text and its own run properties from `<c:title>`.
 ///
-/// Returns the text and whether the element named text of its own — a
-/// `<c:tx>`. A title without one is *automatic*: it carries the formatting for
-/// a string the application supplies (issue #1146), so an empty result there
-/// means something different from an empty `<c:tx>`.
-fn parse_chart_title(reader: &mut Reader<&[u8]>) -> (Option<String>, bool) {
+/// Returns the text, whether the element named text of its own — a `<c:tx>` —
+/// and what its `<c:txPr>` declares. A title without a `<c:tx>` is
+/// *automatic*: it carries the formatting for a string the application
+/// supplies (issue #1146), so an empty result there means something different
+/// from an empty `<c:tx>`.
+///
+/// The `<c:txPr>` is the title's own, and outranks the chart space's for the
+/// string it governs: `any_sheets.xlsx` states `sz="1400" b="0"` in grey there
+/// beside a chart space that states nothing at all (issue #1215).
+fn parse_chart_title(
+    reader: &mut Reader<&[u8]>,
+    scheme: &SchemeColors<'_>,
+) -> (Option<String>, bool, ChartTextStyle) {
     let mut text = String::new();
     let mut in_t = false;
     let mut names_own_text = false;
+    let mut style: ChartTextStyle = ChartTextStyle::default();
     let mut depth = 1u32;
 
     loop {
@@ -830,6 +892,10 @@ fn parse_chart_title(reader: &mut Reader<&[u8]>) -> (Option<String>, bool) {
                 let local = e.local_name();
                 if local.as_ref() == b"title" {
                     depth += 1;
+                } else if local.as_ref() == b"txPr" {
+                    // Consumes through `</c:txPr>`, so the reader comes back on
+                    // the title's next sibling.
+                    style = parse_chart_text_style(reader, scheme);
                 } else if local.as_ref() == b"tx" {
                     names_own_text = true;
                 } else if local.as_ref() == b"t" {
@@ -868,7 +934,7 @@ fn parse_chart_title(reader: &mut Reader<&[u8]>) -> (Option<String>, bool) {
     } else {
         Some(trimmed)
     };
-    (title, names_own_text)
+    (title, names_own_text, style)
 }
 
 /// Plot-area settings that sit beside `<c:ser>` inside a chart type element.

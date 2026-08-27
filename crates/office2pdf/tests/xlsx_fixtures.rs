@@ -14,7 +14,7 @@ use office2pdf::internal::Parser;
 use office2pdf::internal::XlsxParser;
 use office2pdf::internal::generate_typst;
 use office2pdf::ir::{
-    Alignment, Block, BorderLineStyle, ChartAreaOutline, ChartLine, ChartPlotAreaLayout,
+    Alignment, Block, BorderLineStyle, ChartAreaOutline, ChartHost, ChartLine, ChartPlotAreaLayout,
     ChartUserShapeExtent, Color, HFInline, Page, SheetPage, TableCell,
 };
 
@@ -240,10 +240,11 @@ fn acceptance_pr_186_contributor_acceptance_carlito_fallback() {
     let output = generate_typst(&document).expect("fixture should generate Typst");
 
     assert!(
-        output
-            .source
-            .contains(r#"font: ("Carlito", "Calibri", "Liberation Sans", "Arimo", "Arial")"#),
-        "Carlito should retain a sans-serif fallback chain: {}",
+        output.source.contains(
+            r#"font: ("Carlito", "Calibri", "Liberation Sans", "Arimo", "Arial", "DejaVu Sans", "Helvetica")"#
+        ),
+        "Carlito should retain a sans-serif fallback chain, ending on the generic \
+         sans faces so a host with none of the named ones still keeps the class: {}",
         output.source
     );
 }
@@ -384,6 +385,11 @@ fn structure_any_sheets_chartsheet_pages_its_chart_alone() {
     assert!(chart_page.table.rows.is_empty());
 
     assert_eq!(chart_page.charts.len(), 1);
+    assert_eq!(
+        chart_page.charts[0].chart.host,
+        ChartHost::SpreadsheetChartsheet,
+        "the renderer must be able to distinguish a chartsheet from an anchored worksheet chart"
+    );
     let placement = chart_page.charts[0]
         .placement
         .expect("a chartsheet's chart is placed, not flowed after the grid");
@@ -446,6 +452,34 @@ fn structure_any_sheets_chart_chrome_takes_its_declared_colour() {
     };
     assert_eq!(chart.major_gridline_line, expected, "major gridlines");
     assert_eq!(chart.category_axis_line, expected, "category axis");
+}
+
+/// `c:chartSpace/c:spPr` paints the whole chart area before it draws the
+/// title, plot, and legend. The real fixture declares theme `bg1`, which is
+/// white on white and hides a dropped fill, so this package-local mutation
+/// gives only that outer fill a colour no other element uses (issue #1217).
+#[test]
+fn a_chart_space_solid_fill_paints_the_chart_area_box() {
+    let data = repackage_xlsx_part(
+        &load_fixture("any_sheets.xlsx"),
+        "xl/charts/chart1.xml",
+        |xml| {
+            xml.replace(
+                r#"<c:spPr><a:solidFill><a:schemeClr val="bg1"/></a:solidFill><a:ln w="9525""#,
+                r#"<c:spPr><a:solidFill><a:srgbClr val="123456"/></a:solidFill><a:ln w="9525""#,
+            )
+        },
+    );
+    let (document, _warnings) = XlsxParser
+        .parse(&data, &ConvertOptions::default())
+        .expect("the patched fixture should parse");
+    let source = generate_typst(&document)
+        .expect("the patched fixture should generate Typst")
+        .source;
+    assert!(
+        source.contains("fill: rgb(18, 52, 86)"),
+        "the chart-space solid fill must paint the chart-area box; got:\n{source}"
+    );
 }
 
 /// Both axes' labels take the colour their own `c:txPr` declares.
@@ -519,6 +553,71 @@ fn structure_any_sheets_chart_declares_an_automatic_title() {
     // nothing in the file can supply one.
     assert_eq!(chart.title, None);
     assert!(chart.series.iter().all(|series| series.name.is_none()));
+}
+
+/// The title's own `<c:txPr>` states its size, its weight and its colour, and
+/// all three have to survive the parse.
+///
+/// `xl/charts/chart1.xml` gives `<c:title>` a `<c:txPr>` whose `<a:defRPr>`
+/// carries `sz="1400" b="0"` over an `<a:schemeClr val="tx1">` lifted by
+/// lumMod 65% / lumOff 35% — #595959 against the theme's black `dk1`. The
+/// Excel for Mac 16.100 export of the `Chart` sheet draws the placeholder at
+/// `trm="14 0 0 14"` in `.3490196` grey. The subtree was read for its text
+/// alone and everything beside it thrown away, so the title printed at the
+/// renderer's own 11pt, bold and black (issue #1215).
+#[test]
+fn structure_any_sheets_chart_title_carries_its_own_run_properties() {
+    let pages = sheet_pages("any_sheets.xlsx");
+    let chart = &pages
+        .iter()
+        .find(|page| page.name == "Chart")
+        .expect("the chartsheet should contribute a page")
+        .charts
+        .first()
+        .expect("the chartsheet carries its chart")
+        .chart;
+
+    assert_eq!(chart.title_text_style.size_pt, Some(14.0), "declared size");
+    assert_eq!(chart.title_text_style.bold, Some(false), "declared weight");
+    assert_eq!(
+        chart.title_text_style.color,
+        Some(Color::new(0x59, 0x59, 0x59)),
+        "declared colour"
+    );
+    // The chart space's own `c:txPr` is a bare `<a:defRPr/>`, so nothing here
+    // could have come from it.
+    assert_eq!(chart.text_style.size_pt, None);
+    assert_eq!(chart.text_style.bold, None);
+}
+
+/// The legend's own `<c:txPr>` governs every entry rather than disappearing
+/// between the chart parser and renderer.
+///
+/// `xl/charts/chart1.xml` gives `<c:legend>` a 9pt regular `a:defRPr` filled
+/// with the same transformed `tx1` colour as the axes: #595959. Excel for Mac
+/// 16.100 draws both legend entries at that size and colour, while the chart
+/// space itself declares neither property (issue #1236).
+#[test]
+fn structure_any_sheets_chart_legend_carries_its_own_run_properties() {
+    let data = load_fixture("any_sheets.xlsx");
+    let (document, _warnings) = XlsxParser
+        .parse(&data, &ConvertOptions::default())
+        .expect("the fixture should parse");
+    let source = generate_typst(&document)
+        .expect("the fixture should generate Typst")
+        .source;
+    let entries: Vec<&str> = source
+        .lines()
+        .filter(|line| line.contains("[Series 1]") || line.contains("[Series 2]"))
+        .collect();
+
+    assert_eq!(entries.len(), 2, "both legend entries are emitted");
+    for entry in entries {
+        assert!(
+            entry.contains("#text(size: 9pt, fill: rgb(89, 89, 89))[Series"),
+            "the legend's own size and colour reach every entry; got: {entry}"
+        );
+    }
 }
 
 /// Two chartsheet packages whose parts collide by filename, which is how the

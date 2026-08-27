@@ -450,6 +450,69 @@ fn a_bordered_picture_rounds_its_shadow_corner_like_the_border_join() {
     );
 }
 
+/// A blurred picture's rings follow the same blurred-silhouette contour a
+/// shape's do — wider at the corner than the dilated arc, because an isotropic
+/// Gaussian loses coverage to both axes where two edges meet (issue #1204).
+/// This path builds its ring stack separately from `write_shadow_shape`, so it
+/// needs its own guard.
+#[test]
+fn a_blurred_picture_arcs_its_shadow_corner_past_the_dilated_silhouette() {
+    use crate::ir::Shadow;
+
+    let doc = make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![FixedElement {
+            x: 100.0,
+            y: 50.0,
+            width: 200.0,
+            height: 120.0,
+            kind: FixedElementKind::Image(ImageData {
+                rotation_deg: None,
+                flip_h: false,
+                flip_v: false,
+                data: MINIMAL_PNG.to_vec(),
+                format: ImageFormat::Png,
+                width: Some(200.0),
+                height: Some(120.0),
+                crop: None,
+                stroke: None,
+                alignment: None,
+                clip_shape: None,
+                shadow: Some(Shadow {
+                    // The theme effect `customGeo.pptx` page 46 carries.
+                    blur_radius: 40000.0 / 12700.0,
+                    distance: 1.57,
+                    direction: 90.0,
+                    color: Color { r: 0, g: 0, b: 0 },
+                    opacity: 0.38,
+                }),
+                paragraph_spacing: None,
+            }),
+        }],
+    )]);
+    let source = generate_typst(&doc).unwrap().source;
+
+    // The outermost ring reaches 2.6 sigma past an unstroked frame, and a
+    // square corner blurred by that sigma turns an arc wider still.
+    let reach: f64 = 2.6 * (40000.0 / 12700.0) / 3.0;
+    let outermost: &str = source
+        .lines()
+        .rfind(|line| line.contains("rgb(0, 0, 0, "))
+        .expect("no shadow ring in the picture's output");
+    let radius: f64 = {
+        let start: usize = outermost.find("radius: ").expect("no radius") + "radius: ".len();
+        let rest: &str = &outermost[start..];
+        rest[..rest.find("pt").expect("no unit")]
+            .parse::<f64>()
+            .expect("unparsable radius")
+    };
+    assert!(
+        radius > reach + 0.5,
+        "a blurred picture's outermost ring must arc past the {reach}pt it          is dilated by, got {radius}pt: {source}"
+    );
+}
+
 #[test]
 fn test_fixed_image_with_border_uses_rect_overlay() {
     let doc = make_doc(vec![make_fixed_page(

@@ -985,27 +985,28 @@ fn build_drawing_only_sheet_xlsx() -> Vec<u8> {
     let book = umya_spreadsheet::new_file();
     let mut cursor = Cursor::new(Vec::new());
     umya_spreadsheet::writer::xlsx::write_writer(&book, &mut cursor).unwrap();
-    splice_picture_drawing(&cursor.into_inner())
+    splice_picture_drawing(&cursor.into_inner(), &one_pixel_png())
+}
+
+fn one_pixel_png() -> Vec<u8> {
+    let image = image::DynamicImage::new_rgba8(1, 1);
+    let mut encoded = Cursor::new(Vec::new());
+    image
+        .write_to(&mut encoded, image::ImageFormat::Png)
+        .expect("1x1 PNG encodes");
+    encoded.into_inner()
 }
 
 /// Splice `xl/drawings/drawing1.xml` (one twoCellAnchor picture), its rels,
-/// and a 1x1 PNG into a workbook zip, wiring the first worksheet to it.
-fn splice_picture_drawing(data: &[u8]) -> Vec<u8> {
+/// and the supplied PNG media part into a workbook zip, wiring the first
+/// worksheet to it.
+fn splice_picture_drawing(data: &[u8], media: &[u8]) -> Vec<u8> {
     const DRAWING_XML: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><xdr:twoCellAnchor><xdr:from><xdr:col>2</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:to><xdr:col>5</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>8</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="2" name="Picture 1"/><xdr:cNvPicPr/></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:twoCellAnchor></xdr:wsDr>"#;
     const DRAWING_RELS: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/></Relationships>"#;
     const SHEET_RELS: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdDrawing1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>"#;
-    /// Smallest valid PNG: 1x1 RGBA.
-    const PNG_1X1: &[u8] = &[
-        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44,
-        0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F,
-        0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x62, 0x00,
-        0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
-        0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
-    ];
-
     let mut archive = zip::ZipArchive::new(Cursor::new(data)).expect("readable zip");
     let mut out = zip::ZipWriter::new(Cursor::new(Vec::new()));
     let mut has_sheet_rels = false;
@@ -1063,13 +1064,53 @@ fn splice_picture_drawing(data: &[u8]) -> Vec<u8> {
             "xl/drawings/_rels/drawing1.xml.rels",
             DRAWING_RELS.as_bytes(),
         ),
-        ("xl/media/image1.png", PNG_1X1),
+        ("xl/media/image1.png", media),
     ] {
         out.start_file(path, zip::write::FileOptions::default())
             .expect("writable drawing part");
         std::io::Write::write_all(&mut out, body).expect("writable drawing part body");
     }
     out.finish().expect("finished zip").into_inner()
+}
+
+#[test]
+fn malformed_raster_image_is_omitted_with_warning_and_workbook_still_converts() {
+    let workbook = build_xlsx_bytes("Sheet1", &[("A1", "survives")]);
+    let data = splice_picture_drawing(&workbook, b"not a png");
+
+    let (doc, warnings) = XlsxParser
+        .parse(&data, &ConvertOptions::default())
+        .expect("a malformed picture must not abort XLSX parsing");
+    let page = get_sheet_page(&doc, 0);
+    assert!(
+        page.images.is_empty(),
+        "the malformed picture must not reach the renderer"
+    );
+    assert!(
+        warnings.iter().any(|warning| matches!(
+            warning,
+            ConvertWarning::UnsupportedElement { format, element }
+                if format == "XLSX"
+                    && element.contains("image omitted")
+                    && element.contains("xl/media/image1.png")
+        )),
+        "expected an omission warning naming the malformed media part, got {warnings:?}"
+    );
+
+    let result = crate::convert_bytes(
+        &data,
+        crate::config::Format::Xlsx,
+        &ConvertOptions::default(),
+    )
+    .expect("the workbook must still produce a PDF");
+    assert!(result.pdf.starts_with(b"%PDF-"));
+    assert!(result.warnings.iter().any(|warning| matches!(
+        warning,
+        ConvertWarning::UnsupportedElement { format, element }
+            if format == "XLSX"
+                && element.contains("image omitted")
+                && element.contains("xl/media/image1.png")
+    )));
 }
 
 /// A sheet with no cells must resolve its drawing anchors against the

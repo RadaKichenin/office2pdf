@@ -1326,8 +1326,23 @@ fn scan_hf_anchors(xml: &str, theme_colors: &HashMap<String, Color>) -> Vec<HfAn
                     }
                 }
                 b"custGeom" => {
-                    let subpaths =
-                        crate::parser::pptx::custom_geometry::parse_custom_geometry(&mut reader);
+                    // `<wp:extent>` precedes the graphic, so the box a guide
+                    // formula measures against is already known. Points are
+                    // fine here: only the ratio survives normalization.
+                    let extent = crate::parser::pptx::geometry_guides::ShapeExtent::new(
+                        current
+                            .as_ref()
+                            .and_then(|anchor| anchor.width_pt)
+                            .unwrap_or(0.0),
+                        current
+                            .as_ref()
+                            .and_then(|anchor| anchor.height_pt)
+                            .unwrap_or(0.0),
+                    );
+                    let subpaths = crate::parser::pptx::custom_geometry::parse_custom_geometry(
+                        &mut reader,
+                        extent,
+                    );
                     if let Some(anchor) = current.as_mut()
                         && !subpaths.is_empty()
                     {
@@ -1745,10 +1760,10 @@ mod anchor_tests {
         assert_eq!(subpaths.len(), 1);
         // The wedge's right edge stops at 1896461/2906395 of the path box,
         // and the path box is stretched onto the shape's extent.
-        let right_edge: f64 = subpaths[0][2].1;
+        let right_edge: f64 = subpaths[0].vertices[2].1;
         assert!((right_edge - 0.6525).abs() < 0.001, "{right_edge}");
         assert!(
-            (subpaths[0][3].1 - 1.0).abs() < 0.001,
+            (subpaths[0].vertices[3].1 - 1.0).abs() < 0.001,
             "the left edge drops to the bottom"
         );
     }

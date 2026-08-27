@@ -1502,6 +1502,71 @@ fn a_chart_with_no_chart_space_line_takes_the_default_outline() {
     // that one up and report the chart area as red (#637).
     let chart =
         parse_chart_xml(&chart_space_with(""), &SchemeColors::empty()).expect("chart parses");
+    assert_eq!(chart.chart_area_fill, ChartAreaFill::Unspecified);
+    assert_eq!(chart.chart_area_outline, ChartAreaOutline::Default);
+}
+
+#[test]
+fn a_chart_space_no_fill_is_distinct_from_an_unspecified_fill() {
+    let chart = parse_chart_xml(
+        &chart_space_with("<c:spPr><a:noFill/><a:ln><a:noFill/></a:ln></c:spPr>"),
+        &SchemeColors::empty(),
+    )
+    .expect("chart parses");
+
+    assert_eq!(chart.chart_area_fill, ChartAreaFill::Transparent);
+    assert_eq!(chart.chart_area_outline, ChartAreaOutline::Suppressed);
+}
+
+#[test]
+fn a_chart_space_fill_does_not_take_the_lines_colour() {
+    let chart = parse_chart_xml(
+        &chart_space_with(
+            r#"<c:spPr>
+                 <a:solidFill><a:srgbClr val="123456"/></a:solidFill>
+                 <a:ln w="9360"><a:solidFill><a:srgbClr val="d9d9d9"/></a:solidFill></a:ln>
+               </c:spPr>"#,
+        ),
+        &SchemeColors::empty(),
+    )
+    .expect("chart parses");
+
+    assert_eq!(
+        chart.chart_area_fill,
+        ChartAreaFill::Solid(Color::new(0x12, 0x34, 0x56))
+    );
+    assert_eq!(
+        chart.chart_area_outline,
+        ChartAreaOutline::Explicit {
+            width_pt: Some(9360.0 / 12700.0),
+            color: Some(Color::new(0xd9, 0xd9, 0xd9)),
+        }
+    );
+}
+
+#[test]
+fn a_chart_space_fill_resolves_a_transformed_theme_colour() {
+    let colors: std::collections::HashMap<String, Color> =
+        [("bg1".to_string(), Color::new(0xFF, 0xFF, 0xFF))]
+            .into_iter()
+            .collect();
+    let aliases: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let scheme = SchemeColors {
+        colors: &colors,
+        aliases: &aliases,
+    };
+    let chart = parse_chart_xml(
+        &chart_space_with(
+            r#"<c:spPr><a:solidFill><a:schemeClr val="bg1"><a:lumMod val="50000"/></a:schemeClr></a:solidFill></c:spPr>"#,
+        ),
+        &scheme,
+    )
+    .expect("chart parses");
+
+    assert_eq!(
+        chart.chart_area_fill,
+        ChartAreaFill::Solid(Color::new(128, 128, 128))
+    );
     assert_eq!(chart.chart_area_outline, ChartAreaOutline::Default);
 }
 
@@ -1708,6 +1773,61 @@ fn an_axis_tx_pr_overrides_the_chart_space_one() {
     assert_eq!(chart.value_axis_text_style.size_pt, Some(9.0));
     assert_eq!(chart.value_axis_text_style.bold, None);
     assert_eq!(chart.value_axis_text_style.letter_spacing_hundredths, None);
+}
+
+#[test]
+fn a_legend_tx_pr_keeps_its_own_run_properties() {
+    let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+        <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+            <c:chart>
+                <c:plotArea><c:barChart><c:barDir val="col"/></c:barChart></c:plotArea>
+                <c:legend><c:legendPos val="b"/><c:txPr><a:p><a:pPr>
+                    <a:defRPr sz="1700" b="1" spc="125">
+                        <a:solidFill><a:srgbClr val="C02A7A"/></a:solidFill>
+                    </a:defRPr>
+                </a:pPr></a:p></c:txPr></c:legend>
+            </c:chart>
+            <c:txPr><a:p><a:pPr><a:defRPr sz="1200" b="0"/></a:pPr></a:p></c:txPr>
+        </c:chartSpace>"#;
+    let chart = parse_chart_xml(xml, &SchemeColors::empty()).expect("chart parses");
+
+    assert!(chart.has_legend);
+    assert_eq!(chart.legend_position, LegendPosition::Bottom);
+    assert_eq!(chart.legend_text_style.size_pt, Some(17.0));
+    assert_eq!(chart.legend_text_style.bold, Some(true));
+    assert_eq!(chart.legend_text_style.letter_spacing_hundredths, Some(125));
+    assert_eq!(
+        chart.legend_text_style.color,
+        Some(Color::new(0xC0, 0x2A, 0x7A))
+    );
+    assert_eq!(
+        chart.text_style.resolved_size_pt(chart.legend_text_style),
+        Some(17.0),
+        "the legend overrides the chart-space 12pt size"
+    );
+}
+
+#[test]
+fn a_legend_entry_tx_pr_is_not_promoted_to_the_whole_legend() {
+    let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+        <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+            <c:chart>
+                <c:plotArea><c:barChart><c:barDir val="col"/></c:barChart></c:plotArea>
+                <c:legend>
+                    <c:legendPos val="b"/>
+                    <c:legendEntry><c:idx val="0"/><c:txPr><a:p><a:pPr>
+                        <a:defRPr sz="1700" b="1">
+                            <a:solidFill><a:srgbClr val="C02A7A"/></a:solidFill>
+                        </a:defRPr>
+                    </a:pPr></a:p></c:txPr></c:legendEntry>
+                </c:legend>
+            </c:chart>
+        </c:chartSpace>"#;
+    let chart = parse_chart_xml(xml, &SchemeColors::empty()).expect("chart parses");
+
+    assert_eq!(chart.legend_text_style, ChartTextStyle::default());
 }
 
 #[test]

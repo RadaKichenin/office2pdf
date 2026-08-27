@@ -10,30 +10,46 @@
 //! fill rule. Curves are sampled rather than preserved: at the sizes these
 //! decorations print, the sampling error is far below the rectangle it
 //! replaces.
+//!
+//! A coordinate is not always a number. A geometry round-tripped through
+//! LibreOffice states each one as a guide name — `<a:pt x="f38" y="f37"/>` —
+//! and puts the arithmetic in the `<a:gdLst>` beside it, so the whole path
+//! read as empty and the rectangle fallback stood in for a shape the deck had
+//! fully described (issue #1205). Both forms resolve through
+//! [`GuideList`], and `<a:arcTo>` resolves its radii and angles the same way.
 
 use quick_xml::Reader;
-use quick_xml::events::Event;
+use quick_xml::events::{BytesStart, Event};
 
-use crate::parser::xml_util::get_attr_i64;
+use crate::ir::Subpath;
+use crate::parser::pptx::geometry_guides::{GuideList, ShapeExtent, to_radians};
+use crate::parser::xml_util::{get_attr_i64, get_attr_str};
 
 /// Points sampled per cubic or quadratic segment. Sixteen keeps a full circle
 /// — four segments, so 64 points — within about 0.2% of its radius, well under
 /// a printed point at slide sizes.
 const CURVE_SAMPLES: usize = 16;
 
-/// The smallest number of distinct vertices that can enclose an area.
-const MIN_POLYGON_VERTICES: usize = 3;
+/// The most points one `<a:arcTo>` may contribute. `swAng` is unbounded, and
+/// a spiral of many turns must not sample itself into a megabyte of vertices.
+const MAX_ARC_SAMPLES: usize = 512;
 
 /// Flatten the `<a:pathLst>` of a `<a:custGeom>` into vertices normalized to
 /// the shape's bounding box.
+///
+/// `extent` is the shape's own box. It is what the `w`, `h` and `ss` a guide
+/// formula names evaluate to, and it is the coordinate space of an
+/// `<a:path>` that declares none of its own — which is the form every
+/// guide-driven geometry takes. Its units only have to match the geometry's
+/// own, since the result is normalized against the same box.
 ///
 /// The reader is positioned just after the `<a:custGeom>` start tag and is
 /// consumed through its end tag either way, so a geometry this cannot express
 /// still leaves the caller's parse in step.
 ///
 /// Returns an empty vector when nothing usable was found — no path, a
-/// degenerate coordinate space, or fewer than three distinct points in any
-/// subpath. The caller keeps its rectangle fallback for those.
+/// degenerate coordinate space, or a subpath with too few points to draw.
+/// The caller keeps its rectangle fallback for those.
 ///
 /// **Every** subpath is returned, each as its own polygon. A geometry's
 /// subpaths come from separate `<a:path>` elements and from a `moveTo`
@@ -44,12 +60,13 @@ const MIN_POLYGON_VERTICES: usize = 3;
 /// carves a hole rather than painting solid because the caller hands every
 /// subpath to one [`crate::ir::ShapeKind::Path`], which fills even-odd
 /// (issue #870).
-pub(crate) fn parse_custom_geometry(reader: &mut Reader<&[u8]>) -> Vec<Vec<(f64, f64)>> {
+pub(crate) fn parse_custom_geometry(
+    reader: &mut Reader<&[u8]>,
+    extent: ShapeExtent,
+) -> Vec<Subpath> {
     let mut depth: usize = 1;
-    let mut paths: Vec<Vec<(f64, f64)>> = Vec::new();
-    let mut current: Vec<(f64, f64)> = Vec::new();
-    let mut path_width: f64 = 0.0;
-    let mut path_height: f64 = 0.0;
+    let mut builder = SubpathBuilder::new(extent);
+    let mut guides = GuideList::new(extent);
     // `a:pt` children accumulate here; a curve command reads its control
     // points from the list once the command closes.
     let mut pending_points: Vec<(f64, f64)> = Vec::new();
@@ -61,11 +78,8 @@ pub(crate) fn parse_custom_geometry(reader: &mut Reader<&[u8]>) -> Vec<Vec<(f64,
             Ok(Event::Start(ref element)) => {
                 depth += 1;
                 match element.local_name().as_ref() {
-                    b"path" => {
-                        flush_path(&mut paths, &mut current, path_width, path_height);
-                        path_width = get_attr_i64(element, b"w").unwrap_or(0) as f64;
-                        path_height = get_attr_i64(element, b"h").unwrap_or(0) as f64;
-                    }
+                    b"path" => builder.start_path(element),
+                    b"arcTo" => apply_arc(element, &guides, builder.vertices()),
                     other => {
                         if let Some(kind) = Command::from_tag(other) {
                             command = Some(kind);
@@ -75,30 +89,28 @@ pub(crate) fn parse_custom_geometry(reader: &mut Reader<&[u8]>) -> Vec<Vec<(f64,
                 }
             }
             Ok(Event::Empty(ref element)) => match element.local_name().as_ref() {
+                // `<a:gd>` appears in both `<a:avLst>` and `<a:gdLst>`, in the
+                // order a later formula may name an earlier one, and both
+                // precede the `<a:pathLst>` that reads them.
+                b"gd" => define_guide(element, &mut guides),
                 b"pt" => {
-                    if let (Some(x), Some(y)) =
-                        (get_attr_i64(element, b"x"), get_attr_i64(element, b"y"))
-                    {
-                        pending_points.push((x as f64, y as f64));
+                    if let Some(point) = resolve_point(element, &guides) {
+                        pending_points.push(point);
                     }
                 }
-                b"close" => close_path(&mut current),
-                b"path" => {
-                    flush_path(&mut paths, &mut current, path_width, path_height);
-                    path_width = 0.0;
-                    path_height = 0.0;
-                }
+                // An arc carries its whole definition in its attributes and
+                // starts wherever the pen already is, so it applies the
+                // moment it is read rather than waiting for child points.
+                b"arcTo" => apply_arc(element, &guides, builder.vertices()),
+                b"close" => builder.close(),
+                b"path" => builder.end_path(),
                 _ => {}
             },
             Ok(Event::End(ref element)) => {
                 depth -= 1;
                 match element.local_name().as_ref() {
-                    b"close" => close_path(&mut current),
-                    b"path" => {
-                        flush_path(&mut paths, &mut current, path_width, path_height);
-                        path_width = 0.0;
-                        path_height = 0.0;
-                    }
+                    b"close" => builder.close(),
+                    b"path" => builder.end_path(),
                     other => {
                         if let Some(kind) = command.take()
                             && Command::from_tag(other) == Some(kind)
@@ -109,10 +121,10 @@ pub(crate) fn parse_custom_geometry(reader: &mut Reader<&[u8]>) -> Vec<Vec<(f64,
                             // deck on #866 — and concatenating them joined the
                             // end of one outline to the start of the next,
                             // painting the wedge between (issue #866).
-                            if kind == Command::Move && !current.is_empty() {
-                                flush_path(&mut paths, &mut current, path_width, path_height);
+                            if kind == Command::Move {
+                                builder.start_subpath();
                             }
-                            apply_command(kind, &pending_points, &mut current);
+                            apply_command(kind, &pending_points, builder.vertices());
                             pending_points.clear();
                         }
                     }
@@ -125,10 +137,186 @@ pub(crate) fn parse_custom_geometry(reader: &mut Reader<&[u8]>) -> Vec<Vec<(f64,
             _ => {}
         }
     }
-    flush_path(&mut paths, &mut current, path_width, path_height);
 
-    paths.retain(|path| path.len() >= MIN_POLYGON_VERTICES);
-    paths
+    builder.finish()
+}
+
+/// Bind one `<a:gd name= fmla=>`.
+fn define_guide(element: &BytesStart, guides: &mut GuideList) {
+    if let (Some(name), Some(formula)) = (
+        get_attr_str(element, b"name"),
+        get_attr_str(element, b"fmla"),
+    ) {
+        guides.define(&name, &formula);
+    }
+}
+
+/// Read one `<a:pt x= y=>`, resolving each coordinate through the guides.
+///
+/// A point whose coordinates do not resolve is dropped rather than defaulted:
+/// substituting zero would stake a vertex at the shape's top-left corner and
+/// drag the outline through it.
+fn resolve_point(element: &BytesStart, guides: &GuideList) -> Option<(f64, f64)> {
+    let x: f64 = guides.resolve(&get_attr_str(element, b"x")?)?;
+    let y: f64 = guides.resolve(&get_attr_str(element, b"y")?)?;
+    Some((x, y))
+}
+
+/// Append the elliptical arc of one `<a:arcTo wR= hR= stAng= swAng=>`.
+///
+/// The arc starts at the pen's current point, so the ellipse is the one whose
+/// point at `stAng` is already there: its centre is that point stepped back
+/// along the radii. From there the arc sweeps `swAng`. Both angles are in
+/// 60000ths of a degree, and both turn clockwise on the page, which the
+/// y-down coordinate space gives without a sign flip.
+///
+/// Skipping the segment squared off every corner it was drawing: a freeform
+/// rounded rectangle came out a plain rectangle, outline, fill and shadow
+/// silhouette alike (issue #1205).
+fn apply_arc(element: &BytesStart, guides: &GuideList, current: &mut Vec<(f64, f64)>) {
+    let attribute = |key: &[u8]| -> Option<f64> { guides.resolve(&get_attr_str(element, key)?) };
+    let (
+        Some(start),
+        Some(radius_x),
+        Some(radius_y),
+        Some(start_angle_units),
+        Some(swing_angle_units),
+    ) = (
+        current.last().copied(),
+        attribute(b"wR"),
+        attribute(b"hR"),
+        attribute(b"stAng"),
+        attribute(b"swAng"),
+    )
+    else {
+        return;
+    };
+
+    let start_angle: f64 = to_radians(start_angle_units);
+    let swing: f64 = to_radians(swing_angle_units);
+    if !(start_angle.is_finite()
+        && swing.is_finite()
+        && radius_x.is_finite()
+        && radius_y.is_finite())
+    {
+        return;
+    }
+    let centre: (f64, f64) = (
+        start.0 - radius_x * start_angle.cos(),
+        start.1 - radius_y * start_angle.sin(),
+    );
+
+    let samples: usize = arc_sample_count(swing);
+    for step in 1..=samples {
+        let angle: f64 = start_angle + swing * (step as f64 / samples as f64);
+        current.push((
+            centre.0 + radius_x * angle.cos(),
+            centre.1 + radius_y * angle.sin(),
+        ));
+    }
+}
+
+/// Sample an arc at the rate a Bezier quarter-circle is sampled at, so a
+/// corner arc and a corner curve print the same smoothness.
+fn arc_sample_count(swing: f64) -> usize {
+    let quarter_turns: f64 = swing.abs() / std::f64::consts::FRAC_PI_2;
+    let samples: f64 = (quarter_turns * CURVE_SAMPLES as f64).ceil();
+    (samples as usize).clamp(1, MAX_ARC_SAMPLES)
+}
+
+/// Accumulates subpaths, and knows the coordinate space each one normalizes
+/// against.
+struct SubpathBuilder {
+    extent: ShapeExtent,
+    paths: Vec<Subpath>,
+    vertices: Vec<(f64, f64)>,
+    /// `a:close` on the subpath being collected. It must travel with the
+    /// vertices rather than be inferred from them: an elbow connector's last
+    /// point is nowhere near its first, and so is a spiral's (issue #1205).
+    closed: bool,
+    /// The `<a:path w= h=>` coordinate space, or the shape's own extent when
+    /// the path declares none.
+    space: ShapeExtent,
+}
+
+impl SubpathBuilder {
+    fn new(extent: ShapeExtent) -> Self {
+        Self {
+            extent,
+            paths: Vec::new(),
+            vertices: Vec::new(),
+            closed: false,
+            space: extent,
+        }
+    }
+
+    fn vertices(&mut self) -> &mut Vec<(f64, f64)> {
+        &mut self.vertices
+    }
+
+    /// `<a:path>`: bank whatever the previous one left and read the new
+    /// coordinate space.
+    ///
+    /// `w`/`h` default to 0, which DrawingML reads as "the shape's own
+    /// space" — the form a guide-driven geometry uses, since its guides are
+    /// already in the shape's units.
+    fn start_path(&mut self, element: &BytesStart) {
+        self.start_subpath();
+        let width: f64 = get_attr_i64(element, b"w").unwrap_or(0) as f64;
+        let height: f64 = get_attr_i64(element, b"h").unwrap_or(0) as f64;
+        self.space = if width > 0.0 && height > 0.0 {
+            ShapeExtent::new(width, height)
+        } else {
+            self.extent
+        };
+    }
+
+    fn end_path(&mut self) {
+        self.start_subpath();
+        self.space = self.extent;
+    }
+
+    /// Bank the subpath in hand, if any, and begin the next.
+    fn start_subpath(&mut self) {
+        if self.vertices.is_empty() {
+            return;
+        }
+        let vertices: Vec<(f64, f64)> = std::mem::take(&mut self.vertices);
+        let closed: bool = std::mem::take(&mut self.closed);
+        if !self.space.is_usable() {
+            return;
+        }
+        self.paths.push(Subpath {
+            vertices: vertices
+                .into_iter()
+                .map(|(x, y)| (x / self.space.width, y / self.space.height))
+                .collect(),
+            closed,
+        });
+    }
+
+    /// `a:close` returns to the subpath's first point. The renderer closes the
+    /// outline itself, so the duplicate vertex is dropped.
+    fn close(&mut self) {
+        if self.vertices.is_empty() {
+            return;
+        }
+        self.closed = true;
+        if let (Some(first), Some(last)) = (
+            self.vertices.first().copied(),
+            self.vertices.last().copied(),
+        ) && (first.0 - last.0).abs() < f64::EPSILON
+            && (first.1 - last.1).abs() < f64::EPSILON
+        {
+            self.vertices.pop();
+        }
+    }
+
+    fn finish(mut self) -> Vec<Subpath> {
+        self.start_subpath();
+        self.paths.retain(Subpath::encloses_or_draws);
+        self.paths
+    }
 }
 
 /// The drawing commands a path can carry. `close` is handled separately: it
@@ -205,40 +393,6 @@ fn sample_cubic(
             axis(start.1, control_one.1, control_two.1, end.1),
         ));
     }
-}
-
-/// `a:close` returns to the subpath's first point. The polygon renderer closes
-/// the outline itself, so the duplicate vertex is dropped.
-fn close_path(current: &mut Vec<(f64, f64)>) {
-    if let (Some(first), Some(last)) = (current.first().copied(), current.last().copied())
-        && (first.0 - last.0).abs() < f64::EPSILON
-        && (first.1 - last.1).abs() < f64::EPSILON
-    {
-        current.pop();
-    }
-}
-
-/// Normalize the collected points against the path's declared coordinate space
-/// and bank them, leaving `current` empty for the next path.
-fn flush_path(
-    paths: &mut Vec<Vec<(f64, f64)>>,
-    current: &mut Vec<(f64, f64)>,
-    width: f64,
-    height: f64,
-) {
-    if current.is_empty() {
-        return;
-    }
-    let points = std::mem::take(current);
-    if width <= 0.0 || height <= 0.0 {
-        return;
-    }
-    paths.push(
-        points
-            .into_iter()
-            .map(|(x, y)| (x / width, y / height))
-            .collect(),
-    );
 }
 
 #[cfg(test)]

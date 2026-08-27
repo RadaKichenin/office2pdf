@@ -1,6 +1,8 @@
 use std::fmt::Write;
 
+use super::shadow_outline::{CornerReach, OffsetCorner, arc_beziers, offset_ring};
 use super::*;
+use crate::ir::Subpath;
 
 pub(super) fn generate_shape(out: &mut String, shape: &Shape, width: f64, height: f64) {
     // Render shadow as offset duplicate before main shape
@@ -187,7 +189,7 @@ pub(super) const SHADOW_RING_EXTENT_SIGMA: f64 = 2.6;
 /// (Abramowitz & Stegun 26.2.17). Its error is under 8e-8, far below the
 /// 1/255 an alpha byte can carry, and it avoids pulling in a crate for one
 /// function.
-fn standard_normal_cdf(z: f64) -> f64 {
+pub(super) fn standard_normal_cdf(z: f64) -> f64 {
     if z < 0.0 {
         return 1.0 - standard_normal_cdf(-z);
     }
@@ -207,6 +209,30 @@ fn standard_normal_cdf(z: f64) -> f64 {
         .map(|(index, coefficient)| coefficient * t.powi(index as i32 + 1))
         .sum::<f64>();
     1.0 - density * poly
+}
+
+/// The standard normal density, the companion of [`standard_normal_cdf`].
+fn standard_normal_pdf(z: f64) -> f64 {
+    (-0.5 * z * z).exp() / (2.0 * std::f64::consts::PI).sqrt()
+}
+
+/// The inverse of [`standard_normal_cdf`], by bisection over its own values.
+///
+/// Only wanted to bracket the corner solve below, where the answer is finally
+/// spelled as a length in points; 60 halvings of an 80-wide bracket leave far
+/// less than that can carry, and it avoids fitting a second rational
+/// approximation for a function called a handful of times per shadow.
+fn standard_normal_quantile(probability: f64) -> f64 {
+    let (mut low, mut high): (f64, f64) = (-40.0, 40.0);
+    for _ in 0..60 {
+        let middle: f64 = 0.5 * (low + high);
+        if standard_normal_cdf(middle) < probability {
+            low = middle;
+        } else {
+            high = middle;
+        }
+    }
+    0.5 * (low + high)
 }
 
 /// Ring boundaries in sigma units, outermost coverage first, paired with the
@@ -232,12 +258,17 @@ fn shadow_ring_bands() -> Vec<(f64, f64)> {
         .collect()
 }
 
+/// The blur's standard deviation in points, zero for a crisp shadow.
+pub(super) fn shadow_blur_sigma(shadow: &Shadow) -> f64 {
+    (SHADOW_BLUR_SIGMA_PER_RADIUS * shadow.blur_radius).max(0.0)
+}
+
 pub(super) fn shadow_blur_layers(shadow: &Shadow) -> Vec<(f64, u8)> {
     let opacity = shadow.opacity.clamp(0.0, 1.0);
     if shadow.blur_radius <= 0.0 {
         return vec![(0.0, (opacity * 255.0).round() as u8)];
     }
-    let sigma: f64 = SHADOW_BLUR_SIGMA_PER_RADIUS * shadow.blur_radius;
+    let sigma: f64 = shadow_blur_sigma(shadow);
     // Coverage target for the region covered by rings k.. is
     // `opacity * cdf_k`; solving outermost-in, ring k's own alpha is
     // 1 - (1 - target_k) / (1 - target_{k+1}).
@@ -306,17 +337,149 @@ pub(super) fn shadow_silhouette_corner_radius(stroke: &Option<BorderSide>) -> f6
         .map_or(0.0, |stroke| (stroke.width / 2.0).max(0.0))
 }
 
-/// The corner radius of one blur ring, given the silhouette's own radius and
-/// how far that ring is offset from it.
+/// How far the Gaussian's tail is followed when integrating over the corner
+/// arc, in sigma. `phi(6)` is 6e-9, five orders under the 1/255 an alpha byte
+/// can carry, so nothing outside that window survives being written out.
+const SHADOW_CORNER_TAIL_SIGMA: f64 = 6.0;
+
+/// Simpson intervals across that window. Against a 4096-interval reference
+/// over the whole quadrant the worst error on a sweep of arc radii from 0 to
+/// 100 sigma was 1.6e-5 of coverage, again far under one alpha level.
+const SHADOW_CORNER_QUADRATURE_STEPS: usize = 32;
+
+/// The coverage a Gaussian blur leaves on a convex right-angle corner's
+/// diagonal, as a fraction of the shadow's own opacity.
 ///
-/// A ring is the silhouette dilated by `blur_expansion`, and dilating by a
-/// disc grows a corner arc's radius by the same amount — which is why a square
-/// corner (radius 0) comes out rounded by the offset alone rather than mitred
-/// out to `blur_expansion * sqrt(2)` along the diagonal (issue #1138). The
-/// inner rings erode instead, and eroding past the arc leaves the corner
-/// square, so the radius floors at zero; Typst rejects a negative one.
-pub(super) fn shadow_ring_corner_radius(silhouette_radius: f64, blur_expansion: f64) -> f64 {
-    (silhouette_radius + blur_expansion).max(0.0)
+/// Both arguments are in sigma: `axis_offset` is how far the sample sits
+/// outside the corner arc's centre along each axis — so `axis_offset *
+/// sqrt(2)` out along the 45-degree bisector — and `arc_radius` is the
+/// silhouette's own corner arc. The silhouette near that corner is the
+/// quadrant behind the arc's centre grown by the arc, so a Gaussian sample
+/// lands inside it exactly when its distance to that quadrant is at most the
+/// arc radius.
+///
+/// Splitting on which axes the sample overshoots gives three terms: neither
+/// (the quadrant itself), one (a strip of width `arc_radius` past a single
+/// edge), and both — which leaves the bivariate normal's mass over a quarter
+/// disc. That last has no elementary form, so it is integrated over the
+/// arc's angle, where the integrand is one Gaussian bump whose width does not
+/// shrink as the radius grows.
+fn blurred_corner_coverage(axis_offset: f64, arc_radius: f64) -> f64 {
+    let beyond_edge: f64 = standard_normal_cdf(-axis_offset);
+    if arc_radius <= 0.0 {
+        // A square silhouette corner: the two axes are independent, so the
+        // coverage is exactly the product of the two edges' own tails.
+        return beyond_edge * beyond_edge;
+    }
+    let within_strip: f64 = standard_normal_cdf(arc_radius - axis_offset);
+    let outside_both: f64 = beyond_edge * (2.0 * within_strip - beyond_edge);
+
+    // Only the angles whose sample sits within the Gaussian's tail of the
+    // arc contribute; clipping to them keeps the quadrature's step fine
+    // enough however wide the arc is.
+    let low_sine: f64 = ((axis_offset - SHADOW_CORNER_TAIL_SIGMA) / arc_radius).clamp(0.0, 1.0);
+    let high_sine: f64 = ((axis_offset + SHADOW_CORNER_TAIL_SIGMA) / arc_radius).clamp(0.0, 1.0);
+    if high_sine <= low_sine {
+        return outside_both;
+    }
+    let (start, end): (f64, f64) = (low_sine.asin(), high_sine.asin());
+    let step: f64 = (end - start) / SHADOW_CORNER_QUADRATURE_STEPS as f64;
+    let mut total: f64 = 0.0;
+    for index in 0..=SHADOW_CORNER_QUADRATURE_STEPS {
+        let angle: f64 = start + step * index as f64;
+        let weight: f64 = if index == 0 || index == SHADOW_CORNER_QUADRATURE_STEPS {
+            1.0
+        } else if index % 2 == 1 {
+            4.0
+        } else {
+            2.0
+        };
+        total += weight
+            * standard_normal_pdf(arc_radius * angle.sin() - axis_offset)
+            * (standard_normal_cdf(arc_radius * angle.cos() - axis_offset) - beyond_edge)
+            * arc_radius
+            * angle.cos();
+    }
+    outside_both + total * step / 3.0
+}
+
+/// Where along a convex corner's diagonal the blurred coverage falls to
+/// `coverage`, as an offset per axis in sigma — the inverse of
+/// [`blurred_corner_coverage`] in its first argument, which is monotone.
+///
+/// Bracketed by the two shapes the silhouette sits between: it contains the
+/// bare quadrant, whose contour is the product of the two edge tails, and is
+/// contained in that quadrant dilated by the arc, whose contour is the
+/// equidistant one. Bisection inside that bracket needs no expansion step and
+/// cannot walk off a flat tail.
+fn blurred_corner_axis_offset(coverage: f64, arc_radius: f64) -> f64 {
+    let square_corner: f64 = -standard_normal_quantile(coverage.clamp(0.0, 1.0).sqrt());
+    let dilated: f64 = (arc_radius + standard_normal_quantile(1.0 - coverage.clamp(0.0, 1.0)))
+        / std::f64::consts::SQRT_2;
+    let (mut low, mut high): (f64, f64) = (square_corner.min(dilated), square_corner.max(dilated));
+    for _ in 0..32 {
+        let middle: f64 = 0.5 * (low + high);
+        if blurred_corner_coverage(middle, arc_radius) > coverage {
+            low = middle;
+        } else {
+            high = middle;
+        }
+    }
+    0.5 * (low + high)
+}
+
+/// The corner radius of one blur ring, given the silhouette's own radius, how
+/// far that ring is offset from it, and the blur's sigma.
+///
+/// A ring's alpha is solved from the 1-D Gaussian tail at its own offset, so
+/// the ring's boundary has to be the *iso-coverage* contour of the blurred
+/// silhouette at that tail. Along an edge that contour is the equidistant one
+/// — the silhouette dilated by the offset, which is why a square corner comes
+/// out rounded by the offset alone rather than mitred out to
+/// `blur_expansion * sqrt(2)` along the diagonal (issue #1138).
+///
+/// At a convex corner it is not. An isotropic Gaussian's coverage there is the
+/// product of the two edges' own tails, a quarter at a square corner against
+/// the half a single edge keeps, so the contour turns inside the equidistant
+/// one and the arc that follows it is wider. Dilating by a disc instead
+/// reproduces the edge's value at the same signed distance and leaves the
+/// corner about twice as dense as PowerPoint draws it (issue #1204): measured
+/// on `customGeo.pptx` page 46 against a native macOS PowerPoint export at
+/// 1200 DPI, grey outward along the 45-degree diagonal from the silhouette's
+/// bottom-left corner read 238.3 in the export against the dilated stack's
+/// 229.1, while both agreed to a level along the bottom edge.
+///
+/// A `#rect` carries one radius, so the arc is fitted where the two models
+/// differ most — on the diagonal. A ring reaching `offset + arc` past the
+/// corner on each axis reaches `sqrt(2) * (offset + arc - radius) + radius`
+/// along the bisector, and setting that equal to the contour's own reach
+/// there gives the `2 + sqrt(2)` below. The correction vanishes as the
+/// silhouette's arc grows past the blur's scale, where the boundary is
+/// locally straight and the equidistant contour is right again.
+///
+/// The radius still floors at zero: Typst rejects a negative one.
+pub(super) fn shadow_ring_corner_radius(
+    silhouette_radius: f64,
+    blur_expansion: f64,
+    blur_sigma: f64,
+) -> f64 {
+    let dilated: f64 = (silhouette_radius + blur_expansion).max(0.0);
+    if blur_sigma <= 0.0 {
+        // A crisp shadow has no ramp to follow; the ring *is* the silhouette.
+        return dilated;
+    }
+    let arc_radius: f64 = (silhouette_radius / blur_sigma).max(0.0);
+    let offset: f64 = blur_expansion / blur_sigma;
+    let coverage: f64 = standard_normal_cdf(-offset);
+    let contour: f64 = blurred_corner_axis_offset(coverage, arc_radius);
+    ((2.0 + std::f64::consts::SQRT_2) * blur_sigma * (offset + arc_radius - contour)).max(0.0)
+}
+
+/// A corner arc can never bite deeper than half the box it turns, whatever the
+/// contour asks for; Typst would clamp it anyway, and a ring degenerate enough
+/// to hit this carries almost no alpha.
+pub(super) fn clamp_ring_corner_radius(radius: f64, width: f64, height: f64) -> f64 {
+    radius.clamp(0.0, 0.5 * width.min(height))
 }
 
 /// Render a shadow approximation: concentric translucent duplicates whose
@@ -331,9 +494,30 @@ fn write_shadow_shape(out: &mut String, shape: &Shape, width: f64, height: f64, 
     let dy = shadow.distance * dir_rad.sin();
     let outline_outset: f64 = shadow_outline_outset(&shape.stroke);
     let silhouette_radius: f64 = shadow_silhouette_corner_radius(&shape.stroke);
+    let blur_sigma: f64 = shadow_blur_sigma(shadow);
+    // A polygon and a custom geometry both cast the shadow of their own
+    // outline, so both take the same silhouette: closed rings in the shape's
+    // frame, each offset rather than scaled (issue #1206).
+    let outline_rings: Option<Vec<OutlineRing>> = shadow_outline_rings(&shape.kind, width, height);
 
     for (blur_expansion, alpha) in shadow_blur_layers(shadow) {
         let expansion = outline_outset + blur_expansion;
+        if let Some(rings) = &outline_rings {
+            write_offset_ring_layer(
+                out,
+                rings,
+                RingGeometry {
+                    expansion,
+                    blur_expansion,
+                    blur_sigma,
+                    silhouette_radius,
+                },
+                shadow,
+                alpha,
+                (dx, dy),
+            );
+            continue;
+        }
         let layer_width = (width + 2.0 * expansion).max(0.0);
         let layer_height = (height + 2.0 * expansion).max(0.0);
         let _ = write!(
@@ -343,18 +527,16 @@ fn write_shadow_shape(out: &mut String, shape: &Shape, width: f64, height: f64, 
             format_f64(dy - expansion),
         );
         match &shape.kind {
-            ShapeKind::Polygon { vertices } => {
-                out.push_str("#polygon(");
-                write_polygon_vertices(out, layer_width, layer_height, vertices);
-                let _ = write!(
-                    out,
-                    ", fill: rgb({}, {}, {}, {})",
-                    shadow.color.r, shadow.color.g, shadow.color.b, alpha,
-                );
-                out.push(')');
-            }
             ShapeKind::RoundedRectangle { radius_fraction } => {
-                let radius = (radius_fraction * width.min(height) + expansion).max(0.0);
+                // The outline's join cannot square a corner the fill path
+                // already curves, so the silhouette's arc is the shape's own
+                // plus the half-width the stroke adds (#1057).
+                let silhouette_arc: f64 = radius_fraction * width.min(height) + outline_outset;
+                let radius = clamp_ring_corner_radius(
+                    shadow_ring_corner_radius(silhouette_arc, blur_expansion, blur_sigma),
+                    layer_width,
+                    layer_height,
+                );
                 let _ = write!(
                     out,
                     "#rect(width: {}pt, height: {}pt, radius: {}pt, fill: rgb({}, {}, {}, {}))",
@@ -368,7 +550,11 @@ fn write_shadow_shape(out: &mut String, shape: &Shape, width: f64, height: f64, 
                 );
             }
             ShapeKind::Rectangle => {
-                let radius: f64 = shadow_ring_corner_radius(silhouette_radius, blur_expansion);
+                let radius: f64 = clamp_ring_corner_radius(
+                    shadow_ring_corner_radius(silhouette_radius, blur_expansion, blur_sigma),
+                    layer_width,
+                    layer_height,
+                );
                 let _ = write!(
                     out,
                     "#rect(width: {}pt, height: {}pt, radius: {}pt, fill: rgb({}, {}, {}, {}))",
@@ -395,12 +581,233 @@ fn write_shadow_shape(out: &mut String, shape: &Shape, width: f64, height: f64, 
                     alpha,
                 );
             }
-            // Line is handled above; any future variants gracefully skip
-            // the shadow rather than panicking.
+            // Polygon, Path and Line are handled above; any future variants
+            // gracefully skip the shadow rather than panicking.
             _ => {}
         }
         out.push_str("]\n");
     }
+}
+
+/// One closed ring of a shadow silhouette, in the shape's own frame.
+struct OutlineRing {
+    vertices: Vec<(f64, f64)>,
+    /// A ring the fill rule leaves empty. Dilating the shape shrinks its
+    /// holes, so a hole offsets the other way.
+    hole: bool,
+}
+
+/// How far one ring of the stack sits from the fill path, and what the blur
+/// under it looks like.
+struct RingGeometry {
+    /// The whole signed offset from the fill path: the outline's outset plus
+    /// this ring's own share of the blur.
+    expansion: f64,
+    /// This ring's share alone, which is what the blur's contour is measured
+    /// from.
+    blur_expansion: f64,
+    blur_sigma: f64,
+    /// The arc the outline's join leaves on the silhouette itself, which is
+    /// all a crisp shadow has to follow.
+    silhouette_radius: f64,
+}
+
+/// The closed rings a shape's shadow silhouette is made of, or `None` for a
+/// kind whose silhouette is a box or an ellipse instead.
+///
+/// Only a closed subpath is a filled region: an unclosed polyline is stroked,
+/// and filling it would paint the area an elbow connector merely brackets
+/// (issues #1205, #1305).
+fn shadow_outline_rings(kind: &ShapeKind, width: f64, height: f64) -> Option<Vec<OutlineRing>> {
+    let rings: Vec<Vec<(f64, f64)>> = match kind {
+        ShapeKind::Polygon { vertices } => vec![scale_vertices(vertices, width, height)],
+        ShapeKind::Path { subpaths } => subpaths
+            .iter()
+            .filter(|subpath| subpath.closed)
+            .map(|subpath| scale_vertices(&subpath.vertices, width, height))
+            .collect(),
+        _ => return None,
+    };
+    // Under the even-odd rule a ring is a hole exactly when an odd number of
+    // the others enclose it.
+    Some(
+        rings
+            .iter()
+            .enumerate()
+            .map(|(index, vertices)| OutlineRing {
+                hole: vertices.first().is_some_and(|&point| {
+                    rings
+                        .iter()
+                        .enumerate()
+                        .filter(|&(other, _)| other != index)
+                        .filter(|(_, ring)| ring_contains(ring, point))
+                        .count()
+                        % 2
+                        == 1
+                }),
+                vertices: vertices.clone(),
+            })
+            .collect(),
+    )
+}
+
+fn scale_vertices(vertices: &[(f64, f64)], width: f64, height: f64) -> Vec<(f64, f64)> {
+    vertices
+        .iter()
+        .map(|(vx, vy)| (vx * width, vy * height))
+        .collect()
+}
+
+/// Whether `point` is inside `ring`, by crossing count.
+fn ring_contains(ring: &[(f64, f64)], point: (f64, f64)) -> bool {
+    let mut inside: bool = false;
+    for index in 0..ring.len() {
+        let (ax, ay): (f64, f64) = ring[index];
+        let (bx, by): (f64, f64) = ring[(index + 1) % ring.len()];
+        if (ay > point.1) != (by > point.1) && point.0 < (bx - ax) * (point.1 - ay) / (by - ay) + ax
+        {
+            inside = !inside;
+        }
+    }
+    inside
+}
+
+/// Write one ring of the stack as the silhouette's outline offset by
+/// `geometry.expansion` — a Minkowski dilation, not a copy scaled onto an
+/// expanded bounding box (issue #1206).
+///
+/// The coordinates are written relative to the outline's own bounding box so
+/// none of them goes negative, and `#place` carries the difference.
+fn write_offset_ring_layer(
+    out: &mut String,
+    rings: &[OutlineRing],
+    geometry: RingGeometry,
+    shadow: &Shadow,
+    alpha: u8,
+    origin: (f64, f64),
+) {
+    // A crisp shadow has no ramp to follow, so its one ring is the silhouette
+    // itself, turned by whichever join the outline declares (#1090).
+    let reach: CornerReach = if geometry.blur_sigma > 0.0 {
+        CornerReach::Blurred {
+            sigma: geometry.blur_sigma,
+            expansion: geometry.blur_expansion,
+        }
+    } else if geometry.silhouette_radius > 0.0 {
+        CornerReach::Round
+    } else {
+        CornerReach::Mitre
+    };
+    let corners: Vec<Vec<OffsetCorner>> = rings
+        .iter()
+        .map(|ring| {
+            let sign: f64 = if ring.hole { -1.0 } else { 1.0 };
+            offset_ring(
+                &ring.vertices,
+                sign * geometry.expansion,
+                match reach {
+                    CornerReach::Blurred { sigma, expansion } => CornerReach::Blurred {
+                        sigma,
+                        expansion: sign * expansion,
+                    },
+                    other => other,
+                },
+            )
+        })
+        .filter(|corners| !corners.is_empty())
+        .collect();
+    if corners.is_empty() {
+        return;
+    }
+
+    let segments: Vec<Vec<RingSegment>> = corners
+        .iter()
+        .map(|corners| ring_segments(corners))
+        .collect();
+    let (left, top): (f64, f64) = segments
+        .iter()
+        .flatten()
+        .flat_map(RingSegment::points)
+        .fold((f64::MAX, f64::MAX), |(left, top), (x, y)| {
+            (left.min(x), top.min(y))
+        });
+    let _ = write!(
+        out,
+        "#place(top + left, dx: {}pt, dy: {}pt)[#curve(fill-rule: \"even-odd\", fill: rgb({}, {}, {}, {})",
+        format_f64(origin.0 + left),
+        format_f64(origin.1 + top),
+        shadow.color.r,
+        shadow.color.g,
+        shadow.color.b,
+        alpha,
+    );
+    for ring in &segments {
+        for segment in ring {
+            segment.write(out, (left, top));
+        }
+        out.push_str(", curve.close()");
+    }
+    out.push_str(")]\n");
+}
+
+/// One drawn step of a ring's outline.
+enum RingSegment {
+    Move((f64, f64)),
+    Line((f64, f64)),
+    Cubic((f64, f64), (f64, f64), (f64, f64)),
+}
+
+impl RingSegment {
+    fn points(&self) -> Vec<(f64, f64)> {
+        match self {
+            RingSegment::Move(point) | RingSegment::Line(point) => vec![*point],
+            // A cubic never leaves its own control hull, so bounding the four
+            // points bounds the curve.
+            RingSegment::Cubic(first, second, end) => vec![*first, *second, *end],
+        }
+    }
+
+    fn write(&self, out: &mut String, offset: (f64, f64)) {
+        let at = |(x, y): (f64, f64)| -> String {
+            format!(
+                "({}pt, {}pt)",
+                format_f64(x - offset.0),
+                format_f64(y - offset.1),
+            )
+        };
+        let _ = match self {
+            RingSegment::Move(point) => write!(out, ", curve.move({})", at(*point)),
+            RingSegment::Line(point) => write!(out, ", curve.line({})", at(*point)),
+            RingSegment::Cubic(first, second, end) => write!(
+                out,
+                ", curve.cubic({}, {}, {})",
+                at(*first),
+                at(*second),
+                at(*end),
+            ),
+        };
+    }
+}
+
+/// The drawn steps of one offset ring: a straight run into every corner, and
+/// the arc that turns it.
+fn ring_segments(corners: &[OffsetCorner]) -> Vec<RingSegment> {
+    let mut segments: Vec<RingSegment> = Vec::with_capacity(2 * corners.len());
+    for (index, corner) in corners.iter().enumerate() {
+        segments.push(if index == 0 {
+            RingSegment::Move(corner.entry)
+        } else {
+            RingSegment::Line(corner.entry)
+        });
+        if let Some(arc) = &corner.arc {
+            segments.extend(
+                arc_beziers(arc)
+                    .into_iter()
+                    .map(|(first, second, end)| RingSegment::Cubic(first, second, end)),
+            );
+        }
+    }
+    segments
 }
 
 /// Write fill color, using rgb with 4 args when opacity is set, rgb with 3 args otherwise.
@@ -475,7 +882,7 @@ fn write_subpath_curve(
     shape: &Shape,
     width: f64,
     height: f64,
-    subpaths: &[Vec<(f64, f64)>],
+    subpaths: &[Subpath],
 ) {
     out.push_str("#curve(fill-rule: \"even-odd\"");
     if let Some(pattern) = &shape.pattern_fill {
@@ -494,9 +901,14 @@ fn write_subpath_curve(
     out.push_str(")\n");
 }
 
-/// One closed subpath as `curve.move` / `curve.line` … / `curve.close`.
-fn write_curve_subpath(out: &mut String, width: f64, height: f64, vertices: &[(f64, f64)]) {
-    for (index, (vx, vy)) in vertices.iter().enumerate() {
+/// One subpath as `curve.move` / `curve.line` …, closed with `curve.close`
+/// only when the geometry said `a:close`.
+///
+/// Typst closes an open curve for filling but not for stroking, which is what
+/// DrawingML does: an unclosed connector's outline stops at its last point
+/// (issue #1205).
+fn write_curve_subpath(out: &mut String, width: f64, height: f64, subpath: &Subpath) {
+    for (index, (vx, vy)) in subpath.vertices.iter().enumerate() {
         let verb: &str = if index == 0 { "move" } else { "line" };
         let _ = write!(
             out,
@@ -506,7 +918,9 @@ fn write_curve_subpath(out: &mut String, width: f64, height: f64, vertices: &[(f
             format_f64(vy * height),
         );
     }
-    out.push_str(", curve.close()");
+    if subpath.closed {
+        out.push_str(", curve.close()");
+    }
 }
 
 /// Generate a Typst `#polygon(...)` for an arbitrary polygon shape.

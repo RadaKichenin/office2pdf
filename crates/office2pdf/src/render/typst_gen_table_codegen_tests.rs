@@ -252,14 +252,74 @@ fn test_repeating_header_expands_to_cover_rowspan() {
         ..Table::default()
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
-    let result = generate_typst(&doc).unwrap().source;
-    let header_start = result.find("table.header(").expect("header block");
-    let body_start = result.find("Body 1").expect("body row");
-    let header = &result[header_start..body_start];
+    let output = generate_typst(&doc).unwrap();
+    let header = first_table_header_block(&output.source);
 
-    assert!(header.contains("Spanning header"), "{result}");
-    assert!(header.contains("Month"), "{result}");
-    assert!(header.contains("Day"), "{result}");
+    assert!(header.contains("Spanning header"), "{}", output.source);
+    assert!(header.contains("Month"), "{}", output.source);
+    assert!(header.contains("Day"), "{}", output.source);
+    assert!(!header.contains("Body 1"), "{}", output.source);
+    crate::render::pdf::compile_to_pdf(&output.source, &output.images, None, &[], false, false)
+        .unwrap_or_else(|error| panic!("compile failed: {error}\n{}", output.source));
+}
+
+#[test]
+fn test_repeating_header_expansion_follows_rowspans_from_newly_covered_rows() {
+    let mut first_header = make_text_cell("First header");
+    first_header.row_span = 2;
+    let mut extending_header = make_text_cell("Extending header");
+    extending_header.row_span = 3;
+    let table = Table {
+        rows: vec![
+            TableRow {
+                minimum_height: None,
+                cells: vec![first_header, make_text_cell("Year")],
+                height: None,
+            },
+            TableRow {
+                minimum_height: None,
+                cells: vec![extending_header],
+                height: None,
+            },
+            TableRow {
+                minimum_height: None,
+                cells: vec![make_text_cell("Covered 1")],
+                height: None,
+            },
+            TableRow {
+                minimum_height: None,
+                cells: vec![make_text_cell("Covered 2")],
+                height: None,
+            },
+            TableRow {
+                minimum_height: None,
+                cells: vec![make_text_cell("Body 1"), make_text_cell("Body 2")],
+                height: None,
+            },
+        ],
+        column_widths: vec![100.0, 100.0],
+        header_row_count: 1,
+        ..Table::default()
+    };
+    let output =
+        generate_typst(&make_doc(vec![make_flow_page(vec![Block::Table(table)])])).unwrap();
+    let header = first_table_header_block(&output.source);
+
+    assert!(header.contains("Extending header"), "{}", output.source);
+    assert!(header.contains("Covered 1"), "{}", output.source);
+    assert!(header.contains("Covered 2"), "{}", output.source);
+    assert!(!header.contains("Body 1"), "{}", output.source);
+    crate::render::pdf::compile_to_pdf(&output.source, &output.images, None, &[], false, false)
+        .unwrap_or_else(|error| panic!("compile failed: {error}\n{}", output.source));
+}
+
+fn first_table_header_block(source: &str) -> &str {
+    let header_start = source.find("table.header(").expect("header block");
+    let header_end = source[header_start..]
+        .find("\n  ),\n")
+        .map(|offset| header_start + offset)
+        .expect("header block must close");
+    &source[header_start..header_end]
 }
 
 #[test]

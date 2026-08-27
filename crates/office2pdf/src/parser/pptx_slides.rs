@@ -859,7 +859,7 @@ struct PictureState {
     /// Subpaths flattened from `<a:custGeom>`, normalized to the picture box.
     /// A picture may crop to a custom shape just as it can to a preset one
     /// (issue #872).
-    custom_geometry: Vec<Vec<(f64, f64)>>,
+    custom_geometry: Vec<crate::ir::Subpath>,
     /// Outer shadow from the picture's `<a:effectLst>` (issue #360).
     shadow: Option<Shadow>,
     /// First `<a:gd>` adjust value inside the picture's prstGeom avLst.
@@ -939,7 +939,7 @@ struct ShapeState {
     /// Subpaths flattened from `<a:custGeom>`, each normalized to the shape
     /// box. Empty when the geometry yielded nothing usable, in which case the
     /// rectangle fallback stands (issues #855, #866).
-    custom_geometry: Vec<Vec<(f64, f64)>>,
+    custom_geometry: Vec<crate::ir::Subpath>,
     fill: Option<Color>,
     gradient_fill: Option<GradientFill>,
     pattern_fill: Option<PatternFill>,
@@ -1472,7 +1472,7 @@ fn crop_kept_fractions(crop: Option<ImageCrop>) -> Option<(f64, f64, f64, f64)> 
 /// alone rather than clipping it against guessed units.
 fn clip_svg_to_path(
     data: &[u8],
-    subpaths: &[Vec<(f64, f64)>],
+    subpaths: &[crate::ir::Subpath],
     crop: Option<ImageCrop>,
 ) -> Option<Vec<u8>> {
     use std::fmt::Write as _;
@@ -1512,8 +1512,10 @@ fn clip_svg_to_path(
     };
 
     let mut path: String = String::new();
-    for subpath in subpaths.iter().filter(|points| points.len() >= 3) {
-        for (index, (fx, fy)) in subpath.iter().enumerate() {
+    // A clip region is an area however the geometry ended, so every subpath
+    // closes here whether or not it stated `a:close`.
+    for subpath in subpaths.iter().filter(|path| path.vertices.len() >= 3) {
+        for (index, (fx, fy)) in subpath.vertices.iter().enumerate() {
             let _ = write!(
                 path,
                 "{} {} {} ",
@@ -1659,7 +1661,7 @@ fn format_svg_number(value: f64) -> String {
 /// an inner boundary carves a hole (issues #866, #870).
 fn apply_path_mask(
     data: &[u8],
-    subpaths: &[Vec<(f64, f64)>],
+    subpaths: &[crate::ir::Subpath],
     crop: Option<ImageCrop>,
 ) -> Option<(Vec<u8>, ImageFormat)> {
     let decoded = image::load_from_memory(data).ok()?;
@@ -1689,17 +1691,21 @@ fn apply_path_mask(
     Some((out.into_inner(), ImageFormat::Png))
 }
 
-/// Whether a point falls inside a set of closed subpaths under the even-odd
-/// rule: cast a ray and count the edges it crosses.
-fn point_is_inside_even_odd(subpaths: &[Vec<(f64, f64)>], px: f64, py: f64) -> bool {
+/// Whether a point falls inside a set of subpaths under the even-odd rule:
+/// cast a ray and count the edges it crosses.
+///
+/// Each subpath is treated as closed, as a filled region is: DrawingML closes
+/// an unclosed outline to fill it and only leaves it open for the stroke.
+fn point_is_inside_even_odd(subpaths: &[crate::ir::Subpath], px: f64, py: f64) -> bool {
     let mut crossings: usize = 0;
     for subpath in subpaths {
-        if subpath.len() < 3 {
+        let vertices: &[(f64, f64)] = &subpath.vertices;
+        if vertices.len() < 3 {
             continue;
         }
-        for index in 0..subpath.len() {
-            let (x1, y1) = subpath[index];
-            let (x2, y2) = subpath[(index + 1) % subpath.len()];
+        for index in 0..vertices.len() {
+            let (x1, y1) = vertices[index];
+            let (x2, y2) = vertices[(index + 1) % vertices.len()];
             // A horizontal edge cannot be crossed by a horizontal ray, and the
             // half-open test keeps a vertex from counting twice.
             if (y1 > py) != (y2 > py) {
@@ -2032,7 +2038,15 @@ impl<'a> SlideXmlParser<'a> {
             // A picture can crop to a custom shape as well as a preset one
             // (issue #872).
             b"custGeom" if self.in_pic && self.pic.in_sp_pr => {
-                self.pic.custom_geometry = super::custom_geometry::parse_custom_geometry(reader);
+                // `<a:xfrm>` precedes the geometry in `<p:spPr>`, so the box a
+                // guide formula measures against is already known.
+                self.pic.custom_geometry = super::custom_geometry::parse_custom_geometry(
+                    reader,
+                    super::geometry_guides::ShapeExtent::new(
+                        self.pic.cx as f64,
+                        self.pic.cy as f64,
+                    ),
+                );
             }
             b"effectLst" if self.in_pic && self.pic.in_sp_pr => {
                 self.pic.shadow = parse_effect_list(reader, self.ctx.theme, self.ctx.color_map);
@@ -2056,7 +2070,13 @@ impl<'a> SlideXmlParser<'a> {
             // a rectangle, so its fill renders as it did before
             // (issues #855, #866, #870).
             b"custGeom" if self.shape.in_sp_pr && self.shape.prst_geom.is_none() => {
-                self.shape.custom_geometry = super::custom_geometry::parse_custom_geometry(reader);
+                self.shape.custom_geometry = super::custom_geometry::parse_custom_geometry(
+                    reader,
+                    super::geometry_guides::ShapeExtent::new(
+                        self.shape.cx as f64,
+                        self.shape.cy as f64,
+                    ),
+                );
                 self.shape.prst_geom = Some("rect".to_string());
             }
             b"noFill" if self.shape.in_sp_pr && !self.shape.in_ln && !self.in_rpr => {
@@ -3227,7 +3247,11 @@ mod picture_mask_tests {
     /// scaled onto the root's own viewBox to become user-space coordinates.
     #[test]
     fn an_svg_takes_its_custom_geometry_as_a_clip_path() {
-        let triangle = vec![vec![(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]];
+        let triangle = vec![crate::ir::Subpath::closed_outline(vec![
+            (0.0, 0.0),
+            (1.0, 0.0),
+            (0.0, 1.0),
+        ])];
         let out = clip_svg_to_path(SVG.as_bytes(), &triangle, None).expect("the SVG is clipped");
         let text = String::from_utf8(out).expect("still an SVG");
 
@@ -3260,15 +3284,29 @@ mod picture_mask_tests {
     #[test]
     fn an_svg_without_a_view_box_is_not_clipped() {
         const NO_BOX: &str = r#"<svg width="10" height="10"><rect width="10" height="10"/></svg>"#;
-        let triangle = vec![vec![(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]];
+        let triangle = vec![crate::ir::Subpath::closed_outline(vec![
+            (0.0, 0.0),
+            (1.0, 0.0),
+            (0.0, 1.0),
+        ])];
         assert!(clip_svg_to_path(NO_BOX.as_bytes(), &triangle, None).is_none());
     }
 
     /// The unit square, and a smaller square inside it.
-    fn frame() -> Vec<Vec<(f64, f64)>> {
+    fn frame() -> Vec<crate::ir::Subpath> {
         vec![
-            vec![(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)],
-            vec![(0.25, 0.25), (0.75, 0.25), (0.75, 0.75), (0.25, 0.75)],
+            crate::ir::Subpath::closed_outline(vec![
+                (0.0, 0.0),
+                (1.0, 0.0),
+                (1.0, 1.0),
+                (0.0, 1.0),
+            ]),
+            crate::ir::Subpath::closed_outline(vec![
+                (0.25, 0.25),
+                (0.75, 0.25),
+                (0.75, 0.75),
+                (0.25, 0.75),
+            ]),
         ]
     }
 
@@ -3276,7 +3314,11 @@ mod picture_mask_tests {
     /// rest, so a point outside every subpath is masked away (issue #872).
     #[test]
     fn a_point_outside_the_only_subpath_is_masked() {
-        let triangle = vec![vec![(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]];
+        let triangle = vec![crate::ir::Subpath::closed_outline(vec![
+            (0.0, 0.0),
+            (1.0, 0.0),
+            (0.0, 1.0),
+        ])];
         assert!(point_is_inside_even_odd(&triangle, 0.1, 0.1));
         assert!(!point_is_inside_even_odd(&triangle, 0.9, 0.9));
     }
@@ -3302,7 +3344,10 @@ mod picture_mask_tests {
     /// A degenerate subpath encloses nothing and must not swallow the picture.
     #[test]
     fn a_subpath_with_too_few_points_is_ignored() {
-        let degenerate = vec![vec![(0.0, 0.0), (1.0, 1.0)]];
+        let degenerate = vec![crate::ir::Subpath::closed_outline(vec![
+            (0.0, 0.0),
+            (1.0, 1.0),
+        ])];
         assert!(!point_is_inside_even_odd(&degenerate, 0.5, 0.5));
     }
 
@@ -3310,7 +3355,12 @@ mod picture_mask_tests {
     /// of the mask inverts.
     #[test]
     fn a_vertex_on_the_ray_is_counted_once() {
-        let diamond = vec![vec![(0.5, 0.0), (1.0, 0.5), (0.5, 1.0), (0.0, 0.5)]];
+        let diamond = vec![crate::ir::Subpath::closed_outline(vec![
+            (0.5, 0.0),
+            (1.0, 0.5),
+            (0.5, 1.0),
+            (0.0, 0.5),
+        ])];
         assert!(point_is_inside_even_odd(&diamond, 0.5, 0.5));
         assert!(!point_is_inside_even_odd(&diamond, 0.05, 0.05));
         // The ray at y = 0.5 passes exactly through the left and right vertices.
@@ -3324,7 +3374,11 @@ mod picture_mask_tests {
     /// box it lands on the pre-crop artwork instead (issue #1018).
     #[test]
     fn a_src_rect_crop_moves_the_svg_clip_into_the_kept_region() {
-        let triangle = vec![vec![(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]];
+        let triangle = vec![crate::ir::Subpath::closed_outline(vec![
+            (0.0, 0.0),
+            (1.0, 0.0),
+            (0.0, 1.0),
+        ])];
         let crop = ImageCrop {
             left: 0.25,
             top: 0.0,
@@ -3345,7 +3399,11 @@ mod picture_mask_tests {
     /// clip on the full box, or clip and crop disagree about the frame again.
     #[test]
     fn a_degenerate_crop_leaves_the_svg_clip_on_the_full_box() {
-        let triangle = vec![vec![(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]];
+        let triangle = vec![crate::ir::Subpath::closed_outline(vec![
+            (0.0, 0.0),
+            (1.0, 0.0),
+            (0.0, 1.0),
+        ])];
         let crop = ImageCrop {
             left: 0.7,
             top: 0.0,
@@ -3380,7 +3438,12 @@ mod picture_mask_tests {
             right: 0.0,
             bottom: 0.0,
         };
-        let half = vec![vec![(0.0, 0.0), (0.5, 0.0), (0.5, 1.0), (0.0, 1.0)]];
+        let half = vec![crate::ir::Subpath::closed_outline(vec![
+            (0.0, 0.0),
+            (0.5, 0.0),
+            (0.5, 1.0),
+            (0.0, 1.0),
+        ])];
         let (data, _format) =
             apply_path_mask(&png.into_inner(), &half, Some(crop)).expect("the raster is masked");
         let masked = image::load_from_memory(&data).expect("decode").into_rgba8();

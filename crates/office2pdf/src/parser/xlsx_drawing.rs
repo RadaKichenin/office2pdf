@@ -616,8 +616,13 @@ pub(super) struct RawImageAnchor {
 }
 
 /// Extract anchored pictures per sheet from worksheet drawings.
-/// Metafiles (EMF/WMF) are converted to SVG; unknown formats are skipped.
-pub(super) fn extract_images_with_anchors(data: &[u8]) -> HashMap<String, Vec<RawImageAnchor>> {
+/// Raster parts are sniffed and fully decoded; invalid rasters and unknown
+/// formats are omitted with an unsupported-element warning. Metafiles
+/// (EMF/WMF) are converted to SVG, with conversion failures omitted likewise.
+pub(super) fn extract_images_with_anchors(
+    data: &[u8],
+    warnings: &mut Vec<crate::error::ConvertWarning>,
+) -> HashMap<String, Vec<RawImageAnchor>> {
     let Ok(mut archive) = crate::parser::open_zip(data) else {
         return HashMap::new();
     };
@@ -670,6 +675,10 @@ pub(super) fn extract_images_with_anchors(data: &[u8]) -> HashMap<String, Vec<Ra
                     continue;
                 };
                 let Some((data, format)) = decode_media(&media_path, bytes) else {
+                    warnings.push(crate::error::ConvertWarning::UnsupportedElement {
+                        format: "XLSX".to_string(),
+                        element: format!("image omitted: {media_path}"),
+                    });
                     continue;
                 };
                 // Excel composites a picture carrying `<a:alphaModFix>` onto
@@ -720,11 +729,9 @@ fn decode_media(path: &str, bytes: Vec<u8>) -> Option<(Vec<u8>, crate::ir::Image
     use crate::ir::ImageFormat;
     let extension: String = path.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
     match extension.as_str() {
-        "png" => Some((bytes, ImageFormat::Png)),
-        "jpg" | "jpeg" => Some((bytes, ImageFormat::Jpeg)),
-        "gif" => Some((bytes, ImageFormat::Gif)),
-        "bmp" => Some((bytes, ImageFormat::Bmp)),
-        "tif" | "tiff" => Some((bytes, ImageFormat::Tiff)),
+        "png" | "jpg" | "jpeg" | "gif" | "bmp" | "tif" | "tiff" => {
+            crate::parser::drawingml::validated_raster_format(&bytes).map(|format| (bytes, format))
+        }
         "svg" => Some((bytes, ImageFormat::Svg)),
         "emf" => crate::parser::emf::convert_emf_to_svg(&bytes).map(|svg| (svg, ImageFormat::Svg)),
         "wmf" => crate::parser::wmf::convert_wmf_to_svg(&bytes).map(|svg| (svg, ImageFormat::Svg)),

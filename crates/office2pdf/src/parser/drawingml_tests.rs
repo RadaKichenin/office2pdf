@@ -4,7 +4,7 @@ use quick_xml::Reader;
 use quick_xml::events::Event;
 
 use super::*;
-use crate::ir::Color;
+use crate::ir::{Color, ImageFormat};
 
 fn scheme_with(colors: &[(&str, Color)], aliases: &[(&str, &str)]) -> (ColorsMap, AliasMap) {
     let colors: ColorsMap = colors
@@ -20,6 +20,36 @@ fn scheme_with(colors: &[(&str, Color)], aliases: &[(&str, &str)]) -> (ColorsMap
 
 type ColorsMap = HashMap<String, Color>;
 type AliasMap = HashMap<String, String>;
+
+#[test]
+fn supported_raster_formats_survive_sniffing_and_full_decode() {
+    let image = image::DynamicImage::new_rgb8(2, 2);
+    let formats = [
+        (image::ImageFormat::Png, ImageFormat::Png),
+        (image::ImageFormat::Jpeg, ImageFormat::Jpeg),
+        (image::ImageFormat::Gif, ImageFormat::Gif),
+        (image::ImageFormat::Bmp, ImageFormat::Bmp),
+        (image::ImageFormat::Tiff, ImageFormat::Tiff),
+    ];
+
+    for (encoded_format, expected) in formats {
+        let mut encoded = std::io::Cursor::new(Vec::new());
+        image
+            .write_to(&mut encoded, encoded_format)
+            .expect("test raster encodes");
+        assert_eq!(
+            validated_raster_format(&encoded.into_inner()),
+            Some(expected),
+            "{encoded_format:?} must remain supported"
+        );
+    }
+}
+
+#[test]
+fn malformed_raster_is_rejected_even_when_its_signature_is_present() {
+    assert_eq!(validated_raster_format(b"not an image"), None);
+    assert_eq!(validated_raster_format(b"\x89PNG\r\n\x1a\ntruncated"), None);
+}
 
 #[test]
 fn resolve_scheme_color_direct_lookup() {

@@ -1,5 +1,5 @@
 use super::*;
-use crate::ir::{ChartAreaOutline, DataLabelPosition, MarkerSymbol};
+use crate::ir::{ChartAreaFill, ChartAreaOutline, DataLabelPosition, MarkerSymbol};
 use crate::render::font_subst;
 
 /// How a chart is drawn. Selecting the variant once lets the atomicity decision
@@ -757,9 +757,9 @@ pub(super) const CHART_AREA_OUTLINE: &str = CHART_AUTOMATIC_LINE;
 fn automatic_chart_area_stroke(host: crate::ir::ChartHost) -> &'static str {
     match host {
         crate::ir::ChartHost::Presentation => "none",
-        crate::ir::ChartHost::Spreadsheet | crate::ir::ChartHost::WordProcessing => {
-            CHART_AREA_OUTLINE
-        }
+        crate::ir::ChartHost::Spreadsheet
+        | crate::ir::ChartHost::SpreadsheetChartsheet
+        | crate::ir::ChartHost::WordProcessing => CHART_AREA_OUTLINE,
     }
 }
 
@@ -789,6 +789,18 @@ fn chart_area_stroke(outline: &ChartAreaOutline, host: crate::ir::ChartHost) -> 
                 |c| format!("rgb({}, {}, {})", c.r, c.g, c.b)
             )
         ),
+    }
+}
+
+/// The Typst `fill:` argument for the outermost chart-area box.
+///
+/// A stated solid fill belongs to the full chart space, including its title.
+/// Both an absent fill and explicit `noFill` preserve today's transparent
+/// output, while remaining distinct in the IR for host defaults (#1217).
+fn chart_area_fill(fill: &ChartAreaFill) -> String {
+    match fill {
+        ChartAreaFill::Unspecified | ChartAreaFill::Transparent => "none".to_string(),
+        ChartAreaFill::Solid(color) => format!("rgb({}, {}, {})", color.r, color.g, color.b),
     }
 }
 
@@ -836,6 +848,22 @@ pub(super) const CHART_DEFAULT_TEXT_PT: f64 = 10.0;
 /// requested (issue #669).
 pub(super) fn chart_text_pt(chart: &Chart) -> f64 {
     chart.text_style.size_pt.unwrap_or(CHART_DEFAULT_TEXT_PT)
+}
+
+/// The size of every legend entry, resolving the legend's own `c:txPr` over
+/// the chart space before falling back to the renderer default (issue #1236).
+fn chart_legend_text_pt(chart: &Chart) -> f64 {
+    chart
+        .text_style
+        .resolved_size_pt(chart.legend_text_style)
+        .unwrap_or(CHART_DEFAULT_TEXT_PT)
+}
+
+fn chart_legend_text_is_bold(chart: &Chart) -> bool {
+    chart
+        .text_style
+        .resolved_bold(chart.legend_text_style)
+        .unwrap_or(false)
 }
 
 /// The size one axis' own labels take, honouring the `c:catAx`/`c:valAx`
@@ -914,6 +942,11 @@ pub(super) fn chart_axis_text_attrs(chart: &Chart, axis: crate::ir::ChartTextSty
         chart_axis_text_fill(chart, axis),
         chart_axis_text_tracking(chart, axis)
     )
+}
+
+/// Every Typst text argument a legend entry inherits beyond its resolved size.
+fn chart_legend_text_attrs(chart: &Chart) -> String {
+    chart_axis_text_attrs(chart, chart.legend_text_style)
 }
 
 /// Height of the box that vertically centres one value tick label on its
@@ -1795,8 +1828,10 @@ fn chart_column_value_gutter_pt(chart: &Chart) -> f64 {
     if chart.text_style.size_pt.is_none() && chart.value_axis_text_style.size_pt.is_none() {
         return TICK_GAP + GAP;
     }
-    if chart.host == crate::ir::ChartHost::Spreadsheet
-        && let Some(gutter) = excel_column_value_gutter_pt(chart)
+    if matches!(
+        chart.host,
+        crate::ir::ChartHost::Spreadsheet | crate::ir::ChartHost::SpreadsheetChartsheet
+    ) && let Some(gutter) = excel_column_value_gutter_pt(chart)
     {
         return gutter;
     }
@@ -1814,8 +1849,10 @@ fn chart_column_value_gutter_pt(chart: &Chart) -> f64 {
 /// gutter itself follows the labels.
 fn chart_column_value_label_box(chart: &Chart) -> (f64, f64) {
     let left: f64 = chart_column_value_label_x(chart);
-    if chart.host == crate::ir::ChartHost::Spreadsheet
-        && let Some(gutter) = excel_column_value_gutter_pt(chart)
+    if matches!(
+        chart.host,
+        crate::ir::ChartHost::Spreadsheet | crate::ir::ChartHost::SpreadsheetChartsheet
+    ) && let Some(gutter) = excel_column_value_gutter_pt(chart)
         && let Some(gap) = excel_value_label_plot_gap_pt(chart)
     {
         return (left, (gutter - gap - left).max(0.0));
@@ -2290,9 +2327,9 @@ fn axis_plot_insets(chart: &Chart, frame: Option<(f64, f64)>) -> (f64, f64) {
     }
 }
 
-/// What the frame leaves the plot box: the title block is emitted above the
-/// box rather than inside it, so a framed chart's box gets what remains
-/// beneath it.
+/// What the full chart-area frame leaves its inner content box after the title
+/// takes its band. The chart-area outline itself stays around both boxes; see
+/// [`write_chart_area_start`] (issue #1216).
 fn axis_content_frame(frame: Option<(f64, f64)>, title_h: f64) -> Option<(f64, f64)> {
     frame.map(|(width, height)| (width, (height - title_h).max(MIN_PLOT_PT)))
 }
@@ -2420,12 +2457,63 @@ const AUTOMATIC_CHART_TITLE: &str = "Chart Title";
 /// 18pt `bar-chart.pptx` declares comes back as a 22pt title.
 const CHART_AREA_TITLE_SCALE: f64 = 1.2;
 
+/// Band a chart-area title of a size its own `c:txPr` states takes, above the
+/// plot's own inset.
+///
+/// Measured against twelve Excel for Mac 16.100 exports of the `Chart`
+/// chartsheet of `tests/fixtures/xlsx/any_sheets.xlsx`, forced to Letter
+/// landscape, with the title's `sz` rewritten one value at a time and nothing
+/// else touched. `mutool draw -F trace` puts the chart area's top edge at
+/// 58.00pt on every one of them, and the topmost major gridline — the plot
+/// box's top — this far below it:
+///
+/// | title `sz` | plot top below the chart area |
+/// | ---: | ---: |
+/// | 7 | 32.09 |
+/// | 8 | 33.83 |
+/// | 9 | 35.56 |
+/// | 10 | 37.28 |
+/// | 11 | 39.02 |
+/// | 12 | 40.75 |
+/// | 14 | 44.20 |
+/// | 16 | 47.66 |
+/// | 18 | 51.12 |
+/// | 24 | 61.50 |
+/// | 32 | 75.33 |
+/// | 36 | 82.24 |
+///
+/// A thirteenth export with the `<c:title>` element removed altogether starts
+/// its plot 11.00pt below the same edge, which is the inset the plot takes on
+/// its own account — [`axis_plot_insets`] models that separately, so it comes
+/// off before the band is fitted. The least-squares line through the twelve is
+/// then `8.994 + 1.72912 em`, and no export sits further than 0.007pt from it.
+const CHART_TITLE_BAND_PT: f64 = 8.994;
+const CHART_TITLE_BAND_EM: f64 = 1.72912;
+
+/// Baseline seat of an Excel chartsheet title below the chart area's top.
+///
+/// The same twelve exports used for [`CHART_TITLE_BAND_PT`] put the title
+/// baselines on `8.251pt + 1.26390em`, with no sample further than 0.70pt from
+/// that fit (issue #1314). An explicit seat avoids inheriting the ascent and
+/// descent of whatever fallback face Typst happens to resolve.
+const CHARTSHEET_TITLE_BASELINE_PT: f64 = 8.251;
+const CHARTSHEET_TITLE_BASELINE_EM: f64 = 1.26390;
+
 /// The chart-area title's size.
 ///
+/// A `c:title` stating a size in its own `c:txPr` states the printed size:
+/// `any_sheets.xlsx` writes `sz="1400"` there and Excel prints
+/// `trm="14 0 0 14"`. [`CHART_AREA_TITLE_SCALE`] belongs to the chart space's
+/// size, which Office scales *into* a title size, and applying it to a size
+/// the title already states would scale it twice (issue #1215).
+///
 /// A chart declaring nothing keeps [`CHART_AREA_TITLE_PT`], which is what
-/// [`AREA_TITLE_H`] was measured against; one that declares a size gets that
-/// size scaled the way Office scales it (issue #669).
+/// [`AREA_TITLE_H`] was measured against; one whose chart space declares a
+/// size gets that size scaled the way Office scales it (issue #669).
 fn chart_area_title_pt(chart: &Chart) -> f64 {
+    if let Some(stated) = chart.title_text_style.size_pt {
+        return stated;
+    }
     chart
         .text_style
         .size_pt
@@ -2438,17 +2526,42 @@ fn chart_area_title_pt(chart: &Chart) -> f64 {
 
 /// Height the chart-area title block takes.
 ///
-/// [`AREA_TITLE_H`] preserves charts that declare no text size. Native
-/// PowerPoint 16.112 exports at 10, 12, 18, 24, and 36pt establish the explicit
-/// size relationship used here (#706). It changes only the title/plot chrome,
-/// not the horizontal PowerPoint automatic axis scale resolved by
-/// [`powerpoint_nice_axis`].
+/// A title stating its own size is measured directly against Excel — see
+/// [`CHART_TITLE_BAND_PT`]. [`AREA_TITLE_H`] preserves charts that declare no
+/// text size at all. Native PowerPoint 16.112 exports at 10, 12, 18, 24, and
+/// 36pt establish the explicit chart-space size relationship in between (#706).
+/// It changes only the title/plot chrome, not the horizontal PowerPoint
+/// automatic axis scale resolved by [`powerpoint_nice_axis`].
 pub(super) fn chart_area_title_h(chart: &Chart) -> f64 {
-    if chart.text_style.size_pt.is_some() {
+    if chart.title_text_style.size_pt.is_some() {
+        CHART_TITLE_BAND_PT + CHART_TITLE_BAND_EM * chart_area_title_pt(chart)
+    } else if chart.text_style.size_pt.is_some() {
         CHART_PLOT_TOP_PAD_PT + CHART_PLOT_TOP_PAD_EM * chart_text_pt(chart)
     } else {
         AREA_TITLE_H / CHART_AREA_TITLE_PT * chart_area_title_pt(chart)
     }
+}
+
+/// Every `text` argument the chart-area title carries beyond its size.
+///
+/// The title's own `c:txPr` weight overrides the chart space's weight. The
+/// weight the title has always been drawn with is the fallback when neither
+/// states one, so a chart that says nothing does not change. The colour
+/// resolves the same way — the title's own `c:txPr` over the chart space's —
+/// and stays empty where neither states one, leaving the black it was drawn in
+/// (issue #1215).
+fn chart_area_title_attrs(chart: &Chart) -> String {
+    let bold: bool = chart
+        .title_text_style
+        .bold
+        .or(chart.text_style.bold)
+        .unwrap_or(true);
+    let weight: &str = if bold { ", weight: \"bold\"" } else { "" };
+    let fill: String = match chart.text_style.resolved_color(chart.title_text_style) {
+        Some(color) => format!(", fill: {}", fmt::rgb(&color)),
+        None => String::new(),
+    };
+    format!("{weight}{fill}")
 }
 
 /// Draw a chart title in the width of the chart that owns it.
@@ -2466,42 +2579,131 @@ fn write_chart_title(
 ) {
     let escaped_title: String = escape_typst(title);
     let title_size: String = format_f64(chart_area_title_pt(chart));
+    let attrs: String = chart_area_title_attrs(chart);
+    let fixed_title: String = if chart.host == crate::ir::ChartHost::SpreadsheetChartsheet {
+        let baseline_pt: f64 = CHARTSHEET_TITLE_BASELINE_PT
+            + CHARTSHEET_TITLE_BASELINE_EM * chart_area_title_pt(chart);
+        format!(
+            "#align(center + top)[#text(top-edge: {}pt, bottom-edge: \"baseline\", size: {}pt{})[{}]]",
+            format_f64(baseline_pt),
+            title_size,
+            attrs,
+            escaped_title,
+        )
+    } else {
+        format!(
+            "#align(center + horizon)[#text(size: {}pt{})[{}]]",
+            title_size, attrs, escaped_title,
+        )
+    };
     match (frame, fixed_height) {
         (Some((width, _)), Some(height)) => {
             let _ = writeln!(
                 out,
-                "#block(width: {}pt, height: {}pt, above: 0pt, below: 0pt)[#align(center + horizon)[#text(size: {}pt, weight: \"bold\")[{}]]]",
+                "#block(width: {}pt, height: {}pt, above: 0pt, below: 0pt)[{}]",
                 format_f64(width),
                 format_f64(height),
-                title_size,
-                escaped_title,
+                fixed_title,
             );
         }
         (None, Some(height)) => {
             let _ = writeln!(
                 out,
-                "#block(width: 100%, height: {}pt, above: 0pt, below: 0pt)[#align(center + horizon)[#text(size: {}pt, weight: \"bold\")[{}]]]",
+                "#block(width: 100%, height: {}pt, above: 0pt, below: 0pt)[{}]",
                 format_f64(height),
-                title_size,
-                escaped_title,
+                fixed_title,
             );
         }
         (Some((width, _)), None) => {
             let _ = writeln!(
                 out,
-                "#block(width: {}pt)[#align(center)[#text(size: {}pt, weight: \"bold\")[{}]]]",
+                "#block(width: {}pt)[#align(center)[#text(size: {}pt{})[{}]]]",
                 format_f64(width),
                 title_size,
+                attrs,
                 escaped_title,
             );
         }
         (None, None) => {
             let _ = writeln!(
                 out,
-                "#align(center)[#text(size: {}pt, weight: \"bold\")[{}]]",
-                title_size, escaped_title,
+                "#align(center)[#text(size: {}pt{})[{}]]",
+                title_size, attrs, escaped_title,
             );
         }
+    }
+}
+
+/// Open a chart area's one outer outline and its title-bearing content stack.
+///
+/// `c:chartSpace/c:spPr` is a sibling of `c:chart`, so its stroke and fill
+/// enclose the title as well as the plot. A titled chart therefore opens the
+/// full-area box first, writes the title inside it, and gives an unstyled inner
+/// box the remaining content extent. An untitled chart keeps one box (#1216,
+/// #1217).
+///
+/// `fixed_title_band` preserves the axis plot's measured fixed-height title.
+/// The line, radar and pie families keep their existing intrinsic title plus
+/// 4pt gap; only the ownership of the surrounding stroke changes.
+fn write_chart_area_start(
+    out: &mut String,
+    chart: &Chart,
+    title: Option<&str>,
+    chart_area: Option<(f64, f64)>,
+    content_extent: (f64, f64),
+    title_h: f64,
+    fixed_title_band: bool,
+) -> bool {
+    let wraps_title: bool = title.is_some();
+    if let Some(title) = title {
+        let (area_w, area_h): (f64, f64) =
+            chart_area.unwrap_or((content_extent.0, content_extent.1 + title_h));
+        let _ = writeln!(
+            out,
+            "#box(width: {}pt, height: {}pt, fill: {}, stroke: {})[",
+            format_f64(area_w),
+            format_f64(area_h),
+            chart_area_fill(&chart.chart_area_fill),
+            chart_area_stroke(&chart.chart_area_outline, chart.host)
+        );
+        write_chart_title(
+            out,
+            chart,
+            title,
+            chart_area,
+            fixed_title_band.then_some(title_h),
+        );
+        if !fixed_title_band {
+            out.push_str("#v(4pt)\n");
+        }
+    }
+
+    let content_stroke: String = if wraps_title {
+        "none".to_string()
+    } else {
+        chart_area_stroke(&chart.chart_area_outline, chart.host)
+    };
+    let content_fill: String = if wraps_title {
+        "none".to_string()
+    } else {
+        chart_area_fill(&chart.chart_area_fill)
+    };
+    let _ = writeln!(
+        out,
+        "#box(width: {}pt, height: {}pt, fill: {}, stroke: {})[",
+        format_f64(content_extent.0),
+        format_f64(content_extent.1),
+        content_fill,
+        content_stroke
+    );
+    wraps_title
+}
+
+/// Close the inner content box and, for a titled chart, its full-area wrapper.
+fn write_chart_area_end(out: &mut String, wraps_title: bool) {
+    out.push_str("]\n");
+    if wraps_title {
+        out.push_str("]\n");
     }
 }
 
@@ -2726,7 +2928,8 @@ fn legend_entry_widths(
     key_label_gap_pt: f64,
     names: &[String],
 ) -> Vec<f64> {
-    let size_pt: f64 = chart_text_pt(chart);
+    let size_pt: f64 = chart_legend_text_pt(chart);
+    let is_bold: bool = chart_legend_text_is_bold(chart);
     let family: &str = chart
         .text_font_family
         .as_deref()
@@ -2734,8 +2937,8 @@ fn legend_entry_widths(
     names
         .iter()
         .map(|name| {
-            let label: f64 =
-                chart_text_advance_em(family, false, name).map_or(0.0, |advance| advance * size_pt);
+            let label: f64 = chart_text_advance_em(family, is_bold, name)
+                .map_or(0.0, |advance| advance * size_pt);
             // A gutter after the label keeps neighbouring entries apart rather
             // than butting the next key against the last glyph.
             (key_len_pt + key_label_gap_pt + label + GAP).max(LEGEND_ENTRY_W)
@@ -2753,15 +2956,19 @@ struct LegendKeyMetrics {
 
 /// The legend key metrics of the host the chart came from.
 ///
-/// PowerPoint scales an axis chart's *square* key and its following gap with
-/// chart text (#804). Excel draws a flat bar instead — [`LEGEND_KEY_LEN_PT`]
-/// wide whatever the text, [`EXCEL_LEGEND_KEY_LINE_BOX_SHARE`] of the legend
-/// face's line box tall — and leaves [`EXCEL_LEGEND_KEY_LABEL_GAP_PT`] before
-/// the label (#1169). A Word-hosted chart has never been measured against a
-/// native export, so it keeps the legacy square.
+/// PowerPoint and an Excel chartsheet scale an axis chart's *square* key and
+/// its following gap with chart text (#804, #1315). An Excel chart anchored to
+/// a worksheet draws a flat bar instead — [`LEGEND_KEY_LEN_PT`] wide whatever
+/// the text, [`EXCEL_LEGEND_KEY_LINE_BOX_SHARE`] of the legend face's line box
+/// tall — and leaves [`EXCEL_LEGEND_KEY_LABEL_GAP_PT`] before the label
+/// (#1169). A Word-hosted chart has never been measured against a native
+/// export, so it keeps the legacy square.
 fn axis_legend_entry_metrics(chart: &Chart) -> LegendKeyMetrics {
-    let size_pt: f64 = chart_text_pt(chart);
-    if matches!(chart.host, crate::ir::ChartHost::Presentation) {
+    let size_pt: f64 = chart_legend_text_pt(chart);
+    if matches!(
+        chart.host,
+        crate::ir::ChartHost::Presentation | crate::ir::ChartHost::SpreadsheetChartsheet
+    ) {
         let side_pt: f64 = PPTX_LEGEND_KEY_EM * size_pt;
         return LegendKeyMetrics {
             width_pt: side_pt,
@@ -2797,8 +3004,9 @@ fn excel_legend_key_height_pt(chart: &Chart) -> Option<f64> {
         .text_font_family
         .as_deref()
         .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_FAMILY);
-    let (ascent_em, descent_em) = chart_face_line_metrics_em(family, false)?;
-    Some(EXCEL_LEGEND_KEY_LINE_BOX_SHARE * (ascent_em + descent_em) * chart_text_pt(chart))
+    let (ascent_em, descent_em) =
+        chart_face_line_metrics_em(family, chart_legend_text_is_bold(chart))?;
+    Some(EXCEL_LEGEND_KEY_LINE_BOX_SHARE * (ascent_em + descent_em) * chart_legend_text_pt(chart))
 }
 
 /// Width of the widest entry in a PowerPoint right-side axis legend.
@@ -2821,14 +3029,15 @@ fn powerpoint_right_legend_inset(
     {
         return None;
     }
-    let size_pt = chart_text_pt(chart);
+    let size_pt: f64 = chart_legend_text_pt(chart);
+    let is_bold: bool = chart_legend_text_is_bold(chart);
     let family = chart
         .text_font_family
         .as_deref()
         .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_FAMILY);
     let widest_label = names
         .iter()
-        .map(|name| chart_text_advance_em(family, false, name))
+        .map(|name| chart_text_advance_em(family, is_bold, name))
         .collect::<Option<Vec<_>>>()?
         .into_iter()
         .reduce(f64::max)?
@@ -2844,7 +3053,7 @@ fn powerpoint_right_legend_y_shift(chart: &Chart) -> f64 {
         && matches!(chart.chart_type, ChartType::Bar)
         && matches!(chart.legend_position, LegendPosition::Right)
     {
-        PPTX_RIGHT_LEGEND_Y_SHIFT_PT + PPTX_RIGHT_LEGEND_Y_SHIFT_EM * chart_text_pt(chart)
+        PPTX_RIGHT_LEGEND_Y_SHIFT_PT + PPTX_RIGHT_LEGEND_Y_SHIFT_EM * chart_legend_text_pt(chart)
     } else {
         0.0
     }
@@ -2867,7 +3076,8 @@ fn axis_legend_box(chart: &Chart) -> LegendBox {
         chart.legend_position,
         LegendPosition::Left | LegendPosition::Right
     ) {
-        let size_pt = chart_text_pt(chart);
+        let size_pt: f64 = chart_legend_text_pt(chart);
+        let is_bold: bool = chart_legend_text_is_bold(chart);
         let family = chart
             .text_font_family
             .as_deref()
@@ -2882,11 +3092,15 @@ fn axis_legend_box(chart: &Chart) -> LegendBox {
                     .clone()
                     .unwrap_or_else(|| format!("Series {}", index + 1))
             })
-            .filter_map(|name| chart_text_advance_em(family, false, &name))
+            .filter_map(|name| chart_text_advance_em(family, is_bold, &name))
             .fold(0.0_f64, f64::max)
             * size_pt;
         let measured = widest_label + CHART_LEGEND_BASE_PAD_PT + CHART_LEGEND_PAD_EM * size_pt;
-        let side = if chart.text_style.size_pt.is_none() {
+        let side = if chart
+            .text_style
+            .resolved_size_pt(chart.legend_text_style)
+            .is_none()
+        {
             measured.max(LEGEND_ENTRY_W + GAP)
         } else {
             measured
@@ -3000,9 +3214,6 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
     } else {
         0.0
     };
-    if let Some(title) = area_title {
-        write_chart_title(out, chart, title, frame, Some(title_h));
-    }
 
     // The chart area the fractions of a stated plot rectangle are taken of,
     // kept before the title band comes off it.
@@ -3012,13 +3223,14 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
         Some(extent) => extent,
         None => chart_axis_extent(chart),
     };
-
-    let _ = writeln!(
+    let wraps_title: bool = write_chart_area_start(
         out,
-        "#box(width: {}pt, height: {}pt, stroke: {})[",
-        format_f64(total_w),
-        format_f64(total_h),
-        chart_area_stroke(&chart.chart_area_outline, chart.host)
+        chart,
+        area_title,
+        chart_area,
+        (total_w, total_h),
+        title_h,
+        true,
     );
 
     // The plotting rectangle: the one `c:plotArea/c:layout` states, else the
@@ -3555,11 +3767,12 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
         };
         let _ = writeln!(
             out,
-            "#place(top + left, dx: {}pt, dy: {}pt, box[{key_markup}#h({}pt)#text(size: {}pt)[{}]])",
+            "#place(top + left, dx: {}pt, dy: {}pt, box[{key_markup}#h({}pt)#text(size: {}pt{})[{}]])",
             format_f64(entry_x),
             format_f64(entry_y),
             format_f64(key.label_gap_pt),
-            format_f64(chart_text_pt(chart)),
+            format_f64(chart_legend_text_pt(chart)),
+            chart_legend_text_attrs(chart),
             escape_typst(name)
         );
     }
@@ -3570,7 +3783,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
         chart_area.unwrap_or((total_w, total_h + title_h)),
         title_h,
     );
-    out.push_str("]\n");
+    write_chart_area_end(out, wraps_title);
 }
 
 fn generate_chart_bar(out: &mut String, chart: &Chart) {
@@ -3613,8 +3826,9 @@ fn generate_chart_bar(out: &mut String, chart: &Chart) {
             let color: &str = colors[index % colors.len()];
             let _ = writeln!(
                 out,
-                "#box(width: 10pt, height: 10pt, fill: {color}) #text(size: {}pt)[{name}] ",
-                format_f64(chart_text_pt(chart))
+                "#box(width: 10pt, height: 10pt, fill: {color}) #text(size: {}pt{})[{name}] ",
+                format_f64(chart_legend_text_pt(chart)),
+                chart_legend_text_attrs(chart)
             );
         }
     }
@@ -3649,12 +3863,8 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
     // to dip towards (issue #1184).
     let scale: ValueScale = chart_value_scale(chart, nice_axis(max_value));
 
-    if let Some(title) = chart.title.as_deref() {
-        write_chart_title(out, chart, title, frame, None);
-        out.push_str("#v(4pt)\n");
-    }
-    // As in `generate_chart_axis`: the title sits above the box, so a framed
-    // chart spends its height out of the frame rather than on top of it.
+    // As in `generate_chart_axis`: the title takes a band from the content,
+    // while the full chart-area outline stays around both (issue #1216).
     let title_h: f64 = if chart.title.is_some() {
         chart_area_title_h(chart)
     } else {
@@ -3685,12 +3895,14 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
             legend.top + PLOT_H + CAT_GAP + legend.bottom,
         ),
     };
-    let _ = writeln!(
+    let wraps_title: bool = write_chart_area_start(
         out,
-        "#box(width: {}pt, height: {}pt, stroke: {})[",
-        format_f64(total_w),
-        format_f64(total_h),
-        chart_area_stroke(&chart.chart_area_outline, chart.host)
+        chart,
+        chart.title.as_deref(),
+        chart_area,
+        (total_w, total_h),
+        title_h,
+        false,
     );
 
     // `<c:delete val="1"/>` switches an axis off; see `generate_chart_axis`.
@@ -3890,11 +4102,12 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
         let key: String = line_legend_key(s_index, s, &color);
         let _ = writeln!(
             out,
-            "#place(top + left, dx: {}pt, dy: {}pt, box[{key}#h({}pt)#text(size: {}pt)[{}]])",
+            "#place(top + left, dx: {}pt, dy: {}pt, box[{key}#h({}pt)#text(size: {}pt{})[{}]])",
             format_f64(entry_x),
             format_f64(entry_y),
             format_f64(LEGEND_KEY_LABEL_GAP_PT),
-            format_f64(chart_text_pt(chart)),
+            format_f64(chart_legend_text_pt(chart)),
+            chart_legend_text_attrs(chart),
             escape_typst(name)
         );
     }
@@ -3905,7 +4118,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
         chart_area.unwrap_or((total_w, total_h + title_h)),
         title_h,
     );
-    out.push_str("]\n");
+    write_chart_area_end(out, wraps_title);
 }
 
 /// Whether the chart part declared `<c:radarChart>`.
@@ -3960,18 +4173,13 @@ fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64
         return;
     }
 
-    if let Some(title) = chart.title.as_deref() {
-        write_chart_title(out, chart, title, frame, None);
-        out.push_str("#v(4pt)\n");
-    }
-
     let legend: LegendBox = if chart.has_legend {
         LegendBox::new(chart.legend_position, RADAR_LEGEND_ROW_H, LEGEND_ENTRY_W)
     } else {
         LegendBox::hidden()
     };
-    // As elsewhere: the title is drawn above the box, so a framed chart takes
-    // its height out of the frame.
+    // The title takes its band from the content, while the chart-area outline
+    // remains around the original full frame (issue #1216).
     let title_h: f64 = if chart.title.is_some() {
         chart_area_title_h(chart)
     } else {
@@ -3998,12 +4206,14 @@ fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64
     let centre_x: f64 = legend.left + span_w / 2.0;
     let centre_y: f64 = legend.top + span_h / 2.0;
 
-    let _ = writeln!(
+    let wraps_title: bool = write_chart_area_start(
         out,
-        "#box(width: {}pt, height: {}pt, stroke: {})[",
-        format_f64(total_w),
-        format_f64(total_h),
-        chart_area_stroke(&chart.chart_area_outline, chart.host)
+        chart,
+        chart.title.as_deref(),
+        chart_area,
+        (total_w, total_h),
+        title_h,
+        false,
     );
 
     // Office puts the first category at twelve o'clock and runs clockwise, the
@@ -4160,11 +4370,12 @@ fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64
             let key: String = line_legend_key(series_index, series, &color);
             let _ = writeln!(
                 out,
-                "#place(top + left, dx: {}pt, dy: {}pt, box[{key}#h({}pt)#text(size: {}pt)[{}]])",
+                "#place(top + left, dx: {}pt, dy: {}pt, box[{key}#h({}pt)#text(size: {}pt{})[{}]])",
                 format_f64(entry_x),
                 format_f64(entry_y),
                 format_f64(LEGEND_KEY_LABEL_GAP_PT),
-                format_f64(chart_text_pt(chart)),
+                format_f64(chart_legend_text_pt(chart)),
+                chart_legend_text_attrs(chart),
                 escape_typst(name)
             );
         }
@@ -4176,7 +4387,7 @@ fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64
         chart_area.unwrap_or((total_w, total_h + title_h)),
         title_h,
     );
-    out.push_str("]\n");
+    write_chart_area_end(out, wraps_title);
 }
 
 /// Render a pie chart as a circle of wedges, each sized by its share of the
@@ -4193,18 +4404,13 @@ fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, 
         return;
     }
 
-    if let Some(title) = chart.title.as_deref() {
-        write_chart_title(out, chart, title, frame, None);
-        out.push_str("#v(4pt)\n");
-    }
-
     let legend: LegendBox = if chart.has_legend {
         LegendBox::new(chart.legend_position, PIE_LEGEND_ROW_H, LEGEND_ENTRY_W)
     } else {
         LegendBox::hidden()
     };
-    // As elsewhere: the title is drawn above the box, so a framed chart takes
-    // its height out of the frame.
+    // The title takes its band from the content, while the chart-area outline
+    // remains around the original full frame (issue #1216).
     let title_h: f64 = if chart.title.is_some() {
         chart_area_title_h(chart)
     } else {
@@ -4230,12 +4436,14 @@ fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, 
     let centre_x: f64 = legend.left + (total_w - legend.left - legend.right) / 2.0;
     let centre_y: f64 = legend.top + (total_h - legend.top - legend.bottom) / 2.0;
 
-    let _ = writeln!(
+    let wraps_title: bool = write_chart_area_start(
         out,
-        "#box(width: {}pt, height: {}pt, stroke: {})[",
-        format_f64(total_w),
-        format_f64(total_h),
-        chart_area_stroke(&chart.chart_area_outline, chart.host)
+        chart,
+        chart.title.as_deref(),
+        chart_area,
+        (total_w, total_h),
+        title_h,
+        false,
     );
 
     // Office starts the first wedge at twelve o'clock and sweeps clockwise.
@@ -4317,12 +4525,13 @@ fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, 
         );
         let _ = writeln!(
             out,
-            "#place(top + left, dx: {}pt, dy: {}pt, box[#box(width: 9pt, height: 9pt, fill: {})#h({}pt)#text(size: {}pt)[{}]])",
+            "#place(top + left, dx: {}pt, dy: {}pt, box[#box(width: 9pt, height: 9pt, fill: {})#h({}pt)#text(size: {}pt{})[{}]])",
             format_f64(entry_x),
             format_f64(entry_y),
             color,
             format_f64(LEGEND_KEY_LABEL_GAP_PT),
-            format_f64(chart_text_pt(chart)),
+            format_f64(chart_legend_text_pt(chart)),
+            chart_legend_text_attrs(chart),
             escape_typst(category)
         );
     }
@@ -4333,7 +4542,7 @@ fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, 
         chart_area.unwrap_or((total_w, total_h + title_h)),
         title_h,
     );
-    out.push_str("]\n");
+    write_chart_area_end(out, wraps_title);
 }
 
 /// Emit one filled wedge from `start` through `sweep` radians.

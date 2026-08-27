@@ -615,16 +615,20 @@ fn chartsheet_page(
     let chart_box: chartsheet::ChartsheetChartBox = chartsheet::printed_chart_box(setup);
     let charts: Vec<crate::ir::SheetChart> = raw_charts
         .into_iter()
-        .map(|anchor| crate::ir::SheetChart {
-            anchor_row: 0,
-            placement: Some(crate::ir::SheetChartPlacement {
-                x_offset_pt: chart_box.x_offset_pt,
-                y_offset_pt: chart_box.y_offset_pt,
-                width: chart_box.width,
-                height: chart_box.height,
-                print_scale: 1.0,
-            }),
-            chart: anchor.chart,
+        .map(|anchor| {
+            let mut chart = anchor.chart;
+            chart.host = crate::ir::ChartHost::SpreadsheetChartsheet;
+            crate::ir::SheetChart {
+                anchor_row: 0,
+                placement: Some(crate::ir::SheetChartPlacement {
+                    x_offset_pt: chart_box.x_offset_pt,
+                    y_offset_pt: chart_box.y_offset_pt,
+                    width: chart_box.width,
+                    height: chart_box.height,
+                    print_scale: 1.0,
+                }),
+                chart,
+            }
         })
         .collect();
     SheetPage {
@@ -673,13 +677,13 @@ impl XlsxParser {
         let normal_font = extract_normal_font(data);
 
         let chartsheet_setups = chartsheet::chartsheet_print_setups(data);
+        let mut warnings = Vec::new();
 
         let mut chart_map = extract_charts_with_anchors(data);
-        let mut image_map = extract_images_with_anchors(data);
+        let mut image_map = extract_images_with_anchors(data, &mut warnings);
         let mut text_box_map = extract_text_boxes_with_anchors(data);
 
         let mut chunks = Vec::new();
-        let mut warnings = Vec::new();
 
         for sheet in book.get_sheet_collection() {
             // Sheets the caller excluded by name, and hidden ones nobody
@@ -979,15 +983,15 @@ impl Parser for XlsxParser {
         let normal_font = extract_normal_font(data);
 
         let chartsheet_setups = chartsheet::chartsheet_print_setups(data);
+        let mut warnings = Vec::new();
 
         // Extract charts with anchor positions per sheet
         let mut chart_map = extract_charts_with_anchors(data);
-        let mut image_map = extract_images_with_anchors(data);
+        let mut image_map = extract_images_with_anchors(data, &mut warnings);
         let mut text_box_map = extract_text_boxes_with_anchors(data);
 
         let sheet_count = book.get_sheet_collection().len();
         let mut pages = Vec::with_capacity(sheet_count);
-        let mut warnings = Vec::new();
 
         for sheet in book.get_sheet_collection() {
             // Sheets the caller excluded by name, and hidden ones nobody

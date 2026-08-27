@@ -220,8 +220,9 @@ fn test_pretendard_substitutes() {
 fn test_font_with_fallbacks_known_font() {
     let result = font_with_fallbacks_for_text("Calibri", "");
     assert_eq!(
-        result, r#"("Calibri", "Carlito", "Liberation Sans")"#,
-        "Known font should produce Typst array with original + substitutes"
+        result, r#"("Calibri", "Carlito", "Liberation Sans", "Arimo", "DejaVu Sans", "Helvetica")"#,
+        "Known font should produce Typst array with original + substitutes, \
+         ending on its own class so an absent Carlito cannot land it on a serif"
     );
 }
 
@@ -230,7 +231,7 @@ fn test_carlito_font_with_fallbacks_emits_sans_chain() {
     let result = font_with_fallbacks_for_text("Carlito", "");
     assert_eq!(
         result,
-        r#"("Carlito", "Calibri", "Liberation Sans", "Arimo", "Arial")"#
+        r#"("Carlito", "Calibri", "Liberation Sans", "Arimo", "Arial", "DejaVu Sans", "Helvetica")"#
     );
 }
 
@@ -265,6 +266,127 @@ fn missing_typewriter_face_resolves_to_an_available_monospace_face() {
         resolve_available_fallback("Lucida Sans Typewriter", TextScript::Latin, &context);
 
     assert_eq!(fallback.as_deref(), Some("DejaVu Sans Mono"));
+}
+
+#[test]
+fn a_listed_family_whose_substitutes_are_all_absent_keeps_its_own_class() {
+    // Every name in the substitution table is a real font, so a chain of them
+    // can run out: a host with neither Carlito nor Liberation Sans left a
+    // Calibri run — the `minorFont` of every default Office theme, and so the
+    // face an XLSX chart draws its labels in — with nothing but the engine's
+    // default, which is a serif for a family whose own PANOSE says sans
+    // (issue #1213).
+    //
+    // One case per class, and more than one family per class, so the rule is
+    // "end on the family's own class" rather than a patch for Calibri.
+    let sans_only_host: FontSearchContext =
+        FontSearchContext::for_test(Vec::new(), &["Libertinus Serif", "DejaVu Sans"], &[], &[]);
+    for family in ["Calibri", "Calibri Light", "Verdana", "Corbel"] {
+        assert_eq!(
+            resolve_available_fallback(family, TextScript::Latin, &sans_only_host).as_deref(),
+            Some("DejaVu Sans"),
+            "{family} must reach an available sans rather than the default serif"
+        );
+    }
+
+    // The class has to be the family's own, not whichever face happens to be
+    // installed: a serif family on the same host must not take the sans.
+    let mixed_host: FontSearchContext =
+        FontSearchContext::for_test(Vec::new(), &["DejaVu Sans", "DejaVu Serif"], &[], &[]);
+    for family in ["Cambria", "Times New Roman"] {
+        assert_eq!(
+            resolve_available_fallback(family, TextScript::Latin, &mixed_host).as_deref(),
+            Some("DejaVu Serif"),
+            "{family} is a serif and must stay one"
+        );
+    }
+
+    let fixed_pitch_host: FontSearchContext =
+        FontSearchContext::for_test(Vec::new(), &["DejaVu Sans", "Cousine"], &[], &[]);
+    for family in ["Consolas", "Courier New"] {
+        assert_eq!(
+            resolve_available_fallback(family, TextScript::Latin, &fixed_pitch_host).as_deref(),
+            Some("Cousine"),
+            "{family} is fixed pitch and must stay fixed pitch"
+        );
+    }
+}
+
+#[test]
+fn the_class_tail_follows_the_metric_compatible_substitutes() {
+    // The tail is a last resort, not a preference: Carlito and Liberation Sans
+    // are metric-compatible with Calibri and a generic sans is not, so the
+    // order the table states has to survive the addition (issue #1213).
+    let painted: String = font_with_fallbacks_for_text("Calibri", "Sales");
+    let position = |family: &str| {
+        painted
+            .find(&format!("\"{family}\""))
+            .unwrap_or_else(|| panic!("{family} should be in the chain: {painted}"))
+    };
+
+    assert!(position("Carlito") < position("Arimo"));
+    assert!(position("Liberation Sans") < position("Arimo"));
+    assert!(position("Arimo") < position("Helvetica"));
+    assert!(
+        !painted.contains("Serif"),
+        "a sans family must not gain a serif candidate: {painted}"
+    );
+}
+
+#[test]
+fn the_class_tail_cannot_outrank_an_available_family_substitute() {
+    // Source priority chooses between the family's own substitutes, but the
+    // generic class tail is a last resort. An Office-bundled generic must not
+    // jump ahead of an installed metric-compatible stand-in (issue #1213).
+    let context =
+        FontSearchContext::for_test(Vec::new(), &["Carlito", "Helvetica"], &["Helvetica"], &[]);
+    let painted: String = with_font_search_context(Some(&context), || {
+        font_with_fallbacks_for_text("Calibri", "Sales")
+    });
+    let carlito: usize = painted
+        .find("\"Carlito\"")
+        .expect("Calibri's own substitute is present");
+    let helvetica: usize = painted
+        .find("\"Helvetica\"")
+        .expect("the generic sans tail is present");
+
+    assert!(
+        carlito < helvetica,
+        "the generic class tail must follow the family's substitutes: {painted}"
+    );
+}
+
+#[test]
+fn a_metrics_lookup_stops_at_the_metric_compatible_substitutes() {
+    // A metrics lookup resolves one face and reads its numbers whole, so the
+    // generic tail must not reach it: those numbers are the stand-in's, not the
+    // family's. Trebuchet MS is the case that showed it — its only substitute
+    // is Ubuntu, and on a host without it the tail handed a fit-to-page sheet's
+    // column unit Liberation Sans's digit advance, re-scaling the whole sheet
+    // by 13% (issue #1213).
+    // Families whose own substitutes name no generic, so a generic appearing in
+    // the metrics list can only have come from the tail. Calibri is excluded
+    // for the opposite reason: Liberation Sans is one of its own.
+    for family in ["Trebuchet MS", "Comic Sans MS", "Consolas", "Malgun Gothic"] {
+        let measured: Vec<String> = family_candidates(family);
+        let generic: Option<&String> = measured.iter().find(|candidate| {
+            SANS_SERIF_SUBSTITUTES.contains(&candidate.as_str())
+                || SERIF_SUBSTITUTES.contains(&candidate.as_str())
+                || MONOSPACE_SUBSTITUTES.contains(&candidate.as_str())
+        });
+        assert_eq!(
+            generic, None,
+            "{family} must not read its metrics from a generic face: {measured:?}"
+        );
+
+        // The list Typst paints from still ends on the class, which is the
+        // whole point of the tail.
+        let painted: String = font_with_fallbacks_for_text(family, "Sales");
+        assert!(
+            painted.contains("Helvetica") || painted.contains("DejaVu"),
+            "{family} must still paint in its own class: {painted}"
+        );
+    }
 }
 
 #[test]
@@ -330,9 +452,12 @@ fn missing_cjk_coverage_reports_notdef_instead_of_staying_silent() {
 }
 
 #[test]
-fn test_font_with_fallbacks_single_substitute() {
+fn test_font_with_fallbacks_single_named_substitute_then_the_class_tail() {
     let result = font_with_fallbacks_for_text("Comic Sans MS", "");
-    assert_eq!(result, r#"("Comic Sans MS", "Comic Neue")"#);
+    assert_eq!(
+        result,
+        r#"("Comic Sans MS", "Comic Neue", "Liberation Sans", "Arimo", "DejaVu Sans", "Helvetica")"#
+    );
 }
 
 // Family names come from parsed OOXML, i.e. document-controlled input. A name
@@ -1069,10 +1194,13 @@ fn test_document_requests_font_families_true_for_a_chart_only_document() {
         value_axis_deleted: false,
         bar_band_layout: crate::ir::BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: crate::ir::ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: Some("Pretendard".to_string()),
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
+        legend_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,

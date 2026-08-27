@@ -214,17 +214,42 @@ pub enum ChartAreaOutline {
     },
 }
 
-/// The application whose package a chart came out of.
+/// What `c:chartSpace/c:spPr` asks Office to paint behind the whole chart.
+///
+/// The declaration belongs to the chart space, outside `c:chart`, so it covers
+/// the title as well as the plot. Absence and `<a:noFill/>` stay distinct even
+/// though both currently render transparently: absence leaves the host's
+/// automatic behavior available, while `noFill` explicitly disables it
+/// (issue #1217).
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum ChartAreaFill {
+    /// No top-level fill declaration in the chart area's `c:spPr`.
+    #[default]
+    Unspecified,
+    /// A top-level `<a:noFill/>` explicitly makes the chart area transparent.
+    Transparent,
+    /// A top-level `<a:solidFill>` with a literal or theme-resolved colour.
+    Solid(Color),
+}
+
+/// The Office application and surface a chart came from.
 ///
 /// Excel and PowerPoint disagree about what "the automatic chart-area outline"
 /// is: Excel draws one and PowerPoint draws none, so the same
 /// [`ChartAreaOutline::Default`] has to resolve differently depending on where
-/// the chart part was found. The chart part itself says nothing about this —
-/// only the loader that opened the package knows (issue #823).
+/// the chart part was found (issue #823). Excel also gives an anchored
+/// worksheet chart and a chartsheet different legend geometry even though
+/// both chart parts live in the same package (issue #1315). The chart part
+/// itself says nothing about either distinction; only the loader knows.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ChartHost {
-    /// A chart in a workbook.
+    /// A chart anchored to a worksheet.
     Spreadsheet,
+    /// A chart occupying an Excel chartsheet.
+    ///
+    /// Excel gives chartsheet chrome a separate layout regime from an
+    /// anchored worksheet chart even though both live in a workbook.
+    SpreadsheetChartsheet,
     /// A chart on a slide.
     Presentation,
     /// A chart in a document. Its automatic outline is unmeasured, so it keeps
@@ -317,6 +342,9 @@ pub struct Chart {
     /// What the chart area's own outline should be, from
     /// `c:chartSpace/c:spPr/a:ln` (#637).
     pub chart_area_outline: ChartAreaOutline,
+    /// What the chart area's own background should be, from the top-level fill
+    /// inside `c:chartSpace/c:spPr` (#1217).
+    pub chart_area_fill: ChartAreaFill,
     /// The face every string the chart draws is set in, from
     /// `c:chartSpace/c:txPr/a:p/a:pPr/a:defRPr/a:latin@typeface`.
     ///
@@ -327,12 +355,26 @@ pub struct Chart {
     /// which package this came from substitutes the face, exactly as it does
     /// for [`Chart::theme_accent_colors`] (issue #668).
     pub text_font_family: Option<String>,
-    /// Which application's package this chart came out of, which decides what
-    /// its automatic chart-area outline is (issue #823).
+    /// Which Office application and surface this chart came from, used for
+    /// host-specific chart chrome (issues #823 and #1315).
     pub host: ChartHost,
     /// Run properties `c:chartSpace/c:txPr` declares, which govern every string
     /// the chart draws unless a more specific `c:txPr` overrides them.
     pub text_style: ChartTextStyle,
+    /// What `c:title/c:txPr` declares for the chart-area title alone.
+    ///
+    /// Office writes the title's size, weight and colour here rather than on
+    /// the chart space, so a title reading its size off `text_style` gets the
+    /// wrong one — `tests/fixtures/xlsx/any_sheets.xlsx` states a bare
+    /// `<a:defRPr/>` for the chart space and `sz="1400" b="0"` over a #595959
+    /// fill for the title (issue #1215).
+    pub title_text_style: ChartTextStyle,
+    /// What `c:legend/c:txPr` declares for every legend entry.
+    ///
+    /// The same fixture gives its legend a 9pt regular #595959 run while its
+    /// chart space states none of those properties, so the legend cannot be
+    /// represented by [`Chart::text_style`] alone (issue #1236).
+    pub legend_text_style: ChartTextStyle,
     /// What `c:catAx/c:txPr` declares for the category labels alone.
     pub category_axis_text_style: ChartTextStyle,
     /// What `c:valAx/c:txPr` declares for the value tick labels alone.
@@ -1655,16 +1697,56 @@ pub enum ShapeKind {
     Polygon {
         vertices: Vec<(f64, f64)>,
     },
-    /// Several closed subpaths filled as one path under the even-odd rule, so
-    /// an inner boundary carves a hole rather than painting solid.
+    /// Several subpaths filled as one path under the even-odd rule, so an
+    /// inner boundary carves a hole rather than painting solid.
     ///
     /// This is what a DrawingML `a:custGeom` is: its `a:pathLst` may hold
     /// separate `a:path` elements, and one `a:path` may hold several subpaths.
-    /// Vertices are normalized to 0.0–1.0 of the bounding box, like
+    /// Vertices are normalized to 0.0-1.0 of the bounding box, like
     /// [`ShapeKind::Polygon`] (issue #870).
     Path {
-        subpaths: Vec<Vec<(f64, f64)>>,
+        subpaths: Vec<Subpath>,
     },
+}
+
+/// One outline of a custom geometry.
+///
+/// Vertices are normalized to 0.0-1.0 of the shape's bounding box.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Subpath {
+    pub vertices: Vec<(f64, f64)>,
+    /// Whether `a:close` ended the outline, so its stroke joins the last
+    /// vertex back to the first. An open polyline must not be closed: the
+    /// elbow connectors of the deck on issue #1205 are three-segment
+    /// `moveTo lnTo lnTo lnTo` paths, and closing them draws a diagonal the
+    /// deck never declared. A fill still treats an open outline as closed,
+    /// which is what PowerPoint does.
+    pub closed: bool,
+}
+
+impl Subpath {
+    /// An outline that returns to its own start.
+    pub fn closed_outline(vertices: Vec<(f64, f64)>) -> Self {
+        Self {
+            vertices,
+            closed: true,
+        }
+    }
+
+    /// An outline that stops at its last vertex.
+    pub fn open_outline(vertices: Vec<(f64, f64)>) -> Self {
+        Self {
+            vertices,
+            closed: false,
+        }
+    }
+
+    /// A closed outline needs three vertices to enclose an area; an open one
+    /// draws a line from two.
+    pub(crate) fn encloses_or_draws(&self) -> bool {
+        let needed: usize = if self.closed { 3 } else { 2 };
+        self.vertices.len() >= needed
+    }
 }
 
 /// Arrowhead decoration on a line endpoint.

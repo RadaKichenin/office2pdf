@@ -1,7 +1,7 @@
 use super::*;
-use crate::ir::ChartAreaOutline;
 use crate::ir::DataLabels;
 use crate::ir::MarkerSymbol;
+use crate::ir::{ChartAreaFill, ChartAreaOutline};
 use crate::render::typst_gen::diagrams::{
     CHART_AREA_OUTLINE, CHART_AUTOMATIC_LINE, CHART_DEFAULT_TEXT_PT, GAP, LABEL_W, LEGEND_ENTRY_W,
     LEGEND_KEY_LEN_PT, PPTX_LEGEND_KEY_EM, PPTX_LEGEND_KEY_LABEL_GAP_EM,
@@ -46,10 +46,13 @@ fn test_codegen_chart_bar_visual_bars() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
+        legend_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -124,10 +127,13 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
+        legend_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -190,10 +196,13 @@ fn test_codegen_chart_pie_draws_a_pie() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
+        legend_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -261,10 +270,13 @@ fn test_codegen_chart_line_trend_indicators() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
+        legend_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -319,10 +331,13 @@ fn test_codegen_chart_empty_series() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
+        legend_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -414,10 +429,13 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
+        legend_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -478,10 +496,13 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
+        legend_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -698,10 +719,13 @@ fn test_codegen_chart_line_plot() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
+        legend_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -767,10 +791,13 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
+        legend_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -873,10 +900,13 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
             overlap_percent: 100.0,
         },
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
+        legend_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -1040,10 +1070,13 @@ fn legend_chart(position: LegendPosition) -> Chart {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
+        legend_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -1114,6 +1147,53 @@ fn a_right_legend_still_stacks_its_entries() {
     assert!(
         entries[1].1 > entries[0].1,
         "entries must advance down the page: {entries:?}"
+    );
+}
+
+#[test]
+fn every_legend_family_uses_the_legends_own_run_properties() {
+    let style = crate::ir::ChartTextStyle {
+        size_pt: Some(17.0),
+        bold: Some(true),
+        letter_spacing_hundredths: Some(125),
+        color: Some(Color::new(0xC0, 0x2A, 0x7A)),
+        ellipsis_overflow: false,
+    };
+    for (chart_type, label) in [
+        (ChartType::Column, "Text"),
+        (ChartType::Line, "Text"),
+        (
+            ChartType::Other(crate::ir::RADAR_CHART_LABEL.to_string()),
+            "Text",
+        ),
+        (ChartType::Pie, "DOCX"),
+    ] {
+        let mut chart = legend_chart(LegendPosition::Bottom);
+        chart.chart_type = chart_type.clone();
+        chart.legend_text_style = style;
+        let source = framed_chart_source(&chart, 480.0, 320.0);
+        let entry = source
+            .lines()
+            .find(|line| line.contains(&format!("[{label}]")))
+            .unwrap_or_else(|| panic!("{chart_type:?} emits a {label} legend entry"));
+
+        assert!(
+            entry.contains(
+                "#text(size: 17pt, weight: \"bold\", fill: rgb(192, 42, 122), tracking: 1.25pt, ligatures: false, kerning: false)"
+            ),
+            "{chart_type:?} must carry the legend's size, weight, colour and tracking; got: {entry}"
+        );
+    }
+
+    let mut fallback = legend_chart(LegendPosition::Bottom);
+    fallback.chart_type = ChartType::Bar;
+    fallback.legend_text_style = style;
+    let source = chart_source(fallback);
+    assert!(
+        source.contains(
+            "#text(size: 17pt, weight: \"bold\", fill: rgb(192, 42, 122), tracking: 1.25pt, ligatures: false, kerning: false)[Text]"
+        ),
+        "the unframed bar fallback uses the same legend style; got:\n{source}"
     );
 }
 
@@ -1203,10 +1283,13 @@ fn a_declared_series_fill_reaches_the_bars() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
+        legend_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -1265,10 +1348,13 @@ fn a_series_without_a_fill_still_takes_the_palette() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
+        legend_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -1325,10 +1411,13 @@ fn per_point_fills_colour_each_bar_separately() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
+        legend_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -1384,10 +1473,13 @@ fn axis_titled_chart(category: Option<&str>, value: Option<&str>) -> Chart {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
+        legend_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -1493,10 +1585,13 @@ fn labelled_chart(labels: DataLabels) -> Chart {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
+        legend_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -1597,10 +1692,13 @@ fn pie_chart(values: Vec<f64>) -> Chart {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
+        legend_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -1800,10 +1898,13 @@ fn test_chart_default_gridline_matches_powerpoint() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
+        legend_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -1965,10 +2066,13 @@ fn tick_mark_chart(
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
+        legend_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -2576,10 +2680,13 @@ fn band_layout_chart(
         value_axis_deleted: false,
         bar_band_layout: layout,
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
+        legend_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -2868,10 +2975,13 @@ fn two_series_bar_chart(theme_accent_colors: Vec<crate::ir::Color>) -> Chart {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors,
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
+        legend_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -3306,6 +3416,64 @@ fn every_chart_family_draws_the_default_chart_area_outline() {
 }
 
 #[test]
+fn every_chart_family_paints_a_declared_chart_area_fill_once() {
+    for chart_type in [ChartType::Bar, ChartType::Line, ChartType::Pie] {
+        let kind: String = format!("{chart_type:?}");
+        let mut chart = two_series_bar_chart(Vec::new());
+        chart.chart_type = chart_type;
+        chart.categories = vec!["Q1".to_string(), "Q2".to_string()];
+        chart.series[0].values = vec![4.0, 8.0];
+        chart.series[1].values = vec![6.0, 2.0];
+        chart.chart_area_fill = ChartAreaFill::Solid(crate::ir::Color::new(0x12, 0x34, 0x56));
+        let source = chart_source(chart);
+
+        assert_eq!(
+            source.matches("fill: rgb(18, 52, 86)").count(),
+            1,
+            "{kind}: only the outermost chart-area box may carry the fill; got:\n{source}"
+        );
+    }
+}
+
+#[test]
+fn a_titled_chart_paints_the_full_area_but_not_its_inner_content_box() {
+    let mut chart = bar_chart_at(Some(14.0), &["Q1", "Q2"]);
+    chart.title = Some("Sales".to_string());
+    chart.chart_area_fill = ChartAreaFill::Solid(crate::ir::Color::new(0x12, 0x34, 0x56));
+    let source = framed_chart_source(&chart, 321.0, 240.0);
+    let area_start = "#box(width: 321pt, height: 240pt, fill: rgb(18, 52, 86), stroke:";
+    let area_position = source
+        .find(area_start)
+        .unwrap_or_else(|| panic!("the full chart area must carry the fill, got:\n{source}"));
+    let title_position = source
+        .find("Sales")
+        .unwrap_or_else(|| panic!("the title must be emitted, got:\n{source}"));
+
+    assert!(
+        area_position < title_position,
+        "the fill must wrap the title"
+    );
+    assert_eq!(source.matches("fill: rgb(18, 52, 86)").count(), 1);
+    assert!(
+        source[title_position..].contains("fill: none, stroke: none"),
+        "the nested content box must not repaint the area; got:\n{source}"
+    );
+}
+
+#[test]
+fn absent_and_explicitly_transparent_chart_area_fills_stay_transparent() {
+    for fill in [ChartAreaFill::Unspecified, ChartAreaFill::Transparent] {
+        let mut chart = two_series_bar_chart(Vec::new());
+        chart.chart_area_fill = fill;
+        let source = chart_source(chart);
+        assert!(
+            source.contains("fill: none, stroke:"),
+            "{fill:?} must leave the chart area transparent; got:\n{source}"
+        );
+    }
+}
+
+#[test]
 fn a_chart_that_asks_for_no_outline_gets_none() {
     // `<a:ln><a:noFill/></a:ln>` on `c:chartSpace/c:spPr` is the file saying it
     // wants no chart-area border. Drawing the default anyway puts a grey box
@@ -3377,6 +3545,34 @@ fn chart_text_is_set_in_the_face_the_chart_declares() {
     assert!(
         source.contains("Calibri"),
         "the declared face must reach the emitted font list, got:\n{source}"
+    );
+}
+
+#[test]
+fn a_chart_face_keeps_its_class_when_none_of_its_substitutes_are_installed() {
+    // `Calibri` maps to Carlito and Liberation Sans, and either face may be
+    // absent from a host. The exhausted chain then sent every chart string to
+    // the engine's default serif (issue #1213).
+    let mut chart = two_series_bar_chart(Vec::new());
+    chart.categories = vec!["Q1".to_string(), "Q2".to_string()];
+    chart.series[0].values = vec![4.0, 8.0];
+    chart.series[1].values = vec![2.0, 6.0];
+    chart.title = Some("Sales".to_string());
+    chart.text_font_family = Some("Calibri".to_string());
+
+    let source: String = chart_source(chart);
+    let set_line: &str = source
+        .lines()
+        .find(|line| line.starts_with("#set text(font: "))
+        .expect("the chart sets a face");
+
+    assert!(
+        set_line.contains("\"Helvetica\"") || set_line.contains("\"DejaVu Sans\""),
+        "the chain must end on a generic sans, not on the engine's serif: {set_line}"
+    );
+    assert!(
+        !set_line.contains("Serif"),
+        "a sans face must never gain a serif candidate: {set_line}"
     );
 }
 
@@ -3469,6 +3665,231 @@ fn a_chart_declaring_no_size_keeps_the_eleven_point_title() {
     let mut chart = sized_bar_chart(18.0);
     chart.text_style = crate::ir::ChartTextStyle::default();
     assert!(chart_source(chart).contains("#text(size: 11pt, weight: \"bold\")[Sales]"));
+}
+
+// ----- A `c:title`'s own `c:txPr` (issue #1215) -----
+
+fn title_run_style(
+    size_pt: Option<f64>,
+    bold: Option<bool>,
+    color: Option<crate::ir::Color>,
+) -> crate::ir::ChartTextStyle {
+    crate::ir::ChartTextStyle {
+        size_pt,
+        bold,
+        letter_spacing_hundredths: None,
+        color,
+        ellipsis_overflow: false,
+    }
+}
+
+/// A chart whose space asks for 18pt and whose title states its own properties.
+fn own_title_style_chart(title_style: crate::ir::ChartTextStyle) -> Chart {
+    let mut chart = sized_bar_chart(18.0);
+    chart.title_text_style = title_style;
+    chart
+}
+
+/// A size the title states itself is the printed size, not something to scale.
+///
+/// `tests/fixtures/xlsx/any_sheets.xlsx` states `sz="1400"` on the title's own
+/// `c:txPr`, and the Excel for Mac 16.100 export prints it at
+/// `trm="14 0 0 14"`. The 1.2 factor belongs to the chart space's size, which
+/// Office scales *into* a title size; a title size is already that.
+#[test]
+fn a_title_stating_its_own_size_prints_it_unscaled() {
+    let source: String = chart_source(own_title_style_chart(title_run_style(
+        Some(14.0),
+        None,
+        None,
+    )));
+
+    assert!(
+        source.contains("#text(size: 14pt, weight: \"bold\")[Sales]"),
+        "the title must take its own 14pt, got:\n{source}"
+    );
+    assert!(
+        !source.contains("21.6pt"),
+        "and must not scale the chart space's 18pt on top of it:\n{source}"
+    );
+}
+
+/// The same rule at another size, so nothing can pass by returning 14.
+#[test]
+fn another_title_size_prints_unscaled_too() {
+    let source: String = chart_source(own_title_style_chart(title_run_style(
+        Some(9.0),
+        None,
+        None,
+    )));
+
+    assert!(
+        source.contains("#text(size: 9pt, weight: \"bold\")[Sales]"),
+        "the title must take its own 9pt, got:\n{source}"
+    );
+}
+
+/// `b="0"` on the title's own run properties prints a regular title.
+#[test]
+fn a_title_stating_regular_weight_is_not_drawn_bold() {
+    let source: String = chart_source(own_title_style_chart(title_run_style(
+        Some(14.0),
+        Some(false),
+        None,
+    )));
+
+    assert!(
+        source.contains("#text(size: 14pt)[Sales]"),
+        "a title declaring b=\"0\" must print regular, got:\n{source}"
+    );
+}
+
+/// `b="1"` prints bold, and so does a title that states no weight at all —
+/// the bold every chart has always been drawn with stays the fallback.
+#[test]
+fn a_title_stating_no_weight_keeps_the_bold_it_had() {
+    for stated in [None, Some(true)] {
+        let source: String = chart_source(own_title_style_chart(title_run_style(
+            Some(14.0),
+            stated,
+            None,
+        )));
+        assert!(
+            source.contains("#text(size: 14pt, weight: \"bold\")[Sales]"),
+            "b={stated:?} must still print bold, got:\n{source}"
+        );
+    }
+}
+
+/// When the title states no weight, the chart space's weight still governs it
+/// before the renderer falls back to the legacy bold title.
+#[test]
+fn a_title_without_its_own_weight_inherits_the_chart_spaces_regular_weight() {
+    let mut chart = own_title_style_chart(title_run_style(Some(14.0), None, None));
+    chart.text_style.bold = Some(false);
+    let source: String = chart_source(chart);
+
+    assert!(
+        source.contains("#text(size: 14pt)[Sales]"),
+        "the chart-space b=\"0\" must make an unstated title regular, got:\n{source}"
+    );
+    assert!(
+        !source.contains("#text(size: 14pt, weight: \"bold\")[Sales]"),
+        "the legacy fallback must not outrank chart-space formatting:\n{source}"
+    );
+}
+
+/// The title takes the colour its own `a:solidFill` states.
+#[test]
+fn a_title_stating_a_colour_is_drawn_in_it() {
+    let source: String = chart_source(own_title_style_chart(title_run_style(
+        Some(14.0),
+        Some(false),
+        Some(crate::ir::Color::new(0x59, 0x59, 0x59)),
+    )));
+
+    assert!(
+        source.contains("#text(size: 14pt, fill: rgb(89, 89, 89))[Sales]"),
+        "the title must take its declared grey, got:\n{source}"
+    );
+}
+
+/// The band a stated title size takes, against native Excel.
+///
+/// Twelve Excel for Mac 16.100 exports of the `Chart` chartsheet of
+/// `tests/fixtures/xlsx/any_sheets.xlsx`, forced to Letter landscape, with the
+/// title's own `sz` rewritten one value at a time and nothing else touched.
+/// Measured with `mutool draw -F trace` as the topmost major gridline's device
+/// y less the chart area's own top edge, and with the title band separated out
+/// by a thirteenth export whose `<c:title>` element is removed altogether —
+/// that one starts its plot 11.00pt below the same edge, which is the plot's
+/// own inset with no title above it at all:
+///
+/// | title `sz` | plot top below the chart area | less the 11.00pt inset |
+/// | ---: | ---: | ---: |
+/// | 7 | 32.09 | 21.09 |
+/// | 8 | 33.83 | 22.83 |
+/// | 9 | 35.56 | 24.56 |
+/// | 10 | 37.28 | 26.28 |
+/// | 11 | 39.02 | 28.02 |
+/// | 12 | 40.75 | 29.75 |
+/// | 14 | 44.20 | 33.20 |
+/// | 16 | 47.66 | 36.66 |
+/// | 18 | 51.12 | 40.12 |
+/// | 24 | 61.50 | 50.50 |
+/// | 32 | 75.33 | 64.33 |
+/// | 36 | 82.24 | 71.24 |
+///
+/// A least-squares line over all twelve is 8.994 + 1.72912 em, and no export
+/// is further than 0.007pt from it.
+#[test]
+fn a_stated_title_size_takes_the_band_excel_gives_it() {
+    for (size_pt, band) in [(9.0, 24.56), (14.0, 33.20), (36.0, 71.24)] {
+        let chart = own_title_style_chart(title_run_style(Some(size_pt), Some(false), None));
+        let measured: f64 = chart_area_title_h(&chart);
+        assert!(
+            (measured - band).abs() < 0.01,
+            "a {size_pt}pt title takes {band}pt, got {measured}pt"
+        );
+    }
+}
+
+/// A chartsheet title's baseline is seated from the chart area's top edge,
+/// independently of whichever face Typst resolves for the title.
+///
+/// Twelve Excel for Mac 16.100 exports of the `Chart` chartsheet in
+/// `tests/fixtures/xlsx/any_sheets.xlsx`, with only the title's `sz` changed,
+/// fit `8.251pt + 1.26390em`; no measured baseline is further than 0.70pt from
+/// that line (issue #1314).
+#[test]
+fn an_excel_chartsheet_title_takes_the_native_baseline_seat() {
+    for (size_pt, baseline_pt) in [(9.0, 19.6261), (14.0, 25.9456), (36.0, 53.7514)] {
+        let mut chart = own_title_style_chart(title_run_style(Some(size_pt), Some(false), None));
+        chart.host = crate::ir::ChartHost::SpreadsheetChartsheet;
+        let source: String = framed_chart_source(&chart, 480.0, 320.0);
+        let title: &str = source
+            .lines()
+            .find(|line| line.contains("[Sales]"))
+            .expect("the chart title is emitted");
+
+        assert!(
+            title.contains(&format!(
+                "top-edge: {}pt, bottom-edge: \"baseline\"",
+                format_f64(baseline_pt)
+            )),
+            "a {size_pt}pt chartsheet title seats its baseline {baseline_pt}pt below the chart-area top, got: {title}"
+        );
+    }
+}
+
+#[test]
+fn an_anchored_excel_chart_keeps_its_existing_title_seat() {
+    let mut chart = own_title_style_chart(title_run_style(Some(14.0), Some(false), None));
+    chart.host = crate::ir::ChartHost::Spreadsheet;
+    let source: String = framed_chart_source(&chart, 480.0, 320.0);
+    let title: &str = source
+        .lines()
+        .find(|line| line.contains("[Sales]"))
+        .expect("the chart title is emitted");
+
+    assert!(
+        title.contains("#align(center + horizon)[#text(size: 14pt)[Sales]]"),
+        "an anchored worksheet chart has no measured chartsheet baseline rule: {title}"
+    );
+}
+
+/// A chart whose title states no size of its own is untouched by all of this.
+#[test]
+fn a_title_stating_no_size_keeps_the_band_it_had() {
+    let mut chart = sized_bar_chart(18.0);
+    let before: f64 = chart_area_title_h(&chart);
+    chart.title_text_style = title_run_style(None, Some(false), None);
+
+    assert_eq!(
+        chart_area_title_h(&chart),
+        before,
+        "the band follows a stated size, not a stated weight"
+    );
 }
 
 #[test]
@@ -4010,6 +4431,60 @@ fn framed_line_radar_and_pie_charts_center_their_titles_in_the_frame() {
     }
 }
 
+/// `c:chartSpace/c:spPr` belongs to the whole chart space, not only to the
+/// plot left after the title takes its band. Every plot family must therefore
+/// open the full framed outline before it writes the title (issue #1216).
+#[test]
+fn every_plot_family_draws_a_titled_chart_inside_its_full_area_outline() {
+    let mut axis = bar_chart_at(Some(14.0), &["Q1", "Q2"]);
+    axis.title = Some("Axis title".to_string());
+
+    let mut line = two_series_bar_chart(Vec::new());
+    line.chart_type = ChartType::Line;
+    line.title = Some("Line title".to_string());
+    line.categories = vec!["Q1".to_string(), "Q2".to_string()];
+    line.series[0].values = vec![1.0, 2.0];
+    line.series[1].values = vec![2.0, 1.0];
+
+    let mut radar = radar_chart();
+    radar.title = Some("Radar title".to_string());
+
+    let mut pie = pie_chart(vec![60.0, 40.0]);
+    pie.title = Some("Pie title".to_string());
+
+    let outline = ChartAreaOutline::Explicit {
+        width_pt: Some(2.0),
+        color: Some(crate::ir::Color::new(0xd9, 0xd9, 0xd9)),
+    };
+    let area_start =
+        "#box(width: 321pt, height: 240pt, fill: none, stroke: 2pt + rgb(217, 217, 217))[";
+
+    for (family, title, mut chart) in [
+        ("axis", "Axis title", axis),
+        ("line", "Line title", line),
+        ("radar", "Radar title", radar),
+        ("pie", "Pie title", pie),
+    ] {
+        chart.chart_area_outline = outline.clone();
+        let source = framed_chart_source(&chart, 321.0, 240.0);
+        let area_position = source.find(area_start).unwrap_or_else(|| {
+            panic!("the {family} chart must outline its full frame, got:\n{source}")
+        });
+        let title_position = source
+            .find(title)
+            .unwrap_or_else(|| panic!("the {family} chart must print its title: {source}"));
+        assert!(
+            area_position < title_position,
+            "the {family} title must sit inside the chart-area outline, got:\n{source}"
+        );
+        assert_eq!(
+            source.matches("stroke: 2pt + rgb(217, 217, 217))[").count(),
+            1,
+            "the {family} chart must draw exactly one area outline, got:\n{source}"
+        );
+    }
+}
+
 #[test]
 fn a_flowed_chart_title_keeps_its_container_width() {
     let mut chart = bar_chart_at(Some(18.0), &["Q1", "Q2"]);
@@ -4125,12 +4600,17 @@ fn a_slide_chart_draws_no_automatic_area_outline() {
 #[test]
 fn a_workbook_chart_keeps_the_measured_excel_outline() {
     // #637 measured this against a native Excel export and it must not move.
-    let source: String = chart_source(framed_bar_chart_on(crate::ir::ChartHost::Spreadsheet));
-    let box_line: &str = chart_area_box_line(&source);
-    assert!(
-        box_line.contains(CHART_AREA_OUTLINE),
-        "a workbook chart keeps Excel's automatic border, got: {box_line}"
-    );
+    for host in [
+        crate::ir::ChartHost::Spreadsheet,
+        crate::ir::ChartHost::SpreadsheetChartsheet,
+    ] {
+        let source: String = chart_source(framed_bar_chart_on(host));
+        let box_line: &str = chart_area_box_line(&source);
+        assert!(
+            box_line.contains(CHART_AREA_OUTLINE),
+            "a workbook chart keeps Excel's automatic border on {host:?}, got: {box_line}"
+        );
+    }
 }
 
 #[test]
@@ -4140,6 +4620,7 @@ fn an_explicit_outline_survives_on_every_host() {
     for host in [
         crate::ir::ChartHost::Presentation,
         crate::ir::ChartHost::Spreadsheet,
+        crate::ir::ChartHost::SpreadsheetChartsheet,
         crate::ir::ChartHost::WordProcessing,
     ] {
         let mut chart = framed_bar_chart_on(host);
@@ -4315,10 +4796,13 @@ fn test_data_table_prints_a_series_number_format() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
+        legend_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -4376,10 +4860,13 @@ fn test_data_table_prints_a_declared_thousands_format() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
+        legend_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -4435,10 +4922,13 @@ fn test_data_table_without_a_number_format_prints_plainly() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
+        legend_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -4493,10 +4983,13 @@ fn test_a_currency_axis_label_is_escaped() {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
+        legend_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: Some("\"$\"#,##0".to_string()),
@@ -4553,10 +5046,13 @@ fn single_series_chart(auto_title_deleted: bool) -> Chart {
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
+        legend_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -4635,10 +5131,13 @@ fn automatic_title_chart(series_names: &[Option<&str>], auto_title_deleted: bool
         value_axis_deleted: false,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::default(),
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
+        legend_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -4737,7 +5236,10 @@ fn an_automatic_title_shortens_the_plot_by_its_band() {
         "an untitled chart emits no band at all: {untitled_source}"
     );
 
-    let box_height = |source: &str| block_height(source, "#box(width: 400pt, height: ");
+    // A titled chart now opens the full chart-area box first and the shortened
+    // content box inside it. The last matching box is therefore the one whose
+    // height must still give up the band (issue #1216).
+    let box_height = |source: &str| last_block_height(source, "#box(width: 400pt, height: ");
     assert_eq!(
         box_height(&untitled_source)
             .zip(box_height(&titled_source))
@@ -4760,6 +5262,15 @@ fn block_height(source: &str, prefix: &str) -> Option<f64> {
         .lines()
         .find_map(|line| line.strip_prefix(prefix))
         .and_then(leading_pt)
+}
+
+/// The height of the last block or box the source opens with `prefix`.
+fn last_block_height(source: &str, prefix: &str) -> Option<f64> {
+    source
+        .lines()
+        .filter_map(|line| line.strip_prefix(prefix))
+        .filter_map(leading_pt)
+        .next_back()
 }
 
 /// The axes and gridlines draw with the line the part declares, and fall back
@@ -5356,10 +5867,13 @@ fn combo_budget_chart() -> Chart {
             overlap_percent: 100.0,
         },
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::Spreadsheet,
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
+        legend_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -5553,10 +6067,13 @@ fn combo_line_and_scatter_chart() -> Chart {
         value_axis_deleted: true,
         bar_band_layout: BarBandLayout::default(),
         theme_accent_colors: Vec::new(),
+        chart_area_fill: crate::ir::ChartAreaFill::Unspecified,
         chart_area_outline: ChartAreaOutline::Default,
         host: crate::ir::ChartHost::Spreadsheet,
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
+        title_text_style: crate::ir::ChartTextStyle::default(),
+        legend_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
@@ -5698,6 +6215,41 @@ fn an_excel_bar_legend_key_is_the_flat_bar_excel_draws() {
                 (gap_pt - 2.025).abs() <= 0.005,
                 "{size_pt}pt: the key leaves {gap_pt}pt before its label, Excel's 2.025pt; \
                  got:\n{source}"
+            );
+        }
+    }
+}
+
+#[test]
+fn an_excel_chartsheet_legend_key_scales_as_a_square_with_its_text() {
+    // Excel for Mac 16.100 gives the `any_sheets.xlsx` chartsheet a native
+    // 4.9433pt square key at 9pt, followed by a 2.0967pt gap. The shared
+    // PowerPoint factors resolve to 4.9437pt and 2.096895pt respectively,
+    // inside 0.0004pt of that export; unlike the 19.2pt flat key Excel uses
+    // for an anchored worksheet chart, both dimensions scale with text
+    // (#1315).
+    for size_pt in [9.0_f64, 18.0] {
+        let mut chart = excel_bottom_legend_chart("Calibri", size_pt);
+        chart.host = crate::ir::ChartHost::SpreadsheetChartsheet;
+        let source: String = chart_source(chart);
+        let keys: Vec<(f64, f64, f64)> = emitted_legend_key_boxes(&source);
+        assert_eq!(
+            keys.len(),
+            2,
+            "each of the two bar series takes a legend key; got:\n{source}"
+        );
+        let expected_side_pt: f64 = PPTX_LEGEND_KEY_EM * size_pt;
+        let expected_gap_pt: f64 =
+            PPTX_LEGEND_KEY_LABEL_GAP_PT + PPTX_LEGEND_KEY_LABEL_GAP_EM * size_pt;
+        for (width_pt, height_pt, gap_pt) in keys {
+            assert!(
+                (width_pt - expected_side_pt).abs() <= 0.01
+                    && (height_pt - expected_side_pt).abs() <= 0.01,
+                "{size_pt}pt: a chartsheet key must be the {expected_side_pt}pt square Excel draws, got {width_pt}pt by {height_pt}pt in:\n{source}"
+            );
+            assert!(
+                (gap_pt - expected_gap_pt).abs() <= 0.005,
+                "{size_pt}pt: a chartsheet key leaves {expected_gap_pt}pt before its label, got {gap_pt}pt in:\n{source}"
             );
         }
     }
