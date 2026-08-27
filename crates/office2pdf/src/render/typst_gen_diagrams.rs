@@ -2469,6 +2469,15 @@ const CHART_AREA_TITLE_SCALE: f64 = 1.2;
 const CHART_TITLE_BAND_PT: f64 = 8.994;
 const CHART_TITLE_BAND_EM: f64 = 1.72912;
 
+/// Baseline seat of an Excel chartsheet title below the chart area's top.
+///
+/// The same twelve exports used for [`CHART_TITLE_BAND_PT`] put the title
+/// baselines on `8.251pt + 1.26390em`, with no sample further than 0.70pt from
+/// that fit (issue #1314). An explicit seat avoids inheriting the ascent and
+/// descent of whatever fallback face Typst happens to resolve.
+const CHARTSHEET_TITLE_BASELINE_PT: f64 = 8.251;
+const CHARTSHEET_TITLE_BASELINE_EM: f64 = 1.26390;
+
 /// The chart-area title's size.
 ///
 /// A `c:title` stating a size in its own `c:txPr` states the printed size:
@@ -2550,26 +2559,38 @@ fn write_chart_title(
     let escaped_title: String = escape_typst(title);
     let title_size: String = format_f64(chart_area_title_pt(chart));
     let attrs: String = chart_area_title_attrs(chart);
+    let fixed_title: String = if chart.host == crate::ir::ChartHost::SpreadsheetChartsheet {
+        let baseline_pt: f64 = CHARTSHEET_TITLE_BASELINE_PT
+            + CHARTSHEET_TITLE_BASELINE_EM * chart_area_title_pt(chart);
+        format!(
+            "#align(center + top)[#text(top-edge: {}pt, bottom-edge: \"baseline\", size: {}pt{})[{}]]",
+            format_f64(baseline_pt),
+            title_size,
+            attrs,
+            escaped_title,
+        )
+    } else {
+        format!(
+            "#align(center + horizon)[#text(size: {}pt{})[{}]]",
+            title_size, attrs, escaped_title,
+        )
+    };
     match (frame, fixed_height) {
         (Some((width, _)), Some(height)) => {
             let _ = writeln!(
                 out,
-                "#block(width: {}pt, height: {}pt, above: 0pt, below: 0pt)[#align(center + horizon)[#text(size: {}pt{})[{}]]]",
+                "#block(width: {}pt, height: {}pt, above: 0pt, below: 0pt)[{}]",
                 format_f64(width),
                 format_f64(height),
-                title_size,
-                attrs,
-                escaped_title,
+                fixed_title,
             );
         }
         (None, Some(height)) => {
             let _ = writeln!(
                 out,
-                "#block(width: 100%, height: {}pt, above: 0pt, below: 0pt)[#align(center + horizon)[#text(size: {}pt{})[{}]]]",
+                "#block(width: 100%, height: {}pt, above: 0pt, below: 0pt)[{}]",
                 format_f64(height),
-                title_size,
-                attrs,
-                escaped_title,
+                fixed_title,
             );
         }
         (Some((width, _)), None) => {
