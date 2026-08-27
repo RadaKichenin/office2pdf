@@ -3766,6 +3766,50 @@ fn a_stated_title_size_takes_the_band_excel_gives_it() {
     }
 }
 
+/// A chartsheet title's baseline is seated from the chart area's top edge,
+/// independently of whichever face Typst resolves for the title.
+///
+/// Twelve Excel for Mac 16.100 exports of the `Chart` chartsheet in
+/// `tests/fixtures/xlsx/any_sheets.xlsx`, with only the title's `sz` changed,
+/// fit `8.251pt + 1.26390em`; no measured baseline is further than 0.70pt from
+/// that line (issue #1314).
+#[test]
+fn an_excel_chartsheet_title_takes_the_native_baseline_seat() {
+    for (size_pt, baseline_pt) in [(9.0, 19.6261), (14.0, 25.9456), (36.0, 53.7514)] {
+        let mut chart = own_title_style_chart(title_run_style(Some(size_pt), Some(false), None));
+        chart.host = crate::ir::ChartHost::SpreadsheetChartsheet;
+        let source: String = framed_chart_source(&chart, 480.0, 320.0);
+        let title: &str = source
+            .lines()
+            .find(|line| line.contains("[Sales]"))
+            .expect("the chart title is emitted");
+
+        assert!(
+            title.contains(&format!(
+                "top-edge: {}pt, bottom-edge: \"baseline\"",
+                format_f64(baseline_pt)
+            )),
+            "a {size_pt}pt chartsheet title seats its baseline {baseline_pt}pt below the chart-area top, got: {title}"
+        );
+    }
+}
+
+#[test]
+fn an_anchored_excel_chart_keeps_its_existing_title_seat() {
+    let mut chart = own_title_style_chart(title_run_style(Some(14.0), Some(false), None));
+    chart.host = crate::ir::ChartHost::Spreadsheet;
+    let source: String = framed_chart_source(&chart, 480.0, 320.0);
+    let title: &str = source
+        .lines()
+        .find(|line| line.contains("[Sales]"))
+        .expect("the chart title is emitted");
+
+    assert!(
+        title.contains("#align(center + horizon)[#text(size: 14pt)[Sales]]"),
+        "an anchored worksheet chart has no measured chartsheet baseline rule: {title}"
+    );
+}
+
 /// A chart whose title states no size of its own is untouched by all of this.
 #[test]
 fn a_title_stating_no_size_keeps_the_band_it_had() {
