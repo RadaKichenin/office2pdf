@@ -343,6 +343,7 @@ pub(super) fn prst_to_shape_kind(
         "roundRect" => ShapeKind::RoundedRectangle {
             radius_fraction: adj_values.first().copied().unwrap_or(16_667.0) / 100_000.0,
         },
+        "pie" => pie_sector(width, height, adj_values).unwrap_or(ShapeKind::Rectangle),
         "wedgeRoundRectCallout" => {
             wedge_round_rect_callout(width, height, adj_values).unwrap_or(ShapeKind::Rectangle)
         }
@@ -423,6 +424,79 @@ pub(super) fn prst_to_shape_kind(
         },
         _ => ShapeKind::Rectangle,
     }
+}
+
+/// Build the ECMA-376 `pie` preset from its two polar adjustment angles.
+///
+/// DrawingML measures an ellipse angle along a ray from its centre. The
+/// parametric angle used to sample that ellipse differs when width and height
+/// do, so a direct `(rx * cos(angle), ry * sin(angle))` distorts non-square
+/// sectors. The preset's `cat2`/`sat2` guides perform this same conversion.
+fn pie_sector(width: f64, height: f64, adj_values: &[f64]) -> Option<ShapeKind> {
+    if !(width.is_finite() && height.is_finite() && width > 0.0 && height > 0.0) {
+        return None;
+    }
+
+    const FULL_CIRCLE_UNITS: f64 = 21_600_000.0;
+    const MAX_ANGLE_UNITS: f64 = FULL_CIRCLE_UNITS - 1.0;
+    const UNITS_PER_DEGREE: f64 = 60_000.0;
+
+    let adjustment = |index: usize, default: f64| -> f64 {
+        adj_values
+            .get(index)
+            .copied()
+            .filter(|value| value.is_finite())
+            .unwrap_or(default)
+            .clamp(0.0, MAX_ANGLE_UNITS)
+    };
+    let start_angle_units: f64 = adjustment(0, 0.0);
+    let end_angle_units: f64 = adjustment(1, 16_200_000.0);
+    let raw_swing_units: f64 = end_angle_units - start_angle_units;
+    let swing_units: f64 = if raw_swing_units > 0.0 {
+        raw_swing_units
+    } else {
+        raw_swing_units + FULL_CIRCLE_UNITS
+    };
+
+    let radius_x: f64 = width / 2.0;
+    let radius_y: f64 = height / 2.0;
+    let ray_to_parametric = |angle_units: f64| -> f64 {
+        let ray_angle: f64 = (angle_units / UNITS_PER_DEGREE).to_radians();
+        (radius_x * ray_angle.sin())
+            .atan2(radius_y * ray_angle.cos())
+            .rem_euclid(std::f64::consts::TAU)
+    };
+
+    let start_parametric: f64 = ray_to_parametric(start_angle_units);
+    let end_parametric: f64 = ray_to_parametric(start_angle_units + swing_units);
+    let mut parametric_swing: f64 =
+        (end_parametric - start_parametric).rem_euclid(std::f64::consts::TAU);
+    if swing_units == FULL_CIRCLE_UNITS {
+        parametric_swing = std::f64::consts::TAU;
+    }
+
+    let centre: (f64, f64) = (radius_x, radius_y);
+    let mut vertices: Vec<(f64, f64)> = vec![(
+        centre.0 + radius_x * start_parametric.cos(),
+        centre.1 + radius_y * start_parametric.sin(),
+    )];
+    append_sampled_arc(
+        &mut vertices,
+        radius_x,
+        radius_y,
+        start_parametric.to_degrees() * UNITS_PER_DEGREE,
+        parametric_swing.to_degrees() * UNITS_PER_DEGREE,
+    );
+    vertices.push(centre);
+
+    Some(ShapeKind::Path {
+        subpaths: vec![Subpath::closed_outline(
+            vertices
+                .into_iter()
+                .map(|(x, y)| (x / width, y / height))
+                .collect(),
+        )],
+    })
 }
 
 /// Build the ECMA-376 `wedgeRoundRectCallout` preset outline.
