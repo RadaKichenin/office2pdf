@@ -636,3 +636,74 @@ fn test_shape_round_rect_default_adj() {
         other => panic!("Expected RoundedRectangle, got {other:?}"),
     }
 }
+
+#[test]
+fn wedge_round_rect_callout_matches_the_fixture_bottom_pointer() {
+    let kind = prst_to_shape_kind(
+        "wedgeRoundRectCallout",
+        150.0,
+        114.0,
+        false,
+        false,
+        ArrowHead::None,
+        ArrowHead::None,
+        &[41_242.0, 92_245.0, 16_667.0],
+    );
+    let ShapeKind::Path { subpaths } = kind else {
+        panic!("wedgeRoundRectCallout should retain its rounded wedge outline");
+    };
+    assert_eq!(subpaths.len(), 1);
+    assert!(subpaths[0].closed);
+
+    let vertices = &subpaths[0].vertices;
+    let has_vertex = |expected: (f64, f64)| {
+        vertices.iter().any(|actual| {
+            (actual.0 - expected.0).abs() < 1e-6 && (actual.1 - expected.1).abs() < 1e-6
+        })
+    };
+
+    let radius = 114.0 * 16_667.0 / 100_000.0;
+    assert!(
+        has_vertex((radius / 150.0, 0.0)),
+        "the top-left corner should turn at the adjusted radius"
+    );
+    assert!(
+        has_vertex((136.863 / 150.0, 162.159_3 / 114.0)),
+        "adj1/adj2 should place the fixture pointer below and right of centre"
+    );
+    assert!(
+        vertices.len() > 20,
+        "the four rounded corners should be sampled instead of drawn as diagonals"
+    );
+}
+
+#[test]
+fn wedge_round_rect_callout_selects_the_top_edge_for_an_upward_pointer() {
+    let kind = prst_to_shape_kind(
+        "wedgeRoundRectCallout",
+        200.0,
+        100.0,
+        false,
+        false,
+        ArrowHead::None,
+        ArrowHead::None,
+        &[70_000.0, -80_000.0, 10_000.0],
+    );
+    let ShapeKind::Path { subpaths } = kind else {
+        panic!("wedgeRoundRectCallout should retain its rounded wedge outline");
+    };
+
+    let vertices = &subpaths[0].vertices;
+    assert!(
+        vertices
+            .iter()
+            .any(|actual| { (actual.0 - 1.2).abs() < 1e-6 && (actual.1 + 0.3).abs() < 1e-6 })
+    );
+    assert!(
+        vertices
+            .iter()
+            .filter(|vertex| vertex.1 < -1e-6)
+            .all(|vertex| (vertex.0 - 1.2).abs() < 1e-6),
+        "only the upward wedge tip should leave the rounded rectangle"
+    );
+}

@@ -249,20 +249,38 @@ fn resolve_text_rect(
 /// silhouette alike (issue #1205).
 fn apply_arc(element: &BytesStart, guides: &GuideList, current: &mut Vec<(f64, f64)>) {
     let attribute = |key: &[u8]| -> Option<f64> { guides.resolve(&get_attr_str(element, key)?) };
-    let (
-        Some(start),
-        Some(radius_x),
-        Some(radius_y),
-        Some(start_angle_units),
-        Some(swing_angle_units),
-    ) = (
-        current.last().copied(),
+    let (Some(radius_x), Some(radius_y), Some(start_angle_units), Some(swing_angle_units)) = (
         attribute(b"wR"),
         attribute(b"hR"),
         attribute(b"stAng"),
         attribute(b"swAng"),
-    )
-    else {
+    ) else {
+        return;
+    };
+
+    append_sampled_arc(
+        current,
+        radius_x,
+        radius_y,
+        start_angle_units,
+        swing_angle_units,
+    );
+}
+
+/// Append a DrawingML elliptical arc to a path as sampled line vertices.
+///
+/// Preset geometries and custom geometries use the same angle units and arc
+/// semantics. Sharing this sampler keeps their rounded outlines equally
+/// smooth and avoids two subtly different interpretations of the current pen
+/// position.
+pub(crate) fn append_sampled_arc(
+    current: &mut Vec<(f64, f64)>,
+    radius_x: f64,
+    radius_y: f64,
+    start_angle_units: f64,
+    swing_angle_units: f64,
+) {
+    let Some(start) = current.last().copied() else {
         return;
     };
 

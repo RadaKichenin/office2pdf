@@ -1,4 +1,6 @@
+use super::custom_geometry::append_sampled_arc;
 use super::*;
+use crate::ir::Subpath;
 
 /// Map an `a:prstDash` preset to `BorderLineStyle`, one variant per preset.
 ///
@@ -341,6 +343,9 @@ pub(super) fn prst_to_shape_kind(
         "roundRect" => ShapeKind::RoundedRectangle {
             radius_fraction: adj_values.first().copied().unwrap_or(16_667.0) / 100_000.0,
         },
+        "wedgeRoundRectCallout" => {
+            wedge_round_rect_callout(width, height, adj_values).unwrap_or(ShapeKind::Rectangle)
+        }
         // homePlate: pentagon arrow tab (rect with pointed right edge)
         "homePlate" => {
             let adj: f64 = adj_values.first().copied().unwrap_or(50_000.0);
@@ -418,6 +423,90 @@ pub(super) fn prst_to_shape_kind(
         },
         _ => ShapeKind::Rectangle,
     }
+}
+
+/// Build the ECMA-376 `wedgeRoundRectCallout` preset outline.
+///
+/// The preset carries candidate wedge points on all four sides. Its `dz`
+/// guide compares the vertical tip distance with the aspect-ratio-adjusted
+/// horizontal distance to choose which edge receives the adjustable wedge;
+/// degenerate adjustments may leave that wedge on or inside the body.
+fn wedge_round_rect_callout(width: f64, height: f64, adj_values: &[f64]) -> Option<ShapeKind> {
+    if !(width.is_finite() && height.is_finite() && width > 0.0 && height > 0.0) {
+        return None;
+    }
+
+    let adjustment = |index: usize, default: f64| -> f64 {
+        adj_values
+            .get(index)
+            .copied()
+            .filter(|value| value.is_finite())
+            .unwrap_or(default)
+    };
+    let choose = |condition: f64, positive: f64, non_positive: f64| -> f64 {
+        if condition > 0.0 {
+            positive
+        } else {
+            non_positive
+        }
+    };
+
+    let dx_pos: f64 = width * adjustment(0, -20_833.0) / 100_000.0;
+    let dy_pos: f64 = height * adjustment(1, 62_500.0) / 100_000.0;
+    let x_pos: f64 = width / 2.0 + dx_pos;
+    let y_pos: f64 = height / 2.0 + dy_pos;
+    let diagonal_x: f64 = dx_pos * height / width;
+    let distance_difference: f64 = dy_pos.abs() - diagonal_x.abs();
+
+    let x1: f64 = width * choose(dx_pos, 7.0, 2.0) / 12.0;
+    let x2: f64 = width * choose(dx_pos, 10.0, 5.0) / 12.0;
+    let y1: f64 = height * choose(dy_pos, 7.0, 2.0) / 12.0;
+    let y2: f64 = height * choose(dy_pos, 10.0, 5.0) / 12.0;
+
+    let left_wedge_x: f64 = choose(distance_difference, 0.0, choose(dx_pos, 0.0, x_pos));
+    let top_wedge_x: f64 = choose(distance_difference, choose(dy_pos, x1, x_pos), x1);
+    let right_wedge_x: f64 = choose(distance_difference, width, choose(dx_pos, x_pos, width));
+    let bottom_wedge_x: f64 = choose(distance_difference, choose(dy_pos, x_pos, x1), x1);
+    let left_wedge_y: f64 = choose(distance_difference, y1, choose(dx_pos, y1, y_pos));
+    let top_wedge_y: f64 = choose(distance_difference, choose(dy_pos, 0.0, y_pos), 0.0);
+    let right_wedge_y: f64 = choose(distance_difference, y1, choose(dx_pos, y_pos, y1));
+    let bottom_wedge_y: f64 = choose(distance_difference, choose(dy_pos, y_pos, height), height);
+
+    let radius: f64 = width.min(height) * adjustment(2, 16_667.0).max(0.0) / 100_000.0;
+    let mut vertices: Vec<(f64, f64)> = Vec::with_capacity(80);
+    vertices.push((0.0, radius));
+    append_sampled_arc(&mut vertices, radius, radius, 10_800_000.0, 5_400_000.0);
+    vertices.extend([
+        (x1, 0.0),
+        (top_wedge_x, top_wedge_y),
+        (x2, 0.0),
+        (width - radius, 0.0),
+    ]);
+    append_sampled_arc(&mut vertices, radius, radius, 16_200_000.0, 5_400_000.0);
+    vertices.extend([
+        (width, y1),
+        (right_wedge_x, right_wedge_y),
+        (width, y2),
+        (width, height - radius),
+    ]);
+    append_sampled_arc(&mut vertices, radius, radius, 0.0, 5_400_000.0);
+    vertices.extend([
+        (x2, height),
+        (bottom_wedge_x, bottom_wedge_y),
+        (x1, height),
+        (radius, height),
+    ]);
+    append_sampled_arc(&mut vertices, radius, radius, 5_400_000.0, 5_400_000.0);
+    vertices.extend([(0.0, y2), (left_wedge_x, left_wedge_y), (0.0, y1)]);
+
+    Some(ShapeKind::Path {
+        subpaths: vec![Subpath::closed_outline(
+            vertices
+                .into_iter()
+                .map(|(x, y)| (x / width, y / height))
+                .collect(),
+        )],
+    })
 }
 
 /// Return the edge insets of a preset geometry's DrawingML text rectangle,

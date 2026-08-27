@@ -13,7 +13,9 @@ use office2pdf::config::ConvertOptions;
 use office2pdf::internal::Parser;
 use office2pdf::internal::PptxParser;
 use office2pdf::internal::generate_typst;
-use office2pdf::ir::{Block, Color, FixedElementKind, FixedPage, LineSpacing, Page, PatternPreset};
+use office2pdf::ir::{
+    Block, Color, FixedElementKind, FixedPage, LineSpacing, Page, PatternPreset, ShapeKind,
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -494,6 +496,42 @@ fn custom_geo_slide_6_callout_uses_its_geometry_text_rectangle() {
     assert!((overlay.y - (237.5 + inset)).abs() < 1e-9);
     assert!((overlay.width - (150.0 - 2.0 * inset)).abs() < 1e-9);
     assert!((overlay.height - (114.0 - 2.0 * inset)).abs() < 1e-9);
+}
+
+#[test]
+fn custom_geo_slide_6_callouts_keep_their_rounded_wedge_outlines() {
+    let pages = fixed_pages("customGeo.pptx");
+    let page = &pages[5];
+    let expected_callouts = [
+        (150.0, 114.0, (0.912_42, 1.422_45)),
+        (180.0, 84.0, (-0.393_65, 0.634_68)),
+        (180.0, 72.0, (-0.374_57, 0.679_05)),
+    ];
+
+    for (width, height, expected_tip) in expected_callouts {
+        let shape = page
+            .elements
+            .iter()
+            .find_map(|element| {
+                if (element.width - width).abs() >= 0.01 || (element.height - height).abs() >= 0.01
+                {
+                    return None;
+                }
+                let FixedElementKind::Shape(shape) = &element.kind else {
+                    return None;
+                };
+                Some(shape)
+            })
+            .unwrap_or_else(|| panic!("slide 6 callout {width}x{height}pt"));
+        let ShapeKind::Path { subpaths } = &shape.kind else {
+            panic!("slide 6 callout {width}x{height}pt must retain its preset path");
+        };
+        assert_eq!(subpaths.len(), 1);
+        assert!(subpaths[0].closed);
+        assert!(subpaths[0].vertices.iter().any(|vertex| {
+            (vertex.0 - expected_tip.0).abs() < 1e-6 && (vertex.1 - expected_tip.1).abs() < 1e-6
+        }));
+    }
 }
 
 #[test]
