@@ -292,17 +292,30 @@ fn write_shadow_shape(
     {
         let expansion = outline_outset;
         if let Some(rings) = &outline_rings {
-            write_offset_ring_layer(
-                out,
-                rings,
-                RingGeometry {
-                    expansion,
-                    silhouette_radius,
-                },
-                shadow,
-                alpha,
-                (dx, dy),
-            );
+            if !rings.is_empty() {
+                write_offset_ring_layer(
+                    out,
+                    rings,
+                    RingGeometry {
+                        expansion,
+                        silhouette_radius,
+                    },
+                    shadow,
+                    alpha,
+                    (dx, dy),
+                );
+            }
+            if let ShapeKind::Path { subpaths } = &shape.kind {
+                write_crisp_open_path_shadow(
+                    out,
+                    subpaths,
+                    width,
+                    height,
+                    &shape.stroke,
+                    shadow,
+                    (dx, dy),
+                );
+            }
             return;
         }
         let layer_width = (width + 2.0 * expansion).max(0.0);
@@ -370,6 +383,51 @@ fn write_shadow_shape(
     }
 }
 
+/// Write the offset stroke cast by every unclosed custom-geometry subpath.
+///
+/// Typst closes an open curve for filling, so this copy deliberately has no
+/// fill and retains the source line's width, dash, and join. That leaves an
+/// elbow connector open while painting the grey band PowerPoint places under
+/// each of its legs (issues #1205, #1305).
+fn write_crisp_open_path_shadow(
+    out: &mut String,
+    subpaths: &[Subpath],
+    width: f64,
+    height: f64,
+    stroke: &Option<BorderSide>,
+    shadow: &Shadow,
+    offset: (f64, f64),
+) {
+    let Some(stroke) = stroke
+        .as_ref()
+        .filter(|stroke| stroke.style != BorderLineStyle::None && stroke.width > 0.0)
+    else {
+        return;
+    };
+    if !subpaths
+        .iter()
+        .any(|subpath| !subpath.closed && subpath.vertices.len() >= 2)
+    {
+        return;
+    }
+
+    let paint: String = rgb_with_alpha(&shadow.color, shadow_alpha(shadow));
+    let _ = write!(
+        out,
+        "#place(top + left, dx: {}pt, dy: {}pt)[#curve(stroke: {}",
+        format_f64(offset.0),
+        format_f64(offset.1),
+        drawingml_stroke_value_with_paint(stroke, &paint),
+    );
+    for subpath in subpaths
+        .iter()
+        .filter(|subpath| !subpath.closed && subpath.vertices.len() >= 2)
+    {
+        write_curve_subpath(out, width, height, subpath);
+    }
+    out.push_str(")]\n");
+}
+
 /// Write one filtered SVG whose alpha is the silhouette convolved with a
 /// Gaussian. Typst 0.14 rasterises SVG filters at four samples per output
 /// point, so the PDF receives a continuous 288-DPI ramp instead of one flat
@@ -388,21 +446,21 @@ pub(super) fn write_blurred_shadow_asset(
     if sigma <= 0.0 {
         return;
     }
-    let source_outset: f64 = stroke
+    let source_stroke: Option<&BorderSide> = stroke
         .as_ref()
-        .filter(|stroke| stroke.style != BorderLineStyle::None && stroke.width > 0.0)
-        .map_or(0.0, |stroke| {
-            let half_width: f64 = stroke.width / 2.0;
-            if stroke.join == LineJoin::Miter {
-                // SVG's default miter limit can carry an acute join beyond
-                // the half-width reached by round and bevel joins. Extra
-                // transparent canvas prevents that source from being clipped
-                // before the Gaussian filter sees it.
-                4.0 * stroke.width
-            } else {
-                half_width
-            }
-        });
+        .filter(|stroke| stroke.style != BorderLineStyle::None && stroke.width > 0.0);
+    let source_outset: f64 = source_stroke.map_or(0.0, |stroke| {
+        let half_width: f64 = stroke.width / 2.0;
+        if stroke.join == LineJoin::Miter {
+            // SVG's default miter limit can carry an acute join beyond
+            // the half-width reached by round and bevel joins. Extra
+            // transparent canvas prevents that source from being clipped
+            // before the Gaussian filter sees it.
+            4.0 * stroke.width
+        } else {
+            half_width
+        }
+    });
     let reach: f64 = SHADOW_BLUR_EXTENT_SIGMA * sigma;
     let padding: f64 = source_outset + reach;
     let asset_width: f64 = width + 2.0 * padding;
@@ -415,7 +473,7 @@ pub(super) fn write_blurred_shadow_asset(
         return;
     }
 
-    let Some(body) = shadow_svg_body(kind, width, height, padding) else {
+    let Some(body) = shadow_svg_body(kind, width, height, padding, source_stroke.is_some()) else {
         return;
     };
     let opacity: f64 = shadow.opacity.clamp(0.0, 1.0);
@@ -433,10 +491,7 @@ pub(super) fn write_blurred_shadow_asset(
         shadow.color.g,
         shadow.color.b,
     );
-    if let Some(stroke) = stroke
-        .as_ref()
-        .filter(|stroke| stroke.style != BorderLineStyle::None && stroke.width > 0.0)
-    {
+    if let Some(stroke) = source_stroke {
         let join = match stroke.join {
             LineJoin::Round => "round",
             LineJoin::Bevel => "bevel",
@@ -471,7 +526,13 @@ pub(super) fn write_blurred_shadow_asset(
 }
 
 /// The unblurred silhouette inside a padded shadow SVG.
-fn shadow_svg_body(kind: &ShapeKind, width: f64, height: f64, origin: f64) -> Option<String> {
+fn shadow_svg_body(
+    kind: &ShapeKind,
+    width: f64,
+    height: f64,
+    origin: f64,
+    include_open_strokes: bool,
+) -> Option<String> {
     match kind {
         ShapeKind::Rectangle => Some(format!(
             "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\"/>",
@@ -518,10 +579,19 @@ fn shadow_svg_body(kind: &ShapeKind, width: f64, height: f64, origin: f64) -> Op
             Some(format!("<polygon points=\"{points}\"/>"))
         }
         ShapeKind::Path { subpaths } => {
-            let mut data = String::new();
-            for subpath in subpaths.iter().filter(|subpath| subpath.closed) {
+            let mut closed_data = String::new();
+            let mut open_data = String::new();
+            for subpath in subpaths
+                .iter()
+                .filter(|subpath| subpath.closed || include_open_strokes)
+            {
                 let Some((first, rest)) = subpath.vertices.split_first() else {
                     continue;
+                };
+                let data: &mut String = if subpath.closed {
+                    &mut closed_data
+                } else {
+                    &mut open_data
                 };
                 let _ = write!(
                     data,
@@ -537,9 +607,18 @@ fn shadow_svg_body(kind: &ShapeKind, width: f64, height: f64, origin: f64) -> Op
                         format_f64(origin + y * height),
                     );
                 }
-                data.push_str(" Z ");
+                if subpath.closed {
+                    data.push_str(" Z ");
+                }
             }
-            (!data.is_empty()).then(|| format!("<path d=\"{data}\" fill-rule=\"evenodd\"/>"))
+            let mut body = String::new();
+            if !closed_data.is_empty() {
+                let _ = write!(body, "<path d=\"{closed_data}\" fill-rule=\"evenodd\"/>");
+            }
+            if !open_data.is_empty() {
+                let _ = write!(body, "<path d=\"{open_data}\" fill=\"none\"/>");
+            }
+            (!body.is_empty()).then_some(body)
         }
         ShapeKind::Line { .. } | ShapeKind::Polyline { .. } => None,
     }

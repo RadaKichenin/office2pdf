@@ -466,6 +466,35 @@ pptx_fixture_tests!(shapes, "shapes.pptx");
 pptx_fixture_tests!(custom_geo, "customGeo.pptx");
 
 #[test]
+fn custom_geo_open_connectors_cast_their_declared_stroke_shadows() {
+    let data = load_fixture("customGeo.pptx");
+    let (document, _warnings) = PptxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let source = generate_typst(&document).unwrap().source;
+    let connector_shadows: Vec<&str> = source
+        .lines()
+        .filter(|line| {
+            line.contains("#curve(stroke:")
+                && line.contains("paint: rgb(0, 0, 0, 89)")
+                && line.contains("curve.move(")
+        })
+        .collect();
+
+    assert!(
+        connector_shadows.len() >= 4,
+        "slide 6's four open connectors must cast their declared 35%-opaque shadows: {connector_shadows:?}"
+    );
+    assert!(
+        connector_shadows
+            .iter()
+            .all(|line| line.contains("thickness: 2.0001574803149604pt")
+                && line.contains("join: \"round\"")
+                && !line.contains("fill:")
+                && !line.contains("curve.close()")),
+        "each connector shadow must retain the source stroke without closing or filling it: {connector_shadows:?}"
+    );
+}
+
+#[test]
 fn structure_custom_geo_page_31_preserves_theme_hyperlink_runs() {
     let pages = fixed_pages("customGeo.pptx");
     let page = &pages[30];
