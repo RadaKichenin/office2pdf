@@ -116,9 +116,9 @@ fn drawingml_join_name(join: LineJoin) -> &'static str {
 /// `a:round`, `a:bevel` or `a:miter` child joins round, and leaving the key off
 /// mitered every outlined shape's corners. That forces the dictionary form on
 /// solid strokes too, which used to take the `Wpt + rgb(...)` shorthand.
-pub(super) fn drawingml_stroke_value(side: &BorderSide) -> String {
+pub(super) fn drawingml_stroke_value_with_paint(side: &BorderSide, paint: &str) -> String {
     let mut parts: Vec<String> = vec![
-        format!("paint: {}", rgb(&side.color)),
+        format!("paint: {paint}"),
         format!("thickness: {}pt", format_f64(side.width)),
     ];
     if let Some(array) = drawingml_dash_array_pt(side.style, side.width) {
@@ -138,6 +138,10 @@ pub(super) fn drawingml_stroke_value(side: &BorderSide) -> String {
     }
     parts.push(format!("join: \"{}\"", drawingml_join_name(side.join)));
     format!("({})", parts.join(", "))
+}
+
+pub(super) fn drawingml_stroke_value(side: &BorderSide) -> String {
+    drawingml_stroke_value_with_paint(side, &rgb(&side.color))
 }
 
 /// Format a float without a trailing `.0` on integral values.

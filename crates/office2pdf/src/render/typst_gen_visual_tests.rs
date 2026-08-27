@@ -726,11 +726,12 @@ fn test_path_shape_casts_its_outline_as_a_shadow() {
     );
 }
 
-/// An unclosed subpath is a stroked polyline, not a filled region, so it
-/// contributes no silhouette. Filling it would paint the area an elbow
-/// connector merely brackets (issue #1205).
+/// An unclosed subpath casts the shadow of its stroke rather than a filled
+/// silhouette. Filling it would paint the area an elbow connector merely
+/// brackets, while skipping it loses the offset grey band PowerPoint draws
+/// under the whole connector (issues #1205, #1305).
 #[test]
-fn test_open_subpath_casts_no_shadow_silhouette() {
+fn test_open_subpath_casts_an_offset_copy_of_its_stroke() {
     use crate::ir::{Shadow, Subpath};
 
     let elem = FixedElement {
@@ -749,7 +750,12 @@ fn test_open_subpath_casts_no_shadow_silhouette() {
             fill: None,
             gradient_fill: None,
             pattern_fill: None,
-            stroke: None,
+            stroke: Some(BorderSide {
+                width: 2.0,
+                color: Color::new(138, 180, 226),
+                style: BorderLineStyle::Solid,
+                join: LineJoin::Round,
+            }),
             rotation_deg: None,
             opacity: None,
             shadow: Some(Shadow {
@@ -764,9 +770,80 @@ fn test_open_subpath_casts_no_shadow_silhouette() {
     let doc = make_doc(vec![make_fixed_page(720.0, 540.0, vec![elem])]);
     let source = generate_typst(&doc).unwrap().source;
 
+    let shadow = source
+        .lines()
+        .find(|line| line.contains("rgb(0, 0, 0, 89)"))
+        .unwrap_or_else(|| panic!("the open connector casts no shadow stroke: {source}"));
     assert!(
-        !source.contains("rgb(0, 0, 0, "),
-        "an open polyline casts no filled silhouette: {source}"
+        shadow.contains("dy: 3pt")
+            && shadow.contains("thickness: 2pt")
+            && shadow.contains("join: \"round\"")
+            && shadow.contains("curve.move((0pt, 0pt))")
+            && shadow.contains("curve.line((0pt, 150pt))")
+            && shadow.contains("curve.line((200pt, 150pt))"),
+        "the shadow must offset the source stroke without changing its path, width, or join: {shadow}"
+    );
+    assert!(
+        !shadow.contains("fill:") && !shadow.contains("curve.close()"),
+        "an open connector shadow must remain an open stroke: {shadow}"
+    );
+}
+
+#[test]
+fn test_blurred_open_subpath_filters_its_stroke_without_filling_it() {
+    use crate::ir::{Shadow, Subpath};
+
+    let elem = FixedElement {
+        x: 10.0,
+        y: 20.0,
+        width: 200.0,
+        height: 150.0,
+        kind: FixedElementKind::Shape(Shape {
+            kind: ShapeKind::Path {
+                subpaths: vec![Subpath::open_outline(vec![
+                    (0.0, 0.0),
+                    (0.0, 1.0),
+                    (1.0, 1.0),
+                ])],
+            },
+            fill: None,
+            gradient_fill: None,
+            pattern_fill: None,
+            stroke: Some(BorderSide {
+                width: 2.0,
+                color: Color::new(138, 180, 226),
+                style: BorderLineStyle::Solid,
+                join: LineJoin::Round,
+            }),
+            rotation_deg: None,
+            opacity: None,
+            shadow: Some(Shadow {
+                blur_radius: 6.0,
+                distance: 3.0,
+                direction: 90.0,
+                color: Color::new(0, 0, 0),
+                opacity: 0.35,
+            }),
+        }),
+    };
+    let output =
+        generate_typst(&make_doc(vec![make_fixed_page(720.0, 540.0, vec![elem])])).unwrap();
+    let asset = output.images.first().expect("one blurred shadow asset");
+    let svg = std::str::from_utf8(&asset.data).expect("a generated shadow SVG");
+
+    assert!(
+        svg.contains("<feGaussianBlur stdDeviation=\"2\"")
+            && svg.contains("stroke=\"rgb(0, 0, 0)\"")
+            && svg.contains("stroke-width=\"2\"")
+            && svg.contains("stroke-linejoin=\"round\"")
+            && svg.contains("<path d=\"M ")
+            && svg.contains(" L ")
+            && svg.contains("fill=\"none\""),
+        "the Gaussian source must be the connector's open stroke: {svg}"
+    );
+    assert!(
+        !svg.contains(" Z "),
+        "the filtered connector must not gain a closing segment: {svg}"
     );
 }
 
