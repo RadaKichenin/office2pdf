@@ -590,6 +590,36 @@ fn structure_any_sheets_chart_title_carries_its_own_run_properties() {
     assert_eq!(chart.text_style.bold, None);
 }
 
+/// The legend's own `<c:txPr>` governs every entry rather than disappearing
+/// between the chart parser and renderer.
+///
+/// `xl/charts/chart1.xml` gives `<c:legend>` a 9pt regular `a:defRPr` filled
+/// with the same transformed `tx1` colour as the axes: #595959. Excel for Mac
+/// 16.100 draws both legend entries at that size and colour, while the chart
+/// space itself declares neither property (issue #1236).
+#[test]
+fn structure_any_sheets_chart_legend_carries_its_own_run_properties() {
+    let data = load_fixture("any_sheets.xlsx");
+    let (document, _warnings) = XlsxParser
+        .parse(&data, &ConvertOptions::default())
+        .expect("the fixture should parse");
+    let source = generate_typst(&document)
+        .expect("the fixture should generate Typst")
+        .source;
+    let entries: Vec<&str> = source
+        .lines()
+        .filter(|line| line.contains("[Series 1]") || line.contains("[Series 2]"))
+        .collect();
+
+    assert_eq!(entries.len(), 2, "both legend entries are emitted");
+    for entry in entries {
+        assert!(
+            entry.contains("#text(size: 9pt, fill: rgb(89, 89, 89))[Series"),
+            "the legend's own size and colour reach every entry; got: {entry}"
+        );
+    }
+}
+
 /// Two chartsheet packages whose parts collide by filename, which is how the
 /// worksheet-only rels lookup went wrong in the first place.
 ///

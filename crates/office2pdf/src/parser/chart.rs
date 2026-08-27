@@ -167,6 +167,9 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
     // `c:title/c:txPr` governs the title alone; the chart space's governs
     // everything else and is a poor stand-in for it (issue #1215).
     let mut title_text_style: ChartTextStyle = ChartTextStyle::default();
+    // A legend can override the chart space's run properties independently of
+    // its position and visibility (issue #1236).
+    let mut legend_text_style: ChartTextStyle = ChartTextStyle::default();
     // `c:layout` is written by the title, the legend and every data-label group
     // as well, so the plot area's own is told from theirs by where it sits. The
     // elements that carry the others consume their own subtrees before this
@@ -192,9 +195,10 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
                     plot_area_layout = parse_plot_area_layout(&mut reader);
                 } else if tag == b"legend" {
                     // Declared, unless the element switches itself off.
-                    let (deleted, position) = parse_legend(&mut reader);
+                    let (deleted, position, style) = parse_legend(&mut reader, scheme);
                     has_legend = !deleted;
                     legend_position = legend_position.or(position);
+                    legend_text_style = style;
                 } else if tag == b"title" && title.is_none() {
                     let (text, names_own_text, style) = parse_chart_title(&mut reader, scheme);
                     title = text;
@@ -381,6 +385,7 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
         text_font_family,
         text_style,
         title_text_style,
+        legend_text_style,
         category_axis_text_style: category_axis.text_style,
         value_axis_text_style: value_axis.text_style,
         value_axis_number_format: value_axis.number_format,
@@ -800,15 +805,19 @@ fn parse_axis(reader: &mut Reader<&[u8]>, end_tag: &[u8], scheme: &SchemeColors<
 }
 
 /// Consume a `<c:legend>` body, reporting whether it switches itself off and
-/// which edge it names.
+/// which edge it names, and the run properties its entries take.
 ///
 /// `<c:legend><c:delete val="1"/></c:legend>` is how Office records a legend
 /// that was turned off but whose settings were kept, the same shape the axes
 /// use. The position comes back from here too because this consumes the body,
 /// so `<c:legendPos>` never reaches the caller's loop (issue #762).
-fn parse_legend(reader: &mut Reader<&[u8]>) -> (bool, Option<LegendPosition>) {
+fn parse_legend(
+    reader: &mut Reader<&[u8]>,
+    scheme: &SchemeColors<'_>,
+) -> (bool, Option<LegendPosition>, ChartTextStyle) {
     let mut deleted = false;
     let mut position: Option<LegendPosition> = None;
+    let mut style: ChartTextStyle = ChartTextStyle::default();
     loop {
         match reader.read_event() {
             Ok(Event::Empty(ref e)) => match e.local_name().as_ref() {
@@ -820,12 +829,20 @@ fn parse_legend(reader: &mut Reader<&[u8]>) -> (bool, Option<LegendPosition>) {
                 }
                 _ => {}
             },
+            Ok(Event::Start(ref e)) => match e.local_name().as_ref() {
+                // A `c:legendEntry` can carry a `c:txPr` for one overridden
+                // entry. Do not promote that narrower scope to every entry in
+                // the legend merely because we encounter it first.
+                b"legendEntry" => xml_util::skip_element(reader, b"legendEntry"),
+                b"txPr" => style = parse_chart_text_style(reader, scheme),
+                _ => {}
+            },
             Ok(Event::End(ref e)) if e.local_name().as_ref() == b"legend" => break,
             Ok(Event::Eof) | Err(_) => break,
             _ => {}
         }
     }
-    (deleted, position)
+    (deleted, position, style)
 }
 
 /// Read a `CT_Boolean` element's own state.

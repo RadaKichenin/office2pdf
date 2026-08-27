@@ -1200,6 +1200,7 @@ fn test_document_requests_font_families_true_for_a_chart_only_document() {
         text_font_family: Some("Pretendard".to_string()),
         text_style: crate::ir::ChartTextStyle::default(),
         title_text_style: crate::ir::ChartTextStyle::default(),
+        legend_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,

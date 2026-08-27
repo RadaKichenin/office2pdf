@@ -124,6 +124,7 @@ fn bar_chart() -> crate::ir::Chart {
         text_font_family: None,
         text_style: crate::ir::ChartTextStyle::default(),
         title_text_style: crate::ir::ChartTextStyle::default(),
+        legend_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_number_format: None,
