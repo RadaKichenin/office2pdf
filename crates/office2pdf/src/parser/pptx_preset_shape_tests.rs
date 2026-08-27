@@ -194,6 +194,46 @@ fn test_shape_right_arrow() {
 }
 
 #[test]
+fn test_shape_right_arrow_uses_short_side_for_default_head_length() {
+    let shape = make_shape(0, 0, 3_000_000, 1_500_000, "rightArrow", None, None, None);
+    let slide = make_slide_xml(&[shape]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = first_fixed_page(&doc);
+    let shape = get_shape(&page.elements[0]);
+    let ShapeKind::Polygon { vertices } = &shape.kind else {
+        panic!("Expected Polygon for rightArrow, got {:?}", shape.kind);
+    };
+
+    assert_eq!(vertices.len(), 7);
+    assert!((vertices[1].0 - 0.75).abs() < 1e-9, "{vertices:?}");
+    assert!((vertices[2].0 - 0.75).abs() < 1e-9, "{vertices:?}");
+    assert!((vertices[0].1 - 0.25).abs() < 1e-9, "{vertices:?}");
+    assert!((vertices[6].1 - 0.75).abs() < 1e-9, "{vertices:?}");
+}
+
+#[test]
+fn test_shape_right_arrow_applies_adjustment_guides() {
+    let shape = r#"<p:sp><p:nvSpPr><p:cNvPr id="3" name="Arrow"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="3000000" cy="1500000"/></a:xfrm><a:prstGeom prst="rightArrow"><a:avLst><a:gd name="adj1" fmla="val 25000"/><a:gd name="adj2" fmla="val 25000"/></a:avLst></a:prstGeom></p:spPr></p:sp>"#.to_string();
+    let slide = make_slide_xml(&[shape]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = first_fixed_page(&doc);
+    let shape = get_shape(&page.elements[0]);
+    let ShapeKind::Polygon { vertices } = &shape.kind else {
+        panic!("Expected Polygon for rightArrow, got {:?}", shape.kind);
+    };
+
+    assert!((vertices[1].0 - 0.875).abs() < 1e-9, "{vertices:?}");
+    assert!((vertices[0].1 - 0.375).abs() < 1e-9, "{vertices:?}");
+    assert!((vertices[6].1 - 0.625).abs() < 1e-9, "{vertices:?}");
+}
+
+#[test]
 fn test_shape_left_arrow() {
     let shape = make_shape(0, 0, 3_000_000, 1_500_000, "leftArrow", None, None, None);
     let slide = make_slide_xml(&[shape]);
@@ -211,6 +251,7 @@ fn test_shape_left_arrow() {
                 .map(|vertex| vertex.0)
                 .fold(f64::INFINITY, f64::min);
             assert!(leftmost.abs() < 0.01);
+            assert!((vertices[1].0 - 0.25).abs() < 1e-9, "{vertices:?}");
         }
         other => panic!("Expected Polygon for leftArrow, got {other:?}"),
     }
@@ -227,7 +268,10 @@ fn test_shape_up_arrow() {
     let page = first_fixed_page(&doc);
     let shape = get_shape(&page.elements[0]);
     match &shape.kind {
-        ShapeKind::Polygon { vertices } => assert_eq!(vertices.len(), 7),
+        ShapeKind::Polygon { vertices } => {
+            assert_eq!(vertices.len(), 7);
+            assert!((vertices[1].1 - 0.25).abs() < 1e-9, "{vertices:?}");
+        }
         other => panic!("Expected Polygon for upArrow, got {other:?}"),
     }
 }
@@ -243,7 +287,10 @@ fn test_shape_down_arrow() {
     let page = first_fixed_page(&doc);
     let shape = get_shape(&page.elements[0]);
     match &shape.kind {
-        ShapeKind::Polygon { vertices } => assert_eq!(vertices.len(), 7),
+        ShapeKind::Polygon { vertices } => {
+            assert_eq!(vertices.len(), 7);
+            assert!((vertices[1].1 - 0.75).abs() < 1e-9, "{vertices:?}");
+        }
         other => panic!("Expected Polygon for downArrow, got {other:?}"),
     }
 }
