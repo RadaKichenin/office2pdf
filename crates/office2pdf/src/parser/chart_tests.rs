@@ -1776,6 +1776,61 @@ fn an_axis_tx_pr_overrides_the_chart_space_one() {
 }
 
 #[test]
+fn a_legend_tx_pr_keeps_its_own_run_properties() {
+    let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+        <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+            <c:chart>
+                <c:plotArea><c:barChart><c:barDir val="col"/></c:barChart></c:plotArea>
+                <c:legend><c:legendPos val="b"/><c:txPr><a:p><a:pPr>
+                    <a:defRPr sz="1700" b="1" spc="125">
+                        <a:solidFill><a:srgbClr val="C02A7A"/></a:solidFill>
+                    </a:defRPr>
+                </a:pPr></a:p></c:txPr></c:legend>
+            </c:chart>
+            <c:txPr><a:p><a:pPr><a:defRPr sz="1200" b="0"/></a:pPr></a:p></c:txPr>
+        </c:chartSpace>"#;
+    let chart = parse_chart_xml(xml, &SchemeColors::empty()).expect("chart parses");
+
+    assert!(chart.has_legend);
+    assert_eq!(chart.legend_position, LegendPosition::Bottom);
+    assert_eq!(chart.legend_text_style.size_pt, Some(17.0));
+    assert_eq!(chart.legend_text_style.bold, Some(true));
+    assert_eq!(chart.legend_text_style.letter_spacing_hundredths, Some(125));
+    assert_eq!(
+        chart.legend_text_style.color,
+        Some(Color::new(0xC0, 0x2A, 0x7A))
+    );
+    assert_eq!(
+        chart.text_style.resolved_size_pt(chart.legend_text_style),
+        Some(17.0),
+        "the legend overrides the chart-space 12pt size"
+    );
+}
+
+#[test]
+fn a_legend_entry_tx_pr_is_not_promoted_to_the_whole_legend() {
+    let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+        <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+            <c:chart>
+                <c:plotArea><c:barChart><c:barDir val="col"/></c:barChart></c:plotArea>
+                <c:legend>
+                    <c:legendPos val="b"/>
+                    <c:legendEntry><c:idx val="0"/><c:txPr><a:p><a:pPr>
+                        <a:defRPr sz="1700" b="1">
+                            <a:solidFill><a:srgbClr val="C02A7A"/></a:solidFill>
+                        </a:defRPr>
+                    </a:pPr></a:p></c:txPr></c:legendEntry>
+                </c:legend>
+            </c:chart>
+        </c:chartSpace>"#;
+    let chart = parse_chart_xml(xml, &SchemeColors::empty()).expect("chart parses");
+
+    assert_eq!(chart.legend_text_style, ChartTextStyle::default());
+}
+
+#[test]
 fn an_axis_preserves_its_ellipsis_overflow_policy() {
     let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
         <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"

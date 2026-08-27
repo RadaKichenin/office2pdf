@@ -369,6 +369,12 @@ pub struct Chart {
     /// `<a:defRPr/>` for the chart space and `sz="1400" b="0"` over a #595959
     /// fill for the title (issue #1215).
     pub title_text_style: ChartTextStyle,
+    /// What `c:legend/c:txPr` declares for every legend entry.
+    ///
+    /// The same fixture gives its legend a 9pt regular #595959 run while its
+    /// chart space states none of those properties, so the legend cannot be
+    /// represented by [`Chart::text_style`] alone (issue #1236).
+    pub legend_text_style: ChartTextStyle,
     /// What `c:catAx/c:txPr` declares for the category labels alone.
     pub category_axis_text_style: ChartTextStyle,
     /// What `c:valAx/c:txPr` declares for the value tick labels alone.

@@ -850,6 +850,22 @@ pub(super) fn chart_text_pt(chart: &Chart) -> f64 {
     chart.text_style.size_pt.unwrap_or(CHART_DEFAULT_TEXT_PT)
 }
 
+/// The size of every legend entry, resolving the legend's own `c:txPr` over
+/// the chart space before falling back to the renderer default (issue #1236).
+fn chart_legend_text_pt(chart: &Chart) -> f64 {
+    chart
+        .text_style
+        .resolved_size_pt(chart.legend_text_style)
+        .unwrap_or(CHART_DEFAULT_TEXT_PT)
+}
+
+fn chart_legend_text_is_bold(chart: &Chart) -> bool {
+    chart
+        .text_style
+        .resolved_bold(chart.legend_text_style)
+        .unwrap_or(false)
+}
+
 /// The size one axis' own labels take, honouring the `c:catAx`/`c:valAx`
 /// `c:txPr` that overrides the chart space's.
 pub(super) fn chart_axis_text_pt(chart: &Chart, axis: crate::ir::ChartTextStyle) -> f64 {
@@ -926,6 +942,11 @@ pub(super) fn chart_axis_text_attrs(chart: &Chart, axis: crate::ir::ChartTextSty
         chart_axis_text_fill(chart, axis),
         chart_axis_text_tracking(chart, axis)
     )
+}
+
+/// Every Typst text argument a legend entry inherits beyond its resolved size.
+fn chart_legend_text_attrs(chart: &Chart) -> String {
+    chart_axis_text_attrs(chart, chart.legend_text_style)
 }
 
 /// Height of the box that vertically centres one value tick label on its
@@ -2907,7 +2928,8 @@ fn legend_entry_widths(
     key_label_gap_pt: f64,
     names: &[String],
 ) -> Vec<f64> {
-    let size_pt: f64 = chart_text_pt(chart);
+    let size_pt: f64 = chart_legend_text_pt(chart);
+    let is_bold: bool = chart_legend_text_is_bold(chart);
     let family: &str = chart
         .text_font_family
         .as_deref()
@@ -2915,8 +2937,8 @@ fn legend_entry_widths(
     names
         .iter()
         .map(|name| {
-            let label: f64 =
-                chart_text_advance_em(family, false, name).map_or(0.0, |advance| advance * size_pt);
+            let label: f64 = chart_text_advance_em(family, is_bold, name)
+                .map_or(0.0, |advance| advance * size_pt);
             // A gutter after the label keeps neighbouring entries apart rather
             // than butting the next key against the last glyph.
             (key_len_pt + key_label_gap_pt + label + GAP).max(LEGEND_ENTRY_W)
@@ -2942,7 +2964,7 @@ struct LegendKeyMetrics {
 /// (#1169). A Word-hosted chart has never been measured against a native
 /// export, so it keeps the legacy square.
 fn axis_legend_entry_metrics(chart: &Chart) -> LegendKeyMetrics {
-    let size_pt: f64 = chart_text_pt(chart);
+    let size_pt: f64 = chart_legend_text_pt(chart);
     if matches!(
         chart.host,
         crate::ir::ChartHost::Presentation | crate::ir::ChartHost::SpreadsheetChartsheet
@@ -2982,8 +3004,9 @@ fn excel_legend_key_height_pt(chart: &Chart) -> Option<f64> {
         .text_font_family
         .as_deref()
         .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_FAMILY);
-    let (ascent_em, descent_em) = chart_face_line_metrics_em(family, false)?;
-    Some(EXCEL_LEGEND_KEY_LINE_BOX_SHARE * (ascent_em + descent_em) * chart_text_pt(chart))
+    let (ascent_em, descent_em) =
+        chart_face_line_metrics_em(family, chart_legend_text_is_bold(chart))?;
+    Some(EXCEL_LEGEND_KEY_LINE_BOX_SHARE * (ascent_em + descent_em) * chart_legend_text_pt(chart))
 }
 
 /// Width of the widest entry in a PowerPoint right-side axis legend.
@@ -3006,14 +3029,15 @@ fn powerpoint_right_legend_inset(
     {
         return None;
     }
-    let size_pt = chart_text_pt(chart);
+    let size_pt: f64 = chart_legend_text_pt(chart);
+    let is_bold: bool = chart_legend_text_is_bold(chart);
     let family = chart
         .text_font_family
         .as_deref()
         .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_FAMILY);
     let widest_label = names
         .iter()
-        .map(|name| chart_text_advance_em(family, false, name))
+        .map(|name| chart_text_advance_em(family, is_bold, name))
         .collect::<Option<Vec<_>>>()?
         .into_iter()
         .reduce(f64::max)?
@@ -3029,7 +3053,7 @@ fn powerpoint_right_legend_y_shift(chart: &Chart) -> f64 {
         && matches!(chart.chart_type, ChartType::Bar)
         && matches!(chart.legend_position, LegendPosition::Right)
     {
-        PPTX_RIGHT_LEGEND_Y_SHIFT_PT + PPTX_RIGHT_LEGEND_Y_SHIFT_EM * chart_text_pt(chart)
+        PPTX_RIGHT_LEGEND_Y_SHIFT_PT + PPTX_RIGHT_LEGEND_Y_SHIFT_EM * chart_legend_text_pt(chart)
     } else {
         0.0
     }
@@ -3052,7 +3076,8 @@ fn axis_legend_box(chart: &Chart) -> LegendBox {
         chart.legend_position,
         LegendPosition::Left | LegendPosition::Right
     ) {
-        let size_pt = chart_text_pt(chart);
+        let size_pt: f64 = chart_legend_text_pt(chart);
+        let is_bold: bool = chart_legend_text_is_bold(chart);
         let family = chart
             .text_font_family
             .as_deref()
@@ -3067,11 +3092,15 @@ fn axis_legend_box(chart: &Chart) -> LegendBox {
                     .clone()
                     .unwrap_or_else(|| format!("Series {}", index + 1))
             })
-            .filter_map(|name| chart_text_advance_em(family, false, &name))
+            .filter_map(|name| chart_text_advance_em(family, is_bold, &name))
             .fold(0.0_f64, f64::max)
             * size_pt;
         let measured = widest_label + CHART_LEGEND_BASE_PAD_PT + CHART_LEGEND_PAD_EM * size_pt;
-        let side = if chart.text_style.size_pt.is_none() {
+        let side = if chart
+            .text_style
+            .resolved_size_pt(chart.legend_text_style)
+            .is_none()
+        {
             measured.max(LEGEND_ENTRY_W + GAP)
         } else {
             measured
@@ -3738,11 +3767,12 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
         };
         let _ = writeln!(
             out,
-            "#place(top + left, dx: {}pt, dy: {}pt, box[{key_markup}#h({}pt)#text(size: {}pt)[{}]])",
+            "#place(top + left, dx: {}pt, dy: {}pt, box[{key_markup}#h({}pt)#text(size: {}pt{})[{}]])",
             format_f64(entry_x),
             format_f64(entry_y),
             format_f64(key.label_gap_pt),
-            format_f64(chart_text_pt(chart)),
+            format_f64(chart_legend_text_pt(chart)),
+            chart_legend_text_attrs(chart),
             escape_typst(name)
         );
     }
@@ -3796,8 +3826,9 @@ fn generate_chart_bar(out: &mut String, chart: &Chart) {
             let color: &str = colors[index % colors.len()];
             let _ = writeln!(
                 out,
-                "#box(width: 10pt, height: 10pt, fill: {color}) #text(size: {}pt)[{name}] ",
-                format_f64(chart_text_pt(chart))
+                "#box(width: 10pt, height: 10pt, fill: {color}) #text(size: {}pt{})[{name}] ",
+                format_f64(chart_legend_text_pt(chart)),
+                chart_legend_text_attrs(chart)
             );
         }
     }
@@ -4071,11 +4102,12 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
         let key: String = line_legend_key(s_index, s, &color);
         let _ = writeln!(
             out,
-            "#place(top + left, dx: {}pt, dy: {}pt, box[{key}#h({}pt)#text(size: {}pt)[{}]])",
+            "#place(top + left, dx: {}pt, dy: {}pt, box[{key}#h({}pt)#text(size: {}pt{})[{}]])",
             format_f64(entry_x),
             format_f64(entry_y),
             format_f64(LEGEND_KEY_LABEL_GAP_PT),
-            format_f64(chart_text_pt(chart)),
+            format_f64(chart_legend_text_pt(chart)),
+            chart_legend_text_attrs(chart),
             escape_typst(name)
         );
     }
@@ -4338,11 +4370,12 @@ fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64
             let key: String = line_legend_key(series_index, series, &color);
             let _ = writeln!(
                 out,
-                "#place(top + left, dx: {}pt, dy: {}pt, box[{key}#h({}pt)#text(size: {}pt)[{}]])",
+                "#place(top + left, dx: {}pt, dy: {}pt, box[{key}#h({}pt)#text(size: {}pt{})[{}]])",
                 format_f64(entry_x),
                 format_f64(entry_y),
                 format_f64(LEGEND_KEY_LABEL_GAP_PT),
-                format_f64(chart_text_pt(chart)),
+                format_f64(chart_legend_text_pt(chart)),
+                chart_legend_text_attrs(chart),
                 escape_typst(name)
             );
         }
@@ -4492,12 +4525,13 @@ fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, 
         );
         let _ = writeln!(
             out,
-            "#place(top + left, dx: {}pt, dy: {}pt, box[#box(width: 9pt, height: 9pt, fill: {})#h({}pt)#text(size: {}pt)[{}]])",
+            "#place(top + left, dx: {}pt, dy: {}pt, box[#box(width: 9pt, height: 9pt, fill: {})#h({}pt)#text(size: {}pt{})[{}]])",
             format_f64(entry_x),
             format_f64(entry_y),
             color,
             format_f64(LEGEND_KEY_LABEL_GAP_PT),
-            format_f64(chart_text_pt(chart)),
+            format_f64(chart_legend_text_pt(chart)),
+            chart_legend_text_attrs(chart),
             escape_typst(category)
         );
     }
