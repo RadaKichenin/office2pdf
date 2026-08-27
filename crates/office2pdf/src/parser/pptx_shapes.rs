@@ -427,7 +427,12 @@ pub(super) fn prst_to_shape_kind(
 /// margins from `<a:bodyPr>` inside it. Preset text rectangles are
 /// shape-specific guide formulas; keep each supported preset tied to that
 /// formula rather than approximating it from the rendered path.
-pub(super) fn preset_text_rect_insets(prst: &str, width: f64, height: f64) -> Option<Insets> {
+pub(super) fn preset_text_rect_insets(
+    prst: &str,
+    width: f64,
+    height: f64,
+    adj_values: &[f64],
+) -> Option<Insets> {
     match prst {
         // ECMA-376 presetShapeDefinitions.xml defines pentagon's text rect as
         // l=x2, t=it, r=x3, b=y2. Evaluate the same guide formulas here so
@@ -456,6 +461,23 @@ pub(super) fn preset_text_rect_insets(prst: &str, width: f64, height: f64) -> Op
                 top: inset_top.max(0.0),
                 right: (width - x3).max(0.0),
                 bottom: (height - y2).max(0.0),
+            })
+        }
+        // ECMA-376 presetShapeDefinitions.xml defines the rounded callout's
+        // corner radius as `ss * adj3 / 100000`, then its text rectangle as
+        // l=t=radius*29289/100000 and r/b inset by the same amount. The
+        // callout tail adjustments (adj1/adj2) do not affect that rectangle
+        // (issue #1304).
+        "wedgeRoundRectCallout" => {
+            let radius = width.min(height)
+                * adj_values.get(2).copied().unwrap_or(16_667.0).max(0.0)
+                / 100_000.0;
+            let inset = radius * 29_289.0 / 100_000.0;
+            Some(Insets {
+                left: inset,
+                top: inset,
+                right: inset,
+                bottom: inset,
             })
         }
         _ => None,

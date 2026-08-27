@@ -17,6 +17,9 @@
 //! read as empty and the rectangle fallback stood in for a shape the deck had
 //! fully described (issue #1205). Both forms resolve through
 //! [`GuideList`], and `<a:arcTo>` resolves its radii and angles the same way.
+//! The geometry's `<a:rect>` uses those same guides to define the box where
+//! shape text belongs; callers that lay out text retain that rectangle while
+//! picture masks and Word drawing shapes can keep requesting subpaths alone.
 
 use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
@@ -33,6 +36,25 @@ const CURVE_SAMPLES: usize = 16;
 /// The most points one `<a:arcTo>` may contribute. `swAng` is unbounded, and
 /// a spiral of many turns must not sample itself into a megabyte of vertices.
 const MAX_ARC_SAMPLES: usize = 512;
+
+/// A custom geometry's text rectangle, normalized to its shape box.
+///
+/// These are edge coordinates rather than insets: `(0, 0, 1, 1)` is the
+/// full box. Keeping them normalized makes the parsed geometry independent
+/// of whether its caller measured the shape in EMU or points.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct GeometryTextRect {
+    pub(crate) left: f64,
+    pub(crate) top: f64,
+    pub(crate) right: f64,
+    pub(crate) bottom: f64,
+}
+
+/// The parts of `<a:custGeom>` used by a shape with text.
+pub(crate) struct ParsedCustomGeometry {
+    pub(crate) subpaths: Vec<Subpath>,
+    pub(crate) text_rect: Option<GeometryTextRect>,
+}
 
 /// Flatten the `<a:pathLst>` of a `<a:custGeom>` into vertices normalized to
 /// the shape's bounding box.
@@ -64,9 +86,18 @@ pub(crate) fn parse_custom_geometry(
     reader: &mut Reader<&[u8]>,
     extent: ShapeExtent,
 ) -> Vec<Subpath> {
+    parse_custom_geometry_with_text_rect(reader, extent).subpaths
+}
+
+/// Parse both the drawable paths and the explicit geometry text rectangle.
+pub(crate) fn parse_custom_geometry_with_text_rect(
+    reader: &mut Reader<&[u8]>,
+    extent: ShapeExtent,
+) -> ParsedCustomGeometry {
     let mut depth: usize = 1;
     let mut builder = SubpathBuilder::new(extent);
     let mut guides = GuideList::new(extent);
+    let mut text_rect: Option<GeometryTextRect> = None;
     // `a:pt` children accumulate here; a curve command reads its control
     // points from the list once the command closes.
     let mut pending_points: Vec<(f64, f64)> = Vec::new();
@@ -80,6 +111,11 @@ pub(crate) fn parse_custom_geometry(
                 match element.local_name().as_ref() {
                     b"path" => builder.start_path(element),
                     b"arcTo" => apply_arc(element, &guides, builder.vertices()),
+                    b"rect" => {
+                        if let Some(rect) = resolve_text_rect(element, &guides, extent) {
+                            text_rect = Some(rect);
+                        }
+                    }
                     other => {
                         if let Some(kind) = Command::from_tag(other) {
                             command = Some(kind);
@@ -102,6 +138,11 @@ pub(crate) fn parse_custom_geometry(
                 // starts wherever the pen already is, so it applies the
                 // moment it is read rather than waiting for child points.
                 b"arcTo" => apply_arc(element, &guides, builder.vertices()),
+                b"rect" => {
+                    if let Some(rect) = resolve_text_rect(element, &guides, extent) {
+                        text_rect = Some(rect);
+                    }
+                }
                 b"close" => builder.close(),
                 b"path" => builder.end_path(),
                 _ => {}
@@ -138,7 +179,10 @@ pub(crate) fn parse_custom_geometry(
         }
     }
 
-    builder.finish()
+    ParsedCustomGeometry {
+        subpaths: builder.finish(),
+        text_rect,
+    }
 }
 
 /// Bind one `<a:gd name= fmla=>`.
@@ -160,6 +204,36 @@ fn resolve_point(element: &BytesStart, guides: &GuideList) -> Option<(f64, f64)>
     let x: f64 = guides.resolve(&get_attr_str(element, b"x")?)?;
     let y: f64 = guides.resolve(&get_attr_str(element, b"y")?)?;
     Some((x, y))
+}
+
+/// Resolve `<a:rect l= t= r= b=>` through the geometry guide list.
+///
+/// Invalid or inverted rectangles retain the caller's full-box fallback.
+/// Valid coordinates are clipped to the shape because an out-of-range guide
+/// in an untrusted document must not move text outside its fixed page.
+fn resolve_text_rect(
+    element: &BytesStart,
+    guides: &GuideList,
+    extent: ShapeExtent,
+) -> Option<GeometryTextRect> {
+    if !extent.is_usable() {
+        return None;
+    }
+    let resolve = |key: &[u8]| -> Option<f64> { guides.resolve(&get_attr_str(element, key)?) };
+    let left = resolve(b"l")?;
+    let top = resolve(b"t")?;
+    let right = resolve(b"r")?;
+    let bottom = resolve(b"b")?;
+    if right < left || bottom < top {
+        return None;
+    }
+
+    Some(GeometryTextRect {
+        left: (left / extent.width).clamp(0.0, 1.0),
+        top: (top / extent.height).clamp(0.0, 1.0),
+        right: (right / extent.width).clamp(0.0, 1.0),
+        bottom: (bottom / extent.height).clamp(0.0, 1.0),
+    })
 }
 
 /// Append the elliptical arc of one `<a:arcTo wR= hR= stAng= swAng=>`.
