@@ -581,6 +581,53 @@ fn test_vert_text_in_angled_preset_keeps_full_box_fallback() {
 }
 
 #[test]
+fn test_wedge_round_rect_callout_uses_adjusted_text_rectangle() {
+    let shape = r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="Rounded Rectangular Callout 18"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1905000" cy="1447800"/></a:xfrm><a:prstGeom prst="wedgeRoundRectCallout"><a:avLst><a:gd name="adj1" fmla="val 41242"/><a:gd name="adj2" fmla="val 92245"/><a:gd name="adj3" fmla="val 16667"/></a:avLst></a:prstGeom></p:spPr><p:txBody><a:bodyPr anchor="ctr"/><a:p><a:pPr algn="ctr"/><a:r><a:rPr lang="en-US" sz="1400" b="1"/><a:t>What students should know and be able to do at each grade level and band.</a:t></a:r></a:p></p:txBody></p:sp>"#;
+    let slide = make_slide_xml(&[shape.to_string()]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let page = first_fixed_page(&doc);
+    let overlay = page
+        .elements
+        .iter()
+        .find(|element| matches!(element.kind, FixedElementKind::TextBox(_)))
+        .expect("text overlay present");
+
+    // DrawingML defines the text rectangle inside each rounded corner. With
+    // adj3=16667, the 19 pt corner radius contributes a 5.565 pt inset on
+    // every edge; bodyPr padding is applied inside this overlay afterwards.
+    let radius = 114.0 * 16_667.0 / 100_000.0;
+    let inset = radius * 29_289.0 / 100_000.0;
+    assert!((overlay.x - inset).abs() < 1e-9, "got {}", overlay.x);
+    assert!((overlay.y - inset).abs() < 1e-9, "got {}", overlay.y);
+    assert!((overlay.width - (150.0 - 2.0 * inset)).abs() < 1e-9);
+    assert!((overlay.height - (114.0 - 2.0 * inset)).abs() < 1e-9);
+}
+
+#[test]
+fn test_custom_geometry_uses_its_explicit_text_rectangle() {
+    let shape = r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="Freeform"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1270000" cy="1016000"/></a:xfrm><a:custGeom><a:avLst/><a:gdLst><a:gd name="il" fmla="*/ w 10000 100000"/><a:gd name="it" fmla="*/ h 10000 100000"/><a:gd name="ir" fmla="+- r 0 il"/><a:gd name="ib" fmla="+- b 0 it"/></a:gdLst><a:rect l="il" t="it" r="ir" b="ib"/><a:pathLst><a:path><a:moveTo><a:pt x="l" y="t"/></a:moveTo><a:lnTo><a:pt x="r" y="t"/></a:lnTo><a:lnTo><a:pt x="r" y="b"/></a:lnTo><a:lnTo><a:pt x="l" y="b"/></a:lnTo><a:close/></a:path></a:pathLst></a:custGeom></p:spPr><p:txBody><a:bodyPr/><a:p><a:r><a:rPr lang="en-US"/><a:t>inside</a:t></a:r></a:p></p:txBody></p:sp>"#;
+    let slide = make_slide_xml(&[shape.to_string()]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let page = first_fixed_page(&doc);
+    let overlay = page
+        .elements
+        .iter()
+        .find(|element| matches!(element.kind, FixedElementKind::TextBox(_)))
+        .expect("text overlay present");
+
+    assert!((overlay.x - 10.0).abs() < 1e-9, "got {}", overlay.x);
+    assert!((overlay.y - 8.0).abs() < 1e-9, "got {}", overlay.y);
+    assert!((overlay.width - 80.0).abs() < 1e-9);
+    assert!((overlay.height - 64.0).abs() < 1e-9);
+}
+
+#[test]
 fn test_vert_text_in_plain_rect_keeps_anchor() {
     let shape = r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="V"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="914400" cy="2743200"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr><p:txBody><a:bodyPr vert="vert" anchor="t"/><a:p><a:r><a:rPr lang="en-US"/><a:t>Up</a:t></a:r></a:p></p:txBody></p:sp>"#;
     let slide = make_slide_xml(&[shape.to_string()]);

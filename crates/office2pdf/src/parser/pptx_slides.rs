@@ -940,6 +940,8 @@ struct ShapeState {
     /// box. Empty when the geometry yielded nothing usable, in which case the
     /// rectangle fallback stands (issues #855, #866).
     custom_geometry: Vec<crate::ir::Subpath>,
+    /// `<a:custGeom><a:rect>` text bounds, normalized to the shape box.
+    custom_text_rect: Option<super::custom_geometry::GeometryTextRect>,
     fill: Option<Color>,
     gradient_fill: Option<GradientFill>,
     pattern_fill: Option<PatternFill>,
@@ -956,7 +958,7 @@ struct ShapeState {
     head_end: ArrowHead,
     /// Arrowhead at line end.
     tail_end: ArrowHead,
-    /// Adjustment values from `<a:avLst><a:gd>` for connector bend points.
+    /// Preset adjustment values from `<a:avLst><a:gd>`, in document order.
     adj_values: Vec<f64>,
     /// Fallback line color from `<p:style><a:lnRef>` scheme reference.
     style_ln_color: Option<Color>,
@@ -997,6 +999,7 @@ impl Default for ShapeState {
             in_sp_pr: false,
             prst_geom: None,
             custom_geometry: Vec::new(),
+            custom_text_rect: None,
             fill: None,
             gradient_fill: None,
             pattern_fill: None,
@@ -1096,16 +1099,21 @@ fn finalize_shape(
         // resolved and then dropped here. Emitting the shape background makes
         // the existing shape renderer draw it.
         let needs_shape_background = shape.pattern_fill.is_some() || shape.shadow.is_some();
+        let shape_width = emu_to_pt(shape.cx);
+        let shape_height = emu_to_pt(shape.cy);
+        let has_geometry_text_rect = shape.custom_text_rect.is_some()
+            || shape.prst_geom.as_deref().is_some_and(|geom| {
+                preset_text_rect_insets(geom, shape_width, shape_height, &shape.adj_values)
+                    .is_some()
+            });
         let text_shape_kind: Option<ShapeKind> = shape.prst_geom.as_deref().and_then(|geom| {
-            let width: f64 = emu_to_pt(shape.cx);
-            let height: f64 = emu_to_pt(shape.cy);
             if let Some(kind) = custom_geometry_kind(shape) {
                 return Some(kind);
             }
             let kind: ShapeKind = prst_to_shape_kind(
                 geom,
-                width,
-                height,
+                shape_width,
+                shape_height,
                 shape.flip_h,
                 shape.flip_v,
                 shape.head_end,
@@ -1113,7 +1121,7 @@ fn finalize_shape(
                 &shape.adj_values,
             );
             match kind {
-                ShapeKind::Rectangle if !needs_shape_background => None,
+                ShapeKind::Rectangle if !needs_shape_background && !has_geometry_text_rect => None,
                 other => Some(other),
             }
         });
@@ -1141,9 +1149,7 @@ fn finalize_shape(
             // in addition to the bodyPr margins (issues #286 and #676).
             let shape_x = emu_to_pt(shape.x);
             let shape_y = emu_to_pt(shape.y);
-            let shape_width = emu_to_pt(shape.cx);
-            let shape_height = emu_to_pt(shape.cy);
-            let preset_text_rect = shape.prst_geom.as_deref().and_then(|geom| {
+            let geometry_text_rect = shape.prst_geom.as_deref().and_then(|geom| {
                 let rotation_deg = shape.rotation_deg.unwrap_or(0.0).rem_euclid(360.0);
                 // A transparent overlay cannot represent an independently
                 // oriented geometry rectangle. Limit this exact model to
@@ -1154,7 +1160,18 @@ fn finalize_shape(
                 if !preserves_axes {
                     return None;
                 }
-                preset_text_rect_insets(geom, shape_width, shape_height).map(|insets| {
+                let insets = shape
+                    .custom_text_rect
+                    .map(|rect| Insets {
+                        left: rect.left * shape_width,
+                        top: rect.top * shape_height,
+                        right: (1.0 - rect.right) * shape_width,
+                        bottom: (1.0 - rect.bottom) * shape_height,
+                    })
+                    .or_else(|| {
+                        preset_text_rect_insets(geom, shape_width, shape_height, &shape.adj_values)
+                    });
+                insets.map(|insets| {
                     let rect_width = (shape_width - insets.left - insets.right).max(0.0);
                     let rect_height = (shape_height - insets.top - insets.bottom).max(0.0);
                     let rect_center_x = shape_x + insets.left + rect_width / 2.0;
@@ -1180,12 +1197,12 @@ fn finalize_shape(
                 })
             });
             let (overlay_x, overlay_y, overlay_width, overlay_height) =
-                preset_text_rect.unwrap_or((shape_x, shape_y, shape_width, shape_height));
+                geometry_text_rect.unwrap_or((shape_x, shape_y, shape_width, shape_height));
             // Preserve the old safety approximation for presets whose text
             // rectangle is not modelled yet: edge-anchoring rotated text to
             // the full shape box can put it on a sloped boundary.
             let overlay_vertical_align =
-                if text_box.text_rotation_deg.is_some() && preset_text_rect.is_none() {
+                if text_box.text_rotation_deg.is_some() && geometry_text_rect.is_none() {
                     TextBoxVerticalAlign::Center
                 } else {
                     text_box.vertical_align
@@ -2070,13 +2087,15 @@ impl<'a> SlideXmlParser<'a> {
             // a rectangle, so its fill renders as it did before
             // (issues #855, #866, #870).
             b"custGeom" if self.shape.in_sp_pr && self.shape.prst_geom.is_none() => {
-                self.shape.custom_geometry = super::custom_geometry::parse_custom_geometry(
+                let geometry = super::custom_geometry::parse_custom_geometry_with_text_rect(
                     reader,
                     super::geometry_guides::ShapeExtent::new(
                         self.shape.cx as f64,
                         self.shape.cy as f64,
                     ),
                 );
+                self.shape.custom_geometry = geometry.subpaths;
+                self.shape.custom_text_rect = geometry.text_rect;
                 self.shape.prst_geom = Some("rect".to_string());
             }
             b"noFill" if self.shape.in_sp_pr && !self.shape.in_ln && !self.in_rpr => {
@@ -2669,7 +2688,7 @@ impl<'a> SlideXmlParser<'a> {
             b"headEnd" if self.shape.in_ln => {
                 self.shape.head_end = parse_arrow_head(get_attr_str(e, b"type").as_deref());
             }
-            // Adjustment values for connector bend points (inside <a:avLst>).
+            // Preset adjustment values, in `<a:avLst>` document order.
             b"gd" if self.in_shape && self.shape.in_sp_pr => {
                 if let Some(val) = get_attr_str(e, b"fmla")
                     .as_deref()

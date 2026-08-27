@@ -466,6 +466,37 @@ pptx_fixture_tests!(shapes, "shapes.pptx");
 pptx_fixture_tests!(custom_geo, "customGeo.pptx");
 
 #[test]
+fn custom_geo_slide_6_callout_uses_its_geometry_text_rectangle() {
+    let pages = fixed_pages("customGeo.pptx");
+    let page = &pages[5];
+    let overlay = page
+        .elements
+        .iter()
+        .find(|element| {
+            let FixedElementKind::TextBox(text_box) = &element.kind else {
+                return false;
+            };
+            text_box.content.iter().any(|block| {
+                let Block::Paragraph(paragraph) = block else {
+                    return false;
+                };
+                paragraph.runs.iter().any(|run| {
+                    run.text
+                        .starts_with("\u{201c}What\u{201d} students should know")
+                })
+            })
+        })
+        .expect("slide 6 rounded callout text overlay");
+
+    let radius = 114.0 * 16_667.0 / 100_000.0;
+    let inset = radius * 29_289.0 / 100_000.0;
+    assert!((overlay.x - (66.0 + inset)).abs() < 1e-9);
+    assert!((overlay.y - (237.5 + inset)).abs() < 1e-9);
+    assert!((overlay.width - (150.0 - 2.0 * inset)).abs() < 1e-9);
+    assert!((overlay.height - (114.0 - 2.0 * inset)).abs() < 1e-9);
+}
+
+#[test]
 fn custom_geo_open_connectors_cast_their_declared_stroke_shadows() {
     let data = load_fixture("customGeo.pptx");
     let (document, _warnings) = PptxParser.parse(&data, &ConvertOptions::default()).unwrap();
