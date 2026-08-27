@@ -408,13 +408,13 @@ pub(super) fn prst_to_shape_kind(
             vertices: arrow_vertices(ArrowDir::Down, width, height, adj_values),
         },
         "star4" => ShapeKind::Polygon {
-            vertices: star_vertices(4),
+            vertices: star4_vertices(adj_values),
         },
         "star5" => ShapeKind::Polygon {
-            vertices: star_vertices(5),
+            vertices: star5_vertices(adj_values),
         },
         "star6" => ShapeKind::Polygon {
-            vertices: star_vertices(6),
+            vertices: star6_vertices(adj_values),
         },
         _ => ShapeKind::Rectangle,
     }
@@ -534,18 +534,113 @@ fn arrow_vertices(dir: ArrowDir, width: f64, height: f64, adj_values: &[f64]) ->
     }
 }
 
-/// Generate star polygon vertices with `n` points inscribed in the unit square.
-fn star_vertices(n: usize) -> Vec<(f64, f64)> {
-    let mut vertices = Vec::with_capacity(n * 2);
-    let inner_radius = 0.4;
-    for i in 0..(n * 2) {
-        let angle = -std::f64::consts::FRAC_PI_2 + std::f64::consts::PI * i as f64 / n as f64;
-        let radius = if i % 2 == 0 { 0.5 } else { 0.5 * inner_radius };
-        let x = 0.5 + radius * angle.cos();
-        let y = 0.5 + radius * angle.sin();
-        vertices.push((x, y));
-    }
-    vertices
+fn star_adjustment(adj_values: &[f64], default: f64) -> f64 {
+    adj_values
+        .first()
+        .copied()
+        .unwrap_or(default)
+        .clamp(0.0, 50_000.0)
+}
+
+/// Evaluate the DrawingML `star4` preset guides in normalized coordinates.
+fn star4_vertices(adj_values: &[f64]) -> Vec<(f64, f64)> {
+    let a = star_adjustment(adj_values, 12_500.0);
+    let iwd2 = 0.5 * a / 50_000.0;
+    let ihd2 = 0.5 * a / 50_000.0;
+    let sdx = iwd2 * 45.0_f64.to_radians().cos();
+    let sdy = ihd2 * 45.0_f64.to_radians().sin();
+
+    vec![
+        (0.0, 0.5),
+        (0.5 - sdx, 0.5 - sdy),
+        (0.5, 0.0),
+        (0.5 + sdx, 0.5 - sdy),
+        (1.0, 0.5),
+        (0.5 + sdx, 0.5 + sdy),
+        (0.5, 1.0),
+        (0.5 - sdx, 0.5 + sdy),
+    ]
+}
+
+/// Evaluate the DrawingML `star5` preset guides in normalized coordinates.
+fn star5_vertices(adj_values: &[f64]) -> Vec<(f64, f64)> {
+    let a = star_adjustment(adj_values, 19_098.0);
+    let swd2 = 0.5 * 1.051_46;
+    let shd2 = 0.5 * 1.105_57;
+    let svc = 0.5 * 1.105_57;
+
+    let dx1 = swd2 * 18.0_f64.to_radians().cos();
+    let dx2 = swd2 * 306.0_f64.to_radians().cos();
+    let dy1 = shd2 * 18.0_f64.to_radians().sin();
+    let dy2 = shd2 * 306.0_f64.to_radians().sin();
+    let x1 = 0.5 - dx1;
+    let x2 = 0.5 - dx2;
+    let x3 = 0.5 + dx2;
+    let x4 = 0.5 + dx1;
+    let y1 = svc - dy1;
+    let y2 = svc - dy2;
+
+    let iwd2 = swd2 * a / 50_000.0;
+    let ihd2 = shd2 * a / 50_000.0;
+    let sdx1 = iwd2 * 342.0_f64.to_radians().cos();
+    let sdx2 = iwd2 * 54.0_f64.to_radians().cos();
+    let sdy1 = ihd2 * 54.0_f64.to_radians().sin();
+    let sdy2 = ihd2 * 342.0_f64.to_radians().sin();
+    let sx1 = 0.5 - sdx1;
+    let sx2 = 0.5 - sdx2;
+    let sx3 = 0.5 + sdx2;
+    let sx4 = 0.5 + sdx1;
+    let sy1 = svc - sdy1;
+    let sy2 = svc - sdy2;
+    let sy3 = svc + ihd2;
+
+    vec![
+        (x1, y1),
+        (sx2, sy1),
+        (0.5, 0.0),
+        (sx3, sy1),
+        (x4, y1),
+        (sx4, sy2),
+        (x3, y2),
+        (0.5, sy3),
+        (x2, y2),
+        (sx1, sy2),
+    ]
+}
+
+/// Evaluate the DrawingML `star6` preset guides in normalized coordinates.
+fn star6_vertices(adj_values: &[f64]) -> Vec<(f64, f64)> {
+    let a = star_adjustment(adj_values, 28_868.0);
+    let swd2 = 0.5 * 1.154_70;
+    let dx1 = swd2 * 30.0_f64.to_radians().cos();
+    let x1 = 0.5 - dx1;
+    let x2 = 0.5 + dx1;
+
+    let iwd2 = swd2 * a / 50_000.0;
+    let ihd2 = 0.5 * a / 50_000.0;
+    let sdx2 = iwd2 / 2.0;
+    let sx1 = 0.5 - iwd2;
+    let sx2 = 0.5 - sdx2;
+    let sx3 = 0.5 + sdx2;
+    let sx4 = 0.5 + iwd2;
+    let sdy1 = ihd2 * 60.0_f64.to_radians().sin();
+    let sy1 = 0.5 - sdy1;
+    let sy2 = 0.5 + sdy1;
+
+    vec![
+        (x1, 0.25),
+        (sx2, sy1),
+        (0.5, 0.0),
+        (sx3, sy1),
+        (x2, 0.25),
+        (sx4, 0.5),
+        (x2, 0.75),
+        (sx3, sy2),
+        (0.5, 1.0),
+        (sx2, sy2),
+        (x1, 0.75),
+        (sx1, 0.5),
+    ]
 }
 
 // ── Connector geometry helpers ──────────────────────────────────────

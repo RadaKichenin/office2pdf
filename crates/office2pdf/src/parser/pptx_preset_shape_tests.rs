@@ -315,10 +315,54 @@ fn test_shape_star5() {
     let page = first_fixed_page(&doc);
     let shape = get_shape(&page.elements[0]);
     match &shape.kind {
-        ShapeKind::Polygon { vertices } => assert_eq!(vertices.len(), 10),
+        ShapeKind::Polygon { vertices } => assert_vertices_approx(
+            vertices,
+            &[
+                (0.000_001_058, 0.381_965_041),
+                (0.381_968_119, 0.381_967_729),
+                (0.5, 0.0),
+                (0.618_031_881, 0.381_967_729),
+                (0.999_998_942, 0.381_965_041),
+                (0.690_979_596, 0.618_031_392),
+                (0.809_016_341, 0.999_997_459),
+                (0.5, 0.763_926_759),
+                (0.190_983_659, 0.999_997_459),
+                (0.309_020_404, 0.618_031_392),
+            ],
+        ),
         other => panic!("Expected Polygon for star5, got {other:?}"),
     }
     assert_eq!(shape.fill, Some(Color::new(255, 215, 0)));
+}
+
+#[test]
+fn test_shape_star5_applies_adjustment_guide() {
+    let shape = r#"<p:sp><p:nvSpPr><p:cNvPr id="3" name="Star"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="2000000" cy="2000000"/></a:xfrm><a:prstGeom prst="star5"><a:avLst><a:gd name="adj" fmla="val 25000"/></a:avLst></a:prstGeom></p:spPr></p:sp>"#.to_string();
+    let slide = make_slide_xml(&[shape]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = first_fixed_page(&doc);
+    let shape = get_shape(&page.elements[0]);
+    let ShapeKind::Polygon { vertices } = &shape.kind else {
+        panic!("Expected Polygon for star5, got {:?}", shape.kind);
+    };
+    assert_vertices_approx(
+        vertices,
+        &[
+            (0.000_001_058, 0.381_965_041),
+            (0.345_491_830, 0.329_178_770),
+            (0.5, 0.0),
+            (0.654_508_170, 0.329_178_770),
+            (0.999_998_942, 0.381_965_041),
+            (0.749_999_471, 0.638_194_980),
+            (0.809_016_341, 0.999_997_459),
+            (0.5, 0.829_177_500),
+            (0.190_983_659, 0.999_997_459),
+            (0.250_000_529, 0.638_194_980),
+        ],
+    );
 }
 
 #[test]
@@ -332,7 +376,19 @@ fn test_shape_star4() {
     let page = first_fixed_page(&doc);
     let shape = get_shape(&page.elements[0]);
     match &shape.kind {
-        ShapeKind::Polygon { vertices } => assert_eq!(vertices.len(), 8),
+        ShapeKind::Polygon { vertices } => assert_vertices_approx(
+            vertices,
+            &[
+                (0.0, 0.5),
+                (0.411_611_652, 0.411_611_652),
+                (0.5, 0.0),
+                (0.588_388_348, 0.411_611_652),
+                (1.0, 0.5),
+                (0.588_388_348, 0.588_388_348),
+                (0.5, 1.0),
+                (0.411_611_652, 0.588_388_348),
+            ],
+        ),
         other => panic!("Expected Polygon for star4, got {other:?}"),
     }
 }
@@ -348,8 +404,36 @@ fn test_shape_star6() {
     let page = first_fixed_page(&doc);
     let shape = get_shape(&page.elements[0]);
     match &shape.kind {
-        ShapeKind::Polygon { vertices } => assert_eq!(vertices.len(), 12),
+        ShapeKind::Polygon { vertices } => assert_vertices_approx(
+            vertices,
+            &[
+                (0.000_000_233, 0.25),
+                (0.333_330_602, 0.249_995_786),
+                (0.5, 0.0),
+                (0.666_669_398, 0.249_995_786),
+                (0.999_999_767, 0.25),
+                (0.833_338_796, 0.5),
+                (0.999_999_767, 0.75),
+                (0.666_669_398, 0.750_004_214),
+                (0.5, 1.0),
+                (0.333_330_602, 0.750_004_214),
+                (0.000_000_233, 0.75),
+                (0.166_661_204, 0.5),
+            ],
+        ),
         other => panic!("Expected Polygon for star6, got {other:?}"),
+    }
+}
+
+fn assert_vertices_approx(actual: &[(f64, f64)], expected: &[(f64, f64)]) {
+    assert_eq!(actual.len(), expected.len(), "{actual:?}");
+    for (index, ((actual_x, actual_y), (expected_x, expected_y))) in
+        actual.iter().zip(expected).enumerate()
+    {
+        assert!(
+            (actual_x - expected_x).abs() < 1e-8 && (actual_y - expected_y).abs() < 1e-8,
+            "vertex {index}: expected ({expected_x}, {expected_y}), got ({actual_x}, {actual_y}); all vertices: {actual:?}"
+        );
     }
 }
 
