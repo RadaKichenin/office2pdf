@@ -623,36 +623,44 @@ fn kinsoku_break_marker_becomes_inline_box() {
 
 // ---------------------------------------------------------------------------
 // shadow_blur_radii.pptx — outer shadows at blurRad 6/12/24pt plus the #390
-// reproduction (9pt), authored and exported by Windows PowerPoint. The GT
-// profile behind the ring constants was measured from that export.
+// reproduction (9pt), authored and exported by Windows PowerPoint.
 // ---------------------------------------------------------------------------
 
 #[test]
-fn shadow_blur_renders_gaussian_ring_stack() {
+fn shadow_blur_uses_one_gaussian_asset_per_shape() {
     let data = load_fixture("shadow_blur_radii.pptx");
     let parser = PptxParser;
     let (document, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
     let output = generate_typst(&document).unwrap();
-    // One ring stack per shadowed rectangle. The individual alphas are not
-    // asserted — they are solved from the ring count and move whenever the
-    // ramp is retuned, and the Gaussian shape they encode is checked in the
-    // unit tests. What matters here is that every shadow gets a full stack.
-    let rings = output.source.matches("rgb(0, 0, 0, ").count();
+    let shadows: Vec<&str> = output
+        .images
+        .iter()
+        .filter_map(|asset| std::str::from_utf8(&asset.data).ok())
+        .filter(|svg| svg.contains("<feGaussianBlur"))
+        .collect();
     assert_eq!(
-        rings % 4,
-        0,
-        "four shadows should carry equal stacks, got {rings} rings"
+        shadows.len(),
+        4,
+        "each of the four blurred rectangles should emit one filtered asset"
     );
     assert!(
-        rings >= 4 * 16,
-        "a blur should ramp over many rings, not a handful: {rings}"
+        shadows.iter().all(|svg| svg.contains("<rect")),
+        "each filter must blur the rectangle silhouette itself: {shadows:?}"
     );
-    // blur 24pt: sigma 8pt (blurRad/3, #784), and the outermost ring outsets
-    // the 220x130pt shape by the declared extent times that. Six rings to
-    // 2 sigma left the spread visibly short of this export's (#662).
+    // blur 24pt: sigma 8pt (blurRad/3, #784), followed to 2.6 sigma on
+    // either side, so the 220x130pt frame becomes a 261.6x171.6pt asset.
     assert!(
-        output.source.contains("width: 261.6pt, height: 171.6pt"),
-        "24pt blur must span the declared extent"
+        shadows.iter().any(|svg| {
+            svg.contains("stdDeviation=\"8\"")
+                && svg.contains("width=\"261.6\"")
+                && svg.contains("height=\"171.6\"")
+        }),
+        "24pt blur must span the declared Gaussian extent: {shadows:?}"
+    );
+    assert_eq!(
+        output.source.matches("#pdf.artifact(image(\"").count(),
+        4,
+        "decorative shadows should be marked as artifacts"
     );
 }
 
@@ -1215,119 +1223,105 @@ fn structure_korean_golden_mock_marks_take_the_theme_minor_latin_font() {
 // A native macOS PowerPoint 16 export flattens each shadow to its own bitmap
 // whose alpha mask is a plain Gaussian blur of the polygon at sigma =
 // blurRad/3: sampled against an exact convolution the residual is 0.33-0.53
-// alpha levels rms over the whole mask, never past 2.8 of 255. Our ring stack
-// used to scale the vertices onto an expanded bounding box, which put the
-// triangle's apex 4x short of where an offset leaves it.
+// alpha levels rms over the whole mask, never past 2.8 of 255. The filtered
+// asset must therefore carry the polygon itself as its source, not a box or a
+// sequence of scaled copies.
 // ---------------------------------------------------------------------------
 
-/// The absolute page coordinates of every shadow ring in `source`, one entry
-/// per ring, in emission order.
-fn shadow_ring_outlines(source: &str) -> Vec<Vec<(f64, f64)>> {
-    source
-        .lines()
-        // The rect control's rings are a `#rect` box, not an outline.
-        .filter(|line| line.contains("rgb(0, 0, 0, ") && line.contains("curve.move("))
-        .map(|line| {
-            let read = |key: &str| -> f64 {
-                let rest: &str = &line[line.find(key).expect("a placement") + key.len()..];
-                rest[..rest.find("pt").expect("a length")]
-                    .trim()
-                    .parse::<f64>()
-                    .expect("a number")
-            };
-            let (dx, dy): (f64, f64) = (read("dx: "), read("dy: "));
-            let body: &str = &line[line.find("curve.move(").expect("an outline")..];
-            let lengths: Vec<f64> = body
-                .split("pt")
-                .filter_map(|fragment| {
-                    let start: usize = fragment
-                        .rfind(|character: char| {
-                            !character.is_ascii_digit() && character != '.' && character != '-'
-                        })
-                        .map_or(0, |index| index + 1);
-                    fragment[start..].parse::<f64>().ok()
-                })
-                .collect();
-            lengths
-                .as_chunks::<2>()
-                .0
-                .iter()
-                .map(|pair| (dx + pair[0], dy + pair[1]))
-                .collect()
+fn svg_polygon_points(svg: &str) -> Vec<(f64, f64)> {
+    let marker = "<polygon points=\"";
+    let rest: &str = &svg[svg.find(marker).expect("a polygon source") + marker.len()..];
+    let points: &str = &rest[..rest.find('"').expect("a closed points attribute")];
+    points
+        .split_whitespace()
+        .map(|pair| {
+            let (x, y) = pair.split_once(',').expect("an SVG coordinate pair");
+            (
+                x.parse::<f64>().expect("an x coordinate"),
+                y.parse::<f64>().expect("a y coordinate"),
+            )
         })
         .collect()
 }
 
-/// The tall triangle's rings follow its outline offset outward, so the flat
-/// base moves by the ring's own distance while the sharp apex rises further —
-/// far enough for both slanted edges to clear it, yet held inside the mitre
-/// point by the corner's iso-coverage contour.
+fn svg_number_attr(svg: &str, name: &str) -> f64 {
+    let marker = format!("{name}=\"");
+    let rest: &str = &svg[svg.find(&marker).expect("the SVG numeric attribute") + marker.len()..];
+    rest[..rest.find('"').expect("a closed numeric attribute")]
+        .parse::<f64>()
+        .expect("a numeric SVG attribute")
+}
+
+/// The tall triangle itself feeds the Gaussian filter at its exact 120x240pt
+/// geometry, so the renderer rather than a scaled-ring approximation decides
+/// the blur around its slanted edges and sharp apex.
 #[test]
-fn polygon_shadow_rings_offset_the_outline_they_follow() {
+fn polygon_shadow_uses_its_exact_outline_as_the_gaussian_source() {
     let data = load_fixture("polygon_shadow_offset.pptx");
     let (document, _warnings) = PptxParser.parse(&data, &ConvertOptions::default()).unwrap();
-    let source = generate_typst(&document).unwrap().source;
-    let rings: Vec<Vec<(f64, f64)>> = shadow_ring_outlines(&source);
+    let output = generate_typst(&document).unwrap();
+    let shadows: Vec<&str> = output
+        .images
+        .iter()
+        .filter_map(|asset| std::str::from_utf8(&asset.data).ok())
+        .filter(|svg| svg.contains("<feGaussianBlur"))
+        .collect();
     assert_eq!(
-        rings.len(),
-        5 * 24,
-        "five polygon shadow stacks of 24 rings each, beside the rect control's",
+        shadows.len(),
+        6,
+        "one continuous shadow asset per fixture shape"
+    );
+    let polygon_shadows: Vec<&&str> = shadows
+        .iter()
+        .filter(|svg| svg.contains("<polygon points=\""))
+        .collect();
+    assert_eq!(polygon_shadows.len(), 5, "five polygons beside one rect");
+    assert!(
+        shadows.iter().all(|svg| {
+            (svg_number_attr(svg, "stdDeviation") - 20.0 / 3.0).abs() < 1e-9
+                && svg.contains("opacity=\"1\"")
+        }),
+        "every 20pt, fully opaque shadow must carry the declared filter: {shadows:?}"
     );
 
-    // Ring coordinates are relative to the shape's own frame; the triangle
-    // is the only 120x240 one, so its base runs the full 120pt.
-    let widest: &Vec<(f64, f64)> = rings
+    let triangle: Vec<(f64, f64)> = polygon_shadows
         .iter()
-        .filter(|ring| {
-            let low: f64 = ring.iter().fold(f64::MAX, |low, point| low.min(point.1));
-            let high: f64 = ring.iter().fold(f64::MIN, |high, point| high.max(point.1));
-            high - low > 240.0
+        .map(|svg| svg_polygon_points(svg))
+        .find(|points| {
+            let (low, high): (f64, f64) = points
+                .iter()
+                .fold((f64::MAX, f64::MIN), |(low, high), point| {
+                    (low.min(point.1), high.max(point.1))
+                });
+            (high - low - 240.0).abs() < 0.01
         })
-        .max_by(|left, right| {
-            let extent =
-                |ring: &Vec<(f64, f64)>| ring.iter().fold(f64::MIN, |low, point| low.max(point.1));
-            extent(left).total_cmp(&extent(right))
-        })
-        .expect("the triangle's ring stack");
-
-    let sigma: f64 = 20.0 / 3.0;
-    let reach: f64 = 2.6 * sigma;
-    let base: f64 = widest.iter().fold(f64::MIN, |low, point| low.max(point.1));
-    assert!(
-        (base - (240.0 + reach)).abs() < 0.05,
-        "the flat base reaches {base:.3}pt, expected {:.3}pt",
-        240.0 + reach,
+        .expect("the fixture's 120x240pt triangle source");
+    assert_eq!(
+        triangle.len(),
+        3,
+        "the triangle should keep its three vertices"
     );
-
-    // The slanted edge is where a scale gives itself away: it moves the flat
-    // base by the full reach while pushing this one out by only a quarter of
-    // it, because a vertex travels in proportion to its distance from the
-    // centre rather than perpendicular to its own edge.
-    let slant: f64 = widest
+    let (left, right): (f64, f64) = triangle
         .iter()
-        .map(|&(x, y)| {
-            // Outward perpendicular distance from the line (60, 0) - (0, 240).
-            (-240.0 * (x - 60.0) - 60.0 * y) / (240.0_f64).hypot(60.0)
-        })
-        .fold(f64::MIN, f64::max);
+        .fold((f64::MAX, f64::MIN), |(left, right), point| {
+            (left.min(point.0), right.max(point.0))
+        });
+    let (top, bottom): (f64, f64) = triangle
+        .iter()
+        .fold((f64::MAX, f64::MIN), |(top, bottom), point| {
+            (top.min(point.1), bottom.max(point.1))
+        });
     assert!(
-        (slant - reach).abs() < 0.05,
-        "the slanted edge clears its own line by {slant:.3}pt, expected {reach:.3}pt; \
-         a scale reaches only 4.20pt",
+        (right - left - 120.0).abs() < 0.01 && (bottom - top - 240.0).abs() < 0.01,
+        "the Gaussian source must preserve the 120x240pt frame: {triangle:?}"
     );
-
-    // The sharp apex rises further than the reach — both slanted edges have
-    // to clear it — but the blur's own contour holds it well inside the mitre
-    // point a straight-edged offset would leave.
-    let half_angle: f64 = (60.0_f64).atan2(240.0);
-    let apex: f64 = widest
+    let apex: &(f64, f64) = triangle
         .iter()
-        .fold(f64::MAX, |high, point| high.min(point.1));
-    let mitre_apex: f64 = -reach / half_angle.sin();
+        .min_by(|left, right| left.1.total_cmp(&right.1))
+        .unwrap();
     assert!(
-        apex < 0.0 && apex > mitre_apex + 1.0,
-        "the apex reaches {apex:.3}pt: clear of the shape and inside the mitre's \
-         {mitre_apex:.3}pt",
+        (apex.0 - (left + 60.0)).abs() < 0.01 && (apex.1 - top).abs() < 0.01,
+        "the apex must remain centred over the full-width base: {triangle:?}"
     );
 }
 

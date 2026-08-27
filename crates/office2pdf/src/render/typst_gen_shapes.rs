@@ -4,10 +4,16 @@ use super::shadow_outline::{CornerReach, OffsetCorner, arc_beziers, offset_ring}
 use super::*;
 use crate::ir::Subpath;
 
-pub(super) fn generate_shape(out: &mut String, shape: &Shape, width: f64, height: f64) {
+pub(super) fn generate_shape(
+    out: &mut String,
+    shape: &Shape,
+    width: f64,
+    height: f64,
+    ctx: &mut GenCtx,
+) {
     // Render shadow as offset duplicate before main shape
     if let Some(shadow) = &shape.shadow {
-        write_shadow_shape(out, shape, width, height, shadow);
+        write_shadow_shape(out, shape, width, height, shadow, ctx);
     }
 
     let use_typst_rotation = shape.rotation_deg.is_some()
@@ -174,118 +180,20 @@ fn rotate_point(
 /// midpoint cut the ramp's reach and density about 10% short).
 const SHADOW_BLUR_SIGMA_PER_RADIUS: f64 = 1.0 / 3.0;
 
-/// How many concentric rings approximate the blur, and how far out they
-/// reach in sigma units.
+/// How far the filtered SVG follows the Gaussian tail, in sigma units.
 ///
-/// Each ring is one flat-alpha copy, so the count is what decides whether the
-/// falloff reads as a ramp or as plateaus. Six rings to +-2 sigma stepped the
-/// grey level by up to 16 at a time where PowerPoint moves by at most 4, which
-/// is what made the blur read as a hard outline, and truncating at 2 sigma cut
-/// the visible spread short of PowerPoint's (issue #662).
-pub(super) const SHADOW_RING_COUNT: usize = 24;
-pub(super) const SHADOW_RING_EXTENT_SIGMA: f64 = 2.6;
-
-/// The standard normal CDF, via Zelen & Severo's rational approximation
-/// (Abramowitz & Stegun 26.2.17). Its error is under 8e-8, far below the
-/// 1/255 an alpha byte can carry, and it avoids pulling in a crate for one
-/// function.
-pub(super) fn standard_normal_cdf(z: f64) -> f64 {
-    if z < 0.0 {
-        return 1.0 - standard_normal_cdf(-z);
-    }
-    const P: f64 = 0.231_641_9;
-    const B: [f64; 5] = [
-        0.319_381_530,
-        -0.356_563_782,
-        1.781_477_937,
-        -1.821_255_978,
-        1.330_274_429,
-    ];
-    let t: f64 = 1.0 / (1.0 + P * z);
-    let density: f64 = (-0.5 * z * z).exp() / (2.0 * std::f64::consts::PI).sqrt();
-    let poly: f64 = B
-        .iter()
-        .enumerate()
-        .map(|(index, coefficient)| coefficient * t.powi(index as i32 + 1))
-        .sum::<f64>();
-    1.0 - density * poly
-}
-
-/// The standard normal density, the companion of [`standard_normal_cdf`].
-fn standard_normal_pdf(z: f64) -> f64 {
-    (-0.5 * z * z).exp() / (2.0 * std::f64::consts::PI).sqrt()
-}
-
-/// The inverse of [`standard_normal_cdf`], by bisection over its own values.
-///
-/// Only wanted to bracket the corner solve below, where the answer is finally
-/// spelled as a length in points; 60 halvings of an 80-wide bracket leave far
-/// less than that can carry, and it avoids fitting a second rational
-/// approximation for a function called a handful of times per shadow.
-fn standard_normal_quantile(probability: f64) -> f64 {
-    let (mut low, mut high): (f64, f64) = (-40.0, 40.0);
-    for _ in 0..60 {
-        let middle: f64 = 0.5 * (low + high);
-        if standard_normal_cdf(middle) < probability {
-            low = middle;
-        } else {
-            high = middle;
-        }
-    }
-    0.5 * (low + high)
-}
-
-/// Ring boundaries in sigma units, outermost coverage first, paired with the
-/// coverage each ring's band must compound to.
-///
-/// The band between boundary k-1 and k is covered by rings k.. and has to
-/// reach `opacity * cdf`, where `cdf` is the Gaussian tail at the band's
-/// midpoint; inside the innermost ring the stack compounds to full opacity.
-fn shadow_ring_bands() -> Vec<(f64, f64)> {
-    let extent: f64 = SHADOW_RING_EXTENT_SIGMA;
-    let last: f64 = (SHADOW_RING_COUNT - 1) as f64;
-    (0..SHADOW_RING_COUNT)
-        .map(|ring| {
-            let bound: f64 = -extent + 2.0 * extent * ring as f64 / last;
-            let coverage: f64 = if ring == 0 {
-                1.0
-            } else {
-                let previous: f64 = -extent + 2.0 * extent * (ring - 1) as f64 / last;
-                1.0 - standard_normal_cdf(0.5 * (previous + bound))
-            };
-            (bound, coverage)
-        })
-        .collect()
-}
+/// At 2.6 sigma the one-sided tail is below 0.5%, so clipping the generated
+/// asset there preserves the visible reach PowerPoint exports without giving
+/// each shadow an unbounded bitmap (issues #662, #1309).
+pub(super) const SHADOW_BLUR_EXTENT_SIGMA: f64 = 2.6;
 
 /// The blur's standard deviation in points, zero for a crisp shadow.
 pub(super) fn shadow_blur_sigma(shadow: &Shadow) -> f64 {
     (SHADOW_BLUR_SIGMA_PER_RADIUS * shadow.blur_radius).max(0.0)
 }
 
-pub(super) fn shadow_blur_layers(shadow: &Shadow) -> Vec<(f64, u8)> {
-    let opacity = shadow.opacity.clamp(0.0, 1.0);
-    if shadow.blur_radius <= 0.0 {
-        return vec![(0.0, (opacity * 255.0).round() as u8)];
-    }
-    let sigma: f64 = shadow_blur_sigma(shadow);
-    // Coverage target for the region covered by rings k.. is
-    // `opacity * cdf_k`; solving outermost-in, ring k's own alpha is
-    // 1 - (1 - target_k) / (1 - target_{k+1}).
-    let bands: Vec<(f64, f64)> = shadow_ring_bands();
-    (0..bands.len())
-        .map(|ring| {
-            let target = opacity * bands[ring].1;
-            let outer_target = if ring + 1 < bands.len() {
-                opacity * bands[ring + 1].1
-            } else {
-                0.0
-            };
-            let alpha = 1.0 - (1.0 - target) / (1.0 - outer_target);
-            let expansion = sigma * bands[ring].0;
-            (expansion, (alpha * 255.0).round() as u8)
-        })
-        .collect()
+pub(super) fn shadow_alpha(shadow: &Shadow) -> u8 {
+    (shadow.opacity.clamp(0.0, 1.0) * 255.0).round() as u8
 }
 
 /// How far an outline pushes the shadow's silhouette past the fill path.
@@ -309,8 +217,7 @@ pub(super) fn shadow_outline_outset(stroke: &Option<BorderSide>) -> f64 {
         .map_or(0.0, |stroke| (stroke.width / 2.0).max(0.0))
 }
 
-/// The corner radius a square-cornered fill path's shadow silhouette carries,
-/// before the blur ring's own offset grows it.
+/// The corner radius a square-cornered fill path's shadow silhouette carries.
 ///
 /// The silhouette is cast from the *stroked* shape (#1057), so it turns each
 /// corner the way the outline's `a:ln` join does. DrawingML's default is
@@ -337,155 +244,25 @@ pub(super) fn shadow_silhouette_corner_radius(stroke: &Option<BorderSide>) -> f6
         .map_or(0.0, |stroke| (stroke.width / 2.0).max(0.0))
 }
 
-/// How far the Gaussian's tail is followed when integrating over the corner
-/// arc, in sigma. `phi(6)` is 6e-9, five orders under the 1/255 an alpha byte
-/// can carry, so nothing outside that window survives being written out.
-const SHADOW_CORNER_TAIL_SIGMA: f64 = 6.0;
-
-/// Simpson intervals across that window. Against a 4096-interval reference
-/// over the whole quadrant the worst error on a sweep of arc radii from 0 to
-/// 100 sigma was 1.6e-5 of coverage, again far under one alpha level.
-const SHADOW_CORNER_QUADRATURE_STEPS: usize = 32;
-
-/// The coverage a Gaussian blur leaves on a convex right-angle corner's
-/// diagonal, as a fraction of the shadow's own opacity.
-///
-/// Both arguments are in sigma: `axis_offset` is how far the sample sits
-/// outside the corner arc's centre along each axis — so `axis_offset *
-/// sqrt(2)` out along the 45-degree bisector — and `arc_radius` is the
-/// silhouette's own corner arc. The silhouette near that corner is the
-/// quadrant behind the arc's centre grown by the arc, so a Gaussian sample
-/// lands inside it exactly when its distance to that quadrant is at most the
-/// arc radius.
-///
-/// Splitting on which axes the sample overshoots gives three terms: neither
-/// (the quadrant itself), one (a strip of width `arc_radius` past a single
-/// edge), and both — which leaves the bivariate normal's mass over a quarter
-/// disc. That last has no elementary form, so it is integrated over the
-/// arc's angle, where the integrand is one Gaussian bump whose width does not
-/// shrink as the radius grows.
-fn blurred_corner_coverage(axis_offset: f64, arc_radius: f64) -> f64 {
-    let beyond_edge: f64 = standard_normal_cdf(-axis_offset);
-    if arc_radius <= 0.0 {
-        // A square silhouette corner: the two axes are independent, so the
-        // coverage is exactly the product of the two edges' own tails.
-        return beyond_edge * beyond_edge;
-    }
-    let within_strip: f64 = standard_normal_cdf(arc_radius - axis_offset);
-    let outside_both: f64 = beyond_edge * (2.0 * within_strip - beyond_edge);
-
-    // Only the angles whose sample sits within the Gaussian's tail of the
-    // arc contribute; clipping to them keeps the quadrature's step fine
-    // enough however wide the arc is.
-    let low_sine: f64 = ((axis_offset - SHADOW_CORNER_TAIL_SIGMA) / arc_radius).clamp(0.0, 1.0);
-    let high_sine: f64 = ((axis_offset + SHADOW_CORNER_TAIL_SIGMA) / arc_radius).clamp(0.0, 1.0);
-    if high_sine <= low_sine {
-        return outside_both;
-    }
-    let (start, end): (f64, f64) = (low_sine.asin(), high_sine.asin());
-    let step: f64 = (end - start) / SHADOW_CORNER_QUADRATURE_STEPS as f64;
-    let mut total: f64 = 0.0;
-    for index in 0..=SHADOW_CORNER_QUADRATURE_STEPS {
-        let angle: f64 = start + step * index as f64;
-        let weight: f64 = if index == 0 || index == SHADOW_CORNER_QUADRATURE_STEPS {
-            1.0
-        } else if index % 2 == 1 {
-            4.0
-        } else {
-            2.0
-        };
-        total += weight
-            * standard_normal_pdf(arc_radius * angle.sin() - axis_offset)
-            * (standard_normal_cdf(arc_radius * angle.cos() - axis_offset) - beyond_edge)
-            * arc_radius
-            * angle.cos();
-    }
-    outside_both + total * step / 3.0
-}
-
-/// Where along a convex corner's diagonal the blurred coverage falls to
-/// `coverage`, as an offset per axis in sigma — the inverse of
-/// [`blurred_corner_coverage`] in its first argument, which is monotone.
-///
-/// Bracketed by the two shapes the silhouette sits between: it contains the
-/// bare quadrant, whose contour is the product of the two edge tails, and is
-/// contained in that quadrant dilated by the arc, whose contour is the
-/// equidistant one. Bisection inside that bracket needs no expansion step and
-/// cannot walk off a flat tail.
-fn blurred_corner_axis_offset(coverage: f64, arc_radius: f64) -> f64 {
-    let square_corner: f64 = -standard_normal_quantile(coverage.clamp(0.0, 1.0).sqrt());
-    let dilated: f64 = (arc_radius + standard_normal_quantile(1.0 - coverage.clamp(0.0, 1.0)))
-        / std::f64::consts::SQRT_2;
-    let (mut low, mut high): (f64, f64) = (square_corner.min(dilated), square_corner.max(dilated));
-    for _ in 0..32 {
-        let middle: f64 = 0.5 * (low + high);
-        if blurred_corner_coverage(middle, arc_radius) > coverage {
-            low = middle;
-        } else {
-            high = middle;
-        }
-    }
-    0.5 * (low + high)
-}
-
-/// The corner radius of one blur ring, given the silhouette's own radius, how
-/// far that ring is offset from it, and the blur's sigma.
-///
-/// A ring's alpha is solved from the 1-D Gaussian tail at its own offset, so
-/// the ring's boundary has to be the *iso-coverage* contour of the blurred
-/// silhouette at that tail. Along an edge that contour is the equidistant one
-/// — the silhouette dilated by the offset, which is why a square corner comes
-/// out rounded by the offset alone rather than mitred out to
-/// `blur_expansion * sqrt(2)` along the diagonal (issue #1138).
-///
-/// At a convex corner it is not. An isotropic Gaussian's coverage there is the
-/// product of the two edges' own tails, a quarter at a square corner against
-/// the half a single edge keeps, so the contour turns inside the equidistant
-/// one and the arc that follows it is wider. Dilating by a disc instead
-/// reproduces the edge's value at the same signed distance and leaves the
-/// corner about twice as dense as PowerPoint draws it (issue #1204): measured
-/// on `customGeo.pptx` page 46 against a native macOS PowerPoint export at
-/// 1200 DPI, grey outward along the 45-degree diagonal from the silhouette's
-/// bottom-left corner read 238.3 in the export against the dilated stack's
-/// 229.1, while both agreed to a level along the bottom edge.
-///
-/// A `#rect` carries one radius, so the arc is fitted where the two models
-/// differ most — on the diagonal. A ring reaching `offset + arc` past the
-/// corner on each axis reaches `sqrt(2) * (offset + arc - radius) + radius`
-/// along the bisector, and setting that equal to the contour's own reach
-/// there gives the `2 + sqrt(2)` below. The correction vanishes as the
-/// silhouette's arc grows past the blur's scale, where the boundary is
-/// locally straight and the equidistant contour is right again.
-///
-/// The radius still floors at zero: Typst rejects a negative one.
-pub(super) fn shadow_ring_corner_radius(
-    silhouette_radius: f64,
-    blur_expansion: f64,
-    blur_sigma: f64,
-) -> f64 {
-    let dilated: f64 = (silhouette_radius + blur_expansion).max(0.0);
-    if blur_sigma <= 0.0 {
-        // A crisp shadow has no ramp to follow; the ring *is* the silhouette.
-        return dilated;
-    }
-    let arc_radius: f64 = (silhouette_radius / blur_sigma).max(0.0);
-    let offset: f64 = blur_expansion / blur_sigma;
-    let coverage: f64 = standard_normal_cdf(-offset);
-    let contour: f64 = blurred_corner_axis_offset(coverage, arc_radius);
-    ((2.0 + std::f64::consts::SQRT_2) * blur_sigma * (offset + arc_radius - contour)).max(0.0)
-}
-
-/// A corner arc can never bite deeper than half the box it turns, whatever the
-/// contour asks for; Typst would clamp it anyway, and a ring degenerate enough
-/// to hit this carries almost no alpha.
+/// A corner arc can never bite deeper than half the box it turns; Typst would
+/// clamp it anyway.
 pub(super) fn clamp_ring_corner_radius(radius: f64, width: f64, height: f64) -> f64 {
     radius.clamp(0.0, 0.5 * width.min(height))
 }
 
-/// Render a shadow approximation: concentric translucent duplicates whose
-/// stacked alphas peak at the core and fade across the blur radius.
-fn write_shadow_shape(out: &mut String, shape: &Shape, width: f64, height: f64, shadow: &Shadow) {
-    if matches!(shape.kind, ShapeKind::Line { .. }) {
+/// Render a shadow before the shape it sits under.
+fn write_shadow_shape(
+    out: &mut String,
+    shape: &Shape,
+    width: f64,
+    height: f64,
+    shadow: &Shadow,
+    ctx: &mut GenCtx,
+) {
+    if matches!(
+        shape.kind,
+        ShapeKind::Line { .. } | ShapeKind::Polyline { .. }
+    ) {
         // Lines don't have meaningful shadows; skip
         return;
     }
@@ -493,30 +270,40 @@ fn write_shadow_shape(out: &mut String, shape: &Shape, width: f64, height: f64, 
     let dx = shadow.distance * dir_rad.cos();
     let dy = shadow.distance * dir_rad.sin();
     let outline_outset: f64 = shadow_outline_outset(&shape.stroke);
+    if shadow.blur_radius > 0.0 {
+        write_blurred_shadow_asset(
+            out,
+            ctx,
+            &shape.kind,
+            (width, height),
+            &shape.stroke,
+            shadow,
+            (dx, dy),
+        );
+        return;
+    }
     let silhouette_radius: f64 = shadow_silhouette_corner_radius(&shape.stroke);
-    let blur_sigma: f64 = shadow_blur_sigma(shadow);
     // A polygon and a custom geometry both cast the shadow of their own
     // outline, so both take the same silhouette: closed rings in the shape's
     // frame, each offset rather than scaled (issue #1206).
     let outline_rings: Option<Vec<OutlineRing>> = shadow_outline_rings(&shape.kind, width, height);
 
-    for (blur_expansion, alpha) in shadow_blur_layers(shadow) {
-        let expansion = outline_outset + blur_expansion;
+    let alpha: u8 = shadow_alpha(shadow);
+    {
+        let expansion = outline_outset;
         if let Some(rings) = &outline_rings {
             write_offset_ring_layer(
                 out,
                 rings,
                 RingGeometry {
                     expansion,
-                    blur_expansion,
-                    blur_sigma,
                     silhouette_radius,
                 },
                 shadow,
                 alpha,
                 (dx, dy),
             );
-            continue;
+            return;
         }
         let layer_width = (width + 2.0 * expansion).max(0.0);
         let layer_height = (height + 2.0 * expansion).max(0.0);
@@ -532,11 +319,8 @@ fn write_shadow_shape(out: &mut String, shape: &Shape, width: f64, height: f64, 
                 // already curves, so the silhouette's arc is the shape's own
                 // plus the half-width the stroke adds (#1057).
                 let silhouette_arc: f64 = radius_fraction * width.min(height) + outline_outset;
-                let radius = clamp_ring_corner_radius(
-                    shadow_ring_corner_radius(silhouette_arc, blur_expansion, blur_sigma),
-                    layer_width,
-                    layer_height,
-                );
+                let radius =
+                    clamp_ring_corner_radius(silhouette_arc.max(0.0), layer_width, layer_height);
                 let _ = write!(
                     out,
                     "#rect(width: {}pt, height: {}pt, radius: {}pt, fill: rgb({}, {}, {}, {}))",
@@ -550,11 +334,8 @@ fn write_shadow_shape(out: &mut String, shape: &Shape, width: f64, height: f64, 
                 );
             }
             ShapeKind::Rectangle => {
-                let radius: f64 = clamp_ring_corner_radius(
-                    shadow_ring_corner_radius(silhouette_radius, blur_expansion, blur_sigma),
-                    layer_width,
-                    layer_height,
-                );
+                let radius: f64 =
+                    clamp_ring_corner_radius(silhouette_radius.max(0.0), layer_width, layer_height);
                 let _ = write!(
                     out,
                     "#rect(width: {}pt, height: {}pt, radius: {}pt, fill: rgb({}, {}, {}, {}))",
@@ -589,6 +370,181 @@ fn write_shadow_shape(out: &mut String, shape: &Shape, width: f64, height: f64, 
     }
 }
 
+/// Write one filtered SVG whose alpha is the silhouette convolved with a
+/// Gaussian. Typst 0.14 rasterises SVG filters at four samples per output
+/// point, so the PDF receives a continuous 288-DPI ramp instead of one flat
+/// alpha plateau per duplicate (issue #1309).
+pub(super) fn write_blurred_shadow_asset(
+    out: &mut String,
+    ctx: &mut GenCtx,
+    kind: &ShapeKind,
+    size: (f64, f64),
+    stroke: &Option<BorderSide>,
+    shadow: &Shadow,
+    offset: (f64, f64),
+) {
+    let (width, height): (f64, f64) = size;
+    let sigma: f64 = shadow_blur_sigma(shadow);
+    if sigma <= 0.0 {
+        return;
+    }
+    let source_outset: f64 = stroke
+        .as_ref()
+        .filter(|stroke| stroke.style != BorderLineStyle::None && stroke.width > 0.0)
+        .map_or(0.0, |stroke| {
+            let half_width: f64 = stroke.width / 2.0;
+            if stroke.join == LineJoin::Miter {
+                // SVG's default miter limit can carry an acute join beyond
+                // the half-width reached by round and bevel joins. Extra
+                // transparent canvas prevents that source from being clipped
+                // before the Gaussian filter sees it.
+                4.0 * stroke.width
+            } else {
+                half_width
+            }
+        });
+    let reach: f64 = SHADOW_BLUR_EXTENT_SIGMA * sigma;
+    let padding: f64 = source_outset + reach;
+    let asset_width: f64 = width + 2.0 * padding;
+    let asset_height: f64 = height + 2.0 * padding;
+    if !(asset_width.is_finite()
+        && asset_height.is_finite()
+        && asset_width > 0.0
+        && asset_height > 0.0)
+    {
+        return;
+    }
+
+    let Some(body) = shadow_svg_body(kind, width, height, padding) else {
+        return;
+    };
+    let opacity: f64 = shadow.opacity.clamp(0.0, 1.0);
+    let mut svg = format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{}\" height=\"{}\" viewBox=\"0 0 {} {}\"><defs><filter id=\"blur\" filterUnits=\"userSpaceOnUse\" x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" color-interpolation-filters=\"sRGB\"><feGaussianBlur stdDeviation=\"{}\"/></filter></defs><g filter=\"url(#blur)\" opacity=\"{}\" fill=\"rgb({}, {}, {})\"",
+        format_f64(asset_width),
+        format_f64(asset_height),
+        format_f64(asset_width),
+        format_f64(asset_height),
+        format_f64(asset_width),
+        format_f64(asset_height),
+        format_f64(sigma),
+        format_f64(opacity),
+        shadow.color.r,
+        shadow.color.g,
+        shadow.color.b,
+    );
+    if let Some(stroke) = stroke
+        .as_ref()
+        .filter(|stroke| stroke.style != BorderLineStyle::None && stroke.width > 0.0)
+    {
+        let join = match stroke.join {
+            LineJoin::Round => "round",
+            LineJoin::Bevel => "bevel",
+            LineJoin::Miter => "miter",
+        };
+        let _ = write!(
+            svg,
+            " stroke=\"rgb({}, {}, {})\" stroke-width=\"{}\" stroke-linejoin=\"{}\"",
+            shadow.color.r,
+            shadow.color.g,
+            shadow.color.b,
+            format_f64(stroke.width.max(0.0)),
+            join,
+        );
+    } else {
+        svg.push_str(" stroke=\"none\"");
+    }
+    svg.push('>');
+    svg.push_str(&body);
+    svg.push_str("</g></svg>");
+
+    let path: String = ctx.add_generated_svg(svg.into_bytes());
+    let _ = writeln!(
+        out,
+        "#place(top + left, dx: {}pt, dy: {}pt)[#pdf.artifact(image(\"{}\", width: {}pt, height: {}pt))]",
+        format_f64(offset.0 - padding),
+        format_f64(offset.1 - padding),
+        path,
+        format_f64(asset_width),
+        format_f64(asset_height),
+    );
+}
+
+/// The unblurred silhouette inside a padded shadow SVG.
+fn shadow_svg_body(kind: &ShapeKind, width: f64, height: f64, origin: f64) -> Option<String> {
+    match kind {
+        ShapeKind::Rectangle => Some(format!(
+            "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\"/>",
+            format_f64(origin),
+            format_f64(origin),
+            format_f64(width),
+            format_f64(height),
+        )),
+        ShapeKind::RoundedRectangle { radius_fraction } => {
+            let radius: f64 =
+                (radius_fraction * width.min(height)).clamp(0.0, 0.5 * width.min(height));
+            Some(format!(
+                "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"{}\" ry=\"{}\"/>",
+                format_f64(origin),
+                format_f64(origin),
+                format_f64(width),
+                format_f64(height),
+                format_f64(radius),
+                format_f64(radius),
+            ))
+        }
+        ShapeKind::Ellipse => Some(format!(
+            "<ellipse cx=\"{}\" cy=\"{}\" rx=\"{}\" ry=\"{}\"/>",
+            format_f64(origin + width / 2.0),
+            format_f64(origin + height / 2.0),
+            format_f64(width / 2.0),
+            format_f64(height / 2.0),
+        )),
+        ShapeKind::Polygon { vertices } => {
+            if vertices.len() < 3 {
+                return None;
+            }
+            let points: String = vertices
+                .iter()
+                .map(|(x, y)| {
+                    format!(
+                        "{},{}",
+                        format_f64(origin + x * width),
+                        format_f64(origin + y * height),
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(" ");
+            Some(format!("<polygon points=\"{points}\"/>"))
+        }
+        ShapeKind::Path { subpaths } => {
+            let mut data = String::new();
+            for subpath in subpaths.iter().filter(|subpath| subpath.closed) {
+                let Some((first, rest)) = subpath.vertices.split_first() else {
+                    continue;
+                };
+                let _ = write!(
+                    data,
+                    "M {} {}",
+                    format_f64(origin + first.0 * width),
+                    format_f64(origin + first.1 * height),
+                );
+                for (x, y) in rest {
+                    let _ = write!(
+                        data,
+                        " L {} {}",
+                        format_f64(origin + x * width),
+                        format_f64(origin + y * height),
+                    );
+                }
+                data.push_str(" Z ");
+            }
+            (!data.is_empty()).then(|| format!("<path d=\"{data}\" fill-rule=\"evenodd\"/>"))
+        }
+        ShapeKind::Line { .. } | ShapeKind::Polyline { .. } => None,
+    }
+}
+
 /// One closed ring of a shadow silhouette, in the shape's own frame.
 struct OutlineRing {
     vertices: Vec<(f64, f64)>,
@@ -597,18 +553,11 @@ struct OutlineRing {
     hole: bool,
 }
 
-/// How far one ring of the stack sits from the fill path, and what the blur
-/// under it looks like.
+/// How far a crisp shadow silhouette sits from the fill path.
 struct RingGeometry {
-    /// The whole signed offset from the fill path: the outline's outset plus
-    /// this ring's own share of the blur.
+    /// The signed offset from the fill path contributed by the outline.
     expansion: f64,
-    /// This ring's share alone, which is what the blur's contour is measured
-    /// from.
-    blur_expansion: f64,
-    blur_sigma: f64,
-    /// The arc the outline's join leaves on the silhouette itself, which is
-    /// all a crisp shadow has to follow.
+    /// The arc the outline's join leaves on the silhouette itself.
     silhouette_radius: f64,
 }
 
@@ -672,7 +621,7 @@ fn ring_contains(ring: &[(f64, f64)], point: (f64, f64)) -> bool {
     inside
 }
 
-/// Write one ring of the stack as the silhouette's outline offset by
+/// Write a crisp shadow as the silhouette's outline offset by
 /// `geometry.expansion` — a Minkowski dilation, not a copy scaled onto an
 /// expanded bounding box (issue #1206).
 ///
@@ -686,14 +635,9 @@ fn write_offset_ring_layer(
     alpha: u8,
     origin: (f64, f64),
 ) {
-    // A crisp shadow has no ramp to follow, so its one ring is the silhouette
-    // itself, turned by whichever join the outline declares (#1090).
-    let reach: CornerReach = if geometry.blur_sigma > 0.0 {
-        CornerReach::Blurred {
-            sigma: geometry.blur_sigma,
-            expansion: geometry.blur_expansion,
-        }
-    } else if geometry.silhouette_radius > 0.0 {
+    // A crisp shadow is the silhouette itself, turned by whichever join the
+    // outline declares (#1090).
+    let reach: CornerReach = if geometry.silhouette_radius > 0.0 {
         CornerReach::Round
     } else {
         CornerReach::Mitre
@@ -702,17 +646,7 @@ fn write_offset_ring_layer(
         .iter()
         .map(|ring| {
             let sign: f64 = if ring.hole { -1.0 } else { 1.0 };
-            offset_ring(
-                &ring.vertices,
-                sign * geometry.expansion,
-                match reach {
-                    CornerReach::Blurred { sigma, expansion } => CornerReach::Blurred {
-                        sigma,
-                        expansion: sign * expansion,
-                    },
-                    other => other,
-                },
-            )
+            offset_ring(&ring.vertices, sign * geometry.expansion, reach)
         })
         .filter(|corners| !corners.is_empty())
         .collect();

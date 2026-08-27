@@ -2848,7 +2848,7 @@ fn generate_cell_content(
             }
             Block::FloatingImage(fi) => generate_floating_image(out, fi, ctx),
             Block::FloatingTextBox(ftb) => generate_floating_text_box(out, ftb, ctx)?,
-            Block::FloatingShape(fs) => generate_floating_shape(out, fs),
+            Block::FloatingShape(fs) => generate_floating_shape(out, fs, ctx),
             Block::List(list) => {
                 if can_render_fixed_text_list_inline(list) {
                     generate_fixed_text_list(out, list, true, None, false)?;

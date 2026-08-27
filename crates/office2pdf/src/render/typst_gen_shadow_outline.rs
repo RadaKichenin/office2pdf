@@ -1,4 +1,4 @@
-//! The outline one `a:outerShdw` ring follows around a polygon (issue #1206).
+//! The crisp `a:outerShdw` outline around a polygon (issue #1206).
 //!
 //! A ring is the silhouette pushed out by a fixed distance — a Minkowski
 //! dilation — not a copy scaled onto an expanded bounding box. The two agree
@@ -7,13 +7,10 @@
 //! a far one overshoots, and a spike grows along its own axis instead of
 //! gaining a uniform rim.
 //!
-//! Each corner is turned by an arc rather than left square, because the ring's
-//! boundary has to be the blurred silhouette's *iso-coverage* contour and that
-//! contour is curved wherever two edges meet (issues #1138, #1204).
+//! Each corner follows the source outline's join so crisp shadows preserve the
+//! silhouette PowerPoint casts (issues #1090, #1206).
 
 use std::f64::consts::PI;
-
-use super::shapes::standard_normal_cdf;
 
 /// A point in the shape's own frame, in points.
 pub(super) type Point = (f64, f64);
@@ -36,9 +33,6 @@ pub(super) enum CornerReach {
     /// The equidistant contour: `a:round`'s arc, of the offset's own radius.
     /// DrawingML's default join (#1090), and what a crisp shadow casts.
     Round,
-    /// The blurred silhouette's iso-coverage contour, `expansion` past the
-    /// silhouette under a Gaussian of `sigma`.
-    Blurred { sigma: f64, expansion: f64 },
 }
 
 /// The arc that turns one corner of an offset outline.
@@ -66,8 +60,8 @@ pub(super) struct OffsetCorner {
 /// Offset a closed ring of vertices outward by `distance`, turning each
 /// corner as `reach` prescribes.
 ///
-/// A negative `distance` erodes instead, which is what the inner half of a
-/// blur's ring stack asks for. The result is in the same frame and order as
+/// A negative `distance` erodes instead, which is how a hole contracts when
+/// the surrounding silhouette expands. The result is in the same frame and order as
 /// the input, one corner per surviving vertex; consecutive duplicates are
 /// dropped because a zero-length edge has no normal to offset along.
 pub(super) fn offset_ring(
@@ -155,8 +149,7 @@ fn signed_area(ring: &[Point]) -> f64 {
 /// a single number — how far the boundary reaches along the mitre direction,
 /// in that same measure — pins the arc: the circle tangent to both lines that
 /// reaches it. `Mitre` asks for exactly `distance` (the lines' own crossing),
-/// `Round` for the equidistant contour, and `Blurred` for the contour the
-/// blur actually leaves.
+/// and `Round` for the equidistant contour.
 fn offset_corner(
     vertex: Point,
     previous_normal: Point,
@@ -254,7 +247,7 @@ fn offset_corner(
 
 /// How far the boundary reaches along the mitre direction, in the same
 /// measure the offset lines are quoted in.
-fn corner_reach(reach: CornerReach, distance: f64, dot: f64, cosine: f64, turn: f64) -> f64 {
+fn corner_reach(reach: CornerReach, distance: f64, _dot: f64, cosine: f64, turn: f64) -> f64 {
     match reach {
         CornerReach::Mitre => distance,
         CornerReach::Round => {
@@ -263,15 +256,6 @@ fn corner_reach(reach: CornerReach, distance: f64, dot: f64, cosine: f64, turn: 
             } else {
                 distance
             }
-        }
-        CornerReach::Blurred { sigma, expansion } => {
-            if sigma <= 0.0 {
-                return distance;
-            }
-            // The silhouette's own corner sits at `distance - expansion`, and
-            // the blur's contour is measured from there — so the outline's
-            // outset cancels and only the ring's own expansion is left.
-            distance - expansion + blurred_wedge_reach(expansion, sigma, dot, turn < 0.0)
         }
     }
 }
@@ -373,77 +357,6 @@ fn spike_cap(
         }),
     }
 }
-
-/// Where a blurred wedge's iso-coverage contour sits, measured the way the
-/// offset lines are: as `n . (p - vertex)`, shared by both edges along the
-/// mitre direction.
-///
-/// The silhouette near a corner is a wedge, an intersection of two half
-/// planes whose outward normals meet at `normal_cosine`. An isotropic
-/// Gaussian's coverage over that intersection is the bivariate normal's own
-/// tail at correlation `normal_cosine`, so the contour at the level a ring
-/// `expansion` out carries is the point where that tail falls to the level a
-/// single straight edge leaves at the same distance.
-///
-/// At a right angle the correlation is zero and the tail factors into the
-/// product of the two edges' own — the model the rectangle branch already
-/// carries (#1204). A concave turn is the same solve on the complement, where
-/// the wedge is the *union* of the two half planes: the notch has material on
-/// both sides feeding coverage into it, so the shadow reaches deeper there
-/// than the equidistant contour does.
-fn blurred_wedge_reach(expansion: f64, sigma: f64, normal_cosine: f64, concave: bool) -> f64 {
-    if concave {
-        return -blurred_wedge_reach(-expansion, sigma, normal_cosine, false);
-    }
-    let coverage: f64 = standard_normal_cdf(-expansion / sigma);
-    // The contour lies between the bare edge's own offset and the wedge's
-    // vertex; a bracket of the ring stack's whole reach either side of the
-    // expansion contains it for any angle a slide's geometry can hold.
-    let span: f64 = expansion.abs() + 8.0 * sigma;
-    let (mut low, mut high): (f64, f64) = (-span, span);
-    for _ in 0..48 {
-        let middle: f64 = 0.5 * (low + high);
-        if wedge_tail(-middle / sigma, normal_cosine) > coverage {
-            low = middle;
-        } else {
-            high = middle;
-        }
-    }
-    0.5 * (low + high)
-}
-
-/// `Phi_2(h, h; rho)`: the standard bivariate normal's own tail with both
-/// coordinates equal, which is all the equidistant solve above ever asks for.
-///
-/// Differentiating the bivariate normal in `rho` gives its density, so the
-/// distribution is `Phi(h)^2` plus that density integrated from zero. The
-/// substitution `rho = sin(t)` reduces the equicoordinate integrand to
-/// `exp(-h^2 / (1 + sin t))` — bounded, smooth and monotone over the whole
-/// range, which is what makes a short Simpson rule enough.
-fn wedge_tail(h: f64, rho: f64) -> f64 {
-    let limit: f64 = rho.clamp(-1.0, 1.0).asin();
-    let step: f64 = limit / WEDGE_TAIL_STEPS as f64;
-    let total: f64 = (0..=WEDGE_TAIL_STEPS)
-        .map(|index| {
-            let weight: f64 = if index == 0 || index == WEDGE_TAIL_STEPS {
-                1.0
-            } else if index % 2 == 1 {
-                4.0
-            } else {
-                2.0
-            };
-            weight * (-h * h / (1.0 + (step * index as f64).sin())).exp()
-        })
-        .sum();
-    let square: f64 = standard_normal_cdf(h);
-    square * square + total * step / 3.0 / (2.0 * PI)
-}
-
-/// Simpson intervals across the correlation range. The integrand never turns
-/// over inside it, so 24 leaves an error under 1e-7 of coverage against a
-/// 4096-interval reference — three orders under the 1/255 an alpha byte can
-/// carry.
-const WEDGE_TAIL_STEPS: usize = 24;
 
 /// Approximate `arc` by cubic Bézier segments, each turning at most a quarter
 /// circle so the standard `4/3 tan(delta/4)` handle stays accurate to about a
