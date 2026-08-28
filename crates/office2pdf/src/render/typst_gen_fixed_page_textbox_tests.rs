@@ -2612,6 +2612,122 @@ fn consecutive_slide_paragraphs_keep_powerpoints_full_line_advance() {
     }
 }
 
+/// `customGeo.pptx` slides 2 and 5 store an empty run and break on each side of
+/// their only visible title line. The inline fallback counted those boundaries
+/// as full lines and clipped the title instead of centring it in the banner
+/// (issue #1334).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn powerpoint_empty_boundary_breaks_do_not_move_a_centred_title() {
+    use crate::internal::{Parser, PptxParser};
+
+    let fixture = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/pptx/customGeo.pptx");
+    let data = std::fs::read(fixture).expect("customGeo fixture");
+    let (document, _warnings) = PptxParser
+        .parse(&data, &crate::config::ConvertOptions::default())
+        .expect("customGeo must parse");
+    let Page::Fixed(slide_6) = &document.pages[5] else {
+        panic!("slide 6 must be fixed")
+    };
+    let (slide_6_title_width_pt, slide_6_title_box, slide_6_title) = slide_6
+        .elements
+        .iter()
+        .find_map(|element| {
+            let FixedElementKind::TextBox(text_box) = &element.kind else {
+                return None;
+            };
+            text_box.content.iter().find_map(|block| {
+                let Block::Paragraph(paragraph) = block else {
+                    return None;
+                };
+                paragraph
+                    .runs
+                    .iter()
+                    .any(|run| run.text.contains("ELA Standards Framework"))
+                    .then_some((element.width, text_box, paragraph))
+            })
+        })
+        .expect("slide 6 title paragraph");
+    let slide_6_inner_width_pt: f64 =
+        (slide_6_title_width_pt - slide_6_title_box.padding.left - slide_6_title_box.padding.right)
+            .max(0.0);
+    assert!(
+        powerpoint_hard_breaks_use_line_stack(
+            &slide_6_title.runs,
+            &slide_6_title.style,
+            Some(slide_6_inner_width_pt),
+        ),
+        "slide 6 is the control whose boundary breaks already use the measured line stack"
+    );
+
+    let Page::Fixed(mut actual_page) = document.pages[1].clone() else {
+        panic!("slide 2 must be fixed")
+    };
+    actual_page.elements.retain(|element| {
+        let FixedElementKind::TextBox(text_box) = &element.kind else {
+            return false;
+        };
+        text_box.content.iter().any(|block| {
+            let Block::Paragraph(paragraph) = block else {
+                return false;
+            };
+            paragraph
+                .runs
+                .iter()
+                .any(|run| run.text.contains("Session Objectives"))
+        })
+    });
+    assert_eq!(actual_page.elements.len(), 1, "slide 2 has one title box");
+    let mut visible_line_control = actual_page.clone();
+    let title_paragraph = visible_line_control
+        .elements
+        .iter_mut()
+        .find_map(|element| {
+            let FixedElementKind::TextBox(text_box) = &mut element.kind else {
+                return None;
+            };
+            text_box.content.iter_mut().find_map(|block| {
+                let Block::Paragraph(paragraph) = block else {
+                    return None;
+                };
+                paragraph
+                    .runs
+                    .iter()
+                    .any(|run| run.text.contains("Session Objectives"))
+                    .then_some(paragraph)
+            })
+        })
+        .expect("slide 2 title paragraph");
+    for run in &mut title_paragraph.runs {
+        run.text.retain(|character| character != '\u{000B}');
+    }
+    title_paragraph
+        .runs
+        .retain(|run| run.text.chars().any(|character| !character.is_whitespace()));
+
+    let mut comparison = document;
+    comparison.pages = vec![Page::Fixed(actual_page), Page::Fixed(visible_line_control)];
+    let output = generate_typst(&comparison).unwrap();
+    let baseline = |page_index: usize| {
+        crate::render::pdf::compiled_text_runs(&output.source, page_index)
+            .unwrap_or_else(|error| panic!("compile failed: {error}\n{}", output.source))
+            .into_iter()
+            .find(|run| run.text.contains("Session"))
+            .expect("the title must be painted")
+            .baseline_pt
+    };
+    let boundary_break_baseline_pt: f64 = baseline(0);
+    let plain_baseline_pt: f64 = baseline(1);
+
+    assert!(
+        (boundary_break_baseline_pt - plain_baseline_pt).abs() < 0.01,
+        "empty boundary breaks must not move the only visible title line: \
+         plain={plain_baseline_pt}pt, boundary={boundary_break_baseline_pt}pt\n{}",
+        output.source
+    );
+}
+
 /// A hard break between two sizes clears the preceding line: the advance is
 /// that line's descent plus the following line's seat, not the following
 /// line's whole 1.2em box.
