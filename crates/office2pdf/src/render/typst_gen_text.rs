@@ -2256,29 +2256,12 @@ pub(super) fn generate_powerpoint_runs_with_tabs(
         inline(out, None);
         return;
     };
-    let Some(measure_pt) = available_measure_pt
-        .map(|measure| {
-            measure
-                - style.indent_left.unwrap_or(0.0)
-                - style.indent_right.unwrap_or(0.0)
-                - style.indent_first_line.unwrap_or(0.0).max(0.0)
-        })
-        .filter(|measure| *measure > 0.0)
+    let Some((measure_pt, top_em, bottom_em)) =
+        powerpoint_hard_break_stack_settings(&lines, runs, style, available_measure_pt)
     else {
         inline(out, Some(&lines));
         return;
     };
-    let Some((top_em, bottom_em)) = powerpoint_paragraph_line_box_em(runs, style) else {
-        inline(out, Some(&lines));
-        return;
-    };
-    if !lines
-        .iter()
-        .all(|line| powerpoint_hard_break_line_fits(line, measure_pt))
-    {
-        inline(out, Some(&lines));
-        return;
-    }
 
     let mut line_sources: Vec<String> = Vec::with_capacity(lines.len());
     for line in &lines {
@@ -2317,6 +2300,41 @@ pub(super) fn generate_powerpoint_runs_with_tabs(
         );
     }
     out.push(')');
+}
+
+pub(super) fn powerpoint_hard_breaks_use_line_stack(
+    runs: &[Run],
+    style: &ParagraphStyle,
+    available_measure_pt: Option<f64>,
+) -> bool {
+    let Some(lines) = split_runs_on_hard_breaks(runs) else {
+        return false;
+    };
+    powerpoint_hard_break_stack_settings(&lines, runs, style, available_measure_pt).is_some()
+}
+
+fn powerpoint_hard_break_stack_settings(
+    lines: &[PowerPointHardBreakLine],
+    runs: &[Run],
+    style: &ParagraphStyle,
+    available_measure_pt: Option<f64>,
+) -> Option<(f64, f64, f64)> {
+    let measure_pt: f64 = available_measure_pt
+        .map(|measure| {
+            measure
+                - style.indent_left.unwrap_or(0.0)
+                - style.indent_right.unwrap_or(0.0)
+                - style.indent_first_line.unwrap_or(0.0).max(0.0)
+        })
+        .filter(|measure| *measure > 0.0)?;
+    let (top_em, bottom_em): (f64, f64) = powerpoint_paragraph_line_box_em(runs, style)?;
+    if !lines
+        .iter()
+        .all(|line| powerpoint_hard_break_line_fits(line, measure_pt))
+    {
+        return None;
+    }
+    Some((measure_pt, top_em, bottom_em))
 }
 
 /// Emit the paragraph as ordinary inline markup, giving every hard-broken line

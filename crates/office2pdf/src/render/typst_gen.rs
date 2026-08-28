@@ -1544,6 +1544,19 @@ fn generate_fixed_text_box(
 
     let outer_width_pt: f64 = elem.width.max(0.0);
     let outer_height_pt: f64 = elem.height.max(0.0);
+    let original_inner_width_pt: f64 =
+        (outer_width_pt - text_box.padding.left - text_box.padding.right).max(0.0);
+    // A title saved with empty hard-break lines on both boundaries still has
+    // one visible line in PowerPoint. Letting the inline fallback emit those
+    // markers as full Typst lines can push that title below its centred banner
+    // (issue #1334). A paragraph eligible for the measured hard-break stack
+    // keeps that existing path: slide 6 of the same fixture is its control.
+    let text_box_without_empty_boundary_lines: Option<TextBoxData> =
+        powerpoint_centered_single_line_text_box(text_box, original_inner_width_pt);
+    let text_box: &TextBoxData = text_box_without_empty_boundary_lines
+        .as_ref()
+        .unwrap_or(text_box);
+
     let inner_width_pt: f64 =
         (outer_width_pt - text_box.padding.left - text_box.padding.right).max(0.0);
     let inner_height_pt: f64 =
@@ -3688,6 +3701,58 @@ fn paragraph_has_forced_breaks(paragraph: &Paragraph) -> bool {
             .chars()
             .any(|ch| matches!(ch, '\n' | '\r' | '\u{000B}'))
     })
+}
+
+fn powerpoint_centered_single_line_text_box(
+    text_box: &TextBoxData,
+    inner_width_pt: f64,
+) -> Option<TextBoxData> {
+    if !matches!(text_box.vertical_align, TextBoxVerticalAlign::Center) {
+        return None;
+    }
+    let [Block::Paragraph(paragraph)] = text_box.content.as_slice() else {
+        return None;
+    };
+    if paragraph.runs.iter().any(|run| run.footnote.is_some()) {
+        return None;
+    }
+    if powerpoint_hard_breaks_use_line_stack(
+        &paragraph.runs,
+        &paragraph.style,
+        Some(inner_width_pt),
+    ) {
+        return None;
+    }
+
+    let mut has_hard_break: bool = false;
+    let mut current_line_is_visible: bool = false;
+    let mut visible_line_count: usize = 0;
+    for character in paragraph.runs.iter().flat_map(|run| run.text.chars()) {
+        if matches!(character, '\n' | '\r' | '\u{000B}') {
+            has_hard_break = true;
+            visible_line_count += usize::from(current_line_is_visible);
+            current_line_is_visible = false;
+        } else if !character.is_whitespace() {
+            current_line_is_visible = true;
+        }
+    }
+    visible_line_count += usize::from(current_line_is_visible);
+    if !has_hard_break || visible_line_count != 1 {
+        return None;
+    }
+
+    let mut normalized: TextBoxData = text_box.clone();
+    let [Block::Paragraph(paragraph)] = normalized.content.as_mut_slice() else {
+        unreachable!("the cloned text box has the same single paragraph")
+    };
+    for run in &mut paragraph.runs {
+        run.text
+            .retain(|character| !matches!(character, '\n' | '\r' | '\u{000B}'));
+    }
+    paragraph
+        .runs
+        .retain(|run| !run.text.is_empty() || run.footnote.is_some());
+    Some(normalized)
 }
 
 fn paragraph_has_mixed_font_sizes(paragraph: &Paragraph) -> bool {
