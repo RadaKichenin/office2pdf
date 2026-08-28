@@ -658,10 +658,23 @@ impl PowerPointRunLineMetrics {
 /// resulting point edges to each run, so Typst chooses the largest run that
 /// actually lands on each physical line.
 ///
-/// `None` when the paragraph carries its own line box, when its spacing is an
-/// absolute `a:spcPts` advance, or when the font's metrics are unknown.
+/// `None` when the paragraph carries its own line box or when the font's
+/// metrics are unknown. An absolute `a:spcPts` rule is expressed as the
+/// equivalent scale of PowerPoint's plain 1.2em line so it retains the same
+/// baseline-seating model while replacing the advance.
 fn powerpoint_paragraph_line_box_em(runs: &[Run], style: &ParagraphStyle) -> Option<(f64, f64)> {
-    let (ascent_em, percent) = powerpoint_paragraph_line_model(runs, style)?;
+    let (ascent_em, percent) = match style.line_spacing {
+        Some(LineSpacing::Exact(points)) if points > 0.0 && style.line_box.is_none() => {
+            let families: Vec<&str> = powerpoint_line_families(runs, style);
+            let (ascent_em, _descent_em) =
+                crate::render::pdf::powerpoint_line_box_em_for_families(&families)?;
+            let font_size_pt: f64 = paragraph_font_size_pt(runs);
+            let plain_advance_pt: f64 =
+                crate::render::pdf::POWERPOINT_LINE_HEIGHT_FACTOR * font_size_pt;
+            (ascent_em, points / plain_advance_pt)
+        }
+        _ => powerpoint_paragraph_line_model(runs, style)?,
+    };
     Some(powerpoint_percentage_line_box_em(
         ascent_em,
         paragraph_font_size_pt(runs),

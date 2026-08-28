@@ -1055,14 +1055,16 @@ const TYPST_DEFAULT_LEADING_EM: f64 = 0.65;
 fn fixed_text_list_powerpoint_line(list: &List) -> Option<(String, f64)> {
     let paragraph: &Paragraph = list.items.first()?.content.first()?;
     let settings: String = powerpoint_line_height_settings(&paragraph.runs, &paragraph.style)?;
-    // `powerpoint_line_height_settings` scales its edges by the declared
-    // `a:lnSpc` percentage; the advance has to take the same factor, or a
-    // 1.5-spaced list would separate its items by a single line.
-    let percent: f64 = match paragraph.style.line_spacing {
-        Some(LineSpacing::Proportional(factor)) if factor > 0.0 => factor,
-        _ => 1.0,
+    // `powerpoint_line_height_settings` resizes its edges by the declared
+    // `a:lnSpc`: percentages scale the plain line, while absolute spacing
+    // replaces it with the point advance. The value paired with those settings
+    // must follow the same rule.
+    let plain_advance_pt: f64 = powerpoint_line_box_pt(&paragraph.runs)?;
+    let advance_pt: f64 = match paragraph.style.line_spacing {
+        Some(LineSpacing::Proportional(factor)) if factor > 0.0 => plain_advance_pt * factor,
+        Some(LineSpacing::Exact(points)) if points > 0.0 => points,
+        _ => plain_advance_pt,
     };
-    let advance_pt: f64 = powerpoint_line_box_pt(&paragraph.runs)? * percent;
     Some((settings, advance_pt))
 }
 
