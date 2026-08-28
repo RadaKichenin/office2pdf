@@ -101,6 +101,73 @@ fn test_text_box_bulleted_paragraph_preserves_char_marker_and_uses_run_style() {
 }
 
 #[test]
+fn test_text_box_inherited_bullet_ignores_run_and_paragraph_mark_underline() {
+    let shape = String::from(concat!(
+        r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="TextBox"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>"#,
+        r#"<p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1000000" cy="500000"/></a:xfrm></p:spPr>"#,
+        r#"<p:txBody><a:bodyPr/><a:lstStyle><a:lvl1pPr marL="457200" indent="-228600">"#,
+        r#"<a:buFont typeface="Arial"/><a:buChar char="•"/><a:defRPr sz="1400"><a:latin typeface="Arial"/></a:defRPr>"#,
+        r#"</a:lvl1pPr></a:lstStyle><a:p><a:pPr lvl="0"/>"#,
+        r#"<a:r><a:rPr lang="en-US" u="sng"><a:hlinkClick r:id="rId2"/></a:rPr><a:t>www.commoncore.org</a:t></a:r>"#,
+        r#"<a:endParaRPr lang="en-US" u="sng"/></a:p></p:txBody></p:sp>"#,
+    ));
+    let slide = make_slide_xml(&[shape]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = first_fixed_page(&doc);
+    let blocks = text_box_blocks(&page.elements[0]);
+    let list = match &blocks[0] {
+        Block::List(list) => list,
+        other => panic!("Expected List block, got {other:?}"),
+    };
+    let paragraph = &list.items[0].content[0];
+    assert_eq!(paragraph.runs[0].style.underline, Some(true));
+    assert!(
+        list.level_styles[&0]
+            .marker_style
+            .as_ref()
+            .is_none_or(|style| style.underline != Some(true)),
+        "A run or endParaRPr underline must not decorate an inherited marker"
+    );
+}
+
+#[test]
+fn test_text_box_inherited_bullet_keeps_list_level_underline() {
+    let shape = String::from(concat!(
+        r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="TextBox"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>"#,
+        r#"<p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1000000" cy="500000"/></a:xfrm></p:spPr>"#,
+        r#"<p:txBody><a:bodyPr/><a:lstStyle><a:lvl1pPr marL="457200" indent="-228600">"#,
+        r#"<a:buFont typeface="Arial"/><a:buChar char="•"/><a:defRPr sz="1400" u="sng"><a:latin typeface="Arial"/></a:defRPr>"#,
+        r#"</a:lvl1pPr></a:lstStyle><a:p><a:pPr lvl="0"/>"#,
+        r#"<a:r><a:rPr lang="en-US" u="none"/><a:t>Plain text</a:t></a:r>"#,
+        r#"<a:endParaRPr lang="en-US" u="none"/></a:p></p:txBody></p:sp>"#,
+    ));
+    let slide = make_slide_xml(&[shape]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = first_fixed_page(&doc);
+    let blocks = text_box_blocks(&page.elements[0]);
+    let list = match &blocks[0] {
+        Block::List(list) => list,
+        other => panic!("Expected List block, got {other:?}"),
+    };
+    let paragraph = &list.items[0].content[0];
+    assert_eq!(paragraph.runs[0].style.underline, Some(false));
+    assert_eq!(
+        list.level_styles[&0]
+            .marker_style
+            .as_ref()
+            .and_then(|style| style.underline),
+        Some(true),
+        "The list level's own underline must remain on its marker"
+    );
+}
+
+#[test]
 fn test_text_box_bulleted_paragraph_preserves_explicit_marker_font() {
     let paragraphs_xml = concat!(
         r#"<a:p><a:pPr indent="-216000"><a:buFont typeface="Wingdings"/><a:buChar char="è"/></a:pPr>"#,
