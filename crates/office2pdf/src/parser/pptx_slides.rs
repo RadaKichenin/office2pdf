@@ -761,6 +761,8 @@ struct ShapeState {
     style_ln_idx: Option<usize>,
     /// Fallback fill color from `<p:style><a:fillRef>` scheme reference.
     style_fill_color: Option<Color>,
+    /// 1-based theme `fillStyleLst` entry named by `<a:fillRef idx>`.
+    style_fill_idx: Option<usize>,
     /// Fallback text color from `<p:style><a:fontRef>` scheme reference.
     style_font_color: Option<Color>,
     /// Theme face selected by `<p:style><a:fontRef idx>`.
@@ -811,6 +813,7 @@ impl Default for ShapeState {
             style_ln_color: None,
             style_ln_idx: None,
             style_fill_color: None,
+            style_fill_idx: None,
             style_font_color: None,
             style_font_family: None,
             explicit_no_fill: false,
@@ -828,8 +831,9 @@ impl ShapeState {
 // ── Finalization helpers ────────────────────────────────────────────────
 
 /// Finalize a shape element when `</p:sp>` is reached.
-/// Returns elements to add: for shapes with text AND non-rectangular geometry,
-/// returns two elements (shape background + transparent text overlay).
+/// Returns elements to add. Text shapes that require the shape renderer —
+/// non-rectangular geometry, gradient or pattern fills, or shadows — return a
+/// shape background plus a transparent text overlay.
 fn finalize_shape(
     shape: &mut ShapeState,
     paragraphs: &mut Vec<PptxParagraphEntry>,
@@ -886,17 +890,18 @@ fn finalize_shape(
             join: effective_ln_join,
         });
         // For shapes with text that need a background of their own — a
-        // non-rectangular geometry, a pattern fill, or a shadow — emit the
-        // shape background first, then overlay a transparent text box, so the
-        // geometry goes through the proven shape renderer. A plain rectangle
-        // otherwise skips this and becomes a text box with a background fill,
-        // which is cheaper and lays the text out the same.
+        // non-rectangular geometry, a gradient or pattern fill, or a shadow —
+        // emit the shape background first, then overlay a transparent text box,
+        // so the geometry goes through the proven shape renderer. A plain
+        // rectangle otherwise skips this and becomes a text box with a
+        // background fill, which is cheaper and lays the text out the same.
         // A shadow needs something to cast it. A plain rectangle with text is
         // otherwise drawn as a text box with a background fill, and a text box
         // has nowhere to put a shadow, so the theme shadow of issue #740 was
         // resolved and then dropped here. Emitting the shape background makes
         // the existing shape renderer draw it.
-        let needs_shape_background = shape.pattern_fill.is_some() || shape.shadow.is_some();
+        let needs_shape_background =
+            shape.gradient_fill.is_some() || shape.pattern_fill.is_some() || shape.shadow.is_some();
         let shape_width = emu_to_pt(shape.cx);
         let shape_height = emu_to_pt(shape.cy);
         let has_geometry_text_rect = shape.custom_text_rect.is_some()
@@ -2255,6 +2260,9 @@ impl<'a> SlideXmlParser<'a> {
             // `<a:fillRef>` inside `<p:style>` provides fallback fill color.
             b"fillRef" if self.in_shape && !self.shape.in_sp_pr && !self.in_txbody => {
                 self.in_style_fill_ref = true;
+                self.shape.style_fill_idx = get_attr_str(e, b"idx")
+                    .and_then(|value| value.parse::<usize>().ok())
+                    .filter(|idx| *idx > 0);
             }
             // `<a:effectRef>` inside `<p:style>` names a theme effect style.
             b"effectRef" if self.in_shape && !self.shape.in_sp_pr && !self.in_txbody => {
@@ -2790,6 +2798,24 @@ impl<'a> SlideXmlParser<'a> {
                             self.ctx.theme,
                             self.ctx.color_map,
                         );
+                    }
+                    // A fill style can be a gradient rather than the flat
+                    // child color. Resolve it only when spPr supplied no fill
+                    // of its own, regardless of whether style precedes spPr.
+                    if self.shape.fill.is_none()
+                        && self.shape.gradient_fill.is_none()
+                        && self.shape.pattern_fill.is_none()
+                        && !self.shape.explicit_no_fill
+                        && let Some(fill_idx) = self.shape.style_fill_idx.take()
+                        && let Some((color, gradient)) = resolve_fill_ref(
+                            fill_idx,
+                            self.shape.style_fill_color,
+                            self.ctx.theme,
+                            self.ctx.color_map,
+                        )
+                    {
+                        self.shape.style_fill_color = color.or(self.shape.style_fill_color);
+                        self.shape.gradient_fill = gradient;
                     }
                     // A slide placeholder inherits its shape properties from
                     // the layout's matching copy, so a template's colour band

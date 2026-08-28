@@ -516,9 +516,29 @@ pub(super) fn parse_background_ref(
         return None;
     };
 
-    // Make the entry's phClr placeholders resolve to the bgRef child color,
-    // then reuse the bgPr parsers on a synthetic <p:bg> wrapper so gradients
-    // and color transforms take the existing code path.
+    resolve_theme_fill_entry(entry, base_color, theme, color_map)
+}
+
+/// Resolve a shape's 1-based `<a:fillRef idx>` against the theme's
+/// `fillStyleLst`, substituting the reference child color for `phClr`.
+pub(super) fn resolve_fill_ref(
+    style_index: usize,
+    base_color: Option<Color>,
+    theme: &ThemeData,
+    color_map: &ColorMapData,
+) -> Option<(Option<Color>, Option<GradientFill>)> {
+    let entry: &str = theme.fill_styles.get(style_index.checked_sub(1)?)?;
+    resolve_theme_fill_entry(entry, base_color, theme, color_map)
+}
+
+fn resolve_theme_fill_entry(
+    entry: &str,
+    base_color: Option<Color>,
+    theme: &ThemeData,
+    color_map: &ColorMapData,
+) -> Option<(Option<Color>, Option<GradientFill>)> {
+    // A style entry uses the same fill grammar as bgPr. Reusing that parser
+    // keeps gradients and color transforms identical for bgRef and fillRef.
     let mut theme_with_placeholder: ThemeData = theme.clone();
     if let Some(color) = base_color {
         theme_with_placeholder

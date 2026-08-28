@@ -198,6 +198,108 @@ fn test_shape_rotation_and_transparency() {
     assert!(matches!(s.kind, ShapeKind::Ellipse));
 }
 
+// ── Theme shape fill-reference tests ───────────────────────────────
+
+fn make_theme_xml_with_shape_fill_styles() -> String {
+    let theme_xml = make_theme_xml(&standard_theme_colors(), "Calibri Light", "Calibri");
+    let format_scheme = concat!(
+        r#"<a:fmtScheme name="Test">"#,
+        r#"<a:fillStyleLst>"#,
+        r#"<a:solidFill><a:schemeClr val="phClr"/></a:solidFill>"#,
+        r#"<a:gradFill><a:gsLst>"#,
+        r#"<a:gs pos="0"><a:schemeClr val="phClr"/></a:gs>"#,
+        r#"<a:gs pos="100000"><a:schemeClr val="phClr"><a:shade val="50000"/></a:schemeClr></a:gs>"#,
+        r#"</a:gsLst><a:lin ang="5400000" scaled="0"/></a:gradFill>"#,
+        r#"<a:gradFill rotWithShape="1"><a:gsLst>"#,
+        r#"<a:gs pos="0"><a:schemeClr val="phClr"><a:shade val="51000"/><a:satMod val="130000"/></a:schemeClr></a:gs>"#,
+        r#"<a:gs pos="80000"><a:schemeClr val="phClr"><a:shade val="93000"/><a:satMod val="130000"/></a:schemeClr></a:gs>"#,
+        r#"<a:gs pos="100000"><a:schemeClr val="phClr"><a:shade val="94000"/><a:satMod val="135000"/></a:schemeClr></a:gs>"#,
+        r#"</a:gsLst><a:lin ang="16200000" scaled="0"/></a:gradFill>"#,
+        r#"</a:fillStyleLst><a:lnStyleLst/><a:effectStyleLst/><a:bgFillStyleLst/>"#,
+        r#"</a:fmtScheme>"#,
+    );
+    theme_xml.replacen(
+        "</a:themeElements>",
+        &format!("{format_scheme}</a:themeElements>"),
+        1,
+    )
+}
+
+#[test]
+fn shape_fill_ref_selects_theme_gradient_and_resolves_placeholder_color() {
+    let shape_xml = concat!(
+        r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="Gradient style"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>"#,
+        r#"<p:spPr><a:xfrm><a:off x="100000" y="200000"/><a:ext cx="500000" cy="300000"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr>"#,
+        r#"<p:style><a:lnRef idx="0"><a:schemeClr val="accent1"/></a:lnRef><a:fillRef idx="3"><a:schemeClr val="accent1"/></a:fillRef><a:effectRef idx="0"><a:schemeClr val="accent1"/></a:effectRef><a:fontRef idx="minor"><a:schemeClr val="lt1"/></a:fontRef></p:style>"#,
+        r#"</p:sp>"#,
+    )
+    .to_string();
+    let slide_xml = make_slide_xml(&[shape_xml]);
+    let data = build_test_pptx_with_theme(
+        SLIDE_CX,
+        SLIDE_CY,
+        &[slide_xml],
+        &make_theme_xml_with_shape_fill_styles(),
+    );
+
+    let (document, _warnings) = PptxParser
+        .parse(&data, &ConvertOptions::default())
+        .expect("the style-matrix probe parses");
+    let page = first_fixed_page(&document);
+    let shape = get_shape(&page.elements[0]);
+    let gradient = shape
+        .gradient_fill
+        .as_ref()
+        .expect("fillRef idx=3 must select the third theme fill style");
+
+    assert_eq!(gradient.stops.len(), 3);
+    assert!((gradient.angle - 270.0).abs() < 0.001);
+    assert!(
+        gradient
+            .stops
+            .windows(2)
+            .any(|pair| pair[0].color != pair[1].color),
+        "phClr transforms must produce a visible ramp"
+    );
+    assert_ne!(gradient.stops[0].color, Color::new(0x44, 0x72, 0xC4));
+}
+
+#[test]
+fn theme_gradient_fill_on_text_rectangle_is_rendered_behind_its_text() {
+    let shape_xml = concat!(
+        r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="Gradient title"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>"#,
+        r#"<p:spPr><a:xfrm><a:off x="100000" y="200000"/><a:ext cx="5000000" cy="900000"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr>"#,
+        r#"<p:style><a:lnRef idx="0"><a:schemeClr val="accent1"/></a:lnRef><a:fillRef idx="2"><a:schemeClr val="accent2"/></a:fillRef><a:effectRef idx="0"><a:schemeClr val="accent1"/></a:effectRef><a:fontRef idx="minor"><a:schemeClr val="lt1"/></a:fontRef></p:style>"#,
+        r#"<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>Gradient title</a:t></a:r></a:p></p:txBody></p:sp>"#,
+    )
+    .to_string();
+    let slide_xml = make_slide_xml(&[shape_xml]);
+    let data = build_test_pptx_with_theme(
+        SLIDE_CX,
+        SLIDE_CY,
+        &[slide_xml],
+        &make_theme_xml_with_shape_fill_styles(),
+    );
+
+    let (document, _warnings) = PptxParser
+        .parse(&data, &ConvertOptions::default())
+        .expect("the styled text rectangle parses");
+    let page = first_fixed_page(&document);
+
+    assert_eq!(page.elements.len(), 2, "background plus text overlay");
+    let background = get_shape(&page.elements[0]);
+    let gradient = background
+        .gradient_fill
+        .as_ref()
+        .expect("the theme gradient must reach the shape renderer");
+    assert_eq!(gradient.stops.len(), 2);
+    assert!((gradient.angle - 90.0).abs() < 0.001);
+    match &page.elements[1].kind {
+        FixedElementKind::TextBox(text_box) => assert!(text_box.fill.is_none()),
+        other => panic!("expected transparent text overlay, got {other:?}"),
+    }
+}
+
 // ── Gradient background tests (US-050) ──────────────────────────────
 
 #[test]
