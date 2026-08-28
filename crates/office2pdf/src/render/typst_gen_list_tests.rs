@@ -1520,6 +1520,121 @@ fn slide_list_item_space_after_stays_out_of_wrapped_line_advance() {
     );
 }
 
+/// `customGeo.pptx` slide 23 gives every body bullet an absolute 33pt
+/// `<a:lnSpc><a:spcPts>`. That value is the baseline advance of every visual
+/// line, including lines PowerPoint creates by wrapping one list paragraph
+/// (issue #1336).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn slide_list_exact_point_spacing_controls_every_wrapped_line() {
+    use crate::internal::{Parser, PptxParser};
+
+    let fixture = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/pptx/customGeo.pptx");
+    let data = std::fs::read(fixture).expect("customGeo fixture");
+    let (mut document, _warnings) = PptxParser
+        .parse(&data, &crate::config::ConvertOptions::default())
+        .expect("customGeo must parse");
+    let Page::Fixed(mut exact_33_page) = document.pages[22].clone() else {
+        panic!("slide 23 must be fixed")
+    };
+    exact_33_page.elements.retain(|element| {
+        let FixedElementKind::TextBox(text_box) = &element.kind else {
+            return false;
+        };
+        text_box.content.iter().any(|block| {
+            let Block::List(list) = block else {
+                return false;
+            };
+            list.items.iter().any(|item| {
+                item.content.iter().any(|paragraph| {
+                    paragraph
+                        .runs
+                        .iter()
+                        .any(|run| run.text.contains("Familiarize yourself"))
+                })
+            })
+        })
+    });
+    assert_eq!(
+        exact_33_page.elements.len(),
+        1,
+        "slide 23 has one body list"
+    );
+    exact_33_page.elements[0].x = 50.0;
+    exact_33_page.elements[0].y = 50.0;
+    exact_33_page.elements[0].width = 500.0;
+    exact_33_page.elements[0].height = 440.0;
+    let FixedElementKind::TextBox(text_box) = &mut exact_33_page.elements[0].kind else {
+        unreachable!("the retained element is the body text box")
+    };
+    text_box.auto_fit = false;
+    text_box.vertical_align = crate::ir::TextBoxVerticalAlign::Top;
+    text_box
+        .content
+        .retain(|block| matches!(block, Block::List(_)));
+    for block in &mut text_box.content {
+        let Block::List(list) = block else {
+            unreachable!("only the body list was retained")
+        };
+        list.items.truncate(1);
+        let paragraph = &mut list.items[0].content[0];
+        assert!(
+            matches!(paragraph.style.line_spacing, Some(LineSpacing::Exact(points)) if (points - 33.0).abs() < 1e-9),
+            "the fixture must preserve its exact 33pt line spacing: {:?}",
+            paragraph.style.line_spacing
+        );
+        // Calibri is not installed on every CI runner. The embedded face keeps
+        // the fixture text and exact spacing while making wrapping portable.
+        paragraph.style.paragraph_mark_font_family = Some("Libertinus Serif".into());
+        for run in &mut paragraph.runs {
+            run.style.font_family = Some("Libertinus Serif".into());
+        }
+    }
+
+    let mut exact_41_page = exact_33_page.clone();
+    let FixedElementKind::TextBox(text_box) = &mut exact_41_page.elements[0].kind else {
+        unreachable!("the retained element is the body text box")
+    };
+    for block in &mut text_box.content {
+        let Block::List(list) = block else {
+            unreachable!("only the body list was retained")
+        };
+        list.items[0].content[0].style.line_spacing = Some(LineSpacing::Exact(41.0));
+    }
+
+    document.pages = vec![Page::Fixed(exact_33_page), Page::Fixed(exact_41_page)];
+    let output = generate_typst(&document).unwrap();
+    let line_advances = |page_index: usize| -> Vec<f64> {
+        let runs = crate::render::pdf::compiled_text_runs(&output.source, page_index)
+            .unwrap_or_else(|error| panic!("compile failed: {error}\n{}", output.source));
+        let mut baselines: Vec<f64> = runs
+            .iter()
+            .filter(|run| !run.text.trim().is_empty())
+            .map(|run| run.baseline_pt)
+            .collect();
+        baselines.sort_by(f64::total_cmp);
+        baselines.dedup_by(|left, right| (*left - *right).abs() < 0.05);
+        assert!(
+            baselines.len() >= 2,
+            "the retained real list item must wrap: {runs:?}\n{}",
+            output.source
+        );
+        baselines.windows(2).map(|pair| pair[1] - pair[0]).collect()
+    };
+
+    for (page_index, expected_advance_pt) in [(0, 33.0), (1, 41.0)] {
+        let advances = line_advances(page_index);
+        assert!(
+            advances
+                .iter()
+                .all(|advance| (*advance - expected_advance_pt).abs() < 0.05),
+            "page {page_index} must advance every wrapped line by its exact {expected_advance_pt}pt rule, got {advances:?}\n{}",
+            output.source
+        );
+    }
+}
+
 /// Every `#v(Xpt)` skip in some markup, in points — the emitted numbers carry
 /// binary noise (`43.199999999999996`), so a gap is asserted numerically.
 pub(in crate::render) fn vertical_skips_pt(source: &str) -> Vec<f64> {
