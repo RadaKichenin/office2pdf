@@ -1297,18 +1297,17 @@ pub(super) fn extract_rpr_attributes(e: &quick_xml::events::BytesStart, style: &
     }
 }
 
-/// Apply DrawingML's default hyperlink appearance without replacing run-local overrides.
+/// Apply PowerPoint's hyperlink colour precedence while preserving an authored underline choice.
 pub(super) fn apply_pptx_hyperlink_style(
     style: &mut TextStyle,
-    has_explicit_color: bool,
     has_explicit_underline: bool,
     theme: &ThemeData,
     color_map: &ColorMapData,
 ) {
-    if !has_explicit_color && let Some(color) = resolve_scheme_color(theme, color_map, "hlink") {
+    if let Some(color) = resolve_scheme_color(theme, color_map, "hlink") {
         style.color = Some(color);
-        // The theme's hyperlink colour states no alpha, so it replaces an
-        // inherited half-tone rather than being composited at it.
+        // The resolved theme colour retains no alpha, so clear any inherited
+        // or run-local half-tone rather than compositing the theme RGB at it.
         style.color_alpha = None;
     }
     if !has_explicit_underline {

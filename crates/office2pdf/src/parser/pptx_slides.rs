@@ -1857,7 +1857,6 @@ struct SlideXmlParser<'a> {
     in_run: bool,
     run_style: TextStyle,
     run_text: String,
-    run_has_explicit_color: bool,
     run_has_explicit_underline: bool,
     run_marker_style_before_hyperlink: Option<TextStyle>,
     first_run_marker_style_override: Option<TextStyle>,
@@ -1927,7 +1926,6 @@ impl<'a> SlideXmlParser<'a> {
             run_field_type: None,
             run_style: TextStyle::default(),
             run_text: String::new(),
-            run_has_explicit_color: false,
             run_has_explicit_underline: false,
             run_marker_style_before_hyperlink: None,
             first_run_marker_style_override: None,
@@ -2338,7 +2336,6 @@ impl<'a> SlideXmlParser<'a> {
                 self.run_field_type = None;
                 self.run_style = self.para_default_run_style.clone();
                 self.run_text.clear();
-                self.run_has_explicit_color = false;
                 self.run_has_explicit_underline = false;
                 self.run_marker_style_before_hyperlink = None;
             }
@@ -2356,7 +2353,6 @@ impl<'a> SlideXmlParser<'a> {
                 self.run_field_type = get_attr_str(e, b"type");
                 self.run_style = self.para_default_run_style.clone();
                 self.run_text.clear();
-                self.run_has_explicit_color = false;
                 self.run_has_explicit_underline = false;
                 self.run_marker_style_before_hyperlink = None;
             }
@@ -2378,7 +2374,6 @@ impl<'a> SlideXmlParser<'a> {
                 self.in_text_line = true;
             }
             b"solidFill" if self.in_rpr && !self.in_text_line => {
-                self.run_has_explicit_color = true;
                 self.solid_fill_ctx = SolidFillCtx::RunFill;
             }
             b"solidFill" if self.in_end_para_rpr && !self.in_text_line => {
@@ -2390,7 +2385,6 @@ impl<'a> SlideXmlParser<'a> {
                 }
                 apply_pptx_hyperlink_style(
                     &mut self.run_style,
-                    self.run_has_explicit_color,
                     self.run_has_explicit_underline,
                     self.ctx.theme,
                     self.ctx.color_map,
@@ -2866,7 +2860,6 @@ impl<'a> SlideXmlParser<'a> {
                 }
                 apply_pptx_hyperlink_style(
                     &mut self.run_style,
-                    self.run_has_explicit_color,
                     self.run_has_explicit_underline,
                     self.ctx.theme,
                     self.ctx.color_map,
