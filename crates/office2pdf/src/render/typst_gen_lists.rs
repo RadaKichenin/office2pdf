@@ -752,13 +752,11 @@ fn write_fixed_text_ordered_marker_grid(
         format_f64(hanging_indent_pt),
     );
     out.push('[');
-    let _ = write!(
-        out,
-        "#box(width: {}pt)[#align(right)[",
-        format_f64(hanging_indent_pt),
-    );
+    // PowerPoint anchors the marker at marL + indent; the fixed-width cell
+    // reserves the remaining hanging indent for the gap before the body.
+    let _ = write!(out, "#box(width: {}pt)[", format_f64(hanging_indent_pt),);
     generate_run(out, &marker_run);
-    out.push_str("]]");
+    out.push(']');
     out.push_str("],\n");
     out.push('[');
     write_fixed_text_list_item_paragraph(out, &body_style, &trimmed_runs, uses_powerpoint_line);

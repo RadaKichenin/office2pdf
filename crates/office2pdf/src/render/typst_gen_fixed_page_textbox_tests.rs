@@ -475,6 +475,16 @@ fn test_fixed_page_text_box_compact_list_preserves_marker_origin_offset() {
             .source
             .contains("#grid(columns: (36pt, 1fr), gutter: 0pt,")
     );
+    assert!(
+        output.source.contains("#box(width: 36pt)[#text("),
+        "the marker must start at the hanging indent's leading edge:\n{}",
+        output.source,
+    );
+    assert!(
+        !output.source.contains("#box(width: 36pt)[#align(right)["),
+        "right-aligning the marker moves short numbers away from their declared origin:\n{}",
+        output.source,
+    );
 }
 
 #[test]
