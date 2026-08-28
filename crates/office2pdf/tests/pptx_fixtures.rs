@@ -467,6 +467,55 @@ pptx_fixture_tests!(layouts, "layouts.pptx");
 pptx_fixture_tests!(shapes, "shapes.pptx");
 pptx_fixture_tests!(custom_geo, "customGeo.pptx");
 
+/// `customGeo.pptx` slide 22 repeats `startAt="6"` on every paragraph in
+/// one authored ordered list. PowerPoint uses that repeated metadata to seed
+/// the sequence once, then renders 6 through 10 (issue #1347).
+#[test]
+fn custom_geo_slide_22_repeated_start_at_continues_one_sequence() {
+    let pages = fixed_pages("customGeo.pptx");
+    let page = &pages[21];
+    let matching_lists: Vec<_> = page
+        .elements
+        .iter()
+        .filter_map(|element| match &element.kind {
+            FixedElementKind::TextBox(text_box) => Some(&text_box.content),
+            _ => None,
+        })
+        .flat_map(|content| content.iter())
+        .filter_map(|block| match block {
+            Block::List(list)
+                if list.items.iter().any(|item| {
+                    item.content.iter().any(|paragraph| {
+                        paragraph
+                            .runs
+                            .iter()
+                            .any(|run| run.text.starts_with("Provide extensive research"))
+                    })
+                }) =>
+            {
+                Some(list)
+            }
+            _ => None,
+        })
+        .collect();
+
+    assert_eq!(
+        matching_lists.len(),
+        1,
+        "the five consecutive principles must remain one ordered list"
+    );
+    let list = matching_lists[0];
+    assert_eq!(list.kind, office2pdf::ir::ListKind::Ordered);
+    assert_eq!(list.items.len(), 5);
+    assert_eq!(
+        list.items
+            .iter()
+            .map(|item| item.start_at)
+            .collect::<Vec<_>>(),
+        vec![Some(6), None, None, None, None]
+    );
+}
+
 #[test]
 fn custom_geo_slide_5_keeps_a_latin_typeface_scoped_to_its_declaring_run() {
     let pages = fixed_pages("customGeo.pptx");

@@ -341,6 +341,63 @@ fn test_text_box_auto_numbered_paragraph_start_override_sets_list_start() {
 }
 
 #[test]
+fn test_text_box_auto_numbered_changed_start_begins_a_new_sequence() {
+    let paragraphs_xml = concat!(
+        r#"<a:p><a:pPr indent="-216000"><a:buAutoNum type="arabicPeriod" startAt="3"/></a:pPr><a:r><a:t>Third</a:t></a:r></a:p>"#,
+        r#"<a:p><a:pPr indent="-216000"><a:buAutoNum type="arabicPeriod" startAt="8"/></a:pPr><a:r><a:t>Eighth</a:t></a:r></a:p>"#,
+    );
+    let shape = make_multi_para_text_box(0, 0, 1_000_000, 500_000, paragraphs_xml);
+    let slide = make_slide_xml(&[shape]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = first_fixed_page(&doc);
+    let blocks = text_box_blocks(&page.elements[0]);
+    assert_eq!(
+        blocks.len(),
+        2,
+        "a changed start value must restart the list"
+    );
+    let starts: Vec<Option<u32>> = blocks
+        .iter()
+        .map(|block| match block {
+            Block::List(list) => list.items[0].start_at,
+            other => panic!("Expected List block, got {other:?}"),
+        })
+        .collect();
+    assert_eq!(starts, vec![Some(3), Some(8)]);
+}
+
+#[test]
+fn test_text_box_auto_numbered_repeated_start_continues_the_sequence() {
+    let paragraphs_xml = concat!(
+        r#"<a:p><a:pPr indent="-216000"><a:buAutoNum type="arabicPeriod" startAt="3"/></a:pPr><a:r><a:t>Third</a:t></a:r></a:p>"#,
+        r#"<a:p><a:pPr indent="-216000"><a:buAutoNum type="arabicPeriod" startAt="3"/></a:pPr><a:r><a:t>Fourth</a:t></a:r></a:p>"#,
+    );
+    let shape = make_multi_para_text_box(0, 0, 1_000_000, 500_000, paragraphs_xml);
+    let slide = make_slide_xml(&[shape]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = first_fixed_page(&doc);
+    let blocks = text_box_blocks(&page.elements[0]);
+    assert_eq!(
+        blocks.len(),
+        1,
+        "identical consecutive start metadata must not restart the list"
+    );
+    let list = match &blocks[0] {
+        Block::List(list) => list,
+        other => panic!("Expected List block, got {other:?}"),
+    };
+    assert_eq!(list.items.len(), 2);
+    assert_eq!(list.items[0].start_at, Some(3));
+    assert_eq!(list.items[1].start_at, None);
+}
+
+#[test]
 fn test_text_box_auto_numbered_paragraph_extracts_hanging_indent() {
     let paragraphs_xml = concat!(
         r#"<a:p><a:pPr marL="457200" indent="-457200"><a:buAutoNum type="arabicParenR"/></a:pPr><a:r><a:t>First</a:t></a:r></a:p>"#,

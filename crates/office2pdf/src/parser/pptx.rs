@@ -253,6 +253,7 @@ struct PendingPptxList {
     items: Vec<ListItem>,
     level_styles: BTreeMap<u32, ListLevelStyle>,
     last_level: u32,
+    last_explicit_start_at: Option<u32>,
 }
 
 impl PendingPptxList {
@@ -262,6 +263,7 @@ impl PendingPptxList {
             items: Vec::new(),
             level_styles: BTreeMap::new(),
             last_level: 0,
+            last_explicit_start_at: None,
         }
     }
 
@@ -275,8 +277,18 @@ impl PendingPptxList {
         }
 
         if let PptxListMarker::Ordered { auto_numbering, .. } = marker {
-            if auto_numbering.start_at.is_some() && auto_numbering.level <= self.last_level {
-                return false;
+            if let Some(start_at) = auto_numbering.start_at
+                && auto_numbering.level <= self.last_level
+            {
+                // PowerPoint renders consecutive same-level paragraphs with
+                // the same explicit `startAt` as one sequence. Extend only
+                // that verified form and preserve the existing restart
+                // behavior for other explicit starts (issue #1347).
+                let repeats_previous_marker: bool = auto_numbering.level == self.last_level
+                    && self.last_explicit_start_at == Some(start_at);
+                if !repeats_previous_marker {
+                    return false;
+                }
             }
 
             return self
@@ -293,6 +305,7 @@ impl PendingPptxList {
 
     fn push(&mut self, paragraph: Paragraph, marker: PptxListMarker) {
         let level: u32 = marker.level();
+        let start_at: Option<u32> = marker.start_at();
         let numbering_pattern: Option<String> = marker.numbering_pattern().map(str::to_string);
         let marker_text: Option<String> = marker.marker_text().map(str::to_string);
         let marker_style: Option<TextStyle> = marker.marker_style().cloned();
@@ -309,12 +322,13 @@ impl PendingPptxList {
             content: vec![paragraph],
             level,
             start_at: if self.items.is_empty() {
-                marker.start_at()
+                start_at
             } else {
                 None
             },
         });
         self.last_level = level;
+        self.last_explicit_start_at = start_at;
     }
 
     fn into_block(self) -> Block {
