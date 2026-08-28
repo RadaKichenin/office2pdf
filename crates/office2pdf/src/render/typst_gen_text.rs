@@ -440,10 +440,10 @@ fn write_paragraph_indent_inset(out: &mut String, indent: Option<(f64, f64)>) {
 }
 
 /// Whether the paragraph needs its own block to carry style. The indent is
-/// deliberately absent: `generate_paragraph` wraps indented paragraphs in
-/// their own block, and the fixed-text paths that share this predicate emit
-/// no inset, so counting the indent here would open a bare wrapper that only
-/// leaks Typst's default block spacing.
+/// deliberately absent: `generate_paragraph` wraps flow indents directly,
+/// while fixed-text paragraph and list paths compute their PowerPoint-specific
+/// first-line origin separately. Counting it here would add a duplicate bare
+/// wrapper that only leaks Typst's default block spacing.
 pub(super) fn needs_block_wrapper(style: &ParagraphStyle) -> bool {
     style.space_before.is_some()
         || style.space_after.is_some()

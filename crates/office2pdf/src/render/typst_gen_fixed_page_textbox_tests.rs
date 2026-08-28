@@ -124,6 +124,52 @@ fn test_fixed_page_text_box_multiple_paragraphs_preserve_breaks() {
 }
 
 #[test]
+fn test_fixed_page_bulletless_paragraph_keeps_resolved_hanging_indent() {
+    let doc = make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![make_fixed_text_box(
+            100.0,
+            200.0,
+            600.0,
+            120.0,
+            Insets::default(),
+            crate::ir::TextBoxVerticalAlign::Top,
+            vec![Block::Paragraph(Paragraph {
+                style: ParagraphStyle {
+                    indent_left: Some(27.0),
+                    indent_first_line: Some(-0.25),
+                    ..ParagraphStyle::default()
+                },
+                runs: vec![Run {
+                    text: "A bulletless continuation that wraps at the inherited list margin"
+                        .to_string(),
+                    style: TextStyle {
+                        font_size: Some(17.0),
+                        ..TextStyle::default()
+                    },
+                    href: None,
+                    footnote: None,
+                }],
+            })],
+        )],
+    )]);
+    let output = generate_typst(&doc).unwrap();
+    assert!(
+        output
+            .source
+            .contains("inset: (top: 0pt, right: 0pt, bottom: 0pt, left: 26.75pt)"),
+        "the first line should start at the resolved left plus first-line indent:\n{}",
+        output.source
+    );
+    assert!(
+        output.source.contains("#par(hanging-indent: 0.25pt)["),
+        "wrapped lines should return to the resolved 27pt left indent:\n{}",
+        output.source
+    );
+}
+
+#[test]
 fn test_fixed_page_text_box_ordered_list_preserves_textbox_styling() {
     use crate::ir::List;
 

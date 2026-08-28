@@ -22,7 +22,8 @@ use crate::ir::{
 use self::diagrams::{generate_chart, generate_chart_in, generate_smartart};
 use self::fmt::*;
 use self::lists::{
-    ListEojeolWrap, can_render_fixed_text_list_inline, common_text_style, generate_fixed_text_list,
+    ListEojeolWrap, can_render_fixed_text_list_inline, common_text_style,
+    fixed_text_paragraph_hanging_indent_pt, fixed_text_paragraph_inset, generate_fixed_text_list,
     generate_list, generate_list_with_spacing_model, write_common_text_settings,
     write_fixed_text_default_par_settings,
 };
@@ -3844,12 +3845,19 @@ fn generate_fixed_text_paragraph(
     no_wrap: bool,
 ) -> Result<(), ConvertError> {
     let style: &ParagraphStyle = &para.style;
+    let inset: Insets = fixed_text_paragraph_inset(style);
+    let has_inset: bool = inset.left > 0.0 || inset.right > 0.0;
+    let hanging_indent_pt: Option<f64> = fixed_text_paragraph_hanging_indent_pt(style);
+    let first_line_indent_pt: Option<f64> =
+        style.indent_first_line.filter(|value| value.abs() > 0.0001);
     // PowerPoint's own line, which supersedes the `size * 0.65` leading this
     // path used to guess with (issue #513).
     let line_height_settings: Option<String> = powerpoint_line_height_settings(&para.runs, style);
     let needs_text_scope: bool = common_text_style(&para.runs).is_some();
-    let has_para_style: bool =
-        needs_block_wrapper(style) || needs_text_scope || line_height_settings.is_some();
+    let has_para_style: bool = needs_block_wrapper(style)
+        || needs_text_scope
+        || line_height_settings.is_some()
+        || has_inset;
 
     if has_para_style {
         out.push_str("#block(");
@@ -3863,6 +3871,9 @@ fn generate_fixed_text_paragraph(
             format_f64(style.space_before.unwrap_or(0.0)),
             format_f64(style.space_after.unwrap_or(0.0)),
         );
+        if has_inset {
+            let _ = write!(out, ", width: 100%, inset: {}", format_insets(&inset));
+        }
         out.push_str(")[\n");
         match line_height_settings {
             // The line box carries the whole advance and pins leading to zero,
@@ -3904,6 +3915,20 @@ fn generate_fixed_text_paragraph(
             _ => "left",
         };
         let _ = writeln!(out, "#block(width: 100%)[#set align({align_str})");
+    }
+
+    if let Some(hanging_indent_pt) = hanging_indent_pt {
+        let _ = write!(
+            out,
+            "#par(hanging-indent: {}pt)[",
+            format_f64(hanging_indent_pt)
+        );
+    } else if let Some(first_line_indent_pt) = first_line_indent_pt {
+        let _ = write!(
+            out,
+            "#par(first-line-indent: (amount: {}pt, all: true))[",
+            format_f64(first_line_indent_pt)
+        );
     }
 
     if no_wrap {
@@ -3948,6 +3973,10 @@ fn generate_fixed_text_paragraph(
         let _ = write!(out, "#h({}pt)", format_f64(spacing));
     }
     if no_wrap {
+        out.push(']');
+    }
+
+    if hanging_indent_pt.is_some() || first_line_indent_pt.is_some() {
         out.push(']');
     }
 
