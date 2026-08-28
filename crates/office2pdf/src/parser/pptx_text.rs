@@ -1118,6 +1118,13 @@ pub(super) fn resolve_pptx_marker_style(
         end_para_run_style,
         default_run_style,
     );
+    // PowerPoint lets a bullet follow the visible run's font, size, and
+    // colour, but its underline belongs to the paragraph's list-level style.
+    // A hyperlink run and its trailing `<a:endParaRPr u="sng">` therefore
+    // underline the text without drawing a rule below an inherited bullet
+    // (issue #1353). Conversely, a list-level underline remains on the marker
+    // even when the first run explicitly turns its own underline off.
+    style.underline = default_run_style.underline;
 
     match bullet.font.as_ref() {
         Some(PptxBulletFontSource::FollowText) | None => {}
