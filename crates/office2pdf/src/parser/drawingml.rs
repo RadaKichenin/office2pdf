@@ -1,6 +1,6 @@
 //! Shared DrawingML primitives: scheme-color resolution, OOXML color
-//! transforms (tint/shade/hueOff/satOff/lumMod/lumOff/alpha), picture transparency, and
-//! validation of raster media before it reaches the renderer.
+//! transforms (tint/shade/hueOff/satMod/satOff/lumMod/lumOff/alpha), picture
+//! transparency, and validation of raster media before it reaches the renderer.
 //!
 //! DrawingML color markup (`<a:srgbClr>`, `<a:schemeClr>`, `<a:sysClr>` with
 //! nested transform children) is identical across pptx, docx, and xlsx parts.
@@ -96,6 +96,7 @@ pub(crate) enum ColorTransform {
     Tint(f64),
     Shade(f64),
     HueOff(f64),
+    SatMod(f64),
     SatOff(f64),
     LumMod(f64),
     LumOff(f64),
@@ -127,6 +128,7 @@ pub(crate) fn parse_color_transform(element: &BytesStart<'_>) -> Option<ColorTra
         // DrawingML stores hue angles in 1/60,000 degree units, unlike the
         // percentage scale used by saturation and luminance transforms.
         b"hueOff" => Some(ColorTransform::HueOff(raw_value as f64 / 60_000.0)),
+        b"satMod" => Some(ColorTransform::SatMod(raw_value as f64 / 100_000.0)),
         b"satOff" => Some(ColorTransform::SatOff(raw_value as f64 / 100_000.0)),
         b"lumMod" => Some(ColorTransform::LumMod(raw_value as f64 / 100_000.0)),
         b"lumOff" => Some(ColorTransform::LumOff(raw_value as f64 / 100_000.0)),
@@ -196,6 +198,7 @@ pub(crate) fn apply_color_transforms(color: Color, transforms: &[ColorTransform]
         matches!(
             t,
             ColorTransform::HueOff(_)
+                | ColorTransform::SatMod(_)
                 | ColorTransform::SatOff(_)
                 | ColorTransform::LumMod(_)
                 | ColorTransform::LumOff(_)
@@ -212,6 +215,9 @@ pub(crate) fn apply_color_transforms(color: Color, transforms: &[ColorTransform]
         match transform {
             ColorTransform::HueOff(value) => {
                 hue += value;
+            }
+            ColorTransform::SatMod(value) => {
+                saturation = (saturation * value).clamp(0.0, 1.0);
             }
             ColorTransform::SatOff(value) => {
                 saturation = (saturation + value).clamp(0.0, 1.0);

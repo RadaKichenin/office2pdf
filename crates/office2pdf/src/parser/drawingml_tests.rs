@@ -260,6 +260,21 @@ fn lum_mod_and_off_adjust_lightness_in_hsl() {
 }
 
 #[test]
+fn saturation_modifier_multiplies_hsl_saturation() {
+    let (colors, aliases) = scheme_with(&[], &[]);
+    let parsed = parse_first_color(
+        r#"<a:srgbClr val="6496C8"><a:satMod val="150000"/></a:srgbClr>"#,
+        &colors,
+        &aliases,
+    );
+
+    // #6496C8 is HSL(210, 47.6%, 58.8%). Multiplying its saturation by
+    // 150% produces HSL(210, 71.4%, 58.8%), or #4B96E1. Treating 150000 as
+    // an offset or ignoring satMod cannot produce this color.
+    assert_eq!(parsed.color, Some(Color::new(75, 150, 225)));
+}
+
+#[test]
 fn hue_and_saturation_offsets_use_drawingml_units() {
     let (colors, aliases) = scheme_with(&[], &[]);
     let parsed = parse_first_color(
