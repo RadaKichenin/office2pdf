@@ -2708,34 +2708,61 @@ fn smaller_slide_paragraph_keeps_powerpoints_boundary_line_box() {
             })
         })
         .expect("slide 5 content placeholder");
-    let probe = make_doc(vec![make_fixed_page(
-        slide_5.size.width,
-        slide_5.size.height,
-        vec![content_box.clone()],
-    )]);
-    let output = generate_typst(&probe).expect("slide 5 content must generate");
-    let runs = crate::render::pdf::compiled_text_runs(&output.source, 0)
-        .unwrap_or_else(|error| panic!("compile failed: {error}\n{}", output.source));
-    let baseline_of = |needle: &str| -> f64 {
-        runs.iter()
-            .find(|run| run.text.contains(needle))
-            .unwrap_or_else(|| panic!("missing {needle:?} in {runs:?}\n{}", output.source))
-            .baseline_pt
+    let compile_baselines = |element: FixedElement| -> (f64, f64, String) {
+        let probe = make_doc(vec![make_fixed_page(
+            slide_5.size.width,
+            slide_5.size.height,
+            vec![element],
+        )]);
+        let output = generate_typst(&probe).expect("slide 5 content must generate");
+        let runs = crate::render::pdf::compiled_text_runs(&output.source, 0)
+            .unwrap_or_else(|error| panic!("compile failed: {error}\n{}", output.source));
+        let baseline_of = |needle: &str| -> f64 {
+            runs.iter()
+                .find(|run| run.text.contains(needle))
+                .unwrap_or_else(|| panic!("missing {needle:?} in {runs:?}\n{}", output.source))
+                .baseline_pt
+        };
+        (
+            baseline_of("studies"),
+            baseline_of("3301.079"),
+            output.source,
+        )
     };
-    let studies_baseline_pt = baseline_of("studies");
-    let citation_baseline_pt = baseline_of("3301.079");
+
+    let (studies_baseline_pt, citation_baseline_pt, output_source) =
+        compile_baselines(content_box.clone());
+    let mut without_percentage_gap = content_box.clone();
+    let FixedElementKind::TextBox(text_box) = &mut without_percentage_gap.kind else {
+        panic!("slide 5 content placeholder must remain a text box")
+    };
+    let citation = text_box
+        .content
+        .iter_mut()
+        .find_map(|block| {
+            let Block::Paragraph(paragraph) = block else {
+                return None;
+            };
+            paragraph
+                .runs
+                .iter()
+                .any(|run| run.text.contains("3301.079"))
+                .then_some(paragraph)
+        })
+        .expect("slide 5 citation paragraph");
+    assert!((citation.style.space_before.unwrap() - 4.8).abs() < 1e-9);
+    citation.style.space_before = Some(0.0);
+    let (no_gap_studies_baseline_pt, no_gap_citation_baseline_pt, no_gap_source) =
+        compile_baselines(without_percentage_gap);
+    let rendered_percentage_gap_pt = (citation_baseline_pt - studies_baseline_pt)
+        - (no_gap_citation_baseline_pt - no_gap_studies_baseline_pt);
     assert!(
-        (studies_baseline_pt - 449.52).abs() <= 0.240_001,
-        "the preceding line must remain on PowerPoint's 449.52pt baseline, \
-         got {studies_baseline_pt}pt\n{}",
-        output.source
-    );
-    assert!(
-        (citation_baseline_pt - 479.52).abs() <= 0.240_001,
-        "the inherited percentage gap must put the citation on PowerPoint's \
-         479.52pt baseline, got {citation_baseline_pt}pt; preceding baseline=\
-         {studies_baseline_pt}pt\n{}",
-        output.source
+        (rendered_percentage_gap_pt - 4.8).abs() < 1e-9,
+        "the inherited percentage gap must add exactly 4.8pt to the paragraph \
+         boundary on every platform, got {rendered_percentage_gap_pt}pt; \
+         with-gap baselines=({studies_baseline_pt}, {citation_baseline_pt}), \
+         no-gap baselines=({no_gap_studies_baseline_pt}, \
+         {no_gap_citation_baseline_pt})\nwith gap:\n{output_source}\nwithout gap:\n{no_gap_source}"
     );
 }
 
