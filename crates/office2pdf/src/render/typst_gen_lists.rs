@@ -707,6 +707,7 @@ fn write_fixed_text_list_item(
             list_style,
             marker_text,
             hanging_indent_pt.unwrap_or(0.0),
+            powerpoint_line_settings.is_some(),
         );
     } else {
         let runs: Vec<Run> = prepend_fixed_text_list_marker_run(
@@ -715,7 +716,12 @@ fn write_fixed_text_list_item(
             &paragraph.runs,
             marker_text.to_string(),
         );
-        write_fixed_text_list_item_paragraph(out, &paragraph.style, &runs);
+        write_fixed_text_list_item_paragraph(
+            out,
+            &paragraph.style,
+            &runs,
+            powerpoint_line_settings.is_some(),
+        );
     }
 
     if align_str.is_some() {
@@ -730,6 +736,7 @@ fn write_fixed_text_ordered_marker_grid(
     list_style: &EffectiveListStyle<'_>,
     marker_text: &str,
     hanging_indent_pt: f64,
+    uses_powerpoint_line: bool,
 ) {
     let normalized_marker_text: String = normalize_fixed_text_ordered_grid_marker(marker_text);
     let marker_run: Run =
@@ -754,7 +761,7 @@ fn write_fixed_text_ordered_marker_grid(
     out.push_str("]]");
     out.push_str("],\n");
     out.push('[');
-    write_fixed_text_list_item_paragraph(out, &body_style, &trimmed_runs);
+    write_fixed_text_list_item_paragraph(out, &body_style, &trimmed_runs, uses_powerpoint_line);
     out.push_str("],\n)");
 }
 
@@ -809,9 +816,20 @@ fn fixed_text_list_item_inset(style: &ParagraphStyle) -> Insets {
     }
 }
 
-fn write_fixed_text_list_item_paragraph(out: &mut String, style: &ParagraphStyle, runs: &[Run]) {
+fn write_fixed_text_list_item_paragraph(
+    out: &mut String,
+    style: &ParagraphStyle,
+    runs: &[Run],
+    uses_powerpoint_line: bool,
+) {
     write_common_text_settings(out, runs, "");
-    write_fixed_text_default_par_settings(out, style, runs, "");
+    // The enclosing item already pins PowerPoint's full line box and zero
+    // leading. Reintroducing Typst's 0.65em default here adds that leading to
+    // every natural wrap, while item boundaries still use the fixed box
+    // alone (issue #1335).
+    if !uses_powerpoint_line {
+        write_fixed_text_default_par_settings(out, style, runs, "");
+    }
     let hanging_indent_pt: Option<f64> = fixed_text_list_hanging_indent_pt(style);
     let tab_stops: Option<Vec<TabStop>> = fixed_text_list_tab_stops(style, hanging_indent_pt);
     if let Some(hanging_indent_pt) = hanging_indent_pt {

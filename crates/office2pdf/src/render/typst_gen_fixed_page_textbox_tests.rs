@@ -707,7 +707,11 @@ fn test_fixed_page_text_box_compact_list_preserves_soft_line_breaks() {
 
     assert!(output.source.contains("#linebreak()"));
     assert!(output.source.contains("#set text(size: 20pt"));
-    assert!(output.source.contains("leading: 13pt"));
+    assert!(output.source.contains("#set par(leading: 0pt)"));
+    assert!(
+        !output.source.contains("leading: 13pt"),
+        "the item-level PowerPoint line box must not regain Typst's 0.65em default leading"
+    );
 }
 
 #[test]
