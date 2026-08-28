@@ -720,6 +720,7 @@ struct ShapeState {
     flip_v: bool,
     opacity: Option<f64>,
     shadow: Option<Shadow>,
+    top_bevel: Option<TopBevel>,
     /// `<a:effectRef idx>` from `<p:style>`, resolved against the theme once
     /// the shape closes (issue #740).
     style_effect_idx: Option<i64>,
@@ -794,6 +795,7 @@ impl Default for ShapeState {
             flip_v: false,
             opacity: None,
             shadow: None,
+            top_bevel: None,
             in_sp_pr: false,
             prst_geom: None,
             custom_geometry: Vec::new(),
@@ -832,8 +834,8 @@ impl ShapeState {
 
 /// Finalize a shape element when `</p:sp>` is reached.
 /// Returns elements to add. Text shapes that require the shape renderer —
-/// non-rectangular geometry, gradient or pattern fills, or shadows — return a
-/// shape background plus a transparent text overlay.
+/// non-rectangular geometry, gradient or pattern fills, shadows, or top
+/// bevels — return a shape background plus a transparent text overlay.
 fn finalize_shape(
     shape: &mut ShapeState,
     paragraphs: &mut Vec<PptxParagraphEntry>,
@@ -890,18 +892,21 @@ fn finalize_shape(
             join: effective_ln_join,
         });
         // For shapes with text that need a background of their own — a
-        // non-rectangular geometry, a gradient or pattern fill, or a shadow —
-        // emit the shape background first, then overlay a transparent text box,
-        // so the geometry goes through the proven shape renderer. A plain
-        // rectangle otherwise skips this and becomes a text box with a
-        // background fill, which is cheaper and lays the text out the same.
+        // non-rectangular geometry, a gradient or pattern fill, a shadow, or a
+        // top bevel — emit the shape background first, then overlay a
+        // transparent text box, so the geometry goes through the proven shape
+        // renderer. A plain rectangle otherwise skips this and becomes a text
+        // box with a background fill, which is cheaper and lays the text out
+        // the same.
         // A shadow needs something to cast it. A plain rectangle with text is
         // otherwise drawn as a text box with a background fill, and a text box
         // has nowhere to put a shadow, so the theme shadow of issue #740 was
         // resolved and then dropped here. Emitting the shape background makes
         // the existing shape renderer draw it.
-        let needs_shape_background =
-            shape.gradient_fill.is_some() || shape.pattern_fill.is_some() || shape.shadow.is_some();
+        let needs_shape_background = shape.gradient_fill.is_some()
+            || shape.pattern_fill.is_some()
+            || shape.shadow.is_some()
+            || shape.top_bevel.is_some();
         let shape_width = emu_to_pt(shape.cx);
         let shape_height = emu_to_pt(shape.cy);
         let has_geometry_text_rect = shape.custom_text_rect.is_some()
@@ -945,6 +950,7 @@ fn finalize_shape(
                     rotation_deg: shape.rotation_deg,
                     opacity: shape.opacity,
                     shadow: shape.shadow.take(),
+                    top_bevel: shape.top_bevel.take(),
                 }),
             });
             // Transparent text overlay (no fill, no stroke). DrawingML
@@ -1102,6 +1108,7 @@ fn finalize_shape(
                 rotation_deg: shape.rotation_deg,
                 opacity: shape.opacity,
                 shadow: shape.shadow.take(),
+                top_bevel: shape.top_bevel.take(),
             }),
         }]
     } else {
@@ -2785,19 +2792,23 @@ impl<'a> SlideXmlParser<'a> {
                         self.shape.rotation_deg = geometry.rotation_deg;
                     }
                     // A `<p:style>` effect reference fills in only where the
-                    // shape stated no effect of its own (issue #740). Resolved
-                    // here rather than at the `<a:effectRef>` itself so it does
-                    // not depend on spPr preceding p:style in the file.
-                    if self.shape.shadow.is_none()
-                        && !self.shape.has_direct_effect_lst
+                    // shape stated no effect of its own (issues #740, #1298).
+                    // Resolved here rather than at the `<a:effectRef>` itself
+                    // so it does not depend on spPr preceding p:style in the
+                    // file.
+                    if !self.shape.has_direct_effect_lst
                         && let Some(effect_idx) = self.shape.style_effect_idx.take()
                     {
-                        self.shape.shadow = resolve_effect_ref(
-                            effect_idx,
-                            self.shape.style_effect_color.take(),
-                            self.ctx.theme,
-                            self.ctx.color_map,
-                        );
+                        if self.shape.shadow.is_none() {
+                            self.shape.shadow = resolve_effect_ref(
+                                effect_idx,
+                                self.shape.style_effect_color.take(),
+                                self.ctx.theme,
+                                self.ctx.color_map,
+                            );
+                        }
+                        self.shape.top_bevel =
+                            resolve_effect_ref_top_bevel(effect_idx, self.ctx.theme);
                     }
                     // A fill style can be a gradient rather than the flat
                     // child color. Resolve it only when spPr supplied no fill

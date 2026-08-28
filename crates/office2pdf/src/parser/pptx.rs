@@ -17,7 +17,7 @@ use crate::ir::{
     List, ListItem, ListKind, ListLevelStyle, Page, PageSize, PairKerning, Paragraph,
     ParagraphStyle, PatternFill, PatternPreset, Run, Shadow, Shape, ShapeKind, SmartArt,
     SmartArtNode, StyleSheet, TabAlignment, TabLeader, TabStop, Table, TableBorderPaintModel,
-    TableCell, TableRow, TextBoxData, TextBoxVerticalAlign, TextDirection, TextStyle,
+    TableCell, TableRow, TextBoxData, TextBoxVerticalAlign, TextDirection, TextStyle, TopBevel,
 };
 use crate::parser::Parser;
 use crate::parser::smartart;
@@ -42,7 +42,8 @@ use self::theme::{
     parse_background_image_rid, parse_background_ref, parse_color_from_empty,
     parse_color_from_start, parse_effect_list, parse_master_color_map, parse_master_text_styles,
     parse_shape_gradient_fill, parse_shape_pattern_fill, parse_theme_xml, resolve_effect_ref,
-    resolve_effective_color_map, resolve_fill_ref, resolve_scheme_color, resolve_theme_font,
+    resolve_effect_ref_top_bevel, resolve_effective_color_map, resolve_fill_ref,
+    resolve_scheme_color, resolve_theme_font,
 };
 
 #[path = "pptx_custom_geometry.rs"]

@@ -2,7 +2,7 @@ use std::fmt::Write;
 
 use super::shadow_outline::{CornerReach, OffsetCorner, arc_beziers, offset_ring};
 use super::*;
-use crate::ir::Subpath;
+use crate::ir::{Subpath, TopBevel};
 
 pub(super) fn generate_shape(
     out: &mut String,
@@ -110,9 +110,137 @@ pub(super) fn generate_shape(
         }
     }
 
+    if matches!(shape.kind, ShapeKind::Rectangle)
+        && let Some(bevel) = &shape.top_bevel
+    {
+        write_rectangle_top_bevel(out, shape, width, height, bevel);
+    }
+
     if use_typst_rotation {
         out.push_str("]\n");
     }
+}
+
+/// Approximate an orthographic circular top bevel with four inset faces.
+///
+/// Typst has no 3-D shape primitive, so the bevel is painted over the normal
+/// face. A subtle cool front-light pass matches PowerPoint's three-point rig;
+/// the top face carries the circular profile's narrow specular band, while
+/// the remaining faces darken toward their outer edges. Each overlay is
+/// absolutely placed so it cannot change the surrounding fixed layout
+/// (issue #1298).
+fn write_rectangle_top_bevel(
+    out: &mut String,
+    shape: &Shape,
+    width: f64,
+    height: f64,
+    bevel: &TopBevel,
+) {
+    if shape.fill.is_none() && shape.gradient_fill.is_none() && shape.pattern_fill.is_none() {
+        return;
+    }
+
+    let inset = bevel.width.min(width / 2.0).min(height / 2.0).max(0.0);
+    if inset <= 0.0 {
+        return;
+    }
+
+    let strength = (bevel.height / bevel.width.max(f64::EPSILON) / 0.4).clamp(0.25, 2.0);
+    let shape_opacity = shape.opacity.unwrap_or(1.0).clamp(0.0, 1.0);
+    let alpha =
+        |base: f64| -> u8 { (base * strength * shape_opacity).clamp(0.0, 255.0).round() as u8 };
+    let rotation_bias = (bevel.light_rig_rotation_deg.to_radians().sin() * 16.0).clamp(-16.0, 16.0);
+
+    // Three-point lighting lifts the front face slightly toward the cool
+    // highlight. Keeping this translucent preserves solid, gradient, and
+    // pattern fills underneath.
+    let _ = writeln!(
+        out,
+        "#place(top + left)[#rect(width: {}pt, height: {}pt, fill: gradient.linear((rgb(90, 165, 255, {}), 0%), (rgb(90, 165, 255, {}), 100%), angle: 270deg), stroke: none)]",
+        format_f64(width),
+        format_f64(height),
+        alpha(40.0),
+        alpha(64.0),
+    );
+
+    let right = width - inset;
+    let bottom = height - inset;
+    let top_fill = format!(
+        "gradient.linear((rgb(90, 165, 255, 0), 0%), (rgb(150, 225, 255, {}), 25%), (rgb(90, 165, 255, 0), 100%), angle: 90deg)",
+        alpha(255.0),
+    );
+    let left_fill = format!(
+        "gradient.linear((rgb(0, 0, 0, {}), 0%), (rgb(0, 0, 0, {}), 20%), (rgb(0, 0, 0, {}), 50%), (rgb(0, 0, 0, 0), 100%))",
+        alpha(80.0 - rotation_bias),
+        alpha(38.0 - rotation_bias / 2.0),
+        alpha(13.0),
+    );
+
+    write_bevel_face(
+        out,
+        &[(0.0, 0.0), (inset, inset), (right, inset), (width, 0.0)],
+        &top_fill,
+    );
+    write_bevel_face(
+        out,
+        &[(0.0, 0.0), (inset, inset), (inset, bottom), (0.0, height)],
+        &left_fill,
+    );
+
+    // Typst clamps a gradient on the oppositely wound right and bottom
+    // trapezoids to their dark stop. Thin, non-overlapping slices preserve
+    // the circular falloff without introducing layout-visible boxes.
+    const SLICES: usize = 10;
+    for index in 0..SLICES {
+        let start = index as f64 / SLICES as f64;
+        let end = (index + 1) as f64 / SLICES as f64;
+        let midpoint = (start + end) / 2.0;
+
+        let x0 = right + start * inset;
+        let x1 = right + end * inset;
+        let top0 = inset * (1.0 - start);
+        let top1 = inset * (1.0 - end);
+        let bottom0 = height - top0;
+        let bottom1 = height - top1;
+        let side_alpha = alpha((80.0 + rotation_bias) * midpoint.powf(2.0));
+        write_bevel_face(
+            out,
+            &[(x0, top0), (x1, top1), (x1, bottom1), (x0, bottom0)],
+            &format!("rgb(0, 0, 0, {side_alpha})"),
+        );
+
+        let y0 = bottom + start * inset;
+        let y1 = bottom + end * inset;
+        let left0 = inset * (1.0 - start);
+        let left1 = inset * (1.0 - end);
+        let bottom_color = if midpoint < 0.8 {
+            format!("rgb(0, 0, 0, {})", alpha(28.0 * midpoint))
+        } else {
+            let contact = (midpoint - 0.8) / 0.2;
+            format!("rgb(30, 15, 0, {})", alpha(20.0 + 60.0 * contact),)
+        };
+        write_bevel_face(
+            out,
+            &[
+                (left0, y0),
+                (width - left0, y0),
+                (width - left1, y1),
+                (left1, y1),
+            ],
+            &bottom_color,
+        );
+    }
+}
+
+fn write_bevel_face(out: &mut String, vertices: &[(f64, f64)], fill: &str) {
+    out.push_str("#place(top + left)[#polygon(");
+    for (index, (x, y)) in vertices.iter().enumerate() {
+        if index > 0 {
+            out.push_str(", ");
+        }
+        let _ = write!(out, "({}pt, {}pt)", format_f64(*x), format_f64(*y));
+    }
+    let _ = writeln!(out, ", fill: {fill}, stroke: none)]");
 }
 
 fn rotated_line_points(

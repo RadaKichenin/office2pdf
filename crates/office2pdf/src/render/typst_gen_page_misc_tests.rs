@@ -3228,6 +3228,7 @@ fn a_behind_text_header_banner_is_drawn_on_the_background_layer() {
             rotation_deg: None,
             opacity: None,
             shadow: None,
+            top_bevel: None,
         },
         // Wider than the 595.28pt page, centred, so it hangs off both edges.
         width: 609.12,
