@@ -292,6 +292,86 @@ fn test_fixed_page_text_box_ordered_list_preserves_textbox_styling() {
 }
 
 #[test]
+fn test_fixed_page_empty_pptx_list_paragraph_keeps_line_without_marker_or_number() {
+    use crate::ir::List;
+
+    let paragraph = |text: &str| Paragraph {
+        style: ParagraphStyle::default(),
+        runs: vec![Run {
+            text: text.to_string(),
+            style: TextStyle {
+                font_size: Some(24.0),
+                ..TextStyle::default()
+            },
+            href: None,
+            footnote: None,
+        }],
+    };
+    let doc = make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![make_fixed_text_box(
+            100.0,
+            200.0,
+            300.0,
+            120.0,
+            Insets::default(),
+            crate::ir::TextBoxVerticalAlign::Top,
+            vec![Block::List(List {
+                kind: ListKind::Ordered,
+                items: vec![
+                    ListItem {
+                        content: vec![paragraph(" First item")],
+                        level: 0,
+                        start_at: Some(1),
+                    },
+                    ListItem {
+                        content: vec![paragraph("\u{E000}\u{E001}")],
+                        level: 0,
+                        start_at: None,
+                    },
+                    ListItem {
+                        content: vec![paragraph(" Second item")],
+                        level: 0,
+                        start_at: None,
+                    },
+                ],
+                level_styles: BTreeMap::from([(
+                    0,
+                    ListLevelStyle {
+                        kind: ListKind::Ordered,
+                        numbering_pattern: Some("1.".to_string()),
+                        full_numbering: false,
+                        marker_text: None,
+                        marker_style: None,
+                    },
+                )]),
+            })],
+        )],
+    )]);
+
+    let output = generate_typst(&doc).unwrap();
+    assert_powerpoint_grid_words_in_order(
+        &output.source,
+        &["1.", "First", "item", "2.", "Second", "item"],
+    );
+    let blank_line = format!(
+        "#block(height: {}pt)[]",
+        crate::render::typst_gen::fmt::format_f64(24.0 * 1.2)
+    );
+    assert!(
+        output.source.contains(&blank_line),
+        "the empty paragraph must retain its 1.2em line: {}",
+        output.source
+    );
+    assert!(
+        !output.source.contains("\u{E000}\u{E001}"),
+        "the internal blank-line marker must never reach Typst: {}",
+        output.source
+    );
+}
+
+#[test]
 fn test_fixed_page_text_box_compact_list_items_use_full_width_blocks() {
     use crate::ir::List;
 
@@ -655,6 +735,27 @@ fn test_fixed_page_text_box_dash_bullets_use_generic_list_path() {
                                     ..ParagraphStyle::default()
                                 },
                                 runs: vec![Run {
+                                    text: "\u{E000}\u{E001}".to_string(),
+                                    style: TextStyle {
+                                        font_family: Some("Pretendard".to_string()),
+                                        font_size: Some(14.0),
+                                        ..TextStyle::default()
+                                    },
+                                    href: None,
+                                    footnote: None,
+                                }],
+                            }],
+                            level: 0,
+                            start_at: None,
+                        },
+                        ListItem {
+                            content: vec![Paragraph {
+                                style: ParagraphStyle {
+                                    indent_left: Some(22.5),
+                                    indent_first_line: Some(-22.5),
+                                    ..ParagraphStyle::default()
+                                },
+                                runs: vec![Run {
                                     text: "Second dash bullet".to_string(),
                                     style: TextStyle {
                                         font_family: Some("Pretendard".to_string()),
@@ -702,6 +803,13 @@ fn test_fixed_page_text_box_dash_bullets_use_generic_list_path() {
     assert!(output.source.contains("#list("));
     assert!(output.source.contains("marker: ["));
     assert!(!output.source.contains("tab_advance_1"));
+    assert!(!output.source.contains("\u{E000}\u{E001}"));
+    assert_eq!(
+        output.source.matches("list.item").count(),
+        2,
+        "the empty paragraph must add height without becoming a marked item: {}",
+        output.source
+    );
 }
 
 #[test]

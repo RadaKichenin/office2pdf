@@ -1232,8 +1232,8 @@ pub(super) fn group_pptx_text_blocks(entries: Vec<PptxParagraphEntry>) -> Vec<Bl
     let mut entries = entries;
     for entry in &mut entries {
         resolve_pptx_percentage_paragraph_spacing(entry);
+        preserve_blank_pptx_list_item(entry);
     }
-    trim_trailing_empty_pptx_list_entries(&mut entries);
 
     let mut blocks: Vec<Block> = Vec::new();
     let mut pending_list: Option<PendingPptxList> = None;
@@ -1295,21 +1295,36 @@ fn resolve_pptx_percentage_paragraph_spacing(entry: &mut PptxParagraphEntry) {
     }
 }
 
-fn trim_trailing_empty_pptx_list_entries(entries: &mut Vec<PptxParagraphEntry>) {
-    while entries.len() > 1 {
-        let Some(last_entry) = entries.last() else {
-            break;
-        };
-        if last_entry.list_marker.is_none()
-            || pptx_paragraph_has_visible_content(&last_entry.paragraph)
-        {
-            break;
-        }
-        entries.pop();
+/// Keep an inherited list paragraph in the IR while marking that its list
+/// marker is absent. PowerPoint still reserves the paragraph mark's line box;
+/// its resolved family and size travel on the sentinel run so the renderer can
+/// create that exact blank line without leaking a private-use glyph.
+fn preserve_blank_pptx_list_item(entry: &mut PptxParagraphEntry) {
+    if entry.list_marker.is_none() || pptx_paragraph_has_visible_content(&entry.paragraph) {
+        return;
     }
+
+    entry.paragraph.runs.push(Run {
+        text: PPTX_BLANK_LIST_ITEM_SENTINEL.to_string(),
+        style: TextStyle {
+            font_family: entry
+                .paragraph
+                .style
+                .paragraph_mark_font_family
+                .as_deref()
+                .map(str::to_string),
+            font_size: entry.paragraph_mark_font_size_pt,
+            ..TextStyle::default()
+        },
+        href: None,
+        footnote: None,
+    });
 }
 
 fn pptx_paragraph_has_visible_content(paragraph: &Paragraph) -> bool {
+    if pptx_paragraph_is_blank_list_item(paragraph) {
+        return false;
+    }
     paragraph.runs.iter().any(|run| {
         run.footnote.is_some()
             || run.text.chars().any(|character| {

@@ -584,7 +584,7 @@ fn test_text_box_plain_paragraph_preserves_escaped_gt_entity() {
 }
 
 #[test]
-fn test_text_box_trailing_empty_bullets_do_not_override_nested_marker_style() {
+fn test_text_box_empty_bullet_paragraphs_keep_blank_lines_without_overriding_marker_style() {
     let paragraphs_xml = concat!(
         r#"<a:p><a:pPr marL="742950" lvl="1" indent="-285750"><a:buFont typeface="Wingdings"/><a:buChar char="è"/></a:pPr><a:r><a:rPr lang="en-US" sz="1400"><a:latin typeface="Pretendard"/></a:rPr><a:t>Arrow bullet</a:t></a:r></a:p>"#,
         r#"<a:p><a:pPr marL="285750" indent="-285750"><a:buFontTx/><a:buChar char="-"/></a:pPr></a:p>"#,
@@ -602,8 +602,14 @@ fn test_text_box_trailing_empty_bullets_do_not_override_nested_marker_style() {
         Block::List(list) => list,
         other => panic!("Expected List block, got {other:?}"),
     };
-    assert_eq!(list.items.len(), 1);
+    assert_eq!(
+        list.items.len(),
+        3,
+        "Blank paragraphs must keep their lines"
+    );
     assert_eq!(list.items[0].level, 1);
+    assert!(pptx_paragraph_is_blank_list_item(&list.items[1].content[0]));
+    assert!(pptx_paragraph_is_blank_list_item(&list.items[2].content[0]));
     assert_eq!(
         list.level_styles
             .get(&1)
@@ -613,6 +619,39 @@ fn test_text_box_trailing_empty_bullets_do_not_override_nested_marker_style() {
     assert!(
         !list.level_styles.contains_key(&0),
         "Trailing empty dash bullets should not create a level-0 marker style"
+    );
+}
+
+#[test]
+fn test_text_box_empty_numbered_paragraph_does_not_split_or_restart_sequence() {
+    let paragraphs_xml = concat!(
+        r#"<a:p><a:pPr><a:buAutoNum type="arabicPeriod" startAt="5"/></a:pPr><a:r><a:rPr sz="1800"/><a:t>First</a:t></a:r></a:p>"#,
+        r#"<a:p><a:pPr><a:buAutoNum type="arabicPeriod" startAt="5"/></a:pPr><a:endParaRPr sz="1400"/></a:p>"#,
+        r#"<a:p><a:pPr><a:buAutoNum type="arabicPeriod" startAt="5"/></a:pPr><a:r><a:rPr sz="1800"/><a:t>Second</a:t></a:r></a:p>"#,
+    );
+    let shape = make_multi_para_text_box(0, 0, 1_000_000, 500_000, paragraphs_xml);
+    let slide = make_slide_xml(&[shape]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = first_fixed_page(&doc);
+    let blocks = text_box_blocks(&page.elements[0]);
+    assert_eq!(blocks.len(), 1, "A blank item must not split numbering");
+    let list = match &blocks[0] {
+        Block::List(list) => list,
+        other => panic!("Expected List block, got {other:?}"),
+    };
+    assert_eq!(list.items.len(), 3);
+    assert_eq!(list.items[0].start_at, Some(5));
+    assert!(pptx_paragraph_is_blank_list_item(&list.items[1].content[0]));
+    assert_eq!(
+        list.level_styles
+            .get(&0)
+            .and_then(|style| style.marker_style.as_ref())
+            .and_then(|style| style.font_size),
+        Some(18.0),
+        "The blank paragraph mark must not replace the visible number style"
     );
 }
 

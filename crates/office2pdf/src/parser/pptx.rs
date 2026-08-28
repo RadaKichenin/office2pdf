@@ -138,6 +138,16 @@ struct PptxParagraphEntry {
 const PPTX_DEFAULT_TEXT_BOX_LEFT_RIGHT_INSET_PT: f64 = 7.2;
 const PPTX_DEFAULT_TEXT_BOX_TOP_BOTTOM_INSET_PT: f64 = 3.6;
 const PPTX_SOFT_LINE_BREAK_CHAR: char = '\u{000B}';
+/// Internal run marker for a DrawingML paragraph whose inherited list style
+/// must not paint a bullet or number. The renderer turns this into a line-box
+/// strut and never emits the character into Typst or the PDF text layer.
+const PPTX_BLANK_LIST_ITEM_SENTINEL: &str = "\u{E000}\u{E001}";
+
+fn pptx_paragraph_is_blank_list_item(paragraph: &Paragraph) -> bool {
+    paragraph.runs.len() == 1
+        && paragraph.runs[0].footnote.is_none()
+        && paragraph.runs[0].text == PPTX_BLANK_LIST_ITEM_SENTINEL
+}
 
 fn default_pptx_text_box_padding() -> Insets {
     Insets {
@@ -313,15 +323,17 @@ impl PendingPptxList {
         let numbering_pattern: Option<String> = marker.numbering_pattern().map(str::to_string);
         let marker_text: Option<String> = marker.marker_text().map(str::to_string);
         let marker_style: Option<TextStyle> = marker.marker_style().cloned();
-        self.level_styles
-            .entry(level)
-            .or_insert_with(|| ListLevelStyle {
-                kind: self.kind,
-                numbering_pattern,
-                full_numbering: false,
-                marker_text,
-                marker_style,
-            });
+        if !pptx_paragraph_is_blank_list_item(&paragraph) {
+            self.level_styles
+                .entry(level)
+                .or_insert_with(|| ListLevelStyle {
+                    kind: self.kind,
+                    numbering_pattern,
+                    full_numbering: false,
+                    marker_text,
+                    marker_style,
+                });
+        }
         self.items.push(ListItem {
             content: vec![paragraph],
             level,
