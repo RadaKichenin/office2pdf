@@ -2630,7 +2630,7 @@ fn powerpoint_empty_boundary_breaks_do_not_move_a_centred_title() {
     let Page::Fixed(slide_6) = &document.pages[5] else {
         panic!("slide 6 must be fixed")
     };
-    let (slide_6_title_box, slide_6_title) = slide_6
+    let slide_6_title_box = slide_6
         .elements
         .iter()
         .find_map(|element| {
@@ -2645,23 +2645,32 @@ fn powerpoint_empty_boundary_breaks_do_not_move_a_centred_title() {
                     .runs
                     .iter()
                     .any(|run| run.text.contains("ELA Standards Framework"))
-                    .then_some((text_box, paragraph))
+                    .then_some(text_box)
             })
         })
         .expect("slide 6 title paragraph");
+    let mut slide_6_line_stack_control = slide_6_title_box.clone();
+    let [Block::Paragraph(slide_6_title)] = slide_6_line_stack_control.content.as_mut_slice()
+    else {
+        panic!("slide 6 title box must contain one paragraph")
+    };
+    // Native fixture faces are not installed on every CI runner. Keep the
+    // fixture's real boundary-break structure while giving this precedence
+    // control Typst's embedded, cross-platform metric face.
+    for run in &mut slide_6_title.runs {
+        run.style.font_family = Some("Libertinus Serif".to_string());
+    }
+    slide_6_title.style.paragraph_mark_font_family = Some("Libertinus Serif".into());
     assert!(
         powerpoint_hard_breaks_use_line_stack(
             &slide_6_title.runs,
             &slide_6_title.style,
-            // CI runners do not share the PowerPoint fonts used by the native
-            // fixture. An ample measure keeps this a deterministic check of
-            // the line-stack precedence rather than a platform font census.
             Some(10_000.0),
         ),
         "slide 6 is the control whose boundary breaks can use the measured line stack"
     );
     assert!(
-        powerpoint_centered_single_line_text_box(slide_6_title_box, 10_000.0).is_none(),
+        powerpoint_centered_single_line_text_box(&slide_6_line_stack_control, 10_000.0).is_none(),
         "an eligible measured line stack must not be normalized"
     );
 
