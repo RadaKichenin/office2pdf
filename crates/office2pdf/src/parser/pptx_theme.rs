@@ -896,6 +896,79 @@ pub(super) fn resolve_effect_ref(
     }
 }
 
+/// Resolve the supported top bevel from a theme `<a:effectStyle>`.
+///
+/// DrawingML stores the front-face bevel in `a:sp3d`, beside (not inside)
+/// `a:effectLst`, while its lighting comes from the sibling `a:scene3d`.
+/// Keep the first implementation deliberately bounded to the combination
+/// PowerPoint writes for `customGeo.pptx` page 44: an orthographic front
+/// camera, a top-directed three-point light rig, and the default circular
+/// bevel. Unknown cameras, rigs, directions, and presets remain unrendered
+/// instead of receiving a misleading rim (issue #1298).
+pub(super) fn resolve_effect_ref_top_bevel(
+    style_index: i64,
+    theme: &ThemeData,
+) -> Option<TopBevel> {
+    if style_index < 1 {
+        return None;
+    }
+    let entry: &str = theme.effect_styles.get((style_index - 1) as usize)?;
+    let mut reader = Reader::from_str(entry);
+    let mut in_scene_3d = false;
+    let mut in_shape_3d = false;
+    let mut orthographic_front = false;
+    let mut supported_light_rig = false;
+    let mut light_rig_rotation_deg = 0.0;
+    let mut bevel: Option<TopBevel> = None;
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => match e.local_name().as_ref() {
+                b"scene3d" => in_scene_3d = true,
+                b"sp3d" => in_shape_3d = true,
+                b"camera" if in_scene_3d => {
+                    orthographic_front =
+                        get_attr_str(e, b"prst").as_deref() == Some("orthographicFront");
+                }
+                b"lightRig" if in_scene_3d => {
+                    supported_light_rig = get_attr_str(e, b"rig").as_deref() == Some("threePt")
+                        && get_attr_str(e, b"dir").as_deref() == Some("t");
+                }
+                b"rot" if in_scene_3d && supported_light_rig => {
+                    light_rig_rotation_deg = get_attr_i64(e, b"rev").unwrap_or(0) as f64 / 60_000.0;
+                }
+                b"bevelT" if in_shape_3d => {
+                    let supported_preset =
+                        get_attr_str(e, b"prst").is_none_or(|preset| preset == "circle");
+                    if supported_preset {
+                        let width = units::emu_to_pt(get_attr_i64(e, b"w").unwrap_or(0));
+                        let height = units::emu_to_pt(get_attr_i64(e, b"h").unwrap_or(0));
+                        if width > 0.0 && height > 0.0 {
+                            bevel = Some(TopBevel {
+                                width,
+                                height,
+                                light_rig_rotation_deg,
+                            });
+                        }
+                    }
+                }
+                _ => {}
+            },
+            Ok(Event::End(ref e)) => match e.local_name().as_ref() {
+                b"scene3d" => in_scene_3d = false,
+                b"sp3d" => in_shape_3d = false,
+                _ => {}
+            },
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+
+    (orthographic_front && supported_light_rig)
+        .then_some(bevel)
+        .flatten()
+}
+
 /// Parse `<a:effectLst>` and extract outer shadow if present.
 pub(super) fn parse_effect_list(
     reader: &mut Reader<&[u8]>,

@@ -388,6 +388,7 @@ fn test_generate_shape_shadow_all_kinds() {
                     stroke: None,
                     opacity: None,
                     shadow: Some(shadow.clone()),
+                    top_bevel: None,
                     rotation_deg: None,
                 }),
             }],

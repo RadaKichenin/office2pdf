@@ -1629,6 +1629,22 @@ pub struct Shadow {
     pub opacity: f64,
 }
 
+/// A supported DrawingML top/front-face bevel.
+///
+/// The current renderer models the default circular bevel under an
+/// orthographic, top-directed three-point light rig. `width` is how far the
+/// bevel reaches into the face; `height` is how far it rises above it. Rendering
+/// is currently limited to rectangles with a solid, gradient, or pattern fill;
+/// other shape kinds and unfilled shapes carry this value without drawing a
+/// rim.
+#[derive(Debug, Clone)]
+pub struct TopBevel {
+    pub width: f64,
+    pub height: f64,
+    /// Rotation of the light rig around the viewing axis, in degrees.
+    pub light_rig_rotation_deg: f64,
+}
+
 /// What a chart axis' or gridline's `<c:spPr>` says about its line.
 ///
 /// The three states are distinct, exactly as they are for the chart area
@@ -1667,6 +1683,8 @@ pub struct Shape {
     pub opacity: Option<f64>,
     /// Outer shadow effect.
     pub shadow: Option<Shadow>,
+    /// Top/front-face bevel effect (rendered on filled rectangles only).
+    pub top_bevel: Option<TopBevel>,
 }
 
 /// Shape types.

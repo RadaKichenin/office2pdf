@@ -779,10 +779,11 @@ fn test_theme_line_styles_ignore_nested_lines() {
 // ── `<a:effectRef>` resolution (issue #740) ────────────────────────────
 
 /// Theme carrying three distinct effect styles. The first two are the shadows
-/// PowerPoint's stock themes ship; the third states its color as `phClr` so
-/// the placeholder path is exercised too.
+/// PowerPoint's stock themes ship. The third states its shadow color as `phClr`
+/// and also carries the bounded orthographic `scene3d` plus circular top
+/// `sp3d/bevelT` fixture, exercising both theme paths.
 fn theme_xml_with_effect_styles() -> &'static str {
-    r#"<?xml version="1.0" encoding="UTF-8"?><a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:themeElements><a:clrScheme name="T"><a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1><a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1><a:dk2><a:srgbClr val="44546A"/></a:dk2><a:lt2><a:srgbClr val="E7E6E6"/></a:lt2><a:accent1><a:srgbClr val="4472C4"/></a:accent1><a:accent2><a:srgbClr val="ED7D31"/></a:accent2><a:accent3><a:srgbClr val="A5A5A5"/></a:accent3><a:accent4><a:srgbClr val="FFC000"/></a:accent4><a:accent5><a:srgbClr val="5B9BD5"/></a:accent5><a:accent6><a:srgbClr val="70AD47"/></a:accent6><a:hlink><a:srgbClr val="0563C1"/></a:hlink><a:folHlink><a:srgbClr val="954F72"/></a:folHlink></a:clrScheme><a:fontScheme name="T"><a:majorFont><a:latin typeface="Calibri Light"/></a:majorFont><a:minorFont><a:latin typeface="Calibri"/></a:minorFont></a:fontScheme><a:fmtScheme name="T"><a:fillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:fillStyleLst><a:lnStyleLst><a:ln w="6350"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln></a:lnStyleLst><a:effectStyleLst><a:effectStyle><a:effectLst><a:outerShdw blurRad="40000" dist="20000" dir="5400000" rotWithShape="0"><a:srgbClr val="000000"><a:alpha val="38000"/></a:srgbClr></a:outerShdw></a:effectLst></a:effectStyle><a:effectStyle><a:effectLst><a:outerShdw blurRad="76200" dist="38100" dir="10800000" rotWithShape="0"><a:srgbClr val="FF0000"><a:alpha val="60000"/></a:srgbClr></a:outerShdw></a:effectLst></a:effectStyle><a:effectStyle><a:effectLst><a:outerShdw blurRad="12700" dist="12700" dir="2700000" rotWithShape="0"><a:schemeClr val="phClr"/></a:outerShdw></a:effectLst></a:effectStyle></a:effectStyleLst><a:bgFillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:bgFillStyleLst></a:fmtScheme></a:themeElements></a:theme>"#
+    r#"<?xml version="1.0" encoding="UTF-8"?><a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:themeElements><a:clrScheme name="T"><a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1><a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1><a:dk2><a:srgbClr val="44546A"/></a:dk2><a:lt2><a:srgbClr val="E7E6E6"/></a:lt2><a:accent1><a:srgbClr val="4472C4"/></a:accent1><a:accent2><a:srgbClr val="ED7D31"/></a:accent2><a:accent3><a:srgbClr val="A5A5A5"/></a:accent3><a:accent4><a:srgbClr val="FFC000"/></a:accent4><a:accent5><a:srgbClr val="5B9BD5"/></a:accent5><a:accent6><a:srgbClr val="70AD47"/></a:accent6><a:hlink><a:srgbClr val="0563C1"/></a:hlink><a:folHlink><a:srgbClr val="954F72"/></a:folHlink></a:clrScheme><a:fontScheme name="T"><a:majorFont><a:latin typeface="Calibri Light"/></a:majorFont><a:minorFont><a:latin typeface="Calibri"/></a:minorFont></a:fontScheme><a:fmtScheme name="T"><a:fillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:fillStyleLst><a:lnStyleLst><a:ln w="6350"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln></a:lnStyleLst><a:effectStyleLst><a:effectStyle><a:effectLst><a:outerShdw blurRad="40000" dist="20000" dir="5400000" rotWithShape="0"><a:srgbClr val="000000"><a:alpha val="38000"/></a:srgbClr></a:outerShdw></a:effectLst></a:effectStyle><a:effectStyle><a:effectLst><a:outerShdw blurRad="76200" dist="38100" dir="10800000" rotWithShape="0"><a:srgbClr val="FF0000"><a:alpha val="60000"/></a:srgbClr></a:outerShdw></a:effectLst></a:effectStyle><a:effectStyle><a:effectLst><a:outerShdw blurRad="12700" dist="12700" dir="2700000" rotWithShape="0"><a:schemeClr val="phClr"/></a:outerShdw></a:effectLst><a:scene3d><a:camera prst="orthographicFront"/><a:lightRig rig="threePt" dir="t"><a:rot lat="0" lon="0" rev="1200000"/></a:lightRig></a:scene3d><a:sp3d><a:bevelT w="63500" h="25400"/></a:sp3d></a:effectStyle></a:effectStyleLst><a:bgFillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:bgFillStyleLst></a:fmtScheme></a:themeElements></a:theme>"#
 }
 
 /// `idx="1"` picks the first effect style. Values are the ones stock themes
@@ -830,6 +831,19 @@ fn effect_ref_binds_its_color_to_the_placeholder() {
     assert_eq!(shadow.color, reference_color);
 }
 
+/// The theme effect style keeps its `scene3d`/`sp3d` siblings alongside the
+/// already-supported shadow. This is the 5 x 2pt top bevel used by
+/// `customGeo.pptx` page 44 (issue #1298).
+#[test]
+fn effect_ref_resolves_the_theme_top_bevel() {
+    let theme = parse_theme_xml(theme_xml_with_effect_styles());
+    let bevel = resolve_effect_ref_top_bevel(3, &theme)
+        .expect("idx 3 resolves its orthographic three-point top bevel");
+
+    assert!((bevel.width - 5.0).abs() < 1e-9);
+    assert!((bevel.height - 2.0).abs() < 1e-9);
+}
+
 /// `idx="0"` means no effect, and an index past the list resolves to nothing
 /// rather than to the last entry.
 #[test]
@@ -869,6 +883,28 @@ fn first_shape_shadow(slide: &str) -> Option<Shadow> {
         })
 }
 
+fn first_shape_top_bevel(slide: &str) -> Option<TopBevel> {
+    let data = build_test_pptx_with_theme_layout_master(
+        9144000,
+        6858000,
+        slide,
+        r#"<?xml version="1.0" encoding="UTF-8"?><p:sldLayout xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/></p:spTree></p:cSld></p:sldLayout>"#,
+        r#"<?xml version="1.0" encoding="UTF-8"?><p:sldMaster xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/></p:spTree></p:cSld><p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/></p:sldMaster>"#,
+        theme_xml_with_effect_styles(),
+    );
+    let (doc, _warnings) = PptxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    doc.pages
+        .iter()
+        .flat_map(|page| match page {
+            Page::Fixed(fixed) => fixed.elements.iter().collect::<Vec<_>>(),
+            _ => Vec::new(),
+        })
+        .find_map(|element| match element.kind {
+            FixedElementKind::Shape(ref shape) => shape.top_bevel.clone(),
+            _ => None,
+        })
+}
+
 #[test]
 fn styled_shape_inherits_the_theme_shadow_through_effect_ref() {
     let slide = slide_with_styled_shape(
@@ -880,6 +916,19 @@ fn styled_shape_inherits_the_theme_shadow_through_effect_ref() {
     assert!((shadow.blur_radius - emu_to_pt(40000)).abs() < 1e-9);
     assert!((shadow.distance - emu_to_pt(20000)).abs() < 1e-9);
     assert!((shadow.opacity - 0.38).abs() < 1e-6);
+}
+
+#[test]
+fn styled_shape_inherits_the_theme_top_bevel_through_effect_ref() {
+    let slide = slide_with_styled_shape(
+        "",
+        r#"<a:lnRef idx="2"><a:schemeClr val="accent1"/></a:lnRef><a:fillRef idx="1"><a:schemeClr val="accent1"/></a:fillRef><a:effectRef idx="3"><a:schemeClr val="accent1"/></a:effectRef><a:fontRef idx="minor"><a:schemeClr val="lt1"/></a:fontRef>"#,
+    );
+
+    let bevel = first_shape_top_bevel(&slide).expect("the theme bevel reaches the shape");
+    assert!((bevel.width - 5.0).abs() < 1e-9);
+    assert!((bevel.height - 2.0).abs() < 1e-9);
+    assert!((bevel.light_rig_rotation_deg - 20.0).abs() < 1e-9);
 }
 
 /// An `<a:effectLst/>` of the shape's own means "no effect" and must win over

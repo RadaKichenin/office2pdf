@@ -192,6 +192,7 @@ impl ShapeBuilder {
                 rotation_deg: None,
                 opacity: None,
                 shadow: None,
+                top_bevel: None,
             },
             width,
             height,

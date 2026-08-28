@@ -16,6 +16,7 @@ fn fixed_element_positioned_returns_direct_fields() {
             rotation_deg: None,
             opacity: None,
             shadow: None,
+            top_bevel: None,
         }),
     };
     assert!((elem.x() - 10.5).abs() < f64::EPSILON);
@@ -114,6 +115,7 @@ fn positioned_trait_works_through_dyn_dispatch() {
             rotation_deg: None,
             opacity: None,
             shadow: None,
+            top_bevel: None,
         }),
     };
     let ftb = FloatingTextBox {
@@ -149,6 +151,7 @@ fn fixed_element_positioned_with_zero_dimensions() {
             rotation_deg: None,
             opacity: None,
             shadow: None,
+            top_bevel: None,
         }),
     };
     assert!(elem.x().abs() < f64::EPSILON);

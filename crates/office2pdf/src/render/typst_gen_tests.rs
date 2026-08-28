@@ -175,6 +175,7 @@ fn make_shape_element(
             rotation_deg: None,
             opacity: None,
             shadow: None,
+            top_bevel: None,
         }),
     }
 }

@@ -324,6 +324,7 @@ fn test_consecutive_floating_shapes_share_one_anchor_line() {
         rotation_deg: None,
         opacity: None,
         shadow: None,
+        top_bevel: None,
     };
     let doc = make_doc(vec![make_flow_page(vec![
         Block::FloatingShape(FloatingShape {
@@ -528,6 +529,7 @@ fn test_gradient_shape_fill_codegen() {
             rotation_deg: None,
             opacity: None,
             shadow: None,
+            top_bevel: None,
         }),
     };
     let doc = make_doc(vec![make_fixed_page(720.0, 540.0, vec![elem])]);
@@ -569,6 +571,7 @@ fn test_light_upward_diagonal_pattern_fill_codegen() {
             rotation_deg: None,
             opacity: None,
             shadow: None,
+            top_bevel: None,
         }),
     };
     let doc = make_doc(vec![make_fixed_page(720.0, 540.0, vec![elem])]);
@@ -618,6 +621,7 @@ fn test_all_pattern_presets_compile_to_pdf() {
                 rotation_deg: None,
                 opacity: None,
                 shadow: None,
+                top_bevel: None,
             }),
         })
         .collect();
@@ -656,6 +660,7 @@ fn test_shape_shadow_codegen() {
                 color: Color::new(0, 0, 0),
                 opacity: 0.5,
             }),
+            top_bevel: None,
         }),
     };
     let doc = make_doc(vec![make_fixed_page(720.0, 540.0, vec![elem])]);
@@ -703,6 +708,7 @@ fn test_path_shape_casts_its_outline_as_a_shadow() {
                 color: Color::new(0, 0, 0),
                 opacity: 0.35,
             }),
+            top_bevel: None,
         }),
     };
     let doc = make_doc(vec![make_fixed_page(720.0, 540.0, vec![elem])]);
@@ -765,6 +771,7 @@ fn test_open_subpath_casts_an_offset_copy_of_its_stroke() {
                 color: Color::new(0, 0, 0),
                 opacity: 0.35,
             }),
+            top_bevel: None,
         }),
     };
     let doc = make_doc(vec![make_fixed_page(720.0, 540.0, vec![elem])]);
@@ -824,6 +831,7 @@ fn test_blurred_open_subpath_filters_its_stroke_without_filling_it() {
                 color: Color::new(0, 0, 0),
                 opacity: 0.35,
             }),
+            top_bevel: None,
         }),
     };
     let output =
@@ -863,6 +871,7 @@ fn test_shape_no_shadow_no_extra_output() {
             rotation_deg: None,
             opacity: None,
             shadow: None,
+            top_bevel: None,
         }),
     };
     let doc = make_doc(vec![make_fixed_page(720.0, 540.0, vec![elem])]);
@@ -870,6 +879,46 @@ fn test_shape_no_shadow_no_extra_output() {
     assert!(
         !output.source.contains("rgb(0, 0, 0,"),
         "No shadow should produce no rgb shadow. Got: {}",
+        output.source,
+    );
+}
+
+#[test]
+fn test_rectangle_top_bevel_draws_four_lit_rim_faces() {
+    use crate::ir::TopBevel;
+
+    let elem = FixedElement {
+        x: 10.0,
+        y: 20.0,
+        width: 200.0,
+        height: 100.0,
+        kind: FixedElementKind::Shape(Shape {
+            kind: ShapeKind::Rectangle,
+            fill: Some(Color::new(79, 129, 189)),
+            gradient_fill: None,
+            pattern_fill: None,
+            stroke: None,
+            rotation_deg: None,
+            opacity: None,
+            shadow: None,
+            top_bevel: Some(TopBevel {
+                width: 5.0,
+                height: 2.0,
+                light_rig_rotation_deg: 20.0,
+            }),
+        }),
+    };
+    let doc = make_doc(vec![make_fixed_page(720.0, 540.0, vec![elem])]);
+    let output = generate_typst(&doc).unwrap();
+
+    assert!(
+        output.source.matches("#polygon(").count() >= 4,
+        "the bevel must overlay one face on each rectangular edge: {}",
+        output.source,
+    );
+    assert!(
+        output.source.contains("(5pt, 5pt)") && output.source.contains("(195pt, 95pt)"),
+        "the four faces must meet on the requested 5pt inset: {}",
         output.source,
     );
 }
@@ -983,6 +1032,7 @@ fn test_shape_shadow_blur_uses_one_continuous_gaussian_asset() {
                 color: Color::new(0, 0, 0),
                 opacity: 0.5,
             }),
+            top_bevel: None,
         }),
     };
     let doc = make_doc(vec![make_fixed_page(720.0, 540.0, vec![elem])]);
@@ -1109,6 +1159,7 @@ fn test_shadow_silhouette_outsets_by_half_the_outline_width() {
                 color: Color::new(0, 0, 0),
                 opacity: 0.38,
             }),
+            top_bevel: None,
         }),
     };
     let doc = make_doc(vec![make_fixed_page(720.0, 540.0, vec![elem])]);
@@ -1160,6 +1211,7 @@ fn test_shadow_silhouette_ignores_outline_when_shape_has_none() {
                 color: Color::new(0, 0, 0),
                 opacity: 0.38,
             }),
+            top_bevel: None,
         }),
     };
     let doc = make_doc(vec![make_fixed_page(720.0, 540.0, vec![elem])]);
@@ -1208,6 +1260,7 @@ fn banner_shadow_output(stroke: Option<BorderSide>, rounded: bool) -> TypstOutpu
                 color: Color::new(0, 0, 0),
                 opacity: 0.38,
             }),
+            top_bevel: None,
         }),
     };
     let doc = make_doc(vec![make_fixed_page(720.0, 540.0, vec![elem])]);
@@ -1285,6 +1338,7 @@ fn test_shape_shadow_without_blur_keeps_single_duplicate() {
                 color: Color::new(0, 0, 0),
                 opacity: 0.5,
             }),
+            top_bevel: None,
         }),
     };
     let doc = make_doc(vec![make_fixed_page(720.0, 540.0, vec![elem])]);
@@ -1360,6 +1414,7 @@ fn triangle_shadow_output(stroke: Option<BorderSide>, blur_radius: f64) -> Typst
                 color: Color::new(0, 0, 0),
                 opacity: 1.0,
             }),
+            top_bevel: None,
         }),
     };
     let doc = make_doc(vec![make_fixed_page(720.0, 540.0, vec![elem])]);
@@ -1483,6 +1538,7 @@ fn test_path_shadow_shrinks_a_hole_while_it_grows_the_outline() {
                 color: Color::new(0, 0, 0),
                 opacity: 1.0,
             }),
+            top_bevel: None,
         }),
     };
     let doc = make_doc(vec![make_fixed_page(720.0, 540.0, vec![elem])]);

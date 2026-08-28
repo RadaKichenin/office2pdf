@@ -142,6 +142,7 @@ fn test_shape_rotation_codegen() {
                 rotation_deg: Some(90.0),
                 opacity: None,
                 shadow: None,
+                top_bevel: None,
             }),
         }],
     )]);
@@ -169,6 +170,7 @@ fn test_shape_opacity_codegen() {
                 rotation_deg: None,
                 opacity: Some(0.5),
                 shadow: None,
+                top_bevel: None,
             }),
         }],
     )]);
@@ -195,6 +197,7 @@ fn test_shape_rotation_and_opacity_codegen() {
                 rotation_deg: Some(45.0),
                 opacity: Some(0.75),
                 shadow: None,
+                top_bevel: None,
             }),
         }],
     )]);
@@ -282,6 +285,7 @@ fn test_line_arrowhead_uses_place_overlay() {
                 rotation_deg: None,
                 opacity: None,
                 shadow: None,
+                top_bevel: None,
             }),
         }],
     )]);
@@ -323,6 +327,7 @@ fn test_polyline_segments_use_place_overlay() {
                 rotation_deg: None,
                 opacity: None,
                 shadow: None,
+                top_bevel: None,
             }),
         }],
     )]);
@@ -371,6 +376,7 @@ fn test_rotated_polyline_pre_rotates_points_without_typst_rotate_wrapper() {
                 rotation_deg: Some(270.0),
                 opacity: None,
                 shadow: None,
+                top_bevel: None,
             }),
         }],
     )]);
