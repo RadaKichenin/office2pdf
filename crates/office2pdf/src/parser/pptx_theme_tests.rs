@@ -472,15 +472,19 @@ fn test_hyperlink_run_inherits_theme_color_underline_and_keeps_boundary() {
 }
 
 #[test]
-fn test_hyperlink_run_keeps_explicit_color_and_underline_none() {
+fn test_hyperlink_run_uses_theme_color_over_explicit_fill_and_keeps_underline_none() {
     let runs_xml = concat!(
         r#"<a:r><a:rPr lang="en-US" u="none">"#,
-        r#"<a:solidFill><a:srgbClr val="CC3300"/></a:solidFill>"#,
+        r#"<a:solidFill><a:schemeClr val="accent4"/></a:solidFill>"#,
         r#"<a:hlinkClick r:id="rId2"/></a:rPr><a:t>Styled link</a:t></a:r>"#,
     );
     let shape = make_formatted_text_box(0, 0, 2_000_000, 500_000, runs_xml);
     let slide = make_slide_xml(&[shape]);
-    let theme_xml = make_theme_xml(&[("hlink", "778BA2")], "Calibri Light", "Calibri");
+    let theme_xml = make_theme_xml(
+        &[("accent4", "8064A2"), ("hlink", "0000FF")],
+        "Calibri Light",
+        "Calibri",
+    );
     let data = build_test_pptx_with_theme(SLIDE_CX, SLIDE_CY, &[slide], &theme_xml);
 
     let parser = PptxParser;
@@ -492,7 +496,7 @@ fn test_hyperlink_run_keeps_explicit_color_and_underline_none() {
         Block::Paragraph(p) => p,
         _ => panic!("Expected Paragraph"),
     };
-    assert_eq!(para.runs[0].style.color, Some(Color::new(0xCC, 0x33, 0x00)));
+    assert_eq!(para.runs[0].style.color, Some(Color::new(0x00, 0x00, 0xFF)));
     assert_eq!(para.runs[0].style.underline, Some(false));
 }
 

@@ -67,7 +67,6 @@ struct PptxTableParser<'a> {
     is_in_run: bool,
     run_style: TextStyle,
     run_text: String,
-    run_has_explicit_color: bool,
     run_has_explicit_underline: bool,
     run_marker_style_before_hyperlink: Option<TextStyle>,
     first_run_marker_style_override: Option<TextStyle>,
@@ -141,7 +140,6 @@ impl<'a> PptxTableParser<'a> {
             is_in_run: false,
             run_style: TextStyle::default(),
             run_text: String::new(),
-            run_has_explicit_color: false,
             run_has_explicit_underline: false,
             run_marker_style_before_hyperlink: None,
             first_run_marker_style_override: None,
@@ -342,7 +340,6 @@ impl<'a> PptxTableParser<'a> {
                 }
                 apply_pptx_hyperlink_style(
                     &mut self.run_style,
-                    self.run_has_explicit_color,
                     self.run_has_explicit_underline,
                     self.theme,
                     self.color_map,
@@ -704,7 +701,6 @@ impl<'a> PptxTableParser<'a> {
                 self.is_in_run = true;
                 self.run_style = self.paragraph_default_run_style.clone();
                 self.run_text.clear();
-                self.run_has_explicit_color = false;
                 self.run_has_explicit_underline = false;
                 self.run_marker_style_before_hyperlink = None;
             }
@@ -719,7 +715,6 @@ impl<'a> PptxTableParser<'a> {
                 extract_rpr_attributes(e, &mut self.paragraph_end_run_style);
             }
             b"solidFill" if self.is_in_run_properties => {
-                self.run_has_explicit_color = true;
                 self.solid_fill_context = SolidFillCtx::RunFill;
             }
             b"solidFill" if self.is_in_end_paragraph_run_properties => {
@@ -739,7 +734,6 @@ impl<'a> PptxTableParser<'a> {
                 }
                 apply_pptx_hyperlink_style(
                     &mut self.run_style,
-                    self.run_has_explicit_color,
                     self.run_has_explicit_underline,
                     self.theme,
                     self.color_map,
@@ -763,7 +757,6 @@ impl<'a> PptxTableParser<'a> {
                 self.is_in_run = true;
                 self.run_style = self.paragraph_default_run_style.clone();
                 self.run_text.clear();
-                self.run_has_explicit_color = false;
                 self.run_has_explicit_underline = false;
                 self.run_marker_style_before_hyperlink = None;
             }
@@ -778,7 +771,6 @@ impl<'a> PptxTableParser<'a> {
                 extract_rpr_attributes(e, &mut self.paragraph_end_run_style);
             }
             b"solidFill" if self.is_in_run_properties => {
-                self.run_has_explicit_color = true;
                 self.solid_fill_context = SolidFillCtx::RunFill;
             }
             b"solidFill" if self.is_in_end_paragraph_run_properties => {
@@ -798,7 +790,6 @@ impl<'a> PptxTableParser<'a> {
                 }
                 apply_pptx_hyperlink_style(
                     &mut self.run_style,
-                    self.run_has_explicit_color,
                     self.run_has_explicit_underline,
                     self.theme,
                     self.color_map,
