@@ -1382,6 +1382,144 @@ fn two_slide_list_items_sit_one_line_advance_apart() {
     );
 }
 
+/// `customGeo.pptx` slide 2 gives every real body item a 12pt `a:spcAft`.
+/// PowerPoint applies that gap after the paragraph, while the wrapped
+/// `Curriculum` and `system` lines keep the paragraph's ordinary line advance
+/// (issue #1335).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn slide_list_item_space_after_stays_out_of_wrapped_line_advance() {
+    use crate::internal::{Parser, PptxParser};
+
+    let fixture = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/pptx/customGeo.pptx");
+    let data = std::fs::read(fixture).expect("customGeo fixture");
+    let (mut document, _warnings) = PptxParser
+        .parse(&data, &crate::config::ConvertOptions::default())
+        .expect("customGeo must parse");
+    let Page::Fixed(mut spaced_page) = document.pages[1].clone() else {
+        panic!("slide 2 must be fixed")
+    };
+    spaced_page.elements.retain(|element| {
+        let FixedElementKind::TextBox(text_box) = &element.kind else {
+            return false;
+        };
+        text_box.content.iter().any(|block| {
+            let Block::List(list) = block else {
+                return false;
+            };
+            list.items.iter().any(|item| {
+                item.content.iter().any(|paragraph| {
+                    paragraph
+                        .runs
+                        .iter()
+                        .any(|run| run.text.contains("Curriculum"))
+                })
+            })
+        })
+    });
+    assert_eq!(spaced_page.elements.len(), 1, "slide 2 has one body list");
+    // Libertinus is narrower than the fixture's Calibri. Keep item 1 on one
+    // line while items 2 and 3 still exercise their real natural wraps.
+    spaced_page.elements[0].width = 640.0;
+    let FixedElementKind::TextBox(spaced_text_box) = &mut spaced_page.elements[0].kind else {
+        unreachable!("the retained element is the body text box")
+    };
+    for block in &mut spaced_text_box.content {
+        let Block::List(list) = block else {
+            continue;
+        };
+        for paragraph in list
+            .items
+            .iter_mut()
+            .flat_map(|item| item.content.iter_mut())
+        {
+            // Calibri is not installed on every CI runner. The embedded face
+            // keeps the fixture's real text, size and spacing while making
+            // both the adjusted-measure wrap and its line box portable.
+            paragraph.style.paragraph_mark_font_family = Some("Libertinus Serif".into());
+            for run in &mut paragraph.runs {
+                run.style.font_family = Some("Libertinus Serif".into());
+            }
+        }
+    }
+
+    let mut unspaced_page = spaced_page.clone();
+    let FixedElementKind::TextBox(text_box) = &mut unspaced_page.elements[0].kind else {
+        unreachable!("the retained element is the body text box")
+    };
+    for block in &mut text_box.content {
+        let Block::List(list) = block else {
+            continue;
+        };
+        for paragraph in list
+            .items
+            .iter_mut()
+            .flat_map(|item| item.content.iter_mut())
+        {
+            paragraph.style.space_after = None;
+        }
+    }
+
+    document.pages = vec![Page::Fixed(spaced_page), Page::Fixed(unspaced_page)];
+    let output = generate_typst(&document).unwrap();
+    let baselines = |page_index: usize| -> (f64, f64, f64, f64, f64, f64) {
+        let runs = crate::render::pdf::compiled_text_runs(&output.source, page_index)
+            .unwrap_or_else(|error| panic!("compile failed: {error}\n{}", output.source));
+        let baseline = |needle: &str| -> f64 {
+            runs.iter()
+                .find(|run| run.text.contains(needle))
+                .unwrap_or_else(|| panic!("missing {needle:?} on page {page_index}: {runs:?}"))
+                .baseline_pt
+        };
+        (
+            baseline("Overview"),
+            baseline("Standards"),
+            baseline("Description"),
+            baseline("Curriculum"),
+            baseline("Update"),
+            baseline("system"),
+        )
+    };
+    let spaced = baselines(0);
+    let unspaced = baselines(1);
+    assert!(
+        (spaced.1 - spaced.0).abs() < 0.05,
+        "item 1 must remain the one-line boundary control: {spaced:?}"
+    );
+    let first_item_boundary_advance_pt: f64 = spaced.2 - spaced.0;
+    let item_2_wrapped_advance_pt: f64 = spaced.3 - spaced.2;
+    let item_2_control_advance_pt: f64 = unspaced.3 - unspaced.2;
+    let item_3_wrapped_advance_pt: f64 = spaced.5 - spaced.4;
+    let item_3_control_advance_pt: f64 = unspaced.5 - unspaced.4;
+    assert!(
+        item_2_wrapped_advance_pt > 5.0 && item_3_wrapped_advance_pt > 5.0,
+        "items 2 and 3 must retain their natural wraps: {spaced:?}"
+    );
+
+    assert!(
+        first_item_boundary_advance_pt - item_2_wrapped_advance_pt > 5.0,
+        "the 12pt spcAft boundary must stay visibly larger than item 2's internal line advance: boundary={first_item_boundary_advance_pt}pt, wrapped={item_2_wrapped_advance_pt}pt\n{}",
+        output.source
+    );
+    assert!(
+        first_item_boundary_advance_pt - item_3_wrapped_advance_pt > 5.0,
+        "the 12pt spcAft boundary must stay visibly larger than item 3's internal line advance: boundary={first_item_boundary_advance_pt}pt, wrapped={item_3_wrapped_advance_pt}pt\n{}",
+        output.source
+    );
+
+    assert!(
+        (item_2_wrapped_advance_pt - item_2_control_advance_pt).abs() < 0.05,
+        "spcAft must not change item 2's internal line advance: spaced={item_2_wrapped_advance_pt}pt, control={item_2_control_advance_pt}pt\n{}",
+        output.source
+    );
+    assert!(
+        (item_3_wrapped_advance_pt - item_3_control_advance_pt).abs() < 0.05,
+        "spcAft must not change item 3's internal line advance: spaced={item_3_wrapped_advance_pt}pt, control={item_3_control_advance_pt}pt\n{}",
+        output.source
+    );
+}
+
 /// Every `#v(Xpt)` skip in some markup, in points — the emitted numbers carry
 /// binary noise (`43.199999999999996`), so a gap is asserted numerically.
 pub(in crate::render) fn vertical_skips_pt(source: &str) -> Vec<f64> {
