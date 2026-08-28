@@ -598,6 +598,7 @@ impl<'a> PptxTableParser<'a> {
                 runs: paragraph_runs,
             },
             list_marker: resolved_list_marker,
+            paragraph_mark_font_size_pt: self.paragraph_end_run_style.font_size,
         });
         self.is_in_paragraph = false;
     }

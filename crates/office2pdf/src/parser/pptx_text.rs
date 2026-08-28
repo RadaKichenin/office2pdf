@@ -186,7 +186,11 @@ impl ListStyleParseState {
         }
     }
 
-    fn handle_paragraph_spacing_points(&mut self, e: &quick_xml::events::BytesStart) {
+    fn handle_paragraph_spacing_element(
+        &mut self,
+        e: &quick_xml::events::BytesStart,
+        is_percent: bool,
+    ) {
         let (Some(paragraph_target), Some(spacing_target)) =
             (self.active_paragraph_target, self.paragraph_spacing_target)
         else {
@@ -195,10 +199,22 @@ impl ListStyleParseState {
         let style: &mut ParagraphStyle = self.paragraph_style_mut(paragraph_target);
         match spacing_target {
             ParagraphSpacingTarget::Before => {
-                extract_pptx_space_points(e, &mut style.space_before);
+                if is_percent {
+                    extract_pptx_space_percent(e, &mut style.space_before_percent);
+                    style.space_before = None;
+                } else {
+                    extract_pptx_space_points(e, &mut style.space_before);
+                    style.space_before_percent = None;
+                }
             }
             ParagraphSpacingTarget::After => {
-                extract_pptx_space_points(e, &mut style.space_after);
+                if is_percent {
+                    extract_pptx_space_percent(e, &mut style.space_after_percent);
+                    style.space_after = None;
+                } else {
+                    extract_pptx_space_points(e, &mut style.space_after);
+                    style.space_after_percent = None;
+                }
             }
         }
     }
@@ -485,7 +501,10 @@ pub(super) fn parse_pptx_list_style(
                         state.handle_line_spacing_element(e, false);
                     }
                     b"spcPts" if state.paragraph_spacing_target.is_some() => {
-                        state.handle_paragraph_spacing_points(e);
+                        state.handle_paragraph_spacing_element(e, false);
+                    }
+                    b"spcPct" if state.paragraph_spacing_target.is_some() => {
+                        state.handle_paragraph_spacing_element(e, true);
                     }
                     b"buClr" if state.active_paragraph_target.is_some() => {
                         state.is_in_bullet_fill = true;
@@ -531,7 +550,10 @@ pub(super) fn parse_pptx_list_style(
                         state.handle_line_spacing_element(e, false);
                     }
                     b"spcPts" if state.paragraph_spacing_target.is_some() => {
-                        state.handle_paragraph_spacing_points(e);
+                        state.handle_paragraph_spacing_element(e, false);
+                    }
+                    b"spcPct" if state.paragraph_spacing_target.is_some() => {
+                        state.handle_paragraph_spacing_element(e, true);
                     }
                     b"tabLst" if state.active_paragraph_target.is_some() => {
                         state.begin_tab_list();
@@ -646,14 +668,25 @@ pub(super) fn extract_pptx_line_spacing_pts(
     }
 }
 
-/// `a:spcBef`/`a:spcAft` points value: hundredths of a point. Percent-based
-/// spacing (`a:spcPct`) is rare for before/after gaps and is not yet mapped.
+/// `a:spcBef`/`a:spcAft` points value: hundredths of a point.
 pub(super) fn extract_pptx_space_points(
     e: &quick_xml::events::BytesStart,
     target: &mut Option<f64>,
 ) {
     if let Some(value) = get_attr_i64(e, b"val") {
         *target = Some(value as f64 / 100.0);
+    }
+}
+
+/// `a:spcBef`/`a:spcAft` percentage as a fraction of the paragraph's plain
+/// line advance. Its point value cannot be resolved until the run size and
+/// any saved normal-autofit font scale are known.
+pub(super) fn extract_pptx_space_percent(
+    e: &quick_xml::events::BytesStart,
+    target: &mut Option<f64>,
+) {
+    if let Some(value) = get_attr_i64(e, b"val") {
+        *target = Some(value as f64 / 100_000.0);
     }
 }
 
@@ -745,6 +778,9 @@ pub(super) fn apply_pptx_saved_normal_autofit(
                     ..
                 }) => scale_pptx_text_style_font_size(style, font_scale),
                 _ => {}
+            }
+            if let Some(size) = entry.paragraph_mark_font_size_pt.as_mut() {
+                *size *= font_scale;
             }
         }
 
@@ -1194,6 +1230,9 @@ fn pptx_auto_numbering_pattern(numbering_type: &str) -> Option<&'static str> {
 
 pub(super) fn group_pptx_text_blocks(entries: Vec<PptxParagraphEntry>) -> Vec<Block> {
     let mut entries = entries;
+    for entry in &mut entries {
+        resolve_pptx_percentage_paragraph_spacing(entry);
+    }
     trim_trailing_empty_pptx_list_entries(&mut entries);
 
     let mut blocks: Vec<Block> = Vec::new();
@@ -1228,6 +1267,32 @@ pub(super) fn group_pptx_text_blocks(entries: Vec<PptxParagraphEntry>) -> Vec<Bl
     }
 
     blocks
+}
+
+/// Resolve DrawingML's percentage before/after spacing against the
+/// paragraph's unmodified 1.2em line advance. `lnSpcReduction` changes the
+/// spacing *between lines of the paragraph*; it does not shrink this separate
+/// paragraph gap. Visible text decides the size, while an empty paragraph
+/// falls back to its inherited paragraph mark.
+fn resolve_pptx_percentage_paragraph_spacing(entry: &mut PptxParagraphEntry) {
+    const PLAIN_LINE_ADVANCE_FACTOR: f64 = 1.2;
+
+    let font_size_pt: f64 = entry
+        .paragraph
+        .runs
+        .iter()
+        .filter_map(|run| run.style.font_size)
+        .reduce(f64::max)
+        .or(entry.paragraph_mark_font_size_pt)
+        .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_SIZE_PT);
+    let plain_line_advance_pt: f64 = PLAIN_LINE_ADVANCE_FACTOR * font_size_pt;
+    let style: &mut ParagraphStyle = &mut entry.paragraph.style;
+    if let Some(percent) = style.space_before_percent.take() {
+        style.space_before = Some(percent * plain_line_advance_pt);
+    }
+    if let Some(percent) = style.space_after_percent.take() {
+        style.space_after = Some(percent * plain_line_advance_pt);
+    }
 }
 
 fn trim_trailing_empty_pptx_list_entries(entries: &mut Vec<PptxParagraphEntry>) {

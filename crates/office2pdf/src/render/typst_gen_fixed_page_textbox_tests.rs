@@ -2672,6 +2672,73 @@ fn consecutive_slide_paragraphs_keep_powerpoints_full_line_advance() {
     }
 }
 
+/// `customGeo.pptx` slide 5 ends a wrapped 36pt paragraph with `studies.` and
+/// follows it with a separate 20pt citation paragraph. The citation inherits
+/// the master's 20%-of-line `spcBef`; dropping that gap leaves its baseline
+/// 4.88pt high (#1300, reported again as #1343).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn smaller_slide_paragraph_keeps_powerpoints_boundary_line_box() {
+    use crate::internal::{Parser, PptxParser};
+
+    let fixture = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/pptx/customGeo.pptx");
+    let data = std::fs::read(fixture).expect("customGeo fixture");
+    let (document, _warnings) = PptxParser
+        .parse(&data, &crate::config::ConvertOptions::default())
+        .expect("customGeo must parse");
+    let Page::Fixed(slide_5) = &document.pages[4] else {
+        panic!("slide 5 must be fixed")
+    };
+    let content_box = slide_5
+        .elements
+        .iter()
+        .find(|element| {
+            let FixedElementKind::TextBox(text_box) = &element.kind else {
+                return false;
+            };
+            text_box.content.iter().any(|block| {
+                let Block::Paragraph(paragraph) = block else {
+                    return false;
+                };
+                paragraph
+                    .runs
+                    .iter()
+                    .any(|run| run.text.contains("studies"))
+            })
+        })
+        .expect("slide 5 content placeholder");
+    let probe = make_doc(vec![make_fixed_page(
+        slide_5.size.width,
+        slide_5.size.height,
+        vec![content_box.clone()],
+    )]);
+    let output = generate_typst(&probe).expect("slide 5 content must generate");
+    let runs = crate::render::pdf::compiled_text_runs(&output.source, 0)
+        .unwrap_or_else(|error| panic!("compile failed: {error}\n{}", output.source));
+    let baseline_of = |needle: &str| -> f64 {
+        runs.iter()
+            .find(|run| run.text.contains(needle))
+            .unwrap_or_else(|| panic!("missing {needle:?} in {runs:?}\n{}", output.source))
+            .baseline_pt
+    };
+    let studies_baseline_pt = baseline_of("studies");
+    let citation_baseline_pt = baseline_of("3301.079");
+    assert!(
+        (studies_baseline_pt - 449.52).abs() <= 0.240_001,
+        "the preceding line must remain on PowerPoint's 449.52pt baseline, \
+         got {studies_baseline_pt}pt\n{}",
+        output.source
+    );
+    assert!(
+        (citation_baseline_pt - 479.52).abs() <= 0.240_001,
+        "the inherited percentage gap must put the citation on PowerPoint's \
+         479.52pt baseline, got {citation_baseline_pt}pt; preceding baseline=\
+         {studies_baseline_pt}pt\n{}",
+        output.source
+    );
+}
+
 /// `customGeo.pptx` slides 2 and 5 store an empty run and break on each side of
 /// their only visible title line. The inline fallback counted those boundaries
 /// as full lines and clipped the title instead of centring it in the banner

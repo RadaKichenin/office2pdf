@@ -1015,3 +1015,32 @@ fn normal_autofit_reduces_only_percentage_line_spacing() {
     }
     assert!(!text_box.auto_fit);
 }
+
+/// `lnSpcReduction` reduces percentage line spacing inside each paragraph,
+/// not a separate percentage gap before it. The gap stays 20% of the plain
+/// 1.2em line: 0.2 * 1.2 * 20pt = 4.8pt (#1300, #1343).
+#[test]
+fn normal_autofit_does_not_reduce_percentage_paragraph_spacing() {
+    let text_box = parse_normal_autofit_text_box(
+        r#"lnSpcReduction="10.000%""#,
+        concat!(
+            r#"<a:p><a:pPr><a:spcAft><a:spcPct val="20000"/></a:spcAft></a:pPr><a:r><a:rPr sz="2000"/><a:t>First</a:t></a:r></a:p>"#,
+            r#"<a:p><a:pPr><a:spcBef><a:spcPct val="20000"/></a:spcBef></a:pPr><a:r><a:rPr sz="2000"/><a:t>Second</a:t></a:r></a:p>"#,
+        ),
+    );
+    let Block::Paragraph(first) = &text_box.content[0] else {
+        panic!("expected the first paragraph")
+    };
+    let Block::Paragraph(second) = &text_box.content[1] else {
+        panic!("expected the second paragraph")
+    };
+
+    assert!(matches!(
+        second.style.line_spacing,
+        Some(LineSpacing::Proportional(value)) if (value - 0.9).abs() < 1e-9
+    ));
+    assert!((first.style.space_after.unwrap() - 4.8).abs() < 1e-9);
+    assert!((second.style.space_before.unwrap() - 4.8).abs() < 1e-9);
+    assert_eq!(first.style.space_after_percent, None);
+    assert_eq!(second.style.space_before_percent, None);
+}

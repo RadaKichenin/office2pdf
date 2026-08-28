@@ -515,6 +515,10 @@ pub(super) fn merge_paragraph_style(
         space_after: explicit
             .space_after
             .or(style_paragraph.and_then(|style| style.space_after)),
+        // Percentage paragraph gaps are a DrawingML intermediate. Word's
+        // spacing reaches the IR as absolute points.
+        space_before_percent: None,
+        space_after_percent: None,
         heading_level: style
             .and_then(|resolved_style| resolved_style.heading_level)
             .map(|level| (level + 1) as u8),

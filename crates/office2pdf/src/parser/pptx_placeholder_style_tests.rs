@@ -188,6 +188,44 @@ fn test_body_placeholder_inherits_master_paragraph_spacing_by_level() {
 }
 
 #[test]
+fn test_body_placeholder_resolves_inherited_percentage_spacing_by_level() {
+    let body_style = concat!(
+        r#"<p:bodyStyle><a:lvl1pPr>"#,
+        r#"<a:spcBef><a:spcPct val="20000"/></a:spcBef>"#,
+        r#"<a:spcAft><a:spcPct val="10000"/></a:spcAft>"#,
+        r#"<a:defRPr sz="1800"/></a:lvl1pPr><a:lvl2pPr>"#,
+        r#"<a:spcBef><a:spcPct val="25000"/></a:spcBef>"#,
+        r#"<a:spcAft><a:spcPct val="15000"/></a:spcAft>"#,
+        r#"<a:defRPr sz="1400"/></a:lvl2pPr></p:bodyStyle>"#,
+    );
+    let paragraphs = format!(
+        "{}{}",
+        make_simple_paragraph("First percentage spacing"),
+        make_leveled_paragraph(1, "Second percentage spacing")
+    );
+    let slide = make_slide(&[make_plain_placeholder_sp(
+        r#"type="body" idx="2""#,
+        &paragraphs,
+    )]);
+    let layout = make_layout(&[]);
+    let master = make_master_with_tx_styles(body_style);
+    let data = build_test_pptx_with_layout_master(SLIDE_CX, SLIDE_CY, &slide, &layout, &master);
+
+    let doc = parse_document(&data);
+    let runs = collect_runs(&doc);
+    let first = run_for(&runs, "First percentage spacing");
+    let second = run_for(&runs, "Second percentage spacing");
+    assert!((first.2.space_before.unwrap() - 4.32).abs() < 1e-9);
+    assert!((first.2.space_after.unwrap() - 2.16).abs() < 1e-9);
+    assert!((second.2.space_before.unwrap() - 4.2).abs() < 1e-9);
+    assert!((second.2.space_after.unwrap() - 2.52).abs() < 1e-9);
+    assert_eq!(first.2.space_before_percent, None);
+    assert_eq!(first.2.space_after_percent, None);
+    assert_eq!(second.2.space_before_percent, None);
+    assert_eq!(second.2.space_after_percent, None);
+}
+
+#[test]
 fn test_footer_placeholder_inherits_master_other_style() {
     let other_style =
         r#"<p:otherStyle><a:lvl1pPr><a:defRPr sz="1200"/></a:lvl1pPr></p:otherStyle>"#;

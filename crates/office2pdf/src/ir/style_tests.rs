@@ -198,6 +198,8 @@ fn paragraph_style_merge_from_all_none_source_preserves_target() {
         }),
         space_before: Some(6.0),
         space_after: Some(12.0),
+        space_before_percent: None,
+        space_after_percent: None,
         heading_level: Some(2),
         direction: Some(TextDirection::Rtl),
         tab_stops: Some(vec![TabStop {
@@ -250,6 +252,8 @@ fn paragraph_style_merge_from_all_some_source_overwrites_target() {
         }),
         space_before: Some(8.0),
         space_after: Some(16.0),
+        space_before_percent: None,
+        space_after_percent: None,
         heading_level: Some(1),
         direction: Some(TextDirection::Rtl),
         background: Some(Color::new(0xF4, 0xF4, 0xF4)),
@@ -307,6 +311,37 @@ fn paragraph_style_merge_from_partial_overlap() {
     assert_eq!(target.space_before, Some(6.0));
     assert_eq!(target.space_after, Some(12.0));
     assert!(target.heading_level.is_none());
+}
+
+#[test]
+fn paragraph_style_merge_from_keeps_spacing_units_mutually_exclusive() {
+    let mut target = ParagraphStyle {
+        space_before_percent: Some(0.2),
+        space_after_percent: Some(0.25),
+        ..ParagraphStyle::default()
+    };
+
+    target.merge_from(&ParagraphStyle {
+        space_before: Some(6.0),
+        space_after: Some(12.0),
+        ..ParagraphStyle::default()
+    });
+
+    assert_eq!(target.space_before, Some(6.0));
+    assert_eq!(target.space_after, Some(12.0));
+    assert!(target.space_before_percent.is_none());
+    assert!(target.space_after_percent.is_none());
+
+    target.merge_from(&ParagraphStyle {
+        space_before_percent: Some(0.3),
+        space_after_percent: Some(0.4),
+        ..ParagraphStyle::default()
+    });
+
+    assert!(target.space_before.is_none());
+    assert!(target.space_after.is_none());
+    assert_eq!(target.space_before_percent, Some(0.3));
+    assert_eq!(target.space_after_percent, Some(0.4));
 }
 
 // ----- Pair kerning threshold model (issue #628) -----

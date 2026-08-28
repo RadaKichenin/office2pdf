@@ -129,6 +129,10 @@ enum SolidFillCtx {
 struct PptxParagraphEntry {
     paragraph: Paragraph,
     list_marker: Option<PptxListMarker>,
+    /// Size of the invisible paragraph mark after inheritance. Visible runs
+    /// determine percentage paragraph spacing when present; this is the
+    /// fallback that lets an empty paragraph resolve the same rule.
+    paragraph_mark_font_size_pt: Option<f64>,
 }
 
 const PPTX_DEFAULT_TEXT_BOX_LEFT_RIGHT_INSET_PT: f64 = 7.2;
