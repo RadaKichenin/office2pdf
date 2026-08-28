@@ -671,9 +671,9 @@ fn write_fixed_text_list_item(
     available_width_pt: Option<f64>,
     powerpoint_line_settings: Option<&str>,
 ) {
-    let inset: Insets = fixed_text_list_item_inset(&paragraph.style);
+    let inset: Insets = fixed_text_paragraph_inset(&paragraph.style);
     let has_inset: bool = inset.left > 0.0 || inset.right > 0.0;
-    let hanging_indent_pt: Option<f64> = fixed_text_list_hanging_indent_pt(&paragraph.style);
+    let hanging_indent_pt: Option<f64> = fixed_text_paragraph_hanging_indent_pt(&paragraph.style);
     let use_marker_grid: bool = list_style.kind == ListKind::Ordered && hanging_indent_pt.is_some();
 
     out.push_str("#block(width: ");
@@ -800,9 +800,11 @@ fn trim_fixed_text_list_body_runs(runs: &[Run]) -> Vec<Run> {
     }
 }
 
-fn fixed_text_list_item_inset(style: &ParagraphStyle) -> Insets {
-    let left_inset: f64 = if fixed_text_list_hanging_indent_pt(style).is_some() {
-        fixed_text_list_marker_origin_pt(style)
+/// Seat the first line at its own origin; a hanging-indent wrapper moves every
+/// continuation line back to the paragraph's declared left margin.
+pub(super) fn fixed_text_paragraph_inset(style: &ParagraphStyle) -> Insets {
+    let left_inset: f64 = if fixed_text_paragraph_hanging_indent_pt(style).is_some() {
+        fixed_text_paragraph_first_line_origin_pt(style)
     } else {
         style.indent_left.unwrap_or(0.0).max(0.0)
     };
@@ -828,7 +830,7 @@ fn write_fixed_text_list_item_paragraph(
     if !uses_powerpoint_line {
         write_fixed_text_default_par_settings(out, style, runs, "");
     }
-    let hanging_indent_pt: Option<f64> = fixed_text_list_hanging_indent_pt(style);
+    let hanging_indent_pt: Option<f64> = fixed_text_paragraph_hanging_indent_pt(style);
     let tab_stops: Option<Vec<TabStop>> = fixed_text_list_tab_stops(style, hanging_indent_pt);
     if let Some(hanging_indent_pt) = hanging_indent_pt {
         let _ = write!(
@@ -857,7 +859,7 @@ fn write_fixed_text_list_item_paragraph(
     out.push(']');
 }
 
-fn fixed_text_list_marker_origin_pt(style: &ParagraphStyle) -> f64 {
+fn fixed_text_paragraph_first_line_origin_pt(style: &ParagraphStyle) -> f64 {
     let indent_left: f64 = style.indent_left.unwrap_or(0.0).max(0.0);
     let indent_first_line: f64 = style.indent_first_line.unwrap_or(0.0);
 
@@ -868,14 +870,15 @@ fn fixed_text_list_marker_origin_pt(style: &ParagraphStyle) -> f64 {
     }
 }
 
-fn fixed_text_list_hanging_indent_pt(style: &ParagraphStyle) -> Option<f64> {
+pub(super) fn fixed_text_paragraph_hanging_indent_pt(style: &ParagraphStyle) -> Option<f64> {
     let indent_first_line: f64 = style.indent_first_line.unwrap_or(0.0);
     if indent_first_line >= -0.0001 {
         return None;
     }
 
     let indent_left: f64 = style.indent_left.unwrap_or(0.0).max(0.0);
-    let hanging_indent_pt: f64 = (indent_left - fixed_text_list_marker_origin_pt(style)).max(0.0);
+    let hanging_indent_pt: f64 =
+        (indent_left - fixed_text_paragraph_first_line_origin_pt(style)).max(0.0);
     (hanging_indent_pt > 0.0001).then_some(hanging_indent_pt)
 }
 
@@ -1206,7 +1209,7 @@ fn prepend_fixed_text_list_marker_run(
     } else {
         list_style.marker_style.cloned()
     };
-    if fixed_text_list_hanging_indent_pt(style).is_some() {
+    if fixed_text_paragraph_hanging_indent_pt(style).is_some() {
         // The tab carries the whole gap to the indent, so the space
         // `fixed_text_list_marker` puts after the glyph is a second separator.
         // It pushed the text 2.59pt past the indent on the audited deck, which
