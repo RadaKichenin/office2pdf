@@ -82,6 +82,13 @@ pub struct ParagraphStyle {
     pub line_box: Option<LineBox>,
     pub space_before: Option<f64>,
     pub space_after: Option<f64>,
+    /// DrawingML paragraph spacing stated as a fraction of the paragraph's
+    /// plain 1.2em line advance. PPTX parsing resolves this transient value to
+    /// `space_before` after run sizes and saved autofit scaling are known.
+    pub space_before_percent: Option<f64>,
+    /// DrawingML counterpart of `space_before_percent` for the gap following
+    /// the paragraph. It is likewise resolved to points before rendering.
+    pub space_after_percent: Option<f64>,
     /// Heading level (1 = H1, 2 = H2, ..., 6 = H6). When set, the paragraph
     /// is emitted as a Typst `#heading` element for proper PDF structure tagging.
     pub heading_level: Option<u8>,
@@ -395,9 +402,17 @@ impl ParagraphStyle {
         }
         if other.space_before.is_some() {
             self.space_before = other.space_before;
+            self.space_before_percent = None;
+        } else if other.space_before_percent.is_some() {
+            self.space_before = None;
+            self.space_before_percent = other.space_before_percent;
         }
         if other.space_after.is_some() {
             self.space_after = other.space_after;
+            self.space_after_percent = None;
+        } else if other.space_after_percent.is_some() {
+            self.space_after = None;
+            self.space_after_percent = other.space_after_percent;
         }
         if other.heading_level.is_some() {
             self.heading_level = other.heading_level;

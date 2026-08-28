@@ -2083,9 +2083,19 @@ impl<'a> SlideXmlParser<'a> {
             }
             b"spcPts" if self.in_spc_bef => {
                 extract_pptx_space_points(e, &mut self.para_style.space_before);
+                self.para_style.space_before_percent = None;
             }
             b"spcPts" if self.in_spc_aft => {
                 extract_pptx_space_points(e, &mut self.para_style.space_after);
+                self.para_style.space_after_percent = None;
+            }
+            b"spcPct" if self.in_spc_bef => {
+                extract_pptx_space_percent(e, &mut self.para_style.space_before_percent);
+                self.para_style.space_before = None;
+            }
+            b"spcPct" if self.in_spc_aft => {
+                extract_pptx_space_percent(e, &mut self.para_style.space_after_percent);
+                self.para_style.space_after = None;
             }
             b"buAutoNum" if self.in_para && !self.in_run => {
                 self.para_bullet_definition.kind = Some(PptxBulletKind::AutoNumber(
@@ -2618,9 +2628,19 @@ impl<'a> SlideXmlParser<'a> {
             }
             b"spcPts" if self.in_spc_bef => {
                 extract_pptx_space_points(e, &mut self.para_style.space_before);
+                self.para_style.space_before_percent = None;
             }
             b"spcPts" if self.in_spc_aft => {
                 extract_pptx_space_points(e, &mut self.para_style.space_after);
+                self.para_style.space_after_percent = None;
+            }
+            b"spcPct" if self.in_spc_bef => {
+                extract_pptx_space_percent(e, &mut self.para_style.space_before_percent);
+                self.para_style.space_before = None;
+            }
+            b"spcPct" if self.in_spc_aft => {
+                extract_pptx_space_percent(e, &mut self.para_style.space_after_percent);
+                self.para_style.space_after = None;
             }
             b"buAutoNum" if self.in_para && !self.in_run => {
                 self.para_bullet_definition.kind = Some(PptxBulletKind::AutoNumber(
@@ -2883,6 +2903,7 @@ impl<'a> SlideXmlParser<'a> {
                         runs: paragraph_runs,
                     },
                     list_marker: resolved_list_marker,
+                    paragraph_mark_font_size_pt: self.para_end_run_style.font_size,
                 });
                 self.in_para = false;
             }
