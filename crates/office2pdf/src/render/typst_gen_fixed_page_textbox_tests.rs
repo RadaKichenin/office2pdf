@@ -2630,7 +2630,7 @@ fn powerpoint_empty_boundary_breaks_do_not_move_a_centred_title() {
     let Page::Fixed(slide_6) = &document.pages[5] else {
         panic!("slide 6 must be fixed")
     };
-    let (slide_6_title_width_pt, slide_6_title_box, slide_6_title) = slide_6
+    let (slide_6_title_box, slide_6_title) = slide_6
         .elements
         .iter()
         .find_map(|element| {
@@ -2645,20 +2645,24 @@ fn powerpoint_empty_boundary_breaks_do_not_move_a_centred_title() {
                     .runs
                     .iter()
                     .any(|run| run.text.contains("ELA Standards Framework"))
-                    .then_some((element.width, text_box, paragraph))
+                    .then_some((text_box, paragraph))
             })
         })
         .expect("slide 6 title paragraph");
-    let slide_6_inner_width_pt: f64 =
-        (slide_6_title_width_pt - slide_6_title_box.padding.left - slide_6_title_box.padding.right)
-            .max(0.0);
     assert!(
         powerpoint_hard_breaks_use_line_stack(
             &slide_6_title.runs,
             &slide_6_title.style,
-            Some(slide_6_inner_width_pt),
+            // CI runners do not share the PowerPoint fonts used by the native
+            // fixture. An ample measure keeps this a deterministic check of
+            // the line-stack precedence rather than a platform font census.
+            Some(10_000.0),
         ),
-        "slide 6 is the control whose boundary breaks already use the measured line stack"
+        "slide 6 is the control whose boundary breaks can use the measured line stack"
+    );
+    assert!(
+        powerpoint_centered_single_line_text_box(slide_6_title_box, 10_000.0).is_none(),
+        "an eligible measured line stack must not be normalized"
     );
 
     let Page::Fixed(mut actual_page) = document.pages[1].clone() else {
