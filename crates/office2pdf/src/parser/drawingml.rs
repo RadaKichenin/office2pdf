@@ -1,5 +1,5 @@
 //! Shared DrawingML primitives: scheme-color resolution, OOXML color
-//! transforms (tint/shade/lumMod/lumOff/alpha), picture transparency, and
+//! transforms (tint/shade/hueOff/satOff/lumMod/lumOff/alpha), picture transparency, and
 //! validation of raster media before it reaches the renderer.
 //!
 //! DrawingML color markup (`<a:srgbClr>`, `<a:schemeClr>`, `<a:sysClr>` with
@@ -95,6 +95,8 @@ pub(crate) fn resolve_scheme_color(scheme: &SchemeColors<'_>, scheme_name: &str)
 pub(crate) enum ColorTransform {
     Tint(f64),
     Shade(f64),
+    HueOff(f64),
+    SatOff(f64),
     LumMod(f64),
     LumOff(f64),
 }
@@ -118,12 +120,16 @@ fn parse_base_color(element: &BytesStart<'_>, scheme: &SchemeColors<'_>) -> Opti
 }
 
 pub(crate) fn parse_color_transform(element: &BytesStart<'_>) -> Option<ColorTransform> {
-    let val = get_attr_i64(element, b"val")? as f64 / 100_000.0;
+    let raw_value: i64 = get_attr_i64(element, b"val")?;
     match element.local_name().as_ref() {
-        b"tint" => Some(ColorTransform::Tint(val)),
-        b"shade" => Some(ColorTransform::Shade(val)),
-        b"lumMod" => Some(ColorTransform::LumMod(val)),
-        b"lumOff" => Some(ColorTransform::LumOff(val)),
+        b"tint" => Some(ColorTransform::Tint(raw_value as f64 / 100_000.0)),
+        b"shade" => Some(ColorTransform::Shade(raw_value as f64 / 100_000.0)),
+        // DrawingML stores hue angles in 1/60,000 degree units, unlike the
+        // percentage scale used by saturation and luminance transforms.
+        b"hueOff" => Some(ColorTransform::HueOff(raw_value as f64 / 60_000.0)),
+        b"satOff" => Some(ColorTransform::SatOff(raw_value as f64 / 100_000.0)),
+        b"lumMod" => Some(ColorTransform::LumMod(raw_value as f64 / 100_000.0)),
+        b"lumOff" => Some(ColorTransform::LumOff(raw_value as f64 / 100_000.0)),
         _ => None,
     }
 }
@@ -154,11 +160,11 @@ fn linear_to_srgb_channel(linear: f64) -> f64 {
 }
 
 pub(crate) fn apply_color_transforms(color: Color, transforms: &[ColorTransform]) -> Color {
-    // Tint and shade run before the luminance transforms, but not in the same
-    // space: tint blends toward white across the sRGB bytes, while shade scales
-    // in linear light (decode, multiply, re-encode) because that is what
-    // reproduces PowerPoint's output (issue #667). Tint is left on the bytes
-    // for want of a ground truth saying otherwise.
+    // Tint and shade run before the hue, saturation, and luminance transforms,
+    // but not in the same space: tint blends toward white across the sRGB
+    // bytes, while shade scales in linear light (decode, multiply, re-encode)
+    // because that is what reproduces PowerPoint's output (issue #667). Tint
+    // is left on the bytes for want of a ground truth saying otherwise.
     let mut r: f64 = color.r as f64;
     let mut g: f64 = color.g as f64;
     let mut b: f64 = color.b as f64;
@@ -185,12 +191,18 @@ pub(crate) fn apply_color_transforms(color: Color, transforms: &[ColorTransform]
         b.round().clamp(0.0, 255.0) as u8,
     );
 
-    // Then apply luminance transforms in HSL space.
-    let has_lum_transforms: bool = transforms
-        .iter()
-        .any(|t| matches!(t, ColorTransform::LumMod(_) | ColorTransform::LumOff(_)));
+    // Then apply the hue, saturation, and luminance transforms in HSL space.
+    let has_hsl_transforms: bool = transforms.iter().any(|t| {
+        matches!(
+            t,
+            ColorTransform::HueOff(_)
+                | ColorTransform::SatOff(_)
+                | ColorTransform::LumMod(_)
+                | ColorTransform::LumOff(_)
+        )
+    });
 
-    if !has_lum_transforms {
+    if !has_hsl_transforms {
         return tinted;
     }
 
@@ -198,6 +210,12 @@ pub(crate) fn apply_color_transforms(color: Color, transforms: &[ColorTransform]
 
     for transform in transforms {
         match transform {
+            ColorTransform::HueOff(value) => {
+                hue += value;
+            }
+            ColorTransform::SatOff(value) => {
+                saturation = (saturation + value).clamp(0.0, 1.0);
+            }
             ColorTransform::LumMod(value) => {
                 lightness = (lightness * value).clamp(0.0, 1.0);
             }

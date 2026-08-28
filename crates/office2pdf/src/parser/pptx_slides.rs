@@ -200,246 +200,40 @@ fn extract_data_model_ext_rel_id(data_xml: &str) -> Option<String> {
     }
 }
 
-/// Parse the SmartArt drawing cache's `<dsp:sp>` shapes into fixed elements
-/// (a shape background plus a text overlay), positioned relative to the
-/// diagram frame. The cache uses the same drawingML coordinate space as the
-/// frame extent, so shape offsets add directly to the frame origin.
-fn parse_smartart_drawing(
+/// Parse the SmartArt drawing cache's `<dsp:sp>` shapes with the same
+/// DrawingML shape/text pipeline as ordinary slide shapes. The cache uses the
+/// same coordinate space as the frame extent, so its local offsets add
+/// directly to the frame origin.
+pub(super) fn parse_smartart_drawing(
     drawing_xml: &str,
     theme: &ThemeData,
     color_map: &ColorMapData,
     frame_x_pt: f64,
     frame_y_pt: f64,
 ) -> Vec<FixedElement> {
-    let mut reader = Reader::from_str(drawing_xml);
-    let mut elements: Vec<FixedElement> = Vec::new();
-
-    #[derive(Default)]
-    struct DrawShape {
-        x: i64,
-        y: i64,
-        cx: i64,
-        cy: i64,
-        preset: Option<String>,
-        fill: Option<Color>,
-        line: Option<Color>,
-        line_w: i64,
-        texts: Vec<String>,
+    let images: SlideImageMap = SlideImageMap::new();
+    let table_styles: table_styles::TableStyleMap = table_styles::TableStyleMap::new();
+    let inherited_text_body_defaults: PptxTextBodyStyleDefaults =
+        PptxTextBodyStyleDefaults::default();
+    let ctx = SlideParseContext {
+        images: &images,
+        slide_number: 1,
+        theme,
+        color_map,
+        warning_context: "SmartArt drawing cache",
+        inherited_text_body_defaults: &inherited_text_body_defaults,
+        table_styles: &table_styles,
+        default_text_size_pt: None,
+    };
+    let Ok((mut elements, _warnings)) = parse_slide_xml_inner(drawing_xml, &ctx, false, None)
+    else {
+        return Vec::new();
+    };
+    for element in &mut elements {
+        element.x += frame_x_pt;
+        element.y += frame_y_pt;
     }
-
-    let mut current: Option<DrawShape> = None;
-    let mut in_sp_pr = false;
-    let mut in_ln = false;
-    let mut in_fill = false;
-    let mut in_tx_body = false;
-    let mut in_text = false;
-
-    loop {
-        match reader.read_event() {
-            Ok(Event::Start(ref e)) => match e.local_name().as_ref() {
-                b"sp" => current = Some(DrawShape::default()),
-                b"spPr" => in_sp_pr = true,
-                b"ln" if in_sp_pr => {
-                    in_ln = true;
-                    if let Some(shape) = current.as_mut() {
-                        shape.line_w = get_attr_i64(e, b"w").unwrap_or(0);
-                    }
-                }
-                b"solidFill" if in_sp_pr && !in_ln => in_fill = true,
-                b"txBody" => in_tx_body = true,
-                b"t" if in_tx_body => in_text = true,
-                b"srgbClr" | b"schemeClr" | b"sysClr" if in_fill => {
-                    let parsed =
-                        parse_color_from_start(reader_ref(&mut reader), e, theme, color_map);
-                    if let (Some(shape), Some(color)) = (current.as_mut(), parsed.color) {
-                        shape.fill = Some(color);
-                    }
-                }
-                b"srgbClr" | b"schemeClr" | b"sysClr" if in_ln => {
-                    let parsed =
-                        parse_color_from_start(reader_ref(&mut reader), e, theme, color_map);
-                    if let (Some(shape), Some(color)) = (current.as_mut(), parsed.color) {
-                        shape.line = Some(color);
-                    }
-                }
-                _ => {}
-            },
-            Ok(Event::Empty(ref e)) => match e.local_name().as_ref() {
-                b"off" if in_sp_pr => {
-                    if let Some(shape) = current.as_mut() {
-                        shape.x = get_attr_i64(e, b"x").unwrap_or(0);
-                        shape.y = get_attr_i64(e, b"y").unwrap_or(0);
-                    }
-                }
-                b"ext" if in_sp_pr => {
-                    if let Some(shape) = current.as_mut() {
-                        shape.cx = get_attr_i64(e, b"cx").unwrap_or(0);
-                        shape.cy = get_attr_i64(e, b"cy").unwrap_or(0);
-                    }
-                }
-                b"prstGeom" => {
-                    if let Some(shape) = current.as_mut() {
-                        shape.preset = get_attr_str(e, b"prst");
-                    }
-                }
-                b"srgbClr" | b"schemeClr" | b"sysClr" if in_fill => {
-                    let parsed = parse_color_from_empty(e, theme, color_map);
-                    if let (Some(shape), Some(color)) = (current.as_mut(), parsed.color) {
-                        shape.fill = Some(color);
-                    }
-                }
-                b"srgbClr" | b"schemeClr" | b"sysClr" if in_ln => {
-                    let parsed = parse_color_from_empty(e, theme, color_map);
-                    if let (Some(shape), Some(color)) = (current.as_mut(), parsed.color) {
-                        shape.line = Some(color);
-                    }
-                }
-                _ => {}
-            },
-            Ok(Event::Text(ref t)) => {
-                if in_text
-                    && let Some(text) = decode_pptx_text_event(t)
-                    && let Some(shape) = current.as_mut()
-                {
-                    let trimmed = text.trim();
-                    if !trimmed.is_empty() {
-                        shape.texts.push(trimmed.to_string());
-                    }
-                }
-            }
-            Ok(Event::End(ref e)) => match e.local_name().as_ref() {
-                b"spPr" => in_sp_pr = false,
-                b"ln" => in_ln = false,
-                b"solidFill" => in_fill = false,
-                b"txBody" => in_tx_body = false,
-                b"t" => in_text = false,
-                b"sp" => {
-                    if let Some(shape) = current.take()
-                        && shape.cx > 0
-                        && shape.cy > 0
-                    {
-                        elements.extend(smartart_shape_to_elements(SmartArtShapeFields {
-                            x: frame_x_pt + emu_to_pt(shape.x),
-                            y: frame_y_pt + emu_to_pt(shape.y),
-                            width: emu_to_pt(shape.cx),
-                            height: emu_to_pt(shape.cy),
-                            preset: shape.preset,
-                            fill: shape.fill,
-                            line: shape.line,
-                            line_w: shape.line_w,
-                            texts: shape.texts,
-                        }));
-                    }
-                }
-                _ => {}
-            },
-            Ok(Event::Eof) | Err(_) => break,
-            _ => {}
-        }
-    }
-
     elements
-}
-
-struct SmartArtShapeFields {
-    preset: Option<String>,
-    fill: Option<Color>,
-    line: Option<Color>,
-    line_w: i64,
-    texts: Vec<String>,
-    x: f64,
-    y: f64,
-    width: f64,
-    height: f64,
-}
-
-fn smartart_shape_to_elements(f: SmartArtShapeFields) -> Vec<FixedElement> {
-    let mut out: Vec<FixedElement> = Vec::new();
-    let kind: ShapeKind = f
-        .preset
-        .as_deref()
-        .map(|prst| {
-            prst_to_shape_kind(
-                prst,
-                f.width,
-                f.height,
-                false,
-                false,
-                ArrowHead::None,
-                ArrowHead::None,
-                &[],
-            )
-        })
-        .unwrap_or(ShapeKind::Rectangle);
-    let stroke: Option<BorderSide> = f.line.map(|color| BorderSide {
-        width: emu_to_pt(f.line_w.max(0)),
-        color,
-        style: BorderLineStyle::Solid,
-        join: LineJoin::Round,
-    });
-    out.push(FixedElement {
-        x: f.x,
-        y: f.y,
-        width: f.width,
-        height: f.height,
-        kind: FixedElementKind::Shape(Shape {
-            kind,
-            fill: f.fill,
-            gradient_fill: None,
-            pattern_fill: None,
-            stroke,
-            rotation_deg: None,
-            opacity: None,
-            shadow: None,
-        }),
-    });
-    if !f.texts.is_empty() {
-        let runs: Vec<Run> = f
-            .texts
-            .iter()
-            .map(|text| Run {
-                text: text.clone(),
-                style: TextStyle {
-                    color: Some(Color::new(0xFF, 0xFF, 0xFF)),
-                    ..TextStyle::default()
-                },
-                href: None,
-                footnote: None,
-            })
-            .collect();
-        out.push(FixedElement {
-            x: f.x,
-            y: f.y,
-            width: f.width,
-            height: f.height,
-            kind: FixedElementKind::TextBox(TextBoxData {
-                content: vec![Block::Paragraph(Paragraph {
-                    style: ParagraphStyle {
-                        alignment: Some(Alignment::Center),
-                        ..ParagraphStyle::default()
-                    },
-                    runs,
-                })],
-                padding: Insets::default(),
-                vertical_align: TextBoxVerticalAlign::Center,
-                fill: None,
-                opacity: None,
-                stroke: None,
-                shape_kind: None,
-                no_wrap: false,
-                auto_fit: false,
-                text_rotation_deg: None,
-                shape_rotation_deg: None,
-            }),
-        });
-    }
-    out
-}
-
-/// Borrow helper so `parse_color_from_start` can take the live reader while
-/// we hold a mutable borrow across the match arm.
-fn reader_ref<'a, 'b>(reader: &'a mut Reader<&'b [u8]>) -> &'a mut Reader<&'b [u8]> {
-    reader
 }
 
 /// Collect Chart elements referenced by the slide XML.
@@ -969,6 +763,8 @@ struct ShapeState {
     style_fill_color: Option<Color>,
     /// Fallback text color from `<p:style><a:fontRef>` scheme reference.
     style_font_color: Option<Color>,
+    /// Theme face selected by `<p:style><a:fontRef idx>`.
+    style_font_family: Option<String>,
     /// True when `<a:noFill/>` is explicitly set in `<p:spPr>`, preventing style fallback.
     explicit_no_fill: bool,
     /// True when `<a:noFill/>` sits inside `<a:ln>`: PowerPoint's "No line",
@@ -1016,6 +812,7 @@ impl Default for ShapeState {
             style_ln_idx: None,
             style_fill_color: None,
             style_font_color: None,
+            style_font_family: None,
             explicit_no_fill: false,
             explicit_no_line: false,
         }
@@ -2213,6 +2010,10 @@ impl<'a> SlideXmlParser<'a> {
                 if let Some(color) = self.shape.style_font_color {
                     self.text_body_style_defaults.apply_default_color(color);
                 }
+                if let Some(ref font_family) = self.shape.style_font_family {
+                    self.text_body_style_defaults
+                        .apply_default_font_family(font_family);
+                }
             }
             b"bodyPr" if self.in_shape && self.in_txbody => {
                 extract_pptx_text_box_body_props(e, &mut self.text_box);
@@ -2454,6 +2255,11 @@ impl<'a> SlideXmlParser<'a> {
             // `<a:fontRef>` inside `<p:style>` provides fallback text color.
             b"fontRef" if self.in_shape && !self.shape.in_sp_pr && !self.in_txbody => {
                 self.in_style_font_ref = true;
+                self.shape.style_font_family = match get_attr_str(e, b"idx").as_deref() {
+                    Some("major") => self.ctx.theme.major_font.clone(),
+                    Some("minor") => self.ctx.theme.minor_font.clone(),
+                    _ => None,
+                };
             }
             b"t" if self.in_run => {
                 self.in_text = true;
@@ -2717,6 +2523,13 @@ impl<'a> SlideXmlParser<'a> {
     fn handle_empty_fill_colors_and_style_refs(&mut self, e: &BytesStart<'_>) -> bool {
         let local = e.local_name();
         match local.as_ref() {
+            b"fontRef" if self.in_shape && !self.shape.in_sp_pr && !self.in_txbody => {
+                self.shape.style_font_family = match get_attr_str(e, b"idx").as_deref() {
+                    Some("major") => self.ctx.theme.major_font.clone(),
+                    Some("minor") => self.ctx.theme.minor_font.clone(),
+                    _ => None,
+                };
+            }
             b"srgbClr" | b"schemeClr" | b"sysClr" if self.in_style_font_ref => {
                 let parsed = parse_color_from_empty(e, self.ctx.theme, self.ctx.color_map);
                 self.shape.style_font_color = parsed.color;

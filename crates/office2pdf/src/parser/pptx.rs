@@ -390,6 +390,14 @@ impl PptxTextBodyStyleDefaults {
         }
     }
 
+    /// Apply the theme face selected by a shape-level `<a:fontRef>`.
+    fn apply_default_font_family(&mut self, font_family: &str) {
+        self.default_run.font_family = Some(font_family.to_string());
+        for level_style in self.levels.values_mut() {
+            level_style.run.font_family = Some(font_family.to_string());
+        }
+    }
+
     fn merge_from(&mut self, overlay: &PptxTextBodyStyleDefaults) {
         self.default_paragraph
             .merge_from(&overlay.default_paragraph);

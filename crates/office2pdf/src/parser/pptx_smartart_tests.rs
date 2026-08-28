@@ -179,3 +179,127 @@ fn test_slide_without_smartart_no_smartart_elements() {
         .count();
     assert_eq!(smartart_count, 0);
 }
+
+#[test]
+fn smartart_drawing_cache_preserves_text_body_list_and_run_styles() {
+    let drawing_xml = r#"
+        <dsp:drawing xmlns:dsp="http://schemas.microsoft.com/office/drawing/2008/diagram"
+                     xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+          <dsp:spTree>
+            <dsp:sp>
+              <dsp:spPr>
+                <a:xfrm>
+                  <a:off x="12700" y="25400"/>
+                  <a:ext cx="1270000" cy="2540000"/>
+                </a:xfrm>
+                <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+                <a:solidFill><a:srgbClr val="DDEEFF"/></a:solidFill>
+                <a:ln w="12700">
+                  <a:solidFill><a:srgbClr val="112233"/></a:solidFill>
+                  <a:prstDash val="solid"/>
+                </a:ln>
+              </dsp:spPr>
+              <dsp:style><a:fontRef idx="minor"/></dsp:style>
+              <dsp:txBody>
+                <a:bodyPr lIns="127000" tIns="254000" rIns="381000" bIns="508000" anchor="t"/>
+                <a:lstStyle/>
+                <a:p>
+                  <a:pPr lvl="1" marL="254000" indent="-127000" algn="l">
+                    <a:lnSpc><a:spcPct val="90000"/></a:lnSpc>
+                    <a:spcAft><a:spcPts val="250"/></a:spcAft>
+                    <a:buChar char="••"/>
+                  </a:pPr>
+                  <a:r>
+                    <a:rPr sz="1700" b="0">
+                      <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+                    </a:rPr>
+                    <a:t>First item</a:t>
+                  </a:r>
+                  <a:endParaRPr sz="1700"/>
+                </a:p>
+                <a:p>
+                  <a:pPr lvl="1" marL="254000" indent="-127000" algn="l">
+                    <a:lnSpc><a:spcPct val="90000"/></a:lnSpc>
+                    <a:buChar char="••"/>
+                  </a:pPr>
+                  <a:r>
+                    <a:rPr sz="1700" b="0">
+                      <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+                    </a:rPr>
+                    <a:t>Second item</a:t>
+                  </a:r>
+                  <a:endParaRPr sz="1700"/>
+                </a:p>
+              </dsp:txBody>
+            </dsp:sp>
+          </dsp:spTree>
+        </dsp:drawing>
+    "#;
+
+    let theme = ThemeData {
+        minor_font: Some("Calibri".to_string()),
+        ..ThemeData::default()
+    };
+    let elements =
+        slides::parse_smartart_drawing(drawing_xml, &theme, &default_color_map(), 10.0, 20.0);
+    let text_box = elements
+        .iter()
+        .find_map(|element| match &element.kind {
+            FixedElementKind::TextBox(text_box) => Some((element, text_box)),
+            _ => None,
+        })
+        .expect("the cache shape produces a styled text box");
+
+    assert!((text_box.0.x - 11.0).abs() < 1e-9);
+    assert!((text_box.0.y - 22.0).abs() < 1e-9);
+    assert_eq!(
+        text_box.1.padding,
+        Insets {
+            top: 20.0,
+            right: 30.0,
+            bottom: 40.0,
+            left: 10.0,
+        }
+    );
+    assert_eq!(text_box.1.vertical_align, TextBoxVerticalAlign::Top);
+    assert_eq!(text_box.1.fill, Some(Color::new(0xDD, 0xEE, 0xFF)));
+    assert_eq!(
+        text_box
+            .1
+            .stroke
+            .as_ref()
+            .map(|stroke| (stroke.width, stroke.color)),
+        Some((1.0, Color::new(0x11, 0x22, 0x33)))
+    );
+
+    let [Block::List(list)] = text_box.1.content.as_slice() else {
+        panic!("the two cache paragraphs must remain a single bulleted list");
+    };
+    assert_eq!(list.items.len(), 2);
+    assert_eq!(list.items[0].level, 1);
+    assert_eq!(list.items[0].content[0].runs[0].text, "First item");
+    assert_eq!(list.items[1].content[0].runs[0].text, "Second item");
+    assert_eq!(
+        list.level_styles
+            .get(&1)
+            .and_then(|style| style.marker_text.as_deref()),
+        Some("•")
+    );
+
+    let first_paragraph = &list.items[0].content[0];
+    assert_eq!(first_paragraph.style.alignment, Some(Alignment::Left));
+    assert_eq!(first_paragraph.style.indent_left, Some(20.0));
+    assert_eq!(first_paragraph.style.indent_first_line, Some(-10.0));
+    assert_eq!(first_paragraph.style.space_after, Some(2.5));
+    assert!(matches!(
+        first_paragraph.style.line_spacing,
+        Some(LineSpacing::Proportional(value)) if (value - 0.9).abs() < 1e-9
+    ));
+    assert_eq!(
+        first_paragraph.runs[0].style.font_family.as_deref(),
+        Some("Calibri")
+    );
+    assert_eq!(first_paragraph.runs[0].style.font_size, Some(17.0));
+    assert_eq!(first_paragraph.runs[0].style.bold, Some(false));
+    assert_eq!(first_paragraph.runs[0].style.color, Some(Color::black()));
+}

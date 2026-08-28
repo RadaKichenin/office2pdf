@@ -260,6 +260,20 @@ fn lum_mod_and_off_adjust_lightness_in_hsl() {
 }
 
 #[test]
+fn hue_and_saturation_offsets_use_drawingml_units() {
+    let (colors, aliases) = scheme_with(&[], &[]);
+    let parsed = parse_first_color(
+        r#"<a:srgbClr val="00FFFF"><a:hueOff val="-3600000"/><a:satOff val="-50000"/></a:srgbClr>"#,
+        &colors,
+        &aliases,
+    );
+
+    // -3,600,000 is -60 degrees (1/60,000 degree units), rotating cyan to
+    // green; removing half its HSL saturation produces #40BF40.
+    assert_eq!(parsed.color, Some(Color::new(64, 191, 64)));
+}
+
+#[test]
 fn no_transforms_is_identity() {
     let color = Color::new(12, 34, 56);
     assert_eq!(apply_color_transforms(color, &[]), color);

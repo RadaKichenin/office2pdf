@@ -1168,6 +1168,9 @@ pub(super) fn parse_pptx_bullet_marker(
     level: u32,
 ) -> Option<PptxBulletKind> {
     get_attr_str(e, b"char")
+        // CT_TextBulletCharacter is one character. Normalize malformed cache
+        // values that repeat the marker so they cannot become multiple marks.
+        .and_then(|marker| marker.chars().next().map(|character| character.to_string()))
         .map(PptxBulletKind::Character)
         .or_else(|| (level == 0).then(|| PptxBulletKind::Character("•".to_string())))
 }
