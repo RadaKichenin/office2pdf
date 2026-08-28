@@ -1,5 +1,13 @@
 use super::*;
 
+const PPTX_BLANK_LIST_ITEM_SENTINEL: &str = "\u{E000}\u{E001}";
+
+fn is_pptx_blank_list_item(paragraph: &Paragraph) -> bool {
+    paragraph.runs.len() == 1
+        && paragraph.runs[0].footnote.is_none()
+        && paragraph.runs[0].text == PPTX_BLANK_LIST_ITEM_SENTINEL
+}
+
 /// Generate Typst markup for a list (ordered or unordered).
 ///
 /// Uses Typst's `#enum()` for ordered lists and `#list()` for unordered lists.
@@ -380,6 +388,27 @@ pub(super) fn generate_list_with_spacing_model(
     per_item_gaps: bool,
     mut eojeol_wrap: ListEojeolWrap,
 ) -> Result<(), ConvertError> {
+    if let Some((normalized, blank_height_pt)) = normalize_pptx_blank_list_items(list) {
+        if normalized.items.is_empty() {
+            let _ = writeln!(out, "#block(height: {}pt)[]", format_f64(blank_height_pt));
+            return Ok(());
+        }
+        let normalized_line_settings: Option<String> = normalized
+            .items
+            .first()
+            .and_then(|item| item.content.first())
+            .and_then(|paragraph| {
+                powerpoint_line_height_settings(&paragraph.runs, &paragraph.style)
+            });
+        return generate_list_with_spacing_model(
+            out,
+            &normalized,
+            normalized_line_settings.as_deref(),
+            per_item_gaps,
+            eojeol_wrap,
+        );
+    }
+
     let wrapper_spans_full_line: bool = line_height_settings.is_some();
     let root_level: u32 = list_root_level(list);
     let style = list_style_for_level(list, root_level);
@@ -451,6 +480,59 @@ pub(super) fn generate_list_with_spacing_model(
         out.push_str("]\n");
     }
     Ok(())
+}
+
+/// Remove marker-suppressed DrawingML paragraphs before the generic Typst
+/// list path sees them. A Typst `list.item` always paints its marker, so each
+/// blank line is carried as paragraph spacing on its preceding visible item
+/// (or as leading spacing on the first visible item). Removing the item also
+/// means an ordered list does not consume a number for PowerPoint's blank.
+fn normalize_pptx_blank_list_items(list: &List) -> Option<(List, f64)> {
+    if !list
+        .items
+        .iter()
+        .any(|item| item.content.len() == 1 && is_pptx_blank_list_item(&item.content[0]))
+    {
+        return None;
+    }
+
+    let mut normalized: List = list.clone();
+    normalized.items.clear();
+    let mut leading_blank_height_pt: f64 = 0.0;
+    let mut leading_start_at: Option<u32> = None;
+
+    for item in &list.items {
+        if item.content.len() == 1 && is_pptx_blank_list_item(&item.content[0]) {
+            let paragraph: &Paragraph = &item.content[0];
+            let blank_height_pt: f64 = pptx_blank_list_item_advance_pt(paragraph)
+                + paragraph.style.space_before.unwrap_or(0.0)
+                + paragraph.style.space_after.unwrap_or(0.0);
+            if let Some(previous) = normalized.items.last_mut()
+                && let Some(paragraph) = previous.content.last_mut()
+            {
+                paragraph.style.space_after =
+                    Some(paragraph.style.space_after.unwrap_or(0.0) + blank_height_pt);
+            } else {
+                leading_blank_height_pt += blank_height_pt;
+                leading_start_at = leading_start_at.or(item.start_at);
+            }
+            continue;
+        }
+
+        let mut visible_item = item.clone();
+        if normalized.items.is_empty() {
+            if let Some(paragraph) = visible_item.content.first_mut() {
+                paragraph.style.space_before =
+                    Some(paragraph.style.space_before.unwrap_or(0.0) + leading_blank_height_pt);
+            }
+            if visible_item.start_at.is_none() {
+                visible_item.start_at = leading_start_at;
+            }
+        }
+        normalized.items.push(visible_item);
+    }
+
+    Some((normalized, leading_blank_height_pt))
 }
 
 pub(super) fn can_render_fixed_text_list_inline(list: &List) -> bool {
@@ -612,12 +694,17 @@ pub(super) fn generate_fixed_text_list(
         }
 
         let item_paragraph: &Paragraph = &item.content[0];
-        let marker_text: String = fixed_text_list_marker(
-            list.kind,
-            &effective_style,
-            current_number,
-            &item_paragraph.runs,
-        );
+        let suppress_marker: bool = is_pptx_blank_list_item(item_paragraph);
+        let marker_text: String = if suppress_marker {
+            String::new()
+        } else {
+            fixed_text_list_marker(
+                list.kind,
+                &effective_style,
+                current_number,
+                &item_paragraph.runs,
+            )
+        };
 
         if use_stack {
             out.push('[');
@@ -639,7 +726,7 @@ pub(super) fn generate_fixed_text_list(
             out.push('\n');
         }
 
-        if list.kind == ListKind::Ordered {
+        if list.kind == ListKind::Ordered && !suppress_marker {
             current_number += 1;
         }
     }
@@ -696,6 +783,13 @@ fn write_fixed_text_list_item(
         out.push_str(settings);
     }
 
+    if is_pptx_blank_list_item(paragraph) {
+        let height_pt: f64 = pptx_blank_list_item_advance_pt(paragraph);
+        let _ = write!(out, "#block(height: {}pt)[]", format_f64(height_pt));
+        out.push(']');
+        return;
+    }
+
     if let Some(align) = align_str {
         let _ = write!(out, "#align({align})[");
     }
@@ -728,6 +822,16 @@ fn write_fixed_text_list_item(
         out.push(']');
     }
     out.push(']');
+}
+
+fn pptx_blank_list_item_advance_pt(paragraph: &Paragraph) -> f64 {
+    let plain_advance_pt: f64 = powerpoint_line_box_pt(&paragraph.runs)
+        .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_SIZE_PT * 1.2);
+    match paragraph.style.line_spacing {
+        Some(LineSpacing::Proportional(factor)) if factor > 0.0 => plain_advance_pt * factor,
+        Some(LineSpacing::Exact(points)) if points > 0.0 => points,
+        _ => plain_advance_pt,
+    }
 }
 
 fn write_fixed_text_ordered_marker_grid(
@@ -988,7 +1092,11 @@ fn common_list_level_text_style(items: &[crate::ir::ListItem], level: u32) -> Op
         .filter(|item| item.level == level)
         .flat_map(|item| item.content.iter())
         .flat_map(|paragraph| paragraph.runs.iter())
-        .filter(|run| run.footnote.is_none() && !run.text.is_empty())
+        .filter(|run| {
+            run.footnote.is_none()
+                && !run.text.is_empty()
+                && run.text != PPTX_BLANK_LIST_ITEM_SENTINEL
+        })
         .map(|run| &run.style);
     let first_style = visible_styles.next()?.clone();
     let common_style = visible_styles.fold(first_style, |common, style| {
