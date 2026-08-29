@@ -2492,6 +2492,20 @@ fn test_tracked_run_in_a_substituted_face_stays_unkerned() {
 
 /// A spreadsheet page whose single cell holds `text` in `style`.
 fn sheet_page_with_cell(text: &str, style: TextStyle) -> Page {
+    sheet_page_with_aligned_cell(text, style, None)
+}
+
+fn sheet_page_with_aligned_cell(
+    text: &str,
+    style: TextStyle,
+    alignment: Option<Alignment>,
+) -> Page {
+    let mut content: Block = styled_paragraph(text, style);
+    let Block::Paragraph(paragraph) = &mut content else {
+        unreachable!("styled_paragraph always returns a paragraph")
+    };
+    paragraph.style.alignment = alignment;
+
     Page::Sheet(SheetPage {
         name: String::new(),
         size: PageSize::default(),
@@ -2499,7 +2513,7 @@ fn sheet_page_with_cell(text: &str, style: TextStyle) -> Page {
         table: Table {
             rows: vec![TableRow {
                 cells: vec![TableCell {
-                    content: vec![styled_paragraph(text, style)],
+                    content: vec![content],
                     ..TableCell::default()
                 }],
                 height: None,
@@ -2520,6 +2534,13 @@ fn sheet_page_with_cell(text: &str, style: TextStyle) -> Page {
 fn emitted_tracking_pt(source: &str) -> Option<f64> {
     let after_tracking: &str = source.split_once("tracking: ")?.1;
     let (value, _) = after_tracking.split_once("pt")?;
+    value.parse().ok()
+}
+
+/// The last explicit horizontal space the generator emitted, in points.
+fn emitted_last_horizontal_space_pt(source: &str) -> Option<f64> {
+    let (_, after_space) = source.rsplit_once("#h(")?;
+    let (value, _) = after_space.split_once("pt)")?;
     value.parse().ok()
 }
 
@@ -2548,6 +2569,170 @@ fn test_sheet_cell_line_takes_excels_whole_point_advance_grid() {
     assert!(
         (tracking - 0.065).abs() < 1e-9,
         "'Total' at 10pt should be tracked 0.065pt onto the whole-point grid, got {tracking}"
+    );
+}
+
+/// Excel includes the final glyph's rounded advance when it places a
+/// right-aligned line from the cell's trailing edge. Typst drops tracking after
+/// that glyph, so the difference needs its own trailing spacer (issue #1233).
+///
+/// Libertinus Serif's final `l` in "Total" advances 0.264em: 2.64pt at 10pt,
+/// which Excel rounds to 3pt. The line therefore reserves the missing 0.36pt.
+#[test]
+fn test_right_aligned_sheet_cell_reserves_the_rounded_trailing_advance() {
+    let doc = make_doc(vec![sheet_page_with_aligned_cell(
+        "Total",
+        TextStyle {
+            font_family: Some("Libertinus Serif".to_string()),
+            font_size: Some(10.0),
+            ..TextStyle::default()
+        },
+        Some(Alignment::Right),
+    )]);
+
+    let source = generate_typst(&doc).unwrap().source;
+    assert!(
+        source.contains("#h(0.36pt)"),
+        "a right-aligned sheet line must reserve its rounded final advance: {source}"
+    );
+}
+
+/// The trailing correction follows the advance's rounding direction rather
+/// than always widening the line. A single glyph also needs it even though it
+/// has no inter-glyph gap that could take `tracking`.
+#[test]
+fn test_right_aligned_sheet_cell_trailing_advance_can_narrow_the_line() {
+    let doc = make_doc(vec![sheet_page_with_aligned_cell(
+        "O",
+        TextStyle {
+            font_family: Some("Libertinus Serif".to_string()),
+            font_size: Some(10.0),
+            ..TextStyle::default()
+        },
+        Some(Alignment::Right),
+    )]);
+
+    let source = generate_typst(&doc).unwrap().source;
+    assert_eq!(
+        emitted_tracking_pt(&source),
+        None,
+        "a one-glyph line still has no gap to track: {source}"
+    );
+    assert!(
+        source.contains("#h(-0.02pt)"),
+        "Libertinus Serif O advances 7.02pt and rounds down to 7pt: {source}"
+    );
+}
+
+/// Width cannot move a left-aligned origin, and Excel separately snaps a
+/// centred origin to a whole point. Keep the measured issue #1233 scope on
+/// right alignment instead of moving either unaffected class.
+#[test]
+fn test_non_right_aligned_sheet_cells_do_not_reserve_the_trailing_advance() {
+    for alignment in [None, Some(Alignment::Left), Some(Alignment::Center)] {
+        let doc = make_doc(vec![sheet_page_with_aligned_cell(
+            "Total",
+            TextStyle {
+                font_family: Some("Libertinus Serif".to_string()),
+                font_size: Some(10.0),
+                ..TextStyle::default()
+            },
+            alignment,
+        )]);
+
+        let source = generate_typst(&doc).unwrap().source;
+        assert!(
+            !source.contains("#h(0.36pt)"),
+            "only a right-aligned sheet line takes the trailing reserve: {source}"
+        );
+    }
+}
+
+/// A paragraph-wide trailing reserve cannot represent independently aligned
+/// explicit lines or tab segments. Decline all such paragraphs rather than
+/// correcting only their last segment (issue #1233).
+#[test]
+fn test_segmented_right_aligned_sheet_cells_do_not_reserve_a_trailing_advance() {
+    for text in [
+        "Total\nNext".to_string(),
+        "Total\tNext".to_string(),
+        "Total\u{000B}Next".to_string(),
+    ] {
+        let doc = make_doc(vec![sheet_page_with_aligned_cell(
+            &text,
+            TextStyle {
+                font_family: Some("Libertinus Serif".to_string()),
+                font_size: Some(10.0),
+                ..TextStyle::default()
+            },
+            Some(Alignment::Right),
+        )]);
+
+        let source = generate_typst(&doc).unwrap().source;
+        assert_eq!(
+            emitted_last_horizontal_space_pt(&source),
+            None,
+            "a segmented paragraph must not receive a partial trailing reserve: {source}"
+        );
+    }
+}
+
+/// Small caps are shaped as separate transformed glyph runs downstream, so a
+/// reserve measured from the source run would not describe their final glyph.
+#[test]
+fn test_small_caps_right_aligned_sheet_cell_declines_the_trailing_reserve() {
+    let doc = make_doc(vec![sheet_page_with_aligned_cell(
+        "Total",
+        TextStyle {
+            font_family: Some("Libertinus Serif".to_string()),
+            font_size: Some(10.0),
+            small_caps: Some(true),
+            ..TextStyle::default()
+        },
+        Some(Alignment::Right),
+    )]);
+
+    let source = generate_typst(&doc).unwrap().source;
+    assert_eq!(
+        emitted_last_horizontal_space_pt(&source),
+        None,
+        "small caps must decline a source-run trailing reserve: {source}"
+    );
+}
+
+/// All-caps text is shaped from its uppercase glyphs, whose final advance can
+/// differ from the source case. Its reserve must therefore match literal
+/// uppercase text, not the original mixed-case string.
+#[test]
+fn test_all_caps_right_aligned_sheet_cell_measures_the_uppercase_terminal_glyph() {
+    let source_for = |text: &str, all_caps: bool| {
+        let doc = make_doc(vec![sheet_page_with_aligned_cell(
+            text,
+            TextStyle {
+                font_family: Some("Libertinus Serif".to_string()),
+                font_size: Some(10.0),
+                all_caps: Some(all_caps),
+                ..TextStyle::default()
+            },
+            Some(Alignment::Right),
+        )]);
+        generate_typst(&doc).unwrap().source
+    };
+
+    let transformed = source_for("Total", true);
+    let literal_uppercase = source_for("TOTAL", false);
+    let mixed_case = source_for("Total", false);
+    let transformed_space = emitted_last_horizontal_space_pt(&transformed);
+    let uppercase_space = emitted_last_horizontal_space_pt(&literal_uppercase);
+    let mixed_case_space = emitted_last_horizontal_space_pt(&mixed_case);
+
+    assert_eq!(
+        transformed_space, uppercase_space,
+        "all caps must measure the same terminal glyph as literal uppercase text"
+    );
+    assert_ne!(
+        transformed_space, mixed_case_space,
+        "this fixture must distinguish uppercase L from mixed-case l"
     );
 }
 

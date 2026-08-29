@@ -3120,6 +3120,9 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
                     paragraph_default_tab_width_pt(style, cell.default_tab_width_pt),
                     eojeol_wrap,
                 );
+                if let Some(space_pt) = sheet_trailing_advance_space_pt(style, &para.runs) {
+                    let _ = write!(out, "#h({}pt)", format_geometry(space_pt));
+                }
             }
         }
     }
