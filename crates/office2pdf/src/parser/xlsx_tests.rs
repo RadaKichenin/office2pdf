@@ -1596,16 +1596,24 @@ fn a_custom_height_default_is_honoured_as_declared() {
     );
 }
 
-/// Every measured theme-scheme size, so the recompute cannot collapse to the
-/// single 11pt constant the tests would otherwise pin.
+/// Every size measured for a Normal font that resolves through the theme's
+/// per-script face list. The customer workbooks in issue #1226 exercise 12pt,
+/// but the native sweep measured one complete column, so the lookup must not
+/// leave the other seven added sizes on the declared hint either.
 #[test]
-fn the_recomputed_default_tracks_the_normal_font_size() {
-    for (size_pt, expected) in [(8.0, 13.0), (10.0, 15.0), (11.0, 17.0), (18.0, 27.0)] {
+fn the_theme_scheme_recomputes_from_the_full_ui_script_face_series() {
+    let sizes = [
+        8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 20.0, 22.0, 24.0,
+    ];
+    let heights = [
+        13.0, 14.0, 15.0, 17.0, 18.0, 19.0, 20.0, 22.0, 23.0, 26.0, 27.0, 30.0, 32.0, 35.0,
+    ];
+    for (size_pt, expected) in sizes.into_iter().zip(heights) {
         let mut book = umya_spreadsheet::new_file();
         let sheet = book.get_sheet_mut(&0).unwrap();
         sheet
             .get_sheet_format_properties_mut()
-            .set_default_row_height(15.0);
+            .set_default_row_height(40.0);
         assert_eq!(
             xlsx_cells::worksheet_default_row_height_pt(
                 sheet,
@@ -1701,8 +1709,9 @@ fn an_unmeasured_normal_font_keeps_the_declared_default() {
         .get_sheet_format_properties_mut()
         .set_default_row_height(15.0);
     assert_eq!(
-        xlsx_cells::worksheet_default_row_height_pt(sheet, Some(&theme_scheme_normal_font(12.0))),
-        15.0
+        xlsx_cells::worksheet_default_row_height_pt(sheet, Some(&theme_scheme_normal_font(19.0))),
+        15.0,
+        "a size between the theme scheme's measured points keeps the declared hint"
     );
     assert_eq!(
         xlsx_cells::worksheet_default_row_height_pt(
@@ -2041,7 +2050,7 @@ fn an_auto_row_of_smaller_cells_keeps_the_recomputed_default() {
 /// too — the measured points are too irregular to interpolate between.
 #[test]
 fn an_auto_row_whose_cell_size_is_unmeasured_keeps_the_recomputed_default() {
-    let book = sheet_with_one_cell_font(1, 20.0);
+    let book = sheet_with_one_cell_font(1, 19.0);
     let sheet: &umya_spreadsheet::Worksheet = book.get_sheet(&0).unwrap();
     assert_eq!(
         xlsx_cells::printed_grid_row_height_pt(sheet, 1, Some(&theme_scheme_normal_font(11.0))),
