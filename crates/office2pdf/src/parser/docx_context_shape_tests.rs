@@ -9,6 +9,7 @@ fn body(inner: &str) -> String {
  xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
  xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
  xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"
+ xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup"
  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
  xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
 <w:body><w:p><w:r>{inner}</w:r></w:p></w:body></w:document>"#
@@ -155,4 +156,41 @@ fn consume_next_yields_shapes_then_none() {
 #[test]
 fn empty_when_no_drawings() {
     assert!(scan_drawing_shapes(&body("<w:t>plain text</w:t>")).is_empty());
+}
+
+#[test]
+fn wpg_explicit_colors_outrank_zero_index_style_references() {
+    let drawing = r#"<w:drawing><wp:anchor>
+<wp:positionH><wp:posOffset>0</wp:posOffset></wp:positionH>
+<wp:positionV><wp:posOffset>0</wp:posOffset></wp:positionV>
+<a:graphic><a:graphicData><wpg:wgp><wps:wsp>
+<wps:spPr>
+<a:xfrm><a:off x="0" y="0"/><a:ext cx="127000" cy="127000"/></a:xfrm>
+<a:prstGeom prst="rect"/>
+<a:solidFill><a:schemeClr val="accent2"/></a:solidFill>
+<a:ln w="12700"><a:solidFill><a:schemeClr val="accent3"/></a:solidFill></a:ln>
+</wps:spPr>
+<wps:style>
+<a:lnRef idx="0"><a:schemeClr val="accent1"/></a:lnRef>
+<a:fillRef idx="0"><a:schemeClr val="accent1"/></a:fillRef>
+</wps:style>
+</wps:wsp></wpg:wgp></a:graphicData></a:graphic>
+</wp:anchor></w:drawing>"#;
+    let theme = r#"<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+<a:accent1><a:srgbClr val="112233"/></a:accent1>
+<a:accent2><a:srgbClr val="445566"/></a:accent2>
+<a:accent3><a:srgbClr val="778899"/></a:accent3>
+</a:theme>"#;
+
+    let records = scan_wpg_drawings(&body(drawing), Some(theme));
+    let shape = records[0].as_ref().expect("WPG drawing").children[0]
+        .shape
+        .as_ref()
+        .expect("WPG shape");
+
+    assert_eq!(shape.shape.fill, Some(Color::new(0x44, 0x55, 0x66)));
+    assert_eq!(
+        shape.shape.stroke.as_ref().map(|stroke| stroke.color),
+        Some(Color::new(0x77, 0x88, 0x99))
+    );
 }

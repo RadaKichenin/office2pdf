@@ -1,4 +1,4 @@
-//! Raw-XML side-channel for floating drawing *shapes* (`wps:wsp`).
+//! Raw-XML side-channel for floating DrawingML shapes and grouped drawings.
 //!
 //! docx-rs (the upstream DOCX parser) only models `<w:drawing>` data as either a
 //! picture (`Pic`) or a text box (`TextBox`). A DrawingML word-processing shape
@@ -7,13 +7,10 @@
 //! into a `Drawing` with `data == None`, so its geometry, fill and stroke are
 //! lost entirely (issue #176).
 //!
-//! This module scans the raw `word/document.xml` for such shapes in document
-//! order and exposes them through a cursor that the main walk advances once per
-//! geometry-only drawing it encounters, mirroring [`DrawingTextBoxContext`] and
-//! [`VmlTextBoxContext`].
-//!
-//! [`DrawingTextBoxContext`]: super::docx_context_drawing::DrawingTextBoxContext
-//! [`VmlTextBoxContext`]: super::docx_context_vml::VmlTextBoxContext
+//! This module scans the raw `word/document.xml` in document order for those
+//! geometry-only shapes, WordprocessingGroup (`wpg`) shape children, and
+//! canvas picture offsets. Cursors keep that metadata aligned with the main
+//! docx-rs drawing walk.
 
 use std::cell::Cell;
 use std::collections::HashMap;
@@ -55,8 +52,8 @@ const DEFAULT_STROKE_WIDTH_PT: f64 = 0.75;
 /// EMU per point (914400 EMU/inch ÷ 72 pt/inch).
 const EMU_PER_POINT: f64 = 12700.0;
 
-/// Floating geometry-only shapes scanned from `word/document.xml`, consumed in
-/// document order alongside the docx-rs element walk.
+/// Raw drawing metadata scanned from `word/document.xml`, consumed in document
+/// order alongside the docx-rs element walk.
 #[derive(Debug, Clone)]
 pub(in super::super) struct DrawingShapeContext {
     shapes: Vec<FloatingShape>,
@@ -866,9 +863,6 @@ fn handle_wpg_start(
         b"fillRef" if drawing.child.is_some() => {
             if let Some(child) = drawing.child.as_mut() {
                 child.fill_reference_depth += 1;
-                if numeric_attr(element, b"idx").unwrap_or_default() > 0.0 {
-                    child.shape.fill_color = Some(Color::new(68, 114, 196));
-                }
             }
         }
         b"lnRef" if drawing.child.is_some() => {
@@ -977,10 +971,10 @@ fn handle_wpg_geometry_element(
         if child.font_reference_depth > 0 {
             child.text_color = Some(color);
         } else if child.line_reference_depth > 0 || child.line_depth > 0 {
-            child.shape.line_color = Some(color);
+            child.shape.line_color.get_or_insert(color);
             child.shape.has_line = true;
         } else if child.fill_reference_depth > 0 || child.shape_properties_depth > 0 {
-            child.shape.fill_color = Some(color);
+            child.shape.fill_color.get_or_insert(color);
         }
     }
 
