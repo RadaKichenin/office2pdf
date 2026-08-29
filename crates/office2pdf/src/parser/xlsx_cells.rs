@@ -2355,6 +2355,51 @@ pub(super) fn resolve_column_unit_pt(
         .unwrap_or_else(|| sheet_column_unit_pt(sheet))
 }
 
+/// Last column that contributes visible sheet ink before text overflow.
+///
+/// `Worksheet::get_highest_column_and_row` follows the worksheet dimension,
+/// which includes value-less cells carrying non-visual metadata such as
+/// `quotePrefix`. Excel does not let those cells claim printed width: SH107
+/// declares A:K, but its quote-prefix-only J/K cells produce no second page
+/// in the native export (issue #1229).
+///
+/// A value-less cell that paints a fill or border remains part of the printed
+/// grid. The same applies to visible conditional formatting and a table style
+/// whose band or rules cover otherwise empty cells.
+fn inferred_printed_max_col(
+    sheet: &umya_spreadsheet::Worksheet,
+    theme: Option<&umya_spreadsheet::structs::drawing::Theme>,
+    table_styles: &[crate::parser::xlsx::tables::TableStyleRange],
+    cond_fmt_overrides: &HashMap<(u32, u32), crate::parser::cond_fmt::CondFmtOverride>,
+) -> u32 {
+    let cell_max: u32 = sheet
+        .get_cell_collection()
+        .iter()
+        .filter(|cell| {
+            !cell.get_cell_value().get_raw_value().is_empty()
+                || extract_cell_background(cell, theme).is_some()
+                || extract_cell_borders(cell, theme).is_some()
+        })
+        .map(|cell| *cell.get_coordinate().get_col_num())
+        .max()
+        .unwrap_or(0);
+    let table_max: u32 = table_styles
+        .iter()
+        .filter_map(|style| style.painted_end_col())
+        .max()
+        .unwrap_or(0);
+    let conditional_max: u32 = cond_fmt_overrides
+        .iter()
+        .filter(|(_, ovr)| {
+            ovr.background.is_some() || ovr.data_bar.is_some() || ovr.icon_text.is_some()
+        })
+        .map(|(&(col, _), _)| col)
+        .max()
+        .unwrap_or(0);
+
+    cell_max.max(table_max).max(conditional_max)
+}
+
 /// The last printed column once unwrapped text overflow is honoured.
 ///
 /// Excel extends a sheet's printed range past its used range to every column
@@ -2484,8 +2529,20 @@ pub(super) fn prepare_sheet_context(
     cell_indents: Option<&super::indent::CellIndentLevels>,
     row_boundary_points: Option<&super::row_boundaries::RowBoundaryPoints>,
 ) -> Option<(SheetContext, u32, u32)> {
-    let (mut max_col, mut max_row) = sheet.get_highest_column_and_row();
-    if max_col == 0 || max_row == 0 {
+    let (worksheet_max_col, mut max_row) = sheet.get_highest_column_and_row();
+    if worksheet_max_col == 0 || max_row == 0 {
+        return None;
+    }
+
+    let print_area = find_print_area(sheet);
+    let cond_fmt_overrides =
+        build_cond_fmt_overrides(sheet, raw_cond_fmt_hints, defined_names, theme);
+    let mut max_col: u32 = if print_area.is_some() {
+        worksheet_max_col
+    } else {
+        inferred_printed_max_col(sheet, theme, &table_styles, &cond_fmt_overrides)
+    };
+    if max_col == 0 && print_area.is_none() {
         return None;
     }
 
@@ -2515,7 +2572,6 @@ pub(super) fn prepare_sheet_context(
     // the printed range grows past the used range to the columns that
     // unwrapped text overflow visibly reaches, as Excel prints them
     // (issue #718). An explicit print area is exact and never grows.
-    let print_area = find_print_area(sheet);
     let (col_start, col_end, row_start, row_end) = if let Some(pa) = print_area {
         (pa.start_col, pa.end_col, pa.start_row, pa.end_row)
     } else {
@@ -2540,8 +2596,6 @@ pub(super) fn prepare_sheet_context(
                 .unwrap_or(default_width_pt)
         })
         .collect();
-    let cond_fmt_overrides =
-        build_cond_fmt_overrides(sheet, raw_cond_fmt_hints, defined_names, theme);
     let num_cols = (col_end - col_start + 1) as usize;
 
     Some((
