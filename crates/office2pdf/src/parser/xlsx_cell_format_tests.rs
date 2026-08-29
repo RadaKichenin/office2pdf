@@ -1,4 +1,5 @@
 use super::*;
+use crate::parser::xlsx::xlsx_style::resolve_style_color;
 
 // ----- Cell merging tests (US-015) -----
 
@@ -1834,6 +1835,31 @@ fn test_a_tint_lightens_the_resolved_theme_colour() {
         color.r > 0x40 && color.r < 0xC0,
         "tint 0.5 on black must land mid-grey, got {:#04x}",
         color.r
+    );
+}
+
+/// Excel applies SpreadsheetML `tint` in its 240-step integer HLS space.
+/// The Gift Budget and Tracker fixture from issue #1394 supplies accent 2 as
+/// `DAB6BA` and a body fill at `tint="0.7999"`; native Excel prints `F8EFF0`.
+/// A floating-point 255-step conversion instead lands one RGB step lighter at
+/// `F8F0F1`.
+#[test]
+fn test_positive_theme_tint_matches_native_excel_hls_quantization() {
+    let mut book = umya_spreadsheet::new_file();
+    let mut accent_two = umya_spreadsheet::structs::drawing::RgbColorModelHex::default();
+    accent_two.set_val("DAB6BA");
+    book.get_theme_mut()
+        .get_theme_elements_mut()
+        .get_color_scheme_mut()
+        .get_accent2_mut()
+        .set_rgb_color_model_hex(accent_two);
+
+    let mut source = umya_spreadsheet::Color::default();
+    source.set_theme_index(5).set_tint(0.7999);
+
+    assert_eq!(
+        resolve_style_color(&source, Some(book.get_theme())),
+        Some(Color::new(0xF8, 0xEF, 0xF0))
     );
 }
 
