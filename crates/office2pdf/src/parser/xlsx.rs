@@ -909,7 +909,9 @@ impl XlsxParser {
                         header_row_count,
                         non_repeating_header_row_count,
                         alignment: None,
-                        default_cell_padding: Some(xlsx_cells::XLSX_CELL_PADDING),
+                        default_cell_padding: Some(xlsx_cells::default_cell_padding(
+                            ctx.normal_font.as_ref(),
+                        )),
                         use_content_driven_row_heights: false,
                         default_vertical_align: Some(crate::ir::CellVerticalAlign::Bottom),
                         seats_bottom_aligned_text_on_descender: true,
@@ -1206,7 +1208,9 @@ impl Parser for XlsxParser {
                         header_row_count,
                         non_repeating_header_row_count,
                         alignment: None,
-                        default_cell_padding: Some(xlsx_cells::XLSX_CELL_PADDING),
+                        default_cell_padding: Some(xlsx_cells::default_cell_padding(
+                            ctx.normal_font.as_ref(),
+                        )),
                         use_content_driven_row_heights: false,
                         default_vertical_align: Some(crate::ir::CellVerticalAlign::Bottom),
                         seats_bottom_aligned_text_on_descender: true,
@@ -1317,7 +1321,9 @@ impl Parser for XlsxParser {
                             header_row_count: segment_header_rows,
                             non_repeating_header_row_count: segment_lead_rows,
                             alignment: None,
-                            default_cell_padding: Some(xlsx_cells::XLSX_CELL_PADDING),
+                            default_cell_padding: Some(xlsx_cells::default_cell_padding(
+                                ctx.normal_font.as_ref(),
+                            )),
                             use_content_driven_row_heights: false,
                             default_vertical_align: Some(crate::ir::CellVerticalAlign::Bottom),
                             seats_bottom_aligned_text_on_descender: true,

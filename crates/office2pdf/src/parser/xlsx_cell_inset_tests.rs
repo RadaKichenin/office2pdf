@@ -138,17 +138,39 @@ fn test_sheet_table_carries_excels_cell_text_box() {
     );
 }
 
-/// A one-cell workbook whose cell states `family` at `size_pt`, left-aligned.
-fn workbook_with_cell_font(family: &str, size_pt: f64) -> Vec<u8> {
+#[test]
+fn test_sheet_default_padding_follows_the_workbook_normal_fonts_column_unit() {
+    let data = build_xlsx_with_normal_font("Arial", 32.0);
+    let (doc, _warnings) = XlsxParser
+        .parse(&data, &ConvertOptions::default())
+        .expect("workbook should parse");
+    let sheet = get_sheet_page(&doc, 0);
+    let padding = sheet
+        .table
+        .default_cell_padding
+        .expect("the table carries its Normal-font cell box");
+
+    assert_eq!(padding.left, 6.0);
+    assert_eq!(padding.right, 5.0);
+    assert!(
+        sheet.table.rows[0].cells[0].padding.is_none(),
+        "an unstyled cell inherits the Normal-font table box instead of repeating it"
+    );
+}
+
+/// A one-cell workbook whose cell states `family`, `size_pt`, and `alignment`.
+fn workbook_with_cell_font_and_alignment(
+    family: &str,
+    size_pt: f64,
+    alignment: umya_spreadsheet::HorizontalAlignmentValues,
+) -> Vec<u8> {
     let mut book = umya_spreadsheet::new_file();
     {
         let sheet = book.get_sheet_mut(&0).unwrap();
         let cell = sheet.get_cell_mut("B3");
         cell.set_value("2026");
         let style = cell.get_style_mut();
-        style
-            .get_alignment_mut()
-            .set_horizontal(umya_spreadsheet::HorizontalAlignmentValues::Left);
+        style.get_alignment_mut().set_horizontal(alignment);
         let font = style.get_font_mut();
         font.set_name(family);
         font.set_size(size_pt);
@@ -156,6 +178,15 @@ fn workbook_with_cell_font(family: &str, size_pt: f64) -> Vec<u8> {
     let mut cursor = Cursor::new(Vec::new());
     umya_spreadsheet::writer::xlsx::write_writer(&book, &mut cursor).unwrap();
     cursor.into_inner()
+}
+
+/// A one-cell workbook whose cell states `family` at `size_pt`, left-aligned.
+fn workbook_with_cell_font(family: &str, size_pt: f64) -> Vec<u8> {
+    workbook_with_cell_font_and_alignment(
+        family,
+        size_pt,
+        umya_spreadsheet::HorizontalAlignmentValues::Left,
+    )
 }
 
 /// Every row of the issue #1165 probe whose family the reference digit table
@@ -206,6 +237,26 @@ fn test_left_inset_steps_with_the_cell_fonts_own_column_unit() {
             "{family} {size_pt} starts {expected_left}pt inside its column in Excel's own \
              export, got {}",
             padding.left,
+        );
+    }
+}
+
+#[test]
+fn test_right_inset_steps_one_point_behind_the_cell_fonts_left_inset() {
+    for &(family, size_pt, expected_left) in MEASURED_LEFT_INSETS {
+        let data = workbook_with_cell_font_and_alignment(
+            family,
+            size_pt,
+            umya_spreadsheet::HorizontalAlignmentValues::Right,
+        );
+        let padding: Insets = first_cell_padding(&data);
+        let expected_right: f64 = expected_left - 1.0;
+
+        assert!(
+            (padding.right - expected_right).abs() < 0.01,
+            "{family} {size_pt} ends {expected_right}pt inside its column in Excel's own \
+             export, got {}",
+            padding.right,
         );
     }
 }
@@ -262,6 +313,13 @@ fn test_a_centred_cell_holds_the_column_centre_at_any_cell_font() {
         (padding.left - padding.right).abs() < 0.01,
         "a centred run sits on the column's own centre whatever its font size, got \
          left {} right {}",
+        padding.left,
+        padding.right,
+    );
+    assert!(
+        ((padding.left + padding.right) - 9.0).abs() < 0.01,
+        "a centred Calibri 32 cell keeps the font-sized 5pt/4pt box total, got left {} \
+         right {}",
         padding.left,
         padding.right,
     );

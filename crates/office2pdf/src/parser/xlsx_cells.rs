@@ -227,6 +227,17 @@ pub(super) fn column_unit_pt(family: &str, size_pt: f64) -> f64 {
     round_half_up_pt(digit_advance_em(family) * size_pt)
 }
 
+/// Points Excel ends a cell's text left of the cell's own right gridline.
+///
+/// The inset is a quarter of the cell font's whole-point column unit, rounded
+/// up. Issue #1232 measured both sides over 48 native Excel-for-Mac probe rows:
+/// this right side is one point behind [`cell_left_inset_pt`] at every family
+/// and size. [`aligned_cell_padding`] rebalances that asymmetric pair into
+/// equal sides for a centred cell while preserving its total width.
+pub(super) fn cell_right_inset_pt(family: &str, size_pt: f64) -> f64 {
+    (column_unit_pt(family, size_pt) / 4.0).ceil()
+}
+
 /// Points Excel starts a cell's text right of the cell's own left gridline.
 ///
 /// The inset is not the constant [`XLSX_CELL_PADDING`] states: it is a whole
@@ -274,17 +285,17 @@ pub(super) fn column_unit_pt(family: &str, size_pt: f64) -> f64 {
 ///
 /// This probe read the left inset only. Issue #1232's own probe, which read
 /// both sides of the same step, has the right inset one point behind it at
-/// every size, which is why a centred run stays on the column's own centre
-/// whatever its font. Only the left side moves here; the right side's step is
-/// that issue.
+/// every size. [`aligned_cell_padding`] rebalances that asymmetric pair for a
+/// centred cell, preserving its total width while centring on the column.
 pub(super) fn cell_left_inset_pt(family: &str, size_pt: f64) -> f64 {
-    (column_unit_pt(family, size_pt) / 4.0).ceil() + 1.0
+    cell_right_inset_pt(family, size_pt) + 1.0
 }
 
-/// The left inset of a cell laid out in `style`: the font the cell states,
-/// else the workbook Normal font it inherits, else Excel's own Calibri 11
-/// default — the same fallback order the cell's runs resolve through.
-fn styled_cell_left_inset_pt(style: &TextStyle, normal_font: Option<&NormalFont>) -> f64 {
+/// The box of a cell laid out in `style`: the font the cell states, else the
+/// workbook Normal font it inherits, else Excel's own Calibri 11 default — the
+/// same fallback order the cell's runs resolve through. The vertical sides do
+/// not vary with the font; only the horizontal pair does (issues #1165, #1232).
+fn styled_cell_padding(style: &TextStyle, normal_font: Option<&NormalFont>) -> Insets {
     let family: &str = style
         .font_family
         .as_deref()
@@ -294,7 +305,16 @@ fn styled_cell_left_inset_pt(style: &TextStyle, normal_font: Option<&NormalFont>
         .font_size
         .or_else(|| normal_font.map(|font| font.size_pt))
         .unwrap_or(11.0);
-    cell_left_inset_pt(family, size_pt)
+    Insets {
+        left: cell_left_inset_pt(family, size_pt),
+        right: cell_right_inset_pt(family, size_pt),
+        ..XLSX_CELL_PADDING
+    }
+}
+
+/// The table-level cell box inherited by cells in the workbook Normal font.
+pub(super) fn default_cell_padding(normal_font: Option<&NormalFont>) -> Insets {
+    styled_cell_padding(&TextStyle::default(), normal_font)
 }
 
 /// Space advance of Calibri (and metrically identical Carlito), Excel's
@@ -964,7 +984,7 @@ fn compute_spill_width(
     cell_alignment: Option<crate::ir::Alignment>,
     col_span: u32,
     umya_cell: Option<&umya_spreadsheet::Cell>,
-    left_inset_pt: f64,
+    cell_padding: Insets,
 ) -> Option<f64> {
     if runs.is_empty() {
         return None;
@@ -1013,7 +1033,7 @@ fn compute_spill_width(
     // line that fits flush may still reach its column edge indented
     // (issue #1109).
     let horizontal_inset: f64 =
-        left_inset_pt + XLSX_CELL_PADDING.right + ctx.cell_indent_pt(col_idx, row_idx);
+        cell_padding.left + cell_padding.right + ctx.cell_indent_pt(col_idx, row_idx);
     if estimate_text_width_pt(runs) <= own_width - horizontal_inset {
         return None;
     }
@@ -1772,10 +1792,9 @@ const ICON_SET_VALUE_RESERVE_PT: f64 = 9.6;
 ///
 /// Neither side is a constant of Excel's: both step with the cell font's
 /// whole-point digit advance, and this pair is what that step gives a Calibri
-/// 11 cell. The left side is priced per cell by [`cell_left_inset_pt`]
-/// (issue #1165), and the constant here is what a cell inherits for its
-/// vertical insets, its right side and the table default; the right side's own
-/// step is issue #1232.
+/// 11 cell. [`styled_cell_padding`] prices both sides per cell (issues #1165,
+/// #1232); this constant remains the Calibri 11 default and the source of the
+/// font-independent vertical insets.
 pub(super) const XLSX_CELL_PADDING: crate::ir::Insets = crate::ir::Insets {
     top: 1.0,
     right: 2.0,
@@ -1797,7 +1816,7 @@ fn cell_wraps_past_one_line(
     col_span: u32,
     runs: &[Run],
     umya_cell: Option<&umya_spreadsheet::Cell>,
-    left_inset_pt: f64,
+    cell_padding: Insets,
 ) -> bool {
     if runs.is_empty() {
         return false;
@@ -1820,8 +1839,8 @@ fn cell_wraps_past_one_line(
                 .unwrap_or(0.0)
         })
         .sum::<f64>()
-        - left_inset_pt
-        - XLSX_CELL_PADDING.right
+        - cell_padding.left
+        - cell_padding.right
         - ctx.cell_indent_pt(col_idx, row_idx);
     estimate_text_width_pt(runs) > available_width
 }
@@ -2168,12 +2187,11 @@ pub(super) fn build_rows_for_range(
             {
                 text_style.color = Some(header_ink);
             }
-            // Excel prices the cell's text box from the cell's own font, so a
-            // title starts further inside its column than the body line under
-            // it. Read before the runs take the style, and used for the width
-            // the line has as well as for where it starts (issue #1165).
-            let cell_left_inset: f64 =
-                styled_cell_left_inset_pt(&text_style, ctx.normal_font.as_ref());
+            // Excel prices both horizontal sides of the cell's text box from
+            // the cell's own font. Read before the runs take the style, and
+            // use the same box for the width the line has and where either
+            // aligned edge sits (issues #1165, #1232).
+            let cell_padding: Insets = styled_cell_padding(&text_style, ctx.normal_font.as_ref());
             let (cell_alignment, cell_vertical_align) = umya_cell
                 .map(extract_cell_alignment)
                 .unwrap_or((None, None));
@@ -2276,7 +2294,7 @@ pub(super) fn build_rows_for_range(
                 paragraph_alignment,
                 col_span,
                 umya_cell,
-                cell_left_inset,
+                cell_padding,
             );
 
             row_wraps_past_one_line |= cell_wraps_past_one_line(
@@ -2286,7 +2304,7 @@ pub(super) fn build_rows_for_range(
                 col_span,
                 &runs,
                 umya_cell,
-                cell_left_inset,
+                cell_padding,
             );
 
             let content = if runs.is_empty() {
@@ -2315,13 +2333,7 @@ pub(super) fn build_rows_for_range(
             // aligns the value in what remains to its right, which is
             // where the extra left inset comes from (issue #652).
             let padding: Option<Insets> = {
-                let aligned: Insets = aligned_cell_padding(
-                    Insets {
-                        left: cell_left_inset,
-                        ..XLSX_CELL_PADDING
-                    },
-                    paragraph_alignment,
-                );
+                let aligned: Insets = aligned_cell_padding(cell_padding, paragraph_alignment);
                 let base: Insets = match icon_text {
                     Some(_) => Insets {
                         left: aligned.left + ICON_SET_VALUE_RESERVE_PT,
@@ -2331,7 +2343,7 @@ pub(super) fn build_rows_for_range(
                 };
                 let indented: Insets =
                     indented_cell_padding(base, cell_indent_pt, paragraph_alignment);
-                (indented != XLSX_CELL_PADDING).then_some(indented)
+                (indented != default_cell_padding(ctx.normal_font.as_ref())).then_some(indented)
             };
 
             cells.push(TableCell {
@@ -2519,8 +2531,8 @@ fn spill_reach_max_col(
             style.font_size.unwrap_or(11.0),
         );
         let own_width: f64 = column_width_pt(col);
-        let horizontal_inset: f64 =
-            styled_cell_left_inset_pt(&style, normal_font) + XLSX_CELL_PADDING.right;
+        let cell_padding: Insets = styled_cell_padding(&style, normal_font);
+        let horizontal_inset: f64 = cell_padding.left + cell_padding.right;
         if estimate <= own_width - horizontal_inset {
             continue;
         }
