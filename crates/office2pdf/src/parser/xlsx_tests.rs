@@ -1195,7 +1195,7 @@ fn overrun_sweep_picture_width_pt(
         uses_theme_scheme: false,
         theme_declares_script_faces: false,
     };
-    let ctx: SheetContext = empty_sheet_context(sheet, Some(&normal_font), None);
+    let ctx: SheetContext = empty_sheet_context(sheet, Some(&normal_font), None, None);
     let placed: crate::ir::SheetImage = anchored_image(
         xlsx_drawing::RawImageAnchor {
             from_row: 6,
@@ -1295,7 +1295,7 @@ fn test_empty_sheet_context_derives_metric_from_normal_font() {
         uses_theme_scheme: false,
         theme_declares_script_faces: false,
     };
-    let calibri_ctx = empty_sheet_context(sheet, Some(&calibri_11), None);
+    let calibri_ctx = empty_sheet_context(sheet, Some(&calibri_11), None, None);
     assert_eq!(resolve_column_unit_pt(sheet, Some(&calibri_11)), 6.0);
     assert_eq!(calibri_ctx.default_column_width_pt, 53.0);
     assert_eq!(calibri_ctx.normal_font, Some(calibri_11));
@@ -1311,14 +1311,14 @@ fn test_empty_sheet_context_derives_metric_from_normal_font() {
     };
     assert_eq!(resolve_column_unit_pt(sheet, Some(&calibri_8)), 4.0);
     assert_eq!(
-        empty_sheet_context(sheet, Some(&calibri_8), None).default_column_width_pt,
+        empty_sheet_context(sheet, Some(&calibri_8), None, None).default_column_width_pt,
         37.0
     );
 
     // No readable Normal font: the shared cell-font fallback finds no cells
     // on an empty sheet and keeps the legacy 5.25pt unit (7px × 0.75); the
     // #621 probes never covered a stylesheet-less workbook.
-    let fallback_ctx = empty_sheet_context(sheet, None, None);
+    let fallback_ctx = empty_sheet_context(sheet, None, None, None);
     assert_eq!(resolve_column_unit_pt(sheet, None), 5.25);
     assert_eq!(fallback_ctx.default_column_width_pt, 8.0 * 5.25 + 5.0);
     assert_eq!(fallback_ctx.normal_font, None);
@@ -1504,7 +1504,7 @@ fn test_empty_sheet_context_reads_declared_column_widths() {
         theme_declares_script_faces: false,
     };
 
-    let ctx = empty_sheet_context(sheet, Some(&calibri_11), None);
+    let ctx = empty_sheet_context(sheet, Some(&calibri_11), None, None);
 
     assert_eq!((ctx.col_start, ctx.col_end), (1, 3));
     assert_eq!(ctx.column_widths.len(), 3);
@@ -1525,7 +1525,7 @@ fn test_empty_sheet_context_without_cols_keeps_the_default_window() {
     let book = umya_spreadsheet::new_file();
     let sheet: &umya_spreadsheet::Worksheet = book.get_sheet(&0).unwrap();
 
-    let ctx = empty_sheet_context(sheet, None, None);
+    let ctx = empty_sheet_context(sheet, None, None, None);
 
     assert!(ctx.column_widths.is_empty());
     assert_eq!(ctx.num_cols, 0);
@@ -2014,7 +2014,12 @@ fn an_auto_row_is_sized_by_its_own_cells_tallest_font() {
         let book = sheet_with_one_cell_font(1, cell_size_pt);
         let sheet: &umya_spreadsheet::Worksheet = book.get_sheet(&0).unwrap();
         assert_eq!(
-            xlsx_cells::printed_grid_row_height_pt(sheet, 1, Some(&theme_scheme_normal_font(11.0))),
+            xlsx_cells::printed_grid_row_height_pt(
+                sheet,
+                1,
+                Some(&theme_scheme_normal_font(11.0)),
+                None,
+            ),
             expected,
             "a row of {cell_size_pt}pt cells"
         );
@@ -2028,7 +2033,12 @@ fn an_auto_row_ignores_another_rows_cell_font() {
     let book = sheet_with_one_cell_font(2, 24.0);
     let sheet: &umya_spreadsheet::Worksheet = book.get_sheet(&0).unwrap();
     assert_eq!(
-        xlsx_cells::printed_grid_row_height_pt(sheet, 1, Some(&theme_scheme_normal_font(11.0))),
+        xlsx_cells::printed_grid_row_height_pt(
+            sheet,
+            1,
+            Some(&theme_scheme_normal_font(11.0)),
+            None,
+        ),
         17.0
     );
 }
@@ -2041,7 +2051,12 @@ fn an_auto_row_of_smaller_cells_keeps_the_recomputed_default() {
     let book = sheet_with_one_cell_font(1, 8.0);
     let sheet: &umya_spreadsheet::Worksheet = book.get_sheet(&0).unwrap();
     assert_eq!(
-        xlsx_cells::printed_grid_row_height_pt(sheet, 1, Some(&theme_scheme_normal_font(11.0))),
+        xlsx_cells::printed_grid_row_height_pt(
+            sheet,
+            1,
+            Some(&theme_scheme_normal_font(11.0)),
+            None,
+        ),
         17.0
     );
 }
@@ -2053,7 +2068,12 @@ fn an_auto_row_whose_cell_size_is_unmeasured_keeps_the_recomputed_default() {
     let book = sheet_with_one_cell_font(1, 19.0);
     let sheet: &umya_spreadsheet::Worksheet = book.get_sheet(&0).unwrap();
     assert_eq!(
-        xlsx_cells::printed_grid_row_height_pt(sheet, 1, Some(&theme_scheme_normal_font(11.0))),
+        xlsx_cells::printed_grid_row_height_pt(
+            sheet,
+            1,
+            Some(&theme_scheme_normal_font(11.0)),
+            None,
+        ),
         17.0
     );
 }
@@ -2067,7 +2087,12 @@ fn a_recorded_row_height_outranks_its_cells_font() {
     sheet.get_row_dimension_mut(&1).set_height(36.0);
     let sheet: &umya_spreadsheet::Worksheet = book.get_sheet(&0).unwrap();
     assert_eq!(
-        xlsx_cells::printed_grid_row_height_pt(sheet, 1, Some(&theme_scheme_normal_font(11.0))),
+        xlsx_cells::printed_grid_row_height_pt(
+            sheet,
+            1,
+            Some(&theme_scheme_normal_font(11.0)),
+            None,
+        ),
         36.0
     );
 }
@@ -2484,28 +2509,10 @@ fn thick_row_borders_expand_the_printed_boundary() {
 /// their reservations again grows the native 161.87pt chart area to 163.43pt.
 #[test]
 fn custom_row_heights_already_include_thick_border_reservations() {
-    let mut book = umya_spreadsheet::new_file();
-    {
-        let sheet = book.get_sheet_mut(&0).unwrap();
-        for row_idx in 1..=2 {
-            sheet
-                .get_cell_mut(format!("A{row_idx}").as_str())
-                .set_value("x");
-            sheet
-                .get_row_dimension_mut(&row_idx)
-                .set_height(40.0)
-                .set_custom_height(true)
-                .set_thick_top(true);
-        }
-        sheet.get_row_dimension_mut(&1).set_thick_bot(true);
-    }
-    let mut cursor = Cursor::new(Vec::new());
-    umya_spreadsheet::writer::xlsx::write_writer(&book, &mut cursor).unwrap();
+    let data = include_bytes!("../../../../tests/fixtures/xlsx/issue_1181_fit_to_height.xlsx");
+    let points = row_boundaries::extract_row_boundary_points(data);
 
-    assert_eq!(
-        printed_row_heights(&cursor.into_inner()),
-        vec![Some(40.0), Some(40.0)]
-    );
+    assert!(!points.contains_key("Monthly college budget"));
 }
 
 // ── Theme-resolved scheme Normal fonts (issue #1094) ─────────────────

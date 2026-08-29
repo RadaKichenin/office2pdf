@@ -21,6 +21,8 @@ mod indent;
 mod print_headings;
 #[path = "xlsx_print_options.rs"]
 mod print_options;
+#[path = "xlsx_row_boundaries.rs"]
+mod row_boundaries;
 #[path = "xlsx_tables.rs"]
 mod tables;
 #[path = "xlsx_cells.rs"]
@@ -188,7 +190,7 @@ fn sheet_fit(
     sheet_name: &str,
     fitting_sheets: &std::collections::HashMap<String, fit_to_page::SheetFitToPage>,
     printed_rows: (u32, u32),
-    normal_font: Option<&xlsx_cells::NormalFont>,
+    ctx: &SheetContext,
 ) -> xlsx_pagination::SheetFit {
     let declared: Option<&fit_to_page::SheetFitToPage> = fitting_sheets.get(sheet_name);
     let bound = |pages: u32| -> Option<u32> { (pages > 0).then_some(pages) };
@@ -196,9 +198,8 @@ fn sheet_fit(
     xlsx_pagination::SheetFit {
         pages_wide: declared.and_then(|fit| bound(fit.pages_wide)),
         pages_tall,
-        sheet_height_pt: pages_tall.map_or(0.0, |_| {
-            printed_sheet_height_pt(sheet, printed_rows, normal_font)
-        }),
+        sheet_height_pt: pages_tall
+            .map_or(0.0, |_| printed_sheet_height_pt(sheet, printed_rows, ctx)),
     }
 }
 
@@ -210,10 +211,17 @@ fn sheet_fit(
 fn printed_sheet_height_pt(
     sheet: &umya_spreadsheet::Worksheet,
     (row_start, row_end): (u32, u32),
-    normal_font: Option<&xlsx_cells::NormalFont>,
+    ctx: &SheetContext,
 ) -> f64 {
     (row_start..=row_end)
-        .map(|row| xlsx_cells::printed_grid_row_height_pt(sheet, row, normal_font))
+        .map(|row| {
+            xlsx_cells::printed_grid_row_height_pt(
+                sheet,
+                row,
+                ctx.normal_font.as_ref(),
+                Some(&ctx.row_boundary_points),
+            )
+        })
         .sum()
 }
 
@@ -390,7 +398,12 @@ fn anchored_image(
     // tall in the worksheet over 16pt rows, and 90.00pt down and 105.00pt
     // tall in the export over the 15pt track (issue #1102).
     let row_height_at = |row_zero_based: u32| -> f64 {
-        xlsx_cells::printed_grid_row_height_pt(sheet, row_zero_based + 1, ctx.normal_font.as_ref())
+        xlsx_cells::printed_grid_row_height_pt(
+            sheet,
+            row_zero_based + 1,
+            ctx.normal_font.as_ref(),
+            Some(&ctx.row_boundary_points),
+        )
     };
 
     let (width, height): (f64, f64) =
@@ -463,6 +476,7 @@ fn empty_sheet_context(
     sheet: &umya_spreadsheet::Worksheet,
     normal_font: Option<&NormalFont>,
     theme: Option<&umya_spreadsheet::structs::drawing::Theme>,
+    row_boundary_points: Option<&row_boundaries::RowBoundaryPoints>,
 ) -> SheetContext {
     let unit_pt: f64 = resolve_column_unit_pt(sheet, normal_font);
     let default_width_pt: f64 = default_column_width_pt(
@@ -514,6 +528,7 @@ fn empty_sheet_context(
         // A sheet with no used cells has no cell to indent; drawings anchor
         // to the grid, which the indent never moves.
         cell_indents: std::collections::HashMap::new(),
+        row_boundary_points: row_boundary_points.cloned().unwrap_or_default(),
         indent_unit_pt: resolve_indent_unit_pt(normal_font),
     }
 }
@@ -670,6 +685,9 @@ impl XlsxParser {
         // umya drops `<alignment indent="N"/>`, so the levels come from the
         // package itself (issue #1109).
         let cell_indents = indent::extract_cell_indents(data);
+        // crates.io umya v2 drops `thickTop`, so read both row-boundary flags
+        // from the package as one printed-track input (issue #1228).
+        let row_boundary_points = row_boundaries::extract_row_boundary_points(data);
         // A `cfRule type="expression"` names the workbook's defined names
         // rather than repeating their formulas (issue #852).
         let defined_names = cond_fmt_raw::extract_defined_names(data);
@@ -719,6 +737,7 @@ impl XlsxParser {
                 table_styles.remove(sheet.get_name()).unwrap_or_default(),
                 Some(book.get_theme()),
                 cell_indents.get(sheet.get_name()),
+                row_boundary_points.get(sheet.get_name()),
             ) else {
                 // A sheet without used cells can still carry drawings; give
                 // its images a page instead of dropping them.
@@ -727,8 +746,12 @@ impl XlsxParser {
                 let raw_text_boxes = text_box_map.remove(&sheet_name);
                 let raw_charts = chart_map.remove(&sheet_name);
                 if raw_images.is_some() || raw_text_boxes.is_some() || raw_charts.is_some() {
-                    let stub_ctx =
-                        empty_sheet_context(sheet, normal_font.as_ref(), Some(book.get_theme()));
+                    let stub_ctx = empty_sheet_context(
+                        sheet,
+                        normal_font.as_ref(),
+                        Some(book.get_theme()),
+                        row_boundary_points.get(sheet.get_name()),
+                    );
                     let images: Vec<crate::ir::SheetImage> = raw_images
                         .unwrap_or_default()
                         .into_iter()
@@ -834,7 +857,7 @@ impl XlsxParser {
                 &sheet_name,
                 &fitting_sheets,
                 (row_start, row_end),
-                ctx.normal_font.as_ref(),
+                &ctx,
             );
             let header_footer_scales_with_doc: bool =
                 sheet_header_footer_scales_with_doc(&sheet_name, &fitting_sheets);
@@ -976,6 +999,9 @@ impl Parser for XlsxParser {
         // umya drops `<alignment indent="N"/>`, so the levels come from the
         // package itself (issue #1109).
         let cell_indents = indent::extract_cell_indents(data);
+        // crates.io umya v2 drops `thickTop`, so read both row-boundary flags
+        // from the package as one printed-track input (issue #1228).
+        let row_boundary_points = row_boundaries::extract_row_boundary_points(data);
         // A `cfRule type="expression"` names the workbook's defined names
         // rather than repeating their formulas (issue #852).
         let defined_names = cond_fmt_raw::extract_defined_names(data);
@@ -1023,6 +1049,7 @@ impl Parser for XlsxParser {
                 table_styles.remove(sheet.get_name()).unwrap_or_default(),
                 Some(book.get_theme()),
                 cell_indents.get(sheet.get_name()),
+                row_boundary_points.get(sheet.get_name()),
             ) else {
                 // A sheet without used cells can still carry drawings; give
                 // its images a page instead of dropping them.
@@ -1031,8 +1058,12 @@ impl Parser for XlsxParser {
                 let raw_text_boxes = text_box_map.remove(&sheet_name);
                 let raw_charts = chart_map.remove(&sheet_name);
                 if raw_images.is_some() || raw_text_boxes.is_some() || raw_charts.is_some() {
-                    let stub_ctx =
-                        empty_sheet_context(sheet, normal_font.as_ref(), Some(book.get_theme()));
+                    let stub_ctx = empty_sheet_context(
+                        sheet,
+                        normal_font.as_ref(),
+                        Some(book.get_theme()),
+                        row_boundary_points.get(sheet.get_name()),
+                    );
                     let images: Vec<crate::ir::SheetImage> = raw_images
                         .unwrap_or_default()
                         .into_iter()
@@ -1090,7 +1121,7 @@ impl Parser for XlsxParser {
                 sheet.get_name(),
                 &fitting_sheets,
                 (row_start, row_end),
-                ctx.normal_font.as_ref(),
+                &ctx,
             );
             let header_footer_scales_with_doc: bool =
                 sheet_header_footer_scales_with_doc(sheet.get_name(), &fitting_sheets);
