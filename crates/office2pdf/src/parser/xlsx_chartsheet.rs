@@ -31,8 +31,9 @@ pub(super) struct ChartsheetChartBox {
     pub(super) height: f64,
 }
 
-/// The gap Excel leaves between a printed chartsheet's printable area and the
-/// chart it seats inside it, in points.
+/// The deterministic gap Excel leaves between a printed chartsheet's near
+/// edges and the printable area, in points. The far edges reuse it as the
+/// stable page-only estimate described by [`printed_chart_box`].
 ///
 /// Measured on 58 Excel for Mac 16.100 exports of the `Chart` sheet of
 /// `tests/fixtures/xlsx/any_sheets.xlsx` — four papers, both orientations and
@@ -48,19 +49,18 @@ const CHART_INSET_PT: f64 = 4.0;
 /// (issue #1191), so a 0.7in margin of 50.4pt puts the chart's left edge on
 /// 54 rather than on 50.4.
 ///
-/// The far edges only average that 4pt. Excel lays the chart out on an
-/// internal grid — a whole number of units, each 1.4-4.3pt over these pages —
-/// and how much of the printable area the last unit leaves unspent moves with
-/// the chart's content, not with the page: 0.5in margins on A4 landscape leave
-/// 10.19pt of width over where Letter portrait leaves 1.54pt. One chart cannot
-/// separate that grid from a page rule, so the far edges take the near edges'
-/// inset on the whole point. Against the 58 exports that sizes each axis
-/// 0.89pt out on average and 6.19pt at worst — 0.44pt per edge, since the near
-/// ones are exact — where filling the printable area exactly was 8.84pt out
-/// per axis. Fitting the far constant to this one chart instead does slightly
-/// better (5pt lands 0.30pt per edge), but the residual moves with the chart's
-/// content, so an asymmetry bought on one chart is not a rule; it is tracked
-/// as issue #1221.
+/// The far edges only average that 4pt. The original 58-export sweep lands on
+/// Excel's internal grid rather than following a constant page inset: 0.5in
+/// margins on A4 landscape leave 10.19pt of width over where Letter portrait
+/// leaves 1.54pt. This converter deliberately keeps that unexplained residual
+/// as the page-only model's error term (issue #1221).
+///
+/// The far edges consequently take the near edges' exact 4pt inset on the
+/// whole point: a deterministic, symmetric page rule. Against the sweep, that
+/// sizes each axis 0.89pt out on average and 6.19pt at worst — 0.44pt per edge,
+/// since the near ones are exact — where filling the printable area exactly
+/// was 8.84pt out per axis. A fitted 5pt far inset improves only that sweep, so
+/// it is not a general rule.
 ///
 /// A margin Excel cannot print into is not modelled: a chartsheet asking for
 /// zero margins exported against the printer's hardware minimum instead

@@ -601,9 +601,11 @@ fn anchored_chart(
 /// on Excel for Mac 16.100 exports of `tests/fixtures/xlsx/any_sheets.xlsx`:
 /// halving the drawing's `xdr:ext` and moving its `xdr:pos` each left the
 /// exported page byte-identical, while widening a margin moved and resized the
-/// printed chart (issue #1099). The page setup alone therefore says where it
-/// lands — `chartsheet::printed_chart_box`, which insets it from the margins
-/// rather than filling the printable area exactly (issue #1147).
+/// printed chart (issue #1099). The page setup therefore fixes the chart's
+/// origin. `chartsheet::printed_chart_box` also gives its deterministic
+/// page-only extent; Excel's internal-grid far-edge residual remains an
+/// explicit error term rather than a fitted page constant (issues #1147 and
+/// #1221).
 ///
 /// A chartsheet has no header or footer of its own in any audited package, and
 /// no cells at all, so the page carries an empty grid.

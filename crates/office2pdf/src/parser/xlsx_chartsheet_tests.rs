@@ -175,7 +175,7 @@ fn the_chart_stops_short_of_the_far_margin() {
 ///
 /// Each row is one measured export; the expectation is this model's box and
 /// the comment beside it is Excel's own, which the model meets to within the
-/// step of the chart's internal layout grid.
+/// internal-grid error term documented on `printed_chart_box`.
 #[test]
 fn the_box_tracks_the_paper_and_the_margins() {
     // Letter landscape: Excel draws 681.82 x 493.18 at (54, 58).
@@ -224,11 +224,10 @@ fn the_box_tracks_the_paper_and_the_margins() {
 /// The two exports the far inset misses by the most, kept as the model's
 /// stated error rather than left out of the table.
 ///
-/// Excel's chart lands on its own layout grid — a whole number of internal
-/// units, each 1.4-4.3pt on these pages — so how much of the printable area it
-/// spends past the 4pt varies with the chart's content. Half an inch of margin
-/// leaves 10.19pt of width unused where Letter portrait leaves 1.54pt, and no
-/// page rule sits between the two (issue #1147).
+/// Half an inch of margin leaves 10.19pt of width unused where Letter portrait
+/// leaves 1.54pt in the recorded sweep. This page-only model keeps the
+/// difference as its explicit error term rather than fitting one far-edge
+/// constant to that sweep (issue #1221).
 #[test]
 fn the_far_inset_is_the_models_error_term() {
     // A4 landscape, 0.5in margins: Excel draws 755.81 x 511.63 at (40, 40),
