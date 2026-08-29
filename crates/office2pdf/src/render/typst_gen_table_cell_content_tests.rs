@@ -2195,10 +2195,11 @@ fn row_spanning_cell_keeps_its_declared_alignment_in_a_tight_row() {
     );
 }
 
-/// Excel lays a printed sheet out in whole device points: a row's line box is
-/// its face's `hhea` ascent and descent each rounded to a point, centred in
-/// the row's track with the odd leftover point given to the space *above* the
-/// line (issue #1063).
+/// Excel lays an unmerged printed sheet cell out in whole device points: its
+/// line box is the face's `hhea` ascent and descent each rounded to a point,
+/// centred in the row's track with the odd leftover point given to the space
+/// *above* the line (issue #1063). Horizontal merges reverse that last choice
+/// (issue #1242).
 ///
 /// The table is what four native Excel-for-Mac probe exports measured
 /// (`/Volumes/T7/scratch/issue-1063/probe`): a track-height sweep at Arial 10,
@@ -2254,6 +2255,7 @@ fn sheet_cell_line_seat_reproduces_the_native_excel_probe() {
             ARIAL_DESCENT_EM,
             ARIAL_LINE_GAP_EM,
             font_size_pt,
+            false,
             None,
         );
         assert!(
@@ -2318,6 +2320,7 @@ fn sheet_cell_line_seat_reproduces_a_face_with_no_line_gap() {
             descent_em,
             line_gap_em,
             font_size_pt,
+            false,
             None,
         );
         assert!(
@@ -2327,6 +2330,135 @@ fn sheet_cell_line_seat_reproduces_a_face_with_no_line_gap() {
              the track top, seated {seated_pt}pt"
         );
     }
+}
+
+/// The #1242 title's four one-factor Excel-for-Mac 16.112.2 probes isolate
+/// horizontal merge state as the centring selector. With A1:B1 merged, a
+/// Century Gothic 30pt line in 89/90/91/92pt tracks seats 56/56/57/57pt below
+/// the track top: the odd leftover point stays below the line. Removing only
+/// the merge moves the 90pt case to 57pt, the unmerged rule covered by #1063.
+#[test]
+fn merged_sheet_cell_keeps_the_odd_centering_point_below_the_line() {
+    const CENTURY_GOTHIC_ASCENT_EM: f64 = 2060.0 / 2048.0;
+    const CENTURY_GOTHIC_DESCENT_EM: f64 = 451.0 / 2048.0;
+
+    for (track_pt, expected_pt) in [(89.0, 56.0), (90.0, 56.0), (91.0, 57.0), (92.0, 57.0)] {
+        let baseline_pt: f64 = sheet_cell_baseline_from_track_top_pt(
+            track_pt,
+            CENTURY_GOTHIC_ASCENT_EM,
+            CENTURY_GOTHIC_DESCENT_EM,
+            0.0,
+            30.0,
+            true,
+            None,
+        );
+        assert_eq!(
+            baseline_pt, expected_pt,
+            "the merged {track_pt}pt track follows the native floor cadence"
+        );
+    }
+
+    assert_eq!(
+        sheet_cell_baseline_from_track_top_pt(
+            90.0,
+            CENTURY_GOTHIC_ASCENT_EM,
+            CENTURY_GOTHIC_DESCENT_EM,
+            0.0,
+            30.0,
+            false,
+            None,
+        ),
+        57.0,
+        "removing only the merge restores the unmerged ceiling cadence"
+    );
+}
+
+/// The table path must carry a horizontal merge into the numeric seat; testing
+/// the helper alone would not catch a dropped `TableCell::col_span` signal.
+#[test]
+fn horizontal_sheet_merge_selects_the_lower_odd_centering_half() {
+    const FAMILY: &str = "Libertinus Serif";
+    let Some((ascent_em, descent_em, pitch_em)) = crate::render::pdf::font_line_metrics_em(FAMILY)
+    else {
+        return;
+    };
+    let line_gap_em: f64 = crate::render::pdf::font_line_gap_em(FAMILY).unwrap_or(0.0);
+    let font_size_pt: f64 = 30.0;
+    let line_pt: f64 = ((ascent_em - line_gap_em) * font_size_pt).floor()
+        + (line_gap_em * font_size_pt).ceil()
+        + (descent_em * font_size_pt).round();
+    let track_pt: f64 = line_pt + 53.0;
+    let padding = Insets {
+        top: 1.0,
+        right: 3.0,
+        bottom: 1.5,
+        left: 3.0,
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            minimum_height: None,
+            cells: vec![TableCell {
+                content: vec![Block::Paragraph(Paragraph {
+                    style: ParagraphStyle::default(),
+                    runs: vec![Run {
+                        text: "Merged title".to_string(),
+                        style: TextStyle {
+                            font_family: Some(FAMILY.to_string()),
+                            font_size: Some(font_size_pt),
+                            ..TextStyle::default()
+                        },
+                        href: None,
+                        footnote: None,
+                    }],
+                })],
+                col_span: 2,
+                vertical_align: Some(CellVerticalAlign::Center),
+                ..TableCell::default()
+            }],
+            height: Some(track_pt),
+        }],
+        column_widths: vec![72.0, 72.0],
+        default_cell_padding: Some(padding),
+        default_vertical_align: Some(CellVerticalAlign::Bottom),
+        seats_bottom_aligned_text_on_descender: true,
+        border_paint_model: TableBorderPaintModel::CenteredStroke,
+        prints_gridlines: false,
+        prints_headings: false,
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let source: String = generate_typst(&doc).unwrap().source;
+
+    let baseline_pt: f64 = sheet_cell_baseline_from_track_top_pt(
+        track_pt,
+        ascent_em - line_gap_em,
+        descent_em,
+        line_gap_em,
+        font_size_pt,
+        true,
+        None,
+    );
+    let unmerged_baseline_pt: f64 = sheet_cell_baseline_from_track_top_pt(
+        track_pt,
+        ascent_em - line_gap_em,
+        descent_em,
+        line_gap_em,
+        font_size_pt,
+        false,
+        None,
+    );
+    assert_eq!(
+        unmerged_baseline_pt - baseline_pt,
+        1.0,
+        "the constructed track must expose the merge selector"
+    );
+    let content_mid_pt: f64 = (padding.top + (track_pt - padding.bottom)) / 2.0;
+    let expected_top_em: f64 = pitch_em / 2.0 + (baseline_pt - content_mid_pt) / font_size_pt;
+    let needle: String = format!("top-edge: {}em", format_f64(expected_top_em));
+    assert!(
+        source.contains(&needle),
+        "the merged cell must carry its colspan into the lower odd-half seat; expected `{needle}` in:\n{source}"
+    );
 }
 
 /// A fitted sheet snaps the line seat in its own declared-point coordinate
@@ -2346,6 +2478,7 @@ fn scaled_sheet_cell_line_seat_snaps_in_declared_sheet_space() {
         SEGOE_UI_DESCENT_EM,
         0.0,
         12.0 * SCALE,
+        false,
         Some(SCALE),
     );
 
@@ -2446,6 +2579,7 @@ fn sheet_cell_line_box_uses_the_face_that_paints_korean_fallback_text() {
         malgun_descent_em,
         line_gap_em,
         font_size_pt,
+        false,
         None,
     );
     let content_mid_pt: f64 = (padding.top + (track_pt - padding.bottom)) / 2.0;
@@ -2523,6 +2657,7 @@ fn fixed_track_sheet_cell_seats_its_centred_line_on_the_track() {
         descent_em,
         line_gap_em,
         font_size_pt,
+        false,
         None,
     );
     let expected_top_em: f64 = pitch_em / 2.0 + (baseline_pt - content_mid_pt) / font_size_pt;
