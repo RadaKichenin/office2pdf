@@ -304,6 +304,101 @@ const LEGEND_KEY_LABEL_GAP_PT: f64 = 0.0;
 /// again in the unrelated `WithChart.xlsx` export.
 const EXCEL_LEGEND_KEY_LABEL_GAP_PT: f64 = 2.025;
 
+/// Fixed part of the clearance Excel leaves after a horizontal legend label.
+///
+/// Native Excel for Mac 16.112 exports of `Gift Budget and Tracker1.xlsx`,
+/// varied one factor at a time and guarded by a layout-identical re-zip
+/// control, put the common intercept at 6.58..6.64pt across eight faces. The
+/// 6.625pt centre fits every 9/18pt pair below within 0.02pt.
+const EXCEL_LEGEND_TRAILING_FIXED_PT: f64 = 6.625;
+
+/// Share of the final glyph's advance that Excel adds to the trailing slope.
+///
+/// Changing only the final `t` of all four 9pt Segoe UI labels to `.`, `i`,
+/// `A`, `M`, or `W` moves the isolated trailing clearance by 1.43883pt per em
+/// of final-glyph advance. Dividing by the 9pt size gives 0.15987, within
+/// 0.003pt of this 0.16 factor on every variant.
+const EXCEL_LEGEND_TRAILING_LAST_GLYPH_EM: f64 = 0.16;
+
+/// Move a worksheet axis chart's bottom legend from the generic content centre
+/// to Excel's visible-row centre.
+///
+/// Across 25 unconstrained native exports — Segoe UI at every integer size
+/// from 3 through 16 plus 18, 20 and 22pt, and eight faces at 9pt — the row
+/// from the first key edge through the last label centres at 509.740..509.768pt
+/// in the fixture's 1015.978pt chart frame. The generic plot-plus-label content
+/// rectangle centres at 505.4284pt, leaving this stable 4.3235pt correction.
+const EXCEL_BOTTOM_LEGEND_CENTER_X_SHIFT_PT: f64 = 4.3235;
+
+/// Excel's trailing-clearance slope for a label ending in `t`, by face.
+///
+/// The values are fixed-intercept fits through native 9/18pt exports; Segoe UI
+/// additionally uses every unconstrained integer size from 3 through 16 plus
+/// 18, 20 and 22pt. At 24pt the row first runs out of chart width and Excel
+/// compresses it, so that constrained-row regime is deliberately not folded
+/// into these intrinsic per-entry widths.
+fn excel_legend_trailing_slope_t_em(family: &str) -> f64 {
+    let normalized: String = family
+        .chars()
+        .filter(|character| character.is_ascii_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect();
+    match normalized.as_str() {
+        "segoeui" => 1.124_021,
+        "calibri" => 1.033_098,
+        "arial" => 1.120_107,
+        "georgia" => 1.136_827,
+        "timesnewroman" => 1.041_811,
+        "verdana" => 1.272_171,
+        "centurygothic" => 1.227_227,
+        "aptos" => 1.083_627,
+        // Segoe UI is the source workbook's face and the centre of the
+        // measured slopes, so it is the least surprising unmeasured fallback.
+        _ => 1.124_021,
+    }
+}
+
+/// Intrinsic clearance after one worksheet axis-chart legend label.
+///
+/// Excel chartsheets and PowerPoint use a separate square-key layout, while
+/// Word has no native calibration, and the line/radar/pie emitters have
+/// different content rectangles, so only a worksheet axis chart
+/// enters this measured regime. The face slope is referenced to labels ending
+/// in `t`; when the source face can be measured, the terminal-glyph probe above
+/// adjusts it for the actual final character. Font-search-free builds retain
+/// the face/size calibration and omit only that sub-point correction.
+pub(super) fn excel_legend_trailing_gutter_pt(chart: &Chart, label: &str) -> Option<f64> {
+    if !matches!(chart.host, crate::ir::ChartHost::Spreadsheet)
+        || !matches!(chart_variant(chart), ChartVariant::AxisPlot)
+    {
+        return None;
+    }
+    let size_pt: f64 = chart_legend_text_pt(chart);
+    let is_bold: bool = chart_legend_text_is_bold(chart);
+    let family: &str = chart
+        .text_font_family
+        .as_deref()
+        .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_FAMILY);
+    let terminal_delta_em: f64 = label
+        .chars()
+        .last()
+        .filter(|last| *last != 't')
+        .and_then(|last| {
+            let last: String = last.to_string();
+            Some(
+                chart_text_advance_em(family, is_bold, &last)?
+                    - chart_text_advance_em(family, is_bold, "t")?,
+            )
+        })
+        .unwrap_or(0.0)
+        * EXCEL_LEGEND_TRAILING_LAST_GLYPH_EM;
+    Some(
+        (EXCEL_LEGEND_TRAILING_FIXED_PT
+            + (excel_legend_trailing_slope_t_em(family) + terminal_delta_em) * size_pt)
+            .max(GAP),
+    )
+}
+
 /// The share of the legend face's line box Excel gives a filled key's height.
 ///
 /// The key is a flat bar, not a square: 5.39pt tall for the 9pt Segoe UI legend
@@ -1334,6 +1429,8 @@ struct LegendEntryLayout<'a> {
     widths: &'a [f64],
     right_inset: Option<(f64, f64)>,
     side_y_shift: f64,
+    horizontal_end_trim: f64,
+    horizontal_x_shift: f64,
 }
 
 impl LegendBox {
@@ -1393,8 +1490,10 @@ impl LegendBox {
             // advances by its own width, not by a flat pitch: a name wider than
             // the pitch used to run under the entry beside it and the two
             // overprinted into unreadable text (issue #827).
-            let row_w: f64 = layout.widths.iter().sum();
-            let start_x: f64 = content_x + (content_w - row_w).max(0.0) / 2.0;
+            let row_w: f64 =
+                (layout.widths.iter().sum::<f64>() - layout.horizontal_end_trim).max(0.0);
+            let start_x: f64 =
+                content_x + (content_w - row_w).max(0.0) / 2.0 + layout.horizontal_x_shift;
             let y: f64 = match position {
                 LegendPosition::Top => (content_y - self.top).max(0.0),
                 _ => content_y + content_h + GAP,
@@ -2976,9 +3075,11 @@ fn chart_user_shape_run_markup(run: &crate::ir::Run) -> String {
 /// Width each legend entry occupies when the legend runs across the chart.
 ///
 /// The key, the gap to the label, and the label itself measured in the face the
-/// chart sets its text in. [`LEGEND_ENTRY_W`] is the floor, so a legend of short
-/// names lays out exactly where it always did and only a name too wide for the
-/// old flat pitch moves (issue #827).
+/// chart sets its text in. An Excel worksheet axis chart then closes
+/// the entry with its measured face/size-dependent clearance; other hosts and
+/// chart variants retain the generic [`GAP`]. [`LEGEND_ENTRY_W`] remains the
+/// floor, so a short entry cannot collapse below the established minimum
+/// (issues #827 and #1249).
 ///
 /// Falls back to the floor for any name that cannot be measured — wasm has no
 /// font search — so an entry is never narrower than its text.
@@ -2999,11 +3100,50 @@ fn legend_entry_widths(
         .map(|name| {
             let label: f64 = chart_text_advance_em(family, is_bold, name)
                 .map_or(0.0, |advance| advance * size_pt);
-            // A gutter after the label keeps neighbouring entries apart rather
-            // than butting the next key against the last glyph.
-            (key_len_pt + key_label_gap_pt + label + GAP).max(LEGEND_ENTRY_W)
+            let trailing: f64 = excel_legend_trailing_gutter_pt(chart, name).unwrap_or(GAP);
+            (key_len_pt + key_label_gap_pt + label + trailing).max(LEGEND_ENTRY_W)
         })
         .collect()
+}
+
+/// The invisible tail and centre correction of an Excel bottom-legend row.
+///
+/// The per-entry trailing clearance advances every following key, but after
+/// the final label there is no following entry, and Excel excludes that final
+/// clearance when centring the visible row. If the source face cannot be
+/// measured, no trim is attempted: the width floor may be the part closing the
+/// entry in a font-search-free build, and subtracting an assumed gutter would
+/// move an otherwise unchanged fallback.
+fn excel_bottom_legend_row_adjustment(
+    chart: &Chart,
+    key_len_pt: f64,
+    key_label_gap_pt: f64,
+    names: &[String],
+) -> (f64, f64) {
+    if !matches!(chart.host, crate::ir::ChartHost::Spreadsheet)
+        || !matches!(chart.legend_position, LegendPosition::Bottom)
+    {
+        return (0.0, 0.0);
+    }
+    let Some(last) = names.last() else {
+        return (0.0, 0.0);
+    };
+    let size_pt: f64 = chart_legend_text_pt(chart);
+    let is_bold: bool = chart_legend_text_is_bold(chart);
+    let family: &str = chart
+        .text_font_family
+        .as_deref()
+        .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_FAMILY);
+    let Some(label_pt) =
+        chart_text_advance_em(family, is_bold, last).map(|advance| advance * size_pt)
+    else {
+        return (0.0, 0.0);
+    };
+    let trailing_pt: f64 = excel_legend_trailing_gutter_pt(chart, last).unwrap_or(GAP);
+    if key_len_pt + key_label_gap_pt + label_pt + trailing_pt < LEGEND_ENTRY_W {
+        return (0.0, 0.0);
+    }
+    (trailing_pt, EXCEL_BOTTOM_LEGEND_CENTER_X_SHIFT_PT)
 }
 
 /// The key box one entry of an axis chart's legend draws, and the space it
@@ -3775,6 +3915,8 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
     let key: LegendKeyMetrics = axis_legend_entry_metrics(chart);
     let entry_widths: Vec<f64> =
         legend_entry_widths(chart, key.width_pt, key.label_gap_pt, &legend_names);
+    let (horizontal_end_trim, horizontal_x_shift) =
+        excel_bottom_legend_row_adjustment(chart, key.width_pt, key.label_gap_pt, &legend_names);
     let right_inset =
         powerpoint_right_legend_inset(chart, &legend_names, key.width_pt, key.label_gap_pt);
     let legend_entries: usize = if chart.has_legend { series.len() } else { 0 };
@@ -3810,6 +3952,8 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 widths: &entry_widths,
                 right_inset,
                 side_y_shift: powerpoint_right_legend_y_shift(chart),
+                horizontal_end_trim,
+                horizontal_x_shift,
             },
         );
         let entry_y: f64 = entry_y + excel_bottom_legend_y_shift_pt(chart);
@@ -4158,6 +4302,8 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
                 widths: &entry_widths,
                 right_inset: None,
                 side_y_shift: 0.0,
+                horizontal_end_trim: 0.0,
+                horizontal_x_shift: 0.0,
             },
         );
         let key: String = line_legend_key(s_index, s, &color);
@@ -4426,6 +4572,8 @@ fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64
                     widths: &entry_widths,
                     right_inset: None,
                     side_y_shift: 0.0,
+                    horizontal_end_trim: 0.0,
+                    horizontal_x_shift: 0.0,
                 },
             );
             let key: String = line_legend_key(series_index, series, &color);
@@ -4582,6 +4730,8 @@ fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, 
                 widths: &entry_widths,
                 right_inset: None,
                 side_y_shift: 0.0,
+                horizontal_end_trim: 0.0,
+                horizontal_x_shift: 0.0,
             },
         );
         let _ = writeln!(
