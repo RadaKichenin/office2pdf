@@ -1095,10 +1095,19 @@ const EXCEL_DEFAULT_ROW_HEIGHT_PT: f64 = 15.0;
 /// | scheme font size | recomputed row | printed track |
 /// | ---: | ---: | ---: |
 /// | 8 | 13 | 13 |
+/// | 9 | 14 | 14 |
 /// | 10 | 15 | 15 |
 /// | 11 | 17 | 17 |
+/// | 12 | 18 | 18 |
+/// | 13 | 19 | 19 |
 /// | 14 | 20 | 20 |
+/// | 15 | 22 | 22 |
+/// | 16 | 23 | 23 |
+/// | 17 | 26 | 26 |
 /// | 18 | 27 | 27 |
+/// | 20 | 30 | 30 |
+/// | 22 | 32 | 32 |
+/// | 24 | 35 | 35 |
 pub(super) fn recomputed_default_row_height_pt(
     sheet: &umya_spreadsheet::Worksheet,
     normal_font: Option<&NormalFont>,
@@ -1159,17 +1168,25 @@ fn named_face_row_heights(family: &str) -> Option<&'static [(f64, f64)]> {
 /// through the theme's per-script face list — Malgun Gothic on the reference
 /// machine, whose measurement the doc comment above records.
 ///
-/// The 24pt entry comes from the other end of the same face: the auto rows of
-/// `issue_1060_sheet_row_line_box_probe.xlsx` whose cells name Malgun Gothic
-/// 24 outright export a 35.00pt track, where its 14pt cells export the 20.00pt
-/// this table already carried from the scheme sweep (issue #1140). The two
-/// agreeing at 14 is what says the scheme resolves to that same face.
-const UI_SCRIPT_FACE_ROW_HEIGHTS: [(f64, f64); 6] = [
+/// The original scheme sweep covered six points. Issue #1150 swept the same
+/// resolved face, Malgun Gothic, across fourteen sizes: its six overlapping
+/// readings agree exactly, which identifies one series, and issue #1226 adds
+/// the remaining eight. The native customer-workbook exports captured before
+/// that change exercise its 12pt entry over 101 and 1001 dimension-less rows.
+const UI_SCRIPT_FACE_ROW_HEIGHTS: [(f64, f64); 14] = [
     (8.0, 13.0),
+    (9.0, 14.0),
     (10.0, 15.0),
     (11.0, 17.0),
+    (12.0, 18.0),
+    (13.0, 19.0),
     (14.0, 20.0),
+    (15.0, 22.0),
+    (16.0, 23.0),
+    (17.0, 26.0),
     (18.0, 27.0),
+    (20.0, 30.0),
+    (22.0, 32.0),
     (24.0, 35.0),
 ];
 
@@ -1289,20 +1306,21 @@ struct NamedFaceRowHeights {
 ///
 /// `맑은 고딕` and `Malgun Gothic` name the face the theme's per-script list
 /// resolves to on this machine, so a font naming it outright takes the
-/// scheme's own `UI_SCRIPT_FACE_ROW_HEIGHTS`; it agrees with that table at all
-/// six sizes it carries, which is the reading that identifies it, and the two
-/// spellings answer each other at all fourteen. The sweep measured eight
-/// further sizes for that face, which are left out rather than folded in:
-/// extending the scheme table repaginates eleven tracked workbooks with no
-/// ground truth to check the result against.
+/// scheme's own `UI_SCRIPT_FACE_ROW_HEIGHTS`. Its six original scheme points
+/// agree with the named-face sweep exactly, which identifies the series, and
+/// issue #1226 folds in that sweep's other eight sizes after capturing native
+/// Excel exports of the two customer workbooks that exercise 12pt. Their 18pt
+/// row pitch now agrees; the remaining theme-face/column, final-column text
+/// overflow and pristine-sheet paper differences are tracked in #1380, #1381
+/// and #1382 respectively.
 ///
 /// A spelling is only aliased once it has been swept as its own variant.
 /// `NanumMyeongjo` is not `나눔명조` here: it answers a column of its own that
 /// falls at 13pt (16 at 12, 15 at 13) and at 18pt, reproducibly, so it is left
 /// to the declared hint rather than lent the Korean spelling's series.
 ///
-/// A size a family's series skips keeps the declared hint, as it does for
-/// Calibri: nothing here interpolates.
+/// A size a family's series skips keeps the declared hint: nothing here
+/// interpolates.
 const NAMED_FACE_ROW_HEIGHTS: [NamedFaceRowHeights; 7] = [
     NamedFaceRowHeights {
         families: &["Arial", "Times New Roman", "Verdana"],
