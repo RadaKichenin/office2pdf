@@ -662,6 +662,10 @@ pub(super) struct SheetContext {
     /// The alignment indent level of every cell that declares one, read from
     /// the raw package because umya drops the attribute (issue #1109).
     pub(super) cell_indents: super::indent::CellIndentLevels,
+    /// Fixed printed points reserved by automatic-row `thickTop` and
+    /// `thickBot` flags, read from the raw package because the crates.io v2
+    /// umya release drops `thickTop` (issue #1228).
+    pub(super) row_boundary_points: super::row_boundaries::RowBoundaryPoints,
     /// Points one indent level insets a cell's text by, from the workbook
     /// Normal font.
     pub(super) indent_unit_pt: f64,
@@ -1839,7 +1843,7 @@ fn printed_row_height(
     sheet: &umya_spreadsheet::Worksheet,
     row_idx: u32,
     row_wraps_past_one_line: bool,
-    normal_font: Option<&NormalFont>,
+    ctx: &SheetContext,
 ) -> Option<f64> {
     let is_custom_height: bool = sheet
         .get_row_dimension(&row_idx)
@@ -1848,7 +1852,12 @@ fn printed_row_height(
     if !is_custom_height && row_wraps_past_one_line {
         return None;
     }
-    Some(printed_grid_row_height_pt(sheet, row_idx, normal_font))
+    Some(printed_grid_row_height_pt(
+        sheet,
+        row_idx,
+        ctx.normal_font.as_ref(),
+        Some(&ctx.row_boundary_points),
+    ))
 }
 
 /// The worksheet height of a row that records none: what Excel recomputes
@@ -1957,10 +1966,23 @@ fn tallest_cell_font_size_pt(sheet: &umya_spreadsheet::Worksheet, row_idx: u32) 
 /// dimension, `height of row 1` and `height of row 7` answer the same number
 /// at every size, and neither is 16 except where the recompute lands there
 /// (issue #1151).
+///
+/// The returned table-row height governs this row's printed baseline, not
+/// merely its worksheet `height` property. Excel reserves one PDF point when
+/// this row begins with `thickTop`, plus one when the preceding row ends with
+/// `thickBot`. Native PDF baseline pitches on
+/// `SH107-9-x-9-Formatted-Table.xlsx` are 19/17/19/19/17/17/17/17pt against
+/// its bare 17pt track, exactly the previous-bottom plus current-top pattern. A
+/// separate 8-24pt Normal-font sweep kept each term at 1pt, so apply it after
+/// the font-dependent grid mapping rather than scaling it. A `customHeight`
+/// already declares the full boundary, so only flags belonging to automatic
+/// rows contribute: adding the custom flags in `issue_1181_fit_to_height.xlsx`
+/// again grows its native 161.87pt chart area to 163.43pt (issue #1228).
 pub(super) fn printed_grid_row_height_pt(
     sheet: &umya_spreadsheet::Worksheet,
     row_idx: u32,
     normal_font: Option<&NormalFont>,
+    row_boundary_points: Option<&super::row_boundaries::RowBoundaryPoints>,
 ) -> f64 {
     let dimension: Option<&umya_spreadsheet::structs::Row> = sheet.get_row_dimension(&row_idx);
     let declared_height: Option<f64> = dimension
@@ -1973,7 +1995,13 @@ pub(super) fn printed_grid_row_height_pt(
         (true, Some(height)) => height,
         (_, cached_height) => auto_row_height_pt(sheet, row_idx, normal_font, cached_height),
     };
-    native_excel_pdf_row_height(worksheet_height, normal_font)
+    let boundary_points: f64 = f64::from(
+        row_boundary_points
+            .and_then(|points| points.get(&row_idx))
+            .copied()
+            .unwrap_or(0),
+    );
+    native_excel_pdf_row_height(worksheet_height, normal_font) + boundary_points
 }
 
 /// The outline a merged range prints: each side taken from the members that
@@ -2300,12 +2328,7 @@ pub(super) fn build_rows_for_range(
             });
         }
 
-        let height: Option<f64> = printed_row_height(
-            sheet,
-            row_idx,
-            row_wraps_past_one_line,
-            ctx.normal_font.as_ref(),
-        );
+        let height: Option<f64> = printed_row_height(sheet, row_idx, row_wraps_past_one_line, ctx);
 
         rows.push(TableRow {
             cells,
@@ -2459,6 +2482,7 @@ pub(super) fn prepare_sheet_context(
     table_styles: Vec<crate::parser::xlsx::tables::TableStyleRange>,
     theme: Option<&umya_spreadsheet::structs::drawing::Theme>,
     cell_indents: Option<&super::indent::CellIndentLevels>,
+    row_boundary_points: Option<&super::row_boundaries::RowBoundaryPoints>,
 ) -> Option<(SheetContext, u32, u32)> {
     let (mut max_col, mut max_row) = sheet.get_highest_column_and_row();
     if max_col == 0 || max_row == 0 {
@@ -2482,6 +2506,8 @@ pub(super) fn prepare_sheet_context(
         unit_pt,
     );
     let cell_indents: super::indent::CellIndentLevels = cell_indents.cloned().unwrap_or_default();
+    let row_boundary_points: super::row_boundaries::RowBoundaryPoints =
+        row_boundary_points.cloned().unwrap_or_default();
     let indent_unit_pt: f64 = resolve_indent_unit_pt(normal_font);
     let (merge_tops, merge_skips) = build_merge_maps(sheet);
 
@@ -2532,6 +2558,7 @@ pub(super) fn prepare_sheet_context(
             table_styles,
             theme: theme.cloned(),
             cell_indents,
+            row_boundary_points,
             indent_unit_pt,
         },
         row_start,
