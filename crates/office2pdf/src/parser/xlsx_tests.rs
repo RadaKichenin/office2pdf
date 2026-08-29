@@ -2474,11 +2474,56 @@ fn the_other_remapped_family_compacts_too() {
 
 // ── Thick row-border tracks (issue #1228) ────────────────────────────
 
-/// The formatted-table workbook of issue #1228: rows 1, 3 and 4 end at a
-/// thick border, while rows 1, 2, 4 and 5 start at one.
-const THICK_ROW_BORDER_PROBE: &[u8] =
+/// The customer workbook shared by the print-range and thick-row probes.
+const SH107_FORMATTED_TABLE: &[u8] =
     include_bytes!("../../../../tests/fixtures/xlsx/SH107-9-x-9-Formatted-Table.xlsx");
 
+/// SH107 declares A1:K9 and writes quote-prefix-only J/K cells in two rows,
+/// but its native Excel-for-Mac export stops at the nine value-bearing columns
+/// A:I. The two value-less columns paint no fill, border or text and therefore
+/// must not claim a second horizontal page (issue #1229).
+#[test]
+fn value_less_unpainted_trailing_cells_do_not_extend_the_printed_grid() {
+    let (doc, _warnings) = XlsxParser
+        .parse(SH107_FORMATTED_TABLE, &ConvertOptions::default())
+        .unwrap();
+
+    assert_eq!(doc.pages.len(), 1, "the native export is one page");
+    assert_eq!(
+        get_sheet_page(&doc, 0).table.column_widths.len(),
+        9,
+        "the printed grid stops at value-bearing column I"
+    );
+}
+
+/// Trimming is about paint, not merely the absence of a value: a fill on an
+/// empty trailing cell is visible and keeps that column in the printed grid.
+#[test]
+fn a_painted_value_less_trailing_cell_still_extends_the_printed_grid() {
+    let mut book = umya_spreadsheet::new_file();
+    let sheet = book.get_sheet_mut(&0).unwrap();
+    sheet.get_cell_mut("A1").set_value("Value");
+    sheet
+        .get_cell_mut("C1")
+        .get_style_mut()
+        .set_background_color("FFFF0000");
+    let mut cursor = Cursor::new(Vec::new());
+    umya_spreadsheet::writer::xlsx::write_writer(&book, &mut cursor).unwrap();
+
+    let (doc, _warnings) = XlsxParser
+        .parse(&cursor.into_inner(), &ConvertOptions::default())
+        .unwrap();
+    let page = get_sheet_page(&doc, 0);
+
+    assert_eq!(page.table.column_widths.len(), 3);
+    assert_eq!(
+        page.table.rows[0].cells[2].background,
+        Some(Color::new(255, 0, 0))
+    );
+}
+
+/// Rows 1, 3 and 4 of SH107 end at a thick border, while rows 1, 2, 4 and 5
+/// start at one.
 /// A row receives one printed point when it begins with `thickTop`, plus one
 /// when the preceding row ends with `thickBot`. Native Excel-for-Mac PDF
 /// baselines on the probe are 68, 87, 104, 123, 142, 159, 176, 193 and 210pt:
@@ -2489,7 +2534,7 @@ const THICK_ROW_BORDER_PROBE: &[u8] =
 #[test]
 fn thick_row_borders_expand_the_printed_boundary() {
     assert_eq!(
-        printed_row_heights(THICK_ROW_BORDER_PROBE),
+        printed_row_heights(SH107_FORMATTED_TABLE),
         vec![
             Some(18.0),
             Some(19.0),

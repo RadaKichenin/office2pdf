@@ -33,6 +33,19 @@ pub(super) struct TableStyleRange {
 }
 
 impl TableStyleRange {
+    /// Last column the table style can visibly paint.
+    ///
+    /// The table range may contain value-less cells whose band fill or rules
+    /// still print. Printed-range inference must therefore retain its full
+    /// width whenever the resolved style contributes any paint at all.
+    pub(super) fn painted_end_col(&self) -> Option<u32> {
+        (self.body.is_some()
+            || self.stripe.is_some()
+            || self.rule.is_some()
+            || self.header.is_some())
+        .then_some(self.end_col)
+    }
+
     /// The fill at `(col, row)`, or `None` where the table paints none.
     ///
     /// A header row takes the style's own fill. Below it Excel shades the
