@@ -989,6 +989,42 @@ fn a_run_whose_family_cannot_write_its_script_reaches_a_face_that_can() {
 }
 
 #[test]
+fn painted_family_tracks_the_first_emitted_face_that_covers_the_text() {
+    let context = FontSearchContext::for_test(
+        Vec::new(),
+        &["Calibri", "Noto Sans CJK SC", "Malgun Gothic"],
+        &[],
+        &[],
+    )
+    .with_italic_and_scripts(
+        &[],
+        &[
+            ("Calibri", &[TextScript::Latin]),
+            (
+                "Noto Sans CJK SC",
+                &[TextScript::Latin, TextScript::Chinese],
+            ),
+            ("Malgun Gothic", &[TextScript::Latin, TextScript::Korean]),
+        ],
+    );
+
+    with_font_search_context(Some(&context), || {
+        assert_eq!(
+            painted_family_for_text("Noto Sans CJK SC", None, "금액"),
+            "Malgun Gothic"
+        );
+        assert_eq!(
+            painted_family_for_text("Noto Sans CJK SC", None, "Amount"),
+            "Noto Sans CJK SC"
+        );
+        assert_eq!(
+            painted_family_for_text("Calibri", Some("Noto Sans CJK SC"), "금액"),
+            "Malgun Gothic"
+        );
+    });
+}
+
+#[test]
 fn a_run_whose_family_can_write_its_script_keeps_it() {
     // The script chain must not preempt a family that is already right.
     let list = font_with_fallbacks_for_text("Batang", "구현 완료");
