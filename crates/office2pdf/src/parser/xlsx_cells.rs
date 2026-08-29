@@ -2084,6 +2084,24 @@ fn add_table_style_rules(
     })
 }
 
+/// Whether the cell XF merely repeats the workbook's default dark text ink.
+///
+/// An un-tinted `theme="1"` font colour is not a direct colour veto. Excel
+/// copies it into XFs that carry unrelated direct formatting: SH107's I1
+/// names the regular theme-dark Normal font beside its pale-yellow fill, but
+/// the `TableStyleMedium2` header still prints the run white (issue #1230).
+/// A non-default RGB, indexed colour, or tinted theme colour remains a real
+/// direct override and keeps precedence over the table style.
+fn cell_font_repeats_default_dark_ink(cell: &umya_spreadsheet::Cell) -> bool {
+    let Some(font) = cell.get_style().get_font() else {
+        return false;
+    };
+    let color = font.get_color();
+    color.get_argb().is_empty()
+        && *color.get_theme_index() == 1
+        && color.get_tint().abs() < f64::EPSILON
+}
+
 /// Build TableRows for a range of rows in a sheet.
 pub(super) fn build_rows_for_range(
     sheet: &umya_spreadsheet::Worksheet,
@@ -2138,13 +2156,17 @@ pub(super) fn build_rows_for_range(
                 text_style.bold.get_or_insert(true);
             }
             // A Medium table fills its header row in the accent and prints the
-            // runs on it white; the same precedence applies (issue #1125).
+            // runs on it white. A real direct font colour keeps precedence,
+            // but the default theme-dark ink repeated in a cell XF does not
+            // veto the table header's colour (issues #1125, #1230).
             if let Some(header_ink) = ctx
                 .table_styles
                 .iter()
                 .find_map(|style| style.header_text_color_at(col_idx, row_idx))
+                && (text_style.color.is_none()
+                    || umya_cell.is_some_and(cell_font_repeats_default_dark_ink))
             {
-                text_style.color.get_or_insert(header_ink);
+                text_style.color = Some(header_ink);
             }
             // Excel prices the cell's text box from the cell's own font, so a
             // title starts further inside its column than the body line under

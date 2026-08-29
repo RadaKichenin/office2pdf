@@ -2496,6 +2496,50 @@ fn value_less_unpainted_trailing_cells_do_not_extend_the_printed_grid() {
     );
 }
 
+/// SH107's I1 has a pale-yellow direct fill and a regular theme-dark cell
+/// font, while its `TableStyleMedium2` header prints the `Col9` run white and
+/// bold. Excel composes those two sources: the direct fill stays yellow, but
+/// the table header's font colour still reaches the run (issue #1230).
+#[test]
+fn a_table_header_text_color_overrides_the_cell_xf_font_color() {
+    let (doc, _warnings) = XlsxParser
+        .parse(SH107_FORMATTED_TABLE, &ConvertOptions::default())
+        .unwrap();
+    let cell = &get_sheet_page(&doc, 0).table.rows[0].cells[8];
+
+    assert_eq!(cell_text(cell), "Col9");
+    assert_eq!(cell.background, Some(Color::new(255, 255, 204)));
+    assert_eq!(first_run_style(cell).color, Some(Color::white()));
+    assert_eq!(first_run_style(cell).bold, Some(true));
+}
+
+/// A non-default direct font colour is a real override, unlike the un-tinted
+/// theme-dark default copied into SH107's I1 XF. Keep that red while fixing
+/// the table header's missing white default (issue #1230).
+#[test]
+fn a_direct_non_default_header_text_color_still_wins() {
+    let cursor = Cursor::new(SH107_FORMATTED_TABLE);
+    let mut book = umya_spreadsheet::reader::xlsx::read_reader(cursor, true).unwrap();
+    book.get_sheet_mut(&0)
+        .unwrap()
+        .get_cell_mut("I1")
+        .get_style_mut()
+        .get_font_mut()
+        .get_color_mut()
+        .set_argb("FFFF0000");
+    let mut cursor = Cursor::new(Vec::new());
+    umya_spreadsheet::writer::xlsx::write_writer(&book, &mut cursor).unwrap();
+
+    let (doc, _warnings) = XlsxParser
+        .parse(&cursor.into_inner(), &ConvertOptions::default())
+        .unwrap();
+    let cell = &get_sheet_page(&doc, 0).table.rows[0].cells[8];
+
+    assert_eq!(cell_text(cell), "Col9");
+    assert_eq!(first_run_style(cell).color, Some(Color::new(255, 0, 0)));
+    assert_eq!(first_run_style(cell).bold, Some(true));
+}
+
 /// Trimming is about paint, not merely the absence of a value: a fill on an
 /// empty trailing cell is visible and keeps that column in the printed grid.
 #[test]
