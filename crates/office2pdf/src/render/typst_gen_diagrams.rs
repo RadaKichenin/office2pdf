@@ -1169,6 +1169,21 @@ const CHART_COLUMN_RIGHT_PAD_PT: f64 = 11.0;
 const CHART_COLUMN_TOP_PAD_PT: f64 = 5.0;
 const CHART_COLUMN_TOP_PAD_EM: f64 = 0.607;
 
+/// Chart-local correction for a 9pt category-label band under a worksheet-
+/// hosted Excel plot.
+///
+/// A native Excel for Mac 16.112.2 export of `Gift Budget and Tracker1.xlsx`
+/// puts the `Jan` baseline 2.206pt above this renderer's old seat at the
+/// sheet's 0.82 print scale: 2.690pt in the chart's own coordinates. Four
+/// one-factor size probes establish the response around that 9pt anchor; see
+/// [`excel_category_label_y_shift_pt`].
+const EXCEL_CATEGORY_LABEL_BASE_Y_SHIFT_PT: f64 = -2.690;
+
+/// Chart-local correction for a 9pt bottom legend under a worksheet-hosted
+/// Excel plot. The same export puts its four legend baselines 4.216 printed points,
+/// or 5.141 chart-local points, above the old seat.
+const EXCEL_BOTTOM_LEGEND_BASE_Y_SHIFT_PT: f64 = -5.141;
+
 /// Clearance under the longest 45deg category label in a framed column plot.
 ///
 /// On the native #841 export, the longest label's rotated advance consumes
@@ -2157,6 +2172,51 @@ pub(super) fn chart_category_rotated_label_y(chart: &Chart, axis_y: f64) -> f64 
     } else {
         axis_y + 2.0
     }
+}
+
+/// Vertical correction for a flat category-label band in an Excel worksheet
+/// chart.
+///
+/// Re-exporting the #1240 workbook with only the category size changed to 7,
+/// 9, 11, 14 and 18pt gives native baseline deltas of 0, 0, -1, -2 and -3pt
+/// in chart-local coordinates. The pre-fix Typst seats move by -1.35pt per
+/// text point over the same series. Anchoring the correction at the reported
+/// 9pt face and restoring Excel's integer chart-grid steps reproduces all five
+/// seats without changing the plot rectangle, which belongs to #1250.
+///
+/// An undeclared size keeps the legacy seat: no native probe establishes that
+/// its implicit text follows this explicit-size regime. PowerPoint, Word and
+/// Excel chartsheets also keep their own host layouts. `ChartHost` does not
+/// distinguish drawing-anchored worksheet charts from orphaned worksheet chart
+/// parts, so both worksheet paths intentionally share this Excel text regime.
+fn excel_category_label_y_shift_pt(chart: &Chart) -> f64 {
+    if chart.host != crate::ir::ChartHost::Spreadsheet
+        || (chart.category_axis_text_style.size_pt.is_none() && chart.text_style.size_pt.is_none())
+    {
+        return 0.0;
+    }
+    let size_pt: f64 = chart_axis_text_pt(chart, chart.category_axis_text_style);
+    let from_nine_pt: f64 = size_pt - 9.0;
+    let native_grid_steps: f64 = ((size_pt - 8.0) / 4.0).round();
+    EXCEL_CATEGORY_LABEL_BASE_Y_SHIFT_PT + 1.35 * from_nine_pt - native_grid_steps
+}
+
+/// Vertical correction for a bottom legend in an Excel worksheet chart.
+///
+/// With only the legend size changed to 7, 9, 11, 14 and 18pt, Excel moves the
+/// baseline by +1, 0, -1, -2 and -3 chart-local points. Typst's baseline moves
+/// down by 0.7pt per text point inside the unchanged automatic legend band.
+/// Cancelling that response and restoring Excel's three-point grid cadence
+/// reproduces the native seats while leaving the plot and category band alone.
+fn excel_bottom_legend_y_shift_pt(chart: &Chart) -> f64 {
+    if chart.host != crate::ir::ChartHost::Spreadsheet
+        || chart.legend_position != LegendPosition::Bottom
+        || (chart.legend_text_style.size_pt.is_none() && chart.text_style.size_pt.is_none())
+    {
+        return 0.0;
+    }
+    let from_nine_pt: f64 = chart_legend_text_pt(chart) - 9.0;
+    EXCEL_BOTTOM_LEGEND_BASE_Y_SHIFT_PT - 0.7 * from_nine_pt - (from_nine_pt / 3.0).round()
 }
 
 /// Left coordinate of a rotated category-label box whose trailing end pins to
@@ -3529,7 +3589,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 out,
                 "#place(top + left, dx: {}pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(center + horizon)[#text(size: {}pt{})[{}]]])",
                 format_f64(plot_x + group_start),
-                format_f64(plot_y + plot_h + 2.0),
+                format_f64(plot_y + plot_h + 2.0 + excel_category_label_y_shift_pt(chart)),
                 format_f64(row),
                 format_f64(chart_category_band_pt(chart)),
                 format_f64(chart_axis_text_pt(chart, chart.category_axis_text_style)),
@@ -3752,6 +3812,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 side_y_shift: powerpoint_right_legend_y_shift(chart),
             },
         );
+        let entry_y: f64 = entry_y + excel_bottom_legend_y_shift_pt(chart);
         // Each series' key is drawn the way its family plots it: a filled
         // swatch for a column, a stroke-and-marker sample for a line laid over
         // them (issue #1067).

@@ -4306,6 +4306,122 @@ fn excel_gift_column_chart(size_pt: f64, number_format: Option<&str>) -> Chart {
 const EXCEL_GIFT_CHART_FRAME: (f64, f64) = (1015.9784, 307.9732);
 
 #[test]
+fn an_excel_worksheet_chart_seats_its_category_and_bottom_legend_bands() {
+    // A fresh Excel for Mac 16.112 export of `Gift Budget and Tracker1.xlsx`
+    // (SHA-256 25f5dc75dab19ea12042979a61842314ddc226e3e45d447e36b2a2a104112613)
+    // puts every category-label baseline at 343.580pt and every bottom-legend
+    // baseline at 359.980pt on the printed page. The pre-fix renderer put the
+    // same baselines at 345.786pt and 364.196pt. Undoing the sheet's exact
+    // 0.82 print scale makes those residuals 2.690pt and 5.141pt in chart-local
+    // coordinates (#1240).
+    //
+    // Restate the combo chart in Calibri because its native metrics are held
+    // by the crate and therefore do not depend on a CI runner having Segoe UI.
+    // For this fixed two-category chart the labels remain flat, so series and
+    // category counts do not enter the measured seats; the anchored frame and
+    // the three 9pt text bands are the controlled factors. Larger category
+    // sets can rotate labels and take the separate rotated-label layout path.
+    let mut chart = combo_budget_chart();
+    chart.text_font_family = Some("Calibri".to_string());
+    chart.category_axis_text_style.size_pt = Some(9.0);
+    chart.legend_text_style.size_pt = Some(9.0);
+    chart.value_axis_text_style.size_pt = Some(9.0);
+    let source = framed_chart_source(&chart, EXCEL_GIFT_CHART_FRAME.0, EXCEL_GIFT_CHART_FRAME.1);
+
+    let category_top = placed_box_holding(&source, "May").dy;
+    let legend_top = legend_entry_y(&source, "Birthday Budget");
+
+    assert!(
+        (category_top - 256.683).abs() <= 0.02,
+        "category-label band top {category_top}pt, native-derived 256.683pt; got:\n{source}"
+    );
+    assert!(
+        (legend_top - 288.832).abs() <= 0.02,
+        "bottom-legend band top {legend_top}pt, native-derived 288.832pt; got:\n{source}"
+    );
+}
+
+#[test]
+fn excel_worksheet_band_seats_follow_the_native_size_probes() {
+    // Chart-local box tops that reproduce the five native baselines recorded
+    // by the one-factor probes. Each series changes one text size and leaves
+    // the frame, plot data and other two chart text bands at 9pt.
+    let category_tops = [
+        (7.0, 260.7832),
+        (9.0, 256.6832),
+        (11.0, 251.5832),
+        (14.0, 244.4332),
+        (18.0, 235.2332),
+    ];
+    for (size_pt, expected_top) in category_tops {
+        let mut chart = combo_budget_chart();
+        chart.text_font_family = Some("Calibri".to_string());
+        chart.category_axis_text_style.size_pt = Some(size_pt);
+        chart.legend_text_style.size_pt = Some(9.0);
+        chart.value_axis_text_style.size_pt = Some(9.0);
+        let source =
+            framed_chart_source(&chart, EXCEL_GIFT_CHART_FRAME.0, EXCEL_GIFT_CHART_FRAME.1);
+        let actual_top = placed_box_holding(&source, "May").dy;
+        assert!(
+            (actual_top - expected_top).abs() <= 0.001,
+            "{size_pt}pt category top {actual_top}pt, expected {expected_top}pt"
+        );
+    }
+
+    let legend_tops = [
+        (7.0, 291.2322),
+        (9.0, 288.8322),
+        (11.0, 286.4322),
+        (14.0, 283.3322),
+        (18.0, 279.5322),
+    ];
+    for (size_pt, expected_top) in legend_tops {
+        let mut chart = combo_budget_chart();
+        chart.text_font_family = Some("Calibri".to_string());
+        chart.category_axis_text_style.size_pt = Some(9.0);
+        chart.legend_text_style.size_pt = Some(size_pt);
+        chart.value_axis_text_style.size_pt = Some(9.0);
+        let source =
+            framed_chart_source(&chart, EXCEL_GIFT_CHART_FRAME.0, EXCEL_GIFT_CHART_FRAME.1);
+        let actual_top = legend_entry_y(&source, "Birthday Budget");
+        assert!(
+            (actual_top - expected_top).abs() <= 0.001,
+            "{size_pt}pt legend top {actual_top}pt, expected {expected_top}pt"
+        );
+    }
+}
+
+#[test]
+fn non_worksheet_chart_hosts_keep_their_category_and_legend_seats() {
+    for host in [
+        crate::ir::ChartHost::Presentation,
+        crate::ir::ChartHost::SpreadsheetChartsheet,
+        crate::ir::ChartHost::WordProcessing,
+    ] {
+        let mut chart = combo_budget_chart();
+        chart.host = host;
+        chart.text_font_family = Some("Calibri".to_string());
+        chart.category_axis_text_style.size_pt = Some(9.0);
+        chart.legend_text_style.size_pt = Some(9.0);
+        chart.value_axis_text_style.size_pt = Some(9.0);
+        let source =
+            framed_chart_source(&chart, EXCEL_GIFT_CHART_FRAME.0, EXCEL_GIFT_CHART_FRAME.1);
+        let plot_bottom = axis_plot_rect(&chart, EXCEL_GIFT_CHART_FRAME, false).3;
+        let category_top = placed_box_holding(&source, "May").dy;
+        let legend_top = legend_entry_y(&source, "Birthday Budget");
+
+        assert!(
+            (category_top - (plot_bottom + 2.0)).abs() <= 0.001,
+            "{host:?} category seat changed: {category_top}pt after {plot_bottom}pt"
+        );
+        assert!(
+            (legend_top - (EXCEL_GIFT_CHART_FRAME.1 - 14.0)).abs() <= 0.001,
+            "{host:?} bottom-legend seat changed: {legend_top}pt"
+        );
+    }
+}
+
+#[test]
 fn a_framed_excel_column_chart_seats_its_plot_where_excel_measures_it() {
     // Native Excel for Mac 16.112 exports of the #1166 workbook, one factor
     // changed per variant, measured off `mutool draw -F trace` as the value
