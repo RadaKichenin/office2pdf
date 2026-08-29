@@ -419,6 +419,80 @@ fn test_image_basic_extraction() {
     assert_eq!(img.data, bmp_data);
 }
 
+/// A bitmap may be the fill of an ordinary shape rather than a `<p:pic>`.
+/// The page-1 photograph in issue #1220 takes this path: dropping the
+/// `<a:blipFill>` leaves only the translucent shape painted above it.
+#[test]
+fn ordinary_shape_picture_fill_becomes_an_image_element() {
+    let bmp_data = make_test_bmp();
+    let shape = r#"<p:sp><p:nvSpPr><p:cNvPr id="5" name="Photo rectangle"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm rot="5400000" flipH="1"><a:off x="1000000" y="500000"/><a:ext cx="3000000" cy="2000000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:blipFill><a:blip r:embed="rId3"/><a:srcRect l="10000" t="20000" r="30000" b="40000"/><a:stretch><a:fillRect/></a:stretch></a:blipFill></p:spPr></p:sp>"#.to_string();
+    let slide_xml = make_slide_xml(&[shape]);
+    let slide_images = vec![TestSlideImage {
+        rid: "rId3".to_string(),
+        path: "../media/image1.bmp".to_string(),
+        data: bmp_data.clone(),
+        relationship_type: None,
+    }];
+    let data = build_test_pptx_with_images(SLIDE_CX, SLIDE_CY, &[(slide_xml, slide_images)]);
+    let parser = PptxParser;
+    let (doc, warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    assert!(warnings.is_empty(), "unexpected warnings: {warnings:?}");
+    let page = first_fixed_page(&doc);
+    assert_eq!(page.elements.len(), 1);
+    let elem = &page.elements[0];
+    assert!((elem.x - emu_to_pt(1_000_000)).abs() < 0.1);
+    assert!((elem.y - emu_to_pt(500_000)).abs() < 0.1);
+    assert!((elem.width - emu_to_pt(3_000_000)).abs() < 0.1);
+    assert!((elem.height - emu_to_pt(2_000_000)).abs() < 0.1);
+
+    let image = get_image(elem);
+    assert_eq!(image.data, bmp_data);
+    assert_eq!(image.format, ImageFormat::Bmp);
+    assert_eq!(image.rotation_deg, Some(90.0));
+    assert!(image.flip_h);
+    assert!(!image.flip_v);
+    assert_eq!(
+        image.crop,
+        Some(ImageCrop {
+            left: 0.1,
+            top: 0.2,
+            right: 0.3,
+            bottom: 0.4,
+        })
+    );
+}
+
+/// Text belongs above a shape's picture fill in the same shape-tree slot.
+/// Emitting only the bitmap would restore the page-1 photograph in #1220 but
+/// silently drop captions from the other legal form of this construct.
+#[test]
+fn ordinary_shape_picture_fill_keeps_its_text_overlay() {
+    let shape = r#"<p:sp><p:nvSpPr><p:cNvPr id="5" name="Photo caption"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="3000000" cy="2000000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:blipFill><a:blip r:embed="rId3"/><a:stretch><a:fillRect/></a:stretch></a:blipFill></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US"/><a:t>Caption</a:t></a:r></a:p></p:txBody></p:sp>"#.to_string();
+    let slide_xml = make_slide_xml(&[shape]);
+    let slide_images = vec![TestSlideImage {
+        rid: "rId3".to_string(),
+        path: "../media/image1.bmp".to_string(),
+        data: make_test_bmp(),
+        relationship_type: None,
+    }];
+    let data = build_test_pptx_with_images(SLIDE_CX, SLIDE_CY, &[(slide_xml, slide_images)]);
+    let (doc, warnings) = PptxParser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    assert!(warnings.is_empty(), "unexpected warnings: {warnings:?}");
+    let page = first_fixed_page(&doc);
+    assert_eq!(page.elements.len(), 2);
+    assert!(matches!(page.elements[0].kind, FixedElementKind::Image(_)));
+    let FixedElementKind::TextBox(ref text_box) = page.elements[1].kind else {
+        panic!("expected text overlay, got {:?}", page.elements[1].kind);
+    };
+    assert!(text_box.fill.is_none());
+    let Block::Paragraph(ref paragraph) = text_box.content[0] else {
+        panic!("expected caption paragraph");
+    };
+    assert_eq!(paragraph.runs[0].text, "Caption");
+}
+
 #[test]
 fn test_image_format_detection() {
     let bmp_data = make_test_bmp();
