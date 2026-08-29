@@ -1402,6 +1402,10 @@ pub(super) struct SheetCellSeat {
     /// The gap the bottom seat keeps under the baseline however small the
     /// font, in points — this workbook's floor (issues #1097, #1199).
     pub descent_floor_pt: f64,
+    /// Whether the cell spans several columns. Excel assigns an odd point of
+    /// vertical centring slack to the opposite half for a horizontal merge
+    /// (issue #1242).
+    pub is_horizontally_merged: bool,
 }
 
 /// The baseline Excel prints for one line of a face whose bare `hhea` numbers
@@ -1415,16 +1419,18 @@ pub(super) struct SheetCellSeat {
 /// The box is the three added together, the baseline sits the gap plus the
 /// ascent below its top, and the box is centred in the row's own track — not
 /// in the cell's inset content box, which four native probe exports show has
-/// no say in the vertical seat — with an odd leftover point going to the
-/// space *above* the line. A fitted sheet scales that completed seat onto the
-/// printed page (issue #1238).
+/// no say in the vertical seat. An unmerged cell gives an odd leftover point
+/// to the space *above* the line; a horizontally merged cell gives it to the
+/// space below. A fitted sheet scales that completed seat onto the printed
+/// page (issues #1238, #1242).
 ///
 /// Measured on native Excel-for-Mac exports of purpose-built probe workbooks
 /// (`/Volumes/T7/scratch/issue-1063/probe`, reproduced in
 /// `sheet_cell_line_seat_reproduces_the_native_excel_probe`): a row-height
 /// sweep from 12pt to 60pt at Arial 10, a font-size sweep from 8pt to 44pt in
 /// 40pt and 60pt tracks, and a border/no-border and Normal-font pairing that
-/// changed nothing. All 28 samples land on this rule exactly.
+/// changed nothing. All 28 unmerged samples land on the ceiling cadence
+/// exactly.
 ///
 /// Those probes are Arial-only, and Arial's 67/2048 line gap makes the
 /// separate rounding indistinguishable from folding the gap into the ascender
@@ -1434,12 +1440,19 @@ pub(super) struct SheetCellSeat {
 /// Segoe UI, Century Gothic and Calibri all measured that way on the workbook
 /// of #1161, reproduced in
 /// `sheet_cell_line_seat_reproduces_a_face_with_no_line_gap`.
+///
+/// The merge selector comes from four one-factor Excel-for-Mac 16.112.2
+/// exports of the #1242 workbook. Removing only A1:B1's merge moves its 30pt
+/// Century Gothic baseline in a 90pt track from 56pt to 57pt below the track
+/// top; changing the size, track or horizontal alignment preserves the
+/// respective merged cadence.
 pub(super) fn sheet_cell_baseline_from_track_top_pt(
     track_pt: f64,
     ascent_em: f64,
     descent_em: f64,
     line_gap_em: f64,
     font_size_pt: f64,
+    is_horizontally_merged: bool,
     print_scale: Option<f64>,
 ) -> f64 {
     // The parser has already folded a fit-to-page scale into the track and
@@ -1453,7 +1466,13 @@ pub(super) fn sheet_cell_baseline_from_track_top_pt(
     let descent_pt: f64 = (descent_em * sheet_font_size_pt).round();
     let above_baseline_pt: f64 = line_gap_pt + ascent_pt;
     let line_pt: f64 = above_baseline_pt + descent_pt;
-    (((sheet_track_pt - line_pt) / 2.0).ceil() + above_baseline_pt) * scale
+    let half_slack_pt: f64 = (sheet_track_pt - line_pt) / 2.0;
+    let slack_above_pt: f64 = if is_horizontally_merged {
+        half_slack_pt.floor()
+    } else {
+        half_slack_pt.ceil()
+    };
+    (slack_above_pt + above_baseline_pt) * scale
 }
 
 /// The gap Excel never closes between a bottom-aligned sheet cell's baseline
@@ -1863,6 +1882,7 @@ pub(super) fn word_cell_line_box(
                 descender_em,
                 line_gap_em,
                 font_size,
+                seat.is_horizontally_merged,
                 sheet_print_scale,
             );
             let top_em: f64 = advance_em / 2.0 + (baseline_pt - content_mid_pt) / font_size;

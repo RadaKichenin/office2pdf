@@ -1005,6 +1005,7 @@ fn generate_table_cell(
                 inset_top_pt: inset.top,
                 inset_bottom_pt: inset.bottom,
                 descent_floor_pt: ctx.table_bottom_aligned_descent_floor_pt,
+                is_horizontally_merged: cell.col_span > 1,
             }
         });
     ctx.cell_sheet_row_line = row_shared_line.filter(|_| seats_on_row_line).cloned();
