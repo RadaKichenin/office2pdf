@@ -1618,10 +1618,10 @@ fn the_recomputed_default_tracks_the_normal_font_size() {
 }
 
 /// A Normal font that names its own face instead of deferring to the theme
-/// scheme is a different measurement, not an absent one: Excel substitutes a
-/// face for Calibri and Aptos on the reference machine and recomputes against
-/// that, ignoring the declared hint exactly as the scheme path does
-/// (issue #1102).
+/// scheme is a different measurement, not an absent one: Excel substitutes
+/// unavailable Calibri and Aptos independently on the reference machine and
+/// recomputes against the resolved face, ignoring the declared hint exactly
+/// as the scheme path does (issues #1102, #1225).
 fn substituted_face_normal_font(family: &str, size_pt: f64) -> NormalFont {
     NormalFont {
         family: family.to_string(),
@@ -1650,49 +1650,44 @@ fn a_scheme_less_substituted_face_recomputes_over_the_declared_default() {
     }
 }
 
-/// Every size the scheme-less sweep measured, so the recompute cannot
-/// collapse to one constant. `Aptos` shares the table, which its own 11pt
-/// measurement confirms (issue #1102).
+/// Every size the scheme-less sweep measured for Calibri and Aptos. The two
+/// agree at nine sizes but separate at 9, 13, 16, 20 and 24pt, so neither may
+/// borrow the other face's series (issue #1225).
 #[test]
-fn the_substituted_face_recompute_tracks_the_normal_font_size() {
-    let measured: [(f64, f64); 9] = [
-        (8.0, 11.0),
-        (9.0, 12.0),
-        (10.0, 14.0),
-        (11.0, 15.0),
-        (12.0, 16.0),
-        (13.0, 17.0),
-        (14.0, 19.0),
-        (16.0, 21.0),
-        (18.0, 24.0),
+fn calibri_and_aptos_recompute_from_their_own_full_size_series() {
+    let sizes = [
+        8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 20.0, 22.0, 24.0,
     ];
-    for (size_pt, expected) in measured {
-        let mut book = umya_spreadsheet::new_file();
-        let sheet = book.get_sheet_mut(&0).unwrap();
-        sheet
-            .get_sheet_format_properties_mut()
-            .set_default_row_height(18.0);
-        assert_eq!(
-            xlsx_cells::worksheet_default_row_height_pt(
-                sheet,
-                Some(&substituted_face_normal_font("Calibri", size_pt))
-            ),
-            expected,
-            "{size_pt}pt Calibri Normal font"
-        );
-    }
-    let mut book = umya_spreadsheet::new_file();
-    let sheet = book.get_sheet_mut(&0).unwrap();
-    sheet
-        .get_sheet_format_properties_mut()
-        .set_default_row_height(18.0);
-    assert_eq!(
-        xlsx_cells::worksheet_default_row_height_pt(
-            sheet,
-            Some(&substituted_face_normal_font("Aptos", 11.0))
+    for (family, heights) in [
+        (
+            "Calibri",
+            [
+                11.0, 12.0, 14.0, 15.0, 16.0, 17.0, 19.0, 20.0, 21.0, 23.0, 24.0, 26.0, 29.0, 31.0,
+            ],
         ),
-        15.0
-    );
+        (
+            "Aptos",
+            [
+                11.0, 13.0, 14.0, 15.0, 16.0, 18.0, 19.0, 20.0, 22.0, 23.0, 24.0, 27.0, 29.0, 32.0,
+            ],
+        ),
+    ] {
+        for (size_pt, expected) in sizes.iter().zip(heights) {
+            let mut book = umya_spreadsheet::new_file();
+            let sheet = book.get_sheet_mut(&0).unwrap();
+            sheet
+                .get_sheet_format_properties_mut()
+                .set_default_row_height(18.0);
+            assert_eq!(
+                xlsx_cells::worksheet_default_row_height_pt(
+                    sheet,
+                    Some(&substituted_face_normal_font(family, *size_pt))
+                ),
+                expected,
+                "{size_pt}pt {family} Normal font"
+            );
+        }
+    }
 }
 
 /// A family no sweep has measured keeps the declared hint — as does a size
@@ -1716,10 +1711,20 @@ fn an_unmeasured_normal_font_keeps_the_declared_default() {
         ),
         15.0
     );
+    for unmeasured_variant in ["Calibri Light", "Aptos Narrow", "Aptos Display"] {
+        assert_eq!(
+            xlsx_cells::worksheet_default_row_height_pt(
+                sheet,
+                Some(&substituted_face_normal_font(unmeasured_variant, 13.0))
+            ),
+            15.0,
+            "{unmeasured_variant} does not borrow the exact Calibri/Aptos recompute"
+        );
+    }
     assert_eq!(
         xlsx_cells::worksheet_default_row_height_pt(
             sheet,
-            Some(&substituted_face_normal_font("Calibri", 20.0))
+            Some(&substituted_face_normal_font("Calibri", 19.0))
         ),
         15.0
     );
@@ -2148,6 +2153,34 @@ fn a_scheme_less_dimensionless_printed_row_ignores_a_disagreeing_declared_defaul
 
     let table = &get_sheet_page(&doc, 0).table;
     assert_eq!(table.rows[0].height, Some(15.0));
+}
+
+/// Aptos diverges from Calibri at five sizes in the issue #1225 worksheet
+/// recompute sweep. Each recomputed height then maps through the separately
+/// measured Calibri/Aptos printed-grid rule. The 13pt case is also the visual
+/// probe: 18pt in the worksheet becomes a 17pt printed track.
+#[test]
+fn aptos_dimensionless_rows_print_from_the_aptos_recompute() {
+    for (size_pt, expected_printed) in [
+        (9.0, 13.0),
+        (13.0, 17.0),
+        (16.0, 20.0),
+        (20.0, 25.0),
+        (24.0, 29.0),
+    ] {
+        let data = rewrite_sheet_format_pr(
+            &build_xlsx_with_normal_font("Aptos", size_pt),
+            r#"<sheetFormatPr defaultRowHeight="18"/>"#,
+        );
+        let parser = XlsxParser;
+        let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+        assert_eq!(
+            get_sheet_page(&doc, 0).table.rows[0].height,
+            Some(expected_printed),
+            "{size_pt}pt Aptos Normal font"
+        );
+    }
 }
 
 /// Printed-grid compaction belongs to the resolved face, not to the

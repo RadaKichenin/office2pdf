@@ -55,7 +55,22 @@ STYLES_PART = "xl/styles.xml"
 # that disagrees with every recompute, so a reading equal to the declaration
 # would mean the patch never reached Excel.
 DEFAULT_BASE = REPO_ROOT / "tests" / "fixtures" / "xlsx" / "issue_1066_blip_effect_picture.xlsx"
-DEFAULT_SIZES = (8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 16.0, 18.0, 20.0, 24.0)
+DEFAULT_SIZES = (
+    8.0,
+    9.0,
+    10.0,
+    11.0,
+    12.0,
+    13.0,
+    14.0,
+    15.0,
+    16.0,
+    17.0,
+    18.0,
+    20.0,
+    22.0,
+    24.0,
+)
 
 NORMAL_FONT_PATTERN = re.compile(r"(<fonts\b[^>]*>)<font>.*?</font>", re.DOTALL)
 
