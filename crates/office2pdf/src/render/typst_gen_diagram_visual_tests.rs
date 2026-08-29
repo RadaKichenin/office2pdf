@@ -8,7 +8,7 @@ use crate::render::typst_gen::diagrams::{
     PPTX_LEGEND_KEY_LABEL_GAP_PT, ROW, SERIES_LINE_PT, SERIES_MARKER_SIZE_PT, TICK_GAP,
     axis_plot_rect, chart_area_title_h, chart_category_band_pt, chart_category_gutter_pt,
     chart_category_rotated_label_x, chart_category_rotated_label_y, chart_face_line_metrics_em,
-    chart_tick_band_pt, pptx_column_data_label_seat_pt,
+    chart_tick_band_pt, excel_legend_trailing_gutter_pt, pptx_column_data_label_seat_pt,
 };
 
 #[test]
@@ -4869,6 +4869,106 @@ fn short_legend_names_keep_the_calibrated_pitch() {
         (gap - LEGEND_ENTRY_W).abs() < 1e-9,
         "short names keep the {}pt pitch, got {gap}",
         format_f64(LEGEND_ENTRY_W)
+    );
+}
+
+#[test]
+fn an_excel_legend_entry_keeps_excels_trailing_clearance() {
+    // Native Excel for Mac 16.112 exports of `Gift Budget and Tracker1.xlsx`
+    // put the second key 96.221pt after the first at 9pt Calibri: 19.2pt of
+    // key, 2.025pt before the label, the label's 59.071pt design advance, and
+    // 15.930pt of trailing clearance. The generic 6pt `GAP` leaves the second
+    // entry almost 10pt too far left.
+    let mut chart = excel_bottom_legend_chart("Calibri", 9.0);
+    chart.series[0].name = Some("Birthday Budget".to_string());
+    chart.series[1].name = Some("Holiday Budget".to_string());
+    let source: String = chart_source(chart);
+    let pitch: f64 =
+        legend_entry_x(&source, "Holiday Budget") - legend_entry_x(&source, "Birthday Budget");
+
+    assert!(
+        (pitch - 96.221).abs() <= 0.02,
+        "the 9pt Calibri entry pitch is {pitch}pt, Excel's is 96.221pt"
+    );
+}
+
+#[test]
+fn an_excel_legend_centres_the_visible_row() {
+    // Across eight faces and every Segoe UI size from 3 through 22pt, native
+    // Excel centres the visible row from its first key through its last label;
+    // the trailing clearance after that label does not pull the row left. This
+    // IR holds one chart-wide family, so restating the legend in Calibri also
+    // restates the value labels and moves the content centre 1.022pt left of
+    // the legend-only native probe. The real Segoe UI fixture is the exact
+    // native-origin gate; this helper isolates the row-centering calculation.
+    let mut chart = combo_budget_chart();
+    let mut other = chart.series[0].clone();
+    other.name = Some("Other Gift Budget".to_string());
+    other.values = vec![0.0, 0.0];
+    chart.series.insert(2, other);
+    chart.series.last_mut().expect("the line series").values = vec![30.0, 180.0];
+    chart.text_font_family = Some("Calibri".to_string());
+    chart.legend_text_style.size_pt = Some(9.0);
+    chart.value_axis_text_style.size_pt = Some(9.0);
+    chart.value_axis_number_format = Some("\\$#,##0".to_string());
+    let source = framed_chart_source(&chart, EXCEL_GIFT_CHART_FRAME.0, EXCEL_GIFT_CHART_FRAME.1);
+    let first_key_x = legend_entry_x(&source, "Birthday Budget");
+
+    assert!(
+        (first_key_x - 326.142).abs() <= 0.02,
+        "the first key starts at {first_key_x}pt, the calibrated restatement at 326.142pt"
+    );
+}
+
+#[test]
+fn an_excel_legend_gutter_tracks_its_face_and_size() {
+    // Fresh one-factor native Excel 16.112 exports at both 9pt and 18pt. Each
+    // row was compared with a layout-identical re-zip control; the stated
+    // gutter is the entry pitch after subtracting the 19.2pt key, 2.025pt gap,
+    // and the source face's design advances. All labels end in `t`, so this
+    // checks the face/size rule independently of the terminal-glyph correction.
+    let measurements = [
+        ("Calibri", 15.930_f64, 25.217_f64),
+        ("Arial", 16.704, 26.788),
+        ("Georgia", 16.847, 27.093),
+        ("Times New Roman", 15.998, 25.379),
+        ("Verdana", 18.058, 29.533),
+        ("Century Gothic", 17.664, 28.718),
+        ("Aptos", 16.366, 26.136),
+    ];
+    for (family, at_nine, at_eighteen) in measurements {
+        for (size_pt, expected) in [(9.0, at_nine), (18.0, at_eighteen)] {
+            let chart = excel_bottom_legend_chart(family, size_pt);
+            let actual = excel_legend_trailing_gutter_pt(&chart, "Birthday Budget")
+                .expect("a worksheet axis chart has Excel's gutter");
+            assert!(
+                (actual - expected).abs() <= 0.02,
+                "{family} {size_pt}pt leaves {actual}pt, Excel's {expected}pt"
+            );
+        }
+    }
+}
+
+#[test]
+fn non_calibrated_hosts_and_variants_keep_the_generic_legend_gutter() {
+    for host in [
+        crate::ir::ChartHost::Presentation,
+        crate::ir::ChartHost::WordProcessing,
+        crate::ir::ChartHost::SpreadsheetChartsheet,
+    ] {
+        let mut chart = excel_bottom_legend_chart("Calibri", 9.0);
+        chart.host = host;
+        assert_eq!(
+            excel_legend_trailing_gutter_pt(&chart, "Birthday Budget"),
+            None
+        );
+    }
+
+    let mut line_chart = excel_bottom_legend_chart("Calibri", 9.0);
+    line_chart.chart_type = ChartType::Line;
+    assert_eq!(
+        excel_legend_trailing_gutter_pt(&line_chart, "Birthday Budget"),
+        None
     );
 }
 
