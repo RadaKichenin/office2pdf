@@ -4346,15 +4346,12 @@ fn sheet_advance_grid_is_active() -> bool {
 /// The delta is summed over the advances that *carry a gap* — every glyph but
 /// the last — so the run's last origin lands exactly where Excel puts it. The
 /// last glyph's own advance is deliberately left out: folding it in would make
-/// the run's total width exact instead, at the cost of pushing that whole
-/// rounding into the visible gaps, which on a two-glyph cell is the entire
-/// correction in the one gap there is (`OK` at Arial 10 came out 8.33pt
-/// against the export's 8.00pt).
-///
-/// TODO(issue #1088): a centred or right-aligned line is *placed* from the
-/// total width, so it still sits up to 0.5pt off — the trailing advance needs
-/// its own spacer there, the way `powerpoint_trailing_letter_space_pt` carries
-/// PowerPoint's (issue #1075).
+/// the run's total width exact at the cost of pushing that whole rounding into
+/// the visible gaps, which on a two-glyph cell is the entire correction in the
+/// one gap there is (`OK` at Arial 10 came out 8.33pt against the export's
+/// 8.00pt). [`sheet_trailing_advance_space_pt`] carries that final rounding
+/// separately for a right-aligned cell, so it changes the width the line is
+/// placed from without moving any visible glyph origin (issue #1233).
 ///
 /// A one-glyph run gets `None`: Typst drops the tracking after a shaped item's
 /// last glyph, so there is no gap to carry the correction.
@@ -4363,19 +4360,7 @@ fn sheet_advance_grid_tracking_pt(style: &TextStyle, text: &str) -> Option<f64> 
         return None;
     }
     let size_pt: f64 = style.font_size.filter(|size| *size > 0.0)?;
-    let bold: bool = matches!(style.bold, Some(true));
-    let family: &str = style.font_family.as_deref()?;
-    // A Korean cell names its face in `font_family` like any other, but a run
-    // that carries a separate East Asian family is measured on the face its
-    // glyphs will actually come from — the Latin one has no glyph for them and
-    // reports nothing.
-    let advances_em: Vec<f64> =
-        crate::render::pdf::glyph_advances_em(family, bold, text).or_else(|| {
-            let east_asian: &str = style.east_asian_font_family.as_deref()?;
-            (!east_asian.eq_ignore_ascii_case(family))
-                .then(|| crate::render::pdf::glyph_advances_em(east_asian, bold, text))
-                .flatten()
-        })?;
+    let advances_em: Vec<f64> = sheet_advance_grid_glyph_advances_em(style, text)?;
     let gap_advances_em: &[f64] = advances_em.split_last()?.1;
     if gap_advances_em.is_empty() {
         return None;
@@ -4394,6 +4379,71 @@ fn sheet_advance_grid_tracking_pt(style: &TextStyle, text: &str) -> Option<f64> 
     // An exact fit needs no correction, and emitting `tracking: 0pt` would
     // still cost the run its ligatures and kerning below.
     (tracking_pt != 0.0).then_some(tracking_pt)
+}
+
+/// The final rounded glyph advance Excel includes when placing a right-aligned
+/// sheet line from the cell's trailing edge.
+///
+/// The inter-glyph tracking above stops at the last glyph so every visible
+/// origin stays on Excel's whole-point grid. Typst therefore measures the
+/// line's final advance at its natural width, while Excel includes that
+/// advance rounded to [`SHEET_ADVANCE_GRID_PT`]. A trailing `#h` carries only
+/// the difference: positive values move a right-aligned line left, and the
+/// rarer negative values move it right, without disturbing glyph pitch.
+///
+/// Native Excel-for-Mac traces across the ten business workbooks predict the
+/// measured right-aligned origin residual run by run from this value (issue
+/// #1233). Centred lines deliberately stay unchanged: Excel's separate
+/// whole-point origin snap absorbs the half-residual in the measured corpus.
+pub(super) fn sheet_trailing_advance_space_pt(style: &ParagraphStyle, runs: &[Run]) -> Option<f64> {
+    if !sheet_advance_grid_is_active() || !matches!(style.alignment, Some(Alignment::Right)) {
+        return None;
+    }
+
+    // This call site can append only one reserve after the whole paragraph.
+    // An explicit line or tab boundary would need a reserve at each segment's
+    // own trailing edge, so decline the paragraph instead of correcting only
+    // its final segment and leaving the earlier ones inconsistent.
+    if runs.iter().any(|run| {
+        run.text
+            .chars()
+            .any(|ch| matches!(ch, '\n' | '\t' | PPTX_SOFT_LINE_BREAK_CHAR))
+    }) {
+        return None;
+    }
+
+    let run: &Run = runs.iter().rev().find(|run| !run.text.is_empty())?;
+    if matches!(run.style.small_caps, Some(true)) {
+        return None;
+    }
+    let all_caps: String;
+    let shaped: &str = if matches!(run.style.all_caps, Some(true)) {
+        all_caps = run.text.to_uppercase();
+        &all_caps
+    } else {
+        &run.text
+    };
+    let size_pt: f64 = run.style.font_size.filter(|size| *size > 0.0)?;
+    let advances_em: Vec<f64> = sheet_advance_grid_glyph_advances_em(&run.style, shaped)?;
+    let natural_pt: f64 = advances_em.last()? * size_pt;
+    let rounded_pt: f64 = round_half_up_to_grid(natural_pt, SHEET_ADVANCE_GRID_PT);
+    let space_pt: f64 = rounded_pt - natural_pt;
+    (space_pt != 0.0).then_some(space_pt)
+}
+
+fn sheet_advance_grid_glyph_advances_em(style: &TextStyle, text: &str) -> Option<Vec<f64>> {
+    let bold: bool = matches!(style.bold, Some(true));
+    let family: &str = style.font_family.as_deref()?;
+    // A Korean cell names its face in `font_family` like any other, but a run
+    // that carries a separate East Asian family is measured on the face its
+    // glyphs will actually come from — the Latin one has no glyph for them and
+    // reports nothing.
+    crate::render::pdf::glyph_advances_em(family, bold, text).or_else(|| {
+        let east_asian: &str = style.east_asian_font_family.as_deref()?;
+        (!east_asian.eq_ignore_ascii_case(family))
+            .then(|| crate::render::pdf::glyph_advances_em(east_asian, bold, text))
+            .flatten()
+    })
 }
 
 /// `value` rounded to the nearest multiple of `grid`, halves away from zero —
