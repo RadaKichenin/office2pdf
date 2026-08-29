@@ -6,7 +6,9 @@ traps pinned here are the ones the first run of the sweep actually hit: a
 raw-string escape that wrote `val=\\"10\\"` into the stylesheet and made Excel
 reject every variant with -50, and a slug that collapsed two Korean family
 names to the same stage file so one family's package silently overwrote the
-other's and the report showed one column twice.
+other's and the report showed one column twice. The default size list also
+pins the full fourteen-point matrix used to separate Calibri from Aptos in
+issue #1225.
 """
 
 from __future__ import annotations
@@ -74,6 +76,29 @@ class VariantFileNameTests(unittest.TestCase):
         self.assertNotEqual(
             measure_excel_row_height.variant_file_name(0, "Arial", 11.0),
             measure_excel_row_height.variant_file_name(0, "Arial", 12.0),
+        )
+
+
+class SweepConfigurationTests(unittest.TestCase):
+    def test_default_sizes_cover_the_full_face_matrix(self) -> None:
+        self.assertEqual(
+            measure_excel_row_height.DEFAULT_SIZES,
+            (
+                8.0,
+                9.0,
+                10.0,
+                11.0,
+                12.0,
+                13.0,
+                14.0,
+                15.0,
+                16.0,
+                17.0,
+                18.0,
+                20.0,
+                22.0,
+                24.0,
+            ),
         )
 
 

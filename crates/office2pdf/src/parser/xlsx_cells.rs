@@ -1088,9 +1088,9 @@ const EXCEL_DEFAULT_ROW_HEIGHT_PT: f64 = 15.0;
 /// text in the locale UI face. Both an 11pt "Calibri" and a 10pt "Arial"
 /// scheme font exported as Malgun Gothic there, at 17pt and 15pt rows —
 /// while removing `scheme` from the same package, changing nothing else,
-/// dropped the 11pt rows to 15pt. So the scheme fonts share one table and the
-/// scheme-less Calibri/Aptos another (`SUBSTITUTED_FACE_ROW_HEIGHTS`); a size
-/// neither table measures keeps the declared hint.
+/// dropped the 11pt rows to 15pt. So the scheme fonts share one table, while
+/// scheme-less Calibri and Aptos each use their own measured series; a size
+/// none of those tables measures keeps the declared hint.
 ///
 /// | scheme font size | recomputed row | printed track |
 /// | ---: | ---: | ---: |
@@ -1122,8 +1122,10 @@ pub(super) fn recomputed_default_row_height_pt(
 fn measured_row_height_pt(font: &NormalFont, size_pt: f64) -> Option<f64> {
     let measured: &[(f64, f64)] = if font.uses_theme_scheme {
         &UI_SCRIPT_FACE_ROW_HEIGHTS
-    } else if names_a_substituted_family(font) {
-        &SUBSTITUTED_FACE_ROW_HEIGHTS
+    } else if font.family.eq_ignore_ascii_case("Calibri") {
+        &CALIBRI_RECOMPUTED_ROW_HEIGHTS
+    } else if font.family.eq_ignore_ascii_case("Aptos") {
+        &APTOS_RECOMPUTED_ROW_HEIGHTS
     } else {
         named_face_row_heights(&font.family)?
     };
@@ -1136,10 +1138,12 @@ fn measured_row_height_pt(font: &NormalFont, size_pt: f64) -> Option<f64> {
 /// The series measured for a Normal font that names `family` outright, or
 /// `None` where no sweep has covered it.
 ///
-/// Matched on the whole name, case-insensitively — never as a prefix, unlike
-/// the Calibri/Aptos remap above. `Arial Narrow`, `Arial Black` and
-/// `Arial Unicode MS` are separate faces with row heights of their own, and
-/// lending them Arial's would be a guess wearing a measurement's clothes.
+/// Matched on the whole name, case-insensitively — never as a prefix. The
+/// Calibri and Aptos recompute tables above follow the same rule; prefix
+/// matching belongs only to the separately measured printed-grid remap below.
+/// `Arial Narrow`, `Arial Black` and `Arial Unicode MS` are separate faces
+/// with row heights of their own, and lending them Arial's would be a guess
+/// wearing a measurement's clothes.
 fn named_face_row_heights(family: &str) -> Option<&'static [(f64, f64)]> {
     NAMED_FACE_ROW_HEIGHTS
         .iter()
@@ -1169,8 +1173,8 @@ const UI_SCRIPT_FACE_ROW_HEIGHTS: [(f64, f64); 6] = [
     (24.0, 35.0),
 ];
 
-/// The same recompute under a Normal font that names Calibri or Aptos
-/// outright, the families this machine has no face of its own for.
+/// The recompute under a Normal font that names Calibri outright, a face the
+/// reference machine substitutes.
 ///
 /// Swept one size per export on `issue_1066_blip_effect_picture.xlsx`, which
 /// declares `defaultRowHeight="18"`, reading `standard height` and every
@@ -1178,13 +1182,13 @@ const UI_SCRIPT_FACE_ROW_HEIGHTS: [(f64, f64); 6] = [
 /// hint reaches none of them; re-running the sweep with the hint rewritten to
 /// 30 returned the same column of numbers.
 ///
-/// | size | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 16 | 18 |
-/// | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-/// | row | 11 | 12 | 14 | 15 | 16 | 17 | 19 | 21 | 24 |
+/// Issue #1225 extended the sweep to fourteen sizes and repeated both the
+/// Calibri and Aptos columns. The no-patch re-zip control kept the same
+/// reading, and both runs reproduced this column exactly.
 ///
-/// `Aptos` 11 answers 15 as `Calibri` 11 does, which is why the two share one
-/// table — the same pairing `REMAPPED_NORMAL_FAMILIES` already makes for the
-/// compaction.
+/// | size | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 20 | 22 | 24 |
+/// | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+/// | row | 11 | 12 | 14 | 15 | 16 | 17 | 19 | 20 | 21 | 23 | 24 | 26 | 29 | 31 |
 ///
 /// This is the *worksheet* height, not the printed track: unlike the scheme
 /// faces above, these compact on the way to the PDF, so 12pt Calibri prints a
@@ -1193,7 +1197,7 @@ const UI_SCRIPT_FACE_ROW_HEIGHTS: [(f64, f64); 6] = [
 ///
 /// Every other family the sweep reached has a column of its own, none of them
 /// following this one; `NAMED_FACE_ROW_HEIGHTS` carries them (issue #1150).
-const SUBSTITUTED_FACE_ROW_HEIGHTS: [(f64, f64); 9] = [
+const CALIBRI_RECOMPUTED_ROW_HEIGHTS: [(f64, f64); 14] = [
     (8.0, 11.0),
     (9.0, 12.0),
     (10.0, 14.0),
@@ -1201,8 +1205,38 @@ const SUBSTITUTED_FACE_ROW_HEIGHTS: [(f64, f64); 9] = [
     (12.0, 16.0),
     (13.0, 17.0),
     (14.0, 19.0),
+    (15.0, 20.0),
     (16.0, 21.0),
+    (17.0, 23.0),
     (18.0, 24.0),
+    (20.0, 26.0),
+    (22.0, 29.0),
+    (24.0, 31.0),
+];
+
+/// The corresponding Aptos recompute. One shared 11pt reading in issue #1102
+/// originally paired it with Calibri, but the full issue #1225 sweep separates
+/// the faces at 9, 13, 16, 20 and 24pt. This exact table therefore stays
+/// independent of the broader `REMAPPED_NORMAL_FAMILIES` printed-grid rule.
+///
+/// | size | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 20 | 22 | 24 |
+/// | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+/// | row | 11 | 13 | 14 | 15 | 16 | 18 | 19 | 20 | 22 | 23 | 24 | 27 | 29 | 32 |
+const APTOS_RECOMPUTED_ROW_HEIGHTS: [(f64, f64); 14] = [
+    (8.0, 11.0),
+    (9.0, 13.0),
+    (10.0, 14.0),
+    (11.0, 15.0),
+    (12.0, 16.0),
+    (13.0, 18.0),
+    (14.0, 19.0),
+    (15.0, 20.0),
+    (16.0, 22.0),
+    (17.0, 23.0),
+    (18.0, 24.0),
+    (20.0, 27.0),
+    (22.0, 29.0),
+    (24.0, 32.0),
 ];
 
 /// One face's measured recompute, and the Normal-font family names that
@@ -1411,9 +1445,10 @@ pub(super) fn declared_default_row_height_pt(sheet: &umya_spreadsheet::Worksheet
 }
 
 /// Families the standard Office theme resolves to, and the ones the
-/// reference machine has no face of its own for. Matched as a prefix so the
-/// whole Aptos family — `Aptos`, `Aptos Narrow`, `Aptos Display` — and
-/// `Calibri Light` come along.
+/// reference machine has no face of its own for. This printed-grid rule is
+/// matched as a prefix so the whole Aptos family — `Aptos`, `Aptos Narrow`,
+/// `Aptos Display` — and `Calibri Light` come along. The recomputed worksheet
+/// row tables above are narrower exact-face measurements.
 const REMAPPED_NORMAL_FAMILIES: [&str; 2] = ["calibri", "aptos"];
 
 /// Below this the remap leaves the printed grid alone: the same declared
