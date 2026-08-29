@@ -2447,6 +2447,67 @@ fn the_other_remapped_family_compacts_too() {
     );
 }
 
+// ── Thick row-border tracks (issue #1228) ────────────────────────────
+
+/// The formatted-table workbook of issue #1228: rows 1, 3 and 4 end at a
+/// thick border, while rows 1, 2, 4 and 5 start at one.
+const THICK_ROW_BORDER_PROBE: &[u8] =
+    include_bytes!("../../../../tests/fixtures/xlsx/SH107-9-x-9-Formatted-Table.xlsx");
+
+/// A row receives one printed point when it begins with `thickTop`, plus one
+/// when the preceding row ends with `thickBot`. Native Excel-for-Mac PDF
+/// baselines on the probe are 68, 87, 104, 123, 142, 159, 176, 193 and 210pt:
+/// pitches of 19/17/19/19/17/17/17/17 against a bare 17pt track, while the
+/// first row's top term places its own baseline. A separate 8-24pt Normal-font
+/// sweep kept each individual term at exactly 1pt rather than scaling it with
+/// the font.
+#[test]
+fn thick_row_borders_expand_the_printed_boundary() {
+    assert_eq!(
+        printed_row_heights(THICK_ROW_BORDER_PROBE),
+        vec![
+            Some(18.0),
+            Some(19.0),
+            Some(17.0),
+            Some(19.0),
+            Some(19.0),
+            Some(17.0),
+            Some(17.0),
+            Some(17.0),
+            Some(17.0),
+        ]
+    );
+}
+
+/// A custom track already states the full printed boundary. The thick flags
+/// in `issue_1181_fit_to_height.xlsx` sit on custom-height rows, and adding
+/// their reservations again grows the native 161.87pt chart area to 163.43pt.
+#[test]
+fn custom_row_heights_already_include_thick_border_reservations() {
+    let mut book = umya_spreadsheet::new_file();
+    {
+        let sheet = book.get_sheet_mut(&0).unwrap();
+        for row_idx in 1..=2 {
+            sheet
+                .get_cell_mut(format!("A{row_idx}").as_str())
+                .set_value("x");
+            sheet
+                .get_row_dimension_mut(&row_idx)
+                .set_height(40.0)
+                .set_custom_height(true)
+                .set_thick_top(true);
+        }
+        sheet.get_row_dimension_mut(&1).set_thick_bot(true);
+    }
+    let mut cursor = Cursor::new(Vec::new());
+    umya_spreadsheet::writer::xlsx::write_writer(&book, &mut cursor).unwrap();
+
+    assert_eq!(
+        printed_row_heights(&cursor.into_inner()),
+        vec![Some(40.0), Some(40.0)]
+    );
+}
+
 // ── Theme-resolved scheme Normal fonts (issue #1094) ─────────────────
 
 /// The probe workbook of issue #1094: a `<scheme val="minor"/>` Normal font

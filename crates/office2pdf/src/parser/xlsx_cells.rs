@@ -1957,6 +1957,18 @@ fn tallest_cell_font_size_pt(sheet: &umya_spreadsheet::Worksheet, row_idx: u32) 
 /// dimension, `height of row 1` and `height of row 7` answer the same number
 /// at every size, and neither is 16 except where the recompute lands there
 /// (issue #1151).
+///
+/// The returned table-row height governs this row's printed baseline, not
+/// merely its worksheet `height` property. Excel reserves one PDF point when
+/// this row begins with `thickTop`, plus one when the preceding row ends with
+/// `thickBot`. Native PDF baseline pitches on
+/// `SH107-9-x-9-Formatted-Table.xlsx` are 19/17/19/19/17/17/17/17pt against
+/// its bare 17pt track, exactly the previous-bottom plus current-top pattern. A
+/// separate 8-24pt Normal-font sweep kept each term at 1pt, so apply it after
+/// the font-dependent grid mapping rather than scaling it. A `customHeight`
+/// already declares the full boundary, so only flags belonging to automatic
+/// rows contribute: adding the custom flags in `issue_1181_fit_to_height.xlsx`
+/// again grows its native 161.87pt chart area to 163.43pt (issue #1228).
 pub(super) fn printed_grid_row_height_pt(
     sheet: &umya_spreadsheet::Worksheet,
     row_idx: u32,
@@ -1973,7 +1985,21 @@ pub(super) fn printed_grid_row_height_pt(
         (true, Some(height)) => height,
         (_, cached_height) => auto_row_height_pt(sheet, row_idx, normal_font, cached_height),
     };
+    let thick_top_pt: f64 = f64::from(
+        dimension
+            .map(|row| !*row.get_custom_height() && *row.get_thick_top())
+            .unwrap_or(false),
+    );
+    let previous_thick_bottom_pt: f64 = f64::from(
+        row_idx
+            .checked_sub(1)
+            .and_then(|previous_row_idx| sheet.get_row_dimension(&previous_row_idx))
+            .map(|row| !*row.get_custom_height() && *row.get_thick_bot())
+            .unwrap_or(false),
+    );
     native_excel_pdf_row_height(worksheet_height, normal_font)
+        + thick_top_pt
+        + previous_thick_bottom_pt
 }
 
 /// The outline a merged range prints: each side taken from the members that
