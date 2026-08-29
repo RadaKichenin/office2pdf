@@ -1423,8 +1423,10 @@ pub(super) fn sheet_cell_baseline_from_track_top_pt(
 /// is far from Arial's could yet show it as something else.
 pub(crate) const SHEET_CELL_MIN_DESCENT_SEAT_PT: f64 = 4.0;
 
-/// The same gap in the workbooks whose printed grid compacts its declared
-/// tracks, which floor one point lower (issue #1199).
+/// The 3pt gap measured for the remapped Calibri/Aptos family in the native
+/// floor probe matrix, one point below the script-face theme family
+/// (issue #1199). Face-specific row-track mappings measured later do not
+/// choose this floor.
 ///
 /// Measured on native Excel-for-Mac exports of `10_kpi_tracker_en.xlsx`, whose
 /// A11 note is the corpus's one bottom-aligned cell small enough to tell a
@@ -1456,12 +1458,13 @@ pub(crate) const COMPACTED_SHEET_CELL_MIN_DESCENT_SEAT_PT: f64 = 3.0;
 ///
 /// `descent_floor_pt` is the workbook-wide distance
 /// `xlsx_cells::bottom_aligned_descent_floor_pt` reads, which carries the
-/// measurement behind it: [`SHEET_CELL_MIN_DESCENT_SEAT_PT`] where the printed
-/// grid keeps its declared tracks, and
-/// [`COMPACTED_SHEET_CELL_MIN_DESCENT_SEAT_PT`] where it compacts them. Both
-/// families reproduce their native probes at every size swept; they differ
-/// only under a font small enough for the two floors to separate, which on
-/// Arial is 11pt and below.
+/// measurement behind it: [`COMPACTED_SHEET_CELL_MIN_DESCENT_SEAT_PT`] for the
+/// remapped Calibri/Aptos family in the floor probe matrix, and
+/// [`SHEET_CELL_MIN_DESCENT_SEAT_PT`] for its script-face theme family. Both
+/// families reproduce their native probes at every size swept; later
+/// face-specific printed-grid mappings do not choose this separately measured
+/// floor. The two values differ only under a font small enough to separate
+/// them, which on Arial is 11pt and below.
 pub(super) fn sheet_cell_descent_pt(
     family: &str,
     descent_em: f64,

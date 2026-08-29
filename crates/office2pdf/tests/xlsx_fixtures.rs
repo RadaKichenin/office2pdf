@@ -351,6 +351,29 @@ fn structure_any_sheets() {
     assert_eq!(sheet_names(&pages), vec!["Visible", "Chart"]);
 }
 
+/// `Visible` names Arial 12 as its Normal font and records no row heights.
+/// Excel recomputes a 16pt worksheet row, then seats it on a 15pt printed
+/// track. The old Calibri/Aptos-keyed predicate left all five tracks at 16pt
+/// instead (issue #1224).
+#[test]
+fn structure_any_sheets_uses_the_arial_printed_grid() {
+    let pages = sheet_pages("any_sheets.xlsx");
+    let visible = pages
+        .iter()
+        .find(|page| page.name == "Visible")
+        .expect("the visible worksheet should contribute a page");
+
+    assert_eq!(
+        visible
+            .table
+            .rows
+            .iter()
+            .map(|row| row.height)
+            .collect::<Vec<_>>(),
+        vec![Some(15.0); 5]
+    );
+}
+
 /// A chartsheet prints as one page carrying its chart alone.
 ///
 /// Measured on Excel for Mac 16.100 exports of this fixture's `Chart` sheet:

@@ -2150,6 +2150,29 @@ fn a_scheme_less_dimensionless_printed_row_ignores_a_disagreeing_declared_defaul
     assert_eq!(table.rows[0].height, Some(15.0));
 }
 
+/// Printed-grid compaction belongs to the resolved face, not to the
+/// Calibri/Aptos substitution set. Native Excel-for-Mac exports of
+/// `issue_1066_blip_effect_picture.xlsx` measure a 15pt printed track for
+/// both Arial 12 (16pt worksheet row) and Courier New 12 (17pt worksheet
+/// row), while Verdana 12 keeps its 16pt worksheet row whole (issue #1224).
+#[test]
+fn named_faces_map_dimensionless_rows_through_their_own_printed_grid() {
+    for (family, expected) in [("Arial", 15.0), ("Courier New", 15.0), ("Verdana", 16.0)] {
+        let data = rewrite_sheet_format_pr(
+            &build_xlsx_with_normal_font(family, 12.0),
+            r#"<sheetFormatPr defaultRowHeight="18"/>"#,
+        );
+        let parser = XlsxParser;
+        let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+        assert_eq!(
+            get_sheet_page(&doc, 0).table.rows[0].height,
+            Some(expected),
+            "{family} 12"
+        );
+    }
+}
+
 // ── Declared row tracks and the Normal font (issue #1068) ────────────
 
 /// A workbook whose Normal font names `family` at `size_pt` outright, with
@@ -2219,6 +2242,100 @@ fn a_remapped_normal_font_compacts_a_declared_row_height() {
     );
 }
 
+/// The native issue #1224 face sweep gives a different whole-point series per
+/// face. Every point below was exported independently from three equal fixed
+/// rows, with the PDF baseline pitch agreeing across both row pairs.
+#[test]
+fn named_faces_map_declared_rows_through_their_own_printed_grid() {
+    let heights = [
+        12.0, 15.0, 16.0, 17.0, 18.0, 20.0, 25.5, 30.0, 36.0, 40.0, 49.5,
+    ];
+    for (family, expected) in [
+        (
+            "Arial",
+            vec![
+                11.0, 14.0, 15.0, 16.0, 17.0, 18.0, 24.0, 28.0, 33.0, 37.0, 46.0,
+            ],
+        ),
+        (
+            "Courier New",
+            vec![
+                10.0, 13.0, 14.0, 15.0, 16.0, 17.0, 22.0, 26.0, 31.0, 35.0, 43.0,
+            ],
+        ),
+        (
+            "Verdana",
+            vec![
+                12.0, 15.0, 16.0, 17.0, 18.0, 20.0, 25.0, 30.0, 36.0, 40.0, 49.0,
+            ],
+        ),
+        (
+            "맑은 고딕",
+            vec![
+                12.0, 15.0, 16.0, 17.0, 18.0, 20.0, 25.0, 30.0, 36.0, 40.0, 49.0,
+            ],
+        ),
+    ] {
+        assert_eq!(
+            printed_row_heights(&build_xlsx_with_normal_font_and_row_heights(
+                family, 12.0, &heights
+            )),
+            expected.into_iter().map(Some).collect::<Vec<_>>(),
+            "{family} 12"
+        );
+    }
+}
+
+/// The half-point Arial sweep disproves a scale even within one face: these
+/// adjacent steps cannot all be derived by multiplying and rounding. Keep the
+/// measured staircase explicit (issue #1224).
+#[test]
+fn arial_12_uses_its_measured_half_point_staircase() {
+    assert_eq!(
+        printed_row_heights(&build_xlsx_with_normal_font_and_row_heights(
+            "Arial",
+            12.0,
+            &[10.5, 11.5, 19.0, 19.5, 24.0]
+        )),
+        vec![Some(9.0), Some(10.0), Some(17.0), Some(18.0), Some(22.0)]
+    );
+}
+
+/// Do not turn the measured table into interpolation or a family-prefix
+/// guess. An unmeasured height, size, or distinct Arial face keeps the
+/// conservative whole-point path until a native sweep covers it.
+#[test]
+fn named_face_printed_grid_measurements_are_not_extrapolated() {
+    for (family, size, height, expected) in [
+        ("Arial", 12.0, 24.25, 24.0),
+        ("Arial", 11.0, 16.0, 16.0),
+        ("Arial Narrow", 12.0, 16.0, 16.0),
+        ("Courier New", 12.0, 16.5, 16.0),
+    ] {
+        assert_eq!(
+            printed_row_heights(&build_xlsx_with_normal_font_and_row_heights(
+                family,
+                size,
+                &[height]
+            )),
+            vec![Some(expected)],
+            "{family} {size} at {height}pt"
+        );
+    }
+
+    let scheme_font = NormalFont {
+        family: "Arial".to_string(),
+        size_pt: 12.0,
+        uses_theme_scheme: true,
+        theme_declares_script_faces: false,
+    };
+    assert_eq!(
+        xlsx_cells::native_excel_pdf_row_height(16.0, Some(&scheme_font)),
+        16.0,
+        "a scheme font does not name Arial outright"
+    );
+}
+
 fn table_bottom_aligned_descent_floor_pt(data: &[u8]) -> f64 {
     let parser = XlsxParser;
     let (doc, _warnings) = parser.parse(data, &ConvertOptions::default()).unwrap();
@@ -2227,9 +2344,10 @@ fn table_bottom_aligned_descent_floor_pt(data: &[u8]) -> f64 {
         .bottom_aligned_descent_floor_pt
 }
 
-/// The workbooks that keep their declared tracks are the ones that hold a
-/// bottom-aligned cell's baseline 4pt clear of the row boundary: every native
-/// probe export measures the two together (issue #1097).
+/// The script-face theme family in the native floor probe matrix holds a
+/// bottom-aligned cell's baseline 4pt clear of the row boundary
+/// (issue #1097). This test does not generalize that floor to every face whose
+/// row track remains whole.
 #[test]
 fn a_kept_normal_font_floors_the_bottom_aligned_seat_at_four_points() {
     assert_eq!(
@@ -2242,9 +2360,9 @@ fn a_kept_normal_font_floors_the_bottom_aligned_seat_at_four_points() {
     );
 }
 
-/// And a remapped Normal font, whose grid compacts, floors it a point lower —
-/// measured over an eleven-size sweep of a ruled native re-export
-/// (issue #1199).
+/// The remapped Calibri/Aptos family in that floor probe matrix seats it a
+/// point lower, measured over an eleven-size sweep of a ruled native
+/// re-export (issue #1199).
 #[test]
 fn a_remapped_normal_font_floors_the_bottom_aligned_seat_at_three_points() {
     assert_eq!(
