@@ -533,9 +533,9 @@ fn sheet_row_shared_line(
         return None;
     }
     let track_pt: f64 = row_track_pt?;
-    let metric_family: &str = row_metric_family(row, row_east_asian.has_east_asian_text)?;
+    let metric_family: String = row_metric_family(row, row_east_asian.has_east_asian_text)?;
     let font_size_pt: f64 = row_font_size_pt(row);
-    let bare_line_pt: f64 = sheet_row_line_advance_pt(metric_family, font_size_pt, false)?;
+    let bare_line_pt: f64 = sheet_row_line_advance_pt(&metric_family, font_size_pt, false)?;
     if track_pt + SHEET_ROW_TRACK_QUANTISATION_SLACK_PT < bare_line_pt {
         return None;
     }
@@ -557,7 +557,7 @@ fn sheet_row_shared_line(
         return None;
     }
     Some(SheetRowLine {
-        metric_family: metric_family.to_string(),
+        metric_family,
         font_size_pt,
     })
 }
@@ -573,7 +573,7 @@ fn sheet_row_shared_line(
 /// box: a sheet row never takes an East Asian box (issue #1060), and reading
 /// that answer here would have paced `김민준 | E-1021` on whichever cell came
 /// first instead of on the face shaping the Hangul.
-fn row_metric_family(row: &TableRow, has_east_asian_text: bool) -> Option<&str> {
+fn row_metric_family(row: &TableRow, has_east_asian_text: bool) -> Option<String> {
     let runs = || {
         row.cells
             .iter()
@@ -584,19 +584,27 @@ fn row_metric_family(row: &TableRow, has_east_asian_text: bool) -> Option<&str> 
             })
             .flatten()
     };
-    let latin = || runs().find_map(|run| run.style.font_family.as_deref());
-    if has_east_asian_text {
+    let run: &Run = if has_east_asian_text {
         runs()
-            .find_map(|run| run.style.east_asian_font_family.as_deref())
-            .or_else(|| {
-                runs()
-                    .filter(|run| run.text.chars().any(is_cjk_like))
-                    .find_map(|run| run.style.font_family.as_deref())
+            .find(|run| {
+                run.text.chars().any(is_cjk_like)
+                    && (run.style.font_family.is_some()
+                        || run.style.east_asian_font_family.is_some())
             })
-            .or_else(latin)
+            .or_else(|| runs().find(|run| run.style.east_asian_font_family.is_some()))?
     } else {
-        latin()
-    }
+        runs().find(|run| run.style.font_family.is_some())?
+    };
+    let latin_family: &str = run
+        .style
+        .font_family
+        .as_deref()
+        .or(run.style.east_asian_font_family.as_deref())?;
+    Some(crate::render::font_subst::painted_family_for_text(
+        latin_family,
+        run.style.east_asian_font_family.as_deref(),
+        &run.text,
+    ))
 }
 
 /// The size a spreadsheet row's shared line resolves at: the largest run size

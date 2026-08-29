@@ -1085,6 +1085,46 @@ pub fn font_with_east_asian_fallbacks(
     })
 }
 
+/// The family from an emitted font list that will paint `text`'s script.
+///
+/// Typst walks the list per glyph, whereas [`family_candidates`] resolves one
+/// declared name through its metric-substitution chain. Those answers differ
+/// when the declared face is present but does not cover the text: the Noto face
+/// resolved for the Korean quotation fixture is first in the cell's list but
+/// has no Hangul, so Malgun Gothic supplies both the glyphs and the line metrics
+/// that must seat them (issue #1239).
+///
+/// Without an active font context, coverage is unknowable. In that case this
+/// preserves the prior declared-family answer instead of guessing.
+pub(crate) fn painted_family_for_text(
+    latin_family: &str,
+    east_asian_family: Option<&str>,
+    text: &str,
+) -> String {
+    let script: TextScript = text_script(text);
+    let declared_family: &str = if script == TextScript::Latin {
+        latin_family
+    } else {
+        east_asian_family.unwrap_or(latin_family)
+    };
+    ACTIVE_FONT_CONTEXT.with(|active_context| {
+        let context = active_context.borrow();
+        let Some(context) = context.as_ref() else {
+            return declared_family.to_string();
+        };
+        let families: Vec<String> = match east_asian_family {
+            Some(east_asian) if !east_asian.eq_ignore_ascii_case(latin_family) => {
+                east_asian_family_chain(latin_family, east_asian, text, Some(context))
+            }
+            _ => latin_family_chain(latin_family, text, Some(context)),
+        };
+        families
+            .into_iter()
+            .find(|family| covers_script_with_alias(context, family, script))
+            .unwrap_or_else(|| declared_family.to_string())
+    })
+}
+
 /// The ordered candidate list behind [`font_with_east_asian_fallbacks`], for
 /// the same reason [`latin_family_chain`] exists.
 fn east_asian_family_chain(

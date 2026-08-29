@@ -2355,6 +2355,111 @@ fn scaled_sheet_cell_line_seat_snaps_in_declared_sheet_space() {
     );
 }
 
+/// A sheet cell's numeric line box must follow the same per-glyph family
+/// selection as the font list Typst paints. The committed Korean quotation
+/// declares Noto Sans CJK SC, whose resolved face for this fixture has no
+/// Hangul, before Malgun Gothic; Typst therefore paints `금액` with Malgun
+/// Gothic. Reading Noto's 1.4em metrics instead seats this 10pt line 1pt high
+/// in its 23pt track (issue #1239).
+#[test]
+fn sheet_cell_line_box_uses_the_face_that_paints_korean_fallback_text() {
+    let Some((malgun_ascent_em, malgun_descent_em, malgun_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Malgun Gothic")
+    else {
+        return; // Malgun Gothic is unavailable on this runner
+    };
+    let Some((noto_ascent_em, noto_descent_em, noto_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Noto Sans CJK SC")
+    else {
+        return; // the resolved Noto face is unavailable on this runner
+    };
+    if (malgun_ascent_em - noto_ascent_em).abs() < 1e-9
+        && (malgun_descent_em - noto_descent_em).abs() < 1e-9
+        && (malgun_pitch_em - noto_pitch_em).abs() < 1e-9
+    {
+        return; // this runner resolves both names to one physical face
+    }
+
+    let context = crate::render::font_context::resolve_font_search_context(&[]);
+    if context.covers_script(
+        "Noto Sans CJK SC",
+        crate::render::font_subst::TextScript::Korean,
+    ) || !context.covers_script(
+        "Malgun Gothic",
+        crate::render::font_subst::TextScript::Korean,
+    ) {
+        return; // this runner does not reproduce the fixture's fallback pair
+    }
+    let font_size_pt: f64 = 10.0;
+    let track_pt: f64 = 23.0;
+    let padding = Insets {
+        top: 1.0,
+        right: 3.0,
+        bottom: 1.5,
+        left: 3.0,
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            minimum_height: None,
+            cells: vec![TableCell {
+                content: vec![Block::Paragraph(Paragraph {
+                    style: ParagraphStyle::default(),
+                    runs: vec![Run {
+                        text: "금액".to_string(),
+                        style: TextStyle {
+                            font_family: Some("Noto Sans CJK SC".to_string()),
+                            east_asian_font_family: Some("Noto Sans CJK SC".to_string()),
+                            font_size: Some(font_size_pt),
+                            ..TextStyle::default()
+                        },
+                        href: None,
+                        footnote: None,
+                    }],
+                })],
+                vertical_align: Some(CellVerticalAlign::Center),
+                ..TableCell::default()
+            }],
+            height: Some(track_pt),
+        }],
+        column_widths: vec![72.0],
+        default_cell_padding: Some(padding),
+        default_vertical_align: Some(CellVerticalAlign::Bottom),
+        seats_bottom_aligned_text_on_descender: true,
+        border_paint_model: TableBorderPaintModel::CenteredStroke,
+        prints_gridlines: false,
+        prints_headings: false,
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let source: String = generate_typst_with_options_and_font_context(
+        &doc,
+        &crate::ConvertOptions::default(),
+        Some(&context),
+    )
+    .unwrap()
+    .source;
+
+    let line_gap_em: f64 = crate::render::pdf::font_line_gap_em("Malgun Gothic").unwrap_or(0.0);
+    let baseline_pt: f64 = sheet_cell_baseline_from_track_top_pt(
+        track_pt,
+        malgun_ascent_em - line_gap_em,
+        malgun_descent_em,
+        line_gap_em,
+        font_size_pt,
+        None,
+    );
+    let content_mid_pt: f64 = (padding.top + (track_pt - padding.bottom)) / 2.0;
+    let expected_top_em: f64 =
+        malgun_pitch_em / 2.0 + (baseline_pt - content_mid_pt) / font_size_pt;
+    let expected: String = format!("top-edge: {}em", format_f64(expected_top_em));
+
+    assert!(
+        source.contains(&expected),
+        "the line box must use Malgun Gothic, the first emitted family that \
+         covers the Korean text; expected `{expected}` in:\n{source}"
+    );
+}
+
 /// The expense report's data rows: a 14pt track of Arial 10 whose cells Excel
 /// prints at y=143.00, 11.00pt below the track's top boundary. Our own seat
 /// centred the line in the cell's *inset* box instead of the track and used

@@ -910,6 +910,41 @@ fn east_asian_aware_metric_family(runs: &[Run]) -> Option<&str> {
     }
 }
 
+/// The family that actually paints a spreadsheet cell's representative run.
+///
+/// Sheet line seats are measured from the painted face, not from a declared
+/// family's metric-substitution chain. Typst walks the emitted list per glyph,
+/// so a Simplified Chinese face that has no Hangul yields to the Korean script
+/// fallback even though a family-only metric lookup can resolve it (issue
+/// #1239).
+fn sheet_cell_metric_family(runs: &[Run]) -> Option<String> {
+    let has_east_asian: bool = has_east_asian_text(runs);
+    let run: &Run = if has_east_asian {
+        runs.iter()
+            .find(|run| {
+                run.text.chars().any(is_cjk_like)
+                    && (run.style.font_family.is_some()
+                        || run.style.east_asian_font_family.is_some())
+            })
+            .or_else(|| {
+                runs.iter()
+                    .find(|run| run.style.east_asian_font_family.is_some())
+            })?
+    } else {
+        runs.iter().find(|run| run.style.font_family.is_some())?
+    };
+    let latin_family: &str = run
+        .style
+        .font_family
+        .as_deref()
+        .or(run.style.east_asian_font_family.as_deref())?;
+    Some(crate::render::font_subst::painted_family_for_text(
+        latin_family,
+        run.style.east_asian_font_family.as_deref(),
+        &run.text,
+    ))
+}
+
 fn has_east_asian_text(runs: &[Run]) -> bool {
     runs.iter().any(|run| run.text.chars().any(is_cjk_like))
 }
@@ -1692,11 +1727,19 @@ pub(super) fn word_cell_line_box(
     // A tight spreadsheet row's box resolves at the row's one family and
     // size, not this cell's: Excel prints every cell of such a row on one
     // baseline, and per-cell metrics split it by the descender difference
-    // (issue #839).
+    // (issue #839). A centred fixed-track cell instead resolves the face that
+    // paints its text (#1239). Bottom-aligned cells keep their separately
+    // measured descender-seat model; this issue supplies no new bottom-seat
+    // measurement.
+    let painted_sheet_family: Option<String> = (sheet_seat.is_some() && !seats_text_on_descender)
+        .then(|| sheet_cell_metric_family(runs))
+        .flatten();
     let (family, font_size): (&str, f64) = match sheet_row_line {
         Some(row_line) => (row_line.metric_family.as_str(), row_line.font_size_pt),
         None => (
-            east_asian_aware_metric_family(runs)?,
+            painted_sheet_family
+                .as_deref()
+                .or_else(|| east_asian_aware_metric_family(runs))?,
             paragraph_font_size_pt(runs),
         ),
     };
