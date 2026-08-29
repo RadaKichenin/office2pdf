@@ -243,7 +243,8 @@ pub enum ChartAreaFill {
 /// itself says nothing about either distinction; only the loader knows.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ChartHost {
-    /// A chart anchored to a worksheet.
+    /// A chart hosted by an Excel worksheet, whether drawing-anchored or an
+    /// orphaned chart part with no drawing placement.
     Spreadsheet,
     /// A chart occupying an Excel chartsheet.
     ///
