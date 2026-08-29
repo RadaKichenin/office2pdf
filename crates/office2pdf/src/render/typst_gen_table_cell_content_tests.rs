@@ -2525,8 +2525,9 @@ fn bottom_aligned_sheet_cell_seat_reproduces_the_native_excel_probe() {
     }
 }
 
-/// A workbook whose printed grid compacts its declared tracks floors the same
-/// seat one point lower (issue #1199).
+/// The remapped Calibri/Aptos family from the native floor probe matrix seats
+/// the same text one point lower (issue #1199). This is independent of later
+/// face-specific printed-grid row mappings.
 ///
 /// Read off native Excel-for-Mac re-exports of `10_kpi_tracker_en.xlsx` with
 /// its A11 note ruled by a thin box border, so Excel prints the row's own
@@ -2535,7 +2536,7 @@ fn bottom_aligned_sheet_cell_seat_reproduces_the_native_excel_probe() {
 /// unfloored from its single 14pt sample, whose bare rounded descent is
 /// already 3 and so cannot separate the two readings.
 #[test]
-fn a_compacting_workbook_floors_the_same_seat_a_point_lower() {
+fn a_remapped_normal_workbook_floors_the_same_seat_a_point_lower() {
     const ARIAL_DESCENT_EM: f64 = 434.0 / 2048.0;
 
     // (font size pt, baseline above the row's bottom boundary pt)
@@ -2563,7 +2564,8 @@ fn a_compacting_workbook_floors_the_same_seat_a_point_lower() {
         );
         assert!(
             (seated_pt - expected_pt).abs() < 1e-9,
-            "Arial {font_size_pt}pt bottom-aligned in a compacting workbook: \
+            "Arial {font_size_pt}pt bottom-aligned with the remapped \
+             Calibri/Aptos floor: \
              Excel prints the baseline {expected_pt}pt above the row boundary, \
              seated {seated_pt}pt"
         );
@@ -2846,19 +2848,20 @@ fn a_floored_sheet_cell_ends_its_box_on_excel_minimum_gap() {
         )
     };
     let floored: String = emitted_bottom_edge(SHEET_CELL_MIN_DESCENT_SEAT_PT);
-    let compacted: String = emitted_bottom_edge(COMPACTED_SHEET_CELL_MIN_DESCENT_SEAT_PT);
-    let flooring: String = sheet_source(SHEET_CELL_MIN_DESCENT_SEAT_PT);
+    let remapped: String = emitted_bottom_edge(COMPACTED_SHEET_CELL_MIN_DESCENT_SEAT_PT);
+    let script_face_source: String = sheet_source(SHEET_CELL_MIN_DESCENT_SEAT_PT);
     assert!(
-        flooring.contains(&floored),
-        "a workbook keeping its declared tracks keeps Excel's \
-         {SHEET_CELL_MIN_DESCENT_SEAT_PT}pt gap, which needs `{floored}`: {flooring}"
+        script_face_source.contains(&floored),
+        "the script-face theme floor keeps Excel's \
+         {SHEET_CELL_MIN_DESCENT_SEAT_PT}pt gap, which needs `{floored}`: \
+         {script_face_source}"
     );
-    let compacting: String = sheet_source(COMPACTED_SHEET_CELL_MIN_DESCENT_SEAT_PT);
+    let remapped_source: String = sheet_source(COMPACTED_SHEET_CELL_MIN_DESCENT_SEAT_PT);
     assert!(
-        compacting.contains(&compacted),
-        "a compacting workbook keeps its own \
+        remapped_source.contains(&remapped),
+        "the remapped Calibri/Aptos floor keeps its own \
          {COMPACTED_SHEET_CELL_MIN_DESCENT_SEAT_PT}pt gap, which needs \
-         `{compacted}`: {compacting}"
+         `{remapped}`: {remapped_source}"
     );
 }
 

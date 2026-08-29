@@ -1031,10 +1031,11 @@ pub struct Table {
     /// native GT, so their emission must not change (issue #618).
     pub seats_bottom_aligned_text_on_descender: bool,
     /// The gap that descender seat never comes closer than to the row's bottom
-    /// boundary, in points, however small the font (issues #1097, #1199). Both
-    /// families of workbook floor it; a printed grid that keeps its declared
-    /// row tracks floors one point higher than one that compacts them. Zero
-    /// for Word and PowerPoint tables, which take no descender seat at all.
+    /// boundary, in points, however small the font (issues #1097, #1199). The
+    /// independently measured floor matrix gives the remapped Calibri/Aptos
+    /// family 3pt and the script-face theme family 4pt; later face-specific
+    /// row-track mappings do not change that split. Zero for Word and
+    /// PowerPoint tables, which take no descender seat at all.
     pub bottom_aligned_descent_floor_pt: f64,
     /// How borders are painted relative to the nominal grid boundary.
     pub border_paint_model: TableBorderPaintModel,

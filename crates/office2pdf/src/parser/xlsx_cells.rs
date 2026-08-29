@@ -1421,8 +1421,100 @@ const REMAPPED_NORMAL_FAMILIES: [&str; 2] = ["calibri", "aptos"];
 /// one from 11pt up.
 const REMAPPED_NORMAL_MIN_SIZE_PT: f64 = 11.0;
 
-/// Whether Excel's printed grid compacts this workbook's declared row
-/// heights, which is a property of its Normal font rather than of the row.
+/// The measured whole-point tracks Excel's printed grid gives an Arial 12
+/// worksheet row. Inputs not listed here are deliberately not interpolated.
+///
+/// Issue #1224 first measured both the 16pt dimension-less row and a 36pt
+/// fixed row. A follow-up native PDF sweep then used three equal fixed rows
+/// per package and read their two baseline pitches. Its no-patch re-zip
+/// control was layout-identical. The coarse sweep covered the eleven selected
+/// points listed below; a 0.5pt sweep supplied every point from 10 through 24
+/// and showed that the output is a staircase, not `round(height * factor)`.
+const ARIAL_12_PRINTED_GRID_ROW_HEIGHTS: [(f64, f64); 34] = [
+    (10.0, 9.0),
+    (10.5, 9.0),
+    (11.0, 10.0),
+    (11.5, 10.0),
+    (12.0, 11.0),
+    (12.5, 11.0),
+    (13.0, 12.0),
+    (13.5, 12.0),
+    (14.0, 13.0),
+    (14.5, 13.0),
+    (15.0, 14.0),
+    (15.5, 14.0),
+    (16.0, 15.0),
+    (16.5, 15.0),
+    (17.0, 16.0),
+    (17.5, 16.0),
+    (18.0, 17.0),
+    (18.5, 17.0),
+    (19.0, 17.0),
+    (19.5, 18.0),
+    (20.0, 18.0),
+    (20.5, 19.0),
+    (21.0, 19.0),
+    (21.5, 20.0),
+    (22.0, 20.0),
+    (22.5, 21.0),
+    (23.0, 21.0),
+    (23.5, 22.0),
+    (24.0, 22.0),
+    (25.5, 24.0),
+    (30.0, 28.0),
+    (36.0, 33.0),
+    (40.0, 37.0),
+    (49.5, 46.0),
+];
+
+/// The corresponding measured points for Courier New 12. Its staircase is
+/// different from Arial's: for example, the same 36pt row prints at 31pt
+/// here and 33pt in Arial. That is why this is a face table rather than a
+/// broader "compacts" boolean or a shared scale.
+const COURIER_NEW_12_PRINTED_GRID_ROW_HEIGHTS: [(f64, f64); 11] = [
+    (12.0, 10.0),
+    (15.0, 13.0),
+    (16.0, 14.0),
+    (17.0, 15.0),
+    (18.0, 16.0),
+    (20.0, 17.0),
+    (25.5, 22.0),
+    (30.0, 26.0),
+    (36.0, 31.0),
+    (40.0, 35.0),
+    (49.5, 43.0),
+];
+
+/// A measured printed track for a Normal font that names its face outright.
+///
+/// The issue #1224 sweep also measured Verdana 12 and Malgun Gothic 12 over
+/// the same eleven heights. Both keep the worksheet height whole, so they
+/// need no table. Only 12pt was covered for Arial and Courier New; other font
+/// sizes likewise stay on the conservative whole-height path. Family names
+/// match exactly, so Arial Narrow/Black/Unicode MS borrow nothing from Arial.
+fn measured_named_face_printed_grid_row_height(
+    height: f64,
+    normal_font: &NormalFont,
+) -> Option<f64> {
+    if normal_font.uses_theme_scheme || (normal_font.size_pt - 12.0).abs() >= 0.01 {
+        return None;
+    }
+    let measured: &[(f64, f64)] = if normal_font.family.eq_ignore_ascii_case("Arial") {
+        &ARIAL_12_PRINTED_GRID_ROW_HEIGHTS
+    } else if normal_font.family.eq_ignore_ascii_case("Courier New") {
+        &COURIER_NEW_12_PRINTED_GRID_ROW_HEIGHTS
+    } else {
+        return None;
+    };
+    measured
+        .iter()
+        .find(|(worksheet_height, _)| (height - worksheet_height).abs() < 0.01)
+        .map(|(_, printed_height)| *printed_height)
+}
+
+/// How Excel's printed grid maps this workbook's worksheet row height. This
+/// belongs to the resolved Normal face rather than to the row or to the
+/// Calibri/Aptos substitution set.
 ///
 /// One factor per export, sweeping only the first `<font>` of `xl/styles.xml`
 /// on `03_inventory_en.xlsx` with `ht=40 customHeight="true"` data rows and a
@@ -1476,17 +1568,21 @@ const REMAPPED_NORMAL_MIN_SIZE_PT: f64 = 11.0;
 /// face whatever the theme lists — that workbook has no `<name>` for
 /// `extract_normal_font` to return, so it lands on the `None` arm here and
 /// compacts. No tracked workbook writes one.
-fn printed_grid_compacts_row_heights(normal_font: Option<&NormalFont>) -> bool {
-    match normal_font {
+///
+fn measured_printed_grid_row_height(height: f64, normal_font: Option<&NormalFont>) -> Option<f64> {
+    let font = match normal_font {
         // Excel's own Normal font is Calibri/Aptos 11; a workbook we cannot
         // read a stylesheet from is laid out against it.
-        None => true,
+        None => return Some((height * 0.92).round()),
         // Resolved by script to the UI face, which is not one Excel remaps.
-        Some(font) if font.uses_theme_scheme && font.theme_declares_script_faces => false,
-        Some(font) => {
-            font.size_pt >= REMAPPED_NORMAL_MIN_SIZE_PT && names_a_substituted_family(font)
-        }
+        Some(font) if font.uses_theme_scheme && font.theme_declares_script_faces => return None,
+        Some(font) => font,
+    };
+
+    if font.size_pt >= REMAPPED_NORMAL_MIN_SIZE_PT && names_a_substituted_family(font) {
+        return Some((height * 0.92).round());
     }
+    measured_named_face_printed_grid_row_height(height, font)
 }
 
 /// Convert an OOXML row height to the whole-point track emitted by native
@@ -1494,7 +1590,8 @@ fn printed_grid_compacts_row_heights(normal_font: Option<&NormalFont>) -> bool {
 /// worksheet UI, and its PDF grid snaps that to whole PDF points — after
 /// compacting it, for the Normal fonts that compact at all.
 ///
-/// Where it compacts, the ten XLSX audit workbooks (Calibri 11 Normal) map
+/// Where Calibri/Aptos compacts, the ten XLSX audit workbooks (Calibri 11
+/// Normal) map
 /// their two repeated fixed heights consistently: 15pt -> 14pt and
 /// 25.5pt -> 23pt. "Consistently" is measured, not assumed: reading the
 /// golden exports' horizontal rules with `mutool draw -F trace` gives 23.00pt
@@ -1511,19 +1608,35 @@ fn printed_grid_compacts_row_heights(normal_font: Option<&NormalFont>) -> bool {
 /// for declared 12/15/18/25.5/30/40/49.5, and its nine row boundaries down
 /// the page all land within 0.12pt of that model.
 ///
-/// Only fixed tracks go through here. A `customHeight="false"` row is
-/// auto-sized, and Excel prints it at the taller of this track and the height
-/// its own font needs: the same `ht=15` row measures 14.00pt in Arial 10 and
-/// 15.00pt in Malgun Gothic 10 in the golden exports. That font term is not
-/// applied yet (issue #709), so Korean auto rows print 1.00pt short.
+/// Both declared and recomputed worksheet heights go through here. An
+/// auto-sized row additionally prints at the taller of this track and the
+/// height its own font needs: the same `ht=15` row measures 14.00pt in Arial
+/// 10 and 15.00pt in Malgun Gothic 10 in the golden exports. That font term is
+/// not applied yet (issue #709), so Korean auto rows print 1.00pt short.
 ///
 /// Keep this conversion in the XLSX parser rather than the generic table
 /// renderer so DOCX/PPTX table heights retain their native semantics.
 pub(super) fn native_excel_pdf_row_height(height: f64, normal_font: Option<&NormalFont>) -> f64 {
-    if printed_grid_compacts_row_heights(normal_font) {
-        (height * 0.92).round().max(1.0)
-    } else {
-        height.floor().max(1.0)
+    match measured_printed_grid_row_height(height, normal_font) {
+        Some(measured) => measured.max(1.0),
+        None => height.floor().max(1.0),
+    }
+}
+
+/// Whether this Normal font takes the 3pt bottom-aligned descent floor.
+///
+/// Keep this separate from [`measured_printed_grid_row_height`]. The older
+/// issues #1097/#1199 probe matrix measured Calibri/Aptos compaction and the
+/// descent seat together, but the issue #1224 Arial/Courier face sweep
+/// measured row tracks only. Borrowing its new face set for the text seat
+/// would move baselines on evidence that says nothing about them.
+fn uses_compacted_bottom_aligned_descent_floor(normal_font: Option<&NormalFont>) -> bool {
+    match normal_font {
+        None => true,
+        Some(font) if font.uses_theme_scheme && font.theme_declares_script_faces => false,
+        Some(font) => {
+            font.size_pt >= REMAPPED_NORMAL_MIN_SIZE_PT && names_a_substituted_family(font)
+        }
     }
 }
 
@@ -1531,13 +1644,13 @@ pub(super) fn native_excel_pdf_row_height(height: f64, normal_font: Option<&Norm
 /// cell's baseline in this workbook, however small the font, in points
 /// (issues #1097, #1199).
 ///
-/// The floor and the track compaction above are one switch, measured together
-/// on every native Excel-for-Mac export available. Six purpose-built probe
-/// workbooks print their declared tracks whole and floor the seat at 4pt; the
-/// compacting corpus workbooks floor it at 3pt, read off a ruled re-export of
-/// `10_kpi_tracker_en`'s note cell over an eleven-size sweep. Nothing measured
-/// so far separates the two behaviours, so they share the one predicate rather
-/// than each carrying a guess of its own.
+/// The older floor probe matrix measured this together with its Calibri/Aptos
+/// track split. Six purpose-built workbooks print their declared tracks whole
+/// and floor the seat at 4pt; the compacting corpus workbooks floor it at 3pt,
+/// read off a ruled re-export of `10_kpi_tracker_en`'s note cell over an
+/// eleven-size sweep. Issue #1224 added row-only measurements for Arial and
+/// Courier New, so those faces affect the track without being guessed into
+/// this separately measured floor.
 ///
 /// Issue #1097 read the compacting family as having no floor, from the one
 /// sample then available — `09_expense_report_en`'s Arial Bold 14 title, whose
@@ -1548,11 +1661,11 @@ pub(super) fn native_excel_pdf_row_height(height: f64, normal_font: Option<&Norm
 /// pushed from one family to the other by anything the probes varied — the
 /// title's row height, its spill, the cell's border, or the workbook's Normal
 /// font *family and size*, which is Calibri 11 on both sides of the divide.
-/// What differs is the same thing that decides the compaction: whether the
-/// Normal font resolves through a theme that names per-script faces
-/// (issues #1068, #1094).
+/// Within that floor probe matrix, what differs is whether the Normal font
+/// resolves through a theme that names per-script faces (issues #1068,
+/// #1094). That statement does not extend to the row-only face sweep.
 pub(super) fn bottom_aligned_descent_floor_pt(normal_font: Option<&NormalFont>) -> f64 {
-    if printed_grid_compacts_row_heights(normal_font) {
+    if uses_compacted_bottom_aligned_descent_floor(normal_font) {
         crate::render::typst_gen::COMPACTED_SHEET_CELL_MIN_DESCENT_SEAT_PT
     } else {
         crate::render::typst_gen::SHEET_CELL_MIN_DESCENT_SEAT_PT
