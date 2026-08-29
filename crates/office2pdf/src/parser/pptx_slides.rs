@@ -740,6 +740,15 @@ struct ShapeState {
     fill: Option<Color>,
     gradient_fill: Option<GradientFill>,
     pattern_fill: Option<PatternFill>,
+    /// Relationship id from an ordinary shape's `<a:blipFill>`. DrawingML
+    /// permits a bitmap to paint a `<p:sp>` just as it permits solid,
+    /// gradient, and pattern fills (issue #1220).
+    blip_embed: Option<String>,
+    /// Fill alpha from `<a:blip><a:alphaModFix amt>` (0.0-1.0).
+    blip_alpha: Option<f64>,
+    /// Source crop from the shape fill's `<a:srcRect>`.
+    blip_crop: Option<ImageCrop>,
+    in_blip_fill: bool,
     in_xfrm: bool,
     in_ln: bool,
     ln_width_emu: i64,
@@ -803,6 +812,10 @@ impl Default for ShapeState {
             fill: None,
             gradient_fill: None,
             pattern_fill: None,
+            blip_embed: None,
+            blip_alpha: None,
+            blip_crop: None,
+            in_blip_fill: false,
             in_xfrm: false,
             in_ln: false,
             ln_width_emu: 0,
@@ -833,14 +846,18 @@ impl ShapeState {
 // ── Finalization helpers ────────────────────────────────────────────────
 
 /// Finalize a shape element when `</p:sp>` is reached.
-/// Returns elements to add. Text shapes that require the shape renderer —
-/// non-rectangular geometry, gradient or pattern fills, shadows, or top
-/// bevels — return a shape background plus a transparent text overlay.
+/// Returns elements to add. Text shapes that require the shape/picture
+/// renderer — non-rectangular geometry, gradient, pattern, or picture fills,
+/// shadows, or top bevels — return a background plus a transparent text
+/// overlay.
 fn finalize_shape(
     shape: &mut ShapeState,
     paragraphs: &mut Vec<PptxParagraphEntry>,
     text_box: PptxTextBoxSettings,
     theme_line_styles: &[ThemeLineStyle],
+    images: &SlideImageMap,
+    warning_context: &str,
+    warnings: &mut Vec<ConvertWarning>,
 ) -> Vec<FixedElement> {
     let referenced_line_style: Option<&ThemeLineStyle> = shape
         .style_ln_idx
@@ -871,6 +888,49 @@ fn finalize_shape(
         shape.style_fill_color
     };
 
+    // The outline is shared by solid/gradient shape paint and by an ordinary
+    // shape's picture fill. Building it once also lets the picture reuse the
+    // established `<p:pic>` finalizer instead of growing a parallel image
+    // renderer (issue #1220).
+    let effective_ln_color: Option<Color> = if shape.explicit_no_line {
+        None
+    } else {
+        shape.ln_color.or(shape.style_ln_color)
+    };
+    let stroke: Option<BorderSide> = effective_ln_color.map(|color| BorderSide {
+        width: effective_ln_width_pt,
+        color,
+        style: shape.ln_dash_style,
+        join: effective_ln_join,
+    });
+    let mut picture_fill: Option<FixedElement> = if shape.blip_embed.is_some() {
+        let picture = PictureState {
+            x: shape.x,
+            y: shape.y,
+            cx: shape.cx,
+            cy: shape.cy,
+            blip_embed: shape.blip_embed.clone(),
+            blip_alpha: shape.blip_alpha,
+            prst_geom: shape.prst_geom.clone(),
+            custom_geometry: shape.custom_geometry.clone(),
+            crop: shape.blip_crop,
+            rotation_deg: shape.rotation_deg,
+            flip_h: shape.flip_h,
+            flip_v: shape.flip_v,
+            ln_width_emu: effective_ln_width_emu,
+            ln_color: effective_ln_color,
+            ln_dash_style: shape.ln_dash_style,
+            ln_join: Some(effective_ln_join),
+            shadow: shape.shadow.clone(),
+            ..PictureState::default()
+        };
+        let (element, picture_warnings) = finalize_picture(&picture, images, warning_context);
+        warnings.extend(picture_warnings);
+        element
+    } else {
+        None
+    };
+
     let has_text = paragraphs
         .iter()
         .any(|entry| !entry.paragraph.runs.is_empty());
@@ -880,24 +940,13 @@ fn finalize_shape(
         let blocks: Vec<Block> = group_pptx_text_blocks(std::mem::take(paragraphs));
         // Use explicit line color, falling back to style-based color from
         // <p:style><a:lnRef> - unless <a:ln><a:noFill/> disabled the line.
-        let effective_ln_color: Option<Color> = if shape.explicit_no_line {
-            None
-        } else {
-            shape.ln_color.or(shape.style_ln_color)
-        };
-        let stroke: Option<BorderSide> = effective_ln_color.map(|color| BorderSide {
-            width: effective_ln_width_pt,
-            color,
-            style: shape.ln_dash_style,
-            join: effective_ln_join,
-        });
         // For shapes with text that need a background of their own — a
-        // non-rectangular geometry, a gradient or pattern fill, a shadow, or a
-        // top bevel — emit the shape background first, then overlay a
-        // transparent text box, so the geometry goes through the proven shape
-        // renderer. A plain rectangle otherwise skips this and becomes a text
-        // box with a background fill, which is cheaper and lays the text out
-        // the same.
+        // non-rectangular geometry, a gradient, pattern, or picture fill, a
+        // shadow, or a top bevel — emit the shape background first, then
+        // overlay a transparent text box, so the paint or geometry goes
+        // through the proven shape/picture renderer. A plain rectangle
+        // otherwise skips this and becomes a text box with a background fill,
+        // which is cheaper and lays the text out the same.
         // A shadow needs something to cast it. A plain rectangle with text is
         // otherwise drawn as a text box with a background fill, and a text box
         // has nowhere to put a shadow, so the theme shadow of issue #740 was
@@ -905,6 +954,7 @@ fn finalize_shape(
         // the existing shape renderer draw it.
         let needs_shape_background = shape.gradient_fill.is_some()
             || shape.pattern_fill.is_some()
+            || picture_fill.is_some()
             || shape.shadow.is_some()
             || shape.top_bevel.is_some();
         let shape_width = emu_to_pt(shape.cx);
@@ -914,45 +964,55 @@ fn finalize_shape(
                 preset_text_rect_insets(geom, shape_width, shape_height, &shape.adj_values)
                     .is_some()
             });
-        let text_shape_kind: Option<ShapeKind> = shape.prst_geom.as_deref().and_then(|geom| {
-            if let Some(kind) = custom_geometry_kind(shape) {
-                return Some(kind);
-            }
-            let kind: ShapeKind = prst_to_shape_kind(
-                geom,
-                shape_width,
-                shape_height,
-                shape.flip_h,
-                shape.flip_v,
-                shape.head_end,
-                shape.tail_end,
-                &shape.adj_values,
-            );
-            match kind {
-                ShapeKind::Rectangle if !needs_shape_background && !has_geometry_text_rect => None,
-                other => Some(other),
-            }
-        });
+        let text_shape_kind: Option<ShapeKind> = shape
+            .prst_geom
+            .as_deref()
+            .and_then(|geom| {
+                if let Some(kind) = custom_geometry_kind(shape) {
+                    return Some(kind);
+                }
+                let kind: ShapeKind = prst_to_shape_kind(
+                    geom,
+                    shape_width,
+                    shape_height,
+                    shape.flip_h,
+                    shape.flip_v,
+                    shape.head_end,
+                    shape.tail_end,
+                    &shape.adj_values,
+                );
+                match kind {
+                    ShapeKind::Rectangle if !needs_shape_background && !has_geometry_text_rect => {
+                        None
+                    }
+                    other => Some(other),
+                }
+            })
+            .or_else(|| picture_fill.is_some().then_some(ShapeKind::Rectangle));
         let mut elements: Vec<FixedElement> = Vec::new();
         if let Some(kind) = text_shape_kind {
-            // Shape background element (fill + stroke + geometry)
-            elements.push(FixedElement {
-                x: emu_to_pt(shape.x),
-                y: emu_to_pt(shape.y),
-                width: emu_to_pt(shape.cx),
-                height: emu_to_pt(shape.cy),
-                kind: FixedElementKind::Shape(Shape {
-                    kind,
-                    fill: effective_fill,
-                    gradient_fill: shape.gradient_fill.take(),
-                    pattern_fill: shape.pattern_fill.take(),
-                    stroke: stroke.clone(),
-                    rotation_deg: shape.rotation_deg,
-                    opacity: shape.opacity,
-                    shadow: shape.shadow.take(),
-                    top_bevel: shape.top_bevel.take(),
-                }),
-            });
+            // Shape background element (picture, or vector fill + geometry).
+            if let Some(picture) = picture_fill.take() {
+                elements.push(picture);
+            } else {
+                elements.push(FixedElement {
+                    x: emu_to_pt(shape.x),
+                    y: emu_to_pt(shape.y),
+                    width: emu_to_pt(shape.cx),
+                    height: emu_to_pt(shape.cy),
+                    kind: FixedElementKind::Shape(Shape {
+                        kind,
+                        fill: effective_fill,
+                        gradient_fill: shape.gradient_fill.take(),
+                        pattern_fill: shape.pattern_fill.take(),
+                        stroke: stroke.clone(),
+                        rotation_deg: shape.rotation_deg,
+                        opacity: shape.opacity,
+                        shadow: shape.shadow.take(),
+                        top_bevel: shape.top_bevel.take(),
+                    }),
+                });
+            }
             // Transparent text overlay (no fill, no stroke). DrawingML
             // anchors shape text inside the preset geometry's text rectangle,
             // in addition to the bodyPr margins (issues #286 and #676).
@@ -1066,6 +1126,8 @@ fn finalize_shape(
             });
         }
         elements
+    } else if let Some(picture) = picture_fill {
+        vec![picture]
     } else if let Some(ref geom) = shape.prst_geom {
         let width: f64 = emu_to_pt(shape.cx);
         let height: f64 = emu_to_pt(shape.cy);
@@ -1083,17 +1145,6 @@ fn finalize_shape(
         });
         // Use explicit line color, falling back to style-based color from
         // <p:style><a:lnRef> - unless <a:ln><a:noFill/> disabled the line.
-        let effective_ln_color: Option<Color> = if shape.explicit_no_line {
-            None
-        } else {
-            shape.ln_color.or(shape.style_ln_color)
-        };
-        let stroke: Option<BorderSide> = effective_ln_color.map(|color| BorderSide {
-            width: effective_ln_width_pt,
-            color,
-            style: shape.ln_dash_style,
-            join: effective_ln_join,
-        });
         vec![FixedElement {
             x: emu_to_pt(shape.x),
             y: emu_to_pt(shape.y),
@@ -2230,6 +2281,17 @@ impl<'a> SlideXmlParser<'a> {
     ) -> bool {
         let local = e.local_name();
         match local.as_ref() {
+            b"blipFill" if self.shape.in_sp_pr && !self.shape.in_ln => {
+                self.shape.in_blip_fill = true;
+            }
+            b"blip" if self.shape.in_blip_fill => {
+                self.shape.blip_embed = get_attr_str(e, b"r:embed");
+            }
+            b"alphaModFix" if self.shape.in_blip_fill => {
+                if let Some(alpha) = crate::parser::drawingml::parse_alpha_mod_fix(e) {
+                    self.shape.blip_alpha = Some(alpha);
+                }
+            }
             b"srgbClr" | b"schemeClr" | b"sysClr" if self.solid_fill_ctx != SolidFillCtx::None => {
                 let parsed = parse_color_from_start(reader, e, self.ctx.theme, self.ctx.color_map);
                 apply_solid_fill_color(
@@ -2548,6 +2610,17 @@ impl<'a> SlideXmlParser<'a> {
     fn handle_empty_fill_colors_and_style_refs(&mut self, e: &BytesStart<'_>) -> bool {
         let local = e.local_name();
         match local.as_ref() {
+            b"blip" if self.shape.in_blip_fill => {
+                self.shape.blip_embed = get_attr_str(e, b"r:embed");
+            }
+            b"alphaModFix" if self.shape.in_blip_fill => {
+                if let Some(alpha) = crate::parser::drawingml::parse_alpha_mod_fix(e) {
+                    self.shape.blip_alpha = Some(alpha);
+                }
+            }
+            b"srcRect" if self.shape.in_blip_fill => {
+                self.shape.blip_crop = parse_src_rect(e);
+            }
             b"fontRef" if self.in_shape && !self.shape.in_sp_pr && !self.in_txbody => {
                 self.shape.style_font_family = match get_attr_str(e, b"idx").as_deref() {
                     Some("major") => self.ctx.theme.major_font.clone(),
@@ -2813,7 +2886,8 @@ impl<'a> SlideXmlParser<'a> {
                     // A fill style can be a gradient rather than the flat
                     // child color. Resolve it only when spPr supplied no fill
                     // of its own, regardless of whether style precedes spPr.
-                    if self.shape.fill.is_none()
+                    if self.shape.blip_embed.is_none()
+                        && self.shape.fill.is_none()
                         && self.shape.gradient_fill.is_none()
                         && self.shape.pattern_fill.is_none()
                         && !self.shape.explicit_no_fill
@@ -2836,6 +2910,7 @@ impl<'a> SlideXmlParser<'a> {
                     // slide's own shape, where it also lands at the right
                     // place in z-order (issue #856).
                     if self.shape.has_placeholder
+                        && self.shape.blip_embed.is_none()
                         && self.shape.fill.is_none()
                         && self.shape.gradient_fill.is_none()
                         && self.shape.pattern_fill.is_none()
@@ -2861,6 +2936,7 @@ impl<'a> SlideXmlParser<'a> {
                     let paints_something: bool = self.shape.fill.is_some()
                         || self.shape.gradient_fill.is_some()
                         || self.shape.pattern_fill.is_some()
+                        || self.shape.blip_embed.is_some()
                         || (!self.shape.explicit_no_fill && self.shape.style_fill_color.is_some())
                         || (!self.shape.explicit_no_line
                             && (self.shape.ln_color.is_some()
@@ -2887,6 +2963,9 @@ impl<'a> SlideXmlParser<'a> {
                             &mut self.paragraphs,
                             self.text_box,
                             &self.ctx.theme.line_styles,
+                            self.ctx.images,
+                            self.ctx.warning_context,
+                            &mut self.warnings,
                         ));
                     }
                     self.in_shape = false;
@@ -2894,6 +2973,9 @@ impl<'a> SlideXmlParser<'a> {
             }
             b"spPr" if self.shape.in_sp_pr => {
                 self.shape.in_sp_pr = false;
+            }
+            b"blipFill" if self.shape.in_blip_fill => {
+                self.shape.in_blip_fill = false;
             }
             b"xfrm" if self.shape.in_xfrm => {
                 self.shape.in_xfrm = false;
