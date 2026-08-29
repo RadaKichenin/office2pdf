@@ -393,10 +393,11 @@ fn structure_any_sheets_chartsheet_pages_its_chart_alone() {
     let placement = chart_page.charts[0]
         .placement
         .expect("a chartsheet's chart is placed, not flowed after the grid");
-    // Excel starts the chart 4pt inside each margin, on the whole point, and
-    // stops short of the far margins by as much again — forced onto this
-    // paper, its own box measures 681.82 x 493.18 at (54, 58) inside a
-    // 691.2 x 504 printable area (issue #1147).
+    // Excel starts the chart 4pt inside each margin, on the whole point. The
+    // recorded native box on this paper is 681.82 x 493.18 at (54, 58) inside
+    // a 691.2 x 504 printable area; the page-only model uses the exact 4pt
+    // near-edge rule symmetrically and keeps the internal-grid residual as its
+    // error term (issues #1147 and #1221).
     assert_eq!(
         (
             chart_page.margins.left + placement.x_offset_pt,
