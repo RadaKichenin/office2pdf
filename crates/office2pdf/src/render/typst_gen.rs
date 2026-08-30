@@ -3618,6 +3618,28 @@ fn generate_floating_text_box_content(
     ftb: &FloatingTextBox,
     ctx: &mut GenCtx,
 ) -> Result<(), ConvertError> {
+    if let Some(rotation) = ftb.shape_rotation_deg.filter(|degrees| *degrees != 0.0) {
+        let mut inner: FloatingTextBox = ftb.clone();
+        inner.shape_rotation_deg = None;
+        let (dx, dy): (f64, f64) = centre_pivot_shift(
+            ftb.width.max(0.0),
+            ftb.height.max(0.0),
+            rotation,
+            false,
+            false,
+        );
+        let _ = write!(
+            out,
+            "#move(dx: {}pt, dy: {}pt)[#rotate({}deg, origin: top + left, reflow: false)[",
+            format_f64(dx),
+            format_f64(dy),
+            format_f64(rotation)
+        );
+        generate_floating_text_box_content(out, &inner, ctx)?;
+        out.push_str("]]\n");
+        return Ok(());
+    }
+
     let inner_width: f64 = (ftb.width - ftb.padding.left - ftb.padding.right).max(0.0);
     let inner_height: f64 = (ftb.height - ftb.padding.top - ftb.padding.bottom).max(0.0);
     let inset: String = if ftb.padding == Insets::default() {

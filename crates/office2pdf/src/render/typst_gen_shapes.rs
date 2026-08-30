@@ -22,7 +22,14 @@ pub(super) fn generate_shape(
             ShapeKind::Line { .. } | ShapeKind::Polyline { .. }
         );
     if let Some(deg) = shape.rotation_deg.filter(|_| use_typst_rotation) {
-        let _ = write!(out, "#rotate({}deg)[", format_f64(deg));
+        let (dx, dy): (f64, f64) = centre_pivot_shift(width, height, deg, false, false);
+        let _ = write!(
+            out,
+            "#move(dx: {}pt, dy: {}pt)[#rotate({}deg, origin: top + left, reflow: false)[",
+            format_f64(dx),
+            format_f64(dy),
+            format_f64(deg)
+        );
     }
 
     match &shape.kind {
@@ -117,7 +124,7 @@ pub(super) fn generate_shape(
     }
 
     if use_typst_rotation {
-        out.push_str("]\n");
+        out.push_str("]]\n");
     }
 }
 

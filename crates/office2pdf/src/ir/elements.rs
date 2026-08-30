@@ -878,6 +878,9 @@ pub struct FloatingTextBox {
     pub wrap_mode: WrapMode,
     pub width: f64,
     pub height: f64,
+    /// Clockwise rotation of the whole box about its centre, from the WPS
+    /// shape's `<a:xfrm rot>`.
+    pub shape_rotation_deg: Option<f64>,
     pub padding: Insets,
     pub vertical_align: TextBoxVerticalAlign,
     /// Horizontal offset in points from the anchor reference.

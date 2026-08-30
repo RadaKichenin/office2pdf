@@ -35,6 +35,7 @@ pub(in super::super) struct WpgShapeInfo {
     pub(in super::super) content: Vec<docx_rs::DocumentChild>,
     pub(in super::super) width: f64,
     pub(in super::super) height: f64,
+    pub(in super::super) rotation_deg: Option<f64>,
     pub(in super::super) padding: Insets,
     pub(in super::super) vertical_align: TextBoxVerticalAlign,
     pub(in super::super) text_color: Option<Color>,
@@ -138,6 +139,7 @@ struct ShapeBuilder {
     offset_y_pt: f64,
     flip_h: bool,
     flip_v: bool,
+    rotation_deg: Option<f64>,
     fill_color: Option<Color>,
     fill_none: bool,
     line_color: Option<Color>,
@@ -169,22 +171,27 @@ impl ShapeBuilder {
 
         let width: f64 = self.box_width_pt.unwrap_or(0.0);
         let height: f64 = self.box_height_pt.unwrap_or(0.0);
-        let kind: ShapeKind = self.resolve_kind(width, height);
+        let mut kind: ShapeKind = self.resolve_kind(width, height);
+        mirror_shape_kind(&mut kind, self.flip_h, self.flip_v);
+        let stroke: Option<BorderSide> = self.resolve_stroke();
+
+        let mut gradient_fill: Option<GradientFill> = self.gradient_fill;
+        if let Some(gradient) = gradient_fill.as_mut() {
+            gradient.angle = mirrored_angle(gradient.angle, self.flip_h, self.flip_v);
+        }
 
         let fill: Option<Color> = if self.fill_none {
             None
         } else {
-            self.gradient_fill
+            gradient_fill
                 .as_ref()
                 .and_then(|gradient| gradient.stops.first().map(|stop| stop.color))
                 .or(self.fill_color)
         };
-        let stroke: Option<BorderSide> = self.resolve_stroke();
-
         // A shape with neither fill, stroke nor a line geometry would render as
         // nothing — skip it so we stay in sync with the renderer.
         let is_line: bool = matches!(kind, ShapeKind::Line { .. });
-        if fill.is_none() && self.gradient_fill.is_none() && stroke.is_none() && !is_line {
+        if fill.is_none() && gradient_fill.is_none() && stroke.is_none() && !is_line {
             return None;
         }
 
@@ -192,10 +199,10 @@ impl ShapeBuilder {
             shape: Shape {
                 kind,
                 fill,
-                gradient_fill: self.gradient_fill,
+                gradient_fill,
                 pattern_fill: None,
                 stroke,
-                rotation_deg: None,
+                rotation_deg: self.rotation_deg,
                 opacity: None,
                 shadow: None,
                 top_bevel: None,
@@ -271,6 +278,42 @@ impl ShapeBuilder {
     }
 }
 
+fn mirror_shape_kind(kind: &mut ShapeKind, flip_h: bool, flip_v: bool) {
+    if !flip_h && !flip_v {
+        return;
+    }
+
+    let mirror = |(x, y): (f64, f64)| -> (f64, f64) {
+        (
+            if flip_h { 1.0 - x } else { x },
+            if flip_v { 1.0 - y } else { y },
+        )
+    };
+    match kind {
+        ShapeKind::Polygon { vertices } => {
+            for point in vertices {
+                *point = mirror(*point);
+            }
+        }
+        ShapeKind::Path { subpaths } => {
+            for subpath in subpaths {
+                for point in &mut subpath.vertices {
+                    *point = mirror(*point);
+                }
+            }
+        }
+        // Line flips are already expressed by its endpoint direction in
+        // `resolve_kind`; the remaining preset geometries are symmetric.
+        _ => {}
+    }
+}
+
+fn mirrored_angle(angle: f64, flip_h: bool, flip_v: bool) -> f64 {
+    let horizontal: f64 = if flip_h { 180.0 - angle } else { angle };
+    let vertical: f64 = if flip_v { -horizontal } else { horizontal };
+    vertical.rem_euclid(360.0)
+}
+
 fn arrow(present: bool) -> ArrowHead {
     if present {
         ArrowHead::Triangle
@@ -297,6 +340,13 @@ fn bool_attr(element: &BytesStart<'_>, name: &[u8]) -> bool {
         attribute_value(element, name).as_deref(),
         Some("1") | Some("true")
     )
+}
+
+fn rotation_attr_degrees(element: &BytesStart<'_>) -> Option<f64> {
+    attribute_value(element, b"rot")
+        .and_then(|value| value.parse::<f64>().ok())
+        .map(|raw| (raw / 60_000.0).rem_euclid(360.0))
+        .filter(|degrees| degrees.abs() > f64::EPSILON)
 }
 
 /// Scan `word/document.xml`, returning one [`FloatingShape`] per geometry-only
@@ -428,6 +478,7 @@ fn handle_geometry_element(
         b"xfrm" => {
             builder.flip_h = bool_attr(element, b"flipH");
             builder.flip_v = bool_attr(element, b"flipV");
+            builder.rotation_deg = rotation_attr_degrees(element);
         }
         b"srgbClr" if sppr_depth > 0 => {
             if let Some(color) = attribute_value(element, b"val").and_then(|v| parse_hex_color(&v))
@@ -678,6 +729,7 @@ impl WpgDrawingBuilder {
         let Some(mut child) = self.child.take() else {
             return;
         };
+        let rotation_deg: Option<f64> = child.shape.rotation_deg;
         let (local_x, local_y) = child.parent_transform.point(child.offset_x, child.offset_y);
         let width_emu: f64 = child.extent_x * child.parent_transform.scale_x.abs();
         let height_emu: f64 = child.extent_y * child.parent_transform.scale_y.abs();
@@ -702,6 +754,7 @@ impl WpgDrawingBuilder {
                 content: child.content,
                 width,
                 height,
+                rotation_deg,
                 padding,
                 vertical_align: child.vertical_align,
                 text_color: child.text_color,
@@ -906,6 +959,7 @@ fn handle_wpg_start(
                 child.shape_transform_depth += 1;
                 child.shape.flip_h = bool_attr(element, b"flipH");
                 child.shape.flip_v = bool_attr(element, b"flipV");
+                child.shape.rotation_deg = rotation_attr_degrees(element);
             }
         }
         b"xfrm" if drawing.group_properties_depth > 0 => {

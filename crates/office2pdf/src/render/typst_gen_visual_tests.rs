@@ -171,6 +171,7 @@ fn test_floating_text_box_square_wrap_codegen() {
             wrap_mode: WrapMode::Square,
             width: 200.0,
             height: 100.0,
+            shape_rotation_deg: None,
             padding: Insets::default(),
             vertical_align: TextBoxVerticalAlign::Top,
             offset_x: 72.0,
@@ -212,6 +213,32 @@ fn test_floating_text_box_square_wrap_codegen() {
 }
 
 #[test]
+fn a_rotated_floating_text_box_keeps_its_declared_center() {
+    let doc = make_doc(vec![make_flow_page(vec![Block::FloatingTextBox(
+        FloatingTextBox {
+            content: vec![make_paragraph("Turned label")],
+            wrap_mode: WrapMode::None,
+            width: 200.0,
+            height: 150.0,
+            shape_rotation_deg: Some(90.0),
+            padding: Insets::default(),
+            vertical_align: TextBoxVerticalAlign::Top,
+            offset_x: 72.0,
+            offset_y: 36.0,
+        },
+    )])]);
+
+    let output = generate_typst(&doc).unwrap();
+    assert!(
+        output.source.contains(
+            "#move(dx: 175pt, dy: -25pt)[#rotate(90deg, origin: top + left, reflow: false)["
+        ),
+        "floating WPG text must turn around the same unclamped center as its shape:\n{}",
+        output.source
+    );
+}
+
+#[test]
 fn test_floating_text_box_top_and_bottom_codegen() {
     let doc = make_doc(vec![make_flow_page(vec![Block::FloatingTextBox(
         FloatingTextBox {
@@ -219,6 +246,7 @@ fn test_floating_text_box_top_and_bottom_codegen() {
             wrap_mode: WrapMode::TopAndBottom,
             width: 150.0,
             height: 60.0,
+            shape_rotation_deg: None,
             padding: Insets::default(),
             vertical_align: TextBoxVerticalAlign::Top,
             offset_x: 10.0,
@@ -254,6 +282,7 @@ fn test_floating_text_box_content_is_top_left_aligned_inside_bounds() {
             wrap_mode: WrapMode::None,
             width: 120.0,
             height: 40.0,
+            shape_rotation_deg: None,
             padding: Insets::default(),
             vertical_align: TextBoxVerticalAlign::Top,
             offset_x: 10.0,
@@ -287,6 +316,7 @@ fn test_floating_text_box_applies_padding_and_center_alignment() {
             wrap_mode: WrapMode::None,
             width: 120.0,
             height: 60.0,
+            shape_rotation_deg: None,
             padding: Insets {
                 top: 3.0,
                 right: 6.0,
