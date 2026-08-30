@@ -17,6 +17,8 @@ mod chartsheet;
 mod fit_to_page;
 #[path = "xlsx_indent.rs"]
 mod indent;
+#[path = "xlsx_paper_state.rs"]
+mod paper_state;
 #[path = "xlsx_print_headings.rs"]
 mod print_headings;
 #[path = "xlsx_print_options.rs"]
@@ -145,11 +147,11 @@ fn sheet_print_footer(
 /// Map an OOXML worksheet paper-size code to portrait dimensions in points.
 ///
 /// Code 0 is not a paper size — it is the zero umya leaves in an unset
-/// `UInt32Value`, so it means `paperSize` was never written, either because
-/// `<pageSetup>` omits the attribute or because the element is absent
-/// entirely. ECMA-376 defaults `paperSize` to 1, US Letter, and Excel prints
-/// such a sheet on Letter; A4 left it 16.7pt narrow and 49.9pt tall, which
-/// repaginated the whole sheet (issue #717).
+/// `UInt32Value`. ECMA-376 defaults an initialised but silent `paperSize` to 1,
+/// US Letter, and Excel prints such a sheet on Letter; A4 left it 16.7pt narrow
+/// and 49.9pt tall, which repaginated the whole sheet (issue #717). A fully
+/// pristine sheet is routed around this schema default by [`sheet_page_size`]
+/// because Excel instead follows its current application paper (issue #1382).
 ///
 /// An unrecognised *positive* code is a different case: the file names a paper
 /// this table does not model, and nothing in the schema says what to
@@ -286,11 +288,12 @@ fn first_printed_sheet<'a>(
 fn empty_workbook_page(
     book: &umya_spreadsheet::Spreadsheet,
     options: &ConvertOptions,
+    pristine_paper_sheets: &std::collections::HashSet<String>,
 ) -> Option<SheetPage> {
     let sheet = first_printed_sheet(book, options)?;
     Some(SheetPage {
         name: sheet.get_name().to_string(),
-        size: sheet_page_size(sheet),
+        size: sheet_page_size(sheet, pristine_paper_sheets.contains(sheet.get_name())),
         margins: sheet_print_margins(sheet),
         table: Table::default(),
         header: None,
@@ -302,9 +305,17 @@ fn empty_workbook_page(
 }
 
 /// Preserve a worksheet's paper size and landscape orientation in the IR.
-fn sheet_page_size(sheet: &umya_spreadsheet::Worksheet) -> PageSize {
+fn sheet_page_size(
+    sheet: &umya_spreadsheet::Worksheet,
+    uses_converter_paper_default: bool,
+) -> PageSize {
     let page_setup = sheet.get_page_setup();
-    let size = worksheet_paper_size(*page_setup.get_paper_size());
+    let paper_size_code: u32 = *page_setup.get_paper_size();
+    let size: PageSize = if paper_size_code == 0 && uses_converter_paper_default {
+        PageSize::default()
+    } else {
+        worksheet_paper_size(paper_size_code)
+    };
     if matches!(
         page_setup.get_orientation(),
         umya_spreadsheet::structs::OrientationValues::Landscape
@@ -692,6 +703,7 @@ impl XlsxParser {
         // rather than repeating their formulas (issue #852).
         let defined_names = cond_fmt_raw::extract_defined_names(data);
         let fitting_sheets = fit_to_page::sheets_fit_to_page(data);
+        let pristine_paper_sheets = paper_state::pristine_paper_sheets(data);
         let print_options_by_sheet = print_options::sheets_print_options(data);
         let mut table_styles = tables::extract_table_styles(data);
         let normal_font = extract_normal_font(data);
@@ -774,7 +786,10 @@ impl XlsxParser {
                             // page-columns as Excel prints them (issue #713).
                             pages: xlsx_pagination::split_drawing_only_page(SheetPage {
                                 name: sheet_name,
-                                size: sheet_page_size(sheet),
+                                size: sheet_page_size(
+                                    sheet,
+                                    pristine_paper_sheets.contains(sheet.get_name()),
+                                ),
                                 margins: sheet_print_margins(sheet),
                                 table: Table::default(),
                                 header: None,
@@ -901,7 +916,7 @@ impl XlsxParser {
 
                 let mut sheet_page = SheetPage {
                     name: sheet_name.clone(),
-                    size: sheet_page_size(sheet),
+                    size: sheet_page_size(sheet, pristine_paper_sheets.contains(sheet.get_name())),
                     margins: sheet_print_margins(sheet),
                     table: Table {
                         rows,
@@ -971,7 +986,7 @@ impl XlsxParser {
         }
 
         if chunks.is_empty()
-            && let Some(page) = empty_workbook_page(&book, options)
+            && let Some(page) = empty_workbook_page(&book, options, &pristine_paper_sheets)
         {
             chunks.push(Document {
                 metadata,
@@ -1008,6 +1023,7 @@ impl Parser for XlsxParser {
         // rather than repeating their formulas (issue #852).
         let defined_names = cond_fmt_raw::extract_defined_names(data);
         let fitting_sheets = fit_to_page::sheets_fit_to_page(data);
+        let pristine_paper_sheets = paper_state::pristine_paper_sheets(data);
         let print_options_by_sheet = print_options::sheets_print_options(data);
         let mut table_styles = tables::extract_table_styles(data);
         let normal_font = extract_normal_font(data);
@@ -1087,7 +1103,10 @@ impl Parser for XlsxParser {
                         pages.extend(
                             xlsx_pagination::split_drawing_only_page(SheetPage {
                                 name: sheet_name,
-                                size: sheet_page_size(sheet),
+                                size: sheet_page_size(
+                                    sheet,
+                                    pristine_paper_sheets.contains(sheet.get_name()),
+                                ),
                                 margins: sheet_print_margins(sheet),
                                 table: Table::default(),
                                 header: None,
@@ -1200,7 +1219,7 @@ impl Parser for XlsxParser {
                     .then(|| (row_start..=row_end).collect());
                 let mut sheet_page = SheetPage {
                     name: sheet_name,
-                    size: sheet_page_size(sheet),
+                    size: sheet_page_size(sheet, pristine_paper_sheets.contains(sheet.get_name())),
                     margins: sheet_print_margins(sheet),
                     table: Table {
                         rows,
@@ -1313,7 +1332,10 @@ impl Parser for XlsxParser {
                         });
                     let mut sheet_page = SheetPage {
                         name: sheet_name.clone(),
-                        size: sheet_page_size(sheet),
+                        size: sheet_page_size(
+                            sheet,
+                            pristine_paper_sheets.contains(sheet.get_name()),
+                        ),
                         margins: sheet_print_margins(sheet),
                         table: Table {
                             rows: segment,
@@ -1378,7 +1400,7 @@ impl Parser for XlsxParser {
         }
 
         if pages.is_empty()
-            && let Some(page) = empty_workbook_page(&book, options)
+            && let Some(page) = empty_workbook_page(&book, options, &pristine_paper_sheets)
         {
             pages.push(Page::Sheet(page));
         }
