@@ -42,6 +42,7 @@ def page_vector(**overrides: object) -> dict:
             "large_shift_count": 0,
             "large_shifts": [],
         },
+        "visibility": {"mismatch_count": 0, "mismatches": []},
         "pitch": {"pairs": 9, "worst_delta": 0.3},
         "wraps": {"count": 0, "samples": []},
         "reflow": {"gt_lines": 0, "out_lines": 0, "samples": []},
@@ -157,6 +158,15 @@ class CountTests(unittest.TestCase):
         findings = checker.compare_baselines(stored, fresh)
         self.assertEqual(len(findings), 1)
         self.assertEqual(findings[0]["kind"], "improvement")
+
+    def test_visibility_mismatch_increase_is_a_regression(self) -> None:
+        stored = baseline_document()
+        fresh = copy.deepcopy(stored)
+        fresh["cases"][0]["pages"][0]["visibility"]["mismatch_count"] = 1
+        findings = checker.compare_baselines(stored, fresh)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0]["kind"], "regression")
+        self.assertEqual(findings[0]["metric"], "visibility.mismatch_count")
 
     def test_rect_census_gap_widening_is_a_regression(self) -> None:
         stored = baseline_document()

@@ -17,8 +17,8 @@ on deltas smaller than the GT's own lattice):
   cases (the Quartz export rounds every advance to a whole point);
 - width percentages move materially only past 0.5%;
 - counts (missing/extra lines, wraps, reflows, deviant lines, large shifts,
-  rect census gap, page parity gap) compare exactly — any increase is a
-  regression.
+  painted-visibility mismatches, rect census gap, page parity gap) compare
+  exactly — any increase is a regression.
 
 Exit status is nonzero only when a regression is found; improvements alone
 exit zero so a fix PR can paste the report as its acceptance evidence.
@@ -51,6 +51,7 @@ COUNT_METRICS = (
     ("wraps", "count"),
     ("reflow", "gt_lines"),
     ("instances", "large_shift_count"),
+    ("visibility", "mismatch_count"),
 )
 PT_METRICS = (
     ("baseline", "mean_abs_dy"),
@@ -108,8 +109,11 @@ def compare_page(
 ) -> list[dict]:
     findings: list[dict] = []
     for section, key in COUNT_METRICS:
-        stored_count = int(stored_vector[section][key])
-        fresh_count = int(fresh_vector[section][key])
+        # Visibility was added additively to schema v2. Baselines recorded by
+        # an older generator carry no section and conservatively mean zero
+        # known mismatches; a fresh finding therefore surfaces as a regression.
+        stored_count = int(stored_vector.get(section, {}).get(key, 0))
+        fresh_count = int(fresh_vector.get(section, {}).get(key, 0))
         if fresh_count != stored_count:
             kind = "regression" if fresh_count > stored_count else "improvement"
             findings.append(

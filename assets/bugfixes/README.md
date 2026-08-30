@@ -35,8 +35,8 @@ request. In the PR's `Visual audit` section, mark each layout-audit category
 field as `Pass` or list the open issues that classify it. Those issue references
 must also appear in `Remaining:` deviation rows. The gate rejects a claimed pass
 when the report contains a page-count
-difference, missing/extra/reflowed text, changed wraps, or a text shift above
-the configured large-shift threshold.
+difference, missing/extra/reflowed text, changed wraps, a painted-visibility
+mismatch, or a text shift above the configured large-shift threshold.
 
 ## Evidence mode: `defect`
 
