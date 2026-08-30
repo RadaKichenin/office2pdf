@@ -6,17 +6,36 @@ request declares which one it uses in `Visual audit > Evidence mode`.
 
 ## Evidence mode: `fix`
 
-A pull request that fixes a visual defect commits all three images:
+A pull request that fixes a visual defect keeps all three images and a layout
+report:
 
 ```text
 assets/bugfixes/issue-<number>/gt.jpg
 assets/bugfixes/issue-<number>/before.jpg
 assets/bugfixes/issue-<number>/after.jpg
+assets/bugfixes/issue-<number>/layout-audit.json
 ```
 
-Touching any one of them makes the gate require and validate all three, so the
-trio always lands together. Generate them from the same input document, page,
-resolution, and renderer.
+Touching any image makes the gate require and validate the full trio. Every fix
+pull request changes `after.jpg` and `layout-audit.json`; `gt.jpg` and
+`before.jpg` may remain from the defect evidence when they are still current.
+Generate all evidence from the same input document, page, resolution, and
+renderer.
+
+Generate the machine-readable layout report from those same GT and after PDFs:
+
+```sh
+python3 scripts/compare_layout.py --json --audit gt.pdf after.pdf \
+  > assets/bugfixes/issue-<number>/layout-audit.json
+```
+
+The command exits nonzero when material findings remain but still writes the
+report. Change both `after.jpg` and `layout-audit.json` in the fix pull
+request. Mark each report category as `Pass` or list the open issues that
+classify it. Those issue references must also appear in `Remaining:` deviation
+rows. The gate rejects a claimed pass when the report contains a page-count
+difference, missing/extra/reflowed text, changed wraps, or a text shift above
+the configured large-shift threshold.
 
 ## Evidence mode: `defect`
 
@@ -59,7 +78,9 @@ python3 scripts/check_visual_pr.py --event event.json --base main --head HEAD \
 
 Markdown and text files under `assets/bugfixes/` — this README included — are
 bookkeeping, not evidence. The gate skips them, so a pull request that changes
-only such a file may check `No rendered PDF change`.
+only such a file may check `No rendered PDF change`. A fix-mode
+`layout-audit.json` is validated separately and must be updated with
+`after.jpg` in its issue directory.
 
 Anything else in the directory is treated as evidence and must match one of the
 layouts above. The nested `issue-<number>/audit/<case>/` layout used by the early
