@@ -45,6 +45,8 @@ struct PptxTableParser<'a> {
     cell_background_alpha: Option<f64>,
     cell_fill_suppressed: bool,
     row_no_fill_cells: Vec<bool>,
+    cell_suppressed_borders: table_styles::SuppressedCellBorders,
+    row_suppressed_cell_borders: Vec<table_styles::SuppressedCellBorders>,
     cell_vertical_align: Option<CellVerticalAlign>,
     cell_padding: Option<Insets>,
 
@@ -124,6 +126,8 @@ impl<'a> PptxTableParser<'a> {
             cell_background_alpha: None,
             cell_fill_suppressed: false,
             row_no_fill_cells: Vec::new(),
+            cell_suppressed_borders: table_styles::SuppressedCellBorders::default(),
+            row_suppressed_cell_borders: Vec::new(),
             cell_vertical_align: None,
             cell_padding: None,
 
@@ -256,6 +260,9 @@ impl<'a> PptxTableParser<'a> {
             b"solidFill" if self.is_in_border_line => {
                 self.solid_fill_context = SolidFillCtx::LineFill;
             }
+            b"noFill" if self.is_in_border_line => {
+                self.suppress_current_border();
+            }
             b"noFill" if self.is_in_table_cell_properties && !self.is_in_border_line => {
                 self.cell_background = None;
                 self.cell_background_alpha = None;
@@ -314,6 +321,9 @@ impl<'a> PptxTableParser<'a> {
                 self.cell_background = None;
                 self.cell_background_alpha = None;
                 self.cell_fill_suppressed = true;
+            }
+            b"noFill" if self.is_in_border_line => {
+                self.suppress_current_border();
             }
             b"pPr" if self.is_in_paragraph && !self.is_in_run => {
                 self.handle_paragraph_properties(e);
@@ -478,6 +488,7 @@ impl<'a> PptxTableParser<'a> {
         self.cell_background = None;
         self.cell_background_alpha = None;
         self.cell_fill_suppressed = false;
+        self.cell_suppressed_borders = table_styles::SuppressedCellBorders::default();
         self.cell_vertical_align = None;
         self.cell_padding = None;
         self.is_in_table_cell_properties = false;
@@ -526,6 +537,8 @@ impl<'a> PptxTableParser<'a> {
             padding: self.cell_padding.take(),
         });
         self.row_no_fill_cells.push(self.cell_fill_suppressed);
+        self.row_suppressed_cell_borders
+            .push(self.cell_suppressed_borders);
         self.is_in_cell = false;
         self.is_in_table_cell_properties = false;
     }
@@ -546,6 +559,9 @@ impl<'a> PptxTableParser<'a> {
         self.table_props
             .no_fill_cells
             .push(std::mem::take(&mut self.row_no_fill_cells));
+        self.table_props
+            .suppressed_cell_borders
+            .push(std::mem::take(&mut self.row_suppressed_cell_borders));
         self.is_in_row = false;
     }
 
@@ -849,6 +865,17 @@ impl<'a> PptxTableParser<'a> {
         }
         self.is_in_border_line = false;
         self.current_border_dir = BorderDir::None;
+    }
+
+    fn suppress_current_border(&mut self) {
+        self.border_line_color = None;
+        match self.current_border_dir {
+            BorderDir::Left => self.cell_suppressed_borders.left = true,
+            BorderDir::Right => self.cell_suppressed_borders.right = true,
+            BorderDir::Top => self.cell_suppressed_borders.top = true,
+            BorderDir::Bottom => self.cell_suppressed_borders.bottom = true,
+            BorderDir::None => {}
+        }
     }
 
     // ── Private helpers: color application ───────────────────────────

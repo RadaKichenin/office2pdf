@@ -706,6 +706,79 @@ fn explicit_cell_no_fill_suppresses_table_style_fill_only() {
     );
 }
 
+/// A direct `<a:noFill/>` on one cell-border side suppresses only that side
+/// of the table-style border. Each edge is independent: an absent left rule,
+/// for example, must not discard the style's top, right, or bottom rules.
+#[test]
+fn direct_border_no_fill_suppresses_each_style_side_independently() {
+    let table_styles_xml = concat!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>"#,
+        r#"<a:tblStyleLst xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" def="bordered">"#,
+        r#"<a:tblStyle styleId="bordered" styleName="Bordered"><a:wholeTbl><a:tcStyle><a:tcBdr>"#,
+        r#"<a:left><a:ln w="12700"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:ln></a:left>"#,
+        r#"<a:right><a:ln w="12700"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:ln></a:right>"#,
+        r#"<a:top><a:ln w="12700"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:ln></a:top>"#,
+        r#"<a:bottom><a:ln w="12700"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:ln></a:bottom>"#,
+        r#"<a:insideV><a:ln w="12700"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:ln></a:insideV>"#,
+        r#"</a:tcBdr></a:tcStyle></a:wholeTbl></a:tblStyle></a:tblStyleLst>"#,
+    );
+    let cell = |label: &str, side: &str| {
+        format!(
+            r#"<a:tc><a:txBody><a:bodyPr/><a:p><a:r><a:rPr lang="en-US"/><a:t>{label}</a:t></a:r></a:p></a:txBody><a:tcPr><a:{side} w="12700"><a:noFill/></a:{side}></a:tcPr></a:tc>"#,
+        )
+    };
+    let table_xml = format!(
+        concat!(
+            r#"<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="4" name="Table"/>"#,
+            r#"<p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm/>"#,
+            r#"<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table"><a:tbl>"#,
+            r#"<a:tblPr><a:tableStyleId>bordered</a:tableStyleId></a:tblPr>"#,
+            r#"<a:tblGrid><a:gridCol w="914400"/><a:gridCol w="914400"/><a:gridCol w="914400"/><a:gridCol w="914400"/></a:tblGrid>"#,
+            r#"<a:tr h="370840">{}{}{}{}</a:tr>"#,
+            r#"</a:tbl></a:graphicData></a:graphic></p:graphicFrame>"#,
+        ),
+        cell("left", "lnL"),
+        cell("top", "lnT"),
+        cell("bottom", "lnB"),
+        cell("right", "lnR"),
+    );
+    let slide = make_slide_xml(&[table_xml]);
+    let theme_xml = make_theme_xml(&standard_theme_colors(), "Calibri Light", "Calibri");
+    let data = build_test_pptx_with_table_styles(
+        SLIDE_CX,
+        SLIDE_CY,
+        &[slide],
+        &theme_xml,
+        table_styles_xml,
+        None,
+    );
+
+    let (doc, _warnings) = PptxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let table = table_element(&first_fixed_page(&doc).elements[0]);
+    let borders: Vec<&CellBorder> = table.rows[0]
+        .cells
+        .iter()
+        .map(|cell| cell.border.as_ref().expect("unsuppressed sides remain"))
+        .collect();
+
+    assert!(borders[0].left.is_none(), "direct lnL noFill beats style");
+    assert!(borders[1].top.is_none(), "direct lnT noFill beats style");
+    assert!(borders[2].bottom.is_none(), "direct lnB noFill beats style");
+    assert!(borders[3].right.is_none(), "direct lnR noFill beats style");
+    for (index, border) in borders.iter().enumerate() {
+        let remaining = [
+            border.left.as_ref(),
+            border.right.as_ref(),
+            border.top.as_ref(),
+            border.bottom.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        .count();
+        assert_eq!(remaining, 3, "cell {index} lost unrelated style borders");
+    }
+}
+
 #[test]
 fn test_pptx_table_without_table_styles_xml_still_works() {
     // Regular PPTX without tableStyles.xml should work fine

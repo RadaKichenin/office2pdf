@@ -45,6 +45,15 @@ pub(super) struct PptxTableStyleDef {
 /// Map from style ID (GUID string) to parsed table style definition.
 pub(super) type TableStyleMap = HashMap<String, PptxTableStyleDef>;
 
+/// Cell-border sides explicitly disabled by direct `<a:tcPr>` formatting.
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct SuppressedCellBorders {
+    pub(super) left: bool,
+    pub(super) right: bool,
+    pub(super) top: bool,
+    pub(super) bottom: bool,
+}
+
 /// Attributes from `<a:tblPr>` that control which style regions are active.
 #[derive(Debug, Clone, Default)]
 pub(super) struct PptxTableProps {
@@ -61,6 +70,11 @@ pub(super) struct PptxTableProps {
     /// PowerPoint still applies the table style's text and border properties,
     /// but does not let any region paint a background (#880).
     pub(super) no_fill_cells: Vec<Vec<bool>>,
+    /// Per-cell border sides explicitly set to `<a:noFill/>`.
+    ///
+    /// These direct declarations override the corresponding style-provided
+    /// side without suppressing unrelated sides on the same cell (#1372).
+    pub(super) suppressed_cell_borders: Vec<Vec<SuppressedCellBorders>>,
 }
 
 // ── Parsing ─────────────────────────────────────────────────────────────
@@ -420,6 +434,12 @@ pub(super) fn apply_table_style(table: &mut Table, props: &PptxTableProps, style
                 .and_then(|row| row.get(col_idx))
                 .copied()
                 .unwrap_or(false);
+            let suppressed_borders = props
+                .suppressed_cell_borders
+                .get(row_idx)
+                .and_then(|row| row.get(col_idx))
+                .copied()
+                .unwrap_or_default();
             if let Some(region) = specific_region {
                 apply_region_to_cell(cell, region, suppress_fill);
             }
@@ -435,6 +455,7 @@ pub(super) fn apply_table_style(table: &mut Table, props: &PptxTableProps, style
                 row_idx + 1 == total_rows,
                 col_idx == 0,
                 total_cols > 0 && col_idx + 1 == total_cols,
+                suppressed_borders,
             );
         }
     }
@@ -459,6 +480,7 @@ fn apply_style_borders(
     at_bottom: bool,
     at_left: bool,
     at_right: bool,
+    suppressed: SuppressedCellBorders,
 ) {
     // Explicit tcBorders on the cell win over the style grid.
     if cell.border.is_some() {
@@ -514,6 +536,19 @@ fn apply_style_borders(
         if region_borders.right.is_some() {
             right = region_borders.right.clone();
         }
+    }
+
+    if suppressed.top {
+        top = None;
+    }
+    if suppressed.bottom {
+        bottom = None;
+    }
+    if suppressed.left {
+        left = None;
+    }
+    if suppressed.right {
+        right = None;
     }
 
     if top.is_some() || bottom.is_some() || left.is_some() || right.is_some() {
