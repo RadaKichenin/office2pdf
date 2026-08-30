@@ -1157,14 +1157,14 @@ fn default_anchor_shape() -> crate::ir::Shape {
     }
 }
 
-/// Read an `<a:gradFill>`'s stops and angle, resolving each scheme colour
-/// against the document theme.
+/// Read a DOCX shape's `<a:gradFill>` stops and angle, resolving each scheme
+/// colour against the document theme. Shared by story anchors and WPG shapes.
 ///
 /// The reader is positioned just after the start tag and is consumed through
 /// the matching end tag either way, so a gradient this cannot express still
 /// leaves the caller's scan in step. `None` when fewer than two stops resolve
 /// — one stop is not a gradient, and zero is not a fill.
-fn parse_anchor_gradient(
+pub(in crate::parser) fn parse_docx_shape_gradient(
     reader: &mut quick_xml::Reader<&[u8]>,
     theme_colors: &HashMap<String, Color>,
 ) -> Option<crate::ir::GradientFill> {
@@ -1352,7 +1352,7 @@ fn scan_hf_anchors(xml: &str, theme_colors: &HashMap<String, Color>) -> Vec<HfAn
                     }
                 }
                 b"gradFill" => {
-                    let gradient = parse_anchor_gradient(&mut reader, theme_colors);
+                    let gradient = parse_docx_shape_gradient(&mut reader, theme_colors);
                     if let Some(anchor) = current.as_mut()
                         && gradient.is_some()
                     {

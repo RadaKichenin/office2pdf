@@ -234,3 +234,43 @@ fn wpg_custom_geometry_preserves_normalized_subpaths() {
         vec![(1.0, 0.0), (0.0, 0.4), (0.0, 1.0), (1.0, 1.0)]
     );
 }
+
+#[test]
+fn wpg_gradient_fill_preserves_stops_color_transforms_and_angle() {
+    let drawing = r#"<w:drawing><wp:anchor>
+<wp:positionH><wp:posOffset>0</wp:posOffset></wp:positionH>
+<wp:positionV><wp:posOffset>0</wp:posOffset></wp:positionV>
+<a:graphic><a:graphicData><wpg:wgp><wps:wsp>
+<wps:spPr>
+<a:xfrm><a:off x="0" y="0"/><a:ext cx="1270000" cy="635000"/></a:xfrm>
+<a:prstGeom prst="rect"/>
+<a:gradFill><a:gsLst>
+<a:gs pos="0"><a:schemeClr val="accent1"><a:shade val="50000"/></a:schemeClr></a:gs>
+<a:gs pos="100000"><a:srgbClr val="FF3366"/></a:gs>
+</a:gsLst><a:lin ang="1920000" scaled="0"/></a:gradFill>
+<a:ln><a:noFill/></a:ln>
+</wps:spPr>
+</wps:wsp></wpg:wgp></a:graphicData></a:graphic>
+</wp:anchor></w:drawing>"#;
+    let theme = r#"<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+<a:accent1><a:srgbClr val="4472C4"/></a:accent1>
+</a:theme>"#;
+
+    let records = scan_wpg_drawings(&body(drawing), Some(theme));
+    let shape = records[0].as_ref().expect("WPG drawing").children[0]
+        .shape
+        .as_ref()
+        .expect("WPG shape");
+    let gradient = shape
+        .shape
+        .gradient_fill
+        .as_ref()
+        .expect("WPG gradient fill");
+
+    assert!((gradient.angle - 32.0).abs() < 0.001);
+    assert_eq!(gradient.stops.len(), 2);
+    assert!((gradient.stops[0].position - 0.0).abs() < 1e-9);
+    assert_eq!(gradient.stops[0].color, Color::new(0x2F, 0x52, 0x8F));
+    assert!((gradient.stops[1].position - 1.0).abs() < 1e-9);
+    assert_eq!(gradient.stops[1].color, Color::new(0xFF, 0x33, 0x66));
+}
