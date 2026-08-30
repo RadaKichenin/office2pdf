@@ -1532,6 +1532,11 @@ fn cell_inset_with_border(cell: &TableCell, default_cell_padding: Insets) -> Ins
 /// #619). It is what lets horizontal bands own the corner blocks.
 const BAND_RUN_END_EXTENSION_PT: f64 = 1.0;
 
+/// Inward overlap that keeps three same-colour fill rectangles from meeting
+/// at only one antialiased corner. The measured outer bleed remains 1pt; this
+/// quarter point stays inside the cell and closes the raster seam from #1397.
+const BACKGROUND_BLEED_SEAM_OVERLAP_PT: f64 = 0.25;
+
 /// Width of Excel's printed gridline band, in points.
 ///
 /// Measured on native Excel exports of NumberFormatTests (issue #622,
@@ -2583,7 +2588,10 @@ fn vertical_band_run(vertical_extent: &VerticalBandExtent, inset: Insets) -> (St
 /// bottom and right edges, so neighbouring shadings overlap by exactly the
 /// strip a border then paints over (issue #1190, the fill half of the #619
 /// probe). Typst's cell `fill:` covers the track exactly, so the overrun is
-/// painted here.
+/// painted here. With Typst's bottom/right placement alignment, growing each
+/// strip inward while leaving its placement offset unchanged keeps the
+/// measured outer edge fixed; without the overlap the three paths meet at one
+/// antialiased corner and can leave a one-pixel pinhole (issue #1397).
 ///
 /// Only the +y/+x edges bleed, which is what keeps the strips harmless: every
 /// band sharing one of them — this cell's own, and both neighbours' — is
@@ -2594,7 +2602,10 @@ fn write_excel_background_bleed(
     inset: Insets,
     vertical_extent: &VerticalBandExtent,
 ) {
-    let bleed: String = format!("{}pt", format_geometry(BAND_RUN_END_EXTENSION_PT));
+    let bleed_with_overlap: String = format!(
+        "{}pt",
+        format_geometry(BAND_RUN_END_EXTENSION_PT + BACKGROUND_BLEED_SEAM_OVERLAP_PT)
+    );
     // The bottom strip runs the cell's full width plus the corner block it
     // shares with the right one, exactly as a horizontal border band does.
     write_band_rect(
@@ -2609,7 +2620,7 @@ fn write_excel_background_bleed(
             "100% + {}pt",
             format_geometry(inset.left + inset.right + BAND_RUN_END_EXTENSION_PT)
         ),
-        &bleed,
+        &bleed_with_overlap,
         background,
     );
     // The right strip spans the row frame, and takes a concrete length for the
@@ -2624,7 +2635,7 @@ fn write_excel_background_bleed(
         "top + right",
         &dx,
         &format!("{}pt", format_geometry(-inset.top)),
-        &bleed,
+        &bleed_with_overlap,
         &height,
         background,
     );
@@ -2637,7 +2648,7 @@ fn write_excel_background_bleed(
                 "{}pt",
                 format_geometry(inset.bottom + BAND_RUN_END_EXTENSION_PT)
             ),
-            &bleed,
+            &bleed_with_overlap,
             &height,
             background,
         );

@@ -2473,7 +2473,9 @@ fn text_content_monthly_budget_cash_flow_caption() {
 
 /// Excel paints a cell's background 1pt past its bottom and right grid
 /// boundaries, so a shading meets the rule below it and the column edge to its
-/// right instead of leaving a pale seam (issue #1190). A native Excel-for-Mac
+/// right instead of leaving a pale seam (issue #1190). The strips grow 0.25pt
+/// inward without moving those outer edges so their antialiased T-junction
+/// cannot leave a one-pixel pinhole (issue #1397). A native Excel-for-Mac
 /// export of `ExcelTables.xlsx` prints the `#D9D9D9` band over the table's
 /// first body row at x 464-534, y 73-91, where the 69pt column track ends at
 /// 533 and the 17pt row track at 90.
@@ -2492,13 +2494,13 @@ fn structure_light1_table_band_bleeds_past_its_bottom_and_right_boundaries() {
     // the right one 2pt beyond it.
     assert!(
         source.contains(
-            "#place(bottom + left, dx: -3pt, dy: 2.5pt, rect(width: 100% + 6pt, height: 1pt, fill: rgb(217, 217, 217), stroke: none))"
+            "#place(bottom + left, dx: -3pt, dy: 2.5pt, rect(width: 100% + 6pt, height: 1.25pt, fill: rgb(217, 217, 217), stroke: none))"
         ),
         "the band must reach the rule below it: {source}"
     );
     assert!(
         source.contains(
-            "#place(top + right, dx: 3pt, dy: -1pt, rect(width: 1pt, height: 18pt, fill: rgb(217, 217, 217), stroke: none))"
+            "#place(top + right, dx: 3pt, dy: -1pt, rect(width: 1.25pt, height: 18pt, fill: rgb(217, 217, 217), stroke: none))"
         ),
         "the band must reach the column edge to its right: {source}"
     );
