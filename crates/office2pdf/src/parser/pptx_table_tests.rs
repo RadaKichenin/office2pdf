@@ -436,6 +436,28 @@ fn test_slide_table_with_cell_background() {
 }
 
 #[test]
+fn a_slide_table_cell_preserves_its_fill_alpha() {
+    let rows_xml = concat!(
+        r#"<a:tr h="370840"><a:tc><a:txBody><a:bodyPr/><a:p><a:r>"#,
+        r#"<a:rPr lang="en-US"/><a:t>Translucent</a:t></a:r></a:p></a:txBody>"#,
+        r#"<a:tcPr><a:solidFill><a:srgbClr val="00FF00"><a:alpha val="50000"/>"#,
+        r#"</a:srgbClr></a:solidFill></a:tcPr></a:tc></a:tr>"#,
+    );
+    let table_frame = make_table_graphic_frame(0, 0, 3_657_600, 370_840, &[3_657_600], rows_xml);
+    let slide = make_slide_xml(&[table_frame]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+
+    let (doc, _warnings) = PptxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let table = table_element(&first_fixed_page(&doc).elements[0]);
+
+    assert_eq!(
+        table.rows[0].cells[0].background,
+        Some(Color::new(0, 255, 0))
+    );
+    assert_eq!(table.rows[0].cells[0].background_alpha, Some(0.5));
+}
+
+#[test]
 fn test_slide_table_with_cell_borders() {
     let mut rows_xml = String::new();
     rows_xml.push_str(r#"<a:tr h="370840">"#);

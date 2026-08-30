@@ -2352,6 +2352,7 @@ pub(super) fn build_rows_for_range(
                 row_span,
                 border,
                 background,
+                background_alpha: None,
                 data_bar,
                 padding,
                 icon_text,

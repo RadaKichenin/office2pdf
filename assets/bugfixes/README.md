@@ -31,9 +31,10 @@ python3 scripts/compare_layout.py --json --audit gt.pdf after.pdf \
 
 The command exits nonzero when material findings remain but still writes the
 report. Change both `after.jpg` and `layout-audit.json` in the fix pull
-request. Mark each report category as `Pass` or list the open issues that
-classify it. Those issue references must also appear in `Remaining:` deviation
-rows. The gate rejects a claimed pass when the report contains a page-count
+request. In the PR's `Visual audit` section, mark each layout-audit category
+field as `Pass` or list the open issues that classify it. Those issue references
+must also appear in `Remaining:` deviation rows. The gate rejects a claimed pass
+when the report contains a page-count
 difference, missing/extra/reflowed text, changed wraps, or a text shift above
 the configured large-shift threshold.
 

@@ -20,6 +20,7 @@ fn cell(text: &str) -> TableCell {
         row_span: 1,
         border: None,
         background: None,
+        background_alpha: None,
         data_bar: None,
         icon_text: None,
         icon_color: None,

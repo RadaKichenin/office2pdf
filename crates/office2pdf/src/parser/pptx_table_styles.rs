@@ -24,6 +24,7 @@ pub(super) struct RegionBorders {
 #[derive(Debug, Clone, Default)]
 pub(super) struct TableCellRegionStyle {
     pub(super) fill: Option<Color>,
+    pub(super) fill_alpha: Option<f64>,
     pub(super) text_color: Option<Color>,
     pub(super) text_bold: Option<bool>,
     pub(super) borders: RegionBorders,
@@ -227,6 +228,7 @@ fn parse_region_style(
                 b"srgbClr" | b"schemeClr" | b"sysClr" if in_solid_fill || in_fill_ref => {
                     let parsed: ParsedColor = parse_color_from_start(reader, e, theme, color_map);
                     style.fill = parsed.color;
+                    style.fill_alpha = parsed.color.and(parsed.alpha);
                 }
                 b"srgbClr" | b"schemeClr" | b"sysClr" if in_font_ref => {
                     let parsed: ParsedColor = parse_color_from_start(reader, e, theme, color_map);
@@ -250,6 +252,7 @@ fn parse_region_style(
                 b"srgbClr" | b"schemeClr" | b"sysClr" if in_solid_fill || in_fill_ref => {
                     let parsed: ParsedColor = parse_color_from_empty(e, theme, color_map);
                     style.fill = parsed.color;
+                    style.fill_alpha = parsed.color.and(parsed.alpha);
                 }
                 b"srgbClr" | b"schemeClr" | b"sysClr" if in_font_ref => {
                     let parsed: ParsedColor = parse_color_from_empty(e, theme, color_map);
@@ -534,6 +537,7 @@ fn apply_style_borders(
 fn apply_region_to_cell(cell: &mut TableCell, region: &TableCellRegionStyle, suppress_fill: bool) {
     if !suppress_fill && cell.background.is_none() {
         cell.background = region.fill;
+        cell.background_alpha = region.fill_alpha;
     }
 
     // Apply text color and bold to all runs that don't have explicit overrides
@@ -621,6 +625,7 @@ fn solid_border(color: Color) -> Option<BorderSide> {
 fn medium_style_2_def(accent: Color, lt1: Color, dk1: Color) -> PptxTableStyleDef {
     let solid_region = |fill: Color| TableCellRegionStyle {
         fill: Some(fill),
+        fill_alpha: None,
         text_color: Some(lt1),
         text_bold: None,
         borders: RegionBorders::default(),
@@ -629,6 +634,7 @@ fn medium_style_2_def(accent: Color, lt1: Color, dk1: Color) -> PptxTableStyleDe
     PptxTableStyleDef {
         whole_table: Some(TableCellRegionStyle {
             fill: Some(tint_color(accent, 0.1)),
+            fill_alpha: None,
             text_color: Some(dk1),
             text_bold: None,
             borders: RegionBorders {

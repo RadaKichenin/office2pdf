@@ -1177,6 +1177,9 @@ pub struct TableCell {
     pub row_span: u32,
     pub border: Option<CellBorder>,
     pub background: Option<Color>,
+    /// Opacity declared by the cell background color, from transparent `0.0`
+    /// through opaque `1.0`. `None` keeps the legacy opaque paint.
+    pub background_alpha: Option<f64>,
     /// DataBar conditional formatting render info.
     pub data_bar: Option<DataBarInfo>,
     /// IconSet text symbol prepended to cell content.
@@ -1213,6 +1216,7 @@ impl Default for TableCell {
             row_span: 1,
             border: None,
             background: None,
+            background_alpha: None,
             data_bar: None,
             icon_text: None,
             icon_color: None,
