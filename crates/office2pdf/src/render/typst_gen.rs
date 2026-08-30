@@ -3444,16 +3444,8 @@ fn generate_floating_image(out: &mut String, fi: &FloatingImage, ctx: &mut GenCt
                 "  #place(top + left, dx: {}pt, dy: 0pt)[",
                 format_f64(fi.offset_x)
             );
-            out.push_str("#image(\"");
-            out.push_str(&path);
-            out.push('"');
-            if let Some(w) = fi.image.width {
-                let _ = write!(out, ", width: {}pt", format_f64(w));
-            }
-            if let Some(h) = fi.image.height {
-                let _ = write!(out, ", height: {}pt", format_f64(h));
-            }
-            out.push_str(")]\n");
+            generate_floating_image_content(out, &fi.image, &path);
+            out.push_str("]\n");
             // Reserve vertical space equal to image height
             if let Some(h) = fi.image.height {
                 let _ = writeln!(out, "  #v({}pt)", format_f64(h));
@@ -3468,16 +3460,8 @@ fn generate_floating_image(out: &mut String, fi: &FloatingImage, ctx: &mut GenCt
                 format_f64(fi.offset_x),
                 format_f64(fi.offset_y)
             );
-            out.push_str("#image(\"");
-            out.push_str(&path);
-            out.push('"');
-            if let Some(w) = fi.image.width {
-                let _ = write!(out, ", width: {}pt", format_f64(w));
-            }
-            if let Some(h) = fi.image.height {
-                let _ = write!(out, ", height: {}pt", format_f64(h));
-            }
-            out.push_str(")]\n");
+            generate_floating_image_content(out, &fi.image, &path);
+            out.push_str("]\n");
         }
         WrapMode::Square | WrapMode::Tight => {
             // Best-effort text wrapping: use #place with float: true
@@ -3487,17 +3471,59 @@ fn generate_floating_image(out: &mut String, fi: &FloatingImage, ctx: &mut GenCt
                 format_f64(fi.offset_x),
                 format_f64(fi.offset_y)
             );
-            out.push_str("#image(\"");
-            out.push_str(&path);
-            out.push('"');
-            if let Some(w) = fi.image.width {
-                let _ = write!(out, ", width: {}pt", format_f64(w));
-            }
-            if let Some(h) = fi.image.height {
-                let _ = write!(out, ", height: {}pt", format_f64(h));
-            }
-            out.push_str(")]\n");
+            generate_floating_image_content(out, &fi.image, &path);
+            out.push_str("]\n");
         }
+    }
+}
+
+/// Emit a floating picture while preserving its unrotated frame dimensions
+/// and centre.
+///
+/// Word turns `a:xfrm/@rot` clockwise around the picture centre. The image is
+/// already inside an absolute `#place`, so rotation changes only its painted
+/// extent and does not affect document flow. As with oversized fixed elements,
+/// Typst can clamp the body frame before resolving `origin: center`; pivot on
+/// the unclamped top-left corner and translate it back to Word's centre instead
+/// (issues #1032, #1366).
+fn generate_floating_image_content(out: &mut String, image: &ImageData, path: &str) {
+    let rotation = image.rotation_deg.filter(|degrees| *degrees != 0.0);
+    let pivot_shift = rotation.and_then(|degrees| {
+        image
+            .width
+            .zip(image.height)
+            .map(|(width, height)| centre_pivot_shift(width, height, degrees, false, false))
+    });
+    if let Some(degrees) = rotation {
+        if let Some((dx, dy)) = pivot_shift {
+            let _ = write!(
+                out,
+                "#move(dx: {}pt, dy: {}pt)[#rotate({}deg, origin: top + left)[",
+                format_f64(dx),
+                format_f64(dy),
+                format_f64(degrees)
+            );
+        } else {
+            let _ = write!(out, "#rotate({}deg, origin: center)[", format_f64(degrees));
+        }
+    }
+
+    out.push_str("#image(\"");
+    out.push_str(path);
+    out.push('"');
+    if let Some(width) = image.width {
+        let _ = write!(out, ", width: {}pt", format_f64(width));
+    }
+    if let Some(height) = image.height {
+        let _ = write!(out, ", height: {}pt", format_f64(height));
+    }
+    out.push(')');
+
+    if rotation.is_some() {
+        out.push(']');
+    }
+    if pivot_shift.is_some() {
+        out.push(']');
     }
 }
 
