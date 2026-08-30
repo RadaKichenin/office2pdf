@@ -274,3 +274,78 @@ fn wpg_gradient_fill_preserves_stops_color_transforms_and_angle() {
     assert!((gradient.stops[1].position - 1.0).abs() < 1e-9);
     assert_eq!(gradient.stops[1].color, Color::new(0xFF, 0x33, 0x66));
 }
+
+#[test]
+fn wpg_child_rotation_and_flip_survive_nested_group_scaling() {
+    let drawing = r#"<w:drawing><wp:anchor>
+<wp:positionH><wp:posOffset>38100</wp:posOffset></wp:positionH>
+<wp:positionV><wp:posOffset>50800</wp:posOffset></wp:positionV>
+<a:graphic><a:graphicData><wpg:wgp>
+<wpg:grpSpPr><a:xfrm>
+<a:off x="127000" y="254000"/><a:ext cx="2540000" cy="1270000"/>
+<a:chOff x="0" y="0"/><a:chExt cx="1270000" cy="635000"/>
+</a:xfrm></wpg:grpSpPr>
+<wpg:grpSp><wpg:grpSpPr><a:xfrm>
+<a:off x="127000" y="127000"/><a:ext cx="1270000" cy="635000"/>
+<a:chOff x="0" y="0"/><a:chExt cx="635000" cy="635000"/>
+</a:xfrm></wpg:grpSpPr>
+<wps:wsp><wps:spPr>
+<a:xfrm rot="2700000" flipH="1">
+<a:off x="127000" y="63500"/><a:ext cx="254000" cy="127000"/>
+</a:xfrm>
+<a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/>
+<a:rect l="l" t="t" r="r" b="b"/>
+<a:pathLst><a:path w="200" h="100">
+<a:moveTo><a:pt x="200" y="0"/></a:moveTo>
+<a:lnTo><a:pt x="0" y="40"/></a:lnTo>
+<a:lnTo><a:pt x="0" y="100"/></a:lnTo>
+<a:close/>
+</a:path></a:pathLst></a:custGeom>
+<a:gradFill><a:gsLst>
+<a:gs pos="0"><a:srgbClr val="4472C4"/></a:gs>
+<a:gs pos="100000"><a:srgbClr val="FF3366"/></a:gs>
+</a:gsLst><a:lin ang="1920000" scaled="0"/></a:gradFill>
+<a:ln><a:noFill/></a:ln>
+</wps:spPr></wps:wsp>
+</wpg:grpSp></wpg:wgp></a:graphicData></a:graphic>
+</wp:anchor></w:drawing>"#;
+
+    let records = scan_wpg_drawings(&body(drawing), None);
+    let child = &records[0].as_ref().expect("WPG drawing").children[0];
+    approx(
+        child
+            .rotation_deg
+            .expect("the WPG text overlay must share the shape rotation"),
+        45.0,
+    );
+    let shape = child.shape.as_ref().expect("WPG shape");
+
+    approx(shape.offset_x, 73.0);
+    approx(shape.offset_y, 54.0);
+    approx(shape.width, 80.0);
+    approx(shape.height, 20.0);
+    approx(
+        shape
+            .shape
+            .rotation_deg
+            .expect("the child rotation must survive"),
+        45.0,
+    );
+    approx(
+        shape
+            .shape
+            .gradient_fill
+            .as_ref()
+            .expect("the flipped child must retain its gradient")
+            .angle,
+        148.0,
+    );
+    let ShapeKind::Path { subpaths } = &shape.shape.kind else {
+        panic!("expected custom path, got {:?}", shape.shape.kind);
+    };
+    assert_eq!(
+        subpaths[0].vertices,
+        vec![(0.0, 0.0), (1.0, 0.4), (1.0, 1.0)],
+        "flipH must mirror every normalized custom-geometry point"
+    );
+}

@@ -849,6 +849,7 @@ fn convert_wpg_drawing_blocks(
                 wrap_mode: child.wrap_mode,
                 width: child.width,
                 height: child.height,
+                shape_rotation_deg: child.rotation_deg,
                 padding: child.padding,
                 vertical_align: child.vertical_align,
                 offset_x: child.offset_x,

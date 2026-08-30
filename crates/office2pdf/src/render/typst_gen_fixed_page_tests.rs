@@ -152,6 +152,40 @@ fn test_shape_rotation_codegen() {
 }
 
 #[test]
+fn shape_rotation_keeps_the_declared_box_center_as_its_pivot() {
+    let doc = make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![FixedElement {
+            x: 10.0,
+            y: 20.0,
+            width: 200.0,
+            height: 150.0,
+            kind: FixedElementKind::Shape(Shape {
+                kind: ShapeKind::Rectangle,
+                fill: Some(Color::new(255, 0, 0)),
+                gradient_fill: None,
+                pattern_fill: None,
+                stroke: None,
+                rotation_deg: Some(90.0),
+                opacity: None,
+                shadow: None,
+                top_bevel: None,
+            }),
+        }],
+    )]);
+
+    let output = generate_typst(&doc).unwrap();
+    assert!(
+        output.source.contains(
+            "#move(dx: 175pt, dy: -25pt)[#rotate(90deg, origin: top + left, reflow: false)["
+        ),
+        "shape rotation must pivot around the unclamped 200x150pt box center:\n{}",
+        output.source
+    );
+}
+
+#[test]
 fn test_shape_opacity_codegen() {
     let doc = make_doc(vec![make_fixed_page(
         960.0,
