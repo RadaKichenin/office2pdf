@@ -463,6 +463,7 @@ impl<'a> PptxTableParser<'a> {
             print_scale: None,
         };
         table_styles::apply_table_style(&mut table, &self.table_props, self.table_styles);
+        apply_table_theme_font_fallback(&mut table, self.theme);
         table
     }
 
@@ -912,6 +913,27 @@ impl<'a> PptxTableParser<'a> {
                 self.paragraph_bullet_definition.color = color.map(PptxBulletColorSource::Explicit);
             }
             SolidFillCtx::PicLineFill | SolidFillCtx::None => {}
+        }
+    }
+}
+
+/// Fill the last gap in table-font inheritance after direct run formatting
+/// and table-style regions have had their chance to supply a family.
+fn apply_table_theme_font_fallback(table: &mut Table, theme: &ThemeData) {
+    let Some(minor_font) = theme.minor_font.as_ref() else {
+        return;
+    };
+    for row in &mut table.rows {
+        for cell in &mut row.cells {
+            for block in &mut cell.content {
+                if let Block::Paragraph(paragraph) = block {
+                    for run in &mut paragraph.runs {
+                        if run.style.font_family.is_none() {
+                            run.style.font_family = Some(minor_font.clone());
+                        }
+                    }
+                }
+            }
         }
     }
 }

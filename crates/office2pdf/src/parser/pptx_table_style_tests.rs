@@ -143,6 +143,7 @@ fn test_apply_table_style_first_row_gets_header_fill_and_text_color() {
             first_row: Some(TableCellRegionStyle {
                 fill: Some(Color::new(0x44, 0x72, 0xC4)),
                 fill_alpha: Some(0.4),
+                text_font_family: None,
                 text_color: Some(Color::new(255, 255, 255)),
                 text_bold: Some(true),
                 borders: Default::default(),
@@ -257,6 +258,7 @@ fn test_apply_table_style_banded_rows_skip_first_row() {
             band1_h: Some(TableCellRegionStyle {
                 fill: Some(Color::new(0xDD, 0xEE, 0xFF)),
                 fill_alpha: None,
+                text_font_family: None,
                 text_color: None,
                 text_bold: None,
                 borders: Default::default(),
@@ -351,6 +353,7 @@ fn test_apply_table_style_explicit_cell_fill_not_overridden() {
             whole_table: Some(TableCellRegionStyle {
                 fill: Some(Color::new(0xAA, 0xBB, 0xCC)),
                 fill_alpha: None,
+                text_font_family: None,
                 text_color: None,
                 text_bold: None,
                 borders: Default::default(),
@@ -656,6 +659,90 @@ fn test_pptx_table_with_style_applies_header_fill_and_text_color() {
 
     // header_row_count should be 1
     assert_eq!(table.header_row_count, 1);
+}
+
+#[test]
+fn table_fonts_resolve_style_refs_fallbacks_and_direct_overrides() {
+    let table_styles_xml = concat!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>"#,
+        r#"<a:tblStyleLst xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" def="font-style">"#,
+        r#"<a:tblStyle styleId="font-style" styleName="Font Style">"#,
+        r#"<a:wholeTbl><a:tcTxStyle><a:fontRef idx="minor"><a:prstClr val="black"/></a:fontRef></a:tcTxStyle><a:tcStyle/></a:wholeTbl>"#,
+        r#"<a:firstRow><a:tcTxStyle><a:fontRef idx="major"><a:prstClr val="black"/></a:fontRef></a:tcTxStyle><a:tcStyle/></a:firstRow>"#,
+        r#"</a:tblStyle></a:tblStyleLst>"#,
+    );
+    let table_xml = concat!(
+        r#"<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="4" name="Table"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm/>"#,
+        r#"<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table"><a:tbl>"#,
+        r#"<a:tblPr firstRow="1"><a:tableStyleId>font-style</a:tableStyleId></a:tblPr>"#,
+        r#"<a:tblGrid><a:gridCol w="1828800"/></a:tblGrid>"#,
+        r#"<a:tr h="370840"><a:tc><a:txBody><a:bodyPr/><a:p><a:r><a:rPr lang="en-US"/><a:t>Specific</a:t></a:r></a:p></a:txBody><a:tcPr/></a:tc></a:tr>"#,
+        r#"<a:tr h="370840"><a:tc><a:txBody><a:bodyPr/><a:p><a:r><a:rPr lang="en-US"/><a:t>Whole</a:t></a:r></a:p></a:txBody><a:tcPr/></a:tc></a:tr>"#,
+        r#"<a:tr h="370840"><a:tc><a:txBody><a:bodyPr/><a:p><a:r><a:rPr lang="en-US"><a:latin typeface=" Lato "/></a:rPr><a:t>Direct</a:t></a:r></a:p></a:txBody><a:tcPr/></a:tc></a:tr>"#,
+        r#"</a:tbl></a:graphicData></a:graphic></p:graphicFrame>"#,
+    );
+    let slide = make_slide_xml(&[table_xml.to_string()]);
+    let theme_xml = make_theme_xml(&standard_theme_colors(), " Gill Sans MT ", " Arial ");
+    let data = build_test_pptx_with_table_styles(
+        SLIDE_CX,
+        SLIDE_CY,
+        &[slide],
+        &theme_xml,
+        table_styles_xml,
+        None,
+    );
+
+    let (doc, _warnings) = PptxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let table = table_element(&first_fixed_page(&doc).elements[0]);
+    let font_of = |row: usize| match &table.rows[row].cells[0].content[0] {
+        Block::Paragraph(paragraph) => paragraph.runs[0].style.font_family.as_deref(),
+        other => panic!("Expected paragraph, got {other:?}"),
+    };
+
+    assert_eq!(
+        font_of(0),
+        Some("Gill Sans MT"),
+        "the specific first-row major fontRef beats the whole-table style"
+    );
+    assert_eq!(
+        font_of(1),
+        Some("Arial"),
+        "the whole-table minor fontRef resolves the trimmed theme face"
+    );
+    assert_eq!(
+        font_of(2),
+        Some("Lato"),
+        "a trimmed direct run typeface beats every table-style declaration"
+    );
+}
+
+#[test]
+fn unstyled_table_run_inherits_trimmed_theme_minor_font() {
+    let table_xml = concat!(
+        r#"<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="4" name="Table"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm/>"#,
+        r#"<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table"><a:tbl>"#,
+        r#"<a:tblPr/><a:tblGrid><a:gridCol w="1828800"/></a:tblGrid>"#,
+        r#"<a:tr h="370840"><a:tc><a:txBody><a:bodyPr/><a:p><a:r><a:rPr lang="en-US"/><a:t>Fallback</a:t></a:r></a:p></a:txBody><a:tcPr/></a:tc></a:tr>"#,
+        r#"</a:tbl></a:graphicData></a:graphic></p:graphicFrame>"#,
+    );
+    let slide = make_slide_xml(&[table_xml.to_string()]);
+    let theme_xml = make_theme_xml(&standard_theme_colors(), "Heading", " Arial ");
+    let data = build_test_pptx_with_table_styles(
+        SLIDE_CX,
+        SLIDE_CY,
+        &[slide],
+        &theme_xml,
+        r#"<a:tblStyleLst xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"/>"#,
+        None,
+    );
+
+    let (doc, _warnings) = PptxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let table = table_element(&first_fixed_page(&doc).elements[0]);
+    let run = match &table.rows[0].cells[0].content[0] {
+        Block::Paragraph(paragraph) => &paragraph.runs[0],
+        other => panic!("Expected paragraph, got {other:?}"),
+    };
+    assert_eq!(run.style.font_family.as_deref(), Some("Arial"));
 }
 
 #[test]
@@ -1312,6 +1399,7 @@ fn a_region_stating_no_fill_falls_through_to_whole_table() {
             whole_table: Some(TableCellRegionStyle {
                 fill: Some(whole_fill),
                 fill_alpha: None,
+                text_font_family: None,
                 text_color: Some(Color::new(0x00, 0x00, 0x00)),
                 text_bold: None,
                 borders: Default::default(),
@@ -1319,6 +1407,7 @@ fn a_region_stating_no_fill_falls_through_to_whole_table() {
             first_row: Some(TableCellRegionStyle {
                 fill: Some(header_fill),
                 fill_alpha: None,
+                text_font_family: None,
                 text_color: Some(Color::new(0xFF, 0xFF, 0xFF)),
                 text_bold: Some(true),
                 borders: Default::default(),
@@ -1326,6 +1415,7 @@ fn a_region_stating_no_fill_falls_through_to_whole_table() {
             band1_h: Some(TableCellRegionStyle {
                 fill: Some(band1_fill),
                 fill_alpha: None,
+                text_font_family: None,
                 text_color: None,
                 text_bold: None,
                 borders: Default::default(),
