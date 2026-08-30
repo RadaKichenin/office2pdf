@@ -194,3 +194,43 @@ fn wpg_explicit_colors_outrank_zero_index_style_references() {
         Some(Color::new(0x77, 0x88, 0x99))
     );
 }
+
+#[test]
+fn wpg_custom_geometry_preserves_normalized_subpaths() {
+    let drawing = r#"<w:drawing><wp:anchor>
+<wp:positionH><wp:posOffset>0</wp:posOffset></wp:positionH>
+<wp:positionV><wp:posOffset>0</wp:posOffset></wp:positionV>
+<a:graphic><a:graphicData><wpg:wgp><wps:wsp>
+<wps:spPr>
+<a:xfrm><a:off x="0" y="0"/><a:ext cx="2540000" cy="1270000"/></a:xfrm>
+<a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/>
+<a:rect l="l" t="t" r="r" b="b"/>
+<a:pathLst><a:path w="200" h="100">
+<a:moveTo><a:pt x="200" y="0"/></a:moveTo>
+<a:lnTo><a:pt x="0" y="40"/></a:lnTo>
+<a:lnTo><a:pt x="0" y="100"/></a:lnTo>
+<a:lnTo><a:pt x="200" y="100"/></a:lnTo>
+<a:close/>
+</a:path></a:pathLst></a:custGeom>
+<a:solidFill><a:srgbClr val="4472C4"/></a:solidFill>
+<a:ln><a:noFill/></a:ln>
+</wps:spPr>
+</wps:wsp></wpg:wgp></a:graphicData></a:graphic>
+</wp:anchor></w:drawing>"#;
+
+    let records = scan_wpg_drawings(&body(drawing), None);
+    let shape = records[0].as_ref().expect("WPG drawing").children[0]
+        .shape
+        .as_ref()
+        .expect("WPG shape");
+
+    let ShapeKind::Path { subpaths } = &shape.shape.kind else {
+        panic!("expected custom path, got {:?}", shape.shape.kind);
+    };
+    assert_eq!(subpaths.len(), 1);
+    assert!(subpaths[0].closed);
+    assert_eq!(
+        subpaths[0].vertices,
+        vec![(1.0, 0.0), (0.0, 0.4), (0.0, 1.0), (1.0, 1.0)]
+    );
+}
