@@ -22,6 +22,10 @@ use crate::ir::{
     ArrowHead, BorderLineStyle, BorderSide, Color, FloatingShape, GradientFill, Insets, LineJoin,
     Shape, ShapeKind, Subpath, TextBoxVerticalAlign, WrapMode,
 };
+use crate::parser::drawingml::{
+    ParsedColor, SchemeColors, parse_color_from_empty, parse_color_from_start,
+    parse_theme_color_scheme,
+};
 use crate::parser::pptx::custom_geometry::parse_custom_geometry;
 use crate::parser::pptx::geometry_guides::ShapeExtent;
 use crate::parser::units::emu_to_pt;
@@ -141,6 +145,7 @@ struct ShapeBuilder {
     flip_v: bool,
     rotation_deg: Option<f64>,
     fill_color: Option<Color>,
+    fill_opacity: Option<f64>,
     fill_none: bool,
     line_color: Option<Color>,
     line_width_pt: Option<f64>,
@@ -203,7 +208,7 @@ impl ShapeBuilder {
                 pattern_fill: None,
                 stroke,
                 rotation_deg: self.rotation_deg,
-                opacity: None,
+                opacity: self.fill_opacity,
                 shadow: None,
                 top_bevel: None,
             },
@@ -800,7 +805,13 @@ fn numeric_attr(element: &BytesStart<'_>, name: &[u8]) -> Option<f64> {
 fn scan_wpg_drawings(xml: &str, theme_xml: Option<&str>) -> Vec<Option<WpgDrawingInfo>> {
     let text_box_contents: Vec<Vec<docx_rs::DocumentChild>> = scan_wpg_text_box_contents(xml);
     let mut text_box_cursor: usize = 0;
-    let theme_colors: HashMap<String, Color> = parse_theme_colors(theme_xml.unwrap_or_default());
+    let theme_colors: HashMap<String, Color> =
+        parse_theme_color_scheme(theme_xml.unwrap_or_default());
+    let theme_aliases: HashMap<String, String> = HashMap::new();
+    let scheme = SchemeColors {
+        colors: &theme_colors,
+        aliases: &theme_aliases,
+    };
     let mut reader = quick_xml::Reader::from_str(xml);
     let mut buffer: Vec<u8> = Vec::new();
     let mut records: Vec<Option<WpgDrawingInfo>> = Vec::new();
@@ -820,13 +831,15 @@ fn scan_wpg_drawings(xml: &str, theme_xml: Option<&str>) -> Vec<Option<WpgDrawin
                         b"gradFill" => {
                             consume_wpg_gradient_fill(drawing, &mut reader, &theme_colors)
                         }
+                        b"srgbClr" | b"schemeClr" | b"sysClr" => {
+                            consume_wpg_color(drawing, &mut reader, element, &scheme)
+                        }
                         _ => false,
                     };
                     if !consumed {
                         handle_wpg_start(
                             drawing,
                             element,
-                            &theme_colors,
                             &text_box_contents,
                             &mut text_box_cursor,
                         );
@@ -835,7 +848,15 @@ fn scan_wpg_drawings(xml: &str, theme_xml: Option<&str>) -> Vec<Option<WpgDrawin
             }
             Ok(Event::Empty(ref element)) => {
                 if let Some(drawing) = drawings.last_mut() {
-                    handle_wpg_empty(drawing, element, &theme_colors);
+                    if matches!(
+                        element.local_name().as_ref(),
+                        b"srgbClr" | b"schemeClr" | b"sysClr"
+                    ) && wpg_color_context(drawing)
+                    {
+                        apply_wpg_color(drawing, parse_color_from_empty(element, &scheme));
+                    } else {
+                        handle_wpg_empty(drawing, element);
+                    }
                 }
             }
             Ok(Event::Text(ref text)) => {
@@ -911,10 +932,54 @@ fn consume_wpg_gradient_fill(
     true
 }
 
+fn consume_wpg_color(
+    drawing: &mut WpgDrawingBuilder,
+    reader: &mut quick_xml::Reader<&[u8]>,
+    element: &BytesStart<'_>,
+    scheme: &SchemeColors<'_>,
+) -> bool {
+    if !wpg_color_context(drawing) {
+        return false;
+    }
+    let parsed = parse_color_from_start(reader, element, scheme);
+    apply_wpg_color(drawing, parsed);
+    true
+}
+
+fn wpg_color_context(drawing: &WpgDrawingBuilder) -> bool {
+    drawing.child.as_ref().is_some_and(|child| {
+        child.font_reference_depth > 0
+            || child.line_reference_depth > 0
+            || child.line_depth > 0
+            || child.fill_reference_depth > 0
+            || child.shape_properties_depth > 0
+    })
+}
+
+fn apply_wpg_color(drawing: &mut WpgDrawingBuilder, parsed: ParsedColor) {
+    let Some(child) = drawing.child.as_mut() else {
+        return;
+    };
+    let Some(color) = parsed.color else {
+        return;
+    };
+
+    if child.font_reference_depth > 0 {
+        child.text_color = Some(color);
+    } else if child.line_reference_depth > 0 || child.line_depth > 0 {
+        child.shape.line_color.get_or_insert(color);
+        child.shape.has_line = true;
+    } else if (child.fill_reference_depth > 0 || child.shape_properties_depth > 0)
+        && child.shape.fill_color.is_none()
+    {
+        child.shape.fill_color = Some(color);
+        child.shape.fill_opacity = parsed.alpha;
+    }
+}
+
 fn handle_wpg_start(
     drawing: &mut WpgDrawingBuilder,
     element: &BytesStart<'_>,
-    theme_colors: &HashMap<String, Color>,
     text_box_contents: &[Vec<docx_rs::DocumentChild>],
     text_box_cursor: &mut usize,
 ) {
@@ -1016,23 +1081,15 @@ fn handle_wpg_start(
                 };
             }
         }
-        _ => handle_wpg_geometry_element(drawing, element, theme_colors),
+        _ => handle_wpg_geometry_element(drawing, element),
     }
 }
 
-fn handle_wpg_empty(
-    drawing: &mut WpgDrawingBuilder,
-    element: &BytesStart<'_>,
-    theme_colors: &HashMap<String, Color>,
-) {
-    handle_wpg_geometry_element(drawing, element, theme_colors);
+fn handle_wpg_empty(drawing: &mut WpgDrawingBuilder, element: &BytesStart<'_>) {
+    handle_wpg_geometry_element(drawing, element);
 }
 
-fn handle_wpg_geometry_element(
-    drawing: &mut WpgDrawingBuilder,
-    element: &BytesStart<'_>,
-    theme_colors: &HashMap<String, Color>,
-) {
+fn handle_wpg_geometry_element(drawing: &mut WpgDrawingBuilder, element: &BytesStart<'_>) {
     let element_name = element.local_name();
     let local_name: &[u8] = element_name.as_ref();
     if drawing.group_transform_depth > 0 {
@@ -1074,20 +1131,6 @@ fn handle_wpg_geometry_element(
                 child.extent_y = numeric_attr(element, b"cy").unwrap_or_default();
             }
             _ => {}
-        }
-    }
-
-    if local_name == b"schemeClr"
-        && let Some(name) = attribute_value(element, b"val")
-        && let Some(color) = theme_colors.get(&name).copied()
-    {
-        if child.font_reference_depth > 0 {
-            child.text_color = Some(color);
-        } else if child.line_reference_depth > 0 || child.line_depth > 0 {
-            child.shape.line_color.get_or_insert(color);
-            child.shape.has_line = true;
-        } else if child.fill_reference_depth > 0 || child.shape_properties_depth > 0 {
-            child.shape.fill_color.get_or_insert(color);
         }
     }
 
@@ -1250,72 +1293,6 @@ fn parse_wpg_text_box_document(inner_xml: Vec<u8>) -> Vec<docx_rs::DocumentChild
                 .collect()
         })
         .unwrap_or_default()
-}
-
-fn parse_theme_colors(xml: &str) -> HashMap<String, Color> {
-    let mut reader = quick_xml::Reader::from_str(xml);
-    let mut buffer: Vec<u8> = Vec::new();
-    let mut result: HashMap<String, Color> = HashMap::new();
-    let mut current_name: Option<String> = None;
-
-    loop {
-        match reader.read_event_into(&mut buffer) {
-            Ok(Event::Start(ref element)) => {
-                let name = element.local_name();
-                if matches!(
-                    name.as_ref(),
-                    b"dk1"
-                        | b"lt1"
-                        | b"dk2"
-                        | b"lt2"
-                        | b"accent1"
-                        | b"accent2"
-                        | b"accent3"
-                        | b"accent4"
-                        | b"accent5"
-                        | b"accent6"
-                        | b"hlink"
-                        | b"folHlink"
-                ) {
-                    current_name = Some(String::from_utf8_lossy(name.as_ref()).into_owned());
-                }
-                if matches!(name.as_ref(), b"srgbClr" | b"sysClr")
-                    && let Some(key) = current_name.as_ref()
-                    && let Some(value) = attribute_value(element, b"val")
-                        .filter(|_| name.as_ref() == b"srgbClr")
-                        .or_else(|| attribute_value(element, b"lastClr"))
-                    && let Some(color) = parse_hex_color(&value)
-                {
-                    result.insert(key.clone(), color);
-                }
-            }
-            Ok(Event::Empty(ref element)) => {
-                let name = element.local_name();
-                if matches!(name.as_ref(), b"srgbClr" | b"sysClr")
-                    && let Some(key) = current_name.as_ref()
-                    && let Some(value) = attribute_value(element, b"val")
-                        .filter(|_| name.as_ref() == b"srgbClr")
-                        .or_else(|| attribute_value(element, b"lastClr"))
-                    && let Some(color) = parse_hex_color(&value)
-                {
-                    result.insert(key.clone(), color);
-                }
-            }
-            Ok(Event::End(ref element)) => {
-                if current_name.as_deref()
-                    == std::str::from_utf8(element.local_name().as_ref()).ok()
-                {
-                    current_name = None;
-                }
-            }
-            Ok(Event::Eof) => break,
-            Err(_) => break,
-            _ => {}
-        }
-        buffer.clear();
-    }
-
-    result
 }
 
 #[cfg(test)]

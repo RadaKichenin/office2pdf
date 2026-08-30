@@ -395,6 +395,37 @@ fn test_consecutive_floating_shapes_share_one_anchor_line() {
 }
 
 #[test]
+fn a_translucent_floating_shape_fill_uses_shape_opacity() {
+    let doc = make_doc(vec![make_flow_page(vec![Block::FloatingShape(
+        FloatingShape {
+            shape: Shape {
+                kind: ShapeKind::Rectangle,
+                fill: Some(Color::new(0, 0, 0)),
+                gradient_fill: None,
+                pattern_fill: None,
+                stroke: None,
+                rotation_deg: None,
+                opacity: Some(0.16),
+                shadow: None,
+                top_bevel: None,
+            },
+            width: 100.0,
+            height: 40.0,
+            offset_x: 20.0,
+            offset_y: 10.0,
+            wrap_mode: WrapMode::None,
+        },
+    )])]);
+
+    let output = generate_typst(&doc).unwrap();
+    assert!(
+        output.source.contains("fill: rgb(0, 0, 0, 41)"),
+        "shape opacity must reach the floating shape fill:\n{}",
+        output.source
+    );
+}
+
+#[test]
 fn test_codegen_display_math() {
     let doc = make_doc(vec![make_flow_page(vec![Block::MathEquation(
         MathEquation {
