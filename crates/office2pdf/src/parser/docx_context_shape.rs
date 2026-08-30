@@ -20,8 +20,10 @@ use quick_xml::events::{BytesStart, Event};
 
 use crate::ir::{
     ArrowHead, BorderLineStyle, BorderSide, Color, FloatingShape, Insets, LineJoin, Shape,
-    ShapeKind, TextBoxVerticalAlign, WrapMode,
+    ShapeKind, Subpath, TextBoxVerticalAlign, WrapMode,
 };
+use crate::parser::pptx::custom_geometry::parse_custom_geometry;
+use crate::parser::pptx::geometry_guides::ShapeExtent;
 use crate::parser::units::emu_to_pt;
 use crate::parser::xml_util::parse_hex_color;
 
@@ -142,6 +144,7 @@ struct ShapeBuilder {
     has_line: bool,
     head_arrow: bool,
     tail_arrow: bool,
+    custom_subpaths: Vec<Subpath>,
 }
 
 impl ShapeBuilder {
@@ -200,6 +203,12 @@ impl ShapeBuilder {
     }
 
     fn resolve_kind(&self, width: f64, height: f64) -> ShapeKind {
+        if !self.custom_subpaths.is_empty() {
+            return ShapeKind::Path {
+                subpaths: self.custom_subpaths.clone(),
+            };
+        }
+
         match self.preset.as_deref() {
             Some("line") | Some("straightConnector1") => {
                 // Endpoints run corner-to-corner of the bounding box; flips swap
@@ -747,13 +756,19 @@ fn scan_wpg_drawings(xml: &str, theme_xml: Option<&str>) -> Vec<Option<WpgDrawin
             }
             Ok(Event::Start(ref element)) => {
                 if let Some(drawing) = drawings.last_mut() {
-                    handle_wpg_start(
-                        drawing,
-                        element,
-                        &theme_colors,
-                        &text_box_contents,
-                        &mut text_box_cursor,
-                    );
+                    if element.local_name().as_ref() == b"custGeom"
+                        && consume_wpg_custom_geometry(drawing, &mut reader)
+                    {
+                        // The shared parser consumes through `</a:custGeom>`.
+                    } else {
+                        handle_wpg_start(
+                            drawing,
+                            element,
+                            &theme_colors,
+                            &text_box_contents,
+                            &mut text_box_cursor,
+                        );
+                    }
                 }
             }
             Ok(Event::Empty(ref element)) => {
@@ -797,6 +812,25 @@ fn scan_wpg_drawings(xml: &str, theme_xml: Option<&str>) -> Vec<Option<WpgDrawin
     }
 
     records
+}
+
+fn consume_wpg_custom_geometry(
+    drawing: &mut WpgDrawingBuilder,
+    reader: &mut quick_xml::Reader<&[u8]>,
+) -> bool {
+    let Some(child) = drawing.child.as_mut() else {
+        return false;
+    };
+    if child.shape_properties_depth == 0 {
+        return false;
+    }
+
+    let extent = ShapeExtent::new(child.extent_x, child.extent_y);
+    let subpaths = parse_custom_geometry(reader, extent);
+    if !subpaths.is_empty() {
+        child.shape.custom_subpaths = subpaths;
+    }
+    true
 }
 
 fn handle_wpg_start(
