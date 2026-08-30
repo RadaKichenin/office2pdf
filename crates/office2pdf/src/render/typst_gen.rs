@@ -2195,7 +2195,7 @@ fn hf_paragraph_has_flow_content(paragraph: &crate::ir::HeaderFooterParagraph) -
 }
 
 /// One page layer's markup: the anchored shapes both stories put on it, plus
-/// their framed paragraphs when it is the foreground.
+/// their framed paragraphs below the body in the background.
 ///
 /// Empty when neither story draws anything there, which is the caller's signal
 /// to leave the layer off the `#set page` entirely.
@@ -2210,8 +2210,10 @@ fn page_anchored_layer_markup(
     let mut markup = String::new();
     for hf in header.into_iter().chain(footer) {
         generate_page_anchored_hf_shapes(&mut markup, hf, size, behind_text, ctx);
-        // Framed paragraphs sit over the page's content, never under it.
-        if !behind_text {
+        // Word paints the main story after header/footer framed paragraphs, so
+        // body drawings can cover those frames. Typst's page background is the
+        // layer that preserves that cross-story order (issue #1408).
+        if behind_text {
             generate_page_anchored_hf_frames(&mut markup, hf, size, page.margins.right, ctx);
         }
     }
@@ -2304,7 +2306,7 @@ fn generate_flow_hf_content(out: &mut String, hf: &HeaderFooter, ctx: &mut GenCt
 
 /// Whether [`generate_flow_hf_content`] writes this paragraph into the story.
 ///
-/// Page-anchored frames are drawn separately in the page foreground, and an
+/// Page-anchored frames are drawn separately in the page background, and an
 /// empty paragraph carrying neither content nor a border produces nothing.
 /// Shared with the band placement so the two cannot disagree about which
 /// paragraph comes first (issue #629).
