@@ -1663,7 +1663,7 @@ fn banded_cell(text: &str) -> TableCell {
 }
 
 #[test]
-fn test_boundary_band_background_bleeds_past_its_bottom_and_right_boundaries() {
+fn test_boundary_band_background_bleed_overlaps_its_cell_at_the_corner_junction() {
     let table = boundary_band_table(
         vec![fixed_row(vec![banded_cell("Anton"), plain_text_cell("44")])],
         vec![69.0, 69.0],
@@ -1676,26 +1676,27 @@ fn test_boundary_band_background_bleeds_past_its_bottom_and_right_boundaries() {
         result.contains("table.cell(fill: rgb(217, 217, 217))"),
         "the cell must keep filling its own box: {result}"
     );
-    // Bottom strip: 1pt tall, sitting on the row's bottom boundary
-    // (inset.bottom below the content box, plus its own height), and running
-    // the full cell width plus the corner block the right strip shares.
+    // Bottom strip: its outer edge still lands 1pt past the row boundary, but
+    // its inner edge overlaps the cell fill by 0.25pt. Three same-colour paths
+    // that only meet at the boundary corner leave a one-pixel pinhole when the
+    // PDF is rasterised at 150 DPI (issue #1397).
     assert!(
         result.contains(
-            "#place(bottom + left, dx: -5pt, dy: 6pt, rect(width: 100% + 11pt, height: 1pt, fill: rgb(217, 217, 217), stroke: none))"
+            "#place(bottom + left, dx: -5pt, dy: 6pt, rect(width: 100% + 11pt, height: 1.25pt, fill: rgb(217, 217, 217), stroke: none))"
         ),
-        "the background must bleed 1pt past the bottom boundary: {result}"
+        "the background must overlap the cell before bleeding 1pt past the bottom boundary: {result}"
     );
-    // Right strip: 1pt wide on the column boundary, as tall as the 20pt row
-    // frame plus that same corner block.
+    // The right strip follows the same inward overlap while preserving its
+    // measured outer edge and the 20pt row frame plus corner block.
     assert!(
         result.contains(
-            "#place(top + right, dx: 6pt, dy: -5pt, rect(width: 1pt, height: 21pt, fill: rgb(217, 217, 217), stroke: none))"
+            "#place(top + right, dx: 6pt, dy: -5pt, rect(width: 1.25pt, height: 21pt, fill: rgb(217, 217, 217), stroke: none))"
         ),
-        "the background must bleed 1pt past the right boundary: {result}"
+        "the background must overlap the cell before bleeding 1pt past the right boundary: {result}"
     );
     // An unshaded neighbour paints nothing.
     assert_eq!(
-        result.matches("rect(width: 1pt").count(),
+        result.matches("rect(width: 1.25pt").count(),
         1,
         "only the shaded cell may bleed: {result}"
     );
@@ -1721,13 +1722,13 @@ fn test_boundary_band_background_bleed_paints_twins_in_an_auto_row() {
     // the extent falls back to the ambient text size.
     assert!(
         result.contains(
-            "#place(top + right, dx: 6pt, dy: -5pt, rect(width: 1pt, height: 1.2em + 11pt, fill: rgb(217, 217, 217), stroke: none))"
+            "#place(top + right, dx: 6pt, dy: -5pt, rect(width: 1.25pt, height: 1.2em + 11pt, fill: rgb(217, 217, 217), stroke: none))"
         ),
         "the top twin must hang from the row's top boundary: {result}"
     );
     assert!(
         result.contains(
-            "#place(bottom + right, dx: 6pt, dy: 6pt, rect(width: 1pt, height: 1.2em + 11pt, fill: rgb(217, 217, 217), stroke: none))"
+            "#place(bottom + right, dx: 6pt, dy: 6pt, rect(width: 1.25pt, height: 1.2em + 11pt, fill: rgb(217, 217, 217), stroke: none))"
         ),
         "the bottom twin must rise from 1pt past the bottom boundary: {result}"
     );
