@@ -54,6 +54,14 @@ pub(super) struct SuppressedCellBorders {
     pub(super) bottom: bool,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct TableCellBoundary {
+    top: bool,
+    bottom: bool,
+    left: bool,
+    right: bool,
+}
+
 /// Attributes from `<a:tblPr>` that control which style regions are active.
 #[derive(Debug, Clone, Default)]
 pub(super) struct PptxTableProps {
@@ -451,10 +459,12 @@ pub(super) fn apply_table_style(table: &mut Table, props: &PptxTableProps, style
                 cell,
                 style_def,
                 specific_region,
-                row_idx == 0,
-                row_idx + 1 == total_rows,
-                col_idx == 0,
-                total_cols > 0 && col_idx + 1 == total_cols,
+                TableCellBoundary {
+                    top: row_idx == 0,
+                    bottom: row_idx + 1 == total_rows,
+                    left: col_idx == 0,
+                    right: total_cols > 0 && col_idx + 1 == total_cols,
+                },
                 suppressed_borders,
             );
         }
@@ -476,10 +486,7 @@ fn apply_style_borders(
     cell: &mut TableCell,
     style_def: &PptxTableStyleDef,
     specific_region: Option<&TableCellRegionStyle>,
-    at_top: bool,
-    at_bottom: bool,
-    at_left: bool,
-    at_right: bool,
+    boundary: TableCellBoundary,
     suppressed: SuppressedCellBorders,
 ) {
     // Explicit tcBorders on the cell win over the style grid.
@@ -494,22 +501,22 @@ fn apply_style_borders(
 
     if let Some(whole) = style_def.whole_table.as_ref() {
         let grid = &whole.borders;
-        top = if at_top {
+        top = if boundary.top {
             grid.top.clone()
         } else {
             grid.inside_h.clone()
         };
-        bottom = if at_bottom {
+        bottom = if boundary.bottom {
             grid.bottom.clone()
         } else {
             grid.inside_h.clone()
         };
-        left = if at_left {
+        left = if boundary.left {
             grid.left.clone()
         } else {
             grid.inside_v.clone()
         };
-        right = if at_right {
+        right = if boundary.right {
             grid.right.clone()
         } else {
             grid.inside_v.clone()
