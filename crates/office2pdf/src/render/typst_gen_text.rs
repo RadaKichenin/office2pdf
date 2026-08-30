@@ -1510,6 +1510,17 @@ pub(crate) const SHEET_CELL_MIN_DESCENT_SEAT_PT: f64 = 4.0;
 /// four sizes at or under 11 can, and they floor.
 pub(crate) const COMPACTED_SHEET_CELL_MIN_DESCENT_SEAT_PT: f64 = 3.0;
 
+/// A horizontally merged bottom-aligned cell keeps one more point below its
+/// baseline than the workbook-wide floors above (issue #1390).
+///
+/// Native Excel-for-Mac one-factor probes changed only `A1:F1`'s merge state
+/// in the Korean quotation fixture: the 14pt merged title rested 5pt above
+/// the fixed track's bottom boundary while its unmerged twin rested 4pt above
+/// it. Declared-family sweeps did not move the line. Size sweeps showed the
+/// value is a floor, not a replacement seat: it binds at 8-18pt, while larger
+/// face-specific descents continue to win.
+const MERGED_SHEET_CELL_MIN_DESCENT_SEAT_PT: f64 = 5.0;
+
 /// The descent Excel rests a bottom-aligned sheet cell's last line on: the
 /// face's `hhea` descent at a whole number of points, sitting on the row's own
 /// bottom boundary (issue #1063) — but never closer to that boundary than the
@@ -1852,13 +1863,20 @@ pub(super) fn word_cell_line_box(
         Some(seat) if seats_text_on_descender => {
             // Typst rests the box's bottom edge on the inset content bottom;
             // Excel rests the descender on the row boundary itself, one inset
-            // lower.
+            // lower. A horizontal merge raises only the minimum seat; a
+            // larger measured or rounded face descent still wins (#1390).
+            let descent_floor_pt: f64 = if seat.is_horizontally_merged {
+                seat.descent_floor_pt
+                    .max(MERGED_SHEET_CELL_MIN_DESCENT_SEAT_PT)
+            } else {
+                seat.descent_floor_pt
+            };
             let bottom_em: f64 = (sheet_cell_descent_pt(
                 family,
                 descender_em,
                 font_size,
                 sheet_print_scale,
-                seat.descent_floor_pt,
+                descent_floor_pt,
             ) - seat.inset_bottom_pt)
                 / font_size;
             (

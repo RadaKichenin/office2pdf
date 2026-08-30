@@ -2594,6 +2594,104 @@ fn sheet_cell_line_box_uses_the_face_that_paints_korean_fallback_text() {
     );
 }
 
+/// A bottom-aligned horizontal merge keeps one more point below its baseline
+/// than the same unmerged cell (issue #1390).
+///
+/// Native Excel-for-Mac one-factor probes of the Korean quotation title held
+/// its 23pt printed track and every style constant, then changed only
+/// `A1:F1`'s merge state. The merged 14pt line rests 5pt above the track's
+/// bottom boundary; the unmerged line rests 4pt above it. Size sweeps
+/// triangulate that answer: the merge raises the floor from 4pt to 5pt at 8,
+/// 12, 14, and 18pt, while a larger face-specific seat still wins.
+#[test]
+fn bottom_aligned_merged_sheet_cell_uses_the_native_five_point_floor() {
+    // A stable test face whose 14pt seat is below the merge floor. The native
+    // family sweep covered Malgun Gothic, Arial, Calibri, Verdana, and three
+    // Noto variants; merge state, not family, selected the extra point.
+    const FAMILY: &str = "Libertinus Serif";
+    let Some((_ascent_em, descent_em, _pitch_em)) =
+        crate::render::pdf::font_line_metrics_em(FAMILY)
+    else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+
+    let font_size_pt: f64 = 14.0;
+    let track_pt: f64 = 30.0;
+    let padding = Insets {
+        top: 1.0,
+        right: 3.0,
+        bottom: 1.5,
+        left: 3.0,
+    };
+    let source_for_col_span = |col_span: u32| -> String {
+        let table = Table {
+            rows: vec![TableRow {
+                minimum_height: None,
+                cells: vec![TableCell {
+                    content: vec![Block::Paragraph(Paragraph {
+                        style: ParagraphStyle::default(),
+                        runs: vec![Run {
+                            text: "Merged title".to_string(),
+                            style: TextStyle {
+                                font_family: Some(FAMILY.to_string()),
+                                font_size: Some(font_size_pt),
+                                bold: Some(true),
+                                ..TextStyle::default()
+                            },
+                            href: None,
+                            footnote: None,
+                        }],
+                    })],
+                    col_span,
+                    vertical_align: Some(CellVerticalAlign::Bottom),
+                    ..TableCell::default()
+                }],
+                height: Some(track_pt),
+            }],
+            column_widths: vec![72.0; col_span as usize],
+            default_cell_padding: Some(padding),
+            default_vertical_align: Some(CellVerticalAlign::Bottom),
+            seats_bottom_aligned_text_on_descender: true,
+            bottom_aligned_descent_floor_pt: COMPACTED_SHEET_CELL_MIN_DESCENT_SEAT_PT,
+            border_paint_model: TableBorderPaintModel::CenteredStroke,
+            prints_gridlines: false,
+            prints_headings: false,
+            ..Table::default()
+        };
+        let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+        generate_typst(&doc).unwrap().source
+    };
+
+    let unmerged_seat_pt: f64 = sheet_cell_descent_pt(
+        FAMILY,
+        descent_em,
+        font_size_pt,
+        None,
+        COMPACTED_SHEET_CELL_MIN_DESCENT_SEAT_PT,
+    );
+    assert!(
+        unmerged_seat_pt < 5.0,
+        "the control face must expose the merge floor, seated {unmerged_seat_pt}pt"
+    );
+    let unmerged_bottom_em: f64 = (unmerged_seat_pt - padding.bottom) / font_size_pt;
+    let merged_bottom_em: f64 = (5.0 - padding.bottom) / font_size_pt;
+    let unmerged_needle: String = format!("bottom-edge: {}em", format_f64(-unmerged_bottom_em));
+    let merged_needle: String = format!("bottom-edge: {}em", format_f64(-merged_bottom_em));
+    let unmerged_source: String = source_for_col_span(1);
+    let merged_source: String = source_for_col_span(2);
+
+    assert!(
+        unmerged_source.contains(&unmerged_needle),
+        "the unmerged control must keep its face/floor seat; expected \
+         `{unmerged_needle}` in:\n{unmerged_source}"
+    );
+    assert!(
+        merged_source.contains(&merged_needle),
+        "the horizontal merge must raise the bottom seat to 5pt; expected \
+         `{merged_needle}` in:\n{merged_source}"
+    );
+}
+
 /// The expense report's data rows: a 14pt track of Arial 10 whose cells Excel
 /// prints at y=143.00, 11.00pt below the track's top boundary. Our own seat
 /// centred the line in the cell's *inset* box instead of the track and used
