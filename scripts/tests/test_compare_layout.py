@@ -225,6 +225,7 @@ class MatchAndDiffTest(unittest.TestCase):
         self.assertEqual(vector["lines"]["missing"], 0)
         self.assertEqual(vector["lines"]["extra"], 0)
         self.assertEqual(vector["wraps"]["count"], 1)
+        self.assertEqual(compare_layout.audit_failures([vector]), 1)
 
     def test_reordered_content_is_classified_reflow_not_loss(self) -> None:
         # A table row whose cells share one baseline in GT but split across two
@@ -236,6 +237,7 @@ class MatchAndDiffTest(unittest.TestCase):
         self.assertEqual(vector["lines"]["extra"], 0)
         self.assertEqual(vector["reflow"]["gt_lines"], 1)
         self.assertEqual(vector["reflow"]["out_lines"], 2)
+        self.assertEqual(compare_layout.audit_failures([vector]), 1)
 
     def test_real_text_loss_is_still_reported_missing(self) -> None:
         gt = "\n".join([line_of("kept", 72, 100), line_of("lost", 72, 112)])

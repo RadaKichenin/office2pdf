@@ -505,6 +505,8 @@ def audit_failures(vectors: list[dict]) -> int:
         vector["instances"]["large_shift_count"]
         + vector["lines"]["missing"]
         + vector["lines"]["extra"]
+        + vector["wraps"]["count"]
+        + int(bool(vector["reflow"]["gt_lines"] or vector["reflow"]["out_lines"]))
         for vector in vectors
     )
 
@@ -543,7 +545,10 @@ def main() -> int:
     parser.add_argument(
         "--audit",
         action="store_true",
-        help="exit nonzero on missing/extra text, a large instance shift, or a page-count mismatch",
+        help=(
+            "exit nonzero on missing/extra/reflowed text, changed wraps, "
+            "a large instance shift, or a page-count mismatch"
+        ),
     )
     parser.add_argument("--json", action="store_true", help="emit the deviation vectors as JSON")
     args = parser.parse_args()
