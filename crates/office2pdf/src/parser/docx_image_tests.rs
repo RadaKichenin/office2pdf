@@ -305,6 +305,59 @@ fn test_docx_floating_image_square_wrap() {
 }
 
 #[test]
+fn docx_floating_picture_rotation_reaches_ir_and_typst() {
+    let document_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+            xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+            xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+            xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"
+            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+    <w:body>
+        <w:p><w:r><w:drawing>
+            <wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0"
+                       relativeHeight="1" behindDoc="1" locked="0"
+                       layoutInCell="1" allowOverlap="1">
+                <wp:simplePos x="0" y="0"/>
+                <wp:positionH relativeFrom="margin"><wp:posOffset>914400</wp:posOffset></wp:positionH>
+                <wp:positionV relativeFrom="paragraph"><wp:posOffset>457200</wp:posOffset></wp:positionV>
+                <wp:extent cx="4366365" cy="4366365"/>
+                <wp:wrapNone/>
+                <wp:docPr id="1" name="Picture 1"/>
+                <a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+                    <pic:pic>
+                        <pic:nvPicPr><pic:cNvPr id="1" name="image1.bmp"/><pic:cNvPicPr/></pic:nvPicPr>
+                        <pic:blipFill><a:blip r:embed="rIdImage1"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>
+                        <pic:spPr>
+                            <a:xfrm rot="20933656"><a:off x="0" y="0"/><a:ext cx="4366365" cy="4366365"/></a:xfrm>
+                            <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+                        </pic:spPr>
+                    </pic:pic>
+                </a:graphicData></a:graphic>
+            </wp:anchor>
+        </w:drawing></w:r></w:p>
+        <w:sectPr/>
+    </w:body>
+</w:document>"#;
+
+    let data = build_docx_with_custom_image_document(document_xml);
+    let parser = DocxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let floating = find_floating_images(&doc);
+
+    assert_eq!(floating.len(), 1);
+    assert_eq!(floating[0].image.rotation_deg, Some(349.0));
+
+    let source = crate::render::typst_gen::generate_typst(&doc)
+        .unwrap()
+        .source;
+    assert!(
+        source.contains("#move(dx:")
+            && source.contains("#rotate(349deg, origin: top + left)[#image("),
+        "floating picture rotation was not emitted: {source}"
+    );
+}
+
+#[test]
 fn test_docx_floating_image_top_and_bottom_wrap() {
     let bmp_data = make_test_bmp();
     let pic = docx_rs::Pic::new(&bmp_data)

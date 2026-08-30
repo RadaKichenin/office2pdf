@@ -1314,8 +1314,8 @@ impl ImageCrop {
 pub struct ImageData {
     pub data: Vec<u8>,
     /// Clockwise rotation in degrees about the image's centre: the picture's
-    /// own `a:xfrm/@rot` composed with the angle of any rotated ancestor
-    /// `<p:grpSp>`. `None` means upright (issues #682, #895).
+    /// own `a:xfrm/@rot`, composed with the angle of any rotated ancestor
+    /// `<p:grpSp>` in PPTX. `None` means upright (issues #682, #895, #1366).
     pub rotation_deg: Option<f64>,
     /// Mirror a fixed PPTX picture left-to-right across its frame's vertical
     /// axis. PPTX stores this as `a:xfrm/@flipH`; the frame is flipped after

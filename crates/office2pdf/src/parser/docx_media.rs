@@ -30,7 +30,7 @@ pub(super) fn extract_drawing_image(
     };
 
     let image_data = ImageData {
-        rotation_deg: None,
+        rotation_deg: (pic.rot != 0).then_some(f64::from(pic.rot)),
         flip_h: false,
         flip_v: false,
         data: asset.data.clone(),
