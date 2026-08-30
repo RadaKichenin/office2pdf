@@ -132,6 +132,37 @@ fn test_parse_streaming_multi_sheet() {
     assert_eq!(chunks.len(), 3, "Sheet1→2 chunks + Sheet2→1 chunk");
 }
 
+/// Streaming preserves the same pristine-paper provenance as batch parsing;
+/// every chunk of the reported workbook stays on A4 (issue #1382).
+#[test]
+fn test_parse_streaming_pristine_worksheet_uses_the_converter_a4_default() {
+    let data = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/xlsx/100-customers.xlsx"
+    ));
+    let (chunks, _warnings) = XlsxParser
+        .parse_streaming(data, &ConvertOptions::default(), 50)
+        .expect("the customer fixture should stream");
+
+    assert!(
+        !chunks.is_empty(),
+        "the populated sheet should produce chunks"
+    );
+    for chunk in &chunks {
+        for page in &chunk.pages {
+            let Page::Sheet(sheet) = page else {
+                panic!("an XLSX page should be a sheet page");
+            };
+            assert!(
+                (sheet.size.width - 595.28).abs() < 0.01
+                    && (sheet.size.height - 841.89).abs() < 0.01,
+                "expected A4, got {:?}",
+                sheet.size
+            );
+        }
+    }
+}
+
 /// An empty sheet produces no row chunk, but the workbook still prints one
 /// page, and it is the sheet's own — not the compiler's A4 default.
 ///

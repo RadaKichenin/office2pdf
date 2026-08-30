@@ -518,16 +518,56 @@ fn test_column_overflow_splits_to_second_page_like_excel() {
 
 // ----- Page size and margins defaults -----
 
-/// A sheet with no `<pageSetup>` element at all prints on the schema default,
-/// Letter — not on the renderer's A4 (issue #717).
+/// A worksheet with no print metadata follows the converter's A4 default.
 ///
-/// ECMA-376 gives `paperSize` a default of 1 (US Letter), and the attribute's
-/// defaults apply whether the element is absent or merely silent about paper.
-/// Confirmed against a native Excel export of a workbook whose first sheet
-/// writes only `<pageMargins>`: Excel prints it 612 x 792.
+/// The customer fixture carries neither `<pageSetup>` nor `<pageMargins>`.
+/// Excel-for-Mac therefore uses its current paper selection, A4 on the
+/// reference machine, instead of applying the OOXML default that belongs to
+/// an initialised but silent `<pageSetup>` (issue #1382).
 #[test]
-fn test_page_size_defaults_to_letter_when_page_setup_is_absent() {
+fn test_pristine_worksheet_uses_the_converter_a4_default() {
+    let data = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/xlsx/100-customers.xlsx"
+    ));
+    let (doc, _warnings) = XlsxParser
+        .parse(data, &ConvertOptions::default())
+        .expect("the customer fixture should parse");
+
+    assert!(!doc.pages.is_empty(), "the populated sheet should print");
+    for page in &doc.pages {
+        let Page::Sheet(sheet) = page else {
+            panic!("an XLSX page should be a sheet page");
+        };
+        assert!(
+            (sheet.size.width - 595.28).abs() < 0.01 && (sheet.size.height - 841.89).abs() < 0.01,
+            "expected A4, got {:?}",
+            sheet.size
+        );
+    }
+}
+
+/// A sheet whose `<pageMargins>` has initialised print state but which has no
+/// `<pageSetup>` prints on the schema default, Letter (issue #717).
+///
+/// Confirmed against a native Excel export of this exact shape: the margin
+/// element makes the absent paper setup an initialised default rather than the
+/// fully pristine application-default case from issue #1382.
+#[test]
+fn test_page_margins_without_page_setup_default_to_letter() {
     let data = build_xlsx_bytes("Sheet1", &[("A1", "Test")]);
+    let mut archive = zip::ZipArchive::new(Cursor::new(&data)).expect("readable workbook");
+    let mut worksheet_xml = String::new();
+    std::io::Read::read_to_string(
+        &mut archive
+            .by_name("xl/worksheets/sheet1.xml")
+            .expect("first worksheet part"),
+        &mut worksheet_xml,
+    )
+    .expect("worksheet XML");
+    assert!(worksheet_xml.contains("<pageMargins"));
+    assert!(!worksheet_xml.contains("<pageSetup"));
+
     let parser = XlsxParser;
     let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
 
