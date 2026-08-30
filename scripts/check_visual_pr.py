@@ -20,6 +20,9 @@ VISUAL_ROOT = Path("assets/bugfixes")
 EVIDENCE_PATH = re.compile(
     r"^assets/bugfixes/issue-(?P<issue>\d+)/(?P<name>gt|before|after|compare)\.(?P<ext>[^/]+)$"
 )
+LAYOUT_AUDIT_PATH = re.compile(
+    r"^assets/bugfixes/issue-(?P<issue>\d+)/layout-audit\.json$"
+)
 # Prose living under assets/bugfixes/ carries no pixels, so it is neither evidence
 # to validate nor a rendered change to audit. Without this the file documenting the
 # evidence convention could never be edited (#539). Image suffixes stay outside the
@@ -257,6 +260,132 @@ def remaining_issue_numbers(body: str) -> set[int]:
     return numbers
 
 
+def layout_audit_categories(report: object) -> dict[str, bool]:
+    """Return the material finding categories recorded by compare_layout JSON."""
+
+    if not isinstance(report, dict):
+        raise ValueError("the top level must be an object")
+    pages = report.get("pages")
+    gt_pages = report.get("gt_pages")
+    out_pages = report.get("out_pages")
+    if (
+        not isinstance(pages, list)
+        or type(gt_pages) is not int
+        or type(out_pages) is not int
+        or gt_pages <= 0
+        or out_pages <= 0
+    ):
+        raise ValueError("pages must be a list and page counts must be positive integers")
+    if len(pages) != min(gt_pages, out_pages):
+        raise ValueError("page vectors must cover every comparable page")
+
+    has_text_flow_findings = False
+    has_large_shifts = False
+    for page_number, page in enumerate(pages, start=1):
+        if not isinstance(page, dict):
+            raise ValueError(f"page {page_number} must be an object")
+        try:
+            line_counts = page["lines"]
+            wraps = page["wraps"]
+            reflow = page["reflow"]
+            instances = page["instances"]
+            counts = (
+                line_counts["missing"],
+                line_counts["extra"],
+                wraps["count"],
+                reflow["gt_lines"],
+                reflow["out_lines"],
+                instances["large_shift_count"],
+            )
+        except (KeyError, TypeError) as exc:
+            raise ValueError(f"page {page_number} is missing compare_layout fields") from exc
+        if any(type(count) is not int or count < 0 for count in counts):
+            raise ValueError(f"page {page_number} finding counts must be non-negative integers")
+
+        has_text_flow_findings |= any(counts[:5])
+        has_large_shifts |= counts[5] > 0
+
+    return {
+        "page count": gt_pages != out_pages,
+        "text flow": has_text_flow_findings,
+        "large shifts": has_large_shifts,
+    }
+
+
+def disposition_issue_numbers(value: str | None) -> set[int] | None:
+    if value == "Pass":
+        return set()
+    if not value or not re.fullmatch(r"#\d+(?:\s*,\s*#\d+)*", value):
+        return None
+    return {int(number) for number in re.findall(r"#(\d+)", value)}
+
+
+def validate_layout_audit(body: str, changed_paths: list[str], root: Path) -> list[str]:
+    """Tie machine-detected layout failures to classified open issue references."""
+
+    impact = extract_section(body, "## Visual impact")
+    if checked(impact, "No rendered PDF change"):
+        return []
+
+    audit = extract_section(body, "## Visual audit")
+    if field(audit, "Evidence mode") != "fix":
+        return []
+    issue_match = re.fullmatch(r"#(\d+)", field(audit, "Issue") or "")
+    if not issue_match:
+        return []
+
+    issue_number = issue_match.group(1)
+    expected_path = f"assets/bugfixes/issue-{issue_number}/layout-audit.json"
+    errors: list[str] = []
+    if field(audit, "Layout audit report") != expected_path:
+        errors.append(f"Visual audit > Layout audit report must be `{expected_path}`.")
+    if expected_path not in changed_paths:
+        errors.append(f"{expected_path}: layout audit report must be changed in this pull request.")
+    expected_after = f"assets/bugfixes/issue-{issue_number}/after.jpg"
+    if expected_after not in changed_paths:
+        errors.append(
+            f"{expected_path}: {expected_after} must be changed with the layout audit report."
+        )
+
+    report_path = root / expected_path
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        findings = layout_audit_categories(report)
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        errors.append(f"{expected_path}: invalid layout audit report: {exc}.")
+        return errors
+
+    remaining_issues = remaining_issue_numbers(body)
+    fields = {
+        "page count": "Layout audit page count",
+        "text flow": "Layout audit text flow",
+        "large shifts": "Layout audit large shifts",
+    }
+    for category, has_findings in findings.items():
+        field_name = fields[category]
+        disposition = disposition_issue_numbers(field(audit, field_name))
+        if has_findings:
+            if not disposition:
+                errors.append(
+                    f"Visual audit > {field_name} has {category} findings and requires "
+                    "one or more issue references."
+                )
+                continue
+            unclassified = disposition - remaining_issues
+            if unclassified:
+                references = ", ".join(f"#{number}" for number in sorted(unclassified))
+                errors.append(
+                    f"Visual audit > {field_name} references must also appear in a "
+                    f"Remaining deviation row: {references}."
+                )
+        elif disposition != set():
+            errors.append(
+                f"Visual audit > {field_name} has no findings and must be Pass."
+            )
+
+    return errors
+
+
 def validate_open_issues(issue_numbers: set[int], repository: str, token: str | None) -> list[str]:
     if not issue_numbers:
         return []
@@ -365,6 +494,8 @@ def validate_evidence(changed_paths: list[str], root: Path) -> list[str]:
     touched: dict[str, set[str]] = {}
 
     for raw_path in changed_paths:
+        if LAYOUT_AUDIT_PATH.fullmatch(raw_path):
+            continue
         if not is_visual_asset(raw_path):
             continue
         match = EVIDENCE_PATH.fullmatch(raw_path)
@@ -419,6 +550,7 @@ def main() -> int:
     changed_paths = git_changed_paths(args.base, args.head, args.root)
     errors = validate_pr_body(body, changed_paths)
     errors.extend(validate_evidence(changed_paths, args.root))
+    errors.extend(validate_layout_audit(body, changed_paths, args.root))
     errors.extend(
         validate_open_issues(
             remaining_issue_numbers(body),

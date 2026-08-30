@@ -1,5 +1,7 @@
 import io
+import json
 import re
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -9,6 +11,7 @@ from scripts.check_visual_pr import (
     INSPECTION_ITEMS,
     read_jpeg_info,
     validate_evidence,
+    validate_layout_audit,
     validate_open_issues,
     validate_pr_body,
 )
@@ -50,6 +53,10 @@ def visual_body(result_overrides=None, include_previews=True):
 - Page(s): 1
 - Renderer and DPI: pdftoppm, 150 DPI
 - Evidence mode: `fix`
+- Layout audit report: `assets/bugfixes/issue-186/layout-audit.json`
+- Layout audit page count: Pass
+- Layout audit text flow: Pass
+- Layout audit large shifts: Pass
 - New follow-up issues found in this audit: {follow_up_value}
 - Model vision findings: Full pages, pixel diff, and matched crops were opened; no untracked visual deviation remains.
 - GT: `assets/bugfixes/issue-186/gt.jpg`
@@ -67,6 +74,47 @@ def visual_body(result_overrides=None, include_previews=True):
 | --- | --- |
 {rows}
 """
+
+
+def layout_report(
+    *,
+    gt_pages=1,
+    out_pages=1,
+    missing=0,
+    extra=0,
+    wraps=0,
+    reflow_gt=0,
+    reflow_out=0,
+    large_shifts=0,
+):
+    return {
+        "pages": [
+            {
+                "lines": {"missing": missing, "extra": extra},
+                "wraps": {"count": wraps},
+                "reflow": {"gt_lines": reflow_gt, "out_lines": reflow_out},
+                "instances": {"large_shift_count": large_shifts},
+            }
+        ],
+        "gt_pages": gt_pages,
+        "out_pages": out_pages,
+    }
+
+
+def validate_report(body, report):
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        report_path = root / "assets/bugfixes/issue-186/layout-audit.json"
+        report_path.parent.mkdir(parents=True)
+        report_path.write_text(json.dumps(report), encoding="utf-8")
+        return validate_layout_audit(
+            body,
+            [
+                "assets/bugfixes/issue-186/after.jpg",
+                "assets/bugfixes/issue-186/layout-audit.json",
+            ],
+            root,
+        )
 
 
 def defect_body():
@@ -210,6 +258,19 @@ class PullRequestBodyTests(unittest.TestCase):
         errors = validate_pr_body(body, ["assets/bugfixes/issue-186/after.jpg"])
         self.assertTrue(any("assets/bugfixes changes require" in error for error in errors))
 
+    def test_layout_report_cannot_be_marked_non_visual(self):
+        body = """## Visual impact
+
+- [x] No rendered PDF change
+- [ ] Rendered PDF change or visual evidence added
+- Reason: Report only
+"""
+        errors = validate_pr_body(
+            body,
+            ["assets/bugfixes/issue-186/layout-audit.json"],
+        )
+        self.assertTrue(any("assets/bugfixes changes require" in error for error in errors))
+
     def test_evidence_documentation_is_not_a_rendered_change(self):
         body = """## Visual impact
 
@@ -218,6 +279,121 @@ class PullRequestBodyTests(unittest.TestCase):
 - Reason: Documents the evidence convention
 """
         self.assertEqual(validate_pr_body(body, ["assets/bugfixes/README.md"]), [])
+
+
+class LayoutAuditTests(unittest.TestCase):
+    def test_clean_report_accepts_pass_dispositions(self):
+        self.assertEqual(validate_report(visual_body(), layout_report()), [])
+
+    def test_page_count_failure_rejects_pass_disposition(self):
+        errors = validate_report(
+            visual_body(),
+            layout_report(gt_pages=2, out_pages=1),
+        )
+        self.assertTrue(any("page count" in error and "issue reference" in error for error in errors))
+
+    def test_text_flow_failure_rejects_none_disposition(self):
+        errors = validate_report(
+            visual_body(),
+            layout_report(missing=2, extra=5, wraps=1, reflow_gt=2, reflow_out=1),
+        )
+        self.assertTrue(any("text flow" in error and "issue reference" in error for error in errors))
+
+    def test_large_shift_failure_rejects_pass_disposition(self):
+        errors = validate_report(
+            visual_body(),
+            layout_report(large_shifts=5),
+        )
+        self.assertTrue(any("large shifts" in error and "issue reference" in error for error in errors))
+
+    def test_failed_categories_accept_remaining_issue_references(self):
+        body = visual_body(
+            {
+                "Position/size": "Remaining: #328",
+                "Line/paragraph spacing": "Remaining: #329",
+            }
+        )
+        body = body.replace(
+            "Layout audit text flow: Pass",
+            "Layout audit text flow: #329",
+        ).replace(
+            "Layout audit large shifts: Pass",
+            "Layout audit large shifts: #328, #329",
+        )
+        errors = validate_report(
+            body,
+            layout_report(missing=1, reflow_gt=2, reflow_out=1, large_shifts=3),
+        )
+        self.assertEqual(errors, [])
+
+    def test_failed_category_rejects_issue_absent_from_remaining_rows(self):
+        body = visual_body().replace(
+            "Layout audit large shifts: Pass",
+            "Layout audit large shifts: #328",
+        )
+        errors = validate_report(body, layout_report(large_shifts=1))
+        self.assertTrue(any("must also appear in a Remaining" in error for error in errors))
+
+    def test_clean_category_rejects_issue_disposition(self):
+        body = visual_body({"Position/size": "Remaining: #328"}).replace(
+            "Layout audit large shifts: Pass",
+            "Layout audit large shifts: #328",
+        )
+        errors = validate_report(body, layout_report())
+        self.assertTrue(any("has no findings and must be Pass" in error for error in errors))
+
+    def test_fix_audit_requires_changed_machine_report(self):
+        with tempfile.TemporaryDirectory() as directory:
+            errors = validate_layout_audit(visual_body(), [], Path(directory))
+        self.assertTrue(any("must be changed in this pull request" in error for error in errors))
+
+    def test_fix_audit_report_must_accompany_fresh_image_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            report_path = root / "assets/bugfixes/issue-186/layout-audit.json"
+            report_path.parent.mkdir(parents=True)
+            report_path.write_text(json.dumps(layout_report()), encoding="utf-8")
+            errors = validate_layout_audit(
+                visual_body(),
+                ["assets/bugfixes/issue-186/layout-audit.json"],
+                root,
+            )
+        self.assertTrue(any("after.jpg must be changed" in error for error in errors))
+
+    def test_fix_audit_report_requires_changed_after_image(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            report_path = root / "assets/bugfixes/issue-186/layout-audit.json"
+            report_path.parent.mkdir(parents=True)
+            report_path.write_text(json.dumps(layout_report()), encoding="utf-8")
+            errors = validate_layout_audit(
+                visual_body(),
+                [
+                    "assets/bugfixes/issue-186/gt.jpg",
+                    "assets/bugfixes/issue-186/layout-audit.json",
+                ],
+                root,
+            )
+        self.assertTrue(any("after.jpg must be changed" in error for error in errors))
+
+    def test_fix_audit_requires_issue_scoped_report_path(self):
+        body = visual_body().replace(
+            "assets/bugfixes/issue-186/layout-audit.json",
+            "assets/bugfixes/issue-999/layout-audit.json",
+        )
+        errors = validate_report(body, layout_report())
+        self.assertTrue(any("Layout audit report must be" in error for error in errors))
+
+    def test_malformed_report_is_rejected(self):
+        errors = validate_report(visual_body(), {"pages": "not-a-list"})
+        self.assertTrue(any("invalid layout audit report" in error for error in errors))
+
+    def test_incomplete_page_vectors_are_rejected(self):
+        errors = validate_report(
+            visual_body(),
+            layout_report(gt_pages=2, out_pages=2),
+        )
+        self.assertTrue(any("invalid layout audit report" in error for error in errors))
 
 
 class EvidenceTests(unittest.TestCase):
@@ -244,6 +420,15 @@ class EvidenceTests(unittest.TestCase):
 
     def test_evidence_readme_is_not_evidence(self):
         self.assertEqual(validate_evidence(["assets/bugfixes/README.md"], ROOT), [])
+
+    def test_layout_audit_report_is_validated_separately_from_jpegs(self):
+        self.assertEqual(
+            validate_evidence(
+                ["assets/bugfixes/issue-186/layout-audit.json"],
+                ROOT,
+            ),
+            [],
+        )
 
     def test_issue_directory_notes_are_not_evidence(self):
         self.assertEqual(
