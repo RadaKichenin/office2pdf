@@ -196,6 +196,61 @@ fn wpg_explicit_colors_outrank_zero_index_style_references() {
 }
 
 #[test]
+fn wpg_theme_aliases_fill_alpha_and_transforms_use_shared_color_resolution() {
+    let drawing = r#"<w:drawing><wp:anchor>
+<wp:positionH><wp:posOffset>0</wp:posOffset></wp:positionH>
+<wp:positionV><wp:posOffset>0</wp:posOffset></wp:positionV>
+<a:graphic><a:graphicData><wpg:wgp>
+<wps:wsp><wps:spPr>
+<a:xfrm><a:off x="0" y="0"/><a:ext cx="127000" cy="127000"/></a:xfrm>
+<a:prstGeom prst="rect"/>
+<a:solidFill><a:schemeClr val="tx1"><a:alpha val="16000"/></a:schemeClr></a:solidFill>
+<a:ln><a:noFill/></a:ln>
+</wps:spPr><wps:style><a:fillRef idx="0"><a:schemeClr val="accent1"/></a:fillRef></wps:style></wps:wsp>
+<wps:wsp><wps:spPr>
+<a:xfrm><a:off x="127000" y="0"/><a:ext cx="127000" cy="127000"/></a:xfrm>
+<a:prstGeom prst="rect"/>
+<a:solidFill><a:schemeClr val="bg1"><a:shade val="50000"/></a:schemeClr></a:solidFill>
+<a:ln><a:noFill/></a:ln>
+</wps:spPr><wps:style><a:fillRef idx="0"><a:schemeClr val="accent1"/></a:fillRef></wps:style></wps:wsp>
+</wpg:wgp></a:graphicData></a:graphic>
+</wp:anchor></w:drawing>"#;
+    let theme = r#"<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+<a:themeElements><a:clrScheme name="Test">
+<a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1>
+<a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1>
+<a:accent1><a:srgbClr val="B2C1D8"/></a:accent1>
+</a:clrScheme></a:themeElements>
+</a:theme>"#;
+
+    let records = scan_wpg_drawings(&body(drawing), Some(theme));
+    let children = &records[0].as_ref().expect("WPG drawing").children;
+    assert_eq!(children.len(), 2);
+
+    let translucent_text_slot = children[0].shape.as_ref().expect("tx1 shape");
+    assert_eq!(
+        translucent_text_slot.shape.fill,
+        Some(Color::new(0, 0, 0)),
+        "tx1 must resolve through the document theme's dk1 slot"
+    );
+    approx(
+        translucent_text_slot
+            .shape
+            .opacity
+            .expect("nested alpha must reach the shape"),
+        0.16,
+    );
+
+    let shaded_background_slot = children[1].shape.as_ref().expect("bg1 shape");
+    assert_eq!(
+        shaded_background_slot.shape.fill,
+        Some(Color::new(0xBC, 0xBC, 0xBC)),
+        "bg1 must resolve through lt1 before its shade transform is applied"
+    );
+    assert_eq!(shaded_background_slot.shape.opacity, None);
+}
+
+#[test]
 fn wpg_custom_geometry_preserves_normalized_subpaths() {
     let drawing = r#"<w:drawing><wp:anchor>
 <wp:positionH><wp:posOffset>0</wp:posOffset></wp:positionH>
