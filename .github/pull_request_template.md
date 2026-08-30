@@ -27,6 +27,10 @@
 - Page(s): <!-- compared page numbers -->
 - Renderer and DPI: <!-- e.g. pdftoppm, 150 DPI -->
 - Evidence mode: `fix` <!-- `fix` requires gt/before/after; `defect` requires compare -->
+- Layout audit report: `assets/bugfixes/issue-<!-- N -->/layout-audit.json` <!-- fix mode only -->
+- Layout audit page count: <!-- Pass, or #N references when the report differs -->
+- Layout audit text flow: <!-- Pass, or #N references for missing/extra/reflow or changed-wrap findings -->
+- Layout audit large shifts: <!-- Pass, or #N references for shifts above the report threshold -->
 - New follow-up issues found in this audit: <!-- #N, #N or None; create issues before completing the audit -->
 - Model vision findings: <!-- Describe what Codex/Claude saw in the full pages, diff, and crops. Numeric output is insufficient. -->
 - GT: `assets/bugfixes/issue-<!-- N -->/gt.jpg`

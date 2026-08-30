@@ -1722,6 +1722,48 @@ fn an_at_least_row_height_becomes_a_minimum_not_a_fixed_height() {
     }
 }
 
+/// A floating picture whose anchor stays inside its table cell expands an
+/// at-least row past the declared floor. The 343.81pt picture in #1368 sits in
+/// a 283.5pt row; dropping this constraint keeps the following RSVP row on the
+/// first page instead of paginating it like Word.
+#[test]
+fn an_in_cell_floating_picture_expands_an_at_least_row_floor() {
+    let cell_with_picture = |layout_in_cell: bool| {
+        let mut picture = docx_rs::Pic::new(&super::image_tests::make_test_bmp())
+            .size(1_270_000, 4_366_365)
+            .floating();
+        picture.layout_in_cell = layout_in_cell;
+        docx_rs::TableCell::new().add_paragraph(
+            docx_rs::Paragraph::new().add_run(docx_rs::Run::new().add_image(picture)),
+        )
+    };
+    let row = |layout_in_cell: bool| {
+        docx_rs::TableRow::new(vec![cell_with_picture(layout_in_cell)])
+            // 5,670 twips is the fixture's 283.5pt declared floor.
+            .row_height(5_670.0)
+    };
+    let table = docx_rs::Table::new(vec![row(true), row(false)]).set_grid(vec![4_000]);
+
+    let data = build_docx_with_table(table);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let parsed = first_table(&doc);
+
+    assert!(
+        parsed.rows[0]
+            .minimum_height
+            .is_some_and(|height| (height - 343.808).abs() < 0.01),
+        "layoutInCell=1 must raise the row floor to the picture height: {:?}",
+        parsed.rows[0].minimum_height
+    );
+    assert!(
+        parsed.rows[1]
+            .minimum_height
+            .is_some_and(|height| (height - 283.5).abs() < 0.01),
+        "layoutInCell=0 must leave the declared row floor alone: {:?}",
+        parsed.rows[1].minimum_height
+    );
+}
+
 /// `hRule="exact"` still pins the row, and states no floor on top of it.
 #[test]
 fn an_exact_row_height_stays_a_fixed_height() {

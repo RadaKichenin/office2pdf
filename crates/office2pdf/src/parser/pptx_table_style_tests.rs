@@ -53,6 +53,22 @@ fn test_parse_table_style_with_whole_table_fill() {
 }
 
 #[test]
+fn a_table_style_fill_preserves_its_alpha() {
+    let body = r#"<a:wholeTbl><a:tcStyle><a:fill><a:solidFill><a:schemeClr val="bg1"><a:lumMod val="95000"/><a:alpha val="35000"/></a:schemeClr></a:solidFill></a:fill></a:tcStyle></a:wholeTbl>"#;
+    let xml = make_table_style_xml(&[("translucent", body)]);
+    let theme = test_theme();
+    let color_map = test_color_map();
+
+    let styles = table_styles::parse_table_styles_xml(&xml, &theme, &color_map);
+
+    let whole = styles["translucent"]
+        .whole_table
+        .as_ref()
+        .expect("wholeTbl missing");
+    assert_eq!(whole.fill_alpha, Some(0.35));
+}
+
+#[test]
 fn test_parse_table_style_with_first_row_scheme_color() {
     // firstRow with accent1 fill and white bold text
     let body = concat!(
@@ -126,6 +142,7 @@ fn test_apply_table_style_first_row_gets_header_fill_and_text_color() {
         PptxTableStyleDef {
             first_row: Some(TableCellRegionStyle {
                 fill: Some(Color::new(0x44, 0x72, 0xC4)),
+                fill_alpha: Some(0.4),
                 text_color: Some(Color::new(255, 255, 255)),
                 text_bold: Some(true),
                 borders: Default::default(),
@@ -158,6 +175,7 @@ fn test_apply_table_style_first_row_gets_header_fill_and_text_color() {
                     row_span: 1,
                     border: None,
                     background: None,
+                    background_alpha: None,
                     data_bar: None,
                     icon_text: None,
                     icon_color: None,
@@ -184,6 +202,7 @@ fn test_apply_table_style_first_row_gets_header_fill_and_text_color() {
                     row_span: 1,
                     border: None,
                     background: None,
+                    background_alpha: None,
                     data_bar: None,
                     icon_text: None,
                     icon_color: None,
@@ -216,6 +235,7 @@ fn test_apply_table_style_first_row_gets_header_fill_and_text_color() {
     // Header row cell should have blue background and white bold text
     let header_cell = &table.rows[0].cells[0];
     assert_eq!(header_cell.background, Some(Color::new(0x44, 0x72, 0xC4)));
+    assert_eq!(header_cell.background_alpha, Some(0.4));
     let header_run = match &header_cell.content[0] {
         Block::Paragraph(p) => &p.runs[0],
         _ => panic!("Expected paragraph"),
@@ -236,6 +256,7 @@ fn test_apply_table_style_banded_rows_skip_first_row() {
         PptxTableStyleDef {
             band1_h: Some(TableCellRegionStyle {
                 fill: Some(Color::new(0xDD, 0xEE, 0xFF)),
+                fill_alpha: None,
                 text_color: None,
                 text_bold: None,
                 borders: Default::default(),
@@ -267,6 +288,7 @@ fn test_apply_table_style_banded_rows_skip_first_row() {
                 row_span: 1,
                 border: None,
                 background: None,
+                background_alpha: None,
                 data_bar: None,
                 icon_text: None,
                 icon_color: None,
@@ -328,6 +350,7 @@ fn test_apply_table_style_explicit_cell_fill_not_overridden() {
         PptxTableStyleDef {
             whole_table: Some(TableCellRegionStyle {
                 fill: Some(Color::new(0xAA, 0xBB, 0xCC)),
+                fill_alpha: None,
                 text_color: None,
                 text_bold: None,
                 borders: Default::default(),
@@ -357,6 +380,7 @@ fn test_apply_table_style_explicit_cell_fill_not_overridden() {
                 row_span: 1,
                 border: None,
                 background: Some(Color::new(0xFF, 0x00, 0x00)),
+                background_alpha: None,
                 data_bar: None,
                 icon_text: None,
                 icon_color: None,
@@ -409,6 +433,7 @@ fn test_apply_table_style_missing_style_id_is_noop() {
                 row_span: 1,
                 border: None,
                 background: None,
+                background_alpha: None,
                 data_bar: None,
                 icon_text: None,
                 icon_color: None,
@@ -1213,18 +1238,21 @@ fn a_region_stating_no_fill_falls_through_to_whole_table() {
         PptxTableStyleDef {
             whole_table: Some(TableCellRegionStyle {
                 fill: Some(whole_fill),
+                fill_alpha: None,
                 text_color: Some(Color::new(0x00, 0x00, 0x00)),
                 text_bold: None,
                 borders: Default::default(),
             }),
             first_row: Some(TableCellRegionStyle {
                 fill: Some(header_fill),
+                fill_alpha: None,
                 text_color: Some(Color::new(0xFF, 0xFF, 0xFF)),
                 text_bold: Some(true),
                 borders: Default::default(),
             }),
             band1_h: Some(TableCellRegionStyle {
                 fill: Some(band1_fill),
+                fill_alpha: None,
                 text_color: None,
                 text_bold: None,
                 borders: Default::default(),

@@ -150,7 +150,7 @@ fn test_generate_footer_with_compound_border_and_right_positioned_tab() {
 }
 
 #[test]
-fn test_generate_page_anchored_footer_frame_in_foreground() {
+fn a_page_anchored_footer_frame_paints_below_body_content() {
     use crate::ir::{
         FrameAnchor, HFInline, HeaderFooter, HeaderFooterFrame, HeaderFooterParagraph,
     };
@@ -198,12 +198,13 @@ fn test_generate_page_anchored_footer_frame_in_foreground() {
     })]);
 
     let output = generate_typst(&doc).unwrap();
-    assert!(output.source.contains("foreground: ["));
+    assert!(output.source.contains("background: ["));
     assert!(
         output
             .source
             .contains("#place(top + left, dx: 71.8pt, dy: 198.5pt)")
     );
+    assert!(!output.source.contains("foreground: ["));
     assert!(!output.source.contains("footer:"));
 }
 

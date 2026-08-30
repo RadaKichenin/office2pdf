@@ -42,6 +42,7 @@ struct PptxTableParser<'a> {
     is_vertical_merge: bool,
     cell_text_entries: Vec<PptxParagraphEntry>,
     cell_background: Option<Color>,
+    cell_background_alpha: Option<f64>,
     cell_fill_suppressed: bool,
     row_no_fill_cells: Vec<bool>,
     cell_vertical_align: Option<CellVerticalAlign>,
@@ -120,6 +121,7 @@ impl<'a> PptxTableParser<'a> {
             is_vertical_merge: false,
             cell_text_entries: Vec::new(),
             cell_background: None,
+            cell_background_alpha: None,
             cell_fill_suppressed: false,
             row_no_fill_cells: Vec::new(),
             cell_vertical_align: None,
@@ -256,6 +258,7 @@ impl<'a> PptxTableParser<'a> {
             }
             b"noFill" if self.is_in_table_cell_properties && !self.is_in_border_line => {
                 self.cell_background = None;
+                self.cell_background_alpha = None;
                 self.cell_fill_suppressed = true;
             }
             b"srgbClr" | b"schemeClr" | b"sysClr"
@@ -309,6 +312,7 @@ impl<'a> PptxTableParser<'a> {
             }
             b"noFill" if self.is_in_table_cell_properties && !self.is_in_border_line => {
                 self.cell_background = None;
+                self.cell_background_alpha = None;
                 self.cell_fill_suppressed = true;
             }
             b"pPr" if self.is_in_paragraph && !self.is_in_run => {
@@ -472,6 +476,7 @@ impl<'a> PptxTableParser<'a> {
         self.is_vertical_merge = get_attr_str(e, b"vMerge").is_some();
         self.cell_text_entries.clear();
         self.cell_background = None;
+        self.cell_background_alpha = None;
         self.cell_fill_suppressed = false;
         self.cell_vertical_align = None;
         self.cell_padding = None;
@@ -511,6 +516,7 @@ impl<'a> PptxTableParser<'a> {
                 None
             },
             background: self.cell_background.take(),
+            background_alpha: self.cell_background_alpha.take(),
             data_bar: None,
             icon_text: None,
             icon_color: None,
@@ -860,7 +866,10 @@ impl<'a> PptxTableParser<'a> {
     fn apply_resolved_color(&mut self, parsed: &ParsedColor) {
         let color: Option<Color> = parsed.color;
         match self.solid_fill_context {
-            SolidFillCtx::ShapeFill => self.cell_background = color,
+            SolidFillCtx::ShapeFill => {
+                self.cell_background = color;
+                self.cell_background_alpha = color.and(parsed.alpha);
+            }
             SolidFillCtx::LineFill => self.border_line_color = color,
             // A cell's run states its opacity the same way a slide shape's run
             // does, so it composites the same way (issue #1121).

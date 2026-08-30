@@ -1053,7 +1053,13 @@ fn generate_table_cell(
         if band.paint_model == TableBorderPaintModel::ExcelBoundaryBands
             && let Some(background) = &cell.background
         {
-            write_excel_background_bleed(out, background, inset, &band.vertical_extent);
+            write_excel_background_bleed(
+                out,
+                background,
+                cell.background_alpha,
+                inset,
+                &band.vertical_extent,
+            );
         }
         if let Some(border) = band.painted_border {
             match band.paint_model {
@@ -2599,6 +2605,7 @@ fn vertical_band_run(vertical_extent: &VerticalBandExtent, inset: Insets) -> (St
 fn write_excel_background_bleed(
     out: &mut String,
     background: &Color,
+    background_alpha: Option<f64>,
     inset: Insets,
     vertical_extent: &VerticalBandExtent,
 ) {
@@ -2608,7 +2615,7 @@ fn write_excel_background_bleed(
     );
     // The bottom strip runs the cell's full width plus the corner block it
     // shares with the right one, exactly as a horizontal border band does.
-    write_band_rect(
+    write_background_rect(
         out,
         "bottom + left",
         &format!("{}pt", format_geometry(-inset.left)),
@@ -2622,6 +2629,7 @@ fn write_excel_background_bleed(
         ),
         &bleed_with_overlap,
         background,
+        background_alpha,
     );
     // The right strip spans the row frame, and takes a concrete length for the
     // same reason [`VerticalBandExtent`] gives.
@@ -2630,7 +2638,7 @@ fn write_excel_background_bleed(
         format_geometry(inset.right + BAND_RUN_END_EXTENSION_PT)
     );
     let (height, twins): (String, bool) = vertical_band_run(vertical_extent, inset);
-    write_band_rect(
+    write_background_rect(
         out,
         "top + right",
         &dx,
@@ -2638,9 +2646,10 @@ fn write_excel_background_bleed(
         &bleed_with_overlap,
         &height,
         background,
+        background_alpha,
     );
     if twins {
-        write_band_rect(
+        write_background_rect(
             out,
             "bottom + right",
             &dx,
@@ -2651,8 +2660,30 @@ fn write_excel_background_bleed(
             &bleed_with_overlap,
             &height,
             background,
+            background_alpha,
         );
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn write_background_rect(
+    out: &mut String,
+    align: &str,
+    dx: &str,
+    dy: &str,
+    width: &str,
+    height: &str,
+    color: &Color,
+    alpha: Option<f64>,
+) {
+    let paint: String = alpha.map_or_else(
+        || rgb(color),
+        |alpha| rgb_with_alpha(color, (alpha.clamp(0.0, 1.0) * 255.0).round() as u8),
+    );
+    let _ = write!(
+        out,
+        "#place({align}, dx: {dx}, dy: {dy}, rect(width: {width}, height: {height}, fill: {paint}, stroke: none))",
+    );
 }
 
 /// Two same-length rules: one hanging from the row's top boundary, one rising
@@ -2733,7 +2764,16 @@ fn write_cell_params(
         write_param(out, &mut first, &format!("rowspan: {}", cell.row_span));
     }
     if let Some(ref bg) = cell.background {
-        write_param(out, &mut first, &format_color(bg));
+        let fill: String = cell.background_alpha.map_or_else(
+            || format_color(bg),
+            |alpha| {
+                format!(
+                    "fill: {}",
+                    rgb_with_alpha(bg, (alpha.clamp(0.0, 1.0) * 255.0).round() as u8)
+                )
+            },
+        );
+        write_param(out, &mut first, &fill);
     }
     let inset: Insets = cell_inset_with_border(cell, default_cell_padding);
     if cell.padding.is_some() || cell.border.is_some() {

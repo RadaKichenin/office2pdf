@@ -563,6 +563,29 @@ fn test_table_with_background_color() {
 }
 
 #[test]
+fn a_translucent_table_cell_fill_reaches_typst() {
+    let cell = TableCell {
+        background: Some(Color::new(200, 200, 200)),
+        background_alpha: Some(0.5),
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            minimum_height: None,
+            cells: vec![cell],
+            height: Some(20.0),
+        }],
+        column_widths: vec![100.0],
+        ..Table::default()
+    };
+    let source = generate_typst(&make_doc(vec![make_flow_page(vec![Block::Table(table)])]))
+        .unwrap()
+        .source;
+
+    assert!(source.contains("fill: rgb(200, 200, 200, 128)"), "{source}");
+}
+
+#[test]
 fn test_table_with_cell_borders() {
     let bordered_cell = TableCell {
         content: vec![Block::Paragraph(Paragraph {
