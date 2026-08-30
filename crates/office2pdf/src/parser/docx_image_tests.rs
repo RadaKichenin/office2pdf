@@ -1,7 +1,7 @@
 use super::*;
 use std::io::{Cursor, Read};
 
-fn make_test_bmp() -> Vec<u8> {
+pub(super) fn make_test_bmp() -> Vec<u8> {
     let mut bmp = Vec::new();
     bmp.extend_from_slice(b"BM");
     bmp.extend_from_slice(&58u32.to_le_bytes());
