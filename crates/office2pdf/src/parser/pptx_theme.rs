@@ -247,6 +247,8 @@ pub(super) fn parse_theme_xml(xml: &str) -> ThemeData {
 
                 if name == "latin"
                     && let Some(typeface) = get_attr_str(e, b"typeface")
+                        .map(|typeface| typeface.trim().to_string())
+                        .filter(|typeface| !typeface.is_empty())
                 {
                     if in_major_font {
                         theme.major_font = Some(typeface);
@@ -1070,6 +1072,7 @@ pub(super) fn parse_effect_list(
 
 /// Resolve a font typeface, substituting theme font references.
 pub(super) fn resolve_theme_font(typeface: &str, theme: &ThemeData) -> String {
+    let typeface = typeface.trim();
     match typeface {
         "+mj-lt" => theme
             .major_font

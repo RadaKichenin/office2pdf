@@ -25,6 +25,7 @@ pub(super) struct RegionBorders {
 pub(super) struct TableCellRegionStyle {
     pub(super) fill: Option<Color>,
     pub(super) fill_alpha: Option<f64>,
+    pub(super) text_font_family: Option<String>,
     pub(super) text_color: Option<Color>,
     pub(super) text_bold: Option<bool>,
     pub(super) borders: RegionBorders,
@@ -238,7 +239,10 @@ fn parse_region_style(
                 }
                 b"fill" if in_tc_style && !in_tc_bdr => in_fill = true,
                 b"solidFill" if in_fill || (in_tc_style && !in_tc_bdr) => in_solid_fill = true,
-                b"fontRef" if in_tc_tx_style => in_font_ref = true,
+                b"fontRef" if in_tc_tx_style => {
+                    in_font_ref = true;
+                    style.text_font_family = table_style_font_ref(e, theme);
+                }
                 b"srgbClr" | b"schemeClr" | b"sysClr" if current_border_side.is_some() => {
                     let parsed: ParsedColor = parse_color_from_start(reader, e, theme, color_map);
                     if let (Some((side, width)), Some(color)) =
@@ -297,6 +301,9 @@ fn parse_region_style(
                         style.text_bold = Some(bold == "on");
                     }
                 }
+                b"fontRef" if in_tc_tx_style => {
+                    style.text_font_family = table_style_font_ref(e, theme);
+                }
                 _ => {}
             },
             Ok(Event::End(ref e)) => {
@@ -328,6 +335,19 @@ fn parse_region_style(
 
     style.text_color = direct_text_color.or(font_ref_color);
     style
+}
+
+/// Resolve the theme font named by a table style's `a:fontRef`.
+///
+/// Table text styles use `major`/`minor` here rather than the `+mj-lt` and
+/// `+mn-lt` placeholders used by run properties. Unknown values leave the
+/// family unset so the table's normal minor-font fallback can decide later.
+fn table_style_font_ref(element: &BytesStart<'_>, theme: &ThemeData) -> Option<String> {
+    match get_attr_str(element, b"idx")?.trim() {
+        "major" => theme.major_font.clone(),
+        "minor" => theme.minor_font.clone(),
+        _ => None,
+    }
 }
 
 /// Width in points of the theme `lnStyleLst` entry an `<a:lnRef idx="N">`
@@ -582,11 +602,17 @@ fn apply_region_to_cell(cell: &mut TableCell, region: &TableCellRegionStyle, sup
         cell.background_alpha = region.fill_alpha;
     }
 
-    // Apply text color and bold to all runs that don't have explicit overrides
-    if region.text_color.is_some() || region.text_bold.is_some() {
+    // Apply text properties to all runs that don't have explicit overrides.
+    if region.text_font_family.is_some()
+        || region.text_color.is_some()
+        || region.text_bold.is_some()
+    {
         for block in &mut cell.content {
             if let Block::Paragraph(paragraph) = block {
                 for run in &mut paragraph.runs {
+                    if region.text_font_family.is_some() && run.style.font_family.is_none() {
+                        run.style.font_family = region.text_font_family.clone();
+                    }
                     if region.text_color.is_some() && run.style.color.is_none() {
                         run.style.color = region.text_color;
                     }
@@ -668,6 +694,7 @@ fn medium_style_2_def(accent: Color, lt1: Color, dk1: Color) -> PptxTableStyleDe
     let solid_region = |fill: Color| TableCellRegionStyle {
         fill: Some(fill),
         fill_alpha: None,
+        text_font_family: None,
         text_color: Some(lt1),
         text_bold: None,
         borders: RegionBorders::default(),
@@ -677,6 +704,7 @@ fn medium_style_2_def(accent: Color, lt1: Color, dk1: Color) -> PptxTableStyleDe
         whole_table: Some(TableCellRegionStyle {
             fill: Some(tint_color(accent, 0.1)),
             fill_alpha: None,
+            text_font_family: None,
             text_color: Some(dk1),
             text_bold: None,
             borders: RegionBorders {
