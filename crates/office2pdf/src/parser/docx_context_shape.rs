@@ -19,13 +19,15 @@ use docx_rs::FromXML;
 use quick_xml::events::{BytesStart, Event};
 
 use crate::ir::{
-    ArrowHead, BorderLineStyle, BorderSide, Color, FloatingShape, Insets, LineJoin, Shape,
-    ShapeKind, Subpath, TextBoxVerticalAlign, WrapMode,
+    ArrowHead, BorderLineStyle, BorderSide, Color, FloatingShape, GradientFill, Insets, LineJoin,
+    Shape, ShapeKind, Subpath, TextBoxVerticalAlign, WrapMode,
 };
 use crate::parser::pptx::custom_geometry::parse_custom_geometry;
 use crate::parser::pptx::geometry_guides::ShapeExtent;
 use crate::parser::units::emu_to_pt;
 use crate::parser::xml_util::parse_hex_color;
+
+use super::super::parse_docx_shape_gradient;
 
 #[derive(Debug, Clone)]
 pub(in super::super) struct WpgShapeInfo {
@@ -145,6 +147,7 @@ struct ShapeBuilder {
     head_arrow: bool,
     tail_arrow: bool,
     custom_subpaths: Vec<Subpath>,
+    gradient_fill: Option<GradientFill>,
 }
 
 impl ShapeBuilder {
@@ -171,14 +174,17 @@ impl ShapeBuilder {
         let fill: Option<Color> = if self.fill_none {
             None
         } else {
-            self.fill_color
+            self.gradient_fill
+                .as_ref()
+                .and_then(|gradient| gradient.stops.first().map(|stop| stop.color))
+                .or(self.fill_color)
         };
         let stroke: Option<BorderSide> = self.resolve_stroke();
 
         // A shape with neither fill, stroke nor a line geometry would render as
         // nothing — skip it so we stay in sync with the renderer.
         let is_line: bool = matches!(kind, ShapeKind::Line { .. });
-        if fill.is_none() && stroke.is_none() && !is_line {
+        if fill.is_none() && self.gradient_fill.is_none() && stroke.is_none() && !is_line {
             return None;
         }
 
@@ -186,7 +192,7 @@ impl ShapeBuilder {
             shape: Shape {
                 kind,
                 fill,
-                gradient_fill: None,
+                gradient_fill: self.gradient_fill,
                 pattern_fill: None,
                 stroke,
                 rotation_deg: None,
@@ -756,11 +762,14 @@ fn scan_wpg_drawings(xml: &str, theme_xml: Option<&str>) -> Vec<Option<WpgDrawin
             }
             Ok(Event::Start(ref element)) => {
                 if let Some(drawing) = drawings.last_mut() {
-                    if element.local_name().as_ref() == b"custGeom"
-                        && consume_wpg_custom_geometry(drawing, &mut reader)
-                    {
-                        // The shared parser consumes through `</a:custGeom>`.
-                    } else {
+                    let consumed = match element.local_name().as_ref() {
+                        b"custGeom" => consume_wpg_custom_geometry(drawing, &mut reader),
+                        b"gradFill" => {
+                            consume_wpg_gradient_fill(drawing, &mut reader, &theme_colors)
+                        }
+                        _ => false,
+                    };
+                    if !consumed {
                         handle_wpg_start(
                             drawing,
                             element,
@@ -830,6 +839,22 @@ fn consume_wpg_custom_geometry(
     if !subpaths.is_empty() {
         child.shape.custom_subpaths = subpaths;
     }
+    true
+}
+
+fn consume_wpg_gradient_fill(
+    drawing: &mut WpgDrawingBuilder,
+    reader: &mut quick_xml::Reader<&[u8]>,
+    theme_colors: &HashMap<String, Color>,
+) -> bool {
+    let Some(child) = drawing.child.as_mut() else {
+        return false;
+    };
+    if child.shape_properties_depth == 0 || child.line_depth > 0 {
+        return false;
+    }
+
+    child.shape.gradient_fill = parse_docx_shape_gradient(reader, theme_colors);
     true
 }
 

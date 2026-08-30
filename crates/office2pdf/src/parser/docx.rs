@@ -73,6 +73,8 @@ mod tables;
 #[path = "docx_text.rs"]
 mod text;
 
+pub(super) use sections::parse_docx_shape_gradient;
+
 /// Parser for DOCX (Office Open XML Word) documents.
 pub struct DocxParser;
 
