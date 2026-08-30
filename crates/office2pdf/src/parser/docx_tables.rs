@@ -5,7 +5,7 @@ use super::{
     TableRow, convert_paragraph_blocks, parse_hex_color,
 };
 use crate::ir::TableBorderPaintModel;
-use crate::parser::units::twips_to_pt;
+use crate::parser::units::{emu_to_pt, twips_to_pt};
 
 #[derive(Clone)]
 struct RawCell {
@@ -252,13 +252,14 @@ fn extract_raw_rows(
             .as_ref()
             .and_then(|j| j.get("heightRule"))
             .and_then(|v| v.as_str());
-        let (height, minimum_height): (Option<f64>, Option<f64>) = match height_rule {
+        let (height, mut minimum_height): (Option<f64>, Option<f64>) = match height_rule {
             Some("exact") => (declared_height, None),
             Some("auto") => (None, None),
             _ => (None, declared_height),
         };
         let mut cells: Vec<RawCell> = Vec::new();
         let mut col_index: usize = 0;
+        let mut in_cell_picture_floor: Option<f64> = None;
 
         for row_child in &row.cells {
             let docx_rs::TableRowChild::TableCell(cell) = row_child;
@@ -278,6 +279,11 @@ fn extract_raw_rows(
             let preferred_width = extract_table_cell_width(prop_json.as_ref());
 
             let content = extract_cell_content(cell, images, hyperlinks, style_map, ctx, depth);
+            if let Some(picture_height) = in_cell_floating_picture_height(cell) {
+                in_cell_picture_floor = Some(
+                    in_cell_picture_floor.map_or(picture_height, |floor| floor.max(picture_height)),
+                );
+            }
             let border = prop_json
                 .as_ref()
                 .and_then(|j| j.get("borders"))
@@ -315,6 +321,19 @@ fn extract_raw_rows(
             col_index += grid_span as usize;
         }
 
+        // A floating picture with `wp:anchor/@layoutInCell="1"` still belongs
+        // to its table cell's layout boundary. For an auto/at-least row Word
+        // therefore grows the track to the picture's `wp:extent/@cy`; treating
+        // it as a zero-height overlay collapsed #1368's 343.81pt picture back
+        // to the declared 283.5pt floor and kept the following row on page 1.
+        // An exact row remains exact and may let the drawing overhang.
+        if height.is_none()
+            && let Some(picture_floor) = in_cell_picture_floor
+        {
+            minimum_height =
+                Some(minimum_height.map_or(picture_floor, |floor| floor.max(picture_floor)));
+        }
+
         align_top_oriented_cells_to_row_vertical_margins(&mut cells, default_cell_padding);
 
         raw_rows.push(RawRow {
@@ -325,6 +344,76 @@ fn extract_raw_rows(
     }
 
     raw_rows
+}
+
+fn in_cell_floating_picture_height(cell: &docx_rs::TableCell) -> Option<f64> {
+    cell.children
+        .iter()
+        .filter_map(|content| match content {
+            docx_rs::TableCellContent::Paragraph(paragraph) => {
+                paragraph_in_cell_floating_picture_height(paragraph)
+            }
+            docx_rs::TableCellContent::StructuredDataTag(sdt) => {
+                sdt_in_cell_floating_picture_height(sdt)
+            }
+            // A nested table calculates the constraint on its own rows.
+            _ => None,
+        })
+        .reduce(f64::max)
+}
+
+fn sdt_in_cell_floating_picture_height(sdt: &docx_rs::StructuredDataTag) -> Option<f64> {
+    sdt.children
+        .iter()
+        .filter_map(|child| match child {
+            docx_rs::StructuredDataTagChild::Run(run) => run_in_cell_floating_picture_height(run),
+            docx_rs::StructuredDataTagChild::Paragraph(paragraph) => {
+                paragraph_in_cell_floating_picture_height(paragraph)
+            }
+            docx_rs::StructuredDataTagChild::StructuredDataTag(nested) => {
+                sdt_in_cell_floating_picture_height(nested)
+            }
+            // A nested table calculates the constraint on its own rows.
+            _ => None,
+        })
+        .reduce(f64::max)
+}
+
+fn paragraph_in_cell_floating_picture_height(paragraph: &docx_rs::Paragraph) -> Option<f64> {
+    super::flatten_tracked_changes(&paragraph.children)
+        .into_iter()
+        .filter_map(|item| match item {
+            super::ParagraphItem::Run(run) => run_in_cell_floating_picture_height(run),
+            super::ParagraphItem::Hyperlink(hyperlink) => hyperlink
+                .children
+                .iter()
+                .filter_map(|child| match child {
+                    docx_rs::ParagraphChild::Run(run) => run_in_cell_floating_picture_height(run),
+                    _ => None,
+                })
+                .reduce(f64::max),
+            _ => None,
+        })
+        .reduce(f64::max)
+}
+
+fn run_in_cell_floating_picture_height(run: &docx_rs::Run) -> Option<f64> {
+    run.children
+        .iter()
+        .filter_map(|child| match child {
+            docx_rs::RunChild::Drawing(drawing) => match drawing.data.as_ref() {
+                Some(docx_rs::DrawingData::Pic(picture))
+                    if picture.position_type == docx_rs::DrawingPositionType::Anchor
+                        && picture.layout_in_cell
+                        && picture.size.1 > 0 =>
+                {
+                    Some(emu_to_pt(picture.size.1))
+                }
+                _ => None,
+            },
+            _ => None,
+        })
+        .reduce(f64::max)
 }
 
 fn align_top_oriented_cells_to_row_vertical_margins(
