@@ -69,16 +69,32 @@ def line_of(text: str, x0: float, baseline_y: float, pitch: float = 6.0) -> str:
     return text_op(words, baseline_y)
 
 
-def rect_op(x0: float, y0: float, x1: float, y1: float, kind: str = "fill_path") -> str:
+def rect_op(
+    x0: float,
+    y0: float,
+    x1: float,
+    y1: float,
+    kind: str = "fill_path",
+    color: str = ".8 .8 .8",
+    alpha: float = 1.0,
+) -> str:
     extra = ' winding="nonzero"' if kind == "fill_path" else ' linewidth="1"'
     return (
-        f'<{kind}{extra} colorspace="ICCBased(RGB,sRGB IEC61966-2.1)" color=".8 .8 .8" '
-        f'ri="1" bp="1" op="0" opm="0" transform="1 0 0 -1 0 841.92">\n'
+        f'<{kind}{extra} colorspace="ICCBased(RGB,sRGB IEC61966-2.1)" color="{color}" '
+        f'alpha="{alpha}" ri="1" bp="1" op="0" opm="0" '
+        f'transform="1 0 0 -1 0 841.92">\n'
         f'<moveto x="{x0}" y="{841.92 - y0}"/>\n'
         f'<lineto x="{x1}" y="{841.92 - y0}"/>\n'
         f'<lineto x="{x1}" y="{841.92 - y1}"/>\n'
         f'<lineto x="{x0}" y="{841.92 - y1}"/>\n'
         f"<closepath/>\n</{kind}>"
+    )
+
+
+def image_op() -> str:
+    return (
+        '<fill_image alpha="1" colorspace="DeviceRGB" ri="1" bp="1" op="0" opm="0" '
+        'transform="595.2 0 0 841.92 0 0" width="1280" height="720"/>'
     )
 
 
@@ -288,6 +304,74 @@ class MatchAndDiffTest(unittest.TestCase):
             [120, -27],
         )
         self.assertEqual(compare_layout.audit_failures([vector]), 2)
+
+    def test_same_text_hidden_by_later_image_reports_visibility_mismatch(self) -> None:
+        text = line_of("Slide9", 72, 100)
+        gt = "\n".join([text, image_op()])
+        out = "\n".join([image_op(), text])
+
+        vector = self.diff(gt, out)
+
+        self.assertEqual(vector["lines"]["matched"], 1)
+        self.assertEqual(vector["visibility"]["mismatch_count"], 1)
+        self.assertEqual(
+            vector["visibility"]["mismatches"][0],
+            {"label": "Slide9", "gt": "hidden", "out": "painted"},
+        )
+        self.assertEqual(compare_layout.audit_failures([vector]), 1)
+
+    def test_same_color_text_on_flat_fill_reports_low_contrast(self) -> None:
+        background = rect_op(0, 0, 595.2, 841.92, color=".8 .8 .8")
+        gt = "\n".join(
+            [
+                background,
+                line_of("Muted", 72, 100).replace(
+                    'color="0 0 0"', 'color=".8 .8 .8"'
+                ),
+            ]
+        )
+        out = "\n".join([background, line_of("Muted", 72, 100)])
+
+        vector = self.diff(gt, out)
+
+        self.assertEqual(vector["visibility"]["mismatch_count"], 1)
+        self.assertEqual(
+            vector["visibility"]["mismatches"][0],
+            {"label": "Muted", "gt": "low_contrast", "out": "painted"},
+        )
+
+    def test_later_opaque_rectangle_hides_text(self) -> None:
+        text = line_of("Covered", 72, 100)
+        cover = rect_op(60, 80, 150, 110)
+
+        vector = self.diff("\n".join([text, cover]), "\n".join([cover, text]))
+
+        self.assertEqual(vector["visibility"]["mismatch_count"], 1)
+        self.assertEqual(vector["visibility"]["mismatches"][0]["gt"], "hidden")
+
+    def test_later_translucent_rectangle_does_not_hide_text(self) -> None:
+        text = line_of("Tinted", 72, 100)
+        tint = rect_op(60, 80, 150, 110, alpha=0.5)
+
+        vector = self.diff("\n".join([text, tint]), "\n".join([tint, text]))
+
+        self.assertEqual(vector["visibility"]["mismatch_count"], 0)
+
+    def test_minor_text_color_substitution_is_not_a_visibility_mismatch(self) -> None:
+        background = rect_op(0, 0, 595.2, 841.92, color="1 1 1")
+        gt = "\n".join([background, line_of("Stable", 72, 100)])
+        out = "\n".join(
+            [
+                background,
+                line_of("Stable", 72, 100).replace(
+                    'color="0 0 0"', 'color=".02 .02 .02"'
+                ),
+            ]
+        )
+
+        vector = self.diff(gt, out)
+
+        self.assertEqual(vector["visibility"]["mismatch_count"], 0)
 
 
 class ReadingTest(unittest.TestCase):

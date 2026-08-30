@@ -121,7 +121,7 @@ This project follows a **6-month rolling MSRV policy** (aligned with [tokio](htt
 
 ## Visual Comparison Workflow
 
-- For visual bug fixes tied to an issue, keep `assets/bugfixes/issue-<number>/gt.jpg`, `before.jpg`, `after.jpg`, and `layout-audit.json` from the same fixture, page set, renderer, and resolution; `before.jpg` captures the pre-fix output, while `after.jpg` and the layout report use the current output. Every fix PR must change `after.jpg` and `layout-audit.json`. Generate the report from the same GT and current-output PDFs used for `gt.jpg` and `after.jpg` with `compare_layout.py --json --audit`; classify page-count, missing/extra/reflow or changed-wrap, and large-shift failures with open issues in the PR's `Visual audit` category fields and matching `Remaining:` rows. Use progressive JPEG quality 86 with metadata stripped, preserve the source pixel dimensions, and verify text and images remain legible for direct GitHub links. Strip first, then re-set the density (`-strip -density 150 -units PixelsPerInch`): the contract check rejects evidence recording under 150 DPI, which stripping alone removes.
+- For visual bug fixes tied to an issue, keep `assets/bugfixes/issue-<number>/gt.jpg`, `before.jpg`, `after.jpg`, and `layout-audit.json` from the same fixture, page set, renderer, and resolution; `before.jpg` captures the pre-fix output, while `after.jpg` and the layout report use the current output. Every fix PR must change `after.jpg` and `layout-audit.json`. Generate the report from the same GT and current-output PDFs used for `gt.jpg` and `after.jpg` with `compare_layout.py --json --audit`; classify page-count, missing/extra/reflow or changed-wrap, painted-visibility, and large-shift failures with open issues in the PR's `Visual audit` category fields and matching `Remaining:` rows. Use progressive JPEG quality 86 with metadata stripped, preserve the source pixel dimensions, and verify text and images remain legible for direct GitHub links. Strip first, then re-set the density (`-strip -density 150 -units PixelsPerInch`): the contract check rejects evidence recording under 150 DPI, which stripping alone removes.
 - **When filing a visual defect issue, attach a side-by-side image (GT left, office2pdf output at filing time right)** rendered from the same page and resolution, committed as `assets/bugfixes/issue-<number>/compare.jpg` (same JPEG rules as above) and embedded in the issue body via a commit-pinned raw URL. For classified fixtures, confirm with the user before publishing the image; the surrounding issue text must still follow the Confidentiality rules.
 
 ### Visual check discipline (harness rules)
@@ -145,8 +145,9 @@ just the pages a screenshot shows.
 2. **Run all four axes**, not one: `compare_layout.py` (geometry, per page),
    `compare_text_layer.py` (what a reader can select), `compare_render.py`
    (colour and pixels), and a page-by-page visual at >=150 DPI.
-   Run the geometry axis with `--audit`; every large text-instance shift it
-   names must be fixed or recorded as a remaining deviation with an open issue.
+   Run the geometry axis with `--audit`; every large text-instance shift or
+   painted-visibility mismatch it names must be fixed or recorded as a
+   remaining deviation with an open issue.
    Do not classify the pixel diff as antialiasing while this audit is failing.
    Source/XML inspection and numeric reports only route attention; they never
    constitute a visual pass. The acting Codex or Claude agent must use its image
@@ -181,8 +182,12 @@ producing the files is not itself inspection.
 
 For layout defects, run `python3 scripts/compare_layout.py <GT.pdf> <output.pdf> --audit`
 first: it matches text lines from `mutool` traces and reports missing/extra/
-re-wrapped lines, spatial-anchor dy, pitch and width drift, and a rect census,
-with GT noise floors built in (`--noise-floor 0.12` Word, `0.5` Excel).
+re-wrapped lines, spatial-anchor dy, pitch and width drift, painted visibility,
+and a rect census, with GT noise floors built in (`--noise-floor 0.12` Word,
+`0.5` Excel). Painted visibility uses trace order and flat-background contrast:
+text covered by a later opaque image/rectangle is `hidden`, same-colour text on
+an opaque flat fill is `low_contrast`, and text that remains visible is
+`painted`.
 Horizontal text uses its true baseline; a rotated or skewed `fill_text` stays
 one visual run and uses the minimum fully transformed glyph x/y as its
 comparable anchor. Its numbers are assertable; pixel counts are only a
@@ -190,8 +195,9 @@ tripwire. Repeated strings are matched as separate spatial instances: a chart
 title and legend both named `Sales` appear as `Sales [1/2]` and `Sales [2/2]`,
 with their own `dx`/`dy`. The audit exits nonzero when any instance moves more
 than 5pt (override with `--large-shift PT` for a justified fixture-specific
-threshold); inspect and track every named instance before marking alignment as
-matching.
+threshold), or when a matched line changes between painted and hidden/low
+contrast; inspect and track every named instance before marking alignment or
+text flow as matching.
 
 **Its width column measures origin-to-origin and so counts invisible trailing
 glyphs.** Word emits a trailing space after a paragraph's last character where

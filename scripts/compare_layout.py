@@ -11,6 +11,9 @@ lines by their text, and reports typed deviations:
   pitch deltas between consecutive matched lines. Horizontal text uses its
   true baseline; a rotated or skewed `fill_text` stays one visual run and uses
   the minimum fully transformed glyph x/y as its comparable anchor;
+- painted visibility from trace order: text covered by a later opaque image or
+  rectangular fill, or painted with the same colour as a flat background, is
+  distinguished from text that remains visibly painted;
 - a fill/stroke rect census with nearest-match position deltas.
 
 A noise floor (default 0.12pt — native Word exports quantise coordinates to a
@@ -51,14 +54,20 @@ GLYPH_RE = re.compile(
     r'<g unicode="([^"]*)" glyph="[^"]*" x="([-0-9.e]+)" y="([-0-9.e]+)" adv="([-0-9.e]+)"'
 )
 PATH_RE = re.compile(r"<(fill_path|stroke_path)\b([^>]*)>(.*?)</\1>", re.S)
+FILL_IMAGE_RE = re.compile(r"<fill_image\b([^>]*)/>", re.S)
 POINT_RE = re.compile(r'<(?:moveto|lineto|curveto)[^>]*x="([-0-9.e]+)" y="([-0-9.e]+)"')
 TRANSFORM_RE = re.compile(
     r'transform="([-0-9.e]+) ([-0-9.e]+) ([-0-9.e]+) ([-0-9.e]+) ([-0-9.e]+) ([-0-9.e]+)"'
 )
 TRM_RE = re.compile(r'trm="([-0-9.e]+) ')
+ALPHA_RE = re.compile(r'alpha="([-0-9.e]+)"')
+COLOR_RE = re.compile(r'color="([-0-9.e ]+)"')
 
 LINE_Y_TOLERANCE_PT = 0.6
 RECT_MATCH_RADIUS_PT = 6.0
+OPAQUE_ALPHA = 0.98
+INVISIBLE_ALPHA = 0.02
+LOW_CONTRAST_CHANNEL_DELTA = 0.04
 XML_ESCAPES = {"&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&apos;": "'"}
 
 
@@ -69,6 +78,23 @@ class Glyph:
     unicode: str
     size: float
     advance: float
+    paint_index: int = -1
+    color: tuple[float, float, float] | None = None
+    alpha: float = 1.0
+
+
+@dataclass(frozen=True)
+class Paint:
+    """One later operation that can determine whether text remains visible."""
+
+    index: int
+    kind: str  # "flat" | "image"
+    x0: float
+    y0: float
+    x1: float
+    y1: float
+    alpha: float
+    color: tuple[float, float, float] | None = None
 
 
 @dataclass(frozen=True)
@@ -88,6 +114,7 @@ class Rect:
 class Line:
     y: float
     glyphs: list[Glyph] = field(default_factory=list)
+    visibility: str = "painted"
 
     @property
     def text(self) -> str:
@@ -115,6 +142,7 @@ class Line:
 class PageLayout:
     lines: list[Line]
     rects: list[Rect]
+    paints: list[Paint] = field(default_factory=list)
 
 
 def unescape(text: str) -> str:
@@ -130,17 +158,141 @@ def parse_transform(attrs: str) -> tuple[float, float, float, float, float, floa
     return tuple(float(value) for value in match.groups())  # type: ignore[return-value]
 
 
+def parse_alpha(attrs: str) -> float:
+    match = ALPHA_RE.search(attrs)
+    return float(match.group(1)) if match else 1.0
+
+
+def parse_rgb(attrs: str) -> tuple[float, float, float] | None:
+    """Return a comparable RGB colour for trace operations when available."""
+    match = COLOR_RE.search(attrs)
+    if not match:
+        return None
+    values = [float(value) for value in match.group(1).split()]
+    if len(values) == 1:
+        return (values[0], values[0], values[0])
+    if len(values) == 3:
+        return (values[0], values[1], values[2])
+    if len(values) == 4:
+        cyan, magenta, yellow, black = values
+        return (
+            1.0 - min(1.0, cyan + black),
+            1.0 - min(1.0, magenta + black),
+            1.0 - min(1.0, yellow + black),
+        )
+    return None
+
+
+def transformed_bbox(
+    transform: tuple[float, float, float, float, float, float],
+    points: list[tuple[float, float]],
+) -> tuple[float, float, float, float]:
+    a, b, c, d, e, f = transform
+    transformed = [(a * x + c * y + e, b * x + d * y + f) for x, y in points]
+    xs = [point[0] for point in transformed]
+    ys = [point[1] for point in transformed]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def is_axis_aligned_rect(points: list[tuple[float, float]]) -> bool:
+    """Conservatively recognise only fills whose points are all bbox corners."""
+    if len(points) < 4:
+        return False
+    xs = {round(point[0], 6) for point in points}
+    ys = {round(point[1], 6) for point in points}
+    corners = {(x, y) for x in xs for y in ys}
+    actual = {(round(x, 6), round(y, 6)) for x, y in points}
+    return len(xs) == 2 and len(ys) == 2 and corners.issubset(actual)
+
+
+def paint_covers(
+    paint: Paint, bbox: tuple[float, float, float, float], tolerance: float = 0.05
+) -> bool:
+    x0, y0, x1, y1 = bbox
+    return (
+        paint.x0 <= x0 + tolerance
+        and paint.y0 <= y0 + tolerance
+        and paint.x1 >= x1 - tolerance
+        and paint.y1 >= y1 - tolerance
+    )
+
+
+def glyph_bbox(glyph: Glyph) -> tuple[float, float, float, float]:
+    """A conservative device-space ink box around one horizontal glyph."""
+    return (
+        glyph.x,
+        glyph.y - glyph.size,
+        glyph.x + max(glyph.advance, glyph.size * 0.25),
+        glyph.y + glyph.size * 0.25,
+    )
+
+
+def glyph_visibility(glyph: Glyph, paints: list[Paint]) -> str:
+    if glyph.alpha <= INVISIBLE_ALPHA:
+        return "hidden"
+    bbox = glyph_bbox(glyph)
+    if any(
+        paint.index > glyph.paint_index
+        and paint.alpha >= OPAQUE_ALPHA
+        and paint_covers(paint, bbox)
+        for paint in paints
+    ):
+        return "hidden"
+
+    background = next(
+        (
+            paint
+            for paint in reversed(paints)
+            if paint.index < glyph.paint_index
+            and paint_covers(paint, bbox)
+        ),
+        None,
+    )
+    if (
+        glyph.color is not None
+        and background is not None
+        and background.kind == "flat"
+        and background.alpha >= OPAQUE_ALPHA
+        and background.color is not None
+    ):
+        channel_delta = max(
+            abs(channel - backdrop)
+            for channel, backdrop in zip(glyph.color, background.color)
+        )
+        if channel_delta <= LOW_CONTRAST_CHANNEL_DELTA:
+            return "low_contrast"
+    return "painted"
+
+
+def classify_line_visibility(line: Line, paints: list[Paint]) -> str:
+    states = [
+        glyph_visibility(glyph, paints)
+        for glyph in line.glyphs
+        if not glyph.unicode.isspace()
+    ]
+    if not states:
+        return "painted"
+    if all(state == "hidden" for state in states):
+        return "hidden"
+    if all(state in {"hidden", "low_contrast"} for state in states):
+        return "low_contrast"
+    return "painted"
+
+
 def parse_trace(trace_xml: str) -> list[PageLayout]:
     pages: list[PageLayout] = []
     for page_match in PAGE_RE.finditer(trace_xml):
         content = page_match.group(1)
         glyphs: list[Glyph] = []
         rotated_lines: list[Line] = []
-        for op_attrs, op_body in FILL_TEXT_RE.findall(content):
+        for op_match in FILL_TEXT_RE.finditer(content):
+            op_attrs, op_body = op_match.groups()
             transform = parse_transform(op_attrs)
             if transform is None:
                 continue
             a, b, c, d, e, f = transform
+            color = parse_rgb(op_attrs)
+            alpha = parse_alpha(op_attrs)
             transformed_run: list[Glyph] = []
             for span_attrs, span_body in SPAN_RE.findall(op_body):
                 trm = TRM_RE.search(span_attrs)
@@ -156,6 +308,9 @@ def parse_trace(trace_xml: str) -> list[PageLayout]:
                             unicode=unescape(unicode_char),
                             size=size_pt,
                             advance=abs(float(adv) * size_units * a),
+                            paint_index=op_match.start(),
+                            color=color,
+                            alpha=alpha,
                         )
                     )
             if not transformed_run:
@@ -174,7 +329,9 @@ def parse_trace(trace_xml: str) -> list[PageLayout]:
             else:
                 glyphs.extend(transformed_run)
         rects: list[Rect] = []
-        for kind, op_attrs, op_body in PATH_RE.findall(content):
+        paints: list[Paint] = []
+        for op_match in PATH_RE.finditer(content):
+            kind, op_attrs, op_body = op_match.groups()
             transform = parse_transform(op_attrs) or (1, 0, 0, 1, 0, 0)
             a, b, c, d, e, f = transform
             xs: list[float] = []
@@ -194,10 +351,53 @@ def parse_trace(trace_xml: str) -> list[PageLayout]:
                         y1=max(ys),
                     )
                 )
+                transformed_points = list(zip(xs, ys))
+                if kind == "fill_path" and "<curveto" not in op_body and is_axis_aligned_rect(
+                    transformed_points
+                ):
+                    paints.append(
+                        Paint(
+                            index=op_match.start(),
+                            kind="flat",
+                            x0=min(xs),
+                            y0=min(ys),
+                            x1=max(xs),
+                            y1=max(ys),
+                            alpha=parse_alpha(op_attrs),
+                            color=parse_rgb(op_attrs),
+                        )
+                    )
+        for op_match in FILL_IMAGE_RE.finditer(content):
+            op_attrs = op_match.group(1)
+            transform = parse_transform(op_attrs)
+            if transform is None:
+                continue
+            a, b, c, d, _, _ = transform
+            # A rotated image's axis-aligned bbox can include areas it never
+            # paints, so only use rectangular page/background images here.
+            if abs(b) > 1e-9 or abs(c) > 1e-9:
+                continue
+            x0, y0, x1, y1 = transformed_bbox(
+                transform, [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
+            )
+            paints.append(
+                Paint(
+                    index=op_match.start(),
+                    kind="image",
+                    x0=x0,
+                    y0=y0,
+                    x1=x1,
+                    y1=y1,
+                    alpha=parse_alpha(op_attrs),
+                )
+            )
+        paints.sort(key=lambda paint: paint.index)
         lines = build_lines(glyphs)
         lines.extend(rotated_lines)
+        for line in lines:
+            line.visibility = classify_line_visibility(line, paints)
         lines.sort(key=lambda line: (line.y, line.x0))
-        pages.append(PageLayout(lines=lines, rects=rects))
+        pages.append(PageLayout(lines=lines, rects=rects, paints=paints))
     return pages
 
 
@@ -330,12 +530,15 @@ def diff_page(
         for index, line in enumerate(ordered_occurrences, start=1):
             occurrence_by_id[id(line)] = (index, len(ordered_occurrences))
 
-    instances: list[dict] = []
-    for gt_line, out_line in matches:
-        occurrence, occurrence_count = occurrence_by_id[id(gt_line)]
-        label = gt_line.key[:60]
+    def instance_label(line: Line) -> str:
+        occurrence, occurrence_count = occurrence_by_id[id(line)]
+        label = line.key[:60]
         if occurrence_count > 1:
             label = f"{label} [{occurrence}/{occurrence_count}]"
+        return label
+
+    instances: list[dict] = []
+    for gt_line, out_line in matches:
         width_pct = (
             (out_line.width - gt_line.width) / gt_line.width * 100
             if gt_line.width > 1.0
@@ -343,7 +546,7 @@ def diff_page(
         )
         instances.append(
             {
-                "label": label,
+                "label": instance_label(gt_line),
                 "gt_x": gt_line.x0,
                 "gt_y": gt_line.y,
                 "out_x": out_line.x0,
@@ -353,6 +556,15 @@ def diff_page(
                 "width_pct": width_pct,
             }
         )
+    visibility_mismatches = [
+        {
+            "label": instance_label(gt_line),
+            "gt": gt_line.visibility,
+            "out": out_line.visibility,
+        }
+        for gt_line, out_line in matches
+        if (gt_line.visibility == "painted") != (out_line.visibility == "painted")
+    ]
     large_shifts = [
         instance
         for instance in instances
@@ -427,6 +639,10 @@ def diff_page(
             "large_shift_count": len(large_shifts),
             "large_shifts": large_shifts,
         },
+        "visibility": {
+            "mismatch_count": len(visibility_mismatches),
+            "mismatches": visibility_mismatches,
+        },
         "pitch": {"pairs": len(pitch_deltas), "worst_delta": abs(stats(pitch_deltas)["worst"])},
         "wraps": {"count": len(wraps), "samples": wraps[:5]},
         "reflow": reflow,
@@ -481,6 +697,16 @@ def render_reading(vectors: list[dict]) -> str:
                 f"past {vector['instances']['large_shift_threshold']:.2f}pt: {examples}. "
                 "These are layout differences, not antialiasing; inspect and track each one"
             )
+        if vector["visibility"]["mismatch_count"]:
+            examples = "; ".join(
+                f"'{item['label']}' GT {item['gt']} vs output {item['out']}"
+                for item in vector["visibility"]["mismatches"]
+            )
+            page_notes.append(
+                f"{vector['visibility']['mismatch_count']} matched text instance(s) differ in "
+                f"painted visibility: {examples}. Check z-order, opacity, or foreground/background "
+                "contrast"
+            )
         if vector["pitch"]["worst_delta"] > vector["noise_floor"]:
             page_notes.append(
                 f"line pitch drifts up to {vector['pitch']['worst_delta']:.2f}pt — "
@@ -503,6 +729,7 @@ def audit_failures(vectors: list[dict]) -> int:
     """Count material text findings that require visual disposition."""
     return sum(
         vector["instances"]["large_shift_count"]
+        + vector["visibility"]["mismatch_count"]
         + vector["lines"]["missing"]
         + vector["lines"]["extra"]
         + vector["wraps"]["count"]
@@ -547,7 +774,7 @@ def main() -> int:
         action="store_true",
         help=(
             "exit nonzero on missing/extra/reflowed text, changed wraps, "
-            "a large instance shift, or a page-count mismatch"
+            "a painted-visibility mismatch, a large instance shift, or a page-count mismatch"
         ),
     )
     parser.add_argument("--json", action="store_true", help="emit the deviation vectors as JSON")
@@ -579,7 +806,12 @@ def main() -> int:
     ]
 
     if args.json:
-        print(json.dumps({"pages": vectors, "gt_pages": len(gt_pages), "out_pages": len(out_pages)}, indent=1))
+        print(
+            json.dumps(
+                {"pages": vectors, "gt_pages": len(gt_pages), "out_pages": len(out_pages)},
+                indent=1,
+            )
+        )
         if args.audit and (audit_failures(vectors) or len(gt_pages) != len(out_pages)):
             return 1
         return 0
@@ -597,6 +829,7 @@ def main() -> int:
             f"pitch worst {vector['pitch']['worst_delta']:.2f}pt | "
             f"width worst {vector['width']['worst_pct']:.1f}% | "
             f"large shifts {vector['instances']['large_shift_count']} | "
+            f"visibility {vector['visibility']['mismatch_count']} | "
             f"rects {vector['rects']['gt_count']}/{vector['rects']['out_count']}"
         )
     print()

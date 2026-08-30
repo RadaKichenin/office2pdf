@@ -71,6 +71,7 @@ def page_vector(
     wraps: int = 0,
     reflow: int = 0,
     large_shifts: int = 0,
+    visibility: int = 0,
     mean_abs_dy: float = 0.0,
     worst_dy: float = 0.0,
     worst_pitch: float = 0.0,
@@ -102,6 +103,7 @@ def page_vector(
             "large_shift_count": large_shifts,
             "large_shifts": [],
         },
+        "visibility": {"mismatch_count": visibility, "mismatches": []},
         "pitch": {"pairs": max(matched - 1, 0), "worst_delta": worst_pitch},
         "wraps": {"count": wraps, "samples": []},
         "reflow": {"gt_lines": reflow, "out_lines": reflow},
@@ -671,12 +673,44 @@ class ControlGateTest(unittest.TestCase):
             with self.assertRaisesRegex(probe_harness.ProbeError, "page"):
                 probe_harness.verify_control(tmp / "base.pdf", tmp / "control.pdf", runner=runner)
 
+    def test_a_control_visibility_mismatch_aborts_the_run(self):
+        with TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / "base.pdf").write_bytes(b"%PDF a")
+            (tmp / "control.pdf").write_bytes(b"%PDF b")
+
+            def runner(argv):
+                return completed(
+                    argv,
+                    stdout=json.dumps(differ_report(page_vector(visibility=1))),
+                )
+
+            with self.assertRaisesRegex(probe_harness.ProbeError, "visibility"):
+                probe_harness.verify_control(tmp / "base.pdf", tmp / "control.pdf", runner=runner)
+
 
 class RowTest(unittest.TestCase):
     def test_multi_page_reports_sum_counts_and_keep_worst_magnitudes(self):
         report = differ_report(
-            page_vector(matched=10, missing=1, wraps=1, mean_abs_dy=0.2, worst_dy=-0.5, worst_pitch=0.3),
-            page_vector(matched=30, extra=2, deviant=3, mean_abs_dy=0.6, worst_dy=1.4, worst_pitch=0.1, rects=(4, 5)),
+            page_vector(
+                matched=10,
+                missing=1,
+                wraps=1,
+                visibility=1,
+                mean_abs_dy=0.2,
+                worst_dy=-0.5,
+                worst_pitch=0.3,
+            ),
+            page_vector(
+                matched=30,
+                extra=2,
+                deviant=3,
+                visibility=2,
+                mean_abs_dy=0.6,
+                worst_dy=1.4,
+                worst_pitch=0.1,
+                rects=(4, 5),
+            ),
         )
         row = probe_harness.variant_row("500", 1, report)
         self.assertEqual(row["value"], "500")
@@ -687,6 +721,7 @@ class RowTest(unittest.TestCase):
         self.assertEqual(row["extra"], 2)
         self.assertEqual(row["wraps"], 1)
         self.assertEqual(row["deviant"], 3)
+        self.assertEqual(row["visibility"], 3)
         self.assertAlmostEqual(row["mean_abs_dy"], (0.2 * 10 + 0.6 * 30) / 40)
         self.assertAlmostEqual(row["worst_dy"], 1.4)
         self.assertAlmostEqual(row["worst_pitch"], 0.3)

@@ -48,7 +48,7 @@ INSPECTION_ITEMS = (
     "Stored progressive JPEG quality 86 assets with metadata stripped",
     "Used Codex/Claude vision to inspect the full GT/output pages, diff, and matched crops",
     "Inspected matched region crops at full resolution",
-    "Ran compare_layout.py --audit and dispositioned every large text-instance shift",
+    "Ran compare_layout.py --audit and dispositioned every large text-instance shift and painted-visibility mismatch",
     "Ran the 5% fuzz pixel-difference sweep",
     "Inventoried hairlines and border dash styles",
     "Inventoried font weight, italic, and underline emphasis",
@@ -289,12 +289,14 @@ def layout_audit_categories(report: object) -> dict[str, bool]:
             wraps = page["wraps"]
             reflow = page["reflow"]
             instances = page["instances"]
+            visibility = page.get("visibility", {"mismatch_count": 0})
             counts = (
                 line_counts["missing"],
                 line_counts["extra"],
                 wraps["count"],
                 reflow["gt_lines"],
                 reflow["out_lines"],
+                visibility["mismatch_count"],
                 instances["large_shift_count"],
             )
         except (KeyError, TypeError) as exc:
@@ -302,8 +304,8 @@ def layout_audit_categories(report: object) -> dict[str, bool]:
         if any(type(count) is not int or count < 0 for count in counts):
             raise ValueError(f"page {page_number} finding counts must be non-negative integers")
 
-        has_text_flow_findings |= any(counts[:5])
-        has_large_shifts |= counts[5] > 0
+        has_text_flow_findings |= any(counts[:6])
+        has_large_shifts |= counts[6] > 0
 
     return {
         "page count": gt_pages != out_pages,

@@ -389,6 +389,11 @@ def layout_identical_failures(report: dict) -> list[str]:
             failures.append(
                 f"page {index}: {vector['instances']['large_shift_count']} large shift(s)"
             )
+        visibility = vector.get("visibility", {"mismatch_count": 0})
+        if visibility["mismatch_count"]:
+            failures.append(
+                f"page {index}: {visibility['mismatch_count']} visibility mismatch(es)"
+            )
         rects = vector["rects"]
         if rects["gt_count"] != rects["out_count"]:
             failures.append(f"page {index}: rects {rects['gt_count']} vs {rects['out_count']}")
@@ -443,6 +448,10 @@ def variant_row(value: str, patched: int, report: dict) -> dict:
         "worst_pitch": max((vector["pitch"]["worst_delta"] for vector in vectors), default=0.0),
         "worst_width": max((vector["width"]["worst_pct"] for vector in vectors), default=0.0),
         "large_shifts": sum(vector["instances"]["large_shift_count"] for vector in vectors),
+        "visibility": sum(
+            vector.get("visibility", {"mismatch_count": 0})["mismatch_count"]
+            for vector in vectors
+        ),
         "rects": "{}/{}".format(
             sum(vector["rects"]["gt_count"] for vector in vectors),
             sum(vector["rects"]["out_count"] for vector in vectors),
@@ -465,6 +474,7 @@ def render_table(spec: Spec, backend: str, control_verdict: str, rows: list[dict
         "worst pitch (pt)",
         "worst width (%)",
         "large shifts",
+        "visibility",
         "rects",
     )
     lines = [
@@ -493,6 +503,7 @@ def render_table(spec: Spec, backend: str, control_verdict: str, rows: list[dict
             f"{row['worst_pitch']:.2f}",
             f"{row['worst_width']:.1f}",
             str(row["large_shifts"]),
+            str(row["visibility"]),
             row["rects"],
         )
         lines.append("| " + " | ".join(cells) + " |")

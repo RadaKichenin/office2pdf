@@ -86,6 +86,7 @@ def layout_report(
     reflow_gt=0,
     reflow_out=0,
     large_shifts=0,
+    visibility=0,
 ):
     return {
         "pages": [
@@ -94,6 +95,7 @@ def layout_report(
                 "wraps": {"count": wraps},
                 "reflow": {"gt_lines": reflow_gt, "out_lines": reflow_out},
                 "instances": {"large_shift_count": large_shifts},
+                "visibility": {"mismatch_count": visibility},
             }
         ],
         "gt_pages": gt_pages,
@@ -162,16 +164,16 @@ class PullRequestBodyTests(unittest.TestCase):
         )
         self.assertTrue(any("rendered preview" in error for error in errors))
 
-    def test_visual_audit_requires_large_instance_shift_audit(self):
+    def test_visual_audit_requires_layout_finding_disposition(self):
         required = (
             "- [x] Ran compare_layout.py --audit and dispositioned every "
-            "large text-instance shift"
+            "large text-instance shift and painted-visibility mismatch"
         )
         errors = validate_pr_body(
             visual_body().replace(required, required.replace("[x]", "[ ]")),
             ["assets/bugfixes/issue-186/after.jpg"],
         )
-        self.assertTrue(any("large text-instance shift" in error for error in errors))
+        self.assertTrue(any("painted-visibility mismatch" in error for error in errors))
 
     def test_visual_audit_requires_model_vision_inspection(self):
         required = (
@@ -305,6 +307,15 @@ class LayoutAuditTests(unittest.TestCase):
             layout_report(large_shifts=5),
         )
         self.assertTrue(any("large shifts" in error and "issue reference" in error for error in errors))
+
+    def test_visibility_failure_rejects_pass_text_flow_disposition(self):
+        errors = validate_report(
+            visual_body(),
+            layout_report(visibility=1),
+        )
+        self.assertTrue(
+            any("text flow" in error and "issue reference" in error for error in errors)
+        )
 
     def test_failed_categories_accept_remaining_issue_references(self):
         body = visual_body(
