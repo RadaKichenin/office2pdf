@@ -1,0 +1,116 @@
+{
+ "pages": [
+  {
+   "lines": {
+    "gt": 10,
+    "out": 10,
+    "matched": 10,
+    "missing": 0,
+    "extra": 0,
+    "deviant": 8,
+    "missing_text": [],
+    "extra_text": []
+   },
+   "baseline": {
+    "mean_abs_dy": 0.6091079999999749,
+    "worst_dy": 1.0666199999999435,
+    "worst_dy_signed": -1.0666199999999435,
+    "worst_line": "OME"
+   },
+   "dx0": {
+    "mean_abs": 0.10929999999999537,
+    "worst": -0.14999999999999858
+   },
+   "width": {
+    "mean_abs_pct": 2.3965325152773334,
+    "worst_pct": 13.326500768836503
+   },
+   "instances": {
+    "large_shift_threshold": 5.0,
+    "large_shift_count": 0,
+    "large_shifts": []
+   },
+   "visibility": {
+    "mismatch_count": 0,
+    "mismatches": []
+   },
+   "pitch": {
+    "pairs": 9,
+    "worst_delta": 1.4918199999999615
+   },
+   "wraps": {
+    "count": 0,
+    "samples": []
+   },
+   "reflow": {
+    "gt_lines": 0,
+    "out_lines": 0,
+    "samples": []
+   },
+   "rects": {
+    "gt_count": 242,
+    "out_count": 24,
+    "matched": 24,
+    "mean_center_delta": 0.15032886292055606
+   },
+   "noise_floor": 0.12
+  },
+  {
+   "lines": {
+    "gt": 2,
+    "out": 2,
+    "matched": 2,
+    "missing": 0,
+    "extra": 0,
+    "deviant": 1,
+    "missing_text": [],
+    "extra_text": []
+   },
+   "baseline": {
+    "mean_abs_dy": 0.15619499999998254,
+    "worst_dy": 0.26239000000001056,
+    "worst_dy_signed": -0.26239000000001056,
+    "worst_line": "RSVPBYJUNE20ATINFO@FABRIKAM.COM"
+   },
+   "dx0": {
+    "mean_abs": 0.1475000000000044,
+    "worst": -0.14999999999999858
+   },
+   "width": {
+    "mean_abs_pct": 0.08594071262405532,
+    "worst_pct": 0.1337494236291357
+   },
+   "instances": {
+    "large_shift_threshold": 5.0,
+    "large_shift_count": 0,
+    "large_shifts": []
+   },
+   "visibility": {
+    "mismatch_count": 0,
+    "mismatches": []
+   },
+   "pitch": {
+    "pairs": 1,
+    "worst_delta": 0.31238999999993666
+   },
+   "wraps": {
+    "count": 0,
+    "samples": []
+   },
+   "reflow": {
+    "gt_lines": 0,
+    "out_lines": 0,
+    "samples": []
+   },
+   "rects": {
+    "gt_count": 0,
+    "out_count": 0,
+    "matched": 0,
+    "mean_center_delta": 0.0
+   },
+   "noise_floor": 0.12
+  }
+ ],
+ "gt_pages": 2,
+ "out_pages": 2
+}

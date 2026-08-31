@@ -125,16 +125,22 @@ pub(super) fn load_additional_fonts(
 
 /// Add document-scoped bundled faces without changing Typst's fallback book
 /// for unrelated conversions. Caller-registered bytes stay ahead of bundled
-/// data, including when they provide their own Noto Serif (issue #1458).
+/// data when they provide the same target family (issues #1458, #1463).
 pub(super) fn extend_document_fonts(fonts: &mut Vec<typst::text::Font>, doc: &ir::Document) {
-    if !render::font_subst::document_requests_bundled_noto_serif(doc)
-        || fonts
+    if render::font_subst::document_requests_bundled_noto_serif(doc)
+        && !fonts
             .iter()
             .any(|font| font.info().family == crate::bundled_fonts::NOTO_SERIF_FAMILY)
     {
-        return;
+        fonts.extend_from_slice(crate::bundled_fonts::noto_serif_fonts());
     }
-    fonts.extend_from_slice(crate::bundled_fonts::noto_serif_fonts());
+    if render::font_subst::document_requests_bundled_noto_sans(doc)
+        && !fonts
+            .iter()
+            .any(|font| font.info().family == crate::bundled_fonts::NOTO_SANS_FAMILY)
+    {
+        fonts.extend_from_slice(crate::bundled_fonts::noto_sans_fonts());
+    }
 }
 
 fn effective_last_resort_family(options: &ConvertOptions) -> Option<&str> {
@@ -371,15 +377,8 @@ fn convert_bytes_streaming_xlsx(
         }
     };
     let parse_duration = parse_start.elapsed();
-    if chunk_docs
-        .iter()
-        .any(render::font_subst::document_requests_bundled_noto_serif)
-    {
-        let first_requesting_doc = chunk_docs
-            .iter()
-            .find(|doc| render::font_subst::document_requests_bundled_noto_serif(doc))
-            .expect("the preceding any call found a requesting document");
-        extend_document_fonts(&mut additional_fonts, first_requesting_doc);
+    for chunk_doc in &chunk_docs {
+        extend_document_fonts(&mut additional_fonts, chunk_doc);
     }
 
     let needs_in_memory_font_context = !additional_fonts.is_empty()

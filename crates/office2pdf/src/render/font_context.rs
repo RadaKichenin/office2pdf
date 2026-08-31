@@ -82,6 +82,13 @@ impl FontSearchContext {
         }
     }
 
+    /// Whether a face came from an explicit conversion input: a caller font
+    /// path, a package-embedded font directory, or registered font bytes.
+    /// System and auto-discovered Office fonts are deliberately excluded.
+    pub(crate) fn is_user_family(&self, family: &str) -> bool {
+        self.user_families.contains(&normalize_family_name(family))
+    }
+
     pub(crate) fn last_resort_font_family(&self) -> Option<&str> {
         self.last_resort_font_family.as_deref()
     }

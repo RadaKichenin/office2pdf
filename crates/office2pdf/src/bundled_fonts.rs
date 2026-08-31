@@ -5,11 +5,14 @@ use std::sync::OnceLock;
 use typst::text::Font;
 
 pub(crate) const NOTO_SERIF_FAMILY: &str = "Noto Serif";
+pub(crate) const NOTO_SANS_FAMILY: &str = "Noto Sans";
 
 const NOTO_SERIF_REGULAR_BYTES: &[u8] = include_bytes!("../fonts/NotoSerif-Regular.ttf");
 const NOTO_SERIF_BOLD_BYTES: &[u8] = include_bytes!("../fonts/NotoSerif-Bold.ttf");
+const NOTO_SANS_REGULAR_BYTES: &[u8] = include_bytes!("../fonts/NotoSans-Regular.ttf");
 
 static NOTO_SERIF_FONTS: OnceLock<Vec<Font>> = OnceLock::new();
+static NOTO_SANS_FONTS: OnceLock<Vec<Font>> = OnceLock::new();
 
 /// Noto Serif 2.015 Regular and Bold, parsed once for deterministic Office
 /// poster fallbacks on native and WASM builds (issue #1458).
@@ -23,6 +26,20 @@ pub(crate) fn noto_serif_fonts() -> &'static [Font] {
             fonts.len(),
             2,
             "the bundled Noto Serif assets must contain two usable faces"
+        );
+        fonts
+    })
+}
+
+/// Noto Sans 2.015 Regular, parsed once for deterministic unembedded Aptos
+/// fallback on native and WASM builds (issue #1463).
+pub(crate) fn noto_sans_fonts() -> &'static [Font] {
+    NOTO_SANS_FONTS.get_or_init(|| {
+        let fonts = crate::render::pdf::load_fonts_from_bytes([NOTO_SANS_REGULAR_BYTES]);
+        assert_eq!(
+            fonts.len(),
+            1,
+            "the bundled Noto Sans asset must contain one usable face"
         );
         fonts
     })
@@ -87,6 +104,28 @@ mod tests {
             assert!(bytes.len() >= 450_000);
             assert!(bytes.len() <= 500_000);
         }
+    }
+
+    #[test]
+    fn bundled_noto_sans_has_the_reference_regular_face() {
+        let fonts = noto_sans_fonts();
+        assert_eq!(fonts.len(), 1);
+        let info = fonts[0].info();
+        assert_eq!(info.family, NOTO_SANS_FAMILY);
+        assert_eq!(info.variant.weight.to_number(), 400);
+
+        for character in ['A', 'É', 'Ω', 'Ж'] {
+            assert!(
+                info.coverage.contains(character as u32),
+                "the bundled Noto Sans face should cover {character:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn bundled_noto_sans_asset_stays_within_the_documented_size_envelope() {
+        assert!(NOTO_SANS_REGULAR_BYTES.len() >= 400_000);
+        assert!(NOTO_SANS_REGULAR_BYTES.len() <= 450_000);
     }
 
     #[cfg(feature = "wasm-cjk-font")]

@@ -2311,6 +2311,66 @@ fn test_header_field_never_states_kerning_false() {
     );
 }
 
+#[test]
+fn test_unembedded_aptos_footer_uses_noto_sans_on_an_aptos_host() {
+    // Reduced from `Place your event title here.docx`: the footer fixes its
+    // face and size, but the package carries no font data. A host Office
+    // installation must not make this fixed footer narrower than the
+    // LibreOffice/Noto Sans ground truth (issue #1463).
+    use crate::ir::{HFInline, HeaderFooter, HeaderFooterParagraph};
+
+    let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
+        size: PageSize::default(),
+        margins: Margins::default(),
+        content: vec![make_paragraph("Body")],
+        header: None,
+        footer: Some(HeaderFooter {
+            shapes: Vec::new(),
+            distance_from_edge: Some(24.0),
+            paragraphs: vec![HeaderFooterParagraph {
+                style: ParagraphStyle::default(),
+                elements: vec![HFInline::Run(Run {
+                    text: "Sensitivity: Internal".to_string(),
+                    style: TextStyle {
+                        font_family: Some("Aptos".to_string()),
+                        font_size: Some(8.0),
+                        ..TextStyle::default()
+                    },
+                    href: None,
+                    footnote: None,
+                })],
+                border: None,
+                border_space: None,
+                frame: None,
+            }],
+        }),
+        columns: None,
+        line_grid_pitch: None,
+        line_grid_snaps_lines: false,
+        page_numbering: None,
+    })]);
+    let context = FontSearchContext::for_test(Vec::new(), &["Aptos", "Noto Sans"], &["Aptos"], &[]);
+
+    let source = generate_typst_with_options_and_font_context(
+        &doc,
+        &ConvertOptions::default(),
+        Some(&context),
+    )
+    .unwrap()
+    .source;
+
+    assert!(
+        source.contains("font: (\"Noto Sans\""),
+        "the fixed footer must lead with the reference-compatible family: {source}"
+    );
+    assert!(
+        !source.contains("font: (\"Aptos\""),
+        "the incidental host face must not remain first: {source}"
+    );
+}
+
 // ── Synthetic oblique for faces with no italic (issue #686) ──────
 
 use crate::render::font_context::FontSearchContext;
