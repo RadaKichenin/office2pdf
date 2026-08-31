@@ -1647,23 +1647,27 @@ const SHEET_CELL_SEATS: [SheetCellSeats; 3] = [
 pub(super) struct CellLineBox {
     pub top_em: f64,
     pub bottom_em: f64,
-    /// Zero for a Word or PowerPoint cell whose box is not re-seated on the
-    /// descender. It carries the surplus that seat removes from below the
-    /// baseline, so multi-line advance is unchanged (issue #618) — and, in a
-    /// spreadsheet cell, whatever Excel's measured wrapped-line pitch adds to
-    /// the face's hhea box, which is independent of that seat and applies to
-    /// top- and centre-aligned cells alike (issue #1163).
+    /// The gap between successive boxes. It carries the surplus removed from
+    /// below a descender-seated spreadsheet line (issue #618), the remainder
+    /// below a compressed Word line's first baseline (issue #1460), or the
+    /// difference between Excel's measured wrapped-line pitch and the face's
+    /// hhea box (issue #1163). Moving those quantities into leading preserves
+    /// multi-line advance without lengthening the final line's exterior box.
     pub leading_pt: f64,
     pub font_size_pt: f64,
 }
 
 /// Line-box settings for a **Word or sheet** table cell: a fixed box spanning
-/// the font's full single-spacing (hhea) line — 1.3 times it for an East Asian row — seated at
-/// the same constant ascent the body path uses. In the default symmetric
-/// emission the box carries the whole line advance below the ascent with zero
-/// leading, so a single-line cell occupies the full line height Word gives it
-/// rather than only the tighter metric box (which left auto-height rows too
-/// short, issue #396). When `seats_text_on_descender` is set (bottom-aligned
+/// the font's full single-spacing (hhea) line — 1.3 times it for an East Asian
+/// row — seated at the same constant ascent the body path uses. In the default
+/// uncompressed emission the box carries the whole line advance below the
+/// ascent with zero leading, so a single-line cell occupies the full line
+/// height Word gives it rather than only the tighter metric box (which left
+/// auto-height rows too short, issue #396). A Word line compressed below the
+/// face's metric box instead seats its first baseline halfway through the
+/// compressed advance, scales the exterior descent, and carries the remaining
+/// inter-line distance as leading (issue #1460). When
+/// `seats_text_on_descender` is set (bottom-aligned
 /// spreadsheet cells in fixed-height rows), the box instead ends at the
 /// font's descender and the removed sub-baseline surplus moves into leading,
 /// so the last line's descent rests on the row's bottom inset edge while
@@ -1680,7 +1684,8 @@ pub(super) struct CellLineBox {
 /// gated by `sheet_row_shared_line` in the table codegen — the box resolves
 /// at the row's shared metric family and size instead of this paragraph's
 /// own, so every cell of the row carries the same box and lands on one
-/// baseline as Excel prints it (issue #839).
+/// baseline as Excel prints it (issue #839). Spreadsheet cells are excluded
+/// from Word's compressed-line redistribution.
 ///
 /// When `sheet_seat` is `Some` — a spreadsheet cell in a fixed row track,
 /// gated by `generate_table_cell` — the box is redistributed around the
@@ -1695,8 +1700,7 @@ pub(super) struct CellLineBox {
 /// [`sheet_wrapped_line_advance_pt`] measured pace their *lines* on Excel's
 /// own pitch instead of on that box, and the difference leaves the box
 /// untouched and rides as leading. So a sheet cell's leading is non-zero
-/// whatever its vertical alignment, where every seat above leaves it at zero
-/// (issue #1163).
+/// whatever its vertical alignment (issue #1163).
 ///
 /// A **slide's** table cell does not come here: it paces on PowerPoint's flat
 /// 1.2em line via [`powerpoint_line_height_settings`], like the slide's own
@@ -1828,7 +1832,21 @@ pub(super) fn word_cell_line_box(
     } else {
         0.0
     };
-    let top_em: f64 = ascender_em + excess_em;
+    // Word centres a proportionally compressed table-cell line on its
+    // baseline. Keeping the face's full hhea ascent above the baseline and
+    // subtracting the whole compression from the descent moved large poster
+    // text down even though its baseline advance already matched the native
+    // export (issue #1460). Keep the advance unchanged and redistribute only
+    // its two edges. A spreadsheet has separately measured line seats below;
+    // `sheet_print_scale` is its reliable marker even when the sheet is
+    // unscaled and this particular cell is top-aligned.
+    let centres_compressed_word_line: bool =
+        sheet_print_scale.is_none() && advance_em + f64::EPSILON < metric_em;
+    let top_em: f64 = if centres_compressed_word_line {
+        advance_em / 2.0
+    } else {
+        ascender_em + excess_em
+    };
     // Excel rests a bottom-aligned cell's last line on its descender: the
     // descent bottom sits on the row's bottom inset edge with all slack above.
     // The symmetric box carries the East Asian 0.15-line surplus below the
@@ -1849,6 +1867,19 @@ pub(super) fn word_cell_line_box(
         (
             descender_em,
             ((advance_em - top_em - descender_em) * font_size).max(0.0),
+        )
+    } else if centres_compressed_word_line {
+        // The first baseline is centred in the compressed advance, but Word
+        // does not give the last line the whole lower half as exterior space.
+        // It scales the face's descent by the same ratio as the line and puts
+        // the remainder between baselines. This keeps a wrapped line's pitch
+        // unchanged while preventing that inter-line space from lengthening
+        // the paragraph after its final line (issue #1460).
+        let compression: f64 = advance_em / metric_em;
+        let bottom_em: f64 = descender_em * compression;
+        (
+            bottom_em,
+            ((advance_em - top_em - bottom_em) * font_size).max(0.0),
         )
     } else {
         (advance_em - top_em, 0.0)
