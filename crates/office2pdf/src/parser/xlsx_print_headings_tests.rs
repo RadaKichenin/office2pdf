@@ -385,6 +385,7 @@ fn test_drawings_shift_with_the_inset_grid() {
             value_axis_number_format: None,
             auto_title_deleted: false,
             has_automatic_title: false,
+            title_layout: None,
             plot_area_layout: None,
             user_shapes: Vec::new(),
         },

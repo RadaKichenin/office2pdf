@@ -131,6 +131,7 @@ fn bar_chart() -> crate::ir::Chart {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        title_layout: None,
         plot_area_layout: None,
         user_shapes: Vec::new(),
     }

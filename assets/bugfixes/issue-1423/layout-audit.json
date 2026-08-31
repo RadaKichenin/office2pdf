@@ -1,0 +1,157 @@
+{
+ "pages": [
+  {
+   "lines": {
+    "gt": 6,
+    "out": 16,
+    "matched": 5,
+    "missing": 1,
+    "extra": 11,
+    "deviant": 3,
+    "missing_text": [
+     "NetProfit"
+    ],
+    "extra_text": [
+     "TotalSales$702,000$400,000$500,000",
+     "TotalCogs$212,000$222,600$233,730",
+     "NETPROFIT$490,000$549,600$615,690",
+     "800",
+     "600"
+    ]
+   },
+   "baseline": {
+    "mean_abs_dy": 4.798218000000011,
+    "worst_dy": 14.431280000000015,
+    "worst_dy_signed": 14.431280000000015,
+    "worst_line": "TotalSales"
+   },
+   "dx0": {
+    "mean_abs": 4.4043400000000075,
+    "worst": -11.010800000000017
+   },
+   "width": {
+    "mean_abs_pct": 2.4814713788096205,
+    "worst_pct": 7.446931112034248
+   },
+   "instances": {
+    "large_shift_threshold": 5.0,
+    "large_shift_count": 2,
+    "large_shifts": [
+     {
+      "label": "TotalSales",
+      "gt_x": 754.0046,
+      "gt_y": 380.4,
+      "out_x": 742.9938,
+      "out_y": 394.83128,
+      "dx": -11.010800000000017,
+      "dy": 14.431280000000015,
+      "width_pct": -2.4213617094366384
+     },
+     {
+      "label": "TotalCogs",
+      "gt_x": 754.0046,
+      "gt_y": 399.6,
+      "out_x": 742.9938,
+      "out_y": 408.83128,
+      "dx": -11.010800000000017,
+      "dy": 9.23127999999997,
+      "width_pct": -2.530677563225682
+     }
+    ]
+   },
+   "visibility": {
+    "mismatch_count": 0,
+    "mismatches": []
+   },
+   "pitch": {
+    "pairs": 4,
+    "worst_delta": 14.265120000000024
+   },
+   "wraps": {
+    "count": 0,
+    "samples": []
+   },
+   "reflow": {
+    "gt_lines": 0,
+    "out_lines": 0,
+    "samples": []
+   },
+   "rects": {
+    "gt_count": 24,
+    "out_count": 33,
+    "matched": 16,
+    "mean_center_delta": 0.36811102991999434
+   },
+   "noise_floor": 0.12
+  },
+  {
+   "lines": {
+    "gt": 15,
+    "out": 19,
+    "matched": 3,
+    "missing": 12,
+    "extra": 16,
+    "deviant": 0,
+    "missing_text": [
+     "20%7",
+     "6",
+     "15%",
+     "5",
+     "4"
+    ],
+    "extra_text": [
+     "ProfitMargin12.07%14.95%17.66%",
+     "ACIDTest2.343.666.67",
+     "AssetstoLiabilities2.834.247.44",
+     "EquitytoLiabilities1.833.246.44",
+     "CashtoAssets0.830.860.90"
+    ]
+   },
+   "baseline": {
+    "mean_abs_dy": 0.059153333333346346,
+    "worst_dy": 0.08497999999997319,
+    "worst_dy_signed": 0.08497999999997319,
+    "worst_line": "SuccessRatios"
+   },
+   "dx0": {
+    "mean_abs": 2.7333333330640624e-05,
+    "worst": -7.199999998874773e-05
+   },
+   "width": {
+    "mean_abs_pct": 2.3142603410769116,
+    "worst_pct": 6.918144642828795
+   },
+   "instances": {
+    "large_shift_threshold": 5.0,
+    "large_shift_count": 0,
+    "large_shifts": []
+   },
+   "visibility": {
+    "mismatch_count": 0,
+    "mismatches": []
+   },
+   "pitch": {
+    "pairs": 2,
+    "worst_delta": 0.09248000000006584
+   },
+   "wraps": {
+    "count": 0,
+    "samples": []
+   },
+   "reflow": {
+    "gt_lines": 0,
+    "out_lines": 0,
+    "samples": []
+   },
+   "rects": {
+    "gt_count": 28,
+    "out_count": 33,
+    "matched": 23,
+    "mean_center_delta": 0.006095958671313956
+   },
+   "noise_floor": 0.12
+  }
+ ],
+ "gt_pages": 2,
+ "out_pages": 2
+}
