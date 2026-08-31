@@ -142,7 +142,17 @@ pub(super) fn convert_table(
     let table_style = ctx.table_styles.consume_next();
     let table_prop_json = serde_json::to_value(&table.property).ok();
     let alignment = extract_table_alignment(table_prop_json.as_ref());
-    let default_cell_padding = extract_table_default_cell_padding(table_prop_json.as_ref());
+    // Direct table properties win, but a table that states no `w:tblStyle`
+    // still inherits the package's default table style. Word's built-in
+    // `TableNormal` commonly carries 0pt vertical and 5.4pt horizontal cell
+    // margins there; losing it lets Typst's unrelated 5pt inset leak into all
+    // four sides (issue #1466).
+    let default_cell_padding = extract_table_default_cell_padding(table_prop_json.as_ref())
+        .or_else(|| {
+            table_style
+                .as_ref()
+                .and_then(ResolvedTableStyle::default_cell_padding)
+        });
 
     let mut raw_rows = extract_raw_rows(
         table,
@@ -473,6 +483,12 @@ fn apply_conditional_table_style(
             // Explicit tcBorders on the cell win over the style's borders.
             if cell.border.is_none() {
                 cell.border = style.border.clone();
+            }
+            // A conditional region's `w:tcMar` applies only where that region
+            // is active. Direct per-cell margins were resolved before this
+            // pass and keep precedence.
+            if cell.padding.is_none() {
+                cell.padding = style.padding;
             }
             apply_table_text_style(&mut cell.content, &style);
         }

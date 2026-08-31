@@ -3,7 +3,35 @@ use std::collections::HashMap;
 
 use super::super::tables::{BorderSideSpec, TableBorderSpec};
 use super::super::{Block, Color, TextStyle, parse_hex_color};
-use crate::ir::{Alignment, BorderLineStyle, BorderSide, CellBorder, LineJoin};
+use crate::ir::{Alignment, BorderLineStyle, BorderSide, CellBorder, Insets, LineJoin};
+
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+struct PartialInsets {
+    top: Option<f64>,
+    right: Option<f64>,
+    bottom: Option<f64>,
+    left: Option<f64>,
+}
+
+impl PartialInsets {
+    fn overlay(self, other: Self) -> Self {
+        Self {
+            top: other.top.or(self.top),
+            right: other.right.or(self.right),
+            bottom: other.bottom.or(self.bottom),
+            left: other.left.or(self.left),
+        }
+    }
+
+    fn complete(self) -> Option<Insets> {
+        Some(Insets {
+            top: self.top?,
+            right: self.right?,
+            bottom: self.bottom?,
+            left: self.left?,
+        })
+    }
+}
 
 #[derive(Debug, Clone, Default)]
 struct RegionBorders {
@@ -41,6 +69,7 @@ struct TableRegionStyle {
     /// `w:tblPr/w:jc` is a different property — it places the table box — and
     /// is deliberately not read here.
     alignment: Option<Alignment>,
+    cell_margins: PartialInsets,
     borders: RegionBorders,
 }
 
@@ -52,6 +81,7 @@ impl TableRegionStyle {
             bold: other.bold.or(self.bold),
             all_caps: other.all_caps.or(self.all_caps),
             alignment: other.alignment.or(self.alignment),
+            cell_margins: self.cell_margins.overlay(other.cell_margins),
             borders: self.borders.overlay(other.borders),
         }
     }
@@ -106,6 +136,7 @@ struct TableApplicationScanState {
 
 pub(in super::super) struct TableStyleContext {
     styles: HashMap<String, TableStyleDefinition>,
+    default_style_id: Option<String>,
     applications: Vec<TableStyleApplication>,
     cursor: Cell<usize>,
 }
@@ -117,18 +148,22 @@ pub(in super::super) struct ResolvedTableCellStyle {
     pub(in super::super) bold: Option<bool>,
     pub(in super::super) all_caps: Option<bool>,
     pub(in super::super) alignment: Option<Alignment>,
+    pub(in super::super) padding: Option<Insets>,
     pub(in super::super) border: Option<CellBorder>,
 }
 
 pub(in super::super) struct ResolvedTableStyle {
     definition: TableStyleDefinition,
     look: TableLook,
+    default_cell_padding: Option<Insets>,
 }
 
 impl TableStyleContext {
     pub(in super::super) fn from_xml(document_xml: Option<&str>, styles_xml: Option<&str>) -> Self {
+        let scanned = styles_xml.map(scan_table_styles).unwrap_or_default();
         Self {
-            styles: styles_xml.map(scan_table_styles).unwrap_or_default(),
+            styles: scanned.styles,
+            default_style_id: scanned.default_style_id,
             applications: document_xml
                 .map(scan_table_style_applications)
                 .unwrap_or_default(),
@@ -140,15 +175,33 @@ impl TableStyleContext {
         let index = self.cursor.get();
         self.cursor.set(index + 1);
         let application = self.applications.get(index)?;
-        let style_id = application.style_id.as_deref()?;
+        let style_id = application
+            .style_id
+            .as_deref()
+            .or(self.default_style_id.as_deref())?;
+        let definition = self.styles.get(style_id)?.clone();
+        let inherited_margins = self
+            .default_style_id
+            .as_deref()
+            .and_then(|default_id| self.styles.get(default_id))
+            .map(|default| default.base.cell_margins)
+            .unwrap_or_default();
+        let default_cell_padding = inherited_margins
+            .overlay(definition.base.cell_margins)
+            .complete();
         Some(ResolvedTableStyle {
-            definition: self.styles.get(style_id)?.clone(),
+            definition,
             look: application.look,
+            default_cell_padding,
         })
     }
 }
 
 impl ResolvedTableStyle {
+    pub(in super::super) fn default_cell_padding(&self) -> Option<Insets> {
+        self.default_cell_padding
+    }
+
     pub(in super::super) fn cell_style(
         &self,
         row_index: usize,
@@ -273,6 +326,9 @@ impl ResolvedTableStyle {
             bold: region.bold,
             all_caps: region.all_caps,
             alignment: region.alignment,
+            padding: (region.cell_margins != self.definition.base.cell_margins)
+                .then(|| region.cell_margins.complete())
+                .flatten(),
             border,
         }
     }
@@ -373,10 +429,17 @@ fn parse_border_side(element: &quick_xml::events::BytesStart<'_>) -> Option<Bord
     })
 }
 
-fn scan_table_styles(xml: &str) -> HashMap<String, TableStyleDefinition> {
+#[derive(Default)]
+struct ScannedTableStyles {
+    styles: HashMap<String, TableStyleDefinition>,
+    default_style_id: Option<String>,
+}
+
+fn scan_table_styles(xml: &str) -> ScannedTableStyles {
     let mut reader = quick_xml::Reader::from_str(xml);
     let mut buffer: Vec<u8> = Vec::new();
     let mut styles: HashMap<String, TableStyleDefinition> = HashMap::new();
+    let mut default_style_id: Option<String> = None;
     let mut current_style_id: Option<String> = None;
     let mut current_definition = TableStyleDefinition::default();
     let mut current_region = TableStyleRegion::Base;
@@ -384,6 +447,7 @@ fn scan_table_styles(xml: &str) -> HashMap<String, TableStyleDefinition> {
     let mut in_run_properties = false;
     let mut in_paragraph_properties = false;
     let mut in_borders = false;
+    let mut in_cell_margins = false;
 
     loop {
         match reader.read_event_into(&mut buffer) {
@@ -391,6 +455,9 @@ fn scan_table_styles(xml: &str) -> HashMap<String, TableStyleDefinition> {
                 match element.local_name().as_ref() {
                     b"style" if attribute_value(element, b"type").as_deref() == Some("table") => {
                         current_style_id = attribute_value(element, b"styleId");
+                        if boolean_attribute(element, b"default").unwrap_or(false) {
+                            default_style_id.clone_from(&current_style_id);
+                        }
                         current_definition = TableStyleDefinition::default();
                         current_region = TableStyleRegion::Base;
                     }
@@ -404,6 +471,9 @@ fn scan_table_styles(xml: &str) -> HashMap<String, TableStyleDefinition> {
                     b"rPr" if current_style_id.is_some() => in_run_properties = true,
                     b"pPr" if current_style_id.is_some() => in_paragraph_properties = true,
                     b"tblBorders" | b"tcBorders" if current_style_id.is_some() => in_borders = true,
+                    b"tblCellMar" | b"tcMar" if current_style_id.is_some() => {
+                        in_cell_margins = true
+                    }
                     _ => {}
                 }
                 apply_style_element(
@@ -415,6 +485,7 @@ fn scan_table_styles(xml: &str) -> HashMap<String, TableStyleDefinition> {
                         in_run_properties,
                         in_paragraph_properties,
                         in_borders,
+                        in_cell_margins,
                     },
                 );
             }
@@ -428,6 +499,7 @@ fn scan_table_styles(xml: &str) -> HashMap<String, TableStyleDefinition> {
                         in_run_properties,
                         in_paragraph_properties,
                         in_borders,
+                        in_cell_margins,
                     },
                 );
             }
@@ -436,6 +508,7 @@ fn scan_table_styles(xml: &str) -> HashMap<String, TableStyleDefinition> {
                 b"rPr" => in_run_properties = false,
                 b"pPr" => in_paragraph_properties = false,
                 b"tblBorders" | b"tcBorders" => in_borders = false,
+                b"tblCellMar" | b"tcMar" => in_cell_margins = false,
                 b"tblStylePr" => current_region = TableStyleRegion::Base,
                 b"style" => {
                     if let Some(style_id) = current_style_id.take() {
@@ -450,7 +523,10 @@ fn scan_table_styles(xml: &str) -> HashMap<String, TableStyleDefinition> {
         buffer.clear();
     }
 
-    styles
+    ScannedTableStyles {
+        styles,
+        default_style_id,
+    }
 }
 
 /// Which property container the scanner is currently inside. `w:jc` appears
@@ -462,6 +538,7 @@ struct StyleElementScope {
     in_run_properties: bool,
     in_paragraph_properties: bool,
     in_borders: bool,
+    in_cell_margins: bool,
 }
 
 fn apply_style_element(
@@ -475,6 +552,7 @@ fn apply_style_element(
         in_run_properties,
         in_paragraph_properties,
         in_borders,
+        in_cell_margins,
     } = scope;
     let Some(target) = region_mut(definition, region) else {
         return;
@@ -491,6 +569,22 @@ fn apply_style_element(
         };
         if let Some(slot) = side_slot {
             *slot = parse_border_side(element);
+            return;
+        }
+    }
+    if in_cell_margins {
+        let value = attribute_value(element, b"w")
+            .and_then(|value| value.parse::<f64>().ok())
+            .map(crate::parser::units::twips_to_pt);
+        let slot = match element.local_name().as_ref() {
+            b"top" => Some(&mut target.cell_margins.top),
+            b"right" | b"end" => Some(&mut target.cell_margins.right),
+            b"bottom" => Some(&mut target.cell_margins.bottom),
+            b"left" | b"start" => Some(&mut target.cell_margins.left),
+            _ => None,
+        };
+        if let Some(slot) = slot {
+            *slot = value;
             return;
         }
     }
