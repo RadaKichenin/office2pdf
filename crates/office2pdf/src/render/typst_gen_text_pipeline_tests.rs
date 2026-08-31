@@ -1393,6 +1393,152 @@ fn a_pathologically_long_token_is_not_framed() {
     );
 }
 
+/// Word keeps a Latin token whole while it fits a table-cell line, then
+/// exposes character boundaries only when the token is wider than the cell.
+/// The break must not add an invisible character to the PDF text layer, and a
+/// split that crosses run boundaries must retain every run's link and style.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_docx_table_cell_breaks_only_an_overlong_latin_token() {
+    const FAMILY: &str = "Office2pdf Missing Hand Fixture";
+    const SIZE_PT: f64 = 66.0;
+    let family_chain = vec![FAMILY.to_string()];
+    let welc_width =
+        crate::render::pdf::glyph_advances_em_with_typst_fallback(&family_chain, false, "WELC")
+            .expect("Typst's fallback face should measure")
+            .iter()
+            .sum::<f64>()
+            * SIZE_PT;
+    let welco_width =
+        crate::render::pdf::glyph_advances_em_with_typst_fallback(&family_chain, false, "WELCO")
+            .expect("Typst's fallback face should measure")
+            .iter()
+            .sum::<f64>()
+            * SIZE_PT;
+    let available_width = (welc_width + welco_width) / 2.0;
+    let linked_style = |color| TextStyle {
+        font_family: Some(FAMILY.to_string()),
+        font_size: Some(SIZE_PT),
+        color: Some(color),
+        ..TextStyle::default()
+    };
+    let href = Some("https://example.com/event".to_string());
+    let cell = TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle {
+                alignment: Some(Alignment::Center),
+                line_spacing: Some(LineSpacing::Proportional(0.8)),
+                ..ParagraphStyle::default()
+            },
+            runs: vec![
+                Run {
+                    text: "AGES ".to_string(),
+                    style: linked_style(Color::black()),
+                    href: None,
+                    footnote: None,
+                },
+                Run {
+                    text: "WEL".to_string(),
+                    style: linked_style(Color::new(255, 0, 0)),
+                    href: href.clone(),
+                    footnote: None,
+                },
+                Run {
+                    text: "CO".to_string(),
+                    style: linked_style(Color::new(0, 0, 255)),
+                    href: href.clone(),
+                    footnote: None,
+                },
+                Run {
+                    text: "ME".to_string(),
+                    style: linked_style(Color::new(0, 128, 0)),
+                    href,
+                    footnote: None,
+                },
+            ],
+        })],
+        vertical_align: Some(CellVerticalAlign::Center),
+        padding: Some(Insets::default()),
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            cells: vec![cell],
+            height: Some(333.808),
+            minimum_height: None,
+        }],
+        column_widths: vec![available_width],
+        default_cell_padding: Some(Insets::default()),
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let output = generate_typst(&doc).unwrap();
+
+    assert_eq!(
+        output.source.matches("#linebreak()").count(),
+        1,
+        "the overlong token should gain one measured break: {}",
+        output.source
+    );
+    assert!(
+        !output.source.contains("AGE#linebreak()"),
+        "the fitting AGES token must stay whole: {}",
+        output.source
+    );
+    assert_eq!(
+        output.source.matches("https://example.com/event").count(),
+        4,
+        "both halves of the split run must retain their hyperlink: {}",
+        output.source
+    );
+    assert!(
+        !output.source.contains(['\u{200B}', '\u{2060}', '\u{00A0}']),
+        "no hidden break character may reach the generated source: {}",
+        output.source
+    );
+
+    let mut placed = crate::render::pdf::compiled_text_runs(&output.source, 0)
+        .unwrap_or_else(|error| panic!("compile failed: {error}\n{}", output.source));
+    placed.sort_by(|left, right| {
+        left.baseline_pt
+            .total_cmp(&right.baseline_pt)
+            .then_with(|| left.left_pt.total_cmp(&right.left_pt))
+    });
+    let extracted: String = placed.iter().map(|run| run.text.as_str()).collect();
+    assert_eq!(
+        extracted, "AGES WELCOME",
+        "the break object must not change the searchable characters"
+    );
+    let mut lines: Vec<(f64, String)> = Vec::new();
+    for run in placed {
+        match lines.last_mut() {
+            Some((baseline, text)) if (run.baseline_pt - *baseline).abs() < 0.1 => {
+                text.push_str(&run.text);
+            }
+            _ => lines.push((run.baseline_pt, run.text)),
+        }
+    }
+    assert_eq!(
+        lines
+            .iter()
+            .map(|(_, text)| text.trim().to_string())
+            .collect::<Vec<_>>(),
+        vec!["AGES", "WELC", "OME"],
+        "the overlong token should wrap at the measured character boundary: {lines:#?}"
+    );
+    let pitches: Vec<f64> = lines.windows(2).map(|pair| pair[1].0 - pair[0].0).collect();
+    assert!(
+        pitches.iter().all(|pitch| *pitch > SIZE_PT),
+        "splitting styled inline items must retain the original line metrics: {pitches:?}"
+    );
+    assert!(
+        pitches
+            .windows(2)
+            .all(|pair| (pair[1] - pair[0]).abs() < 0.1),
+        "every split line must keep the same pitch: {pitches:?}"
+    );
+}
+
 /// A table cell whose single paragraph names a family and a size, so the
 /// eojeol width guard has metrics to measure against (issue #626).
 fn make_text_cell_styled(text: &str, family: &str, font_size: f64) -> TableCell {

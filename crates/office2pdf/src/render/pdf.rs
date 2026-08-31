@@ -1404,7 +1404,134 @@ pub(crate) fn glyph_advances_em(family: &str, bold: bool, text: &str) -> Option<
         },
     };
 
-    let font: typst::text::Font = font?;
+    font_glyph_advances_em(&font?, text)
+}
+
+/// Measure `text` through the exact family list Typst receives, including its
+/// built-in fallback families and the font-book fallback it selects after
+/// those names are exhausted.
+///
+/// A DOCX can declare a face absent from the host. Typst then calls
+/// [`typst::text::FontBook::select_fallback`], while a family-only metric lookup
+/// returns `None`. Overlong-token wrapping needs the former answer because the
+/// fallback's glyph widths decide Word's character boundary (issue #1454).
+pub(crate) fn glyph_advances_em_with_typst_fallback(
+    families: &[String],
+    bold: bool,
+    text: &str,
+) -> Option<Vec<f64>> {
+    let variant = typst::text::FontVariant {
+        weight: if bold {
+            typst::text::FontWeight::BOLD
+        } else {
+            typst::text::FontWeight::REGULAR
+        },
+        ..typst::text::FontVariant::default()
+    };
+
+    #[cfg(not(target_arch = "wasm32"))]
+    let native_data = {
+        let search_paths = super::font_subst::active_font_search_paths().unwrap_or_else(|| {
+            super::font_context::resolve_font_search_context(&[])
+                .search_paths()
+                .to_vec()
+        });
+        get_fonts_for_extra_paths(&search_paths)
+    };
+    #[cfg(not(target_arch = "wasm32"))]
+    let fallback_data: &CachedFontData = native_data.as_ref();
+    #[cfg(target_arch = "wasm32")]
+    let fallback_data: &CachedFontData = get_embedded_fonts();
+
+    let in_memory_fonts: Vec<typst::text::Font> = super::font_subst::active_in_memory_fonts();
+    if in_memory_fonts.is_empty() {
+        return select_typst_font_advances(
+            &fallback_data.book,
+            |index| fallback_data.fonts.get(index).and_then(|slot| slot.get()),
+            families,
+            variant,
+            text,
+        );
+    }
+
+    // `MinimalWorld` prepends the conversion-local faces to this same
+    // fallback book. Rebuild just the lightweight metadata index so selection
+    // and tie-breaking stay identical without eagerly loading every slot.
+    let in_memory_count = in_memory_fonts.len();
+    let book = typst::text::FontBook::from_infos(
+        in_memory_fonts
+            .iter()
+            .map(|font| font.info().clone())
+            .chain(
+                (0..fallback_data.fonts.len())
+                    .filter_map(|index| fallback_data.book.info(index).cloned()),
+            ),
+    );
+    select_typst_font_advances(
+        &book,
+        |index| {
+            if index < in_memory_count {
+                in_memory_fonts.get(index).cloned()
+            } else {
+                fallback_data
+                    .fonts
+                    .get(index - in_memory_count)
+                    .and_then(|slot| slot.get())
+            }
+        },
+        families,
+        variant,
+        text,
+    )
+}
+
+fn select_typst_font_advances(
+    book: &typst::text::FontBook,
+    mut load: impl FnMut(usize) -> Option<typst::text::Font>,
+    families: &[String],
+    variant: typst::text::FontVariant,
+    text: &str,
+) -> Option<Vec<f64>> {
+    const TYPST_IMPLICIT_FAMILIES: [&str; 5] = [
+        "Libertinus Serif",
+        "Twitter Color Emoji",
+        "Noto Color Emoji",
+        "Apple Color Emoji",
+        "Segoe UI Emoji",
+    ];
+
+    let mut first_selected: Option<usize> = None;
+    for family in families
+        .iter()
+        .map(String::as_str)
+        .chain(TYPST_IMPLICIT_FAMILIES)
+    {
+        let Some(index) = book.select(&family.to_lowercase(), variant) else {
+            continue;
+        };
+        first_selected.get_or_insert(index);
+        let font = load(index)?;
+        if let Some(advances) = font_glyph_advances_em(&font, text) {
+            return Some(advances);
+        }
+        // A run needing several faces has per-segment shaping and kerning that
+        // this hmtx-only helper cannot reproduce safely. Basic Latin absent
+        // from a selected face can still continue to Typst's fallback below.
+        if text
+            .chars()
+            .any(|character| font.ttf().glyph_index(character).is_some())
+        {
+            return None;
+        }
+    }
+
+    let like = first_selected.and_then(|index| book.info(index));
+    let fallback_index = book.select_fallback(like, variant, text)?;
+    let fallback = load(fallback_index)?;
+    font_glyph_advances_em(&fallback, text)
+}
+
+fn font_glyph_advances_em(font: &typst::text::Font, text: &str) -> Option<Vec<f64>> {
     let ttf = font.ttf();
     let upem: f64 = f64::from(ttf.units_per_em()).max(1.0);
     let mut advances_em: Vec<f64> = Vec::with_capacity(text.chars().count());

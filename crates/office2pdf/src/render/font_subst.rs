@@ -1036,6 +1036,18 @@ pub(crate) fn active_in_memory_font(
     })
 }
 
+/// Every document- or caller-provided face in the same priority order the
+/// compiler prepends to its fallback font book.
+pub(crate) fn active_in_memory_fonts() -> Vec<typst::text::Font> {
+    ACTIVE_FONT_CONTEXT.with(|active_context| {
+        active_context
+            .borrow()
+            .as_ref()
+            .map(|context| context.in_memory_fonts().to_vec())
+            .unwrap_or_default()
+    })
+}
+
 /// The conversion-local filesystem font paths, when code generation is
 /// running under a native font context.
 ///
@@ -1112,17 +1124,47 @@ pub(crate) fn painted_family_for_text(
         let Some(context) = context.as_ref() else {
             return declared_family.to_string();
         };
-        let families: Vec<String> = match east_asian_family {
-            Some(east_asian) if !east_asian.eq_ignore_ascii_case(latin_family) => {
-                east_asian_family_chain(latin_family, east_asian, text, Some(context))
-            }
-            _ => latin_family_chain(latin_family, text, Some(context)),
-        };
+        let families: Vec<String> = family_chain_for_text_with_context(
+            latin_family,
+            east_asian_family,
+            text,
+            Some(context),
+        );
         families
             .into_iter()
             .find(|family| covers_script_with_alias(context, family, script))
             .unwrap_or_else(|| declared_family.to_string())
     })
+}
+
+/// The exact ordered family list the emitter states for one run.
+///
+/// Metric callers that must reproduce Typst's implicit fallback need the
+/// entire list: when every named family is absent, Typst selects a fallback
+/// from its font book rather than resolving one declared name in isolation.
+pub(crate) fn family_chain_for_text(
+    latin_family: &str,
+    east_asian_family: Option<&str>,
+    text: &str,
+) -> Vec<String> {
+    ACTIVE_FONT_CONTEXT.with(|active_context| {
+        let context = active_context.borrow();
+        family_chain_for_text_with_context(latin_family, east_asian_family, text, context.as_ref())
+    })
+}
+
+fn family_chain_for_text_with_context(
+    latin_family: &str,
+    east_asian_family: Option<&str>,
+    text: &str,
+    context: Option<&FontSearchContext>,
+) -> Vec<String> {
+    match east_asian_family {
+        Some(east_asian) if !east_asian.eq_ignore_ascii_case(latin_family) => {
+            east_asian_family_chain(latin_family, east_asian, text, context)
+        }
+        _ => latin_family_chain(latin_family, text, context),
+    }
 }
 
 /// The ordered candidate list behind [`font_with_east_asian_fallbacks`], for

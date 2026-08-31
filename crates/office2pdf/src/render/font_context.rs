@@ -135,6 +135,12 @@ impl FontSearchContext {
             .cloned()
     }
 
+    /// Conversion-local faces in the order they precede the compiler's
+    /// fallback font slots.
+    pub(crate) fn in_memory_fonts(&self) -> &[typst::text::Font] {
+        &self.in_memory_fonts
+    }
+
     #[cfg(test)]
     pub(crate) fn for_test(
         search_paths: Vec<PathBuf>,
