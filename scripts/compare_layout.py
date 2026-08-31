@@ -2,8 +2,9 @@
 """Trace-based layout differ: a per-page deviation vector instead of a pixel scalar.
 
 Parses ``mutool draw -F trace`` for a ground-truth PDF and an office2pdf
-output, reconstructs text lines and vector rects in device points, matches
-lines by their text, and reports typed deviations:
+output, reconstructs text and vector-path bounds in device points, and
+conservatively recovers ``ignore_text`` geometry when a nearby path supplies
+visible ink. It then matches lines by their text and reports typed deviations:
 
 - matched / missing / extra lines, and wrap-point differences (text that is
   present but breaks at a different word) counted separately from real loss;
@@ -50,7 +51,7 @@ from spatial_match import minimum_cost_pairs
 # attribute; later builds add one. Requiring it parses zero pages and reports
 # that as "no differences found" instead of as a failure.
 PAGE_RE = re.compile(r"<page\b[^>]*>(.*?)</page>", re.S)
-FILL_TEXT_RE = re.compile(r"<fill_text\b([^>]*)>(.*?)</fill_text>", re.S)
+TEXT_RE = re.compile(r"<(fill_text|ignore_text)\b([^>]*)>(.*?)</\1>", re.S)
 SPAN_RE = re.compile(r"<span\b([^>]*)>(.*?)</span>", re.S)
 GLYPH_RE = re.compile(
     r'<g unicode="([^"]*)" glyph="[^"]*" x="([-0-9.e]+)" y="([-0-9.e]+)" adv="([-0-9.e]+)"'
@@ -94,6 +95,9 @@ class Glyph:
     paint_index: int = -1
     color: tuple[float, float, float] | None = None
     alpha: float = 1.0
+    needs_path_ink: bool = False
+    paint_window_start: int = -1
+    paint_window_end: int = -1
 
 
 @dataclass(frozen=True)
@@ -101,7 +105,7 @@ class Paint:
     """One later operation that can determine whether text remains visible."""
 
     index: int
-    kind: str  # "flat" | "image" | "shade"
+    kind: str  # "flat" | "image" | "shade" | "path"
     x0: float
     y0: float
     x1: float
@@ -353,12 +357,59 @@ def glyph_bbox(glyph: Glyph) -> tuple[float, float, float, float]:
     )
 
 
+def bboxes_overlap(
+    first: tuple[float, float, float, float],
+    second: tuple[float, float, float, float],
+) -> bool:
+    return (
+        first[0] < second[2]
+        and first[2] > second[0]
+        and first[1] < second[3]
+        and first[3] > second[1]
+    )
+
+
+def ignored_text_path_inks(glyph: Glyph, paints: list[Paint]) -> list[Paint]:
+    """Compact preceding paths used as an ``ignore_text`` visibility cue.
+
+    This does not identify a font program or prove that the path is a glyph.
+    It is a conservative trace-order heuristic observed on issue #1407's
+    ground truth: only a path since the preceding text operation and within
+    half an em of the ignored glyph is accepted. Pathless invisible/OCR text
+    remains hidden; pixel-difference inspection remains the fallback for an
+    ambiguous nearby path.
+    """
+    bbox = glyph_bbox(glyph)
+    allowance = glyph.size * 0.5
+    return [
+        paint
+        for paint in paints
+        if paint.kind == "path"
+        and paint.alpha > INVISIBLE_ALPHA
+        and glyph.paint_window_start < paint.index < glyph.paint_window_end
+        and paint.x0 >= bbox[0] - allowance
+        and paint.y0 >= bbox[1] - allowance
+        and paint.x1 <= bbox[2] + allowance
+        and paint.y1 <= bbox[3] + allowance
+        and bboxes_overlap(
+            (paint.x0, paint.y0, paint.x1, paint.y1),
+            bbox,
+        )
+    ]
+
+
 def glyph_visibility(glyph: Glyph, paints: list[Paint]) -> str:
     if glyph.alpha <= INVISIBLE_ALPHA:
         return "hidden"
+    own_path_inks = (
+        ignored_text_path_inks(glyph, paints) if glyph.needs_path_ink else []
+    )
+    if glyph.needs_path_ink and not own_path_inks:
+        return "hidden"
     bbox = glyph_bbox(glyph)
     if any(
-        paint.index > glyph.paint_index
+        paint.kind in {"flat", "image", "shade"}
+        and paint.index > glyph.paint_index
         and paint.alpha >= OPAQUE_ALPHA
         and paint_covers(paint, bbox)
         for paint in paints
@@ -411,8 +462,15 @@ def parse_trace(trace_xml: str) -> list[PageLayout]:
         content = page_match.group(1)
         glyphs: list[Glyph] = []
         rotated_lines: list[Line] = []
-        for op_match in FILL_TEXT_RE.finditer(content):
-            op_attrs, op_body = op_match.groups()
+        text_operations = list(TEXT_RE.finditer(content))
+        for operation_index, op_match in enumerate(text_operations):
+            op_kind, op_attrs, op_body = op_match.groups()
+            paint_window_start = (
+                text_operations[operation_index - 1].end()
+                if operation_index > 0
+                else 0
+            )
+            paint_window_end = op_match.start()
             transform = parse_transform(op_attrs)
             if transform is None:
                 continue
@@ -437,6 +495,9 @@ def parse_trace(trace_xml: str) -> list[PageLayout]:
                             paint_index=op_match.start(),
                             color=color,
                             alpha=alpha,
+                            needs_path_ink=op_kind == "ignore_text",
+                            paint_window_start=paint_window_start,
+                            paint_window_end=paint_window_end,
                         )
                     )
             if not transformed_run:
@@ -468,15 +529,29 @@ def parse_trace(trace_xml: str) -> list[PageLayout]:
                 xs.append(a * point_x + c * point_y + e)
                 ys.append(b * point_x + d * point_y + f)
             if xs:
+                bbox = (min(xs), min(ys), max(xs), max(ys))
                 rects.append(
                     Rect(
                         kind="fill" if kind == "fill_path" else "stroke",
-                        x0=min(xs),
-                        y0=min(ys),
-                        x1=max(xs),
-                        y1=max(ys),
+                        x0=bbox[0],
+                        y0=bbox[1],
+                        x1=bbox[2],
+                        y1=bbox[3],
                     )
                 )
+                if kind == "fill_path":
+                    paints.append(
+                        Paint(
+                            index=op_match.start(),
+                            kind="path",
+                            x0=bbox[0],
+                            y0=bbox[1],
+                            x1=bbox[2],
+                            y1=bbox[3],
+                            alpha=parse_alpha(op_attrs),
+                            color=parse_rgb(op_attrs),
+                        )
+                    )
                 flat_bbox = axis_aligned_rect_bbox(op_attrs, op_body)
                 if kind == "fill_path" and flat_bbox is not None:
                     paints.append(
