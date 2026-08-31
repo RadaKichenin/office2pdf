@@ -387,6 +387,83 @@ class LayoutAuditTests(unittest.TestCase):
             )
         self.assertTrue(any("after.jpg must be changed" in error for error in errors))
 
+    def test_text_layer_only_fix_accepts_identical_decoded_before_and_after_images(self):
+        body = visual_body().replace(
+            "- Evidence mode: `fix`",
+            "- Evidence mode: `fix`\n- Text-layer-only: Yes\n- Pixel delta: 0",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            issue_dir = root / "assets/bugfixes/issue-186"
+            issue_dir.mkdir(parents=True)
+            (issue_dir / "layout-audit.json").write_text(
+                json.dumps(layout_report()), encoding="utf-8"
+            )
+            evidence = (ROOT / "assets/bugfixes/issue-186/after.jpg").read_bytes()
+            (issue_dir / "before.jpg").write_bytes(evidence)
+            (issue_dir / "after.jpg").write_bytes(evidence)
+            errors = validate_layout_audit(
+                body,
+                ["assets/bugfixes/issue-186/layout-audit.json"],
+                root,
+            )
+        self.assertEqual(errors, [])
+
+    def test_text_layer_only_fix_rejects_different_decoded_before_and_after_images(self):
+        body = visual_body().replace(
+            "- Evidence mode: `fix`",
+            "- Evidence mode: `fix`\n- Text-layer-only: Yes\n- Pixel delta: 0",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            issue_dir = root / "assets/bugfixes/issue-186"
+            issue_dir.mkdir(parents=True)
+            (issue_dir / "layout-audit.json").write_text(
+                json.dumps(layout_report()), encoding="utf-8"
+            )
+            (issue_dir / "before.jpg").write_bytes(
+                (ROOT / "assets/bugfixes/issue-186/gt.jpg").read_bytes()
+            )
+            (issue_dir / "after.jpg").write_bytes(
+                (ROOT / "assets/bugfixes/issue-186/after.jpg").read_bytes()
+            )
+            errors = validate_layout_audit(
+                body,
+                ["assets/bugfixes/issue-186/layout-audit.json"],
+                root,
+            )
+        self.assertTrue(any("decoded-pixel delta" in error for error in errors))
+
+    def test_text_layer_only_fix_requires_zero_pixel_delta(self):
+        body = visual_body().replace(
+            "- Evidence mode: `fix`",
+            "- Evidence mode: `fix`\n- Text-layer-only: Yes\n- Pixel delta: 1",
+        )
+        errors = validate_report(body, layout_report())
+        self.assertTrue(any("Pixel delta must be 0" in error for error in errors))
+
+    def test_text_layer_only_fix_requires_current_before_image(self):
+        body = visual_body().replace(
+            "- Evidence mode: `fix`",
+            "- Evidence mode: `fix`\n- Text-layer-only: Yes\n- Pixel delta: 0",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            issue_dir = root / "assets/bugfixes/issue-186"
+            issue_dir.mkdir(parents=True)
+            (issue_dir / "layout-audit.json").write_text(
+                json.dumps(layout_report()), encoding="utf-8"
+            )
+            (issue_dir / "after.jpg").write_bytes(
+                (ROOT / "assets/bugfixes/issue-186/after.jpg").read_bytes()
+            )
+            errors = validate_layout_audit(
+                body,
+                ["assets/bugfixes/issue-186/layout-audit.json"],
+                root,
+            )
+        self.assertTrue(any("before.jpg: current evidence is required" in error for error in errors))
+
     def test_fix_audit_requires_issue_scoped_report_path(self):
         body = visual_body().replace(
             "assets/bugfixes/issue-186/layout-audit.json",

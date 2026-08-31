@@ -1,0 +1,61 @@
+{
+ "pages": [
+  {
+   "lines": {
+    "gt": 3,
+    "out": 3,
+    "matched": 3,
+    "missing": 0,
+    "extra": 0,
+    "deviant": 2,
+    "missing_text": [],
+    "extra_text": []
+   },
+   "baseline": {
+    "mean_abs_dy": 0.3783866666666616,
+    "worst_dy": 0.6072900000000345,
+    "worst_dy_signed": 0.6072900000000345,
+    "worst_line": "MARKETINGPLAN"
+   },
+   "dx0": {
+    "mean_abs": 0.024676666666654985,
+    "worst": 0.07299999999997908
+   },
+   "width": {
+    "mean_abs_pct": 0.02768377541116282,
+    "worst_pct": 0.05780804721901305
+   },
+   "instances": {
+    "large_shift_threshold": 5.0,
+    "large_shift_count": 0,
+    "large_shifts": []
+   },
+   "visibility": {
+    "mismatch_count": 0,
+    "mismatches": []
+   },
+   "pitch": {
+    "pairs": 2,
+    "worst_delta": 0.6478900000000181
+   },
+   "wraps": {
+    "count": 0,
+    "samples": []
+   },
+   "reflow": {
+    "gt_lines": 0,
+    "out_lines": 0,
+    "samples": []
+   },
+   "rects": {
+    "gt_count": 6,
+    "out_count": 5,
+    "matched": 5,
+    "mean_center_delta": 0.0245780993920107
+   },
+   "noise_floor": 0.12
+  }
+ ],
+ "gt_pages": 1,
+ "out_pages": 1
+}
