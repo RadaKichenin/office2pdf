@@ -4373,6 +4373,122 @@ fn excel_gift_column_chart(size_pt: f64, number_format: Option<&str>) -> Chart {
 /// page it measures 833.10 x 252.54pt.
 const EXCEL_GIFT_CHART_FRAME: (f64, f64) = (1015.9784, 307.9732);
 
+/// The same anchored worksheet combo chart with its three vertical-layout
+/// text bands stated independently.
+fn excel_gift_vertical_chart(
+    value_axis_size_pt: f64,
+    category_axis_size_pt: f64,
+    legend_size_pt: f64,
+) -> Chart {
+    let mut chart = combo_budget_chart();
+    chart.categories = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ]
+    .into_iter()
+    .map(str::to_string)
+    .collect();
+    chart.text_font_family = Some("Segoe UI".to_string());
+    chart.value_axis_text_style.size_pt = Some(value_axis_size_pt);
+    chart.category_axis_text_style.size_pt = Some(category_axis_size_pt);
+    chart.legend_text_style.size_pt = Some(legend_size_pt);
+    chart
+}
+
+#[test]
+fn an_excel_worksheet_column_plot_uses_the_native_vertical_edges() {
+    // The native Excel export puts the chart-local plot at 10.146..258.327pt
+    // inside the 307.9732pt frame. The old shared PowerPoint chrome produced
+    // 10.463..257.373pt: 0.317pt low at the top, 0.954pt high at the bottom,
+    // and therefore 1.271pt short overall (issue #1250).
+    let chart = excel_gift_vertical_chart(9.0, 9.0, 9.0);
+    let (_, top, _, bottom) = axis_plot_rect(&chart, EXCEL_GIFT_CHART_FRAME, false);
+
+    assert!(
+        (top - 10.146).abs() <= 0.05,
+        "plot top {top}pt, Excel's 10.146pt"
+    );
+    assert!(
+        (bottom - 258.327).abs() <= 0.05,
+        "plot bottom {bottom}pt, Excel's 258.327pt"
+    );
+    assert!(
+        ((bottom - top) - 248.181).abs() <= 0.05,
+        "plot height {}pt, Excel's 248.181pt",
+        bottom - top
+    );
+}
+
+#[test]
+fn an_excel_worksheet_plot_top_follows_the_native_value_size_probes() {
+    // Re-zip-controlled native Excel exports with only c:valAx text size
+    // changed. Excel floors the top chrome at the 9pt seat, then grows it by
+    // approximately two thirds of a point per additional text point.
+    let measurements = [
+        (7.0, 10.1460),
+        (9.0, 10.1460),
+        (11.0, 11.4610),
+        (14.0, 13.4560),
+        (18.0, 16.1186),
+    ];
+    for (size_pt, expected_top) in measurements {
+        let chart = excel_gift_vertical_chart(size_pt, 9.0, 9.0);
+        let actual_top = axis_plot_rect(&chart, EXCEL_GIFT_CHART_FRAME, false).1;
+        assert!(
+            (actual_top - expected_top).abs() <= 0.05,
+            "{size_pt}pt value axis: plot top {actual_top}pt, Excel's {expected_top}pt"
+        );
+    }
+}
+
+#[test]
+fn an_excel_worksheet_plot_bottom_follows_both_native_text_band_probes() {
+    // The bottom edge moves independently with the category and bottom-legend
+    // bands: 2.05pt per category text point and 1.3167pt per legend text point.
+    let category_measurements = [
+        (7.0, 262.4234),
+        (9.0, 258.3270),
+        (11.0, 254.2270),
+        (14.0, 248.0802),
+        (18.0, 239.8752),
+    ];
+    for (size_pt, expected_bottom) in category_measurements {
+        let chart = excel_gift_vertical_chart(9.0, size_pt, 9.0);
+        let actual_bottom = axis_plot_rect(&chart, EXCEL_GIFT_CHART_FRAME, false).3;
+        assert!(
+            (actual_bottom - expected_bottom).abs() <= 0.05,
+            "{size_pt}pt category axis: plot bottom {actual_bottom}pt, Excel's {expected_bottom}pt"
+        );
+    }
+
+    let legend_measurements = [
+        (7.0, 260.9604),
+        (9.0, 258.3270),
+        (11.0, 255.6937),
+        (14.0, 251.7434),
+        (18.0, 246.4717),
+    ];
+    for (size_pt, expected_bottom) in legend_measurements {
+        let chart = excel_gift_vertical_chart(9.0, 9.0, size_pt);
+        let actual_bottom = axis_plot_rect(&chart, EXCEL_GIFT_CHART_FRAME, false).3;
+        assert!(
+            (actual_bottom - expected_bottom).abs() <= 0.05,
+            "{size_pt}pt legend: plot bottom {actual_bottom}pt, Excel's {expected_bottom}pt"
+        );
+    }
+}
+
+#[test]
+fn an_excel_worksheet_plot_without_a_legend_reclaims_excels_legend_band() {
+    // Removing c:legend in the native workbook extends the plot by 23.850pt.
+    let mut chart = excel_gift_vertical_chart(9.0, 9.0, 9.0);
+    chart.has_legend = false;
+    let actual_bottom = axis_plot_rect(&chart, EXCEL_GIFT_CHART_FRAME, false).3;
+    assert!(
+        (actual_bottom - 282.177).abs() <= 0.05,
+        "plot bottom without legend {actual_bottom}pt, Excel's 282.177pt"
+    );
+}
+
 #[test]
 fn an_excel_worksheet_chart_seats_its_category_and_bottom_legend_bands() {
     // A fresh Excel for Mac 16.112 export of `Gift Budget and Tracker1.xlsx`

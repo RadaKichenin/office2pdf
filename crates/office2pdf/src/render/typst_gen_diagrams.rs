@@ -1263,26 +1263,47 @@ const CHART_COLUMN_VALUE_GUTTER_EM: f64 = 3.13;
 
 /// Insets PowerPoint keeps at the top and right of a framed column plot.
 ///
-/// Across the same native #841 exports the right edge remains 11pt inside the
-/// chart frame, while the top edge follows `5pt + 0.607em`.
+/// Across the native #841 exports the right edge remains 11pt inside the chart
+/// frame, while the top edge follows `5pt + 0.607em`. Excel worksheet charts
+/// use the separate native model below; the shared right inset already agrees
+/// with the audited Excel frame.
 const CHART_COLUMN_RIGHT_PAD_PT: f64 = 11.0;
 const CHART_COLUMN_TOP_PAD_PT: f64 = 5.0;
 const CHART_COLUMN_TOP_PAD_EM: f64 = 0.607;
 
+/// Vertical chrome around an automatic Excel worksheet column plot.
+///
+/// Re-zip-controlled native Excel for Mac 16.112 exports of the #1250 workbook
+/// isolate four factors. The top inset stays at 10.146pt through a 9pt value
+/// axis, then grows by two thirds of a point per additional text point. With
+/// category and legend text at 9pt, suppressing their bands extends the plot by
+/// 13.943pt and 23.850pt respectively; the remaining 11.853pt is Excel's fixed
+/// bottom edge pad. Size sweeps make those two bands grow by 2.05pt and 79/60pt
+/// per text point. A frame-height sweep moves the bottom edge 1:1, so none of
+/// these quantities is a share of the frame.
+const EXCEL_COLUMN_TOP_INSET_AT_NINE_PT: f64 = 10.146;
+const EXCEL_COLUMN_TOP_INSET_GROWTH_EM: f64 = 2.0 / 3.0;
+const EXCEL_COLUMN_BOTTOM_EDGE_PAD_PT: f64 = 11.853;
+const EXCEL_COLUMN_CATEGORY_BAND_AT_NINE_PT: f64 = 13.943;
+const EXCEL_COLUMN_CATEGORY_BAND_GROWTH_EM: f64 = 2.05;
+const EXCEL_BOTTOM_LEGEND_BAND_AT_NINE_PT: f64 = 23.850;
+const EXCEL_BOTTOM_LEGEND_BAND_GROWTH_EM: f64 = 79.0 / 60.0;
+
 /// Chart-local correction for a 9pt category-label band under a worksheet-
-/// hosted Excel plot.
+/// hosted Excel plot after its native bottom chrome is reserved.
 ///
 /// A native Excel for Mac 16.112.2 export of `Gift Budget and Tracker1.xlsx`
-/// puts the `Jan` baseline 2.206pt above this renderer's old seat at the
-/// sheet's 0.82 print scale: 2.690pt in the chart's own coordinates. Four
-/// one-factor size probes establish the response around that 9pt anchor; see
-/// [`excel_category_label_y_shift_pt`].
-const EXCEL_CATEGORY_LABEL_BASE_Y_SHIFT_PT: f64 = -2.690;
+/// puts the label box at 256.683pt in the chart-local frame. Once #1250 gives
+/// the plot its native 258.327pt bottom edge, that is a -3.644pt correction
+/// from the generic 2pt gap. Four one-factor size probes establish the integer
+/// chart-grid response around that 9pt anchor.
+const EXCEL_CATEGORY_LABEL_BASE_Y_SHIFT_PT: f64 = -3.644;
 
-/// Chart-local correction for a 9pt bottom legend under a worksheet-hosted
-/// Excel plot. The same export puts its four legend baselines 4.216 printed points,
-/// or 5.141 chart-local points, above the old seat.
-const EXCEL_BOTTOM_LEGEND_BASE_Y_SHIFT_PT: f64 = -5.141;
+/// Chart-local correction for a 9pt bottom legend after its native 23.850pt
+/// band is reserved. The band moves the generic row origin 3.850pt upward, so
+/// the old -5.141pt correction becomes -1.291pt without moving the text.
+const EXCEL_BOTTOM_LEGEND_BASE_Y_SHIFT_PT: f64 = -1.291;
+const EXCEL_BOTTOM_LEGEND_Y_SHIFT_GROWTH_EM: f64 = 37.0 / 60.0;
 
 /// Clearance under the longest 45deg category label in a framed column plot.
 ///
@@ -2300,9 +2321,8 @@ fn excel_category_label_y_shift_pt(chart: &Chart) -> f64 {
         return 0.0;
     }
     let size_pt: f64 = chart_axis_text_pt(chart, chart.category_axis_text_style);
-    let from_nine_pt: f64 = size_pt - 9.0;
     let native_grid_steps: f64 = ((size_pt - 8.0) / 4.0).round();
-    EXCEL_CATEGORY_LABEL_BASE_Y_SHIFT_PT + 1.35 * from_nine_pt - native_grid_steps
+    EXCEL_CATEGORY_LABEL_BASE_Y_SHIFT_PT - native_grid_steps
 }
 
 /// Vertical correction for a bottom legend in an Excel worksheet chart.
@@ -2320,7 +2340,8 @@ fn excel_bottom_legend_y_shift_pt(chart: &Chart) -> f64 {
         return 0.0;
     }
     let from_nine_pt: f64 = chart_legend_text_pt(chart) - 9.0;
-    EXCEL_BOTTOM_LEGEND_BASE_Y_SHIFT_PT - 0.7 * from_nine_pt - (from_nine_pt / 3.0).round()
+    EXCEL_BOTTOM_LEGEND_BASE_Y_SHIFT_PT + EXCEL_BOTTOM_LEGEND_Y_SHIFT_GROWTH_EM * from_nine_pt
+        - (from_nine_pt / 3.0).round()
 }
 
 /// Left coordinate of a rotated category-label box whose trailing end pins to
@@ -2348,6 +2369,14 @@ fn axis_label_gutters(chart: &Chart, frame: Option<(f64, f64)>) -> (f64, f64) {
     } else {
         let category_band: f64 = if chart_category_labels_rotated(chart, frame) {
             chart_category_rotated_gutter_pt(chart)
+        } else if chart.host == crate::ir::ChartHost::Spreadsheet
+            && (chart.text_style.size_pt.is_some()
+                || chart.category_axis_text_style.size_pt.is_some())
+        {
+            let size_pt: f64 = chart_axis_text_pt(chart, chart.category_axis_text_style);
+            EXCEL_COLUMN_BOTTOM_EDGE_PAD_PT
+                + EXCEL_COLUMN_CATEGORY_BAND_AT_NINE_PT
+                + EXCEL_COLUMN_CATEGORY_BAND_GROWTH_EM * (size_pt - 9.0)
         } else {
             chart_category_band_pt(chart)
         };
@@ -2481,11 +2510,18 @@ fn axis_plot_size(chart: &Chart, frame: Option<(f64, f64)>) -> (f64, f64) {
 /// Extra top/right breathing room inside a framed column chart.
 fn axis_plot_insets(chart: &Chart, frame: Option<(f64, f64)>) -> (f64, f64) {
     if frame.is_some() && matches!(chart.chart_type, ChartType::Column) {
-        (
+        let has_declared_value_size: bool =
+            chart.text_style.size_pt.is_some() || chart.value_axis_text_style.size_pt.is_some();
+        let top: f64 = if chart.host == crate::ir::ChartHost::Spreadsheet && has_declared_value_size
+        {
+            let size_pt: f64 = chart_axis_text_pt(chart, chart.value_axis_text_style);
+            EXCEL_COLUMN_TOP_INSET_AT_NINE_PT
+                + EXCEL_COLUMN_TOP_INSET_GROWTH_EM * (size_pt - 9.0).max(0.0)
+        } else {
             CHART_COLUMN_TOP_PAD_PT
-                + CHART_COLUMN_TOP_PAD_EM * chart_axis_text_pt(chart, chart.value_axis_text_style),
-            CHART_COLUMN_RIGHT_PAD_PT,
-        )
+                + CHART_COLUMN_TOP_PAD_EM * chart_axis_text_pt(chart, chart.value_axis_text_style)
+        };
+        (top, CHART_COLUMN_RIGHT_PAD_PT)
     } else {
         (0.0, 0.0)
     }
@@ -3345,6 +3381,15 @@ fn axis_legend_box(chart: &Chart) -> LegendBox {
         axis_legend_row_height_pt(chart),
         LEGEND_ENTRY_W,
     );
+    if chart.host == crate::ir::ChartHost::Spreadsheet
+        && matches!(chart.chart_type, ChartType::Column)
+        && matches!(chart.legend_position, LegendPosition::Bottom)
+        && (chart.text_style.size_pt.is_some() || chart.legend_text_style.size_pt.is_some())
+    {
+        let size_pt: f64 = chart_legend_text_pt(chart);
+        legend.bottom = EXCEL_BOTTOM_LEGEND_BAND_AT_NINE_PT
+            + EXCEL_BOTTOM_LEGEND_BAND_GROWTH_EM * (size_pt - 9.0);
+    }
     if matches!(
         chart.legend_position,
         LegendPosition::Left | LegendPosition::Right
@@ -4005,10 +4050,15 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 chart_tick_band_pt(chart),
             )
         } else {
-            (
-                chart_tick_band_pt(chart) + GAP,
-                chart_category_band_pt(chart),
-            )
+            let category_gutter_h: f64 = if chart.host == crate::ir::ChartHost::Spreadsheet
+                && (chart.text_style.size_pt.is_some()
+                    || chart.category_axis_text_style.size_pt.is_some())
+            {
+                axis_label_gutters(chart, frame).1
+            } else {
+                chart_category_band_pt(chart)
+            };
+            (chart_tick_band_pt(chart) + GAP, category_gutter_h)
         };
         let (entry_x, entry_y) = legend.entry_origin(
             chart.legend_position,
