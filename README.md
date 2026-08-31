@@ -16,7 +16,7 @@ No LibreOffice, no Chromium, no Docker — just a single binary powered by [Typs
 - **XLSX** — sheets (hidden ones skipped, as Excel does), chartsheets (one page-sized chart each), cell formatting, merged cells, column widths, row heights, Excel tables (built-in style banding, header/foot rules, bold header), conditional formatting (DataBar, IconSet, and formula rules)
 - **PDF/A-2b** — archival-compliant output via `--pdf-a`
 - **Embedded font extraction** — fonts embedded in PPTX/DOCX are automatically extracted, deobfuscated, and used during conversion
-- **macOS Office font auto-discovery** — PowerPoint/Word/Excel bundled fonts and Office cloud font caches are searched automatically
+- **macOS Office font auto-discovery** — PowerPoint/Word/Excel bundled fonts are searched automatically; mutable per-user Office cloud caches require an explicit font path
 - **WASM** — runs in browsers and Node.js via WebAssembly, with optional caller-provided or feature-gated Simplified Chinese fonts
 - **Zero external dependencies** — runs as a standalone executable
 
@@ -111,7 +111,12 @@ office2pdf document.docx --pdf-a
 office2pdf report.docx --font-path /usr/share/fonts/custom
 ```
 
-On macOS, `office2pdf` automatically searches Microsoft Office app fonts and local Office font caches before falling back to regular system fonts. `--font-path` is only needed as an override for custom local fonts.
+On macOS, `office2pdf` automatically searches fonts bundled in Microsoft Office
+applications before falling back to regular system fonts. It does not
+automatically read the mutable per-user `CloudFonts` or `PreviewFont` caches,
+whose contents depend on previously opened documents. Pass such a cache (or any
+other custom font directory) explicitly with `--font-path` or
+`ConvertOptions::font_paths` when that host-specific behavior is intentional.
 
 ### WASM (Browser / Node.js)
 

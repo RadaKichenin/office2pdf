@@ -1,6 +1,7 @@
 #![cfg(not(target_arch = "wasm32"))] // native-only unit tests (filesystem, system fonts)
 use super::*;
 use std::fs;
+use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 struct TempDir {
@@ -30,7 +31,7 @@ impl Drop for TempDir {
 }
 
 #[test]
-fn test_discover_macos_office_font_paths_prefers_office_order() {
+fn test_discover_macos_office_font_paths_ignores_mutable_per_user_caches() {
     let temp = TempDir::new("office-font-discovery-order");
     let apps = temp.path().join("Applications");
     let home = temp.path().join("home");
@@ -46,7 +47,7 @@ fn test_discover_macos_office_font_paths_prefers_office_order() {
     )
     .unwrap();
 
-    let discovered = discover_macos_office_font_paths_from(&[apps], &home);
+    let discovered = discover_macos_office_font_paths_from(&[apps]);
     let expected = vec![
         fs::canonicalize(
             temp.path()
@@ -58,23 +59,13 @@ fn test_discover_macos_office_font_paths_prefers_office_order() {
                 .join("Applications/Microsoft Word.app/Contents/Resources/DFonts"),
         )
         .unwrap(),
-        fs::canonicalize(
-            temp.path()
-                .join("home/Library/Group Containers/UBF8T346G9.Office/FontCache/4/CloudFonts"),
-        )
-        .unwrap(),
-        fs::canonicalize(
-            temp.path()
-                .join("home/Library/Group Containers/UBF8T346G9.Office/FontCache/4/PreviewFont"),
-        )
-        .unwrap(),
     ];
 
     assert_eq!(discovered, expected);
 }
 
 #[test]
-fn test_discover_macos_office_font_paths_selects_highest_font_cache_version() {
+fn test_discover_macos_office_font_paths_does_not_use_a_cache_only_home() {
     let temp = TempDir::new("office-font-discovery-version");
     let apps = temp.path().join("Applications");
     let home = temp.path().join("home");
@@ -92,18 +83,11 @@ fn test_discover_macos_office_font_paths_selects_highest_font_cache_version() {
     )
     .unwrap();
 
-    let discovered = discover_macos_office_font_paths_from(&[apps], &home);
+    let discovered = discover_macos_office_font_paths_from(&[apps]);
     assert!(
-        discovered
-            .iter()
-            .any(|path| path.ends_with("FontCache/7/CloudFonts")),
-        "highest font cache version should be used"
-    );
-    assert!(
-        discovered
-            .iter()
-            .all(|path| !path.ends_with("FontCache/4/CloudFonts")),
-        "older font cache versions should be ignored"
+        discovered.is_empty(),
+        "application-private caches must not make an unembedded font appear installed: \
+         {discovered:#?}"
     );
 }
 
