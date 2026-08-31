@@ -343,6 +343,7 @@ fn test_merge_paragraph_style_preserves_inherited_tabs_not_overridden() {
         },
         paragraph_tab_overrides: None,
         heading_level: None,
+        heading_has_document_run_formatting: false,
     };
 
     let merged = merge_paragraph_style(&explicit, explicit_tab_overrides.as_deref(), Some(&style));
@@ -404,6 +405,7 @@ fn test_merge_paragraph_style_clears_only_targeted_inherited_tab_stop() {
         },
         paragraph_tab_overrides: None,
         heading_level: None,
+        heading_has_document_run_formatting: false,
     };
 
     let merged = merge_paragraph_style(&explicit, explicit_tab_overrides.as_deref(), Some(&style));
@@ -445,6 +447,7 @@ fn test_merge_paragraph_style_allows_clearing_inherited_tab_stops() {
         },
         paragraph_tab_overrides: None,
         heading_level: None,
+        heading_has_document_run_formatting: false,
     };
 
     let merged = merge_paragraph_style(&explicit, None, Some(&style));
@@ -791,6 +794,7 @@ fn test_explicit_word_wrap_overrides_the_style_chain() {
         },
         paragraph_tab_overrides: None,
         heading_level: None,
+        heading_has_document_run_formatting: false,
     };
 
     let merged = merge_paragraph_style(&explicit, None, Some(&style));

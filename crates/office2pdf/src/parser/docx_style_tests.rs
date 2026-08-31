@@ -47,6 +47,126 @@ fn test_heading2_style_applies_defaults() {
 }
 
 #[test]
+fn test_custom_heading1_and_linked_character_typography_do_not_synthesize_bold() {
+    // Reduced from `Place your event title here.docx`: the paragraph style
+    // states its display size, and the linked character style states the face
+    // and size. Word treats the omitted w:b as regular rather than layering
+    // a synthesized Heading 1 bold default on top (issue #1457).
+    let styles_xml = r#"<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+      <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
+        <w:name w:val="Normal"/>
+      </w:style>
+      <w:style w:type="paragraph" w:styleId="Heading1">
+        <w:name w:val="heading 1"/>
+        <w:basedOn w:val="Normal"/>
+        <w:link w:val="Heading1Char"/>
+        <w:pPr><w:outlineLvl w:val="0"/></w:pPr>
+        <w:rPr><w:sz w:val="132"/><w:szCs w:val="132"/></w:rPr>
+      </w:style>
+      <w:style w:type="character" w:customStyle="1" w:styleId="Heading1Char">
+        <w:name w:val="Heading 1 Char"/>
+        <w:link w:val="Heading1"/>
+        <w:rPr>
+          <w:rFonts w:ascii="The Hand Black" w:hAnsi="The Hand Black"/>
+          <w:sz w:val="132"/><w:szCs w:val="132"/>
+        </w:rPr>
+      </w:style>
+    </w:styles>"#;
+    let body_xml = r#"<w:p>
+      <w:pPr><w:pStyle w:val="Heading1"/></w:pPr>
+      <w:r><w:rPr><w:rStyle w:val="Heading1Char"/></w:rPr><w:t>ALL AGES WELCOME</w:t></w:r>
+    </w:p>"#;
+
+    let data = super::page_feature_tests::build_docx_with_raw_styles(styles_xml, body_xml);
+    let (doc, _warnings) = DocxParser
+        .parse(&data, &ConvertOptions::default())
+        .expect("custom Heading1 package parses");
+    let run = first_run(&doc);
+
+    assert_eq!(run.style.font_family.as_deref(), Some("The Hand Black"));
+    assert_eq!(run.style.font_size, Some(66.0));
+    assert_eq!(run.style.bold, None);
+}
+
+#[test]
+fn test_custom_heading2_typography_without_w_b_remains_regular() {
+    // The same fixture defines Heading2's face and size directly but omits
+    // w:b. That is a complete document-defined display treatment, not a bare
+    // unformatted heading definition that needs synthesized defaults (issue #1457).
+    let styles_xml = r#"<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+      <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
+        <w:name w:val="Normal"/>
+      </w:style>
+      <w:style w:type="paragraph" w:styleId="Heading2">
+        <w:name w:val="heading 2"/>
+        <w:basedOn w:val="Normal"/>
+        <w:pPr><w:outlineLvl w:val="1"/></w:pPr>
+        <w:rPr>
+          <w:rFonts w:ascii="Avenir Next W1G Medium" w:hAnsi="Avenir Next W1G Medium"/>
+          <w:sz w:val="28"/><w:szCs w:val="28"/>
+        </w:rPr>
+      </w:style>
+    </w:styles>"#;
+    let body_xml = r#"<w:p>
+      <w:pPr><w:pStyle w:val="Heading2"/></w:pPr>
+      <w:r><w:t>GATES OPEN AT 9AM</w:t></w:r>
+    </w:p>"#;
+
+    let data = super::page_feature_tests::build_docx_with_raw_styles(styles_xml, body_xml);
+    let (doc, _warnings) = DocxParser
+        .parse(&data, &ConvertOptions::default())
+        .expect("custom Heading2 package parses");
+    let run = first_run(&doc);
+
+    assert_eq!(
+        run.style.font_family.as_deref(),
+        Some("Avenir Next W1G Medium")
+    );
+    assert_eq!(run.style.font_size, Some(14.0));
+    assert_eq!(run.style.bold, None);
+}
+
+#[test]
+fn test_derived_heading_typography_without_own_outline_level_remains_regular() {
+    // A custom style may inherit Heading1's outline level while supplying its
+    // own text treatment. The child does not repeat w:outlineLvl, but it is
+    // still a document-defined heading rather than a bare, unformatted one
+    // (issue #1457).
+    let styles_xml = r#"<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+      <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
+        <w:name w:val="Normal"/>
+      </w:style>
+      <w:style w:type="paragraph" w:styleId="Heading1">
+        <w:name w:val="heading 1"/>
+        <w:basedOn w:val="Normal"/>
+        <w:pPr><w:outlineLvl w:val="0"/></w:pPr>
+      </w:style>
+      <w:style w:type="paragraph" w:customStyle="1" w:styleId="EventHeading">
+        <w:name w:val="Event Heading"/>
+        <w:basedOn w:val="Heading1"/>
+        <w:rPr>
+          <w:rFonts w:ascii="Georgia" w:hAnsi="Georgia"/>
+          <w:sz w:val="36"/><w:szCs w:val="36"/>
+        </w:rPr>
+      </w:style>
+    </w:styles>"#;
+    let body_xml = r#"<w:p>
+      <w:pPr><w:pStyle w:val="EventHeading"/></w:pPr>
+      <w:r><w:t>Derived event heading</w:t></w:r>
+    </w:p>"#;
+
+    let data = super::page_feature_tests::build_docx_with_raw_styles(styles_xml, body_xml);
+    let (doc, _warnings) = DocxParser
+        .parse(&data, &ConvertOptions::default())
+        .expect("derived heading package parses");
+    let run = first_run(&doc);
+
+    assert_eq!(run.style.font_family.as_deref(), Some("Georgia"));
+    assert_eq!(run.style.font_size, Some(18.0));
+    assert_eq!(run.style.bold, None);
+}
+
+#[test]
 fn test_heading3_through_6_defaults() {
     let expected: Vec<(usize, &str, f64)> = vec![
         (2, "Heading3", 16.0),

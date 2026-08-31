@@ -161,6 +161,11 @@ pub(super) struct ResolvedStyle {
     pub(super) paragraph_tab_overrides: Option<Vec<TabStopOverride>>,
     /// Heading level from outline_lvl (0 = Heading 1, 1 = Heading 2, ..., 5 = Heading 6).
     pub(super) heading_level: Option<usize>,
+    /// Whether a heading definition in this style's hierarchy supplies its
+    /// own run formatting. Word does not layer a synthesized heading weight on
+    /// top of such a document-defined treatment merely because `w:b` is
+    /// absent (issue #1457).
+    pub(super) heading_has_document_run_formatting: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -324,6 +329,7 @@ pub(super) fn build_style_map(
             paragraph: default_paragraph.clone(),
             paragraph_tab_overrides: None,
             heading_level: None,
+            heading_has_document_run_formatting: false,
         },
     );
 
@@ -358,6 +364,7 @@ pub(super) fn build_style_map(
             },
             paragraph_tab_overrides: None,
             heading_level: None,
+            heading_has_document_run_formatting: false,
         };
 
         for definition in chain.into_iter().rev() {
@@ -385,6 +392,7 @@ pub(super) fn build_style_map(
             paragraph: default_style.paragraph.clone(),
             paragraph_tab_overrides: default_style.paragraph_tab_overrides.clone(),
             heading_level: None,
+            heading_has_document_run_formatting: false,
         };
         map.insert(DOC_DEFAULT_STYLE_ID.to_string(), merged);
     }
@@ -443,6 +451,14 @@ fn merge_style_definition(
     {
         own_text.font_family = resolve_theme_font_family(&run_property_json, theme_fonts);
     }
+    // Capture provenance before adding the raw pair-kerning overlay below.
+    // A kerning rule is metadata read from the same rPr, but it must not by
+    // itself make an otherwise unformatted heading definition look like a complete
+    // document-defined text treatment.
+    let has_document_run_formatting = TextStyle {
+        pair_kerning: None,
+        ..own_text.clone()
+    } != TextStyle::default();
     // `None` means "states nothing", so the parent decision survives.
     own_text.pair_kerning = pair_kerning.for_style(&style.style_id);
     resolved.text.merge_from(&own_text);
@@ -472,6 +488,13 @@ fn merge_style_definition(
     {
         resolved.heading_level = Some(level);
     }
+    // Once a definition establishes the heading level, formatting on that
+    // definition or any derived style is part of the document's heading
+    // treatment. Formatting inherited from Normal before the heading begins
+    // does not silence the bare-heading fallback (issue #1457).
+    if resolved.heading_level.is_some() {
+        resolved.heading_has_document_run_formatting |= has_document_run_formatting;
+    }
 }
 
 /// The document-wide run defaults, with the kerning threshold the raw
@@ -491,11 +514,17 @@ pub(super) fn resolve_doc_default_text_style(
 
 /// Merge style text formatting with explicit run formatting.
 /// Explicit formatting (from the run itself) takes priority over style formatting.
-/// For heading styles, default sizes and bold are applied when neither the style
-/// nor the run specifies them.
+/// For heading styles, default sizes are applied when neither the style nor the
+/// run specifies them. Bold is synthesized only for a bare, unformatted
+/// heading definition; a document-defined heading run treatment that omits
+/// `w:b` remains regular.
 pub(super) fn merge_text_style(explicit: &TextStyle, style: Option<&ResolvedStyle>) -> TextStyle {
-    let (style_text, heading_level) = match style {
-        Some(style) => (&style.text, style.heading_level),
+    let (style_text, heading_level, heading_has_document_run_formatting) = match style {
+        Some(style) => (
+            &style.text,
+            style.heading_level,
+            style.heading_has_document_run_formatting,
+        ),
         None => return explicit.clone(),
     };
 
@@ -508,7 +537,7 @@ pub(super) fn merge_text_style(explicit: &TextStyle, style: Option<&ResolvedStyl
         if merged.font_size.is_none() {
             merged.font_size = Some(HEADING_FONT_SIZES[level]);
         }
-        if merged.bold.is_none() {
+        if merged.bold.is_none() && !heading_has_document_run_formatting {
             merged.bold = Some(true);
         }
     }
