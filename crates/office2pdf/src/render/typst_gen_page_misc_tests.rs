@@ -3368,6 +3368,75 @@ fn a_non_wrapping_anchored_frame_sizes_to_its_content() {
     assert!(wrapping.contains("[#block(width: 65.8pt)["), "{wrapping}");
 }
 
+/// The #1370 reference's bottom-seated WPS text box pins the last line's em box
+/// above its bottom inset; it does not put the text baseline directly on the
+/// inset line.
+///
+/// `Place your event title here.docx` declares an 8pt one-line footer with a
+/// 15pt `bIns`. Its reference PDF therefore puts the baseline about 23pt above
+/// the Letter page bottom, while placing the baseline at only 15pt produces
+/// the 8.05pt downward error tracked in issue #1370.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_bottom_seated_anchored_frame_keeps_one_em_above_its_bottom_inset() {
+    use crate::ir::{
+        FrameAlign, FrameAnchor, HFInline, HeaderFooter, HeaderFooterFrame, HeaderFooterParagraph,
+    };
+
+    for (declared_size, expected_size) in [(Some(8.0), 8.0), (Some(12.0), 12.0), (None, 11.0)] {
+        let doc = make_doc(vec![Page::Flow(FlowPage {
+            first_header: None,
+            first_footer: None,
+            size: PageSize::default(),
+            margins: Margins::default(),
+            content: vec![make_paragraph("Body")],
+            header: None,
+            footer: Some(HeaderFooter {
+                shapes: Vec::new(),
+                distance_from_edge: None,
+                paragraphs: vec![HeaderFooterParagraph {
+                    style: ParagraphStyle::default(),
+                    elements: vec![HFInline::Run(Run {
+                        text: "Sensitivity: Internal".to_string(),
+                        style: declared_size.map_or_else(TextStyle::default, arial),
+                        href: None,
+                        footnote: None,
+                    })],
+                    border: None,
+                    border_space: None,
+                    frame: Some(HeaderFooterFrame {
+                        x: None,
+                        y: None,
+                        width: Some(65.8),
+                        height: Some(25.55),
+                        horizontal_anchor: FrameAnchor::Page,
+                        vertical_anchor: FrameAnchor::Page,
+                        horizontal_align: Some(FrameAlign::Start),
+                        vertical_align: Some(FrameAlign::End),
+                        inset_left: 20.0,
+                        inset_top: 0.0,
+                        bottom_offset: Some(15.0),
+                        wraps_text: false,
+                    }),
+                }],
+            }),
+            columns: None,
+            line_grid_pitch: None,
+            line_grid_snaps_lines: false,
+            page_numbering: None,
+        })]);
+
+        let baselines = baselines_of(&doc, "Sensitivity: Internal");
+        assert_eq!(baselines.len(), 1, "the footer label is one line");
+        let expected = PageSize::default().height - 15.0 - expected_size;
+        assert!(
+            (baselines[0] - expected).abs() < 0.01,
+            "bottom-seated {expected_size}pt baseline {}pt should be {expected}pt",
+            baselines[0]
+        );
+    }
+}
+
 /// A 5 × 60pt grid on A4 portrait with 0.7in margins: the probe workbook of
 /// issue #1110, whose native Excel-for-Mac export puts the printed grid's
 /// left edge at 146pt. Its 50.4pt sides reach the renderer on the whole point
