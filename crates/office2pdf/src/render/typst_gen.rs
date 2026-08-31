@@ -2525,11 +2525,14 @@ fn generate_page_anchored_hf_frames(
             aligned_offset(frame.horizontal_align, page_size.width, frame.width)
         }) + frame.inset_left;
         // A box that seats its text at its own bottom edge is placed upward
-        // from the page, so the block's own height decides where it starts —
-        // the one case where the parser cannot resolve the position itself
-        // (issue #847).
+        // from the page. In the issue #1370 reference, the final 8pt run's
+        // baseline is one em above the bottom inset; putting the baseline on
+        // the inset itself left that run 8.05pt too low.
         let (anchor, y): (&str, f64) = match frame.bottom_offset {
-            Some(gap) => ("bottom + left", -gap),
+            Some(gap) => (
+                "bottom + left",
+                -bottom_seated_frame_baseline_offset_pt(&hf.paragraphs[index..end], gap),
+            ),
             None => (
                 "top + left",
                 frame.y.unwrap_or_else(|| {
@@ -2570,6 +2573,42 @@ fn generate_page_anchored_hf_frames(
         out.push_str(")]]");
         index = end;
     }
+}
+
+/// Distance from the page bottom to the last baseline of a bottom-seated WPS
+/// text box.
+///
+/// DrawingML's `bodyPr anchor="b"` aligns the text area's bottom, not a
+/// typographic baseline. The issue #1370 reference leaves the stated bottom
+/// inset and then one em for its final one-line paragraph. The
+/// framed-paragraph generator emits inline text whose box baseline is its
+/// placement origin, so that em has to be part of the placement offset
+/// explicitly.
+///
+/// The largest run in the final paragraph with measurable text approximates
+/// that paragraph's final line box. A field is represented by a synthetic run
+/// in [`hf_paragraph_metric_runs`], and an unstated size takes the same 11pt
+/// default used by the Typst generator. If a frame contains no measurable
+/// text, retain the inset-only placement rather than inventing a text height
+/// for an image or decoration.
+fn bottom_seated_frame_baseline_offset_pt(
+    paragraphs: &[crate::ir::HeaderFooterParagraph],
+    bottom_inset_pt: f64,
+) -> f64 {
+    for paragraph in paragraphs.iter().rev() {
+        let runs = hf_paragraph_metric_runs(paragraph);
+        if runs.is_empty() {
+            continue;
+        }
+        let font_size_pt = runs
+            .iter()
+            .map(|run| run.style.font_size.unwrap_or(11.0))
+            .reduce(f64::max)
+            .unwrap_or(11.0)
+            .max(0.0);
+        return bottom_inset_pt + font_size_pt;
+    }
+    bottom_inset_pt
 }
 
 /// Write the full page setup for a SheetPage, including optional header/footer.
