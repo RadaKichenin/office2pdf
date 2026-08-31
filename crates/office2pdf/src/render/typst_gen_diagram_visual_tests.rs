@@ -4419,6 +4419,94 @@ fn an_excel_worksheet_column_plot_uses_the_native_vertical_edges() {
 }
 
 #[test]
+fn an_anchored_excel_worksheet_chart_snaps_interior_gridlines_in_sheet_space() {
+    // Excel lays the #1471 chart out in unscaled sheet points, snaps each
+    // interior major gridline to a whole point there, and only then applies
+    // the sheet's 0.82 fit-to-page scale. The plot endpoints themselves stay
+    // on the exact #1250 chrome model rather than being rounded.
+    const PRINT_SCALE: f64 = 0.82;
+    const CHART_SPACE_FRAME_TOP: f64 = 143.866_536_585_365_85;
+    const ANCHOR_Y: f64 = 79.256_692_913_385_83;
+    let margin_top = CHART_SPACE_FRAME_TOP * PRINT_SCALE - ANCHOR_Y;
+
+    let mut chart = excel_gift_vertical_chart(9.0, 9.0, 9.0);
+    chart.value_axis_max = Some(200.0);
+    chart.value_axis_major_unit = Some(20.0);
+    let doc = make_doc(vec![Page::Sheet(SheetPage {
+        name: "Gift budget and tracker".to_string(),
+        size: PageSize::default(),
+        margins: Margins {
+            top: margin_top,
+            ..Margins::default()
+        },
+        table: make_simple_table(vec![vec![""]]),
+        header: None,
+        footer: None,
+        charts: vec![crate::ir::SheetChart {
+            anchor_row: 3,
+            placement: Some(crate::ir::SheetChartPlacement {
+                x_offset_pt: 0.0,
+                y_offset_pt: ANCHOR_Y,
+                width: EXCEL_GIFT_CHART_FRAME.0,
+                height: EXCEL_GIFT_CHART_FRAME.1,
+                print_scale: PRINT_SCALE,
+            }),
+            chart,
+        }],
+        images: Vec::new(),
+        text_boxes: Vec::new(),
+    })]);
+    let source = generate_typst(&doc).unwrap().source;
+
+    let page_frame_top = leading_pt(
+        source
+            .split_once("#place(top + left, dy: ")
+            .expect("the sheet places its drawing layer chart")
+            .1,
+    )
+    .expect("the chart page offset is a point measurement");
+    let chart_space_frame_top = page_frame_top / PRINT_SCALE;
+    assert!(
+        (chart_space_frame_top - CHART_SPACE_FRAME_TOP).abs() <= 0.001,
+        "test setup changed the sheet-space phase: {chart_space_frame_top}pt; source:\n{source}"
+    );
+
+    // Major gridlines are the first eleven full-width horizontal chart-chrome
+    // lines: ticks are emitted from $0 at the bottom through $200 at the top.
+    let gridline_y: Vec<f64> = emitted_lines(&source)
+        .into_iter()
+        .filter(|line| line.end_x > 100.0 && same_length(line.end_y, 0.0))
+        .take(11)
+        .map(|line| chart_space_frame_top + line.dy)
+        .collect();
+    assert_eq!(
+        gridline_y.len(),
+        11,
+        "expected eleven major gridlines: {source}"
+    );
+
+    let expected = [
+        402.193_536_585_365_85,
+        377.0,
+        353.0,
+        328.0,
+        303.0,
+        278.0,
+        253.0,
+        228.0,
+        204.0,
+        179.0,
+        154.012_536_585_365_85,
+    ];
+    for (index, (actual, expected)) in gridline_y.into_iter().zip(expected).enumerate() {
+        assert!(
+            (actual - expected).abs() <= 0.002,
+            "gridline {index} lands at {actual} sheet pt, native Excel uses {expected} sheet pt; source:\n{source}"
+        );
+    }
+}
+
+#[test]
 fn an_excel_worksheet_plot_top_follows_the_native_value_size_probes() {
     // Re-zip-controlled native Excel exports with only c:valAx text size
     // changed. Excel floors the top chrome at the 9pt seat, then grows it by
