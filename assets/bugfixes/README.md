@@ -17,10 +17,19 @@ assets/bugfixes/issue-<number>/layout-audit.json
 ```
 
 Touching any image makes the gate require and validate the full trio. Every fix
-pull request changes `after.jpg` and `layout-audit.json`; `gt.jpg` and
+pull request with a raster change changes `after.jpg` and `layout-audit.json`; `gt.jpg` and
 `before.jpg` may remain from the defect evidence when they are still current.
 Generate all evidence from the same input document, page, resolution, and
 renderer.
+
+For a text-layer-only fix, the honest before and after page renders can be
+byte- and pixel-identical. Regenerate and verify the current `after.jpg` without
+annotations; it need not appear in the diff when the render is unchanged. Set
+`Text-layer-only: Yes` and `Pixel delta: 0` in the pull request's `Visual audit`,
+change `layout-audit.json`, and use that report to demonstrate that the missing
+or extra searchable text is resolved. The contract requires both `before.jpg`
+and `after.jpg` and independently runs ImageMagick's exact decoded-pixel
+comparison; the declaration cannot bypass a raster-changing fix.
 
 Generate the machine-readable layout report from those same GT and after PDFs:
 
@@ -30,8 +39,9 @@ python3 scripts/compare_layout.py --json --audit gt.pdf after.pdf \
 ```
 
 The command exits nonzero when material findings remain but still writes the
-report. Change both `after.jpg` and `layout-audit.json` in the fix pull
-request. In the PR's `Visual audit` section, mark each layout-audit category
+report. Change both `after.jpg` and `layout-audit.json` in a raster-changing fix
+pull request; use the text-layer-only exception above when the current render is
+byte-identical. In the PR's `Visual audit` section, mark each layout-audit category
 field as `Pass` or list the open issues that classify it. Those issue references
 must also appear in `Remaining:` deviation rows. The gate rejects a claimed pass
 when the report contains a page-count

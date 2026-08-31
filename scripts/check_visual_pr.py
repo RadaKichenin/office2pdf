@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import struct
 import subprocess
 import sys
@@ -322,6 +323,32 @@ def disposition_issue_numbers(value: str | None) -> set[int] | None:
     return {int(number) for number in re.findall(r"#(\d+)", value)}
 
 
+def decoded_pixel_delta(before: Path, after: Path) -> int:
+    """Return ImageMagick's exact decoded-pixel AE count for two images."""
+
+    if shutil.which("magick") is not None:
+        command = ["magick", "compare"]
+    elif shutil.which("compare") is not None:
+        command = ["compare"]
+    else:
+        raise RuntimeError(
+            "ImageMagick is required to verify text-layer-only pixel equality"
+        )
+
+    result = subprocess.run(
+        [*command, "-metric", "AE", str(before), str(after), "null:"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    metric_output = result.stderr.strip() or result.stdout.strip()
+    metric_match = re.search(r"(?:^|\s)(\d+)(?:\s|$)", metric_output)
+    if result.returncode not in {0, 1} or not metric_match:
+        detail = metric_output or f"exit status {result.returncode}"
+        raise RuntimeError(f"ImageMagick could not compare the evidence: {detail}")
+    return int(metric_match.group(1))
+
+
 def validate_layout_audit(body: str, changed_paths: list[str], root: Path) -> list[str]:
     """Tie machine-detected layout failures to classified open issue references."""
 
@@ -344,10 +371,40 @@ def validate_layout_audit(body: str, changed_paths: list[str], root: Path) -> li
     if expected_path not in changed_paths:
         errors.append(f"{expected_path}: layout audit report must be changed in this pull request.")
     expected_after = f"assets/bugfixes/issue-{issue_number}/after.jpg"
-    if expected_after not in changed_paths:
+    text_layer_only = field(audit, "Text-layer-only") == "Yes"
+    if text_layer_only and field(audit, "Pixel delta") != "0":
+        errors.append("Visual audit > Pixel delta must be 0 for a text-layer-only fix.")
+    if expected_after not in changed_paths and not text_layer_only:
         errors.append(
             f"{expected_path}: {expected_after} must be changed with the layout audit report."
         )
+    if text_layer_only:
+        before_path = root / f"assets/bugfixes/issue-{issue_number}/before.jpg"
+        after_path = root / expected_after
+        missing_evidence = False
+        for evidence_path in (before_path, after_path):
+            if not evidence_path.is_file():
+                errors.append(
+                    f"{evidence_path.relative_to(root)}: current evidence is required."
+                )
+                missing_evidence = True
+        if not missing_evidence:
+            evidence_errors = [
+                *validate_jpeg(before_path),
+                *validate_jpeg(after_path),
+            ]
+            errors.extend(evidence_errors)
+            if not evidence_errors:
+                try:
+                    actual_delta = decoded_pixel_delta(before_path, after_path)
+                except RuntimeError as exc:
+                    errors.append(f"Text-layer-only evidence comparison failed: {exc}.")
+                else:
+                    if actual_delta != 0:
+                        errors.append(
+                            "Text-layer-only evidence must have zero decoded-pixel "
+                            f"delta, got {actual_delta}."
+                        )
 
     report_path = root / expected_path
     try:

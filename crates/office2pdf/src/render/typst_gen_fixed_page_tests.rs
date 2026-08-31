@@ -28,6 +28,130 @@ fn test_fixed_page_zero_margins() {
 }
 
 #[test]
+fn test_fixed_page_omits_text_fully_occluded_by_later_opaque_jpeg() {
+    let mut jpeg = Vec::new();
+    image::DynamicImage::ImageRgb8(image::RgbImage::from_pixel(1, 1, image::Rgb([20, 40, 60])))
+        .write_to(
+            &mut std::io::Cursor::new(&mut jpeg),
+            image::ImageFormat::Jpeg,
+        )
+        .unwrap();
+    let mut cover = make_fixed_image(0.0, 0.0, 959.76, 540.0, ImageFormat::Jpeg);
+    let FixedElementKind::Image(image) = &mut cover.kind else {
+        unreachable!();
+    };
+    image.data = jpeg;
+    let doc = make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![
+            make_text_box(5.0, 525.4, 67.4, 9.6, "Sensitivity: Internal"),
+            cover,
+            make_text_box(120.0, 120.0, 720.0, 80.0, "Visible slide title"),
+        ],
+    )]);
+
+    let output = generate_typst(&doc).unwrap();
+
+    assert!(
+        !output.source.contains("[Sensitivity:]"),
+        "fully covered text must not remain in generated markup:\n{}",
+        output.source
+    );
+    assert!(
+        output.source.contains("[Visible]"),
+        "text painted after the covering image must remain in generated markup:\n{}",
+        output.source
+    );
+
+    let pdf =
+        crate::render::pdf::compile_to_pdf(&output.source, &output.images, None, &[], false, false)
+            .unwrap();
+    let extracted = pdf_extract::extract_text_from_mem(&pdf).unwrap();
+    let searchable = extracted.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(
+        !searchable.contains("Sensitivity"),
+        "fully covered text must not remain searchable: {searchable:?}"
+    );
+    assert!(
+        searchable.contains("Visible slide title"),
+        "text painted after the covering image must remain searchable: {searchable:?}"
+    );
+}
+
+#[test]
+fn test_fixed_page_keeps_text_covered_by_a_non_page_sized_jpeg() {
+    let doc = make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![
+            make_text_box(10.0, 10.0, 60.0, 20.0, "Searchable caption"),
+            make_fixed_image(0.0, 0.0, 100.0, 100.0, ImageFormat::Jpeg),
+        ],
+    )]);
+
+    let source = generate_typst(&doc).unwrap().source;
+    assert!(
+        source.contains("[Searchable]"),
+        "partial-slide artwork is outside the conservative occlusion rule:\n{source}"
+    );
+}
+
+#[test]
+fn test_fixed_page_keeps_no_wrap_text_whose_frame_is_covered() {
+    let mut overflow = make_text_box(950.0, 20.0, 5.0, 20.0, "Visible overflow");
+    let FixedElementKind::TextBox(text_box) = &mut overflow.kind else {
+        unreachable!();
+    };
+    text_box.no_wrap = true;
+    let doc = make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![
+            overflow,
+            make_fixed_image(0.0, 0.0, 959.76, 540.0, ImageFormat::Jpeg),
+        ],
+    )]);
+
+    let source = generate_typst(&doc).unwrap().source;
+    assert!(
+        source.contains("[Visible]"),
+        "no-wrap glyphs can escape a covered frame and must remain:\n{source}"
+    );
+}
+
+#[test]
+fn test_fixed_page_keeps_text_under_a_transparent_full_page_png() {
+    let mut png = Vec::new();
+    image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+        1,
+        1,
+        image::Rgba([0, 0, 0, 0]),
+    ))
+    .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+    .unwrap();
+    let mut cover = make_fixed_image(0.0, 0.0, 960.0, 540.0, ImageFormat::Png);
+    let FixedElementKind::Image(image) = &mut cover.kind else {
+        unreachable!();
+    };
+    image.data = png;
+    let doc = make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![
+            make_text_box(10.0, 10.0, 60.0, 20.0, "Visible below alpha"),
+            cover,
+        ],
+    )]);
+
+    let source = generate_typst(&doc).unwrap().source;
+    assert!(
+        source.contains("[Visible]"),
+        "transparent page artwork must not remove searchable text:\n{source}"
+    );
+}
+
+#[test]
 fn test_fixed_page_rectangle_shape() {
     let doc = make_doc(vec![make_fixed_page(
         960.0,

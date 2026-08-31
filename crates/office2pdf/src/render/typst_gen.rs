@@ -828,12 +828,89 @@ fn generate_fixed_page(
     }
     out.push('\n');
 
+    let occluding_images: Vec<(usize, &FixedElement)> = page
+        .elements
+        .iter()
+        .enumerate()
+        .filter(|(_, element)| is_full_page_opaque_image(element, size))
+        .collect();
+
     with_powerpoint_advance_grid(true, || -> Result<(), ConvertError> {
-        for elem in &page.elements {
+        for (index, elem) in page.elements.iter().enumerate() {
+            if is_frame_bounded_text_box(elem)
+                && occluding_images.iter().any(|(cover_index, cover)| {
+                    *cover_index > index && fixed_element_covers(cover, elem)
+                })
+            {
+                continue;
+            }
             generate_fixed_element(out, elem, size.height, ctx)?;
         }
         Ok(())
     })
+}
+
+/// Whether a raster can safely stand in for the full slide when deciding that
+/// an earlier, frame-bounded text box contributes neither pixels nor searchable
+/// PDF content.
+///
+/// PowerPoint drops master text covered by later slide artwork from its PDF
+/// text layer. Keep this deliberately narrow: non-page-sized pictures and
+/// transformed/clipped images may leave part of the text visible (issue #1432).
+fn is_full_page_opaque_image(element: &FixedElement, page_size: PageSize) -> bool {
+    const EDGE_TOLERANCE_PT: f64 = 0.5;
+
+    let FixedElementKind::Image(image) = &element.kind else {
+        return false;
+    };
+    if image.rotation_deg.is_some_and(|degrees| degrees != 0.0) || image.clip_shape.is_some() {
+        return false;
+    }
+    if element.x > EDGE_TOLERANCE_PT
+        || element.y > EDGE_TOLERANCE_PT
+        || element.x + element.width < page_size.width - EDGE_TOLERANCE_PT
+        || element.y + element.height < page_size.height - EDGE_TOLERANCE_PT
+    {
+        return false;
+    }
+
+    match image.format {
+        ImageFormat::Jpeg => true,
+        ImageFormat::Png | ImageFormat::Gif | ImageFormat::Bmp | ImageFormat::Tiff => {
+            image::load_from_memory(&image.data)
+                .ok()
+                .is_some_and(|decoded| {
+                    !decoded.color().has_alpha()
+                        || decoded.to_rgba8().pixels().all(|pixel| pixel[3] == u8::MAX)
+                })
+        }
+        ImageFormat::Svg => false,
+    }
+}
+
+/// Restrict occlusion culling to upright, wrapping text boxes. A no-wrap box
+/// deliberately paints beyond its frame, while either text or shape rotation
+/// can move glyphs outside the axis-aligned bounds tested below.
+fn is_frame_bounded_text_box(element: &FixedElement) -> bool {
+    let FixedElementKind::TextBox(text_box) = &element.kind else {
+        return false;
+    };
+    !text_box.no_wrap
+        && !text_box
+            .text_rotation_deg
+            .is_some_and(|degrees| degrees != 0.0)
+        && !text_box
+            .shape_rotation_deg
+            .is_some_and(|degrees| degrees != 0.0)
+}
+
+fn fixed_element_covers(cover: &FixedElement, covered: &FixedElement) -> bool {
+    const GEOMETRY_TOLERANCE_PT: f64 = 0.01;
+
+    cover.x <= covered.x + GEOMETRY_TOLERANCE_PT
+        && cover.y <= covered.y + GEOMETRY_TOLERANCE_PT
+        && cover.x + cover.width + GEOMETRY_TOLERANCE_PT >= covered.x + covered.width
+        && cover.y + cover.height + GEOMETRY_TOLERANCE_PT >= covered.y + covered.height
 }
 
 fn generate_table_page(
