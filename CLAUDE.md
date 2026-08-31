@@ -186,8 +186,9 @@ first: it matches text lines from `mutool` traces and reports missing/extra/
 re-wrapped lines, spatial-anchor dy, pitch and width drift, painted visibility,
 and a rect census, with GT noise floors built in (`--noise-floor 0.12` Word,
 `0.5` Excel). Painted visibility uses trace order and flat-background contrast:
-text covered by a later opaque image/rectangle is `hidden`, same-colour text on
-an opaque flat fill is `low_contrast`, and text that remains visible is
+text covered by a later opaque image, single closed axis-aligned rectangle, or
+fully extended shading under such a rectangular clip is `hidden`; same-colour
+text on an opaque flat fill is `low_contrast`, and text that remains visible is
 `painted`.
 Horizontal text uses its true baseline; a rotated or skewed `fill_text` stays
 one visual run and uses the minimum fully transformed glyph x/y as its
