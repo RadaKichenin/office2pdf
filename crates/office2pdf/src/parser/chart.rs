@@ -10,8 +10,8 @@ use super::drawingml::{self, SchemeColors};
 use super::xml_util;
 use crate::ir::{
     AxisTickMark, BarBandLayout, Chart, ChartAreaFill, ChartAreaOutline, ChartGrouping, ChartHost,
-    ChartLine, ChartPlotAreaLayout, ChartSeries, ChartTextStyle, ChartType, Color,
-    DataLabelPosition, DataLabels, LegendPosition, MarkerSymbol,
+    ChartLine, ChartPlotAreaLayout, ChartSeries, ChartTextStyle, ChartTitleLayout, ChartType,
+    Color, DataLabelPosition, DataLabels, LegendPosition, MarkerSymbol,
 };
 
 /// Mapping from XML chart element tag names to their corresponding `ChartType`.
@@ -167,6 +167,7 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
     // `c:title/c:txPr` governs the title alone; the chart space's governs
     // everything else and is a poor stand-in for it (issue #1215).
     let mut title_text_style: ChartTextStyle = ChartTextStyle::default();
+    let mut title_layout: Option<ChartTitleLayout> = None;
     // A legend can override the chart space's run properties independently of
     // its position and visibility (issue #1236).
     let mut legend_text_style: ChartTextStyle = ChartTextStyle::default();
@@ -200,10 +201,12 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
                     legend_position = legend_position.or(position);
                     legend_text_style = style;
                 } else if tag == b"title" && title.is_none() {
-                    let (text, names_own_text, style) = parse_chart_title(&mut reader, scheme);
+                    let (text, names_own_text, style, layout) =
+                        parse_chart_title(&mut reader, scheme);
                     title = text;
                     has_automatic_title = !names_own_text;
                     title_text_style = style;
+                    title_layout = layout;
                 } else if tag == b"catAx" {
                     category_axis = parse_axis(&mut reader, b"catAx", scheme);
                 } else if tag == b"valAx" {
@@ -345,6 +348,7 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
         has_legend,
         auto_title_deleted,
         has_automatic_title,
+        title_layout,
         plot_area_layout,
         // The chart part names the drawing its user shapes live in through a
         // relationship, which only the package that holds it can resolve — as
@@ -452,6 +456,46 @@ fn parse_plot_area_layout(reader: &mut Reader<&[u8]>) -> Option<ChartPlotAreaLay
         width,
         height,
     })
+}
+
+/// Read `c:title/c:layout` into its chart-relative top-left anchor.
+///
+/// Unlike a plot-area rectangle, a PowerPoint title commonly states only
+/// edge-mode `x` and `y`: its width and height remain automatic. An omitted
+/// mode means `factor`, whose values offset an application-computed position,
+/// so only two explicit edge modes are deterministic enough to carry into the
+/// renderer (issue #1423).
+fn parse_title_layout(reader: &mut Reader<&[u8]>) -> Option<ChartTitleLayout> {
+    let mut x_mode: Option<String> = None;
+    let mut y_mode: Option<String> = None;
+    let mut x: Option<f64> = None;
+    let mut y: Option<f64> = None;
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
+                let local = e.local_name();
+                let value = || xml_util::get_attr_str(e, b"val");
+                let number = || value().and_then(|raw| raw.parse::<f64>().ok());
+                match local.as_ref() {
+                    b"xMode" => x_mode = value(),
+                    b"yMode" => y_mode = value(),
+                    b"x" => x = number(),
+                    b"y" => y = number(),
+                    _ => {}
+                }
+            }
+            Ok(Event::End(ref e)) if e.local_name().as_ref() == b"layout" => break,
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+
+    if x_mode.as_deref() != Some("edge") || y_mode.as_deref() != Some("edge") {
+        return None;
+    }
+    let (x, y) = (x?, y?);
+    (x.is_finite() && y.is_finite()).then_some(ChartTitleLayout { x, y })
 }
 
 /// Read `c:chartSpace/c:txPr` into the face and the run properties its
@@ -867,11 +911,11 @@ fn axis_tick_mark_for(value: &str) -> AxisTickMark {
 
 /// Parse the chart title text and its own run properties from `<c:title>`.
 ///
-/// Returns the text, whether the element named text of its own — a `<c:tx>` —
-/// and what its `<c:txPr>` declares. A title without a `<c:tx>` is
-/// *automatic*: it carries the formatting for a string the application
-/// supplies (issue #1146), so an empty result there means something different
-/// from an empty `<c:tx>`.
+/// Returns the text, whether the element named text of its own — a `<c:tx>` —,
+/// what its `<c:txPr>` declares, and any deterministic manual edge anchor. A
+/// title without a `<c:tx>` is *automatic*: it carries the formatting for a
+/// string the application supplies (issue #1146), so an empty result there
+/// means something different from an empty `<c:tx>`.
 ///
 /// The `<c:txPr>` is the title's own, and outranks the chart space's for the
 /// string it governs: `any_sheets.xlsx` states `sz="1400" b="0"` in grey there
@@ -879,11 +923,17 @@ fn axis_tick_mark_for(value: &str) -> AxisTickMark {
 fn parse_chart_title(
     reader: &mut Reader<&[u8]>,
     scheme: &SchemeColors<'_>,
-) -> (Option<String>, bool, ChartTextStyle) {
+) -> (
+    Option<String>,
+    bool,
+    ChartTextStyle,
+    Option<ChartTitleLayout>,
+) {
     let mut text = String::new();
     let mut in_t = false;
     let mut names_own_text = false;
     let mut style: ChartTextStyle = ChartTextStyle::default();
+    let mut layout: Option<ChartTitleLayout> = None;
     let mut depth = 1u32;
 
     loop {
@@ -896,6 +946,8 @@ fn parse_chart_title(
                     // Consumes through `</c:txPr>`, so the reader comes back on
                     // the title's next sibling.
                     style = parse_chart_text_style(reader, scheme);
+                } else if local.as_ref() == b"layout" {
+                    layout = parse_title_layout(reader);
                 } else if local.as_ref() == b"tx" {
                     names_own_text = true;
                 } else if local.as_ref() == b"t" {
@@ -934,7 +986,7 @@ fn parse_chart_title(
     } else {
         Some(trimmed)
     };
-    (title, names_own_text, style)
+    (title, names_own_text, style, layout)
 }
 
 /// Plot-area settings that sit beside `<c:ser>` inside a chart type element.

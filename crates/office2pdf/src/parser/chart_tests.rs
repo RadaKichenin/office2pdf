@@ -2980,6 +2980,20 @@ const REPORTED_MANUAL_LAYOUT: &str = r#"<c:layout><c:manualLayout>
     <c:w val="0.64139311135561661"/><c:h val="0.55711705789303645"/>
 </c:manualLayout></c:layout>"#;
 
+const REPORTED_TITLE_MANUAL_LAYOUT: &str = r#"<c:layout><c:manualLayout>
+    <c:xMode val="edge"/><c:yMode val="edge"/>
+    <c:x val="7.2127696791070986E-3"/><c:y val="1.182572865366946E-4"/>
+</c:manualLayout></c:layout>"#;
+
+fn manual_title_layout_chart_xml(layout: &str) -> String {
+    manual_plot_layout_chart_xml("<c:layout/>").replace(
+        "<c:plotArea>",
+        &format!(
+            "<c:title><c:tx><c:rich><a:p><a:r><a:t>Annual Income &amp; Gross Profit</a:t></a:r></a:p></c:rich></c:tx>{layout}</c:title><c:plotArea>"
+        ),
+    )
+}
+
 /// An edge-mode inner manual layout reaches the IR as the four fractions it
 /// states (issue #1182).
 #[test]
@@ -3043,14 +3057,42 @@ fn a_layout_this_does_not_model_keeps_the_automatic_rectangle() {
 /// too, and only the plot area's own says where the plot sits.
 #[test]
 fn a_title_manual_layout_is_not_the_plot_areas() {
-    let titled: String = manual_plot_layout_chart_xml("<c:layout/>").replace(
-        "<c:plotArea>",
-        &format!("<c:title>{REPORTED_MANUAL_LAYOUT}</c:title><c:plotArea>"),
-    );
+    let titled: String = manual_title_layout_chart_xml(REPORTED_TITLE_MANUAL_LAYOUT);
 
     let chart = parse_chart_xml(&titled, &SchemeColors::empty()).unwrap();
 
     assert_eq!(chart.plot_area_layout, None);
+    assert_eq!(
+        chart.title_layout,
+        Some(crate::ir::ChartTitleLayout {
+            x: 0.007212769679107099,
+            y: 0.0001182572865366946,
+        })
+    );
+}
+
+/// Factor-mode coordinates offset the application-computed title position;
+/// treating one as a chart-edge fraction would invent an absolute anchor.
+#[test]
+fn a_title_factor_layout_keeps_the_automatic_position() {
+    for (case, layout) in [
+        (
+            "xMode omitted",
+            REPORTED_TITLE_MANUAL_LAYOUT.replace(r#"<c:xMode val="edge"/>"#, ""),
+        ),
+        (
+            "yMode factor",
+            REPORTED_TITLE_MANUAL_LAYOUT
+                .replace(r#"<c:yMode val="edge"/>"#, r#"<c:yMode val="factor"/>"#),
+        ),
+    ] {
+        let chart = parse_chart_xml(
+            &manual_title_layout_chart_xml(&layout),
+            &SchemeColors::empty(),
+        )
+        .unwrap();
+        assert_eq!(chart.title_layout, None, "{case}");
+    }
 }
 
 /// The `january expenses:` chart of the workbook behind issue #1183 caches six

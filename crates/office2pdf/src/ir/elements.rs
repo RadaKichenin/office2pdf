@@ -395,6 +395,12 @@ pub struct Chart {
     /// chart. A part carrying no `<c:title>` at all, or one whose title names
     /// its own text, leaves this false (issue #1146).
     pub has_automatic_title: bool,
+    /// Where `c:title/c:layout/c:manualLayout` anchors the title box inside
+    /// the full chart area. The Presentation renderer consumes this; other
+    /// hosts currently keep their automatic centred title band. `None` keeps
+    /// that automatic placement everywhere (issue #1423). See
+    /// [`ChartTitleLayout`].
+    pub title_layout: Option<ChartTitleLayout>,
     /// Where `c:plotArea/c:layout/c:manualLayout` puts the inner plot
     /// rectangle inside the chart area. `None` for the automatic layout, which
     /// is every chart that states nothing and every layout this does not model
@@ -407,6 +413,27 @@ pub struct Chart {
     /// cannot settle, since the relationship it names is resolved by whichever
     /// package holds it, exactly as [`Chart::theme_accent_colors`] is.
     pub user_shapes: Vec<ChartUserShape>,
+}
+
+/// The top-left title-box anchor stated by
+/// `c:title/c:layout/c:manualLayout`, as fractions of the full chart area's
+/// width and height.
+///
+/// PowerPoint writes `xMode="edge"` and `yMode="edge"` for an explicitly
+/// positioned title. The Presentation renderer supports this edge-mode pair;
+/// Spreadsheet renderers currently preserve their automatic title placement.
+/// In native exports of the page-8 and page-11 charts from `GENERAL
+/// SERVICES.pptx`, `chart_left + x * chart_width` and
+/// `chart_top + y * chart_height` are the title box edges; the glyphs begin at
+/// the box's standard text inset (issue #1423). Factor-mode values remain
+/// automatic because they are offsets from the application's computed layout,
+/// not chart-relative edges.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ChartTitleLayout {
+    /// `c:x` — title-box left edge as a fraction of chart-area width.
+    pub x: f64,
+    /// `c:y` — title-box top edge as a fraction of chart-area height.
+    pub y: f64,
 }
 
 /// The inner plot rectangle `c:plotArea/c:layout/c:manualLayout` states, as

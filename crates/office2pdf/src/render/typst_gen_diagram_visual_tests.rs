@@ -58,6 +58,7 @@ fn test_codegen_chart_bar_visual_bars() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        title_layout: None,
         plot_area_layout: None,
         user_shapes: Vec::new(),
     }))])]);
@@ -139,6 +140,7 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        title_layout: None,
         plot_area_layout: None,
         user_shapes: Vec::new(),
     }))])]);
@@ -208,6 +210,7 @@ fn test_codegen_chart_pie_draws_a_pie() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        title_layout: None,
         plot_area_layout: None,
         user_shapes: Vec::new(),
     }))])]);
@@ -282,6 +285,7 @@ fn test_codegen_chart_line_trend_indicators() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        title_layout: None,
         plot_area_layout: None,
         user_shapes: Vec::new(),
     }))])]);
@@ -343,6 +347,7 @@ fn test_codegen_chart_empty_series() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        title_layout: None,
         plot_area_layout: None,
         user_shapes: Vec::new(),
     }))])]);
@@ -441,6 +446,7 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        title_layout: None,
         plot_area_layout: None,
         user_shapes: Vec::new(),
     })));
@@ -508,6 +514,7 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        title_layout: None,
         plot_area_layout: None,
         user_shapes: Vec::new(),
     })));
@@ -731,6 +738,7 @@ fn test_codegen_chart_line_plot() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        title_layout: None,
         plot_area_layout: None,
         user_shapes: Vec::new(),
     }))])]);
@@ -803,6 +811,7 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        title_layout: None,
         plot_area_layout: None,
         user_shapes: Vec::new(),
     }))])]);
@@ -912,6 +921,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        title_layout: None,
         plot_area_layout: None,
         user_shapes: Vec::new(),
     }
@@ -1082,6 +1092,7 @@ fn legend_chart(position: LegendPosition) -> Chart {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        title_layout: None,
         plot_area_layout: None,
         user_shapes: Vec::new(),
     }
@@ -1295,6 +1306,7 @@ fn a_declared_series_fill_reaches_the_bars() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        title_layout: None,
         plot_area_layout: None,
         user_shapes: Vec::new(),
     };
@@ -1360,6 +1372,7 @@ fn a_series_without_a_fill_still_takes_the_palette() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        title_layout: None,
         plot_area_layout: None,
         user_shapes: Vec::new(),
     };
@@ -1423,6 +1436,7 @@ fn per_point_fills_colour_each_bar_separately() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        title_layout: None,
         plot_area_layout: None,
         user_shapes: Vec::new(),
     };
@@ -1485,6 +1499,7 @@ fn axis_titled_chart(category: Option<&str>, value: Option<&str>) -> Chart {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        title_layout: None,
         plot_area_layout: None,
         user_shapes: Vec::new(),
     }
@@ -1597,6 +1612,7 @@ fn labelled_chart(labels: DataLabels) -> Chart {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        title_layout: None,
         plot_area_layout: None,
         user_shapes: Vec::new(),
     }
@@ -1704,6 +1720,7 @@ fn pie_chart(values: Vec<f64>) -> Chart {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        title_layout: None,
         plot_area_layout: None,
         user_shapes: Vec::new(),
     }
@@ -1910,6 +1927,7 @@ fn test_chart_default_gridline_matches_powerpoint() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        title_layout: None,
         plot_area_layout: None,
         user_shapes: Vec::new(),
     }))])]);
@@ -2078,6 +2096,7 @@ fn tick_mark_chart(
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        title_layout: None,
         plot_area_layout: None,
         user_shapes: Vec::new(),
     }
@@ -2692,6 +2711,7 @@ fn band_layout_chart(
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        title_layout: None,
         plot_area_layout: None,
         user_shapes: Vec::new(),
     }
@@ -2987,6 +3007,7 @@ fn two_series_bar_chart(theme_accent_colors: Vec<crate::ir::Color>) -> Chart {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        title_layout: None,
         plot_area_layout: None,
         user_shapes: Vec::new(),
     }
@@ -4523,6 +4544,35 @@ fn a_chart_title_occupies_the_same_fixed_band_used_by_plot_geometry() {
     );
 }
 
+/// PowerPoint measures a title's edge-mode x/y against the full chart frame.
+/// Its text begins 3pt inside that title box, and the title still reserves the
+/// existing plot band. `c:title/c:overlay` is not modelled yet, so this test
+/// covers manual position without changing that reservation (issue #1423).
+#[test]
+fn a_powerpoint_chart_title_uses_its_manual_edge_anchor() {
+    let mut chart = bar_chart_at(Some(18.62), &["Q1", "Q2"]);
+    chart.host = crate::ir::ChartHost::Presentation;
+    chart.title = Some("Annual Income & Gross Profit".to_string());
+    chart.title_text_style.size_pt = Some(18.62);
+    chart.title_layout = Some(crate::ir::ChartTitleLayout {
+        x: 0.007212769679107099,
+        y: 0.0001182572865366946,
+    });
+
+    let source = framed_chart_source(&chart, 689.187, 221.058);
+
+    assert!(
+        source.contains(
+            "#place(top + left, dx: 7.970947096834784pt, dy: 0.026141719247228634pt, text(top-edge: 18.62pt, bottom-edge: \"baseline\", size: 18.62pt"
+        ),
+        "the title must use its chart-relative edge anchor and text inset, got:\n{source}"
+    );
+    assert!(
+        source.contains("#block(width: 689.187pt, height: 41.1902144pt"),
+        "the manually positioned title must keep the existing title band, got:\n{source}"
+    );
+}
+
 #[test]
 fn framed_line_radar_and_pie_charts_center_their_titles_in_the_frame() {
     let mut line = two_series_bar_chart(Vec::new());
@@ -5024,6 +5074,7 @@ fn test_data_table_prints_a_series_number_format() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        title_layout: None,
         plot_area_layout: None,
         user_shapes: Vec::new(),
     };
@@ -5088,6 +5139,7 @@ fn test_data_table_prints_a_declared_thousands_format() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        title_layout: None,
         plot_area_layout: None,
         user_shapes: Vec::new(),
     };
@@ -5150,6 +5202,7 @@ fn test_data_table_without_a_number_format_prints_plainly() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        title_layout: None,
         plot_area_layout: None,
         user_shapes: Vec::new(),
     };
@@ -5211,6 +5264,7 @@ fn test_a_currency_axis_label_is_escaped() {
         value_axis_number_format: Some("\"$\"#,##0".to_string()),
         auto_title_deleted: false,
         has_automatic_title: false,
+        title_layout: None,
         plot_area_layout: None,
         user_shapes: Vec::new(),
     };
@@ -5274,6 +5328,7 @@ fn single_series_chart(auto_title_deleted: bool) -> Chart {
         value_axis_number_format: None,
         auto_title_deleted,
         has_automatic_title: false,
+        title_layout: None,
         plot_area_layout: None,
         user_shapes: Vec::new(),
     }
@@ -5359,6 +5414,7 @@ fn automatic_title_chart(series_names: &[Option<&str>], auto_title_deleted: bool
         value_axis_number_format: None,
         auto_title_deleted,
         has_automatic_title: true,
+        title_layout: None,
         plot_area_layout: None,
         user_shapes: Vec::new(),
     }
@@ -6095,6 +6151,7 @@ fn combo_budget_chart() -> Chart {
         value_axis_number_format: None,
         auto_title_deleted: true,
         has_automatic_title: false,
+        title_layout: None,
         plot_area_layout: None,
         user_shapes: Vec::new(),
     }
@@ -6295,6 +6352,7 @@ fn combo_line_and_scatter_chart() -> Chart {
         value_axis_number_format: None,
         auto_title_deleted: true,
         has_automatic_title: false,
+        title_layout: None,
         plot_area_layout: None,
         user_shapes: Vec::new(),
     }

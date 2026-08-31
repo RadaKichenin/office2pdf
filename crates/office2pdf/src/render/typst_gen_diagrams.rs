@@ -2649,6 +2649,13 @@ const CHART_AREA_TITLE_SCALE: f64 = 1.2;
 const CHART_TITLE_BAND_PT: f64 = 8.994;
 const CHART_TITLE_BAND_EM: f64 = 1.72912;
 
+/// Left text inset inside a manually positioned PowerPoint chart-title box.
+///
+/// The two title layouts in `GENERAL SERVICES.pptx` put the first glyph
+/// exactly 3pt to the right of `chart_left + c:x * chart_width` in native
+/// PowerPoint PDF exports (issue #1423).
+const PPTX_CHART_TITLE_LEFT_INSET_PT: f64 = 3.0;
+
 /// Baseline seat of an Excel chartsheet title below the chart area's top.
 ///
 /// The same twelve exports used for [`CHART_TITLE_BAND_PT`] put the title
@@ -2793,6 +2800,46 @@ fn write_chart_title(
     }
 }
 
+/// Draw a PowerPoint title at the edge-mode anchor its own manual layout
+/// states while preserving the existing title band already reserved from the
+/// plot. `c:title/c:overlay` is not modelled yet, so manual placement does not
+/// change that reservation.
+fn write_manual_chart_title(
+    out: &mut String,
+    chart: &Chart,
+    title: &str,
+    frame: (f64, f64),
+    layout: crate::ir::ChartTitleLayout,
+    title_h: f64,
+    fixed_title_band: bool,
+) {
+    let escaped_title: String = escape_typst(title);
+    let title_size: f64 = chart_area_title_pt(chart);
+    let attrs: String = chart_area_title_attrs(chart);
+    let dx: f64 = layout.x * frame.0 + PPTX_CHART_TITLE_LEFT_INSET_PT;
+    let dy: f64 = layout.y * frame.1;
+    // Line/radar/pie titles historically contribute their natural line box
+    // plus a separate 4pt gap. `place` contributes no flow height, so keep the
+    // old total explicitly; fixed axis titles already own the entire band.
+    let block_h: f64 = if fixed_title_band {
+        title_h
+    } else {
+        (title_h - 4.0).max(0.0)
+    };
+    let _ = writeln!(
+        out,
+        "#block(width: {}pt, height: {}pt, above: 0pt, below: 0pt)[#place(top + left, dx: {}pt, dy: {}pt, text(top-edge: {}pt, bottom-edge: \"baseline\", size: {}pt{})[{}])]",
+        format_f64(frame.0),
+        format_f64(block_h),
+        format_f64(dx),
+        format_f64(dy),
+        format_f64(title_size),
+        format_f64(title_size),
+        attrs,
+        escaped_title,
+    );
+}
+
 /// Open a chart area's one outer outline and its title-bearing content stack.
 ///
 /// `c:chartSpace/c:spPr` is a sibling of `c:chart`, so its stroke and fill
@@ -2825,13 +2872,19 @@ fn write_chart_area_start(
             chart_area_fill(&chart.chart_area_fill),
             chart_area_stroke(&chart.chart_area_outline, chart.host)
         );
-        write_chart_title(
-            out,
-            chart,
-            title,
-            chart_area,
-            fixed_title_band.then_some(title_h),
-        );
+        if let (crate::ir::ChartHost::Presentation, Some(layout), Some(frame)) =
+            (chart.host, chart.title_layout, chart_area)
+        {
+            write_manual_chart_title(out, chart, title, frame, layout, title_h, fixed_title_band);
+        } else {
+            write_chart_title(
+                out,
+                chart,
+                title,
+                chart_area,
+                fixed_title_band.then_some(title_h),
+            );
+        }
         if !fixed_title_band {
             out.push_str("#v(4pt)\n");
         }

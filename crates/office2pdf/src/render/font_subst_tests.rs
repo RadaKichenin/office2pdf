@@ -1242,6 +1242,7 @@ fn test_document_requests_font_families_true_for_a_chart_only_document() {
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
+        title_layout: None,
         plot_area_layout: None,
         user_shapes: Vec::new(),
     };
