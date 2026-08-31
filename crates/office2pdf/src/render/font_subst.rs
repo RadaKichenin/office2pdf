@@ -250,6 +250,11 @@ fn table_entry(normalized_family: &str) -> Option<(FamilyClass, &'static [&'stat
     use FamilyClass::{Monospace, SansSerif, Serif};
     Some(match normalized_family {
         "calibri" => (SansSerif, &["Carlito", "Liberation Sans"]),
+        // LibreOffice 25.2 resolves the unembedded Aptos footer in the Office
+        // poster fixture to Noto Sans 2.015. The paint-chain builder also
+        // suppresses an incidental host Aptos while preserving a caller- or
+        // package-provided face (issue #1463).
+        "aptos" => (SansSerif, &["Noto Sans"]),
         // `Calibri Light` is the `majorHAnsi` face of every Office theme since
         // 2013, so it is the face every built-in `Heading N` resolves to. It
         // needs its own entry even where Office ships it: Typst keys its font
@@ -602,6 +607,19 @@ fn family_name_is_known_sans_serif_brand(normalized_family: &str) -> bool {
     matches!(first_token, Some("aptos"))
 }
 
+/// Whether the declared family itself stays at the front of a conversion's
+/// paint and metric chains.
+///
+/// Aptos is special only when it is unembedded: its incidental presence in a
+/// host Office installation made the #1407 DOCX footer narrower on that host
+/// than on CI and in LibreOffice. An embedded face, a caller font path, or
+/// registered bytes remain explicit conversion inputs and still lead. With no
+/// active context, preserve the historical declaration-first behaviour.
+fn requested_family_leads(font_family: &str, context: Option<&FontSearchContext>) -> bool {
+    normalized_lookup_key(font_family) != "aptos"
+        || context.is_none_or(|context| context.is_user_family(font_family))
+}
+
 /// Check whether the given font family (or its alias) is available in the
 /// current font context. Returns `true` when no context is active to preserve
 /// existing behaviour.
@@ -611,6 +629,9 @@ pub fn is_primary_font_available(font_family: &str) -> bool {
         let Some(ctx) = guard.as_ref() else {
             return true;
         };
+        if !requested_family_leads(font_family, Some(ctx)) {
+            return false;
+        }
         if ctx.has_family(font_family) {
             return true;
         }
@@ -840,7 +861,10 @@ fn latin_family_chain(
     text: &str,
     context: Option<&FontSearchContext>,
 ) -> Vec<String> {
-    let mut families: Vec<String> = vec![font_family.to_string()];
+    let mut families: Vec<String> = Vec::new();
+    if requested_family_leads(font_family, context) {
+        families.push(font_family.to_string());
+    }
     families.extend(
         script_fallbacks(font_family, text)
             .iter()
@@ -879,7 +903,10 @@ fn latin_family_chain(
 pub(crate) fn font_for_mixed_script_text(font_family: &str, text: &str) -> String {
     ACTIVE_FONT_CONTEXT.with(|active_context| {
         let context = active_context.borrow();
-        let mut families: Vec<String> = vec![font_family.to_string()];
+        let mut families: Vec<String> = Vec::new();
+        if requested_family_leads(font_family, context.as_ref()) {
+            families.push(font_family.to_string());
+        }
         families.extend(fallback_candidates(
             font_family,
             context.as_ref(),
@@ -1016,7 +1043,10 @@ fn join_font_list(families: Vec<String>) -> String {
 pub(crate) fn family_candidates(font_family: &str) -> Vec<String> {
     ACTIVE_FONT_CONTEXT.with(|active_context| {
         let context = active_context.borrow();
-        let mut candidates: Vec<String> = vec![font_family.to_string()];
+        let mut candidates: Vec<String> = Vec::new();
+        if requested_family_leads(font_family, context.as_ref()) {
+            candidates.push(font_family.to_string());
+        }
         candidates.extend(fallback_candidates(
             font_family,
             context.as_ref(),
@@ -1182,8 +1212,13 @@ fn east_asian_family_chain(
     text: &str,
     context: Option<&FontSearchContext>,
 ) -> Vec<String> {
-    let mut families: Vec<String> = vec![latin_family.to_string()];
-    families.push(east_asian_family.to_string());
+    let mut families: Vec<String> = Vec::new();
+    if requested_family_leads(latin_family, context) {
+        families.push(latin_family.to_string());
+    }
+    if requested_family_leads(east_asian_family, context) {
+        families.push(east_asian_family.to_string());
+    }
     // The East Asian slot names the face whose voice must be kept — the
     // deck in #687 puts a serif Latin family there — and the Latin slot
     // decides when it says nothing.
@@ -1463,6 +1498,15 @@ pub(crate) fn document_requests_bundled_noto_serif(doc: &Document) -> bool {
         })
 }
 
+/// Whether this document names Aptos, whose reproducible fallback bundle is
+/// Noto Sans 2.015. Explicitly supplied Aptos still leads the paint chain
+/// (issue #1463).
+pub(crate) fn document_requests_bundled_noto_sans(doc: &Document) -> bool {
+    collect_document_font_requests(doc)
+        .into_iter()
+        .any(|(family, _)| normalized_lookup_key(&family) == "aptos")
+}
+
 pub(crate) fn document_requests_font_families(doc: &Document) -> bool {
     doc.pages.iter().any(|page| match page {
         Page::Flow(page) => {
@@ -1527,7 +1571,9 @@ fn resolve_available_fallback(
     script: TextScript,
     context: &FontSearchContext,
 ) -> Option<String> {
-    if family_covers_or_is_unindexed(context, font_family, script) {
+    if requested_family_leads(font_family, Some(context))
+        && family_covers_or_is_unindexed(context, font_family, script)
+    {
         return None;
     }
 

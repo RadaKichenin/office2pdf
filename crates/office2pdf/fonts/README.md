@@ -1,5 +1,36 @@
 # Bundled fallback fonts
 
+## Noto Sans 2.015
+
+`NotoSans-Regular.ttf` is the unhinted static Regular face from the official
+Noto Sans 2.015 release. It is loaded only when a document requests Aptos.
+LibreOffice 25.2 resolves the unembedded Aptos footer in the poster fixture
+from issue #1463 to Noto Sans; shipping the same pinned face keeps its glyph
+widths independent of whether the converting host has Microsoft Office fonts.
+An Aptos face embedded in the package or supplied by the caller still wins.
+
+- Release tag: `NotoSans-v2.015`
+- Source commit: `c4a321e123e4d4ff315f57f4e0adf294fe3a95be`
+- Release URL: <https://github.com/notofonts/latin-greek-cyrillic/releases/tag/NotoSans-v2.015>
+- Release archive SHA-256: `0c34df072a3fa7efbb7cbf34950e1f971a4447cffe365d3a359e2d4089b958f5`
+- `NotoSans-Regular.ttf` SHA-256: `f3961a9cde016d41a4879aecda1474d3a36d6bf54fa0e4643de029cc2248b0e8`
+- License: SIL Open Font License 1.1; see `OFL-1.1.txt`
+
+Reproduce the committed asset from the pinned release archive while keeping
+the archive's nested path out of the repository:
+
+```sh
+unzip -p NotoSans-v2.015.zip \
+  NotoSans/unhinted/ttf/NotoSans-Regular.ttf \
+  > crates/office2pdf/fonts/NotoSans-Regular.ttf
+printf '%s  %s\n' \
+  f3961a9cde016d41a4879aecda1474d3a36d6bf54fa0e4643de029cc2248b0e8 \
+  crates/office2pdf/fonts/NotoSans-Regular.ttf \
+  | shasum -a 256 -c -
+```
+
+The final command must report `OK`.
+
 ## Noto Serif 2.015
 
 `NotoSerif-Regular.ttf` and `NotoSerif-Bold.ttf` are the unhinted static

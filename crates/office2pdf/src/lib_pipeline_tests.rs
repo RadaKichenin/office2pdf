@@ -204,6 +204,67 @@ fn bundled_noto_serif_is_loaded_only_for_the_poster_families() {
 }
 
 #[test]
+fn bundled_noto_sans_is_loaded_only_for_aptos_requests() {
+    let document = |family: &str| Document {
+        metadata: Metadata::default(),
+        pages: vec![Page::Flow(FlowPage {
+            first_header: None,
+            first_footer: None,
+            size: PageSize::default(),
+            margins: Margins::default(),
+            content: vec![Block::Paragraph(Paragraph {
+                style: ParagraphStyle::default(),
+                runs: vec![Run {
+                    text: "Footer".to_string(),
+                    style: TextStyle {
+                        font_family: Some(family.to_string()),
+                        ..TextStyle::default()
+                    },
+                    href: None,
+                    footnote: None,
+                }],
+            })],
+            header: None,
+            footer: None,
+            columns: None,
+            line_grid_pitch: None,
+            line_grid_snaps_lines: false,
+            page_numbering: None,
+        })],
+        styles: StyleSheet::default(),
+    };
+
+    let options = ConvertOptions::default();
+    let mut unrelated = load_additional_fonts(&options).expect("load default fonts");
+    extend_document_fonts(&mut unrelated, &document("Calibri"));
+    assert!(
+        unrelated
+            .iter()
+            .all(|font| font.info().family != crate::bundled_fonts::NOTO_SANS_FAMILY)
+    );
+
+    let mut aptos = load_additional_fonts(&options).expect("load default fonts");
+    extend_document_fonts(&mut aptos, &document("Aptos"));
+    assert_eq!(
+        aptos
+            .iter()
+            .filter(|font| font.info().family == crate::bundled_fonts::NOTO_SANS_FAMILY)
+            .count(),
+        1
+    );
+
+    extend_document_fonts(&mut aptos, &document("Aptos"));
+    assert_eq!(
+        aptos
+            .iter()
+            .filter(|font| font.info().family == crate::bundled_fonts::NOTO_SANS_FAMILY)
+            .count(),
+        1,
+        "several Aptos declarations must not duplicate the bundled face"
+    );
+}
+
+#[test]
 fn test_convert_with_options_delegates_to_convert_bytes() {
     let result = convert_with_options("nonexistent.docx", &ConvertOptions::default());
     assert!(matches!(result.unwrap_err(), ConvertError::Io(_)));

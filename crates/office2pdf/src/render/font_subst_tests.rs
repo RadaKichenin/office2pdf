@@ -319,6 +319,50 @@ fn test_carlito_installed_system_fallback_is_ranked_first() {
 }
 
 #[test]
+fn unembedded_aptos_ignores_the_incidental_host_face() {
+    // `Place your event title here.docx` declares Aptos for its 8pt footer,
+    // but does not embed it. LibreOffice resolves that run to Noto Sans. The
+    // converter must make the same choice whether the converting host happens
+    // to have Microsoft Office's Aptos installed or not (issue #1463).
+    let host_context =
+        FontSearchContext::for_test(Vec::new(), &["Aptos", "Noto Sans"], &["Aptos"], &[]);
+    let chain = with_font_search_context(Some(&host_context), || {
+        font_with_fallbacks_for_text("Aptos", "Sensitivity: Internal")
+    });
+
+    assert!(
+        chain.starts_with("(\"Noto Sans\""),
+        "an incidental host Aptos must not lead the paint chain: {chain}"
+    );
+    assert_eq!(
+        resolve_available_fallback("Aptos", TextScript::Latin, &host_context).as_deref(),
+        Some("Noto Sans"),
+        "the warning path must report the same family that paints"
+    );
+}
+
+#[test]
+fn caller_supplied_aptos_still_leads_its_own_chain() {
+    // A caller-provided font is an explicit conversion input, unlike a face
+    // discovered incidentally from the host. Preserve that opt-in path while
+    // making the unembedded document deterministic (issue #1463).
+    let user_context =
+        FontSearchContext::for_test(Vec::new(), &["Aptos", "Noto Sans"], &[], &["Aptos"]);
+    let chain = with_font_search_context(Some(&user_context), || {
+        font_with_fallbacks_for_text("Aptos", "Sensitivity: Internal")
+    });
+
+    assert!(
+        chain.starts_with("(\"Aptos\""),
+        "an explicitly supplied Aptos face remains authoritative: {chain}"
+    );
+    assert_eq!(
+        resolve_available_fallback("Aptos", TextScript::Latin, &user_context),
+        None
+    );
+}
+
+#[test]
 fn missing_typewriter_face_resolves_to_an_available_monospace_face() {
     let context = FontSearchContext::for_test(
         Vec::new(),
@@ -1446,7 +1490,12 @@ fn corbel_resolves_to_a_sans_serif_face() {
 /// Gantt template on #841 sets its footer in it (issue #949).
 #[test]
 fn the_aptos_family_resolves_to_a_sans_serif_face() {
-    for family in ["Aptos", "Aptos Display", "Aptos Narrow", "Aptos SemiBold"] {
+    assert_eq!(
+        substitutes("Aptos"),
+        Some(&["Noto Sans"][..]),
+        "base Aptos must use the pinned LibreOffice-compatible face"
+    );
+    for family in ["Aptos Display", "Aptos Narrow", "Aptos SemiBold"] {
         let subs = substitutes(family).unwrap_or_else(|| panic!("{family} should substitute"));
         assert!(
             subs.contains(&"Liberation Sans"),
