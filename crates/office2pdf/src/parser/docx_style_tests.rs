@@ -158,6 +158,176 @@ fn test_style_alignment_applied_to_paragraph() {
 }
 
 #[test]
+fn test_based_on_chain_inherits_parent_paragraph_and_run_properties() {
+    let child = docx_rs::Style::new("Child", docx_rs::StyleType::Paragraph)
+        .name("Child")
+        .based_on("Middle")
+        .bold();
+    let parent = docx_rs::Style::new("Middle", docx_rs::StyleType::Paragraph)
+        .name("Middle")
+        .based_on("Normal")
+        .size(36);
+    let normal = docx_rs::Style::new("Normal", docx_rs::StyleType::Paragraph)
+        .name("Normal")
+        .align(docx_rs::AlignmentType::Center)
+        .fonts(docx_rs::RunFonts::new().ascii("Georgia"));
+    let paragraph = docx_rs::Paragraph::new()
+        .add_run(docx_rs::Run::new().add_text("Inherited"))
+        .style("Child");
+
+    // Deliberately put the child before its parents: style resolution must
+    // follow IDs rather than relying on declaration order.
+    let data = build_docx_bytes_with_styles(vec![paragraph], vec![child, parent, normal]);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let paragraph = first_paragraph(&doc);
+    let run = &paragraph.runs[0];
+
+    assert_eq!(paragraph.style.alignment, Some(Alignment::Center));
+    assert_eq!(run.style.font_family.as_deref(), Some("Georgia"));
+    assert_eq!(run.style.font_size, Some(18.0));
+    assert_eq!(run.style.bold, Some(true));
+}
+
+#[test]
+fn test_character_style_based_on_chain_inherits_run_properties() {
+    let child = docx_rs::Style::new("ChildCharacter", docx_rs::StyleType::Character)
+        .name("Child character")
+        .based_on("ParentCharacter")
+        .bold();
+    let parent = docx_rs::Style::new("ParentCharacter", docx_rs::StyleType::Character)
+        .name("Parent character")
+        .fonts(docx_rs::RunFonts::new().ascii("Georgia"))
+        .italic();
+    let paragraph = docx_rs::Paragraph::new().add_run(
+        docx_rs::Run::new()
+            .add_text("Inherited character style")
+            .style("ChildCharacter"),
+    );
+
+    // Character styles use the same child-to-root cascade as paragraph
+    // styles, while remaining independent from paragraph defaults.
+    let data = build_docx_bytes_with_styles(vec![paragraph], vec![child, parent]);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let run = first_run(&doc);
+
+    assert_eq!(run.style.font_family.as_deref(), Some("Georgia"));
+    assert_eq!(run.style.italic, Some(true));
+    assert_eq!(run.style.bold, Some(true));
+}
+
+#[test]
+fn test_child_and_direct_formatting_override_based_on_parent() {
+    let parent = docx_rs::Style::new("Parent", docx_rs::StyleType::Paragraph)
+        .name("Parent")
+        .align(docx_rs::AlignmentType::Center)
+        .fonts(docx_rs::RunFonts::new().ascii("Georgia"));
+    let child = docx_rs::Style::new("Child", docx_rs::StyleType::Paragraph)
+        .name("Child")
+        .based_on("Parent")
+        .align(docx_rs::AlignmentType::Right)
+        .fonts(docx_rs::RunFonts::new().ascii("Arial"));
+    let paragraph = docx_rs::Paragraph::new()
+        .add_run(
+            docx_rs::Run::new()
+                .add_text("Overrides")
+                .fonts(docx_rs::RunFonts::new().ascii("Courier New")),
+        )
+        .style("Child")
+        .align(docx_rs::AlignmentType::Left);
+
+    let data = build_docx_bytes_with_styles(vec![paragraph], vec![parent, child]);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let paragraph = first_paragraph(&doc);
+
+    assert_eq!(paragraph.style.alignment, Some(Alignment::Left));
+    assert_eq!(
+        paragraph.runs[0].style.font_family.as_deref(),
+        Some("Courier New")
+    );
+}
+
+#[test]
+fn test_cyclic_based_on_chain_is_ignored_for_every_cycle_member() {
+    let first = docx_rs::Style::new("First", docx_rs::StyleType::Paragraph)
+        .name("First")
+        .based_on("Second");
+    let second = docx_rs::Style::new("Second", docx_rs::StyleType::Paragraph)
+        .name("Second")
+        .based_on("First")
+        .align(docx_rs::AlignmentType::Center);
+    let paragraphs = vec![
+        docx_rs::Paragraph::new()
+            .add_run(docx_rs::Run::new().add_text("First paragraph"))
+            .style("First"),
+        docx_rs::Paragraph::new()
+            .add_run(docx_rs::Run::new().add_text("Second paragraph"))
+            .style("Second"),
+    ];
+
+    let data = build_docx_bytes_with_styles(paragraphs, vec![first, second]);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let Page::Flow(page) = &doc.pages[0] else {
+        panic!("expected flow page");
+    };
+    let paragraphs: Vec<&Paragraph> = page
+        .content
+        .iter()
+        .filter_map(|block| match block {
+            Block::Paragraph(paragraph) => Some(paragraph),
+            _ => None,
+        })
+        .collect();
+
+    assert_eq!(paragraphs[0].style.alignment, None);
+    assert_eq!(paragraphs[1].style.alignment, Some(Alignment::Center));
+}
+
+#[test]
+fn test_missing_or_cross_type_based_on_parent_is_ignored() {
+    let missing_parent = docx_rs::Style::new("MissingChild", docx_rs::StyleType::Paragraph)
+        .name("Missing child")
+        .based_on("DoesNotExist")
+        .bold();
+    let character_parent = docx_rs::Style::new("CharacterParent", docx_rs::StyleType::Character)
+        .name("Character parent")
+        .align(docx_rs::AlignmentType::Center);
+    let cross_type_child = docx_rs::Style::new("CrossTypeChild", docx_rs::StyleType::Paragraph)
+        .name("Cross-type child")
+        .based_on("CharacterParent")
+        .italic();
+    let paragraphs = vec![
+        docx_rs::Paragraph::new()
+            .add_run(docx_rs::Run::new().add_text("Missing"))
+            .style("MissingChild"),
+        docx_rs::Paragraph::new()
+            .add_run(docx_rs::Run::new().add_text("Cross type"))
+            .style("CrossTypeChild"),
+    ];
+
+    let data = build_docx_bytes_with_styles(
+        paragraphs,
+        vec![missing_parent, character_parent, cross_type_child],
+    );
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let Page::Flow(page) = &doc.pages[0] else {
+        panic!("expected flow page");
+    };
+    let paragraphs: Vec<&Paragraph> = page
+        .content
+        .iter()
+        .filter_map(|block| match block {
+            Block::Paragraph(paragraph) => Some(paragraph),
+            _ => None,
+        })
+        .collect();
+
+    assert_eq!(paragraphs[0].style.alignment, None);
+    assert_eq!(paragraphs[0].runs[0].style.bold, Some(true));
+    assert_eq!(paragraphs[1].style.alignment, None);
+    assert_eq!(paragraphs[1].runs[0].style.italic, Some(true));
+}
+
+#[test]
 fn test_normal_style_no_heading_defaults() {
     let normal = docx_rs::Style::new("Normal", docx_rs::StyleType::Paragraph).name("Normal");
 
