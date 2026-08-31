@@ -1332,24 +1332,98 @@ fn bottom_aligned_spreadsheet_cell_in_auto_height_row_keeps_the_symmetric_line_b
     );
 }
 
-/// Triangulation: a Word-style table (no descender seating) keeps its current
-/// emission even for bottom-aligned cells — Word GT has not verified that
-/// seating, so DOCX/PPTX output must stay byte-identical (issue #618).
+/// A proportional Word line shorter than the face's hhea box is centred on
+/// the baseline inside a table cell. Keeping the full hhea ascent above the
+/// baseline and putting the whole compression below it moved the 66pt poster
+/// title down even though its baseline advance was already exact (issue
+/// #1460). The default cell alignment is top, so this pins that first seat.
 #[test]
-fn bottom_aligned_word_table_cell_keeps_the_symmetric_line_box() {
+fn compressed_word_table_line_box_is_centred_for_default_top_alignment() {
     let Some((ascender, descender, word_pitch_em)) =
         crate::render::pdf::font_line_metrics_em("Libertinus Serif")
     else {
         return;
     };
-    let font_size: f64 = 10.0;
-    let top_em: f64 = ascender + 0.15 * word_pitch_em;
-    let symmetric_bottom_em: f64 = 1.3 * word_pitch_em - top_em;
+    let result = compressed_word_table_cell_source(None);
+    let advance_em: f64 = word_pitch_em * 0.8;
+    let half_advance_em: f64 = advance_em / 2.0;
+    let scaled_descent_em: f64 = descender * advance_em / (ascender + descender);
+    let leading_pt: f64 = (advance_em - half_advance_em - scaled_descent_em) * 66.0;
+
+    assert!(
+        result.contains(&format!(
+            "top-edge: {}em, bottom-edge: -{}em",
+            format_f64(half_advance_em),
+            format_f64(scaled_descent_em)
+        )),
+        "the default top-aligned Word cell centres its first baseline and scales its final descent: {result}"
+    );
+    assert!(
+        result.contains(&format!("#set par(leading: {}pt)", format_f64(leading_pt))),
+        "the rest of the compressed advance stays between lines: {result}"
+    );
+    assert!(
+        !result.contains("table.cell(align:"),
+        "the default top alignment stays implicit: {result}"
+    );
+}
+
+/// Centring a cell must move the already-centred compressed line box as one
+/// unit; it must not restore the face's full ascent above the baseline (issue
+/// #1460).
+#[test]
+fn compressed_word_table_line_box_stays_centred_for_center_alignment() {
+    assert_compressed_word_table_line_box(CellVerticalAlign::Center, "horizon");
+}
+
+/// Bottom alignment likewise anchors the same baseline-centred line box. It
+/// does not use Excel's separately measured descender-seat model (issues #618
+/// and #1460).
+#[test]
+fn compressed_word_table_line_box_stays_centred_for_bottom_alignment() {
+    assert_compressed_word_table_line_box(CellVerticalAlign::Bottom, "bottom");
+}
+
+fn assert_compressed_word_table_line_box(vertical_align: CellVerticalAlign, typst_align: &str) {
+    let Some((ascender, descender, word_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
+        return;
+    };
+    let result = compressed_word_table_cell_source(Some(vertical_align));
+    let advance_em: f64 = word_pitch_em * 0.8;
+    let half_advance_em: f64 = advance_em / 2.0;
+    let scaled_descent_em: f64 = descender * advance_em / (ascender + descender);
+    let leading_pt: f64 = (advance_em - half_advance_em - scaled_descent_em) * 66.0;
+
+    assert!(
+        result.contains(&format!(
+            "top-edge: {}em, bottom-edge: -{}em",
+            format_f64(half_advance_em),
+            format_f64(scaled_descent_em)
+        )),
+        "a {typst_align}-aligned Word cell keeps its centred first seat and scaled last descent: {result}"
+    );
+    assert!(
+        result.contains(&format!("table.cell(align: {typst_align})")),
+        "the cell keeps its {typst_align} table alignment: {result}"
+    );
+    assert!(
+        result.contains(&format!("#set par(leading: {}pt)", format_f64(leading_pt))),
+        "the line advance remainder stays between lines: {result}"
+    );
+}
+
+fn compressed_word_table_cell_source(vertical_align: Option<CellVerticalAlign>) -> String {
+    let font_size: f64 = 66.0;
     let cell = TableCell {
         content: vec![Block::Paragraph(Paragraph {
-            style: ParagraphStyle::default(),
+            style: ParagraphStyle {
+                line_spacing: Some(LineSpacing::Proportional(0.8)),
+                ..ParagraphStyle::default()
+            },
             runs: vec![Run {
-                text: "회의 안건".to_string(),
+                text: "PLACE YOUR EVENT TITLE HERE".to_string(),
                 style: TextStyle {
                     font_family: Some("Libertinus Serif".to_string()),
                     font_size: Some(font_size),
@@ -1359,39 +1433,20 @@ fn bottom_aligned_word_table_cell_keeps_the_symmetric_line_box() {
                 footnote: None,
             }],
         })],
-        vertical_align: Some(CellVerticalAlign::Bottom),
+        vertical_align,
         ..TableCell::default()
     };
-    // A fixed row height, so this guards the table's seating flag itself
-    // rather than passing trivially through the fixed-row gate.
     let table = Table {
         rows: vec![TableRow {
             minimum_height: None,
             cells: vec![cell],
-            height: Some(20.0),
+            height: Some(240.0),
         }],
-        column_widths: vec![200.0],
+        column_widths: vec![500.0],
         ..Table::default()
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
-    let result = generate_typst(&doc).unwrap().source;
-
-    assert!(
-        result.contains(&format!(
-            "top-edge: {}em, bottom-edge: -{}em",
-            format_f64(top_em),
-            format_f64(symmetric_bottom_em)
-        )),
-        "a Word table keeps the symmetric East Asian box under bottom alignment: {result}"
-    );
-    assert!(
-        result.contains("#set par(leading: 0pt)"),
-        "a Word table keeps zero leading: {result}"
-    );
-    assert!(
-        !result.contains(&format!("bottom-edge: -{}em", format_f64(descender))),
-        "a Word table cell must not be re-seated on the descender: {result}"
-    );
+    generate_typst(&doc).unwrap().source
 }
 
 /// Two stacked `<w:p>` in one `<w:tc>` are separated by the first paragraph's
