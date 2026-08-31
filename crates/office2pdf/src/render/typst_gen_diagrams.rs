@@ -110,6 +110,29 @@ pub(super) fn generate_chart(out: &mut String, chart: &Chart) {
 /// empty slide underneath (issue #548). Flowed charts have no frame and keep
 /// the intrinsic size.
 pub(super) fn generate_chart_in(out: &mut String, chart: &Chart, frame: Option<(f64, f64)>) {
+    generate_chart_in_with_sheet_origin(out, chart, frame, None);
+}
+
+/// Render a chart anchored on an Excel worksheet.
+///
+/// `sheet_frame_top_pt` is the chart frame's top in Excel's unscaled sheet
+/// coordinate space. Excel uses that phase when it snaps column-chart axis
+/// chrome before applying the worksheet print scale (issue #1471).
+pub(super) fn generate_sheet_chart_in(
+    out: &mut String,
+    chart: &Chart,
+    frame: (f64, f64),
+    sheet_frame_top_pt: f64,
+) {
+    generate_chart_in_with_sheet_origin(out, chart, Some(frame), Some(sheet_frame_top_pt));
+}
+
+fn generate_chart_in_with_sheet_origin(
+    out: &mut String,
+    chart: &Chart,
+    frame: Option<(f64, f64)>,
+    sheet_frame_top_pt: Option<f64>,
+) {
     // A framed chart is already bounded by its frame, so the page-break guard
     // only concerns the flowed case.
     let atomic: bool = frame.is_none() && chart_fits_on_one_page(chart);
@@ -126,7 +149,7 @@ pub(super) fn generate_chart_in(out: &mut String, chart: &Chart, frame: Option<(
         out.push_str("#[\n");
         out.push_str(scope);
     }
-    generate_chart_body(out, chart, frame);
+    generate_chart_body(out, chart, frame, sheet_frame_top_pt);
     if font_scope.is_some() {
         out.push_str("]\n");
     }
@@ -151,9 +174,16 @@ fn chart_text_font_scope(chart: &Chart) -> Option<String> {
 }
 
 /// Emit the chart's own markup, without the atomicity wrapper.
-fn generate_chart_body(out: &mut String, chart: &Chart, frame: Option<(f64, f64)>) {
+fn generate_chart_body(
+    out: &mut String,
+    chart: &Chart,
+    frame: Option<(f64, f64)>,
+    sheet_frame_top_pt: Option<f64>,
+) {
     match chart_variant(chart) {
-        ChartVariant::AxisPlot => return generate_chart_axis(out, chart, frame),
+        ChartVariant::AxisPlot => {
+            return generate_chart_axis(out, chart, frame, sheet_frame_top_pt);
+        }
         ChartVariant::LinePlot => return generate_chart_line_plot(out, chart, frame),
         ChartVariant::PiePlot => return generate_chart_pie_plot(out, chart, frame),
         ChartVariant::RadarPlot => return generate_chart_radar_plot(out, chart, frame),
@@ -3486,9 +3516,37 @@ fn band_bars(band: f64, series_count: usize, layout: BarBandLayout) -> BandBars 
     }
 }
 
+/// Seat one value-axis gridline, label, or tick for a column chart.
+///
+/// An anchored Excel worksheet chart lays out its plot in unscaled sheet
+/// points. It preserves the exact plot edges but rounds every interior chrome
+/// seat to the nearest whole sheet point before fit-to-page scaling (#1471).
+/// Bars and overlaid data series keep their continuous value coordinates.
+fn column_value_chrome_y(
+    chart: &Chart,
+    plot_y: f64,
+    plot_h: f64,
+    frac: f64,
+    sheet_frame_top_pt: Option<f64>,
+) -> f64 {
+    let y: f64 = plot_y + (1.0 - frac) * plot_h;
+    if chart.host != crate::ir::ChartHost::Spreadsheet || !(0.0 < frac && frac < 1.0) {
+        return y;
+    }
+    let Some(frame_top) = sheet_frame_top_pt else {
+        return y;
+    };
+    (frame_top + y).round() - frame_top
+}
+
 /// Render a bar (horizontal) or column (vertical) chart as an axis-scaled
 /// plot with gridlines, tick labels, and a legend.
-fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)>) {
+fn generate_chart_axis(
+    out: &mut String,
+    chart: &Chart,
+    frame: Option<(f64, f64)>,
+    sheet_frame_top_pt: Option<f64>,
+) {
     let horizontal: bool = matches!(chart.chart_type, ChartType::Bar);
     let categories: usize = chart.categories.len();
     let series: &[crate::ir::ChartSeries] = &chart.series;
@@ -3631,7 +3689,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 );
             }
         } else {
-            let y: f64 = plot_y + (1.0 - frac) * plot_h;
+            let y: f64 = column_value_chrome_y(chart, plot_y, plot_h, frac, sheet_frame_top_pt);
             if let Some(stroke) = gridline_stroke.as_deref() {
                 let _ = writeln!(
                     out,
@@ -3964,7 +4022,13 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                     );
                 }
             } else if let Some(stroke) = left_stroke.as_deref() {
-                write_tick_left_of_plot(out, plot_x, plot_y + (1.0 - frac) * plot_h, reach, stroke);
+                write_tick_left_of_plot(
+                    out,
+                    plot_x,
+                    column_value_chrome_y(chart, plot_y, plot_h, frac, sheet_frame_top_pt),
+                    reach,
+                    stroke,
+                );
             }
         }
     }

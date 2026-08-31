@@ -19,7 +19,9 @@ use crate::ir::{
     TextDirection, TextStyle, VerticalTextAlign, WrapMode,
 };
 
-use self::diagrams::{generate_chart, generate_chart_in, generate_smartart};
+use self::diagrams::{
+    generate_chart, generate_chart_in, generate_sheet_chart_in, generate_smartart,
+};
 use self::fmt::*;
 use self::lists::{
     ListEojeolWrap, can_render_fixed_text_list_inline, common_text_style,
@@ -1190,7 +1192,7 @@ fn write_placed_sheet_drawing(
     ctx: &mut GenCtx,
 ) {
     let _ = write!(out, "#place(top + left, dy: {}pt)[", format_f64(dy_pt));
-    write_placed_sheet_anchor(out, anchor, left_pt, ctx);
+    write_placed_sheet_anchor(out, anchor, left_pt, dy_pt, ctx);
     out.push(']');
 }
 
@@ -1200,6 +1202,7 @@ fn write_placed_sheet_anchor(
     out: &mut String,
     anchor: &SheetAnchor,
     left_pt: f64,
+    dy_pt: f64,
     ctx: &mut GenCtx,
 ) {
     match anchor {
@@ -1229,10 +1232,16 @@ fn write_placed_sheet_anchor(
                     "#scale(x: {percent}%, y: {percent}%, origin: top + left)[",
                 );
             }
-            generate_chart_in(
+            let sheet_frame_top_pt: f64 = if placement.print_scale > 0.0 {
+                dy_pt / placement.print_scale
+            } else {
+                dy_pt
+            };
+            generate_sheet_chart_in(
                 out,
                 &sheet_chart.chart,
-                Some((placement.width, placement.height)),
+                (placement.width, placement.height),
+                sheet_frame_top_pt,
             );
             if fitted {
                 out.push(']');
