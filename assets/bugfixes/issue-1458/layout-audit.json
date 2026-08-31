@@ -1,0 +1,218 @@
+{
+ "pages": [
+  {
+   "lines": {
+    "gt": 10,
+    "out": 10,
+    "matched": 10,
+    "missing": 0,
+    "extra": 0,
+    "deviant": 9,
+    "missing_text": [],
+    "extra_text": []
+   },
+   "baseline": {
+    "mean_abs_dy": 33.448646999999994,
+    "worst_dy": 43.88297,
+    "worst_dy_signed": 43.88297,
+    "worst_line": "ALL"
+   },
+   "dx0": {
+    "mean_abs": 2.161799999999995,
+    "worst": -5.680000000000007
+   },
+   "width": {
+    "mean_abs_pct": 5.78855173420477,
+    "worst_pct": 18.964635058944175
+   },
+   "instances": {
+    "large_shift_threshold": 5.0,
+    "large_shift_count": 9,
+    "large_shifts": [
+     {
+      "label": "PLACEYOUR",
+      "gt_x": 63.45,
+      "gt_y": 177.5,
+      "out_x": 63.35,
+      "out_y": 211.65399,
+      "dx": -0.10000000000000142,
+      "dy": 34.15398999999999,
+      "width_pct": 8.944223783496323e-06
+     },
+     {
+      "label": "EVENTTITLE",
+      "gt_x": 63.45,
+      "gt_y": 249.45000000000005,
+      "out_x": 63.35,
+      "out_y": 283.5676,
+      "dx": -0.10000000000000142,
+      "dy": 34.11759999999998,
+      "width_pct": 1.0886273480030555e-05
+     },
+     {
+      "label": "HERE",
+      "gt_x": 63.45,
+      "gt_y": 321.4,
+      "out_x": 63.35,
+      "out_y": 355.4812,
+      "dx": -0.10000000000000142,
+      "dy": 34.081200000000024,
+      "width_pct": 0.03526092612624952
+     },
+     {
+      "label": "EVENTSUBTITLECANGOHERE",
+      "gt_x": 63.1,
+      "gt_y": 357.2,
+      "out_x": 62.6,
+      "out_y": 383.2208,
+      "dx": -0.5,
+      "dy": 26.02080000000001,
+      "width_pct": 0.2679853094065718
+     },
+     {
+      "label": "ALL",
+      "gt_x": 365.55,
+      "gt_y": 462.15,
+      "out_x": 361.812,
+      "out_y": 506.03297,
+      "dx": -3.7379999999999995,
+      "dy": 43.88297,
+      "width_pct": 18.964635058944175
+     },
+     {
+      "label": "AGES",
+      "gt_x": 345.25,
+      "gt_y": 534.1,
+      "out_x": 339.57,
+      "out_y": 577.94656,
+      "dx": -5.680000000000007,
+      "dy": 43.846559999999954,
+      "width_pct": 16.71863528897705
+     },
+     {
+      "label": "WELC",
+      "gt_x": 334.0,
+      "gt_y": 606.05,
+      "out_x": 329.406,
+      "out_y": 649.86019,
+      "dx": -4.593999999999994,
+      "dy": 43.810190000000034,
+      "width_pct": 4.678362573099383
+     },
+     {
+      "label": "OME",
+      "gt_x": 353.95,
+      "gt_y": 678.0,
+      "out_x": 350.889,
+      "out_y": 721.77377,
+      "dx": -3.0609999999999786,
+      "dy": 43.77377000000001,
+      "width_pct": 3.864507507103853
+     },
+     {
+      "label": "GATESOPENAT9AM",
+      "gt_x": 359.15,
+      "gt_y": 715.35,
+      "out_x": 355.555,
+      "out_y": 746.09939,
+      "dx": -3.5949999999999704,
+      "dy": 30.74938999999995,
+      "width_pct": 5.0079176563736745
+     }
+    ]
+   },
+   "visibility": {
+    "mismatch_count": 0,
+    "mismatches": []
+   },
+   "pitch": {
+    "pairs": 9,
+    "worst_delta": 30.699389999999994
+   },
+   "wraps": {
+    "count": 0,
+    "samples": []
+   },
+   "reflow": {
+    "gt_lines": 0,
+    "out_lines": 0,
+    "samples": []
+   },
+   "rects": {
+    "gt_count": 242,
+    "out_count": 24,
+    "matched": 24,
+    "mean_center_delta": 0.15032886292055606
+   },
+   "noise_floor": 0.12
+  },
+  {
+   "lines": {
+    "gt": 2,
+    "out": 2,
+    "matched": 2,
+    "missing": 0,
+    "extra": 0,
+    "deviant": 1,
+    "missing_text": [],
+    "extra_text": []
+   },
+   "baseline": {
+    "mean_abs_dy": 2.6561949999999754,
+    "worst_dy": 5.262389999999996,
+    "worst_dy_signed": -5.262389999999996,
+    "worst_line": "RSVPBYJUNE20ATINFO@FABRIKAM.COM"
+   },
+   "dx0": {
+    "mean_abs": 0.1475000000000044,
+    "worst": -0.14999999999999858
+   },
+   "width": {
+    "mean_abs_pct": 4.193162596569227,
+    "worst_pct": 8.34819319151948
+   },
+   "instances": {
+    "large_shift_threshold": 5.0,
+    "large_shift_count": 1,
+    "large_shifts": [
+     {
+      "label": "RSVPBYJUNE20ATINFO@FABRIKAM.COM",
+      "gt_x": 148.5,
+      "gt_y": 130.25,
+      "out_x": 148.355,
+      "out_y": 124.98761,
+      "dx": -0.14500000000001023,
+      "dy": -5.262389999999996,
+      "width_pct": 0.03813200161897496
+     }
+    ]
+   },
+   "visibility": {
+    "mismatch_count": 0,
+    "mismatches": []
+   },
+   "pitch": {
+    "pairs": 1,
+    "worst_delta": 5.312389999999937
+   },
+   "wraps": {
+    "count": 0,
+    "samples": []
+   },
+   "reflow": {
+    "gt_lines": 0,
+    "out_lines": 0,
+    "samples": []
+   },
+   "rects": {
+    "gt_count": 0,
+    "out_count": 0,
+    "matched": 0,
+    "mean_center_delta": 0.0
+   },
+   "noise_floor": 0.12
+  }
+ ],
+ "gt_pages": 2,
+ "out_pages": 2
+}

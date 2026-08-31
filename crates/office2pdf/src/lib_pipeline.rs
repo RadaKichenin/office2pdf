@@ -107,7 +107,9 @@ fn load_registered_fonts(options: &ConvertOptions) -> Result<Vec<typst::text::Fo
     Ok(fonts)
 }
 
-fn load_additional_fonts(options: &ConvertOptions) -> Result<Vec<typst::text::Font>, ConvertError> {
+pub(super) fn load_additional_fonts(
+    options: &ConvertOptions,
+) -> Result<Vec<typst::text::Font>, ConvertError> {
     let fonts = load_registered_fonts(options)?;
     #[cfg(all(target_arch = "wasm32", feature = "wasm-cjk-font"))]
     {
@@ -119,6 +121,20 @@ fn load_additional_fonts(options: &ConvertOptions) -> Result<Vec<typst::text::Fo
     {
         Ok(fonts)
     }
+}
+
+/// Add document-scoped bundled faces without changing Typst's fallback book
+/// for unrelated conversions. Caller-registered bytes stay ahead of bundled
+/// data, including when they provide their own Noto Serif (issue #1458).
+pub(super) fn extend_document_fonts(fonts: &mut Vec<typst::text::Font>, doc: &ir::Document) {
+    if !render::font_subst::document_requests_bundled_noto_serif(doc)
+        || fonts
+            .iter()
+            .any(|font| font.info().family == crate::bundled_fonts::NOTO_SERIF_FAMILY)
+    {
+        return;
+    }
+    fonts.extend_from_slice(crate::bundled_fonts::noto_serif_fonts());
 }
 
 fn effective_last_resort_family(options: &ConvertOptions) -> Option<&str> {
@@ -172,7 +188,7 @@ pub(super) fn convert_bytes(
 
     let total_start: Instant = Instant::now();
     let input_size_bytes = data.len() as u64;
-    let additional_fonts = load_additional_fonts(options)?;
+    let mut additional_fonts = load_additional_fonts(options)?;
 
     // Extract embedded fonts before parsing (PPTX/DOCX only). Native keeps the
     // materialized directory alive through compilation; WASM keeps parsed
@@ -185,12 +201,6 @@ pub(super) fn convert_bytes(
     let embedded_fonts = embedded_font_data.as_ref().map_or_else(Vec::new, |fonts| {
         render::pdf::load_fonts_from_bytes(fonts.font_bytes())
     });
-    #[cfg(target_arch = "wasm32")]
-    let in_memory_fonts: Vec<typst::text::Font> = embedded_fonts
-        .into_iter()
-        .chain(additional_fonts.iter().cloned())
-        .collect();
-
     let parser: Box<dyn Parser> = match format {
         Format::Docx => Box::new(parser::docx::DocxParser),
         Format::Pptx => Box::new(parser::pptx::PptxParser),
@@ -211,6 +221,13 @@ pub(super) fn convert_bytes(
     };
     let parse_duration = parse_start.elapsed();
     let page_count = doc.pages.len() as u32;
+    extend_document_fonts(&mut additional_fonts, &doc);
+
+    #[cfg(target_arch = "wasm32")]
+    let in_memory_fonts: Vec<typst::text::Font> = embedded_fonts
+        .into_iter()
+        .chain(additional_fonts.iter().cloned())
+        .collect();
 
     #[cfg(not(target_arch = "wasm32"))]
     let font_context = resolve_font_context_with_embedded(
@@ -333,7 +350,7 @@ fn convert_bytes_streaming_xlsx(
 ) -> Result<ConvertResult, ConvertError> {
     let total_start: Instant = Instant::now();
     let input_size_bytes = data.len() as u64;
-    let additional_fonts = load_additional_fonts(options)?;
+    let mut additional_fonts = load_additional_fonts(options)?;
     let chunk_size = options
         .streaming_chunk_size
         .unwrap_or(crate::defaults::DEFAULT_STREAMING_CHUNK_SIZE);
@@ -354,6 +371,16 @@ fn convert_bytes_streaming_xlsx(
         }
     };
     let parse_duration = parse_start.elapsed();
+    if chunk_docs
+        .iter()
+        .any(render::font_subst::document_requests_bundled_noto_serif)
+    {
+        let first_requesting_doc = chunk_docs
+            .iter()
+            .find(|doc| render::font_subst::document_requests_bundled_noto_serif(doc))
+            .expect("the preceding any call found a requesting document");
+        extend_document_fonts(&mut additional_fonts, first_requesting_doc);
+    }
 
     let needs_in_memory_font_context = !additional_fonts.is_empty()
         || effective_last_resort_family(options).is_some()
@@ -495,33 +522,73 @@ pub(super) fn render_document(doc: &ir::Document) -> Result<Vec<u8>, ConvertErro
     #[cfg(not(target_arch = "wasm32"))]
     {
         let options = ConvertOptions::default();
-        let font_context = resolve_font_context_with_embedded(doc, &options, None, &[]);
+        let mut fonts = load_additional_fonts(&options)?;
+        extend_document_fonts(&mut fonts, doc);
+        let font_context = resolve_font_context_with_embedded(doc, &options, None, &fonts);
         let output = render::typst_gen::generate_typst_with_options_and_font_context(
             doc,
             &options,
             font_context.as_ref(),
         )?;
-        render::pdf::compile_to_pdf(
-            &output.source,
-            &output.images,
-            None,
-            font_context
-                .as_ref()
-                .map(|context| context.search_paths())
-                .unwrap_or(&[]),
-            false,
-            false,
-        )
+        let search_paths = font_context
+            .as_ref()
+            .map(|context| context.search_paths())
+            .unwrap_or(&[]);
+        if fonts.is_empty() {
+            render::pdf::compile_to_pdf(
+                &output.source,
+                &output.images,
+                None,
+                search_paths,
+                false,
+                false,
+            )
+        } else {
+            render::pdf::compile_to_pdf_with_fonts(
+                &output.source,
+                &output.images,
+                None,
+                search_paths,
+                &fonts,
+                false,
+                false,
+            )
+        }
     }
     #[cfg(all(target_arch = "wasm32", not(feature = "wasm-cjk-font")))]
     {
-        let output = render::typst_gen::generate_typst(doc)?;
-        render::pdf::compile_to_pdf(&output.source, &output.images, None, &[], false, false)
+        let options = ConvertOptions::default();
+        let mut fonts = load_additional_fonts(&options)?;
+        extend_document_fonts(&mut fonts, doc);
+        let font_context = (!fonts.is_empty()
+            || render::font_subst::document_requests_font_families(doc))
+        .then(|| render::font_context::resolve_font_search_context_from_fonts(&fonts));
+        let output = render::typst_gen::generate_typst_with_options_and_font_context(
+            doc,
+            &options,
+            font_context.as_ref(),
+        )?;
+        if fonts.is_empty() {
+            // Preserve the no-font fast path for unrelated filesystem-free
+            // documents; only poster requests need the bundled-face compiler.
+            render::pdf::compile_to_pdf(&output.source, &output.images, None, &[], false, false)
+        } else {
+            render::pdf::compile_to_pdf_with_fonts(
+                &output.source,
+                &output.images,
+                None,
+                &[],
+                &fonts,
+                false,
+                false,
+            )
+        }
     }
     #[cfg(all(target_arch = "wasm32", feature = "wasm-cjk-font"))]
     {
         let options = ConvertOptions::default();
-        let fonts = load_additional_fonts(&options)?;
+        let mut fonts = load_additional_fonts(&options)?;
+        extend_document_fonts(&mut fonts, doc);
         let font_context = render::font_context::resolve_font_search_context_from_fonts(&fonts)
             .with_last_resort_family(effective_last_resort_family(&options));
         let output = render::typst_gen::generate_typst_with_options_and_font_context(

@@ -187,6 +187,71 @@ fn test_impact_substitutes() {
 }
 
 #[test]
+fn office_poster_fonts_use_the_bundled_noto_serif_fallback() {
+    // LibreOffice 25.2 resolves the unembedded poster-template faces in
+    // issue #1458 to Noto Serif 2.015. Keeping that exact OFL face as the
+    // first named substitute makes widths and Word line metrics independent
+    // of whichever serif a host happens to install.
+    for family in [
+        "Avenir Next LT Pro",
+        "Avenir Next W1G Medium",
+        "The Hand Black",
+    ] {
+        assert_eq!(
+            substitutes(family),
+            Some(&["Noto Serif"][..]),
+            "{family} should resolve through the reproducible Noto Serif face"
+        );
+    }
+}
+
+#[test]
+fn only_office_poster_requests_select_the_bundled_noto_serif() {
+    use crate::ir::{
+        Block, Document, FlowPage, Margins, Metadata, Page, PageSize, Paragraph, ParagraphStyle,
+        Run, StyleSheet, TextStyle,
+    };
+
+    let document = |family: &str| Document {
+        metadata: Metadata::default(),
+        pages: vec![Page::Flow(FlowPage {
+            first_header: None,
+            first_footer: None,
+            size: PageSize::default(),
+            margins: Margins::default(),
+            content: vec![Block::Paragraph(Paragraph {
+                style: ParagraphStyle::default(),
+                runs: vec![Run {
+                    text: "Poster".to_string(),
+                    style: TextStyle {
+                        font_family: Some(family.to_string()),
+                        ..TextStyle::default()
+                    },
+                    href: None,
+                    footnote: None,
+                }],
+            })],
+            header: None,
+            footer: None,
+            columns: None,
+            line_grid_pitch: None,
+            line_grid_snaps_lines: false,
+            page_numbering: None,
+        })],
+        styles: StyleSheet::default(),
+    };
+
+    for family in [
+        "Avenir Next LT Pro",
+        "Avenir Next W1G Medium",
+        "The Hand Black",
+    ] {
+        assert!(document_requests_bundled_noto_serif(&document(family)));
+    }
+    assert!(!document_requests_bundled_noto_serif(&document("Calibri")));
+}
+
+#[test]
 fn test_raleway_substitutes() {
     let subs = substitutes("Raleway").expect("Raleway should have substitutes");
     assert!(subs.contains(&"Helvetica"));
