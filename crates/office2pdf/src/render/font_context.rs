@@ -4,8 +4,6 @@
 #![cfg_attr(target_arch = "wasm32", allow(dead_code))]
 
 use std::collections::{HashMap, HashSet};
-#[cfg(not(target_arch = "wasm32"))]
-use std::path::Path;
 use std::path::PathBuf;
 
 use super::font_subst::TextScript;
@@ -345,27 +343,21 @@ fn index_families_from_book(book: &typst::text::FontBook) -> FamilyIndex {
 #[cfg(not(target_arch = "wasm32"))]
 fn discover_default_macos_office_font_paths() -> Vec<PathBuf> {
     let mut app_roots = vec![PathBuf::from("/Applications")];
-    let Some(home_dir) = std::env::var_os("HOME").map(PathBuf::from) else {
-        return canonicalize_existing_dirs(
-            office_app_font_dir_candidates(&app_roots)
-                .into_iter()
-                .collect::<Vec<PathBuf>>(),
-        );
-    };
-    app_roots.push(home_dir.join("Applications"));
-    discover_macos_office_font_paths_from(&app_roots, &home_dir)
+    if let Some(home_dir) = std::env::var_os("HOME").map(PathBuf::from) {
+        app_roots.push(home_dir.join("Applications"));
+    }
+    discover_macos_office_font_paths_from(&app_roots)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn discover_macos_office_font_paths_from(app_roots: &[PathBuf], home_dir: &Path) -> Vec<PathBuf> {
-    let mut candidates = office_app_font_dir_candidates(app_roots);
-    if let Some(font_cache_root) = highest_numeric_child(
-        &home_dir.join("Library/Group Containers/UBF8T346G9.Office/FontCache"),
-    ) {
-        candidates.push(font_cache_root.join("CloudFonts"));
-        candidates.push(font_cache_root.join("PreviewFont"));
-    }
-    canonicalize_existing_dirs(candidates)
+fn discover_macos_office_font_paths_from(app_roots: &[PathBuf]) -> Vec<PathBuf> {
+    // Installed Office application resources are versioned with the app. The
+    // per-user CloudFonts and PreviewFont caches are mutable implementation
+    // details: their contents depend on which documents the user opened, so
+    // auto-discovering them makes an unembedded family render differently on
+    // otherwise identical hosts. Callers that intentionally want one of those
+    // directories can still pass it as an explicit font path (issue #1409).
+    canonicalize_existing_dirs(office_app_font_dir_candidates(app_roots))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -381,23 +373,6 @@ fn office_app_font_dir_candidates(app_roots: &[PathBuf]) -> Vec<PathBuf> {
         }
     }
     candidates
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn highest_numeric_child(root: &Path) -> Option<PathBuf> {
-    let entries = std::fs::read_dir(root).ok()?;
-    entries
-        .flatten()
-        .filter_map(|entry| {
-            let path = entry.path();
-            if !path.is_dir() {
-                return None;
-            }
-            let version = path.file_name()?.to_str()?.parse::<u32>().ok()?;
-            Some((version, path))
-        })
-        .max_by_key(|(version, _)| *version)
-        .map(|(_, path)| path)
 }
 
 #[cfg(not(target_arch = "wasm32"))]

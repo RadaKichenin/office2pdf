@@ -1,0 +1,172 @@
+{
+ "pages": [
+  {
+   "lines": {
+    "gt": 7,
+    "out": 10,
+    "matched": 7,
+    "missing": 0,
+    "extra": 3,
+    "deviant": 6,
+    "missing_text": [],
+    "extra_text": [
+     "PLACEYOUR",
+     "EVENTTITLE",
+     "HERE"
+    ]
+   },
+   "baseline": {
+    "mean_abs_dy": 7.632248571428566,
+    "worst_dy": 17.709100000000035,
+    "worst_dy_signed": 17.709100000000035,
+    "worst_line": "OME"
+   },
+   "dx0": {
+    "mean_abs": 0.7698571428571392,
+    "worst": 2.021000000000015
+   },
+   "width": {
+    "mean_abs_pct": 5.03656371306407,
+    "worst_pct": 9.892362890825265
+   },
+   "instances": {
+    "large_shift_threshold": 5.0,
+    "large_shift_count": 4,
+    "large_shifts": [
+     {
+      "label": "AGES",
+      "gt_x": 345.25,
+      "gt_y": 534.1,
+      "out_x": 345.642,
+      "out_y": 541.92916,
+      "dx": 0.3919999999999959,
+      "dy": 7.829160000000002,
+      "width_pct": 9.158222915042897
+     },
+     {
+      "label": "WELC",
+      "gt_x": 334.0,
+      "gt_y": 606.05,
+      "out_x": 333.465,
+      "out_y": 618.81918,
+      "dx": -0.535000000000025,
+      "dy": 12.769180000000006,
+      "width_pct": 0.447198142414805
+     },
+     {
+      "label": "OME",
+      "gt_x": 353.95,
+      "gt_y": 678.0,
+      "out_x": 355.971,
+      "out_y": 695.7091,
+      "dx": 2.021000000000015,
+      "dy": 17.709100000000035,
+      "width_pct": -2.822418158972209
+     },
+     {
+      "label": "GATESOPENAT9AM",
+      "gt_x": 359.15,
+      "gt_y": 715.35,
+      "out_x": 359.132,
+      "out_y": 725.93917,
+      "dx": -0.01799999999997226,
+      "dy": 10.589169999999967,
+      "width_pct": -0.04949172887681421
+     }
+    ]
+   },
+   "visibility": {
+    "mismatch_count": 0,
+    "mismatches": []
+   },
+   "pitch": {
+    "pairs": 6,
+    "worst_delta": 10.539170000000013
+   },
+   "wraps": {
+    "count": 0,
+    "samples": []
+   },
+   "reflow": {
+    "gt_lines": 0,
+    "out_lines": 0,
+    "samples": []
+   },
+   "rects": {
+    "gt_count": 242,
+    "out_count": 24,
+    "matched": 24,
+    "mean_center_delta": 0.15032886292055606
+   },
+   "noise_floor": 0.12
+  },
+  {
+   "lines": {
+    "gt": 2,
+    "out": 2,
+    "matched": 2,
+    "missing": 0,
+    "extra": 0,
+    "deviant": 1,
+    "missing_text": [],
+    "extra_text": []
+   },
+   "baseline": {
+    "mean_abs_dy": 0.39999999999997726,
+    "worst_dy": 0.75,
+    "worst_dy_signed": 0.75,
+    "worst_line": "RSVPBYJUNE20ATINFO@FABRIKAM.COM"
+   },
+   "dx0": {
+    "mean_abs": 6.268749999999994,
+    "worst": 12.387499999999989
+   },
+   "width": {
+    "mean_abs_pct": 8.13778436518478,
+    "worst_pct": 8.34819319151948
+   },
+   "instances": {
+    "large_shift_threshold": 5.0,
+    "large_shift_count": 1,
+    "large_shifts": [
+     {
+      "label": "RSVPBYJUNE20ATINFO@FABRIKAM.COM",
+      "gt_x": 148.5,
+      "gt_y": 130.25,
+      "out_x": 160.8875,
+      "out_y": 131.0,
+      "dx": 12.387499999999989,
+      "dy": 0.75,
+      "width_pct": -7.9273755388500815
+     }
+    ]
+   },
+   "visibility": {
+    "mismatch_count": 0,
+    "mismatches": []
+   },
+   "pitch": {
+    "pairs": 1,
+    "worst_delta": 0.7000000000000455
+   },
+   "wraps": {
+    "count": 0,
+    "samples": []
+   },
+   "reflow": {
+    "gt_lines": 0,
+    "out_lines": 0,
+    "samples": []
+   },
+   "rects": {
+    "gt_count": 0,
+    "out_count": 0,
+    "matched": 0,
+    "mean_center_delta": 0.0
+   },
+   "noise_floor": 0.12
+  }
+ ],
+ "gt_pages": 2,
+ "out_pages": 2
+}
