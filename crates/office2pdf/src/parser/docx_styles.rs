@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::ir::{Color, PairKerning, ParagraphStyle, TabStop, TextStyle};
 
@@ -320,77 +320,57 @@ pub(super) fn build_style_map(
     map.insert(
         DOC_DEFAULT_STYLE_ID.to_string(),
         ResolvedStyle {
-            text: default_text,
+            text: default_text.clone(),
             paragraph: default_paragraph.clone(),
             paragraph_tab_overrides: None,
             heading_level: None,
         },
     );
 
+    let styles_by_id: HashMap<&str, &docx_rs::Style> = styles
+        .styles
+        .iter()
+        .map(|style| (style.style_id.as_str(), style))
+        .collect();
     for style in &styles.styles {
-        match style.style_type {
-            docx_rs::StyleType::Paragraph => {
-                let mut own_text = extract_run_style(&style.run_property);
-                if own_text.font_family.is_none()
-                    && let Ok(run_property_json) = serde_json::to_value(&style.run_property)
-                {
-                    own_text.font_family =
-                        resolve_theme_font_family(&run_property_json, theme_fonts);
-                }
-                // `None` here is "states nothing", so the merge below leaves
-                // the document default's decision standing (issue #628).
-                own_text.pair_kerning = pair_kerning.for_style(&style.style_id);
-                let text = merge_text_style(&own_text, map.get(DOC_DEFAULT_STYLE_ID));
-                // A named style states only what it changes; everything else
-                // falls through to `w:pPrDefault`, exactly as its run
-                // properties fall through to `w:rPrDefault` above (issue #574).
-                let mut paragraph = fill_paragraph_defaults(
-                    extract_paragraph_style(&style.paragraph_property),
-                    &default_paragraph,
-                );
-                paragraph.background = paragraph_backgrounds.get(&style.style_id).copied();
-                // From the raw styles.xml, since the published docx-rs does
-                // not parse `w:wordWrap` (issue #1041).
-                paragraph.word_wrap = style_word_wraps.get(&style.style_id).copied();
-                let paragraph_tab_overrides =
-                    extract_tab_stop_overrides(&style.paragraph_property.tabs);
-                let heading_level = style
-                    .paragraph_property
-                    .outline_lvl
-                    .as_ref()
-                    .map(|outline_level| outline_level.v)
-                    .filter(|&value| value < 6);
-
-                map.insert(
-                    style.style_id.clone(),
-                    ResolvedStyle {
-                        text,
-                        paragraph,
-                        paragraph_tab_overrides,
-                        heading_level,
-                    },
-                );
-            }
-            // Character styles (e.g. pandoc's `BuiltInTok`/`StringTok` syntax
-            // highlighting tokens) contribute only run-level text properties.
-            // They deliberately do NOT inherit document defaults, so that
-            // overlaying a run's `rStyle` onto its paragraph style changes only
-            // the properties the character style actually sets (issue #176).
-            docx_rs::StyleType::Character => {
-                let mut text = extract_run_style(&style.run_property);
-                text.pair_kerning = pair_kerning.for_style(&style.style_id);
-                map.insert(
-                    style.style_id.clone(),
-                    ResolvedStyle {
-                        text,
-                        paragraph: ParagraphStyle::default(),
-                        paragraph_tab_overrides: None,
-                        heading_level: None,
-                    },
-                );
-            }
-            _ => {}
+        if !matches!(
+            style.style_type,
+            docx_rs::StyleType::Paragraph | docx_rs::StyleType::Character
+        ) {
+            continue;
         }
+
+        let chain = based_on_chain(style, &styles_by_id);
+        let is_paragraph = style.style_type == docx_rs::StyleType::Paragraph;
+        let mut resolved = ResolvedStyle {
+            // Paragraph styles start at document defaults. Character styles
+            // deliberately do not: applying a character style must overlay
+            // only what that style hierarchy states (issue #176).
+            text: if is_paragraph {
+                default_text.clone()
+            } else {
+                TextStyle::default()
+            },
+            paragraph: if is_paragraph {
+                default_paragraph.clone()
+            } else {
+                ParagraphStyle::default()
+            },
+            paragraph_tab_overrides: None,
+            heading_level: None,
+        };
+
+        for definition in chain.into_iter().rev() {
+            merge_style_definition(
+                &mut resolved,
+                definition,
+                theme_fonts,
+                paragraph_backgrounds,
+                style_word_wraps,
+                pair_kerning,
+            );
+        }
+        map.insert(style.style_id.clone(), resolved);
     }
 
     // Paragraphs without an explicit pStyle inherit the default paragraph
@@ -412,6 +392,88 @@ pub(super) fn build_style_map(
     map
 }
 
+/// The style and its same-type ancestors, from child to root.
+///
+/// A cycle invalidates the whole parent chain for this style. Dropping the
+/// chain is deterministic regardless of declaration order and safer than
+/// partially inheriting a different subset depending on which cycle member
+/// happened to be resolved first (issue #1453).
+fn based_on_chain<'a>(
+    style: &'a docx_rs::Style,
+    styles_by_id: &HashMap<&str, &'a docx_rs::Style>,
+) -> Vec<&'a docx_rs::Style> {
+    let mut chain = vec![style];
+    let mut seen = HashSet::from([style.style_id.as_str()]);
+    let mut current = style;
+    while let Some(parent_id) = based_on_id(current) {
+        let Some(parent) = styles_by_id.get(parent_id.as_str()).copied() else {
+            break;
+        };
+        if parent.style_type != style.style_type {
+            break;
+        }
+        if !seen.insert(parent.style_id.as_str()) {
+            return vec![style];
+        }
+        chain.push(parent);
+        current = parent;
+    }
+    chain
+}
+
+fn based_on_id(style: &docx_rs::Style) -> Option<String> {
+    style
+        .based_on
+        .as_ref()
+        .and_then(|based_on| serde_json::to_value(based_on).ok())
+        .and_then(|value| value.as_str().map(str::to_string))
+}
+
+fn merge_style_definition(
+    resolved: &mut ResolvedStyle,
+    style: &docx_rs::Style,
+    theme_fonts: &ThemeFonts,
+    paragraph_backgrounds: &HashMap<String, Color>,
+    style_word_wraps: &HashMap<String, bool>,
+    pair_kerning: &PairKerningRules,
+) {
+    let mut own_text = extract_run_style(&style.run_property);
+    if own_text.font_family.is_none()
+        && let Ok(run_property_json) = serde_json::to_value(&style.run_property)
+    {
+        own_text.font_family = resolve_theme_font_family(&run_property_json, theme_fonts);
+    }
+    // `None` means "states nothing", so the parent decision survives.
+    own_text.pair_kerning = pair_kerning.for_style(&style.style_id);
+    resolved.text.merge_from(&own_text);
+
+    if style.style_type != docx_rs::StyleType::Paragraph {
+        return;
+    }
+
+    let mut own_paragraph = extract_paragraph_style(&style.paragraph_property);
+    own_paragraph.background = paragraph_backgrounds.get(&style.style_id).copied();
+    // From raw styles.xml because published docx-rs does not parse the field
+    // (issue #1041).
+    own_paragraph.word_wrap = style_word_wraps.get(&style.style_id).copied();
+    let own_tab_overrides = extract_tab_stop_overrides(&style.paragraph_property.tabs);
+    resolved.paragraph =
+        merge_paragraph_style(&own_paragraph, own_tab_overrides.as_deref(), Some(resolved));
+    // The merge above resolves clears and replacements against the inherited
+    // list, so descendants consume one concrete list rather than replaying a
+    // parent's raw operations.
+    resolved.paragraph_tab_overrides = None;
+    if let Some(level) = style
+        .paragraph_property
+        .outline_lvl
+        .as_ref()
+        .map(|outline_level| outline_level.v)
+        .filter(|&value| value < 6)
+    {
+        resolved.heading_level = Some(level);
+    }
+}
+
 /// The document-wide run defaults, with the kerning threshold the raw
 /// `word/styles.xml` states folded in.
 ///
@@ -425,24 +487,6 @@ pub(super) fn resolve_doc_default_text_style(
     let mut text: TextStyle = extract_doc_default_text_style_with_theme(styles, theme_fonts);
     text.pair_kerning = Some(pair_kerning.document_default());
     text
-}
-
-/// Fill a style's unstated paragraph properties from the document default.
-///
-/// Only the properties Word actually inherits through `w:pPrDefault` are
-/// filled. `heading_level`, `tab_stops`, `background`, and the borders are
-/// deliberately absent: the first three are resolved from the style's own
-/// `w:outlineLvl`, `w:tabs`, and `w:shd`, and a document default never carries
-/// a `w:pBdr` that should frame every paragraph in the file.
-fn fill_paragraph_defaults(mut style: ParagraphStyle, defaults: &ParagraphStyle) -> ParagraphStyle {
-    style.alignment = style.alignment.or(defaults.alignment);
-    style.indent_left = style.indent_left.or(defaults.indent_left);
-    style.indent_right = style.indent_right.or(defaults.indent_right);
-    style.indent_first_line = style.indent_first_line.or(defaults.indent_first_line);
-    style.line_spacing = style.line_spacing.or(defaults.line_spacing);
-    style.space_before = style.space_before.or(defaults.space_before);
-    style.space_after = style.space_after.or(defaults.space_after);
-    style
 }
 
 /// Merge style text formatting with explicit run formatting.
