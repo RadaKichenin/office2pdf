@@ -275,6 +275,13 @@ fn table_entry(normalized_family: &str) -> Option<(FamilyClass, &'static [&'stat
         "consolas" => (Monospace, &["Inconsolata"]),
         "trebuchet ms" => (SansSerif, &["Ubuntu"]),
         "impact" => (SansSerif, &["Oswald"]),
+        // LibreOffice 25.2 resolves the unembedded display faces in the
+        // Office poster template from issue #1458 to Noto Serif 2.015. Keep
+        // those declarations on the same reproducible OFL face instead of
+        // letting Typst fall through to its unrelated default serif.
+        "avenir next lt pro" | "avenir next w1g medium" | "the hand black" => {
+            (Serif, &["Noto Serif"])
+        }
         "raleway" => (
             SansSerif,
             &[
@@ -1438,6 +1445,22 @@ fn collect_document_font_requests(doc: &Document) -> BTreeSet<FontRequest> {
     }
 
     fonts
+}
+
+/// Whether this document names one of the unembedded poster faces whose
+/// reproducible fallback is the bundled Noto Serif 2.015 (issue #1458).
+///
+/// Loading the two faces only for a document that can select them keeps the
+/// generic Typst fallback order unchanged for every unrelated conversion.
+pub(crate) fn document_requests_bundled_noto_serif(doc: &Document) -> bool {
+    collect_document_font_requests(doc)
+        .into_iter()
+        .any(|(family, _)| {
+            matches!(
+                normalized_lookup_key(&family).as_str(),
+                "avenir next lt pro" | "avenir next w1g medium" | "the hand black"
+            )
+        })
 }
 
 pub(crate) fn document_requests_font_families(doc: &Document) -> bool {

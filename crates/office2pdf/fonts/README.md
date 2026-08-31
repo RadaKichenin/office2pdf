@@ -1,4 +1,44 @@
-# Feature-gated WASM Chinese font
+# Bundled fallback fonts
+
+## Noto Serif 2.015
+
+`NotoSerif-Regular.ttf` and `NotoSerif-Bold.ttf` are the unhinted static
+Regular and Bold faces from the official Noto Serif 2.015 release. They are
+loaded only when a document requests `Avenir Next LT Pro`, `Avenir Next W1G
+Medium`, or `The Hand Black`. LibreOffice 25.2 resolves those unembedded faces
+to Noto Serif in the poster fixture from issue #1458; shipping the same pinned
+faces keeps glyph widths and line advance independent of fonts installed on the
+host.
+
+- Release tag: `NotoSerif-v2.015`
+- Source commit: `c4a321e123e4d4ff315f57f4e0adf294fe3a95be`
+- Release URL: <https://github.com/notofonts/latin-greek-cyrillic/releases/tag/NotoSerif-v2.015>
+- Release archive SHA-256: `0e9a43c8a4b94ac76f55069ed1d7385bbcaf6b99527a94deb5619e032b7e76c1`
+- `NotoSerif-Regular.ttf` SHA-256: `a15cfbbc1539d707115111d672d590a3d70d4f74b4c0a315956da20ae19a14e1`
+- `NotoSerif-Bold.ttf` SHA-256: `24ad531e6b05ddad8c3d89572d2c93eb86a6b74e652ce7ee3c3e171de68e84c3`
+- License: SIL Open Font License 1.1; see `OFL-1.1.txt`
+
+Reproduce the committed assets from the pinned release archive while keeping
+the archive's nested paths out of the repository:
+
+```sh
+unzip -p NotoSerif-v2.015.zip \
+  NotoSerif/unhinted/ttf/NotoSerif-Regular.ttf \
+  > crates/office2pdf/fonts/NotoSerif-Regular.ttf
+unzip -p NotoSerif-v2.015.zip \
+  NotoSerif/unhinted/ttf/NotoSerif-Bold.ttf \
+  > crates/office2pdf/fonts/NotoSerif-Bold.ttf
+printf '%s  %s\n' \
+  a15cfbbc1539d707115111d672d590a3d70d4f74b4c0a315956da20ae19a14e1 \
+  crates/office2pdf/fonts/NotoSerif-Regular.ttf \
+  24ad531e6b05ddad8c3d89572d2c93eb86a6b74e652ce7ee3c3e171de68e84c3 \
+  crates/office2pdf/fonts/NotoSerif-Bold.ttf \
+  | shasum -a 256 -c -
+```
+
+The final command must report `OK` for both files.
+
+## Feature-gated WASM Chinese font
 
 `NotoSansCJKsc-GB2312.otf` is included in compiled output only when both the
 `wasm32` target and the `wasm-cjk-font` feature are active. It is a Regular

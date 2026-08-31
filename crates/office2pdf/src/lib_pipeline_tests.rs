@@ -4,6 +4,7 @@ use super::test_support::{
 };
 use super::*;
 use crate::ir::*;
+use crate::pipeline::{extend_document_fonts, load_additional_fonts};
 
 #[test]
 fn test_convert_unsupported_format() {
@@ -140,6 +141,66 @@ fn test_should_resolve_font_context_true_when_document_requests_font_family() {
         &doc,
         &ConvertOptions::default()
     ));
+}
+
+#[test]
+fn bundled_noto_serif_is_loaded_only_for_the_poster_families() {
+    let document = |family: &str| Document {
+        metadata: Metadata::default(),
+        pages: vec![Page::Flow(FlowPage {
+            first_header: None,
+            first_footer: None,
+            size: PageSize::default(),
+            margins: Margins::default(),
+            content: vec![Block::Paragraph(Paragraph {
+                style: ParagraphStyle::default(),
+                runs: vec![Run {
+                    text: "Poster".to_string(),
+                    style: TextStyle {
+                        font_family: Some(family.to_string()),
+                        ..TextStyle::default()
+                    },
+                    href: None,
+                    footnote: None,
+                }],
+            })],
+            header: None,
+            footer: None,
+            columns: None,
+            line_grid_pitch: None,
+            line_grid_snaps_lines: false,
+            page_numbering: None,
+        })],
+        styles: StyleSheet::default(),
+    };
+
+    let options = ConvertOptions::default();
+    let mut unrelated = load_additional_fonts(&options).expect("load default fonts");
+    extend_document_fonts(&mut unrelated, &document("Calibri"));
+    assert!(
+        unrelated
+            .iter()
+            .all(|font| { font.info().family != crate::bundled_fonts::NOTO_SERIF_FAMILY }),
+        "unrelated documents must keep the existing fallback book"
+    );
+
+    let mut poster = load_additional_fonts(&options).expect("load default fonts");
+    extend_document_fonts(&mut poster, &document("The Hand Black"));
+    let poster_faces: Vec<_> = poster
+        .iter()
+        .filter(|font| font.info().family == crate::bundled_fonts::NOTO_SERIF_FAMILY)
+        .collect();
+    assert_eq!(poster_faces.len(), 2);
+
+    extend_document_fonts(&mut poster, &document("Avenir Next LT Pro"));
+    assert_eq!(
+        poster
+            .iter()
+            .filter(|font| font.info().family == crate::bundled_fonts::NOTO_SERIF_FAMILY)
+            .count(),
+        2,
+        "several poster declarations must not duplicate the bundled faces"
+    );
 }
 
 #[test]
