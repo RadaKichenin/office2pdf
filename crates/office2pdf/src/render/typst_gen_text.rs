@@ -2953,32 +2953,133 @@ fn generate_runs_with_metrics(
         return;
     };
 
-    // Everything between two frames is coalesced and spliced back into whole
-    // runs before it is emitted, so a paragraph in which no eojeol is framed —
-    // every Latin one, and every Korean one whose words are all single
-    // syllables — keeps byte-identical markup.
-    let mut units: Vec<(bool, Vec<EojeolPiece>)> = Vec::new();
+    enum WordUnit {
+        Plain(Vec<EojeolPiece>),
+        FramedEojeol(Vec<EojeolPiece>),
+        OverlongLatin(Vec<Vec<EojeolPiece>>),
+    }
+
+    // Everything between a framed eojeol or an overlong Latin token is
+    // coalesced and spliced back into whole runs before it is emitted, so a
+    // paragraph whose tokens all fit keeps byte-identical markup.
+    let latin_metric_shell: Option<TextStyle> = overlong_latin_metric_shell(runs);
+    let mut units: Vec<WordUnit> = Vec::new();
     for token in split_runs_into_eojeol_tokens(runs) {
-        match (is_framed_eojeol(&token, measure_pt), units.last_mut()) {
-            (false, Some((false, unframed))) => unframed.extend(token),
-            (framed, _) => units.push((framed, token)),
+        if is_framed_eojeol(&token, measure_pt) {
+            units.push(WordUnit::FramedEojeol(token));
+        } else if let Some(chunks) = latin_metric_shell
+            .as_ref()
+            .and_then(|_| split_overlong_latin_token(&token, measure_pt))
+        {
+            units.push(WordUnit::OverlongLatin(chunks));
+        } else if let Some(WordUnit::Plain(unframed)) = units.last_mut() {
+            unframed.extend(token);
+        } else {
+            units.push(WordUnit::Plain(token));
         }
     }
 
-    for (framed, pieces) in &units {
-        // A framed eojeol restores the paragraph's edges inside itself, so a
-        // synthetic-oblique box within it has to claim the same descent or
-        // the frame's baseline shift over-corrects by exactly that much.
-        let seat_bottom_pt: Option<f64> = if *framed {
-            write_eojeol_frame_open(out, pieces, line_box_em)
-        } else {
-            None
-        };
-        write_eojeol_pieces(out, pieces, seat_bottom_pt, run_line_metrics);
-        if *framed {
-            write_eojeol_frame_close(out, line_box_em);
+    let has_overlong_latin: bool = units
+        .iter()
+        .any(|unit| matches!(unit, WordUnit::OverlongLatin(_)));
+    if has_overlong_latin {
+        let shell = latin_metric_shell
+            .as_ref()
+            .expect("an overlong Latin unit requires its metric shell");
+        let paragraph_text: String = runs.iter().map(|run| run.text.as_str()).collect();
+        out.push_str("#text(");
+        write_text_params_for_text(out, shell, &paragraph_text);
+        out.push_str(")[");
+    }
+
+    for unit in &units {
+        match unit {
+            WordUnit::Plain(pieces) => {
+                write_eojeol_pieces(out, pieces, None, run_line_metrics);
+            }
+            WordUnit::FramedEojeol(pieces) => {
+                // A framed eojeol restores the paragraph's edges inside
+                // itself, so a synthetic-oblique box within it has to claim
+                // the same descent or the frame's baseline shift
+                // over-corrects by exactly that much.
+                let seat_bottom_pt = write_eojeol_frame_open(out, pieces, line_box_em);
+                write_eojeol_pieces(out, pieces, seat_bottom_pt, run_line_metrics);
+                write_eojeol_frame_close(out, line_box_em);
+            }
+            WordUnit::OverlongLatin(chunks) => {
+                for (index, chunk) in chunks.iter().enumerate() {
+                    write_eojeol_pieces(out, chunk, None, run_line_metrics);
+                    if index + 1 < chunks.len() {
+                        // The boundary was already measured against the real
+                        // line, so force it without adding a character to the
+                        // PDF text layer. Keeping it inside the metric shell
+                        // preserves the original line advance even when the
+                        // pieces have different colours or links (#1454).
+                        out.push_str("#linebreak()");
+                    }
+                }
+            }
         }
     }
+    if has_overlong_latin {
+        out.push(']');
+    }
+}
+
+/// A neutral outer text style that keeps Typst's line metrics stable while an
+/// overlong token is split into several styled inline items.
+///
+/// A centred fixed-height table cell computes a different intrinsic line box
+/// once one run becomes neighbouring `#text` nodes. One surrounding text scope
+/// retains the paragraph's original family, size, weight and style while the
+/// nested runs continue to carry their own colour, decoration and hyperlink.
+/// The conservative gate leaves mixed metric faces and non-Latin paragraphs on
+/// their existing path until their per-line shell can be modelled safely.
+fn overlong_latin_metric_shell(runs: &[Run]) -> Option<TextStyle> {
+    let visible: Vec<&Run> = runs
+        .iter()
+        .filter(|run| run.footnote.is_none() && !run.text.is_empty())
+        .collect();
+    let first: &Run = *visible.first()?;
+    let first_family = first.style.font_family.as_deref()?;
+    let first_size = first.style.font_size?;
+    let first_weight = effective_font_weight(&first.style);
+
+    let same_family = |left: Option<&str>, right: Option<&str>| match (left, right) {
+        (Some(left), Some(right)) => left.eq_ignore_ascii_case(right),
+        (None, None) => true,
+        _ => false,
+    };
+    if runs.iter().any(|run| {
+        run.footnote.is_some()
+            || !run.text.is_ascii()
+            || run
+                .style
+                .letter_spacing
+                .is_some_and(|spacing| spacing != 0.0)
+            || run.style.vertical_align.is_some()
+            || run.style.baseline_shift.is_some()
+    }) || visible.iter().any(|run| {
+        !same_family(run.style.font_family.as_deref(), Some(first_family))
+            || !same_family(
+                run.style.east_asian_font_family.as_deref(),
+                first.style.east_asian_font_family.as_deref(),
+            )
+            || run.style.font_size != Some(first_size)
+            || effective_font_weight(&run.style) != first_weight
+            || run.style.italic != first.style.italic
+    }) {
+        return None;
+    }
+
+    Some(TextStyle {
+        font_family: first.style.font_family.clone(),
+        east_asian_font_family: first.style.east_asian_font_family.clone(),
+        font_size: first.style.font_size,
+        bold: first.style.bold,
+        italic: first.style.italic,
+        ..TextStyle::default()
+    })
 }
 
 /// A slice of one run, tagged with the run it was cut from.
@@ -2991,6 +3092,127 @@ fn generate_runs_with_metrics(
 struct EojeolPiece {
     run_index: usize,
     run: Run,
+}
+
+/// Split a basic-Latin token into the largest measured chunks that fit one
+/// Word line.
+///
+/// Typst keeps a Latin word unbroken even when it is wider than its container;
+/// Word instead moves the token to a fresh line and then breaks it at a
+/// character boundary. Only a token proven wider than the paragraph's real
+/// measure reaches this path. Fitting words therefore retain the engine's
+/// ordinary word-level breaking, kerning, and run emission.
+///
+/// Each returned chunk preserves the original run indices, styles and links.
+/// [`generate_runs_with_metrics`] places a markup line break between chunks,
+/// so no hidden character reaches the PDF text layer.
+fn split_overlong_latin_token(
+    token: &[EojeolPiece],
+    measure_pt: Option<f64>,
+) -> Option<Vec<Vec<EojeolPiece>>> {
+    let measure_pt = measure_pt.filter(|measure| *measure > 0.0)?;
+    if token.iter().any(|piece| {
+        piece.run.footnote.is_some()
+            || piece
+                .run
+                .style
+                .letter_spacing
+                .is_some_and(|spacing| spacing != 0.0)
+            || piece
+                .run
+                .text
+                .chars()
+                .any(|character| !character.is_ascii_graphic())
+    }) {
+        return None;
+    }
+
+    // Measure the face Typst will actually paint, not merely the family the
+    // DOCX declared. A present face may lack this script or weight, in which
+    // case Typst walks the emitted fallback list per glyph (issue #1239).
+    let mut measured_pieces: Vec<(&EojeolPiece, Vec<(char, f64)>)> = Vec::new();
+    let mut token_advance_pt: f64 = 0.0;
+    for piece in token {
+        if piece.run.text.is_empty() {
+            measured_pieces.push((piece, Vec::new()));
+            continue;
+        }
+        let declared_family = piece.run.style.font_family.as_deref()?;
+        let family_chain = font_subst::family_chain_for_text(
+            declared_family,
+            piece.run.style.east_asian_font_family.as_deref(),
+            &piece.run.text,
+        );
+        let font_size_pt = piece.run.style.font_size?;
+        let is_bold = effective_font_weight(&piece.run.style)
+            .is_some_and(|weight| weight != "regular" && weight != "light");
+        let glyphs: Vec<(char, f64)> = piece
+            .run
+            .text
+            .chars()
+            .zip(crate::render::pdf::glyph_advances_em_with_typst_fallback(
+                &family_chain,
+                is_bold,
+                &piece.run.text,
+            )?)
+            .map(|(character, advance_em)| (character, advance_em * font_size_pt))
+            .collect();
+        token_advance_pt += glyphs.iter().map(|(_, advance_pt)| advance_pt).sum::<f64>();
+        measured_pieces.push((piece, glyphs));
+    }
+    if token_advance_pt <= measure_pt {
+        return None;
+    }
+
+    let mut chunks: Vec<Vec<EojeolPiece>> = vec![Vec::new()];
+    let mut chunk_advance_pt: f64 = 0.0;
+    for (piece, glyphs) in measured_pieces {
+        if glyphs.is_empty() {
+            chunks
+                .last_mut()
+                .expect("an overlong token starts with one chunk")
+                .push(EojeolPiece {
+                    run_index: piece.run_index,
+                    run: piece.run.clone(),
+                });
+            continue;
+        }
+
+        for (character, advance_pt) in glyphs {
+            if chunk_advance_pt > 0.0 && chunk_advance_pt + advance_pt > measure_pt {
+                chunks.push(Vec::new());
+                chunk_advance_pt = 0.0;
+            }
+            push_overlong_character(
+                chunks
+                    .last_mut()
+                    .expect("an overlong token always has a current chunk"),
+                piece,
+                character,
+            );
+            chunk_advance_pt += advance_pt;
+        }
+    }
+
+    (chunks.len() > 1).then_some(chunks)
+}
+
+fn push_overlong_character(chunk: &mut Vec<EojeolPiece>, source: &EojeolPiece, character: char) {
+    if let Some(previous) = chunk.last_mut()
+        && previous.run_index == source.run_index
+    {
+        previous.run.text.push(character);
+        return;
+    }
+    chunk.push(EojeolPiece {
+        run_index: source.run_index,
+        run: Run {
+            text: character.to_string(),
+            style: source.run.style.clone(),
+            href: source.run.href.clone(),
+            footnote: None,
+        },
+    });
 }
 
 /// Emits pieces, re-joining every neighbouring pair cut from the same run.

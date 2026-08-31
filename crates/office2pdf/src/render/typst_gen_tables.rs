@@ -3150,12 +3150,22 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
             let _ = write!(out, "#box(width: 0pt, height: {}pt)", format_f64(height_pt));
         }
         None => {
-            let eojeol_wrap = paragraph_eojeol_wrap(
-                cell.breaks_hangul_at_eojeol,
-                style,
-                cell_line_box_em,
-                cell.available_measure_pt,
-            );
+            // A spill wrapper deliberately lays its content out at natural
+            // width and clips one physical line at the sheet boundary
+            // (#811). It must never inherit Word's measured token breaker:
+            // that breaker inserts real line boundaries for an overlong Latin
+            // token (#1454), defeating the wrapper's no-wrap contract before
+            // the outer box gets a chance to clip it.
+            let eojeol_wrap = if cell.in_spill_cell {
+                EojeolWrap::Syllable
+            } else {
+                paragraph_eojeol_wrap(
+                    cell.breaks_hangul_at_eojeol,
+                    style,
+                    cell_line_box_em,
+                    cell.available_measure_pt,
+                )
+            };
             if cell.uses_powerpoint_line_box {
                 generate_powerpoint_runs_with_tabs(
                     out,
