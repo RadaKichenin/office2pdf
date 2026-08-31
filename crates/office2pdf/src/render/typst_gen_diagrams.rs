@@ -1195,6 +1195,11 @@ pub(super) const LABEL_W: f64 = 62.0; // category label gutter
 pub(super) const TICK_GAP: f64 = 22.0; // value tick label gutter
 pub(super) const GAP: f64 = 6.0;
 const LEGEND_ROW_H: f64 = 14.0; // per-entry height when the legend stacks
+/// PowerPoint's three-entry column legend on page 8 of the #1407 fixture uses
+/// a 19.2pt baseline pitch for its declared 11.97pt face. Keep the calibrated
+/// 1.6em relationship on that host/chart-family/edge only: horizontal bar legends
+/// use a separately measured automatic-layout regime (#1434).
+const PPTX_COLUMN_RIGHT_LEGEND_ROW_EM: f64 = 1.6;
 /// Floor for one entry's width in a legend that runs across the chart, and the
 /// flat width a legend down the side reserves for its gutter.
 ///
@@ -3312,6 +3317,17 @@ fn powerpoint_right_legend_y_shift(chart: &Chart) -> f64 {
     }
 }
 
+fn axis_legend_row_height_pt(chart: &Chart) -> f64 {
+    if matches!(chart.host, crate::ir::ChartHost::Presentation)
+        && matches!(chart.chart_type, ChartType::Column)
+        && matches!(chart.legend_position, LegendPosition::Right)
+    {
+        PPTX_COLUMN_RIGHT_LEGEND_ROW_EM * chart_legend_text_pt(chart)
+    } else {
+        LEGEND_ROW_H
+    }
+}
+
 /// Space the axis plot's legend reserves.
 ///
 /// A vertical legend measures its longest series name and adds the key and
@@ -3324,7 +3340,11 @@ fn axis_legend_box(chart: &Chart) -> LegendBox {
     if !chart.has_legend {
         return LegendBox::hidden();
     }
-    let mut legend = LegendBox::new(chart.legend_position, LEGEND_ROW_H, LEGEND_ENTRY_W);
+    let mut legend = LegendBox::new(
+        chart.legend_position,
+        axis_legend_row_height_pt(chart),
+        LEGEND_ENTRY_W,
+    );
     if matches!(
         chart.legend_position,
         LegendPosition::Left | LegendPosition::Right
@@ -4001,7 +4021,7 @@ fn generate_chart_axis(out: &mut String, chart: &Chart, frame: Option<(f64, f64)
                 plot_h + gutter_h,
             ),
             LegendEntryLayout {
-                row_h: LEGEND_ROW_H,
+                row_h: axis_legend_row_height_pt(chart),
                 widths: &entry_widths,
                 right_inset,
                 side_y_shift: powerpoint_right_legend_y_shift(chart),

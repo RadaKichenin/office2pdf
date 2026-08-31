@@ -4205,6 +4205,53 @@ fn a_powerpoint_right_legend_uses_the_native_vertical_center_at_multiple_sizes()
 }
 
 #[test]
+fn a_powerpoint_column_right_legend_uses_the_native_text_scaled_row_pitch() {
+    // Page 8 of the #1407 PowerPoint fixture declares 11.97pt legend text.
+    // Native PowerPoint places the three baselines 19.2pt apart, while the
+    // legacy axis-legend constant compresses every pair to 14pt (#1434).
+    let mut chart = bar_chart_at(Some(11.97), &["Year 1", "Year 2", "Net Profit"]);
+    chart.chart_type = ChartType::Column;
+    chart.host = crate::ir::ChartHost::Presentation;
+    chart.legend_position = LegendPosition::Right;
+    chart.text_font_family = Some("Avenir Next LT Pro".to_string());
+    chart.series[0].name = Some("Total Sales".to_string());
+    chart.series[1].name = Some("Total Cogs".to_string());
+    let mut third = chart.series[0].clone();
+    third.name = Some("Net Profit".to_string());
+    chart.series.push(third);
+
+    let source = framed_chart_source(&chart, 852.0, 280.0);
+    let origins = [
+        legend_entry_y(&source, "Total Sales"),
+        legend_entry_y(&source, "Total Cogs"),
+        legend_entry_y(&source, "Net Profit"),
+    ];
+    let pitches = [origins[1] - origins[0], origins[2] - origins[1]];
+    assert!(
+        pitches.iter().all(|pitch| (*pitch - 19.2).abs() <= 0.1),
+        "11.97pt PowerPoint column legend row pitches are {pitches:?}, expected native 19.2pt; got:\n{source}"
+    );
+
+    chart.chart_type = ChartType::Bar;
+    let bar_source = framed_chart_source(&chart, 852.0, 280.0);
+    let bar_origins = [
+        legend_entry_y(&bar_source, "Total Sales"),
+        legend_entry_y(&bar_source, "Total Cogs"),
+        legend_entry_y(&bar_source, "Net Profit"),
+    ];
+    let bar_pitches = [
+        bar_origins[1] - bar_origins[0],
+        bar_origins[2] - bar_origins[1],
+    ];
+    assert!(
+        bar_pitches
+            .iter()
+            .all(|pitch| (*pitch - 14.0).abs() <= 0.01),
+        "the separately calibrated PowerPoint bar path must keep its 14pt pitch, got {bar_pitches:?}; source:\n{bar_source}"
+    );
+}
+
+#[test]
 fn a_powerpoint_horizontal_value_axis_keeps_native_label_gap_at_multiple_sizes() {
     // Native PowerPoint 16.112 exports of the same 480 x 320pt chart frame.
     // Each value is the required Typst box-top gap after translating the
