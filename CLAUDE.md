@@ -189,7 +189,13 @@ and a rect census, with GT noise floors built in (`--noise-floor 0.12` Word,
 text covered by a later opaque image, single closed axis-aligned rectangle, or
 fully extended shading under such a rectangular clip is `hidden`; same-colour
 text on an opaque flat fill is `low_contrast`, and text that remains visible is
-`painted`.
+`painted`. An `ignore_text` record is normally hidden. The harness promotes it
+to painted geometry only when a compact, intersecting `fill_path` appeared
+since the preceding text operation and lies within half an em of the glyph's
+conservative bounding box. This trace-order heuristic recovers path-painted
+text seen in issue #1407 without claiming to identify a Type3 program;
+pathless invisible/OCR text stays hidden, and ambiguous cases still require
+the pixel-difference and visual-inspection passes.
 Horizontal text uses its true baseline; a rotated or skewed `fill_text` stays
 one visual run and uses the minimum fully transformed glyph x/y as its
 comparable anchor. Its numbers are assertable; pixel counts are only a

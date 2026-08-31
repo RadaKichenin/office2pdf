@@ -69,6 +69,17 @@ def line_of(text: str, x0: float, baseline_y: float, pitch: float = 6.0) -> str:
     return text_op(words, baseline_y)
 
 
+def ignored_text_op(
+    words: list[tuple[str, float]], baseline_y: float, size_units: float = 44.0
+) -> str:
+    """Synthetic ``ignore_text`` geometry for path-correlation tests."""
+    return (
+        text_op(words, baseline_y, size_units=size_units)
+        .replace("<fill_text ", "<ignore_text ", 1)
+        .replace("</fill_text>", "</ignore_text>", 1)
+    )
+
+
 def rect_op(
     x0: float,
     y0: float,
@@ -180,6 +191,63 @@ class ParseTraceTest(unittest.TestCase):
         pages = compare_layout.parse_trace(trace_document(page))
         texts = [line.text for line in pages[0].lines]
         self.assertEqual(texts, ["AB", "C"])
+
+    def test_ignore_text_with_compact_preceding_path_is_measured_as_painted_text(
+        self,
+    ) -> None:
+        page = "\n".join(
+            [
+                rect_op(71.0, 90.0, 78.0, 102.0, color="0 0 0"),
+                ignored_text_op([("A", 72.0)], baseline_y=100.0),
+            ]
+        )
+
+        line = compare_layout.parse_trace(trace_document(page))[0].lines[0]
+
+        self.assertEqual(line.text, "A")
+        self.assertAlmostEqual(line.x0, 72.0, places=3)
+        self.assertAlmostEqual(line.y, 100.0, places=3)
+        self.assertEqual(line.visibility, "painted")
+
+    def test_ignore_text_without_preceding_path_remains_hidden(self) -> None:
+        page = ignored_text_op([("OCR", 72.0)], baseline_y=100.0)
+
+        line = compare_layout.parse_trace(trace_document(page))[0].lines[0]
+
+        self.assertEqual(line.text, "OCR")
+        self.assertEqual(line.visibility, "hidden")
+
+    def test_ignore_text_after_transparent_path_remains_hidden(self) -> None:
+        page = "\n".join(
+            [
+                rect_op(71.0, 90.0, 78.0, 102.0, color="0 0 0", alpha=0.0),
+                ignored_text_op([("OCR", 72.0)], baseline_y=100.0),
+            ]
+        )
+
+        line = compare_layout.parse_trace(trace_document(page))[0].lines[0]
+
+        self.assertEqual(line.text, "OCR")
+        self.assertEqual(line.visibility, "hidden")
+
+    def test_later_image_still_hides_path_correlated_ignore_text(self) -> None:
+        path_correlated_text = "\n".join(
+            [
+                rect_op(71.0, 90.0, 78.0, 102.0, color="0 0 0"),
+                ignored_text_op([("A", 72.0)], baseline_y=100.0),
+            ]
+        )
+        gt = "\n".join([path_correlated_text, image_op()])
+        out = "\n".join([image_op(), path_correlated_text])
+
+        vector = compare_layout.diff_page(
+            compare_layout.parse_trace(trace_document(gt))[0],
+            compare_layout.parse_trace(trace_document(out))[0],
+        )
+
+        self.assertEqual(vector["visibility"]["mismatch_count"], 1)
+        self.assertEqual(vector["visibility"]["mismatches"][0]["gt"], "hidden")
+        self.assertEqual(vector["visibility"]["mismatches"][0]["out"], "painted")
 
     def test_rotated_fill_text_uses_the_full_affine_transform_and_stays_one_run(self) -> None:
         page = """<fill_text transform="1 2 3 4 5 6">
