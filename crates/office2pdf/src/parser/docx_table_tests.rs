@@ -825,6 +825,128 @@ fn test_table_cell_margins_override_table_defaults() {
     );
 }
 
+/// A table with no `w:tblStyle` still inherits the package's default table
+/// style. The poster of issue #1466 puts its 0/5.4/0/5.4pt cell margins only
+/// on default `TableNormal`; dropping them lets Typst's unrelated 5pt inset
+/// leak into every unoverridden cell.
+#[test]
+fn default_table_style_supplies_undeclared_cell_margins() {
+    let data = build_docx_with_table_style(
+        r#"<w:style w:type="table" w:default="1" w:styleId="TableNormal">
+            <w:tblPr><w:tblCellMar>
+                <w:top w:w="0" w:type="dxa"/>
+                <w:left w:w="108" w:type="dxa"/>
+                <w:bottom w:w="0" w:type="dxa"/>
+                <w:right w:w="108" w:type="dxa"/>
+            </w:tblCellMar></w:tblPr>
+        </w:style>"#,
+        TABLE_WITHOUT_STYLE,
+    );
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let table = first_table(&doc);
+
+    assert_eq!(
+        table.default_cell_padding,
+        Some(Insets {
+            top: 0.0,
+            right: 5.4,
+            bottom: 0.0,
+            left: 5.4,
+        })
+    );
+    let source = crate::render::typst_gen::generate_typst(&doc)
+        .expect("the resolved table renders")
+        .source;
+    assert!(
+        source.contains("inset: (top: 0pt, right: 5.4pt, bottom: 0pt, left: 5.4pt)"),
+        "the Word style inset must be emitted instead of Typst's 5pt default: {source}"
+    );
+}
+
+/// An explicitly selected table style overlays the margin sides it declares
+/// onto the default table style.
+#[test]
+fn explicit_table_style_cell_margins_beat_the_default_style() {
+    let data = build_docx_with_table_style(
+        r#"<w:style w:type="table" w:default="1" w:styleId="TableNormal">
+            <w:tblPr><w:tblCellMar>
+                <w:top w:w="0" w:type="dxa"/><w:left w:w="108" w:type="dxa"/>
+                <w:bottom w:w="0" w:type="dxa"/><w:right w:w="108" w:type="dxa"/>
+            </w:tblCellMar></w:tblPr>
+        </w:style>
+        <w:style w:type="table" w:styleId="Poster">
+            <w:tblPr><w:tblCellMar>
+                <w:top w:w="20" w:type="dxa"/>
+                <w:bottom w:w="60" w:type="dxa"/>
+            </w:tblCellMar></w:tblPr>
+        </w:style>"#,
+        &TABLE_WITHOUT_STYLE.replace(
+            "<w:tblPr/>",
+            r#"<w:tblPr><w:tblStyle w:val="Poster"/></w:tblPr>"#,
+        ),
+    );
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    assert_eq!(
+        first_table(&doc).default_cell_padding,
+        Some(Insets {
+            top: 1.0,
+            right: 5.4,
+            bottom: 3.0,
+            left: 5.4,
+        })
+    );
+}
+
+/// Direct table properties outrank either the explicit or default style.
+#[test]
+fn direct_table_cell_margins_beat_the_resolved_table_style() {
+    let table_xml = TABLE_WITHOUT_STYLE.replace(
+        "<w:tblPr/>",
+        r#"<w:tblPr><w:tblCellMar>
+            <w:top w:w="100" w:type="dxa"/><w:left w:w="160" w:type="dxa"/>
+            <w:bottom w:w="140" w:type="dxa"/><w:right w:w="120" w:type="dxa"/>
+        </w:tblCellMar></w:tblPr>"#,
+    );
+    let data = build_docx_with_table_style(DEFAULT_TABLE_STYLE_WITH_MARGINS, &table_xml);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    assert_eq!(
+        first_table(&doc).default_cell_padding,
+        Some(Insets {
+            top: 5.0,
+            right: 6.0,
+            bottom: 7.0,
+            left: 8.0,
+        })
+    );
+}
+
+/// A cell-level margin overlays only the sides it states on the fully
+/// resolved table-style margins.
+#[test]
+fn cell_margins_overlay_the_resolved_default_table_style() {
+    let table_xml = TABLE_WITHOUT_STYLE.replace(
+        "<w:tc>",
+        r#"<w:tc><w:tcPr>
+            <w:tcMar><w:top w:w="200" w:type="dxa"/></w:tcMar>
+        </w:tcPr>"#,
+    );
+    let data = build_docx_with_table_style(DEFAULT_TABLE_STYLE_WITH_MARGINS, &table_xml);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let table = first_table(&doc);
+
+    assert_eq!(
+        table.rows[0].cells[0].padding,
+        Some(Insets {
+            top: 10.0,
+            right: 5.4,
+            bottom: 0.0,
+            left: 5.4,
+        })
+    );
+}
+
 #[test]
 fn test_table_row_uses_largest_effective_vertical_cell_margins() {
     let mut first_cell = docx_rs::TableCell::new()
@@ -1556,6 +1678,22 @@ const TABLE_WITH_STYLE: &str = r#"<w:tbl>
     <w:tr><w:tc><w:p><w:r><w:t>Stilling</w:t></w:r></w:p></w:tc></w:tr>
     <w:tr><w:tc><w:p><w:r><w:t>Produkt</w:t></w:r></w:p></w:tc></w:tr>
 </w:tbl>"#;
+
+const TABLE_WITHOUT_STYLE: &str = r#"<w:tbl>
+    <w:tblPr/>
+    <w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid>
+    <w:tr><w:tc><w:p><w:r><w:t>Poster</w:t></w:r></w:p></w:tc></w:tr>
+</w:tbl>"#;
+
+const DEFAULT_TABLE_STYLE_WITH_MARGINS: &str = r#"
+    <w:style w:type="table" w:default="1" w:styleId="TableNormal">
+        <w:tblPr><w:tblCellMar>
+            <w:top w:w="0" w:type="dxa"/>
+            <w:left w:w="108" w:type="dxa"/>
+            <w:bottom w:w="0" w:type="dxa"/>
+            <w:right w:w="108" w:type="dxa"/>
+        </w:tblCellMar></w:tblPr>
+    </w:style>"#;
 
 #[test]
 fn test_table_style_first_row_caps_reaches_the_run() {
