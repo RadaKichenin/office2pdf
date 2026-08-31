@@ -11,9 +11,11 @@ lines by their text, and reports typed deviations:
   pitch deltas between consecutive matched lines. Horizontal text uses its
   true baseline; a rotated or skewed `fill_text` stays one visual run and uses
   the minimum fully transformed glyph x/y as its comparable anchor;
-- painted visibility from trace order: text covered by a later opaque image or
-  rectangular fill, or painted with the same colour as a flat background, is
-  distinguished from text that remains visibly painted;
+- painted visibility from trace order: text covered by a later opaque image,
+  single closed axis-aligned rectangular fill, or fully extended shading under
+  a single closed axis-aligned rectangular clip, or painted with the same
+  colour as a flat background, is distinguished from text that remains visibly
+  painted;
 - a fill/stroke rect census with nearest-match position deltas.
 
 A noise floor (default 0.12pt — native Word exports quantise coordinates to a
@@ -55,7 +57,18 @@ GLYPH_RE = re.compile(
 )
 PATH_RE = re.compile(r"<(fill_path|stroke_path)\b([^>]*)>(.*?)</\1>", re.S)
 FILL_IMAGE_RE = re.compile(r"<fill_image\b([^>]*)/>", re.S)
+CLIP_PATH_RE = re.compile(r"<clip_path\b([^>]*)>(.*?)</clip_path>", re.S)
+FILL_SHADE_RE = re.compile(r"<fill_shade\b([^>]*)/>", re.S)
+POP_CLIP_RE = re.compile(r"<pop_clip\s*/>")
+CLIP_SHADE_EVENT_RE = re.compile(
+    r"<clip_path\b[^>]*>.*?</clip_path>|<fill_shade\b[^>]*/>|<pop_clip\s*/>", re.S
+)
 POINT_RE = re.compile(r'<(?:moveto|lineto|curveto)[^>]*x="([-0-9.e]+)" y="([-0-9.e]+)"')
+PATH_COMMAND_RE = re.compile(
+    r"<(?:(?P<point>moveto|lineto)\b(?P<attrs>[^>]*)|(?P<close>closepath)\s*)/>"
+)
+X_RE = re.compile(r'\bx="([-0-9.e]+)"')
+Y_RE = re.compile(r'\by="([-0-9.e]+)"')
 TRANSFORM_RE = re.compile(
     r'transform="([-0-9.e]+) ([-0-9.e]+) ([-0-9.e]+) ([-0-9.e]+) ([-0-9.e]+) ([-0-9.e]+)"'
 )
@@ -88,7 +101,7 @@ class Paint:
     """One later operation that can determine whether text remains visible."""
 
     index: int
-    kind: str  # "flat" | "image"
+    kind: str  # "flat" | "image" | "shade"
     x0: float
     y0: float
     x1: float
@@ -194,15 +207,128 @@ def transformed_bbox(
     return min(xs), min(ys), max(xs), max(ys)
 
 
-def is_axis_aligned_rect(points: list[tuple[float, float]]) -> bool:
-    """Conservatively recognise only fills whose points are all bbox corners."""
-    if len(points) < 4:
-        return False
-    xs = {round(point[0], 6) for point in points}
-    ys = {round(point[1], 6) for point in points}
+def axis_aligned_rect_bbox(
+    attrs: str, body: str
+) -> tuple[float, float, float, float] | None:
+    """Return a bbox only for one closed, ordered axis-aligned rectangle.
+
+    Merely visiting all four bounding-box corners is not enough: a bow-tie or
+    a second subpath does not prove that the bounding box is fully painted.
+    """
+    commands: list[tuple[str, tuple[float, float] | None]] = []
+    cursor = 0
+    for match in PATH_COMMAND_RE.finditer(body):
+        if body[cursor : match.start()].strip():
+            return None
+        cursor = match.end()
+        if match.group("close"):
+            commands.append(("closepath", None))
+            continue
+        point_attrs = match.group("attrs")
+        x_match = X_RE.search(point_attrs)
+        y_match = Y_RE.search(point_attrs)
+        if not x_match or not y_match:
+            return None
+        commands.append(
+            (
+                match.group("point"),
+                (float(x_match.group(1)), float(y_match.group(1))),
+            )
+        )
+    if body[cursor:].strip():
+        return None
+    if not commands or commands[0][0] != "moveto" or commands[-1][0] != "closepath":
+        return None
+    if any(command != "lineto" for command, _ in commands[1:-1]):
+        return None
+
+    points = [point for _, point in commands[:-1] if point is not None]
+    if len(points) == 5 and points[-1] == points[0]:
+        points.pop()
+    if len(points) != 4:
+        return None
+
+    transform = parse_transform(attrs) or (1, 0, 0, 1, 0, 0)
+    a, b, c, d, e, f = transform
+    transformed = [(a * x + c * y + e, b * x + d * y + f) for x, y in points]
+    rounded = [(round(x, 6), round(y, 6)) for x, y in transformed]
+    xs = {x for x, _ in rounded}
+    ys = {y for _, y in rounded}
     corners = {(x, y) for x in xs for y in ys}
-    actual = {(round(x, 6), round(y, 6)) for x, y in points}
-    return len(xs) == 2 and len(ys) == 2 and corners.issubset(actual)
+    if len(xs) != 2 or len(ys) != 2 or set(rounded) != corners:
+        return None
+    for start, end in zip(rounded, rounded[1:] + rounded[:1]):
+        same_x = start[0] == end[0]
+        same_y = start[1] == end[1]
+        if same_x == same_y:
+            return None
+    return transformed_bbox((1, 0, 0, 1, 0, 0), transformed)
+
+
+def intersect_bboxes(
+    first: tuple[float, float, float, float],
+    second: tuple[float, float, float, float],
+) -> tuple[float, float, float, float]:
+    x0 = max(first[0], second[0])
+    y0 = max(first[1], second[1])
+    x1 = min(first[2], second[2])
+    y1 = min(first[3], second[3])
+    if x0 >= x1 or y0 >= y1:
+        return (x0, y0, x0, y0)
+    return (x0, y0, x1, y1)
+
+
+def clipped_shade_paints(content: str) -> list[Paint]:
+    """Collect shadings clipped by one closed axis-aligned rectangle.
+
+    A shading has no useful geometric bounds in mutool's trace; the active
+    clip is the only conservative device-space extent available. Unknown or
+    non-rectangular outer clips poison nested clips rather than letting a
+    smaller rectangle overclaim coverage. Non-extended shadings are skipped
+    because their colour ramp may not paint the entire clip (issue #1450).
+    """
+
+    no_clip = object()
+    unknown_clip = object()
+    active_clip: object | tuple[float, float, float, float] = no_clip
+    stack: list[object | tuple[float, float, float, float]] = []
+    paints: list[Paint] = []
+
+    for event in CLIP_SHADE_EVENT_RE.finditer(content):
+        operation = event.group(0)
+        clip_match = CLIP_PATH_RE.fullmatch(operation)
+        if clip_match:
+            stack.append(active_clip)
+            bbox = axis_aligned_rect_bbox(*clip_match.groups())
+            if bbox is None or active_clip is unknown_clip:
+                active_clip = unknown_clip
+            elif active_clip is no_clip:
+                active_clip = bbox
+            else:
+                active_clip = intersect_bboxes(active_clip, bbox)
+            continue
+
+        shade_match = FILL_SHADE_RE.fullmatch(operation)
+        if shade_match:
+            attrs = shade_match.group(1)
+            if isinstance(active_clip, tuple) and re.search(r'\bextend="1\s+1"', attrs):
+                paints.append(
+                    Paint(
+                        index=event.start(),
+                        kind="shade",
+                        x0=active_clip[0],
+                        y0=active_clip[1],
+                        x1=active_clip[2],
+                        y1=active_clip[3],
+                        alpha=parse_alpha(attrs),
+                    )
+                )
+            continue
+
+        if POP_CLIP_RE.fullmatch(operation):
+            active_clip = stack.pop() if stack else no_clip
+
+    return paints
 
 
 def paint_covers(
@@ -351,18 +477,16 @@ def parse_trace(trace_xml: str) -> list[PageLayout]:
                         y1=max(ys),
                     )
                 )
-                transformed_points = list(zip(xs, ys))
-                if kind == "fill_path" and "<curveto" not in op_body and is_axis_aligned_rect(
-                    transformed_points
-                ):
+                flat_bbox = axis_aligned_rect_bbox(op_attrs, op_body)
+                if kind == "fill_path" and flat_bbox is not None:
                     paints.append(
                         Paint(
                             index=op_match.start(),
                             kind="flat",
-                            x0=min(xs),
-                            y0=min(ys),
-                            x1=max(xs),
-                            y1=max(ys),
+                            x0=flat_bbox[0],
+                            y0=flat_bbox[1],
+                            x1=flat_bbox[2],
+                            y1=flat_bbox[3],
                             alpha=parse_alpha(op_attrs),
                             color=parse_rgb(op_attrs),
                         )
@@ -391,6 +515,7 @@ def parse_trace(trace_xml: str) -> list[PageLayout]:
                     alpha=parse_alpha(op_attrs),
                 )
             )
+        paints.extend(clipped_shade_paints(content))
         paints.sort(key=lambda paint: paint.index)
         lines = build_lines(glyphs)
         lines.extend(rotated_lines)

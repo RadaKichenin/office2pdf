@@ -98,6 +98,31 @@ def image_op() -> str:
     )
 
 
+def clipped_shade_op(
+    x0: float,
+    y0: float,
+    x1: float,
+    y1: float,
+    alpha: float = 1.0,
+    extend: str = "1 1",
+    clip_transform: str = "1 0 0 1 0 0",
+) -> str:
+    return "\n".join(
+        [
+            f'<clip_path winding="nonzero" transform="{clip_transform}">',
+            f'<moveto x="{x0}" y="{y0}"/>',
+            f'<lineto x="{x1}" y="{y0}"/>',
+            f'<lineto x="{x1}" y="{y1}"/>',
+            f'<lineto x="{x0}" y="{y1}"/>',
+            "<closepath/>",
+            "</clip_path>",
+            f'<fill_shade alpha="{alpha}" transform="1 0 0 1 0 0" '
+            f'type="linear" extend="{extend}" start="0 0" end="1 1"/>',
+            "<pop_clip/>",
+        ]
+    )
+
+
 class PageElementTest(unittest.TestCase):
     """The ``<page>`` opening tag differs across mutool releases.
 
@@ -319,6 +344,113 @@ class MatchAndDiffTest(unittest.TestCase):
             {"label": "Slide9", "gt": "hidden", "out": "painted"},
         )
         self.assertEqual(compare_layout.audit_failures([vector]), 1)
+
+    def test_same_text_hidden_by_later_clipped_shading_reports_visibility_mismatch(self) -> None:
+        text = line_of("Covered", 72, 100)
+        shade = clipped_shade_op(60, 80, 150, 110)
+
+        vector = self.diff("\n".join([text, shade]), "\n".join([shade, text]))
+
+        self.assertEqual(vector["visibility"]["mismatch_count"], 1)
+        self.assertEqual(
+            vector["visibility"]["mismatches"][0],
+            {"label": "Covered", "gt": "hidden", "out": "painted"},
+        )
+
+    def test_translucent_clipped_shading_does_not_hide_text(self) -> None:
+        text = line_of("Tinted", 72, 100)
+        shade = clipped_shade_op(60, 80, 150, 110, alpha=0.5)
+
+        vector = self.diff("\n".join([text, shade]), "\n".join([shade, text]))
+
+        self.assertEqual(vector["visibility"]["mismatch_count"], 0)
+
+    def test_noncovering_clipped_shading_does_not_hide_text(self) -> None:
+        text = line_of("Clear", 72, 100)
+        shade = clipped_shade_op(200, 80, 300, 110)
+
+        vector = self.diff("\n".join([text, shade]), "\n".join([shade, text]))
+
+        self.assertEqual(vector["visibility"]["mismatch_count"], 0)
+
+    def test_clipped_shading_painted_before_text_does_not_hide_it(self) -> None:
+        page = "\n".join([clipped_shade_op(60, 80, 150, 110), line_of("Above", 72, 100)])
+
+        line = compare_layout.parse_trace(trace_document(page))[0].lines[0]
+
+        self.assertEqual(line.visibility, "painted")
+
+    def test_nonextended_or_rotated_clipped_shading_is_not_overclaimed(self) -> None:
+        text = line_of("Conservative", 72, 100)
+        nonextended = clipped_shade_op(60, 80, 180, 110, extend="0 0")
+        rotated = clipped_shade_op(
+            0,
+            0,
+            120,
+            30,
+            clip_transform="0.7071 0.7071 -0.7071 0.7071 75 65",
+        )
+
+        for shade in (nonextended, rotated):
+            page = "\n".join([text, shade])
+            line = compare_layout.parse_trace(trace_document(page))[0].lines[0]
+            self.assertEqual(line.visibility, "painted")
+
+    def test_bow_tie_clip_does_not_overclaim_shading_coverage(self) -> None:
+        text = line_of("Crossed", 72, 100)
+        bow_tie = """<clip_path winding="nonzero" transform="1 0 0 1 0 0">
+          <moveto x="60" y="80"/><lineto x="150" y="110"/>
+          <lineto x="150" y="80"/><lineto x="60" y="110"/><closepath/>
+        </clip_path>
+        <fill_shade alpha="1" transform="1 0 0 1 0 0"
+          type="linear" extend="1 1" start="0 0" end="1 1"/>
+        <pop_clip/>"""
+
+        line = compare_layout.parse_trace(trace_document("\n".join([text, bow_tie])))[0].lines[0]
+
+        self.assertEqual(line.visibility, "painted")
+
+    def test_multiple_clip_subpaths_do_not_overclaim_shading_coverage(self) -> None:
+        text = line_of("Subpaths", 72, 100)
+        multiple = """<clip_path winding="nonzero" transform="1 0 0 1 0 0">
+          <moveto x="60" y="80"/><lineto x="150" y="80"/>
+          <lineto x="150" y="110"/><lineto x="60" y="110"/><closepath/>
+          <moveto x="70" y="90"/><lineto x="80" y="90"/>
+          <lineto x="80" y="100"/><lineto x="70" y="100"/><closepath/>
+        </clip_path>
+        <fill_shade alpha="1" transform="1 0 0 1 0 0"
+          type="linear" extend="1 1" start="0 0" end="1 1"/>
+        <pop_clip/>"""
+
+        line = compare_layout.parse_trace(trace_document("\n".join([text, multiple])))[0].lines[0]
+
+        self.assertEqual(line.visibility, "painted")
+
+    def test_nested_shading_keeps_the_outer_clip_intersection(self) -> None:
+        text = line_of("A", 72, 100)
+        partial_outer = """<clip_path winding="nonzero" transform="1 0 0 1 0 0">
+          <moveto x="60" y="80"/><lineto x="74" y="80"/>
+          <lineto x="74" y="110"/><lineto x="60" y="110"/><closepath/>
+        </clip_path>"""
+        full_inner = clipped_shade_op(60, 80, 150, 110)
+        page = "\n".join([text, partial_outer, full_inner, "<pop_clip/>"])
+
+        line = compare_layout.parse_trace(trace_document(page))[0].lines[0]
+
+        self.assertEqual(line.visibility, "painted")
+
+    def test_unknown_outer_clip_prevents_a_nested_rectangle_from_overclaiming(self) -> None:
+        text = line_of("A", 72, 100)
+        triangular_outer = """<clip_path winding="nonzero" transform="1 0 0 1 0 0">
+          <moveto x="60" y="80"/><lineto x="150" y="80"/>
+          <lineto x="60" y="110"/><closepath/>
+        </clip_path>"""
+        full_inner = clipped_shade_op(60, 80, 150, 110)
+        page = "\n".join([text, triangular_outer, full_inner, "<pop_clip/>"])
+
+        line = compare_layout.parse_trace(trace_document(page))[0].lines[0]
+
+        self.assertEqual(line.visibility, "painted")
 
     def test_same_color_text_on_flat_fill_reports_low_contrast(self) -> None:
         background = rect_op(0, 0, 595.2, 841.92, color=".8 .8 .8")
