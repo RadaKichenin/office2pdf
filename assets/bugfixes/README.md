@@ -34,20 +34,20 @@ comparison; the declaration cannot bypass a raster-changing fix.
 Generate the machine-readable layout report from those same GT and after PDFs:
 
 ```sh
-python3 scripts/compare_layout.py --json --audit gt.pdf after.pdf \
+python3 scripts/compare_layout.py --json --audit --fine-shift 0.5 gt.pdf after.pdf \
   > assets/bugfixes/issue-<number>/layout-audit.json
 ```
 
 The command exits nonzero when material findings remain but still writes the
 report. Change both `after.jpg` and `layout-audit.json` in a raster-changing fix
 pull request; use the text-layer-only exception above when the current render is
-byte-identical. In the PR's `Visual audit` section, mark each layout-audit category
-field as `Pass` or list the open issues that classify it. Those issue references
-must also appear in `Remaining:` deviation rows. The gate rejects a claimed pass
-when the report contains a page-count
+byte-identical. Record the same `Fine-detail threshold` in the PR's `Visual
+audit`, then mark each layout-audit category as `Pass` or list the open issues
+that classify it. Those references must also appear in `Remaining:` deviation
+rows. The gate rejects a claimed pass when the report contains a page-count
 difference, missing/extra/reflowed text, changed wraps, a painted-text visibility
-mismatch, a visible-fill occlusion, or a text shift above the configured
-large-shift threshold.
+mismatch, a visible-fill occlusion, or a text shift above the configured fine or
+large threshold.
 
 ## Evidence mode: `defect`
 

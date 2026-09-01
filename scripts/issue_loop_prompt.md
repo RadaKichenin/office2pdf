@@ -10,9 +10,10 @@ replace those documents.
 - Delegate the read-only documentation freshness audit and wait for `PASS:` before
   **every** commit, not only the one that opens the pull request.
 - Layout and rendering claims need measurement, not inspection: use
-  `scripts/compare_layout.py --audit`, `scripts/compare_render.py --artifacts-dir`,
-  and `scripts/compare_text_layer.py`, and look at the emitted images. A numeric report
-  alone is not a visual pass.
+  `scripts/compare_layout.py --audit --fine-shift PT`,
+  `scripts/compare_render.py --fine-shift PT --artifacts-dir`, and
+  `scripts/compare_text_layer.py`, and look at the emitted images. A numeric
+  report alone is not a visual pass.
 - Settle an unclear native-application rule with `scripts/probe_harness.py` (one factor
   per variant) rather than by arguing from the corpus.
 - A visual defect fix owes the evidence contract in `CLAUDE.md`:

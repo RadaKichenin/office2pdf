@@ -28,10 +28,12 @@
 - Renderer and DPI: <!-- e.g. pdftoppm, 150 DPI -->
 - Evidence mode: `fix` <!-- `fix` requires gt/before/after; `defect` requires compare -->
 - Layout audit report: `assets/bugfixes/issue-<!-- N -->/layout-audit.json` <!-- fix mode only -->
+- Fine-detail threshold: <!-- e.g. 0.5pt; must match compare_layout.py --fine-shift -->
 - Layout audit page count: <!-- Pass, or #N references when the report differs -->
 - Layout audit text flow: <!-- Pass, or #N references for missing/extra/reflow, changed-wrap, or painted-text visibility findings -->
 - Layout audit visible fills: <!-- Pass, or #N references for visible-fill occlusions -->
 - Layout audit large shifts: <!-- Pass, or #N references for shifts above the report threshold -->
+- Layout audit fine shifts: <!-- Pass, or #N references for shifts above the fine-detail threshold -->
 - New follow-up issues found in this audit: <!-- #N, #N or None; create issues before completing the audit -->
 - Model vision findings: <!-- Describe what Codex/Claude saw in the full pages, diff, and crops. Numeric output is insufficient. -->
 - GT: `assets/bugfixes/issue-<!-- N -->/gt.jpg`
@@ -59,7 +61,7 @@
 - [ ] Stored progressive JPEG quality 86 assets with metadata stripped
 - [ ] Used Codex/Claude vision to inspect the full GT/output pages, diff, and matched crops
 - [ ] Inspected matched region crops at full resolution
-- [ ] Ran compare_layout.py --audit and dispositioned every large text-instance shift, painted-text visibility mismatch, and visible-fill occlusion
+- [ ] Ran compare_layout.py --audit --fine-shift PT and dispositioned every fine/large text-instance shift, painted-text visibility mismatch, and visible-fill occlusion
 - [ ] Ran the 5% fuzz pixel-difference sweep
 - [ ] Inventoried hairlines and border dash styles
 - [ ] Inventoried font weight, italic, and underline emphasis

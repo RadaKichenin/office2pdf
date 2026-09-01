@@ -49,8 +49,8 @@ INSPECTION_ITEMS = (
     "Stored progressive JPEG quality 86 assets with metadata stripped",
     "Used Codex/Claude vision to inspect the full GT/output pages, diff, and matched crops",
     "Inspected matched region crops at full resolution",
-    "Ran compare_layout.py --audit and dispositioned every large text-instance "
-    "shift, painted-text visibility mismatch, and visible-fill occlusion",
+    "Ran compare_layout.py --audit --fine-shift PT and dispositioned every fine/large "
+    "text-instance shift, painted-text visibility mismatch, and visible-fill occlusion",
     "Ran the 5% fuzz pixel-difference sweep",
     "Inventoried hairlines and border dash styles",
     "Inventoried font weight, italic, and underline emphasis",
@@ -284,6 +284,7 @@ def layout_audit_categories(report: object) -> dict[str, bool]:
     has_text_flow_findings = False
     has_visible_fill_findings = False
     has_large_shifts = False
+    has_fine_shifts = False
     for page_number, page in enumerate(pages, start=1):
         if not isinstance(page, dict):
             raise ValueError(f"page {page_number} must be an object")
@@ -304,22 +305,50 @@ def layout_audit_categories(report: object) -> dict[str, bool]:
             )
             visible_fill_count = visible_fills["mismatch_count"]
             large_shift_count = instances["large_shift_count"]
+            fine_shift_count = instances["fine_shift_count"]
         except (KeyError, TypeError) as exc:
             raise ValueError(f"page {page_number} is missing compare_layout fields") from exc
-        counts = (*text_flow_counts, visible_fill_count, large_shift_count)
+        counts = (*text_flow_counts, visible_fill_count, large_shift_count, fine_shift_count)
         if any(type(count) is not int or count < 0 for count in counts):
             raise ValueError(f"page {page_number} finding counts must be non-negative integers")
 
         has_text_flow_findings |= any(text_flow_counts)
         has_visible_fill_findings |= visible_fill_count > 0
         has_large_shifts |= large_shift_count > 0
+        has_fine_shifts |= fine_shift_count > 0
 
     return {
         "page count": gt_pages != out_pages,
         "text flow": has_text_flow_findings,
         "visible fills": has_visible_fill_findings,
         "large shifts": has_large_shifts,
+        "fine shifts": has_fine_shifts,
     }
+
+
+def layout_audit_fine_shift_threshold(report: object) -> float:
+    """Return the single positive fine-detail threshold recorded on every page."""
+
+    if not isinstance(report, dict) or not isinstance(report.get("pages"), list):
+        raise ValueError("the report must contain page vectors")
+    thresholds: list[float] = []
+    for page_number, page in enumerate(report["pages"], start=1):
+        try:
+            threshold = page["instances"]["fine_shift_threshold"]
+        except (KeyError, TypeError) as exc:
+            raise ValueError(
+                f"page {page_number} is missing the fine-detail threshold"
+            ) from exc
+        if isinstance(threshold, bool) or not isinstance(threshold, (int, float)):
+            raise ValueError(f"page {page_number} fine-detail threshold must be numeric")
+        if threshold <= 0:
+            raise ValueError(f"page {page_number} fine-detail threshold must be positive")
+        thresholds.append(float(threshold))
+    if not thresholds:
+        raise ValueError("the report has no fine-detail threshold")
+    if any(abs(threshold - thresholds[0]) > 1e-9 for threshold in thresholds[1:]):
+        raise ValueError("fine-detail threshold differs between pages")
+    return thresholds[0]
 
 
 def disposition_issue_numbers(value: str | None) -> set[int] | None:
@@ -417,9 +446,22 @@ def validate_layout_audit(body: str, changed_paths: list[str], root: Path) -> li
     try:
         report = json.loads(report_path.read_text(encoding="utf-8"))
         findings = layout_audit_categories(report)
+        report_fine_shift_threshold = layout_audit_fine_shift_threshold(report)
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         errors.append(f"{expected_path}: invalid layout audit report: {exc}.")
         return errors
+
+    threshold_value = field(audit, "Fine-detail threshold")
+    threshold_match = re.fullmatch(r"(\d+(?:\.\d+)?)\s*pt", threshold_value or "", re.I)
+    if not threshold_match:
+        errors.append(
+            "Visual audit > Fine-detail threshold is required in points, for example `0.5pt`."
+        )
+    elif abs(float(threshold_match.group(1)) - report_fine_shift_threshold) > 1e-9:
+        errors.append(
+            "Visual audit > Fine-detail threshold must match the layout report's "
+            f"{report_fine_shift_threshold:g}pt threshold."
+        )
 
     remaining_issues = remaining_issue_numbers(body)
     fields = {
@@ -427,6 +469,7 @@ def validate_layout_audit(body: str, changed_paths: list[str], root: Path) -> li
         "text flow": "Layout audit text flow",
         "visible fills": "Layout audit visible fills",
         "large shifts": "Layout audit large shifts",
+        "fine shifts": "Layout audit fine shifts",
     }
     for category, has_findings in findings.items():
         field_name = fields[category]

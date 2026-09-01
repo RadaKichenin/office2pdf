@@ -232,6 +232,24 @@ class RepeatedTextGeometryTest(unittest.TestCase):
         self.assertIn("Sales [1/2]", output.getvalue())
         self.assertIn("+120.00pt", output.getvalue())
 
+    def test_report_keeps_coarse_summary_and_adds_fine_shift_gate(self) -> None:
+        gt_lines = [compare_render.TextLine(0, 10.0, 20.0, "Fine detail")]
+        output_lines = [compare_render.TextLine(0, 10.0, 20.75, "Fine detail")]
+        with mock.patch.object(
+            compare_render, "text_lines", side_effect=[gt_lines, output_lines]
+        ):
+            result = compare_render.report_geometry(
+                Path("gt.pdf"),
+                Path("output.pdf"),
+                large_shift=5.0,
+                fine_shift=0.5,
+            )
+
+        self.assertEqual(result["large_shift_count"], 0.0)
+        self.assertEqual(result["large_shift_threshold"], 5.0)
+        self.assertEqual(result["fine_shift_count"], 1.0)
+        self.assertEqual(result["fine_shift_threshold"], 0.5)
+
     def test_report_scopes_geometry_to_the_requested_page(self) -> None:
         gt_lines = [
             compare_render.TextLine(0, 10.0, 20.0, "First page"),

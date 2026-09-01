@@ -27,7 +27,8 @@ histogram flat has moved something without changing what is drawn, which is
 usually exactly what a positioning fix should do.
 
 Usage:
-    compare_render.py GT.pdf OUTPUT.pdf [--page N] [--dpi 150] [--audit]
+    compare_render.py GT.pdf OUTPUT.pdf [--page N] [--dpi 150]
+        [--fine-shift PT] [--audit]
 """
 
 from __future__ import annotations
@@ -341,7 +342,11 @@ def page_text_lines(pdf: Path, page: int) -> list[TextLine]:
 
 
 def report_geometry(
-    gt: Path, other: Path, page: int = 1, large_shift: float = 5.0
+    gt: Path,
+    other: Path,
+    page: int = 1,
+    large_shift: float = 5.0,
+    fine_shift: float | None = None,
 ) -> dict[str, float]:
     """Vertical and horizontal drift of spatially matched text instances."""
     gt_text_lines = page_text_lines(gt, page)
@@ -377,6 +382,15 @@ def report_geometry(
     large_matches = [
         match for match in matches if abs(match.dx) > large_shift or abs(match.dy) > large_shift
     ]
+    fine_matches = (
+        [
+            match
+            for match in matches
+            if abs(match.dx) > fine_shift or abs(match.dy) > fine_shift
+        ]
+        if fine_shift is not None
+        else []
+    )
     print(f"  matched instances  {len(dy)} of {len(gt_text_lines)} "
           f"({coverage * 100:.0f}% of the GT's text lines)")
     print(
@@ -395,9 +409,18 @@ def report_geometry(
             f"    page {match.reference.page + 1}: {match.label[:52]}  "
             f"dx {match.dx:+.2f}pt  dy {match.dy:+.2f}pt"
         )
+    if fine_shift is not None:
+        print(f"  fine-detail instance shifts (>{fine_shift:.2f}pt): {len(fine_matches)}")
+        for match in sorted(
+            fine_matches, key=lambda item: max(abs(item.dx), abs(item.dy)), reverse=True
+        ):
+            print(
+                f"    page {match.reference.page + 1}: {match.label[:52]}  "
+                f"dx {match.dx:+.2f}pt  dy {match.dy:+.2f}pt"
+            )
     if page_mismatch:
         print(f"  on a different page: {page_mismatch} line(s) — pagination differs")
-    return {
+    result = {
         "mad_y": mad_y,
         "mad_x": mad_x,
         "page_mismatch": float(page_mismatch),
@@ -408,6 +431,14 @@ def report_geometry(
         "large_shift_count": float(len(large_matches)),
         "large_shift_threshold": large_shift,
     }
+    if fine_shift is not None:
+        result.update(
+            {
+                "fine_shift_count": float(len(fine_matches)),
+                "fine_shift_threshold": fine_shift,
+            }
+        )
+    return result
 
 
 def histogram(png: Path) -> tuple[list[int], int]:
@@ -838,6 +869,8 @@ def diagnose(
     ink_delta: float = histogram_result.get("ink_delta", 0.0)
     large_shift_count = int(geometry.get("large_shift_count", 0.0))
     large_shift_threshold = geometry.get("large_shift_threshold", 5.0)
+    fine_shift_count = int(geometry.get("fine_shift_count", 0.0))
+    fine_shift_threshold = geometry.get("fine_shift_threshold")
 
     # Thresholds are deliberately loose: they route attention, they do not
     # decide correctness. A point of drift is invisible; ten is not.
@@ -852,6 +885,13 @@ def diagnose(
     ink_differs: bool = colour_measured and abs(ink_delta) > 0.2
 
     findings: list[str] = []
+    if fine_shift_count and fine_shift_threshold is not None:
+        findings.append(
+            f"{fine_shift_count} matched text instance(s) move more than the "
+            f"fine-detail {fine_shift_threshold:.2f}pt tolerance. Trace-derived "
+            "anchor movement is geometry, not font antialiasing; inspect and track "
+            "each named instance above."
+        )
     if large_shift_count:
         findings.append(
             f"{large_shift_count} matched text instance(s) move more than "
@@ -978,14 +1018,23 @@ def main() -> None:
         help="flag any matched text instance whose x or y moves by more than this (default: 5pt)",
     )
     parser.add_argument(
+        "--fine-shift",
+        type=float,
+        metavar="PT",
+        help=(
+            "enable the fine-detail audit gate and flag matched text whose x or y "
+            "moves by more than PT; does not replace the 5pt coarse summary"
+        ),
+    )
+    parser.add_argument(
         "--audit",
         action="store_true",
-        help="exit nonzero when a large per-instance text shift is found",
+        help="exit nonzero when the enabled per-instance text-shift gate finds movement",
     )
     parser.add_argument(
         "--artifacts-dir",
         type=Path,
-        help="preserve full GT/output pages, 5%% diff, and large-shift crops for model vision",
+        help="preserve full GT/output pages, 5%% diff, and gated-shift crops for model vision",
     )
     parser.add_argument(
         "--lines",
@@ -997,6 +1046,8 @@ def main() -> None:
 
     if args.dpi < 150:
         raise SystemExit("--dpi must be at least 150; hairlines vanish below that")
+    if args.fine_shift is not None and args.fine_shift <= 0:
+        parser.error("--fine-shift must be greater than zero")
     require_vision_artifact_dependencies(args.artifacts_dir)
 
     print(f"GT     {args.gt}")
@@ -1004,7 +1055,11 @@ def main() -> None:
     print(f"page {args.page} at {args.dpi} DPI\n")
 
     geometry = report_geometry(
-        args.gt, args.output, page=args.page, large_shift=args.large_shift
+        args.gt,
+        args.output,
+        page=args.page,
+        large_shift=args.large_shift,
+        fine_shift=args.fine_shift,
     )
     print()
     if args.lines:
@@ -1031,8 +1086,8 @@ def main() -> None:
                 page_matches = [
                     match
                     for match in matches
-                    if abs(match.dx) > args.large_shift
-                    or abs(match.dy) > args.large_shift
+                    if abs(match.dx) > (args.fine_shift or args.large_shift)
+                    or abs(match.dy) > (args.fine_shift or args.large_shift)
                 ]
                 print()
                 preserve_vision_artifacts(
@@ -1050,11 +1105,16 @@ def main() -> None:
         print("  is on PATH. Install `imagemagick` to measure colour and ink.")
     print()
     diagnose(geometry, histogram_result, clusters)
-    if args.audit and geometry.get("large_shift_count", 0.0):
+    audit_shift_count = (
+        geometry.get("fine_shift_count", 0.0)
+        if args.fine_shift is not None
+        else geometry.get("large_shift_count", 0.0)
+    )
+    if args.audit and audit_shift_count:
         print()
         print(
-            "AUDIT FAILED: large text-instance shifts are layout differences, not "
-            "antialiasing; inspect and track every line above."
+            "AUDIT FAILED: text-instance shifts past the active gate are layout "
+            "differences, not antialiasing; inspect and track every line above."
         )
         raise SystemExit(1)
 
