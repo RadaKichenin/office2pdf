@@ -1,0 +1,43 @@
+{
+  "clusters": [],
+  "dpi": 300,
+  "duplicate_disposition_cluster_ids": [],
+  "errors": [],
+  "fuzz_percent": 5,
+  "minimum_area_pt2": 20,
+  "page": 2,
+  "passed": true,
+  "renderer_observations": [
+    {
+      "bbox_pt": {
+        "x": 110,
+        "y": 85,
+        "width": 430,
+        "height": 100
+      },
+      "class": "glyph-edge-rasterization",
+      "note": "Poppler and MuPDF 300 DPI GT/before/after RSVP crops preserve content, font, weight, centered alignment, width, and baseline; its x residual falls from -0.145pt to -0.045pt."
+    },
+    {
+      "bbox_pt": {
+        "x": 0,
+        "y": 735,
+        "width": 150,
+        "height": 57
+      },
+      "class": "glyph-edge-rasterization",
+      "note": "The page-2 footer stays at x=20.15pt and the 300 DPI crop contains only dispersed glyph-edge rasterization below the material-cluster floor."
+    }
+  ],
+  "schema_version": 1,
+  "strict": true,
+  "summary": {
+    "dispositioned": 0,
+    "duplicate": 0,
+    "total": 0,
+    "undispositioned": 0,
+    "unknown": 0
+  },
+  "undispositioned_cluster_ids": [],
+  "unknown_disposition_cluster_ids": []
+}
