@@ -1800,6 +1800,135 @@ fn test_boundary_band_background_bleed_overlaps_its_cell_at_the_corner_junction(
     );
 }
 
+/// `Gift Budget and Tracker1.xlsx` (attached to #982) puts a rose title fill
+/// above pale body cells. The title's bottom bleed forms the visible rule, so
+/// the later cells' right-edge bleed must start below that positive-axis band;
+/// otherwise its later paint order cuts the two pale notches in issue #1475.
+#[test]
+fn a_later_cell_fill_does_not_cut_through_the_rule_above_it() {
+    let rose = Color::new(218, 182, 186);
+    let pale_left = Color::new(248, 239, 240);
+    let pale_right = Color::new(247, 238, 239);
+    let header = TableCell {
+        background: Some(rose),
+        col_span: 2,
+        ..plain_text_cell("Title")
+    };
+    let body_left = TableCell {
+        background: Some(pale_left),
+        ..plain_text_cell("Left")
+    };
+    let body_right = TableCell {
+        background: Some(pale_right),
+        ..plain_text_cell("Right")
+    };
+    let table = boundary_band_table(
+        vec![
+            fixed_row(vec![header]),
+            fixed_row(vec![body_left, body_right]),
+        ],
+        vec![69.0, 20.0],
+    );
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains(
+            "#place(top + right, dx: 6pt, dy: -4pt, rect(width: 1.25pt, height: 20pt, fill: rgb(248, 239, 240), stroke: none))"
+        ),
+        "the internal junction beneath the merge must preserve the title fill's 1pt bottom band: {result}"
+    );
+    assert!(
+        result.contains(
+            "#place(top + right, dx: 6pt, dy: -4pt, rect(width: 1.25pt, height: 20pt, fill: rgb(247, 238, 239), stroke: none))"
+        ),
+        "the exterior junction beneath the merge must preserve the title fill's 1pt bottom band: {result}"
+    );
+    assert!(
+        !result.contains(
+            "#place(top + right, dx: 6pt, dy: -5pt, rect(width: 1.25pt, height: 21pt, fill: rgb(248, 239, 240), stroke: none))"
+        ),
+        "the later fill must not begin on top of the preceding rule: {result}"
+    );
+}
+
+/// At an ordinary boundary the cell below and to the left paints the crossing
+/// last. The second sheet in the #1475 fixture has pale E cells beside a rose
+/// F:Q merge; treating E's own upper fill as a winning horizontal band leaves
+/// two rose corner pixels that native Excel instead covers with pale.
+#[test]
+fn an_unmerged_upper_fill_does_not_trim_the_lower_cells_right_bleed() {
+    let pale = Color::new(248, 239, 240);
+    let rose = Color::new(218, 182, 186);
+    let upper_left = TableCell {
+        background: Some(pale),
+        ..plain_text_cell("E2")
+    };
+    let upper_right = TableCell {
+        background: Some(rose),
+        col_span: 2,
+        ..plain_text_cell("F2:Q2")
+    };
+    let lower_left = TableCell {
+        background: Some(pale),
+        ..plain_text_cell("E3")
+    };
+    let table = boundary_band_table(
+        vec![
+            fixed_row(vec![upper_left, upper_right]),
+            fixed_row(vec![
+                lower_left,
+                plain_text_cell("F3"),
+                plain_text_cell("G3"),
+            ]),
+        ],
+        vec![20.0, 69.0, 69.0],
+    );
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains(
+            "#place(top + right, dx: 6pt, dy: -5pt, rect(width: 1.25pt, height: 21pt, fill: rgb(248, 239, 240), stroke: none))"
+        ),
+        "an ordinary upper fill must not trim the later lower-left bleed: {result}"
+    );
+}
+
+/// With no filled cell starting on the upper-right side of a junction, the
+/// upper cell's bottom band remains the crossing owner. This is the G-column
+/// pattern on the fixture's second sheet; failing to trim produces four
+/// one-point notches between its differently coloured conditional fills.
+#[test]
+fn an_upper_fill_keeps_the_crossing_when_no_upper_right_fill_replaces_it() {
+    let dark = Color::new(61, 43, 45);
+    let purple = Color::new(93, 55, 84);
+    let upper_left = TableCell {
+        background: Some(dark),
+        ..plain_text_cell("G7")
+    };
+    let lower_left = TableCell {
+        background: Some(purple),
+        ..plain_text_cell("G8")
+    };
+    let table = boundary_band_table(
+        vec![
+            fixed_row(vec![upper_left, plain_text_cell("H7")]),
+            fixed_row(vec![lower_left, plain_text_cell("H8")]),
+        ],
+        vec![69.0, 69.0],
+    );
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains(
+            "#place(top + right, dx: 6pt, dy: -4pt, rect(width: 1.25pt, height: 20pt, fill: rgb(93, 55, 84), stroke: none))"
+        ),
+        "the lower vertical bleed must start below the upper cell's bottom band: {result}"
+    );
+}
+
 /// The bleed's vertical run obeys the same extent rule the vertical border
 /// bands do: a relative height inside `#place` resolves against the page in an
 /// auto-sized row, so the strip is painted as concrete twins instead.
