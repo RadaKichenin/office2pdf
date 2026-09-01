@@ -332,6 +332,29 @@ class MatchAndDiffTest(unittest.TestCase):
         # The raw statistic still carries the measurement.
         self.assertGreater(vector["baseline"]["worst_dy"], 0.0)
 
+    def test_fine_shift_gate_ignores_trace_noise_but_fails_visible_movement(self) -> None:
+        gt = "\n".join([line_of("noise", 72, 100), line_of("moved", 72, 120)])
+        out = "\n".join([line_of("noise", 72, 100.12), line_of("moved", 72, 120.75)])
+
+        vector = self.diff(gt, out, fine_shift=0.5)
+
+        self.assertEqual(vector["instances"]["large_shift_count"], 0)
+        self.assertEqual(vector["instances"]["fine_shift_threshold"], 0.5)
+        self.assertEqual(vector["instances"]["fine_shift_count"], 1)
+        self.assertEqual(vector["instances"]["fine_shifts"][0]["label"], "moved")
+        self.assertEqual(compare_layout.audit_failures([vector]), 1)
+
+    def test_coarse_audit_stays_clean_without_fine_shift_mode(self) -> None:
+        gt = line_of("moved", 72, 120)
+        out = line_of("moved", 72, 121.1)
+
+        vector = self.diff(gt, out, large_shift=5.0)
+
+        self.assertEqual(vector["instances"]["large_shift_threshold"], 5.0)
+        self.assertEqual(vector["instances"]["large_shift_count"], 0)
+        self.assertIsNone(vector["instances"]["fine_shift_threshold"])
+        self.assertEqual(compare_layout.audit_failures([vector]), 0)
+
     def test_missing_and_extra_lines_are_counted(self) -> None:
         gt = "\n".join([line_of("alpha", 72, 100), line_of("beta", 72, 112)])
         out = line_of("alpha", 72, 100)
@@ -803,6 +826,36 @@ class CompareLayoutCliTest(unittest.TestCase):
         report = json.loads(stdout.getvalue())
         self.assertEqual(result, 1)
         self.assertEqual(report["pages"][0]["visible_fills"]["mismatch_count"], 1)
+
+    def test_fine_shift_mode_makes_json_audit_fail_below_coarse_threshold(self) -> None:
+        traces = [
+            trace_document(line_of("moved", 72, 100)),
+            trace_document(line_of("moved", 72, 100.75)),
+        ]
+        stdout = io.StringIO()
+        with (
+            patch.object(compare_layout, "run_mutool", side_effect=traces),
+            patch.object(
+                sys,
+                "argv",
+                [
+                    "compare_layout.py",
+                    "gt.pdf",
+                    "output.pdf",
+                    "--json",
+                    "--audit",
+                    "--fine-shift",
+                    "0.5",
+                ],
+            ),
+            patch("sys.stdout", stdout),
+        ):
+            result = compare_layout.main()
+
+        report = json.loads(stdout.getvalue())
+        self.assertEqual(result, 1)
+        self.assertEqual(report["pages"][0]["instances"]["large_shift_count"], 0)
+        self.assertEqual(report["pages"][0]["instances"]["fine_shift_count"], 1)
 
 
 if __name__ == "__main__":

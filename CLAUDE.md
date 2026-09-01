@@ -121,7 +121,7 @@ This project follows a **6-month rolling MSRV policy** (aligned with [tokio](htt
 
 ## Visual Comparison Workflow
 
-- For visual bug fixes tied to an issue, keep `assets/bugfixes/issue-<number>/gt.jpg`, `before.jpg`, `after.jpg`, and `layout-audit.json` from the same fixture, page set, renderer, and resolution; `before.jpg` captures the pre-fix output, while `after.jpg` and the layout report use the current output. Every fix PR with a raster change must change `after.jpg` and `layout-audit.json`. Generate the report from the same GT and current-output PDFs used for `gt.jpg` and `after.jpg` with `compare_layout.py --json --audit`; classify page-count, missing/extra/reflow or changed-wrap, painted-text visibility, visible-fill occlusion, and large-shift failures with open issues in the PR's `Visual audit` category fields and matching `Remaining:` rows. Use progressive JPEG quality 86 with metadata stripped, preserve the source pixel dimensions, and verify text and images remain legible for direct GitHub links. Strip first, then re-set the density (`-strip -density 150 -units PixelsPerInch`): the contract check rejects evidence recording under 150 DPI, which stripping alone removes.
+- For visual bug fixes tied to an issue, keep `assets/bugfixes/issue-<number>/gt.jpg`, `before.jpg`, `after.jpg`, and `layout-audit.json` from the same fixture, page set, renderer, and resolution; `before.jpg` captures the pre-fix output, while `after.jpg` and the layout report use the current output. Every fix PR with a raster change must change `after.jpg` and `layout-audit.json`. Generate the report from the same GT and current-output PDFs used for `gt.jpg` and `after.jpg` with `compare_layout.py --json --audit --fine-shift PT`; record the same fine-detail threshold in the PR and classify page-count, missing/extra/reflow or changed-wrap, painted-text visibility, visible-fill occlusion, and fine/large-shift failures with open issues in the `Visual audit` fields and matching `Remaining:` rows. Use progressive JPEG quality 86 with metadata stripped, preserve the source pixel dimensions, and verify text and images remain legible for direct GitHub links. Strip first, then re-set the density (`-strip -density 150 -units PixelsPerInch`): the contract check rejects evidence recording under 150 DPI, which stripping alone removes.
 - A text-layer-only fix may correctly produce byte- and pixel-identical `before.jpg` and `after.jpg`. Regenerate and verify the current `after.jpg` without adding annotations; it need not appear in the diff when the render is unchanged. Set `Text-layer-only: Yes` and `Pixel delta: 0` in the PR's `Visual audit`, change `layout-audit.json`, and require that report to show the missing/extra searchable-text finding resolved. The contract requires both evidence files and uses ImageMagick's exact decoded-pixel comparison to verify that the declared zero delta is true.
 - **When filing a visual defect issue, attach a side-by-side image (GT left, office2pdf output at filing time right)** rendered from the same page and resolution, committed as `assets/bugfixes/issue-<number>/compare.jpg` (same JPEG rules as above) and embedded in the issue body via a commit-pinned raw URL. For classified fixtures, confirm with the user before publishing the image; the surrounding issue text must still follow the Confidentiality rules.
 
@@ -146,8 +146,8 @@ just the pages a screenshot shows.
 2. **Run all four axes**, not one: `compare_layout.py` (geometry, per page),
    `compare_text_layer.py` (what a reader can select), `compare_render.py`
    (colour and pixels), and a page-by-page visual at >=150 DPI.
-   Run the geometry axis with `--audit`; every large text-instance shift or
-   painted-text visibility mismatch or visible-fill occlusion it names must be fixed or recorded as a
+   Run the geometry axis with `--audit --fine-shift PT`; every fine/large
+   text-instance shift, painted-text visibility mismatch, or visible-fill occlusion it names must be fixed or recorded as a
    remaining deviation with an open issue.
    Do not classify the pixel diff as antialiasing while this audit is failing.
    Source/XML inspection and numeric reports only route attention; they never
@@ -173,15 +173,15 @@ produces no new finding.
 Run `python3 scripts/compare_render.py <GT.pdf> <output.pdf> [--page N]` before
 judging a rendered difference. It reports geometry, colour histogram, and pixel
 difference together, then states what the combination means.
-For a visual audit, also pass `--artifacts-dir <directory>`: for the page chosen
-by `--page`, it preserves the full GT/output pages, their side-by-side image,
-the 5% pixel diff, and a matched GT/output crop for every large text-instance
-shift on that page. Run it once for every compared page, using a distinct
+For a visual audit, also pass `--fine-shift PT --artifacts-dir <directory>`: for
+the page chosen by `--page`, it preserves the full GT/output pages, their side-by-side image,
+the 5% pixel diff, and a matched GT/output crop for every text-instance shift
+past the active fine or coarse gate on that page. Run it once for every compared page, using a distinct
 directory per page. It fails if ImageMagick is unavailable rather than silently
 omitting evidence. Open every emitted path with Codex/Claude image vision;
 producing the files is not itself inspection.
 
-For layout defects, run `python3 scripts/compare_layout.py <GT.pdf> <output.pdf> --audit`
+For layout defects, run `python3 scripts/compare_layout.py <GT.pdf> <output.pdf> --audit --fine-shift PT`
 first: it matches text lines from `mutool` traces and reports missing/extra/
 re-wrapped lines, spatial-anchor dy, pitch and width drift, painted-text visibility,
 visible-fill occlusions, and a rect census, with GT noise floors built in (`--noise-floor 0.12` Word,
@@ -204,11 +204,15 @@ one visual run and uses the minimum fully transformed glyph x/y as its
 comparable anchor. Its numbers are assertable; pixel counts are only a
 tripwire. Repeated strings are matched as separate spatial instances: a chart
 title and legend both named `Sales` appear as `Sales [1/2]` and `Sales [2/2]`,
-with their own `dx`/`dy`. The audit exits nonzero when any instance moves more
-than 5pt (override with `--large-shift PT` for a justified fixture-specific
-threshold), or when a matched line changes between painted and hidden/low
-contrast; inspect and track every named instance before marking alignment or
-text flow as matching.
+with their own `dx`/`dy`. The coarse audit exits nonzero when any instance moves
+more than 5pt (override with `--large-shift PT` for a justified fixture-specific
+threshold). Add `--fine-shift PT` for high-DPI evidence; it keeps that coarse
+report and also fails on matched text beyond the recorded fine tolerance. The
+fine threshold must be at least the trace noise floor. Raster-only edge or
+colour changes may be font antialiasing, but trace-derived x/y anchor movement
+is geometry and must be fixed or tracked. Painted versus hidden/low-contrast
+changes also fail; inspect and track every named instance before marking
+alignment or text flow as matching.
 
 **Its width column trims leading and trailing whitespace glyphs.** Their
 advances position no visible ink and previously invented large width deltas

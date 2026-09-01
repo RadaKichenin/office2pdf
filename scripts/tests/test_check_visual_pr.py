@@ -54,10 +54,12 @@ def visual_body(result_overrides=None, include_previews=True):
 - Renderer and DPI: pdftoppm, 150 DPI
 - Evidence mode: `fix`
 - Layout audit report: `assets/bugfixes/issue-186/layout-audit.json`
+- Fine-detail threshold: 0.5pt
 - Layout audit page count: Pass
 - Layout audit text flow: Pass
 - Layout audit visible fills: Pass
 - Layout audit large shifts: Pass
+- Layout audit fine shifts: Pass
 - New follow-up issues found in this audit: {follow_up_value}
 - Model vision findings: Full pages, pixel diff, and matched crops were opened; no untracked visual deviation remains.
 - GT: `assets/bugfixes/issue-186/gt.jpg`
@@ -87,6 +89,8 @@ def layout_report(
     reflow_gt=0,
     reflow_out=0,
     large_shifts=0,
+    fine_shifts=0,
+    fine_threshold=0.5,
     visibility=0,
     visible_fills=0,
 ):
@@ -96,7 +100,11 @@ def layout_report(
                 "lines": {"missing": missing, "extra": extra},
                 "wraps": {"count": wraps},
                 "reflow": {"gt_lines": reflow_gt, "out_lines": reflow_out},
-                "instances": {"large_shift_count": large_shifts},
+                "instances": {
+                    "large_shift_count": large_shifts,
+                    "fine_shift_count": fine_shifts,
+                    "fine_shift_threshold": fine_threshold,
+                },
                 "visibility": {"mismatch_count": visibility},
                 "visible_fills": {"mismatch_count": visible_fills},
             }
@@ -169,8 +177,8 @@ class PullRequestBodyTests(unittest.TestCase):
 
     def test_visual_audit_requires_layout_finding_disposition(self):
         required = (
-            "- [x] Ran compare_layout.py --audit and dispositioned every "
-            "large text-instance shift, painted-text visibility mismatch, and "
+            "- [x] Ran compare_layout.py --audit --fine-shift PT and dispositioned every "
+            "fine/large text-instance shift, painted-text visibility mismatch, and "
             "visible-fill occlusion"
         )
         errors = validate_pr_body(
@@ -311,6 +319,40 @@ class LayoutAuditTests(unittest.TestCase):
             layout_report(large_shifts=5),
         )
         self.assertTrue(any("large shifts" in error and "issue reference" in error for error in errors))
+
+    def test_fine_shift_failure_rejects_pass_disposition(self):
+        errors = validate_report(
+            visual_body(),
+            layout_report(fine_shifts=2),
+        )
+        self.assertTrue(any("fine shifts" in error and "issue reference" in error for error in errors))
+
+    def test_fine_shift_failure_accepts_tracked_position_issue(self):
+        body = visual_body({"Position/size": "Remaining: #328"}).replace(
+            "Layout audit fine shifts: Pass",
+            "Layout audit fine shifts: #328",
+        )
+        self.assertEqual(validate_report(body, layout_report(fine_shifts=2)), [])
+
+    def test_fine_detail_threshold_is_required_in_pr_metadata(self):
+        body = visual_body().replace("- Fine-detail threshold: 0.5pt\n", "")
+        errors = validate_report(body, layout_report())
+        self.assertTrue(any("Fine-detail threshold" in error and "required" in error for error in errors))
+
+    def test_fine_detail_threshold_must_match_machine_report(self):
+        body = visual_body().replace(
+            "Fine-detail threshold: 0.5pt",
+            "Fine-detail threshold: 0.75pt",
+        )
+        errors = validate_report(body, layout_report())
+        self.assertTrue(any("Fine-detail threshold" in error and "0.5" in error for error in errors))
+
+    def test_machine_report_must_record_fine_detail_threshold(self):
+        errors = validate_report(
+            visual_body(),
+            layout_report(fine_threshold=None),
+        )
+        self.assertTrue(any("fine-detail threshold" in error.lower() for error in errors))
 
     def test_visibility_failure_rejects_pass_text_flow_disposition(self):
         errors = validate_report(

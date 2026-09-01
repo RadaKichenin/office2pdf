@@ -33,7 +33,8 @@ position, size, pitch, wrap, and element presence, which is what actually
 changes when a layout defect is fixed.
 
 Usage:
-    compare_layout.py GT.pdf OUTPUT.pdf [--page N] [--noise-floor PT] [--audit]
+    compare_layout.py GT.pdf OUTPUT.pdf [--page N] [--noise-floor PT]
+        [--fine-shift PT] [--audit]
 """
 
 from __future__ import annotations
@@ -943,6 +944,7 @@ def diff_page(
     out: PageLayout,
     noise_floor: float = 0.12,
     large_shift: float = 5.0,
+    fine_shift: float | None = None,
 ) -> dict:
     matches, missing, extra = match_lines(gt.lines, out.lines)
     wraps, missing, extra = take_wrap_differences(missing, extra)
@@ -1006,6 +1008,15 @@ def diff_page(
         for instance in instances
         if abs(instance["dx"]) > large_shift or abs(instance["dy"]) > large_shift
     ]
+    fine_shifts = (
+        [
+            instance
+            for instance in instances
+            if abs(instance["dx"]) > fine_shift or abs(instance["dy"]) > fine_shift
+        ]
+        if fine_shift is not None
+        else []
+    )
 
     pitch_deltas: list[float] = []
     matched_gt = {id(gt_line) for gt_line, _ in matches}
@@ -1074,6 +1085,9 @@ def diff_page(
             "large_shift_threshold": large_shift,
             "large_shift_count": len(large_shifts),
             "large_shifts": large_shifts,
+            "fine_shift_threshold": fine_shift,
+            "fine_shift_count": len(fine_shifts),
+            "fine_shifts": fine_shifts,
         },
         "visibility": {
             "mismatch_count": len(visibility_mismatches),
@@ -1137,6 +1151,21 @@ def render_reading(vectors: list[dict]) -> str:
                 f"past {vector['instances']['large_shift_threshold']:.2f}pt: {examples}. "
                 "These are layout differences, not antialiasing; inspect and track each one"
             )
+        if vector["instances"]["fine_shift_count"]:
+            examples = "; ".join(
+                f"'{item['label']}' dx {item['dx']:+.2f}pt, dy {item['dy']:+.2f}pt"
+                for item in sorted(
+                    vector["instances"]["fine_shifts"],
+                    key=lambda value: max(abs(value["dx"]), abs(value["dy"])),
+                    reverse=True,
+                )
+            )
+            page_notes.append(
+                f"{vector['instances']['fine_shift_count']} matched text instance(s) move "
+                f"past the fine-detail {vector['instances']['fine_shift_threshold']:.2f}pt "
+                f"tolerance: {examples}. Trace-derived anchor movement is geometry, not "
+                "font antialiasing; inspect and track each one"
+            )
         if vector["visibility"]["mismatch_count"]:
             examples = "; ".join(
                 f"'{item['label']}' GT {item['gt']} vs output {item['out']}"
@@ -1177,7 +1206,11 @@ def render_reading(vectors: list[dict]) -> str:
 def audit_failures(vectors: list[dict]) -> int:
     """Count material layout or paint findings that require visual disposition."""
     return sum(
-        vector["instances"]["large_shift_count"]
+        (
+            vector["instances"]["fine_shift_count"]
+            if vector["instances"]["fine_shift_threshold"] is not None
+            else vector["instances"]["large_shift_count"]
+        )
         + vector["visibility"]["mismatch_count"]
         + vector["visible_fills"]["mismatch_count"]
         + vector["lines"]["missing"]
@@ -1220,15 +1253,28 @@ def main() -> int:
         help="flag any matched text instance whose x or y moves by more than this (default: 5pt)",
     )
     parser.add_argument(
+        "--fine-shift",
+        type=float,
+        metavar="PT",
+        help=(
+            "enable the fine-detail audit gate and flag matched text whose x or y "
+            "moves by more than PT; does not replace the 5pt coarse summary"
+        ),
+    )
+    parser.add_argument(
         "--audit",
         action="store_true",
         help=(
             "exit nonzero on missing/extra/reflowed text, changed wraps, "
-            "a text/fill visibility mismatch, a large instance shift, or a page-count mismatch"
+            "a text/fill visibility mismatch, an active fine/coarse instance "
+            "shift, or a page-count mismatch"
         ),
     )
     parser.add_argument("--json", action="store_true", help="emit the deviation vectors as JSON")
     args = parser.parse_args()
+
+    if args.fine_shift is not None and args.fine_shift < args.noise_floor:
+        parser.error("--fine-shift must be at least --noise-floor")
 
     gt_pages = parse_trace(run_mutool(args.gt))
     out_pages = parse_trace(run_mutool(args.output))
@@ -1251,6 +1297,7 @@ def main() -> int:
             out_pages[i],
             noise_floor=args.noise_floor,
             large_shift=args.large_shift,
+            fine_shift=args.fine_shift,
         )
         for i in range(count)
     ]
@@ -1270,6 +1317,11 @@ def main() -> int:
         print(f"PAGE COUNT MISMATCH: GT {len(gt_pages)} vs output {len(out_pages)}\n")
     for index, vector in enumerate(vectors, start=1):
         line_info = vector["lines"]
+        fine_shift_summary = (
+            f"fine shifts {vector['instances']['fine_shift_count']} | "
+            if vector["instances"]["fine_shift_threshold"] is not None
+            else ""
+        )
         print(
             f"page {index}: {line_info['matched']} matched "
             f"({line_info['missing']} missing, {line_info['extra']} extra, "
@@ -1279,6 +1331,7 @@ def main() -> int:
             f"pitch worst {vector['pitch']['worst_delta']:.2f}pt | "
             f"width worst {vector['width']['worst_pct']:.1f}% | "
             f"large shifts {vector['instances']['large_shift_count']} | "
+            f"{fine_shift_summary}"
             f"visibility {vector['visibility']['mismatch_count']} | "
             f"visible fills {vector['visible_fills']['mismatch_count']} | "
             f"rects {vector['rects']['gt_count']}/{vector['rects']['out_count']}"
