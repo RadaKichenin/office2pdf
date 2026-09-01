@@ -121,7 +121,7 @@ This project follows a **6-month rolling MSRV policy** (aligned with [tokio](htt
 
 ## Visual Comparison Workflow
 
-- For visual bug fixes tied to an issue, keep `assets/bugfixes/issue-<number>/gt.jpg`, `before.jpg`, `after.jpg`, and `layout-audit.json` from the same fixture, page set, renderer, and resolution; `before.jpg` captures the pre-fix output, while `after.jpg` and the layout report use the current output. Every fix PR with a raster change must change `after.jpg` and `layout-audit.json`. Generate the report from the same GT and current-output PDFs used for `gt.jpg` and `after.jpg` with `compare_layout.py --json --audit`; classify page-count, missing/extra/reflow or changed-wrap, painted-visibility, and large-shift failures with open issues in the PR's `Visual audit` category fields and matching `Remaining:` rows. Use progressive JPEG quality 86 with metadata stripped, preserve the source pixel dimensions, and verify text and images remain legible for direct GitHub links. Strip first, then re-set the density (`-strip -density 150 -units PixelsPerInch`): the contract check rejects evidence recording under 150 DPI, which stripping alone removes.
+- For visual bug fixes tied to an issue, keep `assets/bugfixes/issue-<number>/gt.jpg`, `before.jpg`, `after.jpg`, and `layout-audit.json` from the same fixture, page set, renderer, and resolution; `before.jpg` captures the pre-fix output, while `after.jpg` and the layout report use the current output. Every fix PR with a raster change must change `after.jpg` and `layout-audit.json`. Generate the report from the same GT and current-output PDFs used for `gt.jpg` and `after.jpg` with `compare_layout.py --json --audit`; classify page-count, missing/extra/reflow or changed-wrap, painted-text visibility, visible-fill occlusion, and large-shift failures with open issues in the PR's `Visual audit` category fields and matching `Remaining:` rows. Use progressive JPEG quality 86 with metadata stripped, preserve the source pixel dimensions, and verify text and images remain legible for direct GitHub links. Strip first, then re-set the density (`-strip -density 150 -units PixelsPerInch`): the contract check rejects evidence recording under 150 DPI, which stripping alone removes.
 - A text-layer-only fix may correctly produce byte- and pixel-identical `before.jpg` and `after.jpg`. Regenerate and verify the current `after.jpg` without adding annotations; it need not appear in the diff when the render is unchanged. Set `Text-layer-only: Yes` and `Pixel delta: 0` in the PR's `Visual audit`, change `layout-audit.json`, and require that report to show the missing/extra searchable-text finding resolved. The contract requires both evidence files and uses ImageMagick's exact decoded-pixel comparison to verify that the declared zero delta is true.
 - **When filing a visual defect issue, attach a side-by-side image (GT left, office2pdf output at filing time right)** rendered from the same page and resolution, committed as `assets/bugfixes/issue-<number>/compare.jpg` (same JPEG rules as above) and embedded in the issue body via a commit-pinned raw URL. For classified fixtures, confirm with the user before publishing the image; the surrounding issue text must still follow the Confidentiality rules.
 
@@ -147,7 +147,7 @@ just the pages a screenshot shows.
    `compare_text_layer.py` (what a reader can select), `compare_render.py`
    (colour and pixels), and a page-by-page visual at >=150 DPI.
    Run the geometry axis with `--audit`; every large text-instance shift or
-   painted-visibility mismatch it names must be fixed or recorded as a
+   painted-text visibility mismatch or visible-fill occlusion it names must be fixed or recorded as a
    remaining deviation with an open issue.
    Do not classify the pixel diff as antialiasing while this audit is failing.
    Source/XML inspection and numeric reports only route attention; they never
@@ -183,8 +183,8 @@ producing the files is not itself inspection.
 
 For layout defects, run `python3 scripts/compare_layout.py <GT.pdf> <output.pdf> --audit`
 first: it matches text lines from `mutool` traces and reports missing/extra/
-re-wrapped lines, spatial-anchor dy, pitch and width drift, painted visibility,
-and a rect census, with GT noise floors built in (`--noise-floor 0.12` Word,
+re-wrapped lines, spatial-anchor dy, pitch and width drift, painted-text visibility,
+visible-fill occlusions, and a rect census, with GT noise floors built in (`--noise-floor 0.12` Word,
 `0.5` Excel). Painted visibility uses trace order and flat-background contrast:
 text covered by a later opaque image, single closed axis-aligned rectangle, or
 fully extended shading under such a rectangular clip is `hidden`; same-colour
@@ -195,7 +195,10 @@ since the preceding text operation and lies within half an em of the glyph's
 conservative bounding box. This trace-order heuristic recovers path-painted
 text seen in issue #1407 without claiming to identify a Type3 program;
 pathless invisible/OCR text stays hidden, and ambiguous cases still require
-the pixel-difference and visual-inspection passes.
+the pixel-difference and visual-inspection passes. Visible-fill analysis compares
+paint order and final overlap colour where a later opaque rectangle cuts into a
+thin earlier rule. Point and area floors reject trace slivers, and same-colour
+operation splitting is ignored.
 Horizontal text uses its true baseline; a rotated or skewed `fill_text` stays
 one visual run and uses the minimum fully transformed glyph x/y as its
 comparable anchor. Its numbers are assertable; pixel counts are only a

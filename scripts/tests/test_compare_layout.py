@@ -9,9 +9,12 @@ mutool.
 
 from __future__ import annotations
 
+import io
+import json
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -376,6 +379,120 @@ class MatchAndDiffTest(unittest.TestCase):
         self.assertEqual(vector["rects"]["gt_count"], 2)
         self.assertEqual(vector["rects"]["out_count"], 1)
 
+    def test_later_different_fill_cutting_rule_reports_visible_fill_occlusion(
+        self,
+    ) -> None:
+        # Issue #1475: a pale body-cell fill starts 1pt too high and is painted
+        # after the long rose title rule. Every constituent rectangle exists,
+        # so a rect census cannot reveal the wrong final visible colour.
+        rose_rule = rect_op(
+            50.0,
+            143.75,
+            474.0,
+            145.0,
+            color=".85490199 .7137255 .7294118",
+        )
+        native_body = rect_op(
+            452.75,
+            145.0,
+            454.0,
+            184.0,
+            color=".972549 .9372549 .9411765",
+        )
+        overpainting_body = rect_op(
+            452.75,
+            144.0,
+            454.0,
+            184.0,
+            color=".972549 .9372549 .9411765",
+        )
+
+        vector = self.diff(
+            "\n".join([rose_rule, native_body]),
+            "\n".join([rose_rule, overpainting_body]),
+        )
+
+        self.assertEqual(vector["visible_fills"]["mismatch_count"], 1)
+        self.assertEqual(
+            vector["visible_fills"]["mismatches"][0],
+            {
+                "side": "output",
+                "bbox": [452.75, 144.0, 454.0, 145.0],
+                "area": 1.25,
+                "under_color": [0.854902, 0.713726, 0.729412],
+                "over_color": [0.972549, 0.937255, 0.941176],
+            },
+        )
+        self.assertEqual(compare_layout.audit_failures([vector]), 1)
+        self.assertIn("visible fill", compare_layout.render_reading([vector]).lower())
+
+    def test_same_color_operation_splitting_is_not_a_visible_fill_mismatch(self) -> None:
+        rule_color = ".85490199 .7137255 .7294118"
+        cover_color = ".972549 .9372549 .9411765"
+        rule = rect_op(50.0, 143.75, 474.0, 145.0, color=rule_color)
+        gt = "\n".join(
+            [rule, rect_op(452.75, 144.0, 454.0, 184.0, color=cover_color)]
+        )
+        output = "\n".join(
+            [
+                rule,
+                rect_op(452.75, 144.0, 453.25, 184.0, color=cover_color),
+                rect_op(453.25, 144.0, 454.0, 184.0, color=cover_color),
+            ]
+        )
+
+        vector = self.diff(gt, output)
+
+        self.assertEqual(vector["visible_fills"]["mismatch_count"], 0)
+        self.assertEqual(compare_layout.audit_failures([vector]), 0)
+
+    def test_repainting_rule_color_restores_final_visible_fill(self) -> None:
+        rule = rect_op(10.0, 20.0, 110.0, 21.0, color=".8 .2 .2")
+        different_cover = rect_op(50.0, 20.0, 51.0, 21.0, color=".2 .8 .2")
+        restored_rule = rect_op(50.0, 20.0, 51.0, 21.0, color=".8 .2 .2")
+
+        vector = self.diff(rule, "\n".join([rule, different_cover, restored_rule]))
+
+        self.assertEqual(vector["visible_fills"]["mismatch_count"], 0)
+        self.assertEqual(compare_layout.audit_failures([vector]), 0)
+
+    def test_subthreshold_fill_overlap_is_ignored_as_vector_noise(self) -> None:
+        rule = rect_op(10.0, 20.0, 110.0, 21.0, color=".8 .2 .2")
+        tiny_overlap = rect_op(50.0, 20.8, 50.2, 40.0, color=".2 .8 .2")
+
+        vector = self.diff(rule, "\n".join([rule, tiny_overlap]))
+
+        self.assertEqual(vector["visible_fills"]["mismatch_count"], 0)
+        self.assertEqual(compare_layout.audit_failures([vector]), 0)
+
+    def test_low_color_delta_overlap_is_ignored_as_trace_noise(self) -> None:
+        rule = rect_op(10.0, 20.0, 110.0, 21.0, color=".80 .20 .20")
+        near_same_cover = rect_op(50.0, 20.0, 51.0, 40.0, color=".84 .23 .24")
+
+        vector = self.diff(rule, "\n".join([rule, near_same_cover]))
+
+        self.assertEqual(vector["visible_fills"]["mismatch_count"], 0)
+        self.assertEqual(compare_layout.audit_failures([vector]), 0)
+
+    def test_duplicate_cover_operations_do_not_duplicate_visible_coverage(self) -> None:
+        rule = rect_op(10.0, 20.0, 110.0, 21.0, color=".8 .2 .2")
+        cover = rect_op(50.0, 20.0, 51.0, 40.0, color=".2 .8 .2")
+
+        vector = self.diff("\n".join([rule, cover]), "\n".join([rule, cover, cover]))
+
+        self.assertEqual(vector["visible_fills"]["mismatch_count"], 0)
+        self.assertEqual(compare_layout.audit_failures([vector]), 0)
+
+    def test_matching_different_color_occlusion_is_not_a_mismatch(self) -> None:
+        rule = rect_op(10.0, 20.0, 110.0, 21.0, color=".8 .2 .2")
+        intentional_cover = rect_op(50.0, 20.0, 51.0, 40.0, color=".2 .8 .2")
+        page = "\n".join([rule, intentional_cover])
+
+        vector = self.diff(page, page)
+
+        self.assertEqual(vector["visible_fills"]["mismatch_count"], 0)
+        self.assertEqual(compare_layout.audit_failures([vector]), 0)
+
     def test_repeated_labels_are_spatially_matched_and_large_shifts_are_named(self) -> None:
         gt = "\n".join(
             [line_of("Sales", 337, 133), line_of("Sales", 553, 286)]
@@ -600,6 +717,51 @@ class ReadingTest(unittest.TestCase):
 
         self.assertIn("Sales [1/2]", reading)
         self.assertIn("+120.00pt", reading)
+
+
+class CompareLayoutCliTest(unittest.TestCase):
+    def test_audit_exits_nonzero_for_issue_1475_visible_fill_occlusion(self) -> None:
+        rose_rule = rect_op(
+            50.0,
+            143.75,
+            474.0,
+            145.0,
+            color=".85490199 .7137255 .7294118",
+        )
+        native_body = rect_op(
+            452.75,
+            145.0,
+            454.0,
+            184.0,
+            color=".972549 .9372549 .9411765",
+        )
+        overpainting_body = rect_op(
+            452.75,
+            144.0,
+            454.0,
+            184.0,
+            color=".972549 .9372549 .9411765",
+        )
+        traces = [
+            trace_document("\n".join([rose_rule, native_body])),
+            trace_document("\n".join([rose_rule, overpainting_body])),
+        ]
+
+        stdout = io.StringIO()
+        with (
+            patch.object(compare_layout, "run_mutool", side_effect=traces),
+            patch.object(
+                sys,
+                "argv",
+                ["compare_layout.py", "gt.pdf", "output.pdf", "--json", "--audit"],
+            ),
+            patch("sys.stdout", stdout),
+        ):
+            result = compare_layout.main()
+
+        report = json.loads(stdout.getvalue())
+        self.assertEqual(result, 1)
+        self.assertEqual(report["pages"][0]["visible_fills"]["mismatch_count"], 1)
 
 
 if __name__ == "__main__":

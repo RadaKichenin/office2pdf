@@ -56,6 +56,7 @@ def visual_body(result_overrides=None, include_previews=True):
 - Layout audit report: `assets/bugfixes/issue-186/layout-audit.json`
 - Layout audit page count: Pass
 - Layout audit text flow: Pass
+- Layout audit visible fills: Pass
 - Layout audit large shifts: Pass
 - New follow-up issues found in this audit: {follow_up_value}
 - Model vision findings: Full pages, pixel diff, and matched crops were opened; no untracked visual deviation remains.
@@ -87,6 +88,7 @@ def layout_report(
     reflow_out=0,
     large_shifts=0,
     visibility=0,
+    visible_fills=0,
 ):
     return {
         "pages": [
@@ -96,6 +98,7 @@ def layout_report(
                 "reflow": {"gt_lines": reflow_gt, "out_lines": reflow_out},
                 "instances": {"large_shift_count": large_shifts},
                 "visibility": {"mismatch_count": visibility},
+                "visible_fills": {"mismatch_count": visible_fills},
             }
         ],
         "gt_pages": gt_pages,
@@ -167,13 +170,14 @@ class PullRequestBodyTests(unittest.TestCase):
     def test_visual_audit_requires_layout_finding_disposition(self):
         required = (
             "- [x] Ran compare_layout.py --audit and dispositioned every "
-            "large text-instance shift and painted-visibility mismatch"
+            "large text-instance shift, painted-text visibility mismatch, and "
+            "visible-fill occlusion"
         )
         errors = validate_pr_body(
             visual_body().replace(required, required.replace("[x]", "[ ]")),
             ["assets/bugfixes/issue-186/after.jpg"],
         )
-        self.assertTrue(any("painted-visibility mismatch" in error for error in errors))
+        self.assertTrue(any("painted-text visibility mismatch" in error for error in errors))
 
     def test_visual_audit_requires_model_vision_inspection(self):
         required = (
@@ -316,6 +320,22 @@ class LayoutAuditTests(unittest.TestCase):
         self.assertTrue(
             any("text flow" in error and "issue reference" in error for error in errors)
         )
+
+    def test_visible_fill_failure_rejects_pass_visible_fill_disposition(self):
+        errors = validate_report(
+            visual_body(),
+            layout_report(visible_fills=1),
+        )
+        self.assertTrue(
+            any("visible fills" in error and "issue reference" in error for error in errors)
+        )
+
+    def test_visible_fill_failure_accepts_remaining_fill_issue(self):
+        body = visual_body({"Fill": "Remaining: #328"}).replace(
+            "Layout audit visible fills: Pass",
+            "Layout audit visible fills: #328",
+        )
+        self.assertEqual(validate_report(body, layout_report(visible_fills=1)), [])
 
     def test_failed_categories_accept_remaining_issue_references(self):
         body = visual_body(

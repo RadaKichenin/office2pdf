@@ -11,8 +11,9 @@ For every case in ``tests/golden_mocks/business/manifest.json`` this pipeline:
    ``compare_layout`` deviation vector for every page, using the per-format
    noise floor (0.12pt for Word/PowerPoint GT, whose exports quantise to a
    0.24pt grid; 0.5pt for Excel GT, whose Quartz export rounds every advance
-   to a whole point), including painted-visibility mismatches caused by
-   z-order or flat-background contrast.
+   to a whole point), including painted-text visibility mismatches caused by
+   z-order or flat-background contrast, plus visible-fill occlusions where a
+   later opaque, differently coloured rectangle cuts into a thin rule.
 
 A trace that parses to zero pages is a hard failure, never an empty vector: on
 mutool 1.23.x that state used to look exactly like a perfect comparison
@@ -161,6 +162,10 @@ def build_baseline_document(
             vector.get("visibility", {"mismatch_count": 0})["mismatch_count"]
             for vector in pages
         ),
+        "visible_fill_mismatches": sum(
+            vector.get("visible_fills", {"mismatch_count": 0})["mismatch_count"]
+            for vector in pages
+        ),
     }
     return {
         "schema_version": SCHEMA_VERSION,
@@ -239,12 +244,19 @@ def main() -> int:
                     vector.get("visibility", {"mismatch_count": 0})["mismatch_count"]
                     for vector in record["pages"]
                 )
+                visible_fill_mismatches = sum(
+                    vector.get("visible_fills", {"mismatch_count": 0})[
+                        "mismatch_count"
+                    ]
+                    for vector in record["pages"]
+                )
                 print(
                     f"{record['id']}: {record['out_pages']}/{record['gt_pages']} pages, "
                     f"{sum(v['lines']['missing'] for v in record['pages'])} missing, "
                     f"{sum(v['instances']['large_shift_count'] for v in record['pages'])} "
                     "large shifts, "
-                    f"{visibility_mismatches} visibility mismatches"
+                    f"{visibility_mismatches} text visibility mismatches, "
+                    f"{visible_fill_mismatches} visible fill mismatches"
                 )
     except BaselineError as error:
         print(f"baseline generation failed: {error}", file=sys.stderr)

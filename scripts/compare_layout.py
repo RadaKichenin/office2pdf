@@ -17,6 +17,9 @@ visible ink. It then matches lines by their text and reports typed deviations:
   a single closed axis-aligned rectangular clip, or painted with the same
   colour as a flat background, is distinguished from text that remains visibly
   painted;
+- visible-fill occlusions: a later opaque, differently coloured rectangle
+  cutting into a thin earlier rule is compared by final overlap area, colour,
+  and paint order rather than by the raw rectangle count;
 - a fill/stroke rect census with nearest-match position deltas.
 
 A noise floor (default 0.12pt — native Word exports quantise coordinates to a
@@ -82,6 +85,12 @@ RECT_MATCH_RADIUS_PT = 6.0
 OPAQUE_ALPHA = 0.98
 INVISIBLE_ALPHA = 0.02
 LOW_CONTRAST_CHANNEL_DELTA = 0.04
+VISIBLE_FILL_MIN_EDGE_PT = 0.5
+VISIBLE_FILL_MIN_AREA_PT2 = 0.5
+VISIBLE_FILL_MAX_RULE_THICKNESS_PT = 2.0
+VISIBLE_FILL_MIN_RULE_LENGTH_PT = 4.0
+VISIBLE_FILL_COLOR_DELTA = 0.08
+VISIBLE_FILL_MATCH_TOLERANCE_PT = 0.5
 XML_ESCAPES = {"&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&apos;": "'"}
 
 
@@ -125,6 +134,19 @@ class Rect:
     @property
     def center(self) -> tuple[float, float]:
         return ((self.x0 + self.x1) / 2, (self.y0 + self.y1) / 2)
+
+
+@dataclass(frozen=True)
+class VisibleFillOcclusion:
+    """A later flat fill that changes a thin earlier rule's visible colour."""
+
+    bbox: tuple[float, float, float, float]
+    under_color: tuple[float, float, float]
+    over_color: tuple[float, float, float]
+
+    @property
+    def area(self) -> float:
+        return (self.bbox[2] - self.bbox[0]) * (self.bbox[3] - self.bbox[1])
 
 
 @dataclass
@@ -280,6 +302,207 @@ def intersect_bboxes(
     if x0 >= x1 or y0 >= y1:
         return (x0, y0, x0, y0)
     return (x0, y0, x1, y1)
+
+
+def color_delta(
+    first: tuple[float, float, float], second: tuple[float, float, float]
+) -> float:
+    return max(abs(channel - other) for channel, other in zip(first, second))
+
+
+def merge_visible_fill_occlusions(
+    occlusions: list[VisibleFillOcclusion],
+) -> list[VisibleFillOcclusion]:
+    """Union adjacent cells without preserving harmless operation splits."""
+
+    coordinate_tolerance = 1e-6
+    merged = list(occlusions)
+    changed = True
+    while changed:
+        changed = False
+        for first_index, first in enumerate(merged):
+            for second_index in range(first_index + 1, len(merged)):
+                second = merged[second_index]
+                if (
+                    color_delta(first.under_color, second.under_color)
+                    > coordinate_tolerance
+                    or color_delta(first.over_color, second.over_color)
+                    > coordinate_tolerance
+                ):
+                    continue
+                same_y_span = (
+                    abs(first.bbox[1] - second.bbox[1]) <= coordinate_tolerance
+                    and abs(first.bbox[3] - second.bbox[3]) <= coordinate_tolerance
+                )
+                same_x_span = (
+                    abs(first.bbox[0] - second.bbox[0]) <= coordinate_tolerance
+                    and abs(first.bbox[2] - second.bbox[2]) <= coordinate_tolerance
+                )
+                x_connected = (
+                    first.bbox[0] <= second.bbox[2] + coordinate_tolerance
+                    and second.bbox[0] <= first.bbox[2] + coordinate_tolerance
+                )
+                y_connected = (
+                    first.bbox[1] <= second.bbox[3] + coordinate_tolerance
+                    and second.bbox[1] <= first.bbox[3] + coordinate_tolerance
+                )
+                if not (
+                    (same_y_span and x_connected) or (same_x_span and y_connected)
+                ):
+                    continue
+                merged[first_index] = VisibleFillOcclusion(
+                    bbox=(
+                        min(first.bbox[0], second.bbox[0]),
+                        min(first.bbox[1], second.bbox[1]),
+                        max(first.bbox[2], second.bbox[2]),
+                        max(first.bbox[3], second.bbox[3]),
+                    ),
+                    under_color=first.under_color,
+                    over_color=first.over_color,
+                )
+                del merged[second_index]
+                changed = True
+                break
+            if changed:
+                break
+    return merged
+
+
+def visible_fill_occlusions(paints: list[Paint]) -> list[VisibleFillOcclusion]:
+    """Return material later-fill intrusions into thin earlier rules.
+
+    Mutool records vector geometry before raster antialiasing, so point and
+    area floors can reject trace slivers without depending on DPI. Restricting
+    the earlier paint to a long, thin rule also avoids treating ordinary
+    stacked cell backgrounds as border damage. Same-colour operation splitting
+    has no final visible-colour change and is ignored (issue #1476).
+    """
+
+    opaque_flat_fills = [
+        paint
+        for paint in paints
+        if paint.kind == "flat"
+        and paint.alpha >= OPAQUE_ALPHA
+        and paint.color is not None
+    ]
+    occlusion_cells: list[VisibleFillOcclusion] = []
+    for earlier in opaque_flat_fills:
+        earlier_width = earlier.x1 - earlier.x0
+        earlier_height = earlier.y1 - earlier.y0
+        if (
+            min(earlier_width, earlier_height) > VISIBLE_FILL_MAX_RULE_THICKNESS_PT
+            or max(earlier_width, earlier_height) < VISIBLE_FILL_MIN_RULE_LENGTH_PT
+        ):
+            continue
+        assert earlier.color is not None
+        earlier_bbox = (earlier.x0, earlier.y0, earlier.x1, earlier.y1)
+        later_fills = [
+            paint
+            for paint in opaque_flat_fills
+            if paint.index > earlier.index
+            and bboxes_overlap(
+                earlier_bbox,
+                (paint.x0, paint.y0, paint.x1, paint.y1),
+            )
+        ]
+        if not later_fills:
+            continue
+
+        clipped_overlaps = [
+            intersect_bboxes(
+                earlier_bbox,
+                (paint.x0, paint.y0, paint.x1, paint.y1),
+            )
+            for paint in later_fills
+        ]
+        x_coordinates = sorted(
+            {earlier.x0, earlier.x1}
+            | {coordinate for bbox in clipped_overlaps for coordinate in (bbox[0], bbox[2])}
+        )
+        y_coordinates = sorted(
+            {earlier.y0, earlier.y1}
+            | {coordinate for bbox in clipped_overlaps for coordinate in (bbox[1], bbox[3])}
+        )
+        for x0, x1 in zip(x_coordinates, x_coordinates[1:]):
+            for y0, y1 in zip(y_coordinates, y_coordinates[1:]):
+                if x0 >= x1 or y0 >= y1:
+                    continue
+                midpoint = ((x0 + x1) / 2, (y0 + y1) / 2)
+                covering_fills = [
+                    paint
+                    for paint in later_fills
+                    if paint.x0 <= midpoint[0] <= paint.x1
+                    and paint.y0 <= midpoint[1] <= paint.y1
+                ]
+                if not covering_fills:
+                    continue
+                top_fill = max(covering_fills, key=lambda paint: paint.index)
+                assert top_fill.color is not None
+                if color_delta(earlier.color, top_fill.color) < VISIBLE_FILL_COLOR_DELTA:
+                    continue
+                occlusion_cells.append(
+                    VisibleFillOcclusion(
+                        bbox=(x0, y0, x1, y1),
+                        under_color=earlier.color,
+                        over_color=top_fill.color,
+                    )
+                )
+
+    return [
+        occlusion
+        for occlusion in merge_visible_fill_occlusions(occlusion_cells)
+        if min(
+            occlusion.bbox[2] - occlusion.bbox[0],
+            occlusion.bbox[3] - occlusion.bbox[1],
+        )
+        >= VISIBLE_FILL_MIN_EDGE_PT
+        and occlusion.area >= VISIBLE_FILL_MIN_AREA_PT2
+    ]
+
+
+def visible_fill_occlusion_mismatches(
+    gt_paints: list[Paint], out_paints: list[Paint]
+) -> list[dict]:
+    """Pair equivalent occlusions and report only final-coverage differences."""
+
+    gt_occlusions = visible_fill_occlusions(gt_paints)
+    out_occlusions = visible_fill_occlusions(out_paints)
+    unclaimed_output = list(out_occlusions)
+    mismatches: list[tuple[str, VisibleFillOcclusion]] = []
+    for gt_occlusion in gt_occlusions:
+        best: VisibleFillOcclusion | None = None
+        best_distance = VISIBLE_FILL_MATCH_TOLERANCE_PT
+        for candidate in unclaimed_output:
+            if (
+                color_delta(gt_occlusion.under_color, candidate.under_color)
+                > LOW_CONTRAST_CHANNEL_DELTA
+                or color_delta(gt_occlusion.over_color, candidate.over_color)
+                > LOW_CONTRAST_CHANNEL_DELTA
+            ):
+                continue
+            distance = max(
+                abs(gt_value - out_value)
+                for gt_value, out_value in zip(gt_occlusion.bbox, candidate.bbox)
+            )
+            if distance <= best_distance:
+                best = candidate
+                best_distance = distance
+        if best is None:
+            mismatches.append(("ground_truth", gt_occlusion))
+        else:
+            unclaimed_output.remove(best)
+    mismatches.extend(("output", occlusion) for occlusion in unclaimed_output)
+
+    def report(side: str, occlusion: VisibleFillOcclusion) -> dict:
+        return {
+            "side": side,
+            "bbox": [round(value, 6) for value in occlusion.bbox],
+            "area": round(occlusion.area, 6),
+            "under_color": [round(value, 6) for value in occlusion.under_color],
+            "over_color": [round(value, 6) for value in occlusion.over_color],
+        }
+
+    return [report(side, occlusion) for side, occlusion in mismatches]
 
 
 def clipped_shade_paints(content: str) -> list[Paint]:
@@ -765,6 +988,7 @@ def diff_page(
         for gt_line, out_line in matches
         if (gt_line.visibility == "painted") != (out_line.visibility == "painted")
     ]
+    visible_fill_mismatches = visible_fill_occlusion_mismatches(gt.paints, out.paints)
     large_shifts = [
         instance
         for instance in instances
@@ -843,6 +1067,10 @@ def diff_page(
             "mismatch_count": len(visibility_mismatches),
             "mismatches": visibility_mismatches,
         },
+        "visible_fills": {
+            "mismatch_count": len(visible_fill_mismatches),
+            "mismatches": visible_fill_mismatches,
+        },
         "pitch": {"pairs": len(pitch_deltas), "worst_delta": abs(stats(pitch_deltas)["worst"])},
         "wraps": {"count": len(wraps), "samples": wraps[:5]},
         "reflow": reflow,
@@ -907,6 +1135,15 @@ def render_reading(vectors: list[dict]) -> str:
                 f"painted visibility: {examples}. Check z-order, opacity, or foreground/background "
                 "contrast"
             )
+        if vector["visible_fills"]["mismatch_count"]:
+            examples = "; ".join(
+                f"{item['side']} bbox {item['bbox']} {item['under_color']} -> {item['over_color']}"
+                for item in vector["visible_fills"]["mismatches"][:3]
+            )
+            page_notes.append(
+                f"{vector['visible_fills']['mismatch_count']} visible fill occlusion(s) "
+                f"differ after paint order: {examples}. Check border/fill z-order"
+            )
         if vector["pitch"]["worst_delta"] > vector["noise_floor"]:
             page_notes.append(
                 f"line pitch drifts up to {vector['pitch']['worst_delta']:.2f}pt — "
@@ -926,10 +1163,11 @@ def render_reading(vectors: list[dict]) -> str:
 
 
 def audit_failures(vectors: list[dict]) -> int:
-    """Count material text findings that require visual disposition."""
+    """Count material layout or paint findings that require visual disposition."""
     return sum(
         vector["instances"]["large_shift_count"]
         + vector["visibility"]["mismatch_count"]
+        + vector["visible_fills"]["mismatch_count"]
         + vector["lines"]["missing"]
         + vector["lines"]["extra"]
         + vector["wraps"]["count"]
@@ -974,7 +1212,7 @@ def main() -> int:
         action="store_true",
         help=(
             "exit nonzero on missing/extra/reflowed text, changed wraps, "
-            "a painted-visibility mismatch, a large instance shift, or a page-count mismatch"
+            "a text/fill visibility mismatch, a large instance shift, or a page-count mismatch"
         ),
     )
     parser.add_argument("--json", action="store_true", help="emit the deviation vectors as JSON")
@@ -1030,6 +1268,7 @@ def main() -> int:
             f"width worst {vector['width']['worst_pct']:.1f}% | "
             f"large shifts {vector['instances']['large_shift_count']} | "
             f"visibility {vector['visibility']['mismatch_count']} | "
+            f"visible fills {vector['visible_fills']['mismatch_count']} | "
             f"rects {vector['rects']['gt_count']}/{vector['rects']['out_count']}"
         )
     print()
@@ -1038,7 +1277,7 @@ def main() -> int:
     if args.audit and (failures or len(gt_pages) != len(out_pages)):
         print()
         print(
-            f"AUDIT FAILED: {failures} unresolved text-layout finding(s) require visual "
+            f"AUDIT FAILED: {failures} unresolved layout/paint finding(s) require visual "
             "inspection and an issue reference before the audit can be marked as matching."
         )
         return 1
