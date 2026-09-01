@@ -754,6 +754,102 @@ fn test_unflagged_table_keeps_centred_strokes_byte_identically() {
     );
 }
 
+/// Writer seats every DOCX table cell's content one tenth of a point into the
+/// positive x side of the cell track, even when the table is borderless. The
+/// seat belongs to the content box rather than to its paragraph alignment:
+/// left-, centre-, and right-aligned lines all move by the same amount while
+/// their baselines, column widths, and cell margins stay fixed (issue #1488).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn test_borderless_word_cells_share_the_writer_x_origin_seat() {
+    fn table_source(model: TableBorderPaintModel) -> String {
+        let cells = [
+            ("LEFT", Some(Alignment::Left)),
+            ("CENTER", Some(Alignment::Center)),
+            ("RIGHT", Some(Alignment::Right)),
+        ]
+        .into_iter()
+        .map(|(text, alignment)| TableCell {
+            content: vec![Block::Paragraph(Paragraph {
+                style: ParagraphStyle {
+                    alignment,
+                    ..ParagraphStyle::default()
+                },
+                runs: vec![Run {
+                    text: text.to_string(),
+                    style: TextStyle::default(),
+                    href: None,
+                    footnote: None,
+                }],
+            })],
+            ..TableCell::default()
+        })
+        .collect();
+        let table = Table {
+            rows: vec![TableRow {
+                minimum_height: None,
+                cells,
+                height: Some(24.0),
+            }],
+            column_widths: vec![100.0, 100.0, 100.0],
+            default_cell_padding: Some(Insets {
+                top: 0.0,
+                right: 5.4,
+                bottom: 0.0,
+                left: 5.4,
+            }),
+            border_paint_model: model,
+            ..Table::default()
+        };
+        generate_typst(&make_doc(vec![make_flow_page(vec![Block::Table(table)])]))
+            .unwrap()
+            .source
+    }
+
+    let neutral_source = table_source(TableBorderPaintModel::CenteredStroke);
+    let word_source = table_source(TableBorderPaintModel::WordPositiveAxisBands);
+    let neutral_runs =
+        crate::render::pdf::compiled_text_runs(&neutral_source, 0).unwrap_or_else(|error| {
+            panic!("neutral table failed to compile: {error}\n{neutral_source}")
+        });
+    let word_runs = crate::render::pdf::compiled_text_runs(&word_source, 0)
+        .unwrap_or_else(|error| panic!("Word table failed to compile: {error}\n{word_source}"));
+
+    for text in ["LEFT", "CENTER", "RIGHT"] {
+        let neutral = neutral_runs
+            .iter()
+            .find(|run| run.text == text)
+            .unwrap_or_else(|| panic!("missing {text:?} in {neutral_runs:?}"));
+        let word = word_runs
+            .iter()
+            .find(|run| run.text == text)
+            .unwrap_or_else(|| panic!("missing {text:?} in {word_runs:?}"));
+        assert!(
+            (word.left_pt - neutral.left_pt - 0.1).abs() < 0.001,
+            "{text} must move exactly 0.10pt right: neutral={}, Word={}\n{word_source}",
+            neutral.left_pt,
+            word.left_pt,
+        );
+        assert!(
+            (word.baseline_pt - neutral.baseline_pt).abs() < 0.001,
+            "{text} must keep its baseline: neutral={}, Word={}\n{word_source}",
+            neutral.baseline_pt,
+            word.baseline_pt,
+        );
+    }
+
+    assert_eq!(
+        word_source.matches("#move(dx: 0.1pt, dy: 0pt)[").count(),
+        3,
+        "each Word cell gets the same visual seat: {word_source}"
+    );
+    assert!(
+        word_source.contains("columns: (100pt, 100pt, 100pt)")
+            && word_source.contains("inset: (top: 0pt, right: 5.4pt, bottom: 0pt, left: 5.4pt)"),
+        "the seat must not rewrite table width or cell margins: {word_source}"
+    );
+}
+
 #[test]
 fn test_word_bands_quantize_and_paint_on_the_positive_axis() {
     let border = CellBorder {
@@ -800,9 +896,10 @@ fn test_word_bands_quantize_and_paint_on_the_positive_axis() {
         "the right band must start at the boundary and paint right: {result}"
     );
     assert!(
-        result.contains("#move(dx: 0.24pt, dy: 0.48pt)[Word]"),
-        "Word seats cell content half a painted left border inward and one \
-         painted top border down without changing row or column layout: {result}"
+        result.contains("#move(dx: 0.34pt, dy: 0.48pt)[Word]"),
+        "Writer's borderless 0.10pt x seat composes with half a painted left \
+         border inward and one painted top border down without changing row \
+         or column layout: {result}"
     );
 }
 
@@ -910,7 +1007,7 @@ fn test_word_repeating_header_boundary_starts_inside_the_body_row() {
 
     assert!(
         result.contains(
-            "#place(top + left, dx: -5pt, dy: -5.25pt, rect(width: 100% + 10pt, height: 0.48pt, fill: rgb(0, 0, 0), stroke: none))#move(dx: 0pt, dy: 0.48pt)[Body]"
+            "#place(top + left, dx: -5pt, dy: -5.25pt, rect(width: 100% + 10pt, height: 0.48pt, fill: rgb(0, 0, 0), stroke: none))#move(dx: 0.1pt, dy: 0.48pt)[Body]"
         ),
         "the Word body row must own the repeated-header boundary and seat its \
          content below that band: {result}"

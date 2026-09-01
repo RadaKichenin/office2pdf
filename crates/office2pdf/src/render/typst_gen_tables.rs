@@ -1211,12 +1211,11 @@ fn generate_table_cell(
         }
     }
 
-    // Word paints a cell boundary into the positive x/y side, but seats the
-    // content from that painted edge rather than from Typst's unpainted track
-    // centre. Native Word PDFs put the first glyph half a left band farther
-    // in and the first baseline one top band lower. Keep that correction as a
-    // visual translation: row pitch and column measure already match Word and
-    // must not grow with the border (issue #649).
+    // Writer seats a borderless DOCX cell's content 0.10pt into the positive x
+    // side of its track. A painted Word boundary adds its own half-left-band
+    // x seat and full-top-band y seat from that common origin. Keep both as a
+    // visual translation: row pitch, column measure, margins, and wrapping
+    // already match and must not grow with either seat (issues #649, #1488).
     let word_content_shift: Option<(f64, f64)> = word_cell_content_shift(&boundary_band);
     if let Some((dx, dy)) = word_content_shift {
         let _ = write!(
@@ -1362,24 +1361,32 @@ fn generate_table_cell(
     Ok(())
 }
 
-/// The translation from Typst's cell track to Word's positive-axis content
-/// seat. Use the resolved boundary owner so a shared rule affects only the
-/// following cell, exactly like the painted band itself.
+/// Writer's borderless DOCX table-cell text origin sits this far into the
+/// positive x side of the cell track. The #1219 native PDF trace measures the
+/// same 0.10pt delta for left, centre, and right paragraph alignment, so this
+/// is a content-box seat rather than a margin or text-width correction.
+const WRITER_TABLE_CELL_X_ORIGIN_SEAT_PT: f64 = 0.1;
+
+/// The translation from Typst's cell track to Writer's positive-axis content
+/// seat. A resolved boundary owner adds its painted band only to the following
+/// cell, exactly like the band itself; the borderless x seat applies to every
+/// DOCX cell without changing its layout measure.
 fn word_cell_content_shift(boundary_band: &Option<BoundaryBandCell<'_>>) -> Option<(f64, f64)> {
     let band = boundary_band.as_ref()?;
     if band.paint_model != TableBorderPaintModel::WordPositiveAxisBands {
         return None;
     }
-    let border = band.painted_border.as_ref()?;
-    let dx = border
-        .left
+    let border_dx = band
+        .painted_border
         .as_ref()
+        .and_then(|border| border.left.as_ref())
         .map_or(0.0, |side| word_pdf_border_side(side).width / 2.0);
-    let dy = border
-        .top
+    let dy = band
+        .painted_border
         .as_ref()
+        .and_then(|border| border.top.as_ref())
         .map_or(0.0, |side| word_pdf_border_side(side).width);
-    (dx != 0.0 || dy != 0.0).then_some((dx, dy))
+    Some((WRITER_TABLE_CELL_X_ORIGIN_SEAT_PT + border_dx, dy))
 }
 
 /// Height, in points, of the single line box a spill cell's paragraph emits —

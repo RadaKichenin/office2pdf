@@ -1,0 +1,1702 @@
+{
+  "clusters": [
+    {
+      "area_pt2": 1089.9648,
+      "bbox_pt": {
+        "height": 123.84,
+        "width": 39.6,
+        "x": 15.6,
+        "y": 451.2
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-3431d0dd4cec",
+      "region": "left"
+    },
+    {
+      "area_pt2": 894.816,
+      "bbox_pt": {
+        "height": 343.2,
+        "width": 29.28,
+        "x": 0,
+        "y": 420.72
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-ee71c56388cc",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 773.568,
+      "bbox_pt": {
+        "height": 120.72,
+        "width": 44.16,
+        "x": 44.16,
+        "y": 618.72
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-91ff333e1857",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 355.392,
+      "bbox_pt": {
+        "height": 108.72,
+        "width": 45.6,
+        "x": 222,
+        "y": 545.04
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-71cd4a6ad489",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 348.9984,
+      "bbox_pt": {
+        "height": 161.76,
+        "width": 42.24,
+        "x": 170.64,
+        "y": 396
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-356816beb988",
+      "region": "left"
+    },
+    {
+      "area_pt2": 313.632,
+      "bbox_pt": {
+        "height": 30.96,
+        "width": 34.56,
+        "x": 258,
+        "y": 479.76
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-8cef17d61b88",
+      "region": "center"
+    },
+    {
+      "area_pt2": 269.7408,
+      "bbox_pt": {
+        "height": 102.48,
+        "width": 23.76,
+        "x": 203.04,
+        "y": 382.32
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-4bb0a086b1da",
+      "region": "center"
+    },
+    {
+      "area_pt2": 234.0288,
+      "bbox_pt": {
+        "height": 53.76,
+        "width": 10.56,
+        "x": 38.88,
+        "y": 514.8
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-dce36e4f6bba",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 228.2112,
+      "bbox_pt": {
+        "height": 105.84,
+        "width": 11.04,
+        "x": 267.6,
+        "y": 575.28
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-4a964a1ddc8f",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 211.104,
+      "bbox_pt": {
+        "height": 38.16,
+        "width": 15.12,
+        "x": 23.28,
+        "y": 413.52
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-0ce1fb5172f4",
+      "region": "left"
+    },
+    {
+      "area_pt2": 205.6896,
+      "bbox_pt": {
+        "height": 32.16,
+        "width": 19.44,
+        "x": 306.48,
+        "y": 604.56
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-395f18021b68",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 148.0896,
+      "bbox_pt": {
+        "height": 57.84,
+        "width": 13.68,
+        "x": 52.56,
+        "y": 509.04
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-b2044191ab27",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 142.3296,
+      "bbox_pt": {
+        "height": 31.44,
+        "width": 41.52,
+        "x": 228,
+        "y": 391.44
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-d4761fb3fd11",
+      "region": "center"
+    },
+    {
+      "area_pt2": 131.1552,
+      "bbox_pt": {
+        "height": 47.04,
+        "width": 5.04,
+        "x": 274.56,
+        "y": 584.64
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-d0f83dcce15c",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 126.5472,
+      "bbox_pt": {
+        "height": 27.12,
+        "width": 32.4,
+        "x": 55.92,
+        "y": 479.52
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-075d6f235bab",
+      "region": "left"
+    },
+    {
+      "area_pt2": 124.8768,
+      "bbox_pt": {
+        "height": 35.28,
+        "width": 26.88,
+        "x": 64.56,
+        "y": 539.76
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-6b34a4fcb172",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 123.7248,
+      "bbox_pt": {
+        "height": 25.92,
+        "width": 16.56,
+        "x": 265.44,
+        "y": 505.68
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-13a1efdf3ea4",
+      "region": "center"
+    },
+    {
+      "area_pt2": 120.2688,
+      "bbox_pt": {
+        "height": 21.12,
+        "width": 20.16,
+        "x": 17.76,
+        "y": 563.76
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-eae955656111",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 104.4288,
+      "bbox_pt": {
+        "height": 25.68,
+        "width": 20.64,
+        "x": 317.04,
+        "y": 682.8
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-9eaef173ef3e",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 97.7472,
+      "bbox_pt": {
+        "height": 30.48,
+        "width": 13.44,
+        "x": 282.48,
+        "y": 501.6
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-1a0342454607",
+      "region": "center"
+    },
+    {
+      "area_pt2": 97.4016,
+      "bbox_pt": {
+        "height": 28.8,
+        "width": 13.44,
+        "x": 43.44,
+        "y": 539.04
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-973d4de089f4",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 95.8464,
+      "bbox_pt": {
+        "height": 39.36,
+        "width": 49.2,
+        "x": 278.88,
+        "y": 642.48
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-0339dc7aa28d",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 92.16,
+      "bbox_pt": {
+        "height": 47.28,
+        "width": 12.24,
+        "x": 6.48,
+        "y": 450.24
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-f3d3427fc9ee",
+      "region": "left"
+    },
+    {
+      "area_pt2": 90.3168,
+      "bbox_pt": {
+        "height": 49.44,
+        "width": 11.28,
+        "x": 285.36,
+        "y": 577.92
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-a6cf4f7918f5",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 81.8496,
+      "bbox_pt": {
+        "height": 36.48,
+        "width": 7.68,
+        "x": 219.12,
+        "y": 537.84
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-04c0cab4e4ca",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 81.1584,
+      "bbox_pt": {
+        "height": 16.08,
+        "width": 15.36,
+        "x": 248.4,
+        "y": 542.64
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-b2b2fc97cebc",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 76.5504,
+      "bbox_pt": {
+        "height": 19.2,
+        "width": 18.24,
+        "x": 259.68,
+        "y": 701.28
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-295278c1ffd8",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 71.136,
+      "bbox_pt": {
+        "height": 27.6,
+        "width": 12.24,
+        "x": 296.88,
+        "y": 581.28
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-e02c46efb871",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 69.1776,
+      "bbox_pt": {
+        "height": 22.56,
+        "width": 15.12,
+        "x": 251.28,
+        "y": 487.68
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-9680ed12eb22",
+      "region": "center"
+    },
+    {
+      "area_pt2": 63.4752,
+      "bbox_pt": {
+        "height": 19.2,
+        "width": 12.24,
+        "x": 251.52,
+        "y": 521.52
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-c539a5864bcf",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 63.1872,
+      "bbox_pt": {
+        "height": 17.52,
+        "width": 14.4,
+        "x": 33.84,
+        "y": 572.88
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-370e9d5e9b5a",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 61.344,
+      "bbox_pt": {
+        "height": 28.32,
+        "width": 13.68,
+        "x": 201.12,
+        "y": 604.08
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-f1a944c7e798",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 60.4224,
+      "bbox_pt": {
+        "height": 46.08,
+        "width": 5.04,
+        "x": 225.6,
+        "y": 588.48
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-2df077a8e760",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 59.5584,
+      "bbox_pt": {
+        "height": 12.48,
+        "width": 10.32,
+        "x": 6.96,
+        "y": 552.96
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-1f5a20abbf2f",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 58.8672,
+      "bbox_pt": {
+        "height": 18.24,
+        "width": 10.32,
+        "x": 249.12,
+        "y": 499.92
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-c2fbc05aec08",
+      "region": "center"
+    },
+    {
+      "area_pt2": 57.888,
+      "bbox_pt": {
+        "height": 11.52,
+        "width": 8.16,
+        "x": 277.44,
+        "y": 505.2
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-d1de6d5f96b3",
+      "region": "center"
+    },
+    {
+      "area_pt2": 57.1392,
+      "bbox_pt": {
+        "height": 22.08,
+        "width": 7.92,
+        "x": 61.68,
+        "y": 673.68
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-e29492d034fe",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 56.448,
+      "bbox_pt": {
+        "height": 37.2,
+        "width": 22.56,
+        "x": 168.96,
+        "y": 383.76
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-c457ee8379b0",
+      "region": "left"
+    },
+    {
+      "area_pt2": 53.1072,
+      "bbox_pt": {
+        "height": 14.4,
+        "width": 12.72,
+        "x": 293.28,
+        "y": 699.12
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-53b49fb2951d",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 52.128,
+      "bbox_pt": {
+        "height": 21.6,
+        "width": 5.76,
+        "x": 69.84,
+        "y": 683.04
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-e22377baf1c2",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 50.112,
+      "bbox_pt": {
+        "height": 11.76,
+        "width": 6.96,
+        "x": 316.8,
+        "y": 614.88
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-90efe60686e4",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 49.9392,
+      "bbox_pt": {
+        "height": 27.6,
+        "width": 8.16,
+        "x": 97.44,
+        "y": 640.8
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-315bae8a2503",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 48.2688,
+      "bbox_pt": {
+        "height": 25.68,
+        "width": 7.44,
+        "x": 212.64,
+        "y": 489.6
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-7032881449d0",
+      "region": "center"
+    },
+    {
+      "area_pt2": 47.808,
+      "bbox_pt": {
+        "height": 17.28,
+        "width": 18.96,
+        "x": 231.84,
+        "y": 510.24
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-3f29bb02bf7d",
+      "region": "center"
+    },
+    {
+      "area_pt2": 47.1744,
+      "bbox_pt": {
+        "height": 10.32,
+        "width": 7.44,
+        "x": 282,
+        "y": 460.08
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-00dfd3817776",
+      "region": "center"
+    },
+    {
+      "area_pt2": 45.7344,
+      "bbox_pt": {
+        "height": 13.44,
+        "width": 11.52,
+        "x": 362.4,
+        "y": 343.68
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page and subtitle crops in Poppler and MuPDF; these five small clusters are dispersed glyph-edge rasterization after the exact 0.10pt table-cell seat."
+      },
+      "id": "p1-b3ddd3b340ca",
+      "region": "center"
+    },
+    {
+      "area_pt2": 45.0432,
+      "bbox_pt": {
+        "height": 14.4,
+        "width": 9.6,
+        "x": 366.24,
+        "y": 342.72
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page and subtitle crops in Poppler and MuPDF; these five small clusters are dispersed glyph-edge rasterization after the exact 0.10pt table-cell seat."
+      },
+      "id": "p1-1e155d3e5b83",
+      "region": "center"
+    },
+    {
+      "area_pt2": 41.2992,
+      "bbox_pt": {
+        "height": 22.08,
+        "width": 7.92,
+        "x": 216.96,
+        "y": 486.48
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-5715fac6f0ca",
+      "region": "center"
+    },
+    {
+      "area_pt2": 41.2416,
+      "bbox_pt": {
+        "height": 20.64,
+        "width": 8.4,
+        "x": 295.2,
+        "y": 597.6
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-8281670849ba",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 40.5504,
+      "bbox_pt": {
+        "height": 25.92,
+        "width": 10.8,
+        "x": 108.24,
+        "y": 631.68
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-0782fad2f347",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 40.5504,
+      "bbox_pt": {
+        "height": 26.88,
+        "width": 6,
+        "x": 217.68,
+        "y": 554.64
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-58e521e741e6",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 40.4352,
+      "bbox_pt": {
+        "height": 11.04,
+        "width": 7.44,
+        "x": 234.48,
+        "y": 500.64
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-9eb02d342cec",
+      "region": "center"
+    },
+    {
+      "area_pt2": 40.3776,
+      "bbox_pt": {
+        "height": 17.04,
+        "width": 32.88,
+        "x": 217.2,
+        "y": 711.84
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-67d794f3ff84",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 40.2048,
+      "bbox_pt": {
+        "height": 24.72,
+        "width": 4.56,
+        "x": 256.32,
+        "y": 659.52
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-fcd11fbb61f3",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 39.3984,
+      "bbox_pt": {
+        "height": 21.84,
+        "width": 12.48,
+        "x": 97.68,
+        "y": 547.44
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-ae2a053f8c41",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 39.3984,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 6.72,
+        "x": 254.88,
+        "y": 450.24
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-22ba48ab9357",
+      "region": "center"
+    },
+    {
+      "area_pt2": 38.9952,
+      "bbox_pt": {
+        "height": 14.88,
+        "width": 6.72,
+        "x": 291.12,
+        "y": 513.84
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-3c426b17951d",
+      "region": "center"
+    },
+    {
+      "area_pt2": 38.8224,
+      "bbox_pt": {
+        "height": 13.44,
+        "width": 7.68,
+        "x": 260.16,
+        "y": 588
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-0d23f137fdcf",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 38.6496,
+      "bbox_pt": {
+        "height": 11.52,
+        "width": 11.28,
+        "x": 241.44,
+        "y": 527.76
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-c11aa6b7c759",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 36.3456,
+      "bbox_pt": {
+        "height": 24.96,
+        "width": 4.32,
+        "x": 17.28,
+        "y": 417.12
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-486d922a9485",
+      "region": "left"
+    },
+    {
+      "area_pt2": 36.288,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 8.4,
+        "x": 278.88,
+        "y": 498
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-e0d9852912ad",
+      "region": "center"
+    },
+    {
+      "area_pt2": 36.2304,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 11.52,
+        "x": 271.2,
+        "y": 413.28
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-9c8e5f57ff40",
+      "region": "center"
+    },
+    {
+      "area_pt2": 35.5968,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 20.64,
+        "x": 193.92,
+        "y": 650.16
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-7a315cc35142",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 35.424,
+      "bbox_pt": {
+        "height": 21.6,
+        "width": 3.6,
+        "x": 210.24,
+        "y": 583.2
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-c8932c714762",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 34.272,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 8.88,
+        "x": 280.8,
+        "y": 518.16
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-5c8c59e840e2",
+      "region": "center"
+    },
+    {
+      "area_pt2": 33.696,
+      "bbox_pt": {
+        "height": 22.08,
+        "width": 6.24,
+        "x": 303.84,
+        "y": 577.92
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-db0174e3eac1",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 33.1776,
+      "bbox_pt": {
+        "height": 18.48,
+        "width": 7.92,
+        "x": 262.32,
+        "y": 669.36
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-9697c6eec7ec",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 33.1776,
+      "bbox_pt": {
+        "height": 9.36,
+        "width": 8.88,
+        "x": 42.48,
+        "y": 577.44
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-701105e2a79d",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 31.7952,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 6.96,
+        "x": 304.56,
+        "y": 618
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-0ade561fd1ba",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 31.5072,
+      "bbox_pt": {
+        "height": 14.4,
+        "width": 7.44,
+        "x": 341.52,
+        "y": 342.72
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page and subtitle crops in Poppler and MuPDF; these five small clusters are dispersed glyph-edge rasterization after the exact 0.10pt table-cell seat."
+      },
+      "id": "p1-f52060cf60a5",
+      "region": "center"
+    },
+    {
+      "area_pt2": 31.2768,
+      "bbox_pt": {
+        "height": 11.52,
+        "width": 7.2,
+        "x": 89.52,
+        "y": 620.64
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-f3141d232861",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 31.1616,
+      "bbox_pt": {
+        "height": 13.92,
+        "width": 3.84,
+        "x": 238.08,
+        "y": 467.52
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-da75a7234957",
+      "region": "center"
+    },
+    {
+      "area_pt2": 31.1616,
+      "bbox_pt": {
+        "height": 20.64,
+        "width": 4.32,
+        "x": 223.92,
+        "y": 612.24
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-415c192a8947",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 30.7008,
+      "bbox_pt": {
+        "height": 23.76,
+        "width": 4.32,
+        "x": 203.28,
+        "y": 583.92
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-01efe4c84cb8",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 30.1824,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 6.24,
+        "x": 56.88,
+        "y": 663.6
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-7797d46baa7c",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 30.1824,
+      "bbox_pt": {
+        "height": 11.76,
+        "width": 21.6,
+        "x": 204.96,
+        "y": 380.4
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-f2bdd58cc255",
+      "region": "center"
+    },
+    {
+      "area_pt2": 30.0672,
+      "bbox_pt": {
+        "height": 10.32,
+        "width": 9.12,
+        "x": 21.84,
+        "y": 414.96
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-88a40cc62235",
+      "region": "left"
+    },
+    {
+      "area_pt2": 29.8368,
+      "bbox_pt": {
+        "height": 18,
+        "width": 4.56,
+        "x": 66.72,
+        "y": 520.32
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-4c09b5986374",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 29.6064,
+      "bbox_pt": {
+        "height": 14.88,
+        "width": 6,
+        "x": 72,
+        "y": 522
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-dfb3beac5335",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 27.8784,
+      "bbox_pt": {
+        "height": 10.32,
+        "width": 3.84,
+        "x": 8.4,
+        "y": 682.8
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-4f31cb869042",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 27.5328,
+      "bbox_pt": {
+        "height": 11.76,
+        "width": 6.48,
+        "x": 225.36,
+        "y": 394.56
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-de808e32965d",
+      "region": "center"
+    },
+    {
+      "area_pt2": 26.6688,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 22.8,
+        "x": 56.64,
+        "y": 480.96
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-6eaacbcdbf01",
+      "region": "left"
+    },
+    {
+      "area_pt2": 26.4384,
+      "bbox_pt": {
+        "height": 9.84,
+        "width": 6.48,
+        "x": 53.52,
+        "y": 571.44
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-767ce9af09cc",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 25.9776,
+      "bbox_pt": {
+        "height": 23.04,
+        "width": 1.92,
+        "x": 226.8,
+        "y": 587.28
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-3289c0ad3119",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 25.9776,
+      "bbox_pt": {
+        "height": 12.24,
+        "width": 5.04,
+        "x": 80.16,
+        "y": 660
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-f53d0b808902",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 25.7472,
+      "bbox_pt": {
+        "height": 14.64,
+        "width": 4.32,
+        "x": 310.08,
+        "y": 580.08
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-8705df69d47d",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 25.5744,
+      "bbox_pt": {
+        "height": 12.48,
+        "width": 5.52,
+        "x": 220.56,
+        "y": 513.84
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-34872dfa1eb4",
+      "region": "center"
+    },
+    {
+      "area_pt2": 25.4592,
+      "bbox_pt": {
+        "height": 12.96,
+        "width": 15.12,
+        "x": 73.68,
+        "y": 623.76
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-69502e6c9fc8",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 23.6736,
+      "bbox_pt": {
+        "height": 12.96,
+        "width": 3.84,
+        "x": 62.16,
+        "y": 546.72
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-2a17882b8160",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 23.1552,
+      "bbox_pt": {
+        "height": 11.76,
+        "width": 4.56,
+        "x": 215.52,
+        "y": 517.2
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-013606076d1d",
+      "region": "center"
+    },
+    {
+      "area_pt2": 23.04,
+      "bbox_pt": {
+        "height": 7.92,
+        "width": 8.88,
+        "x": 16.56,
+        "y": 557.28
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-8756448eeef0",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 22.8672,
+      "bbox_pt": {
+        "height": 7.92,
+        "width": 12.72,
+        "x": 192.48,
+        "y": 631.44
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-e554ce8ea05d",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 22.5792,
+      "bbox_pt": {
+        "height": 12.48,
+        "width": 3.6,
+        "x": 69.6,
+        "y": 510
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-05588d5bf79a",
+      "region": "left"
+    },
+    {
+      "area_pt2": 22.2912,
+      "bbox_pt": {
+        "height": 8.88,
+        "width": 6.48,
+        "x": 235.68,
+        "y": 491.28
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-8330e10e5c66",
+      "region": "center"
+    },
+    {
+      "area_pt2": 22.176,
+      "bbox_pt": {
+        "height": 14.64,
+        "width": 5.52,
+        "x": 119.76,
+        "y": 661.68
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-e77084c3d006",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 22.0608,
+      "bbox_pt": {
+        "height": 18.96,
+        "width": 5.52,
+        "x": 47.28,
+        "y": 623.76
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-a85e61269f0c",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 21.7728,
+      "bbox_pt": {
+        "height": 7.92,
+        "width": 13.92,
+        "x": 269.76,
+        "y": 408.72
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-cdc7e508979e",
+      "region": "center"
+    },
+    {
+      "area_pt2": 21.7152,
+      "bbox_pt": {
+        "height": 14.4,
+        "width": 3.36,
+        "x": 506.4,
+        "y": 342.72
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page and subtitle crops in Poppler and MuPDF; these five small clusters are dispersed glyph-edge rasterization after the exact 0.10pt table-cell seat."
+      },
+      "id": "p1-1824be167afd",
+      "region": "right"
+    },
+    {
+      "area_pt2": 21.7152,
+      "bbox_pt": {
+        "height": 14.88,
+        "width": 6.96,
+        "x": 122.16,
+        "y": 637.44
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-375ed3b83583",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 21.6576,
+      "bbox_pt": {
+        "height": 10.08,
+        "width": 7.68,
+        "x": 64.32,
+        "y": 695.76
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-bc859cd00ab4",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 21.5424,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 5.04,
+        "x": 248.88,
+        "y": 450
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-bc6f73b7fd1f",
+      "region": "center"
+    },
+    {
+      "area_pt2": 20.448,
+      "bbox_pt": {
+        "height": 11.04,
+        "width": 5.52,
+        "x": 62.4,
+        "y": 509.28
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page, diff, and rotated-photo crops in Poppler and MuPDF; these clusters remain inside or on the clipped photo and are JPEG-versus-lossless resampling."
+      },
+      "id": "p1-5264abf7e529",
+      "region": "left"
+    },
+    {
+      "area_pt2": 20.2176,
+      "bbox_pt": {
+        "height": 14.4,
+        "width": 7.44,
+        "x": 349.44,
+        "y": 342.72
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Inspected the 300 DPI full page and subtitle crops in Poppler and MuPDF; these five small clusters are dispersed glyph-edge rasterization after the exact 0.10pt table-cell seat."
+      },
+      "id": "p1-2986756bd045",
+      "region": "center"
+    }
+  ],
+  "dpi": 300,
+  "duplicate_disposition_cluster_ids": [],
+  "errors": [],
+  "fuzz_percent": 5,
+  "minimum_area_pt2": 20,
+  "page": 1,
+  "passed": true,
+  "renderer_observations": [
+    {
+      "bbox_pt": {
+        "x": 45,
+        "y": 105,
+        "width": 525,
+        "height": 285
+      },
+      "class": "glyph-edge-rasterization",
+      "note": "Poppler and MuPDF 300 DPI GT/before/after crops preserve the three title lines and subtitle content, font, weight, tracking, wraps, and vertical baselines; the candidate moves every table line exactly 0.10pt right and leaves only dispersed glyph-edge rasterization."
+    },
+    {
+      "bbox_pt": {
+        "x": 315,
+        "y": 430,
+        "width": 245,
+        "height": 310
+      },
+      "class": "glyph-edge-rasterization",
+      "note": "Poppler and MuPDF 300 DPI crops preserve the centered ALL AGES WELCOME block, gate line, diamond outline, circular hairline, and dot pattern; trace residuals are at most 0.024pt in x and 0.067pt in y."
+    },
+    {
+      "bbox_pt": {
+        "x": 0,
+        "y": 380,
+        "width": 320,
+        "height": 365
+      },
+      "class": "photo-resampling",
+      "note": "The full-page and crop diff localize every photo-class material cluster to the rotated clipped photograph; the geometry and clip boundary match, and only JPEG-versus-lossless resampling remains."
+    }
+  ],
+  "schema_version": 1,
+  "strict": true,
+  "summary": {
+    "dispositioned": 103,
+    "duplicate": 0,
+    "total": 103,
+    "undispositioned": 0,
+    "unknown": 0
+  },
+  "undispositioned_cluster_ids": [],
+  "unknown_disposition_cluster_ids": []
+}
