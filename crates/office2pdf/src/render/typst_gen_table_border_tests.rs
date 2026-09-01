@@ -1852,12 +1852,13 @@ fn a_later_cell_fill_does_not_cut_through_the_rule_above_it() {
     );
 }
 
-/// At an ordinary boundary the cell below and to the left paints the crossing
-/// last. The second sheet in the #1475 fixture has pale E cells beside a rose
-/// F:Q merge; treating E's own upper fill as a winning horizontal band leaves
-/// two rose corner pixels that native Excel instead covers with pale.
+/// The second sheet in `Gift Budget and Tracker1.xlsx` has pale E cells beside
+/// a rose F:Q merge. Native Excel steps the shared corner: the lower-left
+/// cell's right bleed begins below the upper row, while the upper-right cell's
+/// bottom bleed begins to the right of the pale corner block. Letting either
+/// strip cross the other cuts a differently coloured 1pt notch (#1495).
 #[test]
-fn an_unmerged_upper_fill_does_not_trim_the_lower_cells_right_bleed() {
+fn differently_colored_adjacent_fills_step_their_shared_corner() {
     let pale = Color::new(248, 239, 240);
     let rose = Color::new(218, 182, 186);
     let upper_left = TableCell {
@@ -1889,9 +1890,15 @@ fn an_unmerged_upper_fill_does_not_trim_the_lower_cells_right_bleed() {
 
     assert!(
         result.contains(
-            "#place(top + right, dx: 6pt, dy: -5pt, rect(width: 1.25pt, height: 21pt, fill: rgb(248, 239, 240), stroke: none))"
+            "#place(top + right, dx: 6pt, dy: -4pt, rect(width: 1.25pt, height: 20pt, fill: rgb(248, 239, 240), stroke: none))"
         ),
-        "an ordinary upper fill must not trim the later lower-left bleed: {result}"
+        "the lower-left bleed must start below the upper-right cell's bottom band: {result}"
+    );
+    assert!(
+        result.contains(
+            "#place(bottom + left, dx: -4pt, dy: 6pt, rect(width: 100% + 10pt, height: 1.25pt, fill: rgb(218, 182, 186), stroke: none))"
+        ),
+        "the upper-right bottom bleed must begin beyond the pale corner block: {result}"
     );
 }
 
