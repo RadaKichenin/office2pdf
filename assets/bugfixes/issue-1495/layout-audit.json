@@ -1,0 +1,302 @@
+{
+ "pages": [
+  {
+   "lines": {
+    "gt": 12,
+    "out": 12,
+    "matched": 12,
+    "missing": 0,
+    "extra": 0,
+    "deviant": 3,
+    "missing_text": [],
+    "extra_text": []
+   },
+   "baseline": {
+    "mean_abs_dy": 0.28540833333333165,
+    "worst_dy": 1.0,
+    "worst_dy_signed": -1.0,
+    "worst_line": "AdditionalinstructionshavebeenprovidedincolumnAinGIFTBUDGETA"
+   },
+   "dx0": {
+    "mean_abs": 0.08683249999999987,
+    "worst": -1.0419899999999984
+   },
+   "width": {
+    "mean_abs_pct": 0.8817674269765817,
+    "worst_pct": 8.70238863638585
+   },
+   "instances": {
+    "large_shift_threshold": 5.0,
+    "large_shift_count": 0,
+    "large_shifts": [],
+    "fine_shift_threshold": 0.5,
+    "fine_shift_count": 4,
+    "fine_shifts": [
+     {
+      "label": "ABOUTTHETEMPLATE",
+      "gt_x": 111.0,
+      "gt_y": 110.0,
+      "out_x": 109.95801,
+      "out_y": 110.0,
+      "dx": -1.0419899999999984,
+      "dy": 0.0,
+      "width_pct": 0.040280129239645
+     },
+     {
+      "label": "AdditionalinstructionshavebeenprovidedincolumnAinGIFTBUDGETA",
+      "gt_x": 62.0,
+      "gt_y": 310.0,
+      "out_x": 62.0,
+      "out_y": 309.0,
+      "dx": 0.0,
+      "dy": -1.0,
+      "width_pct": -0.2567368045263552
+     },
+     {
+      "label": "worksheet.Thistexthasbeenintentionallyhidden.Toremovetext,se",
+      "gt_x": 62.0,
+      "gt_y": 324.0,
+      "out_x": 62.0,
+      "out_y": 323.0,
+      "dx": 0.0,
+      "dy": -1.0,
+      "width_pct": 0.02536620971188912
+     },
+     {
+      "label": "thenselectDELETE.Tounhidetext,selectcolumnA,thenchangefontco",
+      "gt_x": 62.0,
+      "gt_y": 338.0,
+      "out_x": 62.0,
+      "out_y": 337.0,
+      "dx": 0.0,
+      "dy": -1.0,
+      "width_pct": 0.10857554977091521
+     }
+    ]
+   },
+   "visibility": {
+    "mismatch_count": 0,
+    "mismatches": []
+   },
+   "visible_fills": {
+    "mismatch_count": 0,
+    "mismatches": []
+   },
+   "pitch": {
+    "pairs": 11,
+    "worst_delta": 1.0
+   },
+   "wraps": {
+    "count": 0,
+    "samples": []
+   },
+   "reflow": {
+    "gt_lines": 0,
+    "out_lines": 0,
+    "samples": []
+   },
+   "rects": {
+    "gt_count": 2,
+    "out_count": 45,
+    "matched": 1,
+    "mean_center_delta": 0.5
+   },
+   "noise_floor": 0.5
+  },
+  {
+   "lines": {
+    "gt": 34,
+    "out": 34,
+    "matched": 34,
+    "missing": 0,
+    "extra": 0,
+    "deviant": 13,
+    "missing_text": [],
+    "extra_text": []
+   },
+   "baseline": {
+    "mean_abs_dy": 0.4101023235294066,
+    "worst_dy": 1.3550500000000625,
+    "worst_dy_signed": 1.3550500000000625,
+    "worst_line": "AmountAmountInstore/"
+   },
+   "dx0": {
+    "mean_abs": 0.21869323529411697,
+    "worst": 0.8000000000000043
+   },
+   "width": {
+    "mean_abs_pct": 1.0858784268491175,
+    "worst_pct": 8.702393874666923
+   },
+   "instances": {
+    "large_shift_threshold": 5.0,
+    "large_shift_count": 0,
+    "large_shifts": [],
+    "fine_shift_threshold": 0.5,
+    "fine_shift_count": 13,
+    "fine_shifts": [
+     {
+      "label": "MONTHLYOVERVIEW",
+      "gt_x": 287.82,
+      "gt_y": 88.55999999999995,
+      "out_x": 288.005,
+      "out_y": 89.26001,
+      "dx": 0.18500000000000227,
+      "dy": 0.7000100000000486,
+      "width_pct": -0.00820012385179444
+     },
+     {
+      "label": "GIFTBUDGET",
+      "gt_x": 82.82,
+      "gt_y": 94.29999999999995,
+      "out_x": 83.005,
+      "out_y": 95.438419,
+      "dx": 0.18500000000000227,
+      "dy": 1.1384190000000416,
+      "width_pct": -0.38327716468322737
+     },
+     {
+      "label": "ANDTRACKER",
+      "gt_x": 82.82,
+      "gt_y": 125.46000000000004,
+      "out_x": 83.005,
+      "out_y": 126.59845,
+      "dx": 0.18500000000000227,
+      "dy": 1.1384499999999633,
+      "width_pct": 0.36379532984831237
+     },
+     {
+      "label": "$140",
+      "gt_x": 294.7797,
+      "gt_y": 190.24,
+      "out_x": 294.96467,
+      "out_y": 189.5437,
+      "dx": 0.18497000000002117,
+      "dy": -0.6963000000000079,
+      "width_pct": -2.257689035244115
+     },
+     {
+      "label": "GIFTBUDGETANDTRACKER",
+      "gt_x": 287.82,
+      "gt_y": 400.97999999999996,
+      "out_x": 288.005,
+      "out_y": 401.68,
+      "dx": 0.18500000000000227,
+      "dy": 0.7000000000000455,
+      "width_pct": -0.0014000379462831907
+     },
+     {
+      "label": "AmountAmountInstore/",
+      "gt_x": 488.71999999999997,
+      "gt_y": 430.49999999999994,
+      "out_x": 488.5951,
+      "out_y": 431.85505,
+      "dx": -0.12489999999996826,
+      "dy": 1.3550500000000625,
+      "width_pct": 0.2784748098502561
+     },
+     {
+      "label": "WhoOccasionMonthGiftLinktogiftPurchased?Wrapped?Delivered?No",
+      "gt_x": 286.18,
+      "gt_y": 437.05999999999995,
+      "out_x": 286.365,
+      "out_y": 437.76,
+      "dx": 0.18500000000000227,
+      "dy": 0.7000000000000455,
+      "width_pct": 0.0011294554560828066
+     },
+     {
+      "label": "LauraBirthdaysJune$50$30ShoesSellerOnlineYesNoNo6/16,Movieti",
+      "gt_x": 286.18,
+      "gt_y": 469.03999999999996,
+      "out_x": 286.365,
+      "out_y": 469.74,
+      "dx": 0.18500000000000227,
+      "dy": 0.7000000000000455,
+      "width_pct": 0.0019746359096498773
+     },
+     {
+      "label": "NoaAnniversariesApril$20$20AcatSellerInstoreNoNoNoHementione",
+      "gt_x": 286.18,
+      "gt_y": 493.64,
+      "out_x": 286.365,
+      "out_y": 494.34,
+      "dx": 0.18500000000000227,
+      "dy": 0.6999999999999886,
+      "width_pct": 0.006330488402482187
+     },
+     {
+      "label": "AktanHolidaysJuly$50$70HeadphonesSellerOnlineNoNoNoDormstuff",
+      "gt_x": 286.18,
+      "gt_y": 518.24,
+      "out_x": 286.365,
+      "out_y": 518.94,
+      "dx": 0.18500000000000227,
+      "dy": 0.7000000000000455,
+      "width_pct": 0.002179988119438584
+     },
+     {
+      "label": "MeitarBirthdaysJanuary$20$30GameSellerInstoreYesYesYes",
+      "gt_x": 286.18,
+      "gt_y": 542.8399999999999,
+      "out_x": 286.365,
+      "out_y": 543.54,
+      "dx": 0.18500000000000227,
+      "dy": 0.7000000000000455,
+      "width_pct": -0.03958879714405923
+     },
+     {
+      "label": "YuuriWeddingsJune$100$150CrystalvaseSellerInstoreYesYesNo",
+      "gt_x": 286.18,
+      "gt_y": 567.4399999999999,
+      "out_x": 286.365,
+      "out_y": 568.14,
+      "dx": 0.18500000000000227,
+      "dy": 0.7000000000000455,
+      "width_pct": -0.02675187632952682
+     },
+     {
+      "label": "_x000D_#Sensitivity:Internal",
+      "gt_x": 49.199999999999996,
+      "gt_y": 817.54,
+      "out_x": 50.0,
+      "out_y": 816.99179,
+      "dx": 0.8000000000000043,
+      "dy": -0.5482099999999264,
+      "width_pct": 8.702393874666923
+     }
+    ]
+   },
+   "visibility": {
+    "mismatch_count": 0,
+    "mismatches": []
+   },
+   "visible_fills": {
+    "mismatch_count": 0,
+    "mismatches": []
+   },
+   "pitch": {
+    "pairs": 33,
+    "worst_delta": 1.2482099999999718
+   },
+   "wraps": {
+    "count": 0,
+    "samples": []
+   },
+   "reflow": {
+    "gt_lines": 0,
+    "out_lines": 0,
+    "samples": []
+   },
+   "rects": {
+    "gt_count": 26,
+    "out_count": 156,
+    "matched": 16,
+    "mean_center_delta": 0.49030499864999744
+   },
+   "noise_floor": 0.5
+  }
+ ],
+ "gt_pages": 2,
+ "out_pages": 2
+}

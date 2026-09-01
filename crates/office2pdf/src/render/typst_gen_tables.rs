@@ -168,11 +168,12 @@ fn generate_table_inner(
     let painted_borders: Option<Vec<Vec<Option<CellBorder>>>> = boundary_band_model
         .map(|_| resolve_boundary_painted_borders(table, num_cols, &repeating_header_boundaries));
     // A later cell's +x fill bleed can cross a horizontal band emitted by an
-    // earlier row. Precompute the winning band at each cell's top-right
-    // junction so Excel fills can begin below that ink (#1475).
-    let background_bleed_top_trims: Option<Vec<Vec<f64>>> =
+    // earlier row, while an upper-right cell's +y bleed can cross a
+    // differently painted left neighbour. Precompute both junction trims so
+    // Excel fills meet without repainting the corner owner (#1475, #1495).
+    let background_bleed_trims: Option<ExcelBackgroundBleedTrims> =
         (boundary_band_model == Some(TableBorderPaintModel::ExcelBoundaryBands)).then(|| {
-            excel_background_bleed_top_trims(
+            excel_background_bleed_trims(
                 table,
                 num_cols,
                 painted_borders
@@ -190,9 +191,12 @@ fn generate_table_inner(
             painted_borders
                 .as_deref()
                 .map(|p| &p[..heading_strip_row_count]),
-            background_bleed_top_trims
-                .as_deref()
-                .map(|t| &t[..heading_strip_row_count]),
+            background_bleed_trims
+                .as_ref()
+                .map(|trims| &trims.top[..heading_strip_row_count]),
+            background_bleed_trims
+                .as_ref()
+                .map(|trims| &trims.bottom_left[..heading_strip_row_count]),
             boundary_band_model,
             &table.column_widths,
             num_cols,
@@ -217,9 +221,12 @@ fn generate_table_inner(
             painted_borders
                 .as_deref()
                 .map(|p| &p[lead_start..lead_start + lead_row_count]),
-            background_bleed_top_trims
-                .as_deref()
-                .map(|t| &t[lead_start..lead_start + lead_row_count]),
+            background_bleed_trims
+                .as_ref()
+                .map(|trims| &trims.top[lead_start..lead_start + lead_row_count]),
+            background_bleed_trims
+                .as_ref()
+                .map(|trims| &trims.bottom_left[lead_start..lead_start + lead_row_count]),
             boundary_band_model,
             &table.column_widths,
             num_cols,
@@ -249,9 +256,12 @@ fn generate_table_inner(
             painted_borders
                 .as_deref()
                 .map(|p| &p[title_start..title_start + header_row_count]),
-            background_bleed_top_trims
-                .as_deref()
-                .map(|t| &t[title_start..title_start + header_row_count]),
+            background_bleed_trims
+                .as_ref()
+                .map(|trims| &trims.top[title_start..title_start + header_row_count]),
+            background_bleed_trims
+                .as_ref()
+                .map(|trims| &trims.bottom_left[title_start..title_start + header_row_count]),
             boundary_band_model,
             &table.column_widths,
             num_cols,
@@ -270,9 +280,12 @@ fn generate_table_inner(
         painted_borders
             .as_deref()
             .map(|p| &p[title_start + header_row_count..]),
-        background_bleed_top_trims
-            .as_deref()
-            .map(|t| &t[title_start + header_row_count..]),
+        background_bleed_trims
+            .as_ref()
+            .map(|trims| &trims.top[title_start + header_row_count..]),
+        background_bleed_trims
+            .as_ref()
+            .map(|trims| &trims.bottom_left[title_start + header_row_count..]),
         boundary_band_model,
         &table.column_widths,
         num_cols,
@@ -310,6 +323,7 @@ fn generate_table_rows(
     rows: &[TableRow],
     painted_borders: Option<&[Vec<Option<CellBorder>>]>,
     background_bleed_top_trims: Option<&[Vec<f64>]>,
+    background_bleed_bottom_left_trims: Option<&[Vec<f64>]>,
     boundary_band_model: Option<TableBorderPaintModel>,
     // The table's declared column widths, in points, so each cell can bound
     // how wide a framed eojeol may be (issue #626). Empty when the table
@@ -399,6 +413,8 @@ fn generate_table_rows(
                 painted_borders.map(|p| BoundaryBandCell {
                     painted_border: &p[row_index][cell_index],
                     background_bleed_top_trim_pt: background_bleed_top_trims
+                        .map_or(0.0, |trims| trims[row_index][cell_index]),
+                    background_bleed_bottom_left_trim_pt: background_bleed_bottom_left_trims
                         .map_or(0.0, |trims| trims[row_index][cell_index]),
                     paint_model: boundary_band_model
                         .expect("painted borders require a boundary-band model"),
@@ -1090,6 +1106,7 @@ fn generate_table_cell(
                 inset,
                 &band.vertical_extent,
                 band.background_bleed_top_trim_pt,
+                band.background_bleed_bottom_left_trim_pt,
             );
         }
         if let Some(border) = band.painted_border {
@@ -2094,8 +2111,21 @@ pub(super) fn resolve_boundary_painted_borders(
     painted
 }
 
-/// How much positive-axis horizontal border ink occupies each Excel cell's
-/// top-right junction after shared-boundary conflict resolution.
+struct ExcelBackgroundBleedTrims {
+    top: Vec<Vec<f64>>,
+    bottom_left: Vec<Vec<f64>>,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+struct ExcelBackgroundPaint {
+    color: Color,
+    alpha: Option<f64>,
+}
+
+type ExcelBackgroundPaintGrid = Vec<Vec<Option<ExcelBackgroundPaint>>>;
+
+/// How much ink each Excel background must preserve at its top-right and
+/// bottom-left junctions after shared-boundary conflict resolution.
 ///
 /// Cell children paint in table order. A right-edge background bleed in row
 /// `r` therefore paints after a bottom band owned by row `r - 1`, even though
@@ -2103,11 +2133,13 @@ pub(super) fn resolve_boundary_painted_borders(
 /// bleed by the winning band's positive extent preserves the final colour at
 /// that crossing (#1475). Reading the resolved paint plan is important: a
 /// losing declaration can have a different extent and must not create a gap.
-fn excel_background_bleed_top_trims(
+/// At the opposite corner, adjacent differently painted cells reserve the
+/// left cell's positive-axis block in the later cell's bottom strip (#1495).
+fn excel_background_bleed_trims(
     table: &Table,
     num_cols: usize,
     painted_borders: &[Vec<Option<CellBorder>>],
-) -> Vec<Vec<f64>> {
+) -> ExcelBackgroundBleedTrims {
     struct CellPlacement {
         row_index: usize,
         cell_index: usize,
@@ -2151,34 +2183,58 @@ fn excel_background_bleed_top_trims(
         }
     }
 
+    // Track each occupied grid slot's effective paint. When adjacent cells
+    // use different paints, the later cell's bottom strip must begin after
+    // the preceding cell's +x corner block instead of overpainting it
+    // (#1495). Row spans are expanded here so a cell beside a merge receives
+    // the same answer as one beside an ordinary cell.
+    let mut background_paints: ExcelBackgroundPaintGrid =
+        vec![vec![None; num_cols]; table.rows.len()];
+    for placement in &placements {
+        let cell: &TableCell = &table.rows[placement.row_index].cells[placement.cell_index];
+        let paint: Option<ExcelBackgroundPaint> =
+            cell.background.map(|color| ExcelBackgroundPaint {
+                color,
+                alpha: cell.background_alpha,
+            });
+        if paint.is_none() {
+            continue;
+        }
+        for row_paints in background_paints
+            .iter_mut()
+            .skip(placement.row_index)
+            .take(placement.row_span)
+        {
+            for slot in row_paints
+                .iter_mut()
+                .skip(placement.first_col)
+                .take(placement.col_span)
+            {
+                *slot = paint;
+            }
+        }
+    }
+
     let mut horizontal_border_positive_extents: Vec<Vec<f64>> =
         vec![vec![0.0; num_cols]; table.rows.len() + 1];
     let mut horizontal_background_positive_extents: Vec<Vec<f64>> =
         vec![vec![0.0; num_cols]; table.rows.len() + 1];
-    // The upper cell beginning immediately to a junction's right paints its
-    // bottom strip after the cell on the left. If that later strip has a
-    // different colour from the lower-left vertical, Excel lets the vertical
-    // cover the crossing instead of trimming it. The E/F crossings on the
-    // second sheet of the #1475 fixture exercise precisely this exception.
-    let mut upper_backgrounds_starting_at_junction: Vec<Vec<Option<Color>>> =
-        vec![vec![None; num_cols + 1]; table.rows.len() + 1];
     for placement in &placements {
         let column_tracks = placement.first_col..placement.first_col + placement.col_span;
         let bottom_boundary: usize = placement.row_index + placement.row_span;
         let cell: &TableCell = &table.rows[placement.row_index].cells[placement.cell_index];
         // An upper cell's own bottom background bleed is visible as the title
         // rule in #1475 even without a declared border. It owns the same
-        // positive 1pt boundary band unless a later upper-right fill owns the
-        // crossing as described above.
+        // positive 1pt boundary band. It also owns the corner where an
+        // adjacent upper-right fill begins; otherwise the lower-left cell's
+        // later vertical bleed cuts a differently coloured notch (#1495).
         if bottom_boundary < horizontal_background_positive_extents.len()
-            && let Some(background) = cell.background
+            && cell.background.is_some()
         {
             for col in column_tracks.clone() {
                 horizontal_background_positive_extents[bottom_boundary][col] =
                     BAND_RUN_END_EXTENSION_PT;
             }
-            upper_backgrounds_starting_at_junction[bottom_boundary][placement.first_col] =
-                Some(background);
         }
 
         if let Some(border) = painted_borders[placement.row_index][placement.cell_index].as_ref() {
@@ -2201,28 +2257,34 @@ fn excel_background_bleed_top_trims(
         }
     }
 
-    let mut trims: Vec<Vec<f64>> = table
+    let mut top_trims: Vec<Vec<f64>> = table
+        .rows
+        .iter()
+        .map(|row| vec![0.0; row.cells.len()])
+        .collect();
+    let mut bottom_left_trims: Vec<Vec<f64>> = table
         .rows
         .iter()
         .map(|row| vec![0.0; row.cells.len()])
         .collect();
     for placement in placements {
         let rightmost_col: usize = placement.first_col + placement.col_span - 1;
-        let right_boundary: usize = placement.first_col + placement.col_span;
-        let cell: &TableCell = &table.rows[placement.row_index].cells[placement.cell_index];
-        let upper_right_has_different_background: bool = upper_backgrounds_starting_at_junction
-            [placement.row_index][right_boundary]
-            .is_some_and(|upper_right| cell.background != Some(upper_right));
-        let background_extent: f64 = if upper_right_has_different_background {
-            0.0
-        } else {
-            horizontal_background_positive_extents[placement.row_index][rightmost_col]
-        };
-        trims[placement.row_index][placement.cell_index] = horizontal_border_positive_extents
+        top_trims[placement.row_index][placement.cell_index] = horizontal_border_positive_extents
             [placement.row_index][rightmost_col]
-            .max(background_extent);
+            .max(horizontal_background_positive_extents[placement.row_index][rightmost_col]);
+        if placement.first_col > 0 {
+            let current_paint = background_paints[placement.row_index][placement.first_col];
+            let left_paint = background_paints[placement.row_index][placement.first_col - 1];
+            if current_paint.is_some() && left_paint.is_some() && current_paint != left_paint {
+                bottom_left_trims[placement.row_index][placement.cell_index] =
+                    BAND_RUN_END_EXTENSION_PT;
+            }
+        }
     }
-    trims
+    ExcelBackgroundBleedTrims {
+        top: top_trims,
+        bottom_left: bottom_left_trims,
+    }
 }
 
 /// Furthest point a centred Excel band reaches on the positive side of its
@@ -2244,6 +2306,9 @@ struct BoundaryBandCell<'a> {
     /// junction. A later Excel fill starts below it instead of overpainting
     /// the rule emitted by an earlier row (#1475).
     background_bleed_top_trim_pt: f64,
+    /// Space reserved at the left end of this cell's bottom strip for a
+    /// differently coloured left neighbour's +x corner block (#1495).
+    background_bleed_bottom_left_trim_pt: f64,
     /// The source application's placement convention for those bands.
     paint_model: TableBorderPaintModel,
     /// How far this cell's vertical bands may extend.
@@ -2794,6 +2859,7 @@ fn write_excel_background_bleed(
     inset: Insets,
     vertical_extent: &VerticalBandExtent,
     top_trim_pt: f64,
+    bottom_left_trim_pt: f64,
 ) {
     let bleed_with_overlap: String = format!(
         "{}pt",
@@ -2801,17 +2867,21 @@ fn write_excel_background_bleed(
     );
     // The bottom strip runs the cell's full width plus the corner block it
     // shares with the right one, exactly as a horizontal border band does.
+    // A differently painted left neighbour reserves its own corner block, so
+    // shift this strip's left edge inward while keeping its right edge fixed.
     write_background_rect(
         out,
         "bottom + left",
-        &format!("{}pt", format_geometry(-inset.left)),
+        &format!("{}pt", format_geometry(-inset.left + bottom_left_trim_pt)),
         &format!(
             "{}pt",
             format_geometry(inset.bottom + BAND_RUN_END_EXTENSION_PT)
         ),
         &format!(
             "100% + {}pt",
-            format_geometry(inset.left + inset.right + BAND_RUN_END_EXTENSION_PT)
+            format_geometry(
+                inset.left + inset.right + BAND_RUN_END_EXTENSION_PT - bottom_left_trim_pt
+            )
         ),
         &bleed_with_overlap,
         background,

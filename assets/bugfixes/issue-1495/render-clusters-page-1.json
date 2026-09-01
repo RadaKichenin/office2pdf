@@ -1,0 +1,1644 @@
+{
+  "clusters": [
+    {
+      "area_pt2": 921.0816,
+      "bbox_pt": {
+        "height": 90.96,
+        "width": 424.08,
+        "x": 49.92,
+        "y": 54.0
+      },
+      "disposition": {
+        "class": "shape-edge-antialiasing",
+        "kind": "accepted-rendering",
+        "note": "The native PDF paints the rose panel as one clipped rectangle while office2pdf composes the same final x=50..474, y=54..145 union from the nominal fill and bottom/right bleed. Poppler and MuPDF 300 DPI inspection confirms matching bounds and colour with only joined-edge antialiasing."
+      },
+      "id": "p1-e4e01bbc6cb3",
+      "region": "top"
+    },
+    {
+      "area_pt2": 132.5376,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 25.44,
+        "x": 59.04,
+        "y": 808.56
+      },
+      "disposition": {
+        "issue": "#1210",
+        "kind": "issue",
+        "note": "The page-1 footer's inherited size, colour, and baseline residual is already tracked in #1210."
+      },
+      "id": "p1-2b092849009f",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 111.456,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 33.12,
+        "x": 163.44,
+        "y": 301.44
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-ece2eb1cc224",
+      "region": "left"
+    },
+    {
+      "area_pt2": 80.2368,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 17.04,
+        "x": 171.6,
+        "y": 315.36
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-6f4a596e7d5a",
+      "region": "left"
+    },
+    {
+      "area_pt2": 76.7232,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 21.36,
+        "x": 197.04,
+        "y": 330.48
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-20972af8f579",
+      "region": "center"
+    },
+    {
+      "area_pt2": 76.608,
+      "bbox_pt": {
+        "height": 7.92,
+        "width": 16.8,
+        "x": 389.28,
+        "y": 301.92
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-f29f0870fcdb",
+      "region": "right"
+    },
+    {
+      "area_pt2": 74.2464,
+      "bbox_pt": {
+        "height": 7.92,
+        "width": 20.16,
+        "x": 332.64,
+        "y": 301.92
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-f466b3e4af1a",
+      "region": "center"
+    },
+    {
+      "area_pt2": 68.7168,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 16.32,
+        "x": 90.96,
+        "y": 301.44
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-fabfa9be79f2",
+      "region": "left"
+    },
+    {
+      "area_pt2": 63.36,
+      "bbox_pt": {
+        "height": 6.96,
+        "width": 13.2,
+        "x": 191.04,
+        "y": 361.92
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-page and matched 300 DPI Poppler/MuPDF crops show matching text content, origins, baselines, wraps, colour, and emphasis outside the explicitly tracked title, A6, and footer regions; the remaining fragments follow glyph edges only."
+      },
+      "id": "p1-617172ae723e",
+      "region": "left"
+    },
+    {
+      "area_pt2": 59.328,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 11.76,
+        "x": 365.04,
+        "y": 315.36
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-2568846ca522",
+      "region": "center"
+    },
+    {
+      "area_pt2": 57.6,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 15.6,
+        "x": 369.6,
+        "y": 301.92
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-71492115e825",
+      "region": "center"
+    },
+    {
+      "area_pt2": 56.5056,
+      "bbox_pt": {
+        "height": 7.92,
+        "width": 10.8,
+        "x": 437.28,
+        "y": 301.92
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-bd8dc85436be",
+      "region": "right"
+    },
+    {
+      "area_pt2": 53.0496,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 10.8,
+        "x": 341.04,
+        "y": 331.68
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-dc0446e49d5c",
+      "region": "center"
+    },
+    {
+      "area_pt2": 51.84,
+      "bbox_pt": {
+        "height": 8.4,
+        "width": 13.68,
+        "x": 318.48,
+        "y": 301.68
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-1dea661f75f4",
+      "region": "center"
+    },
+    {
+      "area_pt2": 51.3792,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 12.72,
+        "x": 280.8,
+        "y": 302.4
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-76209021003d",
+      "region": "center"
+    },
+    {
+      "area_pt2": 49.4784,
+      "bbox_pt": {
+        "height": 7.92,
+        "width": 15.12,
+        "x": 292.8,
+        "y": 301.92
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-d77efb27424b",
+      "region": "center"
+    },
+    {
+      "area_pt2": 47.0016,
+      "bbox_pt": {
+        "height": 7.92,
+        "width": 11.76,
+        "x": 407.28,
+        "y": 301.92
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-c0f2246847bf",
+      "region": "right"
+    },
+    {
+      "area_pt2": 44.5824,
+      "bbox_pt": {
+        "height": 6.48,
+        "width": 11.52,
+        "x": 206.4,
+        "y": 317.52
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-6d933bd0205e",
+      "region": "center"
+    },
+    {
+      "area_pt2": 43.9488,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 11.76,
+        "x": 147.36,
+        "y": 302.64
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-b22431b8ec69",
+      "region": "left"
+    },
+    {
+      "area_pt2": 43.776,
+      "bbox_pt": {
+        "height": 5.52,
+        "width": 11.52,
+        "x": 423.84,
+        "y": 193.68
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-page and matched 300 DPI Poppler/MuPDF crops show matching text content, origins, baselines, wraps, colour, and emphasis outside the explicitly tracked title, A6, and footer regions; the remaining fragments follow glyph edges only."
+      },
+      "id": "p1-54087027f2cb",
+      "region": "top-right"
+    },
+    {
+      "area_pt2": 43.3728,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 10.56,
+        "x": 220.32,
+        "y": 330.48
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-c7a0bcc7b9cd",
+      "region": "center"
+    },
+    {
+      "area_pt2": 42.624,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 14.64,
+        "x": 216.48,
+        "y": 303.6
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-82b98afa50e7",
+      "region": "center"
+    },
+    {
+      "area_pt2": 41.184,
+      "bbox_pt": {
+        "height": 8.4,
+        "width": 10.08,
+        "x": 172.8,
+        "y": 329.52
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-39f49abf32ee",
+      "region": "left"
+    },
+    {
+      "area_pt2": 39.6864,
+      "bbox_pt": {
+        "height": 8.4,
+        "width": 10.8,
+        "x": 113.76,
+        "y": 315.36
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-382295b3a8b1",
+      "region": "left"
+    },
+    {
+      "area_pt2": 38.9952,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 11.28,
+        "x": 119.04,
+        "y": 302.4
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-3597ba5affcd",
+      "region": "left"
+    },
+    {
+      "area_pt2": 38.016,
+      "bbox_pt": {
+        "height": 6.48,
+        "width": 10.32,
+        "x": 377.04,
+        "y": 317.52
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-66f3e4a5f368",
+      "region": "center"
+    },
+    {
+      "area_pt2": 37.9008,
+      "bbox_pt": {
+        "height": 6.48,
+        "width": 10.32,
+        "x": 163.68,
+        "y": 331.68
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-1964126e016e",
+      "region": "left"
+    },
+    {
+      "area_pt2": 36.6336,
+      "bbox_pt": {
+        "height": 6.96,
+        "width": 8.64,
+        "x": 215.04,
+        "y": 361.92
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-page and matched 300 DPI Poppler/MuPDF crops show matching text content, origins, baselines, wraps, colour, and emphasis outside the explicitly tracked title, A6, and footer regions; the remaining fragments follow glyph edges only."
+      },
+      "id": "p1-77b22ce32654",
+      "region": "center"
+    },
+    {
+      "area_pt2": 36.3456,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 7.44,
+        "x": 146.16,
+        "y": 361.44
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-page and matched 300 DPI Poppler/MuPDF crops show matching text content, origins, baselines, wraps, colour, and emphasis outside the explicitly tracked title, A6, and footer regions; the remaining fragments follow glyph edges only."
+      },
+      "id": "p1-ddfb176f0460",
+      "region": "left"
+    },
+    {
+      "area_pt2": 35.5392,
+      "bbox_pt": {
+        "height": 6.96,
+        "width": 8.64,
+        "x": 412.08,
+        "y": 348.0
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-page and matched 300 DPI Poppler/MuPDF crops show matching text content, origins, baselines, wraps, colour, and emphasis outside the explicitly tracked title, A6, and footer regions; the remaining fragments follow glyph edges only."
+      },
+      "id": "p1-4d15a92f584b",
+      "region": "right"
+    },
+    {
+      "area_pt2": 35.2512,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 8.64,
+        "x": 232.08,
+        "y": 191.28
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-page and matched 300 DPI Poppler/MuPDF crops show matching text content, origins, baselines, wraps, colour, and emphasis outside the explicitly tracked title, A6, and footer regions; the remaining fragments follow glyph edges only."
+      },
+      "id": "p1-179ad8cb62e9",
+      "region": "top"
+    },
+    {
+      "area_pt2": 34.5024,
+      "bbox_pt": {
+        "height": 6.96,
+        "width": 9.36,
+        "x": 166.32,
+        "y": 361.92
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-page and matched 300 DPI Poppler/MuPDF crops show matching text content, origins, baselines, wraps, colour, and emphasis outside the explicitly tracked title, A6, and footer regions; the remaining fragments follow glyph edges only."
+      },
+      "id": "p1-75f3d6cbd33b",
+      "region": "left"
+    },
+    {
+      "area_pt2": 34.0416,
+      "bbox_pt": {
+        "height": 7.92,
+        "width": 11.04,
+        "x": 183.12,
+        "y": 191.28
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-page and matched 300 DPI Poppler/MuPDF crops show matching text content, origins, baselines, wraps, colour, and emphasis outside the explicitly tracked title, A6, and footer regions; the remaining fragments follow glyph edges only."
+      },
+      "id": "p1-9a5cf880df26",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 32.8896,
+      "bbox_pt": {
+        "height": 6.48,
+        "width": 7.44,
+        "x": 306.48,
+        "y": 331.68
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-ebf417b5439a",
+      "region": "center"
+    },
+    {
+      "area_pt2": 32.256,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 7.92,
+        "x": 231.84,
+        "y": 329.52
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-5f615dbce919",
+      "region": "center"
+    },
+    {
+      "area_pt2": 31.68,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 9.36,
+        "x": 276.24,
+        "y": 317.52
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-68f8700b29f7",
+      "region": "center"
+    },
+    {
+      "area_pt2": 31.5648,
+      "bbox_pt": {
+        "height": 7.92,
+        "width": 7.44,
+        "x": 140.64,
+        "y": 330.0
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-70b27f162ea8",
+      "region": "left"
+    },
+    {
+      "area_pt2": 30.9312,
+      "bbox_pt": {
+        "height": 7.92,
+        "width": 6.24,
+        "x": 113.52,
+        "y": 330.0
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-2a0f76245b98",
+      "region": "left"
+    },
+    {
+      "area_pt2": 30.7584,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 6.48,
+        "x": 80.16,
+        "y": 159.36
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-page and matched 300 DPI Poppler/MuPDF crops show matching text content, origins, baselines, wraps, colour, and emphasis outside the explicitly tracked title, A6, and footer regions; the remaining fragments follow glyph edges only."
+      },
+      "id": "p1-5856dfe62a8b",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 30.528,
+      "bbox_pt": {
+        "height": 5.52,
+        "width": 8.64,
+        "x": 96.48,
+        "y": 363.6
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-page and matched 300 DPI Poppler/MuPDF crops show matching text content, origins, baselines, wraps, colour, and emphasis outside the explicitly tracked title, A6, and footer regions; the remaining fragments follow glyph edges only."
+      },
+      "id": "p1-25f28b58f68e",
+      "region": "left"
+    },
+    {
+      "area_pt2": 30.1824,
+      "bbox_pt": {
+        "height": 9.36,
+        "width": 6.48,
+        "x": 205.2,
+        "y": 191.52
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-page and matched 300 DPI Poppler/MuPDF crops show matching text content, origins, baselines, wraps, colour, and emphasis outside the explicitly tracked title, A6, and footer regions; the remaining fragments follow glyph edges only."
+      },
+      "id": "p1-b6e28ade1477",
+      "region": "top"
+    },
+    {
+      "area_pt2": 29.4912,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 6.96,
+        "x": 389.76,
+        "y": 347.52
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-page and matched 300 DPI Poppler/MuPDF crops show matching text content, origins, baselines, wraps, colour, and emphasis outside the explicitly tracked title, A6, and footer regions; the remaining fragments follow glyph edges only."
+      },
+      "id": "p1-3be5bf13a02b",
+      "region": "center"
+    },
+    {
+      "area_pt2": 29.1456,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 8.64,
+        "x": 256.32,
+        "y": 191.52
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-page and matched 300 DPI Poppler/MuPDF crops show matching text content, origins, baselines, wraps, colour, and emphasis outside the explicitly tracked title, A6, and footer regions; the remaining fragments follow glyph edges only."
+      },
+      "id": "p1-b22b677458fb",
+      "region": "top"
+    },
+    {
+      "area_pt2": 29.0304,
+      "bbox_pt": {
+        "height": 8.88,
+        "width": 7.44,
+        "x": 353.04,
+        "y": 329.28
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-57028fd0eba3",
+      "region": "center"
+    },
+    {
+      "area_pt2": 28.8576,
+      "bbox_pt": {
+        "height": 8.4,
+        "width": 6.48,
+        "x": 381.6,
+        "y": 329.52
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-1e493425feeb",
+      "region": "center"
+    },
+    {
+      "area_pt2": 28.8576,
+      "bbox_pt": {
+        "height": 8.4,
+        "width": 6.48,
+        "x": 255.6,
+        "y": 329.52
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-b27846cbcd33",
+      "region": "center"
+    },
+    {
+      "area_pt2": 28.8576,
+      "bbox_pt": {
+        "height": 8.4,
+        "width": 5.28,
+        "x": 324.72,
+        "y": 329.52
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-b666b6a52b86",
+      "region": "center"
+    },
+    {
+      "area_pt2": 28.7424,
+      "bbox_pt": {
+        "height": 5.28,
+        "width": 6.96,
+        "x": 409.2,
+        "y": 193.68
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-page and matched 300 DPI Poppler/MuPDF crops show matching text content, origins, baselines, wraps, colour, and emphasis outside the explicitly tracked title, A6, and footer regions; the remaining fragments follow glyph edges only."
+      },
+      "id": "p1-8d6312fa38d3",
+      "region": "top-right"
+    },
+    {
+      "area_pt2": 28.5696,
+      "bbox_pt": {
+        "height": 5.52,
+        "width": 13.92,
+        "x": 237.6,
+        "y": 304.56
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-494b8fc61e89",
+      "region": "center"
+    },
+    {
+      "area_pt2": 27.8784,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 5.76,
+        "x": 218.88,
+        "y": 316.32
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-1a469dbed6dd",
+      "region": "center"
+    },
+    {
+      "area_pt2": 26.6112,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 7.2,
+        "x": 350.64,
+        "y": 347.52
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-page and matched 300 DPI Poppler/MuPDF crops show matching text content, origins, baselines, wraps, colour, and emphasis outside the explicitly tracked title, A6, and footer regions; the remaining fragments follow glyph edges only."
+      },
+      "id": "p1-bf7d89f7512e",
+      "region": "center"
+    },
+    {
+      "area_pt2": 26.6112,
+      "bbox_pt": {
+        "height": 4.56,
+        "width": 11.28,
+        "x": 196.32,
+        "y": 305.52
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-7ca84a344a3f",
+      "region": "center"
+    },
+    {
+      "area_pt2": 26.496,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 7.92,
+        "x": 315.36,
+        "y": 317.52
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-ffc0122b4039",
+      "region": "center"
+    },
+    {
+      "area_pt2": 26.4384,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 7.44,
+        "x": 379.2,
+        "y": 193.68
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-page and matched 300 DPI Poppler/MuPDF crops show matching text content, origins, baselines, wraps, colour, and emphasis outside the explicitly tracked title, A6, and footer regions; the remaining fragments follow glyph edges only."
+      },
+      "id": "p1-896020d9bcdb",
+      "region": "top"
+    },
+    {
+      "area_pt2": 26.208,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 6.96,
+        "x": 397.92,
+        "y": 192.48
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-page and matched 300 DPI Poppler/MuPDF crops show matching text content, origins, baselines, wraps, colour, and emphasis outside the explicitly tracked title, A6, and footer regions; the remaining fragments follow glyph edges only."
+      },
+      "id": "p1-e81851e5f816",
+      "region": "top-right"
+    },
+    {
+      "area_pt2": 25.92,
+      "bbox_pt": {
+        "height": 21.6,
+        "width": 1.2,
+        "x": 246.72,
+        "y": 88.32
+      },
+      "disposition": {
+        "issue": "#1493",
+        "kind": "issue",
+        "note": "The title glyph clusters carry the separately tracked 1.042pt merged-center x residual; its baseline and shaped width match GT."
+      },
+      "id": "p1-6168dcc3bca5",
+      "region": "top"
+    },
+    {
+      "area_pt2": 25.92,
+      "bbox_pt": {
+        "height": 21.6,
+        "width": 1.2,
+        "x": 231.36,
+        "y": 88.32
+      },
+      "disposition": {
+        "issue": "#1493",
+        "kind": "issue",
+        "note": "The title glyph clusters carry the separately tracked 1.042pt merged-center x residual; its baseline and shaped width match GT."
+      },
+      "id": "p1-0cf4fcde1397",
+      "region": "top"
+    },
+    {
+      "area_pt2": 25.92,
+      "bbox_pt": {
+        "height": 21.6,
+        "width": 1.2,
+        "x": 399.36,
+        "y": 88.32
+      },
+      "disposition": {
+        "issue": "#1493",
+        "kind": "issue",
+        "note": "The title glyph clusters carry the separately tracked 1.042pt merged-center x residual; its baseline and shaped width match GT."
+      },
+      "id": "p1-bbd904364a76",
+      "region": "top-right"
+    },
+    {
+      "area_pt2": 25.8624,
+      "bbox_pt": {
+        "height": 6.48,
+        "width": 6.96,
+        "x": 346.08,
+        "y": 317.52
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-22227d47bd53",
+      "region": "center"
+    },
+    {
+      "area_pt2": 25.8624,
+      "bbox_pt": {
+        "height": 6.48,
+        "width": 6.96,
+        "x": 138.24,
+        "y": 317.52
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-2773659ba542",
+      "region": "left"
+    },
+    {
+      "area_pt2": 25.8624,
+      "bbox_pt": {
+        "height": 21.6,
+        "width": 1.2,
+        "x": 134.64,
+        "y": 88.32
+      },
+      "disposition": {
+        "issue": "#1493",
+        "kind": "issue",
+        "note": "The title glyph clusters carry the separately tracked 1.042pt merged-center x residual; its baseline and shaped width match GT."
+      },
+      "id": "p1-74c8f9cd16d1",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 25.8048,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 5.28,
+        "x": 270.48,
+        "y": 315.36
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-ae91f38644a4",
+      "region": "center"
+    },
+    {
+      "area_pt2": 25.8048,
+      "bbox_pt": {
+        "height": 8.4,
+        "width": 5.04,
+        "x": 300.72,
+        "y": 329.52
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-6774a097f3b1",
+      "region": "center"
+    },
+    {
+      "area_pt2": 25.8048,
+      "bbox_pt": {
+        "height": 8.4,
+        "width": 5.04,
+        "x": 154.56,
+        "y": 315.36
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-6a30fd44d67c",
+      "region": "left"
+    },
+    {
+      "area_pt2": 25.5168,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 5.52,
+        "x": 340.56,
+        "y": 347.52
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-page and matched 300 DPI Poppler/MuPDF crops show matching text content, origins, baselines, wraps, colour, and emphasis outside the explicitly tracked title, A6, and footer regions; the remaining fragments follow glyph edges only."
+      },
+      "id": "p1-590b6105f49d",
+      "region": "center"
+    },
+    {
+      "area_pt2": 25.4592,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 9.36,
+        "x": 125.52,
+        "y": 811.68
+      },
+      "disposition": {
+        "issue": "#1210",
+        "kind": "issue",
+        "note": "The page-1 footer's inherited size, colour, and baseline residual is already tracked in #1210."
+      },
+      "id": "p1-9e67f93d2a21",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 25.4016,
+      "bbox_pt": {
+        "height": 5.52,
+        "width": 6.72,
+        "x": 416.64,
+        "y": 193.68
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-page and matched 300 DPI Poppler/MuPDF crops show matching text content, origins, baselines, wraps, colour, and emphasis outside the explicitly tracked title, A6, and footer regions; the remaining fragments follow glyph edges only."
+      },
+      "id": "p1-71b93c753a44",
+      "region": "top-right"
+    },
+    {
+      "area_pt2": 25.4016,
+      "bbox_pt": {
+        "height": 6.48,
+        "width": 5.52,
+        "x": 190.32,
+        "y": 331.68
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-3df490c50f15",
+      "region": "left"
+    },
+    {
+      "area_pt2": 25.056,
+      "bbox_pt": {
+        "height": 5.52,
+        "width": 9.12,
+        "x": 374.4,
+        "y": 332.64
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-042f8f031d6b",
+      "region": "center"
+    },
+    {
+      "area_pt2": 25.056,
+      "bbox_pt": {
+        "height": 5.52,
+        "width": 9.12,
+        "x": 248.4,
+        "y": 332.64
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-28136bdee480",
+      "region": "center"
+    },
+    {
+      "area_pt2": 24.9408,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 6.48,
+        "x": 115.2,
+        "y": 361.44
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-page and matched 300 DPI Poppler/MuPDF crops show matching text content, origins, baselines, wraps, colour, and emphasis outside the explicitly tracked title, A6, and footer regions; the remaining fragments follow glyph edges only."
+      },
+      "id": "p1-e1ecfd96809e",
+      "region": "left"
+    },
+    {
+      "area_pt2": 24.7104,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 9.12,
+        "x": 237.84,
+        "y": 330.48
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-565d6927edd5",
+      "region": "center"
+    },
+    {
+      "area_pt2": 24.48,
+      "bbox_pt": {
+        "height": 7.92,
+        "width": 4.56,
+        "x": 130.56,
+        "y": 330.0
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-003223e5e562",
+      "region": "left"
+    },
+    {
+      "area_pt2": 24.3072,
+      "bbox_pt": {
+        "height": 5.52,
+        "width": 7.2,
+        "x": 138.48,
+        "y": 363.6
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-page and matched 300 DPI Poppler/MuPDF crops show matching text content, origins, baselines, wraps, colour, and emphasis outside the explicitly tracked title, A6, and footer regions; the remaining fragments follow glyph edges only."
+      },
+      "id": "p1-b8f6c5ce324f",
+      "region": "left"
+    },
+    {
+      "area_pt2": 24.1344,
+      "bbox_pt": {
+        "height": 21.6,
+        "width": 10.56,
+        "x": 121.68,
+        "y": 88.32
+      },
+      "disposition": {
+        "issue": "#1493",
+        "kind": "issue",
+        "note": "The title glyph clusters carry the separately tracked 1.042pt merged-center x residual; its baseline and shaped width match GT."
+      },
+      "id": "p1-9f154f7e4eca",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 24.1344,
+      "bbox_pt": {
+        "height": 21.6,
+        "width": 10.56,
+        "x": 373.68,
+        "y": 88.32
+      },
+      "disposition": {
+        "issue": "#1493",
+        "kind": "issue",
+        "note": "The title glyph clusters carry the separately tracked 1.042pt merged-center x residual; its baseline and shaped width match GT."
+      },
+      "id": "p1-4d56727d2b84",
+      "region": "top"
+    },
+    {
+      "area_pt2": 24.1344,
+      "bbox_pt": {
+        "height": 21.6,
+        "width": 10.56,
+        "x": 362.88,
+        "y": 88.32
+      },
+      "disposition": {
+        "issue": "#1493",
+        "kind": "issue",
+        "note": "The title glyph clusters carry the separately tracked 1.042pt merged-center x residual; its baseline and shaped width match GT."
+      },
+      "id": "p1-47533291d725",
+      "region": "top"
+    },
+    {
+      "area_pt2": 24.1344,
+      "bbox_pt": {
+        "height": 21.6,
+        "width": 10.56,
+        "x": 110.88,
+        "y": 88.32
+      },
+      "disposition": {
+        "issue": "#1493",
+        "kind": "issue",
+        "note": "The title glyph clusters carry the separately tracked 1.042pt merged-center x residual; its baseline and shaped width match GT."
+      },
+      "id": "p1-a758d4276d1a",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 24.0768,
+      "bbox_pt": {
+        "height": 5.52,
+        "width": 5.76,
+        "x": 83.28,
+        "y": 363.6
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-page and matched 300 DPI Poppler/MuPDF crops show matching text content, origins, baselines, wraps, colour, and emphasis outside the explicitly tracked title, A6, and footer regions; the remaining fragments follow glyph edges only."
+      },
+      "id": "p1-44d60bdcd698",
+      "region": "left"
+    },
+    {
+      "area_pt2": 23.8464,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 6.72,
+        "x": 333.84,
+        "y": 348.48
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-page and matched 300 DPI Poppler/MuPDF crops show matching text content, origins, baselines, wraps, colour, and emphasis outside the explicitly tracked title, A6, and footer regions; the remaining fragments follow glyph edges only."
+      },
+      "id": "p1-b014879d7d19",
+      "region": "center"
+    },
+    {
+      "area_pt2": 23.7312,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 6.96,
+        "x": 287.04,
+        "y": 330.0
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-2762f07d7a96",
+      "region": "center"
+    },
+    {
+      "area_pt2": 23.4432,
+      "bbox_pt": {
+        "height": 5.52,
+        "width": 6.96,
+        "x": 361.68,
+        "y": 349.68
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-page and matched 300 DPI Poppler/MuPDF crops show matching text content, origins, baselines, wraps, colour, and emphasis outside the explicitly tracked title, A6, and footer regions; the remaining fragments follow glyph edges only."
+      },
+      "id": "p1-2e2ea67db52f",
+      "region": "center"
+    },
+    {
+      "area_pt2": 23.3856,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 6.48,
+        "x": 249.36,
+        "y": 301.44
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-70fd328d3dc6",
+      "region": "center"
+    },
+    {
+      "area_pt2": 23.2704,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 5.28,
+        "x": 112.56,
+        "y": 303.6
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-1562ee3d6bf7",
+      "region": "left"
+    },
+    {
+      "area_pt2": 23.2704,
+      "bbox_pt": {
+        "height": 6.48,
+        "width": 4.8,
+        "x": 330.48,
+        "y": 331.68
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-006f2d1cc636",
+      "region": "center"
+    },
+    {
+      "area_pt2": 22.9248,
+      "bbox_pt": {
+        "height": 6.96,
+        "width": 6.0,
+        "x": 239.28,
+        "y": 361.92
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-page and matched 300 DPI Poppler/MuPDF crops show matching text content, origins, baselines, wraps, colour, and emphasis outside the explicitly tracked title, A6, and footer regions; the remaining fragments follow glyph edges only."
+      },
+      "id": "p1-de59e9d3fa09",
+      "region": "center"
+    },
+    {
+      "area_pt2": 22.8096,
+      "bbox_pt": {
+        "height": 6.48,
+        "width": 5.04,
+        "x": 89.28,
+        "y": 331.68
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-eb1564e6936e",
+      "region": "left"
+    },
+    {
+      "area_pt2": 22.6944,
+      "bbox_pt": {
+        "height": 5.52,
+        "width": 8.4,
+        "x": 397.44,
+        "y": 349.68
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-page and matched 300 DPI Poppler/MuPDF crops show matching text content, origins, baselines, wraps, colour, and emphasis outside the explicitly tracked title, A6, and footer regions; the remaining fragments follow glyph edges only."
+      },
+      "id": "p1-53707aad32c5",
+      "region": "right"
+    },
+    {
+      "area_pt2": 22.1184,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 4.32,
+        "x": 369.36,
+        "y": 347.52
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-page and matched 300 DPI Poppler/MuPDF crops show matching text content, origins, baselines, wraps, colour, and emphasis outside the explicitly tracked title, A6, and footer regions; the remaining fragments follow glyph edges only."
+      },
+      "id": "p1-29ef7cd7e80d",
+      "region": "center"
+    },
+    {
+      "area_pt2": 22.0608,
+      "bbox_pt": {
+        "height": 5.52,
+        "width": 5.28,
+        "x": 386.88,
+        "y": 193.68
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-page and matched 300 DPI Poppler/MuPDF crops show matching text content, origins, baselines, wraps, colour, and emphasis outside the explicitly tracked title, A6, and footer regions; the remaining fragments follow glyph edges only."
+      },
+      "id": "p1-7d901008e570",
+      "region": "top"
+    },
+    {
+      "area_pt2": 21.9456,
+      "bbox_pt": {
+        "height": 5.28,
+        "width": 5.52,
+        "x": 363.12,
+        "y": 193.68
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-page and matched 300 DPI Poppler/MuPDF crops show matching text content, origins, baselines, wraps, colour, and emphasis outside the explicitly tracked title, A6, and footer regions; the remaining fragments follow glyph edges only."
+      },
+      "id": "p1-e5fc25de2744",
+      "region": "top"
+    },
+    {
+      "area_pt2": 21.9456,
+      "bbox_pt": {
+        "height": 5.28,
+        "width": 5.52,
+        "x": 216.24,
+        "y": 193.68
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-page and matched 300 DPI Poppler/MuPDF crops show matching text content, origins, baselines, wraps, colour, and emphasis outside the explicitly tracked title, A6, and footer regions; the remaining fragments follow glyph edges only."
+      },
+      "id": "p1-eabc9c7cd920",
+      "region": "top"
+    },
+    {
+      "area_pt2": 21.2544,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 5.28,
+        "x": 287.04,
+        "y": 192.48
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-page and matched 300 DPI Poppler/MuPDF crops show matching text content, origins, baselines, wraps, colour, and emphasis outside the explicitly tracked title, A6, and footer regions; the remaining fragments follow glyph edges only."
+      },
+      "id": "p1-462532f28b2c",
+      "region": "top"
+    },
+    {
+      "area_pt2": 21.2544,
+      "bbox_pt": {
+        "height": 6.48,
+        "width": 4.56,
+        "x": 160.32,
+        "y": 317.52
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-c3fcc4f91fdc",
+      "region": "left"
+    },
+    {
+      "area_pt2": 20.9664,
+      "bbox_pt": {
+        "height": 6.96,
+        "width": 5.28,
+        "x": 308.16,
+        "y": 302.88
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-fa6f3b40becb",
+      "region": "center"
+    },
+    {
+      "area_pt2": 20.6784,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 5.28,
+        "x": 95.28,
+        "y": 239.52
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-page and matched 300 DPI Poppler/MuPDF crops show matching text content, origins, baselines, wraps, colour, and emphasis outside the explicitly tracked title, A6, and footer regions; the remaining fragments follow glyph edges only."
+      },
+      "id": "p1-eaf5dc06d826",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 20.6208,
+      "bbox_pt": {
+        "height": 7.92,
+        "width": 6.72,
+        "x": 150.0,
+        "y": 330.0
+      },
+      "disposition": {
+        "issue": "#1494",
+        "kind": "issue",
+        "note": "These clusters are confined to A6's three lines, whose baselines are each 1.00pt high and are separately tracked in #1494."
+      },
+      "id": "p1-0a9fc2f790c1",
+      "region": "left"
+    },
+    {
+      "area_pt2": 20.5056,
+      "bbox_pt": {
+        "height": 6.48,
+        "width": 6.48,
+        "x": 134.88,
+        "y": 810.72
+      },
+      "disposition": {
+        "issue": "#1210",
+        "kind": "issue",
+        "note": "The page-1 footer's inherited size, colour, and baseline residual is already tracked in #1210."
+      },
+      "id": "p1-f579b85516d7",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 20.448,
+      "bbox_pt": {
+        "height": 5.28,
+        "width": 6.96,
+        "x": 114.0,
+        "y": 811.68
+      },
+      "disposition": {
+        "issue": "#1210",
+        "kind": "issue",
+        "note": "The page-1 footer's inherited size, colour, and baseline residual is already tracked in #1210."
+      },
+      "id": "p1-6ace8111299f",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 20.2176,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 3.6,
+        "x": 346.56,
+        "y": 347.52
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-page and matched 300 DPI Poppler/MuPDF crops show matching text content, origins, baselines, wraps, colour, and emphasis outside the explicitly tracked title, A6, and footer regions; the remaining fragments follow glyph edges only."
+      },
+      "id": "p1-be3e2c95492a",
+      "region": "center"
+    }
+  ],
+  "dpi": 300,
+  "duplicate_disposition_cluster_ids": [],
+  "errors": [],
+  "fuzz_percent": 5,
+  "minimum_area_pt2": 20.0,
+  "page": 1,
+  "passed": true,
+  "renderer_observations": [
+    {
+      "bbox_pt": {
+        "height": 92.0,
+        "width": 425.0,
+        "x": 49.5,
+        "y": 53.5
+      },
+      "class": "shape-edge-antialiasing",
+      "note": "The rose panel's final bounds and colour match GT in both renderers; native uses one clipped fill and office2pdf uses the nominal fill plus measured bleed strips."
+    },
+    {
+      "bbox_pt": {
+        "height": 235.0,
+        "width": 390.0,
+        "x": 60.0,
+        "y": 145.0
+      },
+      "class": "glyph-edge-rasterization",
+      "note": "Matched body crops were inspected at full resolution; all non-issued line geometry and emphasis match and the remaining sub-threshold fragments follow glyph edges."
+    }
+  ],
+  "schema_version": 1,
+  "strict": true,
+  "summary": {
+    "dispositioned": 100,
+    "duplicate": 0,
+    "total": 100,
+    "undispositioned": 0,
+    "unknown": 0
+  },
+  "undispositioned_cluster_ids": [],
+  "unknown_disposition_cluster_ids": []
+}
