@@ -3437,6 +3437,100 @@ fn a_bottom_seated_anchored_frame_keeps_one_em_above_its_bottom_inset() {
     }
 }
 
+/// The page-left-aligned WPS footer in the #1219 / PR #1407 reference declares
+/// a 20pt left inset, but LibreOffice 26.2.5.2 seats the run origin at 20.15pt.
+/// This is the frame's horizontal seat, independent of the already-matched
+/// bottom baseline and natural text width (issue #1487).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_page_left_aligned_wps_footer_uses_the_writer_text_origin_seat() {
+    use crate::ir::{
+        FrameAlign, FrameAnchor, HFInline, HeaderFooter, HeaderFooterFrame, HeaderFooterParagraph,
+    };
+
+    let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
+        size: PageSize::default(),
+        margins: Margins::default(),
+        content: vec![make_paragraph("Body")],
+        header: None,
+        footer: Some(HeaderFooter {
+            shapes: Vec::new(),
+            distance_from_edge: None,
+            paragraphs: vec![HeaderFooterParagraph {
+                style: ParagraphStyle::default(),
+                elements: vec![HFInline::Run(Run {
+                    text: "Sensitivity: Internal".to_string(),
+                    style: arial(8.0),
+                    href: None,
+                    footnote: None,
+                })],
+                border: None,
+                border_space: None,
+                frame: Some(HeaderFooterFrame {
+                    x: None,
+                    y: None,
+                    width: Some(65.8),
+                    height: Some(25.55),
+                    horizontal_anchor: FrameAnchor::Page,
+                    vertical_anchor: FrameAnchor::Page,
+                    horizontal_align: Some(FrameAlign::Start),
+                    vertical_align: Some(FrameAlign::End),
+                    inset_left: 20.0,
+                    inset_top: 0.0,
+                    bottom_offset: Some(15.0),
+                    wraps_text: false,
+                }),
+            }],
+        }),
+        columns: None,
+        line_grid_pitch: None,
+        line_grid_snaps_lines: false,
+        page_numbering: None,
+    })]);
+
+    let run = placed_runs(&doc)
+        .into_iter()
+        .find(|run| run.text.contains("Sensitivity: Internal"))
+        .expect("the footer label should be laid out");
+    assert!(
+        (run.left_pt - 20.15).abs() < 0.01,
+        "Writer seats the page-left-aligned footer at 20.15pt, got {}pt",
+        run.left_pt
+    );
+    let expected_baseline_pt: f64 = PageSize::default().height - 15.0 - 8.0;
+    assert!(
+        (run.baseline_pt - expected_baseline_pt).abs() < 0.01,
+        "the horizontal correction must not move the matched {expected_baseline_pt}pt baseline, got {}pt",
+        run.baseline_pt
+    );
+}
+
+/// A concrete `<wp:posOffset>` is already the requested page coordinate and
+/// must not inherit the Writer-only seat used for a page-left alignment.
+#[test]
+fn an_explicit_header_footer_x_offset_does_not_take_the_writer_aligned_seat() {
+    use crate::ir::{FrameAlign, FrameAnchor, HeaderFooterFrame};
+
+    let frame = HeaderFooterFrame {
+        x: Some(12.5),
+        y: None,
+        width: Some(65.8),
+        height: Some(25.55),
+        horizontal_anchor: FrameAnchor::Page,
+        vertical_anchor: FrameAnchor::Page,
+        horizontal_align: Some(FrameAlign::Start),
+        vertical_align: None,
+        inset_left: 20.0,
+        inset_top: 0.0,
+        bottom_offset: None,
+        wraps_text: false,
+    };
+
+    assert_eq!(page_anchored_hf_text_origin_x(&frame, 612.0), 32.5);
+}
+
 /// A 5 × 60pt grid on A4 portrait with 0.7in margins: the probe workbook of
 /// issue #1110, whose native Excel-for-Mac export puts the printed grid's
 /// left edge at 146pt. Its 50.4pt sides reach the renderer on the whole point
