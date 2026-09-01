@@ -1332,11 +1332,10 @@ fn bottom_aligned_spreadsheet_cell_in_auto_height_row_keeps_the_symmetric_line_b
     );
 }
 
-/// A proportional Word line shorter than the face's hhea box is centred on
-/// the baseline inside a table cell. Keeping the full hhea ascent above the
-/// baseline and putting the whole compression below it moved the 66pt poster
-/// title down even though its baseline advance was already exact (issue
-/// #1460). The default cell alignment is top, so this pins that first seat.
+/// A top/default-aligned compressed line keeps #1460's centred first seat.
+/// The one-line case matters independently of the multiline title and heading
+/// below: a cell's vertical anchor must not change the line's declared pitch
+/// merely because the paragraph happens not to wrap (issue #1479).
 #[test]
 fn compressed_word_table_line_box_is_centred_for_default_top_alignment() {
     let Some((ascender, descender, word_pitch_em)) =
@@ -1344,7 +1343,7 @@ fn compressed_word_table_line_box_is_centred_for_default_top_alignment() {
     else {
         return;
     };
-    let result = compressed_word_table_cell_source(None);
+    let result = compressed_word_table_cell_source(None, None, "ONE LINE");
     let advance_em: f64 = word_pitch_em * 0.8;
     let half_advance_em: f64 = advance_em / 2.0;
     let scaled_descent_em: f64 = descender * advance_em / (ascender + descender);
@@ -1368,41 +1367,100 @@ fn compressed_word_table_line_box_is_centred_for_default_top_alignment() {
     );
 }
 
-/// Centring a cell must move the already-centred compressed line box as one
-/// unit; it must not restore the face's full ascent above the baseline (issue
-/// #1460).
+/// A table-level centre default is the cell's effective anchor even when the
+/// cell itself says nothing. This guards the context propagation separately
+/// from the explicit-alignment cases below (issue #1479).
 #[test]
-fn compressed_word_table_line_box_stays_centred_for_center_alignment() {
-    assert_compressed_word_table_line_box(CellVerticalAlign::Center, "horizon");
-}
-
-/// Bottom alignment likewise anchors the same baseline-centred line box. It
-/// does not use Excel's separately measured descender-seat model (issues #618
-/// and #1460).
-#[test]
-fn compressed_word_table_line_box_stays_centred_for_bottom_alignment() {
-    assert_compressed_word_table_line_box(CellVerticalAlign::Bottom, "bottom");
-}
-
-fn assert_compressed_word_table_line_box(vertical_align: CellVerticalAlign, typst_align: &str) {
+fn compressed_word_table_default_center_reaches_one_line_box() {
     let Some((ascender, descender, word_pitch_em)) =
         crate::render::pdf::font_line_metrics_em("Libertinus Serif")
     else {
         return;
     };
-    let result = compressed_word_table_cell_source(Some(vertical_align));
+    let result =
+        compressed_word_table_cell_source(None, Some(CellVerticalAlign::Center), "ONE LINE");
     let advance_em: f64 = word_pitch_em * 0.8;
-    let half_advance_em: f64 = advance_em / 2.0;
-    let scaled_descent_em: f64 = descender * advance_em / (ascender + descender);
-    let leading_pt: f64 = (advance_em - half_advance_em - scaled_descent_em) * 66.0;
+    let top_em: f64 = advance_em / 2.0 + 2.0 / 66.0;
+    let bottom_em: f64 = descender * advance_em / (ascender + descender) - 1.0 / 66.0;
 
     assert!(
         result.contains(&format!(
             "top-edge: {}em, bottom-edge: -{}em",
-            format_f64(half_advance_em),
-            format_f64(scaled_descent_em)
+            format_f64(top_em),
+            format_f64(bottom_em)
         )),
-        "a {typst_align}-aligned Word cell keeps its centred first seat and scaled last descent: {result}"
+        "the table's centre default reaches the one-line cell box: {result}"
+    );
+    assert!(
+        result.contains("align: horizon"),
+        "the table keeps its centre default: {result}"
+    );
+}
+
+/// LibreOffice's native PDF trace places the four-line, centre-aligned heading
+/// one point below #1460's provisional seat while leaving both the 71.9136pt
+/// pitch and the following uncompressed gate line unchanged. Typst's centred
+/// table-cell block shares an added first edge across both sides of the cell,
+/// so two points above, one point less below, and one point less leading is the
+/// line-box distribution that produces that native seat without a translation
+/// around the fixture's text (issue #1479).
+#[test]
+fn compressed_word_multiline_box_redistributes_center_alignment_seat() {
+    assert_compressed_word_table_line_box(
+        CellVerticalAlign::Center,
+        "horizon",
+        "ALL\nAGES\nWELC\nOME",
+        2.0,
+        -1.0,
+        -1.0,
+    );
+}
+
+/// The overflowing three-line bottom-aligned title uses the native half-point
+/// first seat and a one-point shorter final exterior descent. The resulting
+/// half-point shorter paragraph also advances the following subtitle by the
+/// half point its native PDF trace requires, while leading preserves the title
+/// pitch (issue #1479).
+#[test]
+fn compressed_word_multiline_box_redistributes_bottom_alignment_seat() {
+    assert_compressed_word_table_line_box(
+        CellVerticalAlign::Bottom,
+        "bottom",
+        "PLACE YOUR\nEVENT TITLE\nHERE",
+        0.5,
+        -1.0,
+        0.5,
+    );
+}
+
+fn assert_compressed_word_table_line_box(
+    vertical_align: CellVerticalAlign,
+    typst_align: &str,
+    text: &str,
+    top_delta_pt: f64,
+    bottom_delta_pt: f64,
+    leading_delta_pt: f64,
+) {
+    let Some((ascender, descender, word_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
+        return;
+    };
+    let result = compressed_word_table_cell_source(Some(vertical_align), None, text);
+    let advance_em: f64 = word_pitch_em * 0.8;
+    let top_em: f64 = advance_em / 2.0 + top_delta_pt / 66.0;
+    let bottom_em: f64 = descender * advance_em / (ascender + descender) + bottom_delta_pt / 66.0;
+    let leading_pt: f64 =
+        (advance_em - advance_em / 2.0 - descender * advance_em / (ascender + descender)) * 66.0
+            + leading_delta_pt;
+
+    assert!(
+        result.contains(&format!(
+            "top-edge: {}em, bottom-edge: -{}em",
+            format_f64(top_em),
+            format_f64(bottom_em)
+        )),
+        "a {typst_align}-aligned Word cell uses its calibrated first seat and final exterior descent: {result}"
     );
     assert!(
         result.contains(&format!("table.cell(align: {typst_align})")),
@@ -1414,7 +1472,11 @@ fn assert_compressed_word_table_line_box(vertical_align: CellVerticalAlign, typs
     );
 }
 
-fn compressed_word_table_cell_source(vertical_align: Option<CellVerticalAlign>) -> String {
+fn compressed_word_table_cell_source(
+    vertical_align: Option<CellVerticalAlign>,
+    table_default_vertical_align: Option<CellVerticalAlign>,
+    text: &str,
+) -> String {
     let font_size: f64 = 66.0;
     let cell = TableCell {
         content: vec![Block::Paragraph(Paragraph {
@@ -1423,7 +1485,7 @@ fn compressed_word_table_cell_source(vertical_align: Option<CellVerticalAlign>) 
                 ..ParagraphStyle::default()
             },
             runs: vec![Run {
-                text: "PLACE YOUR EVENT TITLE HERE".to_string(),
+                text: text.to_string(),
                 style: TextStyle {
                     font_family: Some("Libertinus Serif".to_string()),
                     font_size: Some(font_size),
@@ -1443,6 +1505,7 @@ fn compressed_word_table_cell_source(vertical_align: Option<CellVerticalAlign>) 
             height: Some(240.0),
         }],
         column_widths: vec![500.0],
+        default_vertical_align: table_default_vertical_align,
         ..Table::default()
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);

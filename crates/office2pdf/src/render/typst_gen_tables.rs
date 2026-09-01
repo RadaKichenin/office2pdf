@@ -987,6 +987,7 @@ fn generate_table_cell(
         cell.vertical_align.or(ctx.table_default_vertical_align)
     };
     let enclosing_cell_seats_on_descender: bool = ctx.cell_seats_text_on_descender;
+    let enclosing_cell_vertical_align: Option<CellVerticalAlign> = ctx.cell_vertical_align;
     let enclosing_cell_sheet_row_line: Option<SheetRowLine> = ctx.cell_sheet_row_line.take();
     let enclosing_cell_sheet_seat: Option<SheetCellSeat> = ctx.cell_sheet_seat.take();
     // The fixed sheet track this cell seats its line in (issue #1063). Only a
@@ -1017,6 +1018,7 @@ fn generate_table_cell(
     ctx.cell_seats_text_on_descender = ctx.table_seats_bottom_aligned_text_on_descender
         && effective_vertical_align == Some(CellVerticalAlign::Bottom)
         && row_height.is_some();
+    ctx.cell_vertical_align = effective_vertical_align;
 
     let paints_boundary_bands: bool = boundary_band.is_some();
 
@@ -1353,6 +1355,7 @@ fn generate_table_cell(
         out.push(']');
     }
     ctx.cell_seats_text_on_descender = enclosing_cell_seats_on_descender;
+    ctx.cell_vertical_align = enclosing_cell_vertical_align;
     ctx.cell_sheet_row_line = enclosing_cell_sheet_row_line;
     ctx.cell_sheet_seat = enclosing_cell_sheet_seat;
     out.push_str("],\n");
@@ -1392,6 +1395,7 @@ fn spill_line_box_height_pt(cell: &TableCell, ctx: &GenCtx) -> Option<f64> {
         &paragraph.style,
         ctx.line_grid_pitch,
         ctx.row_east_asian,
+        ctx.cell_vertical_align,
         ctx.cell_seats_text_on_descender,
         ctx.cell_sheet_row_line.as_ref(),
         ctx.cell_sheet_seat,
@@ -2166,6 +2170,7 @@ fn auto_row_frame_height_estimate_pt(
                 &paragraph.style,
                 ctx.line_grid_pitch,
                 ctx.row_east_asian,
+                cell.vertical_align.or(ctx.table_default_vertical_align),
                 false,
                 None,
                 None,
@@ -2873,6 +2878,7 @@ fn generate_cell_content(
             default_tab_width_pt: ctx.default_tab_width_pt,
             line_grid_pitch: ctx.line_grid_pitch,
             row_east_asian: ctx.row_east_asian,
+            vertical_align: ctx.cell_vertical_align,
             seats_text_on_descender: ctx.cell_seats_text_on_descender,
             sheet_row_line: ctx.cell_sheet_row_line.clone(),
             sheet_seat: ctx.cell_sheet_seat,
@@ -2941,6 +2947,8 @@ struct CellParagraphCtx<'a> {
     line_grid_pitch: Option<f64>,
     /// Decided once per row so every cell in it shares a baseline (issue #498).
     row_east_asian: RowEastAsianMetrics,
+    /// The cell's effective Word vertical anchor, including the table default.
+    vertical_align: Option<CellVerticalAlign>,
     seats_text_on_descender: bool,
     /// The one line the cell's tight spreadsheet row seats every cell on, so
     /// this paragraph's box resolves at the row's family and size rather than
@@ -3044,6 +3052,7 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
             style,
             cell.line_grid_pitch,
             cell.row_east_asian,
+            cell.vertical_align,
             cell.seats_text_on_descender,
             cell.sheet_row_line.as_ref(),
             cell.sheet_seat,
@@ -3060,6 +3069,7 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
         style,
         cell.line_grid_pitch,
         cell.row_east_asian,
+        cell.vertical_align,
         cell.seats_text_on_descender,
         cell.sheet_row_line.as_ref(),
         cell.sheet_seat,
@@ -3090,6 +3100,7 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
                 style,
                 cell.line_grid_pitch,
                 cell.row_east_asian,
+                cell.vertical_align,
                 cell.seats_text_on_descender,
                 cell.sheet_row_line.as_ref(),
                 cell.sheet_seat,
