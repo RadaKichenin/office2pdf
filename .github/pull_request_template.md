@@ -28,6 +28,7 @@
 - Renderer and DPI: <!-- e.g. pdftoppm, 150 DPI -->
 - Evidence mode: `fix` <!-- `fix` requires gt/before/after; `defect` requires compare -->
 - Layout audit report: `assets/bugfixes/issue-<!-- N -->/layout-audit.json` <!-- fix mode only -->
+- Render cluster reports: `assets/bugfixes/issue-<!-- N -->/render-clusters-page-<!-- P -->.json` <!-- fix mode: one strict report per compared page -->
 - Fine-detail threshold: <!-- e.g. 0.5pt; must match compare_layout.py --fine-shift -->
 - Layout audit page count: <!-- Pass, or #N references when the report differs -->
 - Layout audit text flow: <!-- Pass, or #N references for missing/extra/reflow, changed-wrap, or painted-text visibility findings -->
@@ -62,7 +63,7 @@
 - [ ] Used Codex/Claude vision to inspect the full GT/output pages, diff, and matched crops
 - [ ] Inspected matched region crops at full resolution
 - [ ] Ran compare_layout.py --audit --fine-shift PT and dispositioned every fine/large text-instance shift, painted-text visibility mismatch, and visible-fill occlusion
-- [ ] Ran the 5% fuzz pixel-difference sweep
+- [ ] Ran compare_render.py --cluster-report PATH --strict-clusters and dispositioned every material 5% fuzz diff cluster by explicit ID
 - [ ] Inventoried hairlines and border dash styles
 - [ ] Inventoried font weight, italic, and underline emphasis
 

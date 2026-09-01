@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -23,6 +24,9 @@ EVIDENCE_PATH = re.compile(
 )
 LAYOUT_AUDIT_PATH = re.compile(
     r"^assets/bugfixes/issue-(?P<issue>\d+)/layout-audit\.json$"
+)
+RENDER_CLUSTER_REPORT_PATH = re.compile(
+    r"^assets/bugfixes/issue-(?P<issue>\d+)/render-clusters-page-(?P<page>\d+)\.json$"
 )
 # Prose living under assets/bugfixes/ carries no pixels, so it is neither evidence
 # to validate nor a rendered change to audit. Without this the file documenting the
@@ -51,7 +55,8 @@ INSPECTION_ITEMS = (
     "Inspected matched region crops at full resolution",
     "Ran compare_layout.py --audit --fine-shift PT and dispositioned every fine/large "
     "text-instance shift, painted-text visibility mismatch, and visible-fill occlusion",
-    "Ran the 5% fuzz pixel-difference sweep",
+    "Ran compare_render.py --cluster-report PATH --strict-clusters and dispositioned "
+    "every material 5% fuzz diff cluster by explicit ID",
     "Inventoried hairlines and border dash styles",
     "Inventoried font weight, italic, and underline emphasis",
 )
@@ -62,6 +67,14 @@ VISION_WORDS = re.compile(
     r"(?i)\b(?:page|diff|crop|text|title|label|line|shape|image|chart|table|"
     r"position|align(?:ment|ed)?|offset|colour|color|fill|stroke|border|font|"
     r"spacing|clip(?:ping|ped)?|overflow|rotation|size|weight)\b"
+)
+ACCEPTED_RENDERING_CLASSES = frozenset(
+    {
+        "glyph-edge-rasterization",
+        "photo-resampling",
+        "gradient-rasterization",
+        "shape-edge-antialiasing",
+    }
 )
 
 
@@ -496,6 +509,299 @@ def validate_layout_audit(body: str, changed_paths: list[str], root: Path) -> li
     return errors
 
 
+def compared_pages(value: str | None) -> set[int] | None:
+    """Parse `1`, `1, 3`, and `1-3` page declarations."""
+    if not value:
+        return None
+    pages: set[int] = set()
+    for token in value.split(","):
+        token = token.strip()
+        match = re.fullmatch(r"([1-9]\d*)(?:\s*-\s*([1-9]\d*))?", token)
+        if match is None:
+            return None
+        start = int(match.group(1))
+        end = int(match.group(2) or start)
+        if end < start:
+            return None
+        pages.update(range(start, end + 1))
+    return pages or None
+
+
+def _render_cluster_report_paths(value: str | None) -> list[str] | None:
+    if not value:
+        return None
+    paths = re.findall(
+        r"assets/bugfixes/issue-\d+/render-clusters-page-\d+\.json", value
+    )
+    residue = re.sub(
+        r"assets/bugfixes/issue-\d+/render-clusters-page-\d+\.json", "", value
+    )
+    residue = residue.replace("`", "").replace(",", "").strip()
+    if not paths or residue:
+        return None
+    return paths
+
+
+def _validate_render_cluster_report(
+    report: object,
+    *,
+    path: str,
+    expected_page: int,
+    remaining_issues: set[int],
+) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(report, dict):
+        return [f"{path}: render cluster report must be an object."]
+    if report.get("schema_version") != 1:
+        errors.append(f"{path}: schema_version must be 1.")
+    if report.get("page") != expected_page:
+        errors.append(f"{path}: report page must be {expected_page}.")
+    dpi = report.get("dpi")
+    if isinstance(dpi, bool) or not isinstance(dpi, (int, float)) or dpi < 150:
+        errors.append(f"{path}: report DPI must be at least 150.")
+    if report.get("fuzz_percent") != 5:
+        errors.append(f"{path}: report must use the 5% fuzz cluster sweep.")
+    minimum_area = report.get("minimum_area_pt2")
+    if (
+        isinstance(minimum_area, bool)
+        or not isinstance(minimum_area, (int, float))
+        or minimum_area <= 0
+    ):
+        errors.append(f"{path}: minimum_area_pt2 must be positive.")
+        minimum_area = 0.0
+    if report.get("strict") is not True:
+        errors.append(f"{path}: strict must be true.")
+    if report.get("passed") is not True:
+        errors.append(f"{path}: strict cluster audit did not pass.")
+
+    list_fields = (
+        "undispositioned_cluster_ids",
+        "unknown_disposition_cluster_ids",
+        "duplicate_disposition_cluster_ids",
+        "errors",
+    )
+    for field_name in list_fields:
+        value = report.get(field_name)
+        if not isinstance(value, list):
+            errors.append(f"{path}: {field_name} must be a list.")
+        elif value:
+            detail = ", ".join(str(item) for item in value)
+            errors.append(f"{path}: {field_name} must be empty, got {detail}.")
+
+    renderer_observations = report.get("renderer_observations")
+    if not isinstance(renderer_observations, list):
+        errors.append(f"{path}: renderer_observations must be a list.")
+    else:
+        for index, observation in enumerate(renderer_observations, start=1):
+            if not isinstance(observation, dict):
+                errors.append(f"{path}: renderer observation {index} must be an object.")
+                continue
+            if observation.get("class") not in ACCEPTED_RENDERING_CLASSES:
+                errors.append(
+                    f"{path}: renderer observation {index} has an unsupported class."
+                )
+            note = observation.get("note")
+            if not isinstance(note, str) or not note.strip():
+                errors.append(
+                    f"{path}: renderer observation {index} needs an inspection note."
+                )
+            bbox = observation.get("bbox_pt")
+            if not isinstance(bbox, dict) or set(bbox) != {
+                "x",
+                "y",
+                "width",
+                "height",
+            }:
+                errors.append(
+                    f"{path}: renderer observation {index} needs an exact bounded bbox_pt."
+                )
+                continue
+            values = [bbox[name] for name in ("x", "y", "width", "height")]
+            if any(
+                isinstance(value, bool) or not isinstance(value, (int, float))
+                for value in values
+            ) or bbox["x"] < 0 or bbox["y"] < 0 or bbox["width"] <= 0 or bbox["height"] <= 0:
+                errors.append(
+                    f"{path}: renderer observation {index} bbox_pt values are invalid."
+                )
+
+    clusters = report.get("clusters")
+    if not isinstance(clusters, list):
+        errors.append(f"{path}: clusters must be a list.")
+        return errors
+
+    seen_ids: set[str] = set()
+    issue_dispositions: set[int] = set()
+    dispositioned_count = 0
+    for index, cluster in enumerate(clusters, start=1):
+        if not isinstance(cluster, dict):
+            errors.append(f"{path}: cluster {index} must be an object.")
+            continue
+        cluster_id = cluster.get("id")
+        if not isinstance(cluster_id, str) or re.fullmatch(
+            rf"p{expected_page}-[0-9a-f]{{12}}", cluster_id
+        ) is None:
+            errors.append(f"{path}: cluster {index} has an invalid stable ID.")
+            cluster_id = f"cluster {index}"
+        elif cluster_id in seen_ids:
+            errors.append(f"{path}: duplicate cluster ID {cluster_id}.")
+        else:
+            seen_ids.add(cluster_id)
+
+        bbox = cluster.get("bbox_pt")
+        bbox_is_valid = False
+        if not isinstance(bbox, dict) or any(
+            isinstance(bbox.get(name), bool)
+            or not isinstance(bbox.get(name), (int, float))
+            for name in ("x", "y", "width", "height")
+        ):
+            errors.append(f"{path}: {cluster_id} has an invalid bbox_pt.")
+        elif bbox["width"] <= 0 or bbox["height"] <= 0:
+            errors.append(f"{path}: {cluster_id} bbox dimensions must be positive.")
+        else:
+            bbox_is_valid = True
+        area = cluster.get("area_pt2")
+        area_is_valid = True
+        if (
+            isinstance(area, bool)
+            or not isinstance(area, (int, float))
+            or area < minimum_area
+        ):
+            errors.append(
+                f"{path}: {cluster_id} area_pt2 must meet the report minimum."
+            )
+            area_is_valid = False
+        if (
+            isinstance(cluster_id, str)
+            and cluster_id in seen_ids
+            and bbox_is_valid
+            and area_is_valid
+        ):
+            canonical = "|".join(
+                (
+                    str(expected_page),
+                    f"{bbox['x']:.2f}",
+                    f"{bbox['y']:.2f}",
+                    f"{bbox['width']:.2f}",
+                    f"{bbox['height']:.2f}",
+                    f"{area:.2f}",
+                )
+            )
+            expected_id = (
+                f"p{expected_page}-"
+                f"{hashlib.sha256(canonical.encode('ascii')).hexdigest()[:12]}"
+            )
+            if cluster_id != expected_id:
+                errors.append(
+                    f"{path}: {cluster_id} does not match its page/bbox/area stable ID "
+                    f"{expected_id}."
+                )
+
+        disposition = cluster.get("disposition")
+        if not isinstance(disposition, dict):
+            errors.append(f"{path}: {cluster_id} is undispositioned.")
+            continue
+        if disposition.get("kind") == "accepted-rendering":
+            if disposition.get("class") not in ACCEPTED_RENDERING_CLASSES:
+                errors.append(
+                    f"{path}: {cluster_id} has an unsupported accepted-rendering class."
+                )
+                continue
+        elif disposition.get("kind") == "issue":
+            issue = disposition.get("issue")
+            issue_match = re.fullmatch(r"#([1-9]\d*)", issue or "")
+            if issue_match is None:
+                errors.append(f"{path}: {cluster_id} has an invalid issue disposition.")
+                continue
+            issue_dispositions.add(int(issue_match.group(1)))
+        else:
+            errors.append(f"{path}: {cluster_id} has an invalid disposition kind.")
+            continue
+        dispositioned_count += 1
+
+    summary = report.get("summary")
+    expected_summary = {
+        "total": len(clusters),
+        "dispositioned": dispositioned_count,
+        "undispositioned": 0,
+        "unknown": 0,
+        "duplicate": 0,
+    }
+    if not isinstance(summary, dict) or any(
+        summary.get(name) != count for name, count in expected_summary.items()
+    ):
+        errors.append(f"{path}: summary does not match the validated clusters.")
+
+    unclassified_issues = issue_dispositions - remaining_issues
+    if unclassified_issues:
+        references = ", ".join(f"#{number}" for number in sorted(unclassified_issues))
+        errors.append(
+            f"{path}: issue dispositions must also appear in a Remaining deviation row: "
+            f"{references}."
+        )
+    return errors
+
+
+def validate_render_cluster_audits(
+    body: str, changed_paths: list[str], root: Path
+) -> list[str]:
+    """Require a fresh passing strict cluster report for every visual-fix page."""
+    impact = extract_section(body, "## Visual impact")
+    if checked(impact, "No rendered PDF change"):
+        return []
+    audit = extract_section(body, "## Visual audit")
+    if field(audit, "Evidence mode") != "fix":
+        return []
+    issue_match = re.fullmatch(r"#(\d+)", field(audit, "Issue") or "")
+    if issue_match is None:
+        return []
+    issue_number = issue_match.group(1)
+    pages = compared_pages(field(audit, "Page(s)"))
+    if pages is None:
+        return ["Visual audit > Page(s) must use page numbers or ranges such as `1, 3-5`."]
+
+    declared_paths = _render_cluster_report_paths(field(audit, "Render cluster reports"))
+    if declared_paths is None:
+        return [
+            "Visual audit > Render cluster reports must list one strict report path per page."
+        ]
+    expected_paths = {
+        f"assets/bugfixes/issue-{issue_number}/render-clusters-page-{page}.json": page
+        for page in pages
+    }
+    errors: list[str] = []
+    declared_set = set(declared_paths)
+    missing_declarations = set(expected_paths) - declared_set
+    extra_declarations = declared_set - set(expected_paths)
+    for path in sorted(missing_declarations):
+        errors.append(f"Visual audit > Render cluster reports is missing page {expected_paths[path]}.")
+    for path in sorted(extra_declarations):
+        errors.append(f"Visual audit > Render cluster reports has an unexpected path: {path}.")
+
+    remaining_issues = remaining_issue_numbers(body)
+    for path, page in expected_paths.items():
+        if path not in changed_paths:
+            errors.append(
+                f"{path}: strict render cluster report for page {page} must be changed "
+                "in this pull request."
+            )
+            continue
+        try:
+            report = json.loads((root / path).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            errors.append(f"{path}: invalid render cluster report: {exc}.")
+            continue
+        errors.extend(
+            _validate_render_cluster_report(
+                report,
+                path=path,
+                expected_page=page,
+                remaining_issues=remaining_issues,
+            )
+        )
+    return errors
+
+
 def validate_open_issues(issue_numbers: set[int], repository: str, token: str | None) -> list[str]:
     if not issue_numbers:
         return []
@@ -604,7 +910,9 @@ def validate_evidence(changed_paths: list[str], root: Path) -> list[str]:
     touched: dict[str, set[str]] = {}
 
     for raw_path in changed_paths:
-        if LAYOUT_AUDIT_PATH.fullmatch(raw_path):
+        if LAYOUT_AUDIT_PATH.fullmatch(raw_path) or RENDER_CLUSTER_REPORT_PATH.fullmatch(
+            raw_path
+        ):
             continue
         if not is_visual_asset(raw_path):
             continue
@@ -661,6 +969,7 @@ def main() -> int:
     errors = validate_pr_body(body, changed_paths)
     errors.extend(validate_evidence(changed_paths, args.root))
     errors.extend(validate_layout_audit(body, changed_paths, args.root))
+    errors.extend(validate_render_cluster_audits(body, changed_paths, args.root))
     errors.extend(
         validate_open_issues(
             remaining_issue_numbers(body),

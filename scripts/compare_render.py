@@ -29,11 +29,14 @@ usually exactly what a positioning fix should do.
 Usage:
     compare_render.py GT.pdf OUTPUT.pdf [--page N] [--dpi 150]
         [--fine-shift PT] [--audit]
+        [--cluster-report PATH] [--cluster-dispositions PATH] [--strict-clusters]
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import re
 import shutil
 import subprocess
@@ -73,6 +76,15 @@ CLUSTER_REPORT_LIMIT = 12
 # squared-off panel corners measured ~5,100pt² each while every axis said the
 # pages agreed; this threshold is what turns such a region into a finding.
 CLUSTER_DOMINANT_AREA_PT2 = 500.0
+CLUSTER_AUDIT_SCHEMA_VERSION = 1
+ACCEPTED_RENDERING_CLASSES = frozenset(
+    {
+        "glyph-edge-rasterization",
+        "photo-resampling",
+        "gradient-rasterization",
+        "shape-edge-antialiasing",
+    }
+)
 COMPONENT_LINE_RE = re.compile(
     r"^\s*\d+:\s+(?P<w>\d+)x(?P<h>\d+)\+(?P<x>\d+)\+(?P<y>\d+)\s+"
     r"(?P<cx>[\d.eE+-]+),(?P<cy>[\d.eE+-]+)\s+(?P<area>[\d.eE+]+)\s+"
@@ -120,6 +132,299 @@ class DiffCluster:
     height_pt: float
     area_pt2: float
     region: str
+
+
+def diff_cluster_id(page: int, cluster: DiffCluster) -> str:
+    """Return a deterministic ID for one page-local cluster geometry.
+
+    The point values are quantized to 0.01pt so harmless float formatting does
+    not change the ID, while a one-pixel movement at the minimum 150 DPI still
+    creates a new ID that requires fresh visual review.
+    """
+    canonical = "|".join(
+        (
+            str(page),
+            f"{cluster.x_pt:.2f}",
+            f"{cluster.y_pt:.2f}",
+            f"{cluster.width_pt:.2f}",
+            f"{cluster.height_pt:.2f}",
+            f"{cluster.area_pt2:.2f}",
+        )
+    )
+    digest = hashlib.sha256(canonical.encode("ascii")).hexdigest()[:12]
+    return f"p{page}-{digest}"
+
+
+def _validated_cluster_dispositions(
+    cluster_ids: set[str], disposition_document: object
+) -> tuple[dict[str, dict[str, str]], list[str], set[str], set[str]]:
+    """Validate explicit-ID groups and return dispositions plus schema errors."""
+    dispositions: dict[str, dict[str, str]] = {}
+    errors: list[str] = []
+    duplicate_ids: set[str] = set()
+
+    if disposition_document is None:
+        groups: object = []
+    elif not isinstance(disposition_document, dict):
+        return {}, ["cluster disposition document must be an object"], set(), set()
+    else:
+        extra_top_keys = set(disposition_document) - {
+            "schema_version",
+            "groups",
+            "renderer_observations",
+        }
+        if extra_top_keys:
+            errors.append(
+                "cluster disposition document has unsupported fields: "
+                + ", ".join(sorted(extra_top_keys))
+            )
+        if disposition_document.get("schema_version") != CLUSTER_AUDIT_SCHEMA_VERSION:
+            errors.append(
+                f"cluster disposition schema_version must be {CLUSTER_AUDIT_SCHEMA_VERSION}"
+            )
+        groups = disposition_document.get("groups")
+
+    if not isinstance(groups, list):
+        errors.append("cluster disposition groups must be a list")
+        groups = []
+
+    for index, group in enumerate(groups, start=1):
+        if not isinstance(group, dict):
+            errors.append(f"cluster disposition group {index} must be an object")
+            continue
+        extra_group_keys = set(group) - {"kind", "class", "issue", "cluster_ids", "note"}
+        if extra_group_keys:
+            errors.append(
+                f"cluster disposition group {index} has unsupported fields "
+                f"{', '.join(sorted(extra_group_keys))}; blanket page, region, or bbox "
+                "selectors are not allowed — enumerate cluster_ids"
+            )
+        raw_ids = group.get("cluster_ids")
+        if (
+            not isinstance(raw_ids, list)
+            or not raw_ids
+            or any(not isinstance(cluster_id, str) or not cluster_id for cluster_id in raw_ids)
+        ):
+            errors.append(
+                f"cluster disposition group {index} must enumerate one or more cluster_ids"
+            )
+            continue
+
+        note = group.get("note")
+        if note is not None and (not isinstance(note, str) or not note.strip()):
+            errors.append(f"cluster disposition group {index} note must be non-empty text")
+
+        kind = group.get("kind")
+        disposition: dict[str, str] | None = None
+        if kind == "accepted-rendering":
+            accepted_class = group.get("class")
+            if accepted_class not in ACCEPTED_RENDERING_CLASSES:
+                allowed = ", ".join(sorted(ACCEPTED_RENDERING_CLASSES))
+                errors.append(
+                    f"cluster disposition group {index} class must be one of: {allowed}"
+                )
+            elif "issue" in group:
+                errors.append(
+                    f"cluster disposition group {index} accepted-rendering cannot set issue"
+                )
+            else:
+                disposition = {"kind": kind, "class": str(accepted_class)}
+        elif kind == "issue":
+            issue = group.get("issue")
+            if not isinstance(issue, str) or re.fullmatch(r"#[1-9]\d*", issue) is None:
+                errors.append(
+                    f"cluster disposition group {index} issue must be a reference such as #123"
+                )
+            elif "class" in group:
+                errors.append(f"cluster disposition group {index} issue cannot set class")
+            else:
+                disposition = {"kind": kind, "issue": issue}
+        else:
+            errors.append(
+                f"cluster disposition group {index} kind must be accepted-rendering or issue"
+            )
+
+        if disposition is not None and isinstance(note, str):
+            disposition["note"] = note.strip()
+        for cluster_id in raw_ids:
+            if cluster_id in dispositions:
+                duplicate_ids.add(cluster_id)
+                continue
+            if disposition is not None:
+                dispositions[cluster_id] = disposition
+
+    if duplicate_ids:
+        errors.append(
+            "cluster IDs may appear in only one disposition group: "
+            + ", ".join(sorted(duplicate_ids))
+        )
+    unknown_ids = set(dispositions) - cluster_ids
+    if unknown_ids:
+        errors.append(
+            "dispositions reference clusters absent from the current render: "
+            + ", ".join(sorted(unknown_ids))
+        )
+    return dispositions, errors, unknown_ids, duplicate_ids
+
+
+def _validated_renderer_observations(
+    disposition_document: object,
+) -> tuple[list[dict[str, object]], list[str]]:
+    """Validate bounded observations that never disposition a material cluster."""
+    if disposition_document is None:
+        return [], []
+    if not isinstance(disposition_document, dict):
+        return [], []
+    raw_observations = disposition_document.get("renderer_observations", [])
+    if not isinstance(raw_observations, list):
+        return [], ["renderer_observations must be a list"]
+
+    observations: list[dict[str, object]] = []
+    errors: list[str] = []
+    for index, observation in enumerate(raw_observations, start=1):
+        if not isinstance(observation, dict):
+            errors.append(f"renderer observation {index} must be an object")
+            continue
+        extra_keys = set(observation) - {"class", "bbox_pt", "note"}
+        if extra_keys:
+            errors.append(
+                f"renderer observation {index} has unsupported fields: "
+                + ", ".join(sorted(extra_keys))
+            )
+        accepted_class = observation.get("class")
+        if accepted_class not in ACCEPTED_RENDERING_CLASSES:
+            errors.append(f"renderer observation {index} has an unsupported class")
+            continue
+        note = observation.get("note")
+        if not isinstance(note, str) or not note.strip():
+            errors.append(f"renderer observation {index} note must be non-empty text")
+            continue
+        bbox = observation.get("bbox_pt")
+        if not isinstance(bbox, dict) or set(bbox) != {"x", "y", "width", "height"}:
+            errors.append(
+                f"renderer observation {index} must use an exact x/y/width/height bbox_pt"
+            )
+            continue
+        values = [bbox[name] for name in ("x", "y", "width", "height")]
+        if any(isinstance(value, bool) or not isinstance(value, (int, float)) for value in values):
+            errors.append(f"renderer observation {index} bbox_pt values must be numeric")
+            continue
+        if bbox["x"] < 0 or bbox["y"] < 0 or bbox["width"] <= 0 or bbox["height"] <= 0:
+            errors.append(
+                f"renderer observation {index} bbox_pt must have non-negative origins "
+                "and positive dimensions"
+            )
+            continue
+        observations.append(
+            {
+                "class": accepted_class,
+                "bbox_pt": {
+                    name: round(float(bbox[name]), 4)
+                    for name in ("x", "y", "width", "height")
+                },
+                "note": note.strip(),
+            }
+        )
+    return observations, errors
+
+
+def build_cluster_audit_report(
+    clusters: list[DiffCluster] | None,
+    *,
+    page: int,
+    dpi: int,
+    disposition_document: object,
+    strict: bool,
+) -> dict[str, object]:
+    """Build the complete machine-readable strict cluster audit for one page."""
+    census_available = clusters is not None
+    current_clusters = clusters or []
+    cluster_ids = {diff_cluster_id(page, cluster) for cluster in current_clusters}
+    dispositions, errors, unknown_ids, duplicate_ids = _validated_cluster_dispositions(
+        cluster_ids, disposition_document
+    )
+    renderer_observations, observation_errors = _validated_renderer_observations(
+        disposition_document
+    )
+    errors.extend(observation_errors)
+    if not census_available:
+        errors.append("diff cluster census is unavailable")
+    undispositioned_ids = sorted(cluster_ids - set(dispositions))
+    records: list[dict[str, object]] = []
+    for cluster in current_clusters:
+        cluster_id = diff_cluster_id(page, cluster)
+        records.append(
+            {
+                "id": cluster_id,
+                "bbox_pt": {
+                    "x": round(cluster.x_pt, 4),
+                    "y": round(cluster.y_pt, 4),
+                    "width": round(cluster.width_pt, 4),
+                    "height": round(cluster.height_pt, 4),
+                },
+                "area_pt2": round(cluster.area_pt2, 4),
+                "region": cluster.region,
+                "disposition": dispositions.get(cluster_id),
+            }
+        )
+    passed = (
+        census_available
+        and not errors
+        and not undispositioned_ids
+        and not unknown_ids
+        and not duplicate_ids
+    )
+    return {
+        "schema_version": CLUSTER_AUDIT_SCHEMA_VERSION,
+        "page": page,
+        "dpi": dpi,
+        "fuzz_percent": 5,
+        "minimum_area_pt2": CLUSTER_MIN_AREA_PT2,
+        "strict": strict,
+        "clusters": records,
+        "undispositioned_cluster_ids": undispositioned_ids,
+        "unknown_disposition_cluster_ids": sorted(unknown_ids),
+        "duplicate_disposition_cluster_ids": sorted(duplicate_ids),
+        "errors": errors,
+        "renderer_observations": renderer_observations,
+        "summary": {
+            "total": len(records),
+            "dispositioned": len(records) - len(undispositioned_ids),
+            "undispositioned": len(undispositioned_ids),
+            "unknown": len(unknown_ids),
+            "duplicate": len(duplicate_ids),
+        },
+        "passed": passed,
+    }
+
+
+def load_cluster_disposition_document(path: Path | None) -> object:
+    if path is None:
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"could not read cluster dispositions from {path}: {exc}") from exc
+
+
+def write_cluster_audit_report(path: Path, report: dict[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def report_cluster_audit(report: dict[str, object], path: Path) -> None:
+    summary = report["summary"]
+    assert isinstance(summary, dict)
+    print("## Strict diff-cluster audit")
+    print(f"  machine report: {path}")
+    print(
+        f"  {summary['dispositioned']}/{summary['total']} current cluster(s) dispositioned"
+    )
+    for error in report["errors"]:
+        print(f"  ERROR: {error}")
+    for cluster_id in report["undispositioned_cluster_ids"]:
+        print(f"  UNDISPOSITIONED: {cluster_id}")
+    print("  PASS" if report["passed"] else "  FAIL")
 
 
 def render_page(pdf: Path, page: int, dpi: int, out_dir: Path, role: str) -> Path:
@@ -666,7 +971,7 @@ def diff_cluster_census(
     return parse_diff_clusters(census.stdout + census.stderr, dpi)
 
 
-def report_diff_clusters(clusters: list[DiffCluster] | None) -> None:
+def report_diff_clusters(clusters: list[DiffCluster] | None, page: int = 1) -> None:
     """List every contiguous diff region large enough to need a disposition."""
     print("## Diff clusters — where the differing pixels sit")
     if clusters is None:
@@ -682,7 +987,8 @@ def report_diff_clusters(clusters: list[DiffCluster] | None) -> None:
     print("  corner or edge while colour and position agree is outline geometry —")
     print("  compare the shape's path, not its fill or its box (#1029).")
     for index, cluster in enumerate(clusters[:CLUSTER_REPORT_LIMIT], start=1):
-        print(f"  {index:>2}. {cluster.width_pt:6.1f} x {cluster.height_pt:6.1f}pt "
+        print(f"  {index:>2}. {diff_cluster_id(page, cluster)}  "
+              f"{cluster.width_pt:6.1f} x {cluster.height_pt:6.1f}pt "
               f"at ({cluster.x_pt:6.1f}, {cluster.y_pt:6.1f})  "
               f"area {cluster.area_pt2:7.0f}pt2  {cluster.region}")
     if len(clusters) > CLUSTER_REPORT_LIMIT:
@@ -1037,6 +1343,24 @@ def main() -> None:
         help="preserve full GT/output pages, 5%% diff, and gated-shift crops for model vision",
     )
     parser.add_argument(
+        "--cluster-report",
+        type=Path,
+        help="write the complete machine-readable diff-cluster audit for this page",
+    )
+    parser.add_argument(
+        "--cluster-dispositions",
+        type=Path,
+        help=(
+            "JSON groups that explicitly map current cluster IDs to an accepted "
+            "renderer class or an open issue"
+        ),
+    )
+    parser.add_argument(
+        "--strict-clusters",
+        action="store_true",
+        help="exit nonzero unless every material diff cluster has a valid explicit disposition",
+    )
+    parser.add_argument(
         "--lines",
         action="store_true",
         help="list every matched text instance's x/y position without hand-pairing "
@@ -1048,7 +1372,15 @@ def main() -> None:
         raise SystemExit("--dpi must be at least 150; hairlines vanish below that")
     if args.fine_shift is not None and args.fine_shift <= 0:
         parser.error("--fine-shift must be greater than zero")
+    if args.strict_clusters and args.cluster_report is None:
+        parser.error("--strict-clusters requires --cluster-report")
+    if args.cluster_dispositions is not None and args.cluster_report is None:
+        parser.error("--cluster-dispositions requires --cluster-report")
     require_vision_artifact_dependencies(args.artifacts_dir)
+    try:
+        disposition_document = load_cluster_disposition_document(args.cluster_dispositions)
+    except ValueError as exc:
+        parser.error(str(exc))
 
     print(f"GT     {args.gt}")
     print(f"output {args.output}")
@@ -1077,7 +1409,7 @@ def main() -> None:
             normalised = report_pixels(gt_png, other_png, out_dir)
             print()
             clusters = diff_cluster_census(normalised, other_png, out_dir, args.dpi)
-            report_diff_clusters(clusters)
+            report_diff_clusters(clusters, args.page)
             if args.artifacts_dir is not None:
                 matches = match_text_line_instances(
                     page_text_lines(args.gt, args.page),
@@ -1103,6 +1435,18 @@ def main() -> None:
         print("  ImageMagick is absent: neither `magick` (7.x) nor all of "
               f"{', '.join(f'`{tool}`' for tool in IMAGEMAGICK_TOOLS)} (6.x)")
         print("  is on PATH. Install `imagemagick` to measure colour and ink.")
+    cluster_audit_report: dict[str, object] | None = None
+    if args.cluster_report is not None:
+        cluster_audit_report = build_cluster_audit_report(
+            clusters,
+            page=args.page,
+            dpi=args.dpi,
+            disposition_document=disposition_document,
+            strict=args.strict_clusters,
+        )
+        write_cluster_audit_report(args.cluster_report, cluster_audit_report)
+        print()
+        report_cluster_audit(cluster_audit_report, args.cluster_report)
     print()
     diagnose(geometry, histogram_result, clusters)
     audit_shift_count = (
@@ -1110,12 +1454,25 @@ def main() -> None:
         if args.fine_shift is not None
         else geometry.get("large_shift_count", 0.0)
     )
-    if args.audit and audit_shift_count:
+    audit_failed = args.audit and bool(audit_shift_count)
+    cluster_audit_failed = bool(
+        args.strict_clusters
+        and cluster_audit_report is not None
+        and not cluster_audit_report["passed"]
+    )
+    if audit_failed:
         print()
         print(
             "AUDIT FAILED: text-instance shifts past the active gate are layout "
             "differences, not antialiasing; inspect and track every line above."
         )
+    if cluster_audit_failed:
+        print()
+        print(
+            "AUDIT FAILED: every material diff cluster must have a valid explicit-ID "
+            "disposition; inspect the machine report above."
+        )
+    if audit_failed or cluster_audit_failed:
         raise SystemExit(1)
 
 

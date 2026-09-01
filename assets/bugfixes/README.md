@@ -6,14 +6,15 @@ request declares which one it uses in `Visual audit > Evidence mode`.
 
 ## Evidence mode: `fix`
 
-A pull request that fixes a visual defect keeps all three images and a layout
-report:
+A pull request that fixes a visual defect keeps all three images, a layout
+report, and one strict render-cluster report per compared page:
 
 ```text
 assets/bugfixes/issue-<number>/gt.jpg
 assets/bugfixes/issue-<number>/before.jpg
 assets/bugfixes/issue-<number>/after.jpg
 assets/bugfixes/issue-<number>/layout-audit.json
+assets/bugfixes/issue-<number>/render-clusters-page-<page>.json
 ```
 
 Touching any image makes the gate require and validate the full trio. Every fix
@@ -48,6 +49,60 @@ rows. The gate rejects a claimed pass when the report contains a page-count
 difference, missing/extra/reflowed text, changed wraps, a painted-text visibility
 mismatch, a visible-fill occlusion, or a text shift above the configured fine or
 large threshold.
+
+Generate the cluster IDs once without strict mode, inspect every cluster in the
+full-resolution diff and matched crops, then create a disposition file whose
+groups enumerate those exact IDs:
+
+```json
+{
+  "schema_version": 1,
+  "renderer_observations": [
+    {
+      "class": "shape-edge-antialiasing",
+      "bbox_pt": {"x": 220, "y": 330, "width": 380, "height": 390},
+      "note": "Inspected hairline fragments remain below the material-cluster floor."
+    }
+  ],
+  "groups": [
+    {
+      "kind": "accepted-rendering",
+      "class": "glyph-edge-rasterization",
+      "cluster_ids": ["p1-0123456789ab"],
+      "note": "Glyph outlines only in the inspected crop."
+    },
+    {
+      "kind": "issue",
+      "issue": "#123",
+      "cluster_ids": ["p1-fedcba987654"]
+    }
+  ]
+}
+```
+
+Accepted renderer-only classes are `glyph-edge-rasterization`,
+`photo-resampling`, `gradient-rasterization`, and
+`shape-edge-antialiasing`. Page-, region-, and bbox-wide selectors are rejected:
+every material cluster must be named, so a new cluster cannot inherit an old
+approval. `renderer_observations` may record a bounded crop whose inspected
+renderer-only fragments stay below the material-cluster floor. They never
+disposition a cluster, so a new material cluster inside that bbox still fails.
+Rerun each page in strict mode and commit its passing report:
+
+```sh
+python3 scripts/compare_render.py gt.pdf after.pdf --page <page> --dpi 300 \
+  --fine-shift 0.5 --artifacts-dir target/audit/page-<page> \
+  --cluster-dispositions target/audit/page-<page>-dispositions.json \
+  --cluster-report assets/bugfixes/issue-<number>/render-clusters-page-<page>.json \
+  --strict-clusters
+```
+
+The report contains every cluster's stable ID, page-space bbox, area, region,
+and disposition, plus validated bounded renderer observations.
+`--strict-clusters` exits nonzero for missing, stale, duplicate, or invalid IDs,
+and when the ImageMagick census is unavailable. List every compared page's
+report in `Visual audit > Render cluster reports`; the PR gate requires all of
+them to be freshly changed and passing.
 
 ## Evidence mode: `defect`
 
@@ -91,8 +146,8 @@ python3 scripts/check_visual_pr.py --event event.json --base main --head HEAD \
 Markdown and text files under `assets/bugfixes/` — this README included — are
 bookkeeping, not evidence. The gate skips them, so a pull request that changes
 only such a file may check `No rendered PDF change`. A fix-mode
-`layout-audit.json` is validated separately and must be updated with
-`after.jpg` in its issue directory.
+`layout-audit.json` and `render-clusters-page-<page>.json` are validated
+separately and must be updated with `after.jpg` in their issue directory.
 
 Anything else in the directory is treated as evidence and must match one of the
 layouts above. The nested `issue-<number>/audit/<case>/` layout used by the early
