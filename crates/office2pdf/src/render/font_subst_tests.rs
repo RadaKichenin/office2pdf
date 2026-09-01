@@ -206,6 +206,75 @@ fn office_poster_fonts_use_the_bundled_noto_serif_fallback() {
 }
 
 #[test]
+fn segoe_ui_uses_the_bundled_sans_fallback() {
+    // The issue #982 workbook prints its instruction panel in Segoe UI. On a
+    // host without that proprietary face, a one-family Typst request reaches
+    // the engine's serif default and changes the native nine-line wrap
+    // boundaries (issue #1472). Keep the replacement deterministic and in the
+    // requested family's sans-serif class.
+    assert_eq!(
+        substitutes("Segoe UI"),
+        Some(&["Selawik"][..]),
+        "missing Segoe UI must not fall through to Libertinus Serif"
+    );
+}
+
+#[test]
+fn segoe_ui_metric_substitute_reproduces_native_instruction_line_widths() {
+    // `mutool draw -F trace` on Excel for Mac 16.112's page-2 export of Gift
+    // Budget and Tracker reads these nine Segoe UI advances. They are the
+    // exact wrap boundaries that issue #1472 lost when the run reached
+    // Libertinus Serif. Resolve through only the bundled faces so the test is
+    // independent of whether the runner itself has Segoe UI installed.
+    let measured = [
+        ("Fill out as much as you can at the", 14.667001),
+        ("beginning of each new year. Enter", 14.975001),
+        ("names of family and friends, select", 15.202001),
+        ("gift occasion, select month of", 12.963001),
+        ("event, and type in how much you", 14.663001),
+        ("want to spend. Each person may", 14.271001),
+        ("appear multiple times within the", 14.259001),
+        ("table for each different occasion", 14.197001),
+        ("(birthday, holiday, shower, etc.).", 13.888001),
+    ];
+    let context = crate::render::font_context::resolve_font_search_context_from_fonts(
+        crate::bundled_fonts::selawik_fonts(),
+    );
+
+    with_font_search_context(Some(&context), || {
+        for (text, native_advance_em) in measured {
+            let actual = crate::render::pdf::text_advance_em("Segoe UI", false, text)
+                .unwrap_or_else(|| panic!("the bundled Selawik face must measure {text:?}"));
+            assert!(
+                (actual - native_advance_em).abs() < 0.005,
+                "{text:?}: native Segoe UI advances {native_advance_em}em, bundled fallback gives {actual}em"
+            );
+        }
+    });
+}
+
+#[test]
+fn an_available_segoe_ui_face_still_leads_the_bundled_substitute() {
+    // Selawik is a missing-face replacement, not an override for an explicit
+    // Segoe UI conversion input. Preserve the declared face whenever the
+    // active font context can actually supply it (issue #1472).
+    let context =
+        FontSearchContext::for_test(Vec::new(), &["Segoe UI", "Selawik"], &["Segoe UI"], &[]);
+    let chain = with_font_search_context(Some(&context), || {
+        font_with_fallbacks_for_text("Segoe UI", "Gift Budget")
+    });
+
+    assert!(
+        chain.starts_with("(\"Segoe UI\""),
+        "an available Segoe UI face must remain authoritative: {chain}"
+    );
+    assert_eq!(
+        resolve_available_fallback("Segoe UI", TextScript::Latin, &context),
+        None
+    );
+}
+
+#[test]
 fn only_office_poster_requests_select_the_bundled_noto_serif() {
     use crate::ir::{
         Block, Document, FlowPage, Margins, Metadata, Page, PageSize, Paragraph, ParagraphStyle,

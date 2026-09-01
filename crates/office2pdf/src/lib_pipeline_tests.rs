@@ -204,7 +204,7 @@ fn bundled_noto_serif_is_loaded_only_for_the_poster_families() {
 }
 
 #[test]
-fn bundled_noto_sans_is_loaded_only_for_aptos_requests() {
+fn bundled_sans_families_are_loaded_only_for_their_document_requests() {
     let document = |family: &str| Document {
         metadata: Metadata::default(),
         pages: vec![Page::Flow(FlowPage {
@@ -237,11 +237,12 @@ fn bundled_noto_sans_is_loaded_only_for_aptos_requests() {
     let options = ConvertOptions::default();
     let mut unrelated = load_additional_fonts(&options).expect("load default fonts");
     extend_document_fonts(&mut unrelated, &document("Calibri"));
-    assert!(
-        unrelated
-            .iter()
-            .all(|font| font.info().family != crate::bundled_fonts::NOTO_SANS_FAMILY)
-    );
+    assert!(unrelated.iter().all(|font| {
+        !matches!(
+            font.info().family.as_str(),
+            crate::bundled_fonts::NOTO_SANS_FAMILY | crate::bundled_fonts::SELAWIK_FAMILY
+        )
+    }));
 
     let mut aptos = load_additional_fonts(&options).expect("load default fonts");
     extend_document_fonts(&mut aptos, &document("Aptos"));
@@ -261,6 +262,32 @@ fn bundled_noto_sans_is_loaded_only_for_aptos_requests() {
             .count(),
         1,
         "several Aptos declarations must not duplicate the bundled face"
+    );
+
+    let mut segoe = load_additional_fonts(&options).expect("load default fonts");
+    extend_document_fonts(&mut segoe, &document("Segoe UI"));
+    assert_eq!(
+        segoe
+            .iter()
+            .filter(|font| font.info().family == crate::bundled_fonts::SELAWIK_FAMILY)
+            .count(),
+        2,
+        "a Segoe UI request must materialize regular and bold Selawik"
+    );
+    assert!(
+        segoe
+            .iter()
+            .all(|font| font.info().family != crate::bundled_fonts::NOTO_SANS_FAMILY),
+        "Segoe UI must not pull in the metrically different Aptos fallback"
+    );
+    extend_document_fonts(&mut segoe, &document("Segoe UI"));
+    assert_eq!(
+        segoe
+            .iter()
+            .filter(|font| font.info().family == crate::bundled_fonts::SELAWIK_FAMILY)
+            .count(),
+        2,
+        "several Segoe UI declarations must not duplicate bundled faces"
     );
 }
 

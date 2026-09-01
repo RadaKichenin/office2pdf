@@ -31,6 +31,56 @@ printf '%s  %s\n' \
 
 The final command must report `OK`.
 
+## Selawik 1.01
+
+`Selawik-Regular.ttf` and `Selawik-Bold.ttf` are the `selawk.ttf` and
+`selawkb.ttf` faces from Microsoft's official Selawik 1.01 binary release.
+Microsoft describes Selawik as its open-source replacement for Segoe UI, and
+the two families carry the same glyph advances used by the issue #1472 Gift
+Budget workbook. They are loaded only when a document requests Segoe UI, so an
+unavailable proprietary face keeps its native spreadsheet indents and wrap
+boundaries without changing the fallback book for unrelated conversions.
+
+- Release tag: `1.01`
+- Source repository: <https://github.com/microsoft/Selawik>
+- Release URL: <https://github.com/microsoft/Selawik/releases/tag/1.01>
+- Release archive SHA-256: `3f62c51e05e3b5a1e6241cf92a371f0be2ea1183aa87b30718bbd40832a8d423`
+- `Selawik-Regular.ttf` SHA-256: `e9d98518d8ac2817782a9a382430463a2e0793ea68350b695bb727d9a830ee1c`
+- `Selawik-Bold.ttf` SHA-256: `f0db5e174a90e0956ad7d2844bdca1d5e6da92ec65b2c04e57ba9b180668c904`
+- License: SIL Open Font License 1.1 with Reserved Font Name Selawik; see
+  `Selawik-LICENSE.txt`
+- `Selawik-LICENSE.txt` SHA-256: `77b7c2506d4efb22e09c8ccf10159f4956eab3ef7c007fef95de136bcf45300c`
+
+Reproduce the committed assets from the pinned release archive:
+
+```sh
+gh release download 1.01 \
+  --repo microsoft/Selawik \
+  --pattern Selawik_Release.zip
+printf '%s  %s\n' \
+  3f62c51e05e3b5a1e6241cf92a371f0be2ea1183aa87b30718bbd40832a8d423 \
+  Selawik_Release.zip \
+  | shasum -a 256 -c -
+unzip -p Selawik_Release.zip selawk.ttf \
+  > crates/office2pdf/fonts/Selawik-Regular.ttf
+unzip -p Selawik_Release.zip selawkb.ttf \
+  > crates/office2pdf/fonts/Selawik-Bold.ttf
+curl -fL \
+  https://raw.githubusercontent.com/microsoft/Selawik/1.01/LICENSE.txt \
+  -o crates/office2pdf/fonts/Selawik-LICENSE.txt
+printf '%s  %s\n' \
+  e9d98518d8ac2817782a9a382430463a2e0793ea68350b695bb727d9a830ee1c \
+  crates/office2pdf/fonts/Selawik-Regular.ttf \
+  f0db5e174a90e0956ad7d2844bdca1d5e6da92ec65b2c04e57ba9b180668c904 \
+  crates/office2pdf/fonts/Selawik-Bold.ttf \
+  77b7c2506d4efb22e09c8ccf10159f4956eab3ef7c007fef95de136bcf45300c \
+  crates/office2pdf/fonts/Selawik-LICENSE.txt \
+  | shasum -a 256 -c -
+```
+
+The final two checksum commands must report `OK` for the archive, both faces,
+and the license.
+
 ## Noto Serif 2.015
 
 `NotoSerif-Regular.ttf` and `NotoSerif-Bold.ttf` are the unhinted static
