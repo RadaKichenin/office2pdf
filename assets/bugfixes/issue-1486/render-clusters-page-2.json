@@ -1,0 +1,43 @@
+{
+  "clusters": [],
+  "dpi": 300,
+  "duplicate_disposition_cluster_ids": [],
+  "errors": [],
+  "fuzz_percent": 5,
+  "minimum_area_pt2": 20.0,
+  "page": 2,
+  "passed": true,
+  "renderer_observations": [
+    {
+      "bbox_pt": {
+        "height": 90.0,
+        "width": 410.0,
+        "x": 120.0,
+        "y": 90.0
+      },
+      "class": "glyph-edge-rasterization",
+      "note": "The Poppler and MuPDF 300 DPI RSVP crops have matching vertical placement after the fix; only dispersed glyph-edge rasterization remains below the material-cluster floor. The separate 0.145pt x-origin trace residual is tracked in #1488."
+    },
+    {
+      "bbox_pt": {
+        "height": 57.0,
+        "width": 150.0,
+        "x": 0.0,
+        "y": 735.0
+      },
+      "class": "glyph-edge-rasterization",
+      "note": "The footer crop has matching content and vertical placement; only dispersed glyph-edge rasterization remains below the material-cluster floor. Its separate 0.15pt x-origin residual is tracked in #1487."
+    }
+  ],
+  "schema_version": 1,
+  "strict": true,
+  "summary": {
+    "dispositioned": 0,
+    "duplicate": 0,
+    "total": 0,
+    "undispositioned": 0,
+    "unknown": 0
+  },
+  "undispositioned_cluster_ids": [],
+  "unknown_disposition_cluster_ids": []
+}
