@@ -1800,6 +1800,81 @@ fn test_boundary_band_background_bleed_overlaps_its_cell_at_the_corner_junction(
     );
 }
 
+/// A filled horizontal merge's visible Excel region reaches through its
+/// positive-axis background band. Excel centres the line on that effective
+/// region, while an unfilled merge and a left-aligned line keep the nominal
+/// track origin. This is the one-factor rule behind the A1:B1 title in the
+/// workbook attached to #982 (issue #1493).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_centered_merged_fill_uses_the_excel_background_band_for_its_text_seat() {
+    const EXCEL_POSITIVE_AXIS_BACKGROUND_BAND_PT: f64 = 1.0;
+
+    fn text_run(
+        alignment: Alignment,
+        background: Option<Color>,
+    ) -> crate::render::pdf::PlacedTextRun {
+        let cell = TableCell {
+            content: vec![Block::Paragraph(Paragraph {
+                style: ParagraphStyle {
+                    alignment: Some(alignment),
+                    ..ParagraphStyle::default()
+                },
+                runs: vec![Run {
+                    text: "MERGED TITLE".to_string(),
+                    style: TextStyle::default(),
+                    href: None,
+                    footnote: None,
+                }],
+            })],
+            background,
+            col_span: 2,
+            spill_width: Some(160.0),
+            vertical_align: Some(CellVerticalAlign::Center),
+            ..TableCell::default()
+        };
+        let table = boundary_band_table(vec![fixed_row(vec![cell])], vec![80.0, 80.0]);
+        let source = generate_typst(&make_doc(vec![make_flow_page(vec![Block::Table(table)])]))
+            .expect("merged sheet table should generate")
+            .source;
+        crate::render::pdf::compiled_text_runs(&source, 0)
+            .unwrap_or_else(|error| {
+                panic!("merged sheet table failed to compile: {error}\n{source}")
+            })
+            .into_iter()
+            .find(|run| run.text == "MERGED TITLE")
+            .unwrap_or_else(|| panic!("missing merged title in:\n{source}"))
+    }
+
+    let rose = Some(Color::new(218, 182, 186));
+    let centered_without_fill = text_run(Alignment::Center, None);
+    let centered_with_fill = text_run(Alignment::Center, rose);
+    assert!(
+        (centered_with_fill.left_pt
+            - centered_without_fill.left_pt
+            - EXCEL_POSITIVE_AXIS_BACKGROUND_BAND_PT)
+            .abs()
+            < 0.001,
+        "the centred filled merge must follow Excel's positive-axis background band: \
+         unfilled={}, filled={}",
+        centered_without_fill.left_pt,
+        centered_with_fill.left_pt,
+    );
+    assert!(
+        (centered_with_fill.baseline_pt - centered_without_fill.baseline_pt).abs() < 0.001,
+        "the horizontal seat must not move the title baseline"
+    );
+
+    let left_without_fill = text_run(Alignment::Left, None);
+    let left_with_fill = text_run(Alignment::Left, rose);
+    assert!(
+        (left_with_fill.left_pt - left_without_fill.left_pt).abs() < 0.001,
+        "a left-aligned merge keeps its nominal origin: unfilled={}, filled={}",
+        left_without_fill.left_pt,
+        left_with_fill.left_pt,
+    );
+}
+
 /// `Gift Budget and Tracker1.xlsx` (attached to #982) puts a rose title fill
 /// above pale body cells. The title's bottom bleed forms the visible rule, so
 /// the later cells' right-edge bleed must start below that positive-axis band;
