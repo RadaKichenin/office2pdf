@@ -34,6 +34,35 @@ fn typst_cache_state_defers_eviction_while_compilations_overlap() {
 use crate::test_support::make_test_svg;
 
 #[test]
+fn test_default_font_search_paths_match_the_resolved_context() {
+    // Every measurement site substitutes the memoized paths for a resolved
+    // context's search paths, so the two must stay the same font set or the
+    // metrics are taken against faces the compiler never sees.
+    let resolved = crate::render::font_context::resolve_font_search_context(&[]);
+    assert_eq!(
+        crate::render::font_context::default_font_search_paths(),
+        resolved.search_paths()
+    );
+}
+
+#[test]
+fn test_fallback_glyph_advances_do_not_resolve_a_font_context() {
+    // Each resolution of a full font search context parses every face on
+    // the host, and the fallback metric runs once per measured run: a
+    // 35-page report spent 111 s of a 112 s conversion re-indexing fonts.
+    // Outside an active context the lookup needs only the default paths.
+    let families: Vec<String> = vec!["Calibri".to_string()];
+    crate::render::font_context::FONT_CONTEXT_RESOLUTIONS.with(|count| count.set(0));
+    let _ = glyph_advances_em_with_typst_fallback(&families, false, "overlong-token");
+    let resolutions: usize =
+        crate::render::font_context::FONT_CONTEXT_RESOLUTIONS.with(|count| count.get());
+    assert_eq!(
+        resolutions, 0,
+        "a default-path lookup must not re-index the host's fonts"
+    );
+}
+
+#[test]
 fn test_compile_simple_text() {
     let result = compile_to_pdf("Hello, World!", &[], None, &[], false, false).unwrap();
     assert!(!result.is_empty(), "PDF bytes should not be empty");
