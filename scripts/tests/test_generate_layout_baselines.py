@@ -181,6 +181,7 @@ class DocumentTests(unittest.TestCase):
                     "lines": {"missing": 1, "extra": 0, "matched": 5, "deviant": 2},
                     "instances": {"large_shift_count": 1},
                     "visibility": {"mismatch_count": 2},
+                    "visible_fills": {"mismatch_count": 3},
                 }
             ],
         }
@@ -199,6 +200,7 @@ class DocumentTests(unittest.TestCase):
         self.assertEqual(summary["missing_lines"], 1)
         self.assertEqual(summary["large_shifts"], 1)
         self.assertEqual(summary["visibility_mismatches"], 2)
+        self.assertEqual(summary["visible_fill_mismatches"], 3)
 
     def test_serialisation_is_deterministic(self) -> None:
         record = {
