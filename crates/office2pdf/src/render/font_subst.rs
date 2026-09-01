@@ -255,6 +255,12 @@ fn table_entry(normalized_family: &str) -> Option<(FamilyClass, &'static [&'stat
         // suppresses an incidental host Aptos while preserving a caller- or
         // package-provided face (issue #1463).
         "aptos" => (SansSerif, &["Noto Sans"]),
+        // The Gift Budget workbook from issue #982 declares Segoe UI but does
+        // not embed it. A host without that proprietary face used Typst's
+        // Libertinus Serif default, changing the native instruction panel's
+        // wrap boundaries. Reuse the bundled, reproducible sans face instead
+        // of making this result depend on the host font book (issue #1472).
+        "segoe ui" => (SansSerif, &["Selawik"]),
         // `Calibri Light` is the `majorHAnsi` face of every Office theme since
         // 2013, so it is the face every built-in `Heading N` resolves to. It
         // needs its own entry even where Office ships it: Typst keys its font
@@ -1505,6 +1511,14 @@ pub(crate) fn document_requests_bundled_noto_sans(doc: &Document) -> bool {
     collect_document_font_requests(doc)
         .into_iter()
         .any(|(family, _)| normalized_lookup_key(&family) == "aptos")
+}
+
+/// Whether this document names Segoe UI, whose open metric-compatible
+/// replacement is the bundled Selawik 1.01 family (issue #1472).
+pub(crate) fn document_requests_bundled_selawik(doc: &Document) -> bool {
+    collect_document_font_requests(doc)
+        .into_iter()
+        .any(|(family, _)| normalized_lookup_key(&family) == "segoe ui")
 }
 
 pub(crate) fn document_requests_font_families(doc: &Document) -> bool {

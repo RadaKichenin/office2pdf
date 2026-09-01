@@ -256,6 +256,30 @@ fn test_indent_unit_follows_the_normal_font_face() {
 }
 
 #[test]
+fn segoe_ui_normal_font_uses_its_native_three_space_indent() {
+    // Gift Budget and Tracker's Normal style is Segoe UI 10 and its wrapped
+    // B4:D4 instruction panel declares indent="2". Native Excel gives one
+    // level 9pt: round(0.273926em * 10pt) * 3 spaces. Falling back to
+    // Calibri's 6pt unit widens the panel by 6pt and changes every wrap after
+    // the third line (issue #1472).
+    let data = build_xlsx_with_styles_and_sheet(
+        &styles_with_alignments(
+            "Segoe UI",
+            10.0,
+            &[r#"<alignment horizontal="left" indent="2"/>"#],
+        ),
+        &sheet_with_cells(&[("A1", 1, "Indented")]),
+    );
+
+    let padding = first_cell_padding(&data).expect("an indented cell states its own padding");
+    assert!(
+        (padding.left - (XLSX_CELL_PADDING.left + 18.0)).abs() < 0.01,
+        "two native Segoe UI indent levels should add 18pt, got {}",
+        padding.left
+    );
+}
+
+#[test]
 fn test_indent_applies_even_when_the_xf_switches_alignment_off() {
     // `applyAlignment="false"` beside an indent is what LibreOffice writes,
     // and the reported workbook's default `cellXfs[0]` carries exactly that.

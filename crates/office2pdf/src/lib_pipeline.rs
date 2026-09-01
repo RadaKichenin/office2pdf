@@ -141,6 +141,13 @@ pub(super) fn extend_document_fonts(fonts: &mut Vec<typst::text::Font>, doc: &ir
     {
         fonts.extend_from_slice(crate::bundled_fonts::noto_sans_fonts());
     }
+    if render::font_subst::document_requests_bundled_selawik(doc)
+        && !fonts
+            .iter()
+            .any(|font| font.info().family == crate::bundled_fonts::SELAWIK_FAMILY)
+    {
+        fonts.extend_from_slice(crate::bundled_fonts::selawik_fonts());
+    }
 }
 
 fn effective_last_resort_family(options: &ConvertOptions) -> Option<&str> {

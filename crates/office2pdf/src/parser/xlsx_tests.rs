@@ -287,6 +287,7 @@ fn test_column_unit_pt_is_integer_points_from_digit_advance() {
     assert_eq!(column_unit_pt("Courier New", 12.0), 7.0);
     assert_eq!(column_unit_pt("Malgun Gothic", 10.0), 6.0);
     assert_eq!(column_unit_pt("Malgun Gothic", 11.0), 6.0);
+    assert_eq!(column_unit_pt("Segoe UI", 10.0), 5.0);
 }
 
 /// The reference digit advances are the real `hmtx` maxima over U+0030..=0039
@@ -320,6 +321,13 @@ fn test_reference_digit_advance_em_pins_excel_face_metrics() {
         reference_digit_advance_em("맑은 고딕"),
         reference_digit_advance_em("Malgun Gothic"),
         "the localized Malgun name must map to the same face"
+    );
+    let segoe: f64 = reference_digit_advance_em("Segoe UI").unwrap();
+    assert!((segoe - 0.5390625).abs() < 1e-6);
+    assert_eq!(
+        reference_digit_advance_em("Selawik"),
+        Some(segoe),
+        "Microsoft's Selawik replacement is metric-compatible with Segoe UI"
     );
     assert_eq!(
         reference_digit_advance_em("Definitely Not A Font"),

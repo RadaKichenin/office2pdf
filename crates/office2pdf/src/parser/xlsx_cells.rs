@@ -197,6 +197,9 @@ const CALIBRI_DIGIT_ADVANCE_EM: f64 = 0.506836;
 pub(super) fn reference_digit_advance_em(family: &str) -> Option<f64> {
     match family.to_ascii_lowercase().as_str() {
         "calibri" | "carlito" => Some(CALIBRI_DIGIT_ADVANCE_EM),
+        // Selawik is Microsoft's OFL metric-compatible replacement for Segoe
+        // UI. Both advance every decimal digit by 1104/2048em (issue #1472).
+        "segoe ui" | "selawik" => Some(0.5390625),
         "arial" | "helvetica" | "liberation sans" => Some(0.556152),
         "verdana" => Some(0.635742),
         "courier new" => Some(0.600098),
@@ -330,6 +333,12 @@ const CALIBRI_SPACE_ADVANCE_EM: f64 = 0.226074;
 fn reference_space_advance_em(family: &str) -> Option<f64> {
     match family.to_ascii_lowercase().as_str() {
         "calibri" | "carlito" => Some(CALIBRI_SPACE_ADVANCE_EM),
+        // The issue #982 workbook's two-level instruction-panel indent is
+        // measured before document-scoped fallback faces are materialized.
+        // Pin Segoe UI and its metric-compatible Selawik replacement to their
+        // shared 561/2048em space so parsing cannot fall back to Calibri's
+        // narrower 0.226074em space (issue #1472).
+        "segoe ui" | "selawik" => Some(0.27392578125),
         "arial" | "helvetica" | "liberation sans" => Some(0.277832),
         "verdana" => Some(0.351562),
         "courier new" => Some(0.600098),
