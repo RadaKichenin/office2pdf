@@ -1257,13 +1257,15 @@ fn generate_table_cell(
         }
     }
 
-    // Writer seats a borderless DOCX cell's content 0.10pt into the positive x
-    // side of its track. A painted Word boundary adds its own half-left-band
-    // x seat and full-top-band y seat from that common origin. Keep both as a
-    // visual translation: row pitch, column measure, margins, and wrapping
-    // already match and must not grow with either seat (issues #649, #1488).
-    let word_content_shift: Option<(f64, f64)> = word_cell_content_shift(&boundary_band);
-    if let Some((dx, dy)) = word_content_shift {
+    // Writer's positive-axis origin and Excel's filled-merge centring are
+    // visual seats, not new layout measure. Keeping them as translations
+    // preserves row pitch, column width, margins, and wrapping (#649, #1488,
+    // #1493).
+    let content_shift: Option<(f64, f64)> = word_cell_content_shift(&boundary_band)
+        .or_else(|| excel_merged_cell_content_shift(&boundary_band, cell));
+    let wraps_content_shift: bool = content_shift.is_some() && cell.spill_width.is_none();
+    if wraps_content_shift {
+        let (dx, dy) = content_shift.expect("the content-shift wrapper requires a seat");
         let _ = write!(
             out,
             "#move(dx: {}pt, dy: {}pt)[",
@@ -1368,12 +1370,26 @@ fn generate_table_cell(
         let spill_content = generate_cell_content(out, &cell.content, ctx);
         ctx.in_spill_cell = enclosing_in_spill_cell;
         spill_content?;
-        let _ = write!(
-            out,
-            "]; place({anchor} + {vertical_anchor}, box(width: {}pt, height: {height}, clip: true)\
-             [#box(width: measure(o2p-spill).width)[#o2p-spill]])}}#box(width: 0pt, height: {height})",
-            format_f64(clip_width_pt),
-        );
+        // Translate the placed line itself. Wrapping this whole `#context`
+        // in `#move` changes the measurement region that `place(center)`
+        // resolves against and can move a wide title off the page (#1493).
+        if let Some((content_dx, content_dy)) = content_shift {
+            let _ = write!(
+                out,
+                "]; place({anchor} + {vertical_anchor}, dx: {}pt, dy: {}pt, box(width: {}pt, height: {height}, clip: true)\
+                 [#box(width: measure(o2p-spill).width)[#o2p-spill]])}}#box(width: 0pt, height: {height})",
+                format_geometry(content_dx),
+                format_geometry(content_dy),
+                format_f64(clip_width_pt),
+            );
+        } else {
+            let _ = write!(
+                out,
+                "]; place({anchor} + {vertical_anchor}, box(width: {}pt, height: {height}, clip: true)\
+                 [#box(width: measure(o2p-spill).width)[#o2p-spill]])}}#box(width: 0pt, height: {height})",
+                format_f64(clip_width_pt),
+            );
+        }
     } else {
         // A `w:trHeight` floor is `max(floor, content)`, which no Typst row
         // length expresses — a stated length pins the row, and `auto` drops
@@ -1396,7 +1412,7 @@ fn generate_table_cell(
             out.push_str("])");
         }
     }
-    if word_content_shift.is_some() {
+    if wraps_content_shift {
         out.push(']');
     }
     ctx.cell_seats_text_on_descender = enclosing_cell_seats_on_descender;
@@ -1433,6 +1449,22 @@ fn word_cell_content_shift(boundary_band: &Option<BoundaryBandCell<'_>>) -> Opti
         .and_then(|border| border.top.as_ref())
         .map_or(0.0, |side| word_pdf_border_side(side).width);
     Some((WRITER_TABLE_CELL_X_ORIGIN_SEAT_PT + border_dx, dy))
+}
+
+/// Excel centres a filled horizontal merge on the visible positive-axis
+/// region, which includes its background bleed. The native #1493 probes keep
+/// left alignment and an unfilled merge on the nominal track, so this is a
+/// content-only seat rather than a change to the cell's width.
+fn excel_merged_cell_content_shift(
+    boundary_band: &Option<BoundaryBandCell<'_>>,
+    cell: &TableCell,
+) -> Option<(f64, f64)> {
+    let band = boundary_band.as_ref()?;
+    (band.paint_model == TableBorderPaintModel::ExcelBoundaryBands
+        && cell.col_span > 1
+        && cell.background.is_some()
+        && cell_horizontal_alignment(cell) == Some(Alignment::Center))
+    .then_some((BAND_RUN_END_EXTENSION_PT, 0.0))
 }
 
 /// Height, in points, of the single line box a spill cell's paragraph emits —
