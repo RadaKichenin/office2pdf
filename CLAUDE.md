@@ -210,12 +210,11 @@ threshold), or when a matched line changes between painted and hidden/low
 contrast; inspect and track every named instance before marking alignment or
 text flow as matching.
 
-**Its width column measures origin-to-origin and so counts invisible trailing
-glyphs.** Word emits a trailing space after a paragraph's last character where
-we emit none, which reads as a width deficit even when every visible glyph
-agrees: a footer's reported "17% narrower" (#725) and a centred line's 79.37pt
-against 68.87pt (#728) were both entirely that one space. Compare per-glyph
-advances before believing a width delta.
+**Its width column trims leading and trailing whitespace glyphs.** Their
+advances position no visible ink and previously invented large width deltas
+when only one exporter retained a terminal space (#1482). Internal spaces still
+contribute through the following glyph's origin. Compare per-glyph advances
+before attributing a remaining width delta to the font.
 
 **Install `mupdf-tools` first** (`brew install mupdf-tools`). Without `mutool`
 the geometry axis falls back to `pdftotext -bbox`, whose `yMin` is each glyph's

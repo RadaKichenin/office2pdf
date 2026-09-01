@@ -165,12 +165,23 @@ class Line:
         return "".join(g.unicode for g in self.glyphs if not g.unicode.isspace())
 
     @property
+    def visible_glyphs(self) -> list[Glyph]:
+        """Glyphs whose ink defines the line's comparable visual extent.
+
+        Native exporters and Typst disagree about terminal space glyphs. Their
+        advances position no later ink, so including them invents a width or
+        left-edge delta while every painted glyph agrees (issue #1482).
+        Internal spaces still contribute through the following glyph's origin.
+        """
+        return [glyph for glyph in self.glyphs if not glyph.unicode.isspace()]
+
+    @property
     def x0(self) -> float:
-        return min(glyph.x for glyph in self.glyphs)
+        return min(glyph.x for glyph in self.visible_glyphs)
 
     @property
     def x1(self) -> float:
-        return max(glyph.x + glyph.advance for glyph in self.glyphs)
+        return max(glyph.x + glyph.advance for glyph in self.visible_glyphs)
 
     @property
     def width(self) -> float:
@@ -816,7 +827,7 @@ def parse_trace(trace_xml: str) -> list[PageLayout]:
         paints.extend(clipped_shade_paints(content))
         paints.sort(key=lambda paint: paint.index)
         lines = build_lines(glyphs)
-        lines.extend(rotated_lines)
+        lines.extend(line for line in rotated_lines if line.key)
         for line in lines:
             line.visibility = classify_line_visibility(line, paints)
         lines.sort(key=lambda line: (line.y, line.x0))
@@ -839,8 +850,9 @@ def build_lines(glyphs: list[Glyph], y_tolerance: float = LINE_Y_TOLERANCE_PT) -
     for line in lines:
         line.glyphs.sort(key=lambda g: g.x)
         line.y = statistics.median(g.y for g in line.glyphs)
+    lines = [line for line in lines if line.key]
     lines.sort(key=lambda line: (line.y, line.x0))
-    return [line for line in lines if line.key]
+    return lines
 
 
 def match_lines(
