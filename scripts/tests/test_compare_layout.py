@@ -265,6 +265,17 @@ class ParseTraceTest(unittest.TestCase):
         self.assertAlmostEqual(lines[0].x0, 45.0)
         self.assertAlmostEqual(lines[0].y, 64.0)
 
+    def test_rotated_whitespace_only_run_remains_excluded(self) -> None:
+        page = """<fill_text transform="1 2 3 4 5 6">
+          <span font="AAAAAA+ArialMT" trm="10 0 0 10">
+            <g unicode=" " glyph="space" x="7" y="11" adv=".5"/>
+          </span>
+        </fill_text>"""
+
+        lines = compare_layout.parse_trace(trace_document(page))[0].lines
+
+        self.assertEqual(lines, [])
+
     def test_rect_bbox_uses_the_full_affine_transform(self) -> None:
         page = """<fill_path transform="1 2 3 4 5 6">
           <moveto x="7" y="11"/>
@@ -371,6 +382,36 @@ class MatchAndDiffTest(unittest.TestCase):
         out = line_of("wide", 72, 100, pitch=6.3)
         vector = self.diff(gt, out)
         self.assertGreater(vector["width"]["worst_pct"], 3.0)
+
+    def test_trailing_spaces_do_not_inflate_visible_width(self) -> None:
+        gt = line_of("ALL", 72, 100)
+        out = line_of("ALL  ", 72, 100)
+
+        vector = self.diff(gt, out)
+
+        self.assertEqual(vector["lines"]["matched"], 1)
+        self.assertAlmostEqual(vector["width"]["worst_pct"], 0.0, places=6)
+
+    def test_leading_spaces_do_not_move_the_visible_start(self) -> None:
+        gt = line_of("ALL", 72, 100)
+        out = line_of("  ALL", 60, 100)
+
+        vector = self.diff(gt, out)
+
+        self.assertEqual(vector["lines"]["matched"], 1)
+        self.assertAlmostEqual(vector["dx0"]["worst"], 0.0, places=6)
+
+    def test_internal_spaces_still_contribute_to_visible_width(self) -> None:
+        page = line_of("A B", 72, 100)
+        line = compare_layout.parse_trace(trace_document(page))[0].lines[0]
+
+        self.assertAlmostEqual(line.width, 17.28, places=3)
+
+    def test_whitespace_only_line_remains_excluded(self) -> None:
+        page = line_of("   ", 72, 100)
+        lines = compare_layout.parse_trace(trace_document(page))[0].lines
+
+        self.assertEqual(lines, [])
 
     def test_rect_census_reports_count_delta(self) -> None:
         gt = "\n".join([rect_op(70, 90, 300, 91), rect_op(70, 110, 300, 111, "stroke_path")])
