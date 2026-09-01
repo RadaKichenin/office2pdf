@@ -88,6 +88,12 @@ pub(super) const JUSTIFIED_SPACING_FLOOR: &str = "80%";
 /// Typst's line box leaves more top leading than Word/LibreOffice text frames.
 const FLOATING_TEXT_BOX_TOP_LEADING_COMPENSATION_PT: f64 = 6.0;
 
+/// LibreOffice Writer's page-left WPS text origin sits 0.15pt inside the
+/// DrawingML inset. The #1219 / PR #1407 footer isolates the seat on both
+/// pages: its declared 20pt inset exports at x=20.15pt, while the run's width
+/// and bottom baseline already agree (issue #1487).
+const WRITER_PAGE_LEFT_TEXT_ORIGIN_SEAT_PT: f64 = 0.15;
+
 /// The Typst state carrying the section's `w:pgNumType w:fmt`.
 ///
 /// A `PAGE` field can take the format straight from `GenCtx`, because codegen
@@ -2262,6 +2268,25 @@ fn aligned_offset(
     }
 }
 
+/// Resolve the page-space x origin of an anchored header/footer text column.
+///
+/// An explicit `posOffset` is already a concrete coordinate and is left exact.
+/// A page-left `<wp:align>` WPS box takes Writer's measured inner text-origin
+/// seat in addition to its declared inset; keeping this correction here rather
+/// than changing the inset preserves the box's parsed natural width.
+fn page_anchored_hf_text_origin_x(frame: &HeaderFooterFrame, page_width: f64) -> f64 {
+    let aligned_x: f64 = frame
+        .x
+        .unwrap_or_else(|| aligned_offset(frame.horizontal_align, page_width, frame.width));
+    let writer_seat: f64 =
+        if frame.x.is_none() && frame.horizontal_align == Some(crate::ir::FrameAlign::Start) {
+            WRITER_PAGE_LEFT_TEXT_ORIGIN_SEAT_PT
+        } else {
+            0.0
+        };
+    aligned_x + frame.inset_left + writer_seat
+}
+
 fn is_page_anchored_frame(frame: &HeaderFooterFrame) -> bool {
     frame.horizontal_anchor == FrameAnchor::Page && frame.vertical_anchor == FrameAnchor::Page
 }
@@ -2535,9 +2560,7 @@ fn generate_page_anchored_hf_frames(
         }
         // `<wp:align>` states the edge rather than an offset, and only the
         // renderer knows the page it is measured against (issue #847).
-        let x: f64 = frame.x.unwrap_or_else(|| {
-            aligned_offset(frame.horizontal_align, page_size.width, frame.width)
-        }) + frame.inset_left;
+        let x: f64 = page_anchored_hf_text_origin_x(frame, page_size.width);
         // A box that seats its text at its own bottom edge is placed upward
         // from the page. In the issue #1370 reference, the final 8pt run's
         // baseline is one em above the bottom inset; putting the baseline on

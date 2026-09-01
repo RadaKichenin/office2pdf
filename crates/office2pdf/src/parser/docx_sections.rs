@@ -990,9 +990,11 @@ struct HfAnchorBox {
     height_pt: Option<f64>,
     horizontal: HfAnchorAxis,
     vertical: HfAnchorAxis,
-    /// `<wps:bodyPr>` left and right insets in points. The invoice of #841
-    /// states `lIns="254000"` — 20pt — and its label sits exactly that far in,
-    /// so the text box's own padding is not optional detail here.
+    /// `<wps:bodyPr>` left and right insets in points. The #1219 / PR #1407
+    /// footer states `lIns="254000"` — 20pt — so the text box's own padding is
+    /// not optional detail here. The renderer keeps Writer's separate 0.15pt
+    /// page-left text-origin seat out of this value so it cannot narrow the
+    /// parsed text column (issue #1487).
     left_inset_pt: f64,
     right_inset_pt: f64,
     top_inset_pt: f64,
