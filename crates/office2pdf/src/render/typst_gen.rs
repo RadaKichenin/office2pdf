@@ -170,6 +170,10 @@ struct GenCtx {
     /// the enclosing table is a spreadsheet and the cell's effective vertical
     /// alignment is bottom (issue #618).
     cell_seats_text_on_descender: bool,
+    /// The current cell's effective vertical alignment. Word's compressed
+    /// line box needs the resolved table default as well as an explicit cell
+    /// value to reproduce the anchor-specific baseline seat (issue #1479).
+    cell_vertical_align: Option<CellVerticalAlign>,
     /// The shared line the cell being generated seats on when its spreadsheet
     /// row is too tight for per-cell vertical alignment to differ: one metric
     /// family and size for the whole row, so every cell lands on one baseline
@@ -259,6 +263,7 @@ impl GenCtx {
             table_bottom_aligned_descent_floor_pt: 0.0,
             table_print_scale: None,
             cell_seats_text_on_descender: false,
+            cell_vertical_align: None,
             cell_sheet_row_line: None,
             cell_sheet_seat: None,
             in_spill_cell: false,

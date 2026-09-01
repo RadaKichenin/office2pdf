@@ -1,0 +1,1580 @@
+{
+  "clusters": [
+    {
+      "area_pt2": 1621.9584,
+      "bbox_pt": {
+        "height": 142.32,
+        "width": 39.6,
+        "x": 15.36,
+        "y": 450.96
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-11f97e21a892",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 1006.0992,
+      "bbox_pt": {
+        "height": 343.68,
+        "width": 29.28,
+        "x": 0.0,
+        "y": 420.72
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-78970acaad8b",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 970.5024,
+      "bbox_pt": {
+        "height": 125.52,
+        "width": 44.4,
+        "x": 43.92,
+        "y": 618.72
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-967d876813c0",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 259.2576,
+      "bbox_pt": {
+        "height": 24.96,
+        "width": 30.0,
+        "x": 262.32,
+        "y": 479.76
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-fc4e4b2fe2e6",
+      "region": "center"
+    },
+    {
+      "area_pt2": 251.2512,
+      "bbox_pt": {
+        "height": 57.6,
+        "width": 32.16,
+        "x": 56.16,
+        "y": 479.52
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-805137528434",
+      "region": "left"
+    },
+    {
+      "area_pt2": 247.68,
+      "bbox_pt": {
+        "height": 124.56,
+        "width": 40.8,
+        "x": 170.88,
+        "y": 396.24
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-c020053b25f6",
+      "region": "left"
+    },
+    {
+      "area_pt2": 243.4752,
+      "bbox_pt": {
+        "height": 97.92,
+        "width": 23.76,
+        "x": 203.04,
+        "y": 382.32
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-59d097573943",
+      "region": "center"
+    },
+    {
+      "area_pt2": 242.6688,
+      "bbox_pt": {
+        "height": 38.64,
+        "width": 18.48,
+        "x": 23.04,
+        "y": 413.04
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-08fce43a38b0",
+      "region": "left"
+    },
+    {
+      "area_pt2": 231.7824,
+      "bbox_pt": {
+        "height": 108.72,
+        "width": 19.68,
+        "x": 221.76,
+        "y": 545.04
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-b98227e03027",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 196.8768,
+      "bbox_pt": {
+        "height": 94.08,
+        "width": 8.64,
+        "x": 268.32,
+        "y": 580.08
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-a2b249911d63",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 196.416,
+      "bbox_pt": {
+        "height": 31.92,
+        "width": 18.24,
+        "x": 307.68,
+        "y": 604.8
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-89d98c1b1558",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 161.2224,
+      "bbox_pt": {
+        "height": 58.8,
+        "width": 13.92,
+        "x": 52.32,
+        "y": 508.56
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-c0d4ac27a44a",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 141.408,
+      "bbox_pt": {
+        "height": 35.52,
+        "width": 27.12,
+        "x": 64.32,
+        "y": 539.76
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-70d447de6649",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 134.8416,
+      "bbox_pt": {
+        "height": 30.96,
+        "width": 41.28,
+        "x": 228.24,
+        "y": 391.68
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-34cd6b09622d",
+      "region": "center"
+    },
+    {
+      "area_pt2": 122.6304,
+      "bbox_pt": {
+        "height": 25.68,
+        "width": 16.56,
+        "x": 265.44,
+        "y": 505.92
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-1769b726caa7",
+      "region": "center"
+    },
+    {
+      "area_pt2": 120.7296,
+      "bbox_pt": {
+        "height": 44.64,
+        "width": 5.04,
+        "x": 274.56,
+        "y": 585.12
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-dc0a3f02ef49",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 99.3024,
+      "bbox_pt": {
+        "height": 29.04,
+        "width": 13.44,
+        "x": 43.44,
+        "y": 538.8
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-5441fd181775",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 98.784,
+      "bbox_pt": {
+        "height": 25.68,
+        "width": 20.64,
+        "x": 317.04,
+        "y": 682.8
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-570a95dc4599",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 91.9872,
+      "bbox_pt": {
+        "height": 39.36,
+        "width": 49.2,
+        "x": 278.88,
+        "y": 642.48
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-cf585e65a761",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 88.9344,
+      "bbox_pt": {
+        "height": 30.24,
+        "width": 13.2,
+        "x": 282.48,
+        "y": 501.84
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-e9337ee95e20",
+      "region": "center"
+    },
+    {
+      "area_pt2": 85.9968,
+      "bbox_pt": {
+        "height": 45.6,
+        "width": 21.6,
+        "x": 241.44,
+        "y": 564.72
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-26e6e7b99fd7",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 85.9968,
+      "bbox_pt": {
+        "height": 15.6,
+        "width": 18.96,
+        "x": 248.4,
+        "y": 543.12
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-ea9705017182",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 74.8224,
+      "bbox_pt": {
+        "height": 16.8,
+        "width": 12.96,
+        "x": 12.48,
+        "y": 556.56
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-00c388f4a91a",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 74.5344,
+      "bbox_pt": {
+        "height": 44.16,
+        "width": 9.84,
+        "x": 285.36,
+        "y": 577.44
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-c7f34a01268f",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 73.6704,
+      "bbox_pt": {
+        "height": 26.64,
+        "width": 10.8,
+        "x": 108.24,
+        "y": 631.2
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-aed43f09823d",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 69.9264,
+      "bbox_pt": {
+        "height": 18.24,
+        "width": 16.56,
+        "x": 263.76,
+        "y": 701.52
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-b41e16b7e122",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 69.6384,
+      "bbox_pt": {
+        "height": 37.44,
+        "width": 19.44,
+        "x": 193.44,
+        "y": 520.32
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-ba80c2caef9f",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 65.4336,
+      "bbox_pt": {
+        "height": 12.72,
+        "width": 10.32,
+        "x": 6.72,
+        "y": 552.96
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-8f90ba05ebc5",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 62.784,
+      "bbox_pt": {
+        "height": 22.32,
+        "width": 15.12,
+        "x": 251.28,
+        "y": 487.92
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-e8faa3067f91",
+      "region": "center"
+    },
+    {
+      "area_pt2": 60.3072,
+      "bbox_pt": {
+        "height": 28.08,
+        "width": 8.88,
+        "x": 96.72,
+        "y": 640.8
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-d631e9d3c650",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 59.2128,
+      "bbox_pt": {
+        "height": 30.96,
+        "width": 10.08,
+        "x": 61.44,
+        "y": 507.6
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-12ef5feb3852",
+      "region": "left"
+    },
+    {
+      "area_pt2": 50.0544,
+      "bbox_pt": {
+        "height": 13.92,
+        "width": 12.48,
+        "x": 293.52,
+        "y": 699.6
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-e727e037acac",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 49.4208,
+      "bbox_pt": {
+        "height": 11.76,
+        "width": 7.2,
+        "x": 316.8,
+        "y": 614.88
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-458af00a74c8",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 48.096,
+      "bbox_pt": {
+        "height": 29.28,
+        "width": 7.68,
+        "x": 119.52,
+        "y": 660.96
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-987694881c02",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 47.4624,
+      "bbox_pt": {
+        "height": 15.12,
+        "width": 10.08,
+        "x": 249.12,
+        "y": 503.28
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-51d03f8ac661",
+      "region": "center"
+    },
+    {
+      "area_pt2": 46.4832,
+      "bbox_pt": {
+        "height": 33.36,
+        "width": 19.44,
+        "x": 171.84,
+        "y": 383.76
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-58d0ea76382e",
+      "region": "left"
+    },
+    {
+      "area_pt2": 45.3312,
+      "bbox_pt": {
+        "height": 22.56,
+        "width": 12.72,
+        "x": 97.44,
+        "y": 546.96
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-48bc85cbb3e2",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 43.7184,
+      "bbox_pt": {
+        "height": 14.88,
+        "width": 14.16,
+        "x": 251.52,
+        "y": 525.84
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-58242593547b",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 43.3728,
+      "bbox_pt": {
+        "height": 17.04,
+        "width": 17.04,
+        "x": 233.52,
+        "y": 510.24
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-2db5b7401359",
+      "region": "center"
+    },
+    {
+      "area_pt2": 42.3936,
+      "bbox_pt": {
+        "height": 25.44,
+        "width": 7.2,
+        "x": 212.64,
+        "y": 489.84
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-5989d56e9927",
+      "region": "center"
+    },
+    {
+      "area_pt2": 41.3568,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 7.44,
+        "x": 282.0,
+        "y": 460.08
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-a8cc73196df5",
+      "region": "center"
+    },
+    {
+      "area_pt2": 41.2416,
+      "bbox_pt": {
+        "height": 27.6,
+        "width": 5.04,
+        "x": 209.52,
+        "y": 604.8
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-15f17f05215d",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 41.1264,
+      "bbox_pt": {
+        "height": 24.24,
+        "width": 12.48,
+        "x": 117.36,
+        "y": 629.28
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-12859c4b7658",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 39.5712,
+      "bbox_pt": {
+        "height": 14.4,
+        "width": 9.36,
+        "x": 366.24,
+        "y": 342.72
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Inspected the subtitle crop and full diff; these clusters follow glyph outlines with matching text geometry."
+      },
+      "id": "p1-81a122f0bac4",
+      "region": "center"
+    },
+    {
+      "area_pt2": 38.4768,
+      "bbox_pt": {
+        "height": 24.96,
+        "width": 4.56,
+        "x": 17.28,
+        "y": 417.12
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-ae14801dc426",
+      "region": "left"
+    },
+    {
+      "area_pt2": 37.0944,
+      "bbox_pt": {
+        "height": 11.52,
+        "width": 9.12,
+        "x": 88.08,
+        "y": 620.64
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-6bd4b1551b8e",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 36.0,
+      "bbox_pt": {
+        "height": 24.48,
+        "width": 4.32,
+        "x": 256.32,
+        "y": 659.76
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-aa39e68d7d2b",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 35.712,
+      "bbox_pt": {
+        "height": 31.44,
+        "width": 4.08,
+        "x": 222.72,
+        "y": 542.64
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-5ece43bfb5d3",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 35.4816,
+      "bbox_pt": {
+        "height": 10.8,
+        "width": 6.24,
+        "x": 235.68,
+        "y": 500.88
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-1554c2205d15",
+      "region": "center"
+    },
+    {
+      "area_pt2": 35.0784,
+      "bbox_pt": {
+        "height": 17.04,
+        "width": 3.84,
+        "x": 87.84,
+        "y": 637.44
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-7b7342265a54",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 34.9632,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 8.4,
+        "x": 278.88,
+        "y": 498.24
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-57144841da7a",
+      "region": "center"
+    },
+    {
+      "area_pt2": 34.6752,
+      "bbox_pt": {
+        "height": 14.4,
+        "width": 6.48,
+        "x": 291.12,
+        "y": 514.08
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-65007f7c4395",
+      "region": "center"
+    },
+    {
+      "area_pt2": 34.4448,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 7.2,
+        "x": 254.4,
+        "y": 450.24
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-5ff429499947",
+      "region": "center"
+    },
+    {
+      "area_pt2": 34.3872,
+      "bbox_pt": {
+        "height": 28.8,
+        "width": 5.28,
+        "x": 219.36,
+        "y": 538.8
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-17144207fba0",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 34.2144,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 20.4,
+        "x": 194.16,
+        "y": 650.16
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-fe770f2bbf65",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 33.5232,
+      "bbox_pt": {
+        "height": 13.68,
+        "width": 8.64,
+        "x": 342.72,
+        "y": 342.72
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Inspected the subtitle crop and full diff; these clusters follow glyph outlines with matching text geometry."
+      },
+      "id": "p1-9b69b7bfeb15",
+      "region": "center"
+    },
+    {
+      "area_pt2": 33.2928,
+      "bbox_pt": {
+        "height": 10.56,
+        "width": 10.08,
+        "x": 20.88,
+        "y": 414.96
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-b14bf91b2887",
+      "region": "left"
+    },
+    {
+      "area_pt2": 32.6592,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 6.24,
+        "x": 56.88,
+        "y": 663.6
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-c9bf3a288624",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 32.0832,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 8.88,
+        "x": 280.8,
+        "y": 518.16
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-64b95c269ecc",
+      "region": "center"
+    },
+    {
+      "area_pt2": 31.9104,
+      "bbox_pt": {
+        "height": 11.52,
+        "width": 7.92,
+        "x": 277.44,
+        "y": 505.2
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-7a0a7fd449cd",
+      "region": "center"
+    },
+    {
+      "area_pt2": 31.9104,
+      "bbox_pt": {
+        "height": 22.08,
+        "width": 6.0,
+        "x": 303.84,
+        "y": 577.92
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-9a6adcc3b1d5",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 31.8528,
+      "bbox_pt": {
+        "height": 18.96,
+        "width": 7.44,
+        "x": 101.52,
+        "y": 568.32
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-3775dd60cac0",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 31.392,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 7.44,
+        "x": 304.08,
+        "y": 618.48
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-cb00d9d49b94",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 31.2768,
+      "bbox_pt": {
+        "height": 17.76,
+        "width": 6.72,
+        "x": 300.0,
+        "y": 591.12
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-c84fe0d40e77",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 29.952,
+      "bbox_pt": {
+        "height": 21.12,
+        "width": 3.6,
+        "x": 210.0,
+        "y": 583.44
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-704f0f86b016",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 29.8944,
+      "bbox_pt": {
+        "height": 10.32,
+        "width": 4.08,
+        "x": 8.16,
+        "y": 682.8
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-8813389a98b1",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 29.8368,
+      "bbox_pt": {
+        "height": 13.44,
+        "width": 6.72,
+        "x": 260.16,
+        "y": 588.0
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-ba55560df0c1",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 29.0304,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 7.44,
+        "x": 270.96,
+        "y": 413.28
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-62baed13a235",
+      "region": "center"
+    },
+    {
+      "area_pt2": 28.9728,
+      "bbox_pt": {
+        "height": 10.56,
+        "width": 6.72,
+        "x": 53.28,
+        "y": 571.2
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-fb4daeb9a50e",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 28.9152,
+      "bbox_pt": {
+        "height": 11.76,
+        "width": 22.08,
+        "x": 204.72,
+        "y": 380.4
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-a9b5d804dfa0",
+      "region": "center"
+    },
+    {
+      "area_pt2": 28.5696,
+      "bbox_pt": {
+        "height": 18.24,
+        "width": 7.44,
+        "x": 262.56,
+        "y": 669.6
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-025126d20200",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 27.9936,
+      "bbox_pt": {
+        "height": 12.48,
+        "width": 5.28,
+        "x": 79.92,
+        "y": 660.0
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-51620588ae51",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 26.9568,
+      "bbox_pt": {
+        "height": 12.96,
+        "width": 6.0,
+        "x": 300.48,
+        "y": 585.84
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-434506872558",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 26.3808,
+      "bbox_pt": {
+        "height": 8.4,
+        "width": 7.2,
+        "x": 259.44,
+        "y": 508.8
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-f7f4ed3b4a44",
+      "region": "center"
+    },
+    {
+      "area_pt2": 25.5744,
+      "bbox_pt": {
+        "height": 11.76,
+        "width": 6.0,
+        "x": 225.36,
+        "y": 394.56
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-af943bd550c3",
+      "region": "center"
+    },
+    {
+      "area_pt2": 24.9408,
+      "bbox_pt": {
+        "height": 13.2,
+        "width": 8.4,
+        "x": 70.32,
+        "y": 537.6
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-7a14a995608e",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 24.7104,
+      "bbox_pt": {
+        "height": 21.12,
+        "width": 3.84,
+        "x": 112.32,
+        "y": 492.0
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-d85f55a75d11",
+      "region": "left"
+    },
+    {
+      "area_pt2": 24.3072,
+      "bbox_pt": {
+        "height": 11.28,
+        "width": 6.48,
+        "x": 46.8,
+        "y": 508.08
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-d93b9a35b3a7",
+      "region": "left"
+    },
+    {
+      "area_pt2": 24.192,
+      "bbox_pt": {
+        "height": 12.96,
+        "width": 3.6,
+        "x": 62.64,
+        "y": 546.72
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-e6610fc22922",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 23.9616,
+      "bbox_pt": {
+        "height": 15.6,
+        "width": 5.28,
+        "x": 107.04,
+        "y": 547.2
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-9bbf051eb6fb",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 23.8464,
+      "bbox_pt": {
+        "height": 10.8,
+        "width": 8.16,
+        "x": 365.52,
+        "y": 346.32
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Inspected the subtitle crop and full diff; these clusters follow glyph outlines with matching text geometry."
+      },
+      "id": "p1-20f2b741daee",
+      "region": "center"
+    },
+    {
+      "area_pt2": 23.6736,
+      "bbox_pt": {
+        "height": 14.64,
+        "width": 5.28,
+        "x": 130.56,
+        "y": 684.48
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-9adfb19a2e49",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 23.6736,
+      "bbox_pt": {
+        "height": 17.28,
+        "width": 3.36,
+        "x": 224.64,
+        "y": 612.24
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-6f4b05ecd05b",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 23.4432,
+      "bbox_pt": {
+        "height": 15.36,
+        "width": 10.56,
+        "x": 153.12,
+        "y": 719.04
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-13e0aef9d472",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 23.0976,
+      "bbox_pt": {
+        "height": 9.36,
+        "width": 4.32,
+        "x": 281.28,
+        "y": 506.88
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-f05b0eafeb78",
+      "region": "center"
+    },
+    {
+      "area_pt2": 23.0976,
+      "bbox_pt": {
+        "height": 12.0,
+        "width": 3.84,
+        "x": 218.64,
+        "y": 492.72
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-212049cbb387",
+      "region": "center"
+    },
+    {
+      "area_pt2": 23.04,
+      "bbox_pt": {
+        "height": 18.96,
+        "width": 4.32,
+        "x": 225.6,
+        "y": 615.6
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-7f0801239b6c",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 22.3488,
+      "bbox_pt": {
+        "height": 18.72,
+        "width": 5.52,
+        "x": 47.28,
+        "y": 624.0
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-b35ebd836dd4",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 22.1184,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 3.84,
+        "x": 63.36,
+        "y": 697.2
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-ee6811285a5d",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 21.888,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 9.12,
+        "x": 88.08,
+        "y": 654.24
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-c0375f1d0504",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 21.8304,
+      "bbox_pt": {
+        "height": 11.04,
+        "width": 9.12,
+        "x": 73.68,
+        "y": 623.52
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-f3ee5a10c046",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 21.312,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 6.72,
+        "x": 83.76,
+        "y": 660.24
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-6dcbc962066d",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 21.2544,
+      "bbox_pt": {
+        "height": 9.84,
+        "width": 7.92,
+        "x": 241.44,
+        "y": 529.44
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-c6e110570384",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 21.0816,
+      "bbox_pt": {
+        "height": 14.16,
+        "width": 3.6,
+        "x": 19.92,
+        "y": 672.96
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-c7db2bef791c",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 20.9664,
+      "bbox_pt": {
+        "height": 15.84,
+        "width": 5.04,
+        "x": 295.68,
+        "y": 600.24
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-e4121b4a4c53",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 20.3904,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 7.92,
+        "x": 227.76,
+        "y": 500.4
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Inspected the rotated-photo crop and full diff; these clusters are JPEG-versus-lossless resampling inside or on the clipped photo boundary."
+      },
+      "id": "p1-92fdf0bb6ba6",
+      "region": "center"
+    }
+  ],
+  "dpi": 300,
+  "duplicate_disposition_cluster_ids": [],
+  "errors": [],
+  "fuzz_percent": 5,
+  "minimum_area_pt2": 20.0,
+  "page": 1,
+  "passed": true,
+  "renderer_observations": [
+    {
+      "bbox_pt": {
+        "height": 380.0,
+        "width": 612.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "class": "gradient-rasterization",
+      "note": "Inspected the top gradient and dot field at 300 DPI; only sub-material renderer fragments remain."
+    },
+    {
+      "bbox_pt": {
+        "height": 462.0,
+        "width": 612.0,
+        "x": 0.0,
+        "y": 330.0
+      },
+      "class": "shape-edge-antialiasing",
+      "note": "Inspected decorative fills, hairlines, circles, triangles, diamonds, and bars at 300 DPI; non-photo fragments remain below the material-cluster floor."
+    }
+  ],
+  "schema_version": 1,
+  "strict": true,
+  "summary": {
+    "dispositioned": 96,
+    "duplicate": 0,
+    "total": 96,
+    "undispositioned": 0,
+    "unknown": 0
+  },
+  "undispositioned_cluster_ids": [],
+  "unknown_disposition_cluster_ids": []
+}

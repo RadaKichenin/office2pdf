@@ -59,6 +59,12 @@ const POWERPOINT_ADVANCE_GRID_PT: f64 = 0.125;
 /// whole points.
 const SHEET_ADVANCE_GRID_PT: f64 = 1.0;
 
+/// Native Word-style table placement resolves a compressed paragraph's first
+/// and last exterior seats on a one-point edge quantum. The half-point used by
+/// a bottom anchor is derived from the same quantum, not from a fixture-sized
+/// translation (issue #1479).
+const WORD_COMPRESSED_LINE_EDGE_PT: f64 = 1.0;
+
 /// Emit the ligature rule every PowerPoint slide follows.
 ///
 /// PowerPoint does not apply the OpenType `liga`/`clig` features. DrawingML has
@@ -1714,6 +1720,7 @@ pub(super) fn word_cell_line_box_settings(
     style: &ParagraphStyle,
     line_grid_pitch: Option<f64>,
     row_east_asian: RowEastAsianMetrics,
+    vertical_align: Option<CellVerticalAlign>,
     seats_text_on_descender: bool,
     sheet_row_line: Option<&SheetRowLine>,
     sheet_seat: Option<SheetCellSeat>,
@@ -1724,6 +1731,7 @@ pub(super) fn word_cell_line_box_settings(
         style,
         line_grid_pitch,
         row_east_asian,
+        vertical_align,
         seats_text_on_descender,
         sheet_row_line,
         sheet_seat,
@@ -1750,6 +1758,7 @@ pub(super) fn word_cell_line_box(
     style: &ParagraphStyle,
     line_grid_pitch: Option<f64>,
     row_east_asian: RowEastAsianMetrics,
+    vertical_align: Option<CellVerticalAlign>,
     seats_text_on_descender: bool,
     sheet_row_line: Option<&SheetRowLine>,
     sheet_seat: Option<SheetCellSeat>,
@@ -1883,6 +1892,41 @@ pub(super) fn word_cell_line_box(
         )
     } else {
         (advance_em - top_em, 0.0)
+    };
+    // #1460 established the compressed pitch and its metric-proportional last
+    // descent. Fresh native-PDF traces at 300 DPI then exposed the smaller
+    // anchor-specific seat that whole-page thumbnails missed (#1479). Typst
+    // shares a centre-aligned block's added first edge across the slack above
+    // and below it, so reproducing the native one-point baseline shift takes
+    // two edge quanta above, one less below, and one less in leading. A bottom
+    // anchor instead transfers half a quantum above and leaves the other half
+    // as inter-line leading. Both keep the declared baseline pitch.
+    // Top/default is already seated from its top edge, so it keeps #1460's
+    // answer.
+    //
+    // Cap the quantum at the available descent for very small text. This
+    // preserves a non-negative exterior edge without changing the 1pt native
+    // rule at ordinary document sizes.
+    let (top_em, bottom_em, leading_pt): (f64, f64, f64) = if centres_compressed_word_line {
+        let edge_pt: f64 = WORD_COMPRESSED_LINE_EDGE_PT.min(bottom_em * font_size);
+        match vertical_align.unwrap_or(CellVerticalAlign::Top) {
+            CellVerticalAlign::Top => (top_em, bottom_em, leading_pt),
+            CellVerticalAlign::Center => {
+                let edge_pt: f64 = edge_pt.min(leading_pt.max(0.0));
+                (
+                    top_em + 2.0 * edge_pt / font_size,
+                    bottom_em - edge_pt / font_size,
+                    leading_pt - edge_pt,
+                )
+            }
+            CellVerticalAlign::Bottom => (
+                top_em + edge_pt / (2.0 * font_size),
+                bottom_em - edge_pt / font_size,
+                leading_pt + edge_pt / 2.0,
+            ),
+        }
+    } else {
+        (top_em, bottom_em, leading_pt)
     };
     // A sheet cell in a fixed track seats its line where Excel prints it, not
     // where the cell's own inset box would centre it (issue #1063). Typst

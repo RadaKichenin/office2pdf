@@ -945,6 +945,7 @@ fn test_boundary_band_auto_row_verticals_paint_concrete_twin_bands() {
             has_east_asian_text: false,
             takes_east_asian_metrics: false,
         },
+        None,
         false,
         None,
         None,
