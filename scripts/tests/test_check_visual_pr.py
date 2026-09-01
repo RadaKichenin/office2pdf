@@ -1,4 +1,5 @@
 import io
+import hashlib
 import json
 import re
 import tempfile
@@ -14,6 +15,7 @@ from scripts.check_visual_pr import (
     validate_layout_audit,
     validate_open_issues,
     validate_pr_body,
+    validate_render_cluster_audits,
 )
 
 
@@ -54,6 +56,7 @@ def visual_body(result_overrides=None, include_previews=True):
 - Renderer and DPI: pdftoppm, 150 DPI
 - Evidence mode: `fix`
 - Layout audit report: `assets/bugfixes/issue-186/layout-audit.json`
+- Render cluster reports: `assets/bugfixes/issue-186/render-clusters-page-1.json`
 - Fine-detail threshold: 0.5pt
 - Layout audit page count: Pass
 - Layout audit text flow: Pass
@@ -130,6 +133,67 @@ def validate_report(body, report):
         )
 
 
+def render_cluster_report(
+    *,
+    page=1,
+    strict=True,
+    passed=True,
+    disposition=None,
+    undispositioned=None,
+    renderer_observations=None,
+):
+    disposition = disposition or {
+        "kind": "accepted-rendering",
+        "class": "glyph-edge-rasterization",
+        "note": "Inspected at full resolution.",
+    }
+    undispositioned = undispositioned or []
+    canonical_id_input = f"{page}|10.00|20.00|8.00|8.00|40.00"
+    cluster_id = f"p{page}-{hashlib.sha256(canonical_id_input.encode('ascii')).hexdigest()[:12]}"
+    cluster = {
+        "id": cluster_id,
+        "bbox_pt": {"x": 10.0, "y": 20.0, "width": 8.0, "height": 8.0},
+        "area_pt2": 40.0,
+        "region": "top-left",
+        "disposition": disposition,
+    }
+    return {
+        "schema_version": 1,
+        "page": page,
+        "dpi": 300,
+        "fuzz_percent": 5,
+        "minimum_area_pt2": 20.0,
+        "strict": strict,
+        "clusters": [cluster],
+        "undispositioned_cluster_ids": undispositioned,
+        "unknown_disposition_cluster_ids": [],
+        "duplicate_disposition_cluster_ids": [],
+        "errors": [],
+        "renderer_observations": renderer_observations or [],
+        "summary": {
+            "total": 1,
+            "dispositioned": 0 if undispositioned else 1,
+            "undispositioned": len(undispositioned),
+            "unknown": 0,
+            "duplicate": 0,
+        },
+        "passed": passed,
+    }
+
+
+def validate_cluster_reports(body, reports):
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        issue_dir = root / "assets/bugfixes/issue-186"
+        issue_dir.mkdir(parents=True)
+        changed_paths = []
+        for page, report in reports.items():
+            relative = f"assets/bugfixes/issue-186/render-clusters-page-{page}.json"
+            (root / relative).write_text(json.dumps(report), encoding="utf-8")
+            changed_paths.append(relative)
+        return validate_render_cluster_audits(body, changed_paths, root)
+
+
 def defect_body():
     return (
         visual_body()
@@ -186,6 +250,17 @@ class PullRequestBodyTests(unittest.TestCase):
             ["assets/bugfixes/issue-186/after.jpg"],
         )
         self.assertTrue(any("painted-text visibility mismatch" in error for error in errors))
+
+    def test_visual_audit_requires_complete_strict_cluster_command(self):
+        required = (
+            "- [x] Ran compare_render.py --cluster-report PATH --strict-clusters and "
+            "dispositioned every material 5% fuzz diff cluster by explicit ID"
+        )
+        errors = validate_pr_body(
+            visual_body().replace(required, required.replace("[x]", "[ ]")),
+            ["assets/bugfixes/issue-186/after.jpg"],
+        )
+        self.assertTrue(any("--cluster-report PATH" in error for error in errors))
 
     def test_visual_audit_requires_model_vision_inspection(self):
         required = (
@@ -546,7 +621,136 @@ class LayoutAuditTests(unittest.TestCase):
         self.assertTrue(any("invalid layout audit report" in error for error in errors))
 
 
+class RenderClusterAuditTests(unittest.TestCase):
+    def test_strict_dispositioned_report_passes(self):
+        self.assertEqual(
+            validate_cluster_reports(visual_body(), {1: render_cluster_report()}),
+            [],
+        )
+
+    def test_fix_requires_render_cluster_report_field(self):
+        body = visual_body().replace(
+            "- Render cluster reports: `assets/bugfixes/issue-186/render-clusters-page-1.json`\n",
+            "",
+        )
+
+        errors = validate_cluster_reports(body, {1: render_cluster_report()})
+
+        self.assertTrue(any("Render cluster reports" in error for error in errors))
+
+    def test_report_must_be_changed_in_the_pull_request(self):
+        errors = validate_cluster_reports(visual_body(), {})
+
+        self.assertTrue(any("must be changed" in error for error in errors))
+
+    def test_non_strict_report_is_rejected(self):
+        errors = validate_cluster_reports(
+            visual_body(), {1: render_cluster_report(strict=False)}
+        )
+
+        self.assertTrue(any("strict" in error.lower() for error in errors))
+
+    def test_undispositioned_cluster_is_rejected(self):
+        report = render_cluster_report(
+            passed=False,
+            disposition=None,
+            undispositioned=["placeholder"],
+        )
+        cluster_id = report["clusters"][0]["id"]
+        report["undispositioned_cluster_ids"] = [cluster_id]
+        report["clusters"][0]["disposition"] = None
+
+        errors = validate_cluster_reports(visual_body(), {1: report})
+
+        self.assertTrue(any(cluster_id in error for error in errors))
+
+    def test_report_rejects_id_that_does_not_match_cluster_geometry(self):
+        report = render_cluster_report()
+        report["clusters"][0]["id"] = "p1-0123456789ab"
+
+        errors = validate_cluster_reports(visual_body(), {1: report})
+
+        self.assertTrue(any("does not match" in error for error in errors))
+
+    def test_issue_disposition_must_be_a_remaining_open_issue_reference(self):
+        report = render_cluster_report(
+            disposition={"kind": "issue", "issue": "#328"}
+        )
+
+        errors = validate_cluster_reports(visual_body(), {1: report})
+
+        self.assertTrue(any("#328" in error and "Remaining" in error for error in errors))
+
+    def test_every_declared_page_requires_its_own_report(self):
+        body = (
+            visual_body()
+            .replace("- Page(s): 1", "- Page(s): 1-2")
+            .replace(
+                "render-clusters-page-1.json`",
+                "render-clusters-page-1.json`, `assets/bugfixes/issue-186/"
+                "render-clusters-page-2.json`",
+            )
+        )
+
+        errors = validate_cluster_reports(body, {1: render_cluster_report(page=1)})
+
+        self.assertTrue(any("page 2" in error for error in errors))
+
+    def test_all_declared_pages_pass_with_distinct_reports(self):
+        body = (
+            visual_body()
+            .replace("- Page(s): 1", "- Page(s): 1-2")
+            .replace(
+                "render-clusters-page-1.json`",
+                "render-clusters-page-1.json`, `assets/bugfixes/issue-186/"
+                "render-clusters-page-2.json`",
+            )
+        )
+
+        errors = validate_cluster_reports(
+            body,
+            {1: render_cluster_report(page=1), 2: render_cluster_report(page=2)},
+        )
+
+        self.assertEqual(errors, [])
+
+    def test_valid_below_floor_renderer_observation_passes(self):
+        observation = {
+            "class": "gradient-rasterization",
+            "bbox_pt": {"x": 10.0, "y": 20.0, "width": 80.0, "height": 40.0},
+            "note": "Full-resolution crop shows only gradient decomposition.",
+        }
+
+        errors = validate_cluster_reports(
+            visual_body(),
+            {1: render_cluster_report(renderer_observations=[observation])},
+        )
+
+        self.assertEqual(errors, [])
+
+    def test_renderer_observation_requires_a_bounded_region(self):
+        observation = {
+            "class": "shape-edge-antialiasing",
+            "note": "Blanket page claim.",
+        }
+
+        errors = validate_cluster_reports(
+            visual_body(),
+            {1: render_cluster_report(renderer_observations=[observation])},
+        )
+
+        self.assertTrue(any("renderer observation" in error.lower() for error in errors))
+
+
 class EvidenceTests(unittest.TestCase):
+    def test_render_cluster_report_is_machine_evidence_not_an_image(self):
+        self.assertEqual(
+            validate_evidence(
+                ["assets/bugfixes/issue-186/render-clusters-page-1.json"], ROOT
+            ),
+            [],
+        )
+
     def test_repository_evidence_is_progressive_150_dpi_jpeg(self):
         path = ROOT / "assets/bugfixes/issue-186/gt.jpg"
         info = read_jpeg_info(path)

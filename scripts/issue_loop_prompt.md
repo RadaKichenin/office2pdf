@@ -11,7 +11,8 @@ replace those documents.
   **every** commit, not only the one that opens the pull request.
 - Layout and rendering claims need measurement, not inspection: use
   `scripts/compare_layout.py --audit --fine-shift PT`,
-  `scripts/compare_render.py --fine-shift PT --artifacts-dir`, and
+  `scripts/compare_render.py --fine-shift PT --artifacts-dir PATH --cluster-report
+  PATH --cluster-dispositions PATH --strict-clusters`, and
   `scripts/compare_text_layer.py`, and look at the emitted images. A numeric
   report alone is not a visual pass.
 - Settle an unclear native-application rule with `scripts/probe_harness.py` (one factor

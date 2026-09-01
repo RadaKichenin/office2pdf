@@ -356,6 +356,198 @@ class DiffClusterParseTest(unittest.TestCase):
         self.assertEqual(regions[0].region, "center")
 
 
+class StrictClusterDispositionTest(unittest.TestCase):
+    """Strict audits must name every material cluster by its stable ID."""
+
+    def cluster(self, *, x: float = 10.0, area: float = 40.0) -> object:
+        return compare_render.DiffCluster(
+            x_pt=x,
+            y_pt=20.0,
+            width_pt=8.0,
+            height_pt=8.0,
+            area_pt2=area,
+            region="top-left",
+        )
+
+    def disposition_document(
+        self, cluster_ids: list[str], accepted_class: str
+    ) -> dict[str, object]:
+        return {
+            "schema_version": 1,
+            "groups": [
+                {
+                    "kind": "accepted-rendering",
+                    "class": accepted_class,
+                    "cluster_ids": cluster_ids,
+                    "note": "Inspected at full resolution.",
+                }
+            ],
+        }
+
+    def test_stable_id_includes_page_and_quantized_geometry(self) -> None:
+        cluster = self.cluster()
+
+        first = compare_render.diff_cluster_id(1, cluster)
+        repeat = compare_render.diff_cluster_id(1, cluster)
+        next_page = compare_render.diff_cluster_id(2, cluster)
+        moved = compare_render.diff_cluster_id(1, self.cluster(x=10.24))
+
+        self.assertEqual(first, repeat)
+        self.assertRegex(first, r"^p1-[0-9a-f]{12}$")
+        self.assertNotEqual(first, next_page)
+        self.assertNotEqual(first, moved)
+
+    def test_undispositioned_shape_shift_fails_strict_audit(self) -> None:
+        cluster = self.cluster(area=800.0)
+
+        report = compare_render.build_cluster_audit_report(
+            [cluster], page=1, dpi=300, disposition_document=None, strict=True
+        )
+
+        self.assertFalse(report["passed"])
+        self.assertEqual(
+            report["undispositioned_cluster_ids"],
+            [compare_render.diff_cluster_id(1, cluster)],
+        )
+
+    def test_accepted_glyph_edge_passes_strict_audit(self) -> None:
+        cluster = self.cluster()
+        cluster_id = compare_render.diff_cluster_id(1, cluster)
+
+        report = compare_render.build_cluster_audit_report(
+            [cluster],
+            page=1,
+            dpi=300,
+            disposition_document=self.disposition_document(
+                [cluster_id], "glyph-edge-rasterization"
+            ),
+            strict=True,
+        )
+
+        self.assertTrue(report["passed"])
+        self.assertEqual(
+            report["clusters"][0]["disposition"]["class"],
+            "glyph-edge-rasterization",
+        )
+
+    def test_accepted_photo_region_passes_strict_audit(self) -> None:
+        cluster = self.cluster(area=1200.0)
+        cluster_id = compare_render.diff_cluster_id(1, cluster)
+
+        report = compare_render.build_cluster_audit_report(
+            [cluster],
+            page=1,
+            dpi=300,
+            disposition_document=self.disposition_document(
+                [cluster_id], "photo-resampling"
+            ),
+            strict=True,
+        )
+
+        self.assertTrue(report["passed"])
+
+    def test_new_cluster_outside_existing_disposition_fails(self) -> None:
+        reviewed = self.cluster()
+        new_cluster = self.cluster(x=100.0)
+        reviewed_id = compare_render.diff_cluster_id(1, reviewed)
+
+        report = compare_render.build_cluster_audit_report(
+            [reviewed, new_cluster],
+            page=1,
+            dpi=300,
+            disposition_document=self.disposition_document(
+                [reviewed_id], "shape-edge-antialiasing"
+            ),
+            strict=True,
+        )
+
+        self.assertFalse(report["passed"])
+        self.assertEqual(
+            report["undispositioned_cluster_ids"],
+            [compare_render.diff_cluster_id(1, new_cluster)],
+        )
+
+    def test_renderer_observation_records_below_floor_region_without_hiding_new_cluster(self) -> None:
+        reviewed = self.cluster()
+        new_cluster = self.cluster(x=100.0)
+        reviewed_id = compare_render.diff_cluster_id(1, reviewed)
+        document = self.disposition_document(
+            [reviewed_id], "glyph-edge-rasterization"
+        )
+        document["renderer_observations"] = [
+            {
+                "class": "shape-edge-antialiasing",
+                "bbox_pt": {"x": 90.0, "y": 10.0, "width": 30.0, "height": 40.0},
+                "note": "Sub-threshold hairline fragments inspected at full resolution.",
+            }
+        ]
+
+        report = compare_render.build_cluster_audit_report(
+            [reviewed, new_cluster],
+            page=1,
+            dpi=300,
+            disposition_document=document,
+            strict=True,
+        )
+
+        self.assertFalse(report["passed"])
+        self.assertEqual(
+            report["undispositioned_cluster_ids"],
+            [compare_render.diff_cluster_id(1, new_cluster)],
+        )
+        self.assertEqual(
+            report["renderer_observations"][0]["class"],
+            "shape-edge-antialiasing",
+        )
+
+    def test_blanket_page_disposition_is_rejected(self) -> None:
+        cluster = self.cluster()
+        document = {
+            "schema_version": 1,
+            "groups": [
+                {
+                    "kind": "accepted-rendering",
+                    "class": "glyph-edge-rasterization",
+                    "page": 1,
+                    "region": "top-left",
+                }
+            ],
+        }
+
+        report = compare_render.build_cluster_audit_report(
+            [cluster], page=1, dpi=300, disposition_document=document, strict=True
+        )
+
+        self.assertFalse(report["passed"])
+        self.assertTrue(any("cluster_ids" in error for error in report["errors"]))
+
+    def test_report_contains_machine_readable_geometry_and_summary(self) -> None:
+        cluster = self.cluster()
+        cluster_id = compare_render.diff_cluster_id(1, cluster)
+        report = compare_render.build_cluster_audit_report(
+            [cluster],
+            page=1,
+            dpi=300,
+            disposition_document=self.disposition_document(
+                [cluster_id], "gradient-rasterization"
+            ),
+            strict=True,
+        )
+
+        self.assertEqual(report["schema_version"], 1)
+        self.assertEqual(report["page"], 1)
+        self.assertEqual(report["dpi"], 300)
+        self.assertEqual(report["fuzz_percent"], 5)
+        self.assertEqual(report["minimum_area_pt2"], 20.0)
+        self.assertEqual(report["summary"]["total"], 1)
+        self.assertEqual(report["summary"]["dispositioned"], 1)
+        self.assertEqual(report["clusters"][0]["id"], cluster_id)
+        self.assertEqual(
+            report["clusters"][0]["bbox_pt"],
+            {"x": 10.0, "y": 20.0, "width": 8.0, "height": 8.0},
+        )
+
+
 class DiagnoseWithClustersTest(unittest.TestCase):
     """A dominant contiguous cluster routes attention to structure, not noise."""
 
