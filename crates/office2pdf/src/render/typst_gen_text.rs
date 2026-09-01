@@ -65,6 +65,12 @@ const SHEET_ADVANCE_GRID_PT: f64 = 1.0;
 /// translation (issue #1479).
 const WORD_COMPRESSED_LINE_EDGE_PT: f64 = 1.0;
 
+/// A bottom-aligned expanded Latin line in a Word table keeps one quarter
+/// point of its extra line space between baselines instead of exposing it
+/// below the last baseline. The #1219 LibreOffice trace isolates this quantum
+/// in a 15pt line with `w:line="259"` (issue #1486).
+const WORD_EXPANDED_BOTTOM_LINE_EDGE_PT: f64 = 0.25;
+
 /// Emit the ligature rule every PowerPoint slide follows.
 ///
 /// PowerPoint does not apply the OpenType `liga`/`clig` features. DrawingML has
@@ -1925,6 +1931,33 @@ pub(super) fn word_cell_line_box(
                 leading_pt + edge_pt / 2.0,
             ),
         }
+    } else {
+        (top_em, bottom_em, leading_pt)
+    };
+    // An expanded Latin auto line in a bottom-aligned Word cell has the same
+    // baseline advance as the hhea pitch times `w:line / 240`, but its final
+    // exterior edge is one quarter point shorter. Keeping that quarter point
+    // as leading preserves every baseline-to-baseline advance while lowering
+    // only the last line against the cell's bottom boundary. Limit the move to
+    // the proportional surplus so the exterior edge never cuts into the
+    // face's natural descent (issue #1486).
+    let expands_bottom_aligned_word_line: bool = sheet_print_scale.is_none()
+        && !seats_text_on_descender
+        && !row_east_asian.takes_east_asian_metrics
+        && matches!(
+            style.line_spacing,
+            Some(LineSpacing::Proportional(factor)) if factor > 1.0
+        )
+        && vertical_align == Some(CellVerticalAlign::Bottom)
+        && advance_em > metric_em;
+    let (top_em, bottom_em, leading_pt): (f64, f64, f64) = if expands_bottom_aligned_word_line {
+        let expanded_pt: f64 = (advance_em - metric_em) * font_size;
+        let edge_pt: f64 = WORD_EXPANDED_BOTTOM_LINE_EDGE_PT.min(expanded_pt);
+        (
+            top_em,
+            bottom_em - edge_pt / font_size,
+            leading_pt + edge_pt,
+        )
     } else {
         (top_em, bottom_em, leading_pt)
     };

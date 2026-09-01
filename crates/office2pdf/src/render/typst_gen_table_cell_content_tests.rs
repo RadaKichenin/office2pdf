@@ -1512,6 +1512,91 @@ fn compressed_word_table_cell_source(
     generate_typst(&doc).unwrap().source
 }
 
+/// The page-2 RSVP row from the #1219 invitation starts at the 57.6pt page
+/// margin and is exactly 86.4pt tall, so its lower edge is 144pt. LibreOffice
+/// seats the 15pt Noto line at 130.25pt: after the inherited 8pt paragraph gap,
+/// only 5.75pt remains below the baseline. The raw proportional hhea box leaves
+/// 6.012pt there and puts the line 0.262pt high. A bottom-aligned expanded Word
+/// line moves one quarter point of that exterior edge into inter-line leading;
+/// this changes the last-line seat without changing a multiline pitch (issue
+/// #1486).
+#[test]
+fn expanded_word_bottom_cell_uses_the_native_quarter_point_last_line_seat() {
+    let Some((ascender, _descender, word_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
+        return;
+    };
+    let font_size: f64 = 15.0;
+    let line_factor: f64 = 259.0 / 240.0;
+    let advance_em: f64 = word_pitch_em * line_factor;
+    let native_bottom_em: f64 = advance_em - ascender - 0.25 / font_size;
+    let cell = TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle {
+                line_spacing: Some(LineSpacing::Proportional(line_factor)),
+                space_after: Some(8.0),
+                ..ParagraphStyle::default()
+            },
+            runs: vec![Run {
+                text: "RSVP BY JUNE 20 AT INFO@FABRIKAM.COM".to_string(),
+                style: TextStyle {
+                    font_family: Some("Libertinus Serif".to_string()),
+                    font_size: Some(font_size),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })],
+        vertical_align: Some(CellVerticalAlign::Bottom),
+        padding: Some(Insets {
+            top: 0.0,
+            right: 5.4,
+            bottom: 0.0,
+            left: 5.4,
+        }),
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            minimum_height: None,
+            cells: vec![cell],
+            height: Some(86.4),
+        }],
+        column_widths: vec![496.3],
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains(&format!(
+            "top-edge: {}em, bottom-edge: -{}em",
+            format_f64(ascender),
+            format_f64(native_bottom_em)
+        )),
+        "the expanded line must shorten its last exterior seat by 0.25pt: {result}"
+    );
+    assert!(
+        result.contains("#set par(leading: 0.25pt)"),
+        "the quarter point stays between lines so their advance is unchanged: {result}"
+    );
+    assert!(
+        result.contains("#v(8pt)"),
+        "the inherited paragraph-after gap remains outside the line box: {result}"
+    );
+    assert!(
+        result.contains("align: bottom)["),
+        "the source cell remains bottom aligned: {result}"
+    );
+    assert!(
+        result.contains("rows: (86.4pt)")
+            && result.contains("inset: (top: 0pt, right: 5.4pt, bottom: 0pt, left: 5.4pt)"),
+        "the regression must retain the source row height and effective cell margins: {result}"
+    );
+}
+
 /// Two stacked `<w:p>` in one `<w:tc>` are separated by the first paragraph's
 /// `w:spacing w:after` alone. Each paragraph's `#block` wrapper must therefore
 /// carry `above: 0pt, below: 0pt`: sibling blocks otherwise pick up Typst's
