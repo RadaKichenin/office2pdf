@@ -4372,6 +4372,9 @@ fn excel_gift_column_chart(size_pt: f64, number_format: Option<&str>) -> Chart {
 /// chart's own points. The sheet prints at a 0.82 fit-to-page scale, so on the
 /// page it measures 833.10 x 252.54pt.
 const EXCEL_GIFT_CHART_FRAME: (f64, f64) = (1015.9784, 307.9732);
+const EXCEL_GIFT_PRINT_SCALE: f64 = 0.82;
+const EXCEL_GIFT_CHART_SPACE_FRAME_TOP: f64 = 143.866_536_585_365_85;
+const EXCEL_GIFT_ANCHOR_Y: f64 = 79.256_692_913_385_83;
 
 /// The same anchored worksheet combo chart with its three vertical-layout
 /// text bands stated independently.
@@ -4392,6 +4395,47 @@ fn excel_gift_vertical_chart(
     chart.category_axis_text_style.size_pt = Some(category_axis_size_pt);
     chart.legend_text_style.size_pt = Some(legend_size_pt);
     chart
+}
+
+fn anchored_excel_gift_chart_source(chart: Chart, chart_space_frame_top: f64) -> String {
+    let margin_top: f64 = chart_space_frame_top * EXCEL_GIFT_PRINT_SCALE - EXCEL_GIFT_ANCHOR_Y;
+    let doc: Document = make_doc(vec![Page::Sheet(SheetPage {
+        name: "Gift budget and tracker".to_string(),
+        size: PageSize::default(),
+        margins: Margins {
+            top: margin_top,
+            ..Margins::default()
+        },
+        table: make_simple_table(vec![vec![""]]),
+        header: None,
+        footer: None,
+        charts: vec![crate::ir::SheetChart {
+            anchor_row: 3,
+            placement: Some(crate::ir::SheetChartPlacement {
+                x_offset_pt: 0.0,
+                y_offset_pt: EXCEL_GIFT_ANCHOR_Y,
+                width: EXCEL_GIFT_CHART_FRAME.0,
+                height: EXCEL_GIFT_CHART_FRAME.1,
+                print_scale: EXCEL_GIFT_PRINT_SCALE,
+            }),
+            chart,
+        }],
+        images: Vec::new(),
+        text_boxes: Vec::new(),
+    })]);
+    generate_typst(&doc).unwrap().source
+}
+
+fn value_label_gridline_offset(source: &str, label: &str, tick_index: usize) -> f64 {
+    let gridline_y: Vec<f64> = emitted_lines(source)
+        .into_iter()
+        .filter(|line| line.end_x > 100.0 && same_length(line.end_y, 0.0))
+        .take(11)
+        .map(|line| line.dy)
+        .collect();
+    assert_eq!(gridline_y.len(), 11, "expected eleven gridlines: {source}");
+    let label_box: PlacedBox = placed_box_holding(source, label);
+    label_box.dy + label_box.height / 2.0 - gridline_y[tick_index]
 }
 
 #[test]
@@ -4424,39 +4468,10 @@ fn an_anchored_excel_worksheet_chart_snaps_interior_gridlines_in_sheet_space() {
     // interior major gridline to a whole point there, and only then applies
     // the sheet's 0.82 fit-to-page scale. The plot endpoints themselves stay
     // on the exact #1250 chrome model rather than being rounded.
-    const PRINT_SCALE: f64 = 0.82;
-    const CHART_SPACE_FRAME_TOP: f64 = 143.866_536_585_365_85;
-    const ANCHOR_Y: f64 = 79.256_692_913_385_83;
-    let margin_top = CHART_SPACE_FRAME_TOP * PRINT_SCALE - ANCHOR_Y;
-
     let mut chart = excel_gift_vertical_chart(9.0, 9.0, 9.0);
     chart.value_axis_max = Some(200.0);
     chart.value_axis_major_unit = Some(20.0);
-    let doc = make_doc(vec![Page::Sheet(SheetPage {
-        name: "Gift budget and tracker".to_string(),
-        size: PageSize::default(),
-        margins: Margins {
-            top: margin_top,
-            ..Margins::default()
-        },
-        table: make_simple_table(vec![vec![""]]),
-        header: None,
-        footer: None,
-        charts: vec![crate::ir::SheetChart {
-            anchor_row: 3,
-            placement: Some(crate::ir::SheetChartPlacement {
-                x_offset_pt: 0.0,
-                y_offset_pt: ANCHOR_Y,
-                width: EXCEL_GIFT_CHART_FRAME.0,
-                height: EXCEL_GIFT_CHART_FRAME.1,
-                print_scale: PRINT_SCALE,
-            }),
-            chart,
-        }],
-        images: Vec::new(),
-        text_boxes: Vec::new(),
-    })]);
-    let source = generate_typst(&doc).unwrap().source;
+    let source: String = anchored_excel_gift_chart_source(chart, EXCEL_GIFT_CHART_SPACE_FRAME_TOP);
 
     let page_frame_top = leading_pt(
         source
@@ -4465,9 +4480,9 @@ fn an_anchored_excel_worksheet_chart_snaps_interior_gridlines_in_sheet_space() {
             .1,
     )
     .expect("the chart page offset is a point measurement");
-    let chart_space_frame_top = page_frame_top / PRINT_SCALE;
+    let chart_space_frame_top = page_frame_top / EXCEL_GIFT_PRINT_SCALE;
     assert!(
-        (chart_space_frame_top - CHART_SPACE_FRAME_TOP).abs() <= 0.001,
+        (chart_space_frame_top - EXCEL_GIFT_CHART_SPACE_FRAME_TOP).abs() <= 0.001,
         "test setup changed the sheet-space phase: {chart_space_frame_top}pt; source:\n{source}"
     );
 
@@ -4502,6 +4517,64 @@ fn an_anchored_excel_worksheet_chart_snaps_interior_gridlines_in_sheet_space() {
         assert!(
             (actual - expected).abs() <= 0.002,
             "gridline {index} lands at {actual} sheet pt, native Excel uses {expected} sheet pt; source:\n{source}"
+        );
+    }
+}
+
+#[test]
+fn an_anchored_excel_worksheet_chart_snaps_value_labels_independently() {
+    // Native Excel rounds the value-label baseline separately from the
+    // gridline it accompanies. On the #1499 chart that gives the $140 label
+    // one extra unscaled sheet point while the adjacent $120 and $160 labels
+    // keep the common gridline-relative seat.
+    let mut chart: Chart = excel_gift_vertical_chart(9.0, 9.0, 9.0);
+    chart.value_axis_max = Some(200.0);
+    chart.value_axis_major_unit = Some(20.0);
+    chart.value_axis_number_format = Some("\"$\"#,##0".to_string());
+    let source: String = anchored_excel_gift_chart_source(chart, EXCEL_GIFT_CHART_SPACE_FRAME_TOP);
+    let offsets: [f64; 3] = [
+        value_label_gridline_offset(&source, "\\$120", 6),
+        value_label_gridline_offset(&source, "\\$140", 7),
+        value_label_gridline_offset(&source, "\\$160", 8),
+    ];
+    let expected: [f64; 3] = [0.0, 1.0, 0.0];
+    for ((label, actual), expected) in ["$120", "$140", "$160"]
+        .into_iter()
+        .zip(offsets)
+        .zip(expected)
+    {
+        assert!(
+            (actual - expected).abs() <= 0.002,
+            "{label} label offset is {actual} sheet pt, native Excel uses {expected} sheet pt; source:\n{source}"
+        );
+    }
+}
+
+#[test]
+fn excel_value_label_snap_follows_the_sheet_phase_instead_of_the_tick_value() {
+    // Moving the whole chart 0.2 sheet points changes which continuous label
+    // coordinate crosses the next integer boundary. The extra point therefore
+    // moves from $140 to $120; it is not a special case for one tick value.
+    let mut chart: Chart = excel_gift_vertical_chart(9.0, 9.0, 9.0);
+    chart.value_axis_max = Some(200.0);
+    chart.value_axis_major_unit = Some(20.0);
+    chart.value_axis_number_format = Some("\"$\"#,##0".to_string());
+    let source: String =
+        anchored_excel_gift_chart_source(chart, EXCEL_GIFT_CHART_SPACE_FRAME_TOP + 0.2);
+    let offsets: [f64; 3] = [
+        value_label_gridline_offset(&source, "\\$120", 6),
+        value_label_gridline_offset(&source, "\\$140", 7),
+        value_label_gridline_offset(&source, "\\$160", 8),
+    ];
+    let expected: [f64; 3] = [1.0, 0.0, 0.0];
+    for ((label, actual), expected) in ["$120", "$140", "$160"]
+        .into_iter()
+        .zip(offsets)
+        .zip(expected)
+    {
+        assert!(
+            (actual - expected).abs() <= 0.002,
+            "shifted {label} label offset is {actual} sheet pt, expected {expected} sheet pt; source:\n{source}"
         );
     }
 }

@@ -3539,6 +3539,38 @@ fn column_value_chrome_y(
     (frame_top + y).round() - frame_top
 }
 
+/// Seat an Excel column-chart value label independently of its gridline.
+///
+/// Native no-fit and fit-to-page exports of the same 9pt axis constrain the
+/// label baseline phase to 3.0335..3.1256 sheet points after its continuous
+/// gridline coordinate. The phase changes which side of a whole-point boundary
+/// the label reaches, while Typst still supplies the label's ordinary glyph
+/// seat. Preserve that seat and apply only Excel's additional rounding delta.
+fn column_value_label_y(
+    chart: &Chart,
+    plot_y: f64,
+    plot_h: f64,
+    frac: f64,
+    sheet_frame_top_pt: Option<f64>,
+) -> f64 {
+    let chrome_y: f64 = column_value_chrome_y(chart, plot_y, plot_h, frac, sheet_frame_top_pt);
+    if chart.host != crate::ir::ChartHost::Spreadsheet || !(0.0 < frac && frac < 1.0) {
+        return chrome_y;
+    }
+    let Some(frame_top) = sheet_frame_top_pt else {
+        return chrome_y;
+    };
+
+    const EXCEL_VALUE_LABEL_BASELINE_PHASE_EM: f64 = 0.34;
+    let continuous_sheet_y: f64 = frame_top + plot_y + (1.0 - frac) * plot_h;
+    let baseline_phase: f64 = chart_axis_text_pt(chart, chart.value_axis_text_style)
+        * EXCEL_VALUE_LABEL_BASELINE_PHASE_EM;
+    let independent_snap_delta: f64 = (continuous_sheet_y + baseline_phase).round()
+        - continuous_sheet_y.round()
+        - baseline_phase.round();
+    chrome_y + independent_snap_delta
+}
+
 /// Render a bar (horizontal) or column (vertical) chart as an axis-scaled
 /// plot with gridlines, tick labels, and a legend.
 fn generate_chart_axis(
@@ -3690,6 +3722,8 @@ fn generate_chart_axis(
             }
         } else {
             let y: f64 = column_value_chrome_y(chart, plot_y, plot_h, frac, sheet_frame_top_pt);
+            let label_y: f64 =
+                column_value_label_y(chart, plot_y, plot_h, frac, sheet_frame_top_pt);
             if let Some(stroke) = gridline_stroke.as_deref() {
                 let _ = writeln!(
                     out,
@@ -3706,10 +3740,11 @@ fn generate_chart_axis(
                     "#place(top + left, dx: {}pt, dy: {}pt, box(width: {}pt, height: {}pt)[#align(right + horizon)[#text(size: {}pt{})[{}]]])",
                     format_f64(label_box_x + plot.dx),
                     format_f64(
-                        y - chart_label_box_h(chart_axis_text_pt(
-                            chart,
-                            chart.value_axis_text_style
-                        )) / 2.0
+                        label_y
+                            - chart_label_box_h(chart_axis_text_pt(
+                                chart,
+                                chart.value_axis_text_style
+                            )) / 2.0
                     ),
                     format_f64(label_box_w),
                     format_f64(chart_label_box_h(chart_axis_text_pt(
