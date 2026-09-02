@@ -3601,17 +3601,17 @@ fn wrapped_sheet_cell_paces_its_lines_on_excels_advance() {
 
 /// The `Start` sheet of the workbook attached to #982 puts these two wrapped
 /// cells in consecutive 39.75pt fixed rows with the same Calibri 11pt style,
-/// inset and centre alignment. Native Excel gives the three-line A6 block the
-/// odd centring point below its geometric centre, so its middle baseline sits
-/// one point closer to A7's already-matching two-line midpoint. Typst's
-/// default block centring leaves that point above A6 (issue #1494).
+/// inset and centre alignment. The control uses Typst's embedded Libertinus
+/// face so every runner keeps the same automatic three-line/two-line wraps
+/// while exercising the workbook's row geometry. Native Excel gives the
+/// three-line A6 block the odd centring point below its geometric centre, so
+/// its middle baseline sits one point closer to A7's already-matching two-line
+/// midpoint. Typst's default block centring leaves that point above A6
+/// (issue #1494).
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn centered_fixed_sheet_rows_share_one_center_across_two_and_three_wrapped_lines() {
-    const FAMILY: &str = "Calibri";
-    if crate::render::pdf::font_line_metrics_em(FAMILY).is_none() {
-        return;
-    }
+    const FAMILY: &str = "Libertinus Serif";
 
     let wrapped_cell = |text: &str| TableCell {
         content: vec![Block::Paragraph(Paragraph {
