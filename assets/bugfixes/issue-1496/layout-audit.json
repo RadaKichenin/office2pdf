@@ -1,0 +1,191 @@
+{
+ "pages": [
+  {
+   "lines": {
+    "gt": 12,
+    "out": 12,
+    "matched": 12,
+    "missing": 0,
+    "extra": 0,
+    "deviant": 0,
+    "missing_text": [],
+    "extra_text": []
+   },
+   "baseline": {
+    "mean_abs_dy": 0.03540833333333163,
+    "worst_dy": 0.4248999999999796,
+    "worst_dy_signed": -0.4248999999999796,
+    "worst_line": "_x000D_#Sensitivity:Internal"
+   },
+   "dx0": {
+    "mean_abs": 0.0034991666666665346,
+    "worst": -0.04198999999999842
+   },
+   "width": {
+    "mean_abs_pct": 0.8817674269765817,
+    "worst_pct": 8.70238863638585
+   },
+   "instances": {
+    "large_shift_threshold": 5.0,
+    "large_shift_count": 0,
+    "large_shifts": [],
+    "fine_shift_threshold": 0.5,
+    "fine_shift_count": 0,
+    "fine_shifts": []
+   },
+   "visibility": {
+    "mismatch_count": 0,
+    "mismatches": []
+   },
+   "visible_fills": {
+    "mismatch_count": 0,
+    "mismatches": []
+   },
+   "pitch": {
+    "pairs": 11,
+    "worst_delta": 0.4248999999999796
+   },
+   "wraps": {
+    "count": 0,
+    "samples": []
+   },
+   "reflow": {
+    "gt_lines": 0,
+    "out_lines": 0,
+    "samples": []
+   },
+   "rects": {
+    "gt_count": 2,
+    "out_count": 45,
+    "matched": 1,
+    "mean_center_delta": 0.5
+   },
+   "noise_floor": 0.5
+  },
+  {
+   "lines": {
+    "gt": 34,
+    "out": 34,
+    "matched": 34,
+    "missing": 0,
+    "extra": 0,
+    "deviant": 6,
+    "missing_text": [],
+    "extra_text": []
+   },
+   "baseline": {
+    "mean_abs_dy": 0.2709858529411453,
+    "worst_dy": 1.1384499999999633,
+    "worst_dy_signed": 1.1384499999999633,
+    "worst_line": "ANDTRACKER"
+   },
+   "dx0": {
+    "mean_abs": 0.21869323529411697,
+    "worst": 0.8000000000000043
+   },
+   "width": {
+    "mean_abs_pct": 1.0858784268491175,
+    "worst_pct": 8.702393874666923
+   },
+   "instances": {
+    "large_shift_threshold": 5.0,
+    "large_shift_count": 0,
+    "large_shifts": [],
+    "fine_shift_threshold": 0.5,
+    "fine_shift_count": 6,
+    "fine_shifts": [
+     {
+      "label": "GIFTBUDGET",
+      "gt_x": 82.82,
+      "gt_y": 94.29999999999995,
+      "out_x": 83.005,
+      "out_y": 95.438419,
+      "dx": 0.18500000000000227,
+      "dy": 1.1384190000000416,
+      "width_pct": -0.38327716468322737
+     },
+     {
+      "label": "ANDTRACKER",
+      "gt_x": 82.82,
+      "gt_y": 125.46000000000004,
+      "out_x": 83.005,
+      "out_y": 126.59845,
+      "dx": 0.18500000000000227,
+      "dy": 1.1384499999999633,
+      "width_pct": 0.36379532984831237
+     },
+     {
+      "label": "$140",
+      "gt_x": 294.7797,
+      "gt_y": 190.24,
+      "out_x": 294.96467,
+      "out_y": 189.5437,
+      "dx": 0.18497000000002117,
+      "dy": -0.6963000000000079,
+      "width_pct": -2.257689035244115
+     },
+     {
+      "label": "AmountAmountInstore/",
+      "gt_x": 488.71999999999997,
+      "gt_y": 430.49999999999994,
+      "out_x": 488.5951,
+      "out_y": 431.03504,
+      "dx": -0.12489999999996826,
+      "dy": 0.5350400000000377,
+      "width_pct": 0.2784748098502561
+     },
+     {
+      "label": "budgetedspentOnline",
+      "gt_x": 485.44,
+      "gt_y": 443.61999999999995,
+      "out_x": 484.94355,
+      "out_y": 442.84498,
+      "dx": -0.49644999999998163,
+      "dy": -0.7750199999999268,
+      "width_pct": -0.02185572590445511
+     },
+     {
+      "label": "_x000D_#Sensitivity:Internal",
+      "gt_x": 49.199999999999996,
+      "gt_y": 817.54,
+      "out_x": 50.0,
+      "out_y": 816.99179,
+      "dx": 0.8000000000000043,
+      "dy": -0.5482099999999264,
+      "width_pct": 8.702393874666923
+     }
+    ]
+   },
+   "visibility": {
+    "mismatch_count": 0,
+    "mismatches": []
+   },
+   "visible_fills": {
+    "mismatch_count": 0,
+    "mismatches": []
+   },
+   "pitch": {
+    "pairs": 33,
+    "worst_delta": 1.2584189999999893
+   },
+   "wraps": {
+    "count": 0,
+    "samples": []
+   },
+   "reflow": {
+    "gt_lines": 0,
+    "out_lines": 0,
+    "samples": []
+   },
+   "rects": {
+    "gt_count": 26,
+    "out_count": 156,
+    "matched": 16,
+    "mean_center_delta": 0.49030499864999744
+   },
+   "noise_floor": 0.5
+  }
+ ],
+ "gt_pages": 2,
+ "out_pages": 2
+}
