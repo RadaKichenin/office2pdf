@@ -3718,6 +3718,58 @@ fn wrapped_sheet_cell_paces_its_lines_on_excels_advance() {
     );
 }
 
+/// Excel paces a wrapped cell from the face the workbook declares even when
+/// office2pdf must paint a metric-compatible substitute. The #982 table
+/// header declares Segoe UI 12pt, which advances 16pt in sheet space and
+/// 13.12pt on its 0.82 fitted page. A host without Segoe UI paints bundled
+/// Selawik; selecting the advance table with that painted family collapses
+/// the two baselines to the substitute's 14.40pt `hhea` pitch. This control
+/// uses Typst's embedded Libertinus face as a portable stand-in for the
+/// distinct painted metric family (issue #1498).
+#[test]
+fn substituted_sheet_face_keeps_the_declared_excel_wrapped_advance() {
+    const DECLARED_FAMILY: &str = "Segoe UI";
+    const PAINTED_METRIC_FAMILY: &str = "Libertinus Serif";
+    const FONT_SIZE_PT: f64 = 12.0;
+    const NATIVE_ADVANCE_PT: f64 = 16.0;
+    let runs = [Run {
+        text: "Amount budgeted".to_string(),
+        style: TextStyle {
+            font_family: Some(DECLARED_FAMILY.to_string()),
+            font_size: Some(FONT_SIZE_PT),
+            ..TextStyle::default()
+        },
+        href: None,
+        footnote: None,
+    }];
+    let painted_row_line = SheetRowLine {
+        metric_family: PAINTED_METRIC_FAMILY.to_string(),
+        font_size_pt: FONT_SIZE_PT,
+    };
+    let line_box = word_cell_line_box(
+        &runs,
+        &ParagraphStyle::default(),
+        None,
+        RowEastAsianMetrics {
+            has_east_asian_text: false,
+            takes_east_asian_metrics: false,
+        },
+        Some(CellVerticalAlign::Center),
+        false,
+        Some(&painted_row_line),
+        None,
+        Some(1.0),
+    )
+    .expect("the embedded painted face has line metrics");
+    let emitted_advance_pt: f64 =
+        (line_box.top_em + line_box.bottom_em) * line_box.font_size_pt + line_box.leading_pt;
+    assert!(
+        (emitted_advance_pt - NATIVE_ADVANCE_PT).abs() < 0.01,
+        "the substituted cell must retain {DECLARED_FAMILY}'s {NATIVE_ADVANCE_PT}pt \
+         native advance, got {emitted_advance_pt}pt from {PAINTED_METRIC_FAMILY}"
+    );
+}
+
 /// The `Start` sheet of the workbook attached to #982 puts these two wrapped
 /// cells in consecutive 39.75pt fixed rows with the same Calibri 11pt style,
 /// inset and centre alignment. The control uses Typst's embedded Libertinus

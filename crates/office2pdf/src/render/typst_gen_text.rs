@@ -935,21 +935,7 @@ fn east_asian_aware_metric_family(runs: &[Run]) -> Option<&str> {
 /// fallback even though a family-only metric lookup can resolve it (issue
 /// #1239).
 fn sheet_cell_metric_family(runs: &[Run]) -> Option<String> {
-    let has_east_asian: bool = has_east_asian_text(runs);
-    let run: &Run = if has_east_asian {
-        runs.iter()
-            .find(|run| {
-                run.text.chars().any(is_cjk_like)
-                    && (run.style.font_family.is_some()
-                        || run.style.east_asian_font_family.is_some())
-            })
-            .or_else(|| {
-                runs.iter()
-                    .find(|run| run.style.east_asian_font_family.is_some())
-            })?
-    } else {
-        runs.iter().find(|run| run.style.font_family.is_some())?
-    };
+    let run: &Run = sheet_cell_metric_run(runs)?;
     let latin_family: &str = run
         .style
         .font_family
@@ -960,6 +946,44 @@ fn sheet_cell_metric_family(runs: &[Run]) -> Option<String> {
         run.style.east_asian_font_family.as_deref(),
         &run.text,
     ))
+}
+
+/// The run whose face represents a spreadsheet cell's line metrics. Keeping
+/// this selection shared makes the painted and declared family answers below
+/// describe the same run even when a paragraph mixes scripts or faces.
+fn sheet_cell_metric_run(runs: &[Run]) -> Option<&Run> {
+    if has_east_asian_text(runs) {
+        runs.iter()
+            .find(|run| {
+                run.text.chars().any(is_cjk_like)
+                    && (run.style.font_family.is_some()
+                        || run.style.east_asian_font_family.is_some())
+            })
+            .or_else(|| {
+                runs.iter()
+                    .find(|run| run.style.east_asian_font_family.is_some())
+            })
+    } else {
+        runs.iter().find(|run| run.style.font_family.is_some())
+    }
+}
+
+/// The workbook family Excel uses to choose a wrapped sheet cell's native
+/// line advance. Painting may resolve that request to a substitute, but the
+/// source application's pitch remains keyed to the declared face (#1498).
+fn sheet_cell_declared_metric_family(runs: &[Run]) -> Option<&str> {
+    let run: &Run = sheet_cell_metric_run(runs)?;
+    if has_east_asian_text(runs) {
+        run.style
+            .east_asian_font_family
+            .as_deref()
+            .or(run.style.font_family.as_deref())
+    } else {
+        run.style
+            .font_family
+            .as_deref()
+            .or(run.style.east_asian_font_family.as_deref())
+    }
 }
 
 fn has_east_asian_text(runs: &[Run]) -> bool {
@@ -1805,6 +1829,10 @@ pub(super) fn word_cell_line_box(
     let painted_sheet_family: Option<String> = (sheet_seat.is_some() && !seats_text_on_descender)
         .then(|| sheet_cell_metric_family(runs))
         .flatten();
+    let declared_sheet_family: Option<&str> = sheet_print_scale
+        .is_some()
+        .then(|| sheet_cell_declared_metric_family(runs))
+        .flatten();
     let (family, font_size): (&str, f64) = match sheet_row_line {
         Some(row_line) => (row_line.metric_family.as_str(), row_line.font_size_pt),
         None => (
@@ -2046,14 +2074,21 @@ pub(super) fn word_cell_line_box(
     // inside the box: the box, and with it every seat measured against it,
     // stays exactly where issues #618/#839/#1063 put it, and only a cell that
     // sets a second line can see the difference (issue #1163).
+    // Select that advance with the workbook's declared family even when the
+    // line-box metrics above come from the face office2pdf actually paints:
+    // Excel's Segoe UI pitch does not become Selawik's just because a host
+    // needs the bundled metric-compatible substitute (issue #1498).
     // Excel evaluates that advance at the size the cell *declares* and prints
     // it through the sheet's `fitToWidth` scale, which the parser has already
     // folded into `font_size`; the scaled advance is no whole number of points.
     let leading_pt: f64 = match sheet_print_scale
         .filter(|scale| *scale > 0.0)
         .and_then(|scale| {
-            sheet_wrapped_line_advance_pt(family, font_size / scale)
-                .map(|advance_pt| advance_pt * scale)
+            sheet_wrapped_line_advance_pt(
+                declared_sheet_family.unwrap_or(family),
+                font_size / scale,
+            )
+            .map(|advance_pt| advance_pt * scale)
         }) {
         Some(advance_pt) => advance_pt - (top_em + bottom_em) * font_size,
         None => leading_pt,
