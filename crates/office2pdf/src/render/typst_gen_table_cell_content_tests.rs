@@ -3599,6 +3599,114 @@ fn wrapped_sheet_cell_paces_its_lines_on_excels_advance() {
     );
 }
 
+/// The `Start` sheet of the workbook attached to #982 puts these two wrapped
+/// cells in consecutive 39.75pt fixed rows with the same Calibri 11pt style,
+/// inset and centre alignment. Native Excel gives the three-line A6 block the
+/// odd centring point below its geometric centre, so its middle baseline sits
+/// one point closer to A7's already-matching two-line midpoint. Typst's
+/// default block centring leaves that point above A6 (issue #1494).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn centered_fixed_sheet_rows_share_one_center_across_two_and_three_wrapped_lines() {
+    const FAMILY: &str = "Calibri";
+    if crate::render::pdf::font_line_metrics_em(FAMILY).is_none() {
+        return;
+    }
+
+    let wrapped_cell = |text: &str| TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: text.to_string(),
+                style: TextStyle {
+                    font_family: Some(FAMILY.to_string()),
+                    font_size: Some(11.0),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })],
+        vertical_align: Some(CellVerticalAlign::Center),
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![
+            TableRow {
+                minimum_height: None,
+                cells: vec![wrapped_cell(
+                    "Additional instructions have been provided in column A in GIFT BUDGET AND \
+                     TRACKER worksheet. This text has been intentionally hidden. To remove text, \
+                     select column A, then select DELETE. To unhide text, select column A, then \
+                     change font color.",
+                )],
+                height: Some(39.75),
+            },
+            TableRow {
+                minimum_height: None,
+                cells: vec![wrapped_cell(
+                    "To learn more about table, press SHIFT and then F10 within a table, select the \
+                     TABLE option, and then select ALTERNATIVE TEXT.",
+                )],
+                height: Some(39.75),
+            },
+        ],
+        column_widths: vec![424.0],
+        default_cell_padding: Some(Insets {
+            top: 1.0,
+            right: 3.0,
+            bottom: 1.5,
+            left: 3.0,
+        }),
+        default_vertical_align: Some(CellVerticalAlign::Bottom),
+        seats_bottom_aligned_text_on_descender: true,
+        ..Table::default()
+    };
+    let output = generate_typst(&make_doc(vec![make_flow_page(vec![Block::Table(table)])]))
+        .expect("the fixed-row sheet renders");
+    let mut baselines: Vec<f64> = crate::render::pdf::compiled_text_runs(&output.source, 0)
+        .unwrap_or_else(|error| panic!("compile failed: {error}\n{}", output.source))
+        .into_iter()
+        .map(|run| run.baseline_pt)
+        .collect();
+    baselines.sort_by(f64::total_cmp);
+
+    assert_eq!(
+        baselines.len(),
+        5,
+        "the control must wrap into three lines followed by two: {baselines:?}\n{}",
+        output.source
+    );
+    let three_line_center_pt: f64 = baselines[1];
+    let two_line_center_pt: f64 = (baselines[3] + baselines[4]) / 2.0;
+    assert!(
+        (two_line_center_pt - three_line_center_pt - 38.75).abs() < 0.01,
+        "Excel gives an odd three-line block the residual point below its geometric centre \
+         while the two-line peer stays centred; baselines={baselines:?}"
+    );
+}
+
+/// The dynamic line-count wrapper is a spreadsheet fixed-row rule. Word uses
+/// its own vertical table-cell model and must keep byte-for-byte ordinary
+/// paragraph emission (issue #1494).
+#[test]
+fn odd_wrapped_center_seat_is_scoped_to_spreadsheet_cells() {
+    let Some((family, font_size_pt, _advance_pt)) = swept_face_with_metrics() else {
+        return;
+    };
+    let sheet_source: String = sheet_paragraph_source(family, font_size_pt);
+    let word_source: String = word_table_paragraph_source(family, font_size_pt);
+
+    assert!(
+        sheet_source.contains("let o2p-centered-sheet-lines = calc.round("),
+        "a centred fixed spreadsheet cell must count its actual wrapped lines: {sheet_source}"
+    );
+    assert!(
+        !word_source.contains("o2p-centered-sheet-lines"),
+        "the Excel odd-line seat must not leak into Word tables: {word_source}"
+    );
+}
+
 /// Triangulation: the same paragraph in a **Word** table keeps Word's own
 /// line, which the box carries whole with no leading at all. Excel's advance
 /// is a spreadsheet treatment and must not leak into `<w:tbl>`.

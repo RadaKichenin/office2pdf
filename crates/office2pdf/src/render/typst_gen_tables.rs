@@ -3458,6 +3458,18 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
         || suppress_default_block_spacing
         || indent.is_some();
 
+    // Excel assigns the one-point residual of an odd, wrapped line stack to
+    // the space above the block, which seats the ink one point lower than a
+    // geometric centre. Typst centres the measured block exactly. Measure the
+    // laid-out paragraph so automatic wraps participate, then translate only
+    // odd stacks longer than one line; `move` preserves the row, width, wrap,
+    // and following content geometry (issue #1494).
+    let centered_sheet_odd_line_seat: Option<(f64, f64, f64, f64)> =
+        centered_sheet_odd_line_seat(para, cell);
+    if centered_sheet_odd_line_seat.is_some() {
+        out.push_str("#context {\n  let o2p-centered-sheet-body = [");
+    }
+
     if has_block_wrapper {
         out.push_str("#block(");
         write_cell_paragraph_block_params(
@@ -3546,6 +3558,65 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
     if has_block_wrapper {
         out.push_str("\n]");
     }
+
+    if let Some((line_advance_pt, leading_pt, shift_pt, measure_width_pt)) =
+        centered_sheet_odd_line_seat
+    {
+        let _ = write!(
+            out,
+            "];\n  let o2p-centered-sheet-lines = calc.round((measure(o2p-centered-sheet-body, width: {}pt).height + {}pt) / {}pt);\n  move(dy: if o2p-centered-sheet-lines > 1 and calc.rem-euclid(o2p-centered-sheet-lines, 2) == 1 {{ {}pt }} else {{ 0pt }}, o2p-centered-sheet-body)\n}}",
+            format_geometry(measure_width_pt),
+            format_geometry(leading_pt),
+            format_geometry(line_advance_pt),
+            format_geometry(shift_pt),
+        );
+    }
+}
+
+/// The measured line model needed to distinguish an odd wrapped spreadsheet
+/// paragraph from its one- and even-line peers without predicting wrapping in
+/// Rust. The returned values are `(advance, leading, shift, measure width)` in
+/// printed points.
+fn centered_sheet_odd_line_seat(
+    para: &Paragraph,
+    cell: &CellParagraphCtx,
+) -> Option<(f64, f64, f64, f64)> {
+    if cell.vertical_align != Some(CellVerticalAlign::Center)
+        || cell.sheet_seat.is_none()
+        || cell.sheet_print_scale.is_none()
+        || cell.in_spill_cell
+        || cell.stacks_multiple_blocks
+        || para.runs.is_empty()
+        || para.style.space_before.is_some()
+        || para.style.space_after.is_some()
+    {
+        return None;
+    }
+
+    let line_box: CellLineBox = word_cell_line_box(
+        &para.runs,
+        &para.style,
+        cell.line_grid_pitch,
+        cell.row_east_asian,
+        cell.vertical_align,
+        cell.seats_text_on_descender,
+        cell.sheet_row_line.as_ref(),
+        cell.sheet_seat,
+        cell.sheet_print_scale,
+    )?;
+    let line_advance_pt: f64 =
+        (line_box.top_em + line_box.bottom_em) * line_box.font_size_pt + line_box.leading_pt;
+    if line_advance_pt <= 0.0 {
+        return None;
+    }
+    let shift_pt: f64 = cell.sheet_print_scale.filter(|scale| *scale > 0.0)?;
+    let measure_width_pt: f64 = cell.available_measure_pt.filter(|width| *width > 0.0)?;
+    Some((
+        line_advance_pt,
+        line_box.leading_pt,
+        shift_pt,
+        measure_width_pt,
+    ))
 }
 
 fn cell_paragraph_needs_block_wrapper(style: &ParagraphStyle) -> bool {
