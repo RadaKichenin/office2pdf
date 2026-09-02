@@ -2665,30 +2665,45 @@ fn horizontal_sheet_merge_selects_the_lower_odd_centering_half() {
 }
 
 /// A fitted sheet snaps the line seat in its own declared-point coordinate
-/// system and scales that answer onto the printed page (issue #1238). The
-/// reported header is Segoe UI 12pt in a 49pt row at 0.82 scale: its 29pt
-/// sheet-space seat must therefore print at 23.78pt, not at the 25pt obtained
-/// by snapping the already-scaled 9.84pt face in the 40.18pt track.
+/// system and scales that answer onto the printed page (issues #1238, #1496).
+///
+/// The landscape sheet from #982 prints at 0.82 scale. Its two one-row merged
+/// Century Gothic headings, ordinary Segoe UI header, and five Segoe UI body
+/// rows all land one sheet-space point above the corresponding unscaled
+/// fixed-track cadence. The former regression reused that unscaled cadence
+/// and therefore asserted the repeated +0.70pt defect as correct. Cover both
+/// merge states and two ordinary row heights so the correction is a shared
+/// fitted-sheet seat, not a font, merge, or one-row special case.
 #[test]
-fn scaled_sheet_cell_line_seat_snaps_in_declared_sheet_space() {
-    const SEGOE_UI_ASCENT_EM: f64 = 2210.0 / 2048.0;
-    const SEGOE_UI_DESCENT_EM: f64 = 514.0 / 2048.0;
+fn scaled_sheet_fixed_rows_use_the_native_excel_baseline_seat() {
+    const SEGOE_UI: (f64, f64, f64) = (2210.0 / 2048.0, 514.0 / 2048.0, 0.0);
+    const CENTURY_GOTHIC: (f64, f64, f64) = (2060.0 / 2048.0, 451.0 / 2048.0, 0.0);
     const SCALE: f64 = 0.82;
 
-    let seated_pt: f64 = sheet_cell_baseline_from_track_top_pt(
-        49.0 * SCALE,
-        SEGOE_UI_ASCENT_EM,
-        SEGOE_UI_DESCENT_EM,
-        0.0,
-        12.0 * SCALE,
-        false,
-        Some(SCALE),
-    );
+    // (metrics, track, size, horizontally merged, native sheet-space seat)
+    let measured = [
+        (CENTURY_GOTHIC, 49.0, 24.0, true, 33.0),
+        (SEGOE_UI, 49.0, 12.0, false, 28.0),
+        (SEGOE_UI, 30.0, 11.0, false, 18.0),
+    ];
 
-    assert!(
-        (seated_pt - 29.0 * SCALE).abs() < 1e-9,
-        "the 29pt declared-space seat must print at 23.78pt, seated {seated_pt}pt"
-    );
+    for ((ascent_em, descent_em, line_gap_em), track_pt, size_pt, merged, native_pt) in measured {
+        let seated_pt: f64 = sheet_cell_baseline_from_track_top_pt(
+            track_pt * SCALE,
+            ascent_em,
+            descent_em,
+            line_gap_em,
+            size_pt * SCALE,
+            merged,
+            Some(SCALE),
+        );
+        assert!(
+            (seated_pt - native_pt * SCALE).abs() < 1e-9,
+            "the {native_pt}pt native sheet-space seat must print at {}pt, \
+             seated {seated_pt}pt (track={track_pt}, size={size_pt}, merged={merged})",
+            native_pt * SCALE
+        );
+    }
 }
 
 /// A sheet cell's numeric line box must follow the same per-glyph family

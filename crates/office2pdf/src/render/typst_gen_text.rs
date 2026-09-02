@@ -1433,8 +1433,9 @@ pub(super) struct SheetCellSeat {
 /// in the cell's inset content box, which four native probe exports show has
 /// no say in the vertical seat. An unmerged cell gives an odd leftover point
 /// to the space *above* the line; a horizontally merged cell gives it to the
-/// space below. A fitted sheet scales that completed seat onto the printed
-/// page (issues #1238, #1242).
+/// space below. A fitted sheet then raises the fixed-row text origin by one
+/// sheet-space point and scales that completed seat onto the printed page
+/// (issues #1238, #1242, #1496).
 ///
 /// Measured on native Excel-for-Mac exports of purpose-built probe workbooks
 /// (`/Volumes/T7/scratch/issue-1063/probe`, reproduced in
@@ -1484,7 +1485,17 @@ pub(super) fn sheet_cell_baseline_from_track_top_pt(
     } else {
         half_slack_pt.ceil()
     };
-    (slack_above_pt + above_baseline_pt) * scale
+    // A fitted sheet's fixed-row text origin sits one sheet-space point above
+    // the otherwise identical unscaled cadence. The landscape #982 export
+    // exposes the same quantum across merged Century Gothic headings and
+    // ordinary Segoe UI header/body rows; applying it after scaling would turn
+    // one Excel grid point into one device point (issue #1496).
+    let fitted_sheet_lift_pt: f64 = if scale + f64::EPSILON < 1.0 {
+        SHEET_ADVANCE_GRID_PT
+    } else {
+        0.0
+    };
+    (slack_above_pt + above_baseline_pt - fitted_sheet_lift_pt) * scale
 }
 
 /// The gap Excel never closes between a bottom-aligned sheet cell's baseline
