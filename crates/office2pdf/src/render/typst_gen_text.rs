@@ -59,6 +59,11 @@ const POWERPOINT_ADVANCE_GRID_PT: f64 = 0.125;
 /// whole points.
 const SHEET_ADVANCE_GRID_PT: f64 = 1.0;
 
+/// Native Excel PDF positions resolve on a 1/300-inch grid. A symmetric
+/// multi-row centre gives an unmatched half-grid to the lower half, as the
+/// two-line merged title in issue #1497 isolates.
+pub(super) const SHEET_PDF_POSITION_GRID_PT: f64 = 72.0 / 300.0;
+
 /// Native Word-style table placement resolves a compressed paragraph's first
 /// and last exterior seats on a one-point edge quantum. The half-point used by
 /// a bottom anchor is derived from the same quantum, not from a fixture-sized
@@ -1402,10 +1407,12 @@ const SHEET_WRAPPED_LINE_ADVANCES: [SheetLineAdvances; 13] = [
 ///
 /// `None` outside that regime: a Word table, an auto-height sheet row (whose
 /// track is the content's own answer, not Excel's), a top-aligned cell (a
-/// seat this issue did not settle), or a cell spanning several tracks.
+/// seat this issue did not settle), or a bottom-aligned multi-row merge whose
+/// descender seat has only been measured within one row.
 #[derive(Clone, Copy)]
 pub(super) struct SheetCellSeat {
-    /// The row's printed track height, in points.
+    /// The cell's printed fixed-track height, in points. This is one row for
+    /// an ordinary cell and the joined height for a centred multi-row merge.
     pub track_pt: f64,
     /// The cell's own top inset — its padding plus its share of the border.
     pub inset_top_pt: f64,
@@ -1418,6 +1425,10 @@ pub(super) struct SheetCellSeat {
     /// vertical centring slack to the opposite half for a horizontal merge
     /// (issue #1242).
     pub is_horizontally_merged: bool,
+    /// Whether this is a vertically centred cell spanning multiple fixed rows.
+    /// Excel resolves that block centre to the lower half of its PDF position
+    /// grid (issue #1497).
+    pub is_centered_multi_row: bool,
 }
 
 /// The baseline Excel prints for one line of a face whose bare `hhea` numbers
@@ -2021,7 +2032,11 @@ pub(super) fn word_cell_line_box(
                 font_size,
                 seat.is_horizontally_merged,
                 sheet_print_scale,
-            );
+            ) + if seat.is_centered_multi_row {
+                SHEET_PDF_POSITION_GRID_PT / 2.0
+            } else {
+                0.0
+            };
             let top_em: f64 = advance_em / 2.0 + (baseline_pt - content_mid_pt) / font_size;
             (top_em, advance_em - top_em, leading_pt)
         }

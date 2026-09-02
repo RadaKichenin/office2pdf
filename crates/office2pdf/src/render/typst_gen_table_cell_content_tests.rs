@@ -2706,6 +2706,110 @@ fn scaled_sheet_fixed_rows_use_the_native_excel_baseline_seat() {
     }
 }
 
+/// A vertically centred merge spanning two fixed worksheet rows is one track
+/// for Excel's line-seat calculation. The #982 landscape sheet joins two
+/// 49.5pt rows, lays a two-line Century Gothic block inside them, and prints
+/// at 0.82 scale. Its two baseline midpoint therefore uses the same rounded
+/// declared-space seat as a single line in the full 99pt merged track, then
+/// Excel resolves the symmetric multi-row centre to the lower half of its
+/// 0.24pt PDF position grid. Letting Typst centre the block from its own metric
+/// edges leaves both lines 1.14pt too low. The compiled control uses Typst's
+/// embedded Libertinus face so the same family-independent track rule remains
+/// runnable on every host (issue #1497).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn centered_two_row_sheet_merge_uses_the_full_fixed_track_seat() {
+    const FAMILY: &str = "Libertinus Serif";
+    const SCALE: f64 = 0.82;
+    const DECLARED_ROW_HEIGHT_PT: f64 = 49.5;
+    const DECLARED_FONT_SIZE_PT: f64 = 30.0;
+
+    let Some((ascender_em, descender_em, _pitch_em)) =
+        crate::render::pdf::font_line_metrics_em(FAMILY)
+    else {
+        return;
+    };
+    let line_gap_em: f64 = crate::render::pdf::font_line_gap_em(FAMILY).unwrap_or(0.0);
+    let printed_row_height_pt: f64 = DECLARED_ROW_HEIGHT_PT * SCALE;
+    let printed_font_size_pt: f64 = DECLARED_FONT_SIZE_PT * SCALE;
+    let table = Table {
+        rows: vec![
+            TableRow {
+                minimum_height: None,
+                cells: vec![TableCell {
+                    content: vec![Block::Paragraph(Paragraph {
+                        style: ParagraphStyle::default(),
+                        runs: vec![Run {
+                            text: "GIFT BUDGET AND TRACKER".to_string(),
+                            style: TextStyle {
+                                font_family: Some(FAMILY.to_string()),
+                                font_size: Some(printed_font_size_pt),
+                                ..TextStyle::default()
+                            },
+                            href: None,
+                            footnote: None,
+                        }],
+                    })],
+                    col_span: 2,
+                    row_span: 2,
+                    vertical_align: Some(CellVerticalAlign::Center),
+                    ..TableCell::default()
+                }],
+                height: Some(printed_row_height_pt),
+            },
+            TableRow {
+                minimum_height: None,
+                cells: vec![],
+                height: Some(printed_row_height_pt),
+            },
+        ],
+        column_widths: vec![120.0, 120.0],
+        default_cell_padding: Some(Insets {
+            top: 1.0 * SCALE,
+            right: 3.0 * SCALE,
+            bottom: 1.5 * SCALE,
+            left: 3.0 * SCALE,
+        }),
+        default_vertical_align: Some(CellVerticalAlign::Bottom),
+        seats_bottom_aligned_text_on_descender: true,
+        print_scale: Some(SCALE),
+        ..Table::default()
+    };
+    let output = generate_typst(&make_doc(vec![make_flow_page(vec![Block::Table(table)])]))
+        .expect("the two-row sheet merge renders");
+    let mut baselines: Vec<f64> = crate::render::pdf::compiled_text_runs(&output.source, 0)
+        .unwrap_or_else(|error| panic!("compile failed: {error}\n{}", output.source))
+        .into_iter()
+        .map(|run| run.baseline_pt)
+        .collect();
+    baselines.sort_by(f64::total_cmp);
+
+    assert_eq!(
+        baselines.len(),
+        2,
+        "the control must emit exactly two title lines: {baselines:?}\n{}",
+        output.source
+    );
+    let rendered_midpoint_pt: f64 = (baselines[0] + baselines[1]) / 2.0;
+    let merged_track_seat_pt: f64 = sheet_cell_baseline_from_track_top_pt(
+        2.0 * printed_row_height_pt,
+        ascender_em - line_gap_em,
+        descender_em,
+        line_gap_em,
+        printed_font_size_pt,
+        true,
+        Some(SCALE),
+    );
+    let expected_midpoint_pt: f64 = crate::defaults::DEFAULT_MARGIN_PT
+        + merged_track_seat_pt
+        + SHEET_PDF_POSITION_GRID_PT / 2.0;
+    assert!(
+        (rendered_midpoint_pt - expected_midpoint_pt).abs() < 0.01,
+        "the two baselines must share Excel's full merged-track seat at \
+         {expected_midpoint_pt}pt, got {baselines:?} (midpoint {rendered_midpoint_pt}pt)"
+    );
+}
+
 /// A sheet cell's numeric line box must follow the same per-glyph family
 /// selection as the font list Typst paints. The committed Korean quotation
 /// declares Noto Sans CJK SC, whose resolved face for this fixture has no

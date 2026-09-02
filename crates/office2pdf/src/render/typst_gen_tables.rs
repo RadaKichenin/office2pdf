@@ -449,6 +449,7 @@ fn generate_table_rows(
                 indent,
                 default_cell_padding,
                 row.height.filter(|_| fixed_row_heights),
+                fixed_spanned_row_height(rows, row_index, cell.row_span, fixed_row_heights),
                 // The floor belongs to the row, and a Typst table row is as
                 // tall as its tallest cell, so one strut carries it. Putting
                 // it in every cell would only repeat the same constraint.
@@ -974,6 +975,7 @@ fn generate_table_cell(
     indent: &str,
     default_cell_padding: Insets,
     row_height: Option<f64>,
+    cell_track_height: Option<f64>,
     row_minimum_height: Option<f64>,
     row_shared_line: Option<&SheetRowLine>,
     ctx: &mut GenCtx,
@@ -1034,14 +1036,18 @@ fn generate_table_cell(
     let enclosing_cell_vertical_align: Option<CellVerticalAlign> = ctx.cell_vertical_align;
     let enclosing_cell_sheet_row_line: Option<SheetRowLine> = ctx.cell_sheet_row_line.take();
     let enclosing_cell_sheet_seat: Option<SheetCellSeat> = ctx.cell_sheet_seat.take();
-    // The fixed sheet track this cell seats its line in (issue #1063). Only a
-    // spreadsheet's fixed rows have one: an auto row's track is the content's
-    // own answer rather than Excel's grid, and a cell spanning several tracks
-    // is not seated by any one of them. A top-aligned cell stays on the legacy
-    // seat — Excel's top rule was measured but is out of this issue's scope.
-    ctx.cell_sheet_seat = row_height
+    // The fixed sheet track this cell seats its line in (issue #1063). A
+    // centred multi-row merge uses the full joined track: Excel rounds and
+    // centres the text block against that one declared-space height, whereas
+    // Typst otherwise centres from the paragraph's own metric edges (#1497).
+    // Bottom-aligned multi-row cells keep the legacy answer because their
+    // measured descender seat belongs to a single row; top alignment is also
+    // outside the measured regime. Auto rows have no fixed grid track at all.
+    ctx.cell_sheet_seat = cell_track_height
         .filter(|_| ctx.table_seats_bottom_aligned_text_on_descender)
-        .filter(|_| cell.row_span <= 1)
+        .filter(|_| {
+            cell.row_span <= 1 || effective_vertical_align == Some(CellVerticalAlign::Center)
+        })
         .filter(|_| effective_vertical_align != Some(CellVerticalAlign::Top))
         .map(|track_pt| {
             let inset: Insets = cell_inset_with_border(cell, default_cell_padding);
@@ -1051,6 +1057,8 @@ fn generate_table_cell(
                 inset_bottom_pt: inset.bottom,
                 descent_floor_pt: ctx.table_bottom_aligned_descent_floor_pt,
                 is_horizontally_merged: cell.col_span > 1,
+                is_centered_multi_row: cell.row_span > 1
+                    && effective_vertical_align == Some(CellVerticalAlign::Center),
             }
         });
     ctx.cell_sheet_row_line = row_shared_line.filter(|_| seats_on_row_line).cloned();
@@ -2387,17 +2395,10 @@ fn vertical_band_extent(
     ctx: &GenCtx,
     row_frame_estimate_cache: &mut Option<Option<f64>>,
 ) -> VerticalBandExtent {
-    let row_span: usize = (cell.row_span as usize).max(1);
-    // A span reaching outside this row group (header/body split) falls back
-    // to the twins below rather than summing a partial height.
-    let spanned_rows: &[TableRow] = &rows[row_index..(row_index + row_span).min(rows.len())];
-    if fixed_row_heights && spanned_rows.len() == row_span {
-        let spanned_height: Option<f64> = spanned_rows
-            .iter()
-            .try_fold(0.0_f64, |sum, row| row.height.map(|height| sum + height));
-        if let Some(frame_height_pt) = spanned_height {
-            return VerticalBandExtent::FrameHeight(frame_height_pt);
-        }
+    if let Some(frame_height_pt) =
+        fixed_spanned_row_height(rows, row_index, cell.row_span, fixed_row_heights)
+    {
+        return VerticalBandExtent::FrameHeight(frame_height_pt);
     }
     // Estimate from the anchor row only; a multi-row span over auto rows
     // keeps whatever the twins cover (known limitation).
@@ -2408,6 +2409,28 @@ fn vertical_band_extent(
         Some(frame_estimate_pt) => VerticalBandExtent::TwinBands(frame_estimate_pt),
         None => VerticalBandExtent::TwinBandsEmFallback,
     }
+}
+
+/// The total fixed height of every row a cell joins. A span reaching outside
+/// this row group (for example across a Typst header/body split), an auto-row
+/// table, or any row without an exact height states no complete track.
+fn fixed_spanned_row_height(
+    rows: &[TableRow],
+    row_index: usize,
+    row_span: u32,
+    fixed_row_heights: bool,
+) -> Option<f64> {
+    if !fixed_row_heights {
+        return None;
+    }
+    let row_span: usize = (row_span as usize).max(1);
+    let spanned_rows: &[TableRow] = &rows[row_index..(row_index + row_span).min(rows.len())];
+    if spanned_rows.len() != row_span {
+        return None;
+    }
+    spanned_rows
+        .iter()
+        .try_fold(0.0_f64, |sum, row| row.height.map(|height| sum + height))
 }
 
 // Test-only probe counting `auto_row_frame_height_estimate_pt` calls, so
