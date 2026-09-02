@@ -230,16 +230,46 @@ const SCRIPT_PROBES: [(TextScript, char); 5] = [
     (TextScript::Chinese, '漢'),
 ];
 
+// Test-only probe counting full context resolutions, so the contract that a
+// default-path lookup never re-indexes the host's fonts is assertable: one
+// resolution parses every face on the host, and the fallback metric path
+// once paid that per measured run. (A regular comment: rustc discards doc
+// comments attached to macro invocations.)
+#[cfg(test)]
+thread_local! {
+    pub(super) static FONT_CONTEXT_RESOLUTIONS: std::cell::Cell<usize> =
+        const { std::cell::Cell::new(0) };
+}
+
+/// The Office application font directories a conversion searches on top of
+/// the system fonts when the caller supplied no font path: the bundles under
+/// `/Applications` and `~/Applications` on macOS, nothing elsewhere.
+///
+/// [`resolve_font_search_context`] with no user paths yields these same paths
+/// but also indexes every face on the host, which is far too slow to repeat
+/// per measured run. This is at most six directory probes, done once per
+/// process: an Office installed after the first conversion is seen by the
+/// next process.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn default_font_search_paths() -> &'static [PathBuf] {
+    static PATHS: std::sync::LazyLock<Vec<PathBuf>> = std::sync::LazyLock::new(|| {
+        if cfg!(target_os = "macos") {
+            discover_default_macos_office_font_paths()
+        } else {
+            Vec::new()
+        }
+    });
+    &PATHS
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn resolve_font_search_context(user_font_paths: &[PathBuf]) -> FontSearchContext {
-    let office_paths = if cfg!(target_os = "macos") {
-        discover_default_macos_office_font_paths()
-    } else {
-        Vec::new()
-    };
+    #[cfg(test)]
+    FONT_CONTEXT_RESOLUTIONS.with(|count| count.set(count.get() + 1));
+    let office_paths: &[PathBuf] = default_font_search_paths();
     let user_paths = canonicalize_existing_dirs(user_font_paths.iter().cloned());
-    let search_paths = merge_prioritized_paths(&office_paths, &user_paths);
-    let office_families = available_families_from_paths(&office_paths, false);
+    let search_paths = merge_prioritized_paths(office_paths, &user_paths);
+    let office_families = available_families_from_paths(office_paths, false);
     let user_families = available_families_from_paths(&user_paths, false);
     let FamilyIndex {
         available_families,

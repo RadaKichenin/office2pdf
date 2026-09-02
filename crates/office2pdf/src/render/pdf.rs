@@ -404,14 +404,7 @@ pub(crate) fn compiled_text_runs(
 
     // The same font set the conversion pipeline compiles with, so a probe sees
     // the faces `font_hhea_ascender_em` measured rather than a substitute.
-    // Resolving it rescans the font directories, which dominates a probe's
-    // runtime, so the paths are resolved once for the whole test process.
-    static PROBE_FONT_PATHS: OnceLock<Vec<PathBuf>> = OnceLock::new();
-    let font_paths: &Vec<PathBuf> = PROBE_FONT_PATHS.get_or_init(|| {
-        super::font_context::resolve_font_search_context(&[])
-            .search_paths()
-            .to_vec()
-    });
+    let font_paths: &[PathBuf] = super::font_context::default_font_search_paths();
     let world = MinimalWorld::new(typst_source, &[], font_paths);
     let warned = typst::compile::<typst::layout::PagedDocument>(&world);
     let document = warned.output.map_err(|errors| {
@@ -957,11 +950,8 @@ fn best_face(family: &str) -> Option<typst::text::Font> {
         return Some(font);
     }
 
-    let search_paths = super::font_subst::active_font_search_paths().unwrap_or_else(|| {
-        super::font_context::resolve_font_search_context(&[])
-            .search_paths()
-            .to_vec()
-    });
+    let search_paths = super::font_subst::active_font_search_paths()
+        .unwrap_or_else(|| super::font_context::default_font_search_paths().to_vec());
     let data = get_fonts_for_extra_paths(&search_paths);
     super::font_subst::family_candidates(family)
         .iter()
@@ -1298,8 +1288,7 @@ fn face_advance_em(
 
     // Use the same font set the compiler will use (system + discovered
     // Office font dirs); this also primes the compile-time cache.
-    let search_context = super::font_context::resolve_font_search_context(&[]);
-    let data = get_fonts_for_extra_paths(search_context.search_paths());
+    let data = get_fonts_for_extra_paths(super::font_context::default_font_search_paths());
     let advance: Option<f64> = super::font_subst::family_candidates(family)
         .iter()
         .find_map(|candidate| {
@@ -1387,8 +1376,8 @@ pub(crate) fn glyph_advances_em(family: &str, bold: bool, text: &str) -> Option<
             None => {
                 // Use the same font set the compiler will use (system + discovered
                 // Office font dirs); this also primes the compile-time cache.
-                let search_context = super::font_context::resolve_font_search_context(&[]);
-                let data = get_fonts_for_extra_paths(search_context.search_paths());
+                let data =
+                    get_fonts_for_extra_paths(super::font_context::default_font_search_paths());
                 let resolved: Option<typst::text::Font> =
                     super::font_subst::family_candidates(family)
                         .iter()
@@ -1431,11 +1420,8 @@ pub(crate) fn glyph_advances_em_with_typst_fallback(
 
     #[cfg(not(target_arch = "wasm32"))]
     let native_data = {
-        let search_paths = super::font_subst::active_font_search_paths().unwrap_or_else(|| {
-            super::font_context::resolve_font_search_context(&[])
-                .search_paths()
-                .to_vec()
-        });
+        let search_paths = super::font_subst::active_font_search_paths()
+            .unwrap_or_else(|| super::font_context::default_font_search_paths().to_vec());
         get_fonts_for_extra_paths(&search_paths)
     };
     #[cfg(not(target_arch = "wasm32"))]
