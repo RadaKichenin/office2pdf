@@ -20,6 +20,10 @@ on deltas smaller than the GT's own lattice):
   painted-text visibility mismatches, visible-fill occlusions, rect census
   gap, page parity gap) compare exactly — any increase is a regression.
 
+Safe split/join topology groups are informational and therefore are not a
+count regression. Their recovered fragments still contribute to the position,
+width, pitch, and visibility metrics above.
+
 Exit status is nonzero only when a regression is found; improvements alone
 exit zero so a fix PR can paste the report as its acceptance evidence.
 

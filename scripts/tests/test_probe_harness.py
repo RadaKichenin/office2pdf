@@ -65,6 +65,7 @@ def completed(argv: list[str], returncode: int = 0, stdout: str = "", stderr: st
 
 def page_vector(
     matched: int = 12,
+    compared: int | None = None,
     missing: int = 0,
     extra: int = 0,
     deviant: int = 0,
@@ -99,6 +100,7 @@ def page_vector(
         "dx0": {"mean_abs": 0.0, "worst": 0.0},
         "width": {"mean_abs_pct": 0.0, "worst_pct": worst_width},
         "instances": {
+            "compared": matched if compared is None else compared,
             "large_shift_threshold": 5.0,
             "large_shift_count": large_shifts,
             "large_shifts": [],
@@ -106,6 +108,7 @@ def page_vector(
         "visibility": {"mismatch_count": visibility, "mismatches": []},
         "pitch": {"pairs": max(matched - 1, 0), "worst_delta": worst_pitch},
         "wraps": {"count": wraps, "samples": []},
+        "topology": {"groups": 0, "gt_lines": 0, "out_lines": 0, "samples": []},
         "reflow": {"gt_lines": reflow, "out_lines": reflow},
         "rects": {
             "gt_count": rects[0],
@@ -726,6 +729,17 @@ class RowTest(unittest.TestCase):
         self.assertAlmostEqual(row["worst_dy"], 1.4)
         self.assertAlmostEqual(row["worst_pitch"], 0.3)
         self.assertEqual(row["rects"], "7/8")
+
+    def test_mean_baseline_uses_compared_fragments_for_split_join_groups(self):
+        report = differ_report(
+            page_vector(matched=1, compared=2, mean_abs_dy=0.2),
+            page_vector(matched=3, compared=3, mean_abs_dy=0.6),
+        )
+
+        row = probe_harness.variant_row("500", 1, report)
+
+        self.assertEqual(row["matched"], 4)
+        self.assertAlmostEqual(row["mean_abs_dy"], (0.2 * 2 + 0.6 * 3) / 5)
 
 
 class TableTest(unittest.TestCase):

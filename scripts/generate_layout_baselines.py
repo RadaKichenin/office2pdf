@@ -11,9 +11,10 @@ For every case in ``tests/golden_mocks/business/manifest.json`` this pipeline:
    ``compare_layout`` deviation vector for every page, using the per-format
    noise floor (0.12pt for Word/PowerPoint GT, whose exports quantise to a
    0.24pt grid; 0.5pt for Excel GT, whose Quartz export rounds every advance
-   to a whole point), including painted-text visibility mismatches caused by
-   z-order or flat-background contrast, plus visible-fill occlusions where a
-   later opaque, differently coloured rectangle cuts into a thin rule.
+   to a whole point), including informational safe split/join topology groups,
+   painted-text visibility mismatches caused by z-order or flat-background
+   contrast, plus visible-fill occlusions where a later opaque, differently
+   coloured rectangle cuts into a thin rule.
 
 A trace that parses to zero pages is a hard failure, never an empty vector: on
 mutool 1.23.x that state used to look exactly like a perfect comparison

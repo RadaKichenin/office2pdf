@@ -428,8 +428,14 @@ def variant_row(value: str, patched: int, report: dict) -> dict:
     """Collapse a differ report into one table row for this variant."""
     vectors = report["pages"]
     matched = sum(vector["lines"]["matched"] for vector in vectors)
+    compared = sum(
+        vector["instances"].get("compared", vector["lines"]["matched"])
+        for vector in vectors
+    )
     weighted_dy = sum(
-        vector["baseline"]["mean_abs_dy"] * vector["lines"]["matched"] for vector in vectors
+        vector["baseline"]["mean_abs_dy"]
+        * vector["instances"].get("compared", vector["lines"]["matched"])
+        for vector in vectors
     )
     worst_dy = max(
         (vector["baseline"]["worst_dy_signed"] for vector in vectors), key=abs, default=0.0
@@ -443,7 +449,7 @@ def variant_row(value: str, patched: int, report: dict) -> dict:
         "extra": sum(vector["lines"]["extra"] for vector in vectors),
         "wraps": sum(vector["wraps"]["count"] for vector in vectors),
         "deviant": sum(vector["lines"]["deviant"] for vector in vectors),
-        "mean_abs_dy": weighted_dy / matched if matched else 0.0,
+        "mean_abs_dy": weighted_dy / compared if compared else 0.0,
         "worst_dy": worst_dy,
         "worst_pitch": max((vector["pitch"]["worst_delta"] for vector in vectors), default=0.0),
         "worst_width": max((vector["width"]["worst_pct"] for vector in vectors), default=0.0),

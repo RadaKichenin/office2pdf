@@ -373,6 +373,165 @@ class MatchAndDiffTest(unittest.TestCase):
         self.assertEqual(vector["wraps"]["count"], 1)
         self.assertEqual(compare_layout.audit_failures([vector]), 1)
 
+    def test_issue_1446_distant_objects_split_across_baselines_are_equivalent(
+        self,
+    ) -> None:
+        # Page 8 of GENERAL SERVICES.pptx: the reference gives the 400
+        # value-axis tick and Net Profit legend entry one shared baseline, so
+        # mutool exposes one `400NetProfit` line. office2pdf puts the same two
+        # distant objects on separate baselines. These coordinates are pinned
+        # from the current #1220 attachment comparison. The PDF line topology
+        # is not a wrap/reflow defect, but both position deltas stay auditable.
+        gt = "\n".join(
+            [
+                line_of("400", 148.614, 400.201),
+                line_of("NetProfit", 753.985, 400.201),
+            ]
+        )
+        out = "\n".join(
+            [
+                line_of("400", 149.626, 391.195),
+                line_of("NetProfit", 742.994, 425.407),
+            ]
+        )
+
+        vector = self.diff(gt, out)
+
+        self.assertEqual(vector["lines"]["missing"], 0)
+        self.assertEqual(vector["lines"]["extra"], 0)
+        self.assertEqual(vector["lines"]["matched"], 1)
+        self.assertEqual(vector["lines"]["deviant"], 1)
+        self.assertEqual(vector["instances"]["compared"], 2)
+        self.assertEqual(vector["wraps"]["count"], 0)
+        self.assertEqual(vector["reflow"]["gt_lines"], 0)
+        self.assertEqual(
+            vector["topology"],
+            {
+                "groups": 1,
+                "gt_lines": 1,
+                "out_lines": 2,
+                "samples": ["400 + NetProfit"],
+            },
+        )
+        self.assertEqual(
+            [item["label"] for item in vector["instances"]["large_shifts"]],
+            ["400", "NetProfit"],
+        )
+        self.assertEqual(compare_layout.audit_failures([vector]), 2)
+
+    def test_distant_objects_joined_only_in_output_are_equivalent(self) -> None:
+        gt = "\n".join(
+            [line_of("left", 72, 99), line_of("right", 500, 101)]
+        )
+        out = "\n".join(
+            [line_of("left", 72, 100), line_of("right", 500, 100)]
+        )
+
+        vector = self.diff(gt, out)
+
+        self.assertEqual(vector["lines"]["missing"], 0)
+        self.assertEqual(vector["lines"]["extra"], 0)
+        self.assertEqual(vector["topology"]["groups"], 1)
+        self.assertEqual(vector["topology"]["gt_lines"], 2)
+        self.assertEqual(vector["topology"]["out_lines"], 1)
+        self.assertEqual(compare_layout.audit_failures([vector]), 0)
+
+    def test_one_text_operation_with_a_large_gap_remains_a_wrap_finding(self) -> None:
+        gt = text_op(
+            [(char, 72 + index * 6) for index, char in enumerate("left")]
+            + [(char, 500 + index * 6) for index, char in enumerate("right")],
+            baseline_y=100,
+        )
+        out = "\n".join(
+            [line_of("left", 72, 99), line_of("right", 500, 101)]
+        )
+
+        vector = self.diff(gt, out)
+
+        self.assertEqual(vector["topology"]["groups"], 0)
+        self.assertEqual(vector["wraps"]["count"], 1)
+        self.assertEqual(compare_layout.audit_failures([vector]), 1)
+
+    def test_split_join_segments_keep_independent_visibility_audits(self) -> None:
+        gt = "\n".join(
+            [
+                line_of("left", 72, 100),
+                line_of("right", 500, 100),
+                rect_op(490, 80, 570, 110),
+            ]
+        )
+        out = "\n".join(
+            [
+                rect_op(490, 80, 570, 110),
+                line_of("left", 72, 99),
+                line_of("right", 500, 101),
+            ]
+        )
+
+        vector = self.diff(gt, out)
+
+        self.assertEqual(vector["topology"]["groups"], 1)
+        self.assertEqual(vector["visibility"]["mismatch_count"], 1)
+        self.assertEqual(
+            vector["visibility"]["mismatches"][0],
+            {"label": "right", "gt": "hidden", "out": "painted"},
+        )
+        self.assertEqual(compare_layout.audit_failures([vector]), 1)
+
+    def test_distant_split_join_does_not_hide_reordered_objects(self) -> None:
+        gt = "\n".join(
+            [line_of("left", 72, 100), line_of("right", 500, 100)]
+        )
+        out = "\n".join(
+            [line_of("right", 500, 90), line_of("left", 72, 110)]
+        )
+
+        vector = self.diff(gt, out)
+
+        self.assertEqual(vector["topology"]["groups"], 0)
+        self.assertGreater(compare_layout.audit_failures([vector]), 0)
+
+    def test_distant_split_join_does_not_hide_a_duplicate_object(self) -> None:
+        gt = "\n".join(
+            [line_of("left", 72, 100), line_of("right", 500, 100)]
+        )
+        out = "\n".join(
+            [
+                line_of("left", 72, 99),
+                line_of("right", 500, 101),
+                line_of("right", 500, 120),
+            ]
+        )
+
+        vector = self.diff(gt, out)
+
+        self.assertEqual(vector["topology"]["groups"], 0)
+        self.assertGreater(vector["lines"]["extra"], 0)
+        self.assertGreater(compare_layout.audit_failures([vector]), 0)
+
+    def test_distant_split_join_does_not_hide_absent_text(self) -> None:
+        gt = "\n".join(
+            [line_of("left", 72, 100), line_of("right", 500, 100)]
+        )
+        out = line_of("left", 72, 99)
+
+        vector = self.diff(gt, out)
+
+        self.assertEqual(vector["topology"]["groups"], 0)
+        self.assertEqual(vector["lines"]["missing"], 1)
+
+    def test_real_extra_text_remains_an_audit_failure(self) -> None:
+        gt = line_of("Slide", 72, 100)
+        out = "\n".join(
+            [line_of("Slide", 72, 100), line_of("Sensitivity:Internal", 72, 120)]
+        )
+
+        vector = self.diff(gt, out)
+
+        self.assertEqual(vector["lines"]["extra"], 1)
+        self.assertIn("Sensitivity:Internal", vector["lines"]["extra_text"])
+        self.assertEqual(compare_layout.audit_failures([vector]), 1)
+
     def test_reordered_content_is_classified_reflow_not_loss(self) -> None:
         # A table row whose cells share one baseline in GT but split across two
         # baselines in the output: same characters, different line grouping.
@@ -781,6 +940,27 @@ class ReadingTest(unittest.TestCase):
 
         self.assertIn("Sales [1/2]", reading)
         self.assertIn("+120.00pt", reading)
+
+    def test_reading_explains_safe_split_join_topology(self) -> None:
+        gt = compare_layout.parse_trace(
+            trace_document(
+                "\n".join(
+                    [line_of("left", 72, 100), line_of("right", 500, 100)]
+                )
+            )
+        )[0]
+        out = compare_layout.parse_trace(
+            trace_document(
+                "\n".join(
+                    [line_of("left", 72, 99), line_of("right", 500, 101)]
+                )
+            )
+        )[0]
+
+        reading = compare_layout.render_reading([compare_layout.diff_page(gt, out)])
+
+        self.assertIn("line splits/joins", reading)
+        self.assertIn("position-audited", reading)
 
 
 class CompareLayoutCliTest(unittest.TestCase):

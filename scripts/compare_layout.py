@@ -6,8 +6,9 @@ output, reconstructs text and vector-path bounds in device points, and
 conservatively recovers ``ignore_text`` geometry when a nearby path supplies
 visible ink. It then matches lines by their text and reports typed deviations:
 
-- matched / missing / extra lines, and wrap-point differences (text that is
-  present but breaks at a different word) counted separately from real loss;
+- matched / missing / extra lines, safe split/join topology differences for
+  distant text objects, and wrap-point differences (text that is present but
+  breaks at a different word) counted separately from real loss;
 - spatial-anchor dy statistics, per-line dx0, line-width drift, inter-line
   pitch deltas between consecutive matched lines. Horizontal text uses its
   true baseline; a rotated or skewed `fill_text` stays one visual run and uses
@@ -82,6 +83,10 @@ ALPHA_RE = re.compile(r'alpha="([-0-9.e]+)"')
 COLOR_RE = re.compile(r'color="([-0-9.e ]+)"')
 
 LINE_Y_TOLERANCE_PT = 0.6
+# A normal inter-word gap is far smaller than this. Combined with a text-paint
+# operation boundary, this isolates independently positioned chart/table text
+# that mutool happens to merge only because the objects share a baseline.
+SAFE_TOPOLOGY_GAP_PT = 24.0
 RECT_MATCH_RADIUS_PT = 6.0
 OPAQUE_ALPHA = 0.98
 INVISIBLE_ALPHA = 0.02
@@ -895,6 +900,107 @@ def match_lines(
     return matches, missing, extra
 
 
+def split_distant_text_objects(line: Line) -> list[Line]:
+    """Split a trace line only at unambiguously independent text objects.
+
+    ``build_lines`` intentionally buckets every horizontal glyph on a shared
+    baseline. That can merge an axis tick at the left of a chart with a legend
+    label hundreds of points away. A boundary is safe only when it crosses
+    both a PDF text-paint operation and a large visible gap. Styled runs inside
+    one text operation and ordinary word spacing therefore remain intact.
+    """
+    glyphs = line.visible_glyphs
+    if not glyphs:
+        return []
+
+    groups: list[list[Glyph]] = [[glyphs[0]]]
+    for previous, glyph in zip(glyphs, glyphs[1:]):
+        gap = glyph.x - (previous.x + previous.advance)
+        minimum_gap = max(
+            SAFE_TOPOLOGY_GAP_PT,
+            2.0 * max(previous.size, glyph.size),
+        )
+        if previous.paint_index != glyph.paint_index and gap >= minimum_gap:
+            groups.append([])
+        groups[-1].append(glyph)
+
+    return [
+        Line(
+            y=statistics.median(glyph.y for glyph in group),
+            glyphs=group,
+            visibility=line.visibility,
+        )
+        for group in groups
+    ]
+
+
+def ordered_unique_segment_match(
+    joined_line: Line, candidates: list[Line]
+) -> tuple[list[Line], list[Line]] | None:
+    """Return one-to-many split/join matches when order and count are exact."""
+    segments = split_distant_text_objects(joined_line)
+    if len(segments) < 2:
+        return None
+
+    selected: list[Line] = []
+    for segment in segments:
+        same_text = [line for line in candidates if line.key == segment.key]
+        # Ambiguous occurrences can hide a duplicated label, so leave the
+        # whole group unmatched for the normal missing/extra audit.
+        if len(same_text) != 1:
+            return None
+        selected.append(same_text[0])
+    if len({id(line) for line in selected}) != len(selected):
+        return None
+    if any(len(split_distant_text_objects(line)) != 1 for line in selected):
+        return None
+    ordered = sorted(selected, key=lambda line: (line.y, line.x0))
+    if [id(line) for line in selected] != [id(line) for line in ordered]:
+        # A split/join changes PDF object topology, never reading order.
+        return None
+    return segments, selected
+
+
+def take_topology_equivalents(
+    missing: list[Line], extra: list[Line]
+) -> tuple[list[list[tuple[Line, Line]]], dict, list[Line], list[Line]]:
+    """Match safe one-to-many line groups without suppressing geometry checks."""
+    match_groups: list[list[tuple[Line, Line]]] = []
+    groups: list[tuple[int, int, str]] = []
+    remaining_missing = list(missing)
+    remaining_extra = list(extra)
+
+    for joined_gt in list(remaining_missing):
+        result = ordered_unique_segment_match(joined_gt, remaining_extra)
+        if result is None:
+            continue
+        gt_segments, out_lines = result
+        match_groups.append(list(zip(gt_segments, out_lines)))
+        groups.append((1, len(out_lines), " + ".join(line.key for line in gt_segments)))
+        remaining_missing.remove(joined_gt)
+        for line in out_lines:
+            remaining_extra.remove(line)
+
+    for joined_out in list(remaining_extra):
+        result = ordered_unique_segment_match(joined_out, remaining_missing)
+        if result is None:
+            continue
+        out_segments, gt_lines = result
+        match_groups.append(list(zip(gt_lines, out_segments)))
+        groups.append((len(gt_lines), 1, " + ".join(line.key for line in out_segments)))
+        remaining_extra.remove(joined_out)
+        for line in gt_lines:
+            remaining_missing.remove(line)
+
+    info = {
+        "groups": len(groups),
+        "gt_lines": sum(gt_count for gt_count, _, _ in groups),
+        "out_lines": sum(out_count for _, out_count, _ in groups),
+        "samples": [sample[:120] for _, _, sample in groups[:5]],
+    }
+    return match_groups, info, remaining_missing, remaining_extra
+
+
 def take_wrap_differences(
     missing: list[Line], extra: list[Line]
 ) -> tuple[list[str], list[Line], list[Line]]:
@@ -946,7 +1052,17 @@ def diff_page(
     large_shift: float = 5.0,
     fine_shift: float | None = None,
 ) -> dict:
-    matches, missing, extra = match_lines(gt.lines, out.lines)
+    exact_matches, missing, extra = match_lines(gt.lines, out.lines)
+    topology_groups, topology, missing, extra = take_topology_equivalents(missing, extra)
+    topology_matches = [pair for group in topology_groups for pair in group]
+    for gt_line, out_line in topology_matches:
+        # The original joined line can mix visible and occluded distant
+        # objects. Reclassify each synthetic segment so topology equivalence
+        # cannot suppress an independently real visibility mismatch.
+        gt_line.visibility = classify_line_visibility(gt_line, gt.paints)
+        out_line.visibility = classify_line_visibility(out_line, out.paints)
+    matches = exact_matches + topology_matches
+    matches.sort(key=lambda pair: (pair[0].y, pair[0].x0))
     wraps, missing, extra = take_wrap_differences(missing, extra)
     reflow, missing, extra = take_reflows(missing, extra)
 
@@ -957,9 +1073,17 @@ def diff_page(
         for gt_line, out_line in matches
         if gt_line.width > 1.0
     ]
+    deviant_lines = sum(
+        1
+        for gt_line, out_line in exact_matches
+        if abs(out_line.y - gt_line.y) > noise_floor
+    ) + sum(
+        any(abs(out_line.y - gt_line.y) > noise_floor for gt_line, out_line in group)
+        for group in topology_groups
+    )
 
     gt_occurrences: dict[str, list[Line]] = {}
-    for line in gt.lines:
+    for line, _ in matches:
         gt_occurrences.setdefault(line.key, []).append(line)
     occurrence_by_id: dict[int, tuple[int, int]] = {}
     for repeated in gt_occurrences.values():
@@ -1061,10 +1185,10 @@ def diff_page(
         "lines": {
             "gt": len(gt.lines),
             "out": len(out.lines),
-            "matched": len(matches),
+            "matched": len(exact_matches) + topology["groups"],
             "missing": len(missing),
             "extra": len(extra),
-            "deviant": sum(1 for dy in dys if abs(dy) > noise_floor),
+            "deviant": deviant_lines,
             "missing_text": [line.key[:60] for line in missing[:5]],
             "extra_text": [line.key[:60] for line in extra[:5]],
         },
@@ -1082,6 +1206,7 @@ def diff_page(
             "worst_pct": abs(stats(width_pcts)["worst"]),
         },
         "instances": {
+            "compared": len(matches),
             "large_shift_threshold": large_shift,
             "large_shift_count": len(large_shifts),
             "large_shifts": large_shifts,
@@ -1099,6 +1224,7 @@ def diff_page(
         },
         "pitch": {"pairs": len(pitch_deltas), "worst_delta": abs(stats(pitch_deltas)["worst"])},
         "wraps": {"count": len(wraps), "samples": wraps[:5]},
+        "topology": topology,
         "reflow": reflow,
         "rects": {
             "gt_count": len(gt.rects),
@@ -1124,6 +1250,12 @@ def render_reading(vectors: list[dict]) -> str:
             page_notes.append(
                 f"{vector['wraps']['count']} paragraph(s) wrap at a different word "
                 "(text present, break point moved) — check advances, kerning, or spacing"
+            )
+        if vector["topology"]["groups"]:
+            page_notes.append(
+                f"{vector['topology']['groups']} distant text-object group(s) use "
+                "different PDF line splits/joins with content order preserved; "
+                "their individual anchors remain position-audited"
             )
         if vector["reflow"]["gt_lines"]:
             page_notes.append(
