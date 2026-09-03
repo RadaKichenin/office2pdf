@@ -416,6 +416,34 @@ fn test_convert_bytes_returns_populated_metrics() {
     assert!(metrics.page_count >= 1, "should have at least 1 page");
 }
 
+/// `ConvertMetrics::page_count` answers for the produced PDF, not for the IR.
+/// This fixture has one flow section however long it runs, so reporting the IR
+/// length told every caller "1 page" after Typst broke it across many.
+#[test]
+#[cfg(feature = "pdf-ops")]
+fn test_metrics_page_count_counts_printed_pages() {
+    let mut docx = docx_rs::Docx::new();
+    for index in 0..400 {
+        docx = docx.add_paragraph(
+            docx_rs::Paragraph::new()
+                .add_run(docx_rs::Run::new().add_text(format!("Paragraph {index}"))),
+        );
+    }
+    let mut cursor = std::io::Cursor::new(Vec::new());
+    docx.build().pack(&mut cursor).unwrap();
+    let data = cursor.into_inner();
+
+    let result = convert_bytes(&data, Format::Docx, &ConvertOptions::default()).unwrap();
+    let metrics = result.metrics.expect("convert_bytes should return metrics");
+    let printed = crate::pdf_ops::page_count(&result.pdf).expect("the output PDF should load");
+
+    assert!(printed > 1, "400 paragraphs should not fit one page");
+    assert_eq!(
+        metrics.page_count, printed,
+        "reported page_count should match the pages in the PDF"
+    );
+}
+
 #[test]
 fn test_metrics_total_ge_sum_of_stages() {
     let data = make_test_docx_bytes();
