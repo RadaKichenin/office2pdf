@@ -198,7 +198,15 @@ visible-fill occlusions, and a rect census, with GT noise floors built in (`--no
 text covered by a later opaque image, single closed axis-aligned rectangle, or
 fully extended shading under such a rectangular clip is `hidden`; same-colour
 text on an opaque flat fill is `low_contrast`, and text that remains visible is
-`painted`. An `ignore_text` record is normally hidden. The harness promotes it
+`painted`. The harness retains the page media box and rectangular clip stack,
+intersects each glyph's conservative ink box with those visible bounds, and
+keeps any partially visible run auditable. A trace line proven fully hidden by
+the visibility analysis — including bounds, transparency, absent path ink, or
+later opaque paint — is still reported under
+`visibility.unmatched_hidden_*`, but when it has no counterpart it does not
+become a visual missing/extra failure. An exact counterpart remains matched so
+painted-versus-hidden differences still fail. An `ignore_text` record is
+normally hidden. The harness promotes it
 to painted geometry only when a compact, intersecting `fill_path` appeared
 since the preceding text operation and lies within half an em of the glyph's
 conservative bounding box. This trace-order heuristic recovers path-painted

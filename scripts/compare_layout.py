@@ -13,11 +13,13 @@ visible ink. It then matches lines by their text and reports typed deviations:
   pitch deltas between consecutive matched lines. Horizontal text uses its
   true baseline; a rotated or skewed `fill_text` stays one visual run and uses
   the minimum fully transformed glyph x/y as its comparable anchor;
-- painted visibility from trace order: text covered by a later opaque image,
-  single closed axis-aligned rectangular fill, or fully extended shading under
-  a single closed axis-aligned rectangular clip, or painted with the same
-  colour as a flat background, is distinguished from text that remains visibly
-  painted;
+- painted visibility from the page media box, active rectangular clips, and
+  trace order: text outside the visible bounds, covered by a later opaque
+  image, single closed axis-aligned rectangular fill, or fully extended
+  shading under a single closed axis-aligned rectangular clip, or painted with
+  the same colour as a flat background, is distinguished from text that
+  remains visibly painted. Unmatched hidden trace lines are reported but do
+  not become visual missing/extra findings;
 - visible-fill occlusions: a later opaque, differently coloured rectangle
   cutting into a thin earlier rule is compared by final overlap area, colour,
   and paint order rather than by the raw rectangle count;
@@ -54,8 +56,9 @@ from spatial_match import minimum_cost_pairs
 
 # mutool 1.23.x opens a page as `<page mediabox="...">` with no `number`
 # attribute; later builds add one. Requiring it parses zero pages and reports
-# that as "no differences found" instead of as a failure.
-PAGE_RE = re.compile(r"<page\b[^>]*>(.*?)</page>", re.S)
+# that as "no differences found" instead of as a failure. Keep the attributes
+# so the media box can bound the visual text census.
+PAGE_RE = re.compile(r"<page\b([^>]*)>(.*?)</page>", re.S)
 TEXT_RE = re.compile(r"<(fill_text|ignore_text)\b([^>]*)>(.*?)</\1>", re.S)
 SPAN_RE = re.compile(r"<span\b([^>]*)>(.*?)</span>", re.S)
 GLYPH_RE = re.compile(
@@ -69,6 +72,12 @@ POP_CLIP_RE = re.compile(r"<pop_clip\s*/>")
 CLIP_SHADE_EVENT_RE = re.compile(
     r"<clip_path\b[^>]*>.*?</clip_path>|<fill_shade\b[^>]*/>|<pop_clip\s*/>", re.S
 )
+CLIP_TEXT_EVENT_RE = re.compile(
+    r"<clip_path\b[^>]*>.*?</clip_path>|"
+    r"<(?P<text_op>fill_text|ignore_text)\b[^>]*>.*?</(?P=text_op)>|"
+    r"<pop_clip\s*/>",
+    re.S,
+)
 POINT_RE = re.compile(r'<(?:moveto|lineto|curveto)[^>]*x="([-0-9.e]+)" y="([-0-9.e]+)"')
 PATH_COMMAND_RE = re.compile(
     r"<(?:(?P<point>moveto|lineto)\b(?P<attrs>[^>]*)|(?P<close>closepath)\s*)/>"
@@ -81,6 +90,7 @@ TRANSFORM_RE = re.compile(
 TRM_RE = re.compile(r'trm="([-0-9.e]+) ')
 ALPHA_RE = re.compile(r'alpha="([-0-9.e]+)"')
 COLOR_RE = re.compile(r'color="([-0-9.e ]+)"')
+MEDIABOX_RE = re.compile(r'\bmediabox="([-0-9.e ]+)"')
 
 LINE_Y_TOLERANCE_PT = 0.6
 # A normal inter-word gap is far smaller than this. Combined with a text-paint
@@ -97,6 +107,10 @@ VISIBLE_FILL_MAX_RULE_THICKNESS_PT = 2.0
 VISIBLE_FILL_MIN_RULE_LENGTH_PT = 4.0
 VISIBLE_FILL_COLOR_DELTA = 0.08
 VISIBLE_FILL_MATCH_TOLERANCE_PT = 0.5
+# MuPDF can quantise a page edge and a page-sized paint a few hundredths of a
+# point apart. This matches the established Word trace noise floor while still
+# requiring geometric coverage rather than overlap.
+PAINT_COVER_TOLERANCE_PT = 0.12
 XML_ESCAPES = {"&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&apos;": "'"}
 
 
@@ -113,6 +127,7 @@ class Glyph:
     needs_path_ink: bool = False
     paint_window_start: int = -1
     paint_window_end: int = -1
+    visible_clip: tuple[float, float, float, float] | None = None
 
 
 @dataclass(frozen=True)
@@ -199,6 +214,7 @@ class PageLayout:
     lines: list[Line]
     rects: list[Rect]
     paints: list[Paint] = field(default_factory=list)
+    media_box: tuple[float, float, float, float] | None = None
 
 
 def unescape(text: str) -> str:
@@ -319,6 +335,56 @@ def intersect_bboxes(
     if x0 >= x1 or y0 >= y1:
         return (x0, y0, x0, y0)
     return (x0, y0, x1, y1)
+
+
+def parse_media_box(attrs: str) -> tuple[float, float, float, float] | None:
+    """Return the page's device-space media box when mutool provides one."""
+    match = MEDIABOX_RE.search(attrs)
+    if match is None:
+        return None
+    values = [float(value) for value in match.group(1).split()]
+    if len(values) != 4:
+        return None
+    x0, y0, x1, y1 = values
+    return (min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1))
+
+
+def text_visible_clips(
+    content: str,
+    media_box: tuple[float, float, float, float] | None,
+) -> dict[int, tuple[float, float, float, float] | None]:
+    """Map text operation offsets to conservative active visual bounds.
+
+    A rectangular clip can prove that text outside it cannot paint. Unknown
+    clip shapes only narrow the real visible region, so retaining the last
+    known outer bound is conservative and cannot hide a visual finding.
+    """
+    active_clip = media_box
+    stack: list[tuple[float, float, float, float] | None] = []
+    clips: dict[int, tuple[float, float, float, float] | None] = {}
+
+    for event in CLIP_TEXT_EVENT_RE.finditer(content):
+        operation = event.group(0)
+        clip_match = CLIP_PATH_RE.fullmatch(operation)
+        if clip_match:
+            stack.append(active_clip)
+            bbox = axis_aligned_rect_bbox(*clip_match.groups())
+            if bbox is not None:
+                active_clip = (
+                    bbox
+                    if active_clip is None
+                    else intersect_bboxes(active_clip, bbox)
+                )
+            continue
+
+        if TEXT_RE.fullmatch(operation):
+            clips[event.start()] = active_clip
+            continue
+
+        if POP_CLIP_RE.fullmatch(operation):
+            active_clip = stack.pop() if stack else media_box
+
+    return clips
 
 
 def color_delta(
@@ -576,7 +642,9 @@ def clipped_shade_paints(content: str) -> list[Paint]:
 
 
 def paint_covers(
-    paint: Paint, bbox: tuple[float, float, float, float], tolerance: float = 0.05
+    paint: Paint,
+    bbox: tuple[float, float, float, float],
+    tolerance: float = PAINT_COVER_TOLERANCE_PT,
 ) -> bool:
     x0, y0, x1, y1 = bbox
     return (
@@ -641,12 +709,16 @@ def ignored_text_path_inks(glyph: Glyph, paints: list[Paint]) -> list[Paint]:
 def glyph_visibility(glyph: Glyph, paints: list[Paint]) -> str:
     if glyph.alpha <= INVISIBLE_ALPHA:
         return "hidden"
+    bbox = glyph_bbox(glyph)
+    if glyph.visible_clip is not None:
+        bbox = intersect_bboxes(bbox, glyph.visible_clip)
+        if bbox[0] >= bbox[2] or bbox[1] >= bbox[3]:
+            return "hidden"
     own_path_inks = (
         ignored_text_path_inks(glyph, paints) if glyph.needs_path_ink else []
     )
     if glyph.needs_path_ink and not own_path_inks:
         return "hidden"
-    bbox = glyph_bbox(glyph)
     if any(
         paint.kind in {"flat", "image", "shade"}
         and paint.index > glyph.paint_index
@@ -699,7 +771,9 @@ def classify_line_visibility(line: Line, paints: list[Paint]) -> str:
 def parse_trace(trace_xml: str) -> list[PageLayout]:
     pages: list[PageLayout] = []
     for page_match in PAGE_RE.finditer(trace_xml):
-        content = page_match.group(1)
+        page_attrs, content = page_match.groups()
+        media_box = parse_media_box(page_attrs)
+        visible_clips = text_visible_clips(content, media_box)
         glyphs: list[Glyph] = []
         rotated_lines: list[Line] = []
         text_operations = list(TEXT_RE.finditer(content))
@@ -738,6 +812,7 @@ def parse_trace(trace_xml: str) -> list[PageLayout]:
                             needs_path_ink=op_kind == "ignore_text",
                             paint_window_start=paint_window_start,
                             paint_window_end=paint_window_end,
+                            visible_clip=visible_clips.get(op_match.start(), media_box),
                         )
                     )
             if not transformed_run:
@@ -837,7 +912,14 @@ def parse_trace(trace_xml: str) -> list[PageLayout]:
         for line in lines:
             line.visibility = classify_line_visibility(line, paints)
         lines.sort(key=lambda line: (line.y, line.x0))
-        pages.append(PageLayout(lines=lines, rects=rects, paints=paints))
+        pages.append(
+            PageLayout(
+                lines=lines,
+                rects=rects,
+                paints=paints,
+                media_box=media_box,
+            )
+        )
     return pages
 
 
@@ -1053,6 +1135,10 @@ def diff_page(
     fine_shift: float | None = None,
 ) -> dict:
     exact_matches, missing, extra = match_lines(gt.lines, out.lines)
+    hidden_missing = [line for line in missing if line.visibility == "hidden"]
+    hidden_extra = [line for line in extra if line.visibility == "hidden"]
+    missing = [line for line in missing if line.visibility != "hidden"]
+    extra = [line for line in extra if line.visibility != "hidden"]
     topology_groups, topology, missing, extra = take_topology_equivalents(missing, extra)
     topology_matches = [pair for group in topology_groups for pair in group]
     for gt_line, out_line in topology_matches:
@@ -1217,6 +1303,14 @@ def diff_page(
         "visibility": {
             "mismatch_count": len(visibility_mismatches),
             "mismatches": visibility_mismatches,
+            "unmatched_hidden_gt": len(hidden_missing),
+            "unmatched_hidden_out": len(hidden_extra),
+            "unmatched_hidden_gt_text": [
+                line.key[:60] for line in hidden_missing[:5]
+            ],
+            "unmatched_hidden_out_text": [
+                line.key[:60] for line in hidden_extra[:5]
+            ],
         },
         "visible_fills": {
             "mismatch_count": len(visible_fill_mismatches),
@@ -1307,6 +1401,14 @@ def render_reading(vectors: list[dict]) -> str:
                 f"{vector['visibility']['mismatch_count']} matched text instance(s) differ in "
                 f"painted visibility: {examples}. Check z-order, opacity, or foreground/background "
                 "contrast"
+            )
+        hidden_gt = vector["visibility"].get("unmatched_hidden_gt", 0)
+        hidden_out = vector["visibility"].get("unmatched_hidden_out", 0)
+        if hidden_gt or hidden_out:
+            page_notes.append(
+                f"{hidden_gt} GT and {hidden_out} output unmatched trace line(s) are "
+                "proven non-painted by the trace visibility analysis and "
+                "excluded from visual missing/extra findings"
             )
         if vector["visible_fills"]["mismatch_count"]:
             examples = "; ".join(

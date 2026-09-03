@@ -21,16 +21,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import compare_layout
 
 
-def trace_document(*pages: str, numbered: bool = False) -> str:
+def trace_document(
+    *pages: str,
+    numbered: bool = False,
+    mediabox: str = "0 0 595.2 841.92",
+) -> str:
     """Wrap page bodies in a trace document.
 
     Defaults to the numberless `<page mediabox="...">` mutool 1.23.x emits, so
     the shared fixtures exercise the shape the parser actually meets. Pass
-    ``numbered=True`` for the attribute later builds add.
+    ``numbered=True`` for the attribute later builds add, or override
+    ``mediabox`` for a fixture with different page geometry.
     """
     body = "\n".join(
-        "<page {}mediabox=\"0 0 595.2 841.92\">\n{}\n</page>".format(
-            f'number="{i + 1}" ' if numbered else "", content
+        "<page {}mediabox=\"{}\">\n{}\n</page>".format(
+            f'number="{i + 1}" ' if numbered else "", mediabox, content
         )
         for i, content in enumerate(pages)
     )
@@ -137,6 +142,29 @@ def clipped_shade_op(
     )
 
 
+def clipped_text_op(
+    content: str,
+    x0: float,
+    y0: float,
+    x1: float,
+    y1: float,
+) -> str:
+    """Wrap text in one rectangular device-space clip."""
+    return "\n".join(
+        [
+            '<clip_path winding="nonzero" transform="1 0 0 1 0 0">',
+            f'<moveto x="{x0}" y="{y0}"/>',
+            f'<lineto x="{x1}" y="{y0}"/>',
+            f'<lineto x="{x1}" y="{y1}"/>',
+            f'<lineto x="{x0}" y="{y1}"/>',
+            "<closepath/>",
+            "</clip_path>",
+            content,
+            "<pop_clip/>",
+        ]
+    )
+
+
 class PageElementTest(unittest.TestCase):
     """The ``<page>`` opening tag differs across mutool releases.
 
@@ -150,6 +178,7 @@ class PageElementTest(unittest.TestCase):
             trace_document(text_op([("A", 72.0)], baseline_y=100.0))
         )
         self.assertEqual(len(pages), 1)
+        self.assertEqual(pages[0].media_box, (0.0, 0.0, 595.2, 841.92))
         self.assertEqual(pages[0].lines[0].text, "A")
 
     def test_pages_without_number_keep_document_order(self) -> None:
@@ -395,7 +424,13 @@ class MatchAndDiffTest(unittest.TestCase):
             ]
         )
 
-        vector = self.diff(gt, out)
+        gt_page = compare_layout.parse_trace(
+            trace_document(gt, mediabox="0 0 960 540")
+        )[0]
+        out_page = compare_layout.parse_trace(
+            trace_document(out, mediabox="0 0 960 540")
+        )[0]
+        vector = compare_layout.diff_page(gt_page, out_page)
 
         self.assertEqual(vector["lines"]["missing"], 0)
         self.assertEqual(vector["lines"]["extra"], 0)
@@ -531,6 +566,82 @@ class MatchAndDiffTest(unittest.TestCase):
         self.assertEqual(vector["lines"]["extra"], 1)
         self.assertIn("Sensitivity:Internal", vector["lines"]["extra_text"])
         self.assertEqual(compare_layout.audit_failures([vector]), 1)
+
+    def test_unmatched_text_fully_below_media_box_is_not_a_visual_finding(self) -> None:
+        vector = self.diff(line_of("Outside", 72, 860), "")
+
+        self.assertEqual(vector["lines"]["missing"], 0)
+        self.assertEqual(vector["visibility"]["unmatched_hidden_gt"], 1)
+        self.assertEqual(
+            vector["visibility"]["unmatched_hidden_gt_text"], ["Outside"]
+        )
+        self.assertEqual(compare_layout.audit_failures([vector]), 0)
+
+    def test_unmatched_text_partly_inside_media_box_remains_a_finding(self) -> None:
+        vector = self.diff(line_of("A", -3, 100), "")
+
+        self.assertEqual(vector["lines"]["missing"], 1)
+        self.assertIn("A", vector["lines"]["missing_text"])
+
+    def test_unmatched_text_fully_outside_active_clip_is_not_a_visual_finding(
+        self,
+    ) -> None:
+        gt = clipped_text_op(line_of("Outside clip", 72, 150), 60, 80, 200, 110)
+
+        vector = self.diff(gt, "")
+
+        self.assertEqual(vector["lines"]["missing"], 0)
+        self.assertEqual(vector["visibility"]["unmatched_hidden_gt"], 1)
+        self.assertEqual(compare_layout.audit_failures([vector]), 0)
+
+    def test_unmatched_text_partly_inside_active_clip_remains_a_finding(self) -> None:
+        gt = clipped_text_op(
+            line_of("Clipped overflow", 72, 100), 60, 95, 200, 102
+        )
+
+        vector = self.diff(gt, "")
+
+        self.assertEqual(vector["lines"]["missing"], 1)
+        self.assertIn("Clippedoverflow", vector["lines"]["missing_text"])
+
+    def test_page_clipped_text_covered_in_its_visible_area_is_not_missing(self) -> None:
+        # Mirrors issue #1416: the baseline extends below the page, while a
+        # later page-sized image hides the only area that could paint.
+        gt = "\n".join([line_of("Internal", 72, 846), image_op()])
+
+        vector = self.diff(gt, image_op())
+
+        self.assertEqual(vector["lines"]["missing"], 0)
+        self.assertEqual(vector["visibility"]["unmatched_hidden_gt"], 1)
+        self.assertEqual(compare_layout.audit_failures([vector]), 0)
+
+    def test_unmatched_hidden_output_text_is_not_a_visual_finding(self) -> None:
+        out = "\n".join([line_of("Covered", 72, 100), image_op()])
+
+        vector = self.diff(image_op(), out)
+
+        self.assertEqual(vector["lines"]["extra"], 0)
+        self.assertEqual(vector["visibility"]["unmatched_hidden_out"], 1)
+        self.assertEqual(
+            vector["visibility"]["unmatched_hidden_out_text"], ["Covered"]
+        )
+        self.assertEqual(compare_layout.audit_failures([vector]), 0)
+
+    def test_pop_clip_restores_page_bounds_for_following_text(self) -> None:
+        gt = "\n".join(
+            [
+                clipped_text_op(
+                    line_of("Outside clip", 72, 150), 60, 80, 200, 110
+                ),
+                line_of("Visible", 72, 200),
+            ]
+        )
+
+        vector = self.diff(gt, line_of("Visible", 72, 200))
+
+        self.assertEqual(vector["lines"]["matched"], 1)
+        self.assertEqual(vector["lines"]["missing"], 0)
+        self.assertEqual(vector["visibility"]["unmatched_hidden_gt"], 1)
 
     def test_reordered_content_is_classified_reflow_not_loss(self) -> None:
         # A table row whose cells share one baseline in GT but split across two
@@ -961,6 +1072,17 @@ class ReadingTest(unittest.TestCase):
 
         self.assertIn("line splits/joins", reading)
         self.assertIn("position-audited", reading)
+
+    def test_reading_explains_unmatched_hidden_trace_lines(self) -> None:
+        gt = compare_layout.parse_trace(
+            trace_document(line_of("Outside", 72, 860))
+        )[0]
+        out = compare_layout.parse_trace(trace_document(""))[0]
+
+        reading = compare_layout.render_reading([compare_layout.diff_page(gt, out)])
+
+        self.assertIn("1 GT and 0 output unmatched trace line", reading)
+        self.assertIn("excluded from visual missing/extra findings", reading)
 
 
 class CompareLayoutCliTest(unittest.TestCase):
