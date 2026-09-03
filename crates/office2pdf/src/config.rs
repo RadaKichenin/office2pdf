@@ -155,12 +155,14 @@ pub struct ConvertOptions {
     /// Enable PDF/UA (Universal Accessibility) compliance. Implies `tagged: true`.
     /// Combines tagged PDF with the PDF/UA-1 standard for full accessibility compliance.
     pub pdf_ua: bool,
-    /// Enable streaming mode for large file processing.
-    /// In streaming mode, XLSX files are processed in chunks of rows to bound memory usage.
+    /// Enable bounded-layout mode for large XLSX files.
+    /// XLSX rows are parsed into IR, then compiled in page-aligned chunks to
+    /// bound peak Typst layout memory.
     /// Each chunk is compiled independently and the resulting PDFs are merged.
     /// Requires the `pdf-ops` feature for PDF merging.
     pub streaming: bool,
-    /// Chunk size (in rows) for streaming mode. Defaults to 1000 if `None`.
+    /// Target row count for each streaming compilation chunk. The converter
+    /// extends a chunk to the end of its current PDF page. Defaults to 1000 if `None`.
     /// Only used when `streaming` is `true`.
     pub streaming_chunk_size: Option<usize>,
 }

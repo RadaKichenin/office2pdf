@@ -51,7 +51,7 @@ pub const TYPST_DEFAULT_FONT_FAMILY: &str = "Libertinus Serif";
 // Streaming
 // ---------------------------------------------------------------------------
 
-/// Default chunk size (in rows) for XLSX streaming mode.
+/// Default target chunk size (in rows) for XLSX streaming mode.
 // Streaming needs the pdf-ops merge path; builds without that feature never read this.
 #[cfg_attr(not(feature = "pdf-ops"), allow(dead_code))]
 pub const DEFAULT_STREAMING_CHUNK_SIZE: usize = 1000;

@@ -356,6 +356,314 @@ pub(super) fn convert_bytes(
 }
 
 #[cfg(feature = "pdf-ops")]
+struct PlannedStreamingChunk {
+    document: ir::Document,
+    page_count: u32,
+}
+
+#[cfg(feature = "pdf-ops")]
+struct StreamingProbeContext<'a> {
+    options: &'a ConvertOptions,
+    font_context: Option<&'a render::font_context::FontSearchContext>,
+    additional_fonts: &'a [typst::text::Font],
+    codegen_duration: std::time::Duration,
+    compile_duration: std::time::Duration,
+}
+
+#[cfg(feature = "pdf-ops")]
+impl StreamingProbeContext<'_> {
+    fn page_count(&mut self, document: &ir::Document) -> Result<u32, ConvertError> {
+        let codegen_start: Instant = Instant::now();
+        let output = render::typst_gen::generate_typst_with_options_and_font_context(
+            document,
+            self.options,
+            self.font_context,
+        )?;
+        self.codegen_duration += codegen_start.elapsed();
+
+        let compile_start: Instant = Instant::now();
+        let page_count = render::pdf::compile_page_count_with_fonts(
+            &output.source,
+            &output.images,
+            self.font_context
+                .map(|context| context.search_paths())
+                .unwrap_or(&[]),
+            self.additional_fonts,
+        )?;
+        self.compile_duration += compile_start.elapsed();
+        Ok(page_count)
+    }
+}
+
+#[cfg(feature = "pdf-ops")]
+fn sheet_row_sections(table: &ir::Table) -> (usize, usize, usize, usize) {
+    let heading_rows: usize = usize::from(table.prints_headings && !table.rows.is_empty());
+    let remaining_rows: usize = table.rows.len().saturating_sub(heading_rows);
+    let lead_rows: usize = table.non_repeating_header_row_count.min(remaining_rows);
+    let declared_title_rows: usize = table
+        .header_row_count
+        .min(remaining_rows.saturating_sub(lead_rows));
+    let title_start: usize = heading_rows + lead_rows;
+    let title_rows: usize = render::typst_gen::header_row_count_covering_rowspans(
+        &table.rows[title_start..],
+        declared_title_rows,
+    );
+    let body_start: usize = heading_rows + lead_rows + title_rows;
+    (heading_rows, lead_rows, title_rows, body_start)
+}
+
+#[cfg(feature = "pdf-ops")]
+fn fixed_row_page_aligned_end(
+    page: &ir::SheetPage,
+    body_start: usize,
+    chunk_start: usize,
+    requested_end: usize,
+    options: &ConvertOptions,
+) -> Option<usize> {
+    if page.charts.iter().any(|chart| chart.placement.is_none())
+        || page
+            .table
+            .rows
+            .iter()
+            .any(|row| row.height.is_none() || row.cells.iter().any(|cell| cell.row_span > 1))
+    {
+        return None;
+    }
+
+    let (heading_rows, lead_rows, title_rows, _) = sheet_row_sections(&page.table);
+    let repeat_height: f64 = page.table.rows[..heading_rows]
+        .iter()
+        .chain(
+            page.table.rows[heading_rows + lead_rows..heading_rows + lead_rows + title_rows].iter(),
+        )
+        .filter_map(|row| row.height)
+        .sum();
+    let lead_height: f64 = page.table.rows[heading_rows..heading_rows + lead_rows]
+        .iter()
+        .filter_map(|row| row.height)
+        .sum();
+    let size = render::typst_gen::resolve_page_size(&page.size, options);
+    let page_height: f64 = size.height - page.margins.top - page.margins.bottom;
+    let regular_capacity: f64 = page_height - repeat_height;
+    if !regular_capacity.is_finite() || regular_capacity <= 0.0 {
+        return None;
+    }
+
+    let first_page_lead: f64 = if chunk_start == 0 { lead_height } else { 0.0 };
+    let mut remaining: f64 = regular_capacity - first_page_lead;
+    if remaining < 0.0 {
+        return None;
+    }
+
+    let body_rows: &[ir::TableRow] = &page.table.rows[body_start..];
+    for (row_index, row) in body_rows.iter().enumerate().skip(chunk_start) {
+        let row_height: f64 = row.height?;
+        if !row_height.is_finite() || row_height < 0.0 {
+            return None;
+        }
+        if row_height > remaining + f64::EPSILON {
+            if row_index >= requested_end {
+                return Some(row_index);
+            }
+            remaining = regular_capacity;
+            if row_height > remaining + f64::EPSILON {
+                return None;
+            }
+        }
+        remaining = (remaining - row_height).max(0.0);
+    }
+    Some(body_rows.len())
+}
+
+#[cfg(feature = "pdf-ops")]
+fn streaming_sheet_chunk(
+    page: &ir::SheetPage,
+    body_range: std::ops::Range<usize>,
+    is_first_chunk: bool,
+) -> ir::SheetPage {
+    let (heading_rows, lead_rows, title_rows, body_start) = sheet_row_sections(&page.table);
+    let mut chunk: ir::SheetPage = page.clone();
+    let mut rows: Vec<ir::TableRow> = Vec::with_capacity(
+        heading_rows + title_rows + body_range.len() + usize::from(is_first_chunk) * lead_rows,
+    );
+    if is_first_chunk {
+        rows.extend_from_slice(&page.table.rows[..body_start]);
+    } else {
+        rows.extend_from_slice(&page.table.rows[..heading_rows]);
+        let title_start: usize = heading_rows + lead_rows;
+        rows.extend_from_slice(&page.table.rows[title_start..title_start + title_rows]);
+    }
+    rows.extend_from_slice(
+        &page.table.rows[body_start + body_range.start..body_start + body_range.end],
+    );
+    chunk.table.rows = rows;
+    chunk.table.header_row_count = title_rows;
+    chunk.table.non_repeating_header_row_count = if is_first_chunk { lead_rows } else { 0 };
+    if !is_first_chunk {
+        chunk.charts.clear();
+        chunk.images.clear();
+        chunk.text_boxes.clear();
+    }
+    chunk
+}
+
+#[cfg(feature = "pdf-ops")]
+fn streaming_chunk_document(source: &ir::Document, page: ir::SheetPage) -> ir::Document {
+    ir::Document {
+        metadata: source.metadata.clone(),
+        pages: vec![ir::Page::Sheet(page)],
+        styles: source.styles.clone(),
+    }
+}
+
+#[cfg(feature = "pdf-ops")]
+fn plan_streaming_sheet_chunks(
+    source: &ir::Document,
+    page: &ir::SheetPage,
+    chunk_size: usize,
+    probe_context: &mut StreamingProbeContext<'_>,
+) -> Result<Vec<PlannedStreamingChunk>, ConvertError> {
+    let (_, _, _, body_start) = sheet_row_sections(&page.table);
+    let body_row_count: usize = page.table.rows.len().saturating_sub(body_start);
+    if body_row_count == 0 {
+        let document = streaming_chunk_document(source, page.clone());
+        let page_count = probe_context.page_count(&document)?;
+        return Ok(vec![PlannedStreamingChunk {
+            document,
+            page_count,
+        }]);
+    }
+
+    let chunk_size: usize = chunk_size.max(1);
+    let mut chunks: Vec<PlannedStreamingChunk> = Vec::new();
+    let mut chunk_start: usize = 0;
+    while chunk_start < body_row_count {
+        let requested_end: usize = (chunk_start + chunk_size).min(body_row_count);
+        let is_first_chunk: bool = chunk_start == 0;
+        if let Some(aligned_end) = fixed_row_page_aligned_end(
+            page,
+            body_start,
+            chunk_start,
+            requested_end,
+            probe_context.options,
+        ) {
+            let aligned_document = streaming_chunk_document(
+                source,
+                streaming_sheet_chunk(page, chunk_start..aligned_end, is_first_chunk),
+            );
+            let aligned_pages = probe_context.page_count(&aligned_document)?;
+            let boundary_is_confirmed = if aligned_end == body_row_count {
+                true
+            } else {
+                let next_document = streaming_chunk_document(
+                    source,
+                    streaming_sheet_chunk(page, chunk_start..aligned_end + 1, is_first_chunk),
+                );
+                probe_context.page_count(&next_document)? > aligned_pages
+            };
+            if boundary_is_confirmed {
+                tracing::debug!(
+                    sheet = page.name,
+                    requested_rows = chunk_size,
+                    planned_rows = aligned_end - chunk_start,
+                    planned_pages = aligned_pages,
+                    "aligned fixed-row streaming chunk to a PDF page boundary"
+                );
+                chunks.push(PlannedStreamingChunk {
+                    document: aligned_document,
+                    page_count: aligned_pages,
+                });
+                chunk_start = aligned_end;
+                continue;
+            }
+        }
+
+        let requested_document = streaming_chunk_document(
+            source,
+            streaming_sheet_chunk(page, chunk_start..requested_end, is_first_chunk),
+        );
+        let requested_pages = probe_context.page_count(&requested_document)?;
+
+        if requested_end == body_row_count {
+            chunks.push(PlannedStreamingChunk {
+                document: requested_document,
+                page_count: requested_pages,
+            });
+            break;
+        }
+
+        let mut last_same_end: usize = requested_end;
+        let mut first_larger_end: Option<usize> = None;
+        let mut step: usize = 1;
+        loop {
+            let probe_end: usize = requested_end.saturating_add(step).min(body_row_count);
+            let probe_document = streaming_chunk_document(
+                source,
+                streaming_sheet_chunk(page, chunk_start..probe_end, is_first_chunk),
+            );
+            let probe_pages = probe_context.page_count(&probe_document)?;
+            if probe_pages > requested_pages {
+                first_larger_end = Some(probe_end);
+                break;
+            }
+            last_same_end = probe_end;
+            if probe_end == body_row_count {
+                chunks.push(PlannedStreamingChunk {
+                    document: probe_document,
+                    page_count: probe_pages,
+                });
+                chunk_start = body_row_count;
+                break;
+            }
+            step = step.saturating_mul(2).max(1);
+        }
+        if chunk_start == body_row_count {
+            break;
+        }
+
+        let mut lower_end: usize = last_same_end + 1;
+        let mut upper_end: usize =
+            first_larger_end.expect("the page-growth search must find an upper bound");
+        while lower_end < upper_end {
+            let middle_end: usize = lower_end + (upper_end - lower_end) / 2;
+            let middle_document = streaming_chunk_document(
+                source,
+                streaming_sheet_chunk(page, chunk_start..middle_end, is_first_chunk),
+            );
+            let middle_pages = probe_context.page_count(&middle_document)?;
+            if middle_pages > requested_pages {
+                upper_end = middle_end;
+            } else {
+                lower_end = middle_end + 1;
+            }
+        }
+
+        let aligned_end: usize = lower_end - 1;
+        let aligned_document = if aligned_end == requested_end {
+            requested_document
+        } else {
+            streaming_chunk_document(
+                source,
+                streaming_sheet_chunk(page, chunk_start..aligned_end, is_first_chunk),
+            )
+        };
+        tracing::debug!(
+            sheet = page.name,
+            requested_rows = chunk_size,
+            planned_rows = aligned_end - chunk_start,
+            planned_pages = requested_pages,
+            "aligned streaming chunk to a PDF page boundary"
+        );
+        chunks.push(PlannedStreamingChunk {
+            document: aligned_document,
+            page_count: requested_pages,
+        });
+        chunk_start = aligned_end;
+    }
+    Ok(chunks)
+}
+
+#[cfg(feature = "pdf-ops")]
 fn convert_bytes_streaming_xlsx(
     data: &[u8],
     options: &ConvertOptions,
@@ -365,15 +673,15 @@ fn convert_bytes_streaming_xlsx(
     let mut additional_fonts = load_additional_fonts(options)?;
     let chunk_size = options
         .streaming_chunk_size
-        .unwrap_or(crate::defaults::DEFAULT_STREAMING_CHUNK_SIZE);
+        .unwrap_or(crate::defaults::DEFAULT_STREAMING_CHUNK_SIZE)
+        .max(1);
 
     let xlsx_parser = parser::xlsx::XlsxParser;
-
     let parse_start: Instant = Instant::now();
     let parse_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        xlsx_parser.parse_streaming(data, options, chunk_size)
+        xlsx_parser.parse(data, options)
     }));
-    let (chunk_docs, mut warnings) = match parse_result {
+    let (document, mut warnings) = match parse_result {
         Ok(result) => result?,
         Err(panic_info) => {
             return Err(ConvertError::Parse(format!(
@@ -383,15 +691,11 @@ fn convert_bytes_streaming_xlsx(
         }
     };
     let parse_duration = parse_start.elapsed();
-    for chunk_doc in &chunk_docs {
-        extend_document_fonts(&mut additional_fonts, chunk_doc);
-    }
+    extend_document_fonts(&mut additional_fonts, &document);
 
     let needs_in_memory_font_context = !additional_fonts.is_empty()
         || effective_last_resort_family(options).is_some()
-        || chunk_docs
-            .iter()
-            .any(render::font_subst::document_requests_font_families);
+        || render::font_subst::document_requests_font_families(&document);
     #[cfg(not(target_arch = "wasm32"))]
     let font_context =
         (needs_in_memory_font_context || !options.font_paths.is_empty()).then(|| {
@@ -405,14 +709,33 @@ fn convert_bytes_streaming_xlsx(
             .with_last_resort_family(effective_last_resort_family(options))
     });
 
-    if chunk_docs.is_empty() {
-        let empty_doc = ir::Document {
-            metadata: ir::Metadata::default(),
-            pages: vec![],
-            styles: ir::StyleSheet::default(),
+    let mut probe_context = StreamingProbeContext {
+        options,
+        font_context: font_context.as_ref(),
+        additional_fonts: &additional_fonts,
+        codegen_duration: std::time::Duration::ZERO,
+        compile_duration: std::time::Duration::ZERO,
+    };
+    let mut planned_chunks: Vec<PlannedStreamingChunk> = Vec::new();
+    for page in &document.pages {
+        let ir::Page::Sheet(sheet_page) = page else {
+            return Err(ConvertError::Render(
+                "XLSX streaming received a non-sheet IR page".to_string(),
+            ));
         };
+        planned_chunks.extend(plan_streaming_sheet_chunks(
+            &document,
+            sheet_page,
+            chunk_size,
+            &mut probe_context,
+        )?);
+    }
+    let mut codegen_duration_total = probe_context.codegen_duration;
+    let mut compile_duration_total = probe_context.compile_duration;
+
+    if planned_chunks.is_empty() {
         let output = render::typst_gen::generate_typst_with_options_and_font_context(
-            &empty_doc,
+            &document,
             options,
             font_context.as_ref(),
         )?;
@@ -435,8 +758,8 @@ fn convert_bytes_streaming_xlsx(
             warnings,
             Some(ConvertMetrics {
                 parse_duration,
-                codegen_duration: std::time::Duration::ZERO,
-                compile_duration: std::time::Duration::ZERO,
+                codegen_duration: codegen_duration_total,
+                compile_duration: compile_duration_total,
                 total_duration,
                 input_size_bytes,
                 output_size_bytes,
@@ -445,16 +768,13 @@ fn convert_bytes_streaming_xlsx(
         ));
     }
 
-    let mut all_pdfs: Vec<Vec<u8>> = Vec::with_capacity(chunk_docs.len());
-    let mut codegen_duration_total = std::time::Duration::ZERO;
-    let mut compile_duration_total = std::time::Duration::ZERO;
+    let mut all_pdfs: Vec<Vec<u8>> = Vec::with_capacity(planned_chunks.len());
     let mut total_page_count: u32 = 0;
-
-    for chunk_doc in chunk_docs {
+    for planned_chunk in planned_chunks {
         if let Some(font_context) = font_context.as_ref() {
             warnings.extend(
                 render::font_subst::detect_missing_font_fallbacks_with_context(
-                    &chunk_doc,
+                    &planned_chunk.document,
                     font_context,
                 )
                 .into_iter()
@@ -468,7 +788,7 @@ fn convert_bytes_streaming_xlsx(
 
         let codegen_start: Instant = Instant::now();
         let output = render::typst_gen::generate_typst_with_options_and_font_context(
-            &chunk_doc,
+            &planned_chunk.document,
             options,
             font_context.as_ref(),
         )?;
@@ -487,27 +807,30 @@ fn convert_bytes_streaming_xlsx(
             options.tagged,
             options.pdf_ua,
         )?;
-        total_page_count += chunk_pages;
         compile_duration_total += compile_start.elapsed();
-
+        if chunk_pages != planned_chunk.page_count {
+            return Err(ConvertError::Render(format!(
+                "streaming pagination changed between planning and export: planned {} pages, exported {chunk_pages}",
+                planned_chunk.page_count
+            )));
+        }
+        total_page_count += chunk_pages;
         all_pdfs.push(pdf);
     }
 
     let final_pdf = if all_pdfs.len() == 1 {
-        // Safety: len() == 1 guarantees at least one element
         all_pdfs
             .into_iter()
             .next()
             .expect("all_pdfs is non-empty (len == 1)")
     } else {
-        let refs: Vec<&[u8]> = all_pdfs.iter().map(|p| p.as_slice()).collect();
+        let refs: Vec<&[u8]> = all_pdfs.iter().map(|pdf| pdf.as_slice()).collect();
         crate::pdf_ops::merge(&refs)
-            .map_err(|e| ConvertError::Render(format!("PDF merge failed: {e}")))?
+            .map_err(|error| ConvertError::Render(format!("PDF merge failed: {error}")))?
     };
 
     let total_duration = total_start.elapsed();
     let output_size_bytes = final_pdf.len() as u64;
-
     Ok(build_convert_result(
         final_pdf,
         warnings,
@@ -610,5 +933,102 @@ pub(super) fn render_document(doc: &ir::Document) -> Result<Vec<u8>, ConvertErro
             false,
             false,
         )
+    }
+}
+
+#[cfg(all(test, feature = "pdf-ops"))]
+mod streaming_chunk_tests {
+    use super::*;
+
+    fn fixed_row(height: f64) -> ir::TableRow {
+        ir::TableRow {
+            cells: Vec::new(),
+            height: Some(height),
+            minimum_height: None,
+        }
+    }
+
+    fn sheet_page(table: ir::Table) -> ir::SheetPage {
+        ir::SheetPage {
+            name: "Sheet1".to_string(),
+            size: ir::PageSize {
+                width: 100.0,
+                height: 100.0,
+            },
+            margins: ir::Margins {
+                top: 10.0,
+                right: 0.0,
+                bottom: 10.0,
+                left: 0.0,
+            },
+            table,
+            header: None,
+            footer: None,
+            charts: Vec::new(),
+            images: Vec::new(),
+            text_boxes: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn fixed_rows_extend_each_chunk_to_the_current_page_boundary() {
+        let page = sheet_page(ir::Table {
+            rows: (0..5).map(|_| fixed_row(30.0)).collect(),
+            ..Default::default()
+        });
+        let options = ConvertOptions::default();
+
+        assert_eq!(
+            fixed_row_page_aligned_end(&page, 0, 0, 1, &options),
+            Some(2)
+        );
+        assert_eq!(
+            fixed_row_page_aligned_end(&page, 0, 2, 3, &options),
+            Some(4)
+        );
+        assert_eq!(
+            fixed_row_page_aligned_end(&page, 0, 4, 5, &options),
+            Some(5)
+        );
+    }
+
+    #[test]
+    fn fixed_rows_reserve_repeating_and_first_page_only_headers() {
+        let page = sheet_page(ir::Table {
+            rows: std::iter::once(fixed_row(20.0))
+                .chain(std::iter::once(fixed_row(10.0)))
+                .chain((0..5).map(|_| fixed_row(25.0)))
+                .collect(),
+            header_row_count: 1,
+            non_repeating_header_row_count: 1,
+            ..Default::default()
+        });
+        let options = ConvertOptions::default();
+
+        assert_eq!(
+            fixed_row_page_aligned_end(&page, 2, 0, 1, &options),
+            Some(2)
+        );
+        assert_eq!(
+            fixed_row_page_aligned_end(&page, 2, 2, 3, &options),
+            Some(4)
+        );
+    }
+
+    #[test]
+    fn content_driven_rows_use_typst_boundary_search() {
+        let page = sheet_page(ir::Table {
+            rows: vec![ir::TableRow {
+                cells: Vec::new(),
+                height: None,
+                minimum_height: None,
+            }],
+            ..Default::default()
+        });
+
+        assert_eq!(
+            fixed_row_page_aligned_end(&page, 0, 0, 1, &ConvertOptions::default()),
+            None
+        );
     }
 }

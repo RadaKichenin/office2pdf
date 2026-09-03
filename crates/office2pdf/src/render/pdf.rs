@@ -318,6 +318,38 @@ pub(crate) fn compile_to_pdf_with_fonts_counted(
     compile_to_pdf_inner(&world, pdf_standard, tagged, pdf_ua)
 }
 
+/// Lay out Typst markup and report its page count without exporting a PDF.
+///
+/// Streaming XLSX conversion uses this cheaper probe to move each compilation
+/// boundary to the end of a laid-out page. That keeps the merged PDF's page
+/// count independent of arbitrary row chunk sizes without retaining a whole
+/// workbook layout.
+pub(crate) fn compile_page_count_with_fonts(
+    typst_source: &str,
+    images: &[ImageAsset],
+    font_paths: &[std::path::PathBuf],
+    in_memory_fonts: &[Font],
+) -> Result<u32, ConvertError> {
+    #[cfg(not(target_arch = "wasm32"))]
+    let world =
+        MinimalWorld::new_with_in_memory_fonts(typst_source, images, font_paths, in_memory_fonts);
+    #[cfg(target_arch = "wasm32")]
+    let world = {
+        let _ = font_paths;
+        MinimalWorld::new_embedded_with_fonts(typst_source, images, in_memory_fonts)
+    };
+    let _compilation_guard = TypstCompilationGuard::begin();
+    let warned = typst::compile::<typst::layout::PagedDocument>(&world);
+    let document = warned.output.map_err(|errors| {
+        let messages: Vec<String> = errors
+            .iter()
+            .map(|error| error.message.to_string())
+            .collect();
+        ConvertError::Render(format!("Typst compilation failed: {}", messages.join("; ")))
+    })?;
+    Ok(document.pages.len() as u32)
+}
+
 fn compile_to_pdf_inner(
     world: &MinimalWorld,
     pdf_standard: Option<PdfStandard>,

@@ -122,7 +122,7 @@ pub fn convert_with_options(
 /// [`Format`].
 ///
 /// When `options.streaming` is `true` and the format is XLSX, the conversion
-/// processes rows in chunks to bound peak memory during Typst compilation.
+/// processes rows in page-aligned chunks to bound peak memory during Typst compilation.
 /// This requires the `pdf-ops` feature for PDF merging.
 ///
 /// # Errors

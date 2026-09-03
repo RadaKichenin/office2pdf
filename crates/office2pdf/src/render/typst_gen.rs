@@ -55,6 +55,7 @@ mod text;
 
 // The DOCX table min-content measurement routes East Asian codepoints to the
 // run's `w:eastAsia` face the same way rendering does (issue #624).
+pub(crate) use self::tables::header_row_count_covering_rowspans;
 pub(crate) use self::text::is_cjk_like;
 pub(crate) use self::text::{
     COMPACTED_SHEET_CELL_MIN_DESCENT_SEAT_PT, SHEET_CELL_MIN_DESCENT_SEAT_PT,
@@ -454,7 +455,7 @@ fn preprocess_image_asset(image: &ImageData) -> (Vec<u8>, ImageFormat) {
 }
 
 /// Resolve the effective page size, applying paper_size and landscape overrides.
-fn resolve_page_size(original: &PageSize, options: &ConvertOptions) -> PageSize {
+pub(crate) fn resolve_page_size(original: &PageSize, options: &ConvertOptions) -> PageSize {
     let (mut w, mut h) = if let Some(ref ps) = options.paper_size {
         let (pw, ph) = ps.dimensions();
         (pw, ph)
