@@ -45,7 +45,7 @@ Add release-process changes to this same PR only when they are required for the 
 ```bash
 cargo metadata --offline --locked --no-deps --format-version 1 \
   | jq -r '.packages[] | select(.name == "office2pdf" or .name == "office2pdf-cli") | [.name, .version, ([.dependencies[] | select(.name == "office2pdf") | .req] | first // "-")] | @tsv'
-cargo test --offline --workspace
+cargo test --offline --locked --workspace
 git diff --check
 ```
 

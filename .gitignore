@@ -1,6 +1,5 @@
 /target
 target*/
-Cargo.lock
 *.pdf
 !tests/golden_mocks/business/expected/**/*.pdf
 

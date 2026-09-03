@@ -18,6 +18,7 @@
 - Test behavior, not implementation. Assert on observable outcomes, not internal details — tests must survive refactoring.
 - Every new feature or bug fix must have corresponding tests.
 - **Optimize test execution speed.** Run independent tests in parallel. Use `cargo test` default parallelism. Keep each test isolated — no shared mutable state — so parallel execution is safe.
+- **Use the reviewed dependency graph.** The workspace `Cargo.lock` is tracked. Pass `--locked` to build, test, and evidence commands; update dependencies explicitly and review the lockfile diff.
 - For I/O-bound tests (network, file), prefer async or use mocks to avoid blocking. For CPU-bound tests, use multi-thread parallelism.
 - If full test suite exceeds 30 seconds, investigate: split slow integration tests from fast unit tests, run unit tests first for quick feedback.
 - **Skip tests when no runtime impact.** In CI/CD, use path filters to trigger tests only when source code, test files, or runtime config files are modified. Non-runtime changes (docs, README, `.md`, CI pipeline config) should not trigger test runs.
@@ -387,7 +388,7 @@ defect. Exits non-zero only when the GT cannot be trusted at all.
 
 When comparing PDF output against ground truth (classified fixtures):
 
-1. Run `cargo test -p office2pdf --test artifact_generator -- --ignored --nocapture` to generate artifacts.
+1. Run `cargo test --locked -p office2pdf --test artifact_generator -- --ignored --nocapture` to generate artifacts.
 2. Read `tests/classified_fixtures/_work/report.json` — contains per-file page counts, text lengths, and PNG paths.
 3. Identify worst files: page count mismatches, large text length differences, conversion errors.
 4. For worst files, use the **Read tool to view PNG images** in `tests/classified_fixtures/_work/<work_dir>/`:
