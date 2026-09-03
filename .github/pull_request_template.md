@@ -29,9 +29,10 @@
 - Evidence mode: `fix` <!-- `fix` requires gt/before/after; `defect` requires compare -->
 - Layout audit report: `assets/bugfixes/issue-<!-- N -->/layout-audit.json` <!-- fix mode only -->
 - Render cluster reports: `assets/bugfixes/issue-<!-- N -->/render-clusters-page-<!-- P -->.json` <!-- fix mode: one strict report per compared page -->
+- Reference exporter differences: None <!-- or assets/bugfixes/issue-N/reference-exporter-differences.json -->
 - Fine-detail threshold: <!-- e.g. 0.5pt; must match compare_layout.py --fine-shift -->
 - Layout audit page count: <!-- Pass, or #N references when the report differs -->
-- Layout audit text flow: <!-- Pass, or #N references for missing/extra/reflow, changed-wrap, or painted-text visibility findings -->
+- Layout audit text flow: <!-- Pass, #N, or ref:<id> for an exact verified painted-text visibility difference -->
 - Layout audit visible fills: <!-- Pass, or #N references for visible-fill occlusions -->
 - Layout audit rectangle geometry: <!-- Pass, or #N references for matched rectangle position/size/edge findings -->
 - Layout audit large shifts: <!-- Pass, or #N references for shifts above the report threshold -->
@@ -41,6 +42,7 @@
 - GT: `assets/bugfixes/issue-<!-- N -->/gt.jpg`
 - Before: `assets/bugfixes/issue-<!-- N -->/before.jpg`
 - After: `assets/bugfixes/issue-<!-- N -->/after.jpg`
+- Native: None <!-- required as assets/bugfixes/issue-N/native.jpg when reference exporter differences are used -->
 - Compare: `assets/bugfixes/issue-<!-- N -->/compare.jpg`
 
 ### Visual comparison
@@ -50,6 +52,10 @@
 | GT | Before | After |
 | --- | --- | --- |
 | <!-- ![GT](IMAGE_URL) --> | <!-- ![Before](IMAGE_URL) --> | <!-- ![After](IMAGE_URL) --> |
+
+<!-- Reference exporter difference only: render the native Office evidence. -->
+
+<!-- ![Native](IMAGE_URL) -->
 
 <!-- Defect mode only: replace the cell comment with the rendered Compare image and remove the GT/Before/After table. -->
 
@@ -70,7 +76,7 @@
 
 ### Deviation audit
 
-<!-- Every result must start with: Matches GT, Fixed, No deviation observed, or Remaining: #N. -->
+<!-- Every result must start with: Matches GT, Fixed, No deviation observed, Reference difference: ref:<id>, or Remaining: #N. -->
 
 | Check | Result |
 | --- | --- |
@@ -92,4 +98,4 @@
 
 - [ ] Commits include a `Signed-off-by` line
 - [ ] PR scope contains one root cause
-- [ ] Remaining visual deviations each reference an open issue
+- [ ] Remaining converter or harness deviations each reference an open issue

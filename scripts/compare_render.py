@@ -20,7 +20,7 @@ another's strength:
   regions, each with a bounding box in points. A bare count let #1029's
   squared-off panel corners survive an audit — two ~5,100pt² regions hiding
   inside one number. Every listed cluster must be dispositioned: an accepted
-  rendering difference, or an issue.
+  rendering difference, an evidence-backed GT-exporter difference, or an issue.
 
 Read them together. A fix that improves geometry while leaving the
 histogram flat has moved something without changing what is drawn, which is
@@ -47,6 +47,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from spatial_match import minimum_cost_pairs
+try:
+    from reference_exporter_differences import validate_reference_difference_document
+except ModuleNotFoundError:  # Imported as scripts.compare_render in unit tests.
+    from scripts.reference_exporter_differences import (
+        validate_reference_difference_document,
+    )
 
 PAGE_RE = re.compile(r'<page width="[\d.]+" height="[\d.]+">(.*?)</page>', re.S)
 WORD_RE = re.compile(
@@ -156,12 +162,20 @@ def diff_cluster_id(page: int, cluster: DiffCluster) -> str:
 
 
 def _validated_cluster_dispositions(
-    cluster_ids: set[str], disposition_document: object
+    cluster_ids: set[str],
+    disposition_document: object,
+    *,
+    page: int,
+    reference_difference_document: object = None,
 ) -> tuple[dict[str, dict[str, str]], list[str], set[str], set[str]]:
     """Validate explicit-ID groups and return dispositions plus schema errors."""
     dispositions: dict[str, dict[str, str]] = {}
     errors: list[str] = []
     duplicate_ids: set[str] = set()
+    reference_differences, reference_errors = validate_reference_difference_document(
+        reference_difference_document
+    ) if reference_difference_document is not None else ({}, [])
+    errors.extend(reference_errors)
 
     if disposition_document is None:
         groups: object = []
@@ -192,7 +206,14 @@ def _validated_cluster_dispositions(
         if not isinstance(group, dict):
             errors.append(f"cluster disposition group {index} must be an object")
             continue
-        extra_group_keys = set(group) - {"kind", "class", "issue", "cluster_ids", "note"}
+        extra_group_keys = set(group) - {
+            "kind",
+            "class",
+            "issue",
+            "difference_id",
+            "cluster_ids",
+            "note",
+        }
         if extra_group_keys:
             errors.append(
                 f"cluster disposition group {index} has unsupported fields "
@@ -223,9 +244,10 @@ def _validated_cluster_dispositions(
                 errors.append(
                     f"cluster disposition group {index} class must be one of: {allowed}"
                 )
-            elif "issue" in group:
+            elif "issue" in group or "difference_id" in group:
                 errors.append(
-                    f"cluster disposition group {index} accepted-rendering cannot set issue"
+                    f"cluster disposition group {index} accepted-rendering cannot set "
+                    "issue or difference_id"
                 )
             else:
                 disposition = {"kind": kind, "class": str(accepted_class)}
@@ -235,13 +257,50 @@ def _validated_cluster_dispositions(
                 errors.append(
                     f"cluster disposition group {index} issue must be a reference such as #123"
                 )
-            elif "class" in group:
-                errors.append(f"cluster disposition group {index} issue cannot set class")
+            elif "class" in group or "difference_id" in group:
+                errors.append(
+                    f"cluster disposition group {index} issue cannot set class or "
+                    "difference_id"
+                )
             else:
                 disposition = {"kind": kind, "issue": issue}
+        elif kind == "reference-exporter-difference":
+            difference_id = group.get("difference_id")
+            difference = reference_differences.get(difference_id)
+            if not isinstance(difference_id, str) or difference is None:
+                errors.append(
+                    f"cluster disposition group {index} difference_id must name a "
+                    "validated reference exporter difference"
+                )
+            elif difference.get("kind") != "render-clusters":
+                errors.append(
+                    f"cluster disposition group {index} difference_id must name a "
+                    "render-clusters difference"
+                )
+            elif difference.get("page") != page:
+                errors.append(
+                    f"cluster disposition group {index} reference difference is for "
+                    f"page {difference.get('page')}, not page {page}"
+                )
+            elif set(raw_ids) != set(difference.get("render_cluster_ids", [])):
+                errors.append(
+                    f"cluster disposition group {index} must use the exact cluster IDs "
+                    f"declared by reference difference {difference_id}"
+                )
+            elif "class" in group or "issue" in group:
+                errors.append(
+                    f"cluster disposition group {index} reference exporter difference "
+                    "cannot set class or issue"
+                )
+            else:
+                disposition = {
+                    "kind": kind,
+                    "difference_id": difference_id,
+                }
         else:
             errors.append(
-                f"cluster disposition group {index} kind must be accepted-rendering or issue"
+                f"cluster disposition group {index} kind must be accepted-rendering, "
+                "issue, or reference-exporter-difference"
             )
 
         if disposition is not None and isinstance(note, str):
@@ -334,6 +393,7 @@ def build_cluster_audit_report(
     page: int,
     dpi: int,
     disposition_document: object,
+    reference_difference_document: object = None,
     strict: bool,
 ) -> dict[str, object]:
     """Build the complete machine-readable strict cluster audit for one page."""
@@ -341,7 +401,10 @@ def build_cluster_audit_report(
     current_clusters = clusters or []
     cluster_ids = {diff_cluster_id(page, cluster) for cluster in current_clusters}
     dispositions, errors, unknown_ids, duplicate_ids = _validated_cluster_dispositions(
-        cluster_ids, disposition_document
+        cluster_ids,
+        disposition_document,
+        page=page,
+        reference_difference_document=reference_difference_document,
     )
     renderer_observations, observation_errors = _validated_renderer_observations(
         disposition_document
@@ -405,6 +468,17 @@ def load_cluster_disposition_document(path: Path | None) -> object:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ValueError(f"could not read cluster dispositions from {path}: {exc}") from exc
+
+
+def load_reference_difference_document(path: Path | None) -> object:
+    if path is None:
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(
+            f"could not read reference exporter differences from {path}: {exc}"
+        ) from exc
 
 
 def write_cluster_audit_report(path: Path, report: dict[str, object]) -> None:
@@ -983,7 +1057,8 @@ def report_diff_clusters(clusters: list[DiffCluster] | None, page: int = 1) -> N
         print("  dispersed specks (glyph rasterisation and antialiasing).")
         return
     print("  Disposition every cluster: an accepted rendering difference (glyph")
-    print("  rasterisation) or an issue reference. A cluster hugging a shape's")
+    print("  rasterisation), verified GT-exporter evidence, or an issue reference.")
+    print("  A cluster hugging a shape's")
     print("  corner or edge while colour and position agree is outline geometry —")
     print("  compare the shape's path, not its fill or its box (#1029).")
     for index, cluster in enumerate(clusters[:CLUSTER_REPORT_LIMIT], start=1):
@@ -1352,7 +1427,15 @@ def main() -> None:
         type=Path,
         help=(
             "JSON groups that explicitly map current cluster IDs to an accepted "
-            "renderer class or an open issue"
+            "renderer class, verified GT-exporter evidence, or an open issue"
+        ),
+    )
+    parser.add_argument(
+        "--reference-differences",
+        type=Path,
+        help=(
+            "evidence-backed reference exporter differences used by exact cluster "
+            "dispositions"
         ),
     )
     parser.add_argument(
@@ -1376,9 +1459,14 @@ def main() -> None:
         parser.error("--strict-clusters requires --cluster-report")
     if args.cluster_dispositions is not None and args.cluster_report is None:
         parser.error("--cluster-dispositions requires --cluster-report")
+    if args.reference_differences is not None and args.cluster_dispositions is None:
+        parser.error("--reference-differences requires --cluster-dispositions")
     require_vision_artifact_dependencies(args.artifacts_dir)
     try:
         disposition_document = load_cluster_disposition_document(args.cluster_dispositions)
+        reference_difference_document = load_reference_difference_document(
+            args.reference_differences
+        )
     except ValueError as exc:
         parser.error(str(exc))
 
@@ -1442,6 +1530,7 @@ def main() -> None:
             page=args.page,
             dpi=args.dpi,
             disposition_document=disposition_document,
+            reference_difference_document=reference_difference_document,
             strict=args.strict_clusters,
         )
         write_cluster_audit_report(args.cluster_report, cluster_audit_report)

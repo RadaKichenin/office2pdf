@@ -17,16 +17,27 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
+try:
+    from reference_exporter_differences import validate_reference_difference_document
+except ModuleNotFoundError:  # Imported as scripts.check_visual_pr in unit tests.
+    from scripts.reference_exporter_differences import (
+        validate_reference_difference_document,
+    )
+
 
 VISUAL_ROOT = Path("assets/bugfixes")
 EVIDENCE_PATH = re.compile(
-    r"^assets/bugfixes/issue-(?P<issue>\d+)/(?P<name>gt|before|after|compare)\.(?P<ext>[^/]+)$"
+    r"^assets/bugfixes/issue-(?P<issue>\d+)/"
+    r"(?P<name>gt|before|after|compare|native)\.(?P<ext>[^/]+)$"
 )
 LAYOUT_AUDIT_PATH = re.compile(
     r"^assets/bugfixes/issue-(?P<issue>\d+)/layout-audit\.json$"
 )
 RENDER_CLUSTER_REPORT_PATH = re.compile(
     r"^assets/bugfixes/issue-(?P<issue>\d+)/render-clusters-page-(?P<page>\d+)\.json$"
+)
+REFERENCE_DIFFERENCE_PATH = re.compile(
+    r"^assets/bugfixes/issue-(?P<issue>\d+)/reference-exporter-differences\.json$"
 )
 # Prose living under assets/bugfixes/ carries no pixels, so it is neither evidence
 # to validate nor a rendered change to audit. Without this the file documenting the
@@ -63,7 +74,12 @@ INSPECTION_ITEMS = (
 )
 FIX_PREVIEW_LABELS = ("GT", "Before", "After")
 DEFECT_PREVIEW_LABELS = ("Compare",)
-ALLOWED_RESULTS = ("Matches GT", "Fixed", "No deviation observed")
+ALLOWED_RESULTS = (
+    "Matches GT",
+    "Fixed",
+    "No deviation observed",
+    "Reference difference:",
+)
 VISION_WORDS = re.compile(
     r"(?i)\b(?:page|diff|crop|text|title|label|line|shape|image|chart|table|"
     r"position|align(?:ment|ed)?|offset|colour|color|fill|stroke|border|font|"
@@ -178,6 +194,24 @@ def validate_pr_body(body: str, changed_paths: list[str]) -> list[str]:
         if not field(audit, name):
             errors.append(f"Visual audit > {name} is required.")
 
+    reference_differences = field(audit, "Reference exporter differences")
+    if not reference_differences:
+        errors.append(
+            "Visual audit > Reference exporter differences must be `None` or the "
+            "issue-local machine report path."
+        )
+    reference_artifact_changed = any(
+        REFERENCE_DIFFERENCE_PATH.fullmatch(path)
+        or (match := EVIDENCE_PATH.fullmatch(path)) is not None
+        and match.group("name") == "native"
+        for path in changed_paths
+    )
+    if reference_artifact_changed and reference_differences == "None":
+        errors.append(
+            "Changing native/reference-exporter evidence requires its issue-local "
+            "Reference exporter differences report."
+        )
+
     renderer = field(audit, "Renderer and DPI")
     dpi_match = re.search(r"(?i)(\d+(?:\.\d+)?)\s*DPI", renderer or "")
     if not dpi_match or float(dpi_match.group(1)) < 150:
@@ -255,10 +289,19 @@ def validate_pr_body(body: str, changed_paths: list[str]) -> list[str]:
         elif result.startswith("Remaining:"):
             if not re.search(r"#\d+", result):
                 errors.append(f"Remaining deviation must reference an issue: {row}.")
+        elif result.startswith("Reference difference:"):
+            if re.fullmatch(
+                r"Reference difference:\s*ref:[a-z0-9]+(?:-[a-z0-9]+)*",
+                result,
+            ) is None:
+                errors.append(
+                    f"Reference exporter difference must use one exact ref:<id>: {row}."
+                )
         elif not result.startswith(ALLOWED_RESULTS):
             errors.append(
                 f"Deviation audit row '{row}' must start with Matches GT, Fixed, "
-                "No deviation observed, or Remaining: #N."
+                "No deviation observed, Reference difference: ref:<id>, or "
+                "Remaining: #N."
             )
 
     if not visual_assets_changed:
@@ -274,6 +317,19 @@ def remaining_issue_numbers(body: str) -> set[int]:
         if result.startswith("Remaining:"):
             numbers.update(int(number) for number in re.findall(r"#(\d+)", result))
     return numbers
+
+
+def audit_reference_difference_ids(body: str) -> set[str]:
+    audit = extract_section(body, "## Visual audit")
+    difference_ids: set[str] = set()
+    for result in audit_table(audit).values():
+        match = re.fullmatch(
+            r"Reference difference:\s*ref:([a-z0-9]+(?:-[a-z0-9]+)*)",
+            result,
+        )
+        if match:
+            difference_ids.add(match.group(1))
+    return difference_ids
 
 
 def layout_audit_categories(report: object) -> dict[str, bool]:
@@ -384,6 +440,81 @@ def disposition_issue_numbers(value: str | None) -> set[int] | None:
     return {int(number) for number in re.findall(r"#(\d+)", value)}
 
 
+def layout_dispositions(value: str | None) -> tuple[set[int], set[str]] | None:
+    """Parse a layout category's open-issue and evidence-backed dispositions."""
+
+    if value == "Pass":
+        return set(), set()
+    if not value:
+        return None
+    tokens = [token.strip() for token in value.split(",")]
+    if not tokens or any(
+        re.fullmatch(r"(?:#[1-9]\d*|ref:[a-z0-9]+(?:-[a-z0-9]+)*)", token) is None
+        for token in tokens
+    ):
+        return None
+    issues = {
+        int(token[1:]) for token in tokens if token.startswith("#")
+    }
+    references = {
+        token.removeprefix("ref:") for token in tokens if token.startswith("ref:")
+    }
+    return issues, references
+
+
+def _current_visibility_findings(
+    report: dict[str, object], declared_pages: set[int]
+) -> set[tuple[int, str, str, str, int]]:
+    """Return occurrence-bounded painted-text visibility findings."""
+
+    pages = report.get("pages")
+    if not isinstance(pages, list) or len(pages) != len(declared_pages):
+        raise ValueError(
+            "declared Page(s) must map one-to-one to the layout report page vectors"
+        )
+    findings: set[tuple[int, str, str, str, int]] = set()
+    for page_number, page_report in zip(sorted(declared_pages), pages, strict=True):
+        if not isinstance(page_report, dict):
+            raise ValueError(f"page {page_number} must be an object")
+        visibility = page_report.get("visibility")
+        if not isinstance(visibility, dict):
+            continue
+        raw_mismatches = visibility.get("mismatches", [])
+        if not isinstance(raw_mismatches, list):
+            raise ValueError(f"page {page_number} visibility.mismatches must be a list")
+        occurrences: dict[tuple[str, str, str], int] = {}
+        for mismatch in raw_mismatches:
+            if not isinstance(mismatch, dict) or set(mismatch) != {"label", "gt", "out"}:
+                raise ValueError(
+                    f"page {page_number} visibility mismatch must contain exactly "
+                    "label, gt, and out"
+                )
+            key = (str(mismatch["label"]), str(mismatch["gt"]), str(mismatch["out"]))
+            occurrence = occurrences.get(key, 0) + 1
+            occurrences[key] = occurrence
+            findings.add((page_number, *key, occurrence))
+    return findings
+
+
+def _reference_visibility_key(
+    difference: dict[str, object],
+) -> tuple[int, str, str, str, int] | None:
+    finding = difference.get("layout_finding")
+    page = difference.get("page")
+    if type(page) is not int or not isinstance(finding, dict):
+        return None
+    try:
+        return (
+            page,
+            str(finding["label"]),
+            str(finding["gt"]),
+            str(finding["out"]),
+            int(finding["occurrence"]),
+        )
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
 def decoded_pixel_delta(before: Path, after: Path) -> int:
     """Return ImageMagick's exact decoded-pixel AE count for two images."""
 
@@ -410,7 +541,130 @@ def decoded_pixel_delta(before: Path, after: Path) -> int:
     return int(metric_match.group(1))
 
 
-def validate_layout_audit(body: str, changed_paths: list[str], root: Path) -> list[str]:
+def validate_reference_exporter_differences(
+    body: str, changed_paths: list[str], root: Path
+) -> tuple[dict[str, object] | None, list[str]]:
+    """Load exact GT-exporter dispositions and verify their local image evidence."""
+
+    impact = extract_section(body, "## Visual impact")
+    if checked(impact, "No rendered PDF change"):
+        return None, []
+    audit = extract_section(body, "## Visual audit")
+    if field(audit, "Evidence mode") != "fix":
+        return None, []
+    issue_match = re.fullmatch(r"#(\d+)", field(audit, "Issue") or "")
+    if issue_match is None:
+        return None, []
+
+    declared_path = field(audit, "Reference exporter differences")
+    if declared_path == "None":
+        return None, []
+    issue_number = issue_match.group(1)
+    expected_path = (
+        f"assets/bugfixes/issue-{issue_number}/reference-exporter-differences.json"
+    )
+    errors: list[str] = []
+    if declared_path != expected_path:
+        return None, [
+            "Visual audit > Reference exporter differences must be `None` or "
+            f"`{expected_path}`."
+        ]
+    if expected_path not in changed_paths:
+        errors.append(
+            f"{expected_path}: reference exporter difference report must be changed "
+            "in this pull request."
+        )
+
+    try:
+        document = json.loads((root / expected_path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return None, [f"{expected_path}: invalid reference exporter differences: {exc}."]
+
+    reference_registry, schema_errors = validate_reference_difference_document(document)
+    errors.extend(f"{expected_path}: {error}." for error in schema_errors)
+    if schema_errors or not isinstance(document, dict):
+        return None, errors
+
+    audit_ids = audit_reference_difference_ids(body)
+    undocumented_ids = set(reference_registry) - audit_ids
+    unknown_ids = audit_ids - set(reference_registry)
+    if undocumented_ids:
+        errors.append(
+            f"{expected_path}: every difference must appear in one `Reference "
+            "difference: ref:<id>` deviation row; missing "
+            + ", ".join(sorted(undocumented_ids))
+            + "."
+        )
+    if unknown_ids:
+        errors.append(
+            f"Visual audit deviation rows reference differences absent from "
+            f"{expected_path}: "
+            + ", ".join(sorted(unknown_ids))
+            + "."
+        )
+
+    expected_native_path = f"assets/bugfixes/issue-{issue_number}/native.jpg"
+    if field(audit, "Native") != expected_native_path:
+        errors.append(
+            f"Visual audit > Native must be `{expected_native_path}` when reference "
+            "exporter differences are declared."
+        )
+    if "Native" not in rendered_preview_urls(audit, ("Native",)):
+        errors.append(
+            "Visual audit must render the native-export evidence as "
+            "![Native](https://...)."
+        )
+
+    expected_evidence = {
+        "reference_export": f"assets/bugfixes/issue-{issue_number}/gt.jpg",
+        "native_export": expected_native_path,
+    }
+    verified_evidence: dict[str, Path] = {}
+    for export_name, evidence_path in expected_evidence.items():
+        export = document[export_name]
+        assert isinstance(export, dict)
+        if export.get("evidence_path") != evidence_path:
+            errors.append(
+                f"{expected_path}: {export_name}.evidence_path must be `{evidence_path}`."
+            )
+            continue
+        absolute_path = root / evidence_path
+        if not absolute_path.is_file():
+            errors.append(f"{evidence_path}: {export_name} evidence is missing.")
+            continue
+        verified_evidence[export_name] = absolute_path
+        errors.extend(validate_jpeg(absolute_path))
+        actual_hash = hashlib.sha256(absolute_path.read_bytes()).hexdigest()
+        if actual_hash != export.get("evidence_sha256"):
+            errors.append(
+                f"{expected_path}: {export_name} evidence SHA-256 does not match "
+                f"{evidence_path}."
+            )
+
+    if set(verified_evidence) == set(expected_evidence):
+        try:
+            evidence_delta = decoded_pixel_delta(
+                verified_evidence["reference_export"],
+                verified_evidence["native_export"],
+            )
+        except RuntimeError as exc:
+            errors.append(f"Reference/native evidence comparison failed: {exc}.")
+        else:
+            if evidence_delta == 0:
+                errors.append(
+                    "Reference/native evidence must contain a decoded-pixel difference."
+                )
+
+    return document, errors
+
+
+def validate_layout_audit(
+    body: str,
+    changed_paths: list[str],
+    root: Path,
+    *,
+    reference_differences: dict[str, object] | None = None,
+) -> list[str]:
     """Tie machine-detected layout failures to classified open issue references."""
 
     impact = extract_section(body, "## Visual impact")
@@ -489,6 +743,14 @@ def validate_layout_audit(body: str, changed_paths: list[str], root: Path) -> li
         )
 
     remaining_issues = remaining_issue_numbers(body)
+    reference_registry, reference_errors = (
+        validate_reference_difference_document(reference_differences)
+        if reference_differences is not None
+        else ({}, [])
+    )
+    errors.extend(f"Reference exporter differences: {error}." for error in reference_errors)
+    declared_pages = compared_pages(field(audit, "Page(s)"))
+    current_visibility: set[tuple[int, str, str, str, int]] | None = None
     fields = {
         "page count": "Layout audit page count",
         "text flow": "Layout audit text flow",
@@ -499,22 +761,90 @@ def validate_layout_audit(body: str, changed_paths: list[str], root: Path) -> li
     }
     for category, has_findings in findings.items():
         field_name = fields[category]
-        disposition = disposition_issue_numbers(field(audit, field_name))
+        disposition = layout_dispositions(field(audit, field_name))
         if has_findings:
-            if not disposition:
+            if disposition is None or not any(disposition):
                 errors.append(
                     f"Visual audit > {field_name} has {category} findings and requires "
-                    "one or more issue references."
+                    "one or more issue references or exact `ref:<id>` dispositions."
                 )
                 continue
-            unclassified = disposition - remaining_issues
+            disposition_issues, disposition_references = disposition
+            unclassified = disposition_issues - remaining_issues
             if unclassified:
                 references = ", ".join(f"#{number}" for number in sorted(unclassified))
                 errors.append(
                     f"Visual audit > {field_name} references must also appear in a "
                     f"Remaining deviation row: {references}."
                 )
-        elif disposition != set():
+            if not disposition_references:
+                continue
+            if category != "text flow":
+                errors.append(
+                    f"Visual audit > {field_name} does not support reference exporter "
+                    "differences; use an open issue."
+                )
+                continue
+            if declared_pages is None:
+                errors.append(
+                    "Visual audit > Page(s) must be valid before reference exporter "
+                    "differences can be matched."
+                )
+                continue
+            if current_visibility is None:
+                try:
+                    current_visibility = _current_visibility_findings(
+                        report, declared_pages
+                    )
+                except ValueError as exc:
+                    errors.append(f"{expected_path}: {exc}.")
+                    current_visibility = set()
+            referenced_keys: set[tuple[int, str, str, str, int]] = set()
+            for difference_id in sorted(disposition_references):
+                difference = reference_registry.get(difference_id)
+                if difference is None:
+                    errors.append(
+                        f"Visual audit > {field_name} ref:{difference_id} does not name "
+                        "a validated reference exporter difference."
+                    )
+                    continue
+                if difference.get("kind") != "painted-text-visibility":
+                    errors.append(
+                        f"Visual audit > {field_name} ref:{difference_id} is not a "
+                        "painted-text-visibility difference."
+                    )
+                    continue
+                reference_key = _reference_visibility_key(difference)
+                if reference_key is None or reference_key not in current_visibility:
+                    errors.append(
+                        f"Visual audit > {field_name} ref:{difference_id} does not match "
+                        "an exact current visibility finding."
+                    )
+                    continue
+                referenced_keys.add(reference_key)
+
+            if not disposition_issues:
+                other_text_flow_count = 0
+                for page in report["pages"]:
+                    other_text_flow_count += (
+                        page["lines"]["missing"]
+                        + page["lines"]["extra"]
+                        + page["wraps"]["count"]
+                        + page["reflow"]["gt_lines"]
+                        + page["reflow"]["out_lines"]
+                    )
+                if other_text_flow_count:
+                    errors.append(
+                        f"Visual audit > {field_name} has text-flow findings outside "
+                        "the verified visibility differences and requires an open issue."
+                    )
+                uncovered = current_visibility - referenced_keys
+                if uncovered:
+                    errors.append(
+                        f"Visual audit > {field_name} has visibility findings not covered "
+                        "by exact reference exporter differences; use an open issue."
+                    )
+        elif disposition != (set(), set()):
             errors.append(
                 f"Visual audit > {field_name} has no findings and must be Pass."
             )
@@ -561,6 +891,7 @@ def _validate_render_cluster_report(
     path: str,
     expected_page: int,
     remaining_issues: set[int],
+    reference_differences: dict[str, object] | None = None,
 ) -> list[str]:
     errors: list[str] = []
     if not isinstance(report, dict):
@@ -645,6 +976,13 @@ def _validate_render_cluster_report(
 
     seen_ids: set[str] = set()
     issue_dispositions: set[int] = set()
+    reference_registry, reference_errors = (
+        validate_reference_difference_document(reference_differences)
+        if reference_differences is not None
+        else ({}, [])
+    )
+    errors.extend(f"{path}: reference exporter differences: {error}." for error in reference_errors)
+    referenced_clusters: dict[str, set[str]] = {}
     dispositioned_count = 0
     for index, cluster in enumerate(clusters, start=1):
         if not isinstance(cluster, dict):
@@ -715,18 +1053,61 @@ def _validate_render_cluster_report(
             errors.append(f"{path}: {cluster_id} is undispositioned.")
             continue
         if disposition.get("kind") == "accepted-rendering":
+            if set(disposition) - {"kind", "class", "note"}:
+                errors.append(
+                    f"{path}: {cluster_id} accepted-rendering disposition has "
+                    "unsupported fields."
+                )
+                continue
             if disposition.get("class") not in ACCEPTED_RENDERING_CLASSES:
                 errors.append(
                     f"{path}: {cluster_id} has an unsupported accepted-rendering class."
                 )
                 continue
         elif disposition.get("kind") == "issue":
+            if set(disposition) - {"kind", "issue", "note"}:
+                errors.append(
+                    f"{path}: {cluster_id} issue disposition has unsupported fields."
+                )
+                continue
             issue = disposition.get("issue")
             issue_match = re.fullmatch(r"#([1-9]\d*)", issue or "")
             if issue_match is None:
                 errors.append(f"{path}: {cluster_id} has an invalid issue disposition.")
                 continue
             issue_dispositions.add(int(issue_match.group(1)))
+        elif disposition.get("kind") == "reference-exporter-difference":
+            if set(disposition) - {"kind", "difference_id", "note"}:
+                errors.append(
+                    f"{path}: {cluster_id} reference exporter disposition has "
+                    "unsupported fields."
+                )
+                continue
+            difference_id = disposition.get("difference_id")
+            difference = reference_registry.get(difference_id)
+            if not isinstance(difference_id, str) or difference is None:
+                errors.append(
+                    f"{path}: {cluster_id} reference exporter disposition does not "
+                    "name validated evidence."
+                )
+                continue
+            if (
+                difference.get("kind") != "render-clusters"
+                or difference.get("page") != expected_page
+            ):
+                errors.append(
+                    f"{path}: {cluster_id} reference exporter disposition has the "
+                    "wrong kind or page."
+                )
+                continue
+            declared_ids = difference.get("render_cluster_ids", [])
+            if cluster_id not in declared_ids:
+                errors.append(
+                    f"{path}: {cluster_id} is not listed by reference difference "
+                    f"{difference_id}."
+                )
+                continue
+            referenced_clusters.setdefault(difference_id, set()).add(cluster_id)
         else:
             errors.append(f"{path}: {cluster_id} has an invalid disposition kind.")
             continue
@@ -752,11 +1133,22 @@ def _validate_render_cluster_report(
             f"{path}: issue dispositions must also appear in a Remaining deviation row: "
             f"{references}."
         )
+    for difference_id, used_ids in sorted(referenced_clusters.items()):
+        declared_ids = set(reference_registry[difference_id]["render_cluster_ids"])
+        if used_ids != declared_ids:
+            errors.append(
+                f"{path}: reference difference {difference_id} must disposition its "
+                "exact declared cluster set."
+            )
     return errors
 
 
 def validate_render_cluster_audits(
-    body: str, changed_paths: list[str], root: Path
+    body: str,
+    changed_paths: list[str],
+    root: Path,
+    *,
+    reference_differences: dict[str, object] | None = None,
 ) -> list[str]:
     """Require a fresh passing strict cluster report for every visual-fix page."""
     impact = extract_section(body, "## Visual impact")
@@ -810,6 +1202,7 @@ def validate_render_cluster_audits(
                 path=path,
                 expected_page=page,
                 remaining_issues=remaining_issues,
+                reference_differences=reference_differences,
             )
         )
     return errors
@@ -923,8 +1316,10 @@ def validate_evidence(changed_paths: list[str], root: Path) -> list[str]:
     touched: dict[str, set[str]] = {}
 
     for raw_path in changed_paths:
-        if LAYOUT_AUDIT_PATH.fullmatch(raw_path) or RENDER_CLUSTER_REPORT_PATH.fullmatch(
-            raw_path
+        if (
+            LAYOUT_AUDIT_PATH.fullmatch(raw_path)
+            or RENDER_CLUSTER_REPORT_PATH.fullmatch(raw_path)
+            or REFERENCE_DIFFERENCE_PATH.fullmatch(raw_path)
         ):
             continue
         if not is_visual_asset(raw_path):
@@ -932,8 +1327,8 @@ def validate_evidence(changed_paths: list[str], root: Path) -> list[str]:
         match = EVIDENCE_PATH.fullmatch(raw_path)
         if not match:
             errors.append(
-                f"{raw_path}: visual evidence must be gt.jpg, before.jpg, after.jpg, or compare.jpg "
-                "under assets/bugfixes/issue-<number>/."
+                f"{raw_path}: visual evidence must be gt.jpg, before.jpg, after.jpg, "
+                "compare.jpg, or native.jpg under assets/bugfixes/issue-<number>/."
             )
             continue
         issue = match.group("issue")
@@ -946,7 +1341,10 @@ def validate_evidence(changed_paths: list[str], root: Path) -> list[str]:
     for issue, names in touched.items():
         issue_dir = root / VISUAL_ROOT / f"issue-{issue}"
         required = {"gt", "before", "after"} if names & {"gt", "before", "after"} else set()
-        for name in sorted(required | ({"compare"} if "compare" in names else set())):
+        standalone = ({"compare"} if "compare" in names else set()) | (
+            {"native"} if "native" in names else set()
+        )
+        for name in sorted(required | standalone):
             path = issue_dir / f"{name}.jpg"
             if not path.is_file():
                 errors.append(f"{path}: required evidence file is missing.")
@@ -981,8 +1379,26 @@ def main() -> int:
     changed_paths = git_changed_paths(args.base, args.head, args.root)
     errors = validate_pr_body(body, changed_paths)
     errors.extend(validate_evidence(changed_paths, args.root))
-    errors.extend(validate_layout_audit(body, changed_paths, args.root))
-    errors.extend(validate_render_cluster_audits(body, changed_paths, args.root))
+    reference_differences, reference_errors = validate_reference_exporter_differences(
+        body, changed_paths, args.root
+    )
+    errors.extend(reference_errors)
+    errors.extend(
+        validate_layout_audit(
+            body,
+            changed_paths,
+            args.root,
+            reference_differences=reference_differences,
+        )
+    )
+    errors.extend(
+        validate_render_cluster_audits(
+            body,
+            changed_paths,
+            args.root,
+            reference_differences=reference_differences,
+        )
+    )
     errors.extend(
         validate_open_issues(
             remaining_issue_numbers(body),

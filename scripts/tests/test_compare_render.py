@@ -384,6 +384,45 @@ class StrictClusterDispositionTest(unittest.TestCase):
             ],
         }
 
+    def reference_difference_document(
+        self, cluster_ids: list[str]
+    ) -> dict[str, object]:
+        return {
+            "schema_version": 1,
+            "source": {
+                "url": "https://github.com/developer0hye/office2pdf/files/123/source.pptx",
+                "sha256": "1" * 64,
+            },
+            "reference_export": {
+                "application": "LibreOffice Impress",
+                "version": "26.2.5.2",
+                "platform": "macOS 26.6.2",
+                "pdf_sha256": "2" * 64,
+                "evidence_path": "assets/bugfixes/issue-186/gt.jpg",
+                "evidence_sha256": "3" * 64,
+            },
+            "native_export": {
+                "application": "Microsoft PowerPoint",
+                "version": "16.112.3",
+                "platform": "macOS 26.6.2 build 25G83",
+                "pdf_sha256": "4" * 64,
+                "evidence_path": "assets/bugfixes/issue-186/native.jpg",
+                "evidence_sha256": "5" * 64,
+            },
+            "verification_url": (
+                "https://github.com/developer0hye/office2pdf/issues/1421"
+                "#issuecomment-5471464526"
+            ),
+            "differences": [
+                {
+                    "id": "page-9-title-native-match",
+                    "page": 9,
+                    "kind": "render-clusters",
+                    "render_cluster_ids": cluster_ids,
+                }
+            ],
+        }
+
     def test_stable_id_includes_page_and_quantized_geometry(self) -> None:
         cluster = self.cluster()
 
@@ -445,6 +484,70 @@ class StrictClusterDispositionTest(unittest.TestCase):
         )
 
         self.assertTrue(report["passed"])
+
+    def test_verified_reference_exporter_difference_passes_exact_clusters(self) -> None:
+        cluster = self.cluster()
+        cluster_id = compare_render.diff_cluster_id(9, cluster)
+        dispositions = {
+            "schema_version": 1,
+            "groups": [
+                {
+                    "kind": "reference-exporter-difference",
+                    "difference_id": "page-9-title-native-match",
+                    "cluster_ids": [cluster_id],
+                }
+            ],
+        }
+
+        report = compare_render.build_cluster_audit_report(
+            [cluster],
+            page=9,
+            dpi=300,
+            disposition_document=dispositions,
+            reference_difference_document=self.reference_difference_document(
+                [cluster_id]
+            ),
+            strict=True,
+        )
+
+        self.assertTrue(report["passed"])
+        self.assertEqual(
+            report["clusters"][0]["disposition"],
+            {
+                "kind": "reference-exporter-difference",
+                "difference_id": "page-9-title-native-match",
+            },
+        )
+
+    def test_reference_exporter_difference_cannot_claim_undeclared_cluster(self) -> None:
+        cluster = self.cluster()
+        cluster_id = compare_render.diff_cluster_id(9, cluster)
+        dispositions = {
+            "schema_version": 1,
+            "groups": [
+                {
+                    "kind": "reference-exporter-difference",
+                    "difference_id": "page-9-title-native-match",
+                    "cluster_ids": [cluster_id],
+                }
+            ],
+        }
+
+        report = compare_render.build_cluster_audit_report(
+            [cluster],
+            page=9,
+            dpi=300,
+            disposition_document=dispositions,
+            reference_difference_document=self.reference_difference_document(
+                ["p9-0123456789ab"]
+            ),
+            strict=True,
+        )
+
+        self.assertFalse(report["passed"])
+        self.assertTrue(
+            any("exact cluster IDs" in error for error in report["errors"])
+        )
 
     def test_new_cluster_outside_existing_disposition_fails(self) -> None:
         reviewed = self.cluster()
