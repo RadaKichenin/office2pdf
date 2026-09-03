@@ -303,7 +303,10 @@ fn generate_table_inner(
 /// Keep rows touched by a header-originating rowspan in the same Typst header
 /// block. Typst cannot continue a header cell in the body; splitting such a
 /// merge makes cells in the following rows overflow the available columns.
-fn header_row_count_covering_rowspans(rows: &[TableRow], declared_count: usize) -> usize {
+pub(crate) fn header_row_count_covering_rowspans(
+    rows: &[TableRow],
+    declared_count: usize,
+) -> usize {
     let mut covered_count: usize = declared_count.min(rows.len());
     let mut row_index: usize = 0;
     while row_index < covered_count {

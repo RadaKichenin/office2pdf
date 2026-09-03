@@ -103,11 +103,11 @@ struct Cli {
     #[arg(long = "pdf-ua")]
     pdf_ua: bool,
 
-    /// Enable streaming mode for large XLSX files (processes rows in chunks)
+    /// Enable streaming mode for large XLSX files (compiles page-aligned row chunks)
     #[arg(long)]
     streaming: bool,
 
-    /// Chunk size (rows) for streaming mode (default: 1000)
+    /// Target chunk size (rows) for streaming mode (default: 1000)
     #[arg(long, default_value = None)]
     streaming_chunk_size: Option<usize>,
 

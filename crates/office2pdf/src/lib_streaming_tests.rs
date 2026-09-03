@@ -48,10 +48,67 @@ fn test_streaming_xlsx_same_data_as_normal() {
     };
     let streaming_result = convert_bytes(&data, config::Format::Xlsx, &streaming_opts).unwrap();
 
-    assert!(normal_result.pdf.starts_with(b"%PDF"));
-    assert!(streaming_result.pdf.starts_with(b"%PDF"));
-    assert!(normal_result.pdf.len() > 100);
-    assert!(streaming_result.pdf.len() > 100);
+    let normal_pages = normal_result
+        .metrics
+        .as_ref()
+        .expect("batch metrics")
+        .page_count;
+    let streaming_pages = streaming_result
+        .metrics
+        .as_ref()
+        .expect("streaming metrics")
+        .page_count;
+
+    assert_eq!(
+        streaming_pages, normal_pages,
+        "streaming chunk boundaries must not add PDF pages"
+    );
+    assert_eq!(
+        pdf_extract::extract_text_from_mem(&streaming_result.pdf).unwrap(),
+        pdf_extract::extract_text_from_mem(&normal_result.pdf).unwrap(),
+        "streaming chunks must neither omit nor duplicate worksheet text"
+    );
+}
+
+#[test]
+fn test_streaming_xlsx_page_count_is_independent_of_chunk_size() {
+    let data = build_xlsx_with_rows(50, 2);
+    let batch_result = convert_bytes(
+        &data,
+        config::Format::Xlsx,
+        &config::ConvertOptions::default(),
+    )
+    .unwrap();
+    let batch_pages = batch_result
+        .metrics
+        .as_ref()
+        .expect("batch metrics")
+        .page_count;
+    let batch_text = pdf_extract::extract_text_from_mem(&batch_result.pdf).unwrap();
+
+    for chunk_size in [5, 20, 37, 50] {
+        let options = config::ConvertOptions {
+            streaming: true,
+            streaming_chunk_size: Some(chunk_size),
+            ..Default::default()
+        };
+        let streaming_result = convert_bytes(&data, config::Format::Xlsx, &options).unwrap();
+        let streaming_pages = streaming_result
+            .metrics
+            .as_ref()
+            .expect("streaming metrics")
+            .page_count;
+
+        assert_eq!(
+            streaming_pages, batch_pages,
+            "chunk size {chunk_size} changed PDF pagination"
+        );
+        assert_eq!(
+            pdf_extract::extract_text_from_mem(&streaming_result.pdf).unwrap(),
+            batch_text,
+            "chunk size {chunk_size} changed worksheet text"
+        );
+    }
 }
 
 #[test]
