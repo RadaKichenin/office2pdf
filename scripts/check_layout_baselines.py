@@ -17,8 +17,9 @@ on deltas smaller than the GT's own lattice):
   cases (the Quartz export rounds every advance to a whole point);
 - width percentages move materially only past 0.5%;
 - counts (missing/extra lines, wraps, reflows, deviant lines, large shifts,
-  painted-text visibility mismatches, visible-fill occlusions, rect census
-  gap, page parity gap) compare exactly — any increase is a regression.
+  painted-text visibility mismatches, visible-fill occlusions, rectangle
+  geometry mismatches, rect census gap, page parity gap) compare exactly — any
+  increase is a regression.
 
 Safe split/join topology groups are informational and therefore are not a
 count regression. Their recovered fragments still contribute to the position,
@@ -57,6 +58,7 @@ COUNT_METRICS = (
     ("instances", "large_shift_count"),
     ("visibility", "mismatch_count"),
     ("visible_fills", "mismatch_count"),
+    ("rects", "geometry_mismatch_count"),
 )
 PT_METRICS = (
     ("baseline", "mean_abs_dy"),
@@ -114,10 +116,9 @@ def compare_page(
 ) -> list[dict]:
     findings: list[dict] = []
     for section, key in COUNT_METRICS:
-        # Visibility checks were added additively to schema v2. Baselines
-        # recorded by an older generator carry no section and conservatively
-        # mean zero known mismatches; a fresh finding therefore surfaces as a
-        # regression.
+        # Material checks are added compatibly within schema v2. An older
+        # baseline without one of these counts means zero recorded findings;
+        # a fresh finding therefore surfaces as a regression.
         stored_count = int(stored_vector.get(section, {}).get(key, 0))
         fresh_count = int(fresh_vector.get(section, {}).get(key, 0))
         if fresh_count != stored_count:

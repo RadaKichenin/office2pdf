@@ -23,7 +23,9 @@ visible ink. It then matches lines by their text and reports typed deviations:
 - visible-fill occlusions: a later opaque, differently coloured rectangle
   cutting into a thin earlier rule is compared by final overlap area, colour,
   and paint order rather than by the raw rectangle count;
-- a fill/stroke rect census with nearest-match position deltas.
+- a fill/stroke path census plus geometry-aware x/y/size/edge deltas for
+  axis-aligned rectangles and straight lines. Touching same-paint operation
+  splits are merged before matching while raw counts stay visible.
 
 A noise floor (default 0.12pt — native Word exports quantise coordinates to a
 0.24pt grid; use 0.5 for Excel GT, whose Quartz export rounds every advance to
@@ -97,7 +99,12 @@ LINE_Y_TOLERANCE_PT = 0.6
 # operation boundary, this isolates independently positioned chart/table text
 # that mutool happens to merge only because the objects share a baseline.
 SAFE_TOPOLOGY_GAP_PT = 24.0
-RECT_MATCH_RADIUS_PT = 6.0
+# Unequal rectangle groups contain unmatched operations by definition. Limit
+# their pair candidates so a nearby rule cannot be assigned to an unrelated
+# shape elsewhere on the page. Equal-cardinality groups remain fully paired so
+# a large translation is reported as geometry instead of disappearing.
+RECT_AMBIGUOUS_MATCH_RADIUS_PT = 24.0
+RECT_SAMPLE_LIMIT = 5
 OPAQUE_ALPHA = 0.98
 INVISIBLE_ALPHA = 0.02
 LOW_CONTRAST_CHANNEL_DELTA = 0.04
@@ -147,14 +154,35 @@ class Paint:
 @dataclass(frozen=True)
 class Rect:
     kind: str  # "fill" | "stroke"
+    geometry_kind: str  # "rectangle" | "line" | "other"
     x0: float
     y0: float
     x1: float
     y1: float
+    color: tuple[float, float, float] | None = None
+    alpha: float = 1.0
 
     @property
     def center(self) -> tuple[float, float]:
         return ((self.x0 + self.x1) / 2, (self.y0 + self.y1) / 2)
+
+    @property
+    def width(self) -> float:
+        return self.x1 - self.x0
+
+    @property
+    def height(self) -> float:
+        return self.y1 - self.y0
+
+    @property
+    def bbox(self) -> list[float]:
+        return [self.x0, self.y0, self.x1, self.y1]
+
+
+@dataclass(frozen=True)
+class CanonicalRect:
+    rect: Rect
+    source_indices: tuple[int, ...]
 
 
 @dataclass(frozen=True)
@@ -322,6 +350,50 @@ def axis_aligned_rect_bbox(
         if same_x == same_y:
             return None
     return transformed_bbox((1, 0, 0, 1, 0, 0), transformed)
+
+
+def axis_aligned_line_bbox(
+    attrs: str, body: str
+) -> tuple[float, float, float, float] | None:
+    """Return the bbox for one straight horizontal or vertical path."""
+    points: list[tuple[float, float]] = []
+    cursor = 0
+    saw_move = False
+    for match in PATH_COMMAND_RE.finditer(body):
+        if body[cursor : match.start()].strip():
+            return None
+        cursor = match.end()
+        if match.group("close"):
+            continue
+        command = match.group("point")
+        if command == "moveto":
+            if saw_move:
+                return None
+            saw_move = True
+        elif not saw_move:
+            return None
+        point_attrs = match.group("attrs")
+        x_match = X_RE.search(point_attrs)
+        y_match = Y_RE.search(point_attrs)
+        if not x_match or not y_match:
+            return None
+        points.append((float(x_match.group(1)), float(y_match.group(1))))
+    if body[cursor:].strip() or not saw_move:
+        return None
+
+    transform = parse_transform(attrs) or (1, 0, 0, 1, 0, 0)
+    a, b, c, d, e, f = transform
+    transformed = {
+        (round(a * x + c * y + e, 6), round(b * x + d * y + f, 6))
+        for x, y in points
+    }
+    if len(transformed) < 2:
+        return None
+    xs = {point[0] for point in transformed}
+    ys = {point[1] for point in transformed}
+    if (len(xs) == 1) == (len(ys) == 1):
+        return None
+    return transformed_bbox((1, 0, 0, 1, 0, 0), list(transformed))
 
 
 def intersect_bboxes(
@@ -845,13 +917,29 @@ def parse_trace(trace_xml: str) -> list[PageLayout]:
                 ys.append(b * point_x + d * point_y + f)
             if xs:
                 bbox = (min(xs), min(ys), max(xs), max(ys))
+                flat_bbox = axis_aligned_rect_bbox(op_attrs, op_body)
+                line_bbox = (
+                    axis_aligned_line_bbox(op_attrs, op_body)
+                    if kind == "stroke_path"
+                    else None
+                )
+                geometry_kind = (
+                    "rectangle"
+                    if flat_bbox is not None
+                    else "line"
+                    if line_bbox is not None
+                    else "other"
+                )
                 rects.append(
                     Rect(
                         kind="fill" if kind == "fill_path" else "stroke",
+                        geometry_kind=geometry_kind,
                         x0=bbox[0],
                         y0=bbox[1],
                         x1=bbox[2],
                         y1=bbox[3],
+                        color=parse_rgb(op_attrs),
+                        alpha=parse_alpha(op_attrs),
                     )
                 )
                 if kind == "fill_path":
@@ -867,7 +955,6 @@ def parse_trace(trace_xml: str) -> list[PageLayout]:
                             color=parse_rgb(op_attrs),
                         )
                     )
-                flat_bbox = axis_aligned_rect_bbox(op_attrs, op_body)
                 if kind == "fill_path" and flat_bbox is not None:
                     paints.append(
                         Paint(
@@ -1127,6 +1214,151 @@ def take_reflows(missing: list[Line], extra: list[Line]) -> tuple[dict, list[Lin
     return {"gt_lines": 0, "out_lines": 0, "samples": []}, missing, extra
 
 
+def same_rect_paint(first: Rect, second: Rect) -> bool:
+    if (
+        first.kind != second.kind
+        or first.geometry_kind != second.geometry_kind
+        or abs(first.alpha - second.alpha) > 1e-6
+    ):
+        return False
+    if first.color is None or second.color is None:
+        return first.color is second.color
+    return all(
+        abs(left - right) <= 1e-6
+        for left, right in zip(first.color, second.color)
+    )
+
+
+def merge_rect_groups(
+    groups: list[CanonicalRect], *, horizontal: bool, tolerance: float
+) -> list[CanonicalRect]:
+    """Merge collinear same-paint pieces without filling an L-shaped gap."""
+
+    def can_merge(first: Rect, second: Rect) -> bool:
+        if not same_rect_paint(first, second):
+            return False
+        same_bbox = all(
+            abs(left - right) <= tolerance
+            for left, right in zip(first.bbox, second.bbox)
+        )
+        if same_bbox:
+            return True
+        if horizontal:
+            same_band = (
+                abs(first.y0 - second.y0) <= tolerance
+                and abs(first.y1 - second.y1) <= tolerance
+            )
+            intervals_touch = (
+                abs(first.x1 - second.x0) <= tolerance
+                or abs(second.x1 - first.x0) <= tolerance
+            )
+        else:
+            same_band = (
+                abs(first.x0 - second.x0) <= tolerance
+                and abs(first.x1 - second.x1) <= tolerance
+            )
+            intervals_touch = (
+                abs(first.y1 - second.y0) <= tolerance
+                or abs(second.y1 - first.y0) <= tolerance
+            )
+        return same_band and intervals_touch
+
+    ordered = sorted(
+        groups,
+        key=lambda group: (
+            group.rect.kind,
+            group.rect.y0 if horizontal else group.rect.x0,
+            group.rect.y1 if horizontal else group.rect.x1,
+            group.rect.x0 if horizontal else group.rect.y0,
+        ),
+    )
+    merged: list[CanonicalRect] = []
+    for group in ordered:
+        target_index = next(
+            (
+                index
+                for index, existing in enumerate(merged)
+                if can_merge(existing.rect, group.rect)
+            ),
+            None,
+        )
+        if target_index is None:
+            merged.append(group)
+            continue
+        existing = merged[target_index]
+        merged[target_index] = CanonicalRect(
+            rect=Rect(
+                kind=existing.rect.kind,
+                geometry_kind=existing.rect.geometry_kind,
+                x0=min(existing.rect.x0, group.rect.x0),
+                y0=min(existing.rect.y0, group.rect.y0),
+                x1=max(existing.rect.x1, group.rect.x1),
+                y1=max(existing.rect.y1, group.rect.y1),
+                color=existing.rect.color,
+                alpha=existing.rect.alpha,
+            ),
+            source_indices=tuple(sorted(existing.source_indices + group.source_indices)),
+        )
+    return merged
+
+
+def canonical_rects(rects: list[Rect], tolerance: float) -> list[CanonicalRect]:
+    groups = [
+        CanonicalRect(rect=rect, source_indices=(index,))
+        for index, rect in enumerate(rects)
+        if rect.geometry_kind != "other"
+    ]
+    groups = merge_rect_groups(groups, horizontal=True, tolerance=tolerance)
+    groups = merge_rect_groups(groups, horizontal=False, tolerance=tolerance)
+    return sorted(
+        groups,
+        key=lambda group: (
+            group.rect.kind,
+            group.rect.y0,
+            group.rect.x0,
+            group.rect.height,
+            group.rect.width,
+        ),
+    )
+
+
+def rect_feature(rect: Rect) -> tuple[float, float, float, float]:
+    """Represent both placement and extent for minimum-cost assignment."""
+    return (rect.center[0], rect.center[1], rect.width / 2, rect.height / 2)
+
+
+def rect_sample(gt_group: CanonicalRect, out_group: CanonicalRect) -> dict:
+    gt_rect = gt_group.rect
+    out_rect = out_group.rect
+    dx = out_rect.x0 - gt_rect.x0
+    dy = out_rect.y0 - gt_rect.y0
+    dwidth = out_rect.width - gt_rect.width
+    dheight = out_rect.height - gt_rect.height
+    edges = {
+        "left": dx,
+        "top": dy,
+        "right": out_rect.x1 - gt_rect.x1,
+        "bottom": out_rect.y1 - gt_rect.y1,
+    }
+    deltas = [dx, dy, dwidth, dheight, *edges.values()]
+    return {
+        "kind": gt_rect.kind,
+        "geometry_kind": gt_rect.geometry_kind,
+        "gt_indices": list(gt_group.source_indices),
+        "out_indices": list(out_group.source_indices),
+        "gt_bbox": gt_rect.bbox,
+        "out_bbox": out_rect.bbox,
+        "dx": dx,
+        "dy": dy,
+        "dwidth": dwidth,
+        "dheight": dheight,
+        "edges": edges,
+        "center_dx": out_rect.center[0] - gt_rect.center[0],
+        "center_dy": out_rect.center[1] - gt_rect.center[1],
+        "max_abs_delta": max(abs(delta) for delta in deltas),
+    }
+
+
 def diff_page(
     gt: PageLayout,
     out: PageLayout,
@@ -1238,26 +1470,6 @@ def diff_page(
 
     worst_dy_index = max(range(len(dys)), key=lambda i: abs(dys[i]), default=None)
 
-    rect_pairs = 0
-    rect_center_deltas: list[float] = []
-    unclaimed = list(out.rects)
-    for gt_rect in gt.rects:
-        best = None
-        best_distance = RECT_MATCH_RADIUS_PT
-        for candidate in unclaimed:
-            if candidate.kind != gt_rect.kind:
-                continue
-            distance = max(
-                abs(candidate.center[0] - gt_rect.center[0]),
-                abs(candidate.center[1] - gt_rect.center[1]),
-            )
-            if distance <= best_distance:
-                best, best_distance = candidate, distance
-        if best is not None:
-            unclaimed.remove(best)
-            rect_pairs += 1
-            rect_center_deltas.append(best_distance)
-
     def stats(values: list[float]) -> dict:
         if not values:
             return {"mean_abs": 0.0, "worst": 0.0}
@@ -1265,6 +1477,62 @@ def diff_page(
             "mean_abs": sum(abs(v) for v in values) / len(values),
             "worst": max(values, key=abs),
         }
+
+    canonical_gt_rects = canonical_rects(gt.rects, noise_floor)
+    canonical_out_rects = canonical_rects(out.rects, noise_floor)
+    rect_matches: list[tuple[CanonicalRect, CanonicalRect]] = []
+    for kind, geometry_kind in (
+        ("fill", "rectangle"),
+        ("stroke", "rectangle"),
+        ("stroke", "line"),
+    ):
+        references = [
+            group
+            for group in canonical_gt_rects
+            if (group.rect.kind, group.rect.geometry_kind) == (kind, geometry_kind)
+        ]
+        candidates = [
+            group
+            for group in canonical_out_rects
+            if (group.rect.kind, group.rect.geometry_kind) == (kind, geometry_kind)
+        ]
+        has_equal_cardinality = len(references) == len(candidates)
+        for reference_index, candidate_index in minimum_cost_pairs(
+            [rect_feature(group.rect) for group in references],
+            [rect_feature(group.rect) for group in candidates],
+        ):
+            reference = references[reference_index]
+            candidate = candidates[candidate_index]
+            center_delta = max(
+                abs(candidate.rect.center[0] - reference.rect.center[0]),
+                abs(candidate.rect.center[1] - reference.rect.center[1]),
+            )
+            if (
+                not has_equal_cardinality
+                and center_delta > RECT_AMBIGUOUS_MATCH_RADIUS_PT
+            ):
+                continue
+            rect_matches.append((reference, candidate))
+
+    rect_samples = [
+        rect_sample(reference, candidate) for reference, candidate in rect_matches
+    ]
+    rect_samples.sort(
+        key=lambda sample: (-sample["max_abs_delta"], sample["gt_indices"])
+    )
+    rect_geometry_threshold = fine_shift if fine_shift is not None else large_shift
+    rect_geometry_mismatches = [
+        sample
+        for sample in rect_samples
+        if sample["max_abs_delta"] > rect_geometry_threshold
+    ]
+    rect_center_deltas = [
+        max(abs(sample["center_dx"]), abs(sample["center_dy"]))
+        for sample in rect_samples
+    ]
+
+    rect_gt_ids = {id(reference) for reference, _ in rect_matches}
+    rect_out_ids = {id(candidate) for _, candidate in rect_matches}
 
     dy_stats = stats(dys)
     return {
@@ -1323,8 +1591,28 @@ def diff_page(
         "rects": {
             "gt_count": len(gt.rects),
             "out_count": len(out.rects),
-            "matched": rect_pairs,
+            "canonical_gt_count": len(canonical_gt_rects),
+            "canonical_out_count": len(canonical_out_rects),
+            "matched": len(rect_matches),
+            "unmatched_gt": sum(
+                id(group) not in rect_gt_ids for group in canonical_gt_rects
+            ),
+            "unmatched_out": sum(
+                id(group) not in rect_out_ids for group in canonical_out_rects
+            ),
             "mean_center_delta": stats(rect_center_deltas)["mean_abs"],
+            "geometry_threshold": rect_geometry_threshold,
+            "geometry_mismatch_count": len(rect_geometry_mismatches),
+            "geometry_mismatch_samples": rect_geometry_mismatches[:RECT_SAMPLE_LIMIT],
+            "samples": rect_samples[:RECT_SAMPLE_LIMIT],
+            "x": stats([sample["dx"] for sample in rect_samples]),
+            "y": stats([sample["dy"] for sample in rect_samples]),
+            "width": stats([sample["dwidth"] for sample in rect_samples]),
+            "height": stats([sample["dheight"] for sample in rect_samples]),
+            "edges": {
+                edge: stats([sample["edges"][edge] for sample in rect_samples])
+                for edge in ("left", "top", "right", "bottom")
+            },
         },
         "noise_floor": noise_floor,
     }
@@ -1427,9 +1715,26 @@ def render_reading(vectors: list[dict]) -> str:
         if vector["rects"]["gt_count"] != vector["rects"]["out_count"]:
             page_notes.append(
                 f"rect census differs: GT {vector['rects']['gt_count']} vs "
-                f"output {vector['rects']['out_count']} draw ops — can be op-splitting "
-                "(per-cell border segments vs one merged stroke), so confirm visually "
-                "before reading it as missing ink"
+                f"output {vector['rects']['out_count']} raw draw ops; touching same-paint "
+                "axis-aligned same-paint normalization yields "
+                f"{vector['rects']['canonical_gt_count']} vs "
+                f"{vector['rects']['canonical_out_count']} comparable rectangle/line "
+                "primitives. Raw count differences can be non-rectangular paths or "
+                "operation splitting, so confirm unmatched geometry visually before "
+                "reading it as missing ink"
+            )
+        if vector["rects"]["geometry_mismatch_count"]:
+            examples = "; ".join(
+                f"{item['kind']} GT {item['gt_bbox']} -> output {item['out_bbox']} "
+                f"(dx {item['dx']:+.2f}, dy {item['dy']:+.2f}, "
+                f"dw {item['dwidth']:+.2f}, dh {item['dheight']:+.2f}pt)"
+                for item in vector["rects"]["geometry_mismatch_samples"]
+            )
+            page_notes.append(
+                f"{vector['rects']['geometry_mismatch_count']} matched rectangle geometry "
+                f"deviation(s) exceed {vector['rects']['geometry_threshold']:.2f}pt: "
+                f"{examples}. Inspect the recorded source operation indices and corresponding "
+                "render cluster"
             )
         if not page_notes:
             page_notes.append("no deviation past the noise floor")
@@ -1447,6 +1752,7 @@ def audit_failures(vectors: list[dict]) -> int:
         )
         + vector["visibility"]["mismatch_count"]
         + vector["visible_fills"]["mismatch_count"]
+        + vector["rects"]["geometry_mismatch_count"]
         + vector["lines"]["missing"]
         + vector["lines"]["extra"]
         + vector["wraps"]["count"]
@@ -1484,15 +1790,18 @@ def main() -> int:
         type=float,
         default=5.0,
         metavar="PT",
-        help="flag any matched text instance whose x or y moves by more than this (default: 5pt)",
+        help=(
+            "flag any matched text instance or rectangle geometry component that moves "
+            "by more than this (default: 5pt)"
+        ),
     )
     parser.add_argument(
         "--fine-shift",
         type=float,
         metavar="PT",
         help=(
-            "enable the fine-detail audit gate and flag matched text whose x or y "
-            "moves by more than PT; does not replace the 5pt coarse summary"
+            "enable the fine-detail audit gate and flag matched text x/y or rectangle "
+            "geometry beyond PT; does not replace the 5pt coarse text summary"
         ),
     )
     parser.add_argument(
@@ -1500,8 +1809,8 @@ def main() -> int:
         action="store_true",
         help=(
             "exit nonzero on missing/extra/reflowed text, changed wraps, "
-            "a text/fill visibility mismatch, an active fine/coarse instance "
-            "shift, or a page-count mismatch"
+            "a text/fill visibility mismatch, an active fine/coarse text or "
+            "rectangle geometry shift, or a page-count mismatch"
         ),
     )
     parser.add_argument("--json", action="store_true", help="emit the deviation vectors as JSON")
@@ -1568,7 +1877,8 @@ def main() -> int:
             f"{fine_shift_summary}"
             f"visibility {vector['visibility']['mismatch_count']} | "
             f"visible fills {vector['visible_fills']['mismatch_count']} | "
-            f"rects {vector['rects']['gt_count']}/{vector['rects']['out_count']}"
+            f"rects {vector['rects']['gt_count']}/{vector['rects']['out_count']} "
+            f"(geometry {vector['rects']['geometry_mismatch_count']})"
         )
     print()
     print(render_reading(vectors))

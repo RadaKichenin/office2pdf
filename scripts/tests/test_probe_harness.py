@@ -78,6 +78,7 @@ def page_vector(
     worst_pitch: float = 0.0,
     worst_width: float = 0.0,
     rects: tuple[int, int] = (3, 3),
+    rect_geometry: int = 0,
 ) -> dict:
     """A differ page vector with the same shape compare_layout.py --json emits."""
     return {
@@ -115,6 +116,7 @@ def page_vector(
             "out_count": rects[1],
             "matched": min(rects),
             "mean_center_delta": 0.0,
+            "geometry_mismatch_count": rect_geometry,
         },
         "noise_floor": 0.12,
     }
@@ -691,6 +693,23 @@ class ControlGateTest(unittest.TestCase):
             with self.assertRaisesRegex(probe_harness.ProbeError, "visibility"):
                 probe_harness.verify_control(tmp / "base.pdf", tmp / "control.pdf", runner=runner)
 
+    def test_a_control_rect_geometry_mismatch_aborts_the_run(self):
+        with TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / "base.pdf").write_bytes(b"%PDF a")
+            (tmp / "control.pdf").write_bytes(b"%PDF b")
+
+            def runner(argv):
+                return completed(
+                    argv,
+                    stdout=json.dumps(differ_report(page_vector(rect_geometry=1))),
+                )
+
+            with self.assertRaisesRegex(probe_harness.ProbeError, "rectangle geometry"):
+                probe_harness.verify_control(
+                    tmp / "base.pdf", tmp / "control.pdf", runner=runner
+                )
+
 
 class RowTest(unittest.TestCase):
     def test_multi_page_reports_sum_counts_and_keep_worst_magnitudes(self):
@@ -713,6 +732,7 @@ class RowTest(unittest.TestCase):
                 worst_dy=1.4,
                 worst_pitch=0.1,
                 rects=(4, 5),
+                rect_geometry=2,
             ),
         )
         row = probe_harness.variant_row("500", 1, report)
@@ -729,6 +749,7 @@ class RowTest(unittest.TestCase):
         self.assertAlmostEqual(row["worst_dy"], 1.4)
         self.assertAlmostEqual(row["worst_pitch"], 0.3)
         self.assertEqual(row["rects"], "7/8")
+        self.assertEqual(row["rect_geometry"], 2)
 
     def test_mean_baseline_uses_compared_fragments_for_split_join_groups(self):
         report = differ_report(

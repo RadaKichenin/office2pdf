@@ -121,7 +121,7 @@ This project follows a **6-month rolling MSRV policy** (aligned with [tokio](htt
 
 ## Visual Comparison Workflow
 
-- For visual bug fixes tied to an issue, keep `assets/bugfixes/issue-<number>/gt.jpg`, `before.jpg`, `after.jpg`, `layout-audit.json`, and one `render-clusters-page-<page>.json` per compared page from the same fixture, page set, renderer, and resolution; `before.jpg` captures the pre-fix output, while `after.jpg` and the reports use the current output. Every fix PR with a raster change must change `after.jpg`, `layout-audit.json`, and every page's strict cluster report. Generate the layout report from the same GT and current-output PDFs used for `gt.jpg` and `after.jpg` with `compare_layout.py --json --audit --fine-shift PT`; record the same fine-detail threshold in the PR and classify page-count, missing/extra/reflow or changed-wrap, painted-text visibility, visible-fill occlusion, and fine/large-shift failures with open issues in the `Visual audit` fields and matching `Remaining:` rows. A reported safe split/join `topology` group is informational rather than a text-flow failure, but each recovered fragment's position and visibility findings remain auditable. Generate each render report with `compare_render.py --cluster-report PATH --cluster-dispositions PATH --strict-clusters`; every cluster ID must map to an accepted renderer class or an open issue, and all report paths must be listed in `Visual audit`. Use progressive JPEG quality 86 with metadata stripped, preserve the source pixel dimensions, and verify text and images remain legible for direct GitHub links. Strip first, then re-set the density (`-strip -density 150 -units PixelsPerInch`): the contract check rejects evidence recording under 150 DPI, which stripping alone removes.
+- For visual bug fixes tied to an issue, keep `assets/bugfixes/issue-<number>/gt.jpg`, `before.jpg`, `after.jpg`, `layout-audit.json`, and one `render-clusters-page-<page>.json` per compared page from the same fixture, page set, renderer, and resolution; `before.jpg` captures the pre-fix output, while `after.jpg` and the reports use the current output. Every fix PR with a raster change must change `after.jpg`, `layout-audit.json`, and every page's strict cluster report. Generate the layout report from the same GT and current-output PDFs used for `gt.jpg` and `after.jpg` with `compare_layout.py --json --audit --fine-shift PT`; record the same fine-detail threshold in the PR and classify page-count, missing/extra/reflow or changed-wrap, painted-text visibility, visible-fill occlusion, rectangle geometry, and fine/large-shift failures with open issues in the `Visual audit` fields and matching `Remaining:` rows. A reported safe split/join `topology` group is informational rather than a text-flow failure, but each recovered fragment's position and visibility findings remain auditable. Generate each render report with `compare_render.py --cluster-report PATH --cluster-dispositions PATH --strict-clusters`; every cluster ID must map to an accepted renderer class or an open issue, and all report paths must be listed in `Visual audit`. Use progressive JPEG quality 86 with metadata stripped, preserve the source pixel dimensions, and verify text and images remain legible for direct GitHub links. Strip first, then re-set the density (`-strip -density 150 -units PixelsPerInch`): the contract check rejects evidence recording under 150 DPI, which stripping alone removes.
 - A text-layer-only fix may correctly produce byte- and pixel-identical `before.jpg` and `after.jpg`. Regenerate and verify the current `after.jpg` without adding annotations; it need not appear in the diff when the render is unchanged. Set `Text-layer-only: Yes` and `Pixel delta: 0` in the PR's `Visual audit`, change `layout-audit.json`, and require that report to show the missing/extra searchable-text finding resolved. The contract requires both evidence files and uses ImageMagick's exact decoded-pixel comparison to verify that the declared zero delta is true.
 - **When filing a visual defect issue, attach a side-by-side image (GT left, office2pdf output at filing time right)** rendered from the same page and resolution, committed as `assets/bugfixes/issue-<number>/compare.jpg` (same JPEG rules as above) and embedded in the issue body via a commit-pinned raw URL. For classified fixtures, confirm with the user before publishing the image; the surrounding issue text must still follow the Confidentiality rules.
 
@@ -147,7 +147,8 @@ just the pages a screenshot shows.
    `compare_text_layer.py` (what a reader can select), `compare_render.py`
    (colour and pixels), and a page-by-page visual at >=150 DPI.
    Run the geometry axis with `--audit --fine-shift PT`; every fine/large
-   text-instance shift, painted-text visibility mismatch, or visible-fill occlusion it names must be fixed or recorded as a
+   text-instance shift, rectangle geometry deviation, painted-text visibility
+   mismatch, or visible-fill occlusion it names must be fixed or recorded as a
    remaining deviation with an open issue.
    Do not classify the pixel diff as antialiasing while this audit is failing.
    Source/XML inspection and numeric reports only route attention; they never
@@ -193,7 +194,8 @@ For layout defects, run `python3 scripts/compare_layout.py <GT.pdf> <output.pdf>
 first: it matches text lines from `mutool` traces and reports missing/extra/
 re-wrapped lines, informational safe split/join topology groups, spatial-anchor
 dy, pitch and width drift, painted-text visibility,
-visible-fill occlusions, and a rect census, with GT noise floors built in (`--noise-floor 0.12` Word,
+visible-fill occlusions, and geometry-aware axis-aligned rectangle/line
+x/y/size/edge deltas, with GT noise floors built in (`--noise-floor 0.12` Word,
 `0.5` Excel). Painted visibility uses trace order and flat-background contrast:
 text covered by a later opaque image, single closed axis-aligned rectangle, or
 fully extended shading under such a rectangular clip is `hidden`; same-colour
@@ -216,6 +218,10 @@ the pixel-difference and visual-inspection passes. Visible-fill analysis compare
 paint order and final overlap colour where a later opaque rectangle cuts into a
 thin earlier rule. Point and area floors reject trace slivers, and same-colour
 operation splitting is ignored.
+Touching same-paint rectangle/line operations are merged before geometry
+matching; non-rectangular path bounds and raw draw counts remain informational.
+Matched position, size, and edge deltas use the active fine or coarse shift
+threshold and fail the audit.
 Horizontal text uses its true baseline; a rotated or skewed `fill_text` stays
 one visual run and uses the minimum fully transformed glyph x/y as its
 comparable anchor. Its numbers are assertable; pixel counts are only a

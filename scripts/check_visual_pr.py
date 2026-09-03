@@ -54,7 +54,8 @@ INSPECTION_ITEMS = (
     "Used Codex/Claude vision to inspect the full GT/output pages, diff, and matched crops",
     "Inspected matched region crops at full resolution",
     "Ran compare_layout.py --audit --fine-shift PT and dispositioned every fine/large "
-    "text-instance shift, painted-text visibility mismatch, and visible-fill occlusion",
+    "text-instance shift, rectangle geometry deviation, painted-text visibility mismatch, "
+    "and visible-fill occlusion",
     "Ran compare_render.py --cluster-report PATH --strict-clusters and dispositioned "
     "every material 5% fuzz diff cluster by explicit ID",
     "Inventoried hairlines and border dash styles",
@@ -296,6 +297,7 @@ def layout_audit_categories(report: object) -> dict[str, bool]:
 
     has_text_flow_findings = False
     has_visible_fill_findings = False
+    has_rect_geometry_findings = False
     has_large_shifts = False
     has_fine_shifts = False
     for page_number, page in enumerate(pages, start=1):
@@ -308,6 +310,7 @@ def layout_audit_categories(report: object) -> dict[str, bool]:
             instances = page["instances"]
             visibility = page.get("visibility", {"mismatch_count": 0})
             visible_fills = page.get("visible_fills", {"mismatch_count": 0})
+            rects = page.get("rects", {"geometry_mismatch_count": 0})
             text_flow_counts = (
                 line_counts["missing"],
                 line_counts["extra"],
@@ -317,16 +320,24 @@ def layout_audit_categories(report: object) -> dict[str, bool]:
                 visibility["mismatch_count"],
             )
             visible_fill_count = visible_fills["mismatch_count"]
+            rect_geometry_count = rects.get("geometry_mismatch_count", 0)
             large_shift_count = instances["large_shift_count"]
             fine_shift_count = instances["fine_shift_count"]
         except (KeyError, TypeError) as exc:
             raise ValueError(f"page {page_number} is missing compare_layout fields") from exc
-        counts = (*text_flow_counts, visible_fill_count, large_shift_count, fine_shift_count)
+        counts = (
+            *text_flow_counts,
+            visible_fill_count,
+            rect_geometry_count,
+            large_shift_count,
+            fine_shift_count,
+        )
         if any(type(count) is not int or count < 0 for count in counts):
             raise ValueError(f"page {page_number} finding counts must be non-negative integers")
 
         has_text_flow_findings |= any(text_flow_counts)
         has_visible_fill_findings |= visible_fill_count > 0
+        has_rect_geometry_findings |= rect_geometry_count > 0
         has_large_shifts |= large_shift_count > 0
         has_fine_shifts |= fine_shift_count > 0
 
@@ -334,6 +345,7 @@ def layout_audit_categories(report: object) -> dict[str, bool]:
         "page count": gt_pages != out_pages,
         "text flow": has_text_flow_findings,
         "visible fills": has_visible_fill_findings,
+        "rectangle geometry": has_rect_geometry_findings,
         "large shifts": has_large_shifts,
         "fine shifts": has_fine_shifts,
     }
@@ -481,6 +493,7 @@ def validate_layout_audit(body: str, changed_paths: list[str], root: Path) -> li
         "page count": "Layout audit page count",
         "text flow": "Layout audit text flow",
         "visible fills": "Layout audit visible fills",
+        "rectangle geometry": "Layout audit rectangle geometry",
         "large shifts": "Layout audit large shifts",
         "fine shifts": "Layout audit fine shifts",
     }

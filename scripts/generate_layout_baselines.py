@@ -14,7 +14,8 @@ For every case in ``tests/golden_mocks/business/manifest.json`` this pipeline:
    to a whole point), including informational safe split/join topology groups,
    painted-text visibility mismatches caused by z-order or flat-background
    contrast, plus visible-fill occlusions where a later opaque, differently
-   coloured rectangle cuts into a thin rule.
+   coloured rectangle cuts into a thin rule, and matched axis-aligned
+   rectangle/line geometry deviations after same-paint operation splits merge.
 
 A trace that parses to zero pages is a hard failure, never an empty vector: on
 mutool 1.23.x that state used to look exactly like a perfect comparison
@@ -167,6 +168,10 @@ def build_baseline_document(
             vector.get("visible_fills", {"mismatch_count": 0})["mismatch_count"]
             for vector in pages
         ),
+        "rect_geometry_mismatches": sum(
+            vector.get("rects", {}).get("geometry_mismatch_count", 0)
+            for vector in pages
+        ),
     }
     return {
         "schema_version": SCHEMA_VERSION,
@@ -251,13 +256,18 @@ def main() -> int:
                     ]
                     for vector in record["pages"]
                 )
+                rect_geometry_mismatches = sum(
+                    vector.get("rects", {}).get("geometry_mismatch_count", 0)
+                    for vector in record["pages"]
+                )
                 print(
                     f"{record['id']}: {record['out_pages']}/{record['gt_pages']} pages, "
                     f"{sum(v['lines']['missing'] for v in record['pages'])} missing, "
                     f"{sum(v['instances']['large_shift_count'] for v in record['pages'])} "
                     "large shifts, "
                     f"{visibility_mismatches} text visibility mismatches, "
-                    f"{visible_fill_mismatches} visible fill mismatches"
+                    f"{visible_fill_mismatches} visible fill mismatches, "
+                    f"{rect_geometry_mismatches} rectangle geometry mismatches"
                 )
     except BaselineError as error:
         print(f"baseline generation failed: {error}", file=sys.stderr)

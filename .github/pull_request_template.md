@@ -33,6 +33,7 @@
 - Layout audit page count: <!-- Pass, or #N references when the report differs -->
 - Layout audit text flow: <!-- Pass, or #N references for missing/extra/reflow, changed-wrap, or painted-text visibility findings -->
 - Layout audit visible fills: <!-- Pass, or #N references for visible-fill occlusions -->
+- Layout audit rectangle geometry: <!-- Pass, or #N references for matched rectangle position/size/edge findings -->
 - Layout audit large shifts: <!-- Pass, or #N references for shifts above the report threshold -->
 - Layout audit fine shifts: <!-- Pass, or #N references for shifts above the fine-detail threshold -->
 - New follow-up issues found in this audit: <!-- #N, #N or None; create issues before completing the audit -->
@@ -62,7 +63,7 @@
 - [ ] Stored progressive JPEG quality 86 assets with metadata stripped
 - [ ] Used Codex/Claude vision to inspect the full GT/output pages, diff, and matched crops
 - [ ] Inspected matched region crops at full resolution
-- [ ] Ran compare_layout.py --audit --fine-shift PT and dispositioned every fine/large text-instance shift, painted-text visibility mismatch, and visible-fill occlusion
+- [ ] Ran compare_layout.py --audit --fine-shift PT and dispositioned every fine/large text-instance shift, rectangle geometry deviation, painted-text visibility mismatch, and visible-fill occlusion
 - [ ] Ran compare_render.py --cluster-report PATH --strict-clusters and dispositioned every material 5% fuzz diff cluster by explicit ID
 - [ ] Inventoried hairlines and border dash styles
 - [ ] Inventoried font weight, italic, and underline emphasis
