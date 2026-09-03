@@ -110,6 +110,24 @@ def rect_op(
     )
 
 
+def line_op(
+    x0: float,
+    y0: float,
+    x1: float,
+    y1: float,
+    color: str = ".8 .8 .8",
+) -> str:
+    return "\n".join(
+        [
+            '<stroke_path linewidth="1" colorspace="ICCBased(RGB,sRGB IEC61966-2.1)" '
+            f'color="{color}" alpha="1" transform="1 0 0 1 0 0">',
+            f'<moveto x="{x0}" y="{y0}"/>',
+            f'<lineto x="{x1}" y="{y1}"/>',
+            "</stroke_path>",
+        ]
+    )
+
+
 def image_op() -> str:
     return (
         '<fill_image alpha="1" colorspace="DeviceRGB" ri="1" bp="1" op="0" opm="0" '
@@ -305,13 +323,14 @@ class ParseTraceTest(unittest.TestCase):
 
         self.assertEqual(lines, [])
 
-    def test_rect_bbox_uses_the_full_affine_transform(self) -> None:
+    def test_path_bbox_uses_the_full_affine_transform(self) -> None:
         page = """<fill_path transform="1 2 3 4 5 6">
           <moveto x="7" y="11"/>
           <lineto x="8" y="12"/>
         </fill_path>"""
         rect = compare_layout.parse_trace(trace_document(page))[0].rects[0]
         self.assertEqual((rect.x0, rect.y0, rect.x1, rect.y1), (45.0, 64.0, 49.0, 70.0))
+        self.assertEqual(rect.geometry_kind, "other")
 
     def test_rects_capture_device_bbox_and_kind(self) -> None:
         page = "\n".join(
@@ -324,6 +343,15 @@ class ParseTraceTest(unittest.TestCase):
         self.assertAlmostEqual(fill.x0, 69.36, places=2)
         self.assertAlmostEqual(fill.y1, 793.44, places=2)
         self.assertEqual({r.kind for r in rects}, {"fill", "stroke"})
+        self.assertEqual({r.geometry_kind for r in rects}, {"rectangle"})
+
+    def test_axis_aligned_stroke_line_is_geometry_comparable(self) -> None:
+        rect = compare_layout.parse_trace(
+            trace_document(line_op(74.183, 137.254, 339.165, 137.254))
+        )[0].rects[0]
+
+        self.assertEqual(rect.geometry_kind, "line")
+        self.assertEqual(rect.bbox, [74.183, 137.254, 339.165, 137.254])
 
 
 class MatchAndDiffTest(unittest.TestCase):
@@ -713,6 +741,149 @@ class MatchAndDiffTest(unittest.TestCase):
         self.assertEqual(vector["rects"]["gt_count"], 2)
         self.assertEqual(vector["rects"]["out_count"], 1)
 
+    def test_equal_center_rect_size_change_reports_geometry_and_fails_audit(self) -> None:
+        gt = rect_op(10.0, 20.0, 110.0, 40.0)
+        out = rect_op(0.0, 15.0, 120.0, 45.0)
+
+        vector = self.diff(gt, out, large_shift=5.0)
+        rects = vector["rects"]
+
+        self.assertEqual(rects["matched"], 1)
+        self.assertEqual(rects["geometry_mismatch_count"], 1)
+        self.assertAlmostEqual(rects["x"]["worst"], -10.0)
+        self.assertAlmostEqual(rects["y"]["worst"], -5.0)
+        self.assertAlmostEqual(rects["width"]["worst"], 20.0)
+        self.assertAlmostEqual(rects["height"]["worst"], 10.0)
+        self.assertAlmostEqual(rects["edges"]["left"]["worst"], -10.0)
+        self.assertAlmostEqual(rects["edges"]["top"]["worst"], -5.0)
+        self.assertAlmostEqual(rects["edges"]["right"]["worst"], 10.0)
+        self.assertAlmostEqual(rects["edges"]["bottom"]["worst"], 5.0)
+        self.assertEqual(rects["geometry_mismatch_samples"][0]["kind"], "fill")
+        self.assertEqual(
+            rects["geometry_mismatch_samples"][0]["gt_bbox"],
+            [10.0, 20.0, 110.0, 40.0],
+        )
+        self.assertEqual(
+            rects["geometry_mismatch_samples"][0]["out_bbox"],
+            [0.0, 15.0, 120.0, 45.0],
+        )
+        self.assertEqual(compare_layout.audit_failures([vector]), 1)
+
+    def test_translated_equal_size_rect_reports_position_and_edge_deltas(self) -> None:
+        gt = rect_op(10.0, 20.0, 110.0, 30.0, "stroke_path")
+        out = rect_op(18.0, 17.0, 118.0, 27.0, "stroke_path")
+
+        rects = self.diff(gt, out, large_shift=5.0)["rects"]
+
+        self.assertEqual(rects["geometry_mismatch_count"], 1)
+        self.assertAlmostEqual(rects["x"]["mean_abs"], 8.0)
+        self.assertAlmostEqual(rects["y"]["mean_abs"], 3.0)
+        self.assertAlmostEqual(rects["width"]["worst"], 0.0)
+        self.assertAlmostEqual(rects["height"]["worst"], 0.0)
+        self.assertAlmostEqual(rects["edges"]["left"]["worst"], 8.0)
+        self.assertAlmostEqual(rects["edges"]["right"]["worst"], 8.0)
+        self.assertAlmostEqual(rects["edges"]["top"]["worst"], -3.0)
+        self.assertAlmostEqual(rects["edges"]["bottom"]["worst"], -3.0)
+
+    def test_rect_matching_uses_size_when_centers_are_identical(self) -> None:
+        gt = "\n".join(
+            [rect_op(0.0, 0.0, 100.0, 10.0), rect_op(30.0, 0.0, 70.0, 10.0)]
+        )
+        out = "\n".join(
+            [rect_op(29.0, 0.0, 71.0, 10.0), rect_op(1.0, 0.0, 99.0, 10.0)]
+        )
+
+        rects = self.diff(gt, out, fine_shift=0.5)["rects"]
+
+        self.assertEqual(rects["matched"], 2)
+        self.assertEqual(rects["geometry_mismatch_count"], 2)
+        self.assertEqual(
+            [sample["gt_bbox"] for sample in rects["geometry_mismatch_samples"]],
+            [[0.0, 0.0, 100.0, 10.0], [30.0, 0.0, 70.0, 10.0]],
+        )
+        self.assertEqual(
+            [sample["out_bbox"] for sample in rects["geometry_mismatch_samples"]],
+            [[1.0, 0.0, 99.0, 10.0], [29.0, 0.0, 71.0, 10.0]],
+        )
+
+    def test_same_color_rect_operation_splitting_is_informational(self) -> None:
+        gt = rect_op(10.0, 20.0, 110.0, 21.0, color=".8 .2 .2")
+        out = "\n".join(
+            [
+                rect_op(10.0, 20.0, 60.0, 21.0, color=".8 .2 .2"),
+                rect_op(60.0, 20.0, 110.0, 21.0, color=".8 .2 .2"),
+            ]
+        )
+
+        vector = self.diff(gt, out, fine_shift=0.5)
+        rects = vector["rects"]
+
+        self.assertEqual((rects["gt_count"], rects["out_count"]), (1, 2))
+        self.assertEqual(
+            (rects["canonical_gt_count"], rects["canonical_out_count"]),
+            (1, 1),
+        )
+        self.assertEqual(rects["matched"], 1)
+        self.assertEqual(rects["geometry_mismatch_count"], 0)
+        self.assertEqual(compare_layout.audit_failures([vector]), 0)
+
+    def test_issue_1418_page_9_title_rule_is_a_rect_geometry_failure(self) -> None:
+        gt = line_op(74.183, 137.254, 339.165, 137.254)
+        out = line_op(74.215, 133.679, 327.632, 133.679)
+
+        vector = self.diff(gt, out, large_shift=5.0)
+        rects = vector["rects"]
+
+        self.assertEqual(rects["matched"], 1)
+        self.assertEqual(rects["geometry_mismatch_count"], 1)
+        sample = rects["geometry_mismatch_samples"][0]
+        self.assertAlmostEqual(sample["dy"], -3.575, places=3)
+        self.assertAlmostEqual(sample["dwidth"], -11.565, places=3)
+        self.assertAlmostEqual(sample["edges"]["right"], -11.533, places=3)
+        self.assertEqual(compare_layout.audit_failures([vector]), 1)
+        self.assertIn("rectangle geometry", compare_layout.render_reading([vector]))
+
+    def test_unequal_rect_groups_do_not_pair_distant_unrelated_shapes(self) -> None:
+        gt = "\n".join(
+            [
+                rect_op(10.0, 20.0, 110.0, 30.0),
+                rect_op(10.0, 50.0, 110.0, 60.0),
+            ]
+        )
+        out = rect_op(400.0, 400.0, 500.0, 410.0)
+
+        rects = self.diff(gt, out)["rects"]
+
+        self.assertEqual(rects["matched"], 0)
+        self.assertEqual((rects["unmatched_gt"], rects["unmatched_out"]), (2, 1))
+        self.assertEqual(rects["geometry_mismatch_count"], 0)
+
+    def test_non_rectangular_path_bounds_do_not_become_rect_geometry(self) -> None:
+        def triangle(x0: float, x1: float) -> str:
+            midpoint = (x0 + x1) / 2
+            return "\n".join(
+                [
+                    '<fill_path winding="nonzero" color=".8 .2 .2" alpha="1" '
+                    'transform="1 0 0 1 0 0">',
+                    f'<moveto x="{x0}" y="20"/>',
+                    f'<lineto x="{x1}" y="20"/>',
+                    f'<lineto x="{midpoint}" y="40"/>',
+                    "<closepath/>",
+                    "</fill_path>",
+                ]
+            )
+
+        vector = self.diff(triangle(10.0, 110.0), triangle(0.0, 120.0))
+        rects = vector["rects"]
+
+        self.assertEqual((rects["gt_count"], rects["out_count"]), (1, 1))
+        self.assertEqual(
+            (rects["canonical_gt_count"], rects["canonical_out_count"]),
+            (0, 0),
+        )
+        self.assertEqual(rects["geometry_mismatch_count"], 0)
+        self.assertEqual(compare_layout.audit_failures([vector]), 0)
+
     def test_later_different_fill_cutting_rule_reports_visible_fill_occlusion(
         self,
     ) -> None:
@@ -1086,6 +1257,27 @@ class ReadingTest(unittest.TestCase):
 
 
 class CompareLayoutCliTest(unittest.TestCase):
+    def test_rect_geometry_makes_json_audit_fail(self) -> None:
+        traces = [
+            trace_document(rect_op(10.0, 20.0, 110.0, 30.0)),
+            trace_document(rect_op(18.0, 20.0, 118.0, 30.0)),
+        ]
+        stdout = io.StringIO()
+        with (
+            patch.object(compare_layout, "run_mutool", side_effect=traces),
+            patch.object(
+                sys,
+                "argv",
+                ["compare_layout.py", "gt.pdf", "output.pdf", "--json", "--audit"],
+            ),
+            patch("sys.stdout", stdout),
+        ):
+            result = compare_layout.main()
+
+        report = json.loads(stdout.getvalue())
+        self.assertEqual(result, 1)
+        self.assertEqual(report["pages"][0]["rects"]["geometry_mismatch_count"], 1)
+
     def test_audit_exits_nonzero_for_issue_1475_visible_fill_occlusion(self) -> None:
         rose_rule = rect_op(
             50.0,

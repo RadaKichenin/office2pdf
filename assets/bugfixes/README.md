@@ -47,8 +47,8 @@ audit`, then mark each layout-audit category as `Pass` or list the open issues
 that classify it. Those references must also appear in `Remaining:` deviation
 rows. The gate rejects a claimed pass when the report contains a page-count
 difference, missing/extra/reflowed text, changed wraps, a painted-text visibility
-mismatch, a visible-fill occlusion, or a text shift above the configured fine or
-large threshold.
+mismatch, a visible-fill occlusion, or a text or rectangle geometry shift above
+the configured fine or large threshold.
 
 Generate the cluster IDs once without strict mode, inspect every cluster in the
 full-resolution diff and matched crops, then create a disposition file whose

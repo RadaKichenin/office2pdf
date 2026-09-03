@@ -395,6 +395,10 @@ def layout_identical_failures(report: dict) -> list[str]:
                 f"page {index}: {visibility['mismatch_count']} visibility mismatch(es)"
             )
         rects = vector["rects"]
+        if rects.get("geometry_mismatch_count", 0):
+            failures.append(
+                f"page {index}: {rects['geometry_mismatch_count']} rectangle geometry mismatch(es)"
+            )
         if rects["gt_count"] != rects["out_count"]:
             failures.append(f"page {index}: rects {rects['gt_count']} vs {rects['out_count']}")
     return failures
@@ -458,6 +462,10 @@ def variant_row(value: str, patched: int, report: dict) -> dict:
             vector.get("visibility", {"mismatch_count": 0})["mismatch_count"]
             for vector in vectors
         ),
+        "rect_geometry": sum(
+            vector.get("rects", {}).get("geometry_mismatch_count", 0)
+            for vector in vectors
+        ),
         "rects": "{}/{}".format(
             sum(vector["rects"]["gt_count"] for vector in vectors),
             sum(vector["rects"]["out_count"] for vector in vectors),
@@ -481,6 +489,7 @@ def render_table(spec: Spec, backend: str, control_verdict: str, rows: list[dict
         "worst width (%)",
         "large shifts",
         "visibility",
+        "rect geometry",
         "rects",
     )
     lines = [
@@ -510,6 +519,7 @@ def render_table(spec: Spec, backend: str, control_verdict: str, rows: list[dict
             f"{row['worst_width']:.1f}",
             str(row["large_shifts"]),
             str(row["visibility"]),
+            str(row["rect_geometry"]),
             row["rects"],
         )
         lines.append("| " + " | ".join(cells) + " |")

@@ -137,9 +137,10 @@ The `Business Golden Contract` CI job runs both checks on every push and pull re
 `baselines/layout.json` stores the `compare_layout.py` deviation vector for
 every page of every case (matched/missing/extra lines, baseline dy statistics,
 line-width drift, pitch deltas, wrap and reflow counts, large instance shifts,
-painted-text visibility mismatches, visible-fill occlusions, and the rect
-census), measured against the native GT with the per-format noise floor
-(0.12pt Word/PowerPoint, 0.5pt Excel). Regenerate it with a local build:
+painted-text visibility mismatches, visible-fill occlusions, and path census
+plus axis-aligned rectangle/line geometry deltas), measured against the native
+GT with the per-format noise floor (0.12pt Word/PowerPoint, 0.5pt Excel).
+Regenerate it with a local build:
 
 ```sh
 cargo build -p office2pdf-cli

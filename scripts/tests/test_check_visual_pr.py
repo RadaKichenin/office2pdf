@@ -61,6 +61,7 @@ def visual_body(result_overrides=None, include_previews=True):
 - Layout audit page count: Pass
 - Layout audit text flow: Pass
 - Layout audit visible fills: Pass
+- Layout audit rectangle geometry: Pass
 - Layout audit large shifts: Pass
 - Layout audit fine shifts: Pass
 - New follow-up issues found in this audit: {follow_up_value}
@@ -96,6 +97,7 @@ def layout_report(
     fine_threshold=0.5,
     visibility=0,
     visible_fills=0,
+    rect_geometry=0,
 ):
     return {
         "pages": [
@@ -110,6 +112,7 @@ def layout_report(
                 },
                 "visibility": {"mismatch_count": visibility},
                 "visible_fills": {"mismatch_count": visible_fills},
+                "rects": {"geometry_mismatch_count": rect_geometry},
             }
         ],
         "gt_pages": gt_pages,
@@ -242,8 +245,8 @@ class PullRequestBodyTests(unittest.TestCase):
     def test_visual_audit_requires_layout_finding_disposition(self):
         required = (
             "- [x] Ran compare_layout.py --audit --fine-shift PT and dispositioned every "
-            "fine/large text-instance shift, painted-text visibility mismatch, and "
-            "visible-fill occlusion"
+            "fine/large text-instance shift, rectangle geometry deviation, painted-text "
+            "visibility mismatch, and visible-fill occlusion"
         )
         errors = validate_pr_body(
             visual_body().replace(required, required.replace("[x]", "[ ]")),
@@ -453,6 +456,25 @@ class LayoutAuditTests(unittest.TestCase):
             "Layout audit visible fills: #328",
         )
         self.assertEqual(validate_report(body, layout_report(visible_fills=1)), [])
+
+    def test_rect_geometry_failure_rejects_pass_disposition(self):
+        errors = validate_report(
+            visual_body(),
+            layout_report(rect_geometry=1),
+        )
+        self.assertTrue(
+            any(
+                "rectangle geometry" in error and "issue reference" in error
+                for error in errors
+            )
+        )
+
+    def test_rect_geometry_failure_accepts_remaining_position_issue(self):
+        body = visual_body({"Position/size": "Remaining: #328"}).replace(
+            "Layout audit rectangle geometry: Pass",
+            "Layout audit rectangle geometry: #328",
+        )
+        self.assertEqual(validate_report(body, layout_report(rect_geometry=1)), [])
 
     def test_failed_categories_accept_remaining_issue_references(self):
         body = visual_body(

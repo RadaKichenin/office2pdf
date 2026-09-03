@@ -47,7 +47,13 @@ def page_vector(**overrides: object) -> dict:
         "pitch": {"pairs": 9, "worst_delta": 0.3},
         "wraps": {"count": 0, "samples": []},
         "reflow": {"gt_lines": 0, "out_lines": 0, "samples": []},
-        "rects": {"gt_count": 4, "out_count": 4, "matched": 4, "mean_center_delta": 0.5},
+        "rects": {
+            "gt_count": 4,
+            "out_count": 4,
+            "matched": 4,
+            "mean_center_delta": 0.5,
+            "geometry_mismatch_count": 0,
+        },
         "noise_floor": 0.12,
     }
     for dotted_key, value in overrides.items():
@@ -199,6 +205,30 @@ class CountTests(unittest.TestCase):
         self.assertEqual(len(findings), 1)
         self.assertEqual(findings[0]["metric"], "rects.census_gap")
         self.assertEqual(findings[0]["kind"], "regression")
+
+    def test_rect_geometry_mismatch_increase_is_a_regression(self) -> None:
+        stored = baseline_document()
+        fresh = copy.deepcopy(stored)
+        fresh["cases"][0]["pages"][0]["rects"]["geometry_mismatch_count"] = 1
+
+        findings = checker.compare_baselines(stored, fresh)
+
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0]["kind"], "regression")
+        self.assertEqual(findings[0]["metric"], "rects.geometry_mismatch_count")
+
+    def test_older_baseline_without_rect_geometry_treats_new_finding_as_regression(
+        self,
+    ) -> None:
+        stored = baseline_document()
+        del stored["cases"][0]["pages"][0]["rects"]["geometry_mismatch_count"]
+        fresh = baseline_document()
+        fresh["cases"][0]["pages"][0]["rects"]["geometry_mismatch_count"] = 1
+
+        findings = checker.compare_baselines(stored, fresh)
+
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0]["metric"], "rects.geometry_mismatch_count")
 
 
 class PageParityTests(unittest.TestCase):

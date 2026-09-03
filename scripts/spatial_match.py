@@ -1,8 +1,8 @@
 """Minimum-cost pairing for repeated visual elements.
 
 Text alone is not an identity: charts, legends, tables, and axes routinely
-repeat the same label.  Pair repeated instances by their two-dimensional
-positions so one displaced instance cannot disappear from a geometry report.
+repeat the same label. Pair repeated instances by their position or geometry
+feature vectors so one displaced instance cannot disappear from a report.
 """
 
 from __future__ import annotations
@@ -11,11 +11,11 @@ import math
 from collections.abc import Sequence
 
 
-Point = tuple[float, float]
+Vector = Sequence[float]
 
 
 def minimum_cost_pairs(
-    references: Sequence[Point], candidates: Sequence[Point]
+    references: Sequence[Vector], candidates: Sequence[Vector]
 ) -> list[tuple[int, int]]:
     """Return a minimum-total-distance one-to-one assignment.
 
@@ -29,10 +29,7 @@ def minimum_cost_pairs(
     swapped = len(references) > len(candidates)
     rows = candidates if swapped else references
     columns = references if swapped else candidates
-    costs = [
-        [math.hypot(row[0] - column[0], row[1] - column[1]) for column in columns]
-        for row in rows
-    ]
+    costs = [[math.dist(row, column) for column in columns] for row in rows]
 
     # Rectangular Hungarian algorithm, with rows <= columns.
     row_count = len(rows)

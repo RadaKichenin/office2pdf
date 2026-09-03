@@ -26,6 +26,12 @@ class MinimumCostPairsTest(unittest.TestCase):
 
         self.assertEqual(minimum_cost_pairs(references, candidates), [(0, 0), (2, 1)])
 
+    def test_all_vector_dimensions_contribute_to_the_assignment(self) -> None:
+        references = [(0.0, 0.0, 100.0, 10.0), (0.0, 0.0, 40.0, 10.0)]
+        candidates = [(0.0, 0.0, 42.0, 10.0), (0.0, 0.0, 98.0, 10.0)]
+
+        self.assertEqual(minimum_cost_pairs(references, candidates), [(0, 1), (1, 0)])
+
     def test_empty_side_has_no_pairs(self) -> None:
         self.assertEqual(minimum_cost_pairs([], [(1.0, 1.0)]), [])
         self.assertEqual(minimum_cost_pairs([(1.0, 1.0)], []), [])
