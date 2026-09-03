@@ -250,7 +250,7 @@ pub fn compile_to_pdf(
     pdf_ua: bool,
 ) -> Result<Vec<u8>, ConvertError> {
     let world = MinimalWorld::new(typst_source, images, font_paths);
-    compile_to_pdf_inner(&world, pdf_standard, tagged, pdf_ua)
+    compile_to_pdf_inner(&world, pdf_standard, tagged, pdf_ua).map(|(pdf, _pages)| pdf)
 }
 
 /// Compile Typst markup to PDF bytes (WASM target).
@@ -280,6 +280,33 @@ pub(crate) fn compile_to_pdf_with_fonts(
     tagged: bool,
     pdf_ua: bool,
 ) -> Result<Vec<u8>, ConvertError> {
+    compile_to_pdf_with_fonts_counted(
+        typst_source,
+        images,
+        pdf_standard,
+        font_paths,
+        in_memory_fonts,
+        tagged,
+        pdf_ua,
+    )
+    .map(|(pdf, _pages)| pdf)
+}
+
+/// Compile as `compile_to_pdf_with_fonts` does, also reporting how many pages
+/// the layout produced.
+///
+/// The count comes from the laid-out document rather than the source IR: a
+/// source page, including a DOCX flow section, may lay out across multiple PDF
+/// pages. Callers reporting `ConvertMetrics::page_count` need the PDF count.
+pub(crate) fn compile_to_pdf_with_fonts_counted(
+    typst_source: &str,
+    images: &[ImageAsset],
+    pdf_standard: Option<PdfStandard>,
+    font_paths: &[std::path::PathBuf],
+    in_memory_fonts: &[Font],
+    tagged: bool,
+    pdf_ua: bool,
+) -> Result<(Vec<u8>, u32), ConvertError> {
     #[cfg(not(target_arch = "wasm32"))]
     let world =
         MinimalWorld::new_with_in_memory_fonts(typst_source, images, font_paths, in_memory_fonts);
@@ -296,7 +323,7 @@ fn compile_to_pdf_inner(
     pdf_standard: Option<PdfStandard>,
     tagged: bool,
     pdf_ua: bool,
-) -> Result<Vec<u8>, ConvertError> {
+) -> Result<(Vec<u8>, u32), ConvertError> {
     // Typst's memoized layout results are process-global, while each
     // `MinimalWorld` here is an independent Office document. Age that cache at
     // a bounded document interval so long-running processes do not retain
@@ -342,10 +369,12 @@ fn compile_to_pdf_inner(
         tagged: enable_tagged,
         ..Default::default()
     };
-    typst_pdf::pdf(&document, &options).map_err(|errors| {
+    let page_count = document.pages.len() as u32;
+    let pdf = typst_pdf::pdf(&document, &options).map_err(|errors| {
         let messages: Vec<String> = errors.iter().map(|e| e.message.to_string()).collect();
         ConvertError::Render(format!("PDF export failed: {}", messages.join("; ")))
-    })
+    })?;
+    Ok((pdf, page_count))
 }
 
 /// One shaped text run as the layout engine actually placed it.

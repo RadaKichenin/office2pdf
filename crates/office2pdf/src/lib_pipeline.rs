@@ -233,7 +233,6 @@ pub(super) fn convert_bytes(
         }
     };
     let parse_duration = parse_start.elapsed();
-    let page_count = doc.pages.len() as u32;
     extend_document_fonts(&mut additional_fonts, &doc);
 
     #[cfg(target_arch = "wasm32")]
@@ -314,7 +313,7 @@ pub(super) fn convert_bytes(
 
     let compile_start: Instant = Instant::now();
     #[cfg(not(target_arch = "wasm32"))]
-    let pdf = render::pdf::compile_to_pdf_with_fonts(
+    let (pdf, page_count) = render::pdf::compile_to_pdf_with_fonts_counted(
         &output.source,
         &output.images,
         options.pdf_standard,
@@ -327,7 +326,7 @@ pub(super) fn convert_bytes(
         options.pdf_ua,
     )?;
     #[cfg(target_arch = "wasm32")]
-    let pdf = render::pdf::compile_to_pdf_with_fonts(
+    let (pdf, page_count) = render::pdf::compile_to_pdf_with_fonts_counted(
         &output.source,
         &output.images,
         options.pdf_standard,
@@ -417,7 +416,7 @@ fn convert_bytes_streaming_xlsx(
             options,
             font_context.as_ref(),
         )?;
-        let pdf = render::pdf::compile_to_pdf_with_fonts(
+        let (pdf, page_count) = render::pdf::compile_to_pdf_with_fonts_counted(
             &output.source,
             &output.images,
             options.pdf_standard,
@@ -430,6 +429,7 @@ fn convert_bytes_streaming_xlsx(
             options.pdf_ua,
         )?;
         let total_duration = total_start.elapsed();
+        let output_size_bytes = pdf.len() as u64;
         return Ok(build_convert_result(
             pdf,
             warnings,
@@ -439,8 +439,8 @@ fn convert_bytes_streaming_xlsx(
                 compile_duration: std::time::Duration::ZERO,
                 total_duration,
                 input_size_bytes,
-                output_size_bytes: 0,
-                page_count: 0,
+                output_size_bytes,
+                page_count,
             }),
         ));
     }
@@ -451,8 +451,6 @@ fn convert_bytes_streaming_xlsx(
     let mut total_page_count: u32 = 0;
 
     for chunk_doc in chunk_docs {
-        total_page_count += chunk_doc.pages.len() as u32;
-
         if let Some(font_context) = font_context.as_ref() {
             warnings.extend(
                 render::font_subst::detect_missing_font_fallbacks_with_context(
@@ -477,7 +475,7 @@ fn convert_bytes_streaming_xlsx(
         codegen_duration_total += codegen_start.elapsed();
 
         let compile_start: Instant = Instant::now();
-        let pdf = render::pdf::compile_to_pdf_with_fonts(
+        let (pdf, chunk_pages) = render::pdf::compile_to_pdf_with_fonts_counted(
             &output.source,
             &output.images,
             options.pdf_standard,
@@ -489,6 +487,7 @@ fn convert_bytes_streaming_xlsx(
             options.tagged,
             options.pdf_ua,
         )?;
+        total_page_count += chunk_pages;
         compile_duration_total += compile_start.elapsed();
 
         all_pdfs.push(pdf);
