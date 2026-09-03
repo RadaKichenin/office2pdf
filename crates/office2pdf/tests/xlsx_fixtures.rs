@@ -2204,10 +2204,10 @@ fn structure_fit_to_page_sheet_scales_its_anchored_picture_to_the_native_size() 
 /// prints 73 rows of A1:R73 whose printed tracks total 1372pt against A3
 /// portrait's 1082.55pt of printable height. A native Excel for Mac export of
 /// it, staged and run inside Excel's own sandbox container, is a single A3 page
-/// drawn at 0.78 — `mutool draw -F trace` reports a `.78` text transform and a
-/// 14.82pt pitch across the 19pt tracks. Bounding the columns alone left the
-/// sheet at the width fit's 0.89, a 16.91pt pitch and a second page
-/// (issue #1181).
+/// drawn at 0.78 — `mutool draw -F trace` reports a `.78` text transform.
+/// Bounding the columns alone left the sheet at the width fit's 0.89 and a
+/// second page (issue #1181). The current 14.82pt body pitch is a separate
+/// known row-snap defect; fresh Excel 16.112.3 prints 15.60pt (#1514).
 #[test]
 fn structure_fit_to_page_sheet_without_declared_bounds_fits_its_rows_on_one_page() {
     let pages = sheet_pages("issue_1181_fit_to_height.xlsx");
@@ -2224,9 +2224,9 @@ fn structure_fit_to_page_sheet_without_declared_bounds_fits_its_rows_on_one_page
          {printable_height}pt of printable height"
     );
 
-    // Excel's 0.78 over the sheet's 19pt tracks, which the export measures at
-    // 14.82pt. Asserting the pitch rather than the ratio keeps the check on
-    // what the page shows.
+    // Keep the current converter's 0.78 fit result pinned independently of the
+    // known 19.5pt -> 19pt row snap. #1514 will move this body pitch from 14.82
+    // to the native export's 15.60pt once its fractional-height controls land.
     let tracks: Vec<f64> = budget
         .table
         .rows
@@ -2236,8 +2236,54 @@ fn structure_fit_to_page_sheet_without_declared_bounds_fits_its_rows_on_one_page
     let body_track: f64 = tracks[tracks.len() - 1];
     assert!(
         (body_track - 14.82).abs() < 0.01,
-        "a 19pt track must print at the export's 14.82pt, got {body_track}"
+        "the current #1514 row-snap path must remain explicit, got {body_track}"
     );
+}
+
+/// The reported monthly-budget workbook formats zero-valued entry cells with
+/// the third section of `#,##0_);[Red]\(#,##0\);\-\ \ `. Excel prints the
+/// escaped dash followed by both escaped spaces. All 71 cells are explicit
+/// `<v>0</v>` cells in the worksheet XML; falling back to the positive section
+/// printed `0`, while trimming the literal section shifted every right-aligned
+/// dash 3.76pt to the right (issue #1262).
+#[test]
+fn structure_monthly_budget_zero_values_preserve_the_literal_zero_section() {
+    let pages = sheet_pages("issue_1181_fit_to_height.xlsx");
+    let budget = sheet_page_named(&pages, "Monthly college budget");
+    let zero_cells: &[(usize, &[usize])] = &[
+        (31, &[2, 3]),
+        (34, &[5, 6, 7, 8, 9, 10, 11, 12, 13]),
+        (45, &[2, 3, 5, 6, 8, 9, 11, 12, 13]),
+        (46, &[2, 3, 5, 6, 8, 9, 11, 12, 13]),
+        (49, &[2, 3, 5, 6, 8, 9, 11, 12, 13]),
+        (50, &[2, 3]),
+        (56, &[3, 4, 5, 6, 7, 9, 10, 11]),
+        (59, &[2, 3, 4]),
+        (61, &[2, 3, 4, 5, 6, 8, 9, 10, 11, 12]),
+        (62, &[2, 3]),
+        (63, &[2, 3, 4]),
+        (64, &[2, 3, 4]),
+        (68, &[2, 3]),
+    ];
+
+    assert_eq!(
+        zero_cells
+            .iter()
+            .map(|(_, cells)| cells.len())
+            .sum::<usize>(),
+        71
+    );
+    for (row_index, column_indexes) in zero_cells {
+        for column_index in *column_indexes {
+            assert_eq!(
+                table_cell_text(&budget.table.rows[*row_index].cells[*column_index]),
+                "-  ",
+                "worksheet cell at row {}, column {} must preserve the zero section's two spaces",
+                row_index + 1,
+                column_index + 1
+            );
+        }
+    }
 }
 
 /// Every chart in the same workbook states where its plot area sits inside the
