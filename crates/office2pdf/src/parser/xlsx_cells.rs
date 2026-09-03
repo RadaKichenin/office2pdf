@@ -13,6 +13,135 @@ use crate::ir::{BorderSide, CellBorder, Color, Insets, TableCell, TextStyle};
 /// overflow may extend the printed range.
 const MAX_XLSX_COLUMNS: u32 = 16384;
 
+/// Return a cell's displayed text, preserving whitespace from a literal-only
+/// zero section that `umya-spreadsheet` currently trims.
+///
+/// The workspace patch can select `\-\ \ ` instead of falling back to the
+/// positive section, but its width-independent string formatter returns `-`.
+/// Excel keeps both escaped spaces; they matter when the text is right-aligned.
+/// Keep this narrow compatibility layer until a released dependency carries
+/// the complete behavior (issue #1262).
+fn formatted_cell_value(cell: &umya_spreadsheet::Cell) -> String {
+    if cell.get_value_number().is_some_and(|value| value == 0.0)
+        && let Some(number_format) = cell.get_style().get_number_format()
+        && let Some(literal) = literal_zero_section_text(number_format.get_format_code())
+    {
+        return literal;
+    }
+    cell.get_formatted_value()
+}
+
+/// Decode a conventional three- or four-section format's zero section when it
+/// contains only quoted or escaped literal text (plus bracketed controls).
+/// Value-dependent sections stay on the dependency's normal formatter path.
+fn literal_zero_section_text(format: &str) -> Option<String> {
+    let mut sections: Vec<&str> = Vec::with_capacity(4);
+    let mut section_start: usize = 0;
+    let mut in_quotes = false;
+    let mut skips_next = false;
+
+    for (index, ch) in format.char_indices() {
+        if skips_next {
+            skips_next = false;
+            continue;
+        }
+        match ch {
+            '\\' | '_' | '*' if !in_quotes => skips_next = true,
+            '"' => in_quotes = !in_quotes,
+            ';' if !in_quotes => {
+                sections.push(&format[section_start..index]);
+                section_start = index + ch.len_utf8();
+            }
+            _ => {}
+        }
+    }
+    if in_quotes || skips_next {
+        return None;
+    }
+    sections.push(&format[section_start..]);
+    if !matches!(sections.len(), 3 | 4) {
+        return None;
+    }
+    if sections
+        .iter()
+        .any(|section| section_has_condition(section))
+    {
+        return None;
+    }
+
+    let mut literal = String::with_capacity(sections[2].len());
+    let mut chars = sections[2].chars();
+    let mut in_quotes = false;
+    while let Some(ch) = chars.next() {
+        if in_quotes {
+            if ch == '"' {
+                in_quotes = false;
+            } else {
+                literal.push(ch);
+            }
+            continue;
+        }
+
+        match ch {
+            '"' => in_quotes = true,
+            '\\' => literal.push(chars.next()?),
+            '[' => {
+                let mut control = String::new();
+                let mut closed = false;
+                for control_char in chars.by_ref() {
+                    if control_char == ']' {
+                        closed = true;
+                        break;
+                    }
+                    control.push(control_char);
+                }
+                if !closed || !is_non_rendering_number_format_control(&control) {
+                    return None;
+                }
+            }
+            ch if ch.is_whitespace() => literal.push(ch),
+            _ => return None,
+        }
+    }
+
+    (!in_quotes).then_some(literal)
+}
+
+fn section_has_condition(section: &str) -> bool {
+    let mut chars = section.chars();
+    let mut in_quotes = false;
+    while let Some(ch) = chars.next() {
+        match ch {
+            '"' => in_quotes = !in_quotes,
+            '\\' | '_' | '*' if !in_quotes => {
+                chars.next();
+            }
+            '[' if !in_quotes => {
+                let control: String = chars.by_ref().take_while(|ch| *ch != ']').collect();
+                if matches!(control.chars().next(), Some('<' | '>' | '=')) {
+                    return true;
+                }
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
+fn is_non_rendering_number_format_control(control: &str) -> bool {
+    const COLORS: &[&str] = &[
+        "black", "blue", "cyan", "green", "magenta", "red", "white", "yellow",
+    ];
+    let lowercase = control.to_ascii_lowercase();
+    COLORS.contains(&lowercase.as_str())
+        || lowercase
+            .strip_prefix("color")
+            .is_some_and(|index| !index.is_empty() && index.chars().all(|ch| ch.is_ascii_digit()))
+        || lowercase
+            .strip_prefix("$-")
+            .is_some_and(|locale| !locale.is_empty())
+}
+
 /// A cell range within a sheet (1-indexed, inclusive).
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct CellRange {
@@ -1067,7 +1196,7 @@ fn compute_spill_width(
         }
         let neighbor_is_empty: bool = sheet
             .get_cell((neighbor_col, row_idx))
-            .map(|cell| cell.get_formatted_value().is_empty())
+            .map(|cell| formatted_cell_value(cell).is_empty())
             .unwrap_or(true);
         if !neighbor_is_empty {
             blocked = true;
@@ -1693,6 +1822,10 @@ fn measured_printed_grid_row_height(height: f64, normal_font: Option<&NormalFont
 /// workbook of issue #1068 (Segoe UI 10 Normal) exports 12/15/18/25/30/40/49
 /// for declared 12/15/18/25.5/30/40/49.5, and its nine row boundaries down
 /// the page all land within 0.12pt of that model.
+/// A fresh Excel 16.112.3 export found a narrower exception: the theme-scheme
+/// Trebuchet MS 10 workbook of #1262 snaps 19.5pt custom rows up to 20pt
+/// (#1514). That combination remains on the conservative truncating path until
+/// its fractional-height and theme controls are measured.
 ///
 /// Both declared and recomputed worksheet heights go through here. An
 /// auto-sized row additionally prints at the taller of this track and the
@@ -2157,9 +2290,7 @@ pub(super) fn build_rows_for_range(
             // umya-spreadsheet tuple is (column, row), both 1-indexed
             let umya_cell = sheet.get_cell((col_idx, row_idx));
             let cell_indent_pt: f64 = ctx.cell_indent_pt(col_idx, row_idx);
-            let mut value = umya_cell
-                .map(|cell| cell.get_formatted_value())
-                .unwrap_or_default();
+            let mut value = umya_cell.map(formatted_cell_value).unwrap_or_default();
             if let Some(cell) = umya_cell
                 && let Some(number_format) = cell.get_style().get_number_format()
                 && uses_native_arabic_digits(number_format.get_format_code())
@@ -2499,7 +2630,7 @@ fn spill_reach_max_col(
         if merge_tops.contains_key(&(col, row)) || merge_skips.contains(&(col, row)) {
             continue;
         }
-        let text: String = cell.get_formatted_value();
+        let text: String = formatted_cell_value(cell);
         if text.is_empty() || text.contains('\n') {
             continue;
         }
@@ -2662,4 +2793,41 @@ pub(super) fn prepare_sheet_context(
         row_start,
         row_end,
     ))
+}
+
+#[cfg(test)]
+mod literal_zero_section_tests {
+    use super::literal_zero_section_text;
+
+    #[test]
+    fn decodes_all_escaped_whitespace_from_the_zero_section() {
+        assert_eq!(
+            literal_zero_section_text(r"#,##0_);[Red]\(#,##0\);\-\ \ "),
+            Some("-  ".to_string())
+        );
+    }
+
+    #[test]
+    fn supports_quoted_and_empty_zero_sections() {
+        assert_eq!(
+            literal_zero_section_text(r#""TRUE";"TRUE";"FALSE""#),
+            Some("FALSE".to_string())
+        );
+        assert_eq!(literal_zero_section_text("0;-0;"), Some(String::new()));
+    }
+
+    #[test]
+    fn leaves_value_dependent_and_non_zero_specific_formats_to_umya() {
+        assert_eq!(literal_zero_section_text("#,##0.00"), None);
+        assert_eq!(literal_zero_section_text("0;-0;0"), None);
+        assert_eq!(
+            literal_zero_section_text(r#"0;[Red]-0;"unterminated"#),
+            None
+        );
+        assert_eq!(
+            literal_zero_section_text(r#"[=0]"zero";[>0]"positive";"negative""#),
+            None
+        );
+        assert_eq!(literal_zero_section_text(r#"0;-0;[h]" hours""#), None);
+    }
 }
