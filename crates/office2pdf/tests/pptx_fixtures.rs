@@ -1382,6 +1382,34 @@ fn hard_break_mixed_size_seat_smoke() {
 }
 
 // ---------------------------------------------------------------------------
+// hard_break_table_row_min_height.pptx — one 20pt-high PowerPoint table row
+// containing nine hard-broken 6pt Arial lines with zero cell margins. The
+// declared `a:tr/@h` is a floor: native PowerPoint grows the row and keeps all
+// nine lines in the PDF text layer (issue #1253).
+// ---------------------------------------------------------------------------
+
+#[test]
+fn hard_break_table_row_grows_past_its_declared_height() {
+    let text = pdf_text("hard_break_table_row_min_height.pptx");
+    let compact: String = text.split_whitespace().collect();
+    let mut previous_position: Option<usize> = None;
+
+    for number in 1..=9 {
+        let line = format!("Line-{number}");
+        let position = compact.find(&line).unwrap_or_else(|| {
+            panic!("a content-grown PowerPoint table row must retain {line}; got:\n{text}")
+        });
+        if let Some(previous) = previous_position {
+            assert!(
+                position > previous,
+                "content-grown rows must paint hard-broken lines in source order; got:\n{text}"
+            );
+        }
+        previous_position = Some(position);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Paragraph mark face (issue #1176)
 // ---------------------------------------------------------------------------
 

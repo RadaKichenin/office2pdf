@@ -1131,10 +1131,11 @@ pub struct TableRow {
     /// The row's fixed height in points, from a `w:trHeight` whose
     /// `@w:hRule` is `exact`.
     pub height: Option<f64>,
-    /// The row's floor in points, from a `w:trHeight` whose `@w:hRule` is
-    /// `atLeast` — the schema's default when the attribute is absent. The row
-    /// is at least this tall and grows past it for taller content, which is
-    /// what separates it from [`Self::height`] (issue #965).
+    /// The row's floor in points. Word supplies it through a `w:trHeight`
+    /// whose `@w:hRule` is `atLeast` (the schema default); PowerPoint supplies
+    /// the same growable constraint through `a:tr/@h`. The row is at least
+    /// this tall and grows past it for taller content, which separates it from
+    /// [`Self::height`] (issues #965 and #1253).
     pub minimum_height: Option<f64>,
 }
 
