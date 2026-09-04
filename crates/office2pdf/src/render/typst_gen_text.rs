@@ -603,13 +603,13 @@ impl RunLineMetrics<'_> {
     }
 }
 
-/// PowerPoint line metrics for an automatically wrapped paragraph whose runs
-/// declare different sizes.
+/// PowerPoint line metrics evaluated at a physical line's own declared size.
 ///
 /// The paragraph-wide family set still decides the baseline share, preserving
-/// the existing font model. Only the size varies per run, allowing Typst to
-/// derive each physical line from the largest run that actually landed there
-/// instead of imposing the paragraph maximum on every line (#1329).
+/// the existing font model. An automatically wrapped paragraph attaches the
+/// point edges to each run so Typst chooses the largest run that landed on the
+/// line (#1329); an explicit hard-break stack asks for the split at the line's
+/// already-known maximum size (#1252).
 #[derive(Clone, Copy)]
 struct PowerPointRunLineMetrics {
     plain_ascent_em: f64,
@@ -617,6 +617,14 @@ struct PowerPointRunLineMetrics {
 }
 
 impl PowerPointRunLineMetrics {
+    fn for_paragraph(runs: &[Run], style: &ParagraphStyle) -> Option<Self> {
+        let (plain_ascent_em, line_spacing) = powerpoint_paragraph_line_model(runs, style)?;
+        Some(Self {
+            plain_ascent_em,
+            line_spacing,
+        })
+    }
+
     fn for_mixed_declared_sizes(runs: &[Run], style: &ParagraphStyle) -> Option<Self> {
         let visible_runs: Vec<&Run> = runs
             .iter()
@@ -634,21 +642,44 @@ impl PowerPointRunLineMetrics {
             return None;
         }
 
-        let (plain_ascent_em, line_spacing) = powerpoint_paragraph_line_model(runs, style)?;
-        Some(Self {
-            plain_ascent_em,
-            line_spacing,
-        })
+        Self::for_paragraph(runs, style)
     }
 
     fn line_box_pt(self, run: &Run) -> Option<(f64, f64)> {
-        let font_size_pt: f64 = run.style.font_size?;
+        Some(self.line_box_pt_for_size(run.style.font_size?))
+    }
+
+    fn line_box_pt_for_size(self, font_size_pt: f64) -> (f64, f64) {
         let (top_em, bottom_em) = powerpoint_percentage_line_box_em(
             self.plain_ascent_em,
             font_size_pt,
             self.line_spacing,
         );
-        Some((top_em * font_size_pt, bottom_em * font_size_pt))
+        (top_em * font_size_pt, bottom_em * font_size_pt)
+    }
+}
+
+/// The line-box model used by the measured stack for explicit slide breaks.
+///
+/// Plain lines round their baseline seat independently at the size of the
+/// physical line they hold (#1252). Explicit spacing keeps the existing
+/// paragraph-relative model: percentage spacing has separate native-export
+/// questions tracked by #1254, and absolute spacing is outside #1252's plain
+/// no-`lnSpc` probe.
+#[derive(Clone, Copy)]
+enum PowerPointHardBreakLineMetrics {
+    PerLine(PowerPointRunLineMetrics),
+    Paragraph { top_em: f64, bottom_em: f64 },
+}
+
+impl PowerPointHardBreakLineMetrics {
+    fn line_box_pt(self, font_size_pt: f64) -> (f64, f64) {
+        match self {
+            Self::PerLine(metrics) => metrics.line_box_pt_for_size(font_size_pt),
+            Self::Paragraph { top_em, bottom_em } => {
+                (top_em * font_size_pt, bottom_em * font_size_pt)
+            }
+        }
     }
 }
 
@@ -673,9 +704,11 @@ impl PowerPointRunLineMetrics {
 ///
 /// The seat inside that line is measured in whole points rather than in em.
 /// Paragraph-wide callers therefore resolve it against the largest declared
-/// size. An automatically wrapped mixed-size paragraph instead attaches the
-/// resulting point edges to each run, so Typst chooses the largest run that
-/// actually lands on each physical line.
+/// size. An automatically wrapped mixed-size paragraph attaches the resulting
+/// point edges to each run, while an explicitly hard-broken stack resolves the
+/// same seat at each line's own maximum size. Both let the physical line use
+/// the size it actually holds instead of rescaling the paragraph maximum's
+/// already-rounded ratio (#1252).
 ///
 /// `None` when the paragraph carries its own line box or when the font's
 /// metrics are unknown. An absolute `a:spcPts` rule is expressed as the
@@ -2480,8 +2513,11 @@ pub(super) fn generate_runs_with_tabs(
 ///
 /// Every line owns a 1.2em box at **its own** size, so a break advances by the
 /// preceding line's descent plus the following line's seat and a column of
-/// same-size lines paces at exactly `1.2 x size`. Typst would otherwise pace
-/// the stack by the *face's* edges, which are not PowerPoint's box.
+/// same-size lines paces at exactly `1.2 x size`. The seat is rounded at that
+/// line's size too; rounding once at the paragraph maximum and rescaling its
+/// ratio leaves a mixed-size break up to 0.38pt out (#1252). Typst would
+/// otherwise pace the stack by the *face's* edges, which are not PowerPoint's
+/// box.
 ///
 /// A native PowerPoint 16 export of nine-line hard-broken columns measures the
 /// same-size case at `1.2 x size` for every size probed — 6, 6.5, 8, 8.5, 9,
@@ -2532,7 +2568,7 @@ pub(super) fn generate_powerpoint_runs_with_tabs(
         inline(out, None);
         return;
     };
-    let Some((measure_pt, top_em, bottom_em)) =
+    let Some((measure_pt, line_metrics)) =
         powerpoint_hard_break_stack_settings(&lines, runs, style, available_measure_pt)
     else {
         inline(out, Some(&lines));
@@ -2564,8 +2600,8 @@ pub(super) fn generate_powerpoint_runs_with_tabs(
     };
     for (line, source) in lines.iter().zip(&line_sources) {
         let line_size_pt: f64 = line.max_font_size_pt();
-        let top_pt: f64 = top_em * line_size_pt;
-        let line_height_pt: f64 = top_pt + bottom_em * line_size_pt;
+        let (top_pt, bottom_pt) = line_metrics.line_box_pt(line_size_pt);
+        let line_height_pt: f64 = top_pt + bottom_pt;
         let _ = writeln!(
             out,
             "  box(width: {width}pt, height: {height}pt)[#place({anchor}, dy: {top}pt)[#text(top-edge: \"baseline\", bottom-edge: \"baseline\")[{source}]]],",
@@ -2594,7 +2630,7 @@ fn powerpoint_hard_break_stack_settings(
     runs: &[Run],
     style: &ParagraphStyle,
     available_measure_pt: Option<f64>,
-) -> Option<(f64, f64, f64)> {
+) -> Option<(f64, PowerPointHardBreakLineMetrics)> {
     let measure_pt: f64 = available_measure_pt
         .map(|measure| {
             measure
@@ -2603,14 +2639,21 @@ fn powerpoint_hard_break_stack_settings(
                 - style.indent_first_line.unwrap_or(0.0).max(0.0)
         })
         .filter(|measure| *measure > 0.0)?;
-    let (top_em, bottom_em): (f64, f64) = powerpoint_paragraph_line_box_em(runs, style)?;
+    let line_metrics = if style.line_spacing.is_none() {
+        PowerPointHardBreakLineMetrics::PerLine(PowerPointRunLineMetrics::for_paragraph(
+            runs, style,
+        )?)
+    } else {
+        let (top_em, bottom_em): (f64, f64) = powerpoint_paragraph_line_box_em(runs, style)?;
+        PowerPointHardBreakLineMetrics::Paragraph { top_em, bottom_em }
+    };
     if !lines
         .iter()
         .all(|line| powerpoint_hard_break_line_fits(line, measure_pt))
     {
         return None;
     }
-    Some((measure_pt, top_em, bottom_em))
+    Some((measure_pt, line_metrics))
 }
 
 /// Emit the paragraph as ordinary inline markup, giving every hard-broken line

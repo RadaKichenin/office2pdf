@@ -1368,6 +1368,20 @@ fn hard_break_wrapped_line_advance_smoke() {
 }
 
 // ---------------------------------------------------------------------------
+// hard_break_mixed_size_seat.pptx — a dedicated minimal probe containing a
+// caption and nine alternating 20pt/10pt Arial lines with no `<a:lnSpc>`
+// (issue #1252). PowerPoint rounds the seat of each physical line at that
+// line's own size. The paragraph-wide split used to round at 20pt once and
+// rescale the ratio, emitting a 9.5pt seat for every 10pt line instead of the
+// independently rounded 10pt seat.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn hard_break_mixed_size_seat_smoke() {
+    assert_produces_valid_pdf("hard_break_mixed_size_seat.pptx");
+}
+
+// ---------------------------------------------------------------------------
 // Paragraph mark face (issue #1176)
 // ---------------------------------------------------------------------------
 
