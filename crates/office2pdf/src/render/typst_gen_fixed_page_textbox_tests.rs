@@ -264,16 +264,11 @@ fn test_fixed_page_text_box_ordered_list_preserves_textbox_styling() {
     // A slide list paces on PowerPoint's line box, scaled by the declared
     // `a:lnSpc`: 1.2em at 24pt is 28.8pt, and 1.5 line spacing makes each
     // item's box 43.2pt — which is the advance, since nothing is emitted
-    // between items that declare no spacing (issue #934). The percentage grows
-    // the line from its top, so the face keeps its plain descent gap and the
-    // ascent takes the whole 14.4pt the box gains (issue #1020), and the seat
-    // lands on a whole point (issue #1074). The expectation is derived rather
-    // than spelled out because the default face decides the share.
+    // between items that declare no spacing (issue #934). Above 100%, the
+    // percentage uses PowerPoint's face-independent 0.9em ascent share and the
+    // seat lands on a whole point (issues #1074, #1254).
     let size_pt: f64 = 24.0;
-    let (share_top, _) =
-        crate::render::pdf::powerpoint_line_box_em(crate::defaults::TYPST_DEFAULT_FONT_FAMILY)
-            .expect("the default family's line metrics must resolve");
-    let seat_pt: f64 = ((1.5 * 1.2 - (1.2 - share_top)) * size_pt).round();
+    let seat_pt: f64 = (0.9 * 1.5 * size_pt).round();
     let expected: String = format!(
         "#set text(top-edge: {}pt, bottom-edge: -{}pt)",
         crate::render::typst_gen::fmt::format_f64(seat_pt),
@@ -2617,10 +2612,10 @@ fn slide_line_spacing_scales_proportionally() {
 }
 
 #[test]
-fn slide_line_spacing_keeps_the_descent_gap_and_moves_the_ascent() {
-    // A percentage resizes the line from its top: the gap the face keeps below
-    // its baseline is the same whatever the percentage, and the ascent side
-    // absorbs the whole change.
+fn slide_line_spacing_below_100_percent_keeps_the_descent_gap() {
+    // At 85%, PowerPoint resizes the line from its top: the gap the face keeps
+    // below its baseline is the same, and the ascent side absorbs the whole
+    // change.
     //
     // Measured on native PowerPoint 16.112 exports. Arial 38pt in a plain box
     // drops its first baseline 36.96pt below the content top and 30.00pt under
@@ -2685,6 +2680,95 @@ fn slide_line_spacing_keeps_the_descent_gap_and_moves_the_ascent() {
     assert!(
         scaled.contains("leading: 0pt"),
         "the advance is carried by the box, not by leading: {scaled}"
+    );
+}
+
+#[test]
+fn slide_line_spacing_above_100_percent_scales_both_sides() {
+    // A native PowerPoint 16.112 probe covers Arial at 6-14pt and 125%, 150%,
+    // and 200%. A second 150% probe substitutes Georgia, Verdana, and Times New
+    // Roman. Every cell seats the baseline at round(0.9em * percent), whatever
+    // the face's plain-line share; keeping the plain descent gap misses by up
+    // to two points (#1254).
+    let plain_top_candidates: [f64; 2] = [
+        crate::render::pdf::powerpoint_line_box_split_em([(1854.0 / 2048.0, 434.0 / 2048.0)])
+            .expect("Arial's positive ascent splits the line box")
+            .0,
+        crate::render::pdf::powerpoint_line_box_split_em([(1878.0 / 2048.0, 449.0 / 2048.0)])
+            .expect("Georgia's positive ascent splits the line box")
+            .0,
+    ];
+
+    for plain_top_em in plain_top_candidates {
+        for percent in [1.25_f64, 1.5, 2.0] {
+            for font_size_pt in [6.0_f64, 8.0, 9.0, 10.0, 11.0, 12.0, 14.0] {
+                let (top_em, bottom_em) =
+                    crate::render::typst_gen::text::powerpoint_percentage_line_box_em(
+                        plain_top_em,
+                        font_size_pt,
+                        percent,
+                    );
+                let expected_top_pt: f64 = (0.9 * percent * font_size_pt).round();
+                let expected_advance_pt: f64 =
+                    crate::render::pdf::POWERPOINT_LINE_HEIGHT_FACTOR * percent * font_size_pt;
+
+                assert!(
+                    (top_em * font_size_pt - expected_top_pt).abs() < 1e-6,
+                    "a {font_size_pt}pt line at {}% must use PowerPoint's \
+                     face-independent expanded seat: expected {expected_top_pt}pt, got {}pt",
+                    percent * 100.0,
+                    top_em * font_size_pt
+                );
+                assert!(
+                    ((top_em + bottom_em) * font_size_pt - expected_advance_pt).abs() < 1e-6,
+                    "the expanded split must retain the full {}% advance: \
+                     expected {expected_advance_pt}pt, got {}pt",
+                    percent * 100.0,
+                    (top_em + bottom_em) * font_size_pt
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn slide_line_spacing_rounds_to_whole_percent_before_choosing_the_regime() {
+    // Native PowerPoint keeps 100.499% byte-layout-equivalent to 100%, then
+    // renders 100.500% exactly like 101%. OOXML stores thousandths of a
+    // percent, but the layout engine chooses its rule at whole-percent
+    // precision (#1254).
+    let plain_top_em: f64 =
+        crate::render::pdf::powerpoint_line_box_split_em([(1854.0 / 2048.0, 434.0 / 2048.0)])
+            .expect("Arial's positive ascent splits the line box")
+            .0;
+    let font_size_pt: f64 = 10.0;
+    let at_100 = crate::render::typst_gen::text::powerpoint_percentage_line_box_em(
+        plain_top_em,
+        font_size_pt,
+        1.0,
+    );
+    let below_boundary = crate::render::typst_gen::text::powerpoint_percentage_line_box_em(
+        plain_top_em,
+        font_size_pt,
+        1.00499,
+    );
+    let at_101 = crate::render::typst_gen::text::powerpoint_percentage_line_box_em(
+        plain_top_em,
+        font_size_pt,
+        1.01,
+    );
+    let at_boundary = crate::render::typst_gen::text::powerpoint_percentage_line_box_em(
+        plain_top_em,
+        font_size_pt,
+        1.005,
+    );
+
+    assert_eq!(below_boundary, at_100, "100.499% must round down to 100%");
+    assert_eq!(at_boundary, at_101, "100.500% must round up to 101%");
+    assert_eq!(
+        at_101.0 * font_size_pt,
+        9.0,
+        "the 101% regime must use the expanded 0.9em seat"
     );
 }
 
@@ -3216,14 +3300,12 @@ fn powerpoint_hard_break_advance_clears_the_line_above_it() {
 /// owning the whole scaled box would give 18.00pt, and the paragraph carrying
 /// no multiplier at all 12.60pt, so this stack has to land well clear of both.
 ///
-/// It lands 1.00pt short of the export, which is two open defects and not this
-/// one: the paragraph-wide seat share of #1252, and the percentage split of
-/// #1254. The corrected 0.97238em share (#1176) makes the second of those
-/// exactly measurable here — scaling *both* sides by the percentage predicts
-/// `4.5 + 15 = 19.50pt`, the export's own figure, where holding the descent
-/// fixed and resizing from the top gives the 18.50pt below. The same
-/// both-sides rule misses the 85% Arial 38pt cell of #1024 by a whole point,
-/// so it is not a change to make from one cell.
+/// #1254's measured above-100% split makes a per-line evaluation predict the
+/// export exactly: the 12.5pt line leaves 5.5pt below its baseline and the 10pt
+/// line seats the next one 14pt from its top, totalling 19.50pt. This explicit
+/// spacing stack retains its paragraph-relative evaluation because #1252 only
+/// established per-line rounding for plain no-`lnSpc` lines; the tolerance
+/// therefore covers that remaining scope boundary, not the percentage split.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn powerpoint_hard_break_preserves_proportional_line_spacing() {
@@ -3285,7 +3367,7 @@ fn powerpoint_hard_break_preserves_proportional_line_spacing() {
     let advance_pt: f64 = small_baseline - large_baseline;
     assert!(
         (advance_pt - 19.5).abs() < 1.05,
-        "the scaled box must carry the break to within #1252 and #1254's \
+        "the scaled box must carry the break to within #1252's paragraph-relative \
          residual of the export's 19.5pt: {large_baseline}, {small_baseline}\n{}",
         output.source
     );

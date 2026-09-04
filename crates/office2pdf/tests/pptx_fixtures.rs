@@ -1216,6 +1216,62 @@ fn hard_break_line_advance_smoke() {
 }
 
 // ---------------------------------------------------------------------------
+// percentage_line_spacing_expanded.pptx — a minimal native PowerPoint probe
+// with a top-anchored 10pt Arial paragraph at 150% line spacing. Its four hard
+// broken lines isolate the above-100% baseline regime from wrapping and other
+// slide layout behavior (issue #1254).
+// ---------------------------------------------------------------------------
+
+#[test]
+fn percentage_line_spacing_expanded_keeps_the_source_ratio_and_seat() {
+    let data = load_fixture("percentage_line_spacing_expanded.pptx");
+    let (document, _warnings) = PptxParser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let paragraph = document
+        .pages
+        .iter()
+        .filter_map(|page| match page {
+            Page::Fixed(page) => Some(page),
+            _ => None,
+        })
+        .flat_map(|page| page.elements.iter())
+        .filter_map(|element| match &element.kind {
+            FixedElementKind::TextBox(text_box) => Some(text_box),
+            _ => None,
+        })
+        .flat_map(|text_box| text_box.content.iter())
+        .find_map(|block| match block {
+            Block::Paragraph(paragraph)
+                if paragraph.runs.iter().any(|run| run.text == "Hxg10a") =>
+            {
+                Some(paragraph)
+            }
+            _ => None,
+        })
+        .expect("fixture should contain its 10pt / 150% body paragraph");
+
+    assert!(
+        matches!(
+            paragraph.style.line_spacing,
+            Some(LineSpacing::Proportional(factor)) if (factor - 1.5).abs() < f64::EPSILON
+        ),
+        "the fixture must preserve its 150% a:spcPct value: {:?}",
+        paragraph.style.line_spacing
+    );
+
+    let source = generate_typst(&document).unwrap().source;
+    assert!(
+        source.contains("#set text(top-edge: 14pt, bottom-edge: -4pt)"),
+        "the 10pt / 150% line must use PowerPoint's measured 14pt seat and 18pt advance: {source}"
+    );
+}
+
+#[test]
+fn percentage_line_spacing_expanded_smoke() {
+    assert_produces_valid_pdf("percentage_line_spacing_expanded.pptx");
+}
+
+// ---------------------------------------------------------------------------
 // run-fill-alpha.pptx
 //
 // Three 32pt Arial lines over one `32D6A6` backdrop, declaring the same black
