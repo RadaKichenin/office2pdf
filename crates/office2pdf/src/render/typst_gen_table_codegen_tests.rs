@@ -1605,6 +1605,116 @@ fn test_slide_table_cell_uses_the_powerpoint_line_box() {
     }
 }
 
+fn tracked_slide_table_cell_source(
+    text: &str,
+    alignment: Alignment,
+    spacing_pt: Option<f64>,
+) -> String {
+    let cell = TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle {
+                alignment: Some(alignment),
+                ..ParagraphStyle::default()
+            },
+            runs: vec![Run {
+                text: text.to_string(),
+                style: TextStyle {
+                    font_family: Some("Arial".to_string()),
+                    font_size: Some(18.0),
+                    letter_spacing: spacing_pt,
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })],
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            minimum_height: None,
+            cells: vec![cell],
+            height: Some(36.0),
+        }],
+        column_widths: vec![120.0],
+        ..Table::default()
+    };
+
+    generate_typst(&make_doc(vec![make_fixed_page(
+        720.0,
+        540.0,
+        vec![FixedElement {
+            x: 72.0,
+            y: 72.0,
+            width: 120.0,
+            height: 36.0,
+            kind: FixedElementKind::Table(table),
+        }],
+    )]))
+    .unwrap()
+    .source
+}
+
+/// PowerPoint places tracked table-cell lines by a width that includes one
+/// `a:rPr/@spc` after the final glyph, just like a slide text box.
+///
+/// A native PowerPoint 16.112 one-factor probe varied only the tracking on the
+/// seven-glyph headers in `table_test2.pptx`; its no-patch re-zip control was
+/// layout-identical. The centred header's origin moved from 368.3125pt to
+/// 364.8125, 357.8125 and 347.3125pt at 1, 3 and 6pt tracking: half of the
+/// full 7, 21 and 42pt tracked widths. The right-aligned header moved from
+/// 249.325pt to 242.325, 228.325 and 207.325pt: those widths in full. Typst
+/// tracks only between glyphs, so both alignments need the final run's own
+/// tracking appended to the line (issue #1256).
+#[test]
+fn tracked_slide_table_cell_reserves_its_trailing_letter_space() {
+    for alignment in [Alignment::Center, Alignment::Right] {
+        for spacing_pt in [1.0, 3.0, 6.0] {
+            let source = tracked_slide_table_cell_source("Header2", alignment, Some(spacing_pt));
+            let expected = format!("]#h({spacing_pt}pt)");
+
+            assert!(
+                source.contains(&expected),
+                "{alignment:?} table-cell text must reserve its final {spacing_pt}pt \
+                 letter-space: {source}"
+            );
+        }
+    }
+}
+
+/// A left-aligned line starts at the content edge regardless of its measured
+/// width, and an untracked line has no reserve to make. Neither case may emit
+/// a spacer that could push a borderline table-cell line into a wrap.
+#[test]
+fn left_or_untracked_slide_table_cell_reserves_no_trailing_space() {
+    for (alignment, spacing_pt) in [
+        (Alignment::Left, Some(3.0)),
+        (Alignment::Center, None),
+        (Alignment::Center, Some(0.0)),
+    ] {
+        let source = tracked_slide_table_cell_source("Header2", alignment, spacing_pt);
+        assert!(
+            !source.contains("]#h("),
+            "no trailing reserve is due for {alignment:?} at {spacing_pt:?}: {source}"
+        );
+    }
+}
+
+/// Every visible physical line owns the final glyph's tracking. A hard break
+/// must not transfer the first line's reserve to the paragraph's last line or
+/// omit the last line's reserve after enabling the shared per-break path.
+#[test]
+fn hard_broken_tracked_slide_table_cell_reserves_each_line_space() {
+    let source = tracked_slide_table_cell_source("FIRST\nSECOND", Alignment::Center, Some(3.0));
+
+    assert_eq!(
+        source.matches("]#h(3pt)").count(),
+        2,
+        "both hard-broken table-cell lines must reserve their own final \
+         letter-space: {source}"
+    );
+}
+
 /// A hard break inside a centred slide-table cell clears the taller line above
 /// it, not just the following line's own box.
 ///
