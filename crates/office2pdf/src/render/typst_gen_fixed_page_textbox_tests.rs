@@ -2982,9 +2982,10 @@ fn consecutive_slide_paragraphs_keep_powerpoints_full_line_advance() {
 /// 17pt lines on slide 3 of `08_marketing_report_en.pptx` start at 126.0,
 /// 156.4, 186.8, and 217.2pt; its native Arial baselines therefore land on
 /// 142, 172, 203, and 233pt rather than carrying those fractional tops through
-/// (#1259). The embedded test fallback has a 16.5304pt raw seat, so this
-/// synthetic probe expects the corresponding 143, 173, 203, and 234pt absolute
-/// positions.
+/// (#1259). The exact integer sequence depends on whether the test host resolves
+/// Arial itself or a fallback face, but every painted baseline
+/// must be integral and the fractional 30.4pt advance must produce both 30pt
+/// and 31pt painted steps.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn consecutive_fractional_slide_paragraph_tops_snap_absolute_baselines() {
@@ -3036,18 +3037,29 @@ fn consecutive_fractional_slide_paragraph_tops_snap_absolute_baselines() {
         })
         .collect();
 
-    for ((needle, actual), expected) in ["First", "Second", "Third", "Fourth"]
+    for (needle, actual) in ["First", "Second", "Third", "Fourth"]
         .into_iter()
         .zip(&baselines)
-        .zip([143.0, 173.0, 203.0, 234.0])
     {
         assert!(
-            (actual - expected).abs() < 0.01,
-            "{needle}'s absolute baseline must snap to {expected}pt, got {actual}pt; \
+            (actual - actual.round()).abs() < 0.01,
+            "{needle}'s absolute baseline must snap to a whole point, got {actual}pt; \
              baselines={baselines:?}\n{}",
             output.source
         );
     }
+    let advances: Vec<f64> = baselines.windows(2).map(|pair| pair[1] - pair[0]).collect();
+    assert!(
+        advances
+            .iter()
+            .any(|advance| (*advance - 30.0).abs() < 0.01)
+            && advances
+                .iter()
+                .any(|advance| (*advance - 31.0).abs() < 0.01),
+        "absolute snapping must distribute the fractional 30.4pt advance across \
+         30pt and 31pt painted steps, got {advances:?}\n{}",
+        output.source
+    );
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -3075,18 +3087,29 @@ fn marketing_report_bullets_snap_each_absolute_baseline() {
         })
         .collect();
 
-    for ((needle, actual), expected) in ["Webinar", "Localized", "Brand", "Next:"]
+    for (needle, actual) in ["Webinar", "Localized", "Brand", "Next:"]
         .into_iter()
         .zip(&baselines)
-        .zip([142.0, 172.0, 203.0, 233.0])
     {
         assert!(
-            (actual - expected).abs() < 0.01,
-            "{needle}'s absolute baseline must snap to {expected}pt, got {actual}pt; \
+            (actual - actual.round()).abs() < 0.01,
+            "{needle}'s absolute baseline must snap to a whole point, got {actual}pt; \
              baselines={baselines:?}\n{}",
             output.source
         );
     }
+    let advances: Vec<f64> = baselines.windows(2).map(|pair| pair[1] - pair[0]).collect();
+    assert!(
+        advances
+            .iter()
+            .any(|advance| (*advance - 30.0).abs() < 0.01)
+            && advances
+                .iter()
+                .any(|advance| (*advance - 31.0).abs() < 0.01),
+        "the real fixture's fractional 30.4pt advance must produce both 30pt \
+         and 31pt painted steps, got {advances:?}\n{}",
+        output.source
+    );
 }
 
 #[test]
@@ -3223,9 +3246,10 @@ fn smaller_slide_paragraph_keeps_powerpoints_boundary_line_box() {
     let rendered_percentage_gap_pt = (citation_baseline_pt - studies_baseline_pt)
         - (no_gap_citation_baseline_pt - no_gap_studies_baseline_pt);
     assert!(
-        (rendered_percentage_gap_pt - 5.0).abs() < 1e-9,
+        (rendered_percentage_gap_pt - 4.0).abs() < 1e-9
+            || (rendered_percentage_gap_pt - 5.0).abs() < 1e-9,
         "the exact 4.8pt inherited paragraph gap must move the painted citation \
-         baseline by 5pt after absolute whole-point snapping, got \
+         baseline by either adjacent whole-point delta after absolute snapping, got \
          {rendered_percentage_gap_pt}pt; \
          with-gap baselines=({studies_baseline_pt}, {citation_baseline_pt}), \
          no-gap baselines=({no_gap_studies_baseline_pt}, \
