@@ -1,0 +1,343 @@
+{
+  "clusters": [
+    {
+      "area_pt2": 704.16,
+      "bbox_pt": {
+        "height": 23.76,
+        "width": 68.16,
+        "x": 252.48,
+        "y": 101.04
+      },
+      "disposition": {
+        "difference_id": "page-9-title-font-native-match",
+        "kind": "reference-exporter-difference",
+        "note": "All material clusters are confined to title glyphs. Native Microsoft PowerPoint and office2pdf use the source Gill Sans MT Bold, while the LibreOffice GT embeds Noto Sans. The corrected title rule creates no material cluster."
+      },
+      "id": "p9-711169e6f102",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 391.0464,
+      "bbox_pt": {
+        "height": 23.04,
+        "width": 25.2,
+        "x": 184.08,
+        "y": 101.52
+      },
+      "disposition": {
+        "difference_id": "page-9-title-font-native-match",
+        "kind": "reference-exporter-difference",
+        "note": "All material clusters are confined to title glyphs. Native Microsoft PowerPoint and office2pdf use the source Gill Sans MT Bold, while the LibreOffice GT embeds Noto Sans. The corrected title rule creates no material cluster."
+      },
+      "id": "p9-6f42d2c7d995",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 369.9648,
+      "bbox_pt": {
+        "height": 23.04,
+        "width": 28.56,
+        "x": 153.6,
+        "y": 101.52
+      },
+      "disposition": {
+        "difference_id": "page-9-title-font-native-match",
+        "kind": "reference-exporter-difference",
+        "note": "All material clusters are confined to title glyphs. Native Microsoft PowerPoint and office2pdf use the source Gill Sans MT Bold, while the LibreOffice GT embeds Noto Sans. The corrected title rule creates no material cluster."
+      },
+      "id": "p9-0b7648c9058d",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 317.3184,
+      "bbox_pt": {
+        "height": 23.04,
+        "width": 28.32,
+        "x": 109.2,
+        "y": 66.96
+      },
+      "disposition": {
+        "difference_id": "page-9-title-font-native-match",
+        "kind": "reference-exporter-difference",
+        "note": "All material clusters are confined to title glyphs. Native Microsoft PowerPoint and office2pdf use the source Gill Sans MT Bold, while the LibreOffice GT embeds Noto Sans. The corrected title rule creates no material cluster."
+      },
+      "id": "p9-896168855816",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 282.4128,
+      "bbox_pt": {
+        "height": 23.52,
+        "width": 18.96,
+        "x": 235.44,
+        "y": 101.28
+      },
+      "disposition": {
+        "difference_id": "page-9-title-font-native-match",
+        "kind": "reference-exporter-difference",
+        "note": "All material clusters are confined to title glyphs. Native Microsoft PowerPoint and office2pdf use the source Gill Sans MT Bold, while the LibreOffice GT embeds Noto Sans. The corrected title rule creates no material cluster."
+      },
+      "id": "p9-548811e0cf39",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 224.7552,
+      "bbox_pt": {
+        "height": 23.04,
+        "width": 17.76,
+        "x": 105.6,
+        "y": 101.52
+      },
+      "disposition": {
+        "difference_id": "page-9-title-font-native-match",
+        "kind": "reference-exporter-difference",
+        "note": "All material clusters are confined to title glyphs. Native Microsoft PowerPoint and office2pdf use the source Gill Sans MT Bold, while the LibreOffice GT embeds Noto Sans. The corrected title rule creates no material cluster."
+      },
+      "id": "p9-a8f6bf23b708",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 168.4224,
+      "bbox_pt": {
+        "height": 23.04,
+        "width": 20.4,
+        "x": 210.0,
+        "y": 101.52
+      },
+      "disposition": {
+        "difference_id": "page-9-title-font-native-match",
+        "kind": "reference-exporter-difference",
+        "note": "All material clusters are confined to title glyphs. Native Microsoft PowerPoint and office2pdf use the source Gill Sans MT Bold, while the LibreOffice GT embeds Noto Sans. The corrected title rule creates no material cluster."
+      },
+      "id": "p9-97c0fac32c50",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 166.5792,
+      "bbox_pt": {
+        "height": 21.84,
+        "width": 16.8,
+        "x": 321.12,
+        "y": 101.76
+      },
+      "disposition": {
+        "difference_id": "page-9-title-font-native-match",
+        "kind": "reference-exporter-difference",
+        "note": "All material clusters are confined to title glyphs. Native Microsoft PowerPoint and office2pdf use the source Gill Sans MT Bold, while the LibreOffice GT embeds Noto Sans. The corrected title rule creates no material cluster."
+      },
+      "id": "p9-9d63e4a662e3",
+      "region": "top"
+    },
+    {
+      "area_pt2": 161.1072,
+      "bbox_pt": {
+        "height": 23.04,
+        "width": 11.52,
+        "x": 91.44,
+        "y": 101.52
+      },
+      "disposition": {
+        "difference_id": "page-9-title-font-native-match",
+        "kind": "reference-exporter-difference",
+        "note": "All material clusters are confined to title glyphs. Native Microsoft PowerPoint and office2pdf use the source Gill Sans MT Bold, while the LibreOffice GT embeds Noto Sans. The corrected title rule creates no material cluster."
+      },
+      "id": "p9-df09b561ed2d",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 86.9184,
+      "bbox_pt": {
+        "height": 18.96,
+        "width": 7.44,
+        "x": 78.72,
+        "y": 105.6
+      },
+      "disposition": {
+        "difference_id": "page-9-title-font-native-match",
+        "kind": "reference-exporter-difference",
+        "note": "All material clusters are confined to title glyphs. Native Microsoft PowerPoint and office2pdf use the source Gill Sans MT Bold, while the LibreOffice GT embeds Noto Sans. The corrected title rule creates no material cluster."
+      },
+      "id": "p9-a4cc906034f4",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 80.0064,
+      "bbox_pt": {
+        "height": 23.04,
+        "width": 17.52,
+        "x": 96.0,
+        "y": 66.96
+      },
+      "disposition": {
+        "difference_id": "page-9-title-font-native-match",
+        "kind": "reference-exporter-difference",
+        "note": "All material clusters are confined to title glyphs. Native Microsoft PowerPoint and office2pdf use the source Gill Sans MT Bold, while the LibreOffice GT embeds Noto Sans. The corrected title rule creates no material cluster."
+      },
+      "id": "p9-ca5322a638d1",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 57.5424,
+      "bbox_pt": {
+        "height": 23.04,
+        "width": 16.8,
+        "x": 135.84,
+        "y": 101.52
+      },
+      "disposition": {
+        "difference_id": "page-9-title-font-native-match",
+        "kind": "reference-exporter-difference",
+        "note": "All material clusters are confined to title glyphs. Native Microsoft PowerPoint and office2pdf use the source Gill Sans MT Bold, while the LibreOffice GT embeds Noto Sans. The corrected title rule creates no material cluster."
+      },
+      "id": "p9-5d2ab87823d1",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 55.008,
+      "bbox_pt": {
+        "height": 22.8,
+        "width": 7.68,
+        "x": 124.08,
+        "y": 101.76
+      },
+      "disposition": {
+        "difference_id": "page-9-title-font-native-match",
+        "kind": "reference-exporter-difference",
+        "note": "All material clusters are confined to title glyphs. Native Microsoft PowerPoint and office2pdf use the source Gill Sans MT Bold, while the LibreOffice GT embeds Noto Sans. The corrected title rule creates no material cluster."
+      },
+      "id": "p9-8dc723a3e4e2",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 31.5072,
+      "bbox_pt": {
+        "height": 5.52,
+        "width": 7.68,
+        "x": 254.16,
+        "y": 118.56
+      },
+      "disposition": {
+        "difference_id": "page-9-title-font-native-match",
+        "kind": "reference-exporter-difference",
+        "note": "All material clusters are confined to title glyphs. Native Microsoft PowerPoint and office2pdf use the source Gill Sans MT Bold, while the LibreOffice GT embeds Noto Sans. The corrected title rule creates no material cluster."
+      },
+      "id": "p9-99f3fda72ee5",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 30.0672,
+      "bbox_pt": {
+        "height": 4.32,
+        "width": 6.96,
+        "x": 222.72,
+        "y": 110.16
+      },
+      "disposition": {
+        "difference_id": "page-9-title-font-native-match",
+        "kind": "reference-exporter-difference",
+        "note": "All material clusters are confined to title glyphs. Native Microsoft PowerPoint and office2pdf use the source Gill Sans MT Bold, while the LibreOffice GT embeds Noto Sans. The corrected title rule creates no material cluster."
+      },
+      "id": "p9-d4e0c7125ff4",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 28.3968,
+      "bbox_pt": {
+        "height": 4.08,
+        "width": 6.96,
+        "x": 223.2,
+        "y": 101.76
+      },
+      "disposition": {
+        "difference_id": "page-9-title-font-native-match",
+        "kind": "reference-exporter-difference",
+        "note": "All material clusters are confined to title glyphs. Native Microsoft PowerPoint and office2pdf use the source Gill Sans MT Bold, while the LibreOffice GT embeds Noto Sans. The corrected title rule creates no material cluster."
+      },
+      "id": "p9-0bc8ef45fca2",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 22.9824,
+      "bbox_pt": {
+        "height": 5.04,
+        "width": 4.56,
+        "x": 215.04,
+        "y": 105.6
+      },
+      "disposition": {
+        "difference_id": "page-9-title-font-native-match",
+        "kind": "reference-exporter-difference",
+        "note": "All material clusters are confined to title glyphs. Native Microsoft PowerPoint and office2pdf use the source Gill Sans MT Bold, while the LibreOffice GT embeds Noto Sans. The corrected title rule creates no material cluster."
+      },
+      "id": "p9-58dcb22db3ef",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 21.9456,
+      "bbox_pt": {
+        "height": 9.36,
+        "width": 8.64,
+        "x": 86.16,
+        "y": 80.64
+      },
+      "disposition": {
+        "difference_id": "page-9-title-font-native-match",
+        "kind": "reference-exporter-difference",
+        "note": "All material clusters are confined to title glyphs. Native Microsoft PowerPoint and office2pdf use the source Gill Sans MT Bold, while the LibreOffice GT embeds Noto Sans. The corrected title rule creates no material cluster."
+      },
+      "id": "p9-81a23e646160",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 20.6784,
+      "bbox_pt": {
+        "height": 22.8,
+        "width": 5.76,
+        "x": 74.16,
+        "y": 67.2
+      },
+      "disposition": {
+        "difference_id": "page-9-title-font-native-match",
+        "kind": "reference-exporter-difference",
+        "note": "All material clusters are confined to title glyphs. Native Microsoft PowerPoint and office2pdf use the source Gill Sans MT Bold, while the LibreOffice GT embeds Noto Sans. The corrected title rule creates no material cluster."
+      },
+      "id": "p9-53f9f712b43f",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 20.16,
+      "bbox_pt": {
+        "height": 9.36,
+        "width": 4.32,
+        "x": 283.44,
+        "y": 109.44
+      },
+      "disposition": {
+        "difference_id": "page-9-title-font-native-match",
+        "kind": "reference-exporter-difference",
+        "note": "All material clusters are confined to title glyphs. Native Microsoft PowerPoint and office2pdf use the source Gill Sans MT Bold, while the LibreOffice GT embeds Noto Sans. The corrected title rule creates no material cluster."
+      },
+      "id": "p9-57e58bfef6f5",
+      "region": "top-left"
+    }
+  ],
+  "dpi": 300,
+  "duplicate_disposition_cluster_ids": [],
+  "errors": [],
+  "fuzz_percent": 5,
+  "minimum_area_pt2": 20.0,
+  "page": 9,
+  "passed": true,
+  "renderer_observations": [],
+  "schema_version": 1,
+  "strict": true,
+  "summary": {
+    "dispositioned": 20,
+    "duplicate": 0,
+    "total": 20,
+    "undispositioned": 0,
+    "unknown": 0
+  },
+  "undispositioned_cluster_ids": [],
+  "unknown_disposition_cluster_ids": []
+}

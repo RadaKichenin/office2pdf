@@ -139,6 +139,54 @@ fn test_shape_rotation() {
     );
 }
 
+/// The page-9 title rule in the public fixture is an open custom-geometry
+/// line on the top edge of a vertically flipped shape box (issue #1418).
+/// The shape transform must move that line to the bottom edge without
+/// changing its normalized horizontal span.
+#[test]
+fn a_custom_geometry_path_follows_shape_flips() {
+    let shape = r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="Rule"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm flipV="1"><a:off x="0" y="0"/><a:ext cx="400000" cy="200000"/></a:xfrm><a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="l" t="t" r="r" b="b"/><a:pathLst><a:path w="200000"><a:moveTo><a:pt x="0" y="0"/></a:moveTo><a:lnTo><a:pt x="200000" y="0"/></a:lnTo></a:path></a:pathLst></a:custGeom><a:ln w="12700"><a:solidFill><a:srgbClr val="F0CDA1"/></a:solidFill></a:ln></p:spPr></p:sp>"#.to_string();
+    let slide = make_slide_xml(&[shape]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+
+    let (document, _warnings) = PptxParser
+        .parse(&data, &ConvertOptions::default())
+        .expect("the custom line deck parses");
+    let page = first_fixed_page(&document);
+    let FixedElementKind::Shape(parsed_shape) = &page.elements[0].kind else {
+        panic!("expected a custom Shape, got {:?}", page.elements[0].kind);
+    };
+    let ShapeKind::Path { subpaths } = &parsed_shape.kind else {
+        panic!("expected a custom path, got {:?}", parsed_shape.kind);
+    };
+
+    assert_eq!(subpaths.len(), 1);
+    let vertices = &subpaths[0].vertices;
+    assert_eq!(vertices, &vec![(0.0, 1.0), (1.0, 1.0)]);
+}
+
+/// Triangulation: horizontal and vertical flips are independent shape-box
+/// transforms, not a title-rule-specific vertical offset.
+#[test]
+fn a_custom_geometry_horizontal_flip_mirrors_only_x() {
+    let shape = r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="Diagonal"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm flipH="true"><a:off x="0" y="0"/><a:ext cx="400000" cy="200000"/></a:xfrm><a:custGeom><a:pathLst><a:path w="400000" h="200000"><a:moveTo><a:pt x="100000" y="50000"/></a:moveTo><a:lnTo><a:pt x="300000" y="150000"/></a:lnTo></a:path></a:pathLst></a:custGeom><a:ln w="12700"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln></p:spPr></p:sp>"#.to_string();
+    let slide = make_slide_xml(&[shape]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+
+    let (document, _warnings) = PptxParser
+        .parse(&data, &ConvertOptions::default())
+        .expect("the custom line deck parses");
+    let page = first_fixed_page(&document);
+    let FixedElementKind::Shape(parsed_shape) = &page.elements[0].kind else {
+        panic!("expected a custom Shape, got {:?}", page.elements[0].kind);
+    };
+    let ShapeKind::Path { subpaths } = &parsed_shape.kind else {
+        panic!("expected a custom path, got {:?}", parsed_shape.kind);
+    };
+
+    assert_eq!(subpaths[0].vertices, vec![(0.75, 0.25), (0.25, 0.75)]);
+}
+
 #[test]
 fn test_shape_transparency() {
     let shape = make_styled_shape(

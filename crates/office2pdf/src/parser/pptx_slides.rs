@@ -1175,8 +1175,23 @@ fn finalize_shape(
 /// boundary carves a hole (issue #870). Concatenating them into a single ring
 /// instead welded each outline's end to the next one's start (issue #866).
 fn custom_geometry_kind(shape: &ShapeState) -> Option<ShapeKind> {
-    (!shape.custom_geometry.is_empty()).then(|| ShapeKind::Path {
-        subpaths: shape.custom_geometry.clone(),
+    (!shape.custom_geometry.is_empty()).then(|| {
+        let mut subpaths = shape.custom_geometry.clone();
+        // DrawingML applies `flipH`/`flipV` about the shape box's centre. A
+        // custom path is already normalized to that box, so mirroring each
+        // normalized axis completes the shape transform (issue #1418).
+        for vertex in subpaths
+            .iter_mut()
+            .flat_map(|subpath| &mut subpath.vertices)
+        {
+            if shape.flip_h {
+                vertex.0 = 1.0 - vertex.0;
+            }
+            if shape.flip_v {
+                vertex.1 = 1.0 - vertex.1;
+            }
+        }
+        ShapeKind::Path { subpaths }
     })
 }
 

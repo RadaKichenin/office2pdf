@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "source": {
+    "url": "https://github.com/user-attachments/files/31185149/GENERAL.SERVICES.pptx",
+    "sha256": "17924ec3b27646a2c1b2bb711b845360b713cc7052b3cdde9df752f9ceded3a9"
+  },
+  "reference_export": {
+    "application": "LibreOffice Impress",
+    "version": "26.2.5.2",
+    "platform": "Unspecified in supplied PDF metadata",
+    "pdf_sha256": "8c8f471d8baaf0abd79e752ef49951c240752d36e4512651f6cb9a7cfffb650f",
+    "evidence_path": "assets/bugfixes/issue-1418/gt.jpg",
+    "evidence_sha256": "6e3c1515968aa93a52991836fe2d8cf0af7004de1fee2b50fb3cd94c93ec8e3d"
+  },
+  "native_export": {
+    "application": "Microsoft PowerPoint",
+    "version": "16.112.3 (build 16.112.26083020)",
+    "platform": "macOS 26.6.2 build 25G83",
+    "pdf_sha256": "6634fda74ad4a0f7734e770721864458c1b3ba85123d1902e11e9af03e0b4fe1",
+    "evidence_path": "assets/bugfixes/issue-1418/native.jpg",
+    "evidence_sha256": "16faa2200e47f8ee89fc2ffaba72d8b9824c72d88b8ef80351ebf67d4ef21cdd"
+  },
+  "verification_url": "https://github.com/developer0hye/office2pdf/issues/1519#issuecomment-5535053240",
+  "differences": [
+    {
+      "id": "page-9-slide-number-visibility",
+      "page": 9,
+      "kind": "painted-text-visibility",
+      "layout_finding": {
+        "label": "9",
+        "gt": "hidden",
+        "out": "painted",
+        "occurrence": 1
+      }
+    },
+    {
+      "id": "page-9-title-font-native-match",
+      "page": 9,
+      "kind": "render-clusters",
+      "render_cluster_ids": [
+        "p9-711169e6f102",
+        "p9-6f42d2c7d995",
+        "p9-0b7648c9058d",
+        "p9-896168855816",
+        "p9-548811e0cf39",
+        "p9-a8f6bf23b708",
+        "p9-97c0fac32c50",
+        "p9-9d63e4a662e3",
+        "p9-df09b561ed2d",
+        "p9-a4cc906034f4",
+        "p9-ca5322a638d1",
+        "p9-5d2ab87823d1",
+        "p9-8dc723a3e4e2",
+        "p9-99f3fda72ee5",
+        "p9-d4e0c7125ff4",
+        "p9-0bc8ef45fca2",
+        "p9-58dcb22db3ef",
+        "p9-81a23e646160",
+        "p9-53f9f712b43f",
+        "p9-57e58bfef6f5"
+      ]
+    }
+  ]
+}
