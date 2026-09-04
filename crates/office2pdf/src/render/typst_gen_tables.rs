@@ -3268,7 +3268,7 @@ fn generate_cell_content(
             Block::FloatingShape(fs) => generate_floating_shape(out, fs, ctx),
             Block::List(list) => {
                 if can_render_fixed_text_list_inline(list) {
-                    generate_fixed_text_list(out, list, true, None, false)?;
+                    generate_fixed_text_list(out, list, true, None, false, false)?;
                 } else {
                     // No wrapper settings reach a cell list, so it has no
                     // fixed text edges of its own to restore (issue #626).
@@ -3280,6 +3280,7 @@ fn generate_cell_content(
                             breaks_hangul_at_eojeol: ctx.breaks_hangul_at_eojeol,
                             line_box_em: None,
                             available_measure_pt: ctx.available_measure_pt,
+                            baseline_snap: None,
                         },
                     )?;
                 }

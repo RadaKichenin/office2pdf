@@ -26,6 +26,14 @@ struct ListIndentGeometry {
     marker_width_pt: f64,
 }
 
+#[derive(Clone, Copy, Default)]
+struct ListOpenOptions {
+    indent: Option<ListIndentGeometry>,
+    spacing_pt: Option<f64>,
+    start_at: Option<u32>,
+    baseline_snap: Option<PowerPointBaselineSnap>,
+}
+
 fn list_style_for_level<'a>(list: &'a List, level: u32) -> EffectiveListStyle<'a> {
     if let Some(style) = list.level_styles.get(&level) {
         EffectiveListStyle {
@@ -58,10 +66,14 @@ fn write_list_open(
     prefix: &str,
     style: &EffectiveListStyle<'_>,
     fallback_marker_style: Option<&TextStyle>,
-    indent: Option<ListIndentGeometry>,
-    spacing_pt: Option<f64>,
-    start_at: Option<u32>,
+    options: ListOpenOptions,
 ) {
+    let ListOpenOptions {
+        indent,
+        spacing_pt,
+        start_at,
+        baseline_snap,
+    } = options;
     let (func, _) = list_funcs(style.kind);
     let _ = write!(out, "{prefix}{func}(");
 
@@ -79,8 +91,17 @@ fn write_list_open(
 
     if style.kind == ListKind::Ordered {
         let marker_style = merge_marker_style(fallback_marker_style, style.marker_style);
-        if marker_style.as_ref().is_some_and(has_text_properties) || indent.is_some() {
-            write_ordered_list_numbering_function(out, style, marker_style.as_ref(), indent);
+        if marker_style.as_ref().is_some_and(has_text_properties)
+            || indent.is_some()
+            || baseline_snap.is_some()
+        {
+            write_ordered_list_numbering_function(
+                out,
+                style,
+                marker_style.as_ref(),
+                indent,
+                baseline_snap,
+            );
             out.push_str(", ");
         } else if let Some(numbering_pattern) = style.numbering_pattern {
             let _ = write!(
@@ -105,12 +126,18 @@ fn write_list_open(
         let marker_style =
             merge_marker_style(fallback_marker_style, explicit_marker_style.as_ref());
         out.push_str("marker: [");
+        if let Some(snap) = baseline_snap {
+            snap.write_open(out);
+        }
         if let Some(indent) = indent {
             write_marker_box_open(out, indent.marker_width_pt);
         }
         write_unordered_list_marker_content(out, &marker_text, marker_style.as_ref());
         if indent.is_some() {
             out.push_str("])");
+        }
+        if baseline_snap.is_some() {
+            out.push(']');
         }
         out.push_str("], ");
     }
@@ -123,9 +150,13 @@ fn write_ordered_list_numbering_function(
     style: &EffectiveListStyle<'_>,
     marker_style: Option<&TextStyle>,
     indent: Option<ListIndentGeometry>,
+    baseline_snap: Option<PowerPointBaselineSnap>,
 ) {
     let pattern: &str = style.numbering_pattern.unwrap_or("1.");
     out.push_str("numbering: (..nums) => [");
+    if let Some(snap) = baseline_snap {
+        snap.write_open(out);
+    }
     if let Some(indent) = indent {
         write_marker_box_open(out, indent.marker_width_pt);
     }
@@ -147,6 +178,9 @@ fn write_ordered_list_numbering_function(
     }
     if indent.is_some() {
         out.push_str("])");
+    }
+    if baseline_snap.is_some() {
+        out.push(']');
     }
     out.push(']');
 }
@@ -461,9 +495,12 @@ pub(super) fn generate_list_with_spacing_model(
         "#",
         &style,
         fallback_marker_style.as_ref(),
-        indent,
-        spacing_pt,
-        start_at,
+        ListOpenOptions {
+            indent,
+            spacing_pt,
+            start_at,
+            baseline_snap: eojeol_wrap.baseline_snap,
+        },
     );
     generate_list_items(
         out,
@@ -613,6 +650,7 @@ pub(super) fn generate_fixed_text_list(
     include_item_spacing: bool,
     available_width_pt: Option<f64>,
     uses_powerpoint_line: bool,
+    snap_absolute_baselines: bool,
 ) -> Result<(), ConvertError> {
     let paragraph: &Paragraph = &list.items[0].content[0];
     let style: &ParagraphStyle = &paragraph.style;
@@ -709,6 +747,13 @@ pub(super) fn generate_fixed_text_list(
         if use_stack {
             out.push('[');
         }
+        let baseline_snap: Option<PowerPointBaselineSnap> = snap_absolute_baselines
+            .then(|| powerpoint_absolute_baseline_snap(&item_paragraph.runs, &item_paragraph.style))
+            .flatten()
+            .filter(|_| !suppress_marker);
+        if let Some(snap) = baseline_snap {
+            snap.write_open(out);
+        }
         write_fixed_text_list_item(
             out,
             item_paragraph,
@@ -720,6 +765,9 @@ pub(super) fn generate_fixed_text_list(
                 .as_ref()
                 .map(|(settings, _)| settings.as_str()),
         );
+        if baseline_snap.is_some() {
+            out.push(']');
+        }
         if use_stack {
             out.push(']');
         } else {
@@ -1558,6 +1606,8 @@ pub(super) struct ListEojeolWrap {
     /// The width one line of the list has, in points, before the item's own
     /// indents.
     pub(super) available_measure_pt: Option<f64>,
+    /// PowerPoint's raw and layout baseline seats for absolute slide snapping.
+    pub(super) baseline_snap: Option<PowerPointBaselineSnap>,
 }
 
 /// Recursively generate list items, grouping consecutive items at the same or deeper level.
@@ -1585,7 +1635,13 @@ fn generate_list_items(
             let _ = write!(out, "({start_at})");
         }
         out.push('[');
+        if let Some(snap) = eojeol_wrap.baseline_snap {
+            snap.write_open(out);
+        }
         write_list_item_content(out, item, eojeol_wrap);
+        if eojeol_wrap.baseline_snap.is_some() {
+            out.push(']');
+        }
 
         if item.level == base_level {
             let nested_start = i + 1;
@@ -1651,9 +1707,12 @@ fn generate_list_items(
                     if nested_gap.is_some() { "#" } else { " #" },
                     &nested_style,
                     fallback_marker_style.as_ref(),
-                    indent,
-                    spacing_pt,
-                    nested_start_at,
+                    ListOpenOptions {
+                        indent,
+                        spacing_pt,
+                        start_at: nested_start_at,
+                        baseline_snap: None,
+                    },
                 );
                 generate_list_items(
                     out,
