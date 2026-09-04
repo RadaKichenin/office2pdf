@@ -2,6 +2,7 @@ import io
 import hashlib
 import json
 import re
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -15,6 +16,7 @@ from scripts.check_visual_pr import (
     validate_layout_audit,
     validate_open_issues,
     validate_pr_body,
+    validate_reference_exporter_differences,
     validate_render_cluster_audits,
 )
 
@@ -57,6 +59,7 @@ def visual_body(result_overrides=None, include_previews=True):
 - Evidence mode: `fix`
 - Layout audit report: `assets/bugfixes/issue-186/layout-audit.json`
 - Render cluster reports: `assets/bugfixes/issue-186/render-clusters-page-1.json`
+- Reference exporter differences: None
 - Fine-detail threshold: 0.5pt
 - Layout audit page count: Pass
 - Layout audit text flow: Pass
@@ -69,6 +72,7 @@ def visual_body(result_overrides=None, include_previews=True):
 - GT: `assets/bugfixes/issue-186/gt.jpg`
 - Before: `assets/bugfixes/issue-186/before.jpg`
 - After: `assets/bugfixes/issue-186/after.jpg`
+- Native: None
 
 {previews}
 ### Required inspection
@@ -120,7 +124,7 @@ def layout_report(
     }
 
 
-def validate_report(body, report):
+def validate_report(body, report, reference_differences=None):
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
         report_path = root / "assets/bugfixes/issue-186/layout-audit.json"
@@ -133,6 +137,7 @@ def validate_report(body, report):
                 "assets/bugfixes/issue-186/layout-audit.json",
             ],
             root,
+            reference_differences=reference_differences,
         )
 
 
@@ -184,7 +189,7 @@ def render_cluster_report(
     }
 
 
-def validate_cluster_reports(body, reports):
+def validate_cluster_reports(body, reports, reference_differences=None):
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
         issue_dir = root / "assets/bugfixes/issue-186"
@@ -194,7 +199,65 @@ def validate_cluster_reports(body, reports):
             relative = f"assets/bugfixes/issue-186/render-clusters-page-{page}.json"
             (root / relative).write_text(json.dumps(report), encoding="utf-8")
             changed_paths.append(relative)
-        return validate_render_cluster_audits(body, changed_paths, root)
+        return validate_render_cluster_audits(
+            body,
+            changed_paths,
+            root,
+            reference_differences=reference_differences,
+        )
+
+
+def reference_difference_document(*, cluster_ids=None):
+    differences = [
+        {
+            "id": "page-9-slide-number-visibility",
+            "page": 9,
+            "kind": "painted-text-visibility",
+            "layout_finding": {
+                "label": "9",
+                "gt": "hidden",
+                "out": "painted",
+                "occurrence": 1,
+            },
+        }
+    ]
+    if cluster_ids is not None:
+        differences.append(
+            {
+                "id": "page-1-title-native-match",
+                "page": 1,
+                "kind": "render-clusters",
+                "render_cluster_ids": cluster_ids,
+            }
+        )
+    return {
+        "schema_version": 1,
+        "source": {
+            "url": "https://github.com/developer0hye/office2pdf/files/123/source.pptx",
+            "sha256": "1" * 64,
+        },
+        "reference_export": {
+            "application": "LibreOffice Impress",
+            "version": "26.2.5.2",
+            "platform": "macOS 26.6.2",
+            "pdf_sha256": "2" * 64,
+            "evidence_path": "assets/bugfixes/issue-186/gt.jpg",
+            "evidence_sha256": "3" * 64,
+        },
+        "native_export": {
+            "application": "Microsoft PowerPoint",
+            "version": "16.112.3",
+            "platform": "macOS 26.6.2 build 25G83",
+            "pdf_sha256": "4" * 64,
+            "evidence_path": "assets/bugfixes/issue-186/native.jpg",
+            "evidence_sha256": "5" * 64,
+        },
+        "verification_url": (
+            "https://github.com/developer0hye/office2pdf/issues/1421"
+            "#issuecomment-5471464526"
+        ),
+        "differences": differences,
+    }
 
 
 def defect_body():
@@ -372,6 +435,129 @@ class PullRequestBodyTests(unittest.TestCase):
 """
         self.assertEqual(validate_pr_body(body, ["assets/bugfixes/README.md"]), [])
 
+    def test_visual_audit_requires_reference_difference_declaration(self):
+        body = visual_body().replace("- Reference exporter differences: None\n", "")
+
+        errors = validate_pr_body(
+            body, ["assets/bugfixes/issue-186/after.jpg"]
+        )
+
+        self.assertTrue(any("Reference exporter differences" in error for error in errors))
+
+    def test_reference_difference_row_requires_an_exact_id(self):
+        body = visual_body({"Element presence": "Reference difference: PowerPoint matched"})
+
+        errors = validate_pr_body(
+            body, ["assets/bugfixes/issue-186/after.jpg"]
+        )
+
+        self.assertTrue(any("exact ref:<id>" in error for error in errors))
+
+    def test_native_evidence_cannot_be_added_without_a_difference_report(self):
+        errors = validate_pr_body(
+            visual_body(),
+            [
+                "assets/bugfixes/issue-186/after.jpg",
+                "assets/bugfixes/issue-186/native.jpg",
+            ],
+        )
+
+        self.assertTrue(any("native/reference-exporter evidence" in error for error in errors))
+
+
+class ReferenceExporterDifferenceTests(unittest.TestCase):
+    def prepare_evidence(self, root: Path) -> tuple[str, dict[str, object]]:
+        issue_dir = root / "assets/bugfixes/issue-186"
+        issue_dir.mkdir(parents=True)
+        reference_image = ROOT / "assets/bugfixes/issue-1497/gt.jpg"
+        native_image = ROOT / "assets/bugfixes/issue-1497/after.jpg"
+        shutil.copyfile(reference_image, issue_dir / "gt.jpg")
+        shutil.copyfile(native_image, issue_dir / "native.jpg")
+        reference_hash = hashlib.sha256(reference_image.read_bytes()).hexdigest()
+        native_hash = hashlib.sha256(native_image.read_bytes()).hexdigest()
+        document = reference_difference_document()
+        document["reference_export"]["evidence_sha256"] = reference_hash
+        document["native_export"]["evidence_sha256"] = native_hash
+        relative = "assets/bugfixes/issue-186/reference-exporter-differences.json"
+        (root / relative).write_text(json.dumps(document), encoding="utf-8")
+        return relative, document
+
+    def body(self) -> str:
+        return (
+            visual_body()
+            .replace(
+                "Reference exporter differences: None",
+                "Reference exporter differences: "
+                "`assets/bugfixes/issue-186/reference-exporter-differences.json`",
+            )
+            .replace(
+                "| Element presence | Matches GT |",
+                "| Element presence | Reference difference: "
+                "ref:page-9-slide-number-visibility |",
+            )
+            .replace(
+                "- Native: None",
+                "- Native: `assets/bugfixes/issue-186/native.jpg`",
+            )
+            + "\n![Native](https://example.com/native.jpg)\n"
+        )
+
+    def test_structured_source_reference_and_native_evidence_pass(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path, expected = self.prepare_evidence(root)
+
+            document, errors = validate_reference_exporter_differences(
+                self.body(), [path, "assets/bugfixes/issue-186/native.jpg"], root
+            )
+
+        self.assertEqual(errors, [])
+        self.assertEqual(document, expected)
+
+    def test_free_form_provenance_cannot_bypass_the_gate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path, document = self.prepare_evidence(root)
+            document["native_export"] = "PowerPoint matched when inspected"
+            (root / path).write_text(json.dumps(document), encoding="utf-8")
+
+            _, errors = validate_reference_exporter_differences(
+                self.body(), [path], root
+            )
+
+        self.assertTrue(any("native_export must be an object" in error for error in errors))
+
+    def test_native_evidence_hash_must_match_the_tracked_image(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path, document = self.prepare_evidence(root)
+            document["native_export"]["evidence_sha256"] = "0" * 64
+            (root / path).write_text(json.dumps(document), encoding="utf-8")
+
+            _, errors = validate_reference_exporter_differences(
+                self.body(), [path], root
+            )
+
+        self.assertTrue(any("native_export evidence SHA-256" in error for error in errors))
+
+    def test_reference_and_native_images_must_record_a_pixel_difference(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path, document = self.prepare_evidence(root)
+            gt_path = root / "assets/bugfixes/issue-186/gt.jpg"
+            native_path = root / "assets/bugfixes/issue-186/native.jpg"
+            shutil.copyfile(gt_path, native_path)
+            document["native_export"]["evidence_sha256"] = hashlib.sha256(
+                native_path.read_bytes()
+            ).hexdigest()
+            (root / path).write_text(json.dumps(document), encoding="utf-8")
+
+            _, errors = validate_reference_exporter_differences(
+                self.body(), [path], root
+            )
+
+        self.assertTrue(any("decoded-pixel difference" in error for error in errors))
+
 
 class LayoutAuditTests(unittest.TestCase):
     def test_clean_report_accepts_pass_dispositions(self):
@@ -439,6 +625,102 @@ class LayoutAuditTests(unittest.TestCase):
         )
         self.assertTrue(
             any("text flow" in error and "issue reference" in error for error in errors)
+        )
+
+    def test_page_9_visibility_difference_accepts_exact_native_evidence(self):
+        body = (
+            visual_body()
+            .replace("- Page(s): 1", "- Page(s): 9")
+            .replace(
+                "Reference exporter differences: None",
+                "Reference exporter differences: "
+                "`assets/bugfixes/issue-186/reference-exporter-differences.json`",
+            )
+            .replace(
+                "Layout audit text flow: Pass",
+                "Layout audit text flow: ref:page-9-slide-number-visibility",
+            )
+        )
+        report = layout_report(visibility=1)
+        report["pages"][0]["visibility"]["mismatches"] = [
+            {"label": "9", "gt": "hidden", "out": "painted"}
+        ]
+
+        self.assertEqual(
+            validate_report(body, report, reference_difference_document()),
+            [],
+        )
+
+    def test_reference_difference_cannot_hide_a_different_visibility_finding(self):
+        body = (
+            visual_body()
+            .replace("- Page(s): 1", "- Page(s): 9")
+            .replace(
+                "Reference exporter differences: None",
+                "Reference exporter differences: "
+                "`assets/bugfixes/issue-186/reference-exporter-differences.json`",
+            )
+            .replace(
+                "Layout audit text flow: Pass",
+                "Layout audit text flow: ref:page-9-slide-number-visibility",
+            )
+        )
+        report = layout_report(visibility=1)
+        report["pages"][0]["visibility"]["mismatches"] = [
+            {"label": "10", "gt": "hidden", "out": "painted"}
+        ]
+
+        errors = validate_report(body, report, reference_difference_document())
+
+        self.assertTrue(any("does not match" in error for error in errors))
+
+    def test_reference_difference_does_not_cover_real_text_flow_defects(self):
+        body = (
+            visual_body()
+            .replace("- Page(s): 1", "- Page(s): 9")
+            .replace(
+                "Reference exporter differences: None",
+                "Reference exporter differences: "
+                "`assets/bugfixes/issue-186/reference-exporter-differences.json`",
+            )
+            .replace(
+                "Layout audit text flow: Pass",
+                "Layout audit text flow: ref:page-9-slide-number-visibility",
+            )
+        )
+        report = layout_report(visibility=1, missing=1)
+        report["pages"][0]["lines"]["missing_text"] = ["real converter defect"]
+        report["pages"][0]["visibility"]["mismatches"] = [
+            {"label": "9", "gt": "hidden", "out": "painted"}
+        ]
+
+        errors = validate_report(body, report, reference_difference_document())
+
+        self.assertTrue(any("open issue" in error for error in errors))
+
+    def test_reference_difference_can_coexist_with_a_tracked_real_defect(self):
+        body = (
+            visual_body({"Line/paragraph spacing": "Remaining: #328"})
+            .replace("- Page(s): 1", "- Page(s): 9")
+            .replace(
+                "Reference exporter differences: None",
+                "Reference exporter differences: "
+                "`assets/bugfixes/issue-186/reference-exporter-differences.json`",
+            )
+            .replace(
+                "Layout audit text flow: Pass",
+                "Layout audit text flow: ref:page-9-slide-number-visibility, #328",
+            )
+        )
+        report = layout_report(visibility=1, missing=1)
+        report["pages"][0]["lines"]["missing_text"] = ["real converter defect"]
+        report["pages"][0]["visibility"]["mismatches"] = [
+            {"label": "9", "gt": "hidden", "out": "painted"}
+        ]
+
+        self.assertEqual(
+            validate_report(body, report, reference_difference_document()),
+            [],
         )
 
     def test_visible_fill_failure_rejects_pass_visible_fill_disposition(self):
@@ -702,6 +984,47 @@ class RenderClusterAuditTests(unittest.TestCase):
         errors = validate_cluster_reports(visual_body(), {1: report})
 
         self.assertTrue(any("#328" in error and "Remaining" in error for error in errors))
+
+    def test_reference_exporter_disposition_uses_exact_manifest_cluster(self):
+        report = render_cluster_report()
+        cluster_id = report["clusters"][0]["id"]
+        report["clusters"][0]["disposition"] = {
+            "kind": "reference-exporter-difference",
+            "difference_id": "page-1-title-native-match",
+        }
+        body = visual_body().replace(
+            "Reference exporter differences: None",
+            "Reference exporter differences: "
+            "`assets/bugfixes/issue-186/reference-exporter-differences.json`",
+        )
+
+        errors = validate_cluster_reports(
+            body,
+            {1: report},
+            reference_difference_document(cluster_ids=[cluster_id]),
+        )
+
+        self.assertEqual(errors, [])
+
+    def test_reference_exporter_disposition_rejects_unlisted_cluster(self):
+        report = render_cluster_report()
+        report["clusters"][0]["disposition"] = {
+            "kind": "reference-exporter-difference",
+            "difference_id": "page-1-title-native-match",
+        }
+        body = visual_body().replace(
+            "Reference exporter differences: None",
+            "Reference exporter differences: "
+            "`assets/bugfixes/issue-186/reference-exporter-differences.json`",
+        )
+
+        errors = validate_cluster_reports(
+            body,
+            {1: report},
+            reference_difference_document(cluster_ids=["p1-0123456789ab"]),
+        )
+
+        self.assertTrue(any("not listed" in error for error in errors))
 
     def test_every_declared_page_requires_its_own_report(self):
         body = (

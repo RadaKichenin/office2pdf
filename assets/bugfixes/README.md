@@ -15,6 +15,9 @@ assets/bugfixes/issue-<number>/before.jpg
 assets/bugfixes/issue-<number>/after.jpg
 assets/bugfixes/issue-<number>/layout-audit.json
 assets/bugfixes/issue-<number>/render-clusters-page-<page>.json
+# Only when the supplied GT differs from a verified native Office export:
+assets/bugfixes/issue-<number>/reference-exporter-differences.json
+assets/bugfixes/issue-<number>/native.jpg
 ```
 
 Touching any image makes the gate require and validate the full trio. Every fix
@@ -50,6 +53,82 @@ difference, missing/extra/reflowed text, changed wraps, a painted-text visibilit
 mismatch, a visible-fill occlusion, or a text or rectangle geometry shift above
 the configured fine or large threshold.
 
+### Verified reference-exporter differences
+
+Do not change correct Office behavior merely to match a PDF made by another
+exporter. When a native Word, PowerPoint, or Excel export proves that the
+supplied GT is different, freshly change the issue-local
+`reference-exporter-differences.json` with the visual-fix PR. It has this strict
+shape:
+
+```json
+{
+  "schema_version": 1,
+  "source": {
+    "url": "https://github.com/owner/repository/files/123/source.pptx",
+    "sha256": "<64 lowercase hex characters>"
+  },
+  "reference_export": {
+    "application": "LibreOffice Impress",
+    "version": "26.2.5.2",
+    "platform": "macOS 26.6.2",
+    "pdf_sha256": "<64 lowercase hex characters>",
+    "evidence_path": "assets/bugfixes/issue-123/gt.jpg",
+    "evidence_sha256": "<64 lowercase hex characters>"
+  },
+  "native_export": {
+    "application": "Microsoft PowerPoint",
+    "version": "16.112.3",
+    "platform": "macOS 26.6.2 build 25G83",
+    "pdf_sha256": "<64 lowercase hex characters>",
+    "evidence_path": "assets/bugfixes/issue-123/native.jpg",
+    "evidence_sha256": "<64 lowercase hex characters>"
+  },
+  "verification_url": "https://github.com/owner/repository/issues/456#issuecomment-789",
+  "differences": [
+    {
+      "id": "page-9-slide-number-visibility",
+      "page": 9,
+      "kind": "painted-text-visibility",
+      "layout_finding": {
+        "label": "9",
+        "gt": "hidden",
+        "out": "painted",
+        "occurrence": 1
+      }
+    },
+    {
+      "id": "page-9-title-native-match",
+      "page": 9,
+      "kind": "render-clusters",
+      "render_cluster_ids": ["p9-0123456789ab"]
+    }
+  ]
+}
+```
+
+Both `gt.jpg` and `native.jpg` are full-page renders from the recorded PDFs and
+follow the normal JPEG rules. The gate verifies the committed JPEG hashes and
+requires structured source/reference/native provenance, SHA-256-shaped binary
+hashes, and a stable GitHub comment URL. The reviewer still verifies the
+uncommitted source/PDF hashes and comment content manually. Free-form notes do
+not create a disposition.
+
+Set these PR fields when the report is used:
+
+```text
+Reference exporter differences: assets/bugfixes/issue-123/reference-exporter-differences.json
+Native: assets/bugfixes/issue-123/native.jpg
+Layout audit text flow: ref:page-9-slide-number-visibility
+```
+
+Render `![Native](...)` with a stable image URL. In the deviation table, use
+`Reference difference: ref:<id>` once for every difference in the report.
+Layout reference differences currently cover only one exact occurrence of a
+`painted-text-visibility` finding. Missing/extra text, wrap/reflow, geometry,
+fill, or shift findings still need an open issue. A category containing both a
+verified visibility difference and another finding must also name that issue.
+
 Generate the cluster IDs once without strict mode, inspect every cluster in the
 full-resolution diff and matched crops, then create a disposition file whose
 groups enumerate those exact IDs:
@@ -75,6 +154,11 @@ groups enumerate those exact IDs:
       "kind": "issue",
       "issue": "#123",
       "cluster_ids": ["p1-fedcba987654"]
+    },
+    {
+      "kind": "reference-exporter-difference",
+      "difference_id": "page-9-title-native-match",
+      "cluster_ids": ["p9-0123456789ab"]
     }
   ]
 }
@@ -97,12 +181,17 @@ python3 scripts/compare_render.py gt.pdf after.pdf --page <page> --dpi 300 \
   --strict-clusters
 ```
 
+When a disposition group names a verified reference-exporter difference, add
+`--reference-differences assets/bugfixes/issue-<number>/reference-exporter-differences.json`.
+
 The report contains every cluster's stable ID, page-space bbox, area, region,
 and disposition, plus validated bounded renderer observations.
 `--strict-clusters` exits nonzero for missing, stale, duplicate, or invalid IDs,
 and when the ImageMagick census is unavailable. List every compared page's
 report in `Visual audit > Render cluster reports`; the PR gate requires all of
-them to be freshly changed and passing.
+them to be freshly changed and passing. A reference-exporter group must equal
+its manifest entry's complete cluster-ID set, so a new or unrelated cluster
+remains undispositioned.
 
 ## Evidence mode: `defect`
 
@@ -146,8 +235,9 @@ python3 scripts/check_visual_pr.py --event event.json --base main --head HEAD \
 Markdown and text files under `assets/bugfixes/` — this README included — are
 bookkeeping, not evidence. The gate skips them, so a pull request that changes
 only such a file may check `No rendered PDF change`. A fix-mode
-`layout-audit.json` and `render-clusters-page-<page>.json` are validated
-separately and must be updated with `after.jpg` in their issue directory.
+`layout-audit.json`, `render-clusters-page-<page>.json`, and optional
+`reference-exporter-differences.json` are validated separately and must be
+updated with the visual evidence in their issue directory.
 
 Anything else in the directory is treated as evidence and must match one of the
 layouts above. The nested `issue-<number>/audit/<case>/` layout used by the early
