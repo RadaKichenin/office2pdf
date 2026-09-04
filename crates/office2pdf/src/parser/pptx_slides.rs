@@ -1867,9 +1867,11 @@ impl<'a> SlideXmlParser<'a> {
                         emu_to_pt(self.gf.cx),
                         emu_to_pt(self.gf.cy),
                     );
-                    // Fixed-position PPT tables have explicit row geometry from the slide frame.
-                    // Keeping Typst in content-driven mode compresses side panels like slide 30.
-                    table.use_content_driven_row_heights = false;
+                    // PowerPoint treats each `a:tr/@h` as a floor and grows a
+                    // row whose cell content is taller. The frame still scales
+                    // those floors up when it explicitly exceeds their sum,
+                    // but it must not turn them into clipping tracks (#1253).
+                    table.use_content_driven_row_heights = true;
                     self.elements.push(FixedElement {
                         x: emu_to_pt(self.gf.x),
                         y: emu_to_pt(self.gf.y),

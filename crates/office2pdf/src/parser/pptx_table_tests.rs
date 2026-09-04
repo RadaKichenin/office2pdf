@@ -77,13 +77,15 @@ fn test_slide_table_scales_geometry_to_graphic_frame_extent() {
     assert!((table.column_widths[0] - 144.0).abs() < 0.1);
     assert!((table.column_widths.iter().sum::<f64>() - elem.width).abs() < 0.1);
     assert_eq!(table.rows.len(), 2);
-    assert_eq!(table.rows[0].height, Some(58.4));
-    assert_eq!(table.rows[1].height, Some(58.4));
+    assert_eq!(table.rows[0].height, None);
+    assert_eq!(table.rows[1].height, None);
+    assert_eq!(table.rows[0].minimum_height, Some(58.4));
+    assert_eq!(table.rows[1].minimum_height, Some(58.4));
     assert!(
         (table
             .rows
             .iter()
-            .map(|row| row.height.unwrap_or(0.0))
+            .map(|row| row.minimum_height.unwrap_or(0.0))
             .sum::<f64>()
             - elem.height)
             .abs()
@@ -92,7 +94,7 @@ fn test_slide_table_scales_geometry_to_graphic_frame_extent() {
 }
 
 #[test]
-fn test_slide_table_preserves_row_heights_for_fixed_page_rendering() {
+fn test_slide_table_uses_content_driven_rows_for_fixed_page_rendering() {
     let rows_xml = format!(
         "{}{}",
         make_table_row(&["A1", "B1"]),
@@ -116,9 +118,37 @@ fn test_slide_table_preserves_row_heights_for_fixed_page_rendering() {
     let table = table_element(&page.elements[0]);
 
     assert!(
-        !table.use_content_driven_row_heights,
-        "Fixed-page PPT tables should preserve source row heights",
+        table.use_content_driven_row_heights,
+        "Fixed-page PPT tables should let content grow past source row floors",
     );
+}
+
+#[test]
+fn test_slide_table_declared_row_height_is_a_content_growing_minimum() {
+    let rows_xml = concat!(
+        r#"<a:tr h="254000"><a:tc><a:txBody><a:bodyPr/><a:p>"#,
+        r#"<a:r><a:rPr lang="en-US" sz="600"><a:latin typeface="Arial"/></a:rPr><a:t>One</a:t></a:r>"#,
+        r#"<a:br/><a:r><a:rPr lang="en-US" sz="600"><a:latin typeface="Arial"/></a:rPr><a:t>Two</a:t></a:r>"#,
+        r#"<a:br/><a:r><a:rPr lang="en-US" sz="600"><a:latin typeface="Arial"/></a:rPr><a:t>Three</a:t></a:r>"#,
+        r#"<a:br/><a:r><a:rPr lang="en-US" sz="600"><a:latin typeface="Arial"/></a:rPr><a:t>Four</a:t></a:r>"#,
+        r#"</a:p></a:txBody><a:tcPr marL="0" marR="0" marT="0" marB="0" anchor="t"/></a:tc></a:tr>"#,
+    );
+    let table_frame = make_table_graphic_frame(0, 0, 1_828_800, 254_000, &[1_828_800], rows_xml);
+    let slide = make_slide_xml(&[table_frame]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let page = first_fixed_page(&doc);
+    let table = table_element(&page.elements[0]);
+
+    assert!(
+        table.use_content_driven_row_heights,
+        "PowerPoint rows must grow when their cell content exceeds a:tr/@h"
+    );
+    assert_eq!(table.rows[0].height, None);
+    assert_eq!(table.rows[0].minimum_height, Some(20.0));
 }
 
 #[test]
@@ -225,7 +255,7 @@ fn test_slide_table_uses_powerpoint_default_cell_padding() {
         })
     );
     assert_eq!(table.rows[0].cells[0].padding, None);
-    assert!(!table.use_content_driven_row_heights);
+    assert!(table.use_content_driven_row_heights);
 }
 
 #[test]
@@ -571,8 +601,10 @@ fn test_stale_small_frame_extent_does_not_shrink_row_heights() {
     let page = first_fixed_page(&doc);
     let table = table_element(&page.elements[0]);
 
-    assert_eq!(table.rows[0].height, Some(54.0));
-    assert_eq!(table.rows[1].height, Some(54.0));
+    assert_eq!(table.rows[0].height, None);
+    assert_eq!(table.rows[1].height, None);
+    assert_eq!(table.rows[0].minimum_height, Some(54.0));
+    assert_eq!(table.rows[1].minimum_height, Some(54.0));
 }
 
 fn make_table_row_with_height(h_emu: i64, cells: &[&str]) -> String {
