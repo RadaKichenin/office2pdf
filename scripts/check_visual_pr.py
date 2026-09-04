@@ -534,11 +534,14 @@ def decoded_pixel_delta(before: Path, after: Path) -> int:
         text=True,
     )
     metric_output = result.stderr.strip() or result.stdout.strip()
-    metric_match = re.search(r"(?:^|\s)(\d+)(?:\s|$)", metric_output)
+    metric_match = re.search(
+        r"(?:^|\s)(\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)(?:\s|$)",
+        metric_output,
+    )
     if result.returncode not in {0, 1} or not metric_match:
         detail = metric_output or f"exit status {result.returncode}"
         raise RuntimeError(f"ImageMagick could not compare the evidence: {detail}")
-    return int(metric_match.group(1))
+    return int(float(metric_match.group(1)))
 
 
 def validate_reference_exporter_differences(

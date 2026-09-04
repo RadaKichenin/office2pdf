@@ -11,6 +11,7 @@ from unittest.mock import patch
 from scripts.check_visual_pr import (
     AUDIT_ROWS,
     INSPECTION_ITEMS,
+    decoded_pixel_delta,
     read_jpeg_info,
     validate_evidence,
     validate_layout_audit,
@@ -466,6 +467,19 @@ class PullRequestBodyTests(unittest.TestCase):
 
 
 class ReferenceExporterDifferenceTests(unittest.TestCase):
+    def test_decoded_pixel_delta_accepts_scientific_notation(self):
+        with (
+            patch("scripts.check_visual_pr.shutil.which", return_value="/usr/bin/magick"),
+            patch("scripts.check_visual_pr.subprocess.run") as run,
+        ):
+            run.return_value.returncode = 1
+            run.return_value.stderr = "6.83993e+06 (0.759992)"
+            run.return_value.stdout = ""
+
+            delta = decoded_pixel_delta(Path("gt.jpg"), Path("native.jpg"))
+
+        self.assertEqual(delta, 6_839_930)
+
     def prepare_evidence(self, root: Path) -> tuple[str, dict[str, object]]:
         issue_dir = root / "assets/bugfixes/issue-186"
         issue_dir.mkdir(parents=True)
