@@ -1718,7 +1718,7 @@ fn generate_fixed_text_box(
         out.push_str("  ");
         // The measured raw paragraph must stay unbreakable through Typst layout,
         // otherwise mixed-font headers can reflow again inside the scaled box.
-        generate_fixed_text_paragraph(out, &raw_paragraph, Some(inner_width_pt), true)?;
+        generate_fixed_text_paragraph(out, &raw_paragraph, Some(inner_width_pt), true, false)?;
         out.push_str("  ]\n");
 
         let _ = writeln!(out, "  #let text_box_content_{text_box_id} = context {{");
@@ -1759,7 +1759,7 @@ fn generate_fixed_text_box(
             format_f64(inner_width_pt),
         );
         out.push_str("  ");
-        generate_fixed_text_paragraph(out, paragraph, Some(inner_width_pt), false)?;
+        generate_fixed_text_paragraph(out, paragraph, Some(inner_width_pt), false, false)?;
         out.push_str("  ]\n");
 
         let _ = writeln!(out, "  #let text_box_content_{text_box_id} = context {{");
@@ -1788,7 +1788,14 @@ fn generate_fixed_text_box(
                 out.push('\n');
             }
             out.push_str("  ");
-            generate_fixed_text_box_block(out, block, ctx, Some(inner_width_pt), text_box.no_wrap)?;
+            generate_fixed_text_box_block(
+                out,
+                block,
+                ctx,
+                Some(inner_width_pt),
+                text_box.no_wrap,
+                matches!(text_box.vertical_align, TextBoxVerticalAlign::Top),
+            )?;
         }
         out.push_str("  ]\n");
     }
@@ -3453,6 +3460,7 @@ fn generate_block(out: &mut String, block: &Block, ctx: &mut GenCtx) -> Result<(
                     breaks_hangul_at_eojeol: ctx.breaks_hangul_at_eojeol,
                     line_box_em,
                     available_measure_pt: ctx.available_measure_pt,
+                    baseline_snap: None,
                 },
             )
         }
@@ -3822,7 +3830,7 @@ fn generate_floating_text_box_content(
             if index > 0 {
                 out.push('\n');
             }
-            generate_fixed_text_box_block(out, block, ctx, Some(inner_width), false)?;
+            generate_fixed_text_box_block(out, block, ctx, Some(inner_width), false, false)?;
         }
         out.push_str("]\n]\n]\n");
         return Ok(());
@@ -3838,7 +3846,7 @@ fn generate_floating_text_box_content(
         if index > 0 {
             out.push('\n');
         }
-        generate_fixed_text_box_block(out, block, ctx, Some(inner_width), false)?;
+        generate_fixed_text_box_block(out, block, ctx, Some(inner_width), false, false)?;
     }
     out.push_str("]\n#context {\n");
     let _ = writeln!(
@@ -4015,20 +4023,44 @@ fn fixed_text_box_alignment_name(alignment: Option<Alignment>) -> Option<&'stati
     }
 }
 
+fn common_powerpoint_list_baseline_snap(list: &List) -> Option<PowerPointBaselineSnap> {
+    let root_level: u32 = list.items.first()?.level;
+    let mut snaps = list.items.iter().map(|item| {
+        let [paragraph] = item.content.as_slice() else {
+            return None;
+        };
+        (item.level == root_level)
+            .then(|| powerpoint_absolute_baseline_snap(&paragraph.runs, &paragraph.style))
+            .flatten()
+    });
+    let first: PowerPointBaselineSnap = snaps.next()??;
+    snaps.all(|snap| snap == Some(first)).then_some(first)
+}
+
 fn generate_fixed_text_box_block(
     out: &mut String,
     block: &Block,
     ctx: &mut GenCtx,
     available_width_pt: Option<f64>,
     no_wrap: bool,
+    snap_absolute_baselines: bool,
 ) -> Result<(), ConvertError> {
     match block {
-        Block::List(list) if can_render_fixed_text_list_inline(list) => {
-            generate_fixed_text_list(out, list, true, available_width_pt, true)
-        }
-        Block::Paragraph(para) => {
-            generate_fixed_text_paragraph(out, para, available_width_pt, no_wrap)
-        }
+        Block::List(list) if can_render_fixed_text_list_inline(list) => generate_fixed_text_list(
+            out,
+            list,
+            true,
+            available_width_pt,
+            true,
+            snap_absolute_baselines,
+        ),
+        Block::Paragraph(para) => generate_fixed_text_paragraph(
+            out,
+            para,
+            available_width_pt,
+            no_wrap,
+            snap_absolute_baselines,
+        ),
         // A slide's bullet list paces on PowerPoint's line, not Word's. Routing
         // it through `generate_block` gave it the font's hhea pitch, which is up
         // to 4% short per line and accumulates down the list (issue #513).
@@ -4041,12 +4073,18 @@ fn generate_fixed_text_box_block(
                     powerpoint_line_height_settings(&paragraph.runs, &paragraph.style)
                 });
             // A slide's own breaking; PowerPoint splits Korean mid-word.
+            let baseline_snap = snap_absolute_baselines
+                .then(|| common_powerpoint_list_baseline_snap(list))
+                .flatten();
             generate_list_with_spacing_model(
                 out,
                 list,
                 settings.as_deref(),
                 true,
-                ListEojeolWrap::default(),
+                ListEojeolWrap {
+                    baseline_snap,
+                    ..ListEojeolWrap::default()
+                },
             )
         }
         _ => generate_block(out, block, ctx),
@@ -4058,6 +4096,7 @@ fn generate_fixed_text_paragraph(
     para: &Paragraph,
     available_width_pt: Option<f64>,
     no_wrap: bool,
+    snap_absolute_baseline: bool,
 ) -> Result<(), ConvertError> {
     let style: &ParagraphStyle = &para.style;
     let inset: Insets = fixed_text_paragraph_inset(style);
@@ -4068,6 +4107,9 @@ fn generate_fixed_text_paragraph(
     // PowerPoint's own line, which supersedes the `size * 0.65` leading this
     // path used to guess with (issue #513).
     let line_height_settings: Option<String> = powerpoint_line_height_settings(&para.runs, style);
+    let baseline_snap: Option<PowerPointBaselineSnap> = snap_absolute_baseline
+        .then(|| powerpoint_absolute_baseline_snap(&para.runs, style))
+        .flatten();
     let needs_text_scope: bool = common_text_style(&para.runs).is_some();
     let has_para_style: bool = needs_block_wrapper(style)
         || needs_text_scope
@@ -4112,6 +4154,10 @@ fn generate_fixed_text_paragraph(
                 write_fixed_text_default_par_settings(out, style, &para.runs, "  ");
             }
         }
+    }
+
+    if let Some(snap) = baseline_snap {
+        snap.write_open(out);
     }
 
     let alignment = style.alignment;
@@ -4196,6 +4242,10 @@ fn generate_fixed_text_paragraph(
     }
 
     if use_align {
+        out.push(']');
+    }
+
+    if baseline_snap.is_some() {
         out.push(']');
     }
 

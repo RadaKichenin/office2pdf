@@ -2958,15 +2958,207 @@ fn consecutive_slide_paragraphs_keep_powerpoints_full_line_advance() {
             3,
             "expected three paragraphs: {baselines:?}"
         );
-        for gap in baselines.windows(2).map(|pair| pair[1] - pair[0]) {
+        let (top_em, bottom_em) = emitted_slide_line_box_em(&output.source, 18.0)
+            .unwrap_or_else(|| panic!("missing slide line box:\n{}", output.source));
+        assert!(
+            ((top_em + bottom_em) * 18.0 - 21.6).abs() < 0.01,
+            "18pt slide paragraphs in {family:?} must retain a 21.6pt layout advance: \
+             {top_em}em + {bottom_em}em\n{}",
+            output.source
+        );
+        for baseline in baselines {
             assert!(
-                (gap - 21.6).abs() < 0.01,
-                "18pt slide paragraphs in {family:?} should advance by 1.2em (21.6pt), \
-                 got {gap}pt; baselines={baselines:?}\n{}",
+                (baseline - baseline.round()).abs() < 0.01,
+                "18pt slide paragraphs in {family:?} must paint on absolute whole-point \
+                 baselines after their 21.6pt layout advances, got {baseline}pt\n{}",
                 output.source
             );
         }
     }
+}
+
+/// PowerPoint rounds each paragraph's baseline at its absolute slide position,
+/// not the baseline seat relative to the paragraph's fractional top. The four
+/// 17pt lines on slide 3 of `08_marketing_report_en.pptx` start at 126.0,
+/// 156.4, 186.8, and 217.2pt; its native Arial baselines therefore land on
+/// 142, 172, 203, and 233pt rather than carrying those fractional tops through
+/// (#1259). The exact integer sequence depends on whether the test host resolves
+/// Arial itself or a fallback face, but every painted baseline
+/// must be integral and the fractional 30.4pt advance must produce both 30pt
+/// and 31pt painted steps.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn consecutive_fractional_slide_paragraph_tops_snap_absolute_baselines() {
+    let paragraphs = ["First", "Second", "Third", "Fourth"]
+        .into_iter()
+        .map(|text| {
+            Block::Paragraph(Paragraph {
+                style: ParagraphStyle {
+                    line_spacing: Some(LineSpacing::Proportional(1.0)),
+                    space_after: Some(10.0),
+                    ..ParagraphStyle::default()
+                },
+                runs: vec![Run {
+                    text: text.to_string(),
+                    style: TextStyle {
+                        font_family: Some("Arial".to_string()),
+                        font_size: Some(17.0),
+                        ..TextStyle::default()
+                    },
+                    href: None,
+                    footnote: None,
+                }],
+            })
+        })
+        .collect();
+    let doc = make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![make_fixed_text_box(
+            72.0,
+            126.0,
+            800.0,
+            200.0,
+            Insets::default(),
+            crate::ir::TextBoxVerticalAlign::Top,
+            paragraphs,
+        )],
+    )]);
+    let output = generate_typst(&doc).unwrap();
+    let runs = crate::render::pdf::compiled_text_runs(&output.source, 0)
+        .unwrap_or_else(|error| panic!("compile failed: {error}\n{}", output.source));
+    let baselines: Vec<f64> = ["First", "Second", "Third", "Fourth"]
+        .into_iter()
+        .map(|needle| {
+            runs.iter()
+                .find(|run| run.text.starts_with(needle))
+                .unwrap_or_else(|| panic!("missing {needle:?}: {runs:?}\n{}", output.source))
+                .baseline_pt
+        })
+        .collect();
+
+    for (needle, actual) in ["First", "Second", "Third", "Fourth"]
+        .into_iter()
+        .zip(&baselines)
+    {
+        assert!(
+            (actual - actual.round()).abs() < 0.01,
+            "{needle}'s absolute baseline must snap to a whole point, got {actual}pt; \
+             baselines={baselines:?}\n{}",
+            output.source
+        );
+    }
+    let advances: Vec<f64> = baselines.windows(2).map(|pair| pair[1] - pair[0]).collect();
+    assert!(
+        advances
+            .iter()
+            .any(|advance| (*advance - 30.0).abs() < 0.01)
+            && advances
+                .iter()
+                .any(|advance| (*advance - 31.0).abs() < 0.01),
+        "absolute snapping must distribute the fractional 30.4pt advance across \
+         30pt and 31pt painted steps, got {advances:?}\n{}",
+        output.source
+    );
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn marketing_report_bullets_snap_each_absolute_baseline() {
+    use crate::internal::{Parser, PptxParser};
+
+    let fixture = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/golden_mocks/business/sources/pptx/08_marketing_report_en.pptx");
+    let data = std::fs::read(fixture).expect("marketing report fixture");
+    let (document, _warnings) = PptxParser
+        .parse(&data, &crate::config::ConvertOptions::default())
+        .expect("marketing report must parse");
+    let slide = make_doc(vec![document.pages[2].clone()]);
+    let output = generate_typst(&slide).unwrap();
+    let runs = crate::render::pdf::compiled_text_runs(&output.source, 0)
+        .unwrap_or_else(|error| panic!("compile failed: {error}\n{}", output.source));
+    let baselines: Vec<f64> = ["Webinar", "Localized", "Brand", "Next:"]
+        .into_iter()
+        .map(|needle| {
+            runs.iter()
+                .find(|run| run.text.starts_with(needle))
+                .unwrap_or_else(|| panic!("missing {needle:?}: {runs:?}\n{}", output.source))
+                .baseline_pt
+        })
+        .collect();
+
+    for (needle, actual) in ["Webinar", "Localized", "Brand", "Next:"]
+        .into_iter()
+        .zip(&baselines)
+    {
+        assert!(
+            (actual - actual.round()).abs() < 0.01,
+            "{needle}'s absolute baseline must snap to a whole point, got {actual}pt; \
+             baselines={baselines:?}\n{}",
+            output.source
+        );
+    }
+    let advances: Vec<f64> = baselines.windows(2).map(|pair| pair[1] - pair[0]).collect();
+    assert!(
+        advances
+            .iter()
+            .any(|advance| (*advance - 30.0).abs() < 0.01)
+            && advances
+                .iter()
+                .any(|advance| (*advance - 31.0).abs() < 0.01),
+        "the real fixture's fractional 30.4pt advance must produce both 30pt \
+         and 31pt painted steps, got {advances:?}\n{}",
+        output.source
+    );
+}
+
+#[test]
+fn flat_slide_list_with_different_baseline_seats_declines_a_shared_snap() {
+    let item = |text: &str, font_size: f64, space_after: Option<f64>| ListItem {
+        content: vec![Paragraph {
+            style: ParagraphStyle {
+                line_spacing: Some(LineSpacing::Proportional(1.0)),
+                space_after,
+                ..ParagraphStyle::default()
+            },
+            runs: vec![Run {
+                text: text.to_string(),
+                style: TextStyle {
+                    font_family: Some("Arial".to_string()),
+                    font_size: Some(font_size),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        }],
+        level: 0,
+        start_at: None,
+    };
+    let doc = make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![make_fixed_text_box(
+            72.0,
+            126.0,
+            800.0,
+            200.0,
+            Insets::default(),
+            crate::ir::TextBoxVerticalAlign::Top,
+            vec![Block::List(List {
+                kind: ListKind::Unordered,
+                items: vec![item("First", 17.0, Some(10.0)), item("Second", 18.0, None)],
+                level_styles: std::collections::BTreeMap::new(),
+            })],
+        )],
+    )]);
+    let source = generate_typst(&doc).unwrap().source;
+
+    assert_eq!(
+        source.matches("#o2p-pptx-snap-baseline(").count(),
+        0,
+        "a shared list marker function cannot apply two different baseline seats:\n{source}"
+    );
 }
 
 /// `customGeo.pptx` slide 5 ends a wrapped 36pt paragraph with `studies.` and
@@ -3054,9 +3246,11 @@ fn smaller_slide_paragraph_keeps_powerpoints_boundary_line_box() {
     let rendered_percentage_gap_pt = (citation_baseline_pt - studies_baseline_pt)
         - (no_gap_citation_baseline_pt - no_gap_studies_baseline_pt);
     assert!(
-        (rendered_percentage_gap_pt - 4.8).abs() < 1e-9,
-        "the inherited percentage gap must add exactly 4.8pt to the paragraph \
-         boundary on every platform, got {rendered_percentage_gap_pt}pt; \
+        (rendered_percentage_gap_pt - 4.0).abs() < 1e-9
+            || (rendered_percentage_gap_pt - 5.0).abs() < 1e-9,
+        "the exact 4.8pt inherited paragraph gap must move the painted citation \
+         baseline by either adjacent whole-point delta after absolute snapping, got \
+         {rendered_percentage_gap_pt}pt; \
          with-gap baselines=({studies_baseline_pt}, {citation_baseline_pt}), \
          no-gap baselines=({no_gap_studies_baseline_pt}, \
          {no_gap_citation_baseline_pt})\nwith gap:\n{output_source}\nwithout gap:\n{no_gap_source}"

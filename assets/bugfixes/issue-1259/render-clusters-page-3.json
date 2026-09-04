@@ -1,0 +1,87 @@
+{
+  "clusters": [
+    {
+      "area_pt2": 31.3632,
+      "bbox_pt": {
+        "height": 12.6,
+        "width": 3.6,
+        "x": 446.76,
+        "y": 132.84
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-resolution crops show only narrow Arial glyph-edge coverage differences after the corrected baseline positions; text geometry, weight, and content match."
+      },
+      "id": "p3-4e8a74d35fc4",
+      "region": "top"
+    },
+    {
+      "area_pt2": 30.0672,
+      "bbox_pt": {
+        "height": 12.24,
+        "width": 2.88,
+        "x": 474.84,
+        "y": 129.6
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-resolution crops show only narrow Arial glyph-edge coverage differences after the corrected baseline positions; text geometry, weight, and content match."
+      },
+      "id": "p3-14f4a033231a",
+      "region": "top"
+    },
+    {
+      "area_pt2": 25.7904,
+      "bbox_pt": {
+        "height": 9.0,
+        "width": 2.88,
+        "x": 510.12,
+        "y": 132.84
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-resolution crops show only narrow Arial glyph-edge coverage differences after the corrected baseline positions; text geometry, weight, and content match."
+      },
+      "id": "p3-353c13649967",
+      "region": "top"
+    },
+    {
+      "area_pt2": 20.3472,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 4.68,
+        "x": 490.32,
+        "y": 133.92
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Full-resolution crops show only narrow Arial glyph-edge coverage differences after the corrected baseline positions; text geometry, weight, and content match."
+      },
+      "id": "p3-e4291b63ed44",
+      "region": "top"
+    }
+  ],
+  "dpi": 200,
+  "duplicate_disposition_cluster_ids": [],
+  "errors": [],
+  "fuzz_percent": 5,
+  "minimum_area_pt2": 20.0,
+  "page": 3,
+  "passed": true,
+  "renderer_observations": [],
+  "schema_version": 1,
+  "strict": true,
+  "summary": {
+    "dispositioned": 4,
+    "duplicate": 0,
+    "total": 4,
+    "undispositioned": 0,
+    "unknown": 0
+  },
+  "undispositioned_cluster_ids": [],
+  "unknown_disposition_cluster_ids": []
+}

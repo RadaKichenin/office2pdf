@@ -127,6 +127,11 @@ pub(super) fn write_powerpoint_advance_grid_helpers(out: &mut String) {
   let natural = measure(" ").width
   let target = calc.round(natural / o2p-pptx-advance-grid) * o2p-pptx-advance-grid
   [#" "; #h(target - natural, weak: true)]
+}}
+#let o2p-pptx-snap-baseline(raw-seat, layout-seat, body) = context {{
+  let top = here().position().y
+  let target = calc.round((top + raw-seat) / 1pt) * 1pt
+  move(dy: target - (top + layout-seat), body)
 }}"#
     );
 }
@@ -852,16 +857,19 @@ pub(super) fn powerpoint_percentage_line_box_em(
     font_size_pt: f64,
     percent: f64,
 ) -> (f64, f64) {
+    let (advance_em, seat_em) = powerpoint_percentage_line_box_seat_em(ascent_em, percent);
+    powerpoint_line_box_from_seat_em(advance_em, seat_em, font_size_pt)
+}
+
+fn powerpoint_percentage_line_box_seat_em(ascent_em: f64, percent: f64) -> (f64, f64) {
     let percent: f64 = powerpoint_whole_percent(percent);
     if percent > 1.0 {
         let advance_em: f64 = crate::render::pdf::POWERPOINT_LINE_HEIGHT_FACTOR * percent;
-        return powerpoint_line_box_from_seat_em(
-            advance_em,
-            POWERPOINT_EXPANDED_PERCENTAGE_ASCENT_EM * percent,
-            font_size_pt,
-        );
+        let seat_em: f64 =
+            (POWERPOINT_EXPANDED_PERCENTAGE_ASCENT_EM * percent).clamp(0.0, advance_em);
+        return (advance_em, seat_em);
     }
-    powerpoint_top_resized_line_box_em(ascent_em, font_size_pt, percent)
+    powerpoint_top_resized_line_box_seat_em(ascent_em, percent)
 }
 
 const POWERPOINT_EXPANDED_PERCENTAGE_ASCENT_EM: f64 = 0.9;
@@ -879,9 +887,14 @@ fn powerpoint_top_resized_line_box_em(
     font_size_pt: f64,
     percent: f64,
 ) -> (f64, f64) {
+    let (advance_em, seat_em) = powerpoint_top_resized_line_box_seat_em(ascent_em, percent);
+    powerpoint_line_box_from_seat_em(advance_em, seat_em, font_size_pt)
+}
+
+fn powerpoint_top_resized_line_box_seat_em(ascent_em: f64, percent: f64) -> (f64, f64) {
     let advance_em: f64 = (crate::render::pdf::POWERPOINT_LINE_HEIGHT_FACTOR * percent).max(0.0);
     let below_em: f64 = crate::render::pdf::POWERPOINT_LINE_HEIGHT_FACTOR - ascent_em;
-    powerpoint_line_box_from_seat_em(advance_em, advance_em - below_em, font_size_pt)
+    (advance_em, (advance_em - below_em).clamp(0.0, advance_em))
 }
 
 fn powerpoint_line_box_from_seat_em(
@@ -934,6 +947,63 @@ pub(super) fn powerpoint_line_height_settings(
         format_f64(ascent_em * font_size_pt),
         format_f64(descent_em * font_size_pt)
     ))
+}
+
+/// The two baseline seats a fixed slide paragraph needs to snap at layout
+/// time: PowerPoint's unrounded metric seat and the already-rounded seat that
+/// forms the paragraph's Typst line box.
+///
+/// The paragraph top can be fractional after earlier line advances and
+/// DrawingML paragraph spacing, so only Typst knows the absolute coordinate to
+/// round. Keeping the layout seat alongside the raw one lets the contextual
+/// helper translate paint without changing the line box or later paragraph
+/// tops (issue #1259).
+#[derive(Clone, Copy, PartialEq)]
+pub(super) struct PowerPointBaselineSnap {
+    raw_seat_pt: f64,
+    layout_seat_pt: f64,
+}
+
+impl PowerPointBaselineSnap {
+    pub(super) fn write_open(self, out: &mut String) {
+        let _ = write!(
+            out,
+            "#o2p-pptx-snap-baseline({}pt, {}pt)[",
+            format_f64(self.raw_seat_pt),
+            format_f64(self.layout_seat_pt),
+        );
+    }
+}
+
+pub(super) fn powerpoint_absolute_baseline_snap(
+    runs: &[Run],
+    style: &ParagraphStyle,
+) -> Option<PowerPointBaselineSnap> {
+    let font_size_pt: f64 = declared_paragraph_font_size_pt(runs)?;
+    if !font_size_pt.is_finite() || font_size_pt <= 0.0 || style.line_box.is_some() {
+        return None;
+    }
+
+    let raw_seat_em: f64 = match style.line_spacing {
+        Some(LineSpacing::Exact(points)) if points > 0.0 => {
+            let families: Vec<&str> = powerpoint_line_families(runs, style);
+            let (ascent_em, _descent_em) =
+                crate::render::pdf::powerpoint_line_box_em_for_families(&families)?;
+            let plain_advance_pt: f64 =
+                crate::render::pdf::POWERPOINT_LINE_HEIGHT_FACTOR * font_size_pt;
+            powerpoint_top_resized_line_box_seat_em(ascent_em, points / plain_advance_pt).1
+        }
+        _ => {
+            let (ascent_em, percent) = powerpoint_paragraph_line_model(runs, style)?;
+            powerpoint_percentage_line_box_seat_em(ascent_em, percent).1
+        }
+    };
+    let raw_seat_pt: f64 = raw_seat_em * font_size_pt;
+    let layout_seat_pt: f64 = powerpoint_paragraph_line_box_em(runs, style)?.0 * font_size_pt;
+    Some(PowerPointBaselineSnap {
+        raw_seat_pt,
+        layout_seat_pt,
+    })
 }
 
 /// The height, in points, of one blank PowerPoint line for `runs`.
