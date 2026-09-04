@@ -419,6 +419,24 @@ fn a_declared_coordinate_space_still_wins_over_the_extent() {
     assert!(close_to(vertices[2], (0.5, 0.25)), "got {:?}", vertices[2]);
 }
 
+/// DrawingML makes `w` and `h` independent optional attributes. PowerPoint
+/// can therefore declare a horizontal path scale while leaving the vertical
+/// axis in the shape's own coordinate space (issue #1418).
+#[test]
+fn a_single_declared_path_axis_scales_independently() {
+    let subpaths = parse_subpaths_in(
+        r#"<a:custGeom><a:pathLst><a:path w="200">
+            <a:moveTo><a:pt x="0" y="100"/></a:moveTo>
+            <a:lnTo><a:pt x="200" y="100"/></a:lnTo>
+        </a:path></a:pathLst></a:custGeom>"#,
+        ShapeExtent::new(400.0, 200.0),
+    );
+
+    let vertices: &Vec<(f64, f64)> = &subpaths[0].vertices;
+    assert!(close_to(vertices[0], (0.0, 0.5)), "got {:?}", vertices[0]);
+    assert!(close_to(vertices[1], (1.0, 0.5)), "got {:?}", vertices[1]);
+}
+
 /// A coordinate may be a guide name rather than a number. Reading only
 /// numbers left the geometry empty and the caller's rectangle fallback
 /// standing in for it (issue #1205).

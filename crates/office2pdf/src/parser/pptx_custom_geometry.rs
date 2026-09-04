@@ -1,7 +1,8 @@
 //! `a:custGeom` path translation.
 //!
 //! A shape that declares custom geometry carries an `<a:pathLst>` of drawing
-//! commands in its own coordinate space (`<a:path w= h=>`). Discarding it and
+//! commands in its own coordinate space (`<a:path w= h=>`, with either axis
+//! optional). Discarding it and
 //! substituting a rectangle turned every decorative curve into a block and
 //! every circular frame into a square (issue #855).
 //!
@@ -326,8 +327,8 @@ struct SubpathBuilder {
     /// vertices rather than be inferred from them: an elbow connector's last
     /// point is nowhere near its first, and so is a spiral's (issue #1205).
     closed: bool,
-    /// The `<a:path w= h=>` coordinate space, or the shape's own extent when
-    /// the path declares none.
+    /// The `<a:path w= h=>` coordinate space. An undeclared or zero axis uses
+    /// the corresponding axis of the shape's own extent.
     space: ShapeExtent,
 }
 
@@ -349,18 +350,20 @@ impl SubpathBuilder {
     /// `<a:path>`: bank whatever the previous one left and read the new
     /// coordinate space.
     ///
-    /// `w`/`h` default to 0, which DrawingML reads as "the shape's own
-    /// space" — the form a guide-driven geometry uses, since its guides are
-    /// already in the shape's units.
+    /// `w` and `h` are independent optional axes. A missing or zero axis uses
+    /// the corresponding shape extent — the form a guide-driven geometry
+    /// uses, since its guides are already in the shape's units (issue #1418).
     fn start_path(&mut self, element: &BytesStart) {
         self.start_subpath();
-        let width: f64 = get_attr_i64(element, b"w").unwrap_or(0) as f64;
-        let height: f64 = get_attr_i64(element, b"h").unwrap_or(0) as f64;
-        self.space = if width > 0.0 && height > 0.0 {
-            ShapeExtent::new(width, height)
-        } else {
-            self.extent
-        };
+        let width: f64 = get_attr_i64(element, b"w")
+            .map(|value| value as f64)
+            .filter(|value| *value > 0.0)
+            .unwrap_or(self.extent.width);
+        let height: f64 = get_attr_i64(element, b"h")
+            .map(|value| value as f64)
+            .filter(|value| *value > 0.0)
+            .unwrap_or(self.extent.height);
+        self.space = ShapeExtent::new(width, height);
     }
 
     fn end_path(&mut self) {
