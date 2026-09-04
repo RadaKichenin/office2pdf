@@ -663,9 +663,8 @@ impl PowerPointRunLineMetrics {
 ///
 /// Plain lines round their baseline seat independently at the size of the
 /// physical line they hold (#1252). Explicit spacing keeps the existing
-/// paragraph-relative model: percentage spacing has separate native-export
-/// questions tracked by #1254, and absolute spacing is outside #1252's plain
-/// no-`lnSpc` probe.
+/// paragraph-relative model: #1254 supplies the measured percentage regimes,
+/// while absolute spacing remains outside #1252's plain no-`lnSpc` probe.
 #[derive(Clone, Copy)]
 enum PowerPointHardBreakLineMetrics {
     PerLine(PowerPointRunLineMetrics),
@@ -697,36 +696,42 @@ impl PowerPointHardBreakLineMetrics {
 /// at all (issue #513).
 ///
 /// `<a:lnSpc><a:spcPct>` scales that line rather than replacing it: the advance
-/// is `percent x 1.2em`, and [`powerpoint_percentage_line_box_em`] takes the
-/// whole change off the ascent side. Carrying the percentage as `par(leading)`
-/// instead moved nothing between single-line paragraphs — a slide's code block
-/// is one `<a:p>` per line — so the lines overlapped (issue #541).
+/// is `percent x 1.2em`, and [`powerpoint_percentage_line_box_em`] chooses the
+/// measured below- or above-100% baseline regime. Carrying the percentage as
+/// `par(leading)` instead moved nothing between single-line paragraphs — a
+/// slide's code block is one `<a:p>` per line — so the lines overlapped (issue
+/// #541).
 ///
 /// The seat inside that line is measured in whole points rather than in em.
 /// Paragraph-wide callers therefore resolve it against the largest declared
 /// size. An automatically wrapped mixed-size paragraph attaches the resulting
-/// point edges to each run, while an explicitly hard-broken stack resolves the
-/// same seat at each line's own maximum size. Both let the physical line use
-/// the size it actually holds instead of rescaling the paragraph maximum's
-/// already-rounded ratio (#1252).
+/// point edges to each run. A plain explicitly hard-broken stack likewise
+/// resolves the seat at each line's own maximum size, instead of rescaling the
+/// paragraph maximum's already-rounded ratio (#1252); a stack with explicit
+/// line spacing retains the paragraph-relative model described above.
 ///
 /// `None` when the paragraph carries its own line box or when the font's
 /// metrics are unknown. An absolute `a:spcPts` rule is expressed as the
 /// equivalent scale of PowerPoint's plain 1.2em line so it retains the same
 /// baseline-seating model while replacing the advance.
 fn powerpoint_paragraph_line_box_em(runs: &[Run], style: &ParagraphStyle) -> Option<(f64, f64)> {
-    let (ascent_em, percent) = match style.line_spacing {
-        Some(LineSpacing::Exact(points)) if points > 0.0 && style.line_box.is_none() => {
-            let families: Vec<&str> = powerpoint_line_families(runs, style);
-            let (ascent_em, _descent_em) =
-                crate::render::pdf::powerpoint_line_box_em_for_families(&families)?;
-            let font_size_pt: f64 = paragraph_font_size_pt(runs);
-            let plain_advance_pt: f64 =
-                crate::render::pdf::POWERPOINT_LINE_HEIGHT_FACTOR * font_size_pt;
-            (ascent_em, points / plain_advance_pt)
-        }
-        _ => powerpoint_paragraph_line_model(runs, style)?,
-    };
+    if let Some(LineSpacing::Exact(points)) = style.line_spacing
+        && points > 0.0
+        && style.line_box.is_none()
+    {
+        let families: Vec<&str> = powerpoint_line_families(runs, style);
+        let (ascent_em, _descent_em) =
+            crate::render::pdf::powerpoint_line_box_em_for_families(&families)?;
+        let font_size_pt: f64 = paragraph_font_size_pt(runs);
+        let plain_advance_pt: f64 =
+            crate::render::pdf::POWERPOINT_LINE_HEIGHT_FACTOR * font_size_pt;
+        return Some(powerpoint_top_resized_line_box_em(
+            ascent_em,
+            font_size_pt,
+            points / plain_advance_pt,
+        ));
+    }
+    let (ascent_em, percent) = powerpoint_paragraph_line_model(runs, style)?;
     Some(powerpoint_percentage_line_box_em(
         ascent_em,
         paragraph_font_size_pt(runs),
@@ -808,26 +813,37 @@ fn powerpoint_line_families<'a>(runs: &'a [Run], style: &'a ParagraphStyle) -> V
 /// [`crate::render::pdf::powerpoint_line_box_split_em`] used to hand it — misses
 /// 9 of Georgia's 14 cells, by up to 2.04pt at 72pt (issue #1118).
 ///
-/// PowerPoint resizes the line from its **top**: the gap the face keeps below
-/// its baseline is the plain line's `1.2em - ascent_em` whatever the
-/// percentage, and the ascent side absorbs the whole change, so the percentage
-/// enters only through the advance the seat is measured back from. Measured on
-/// the same exports, against the plain-box control for the same face and size:
-/// Arial 38pt drops its first baseline 36.96pt below the content top plain and
-/// 30.00pt under `val="85000"`, a 6.96pt loss where the line loses 6.84pt. All 18
-/// Posterama titles of the #841 Contoso deck agree across 30, 32, 36, 38, 46 and
-/// 50pt. Scaling both sides by the percentage instead, which is what the even
-/// division of a *taller* box implies, left every one of those titles 1.8-3.7pt
-/// low (issues #1020, #1024).
+/// At or below 100%, PowerPoint resizes the line from its **top**: the gap the
+/// face keeps below its baseline is the plain line's `1.2em - ascent_em`, and
+/// the ascent side absorbs the whole change. Measured against the plain-box
+/// control for the same face and size, Arial 38pt drops its first baseline
+/// 36.96pt below the content top plain and 30.00pt under `val="85000"`, a 6.96pt
+/// loss where the line loses 6.84pt. All 18 Posterama titles of the #841
+/// Contoso deck agree across 30, 32, 36, 38, 46 and 50pt. Scaling both sides at
+/// 85% instead left every one of those titles 1.8-3.7pt low (issues #1020,
+/// #1024).
 ///
-/// The rounding lands on the **scaled** seat, measured back from the plain
-/// line's unrounded gap, so there is one rounding and not two. Rounding the
-/// plain seat to a point first and subtracting that from the scaled advance
-/// predicts 10pt for slide 8's 14pt `Heraclitus` attribution under
-/// `val="85000"`, where the export seats it 11.04pt below the content top; this
-/// form predicts 11. The #841 deck's other `spcPct` frames cannot tell the two
-/// apart — its 30pt centred and 38pt top-anchored Posterama titles land on 23pt
-/// and 29pt either way — so that one attribution carries the distinction.
+/// Above 100%, PowerPoint switches to a face-independent 0.9em ascent and
+/// scales that with the percentage. A native PowerPoint 16.112 one-factor
+/// probe covers Arial at 6, 8, 9, 10, 11, 12 and 14pt under 125%, 150% and
+/// 200%; every first baseline lands on `round(0.9 x percent x size)`. Replacing
+/// Arial with Georgia, Verdana or Times New Roman at 150% leaves every baseline
+/// unchanged. Holding the plain descent gap instead misses those cells by up
+/// to two points (issue #1254).
+///
+/// The OOXML value is precise to one thousandth of a percent, but PowerPoint
+/// rounds it to a whole percent before choosing the regime or sizing the line:
+/// 100.499% is layout-identical to 100%, while 100.500% is identical to 101%.
+///
+/// At or below 100%, rounding lands on the **scaled** seat measured back from
+/// the plain line's unrounded gap, so there is one rounding and not two.
+/// Rounding the plain seat to a point first and subtracting that from the
+/// scaled advance predicts 10pt for slide 8's 14pt `Heraclitus` attribution
+/// under `val="85000"`, where the export seats it 11.04pt below the content
+/// top; the unrounded-gap form predicts 11. The #841 deck's other `spcPct`
+/// frames cannot tell the two apart — its 30pt centred and 38pt top-anchored
+/// Posterama titles land on 23pt and 29pt either way — so that one attribution
+/// carries the distinction.
 ///
 /// The seat cannot outgrow the line it sits in, so a percentage small enough to
 /// close the box takes the ascent to zero rather than negative.
@@ -836,17 +852,49 @@ pub(super) fn powerpoint_percentage_line_box_em(
     font_size_pt: f64,
     percent: f64,
 ) -> (f64, f64) {
+    let percent: f64 = powerpoint_whole_percent(percent);
+    if percent > 1.0 {
+        let advance_em: f64 = crate::render::pdf::POWERPOINT_LINE_HEIGHT_FACTOR * percent;
+        return powerpoint_line_box_from_seat_em(
+            advance_em,
+            POWERPOINT_EXPANDED_PERCENTAGE_ASCENT_EM * percent,
+            font_size_pt,
+        );
+    }
+    powerpoint_top_resized_line_box_em(ascent_em, font_size_pt, percent)
+}
+
+const POWERPOINT_EXPANDED_PERCENTAGE_ASCENT_EM: f64 = 0.9;
+
+fn powerpoint_whole_percent(percent: f64) -> f64 {
+    if !percent.is_finite() {
+        return 0.0;
+    }
+    let thousandths_of_percent: f64 = (percent.max(0.0) * 100_000.0).round();
+    (thousandths_of_percent / 1_000.0).round() / 100.0
+}
+
+fn powerpoint_top_resized_line_box_em(
+    ascent_em: f64,
+    font_size_pt: f64,
+    percent: f64,
+) -> (f64, f64) {
     let advance_em: f64 = (crate::render::pdf::POWERPOINT_LINE_HEIGHT_FACTOR * percent).max(0.0);
     let below_em: f64 = crate::render::pdf::POWERPOINT_LINE_HEIGHT_FACTOR - ascent_em;
+    powerpoint_line_box_from_seat_em(advance_em, advance_em - below_em, font_size_pt)
+}
+
+fn powerpoint_line_box_from_seat_em(
+    advance_em: f64,
+    seat_em: f64,
+    font_size_pt: f64,
+) -> (f64, f64) {
+    let seat_em: f64 = seat_em.clamp(0.0, advance_em);
     if font_size_pt.is_nan() || font_size_pt <= 0.0 {
-        // Nothing to round against; fall back to the bare em split.
-        let below_em: f64 = below_em.clamp(0.0, advance_em);
-        return (advance_em - below_em, below_em);
+        return (seat_em, advance_em - seat_em);
     }
     let advance_pt: f64 = advance_em * font_size_pt;
-    let seat_pt: f64 = ((advance_em - below_em) * font_size_pt)
-        .round()
-        .clamp(0.0, advance_pt);
+    let seat_pt: f64 = (seat_em * font_size_pt).round().clamp(0.0, advance_pt);
     (
         seat_pt / font_size_pt,
         (advance_pt - seat_pt) / font_size_pt,
