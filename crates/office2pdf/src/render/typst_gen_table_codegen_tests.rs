@@ -1618,9 +1618,8 @@ fn test_slide_table_cell_uses_the_powerpoint_line_box() {
 /// every hard-broken line under 10pt at a flat 12.00pt (issue #1172). What
 /// actually carries the gap is the 13pt line's descent.
 ///
-/// The 0.37pt that remains is the paragraph-wide seat share, tracked in #1252;
-/// the tolerance here is the half point that separates a preceding line's
-/// descent from no descent at all.
+/// Each line now rounds its own seat (#1252), which predicts 11.60pt for this
+/// boundary and remains within the native export's half-point dither band.
 ///
 /// This compiles the real table-cell path so its vertical centring and line
 /// box cannot make a source-only assertion pass by accident (issue #683).
@@ -1702,10 +1701,21 @@ fn slide_table_hard_break_clears_the_taller_line_above_it() {
         .baseline_pt;
 
     let advance_pt: f64 = word_baseline - docx_baseline;
+    let (plain_ascent_em, _) = crate::render::pdf::powerpoint_line_box_em(family)
+        .expect("the Arial-compatible line metrics must resolve");
+    let line_box_pt = |size_pt: f64| -> (f64, f64) {
+        let (top_em, bottom_em) = powerpoint_percentage_line_box_em(plain_ascent_em, size_pt, 1.0);
+        (top_em * size_pt, bottom_em * size_pt)
+    };
+    let (_, docx_bottom_pt) = line_box_pt(13.0);
+    let (word_top_pt, _) = line_box_pt(9.5);
+    let expected_pt = docx_bottom_pt + word_top_pt;
     assert!(
-        advance_pt > 1.2 * 9.5 + 0.5,
-        "the 13pt line's descent must push the 9.5pt line past its own 11.4pt \
-         box: {docx_baseline}, {word_baseline}\n{}",
+        (advance_pt - expected_pt).abs() < 0.01,
+        "the break must combine the 13pt line's independently rounded descent \
+         with the 9.5pt line's independently rounded seat: expected \
+         {expected_pt}pt, got {advance_pt}pt from {docx_baseline}, \
+         {word_baseline}\n{}",
         output.source
     );
     assert!(

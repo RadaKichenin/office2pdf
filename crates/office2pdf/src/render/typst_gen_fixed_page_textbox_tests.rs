@@ -3116,9 +3116,10 @@ fn powerpoint_empty_boundary_breaks_do_not_move_a_centred_title() {
 /// the whole box — 12.00pt for 12.5pt over 10pt. A nine-line probe of the same
 /// pair paces it at 12.96pt and its 10pt-over-12.5pt partner at 14.04pt, where
 /// the whole-box reading gives 12.00 and 15.00; the two sum to `1.2 x 22.5`
-/// either way, so only the boundary between them was ever in question. The
-/// half-point tolerances below are what separates the two models, and the
-/// 0.36pt inside them is the paragraph-wide seat share tracked in #1252.
+/// either way, so only the boundary between them was ever in question. Each
+/// line now rounds its own seat (#1252); the half-point tolerances below allow
+/// the native export's per-baseline coordinate dither while still separating
+/// the two models.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn powerpoint_hard_break_advance_clears_the_line_above_it() {
@@ -3184,8 +3185,8 @@ fn powerpoint_hard_break_advance_clears_the_line_above_it() {
     assert_eq!(baselines.len(), 3, "expected three lines: {baselines:?}");
     let (top_em, _) = crate::render::pdf::powerpoint_line_box_em(family)
         .expect("the Arial-compatible line metrics must resolve");
-    // The paragraph's largest size decides its line box, and PowerPoint seats
-    // the baseline a whole number of points below its top (issue #1074).
+    // PowerPoint seats the baseline a whole number of points below the first
+    // line's top (issue #1074).
     let expected_first_baseline = 72.0 + (top_em * 12.5).round();
     assert!(
         (baselines[0] - expected_first_baseline).abs() < 0.01,
@@ -4217,6 +4218,55 @@ fn a_hard_broken_slide_line_advances_by_its_own_font_size() {
                      got {gap}pt: {baselines:?}"
                 );
             }
+        }
+    }
+}
+
+/// A mixed-size hard-broken paragraph rounds the seat of every line at that
+/// line's own size, rather than rounding once at the paragraph maximum and
+/// rescaling the resulting ratio (#1252).
+///
+/// The native PowerPoint probe behind the issue measures the most visible
+/// Arial 20/10 transition at 14.88pt down and 21.12pt back up, which is the
+/// export's 0.24pt coordinate grid around this model's 15pt and 21pt. The
+/// paragraph-wide split emits 14.5pt and 21.5pt instead. The other families
+/// keep the regression tied to the shared line-box model rather than to one
+/// lucky Arial rounding boundary.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn mixed_size_hard_breaks_round_each_lines_own_seat() {
+    for (family, sizes_pt) in [
+        ("Arial", [20.0_f64, 10.0, 20.0]),
+        ("Georgia", [20.0_f64, 10.0, 20.0]),
+        ("Verdana", [20.0_f64, 10.0, 20.0]),
+        ("Arial", [30.0_f64, 10.0, 30.0]),
+    ] {
+        let baselines = hard_broken_slide_baselines(family, &sizes_pt, true);
+        let (plain_ascent_em, _) = crate::render::pdf::powerpoint_line_box_em(family)
+            .unwrap_or_else(|| panic!("the {family} line metrics must resolve"));
+        let line_box_pt = |size_pt: f64| -> (f64, f64) {
+            let (top_em, bottom_em) =
+                powerpoint_percentage_line_box_em(plain_ascent_em, size_pt, 1.0);
+            (top_em * size_pt, bottom_em * size_pt)
+        };
+
+        for ((sizes, baselines), direction) in sizes_pt
+            .windows(2)
+            .zip(baselines.windows(2))
+            .zip(["down", "up"])
+        {
+            let (_, preceding_bottom_pt) = line_box_pt(sizes[0]);
+            let (following_top_pt, _) = line_box_pt(sizes[1]);
+            let expected_pt = preceding_bottom_pt + following_top_pt;
+            let actual_pt = baselines[1] - baselines[0];
+            assert!(
+                (actual_pt - expected_pt).abs() < 0.01,
+                "the {family} {direction} break from {}pt to {}pt must use each \
+                 line's independently rounded seat: expected {expected_pt}pt, \
+                 got {actual_pt}pt from {baselines:?}",
+                sizes[0],
+                sizes[1],
+            );
         }
     }
 }
