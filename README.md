@@ -123,7 +123,7 @@ other custom font directory) explicitly with `--font-path` or
 Build with `wasm-pack`:
 
 ```sh
-wasm-pack build crates/office2pdf --target web --features wasm
+wasm-pack build crates/office2pdf --target web --features wasm --locked
 ```
 
 The default build does not add a CJK font. For zero-configuration Simplified
@@ -131,7 +131,7 @@ Chinese fallback, opt in to the 3.3 MiB GB2312 subset (this feature implies
 `wasm`):
 
 ```sh
-wasm-pack build crates/office2pdf --target web --features wasm-cjk-font
+wasm-pack build crates/office2pdf --target web --features wasm-cjk-font --locked
 ```
 
 Use from JavaScript:

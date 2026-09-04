@@ -143,7 +143,7 @@ GT with the per-format noise floor (0.12pt Word/PowerPoint, 0.5pt Excel).
 Regenerate it with a local build:
 
 ```sh
-cargo build -p office2pdf-cli
+cargo build --locked -p office2pdf-cli
 python3 scripts/generate_layout_baselines.py --office2pdf target/debug/office2pdf
 ```
 

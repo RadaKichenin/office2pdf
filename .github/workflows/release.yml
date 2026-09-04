@@ -54,7 +54,7 @@ jobs:
           set -euo pipefail
 
           version="${RELEASE_TAG#v}"
-          metadata="$(cargo metadata --no-deps --format-version 1)"
+          metadata="$(cargo metadata --locked --no-deps --format-version 1)"
           lib_version="$(jq -r '.packages[] | select(.name == "office2pdf") | .version' <<<"${metadata}")"
           cli_version="$(jq -r '.packages[] | select(.name == "office2pdf-cli") | .version' <<<"${metadata}")"
           cli_dependency="$(jq -r '.packages[] | select(.name == "office2pdf-cli") | .dependencies[] | select(.name == "office2pdf") | .req' <<<"${metadata}")"
@@ -190,7 +190,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y musl-tools
 
       - name: Build
-        run: cargo build --release -p office2pdf-cli --target ${{ matrix.target }}
+        run: cargo build --locked --release -p office2pdf-cli --target ${{ matrix.target }}
 
       - name: Package (tar.gz)
         if: matrix.archive == 'tar.gz'
