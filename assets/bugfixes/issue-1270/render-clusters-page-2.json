@@ -2025,9 +2025,9 @@
         "y": 341.76
       },
       "disposition": {
-        "class": "glyph-edge-rasterization",
-        "kind": "accepted-rendering",
-        "note": "The full-resolution crop shows matching CASH FLOW and month-label content, style, and placement; trace deltas are below 0.5pt and these small residuals follow glyph edges."
+        "issue": "#1563",
+        "kind": "issue",
+        "note": "Native Excel uses Cambria for the cash-flow category labels, while output uses Trebuchet MS. The axis requests +mj-lt, but the axis parser discards the raw +mj-lt typeface reference. These are font-family differences, not glyph-edge rasterization."
       },
       "id": "p2-5132ec031d39",
       "region": "top-right"
@@ -2217,9 +2217,9 @@
         "y": 339.36
       },
       "disposition": {
-        "class": "glyph-edge-rasterization",
-        "kind": "accepted-rendering",
-        "note": "The full-resolution crop shows matching CASH FLOW and month-label content, style, and placement; trace deltas are below 0.5pt and these small residuals follow glyph edges."
+        "issue": "#1563",
+        "kind": "issue",
+        "note": "Native Excel uses Cambria for the cash-flow category labels, while output uses Trebuchet MS. The axis requests +mj-lt, but the axis parser discards the raw +mj-lt typeface reference. These are font-family differences, not glyph-edge rasterization."
       },
       "id": "p2-53384b978b29",
       "region": "top"
@@ -2585,9 +2585,9 @@
         "y": 341.76
       },
       "disposition": {
-        "class": "glyph-edge-rasterization",
-        "kind": "accepted-rendering",
-        "note": "The full-resolution crop shows matching CASH FLOW and month-label content, style, and placement; trace deltas are below 0.5pt and these small residuals follow glyph edges."
+        "issue": "#1563",
+        "kind": "issue",
+        "note": "Native Excel uses Cambria for the cash-flow category labels, while output uses Trebuchet MS. The axis requests +mj-lt, but the axis parser discards the raw +mj-lt typeface reference. These are font-family differences, not glyph-edge rasterization."
       },
       "id": "p2-dc2b7da6ab82",
       "region": "top"
@@ -4153,9 +4153,9 @@
         "y": 341.76
       },
       "disposition": {
-        "class": "glyph-edge-rasterization",
-        "kind": "accepted-rendering",
-        "note": "The full-resolution crop shows matching CASH FLOW and month-label content, style, and placement; trace deltas are below 0.5pt and these small residuals follow glyph edges."
+        "issue": "#1563",
+        "kind": "issue",
+        "note": "Native Excel uses Cambria for the cash-flow category labels, while output uses Trebuchet MS. The axis requests +mj-lt, but the axis parser discards the raw +mj-lt typeface reference. These are font-family differences, not glyph-edge rasterization."
       },
       "id": "p2-01887b5cc29d",
       "region": "top"
@@ -4507,7 +4507,7 @@
       "disposition": {
         "class": "glyph-edge-rasterization",
         "kind": "accepted-rendering",
-        "note": "The full-resolution crop shows matching CASH FLOW and month-label content, style, and placement; trace deltas are below 0.5pt and these small residuals follow glyph edges."
+        "note": "The full-resolution crop shows matching CASH FLOW heading content, font family, weight, and placement; this remaining residual follows the heading glyph edges."
       },
       "id": "p2-68ec8ee844ea",
       "region": "top-left"
@@ -4553,9 +4553,9 @@
         "y": 341.76
       },
       "disposition": {
-        "class": "glyph-edge-rasterization",
-        "kind": "accepted-rendering",
-        "note": "The full-resolution crop shows matching CASH FLOW and month-label content, style, and placement; trace deltas are below 0.5pt and these small residuals follow glyph edges."
+        "issue": "#1563",
+        "kind": "issue",
+        "note": "Native Excel uses Cambria for the cash-flow category labels, while output uses Trebuchet MS. The axis requests +mj-lt, but the axis parser discards the raw +mj-lt typeface reference. These are font-family differences, not glyph-edge rasterization."
       },
       "id": "p2-544655956bdd",
       "region": "top"
@@ -4569,9 +4569,9 @@
         "y": 339.36
       },
       "disposition": {
-        "class": "glyph-edge-rasterization",
-        "kind": "accepted-rendering",
-        "note": "The full-resolution crop shows matching CASH FLOW and month-label content, style, and placement; trace deltas are below 0.5pt and these small residuals follow glyph edges."
+        "issue": "#1563",
+        "kind": "issue",
+        "note": "Native Excel uses Cambria for the cash-flow category labels, while output uses Trebuchet MS. The axis requests +mj-lt, but the axis parser discards the raw +mj-lt typeface reference. These are font-family differences, not glyph-edge rasterization."
       },
       "id": "p2-a9b60c71262d",
       "region": "top-left"
@@ -7257,9 +7257,9 @@
         "y": 341.76
       },
       "disposition": {
-        "class": "glyph-edge-rasterization",
-        "kind": "accepted-rendering",
-        "note": "The full-resolution crop shows matching CASH FLOW and month-label content, style, and placement; trace deltas are below 0.5pt and these small residuals follow glyph edges."
+        "issue": "#1563",
+        "kind": "issue",
+        "note": "Native Excel uses Cambria for the cash-flow category labels, while output uses Trebuchet MS. The axis requests +mj-lt, but the axis parser discards the raw +mj-lt typeface reference. These are font-family differences, not glyph-edge rasterization."
       },
       "id": "p2-aade0100f28b",
       "region": "top-left"
