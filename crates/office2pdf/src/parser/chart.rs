@@ -9,9 +9,10 @@ use quick_xml::events::Event;
 use super::drawingml::{self, SchemeColors};
 use super::xml_util;
 use crate::ir::{
-    AxisTickMark, BarBandLayout, Chart, ChartAreaFill, ChartAreaOutline, ChartGrouping, ChartHost,
-    ChartLine, ChartPlotAreaLayout, ChartSeries, ChartTextStyle, ChartTitleLayout, ChartType,
-    Color, DataLabelPosition, DataLabels, LegendPosition, MarkerSymbol,
+    AxisTickMark, BarBandLayout, Chart, ChartAreaFill, ChartAreaOutline, ChartFillMode,
+    ChartGrouping, ChartHost, ChartLine, ChartPlotAreaLayout, ChartSeries, ChartTextStyle,
+    ChartTitleLayout, ChartType, Color, DataLabelPosition, DataLabels, LegendPosition,
+    MarkerSymbol,
 };
 
 /// Mapping from XML chart element tag names to their corresponding `ChartType`.
@@ -1104,10 +1105,11 @@ fn parse_single_series(
     let mut values = Vec::new();
     let mut categories = Vec::new();
     let mut fill: Option<Color> = None;
+    let mut fill_mode = ChartFillMode::Automatic;
     let mut data_labels: DataLabels = DataLabels::default();
     // Keyed by `<c:idx>` because `<c:dPt>` entries are written only for the
     // points that override the series, and not necessarily in order.
-    let mut point_fills: std::collections::BTreeMap<usize, Color> =
+    let mut point_fills: std::collections::BTreeMap<usize, (Option<Color>, ChartFillMode)> =
         std::collections::BTreeMap::new();
     let mut number_format: Option<String> = None;
     let mut marker_symbol: Option<MarkerSymbol> = None;
@@ -1130,11 +1132,14 @@ fn parse_single_series(
                 b"spPr" => {
                     let properties = parse_shape_properties(reader, b"spPr", scheme);
                     fill = fill.or(properties.fill);
+                    if fill_mode == ChartFillMode::Automatic {
+                        fill_mode = properties.fill_mode;
+                    }
                     line_width_pt = line_width_pt.or(properties.line_width_pt);
                 }
                 b"dPt" => {
-                    if let Some((index, color)) = parse_data_point(reader, scheme) {
-                        point_fills.insert(index, color);
+                    if let Some((index, color, mode)) = parse_data_point(reader, scheme) {
+                        point_fills.insert(index, (color, mode));
                     }
                 }
                 // Consumed whole for the same reason as `<c:dLbls>`: the
@@ -1161,8 +1166,15 @@ fn parse_single_series(
     }
 
     let point_count: usize = point_fills.keys().last().map_or(0, |last| last + 1);
+    let point_fill_modes: Vec<ChartFillMode> = (0..point_count)
+        .map(|index| {
+            point_fills
+                .get(&index)
+                .map_or(ChartFillMode::Automatic, |entry| entry.1)
+        })
+        .collect();
     let point_fills: Vec<Option<Color>> = (0..point_count)
-        .map(|index| point_fills.get(&index).copied())
+        .map(|index| point_fills.get(&index).and_then(|entry| entry.0))
         .collect();
 
     (
@@ -1170,7 +1182,9 @@ fn parse_single_series(
             name,
             values,
             fill,
+            fill_mode,
             point_fills,
+            point_fill_modes,
             data_labels,
             number_format,
             // Filled in by the caller, which knows the family element this
@@ -1319,14 +1333,19 @@ fn marker_symbol_for(value: &str) -> Option<MarkerSymbol> {
 fn parse_data_point(
     reader: &mut Reader<&[u8]>,
     scheme: &SchemeColors<'_>,
-) -> Option<(usize, Color)> {
+) -> Option<(usize, Option<Color>, ChartFillMode)> {
     let mut index: Option<usize> = None;
     let mut fill: Option<Color> = None;
+    let mut fill_mode = ChartFillMode::Automatic;
 
     loop {
         match reader.read_event() {
             Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"spPr" => {
-                fill = fill.or(parse_solid_fill(reader, b"spPr", scheme));
+                let properties = parse_shape_properties(reader, b"spPr", scheme);
+                fill = fill.or(properties.fill);
+                if fill_mode == ChartFillMode::Automatic {
+                    fill_mode = properties.fill_mode;
+                }
             }
             Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))
                 if e.local_name().as_ref() == b"idx" =>
@@ -1339,7 +1358,7 @@ fn parse_data_point(
         }
     }
 
-    Some((index?, fill?))
+    Some((index?, fill, fill_mode))
 }
 
 /// Read an `<a:ln>` nested anywhere up to `end_tag` into the stroke it states.
@@ -1415,6 +1434,9 @@ fn parse_chart_line(
 /// What a `<c:spPr>` says about the shape it belongs to.
 #[derive(Debug, Clone, Copy, Default)]
 struct ShapeProperties {
+    /// Only shape-level fill declarations affect filled marks. A line's fill
+    /// can still supply its colour without changing shape-fill inheritance.
+    fill_mode: ChartFillMode,
     /// The first `<a:solidFill>` colour anywhere inside, which for a line
     /// series is the one nested in its `<a:ln>` — that is where a line states
     /// its colour.
@@ -1424,16 +1446,7 @@ struct ShapeProperties {
     line_width_pt: Option<f64>,
 }
 
-/// Read the colour of a solid fill, consuming up to `end_tag`.
-fn parse_solid_fill(
-    reader: &mut Reader<&[u8]>,
-    end_tag: &[u8],
-    scheme: &SchemeColors<'_>,
-) -> Option<Color> {
-    parse_shape_properties(reader, end_tag, scheme).fill
-}
-
-/// Read a `<c:spPr>` into the fill colour and stroke weight it states,
+/// Read a `<c:spPr>` into its fill mode, colour hint, and stroke weight,
 /// consuming up to `end_tag`.
 ///
 /// A chart part declares no theme of its own, so `<a:schemeClr>` resolves
@@ -1445,10 +1458,17 @@ fn parse_shape_properties(
     scheme: &SchemeColors<'_>,
 ) -> ShapeProperties {
     let mut in_solid_fill: bool = false;
+    let mut in_line: bool = false;
     let mut properties = ShapeProperties::default();
 
     loop {
-        match reader.read_event() {
+        let event = reader.read_event();
+        match &event {
+            Ok(Event::Start(e)) if e.local_name().as_ref() == b"ln" => in_line = true,
+            Ok(Event::End(e)) if e.local_name().as_ref() == b"ln" => in_line = false,
+            _ => {}
+        }
+        match event {
             // The first `<a:ln>` is the shape's own; `w` is in EMU
             // (ECMA-376 §20.1.2.1.15 `ST_LineWidth`), and an `<a:ln>` naming
             // no `w` states nothing about weight (issue #1113).
@@ -1471,6 +1491,14 @@ fn parse_shape_properties(
             }
             Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"solidFill" => {
                 in_solid_fill = true;
+                if !in_line && properties.fill_mode == ChartFillMode::Automatic {
+                    properties.fill_mode = ChartFillMode::Explicit;
+                }
+            }
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))
+                if !in_line && e.local_name().as_ref() == b"noFill" =>
+            {
+                properties.fill_mode = ChartFillMode::Suppressed;
             }
             Ok(Event::Start(ref e))
                 if in_solid_fill

@@ -801,6 +801,21 @@ pub enum MarkerSymbol {
     Cross,
 }
 
+/// A chart shape's fill declaration, independent of its colour and outline.
+/// Keeping this separate from colour preserves the colour hints also used by
+/// line and marker renderers: `<a:ln><a:noFill/>` is not a shape-fill request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ChartFillMode {
+    /// No shape fill was declared; inherit the series or automatic fill.
+    #[default]
+    Automatic,
+    /// A top-level `<a:noFill/>` suppresses the shape's fill.
+    Suppressed,
+    /// A top-level solid fill explicitly paints the shape, even when its
+    /// parent series suppresses its own fill.
+    Explicit,
+}
+
 /// A data series within a chart.
 #[derive(Debug, Clone)]
 pub struct ChartSeries {
@@ -808,13 +823,21 @@ pub struct ChartSeries {
     pub name: Option<String>,
     /// Data values for this series.
     pub values: Vec<f64>,
-    /// Fill declared by the series' own `<c:spPr>`. `None` falls back to the
-    /// built-in palette.
+    /// Colour read from the series' `<c:spPr>`, also used by line and marker
+    /// renderers. `None` falls back to the palette; `fill_mode` determines
+    /// whether a filled mark paints this colour.
     pub fill: Option<Color>,
-    /// Per-point fills from `<c:dPt>`, indexed by data point. A point's own
-    /// fill outranks the series'; entries are `None` where the point declares
-    /// none, and the vector may be shorter than `values`.
+    /// The series' top-level shape fill declaration, separate from its outline.
+    pub fill_mode: ChartFillMode,
+    /// Per-point colours from `<c:dPt>`, indexed by data point. A point's own
+    /// colour outranks the series'; entries are `None` where no colour was
+    /// read, and the vector may be shorter than `values`. Fill visibility is
+    /// resolved separately through `point_fill_modes`.
     pub point_fills: Vec<Option<Color>>,
+    /// Sparse per-point shape fill declarations. Automatic or absent entries
+    /// inherit `fill_mode`; an explicit point fill can restore a suppressed
+    /// series fill without changing its values or plot slots.
+    pub point_fill_modes: Vec<ChartFillMode>,
     /// What this series' `<c:dLbls>` prints beside each point.
     pub data_labels: DataLabels,
     /// The number format code from `<c:numCache><c:formatCode>`, when the
@@ -856,8 +879,24 @@ pub struct ChartSeries {
 }
 
 impl ChartSeries {
-    /// The fill for one data point: its own, else the series', else `None` for
-    /// the caller to take from the palette.
+    /// Whether this point paints its fill; this does not hide its labels,
+    /// outline, value, or contribution to a stack.
+    pub fn paints_fill_for_point(&self, point_index: usize) -> bool {
+        match self
+            .point_fill_modes
+            .get(point_index)
+            .copied()
+            .unwrap_or_default()
+        {
+            ChartFillMode::Automatic => self.fill_mode != ChartFillMode::Suppressed,
+            ChartFillMode::Suppressed => false,
+            ChartFillMode::Explicit => true,
+        }
+    }
+
+    /// The colour for one data point: its own, else the series', else `None`
+    /// for the palette. Filled marks also check `paints_fill_for_point`;
+    /// lines and markers keep their colour when the shape fill is suppressed.
     pub fn fill_for_point(&self, point_index: usize) -> Option<Color> {
         self.point_fills
             .get(point_index)
