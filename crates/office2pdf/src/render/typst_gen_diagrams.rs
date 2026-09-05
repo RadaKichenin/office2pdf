@@ -4377,6 +4377,59 @@ fn generate_chart_bar(out: &mut String, chart: &Chart) {
     }
 }
 
+/// Baseline for explicitly sized labels below a framed worksheet line plot.
+///
+/// Native Excel size, face, plot-height and fractional frame-height probes of
+/// the budget workbook (#1568) separate two seats. The natural seat follows
+/// the plot with half a line pitch and 1pt clearance; Excel rounds that origin
+/// and the bare ascent separately. The bottom cap rounds the space left after
+/// the bare line box and 1pt edge padding. Leading contributes to
+/// the natural gap, but not to the ink box used by the cap (Arial distinguishes
+/// those terms). A short plot therefore moves labels until the cap is reached.
+///
+/// Other hosts, flowed charts and implicit sizes have no native calibration
+/// for this rule and retain their existing layout.
+fn worksheet_line_category_baseline(
+    chart: &Chart,
+    frame: Option<(f64, f64)>,
+    plot_bottom: f64,
+    legend_bottom: f64,
+) -> Option<f64> {
+    if chart.host != crate::ir::ChartHost::Spreadsheet
+        || (chart.category_axis_text_style.size_pt.is_none() && chart.text_style.size_pt.is_none())
+    {
+        return None;
+    }
+    let (_, frame_h) = frame?;
+    let (family, bold, size) = chart_category_label_face(chart);
+    let (ascent, descent) = chart_face_line_metrics_em(family, bold)?;
+    let line_gap = crate::render::pdf::font_line_gap_em(family).unwrap_or(0.0);
+    Some(line_category_baseline_pt(
+        frame_h - legend_bottom,
+        plot_bottom,
+        size,
+        (ascent, descent, line_gap),
+    ))
+}
+
+/// Seat a category line from its measured face metrics and available space.
+pub(super) fn line_category_baseline_pt(
+    available_height: f64,
+    plot_bottom: f64,
+    size: f64,
+    metrics: (f64, f64, f64),
+) -> f64 {
+    let (ascent, descent, line_gap) = metrics;
+    let above = (ascent * size).round();
+    // Excel quantizes the face's leading before using half the line pitch.
+    // Arial 15pt (0.49pt leading) and 24pt (0.79pt) distinguish this from
+    // rounding the combined metric, while zero-leading faces stay unchanged.
+    let pitch = (ascent + descent) * size + (line_gap * size).round();
+    let natural = (plot_bottom + pitch / 2.0 + 1.0).round() + above;
+    let cap = (available_height - (ascent + descent) * size - 1.0).round() + above;
+    natural.min(cap)
+}
+
 /// Render a line/area chart as a polyline plot over a value axis, matching
 /// the native Excel/PowerPoint composition (gridlines, tick labels, category
 /// axis, markers, legend).
@@ -4444,11 +4497,17 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
             automatic_plot_h,
         ));
     let plot_dx: f64 = plot_x - automatic_plot_x;
-    // Excel keeps the category-label band on its automatic vertical seat even
-    // when `manualLayout` gives the inner plot a shorter height. The reported
-    // chart's month-label baseline stays unchanged while its horizontal centres
-    // move with the stated plot (#1265).
-    let category_label_y: f64 = automatic_plot_y + automatic_plot_h + 3.0;
+    // The #1265 chart was already at the bottom cap; a shorter manual plot
+    // can move explicitly sized worksheet labels above that cap (#1568).
+    let category_baseline =
+        worksheet_line_category_baseline(chart, frame, plot_y + plot_h, legend.bottom);
+    let category_label_y: f64 =
+        category_baseline.unwrap_or(automatic_plot_y + automatic_plot_h + 3.0);
+    let category_baseline_attrs: &str = if category_baseline.is_some() {
+        ", top-edge: 0pt, bottom-edge: 0pt"
+    } else {
+        ""
+    };
     let (total_w, total_h) = match frame {
         Some(extent) => extent,
         None => (
@@ -4542,7 +4601,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
             let x: f64 = point_x(index);
             let _ = writeln!(
                 out,
-                "#place(top + left, dx: {}pt, dy: {}pt, box(width: 24pt)[#align(center)[#text(size: {}pt{})[{}]]])",
+                "#place(top + left, dx: {}pt, dy: {}pt, box(width: 24pt)[#align(center)[#text(size: {}pt{}{category_baseline_attrs})[{}]]])",
                 format_f64(x - 12.0),
                 format_f64(category_label_y),
                 format_f64(chart_axis_text_pt(chart, chart.category_axis_text_style)),

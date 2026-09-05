@@ -1,0 +1,903 @@
+{
+  "clusters": [
+    {
+      "area_pt2": 1463.5008,
+      "bbox_pt": {
+        "height": 3.84,
+        "width": 381.12,
+        "x": 63.84,
+        "y": 78.24
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-d31ebb56dd94",
+      "region": "top"
+    },
+    {
+      "area_pt2": 136.3968,
+      "bbox_pt": {
+        "height": 16.8,
+        "width": 12.0,
+        "x": 348.48,
+        "y": 60.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-a195973e7a45",
+      "region": "top"
+    },
+    {
+      "area_pt2": 135.7056,
+      "bbox_pt": {
+        "height": 16.8,
+        "width": 12.48,
+        "x": 228.48,
+        "y": 60.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-78065eced2a2",
+      "region": "top"
+    },
+    {
+      "area_pt2": 129.9456,
+      "bbox_pt": {
+        "height": 16.8,
+        "width": 11.52,
+        "x": 274.56,
+        "y": 60.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-fa90c90849e0",
+      "region": "top"
+    },
+    {
+      "area_pt2": 126.2592,
+      "bbox_pt": {
+        "height": 16.8,
+        "width": 12.0,
+        "x": 161.76,
+        "y": 60.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-6a570fedbb8c",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 116.5824,
+      "bbox_pt": {
+        "height": 16.8,
+        "width": 11.52,
+        "x": 301.92,
+        "y": 60.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-7a7f3dbd8e0c",
+      "region": "top"
+    },
+    {
+      "area_pt2": 112.4352,
+      "bbox_pt": {
+        "height": 16.8,
+        "width": 16.32,
+        "x": 196.32,
+        "y": 60.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-740ad6d87eca",
+      "region": "top"
+    },
+    {
+      "area_pt2": 100.4544,
+      "bbox_pt": {
+        "height": 16.8,
+        "width": 12.96,
+        "x": 148.32,
+        "y": 60.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-b3f60fdbc186",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 100.4544,
+      "bbox_pt": {
+        "height": 16.8,
+        "width": 12.96,
+        "x": 324.48,
+        "y": 60.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-4e09b4ac4982",
+      "region": "top"
+    },
+    {
+      "area_pt2": 96.5376,
+      "bbox_pt": {
+        "height": 16.8,
+        "width": 8.64,
+        "x": 286.56,
+        "y": 60.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-54034abee389",
+      "region": "top"
+    },
+    {
+      "area_pt2": 92.6208,
+      "bbox_pt": {
+        "height": 16.8,
+        "width": 12.48,
+        "x": 262.56,
+        "y": 60.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-ccdf5bbea6d1",
+      "region": "top"
+    },
+    {
+      "area_pt2": 89.3952,
+      "bbox_pt": {
+        "height": 17.28,
+        "width": 10.56,
+        "x": 188.64,
+        "y": 60.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-5794a6b72348",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 85.9392,
+      "bbox_pt": {
+        "height": 16.8,
+        "width": 12.0,
+        "x": 216.96,
+        "y": 60.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-d03eff1137cb",
+      "region": "top"
+    },
+    {
+      "area_pt2": 85.9392,
+      "bbox_pt": {
+        "height": 16.8,
+        "width": 12.0,
+        "x": 336.96,
+        "y": 60.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-77701ec98721",
+      "region": "top"
+    },
+    {
+      "area_pt2": 82.0224,
+      "bbox_pt": {
+        "height": 16.8,
+        "width": 10.56,
+        "x": 313.92,
+        "y": 60.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-cd831d0f8eb1",
+      "region": "top"
+    },
+    {
+      "area_pt2": 74.4192,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 12.48,
+        "x": 175.68,
+        "y": 59.52
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-f13a480708ba",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 73.9584,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 12.48,
+        "x": 174.24,
+        "y": 68.16
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-e1f9fb4920fb",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 56.448,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 13.92,
+        "x": 88.32,
+        "y": 261.6
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-0cd45f5f69bc",
+      "region": "left"
+    },
+    {
+      "area_pt2": 54.6048,
+      "bbox_pt": {
+        "height": 16.8,
+        "width": 5.28,
+        "x": 295.2,
+        "y": 60.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-0f7cd78a9b12",
+      "region": "top"
+    },
+    {
+      "area_pt2": 54.6048,
+      "bbox_pt": {
+        "height": 10.08,
+        "width": 10.56,
+        "x": 148.8,
+        "y": 259.68
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-a99aaa1466f7",
+      "region": "left"
+    },
+    {
+      "area_pt2": 36.864,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 9.6,
+        "x": 248.16,
+        "y": 67.2
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-9e5dc06b3152",
+      "region": "top"
+    },
+    {
+      "area_pt2": 36.4032,
+      "bbox_pt": {
+        "height": 16.8,
+        "width": 3.84,
+        "x": 241.92,
+        "y": 60.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-4acd25b9225c",
+      "region": "top"
+    },
+    {
+      "area_pt2": 35.712,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 7.68,
+        "x": 173.76,
+        "y": 127.68
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-738c3ae4528e",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 33.408,
+      "bbox_pt": {
+        "height": 4.8,
+        "width": 10.56,
+        "x": 246.24,
+        "y": 72.48
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-0eb063bbefd8",
+      "region": "top"
+    },
+    {
+      "area_pt2": 31.3344,
+      "bbox_pt": {
+        "height": 10.56,
+        "width": 6.24,
+        "x": 88.8,
+        "y": 247.2
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-f40bb4ea347b",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 30.6432,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 6.24,
+        "x": 136.32,
+        "y": 248.64
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-8e8a43dbeaac",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 30.6432,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 8.64,
+        "x": 100.32,
+        "y": 159.84
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-f38acb3c6dac",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 30.1824,
+      "bbox_pt": {
+        "height": 4.8,
+        "width": 9.6,
+        "x": 247.68,
+        "y": 59.52
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-65ba2eb1f24a",
+      "region": "top"
+    },
+    {
+      "area_pt2": 28.8,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 5.76,
+        "x": 269.76,
+        "y": 273.6
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-e61b353d63b9",
+      "region": "center"
+    },
+    {
+      "area_pt2": 28.8,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 8.64,
+        "x": 191.52,
+        "y": 99.84
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-d121e896fef2",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 27.648,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 5.76,
+        "x": 110.4,
+        "y": 97.44
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-dc62c969d56e",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 27.4176,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 5.76,
+        "x": 298.56,
+        "y": 272.16
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-55d0b996cff9",
+      "region": "center"
+    },
+    {
+      "area_pt2": 27.1872,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 5.76,
+        "x": 121.92,
+        "y": 261.6
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-eb7080a8abd9",
+      "region": "left"
+    },
+    {
+      "area_pt2": 26.7264,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 8.64,
+        "x": 360.48,
+        "y": 261.6
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-758a7d98734c",
+      "region": "center"
+    },
+    {
+      "area_pt2": 26.496,
+      "bbox_pt": {
+        "height": 4.8,
+        "width": 10.08,
+        "x": 382.08,
+        "y": 132.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-620ed182a4b5",
+      "region": "top"
+    },
+    {
+      "area_pt2": 26.2656,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 9.12,
+        "x": 108.96,
+        "y": 190.56
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-f3983d66afdf",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 25.5744,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 6.24,
+        "x": 96.96,
+        "y": 248.64
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-833e46c2abf8",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 23.9616,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 4.8,
+        "x": 281.76,
+        "y": 273.6
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-6d020fd2ee44",
+      "region": "center"
+    },
+    {
+      "area_pt2": 23.9616,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 6.24,
+        "x": 169.44,
+        "y": 261.6
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-2f345c7046f5",
+      "region": "left"
+    },
+    {
+      "area_pt2": 23.7312,
+      "bbox_pt": {
+        "height": 11.04,
+        "width": 7.2,
+        "x": 363.36,
+        "y": 246.72
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-67cbac7e7b92",
+      "region": "top"
+    },
+    {
+      "area_pt2": 23.7312,
+      "bbox_pt": {
+        "height": 10.08,
+        "width": 4.32,
+        "x": 408.48,
+        "y": 259.68
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-ffb176ae471c",
+      "region": "right"
+    },
+    {
+      "area_pt2": 23.2704,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 3.84,
+        "x": 115.2,
+        "y": 248.64
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-2dd5e133ca7d",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 22.8096,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 4.8,
+        "x": 128.64,
+        "y": 260.64
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-7605aea7c964",
+      "region": "left"
+    },
+    {
+      "area_pt2": 22.3488,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 5.28,
+        "x": 324.48,
+        "y": 99.36
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-130b5ea82eec",
+      "region": "top"
+    },
+    {
+      "area_pt2": 22.1184,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 4.32,
+        "x": 268.32,
+        "y": 96.96
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-b573ccb1c670",
+      "region": "top"
+    },
+    {
+      "area_pt2": 21.888,
+      "bbox_pt": {
+        "height": 11.04,
+        "width": 3.84,
+        "x": 192.0,
+        "y": 246.72
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-b14e6cb4cdb7",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 21.6576,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 4.32,
+        "x": 300.48,
+        "y": 159.36
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-00d7a43a5080",
+      "region": "top"
+    },
+    {
+      "area_pt2": 21.4272,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 3.84,
+        "x": 207.36,
+        "y": 96.96
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-2336ba43eb86",
+      "region": "top"
+    },
+    {
+      "area_pt2": 21.4272,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 3.84,
+        "x": 166.56,
+        "y": 159.36
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-5dbbe68403e3",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 20.9664,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 4.8,
+        "x": 405.12,
+        "y": 97.44
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-d784925e3508",
+      "region": "top"
+    },
+    {
+      "area_pt2": 20.736,
+      "bbox_pt": {
+        "height": 5.28,
+        "width": 6.72,
+        "x": 413.28,
+        "y": 100.32
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-054a503cec6c",
+      "region": "top-right"
+    },
+    {
+      "area_pt2": 20.736,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 4.8,
+        "x": 154.08,
+        "y": 190.08
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-1df357669277",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 20.5056,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 4.32,
+        "x": 174.72,
+        "y": 272.64
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-53031f213585",
+      "region": "left"
+    },
+    {
+      "area_pt2": 20.0448,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 4.8,
+        "x": 360.0,
+        "y": 159.36
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-52a43b622764",
+      "region": "top"
+    },
+    {
+      "area_pt2": 20.0448,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 4.32,
+        "x": 166.56,
+        "y": 99.36
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Inspected full-page diff and matched crops: first-row height shifts the following body; wrapped-line pitch and footer baseline are separate tracked defects. Fixed-row seating is additionally tracked in #1545."
+      },
+      "id": "p1-431ae7c36ee7",
+      "region": "top-left"
+    }
+  ],
+  "dpi": 150,
+  "duplicate_disposition_cluster_ids": [],
+  "errors": [],
+  "fuzz_percent": 5,
+  "minimum_area_pt2": 20.0,
+  "page": 1,
+  "passed": true,
+  "renderer_observations": [],
+  "schema_version": 1,
+  "strict": true,
+  "summary": {
+    "dispositioned": 55,
+    "duplicate": 0,
+    "total": 55,
+    "undispositioned": 0,
+    "unknown": 0
+  },
+  "undispositioned_cluster_ids": [],
+  "unknown_disposition_cluster_ids": []
+}
