@@ -366,10 +366,13 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
         value_axis_max: value_axis.max,
         // Office hangs the gridlines off whichever axis they run across; the
         // value axis carries the horizontal set our renderer draws.
-        major_gridline_line: match value_axis.gridline {
-            ChartLine::Automatic => category_axis.gridline,
-            stated => stated,
-        },
+        // An absent element draws no gridlines. A present but unstyled
+        // element keeps its automatic stroke rather than borrowing another
+        // axis' styling (issue #1271).
+        major_gridline_line: value_axis
+            .gridline
+            .or(category_axis.gridline)
+            .unwrap_or(ChartLine::Suppressed),
         category_axis_deleted: category_axis.deleted,
         value_axis_deleted: value_axis.deleted,
         bar_band_layout: BarBandLayout {
@@ -731,9 +734,9 @@ struct Axis {
     number_format: Option<String>,
     /// What `<c:spPr>` says about the axis' own line.
     line: ChartLine,
-    /// What `<c:majorGridlines><c:spPr>` says; the gridlines hang off the
-    /// axis rather than off the plot area.
-    gridline: ChartLine,
+    /// Presence and stroke of `<c:majorGridlines>`. `None` means absent;
+    /// `Some(Automatic)` means present without a declared stroke.
+    gridline: Option<ChartLine>,
     /// `<c:majorUnit>` — the tick interval this axis states.
     major_unit: Option<f64>,
     /// `<c:scaling><c:min>` — the value this axis starts at.
@@ -805,7 +808,10 @@ fn parse_axis(reader: &mut Reader<&[u8]>, end_tag: &[u8], scheme: &SchemeColors<
                 axis.line = parse_chart_line(reader, b"spPr", scheme);
             }
             Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"majorGridlines" => {
-                axis.gridline = parse_chart_line(reader, b"majorGridlines", scheme);
+                axis.gridline = Some(parse_chart_line(reader, b"majorGridlines", scheme));
+            }
+            Ok(Event::Empty(ref e)) if e.local_name().as_ref() == b"majorGridlines" => {
+                axis.gridline = Some(ChartLine::Automatic);
             }
             // `<c:scaling>` is the only place an axis states a bound, and it
             // holds `<c:orientation>` too, so it is consumed as a body rather

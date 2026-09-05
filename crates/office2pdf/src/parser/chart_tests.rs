@@ -2517,7 +2517,7 @@ fn an_axis_without_a_line_is_automatic() {
 
     assert_eq!(chart.category_axis_line, ChartLine::Automatic);
     assert_eq!(chart.value_axis_line, ChartLine::Automatic);
-    assert_eq!(chart.major_gridline_line, ChartLine::Automatic);
+    assert_eq!(chart.major_gridline_line, ChartLine::Suppressed);
 }
 
 /// `<c:dLblPos>` reaches the model, and a bar chart that states none takes the
@@ -3273,4 +3273,52 @@ fn a_chart_title_keeps_an_escaped_ampersand() {
     let chart = parse_chart_xml(xml, &SchemeColors::empty()).unwrap();
 
     assert_eq!(chart.title.as_deref(), Some("Room & board"));
+}
+
+#[test]
+fn major_gridlines_distinguish_absent_empty_and_explicit_declarations() {
+    let suppressed =
+        r#"<c:majorGridlines><c:spPr><a:ln><a:noFill/></a:ln></c:spPr></c:majorGridlines>"#;
+    let explicit = r#"<c:majorGridlines><c:spPr><a:ln w="25400"><a:solidFill><a:srgbClr val="123456"/></a:solidFill></a:ln></c:spPr></c:majorGridlines>"#;
+    for (gridlines, expected) in [
+        ("", ChartLine::Suppressed),
+        ("<c:majorGridlines/>", ChartLine::Automatic),
+        (
+            "<c:majorGridlines></c:majorGridlines>",
+            ChartLine::Automatic,
+        ),
+        (
+            "<c:majorGridlines><c:spPr/></c:majorGridlines>",
+            ChartLine::Automatic,
+        ),
+        (suppressed, ChartLine::Suppressed),
+        (
+            explicit,
+            ChartLine::Explicit {
+                width_pt: Some(2.0),
+                color: Some(Color::new(0x12, 0x34, 0x56)),
+            },
+        ),
+    ] {
+        for axis in ["valAx", "catAx"] {
+            let xml = bar_chart_xml(r#"<c:barDir val="col"/>"#).replace(
+                "</c:plotArea>",
+                &format!("<c:{axis}>{gridlines}</c:{axis}></c:plotArea>"),
+            );
+            let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
+            assert_eq!(chart.major_gridline_line, expected, "{axis}: {gridlines}");
+            assert_eq!(chart.category_axis_line, ChartLine::Automatic);
+            assert_eq!(chart.value_axis_line, ChartLine::Automatic);
+        }
+    }
+}
+
+#[test]
+fn a_present_automatic_value_gridline_is_not_replaced_by_category_styling() {
+    let xml = bar_chart_xml(r#"<c:barDir val="col"/>"#).replace(
+        "</c:plotArea>",
+        r#"<c:catAx><c:majorGridlines><c:spPr><a:ln><a:noFill/></a:ln></c:spPr></c:majorGridlines></c:catAx><c:valAx><c:majorGridlines/></c:valAx></c:plotArea>"#,
+    );
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
+    assert_eq!(chart.major_gridline_line, ChartLine::Automatic);
 }

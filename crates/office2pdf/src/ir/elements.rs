@@ -322,7 +322,8 @@ pub struct Chart {
     /// `<c:valAx><c:scaling><c:max>` — the value the axis ends at. `None`
     /// leaves that end to the automatic scale (issue #1184).
     pub value_axis_max: Option<f64>,
-    /// What `<c:majorGridlines><c:spPr>` says about the gridlines' line.
+    /// Resolved major-gridline stroke. An absent `<c:majorGridlines>` is
+    /// suppressed; a present element without a stroke is automatic.
     pub major_gridline_line: ChartLine,
     /// Whether `<c:catAx><c:delete>` switched the category axis off.
     pub category_axis_deleted: bool,
@@ -1746,16 +1747,17 @@ pub struct TopBevel {
 /// What a chart axis' or gridline's `<c:spPr>` says about its line.
 ///
 /// The three states are distinct, exactly as they are for the chart area
-/// ([`ChartAreaOutline`], issue #637): saying nothing means the automatic
-/// line, `<a:ln><a:noFill/></a:ln>` means none at all, and a stated `<a:ln>`
-/// means that one. The two enums have the same shape and are candidates for
-/// unification.
+/// ([`ChartAreaOutline`], issue #637): a present element without a line uses
+/// the automatic stroke, `<a:ln><a:noFill/></a:ln>` suppresses it, and a stated
+/// `<a:ln>` supplies its styling. Absent optional gridlines are also suppressed.
+/// The two enums have the same shape and are candidates for unification.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum ChartLine {
     /// The part states no `<a:ln>`; the renderer's automatic stroke applies.
     #[default]
     Automatic,
-    /// `<a:ln><a:noFill/></a:ln>` — draw nothing.
+    /// Draw nothing: the line declares `<a:noFill/>`, or its optional
+    /// chart element (such as major gridlines) is absent.
     Suppressed,
     /// A stated line. Either half may still be absent: a `<a:ln>` naming only
     /// a width keeps the automatic colour, and vice versa.

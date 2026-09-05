@@ -7306,8 +7306,7 @@ fn a_line_family_plot_honours_its_stated_rectangle() {
 /// plot rather than on its left edge.
 ///
 /// Gridlines are suppressed so the only lines in the generated source are the
-/// two axes — the automatic gridlines the renderer draws regardless are #1271's
-/// defect, not this one's.
+/// two axes. The parsed workbook's gridline presence is tested separately.
 fn cash_flow_bar_chart() -> Chart {
     let mut chart = stacked_support_chart(ChartGrouping::Stacked);
     chart.chart_type = ChartType::Bar;
@@ -8068,6 +8067,37 @@ fn no_fill_on_a_series_does_not_suppress_its_line_or_markers() {
         assert_eq!(
             before, after,
             "shape noFill does not change a series stroke or marker"
+        );
+    }
+}
+
+#[test]
+fn absent_major_gridlines_do_not_paint_rules_in_budget_charts() {
+    use std::io::Read;
+    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/xlsx/issue_1181_fit_to_height.xlsx");
+    let mut archive = zip::ZipArchive::new(std::fs::File::open(fixture).unwrap()).unwrap();
+    for part in ["xl/charts/chart1.xml", "xl/charts/chart2.xml"] {
+        let mut xml = String::new();
+        archive
+            .by_name(part)
+            .unwrap()
+            .read_to_string(&mut xml)
+            .unwrap();
+        assert!(!xml.contains("majorGridlines"));
+        let colors = std::collections::HashMap::new();
+        let aliases = std::collections::HashMap::new();
+        let scheme = crate::parser::drawingml::SchemeColors {
+            colors: &colors,
+            aliases: &aliases,
+        };
+        let mut chart = crate::parser::chart::parse_chart_xml(&xml, &scheme).unwrap();
+        let actual = framed_chart_source(&chart, 480.0, 240.0);
+        chart.major_gridline_line = crate::ir::ChartLine::Suppressed;
+        let without_rules = framed_chart_source(&chart, 480.0, 240.0);
+        assert!(
+            actual == without_rules,
+            "{part}: absent majorGridlines must not add rules"
         );
     }
 }
