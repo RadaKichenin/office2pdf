@@ -836,6 +836,21 @@ pub enum ChartFillMode {
     Explicit,
 }
 
+/// Styling declared by a series marker, separate from the plotted line.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ChartMarkerStyle {
+    /// Declared marker size in points (`c:size`, integer 2..72).
+    pub size_pt: Option<f64>,
+    /// A declared marker fill is separate from its outline; automatic fill
+    /// inherits the series color.
+    pub fill_mode: ChartFillMode,
+    pub fill: Option<Color>,
+    /// Solid-fill opacity from 0.0 to 1.0; absent means opaque.
+    pub fill_alpha: Option<f64>,
+    /// The marker's own outline; automatic retains the renderer's default.
+    pub line: ChartLine,
+}
+
 /// A data series within a chart.
 #[derive(Debug, Clone)]
 pub struct ChartSeries {
@@ -883,6 +898,9 @@ pub struct ChartSeries {
     /// does name one gets that symbol whatever its index, which is what issue
     /// #1107 was: a fourth series declaring `circle` drew the cycle's cross.
     pub marker_symbol: Option<MarkerSymbol>,
+    /// Size, fill, and outline from the series' `c:marker`, independent of
+    /// the series' own shape properties.
+    pub marker_style: ChartMarkerStyle,
     /// Weight of the stroke this series is plotted with, from its own
     /// `<c:spPr><a:ln w="…"/>`, in points.
     ///
@@ -1763,15 +1781,16 @@ pub struct TopBevel {
     pub light_rig_rotation_deg: f64,
 }
 
-/// What a chart axis' or gridline's `<c:spPr>` says about its line.
+/// What a chart axis, gridline, or marker declares for its outline.
 ///
-/// The three states are distinct, exactly as they are for the chart area
-/// ([`ChartAreaOutline`], issue #637): a present element without a line uses
-/// the automatic stroke, `<a:ln><a:noFill/></a:ln>` suppresses it, and a stated
-/// `<a:ln>` supplies its styling. Absent optional gridlines are also suppressed.
+/// The three states distinguish an absent declaration, explicit suppression,
+/// and stated styling, as for [`ChartAreaOutline`]. Axes/gridlines use their
+/// automatic stroke when undeclared; markers default to no outline. Absent
+/// optional gridlines are also suppressed.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum ChartLine {
-    /// The part states no `<a:ln>`; the renderer's automatic stroke applies.
+    /// The part states no `<a:ln>`; axes/gridlines use their automatic stroke,
+    /// while markers retain their default of no outline.
     #[default]
     Automatic,
     /// Draw nothing: the line declares `<a:noFill/>`, or its optional

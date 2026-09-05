@@ -10,9 +10,9 @@ use super::drawingml::{self, SchemeColors};
 use super::xml_util;
 use crate::ir::{
     AxisTickMark, BarBandLayout, Chart, ChartAreaFill, ChartAreaOutline, ChartFillMode,
-    ChartGrouping, ChartHost, ChartLine, ChartPlotAreaLayout, ChartSeries, ChartTextStyle,
-    ChartTitleLayout, ChartType, Color, DataLabelPosition, DataLabels, LegendPosition,
-    MarkerSymbol,
+    ChartGrouping, ChartHost, ChartLine, ChartMarkerStyle, ChartPlotAreaLayout, ChartSeries,
+    ChartTextStyle, ChartTitleLayout, ChartType, Color, DataLabelPosition, DataLabels,
+    LegendPosition, MarkerSymbol,
 };
 
 /// Mapping from XML chart element tag names to their corresponding `ChartType`.
@@ -1122,6 +1122,7 @@ fn parse_single_series(
         std::collections::BTreeMap::new();
     let mut number_format: Option<String> = None;
     let mut marker_symbol: Option<MarkerSymbol> = None;
+    let mut marker_style = ChartMarkerStyle::default();
     let mut line_width_pt: Option<f64> = None;
 
     loop {
@@ -1153,7 +1154,7 @@ fn parse_single_series(
                 }
                 // Consumed whole for the same reason as `<c:dLbls>`: the
                 // marker carries an `<c:spPr>` for the symbol's own fill.
-                b"marker" => marker_symbol = parse_series_marker(reader),
+                b"marker" => (marker_symbol, marker_style) = parse_series_marker(reader, scheme),
                 // Consumed whole: `<c:dLbls>` carries an `<c:spPr>` of its
                 // own for the label box, which would otherwise be read as the
                 // series fill.
@@ -1200,6 +1201,7 @@ fn parse_single_series(
             // series was read inside (issue #1067).
             plot_type: None,
             marker_symbol,
+            marker_style,
             line_width_pt,
         },
         categories,
@@ -1289,7 +1291,7 @@ fn data_label_position_for(value: &str) -> Option<DataLabelPosition> {
     }
 }
 
-/// Read a `<c:ser><c:marker>` into the point symbol it names.
+/// Read a series marker's symbol, size, and independent shape styling.
 ///
 /// Consumed whole whether or not it names one this renderer draws: the element
 /// carries an `<c:spPr>` for the symbol's own fill, which the flat series loop
@@ -1298,8 +1300,12 @@ fn data_label_position_for(value: &str) -> Option<DataLabelPosition> {
 /// The `<c:marker val="1"/>` that sits beside the `<c:ser>` elements of a
 /// `<c:lineChart>` is a different element — `CT_Boolean`, saying whether the
 /// family shows markers at all — and never reaches here, being empty.
-fn parse_series_marker(reader: &mut Reader<&[u8]>) -> Option<MarkerSymbol> {
+fn parse_series_marker(
+    reader: &mut Reader<&[u8]>,
+    scheme: &SchemeColors<'_>,
+) -> (Option<MarkerSymbol>, ChartMarkerStyle) {
     let mut symbol: Option<MarkerSymbol> = None;
+    let mut style = ChartMarkerStyle::default();
 
     loop {
         match reader.read_event() {
@@ -1310,13 +1316,112 @@ fn parse_series_marker(reader: &mut Reader<&[u8]>) -> Option<MarkerSymbol> {
                     .as_deref()
                     .and_then(marker_symbol_for);
             }
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))
+                if e.local_name().as_ref() == b"size" =>
+            {
+                style.size_pt = xml_util::get_attr_str(e, b"val")
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .filter(|v| (2..=72).contains(v))
+                    .map(f64::from);
+            }
+            Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"spPr" => {
+                parse_marker_properties(reader, scheme, &mut style);
+            }
             Ok(Event::End(ref e)) if e.local_name().as_ref() == b"marker" => break,
             Ok(Event::Eof) | Err(_) => break,
             _ => {}
         }
     }
 
-    symbol
+    (symbol, style)
+}
+
+/// Marker fill and outline are separate paints; neither may leak into the
+/// series colour or into the other paint when the first is absent.
+fn parse_marker_properties(
+    reader: &mut Reader<&[u8]>,
+    scheme: &SchemeColors<'_>,
+    style: &mut ChartMarkerStyle,
+) {
+    let mut in_line = false;
+    let mut in_solid_fill = false;
+    loop {
+        let event = reader.read_event();
+        let starts_line = matches!(&event, Ok(Event::Start(e)) if e.local_name().as_ref() == b"ln");
+        match event {
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))
+                if e.local_name().as_ref() == b"ln" =>
+            {
+                in_line = starts_line;
+                style.line = ChartLine::Explicit {
+                    width_pt: xml_util::get_attr_str(e, b"w")
+                        .and_then(|v| v.parse::<f64>().ok())
+                        .filter(|v| v.is_finite() && *v >= 0.0)
+                        .map(|v| v / EMU_PER_POINT),
+                    color: None,
+                    alpha: None,
+                };
+            }
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))
+                if e.local_name().as_ref() == b"noFill" =>
+            {
+                if in_line {
+                    style.line = ChartLine::Suppressed;
+                } else {
+                    style.fill_mode = ChartFillMode::Suppressed;
+                }
+            }
+            Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"solidFill" => {
+                in_solid_fill = true;
+                if !in_line {
+                    style.fill_mode = ChartFillMode::Explicit;
+                }
+            }
+            Ok(Event::Start(ref e))
+                if in_solid_fill
+                    && matches!(e.local_name().as_ref(), b"srgbClr" | b"schemeClr") =>
+            {
+                let parsed = drawingml::parse_color_from_start(reader, e, scheme);
+                set_marker_paint(style, in_line, parsed.color, parsed.alpha);
+            }
+            Ok(Event::Empty(ref e))
+                if in_solid_fill
+                    && matches!(e.local_name().as_ref(), b"srgbClr" | b"schemeClr") =>
+            {
+                let parsed = drawingml::parse_color_from_empty(e, scheme);
+                set_marker_paint(style, in_line, parsed.color, parsed.alpha);
+            }
+            Ok(Event::End(ref e)) if e.local_name().as_ref() == b"solidFill" => {
+                in_solid_fill = false
+            }
+            Ok(Event::End(ref e)) if e.local_name().as_ref() == b"ln" => in_line = false,
+            Ok(Event::End(ref e)) if e.local_name().as_ref() == b"spPr" => break,
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+}
+
+fn set_marker_paint(
+    style: &mut ChartMarkerStyle,
+    in_line: bool,
+    color: Option<Color>,
+    alpha: Option<f64>,
+) {
+    if in_line {
+        if let ChartLine::Explicit {
+            color: line_color,
+            alpha: line_alpha,
+            ..
+        } = &mut style.line
+        {
+            *line_color = color;
+            *line_alpha = alpha;
+        }
+    } else {
+        style.fill = color;
+        style.fill_alpha = alpha;
+    }
 }
 
 /// `<c:symbol val>` as ECMA-376 §21.2.3.29 `ST_MarkerStyle` names the symbols.
