@@ -454,6 +454,21 @@ pub(crate) struct ThemeFontScheme {
 }
 
 impl ThemeFontScheme {
+    /// Resolve the chart default and explicit axis typefaces using its package theme.
+    /// An absent axis declaration keeps inheriting the resolved chart default.
+    pub(crate) fn resolve_chart_text_fonts(&self, chart: &mut crate::ir::Chart) {
+        chart.text_font_family =
+            self.resolve_chart_text_typeface(chart.text_font_family.as_deref());
+        for family in [
+            &mut chart.category_axis_text_font_family,
+            &mut chart.value_axis_text_font_family,
+        ] {
+            *family = family
+                .as_deref()
+                .and_then(|declared| self.resolve_typeface(declared));
+        }
+    }
+
     /// Resolve a DrawingML `typeface` attribute. The placeholders `+mj-lt`
     /// and `+mn-lt` name this scheme's major and minor Latin fonts; any
     /// other value is a literal family name.

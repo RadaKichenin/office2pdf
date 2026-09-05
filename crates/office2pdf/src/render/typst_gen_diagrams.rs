@@ -1112,6 +1112,39 @@ pub(super) fn chart_axis_text_attrs(chart: &Chart, axis: crate::ir::ChartTextSty
     )
 }
 
+/// Add an explicit axis face with the chart's script fallback chain.
+fn chart_axis_font_attrs(
+    chart: &Chart,
+    axis: crate::ir::ChartTextStyle,
+    family: Option<&str>,
+) -> String {
+    let mut attrs: String = chart_axis_text_attrs(chart, axis);
+    if let Some(family) = family {
+        let _ = write!(
+            attrs,
+            ", font: {}",
+            font_subst::font_for_mixed_script_text(family, &chart.text_sample())
+        );
+    }
+    attrs
+}
+
+fn chart_category_text_attrs(chart: &Chart) -> String {
+    chart_axis_font_attrs(
+        chart,
+        chart.category_axis_text_style,
+        chart.category_axis_text_font_family.as_deref(),
+    )
+}
+
+fn chart_value_text_attrs(chart: &Chart) -> String {
+    chart_axis_font_attrs(
+        chart,
+        chart.value_axis_text_style,
+        chart.value_axis_text_font_family.as_deref(),
+    )
+}
+
 /// Every Typst text argument a legend entry inherits beyond its resolved size.
 fn chart_legend_text_attrs(chart: &Chart) -> String {
     chart_axis_text_attrs(chart, chart.legend_text_style)
@@ -2010,8 +2043,7 @@ fn chart_column_value_label_widest_pt(chart: &Chart) -> Option<f64> {
         .resolved_bold(chart.value_axis_text_style)
         .unwrap_or(false);
     let family: &str = chart
-        .text_font_family
-        .as_deref()
+        .value_axis_font_family()
         .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_FAMILY);
     let widest_em: f64 = chart_value_axis_labels(chart)
         .iter()
@@ -2027,8 +2059,7 @@ fn excel_value_label_plot_gap_pt(chart: &Chart) -> Option<f64> {
         .resolved_bold(chart.value_axis_text_style)
         .unwrap_or(false);
     let family: &str = chart
-        .text_font_family
-        .as_deref()
+        .value_axis_font_family()
         .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_FAMILY);
     let (ascent_em, descent_em) = chart_face_line_metrics_em(family, bold)?;
     Some(
@@ -2128,8 +2159,7 @@ pub(super) fn chart_category_gutter_pt(chart: &Chart) -> f64 {
         .resolved_bold(chart.category_axis_text_style)
         .unwrap_or(false);
     let family: &str = chart
-        .text_font_family
-        .as_deref()
+        .category_axis_font_family()
         .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_FAMILY);
     let widest_em: f64 = chart
         .categories
@@ -2186,8 +2216,7 @@ const CATEGORY_LABEL_ROTATION_DEG: f64 = 45.0;
 /// Face a category label is set in: family, weight and size.
 fn chart_category_label_face(chart: &Chart) -> (&str, bool, f64) {
     let family: &str = chart
-        .text_font_family
-        .as_deref()
+        .category_axis_font_family()
         .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_FAMILY);
     let bold: bool = chart
         .text_style
@@ -3768,7 +3797,7 @@ fn generate_chart_axis(
                     format_f64(x - 12.0),
                     format_f64(plot_y + plot_h + horizontal_value_label_gap(chart)),
                     format_f64(chart_axis_text_pt(chart, chart.value_axis_text_style)),
-                    chart_axis_text_attrs(chart, chart.value_axis_text_style),
+                    chart_value_text_attrs(chart),
                     escape_typst(&chart_value_label_formatted(
                         *tick,
                         chart_value_number_format(chart)
@@ -3807,7 +3836,7 @@ fn generate_chart_axis(
                         chart.value_axis_text_style
                     ))),
                     format_f64(chart_axis_text_pt(chart, chart.value_axis_text_style)),
-                    chart_axis_text_attrs(chart, chart.value_axis_text_style),
+                    chart_value_text_attrs(chart),
                     escape_typst(&chart_value_label_formatted(
                         *tick,
                         chart_value_number_format(chart)
@@ -3969,7 +3998,7 @@ fn generate_chart_axis(
                 format_f64(chart_category_label_box_w(chart)),
                 format_f64(row),
                 format_f64(chart_axis_text_pt(chart, chart.category_axis_text_style)),
-                chart_axis_text_attrs(chart, chart.category_axis_text_style),
+                chart_category_text_attrs(chart),
                 escape_typst(category)
             );
         } else if category_labels_rotated {
@@ -3992,7 +4021,7 @@ fn generate_chart_axis(
                 format_f64(CATEGORY_LABEL_ROTATION_DEG),
                 format_f64(label_box_w),
                 format_f64(chart_axis_text_pt(chart, chart.category_axis_text_style)),
-                chart_axis_text_attrs(chart, chart.category_axis_text_style),
+                chart_category_text_attrs(chart),
                 rotated_category_label_content(chart, category, &label)
             );
         } else {
@@ -4004,7 +4033,7 @@ fn generate_chart_axis(
                 format_f64(row),
                 format_f64(chart_category_band_pt(chart)),
                 format_f64(chart_axis_text_pt(chart, chart.category_axis_text_style)),
-                chart_axis_text_attrs(chart, chart.category_axis_text_style),
+                chart_category_text_attrs(chart),
                 escape_typst(category)
             );
         }
@@ -4458,7 +4487,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
                     chart.value_axis_text_style
                 ))),
                 format_f64(chart_axis_text_pt(chart, chart.value_axis_text_style)),
-                chart_axis_text_attrs(chart, chart.value_axis_text_style),
+                chart_value_text_attrs(chart),
                 escape_typst(&chart_value_label_formatted(
                     *tick,
                     chart_value_number_format(chart)
@@ -4503,7 +4532,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
                 format_f64(x - 12.0),
                 format_f64(category_label_y),
                 format_f64(chart_axis_text_pt(chart, chart.category_axis_text_style)),
-                chart_axis_text_attrs(chart, chart.category_axis_text_style),
+                chart_category_text_attrs(chart),
                 escape_typst(category)
             );
         }
@@ -4805,7 +4834,7 @@ fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64
                 format_f64(RADAR_VALUE_GAP),
                 format_f64(chart_label_box_h(label_pt)),
                 format_f64(label_pt),
-                chart_axis_text_attrs(chart, chart.value_axis_text_style),
+                chart_value_text_attrs(chart),
                 chart_value_label(unit)
             );
         }
@@ -4835,7 +4864,7 @@ fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64
     // The category labels, each just outside its spoke's end.
     if !chart.category_axis_deleted {
         let category_pt: f64 = chart_axis_text_pt(chart, chart.category_axis_text_style);
-        let weight: String = chart_axis_text_attrs(chart, chart.category_axis_text_style);
+        let weight: String = chart_category_text_attrs(chart);
         for (index, category) in chart.categories.iter().enumerate() {
             let formatted_category: String = formatted_category_axis_label(chart, category);
             if formatted_category.is_empty() {

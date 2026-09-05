@@ -104,8 +104,7 @@ pub(super) fn extract_charts_with_anchors(data: &[u8]) -> HashMap<String, Vec<Ra
                 if let Some(mut chart) = parse_chart_xml(&chart_xml, &scheme) {
                     chart.theme_accent_colors = theme_accents.clone();
                     chart.host = crate::ir::ChartHost::Spreadsheet;
-                    chart.text_font_family =
-                        theme_fonts.resolve_chart_text_typeface(chart.text_font_family.as_deref());
+                    theme_fonts.resolve_chart_text_fonts(&mut chart);
                     chart.user_shapes = crate::parser::chart_drawing::load_chart_user_shapes(
                         &mut archive,
                         &chart_path,
@@ -167,8 +166,7 @@ pub(super) fn extract_charts_with_anchors(data: &[u8]) -> HashMap<String, Vec<Ra
             if let Some(mut chart) = parse_chart_xml(&chart_xml, &scheme) {
                 chart.theme_accent_colors = theme_accents.clone();
                 chart.host = crate::ir::ChartHost::Spreadsheet;
-                chart.text_font_family =
-                    theme_fonts.resolve_chart_text_typeface(chart.text_font_family.as_deref());
+                theme_fonts.resolve_chart_text_fonts(&mut chart);
                 chart.user_shapes = crate::parser::chart_drawing::load_chart_user_shapes(
                     &mut archive,
                     path,

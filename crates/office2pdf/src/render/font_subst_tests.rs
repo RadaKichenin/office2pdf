@@ -1415,6 +1415,8 @@ fn test_document_requests_font_families_true_for_a_chart_only_document() {
         text_style: crate::ir::ChartTextStyle::default(),
         title_text_style: crate::ir::ChartTextStyle::default(),
         legend_text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_font_family: None,
+        value_axis_text_font_family: None,
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
@@ -1473,7 +1475,21 @@ fn test_document_requests_font_families_true_for_a_chart_only_document() {
         "a slide chart's face must reach the font-context gate"
     );
 
+    // An axis-only request must still trigger font discovery (#1563).
+    chart.text_font_family = None;
+    chart.category_axis_text_font_family = Some("Cambria".to_string());
+    chart.value_axis_text_font_family = Some("Arial".to_string());
+    let mut faces = Vec::new();
+    assert!(visit_chart_fonts(&chart, &mut |family, _| {
+        faces.push(family.to_string());
+        true
+    }));
+    assert_eq!(faces, ["Cambria", "Arial"]);
+    assert!(!visit_chart_fonts(&chart, &mut |family, _| family != "Arial"));
+
     // A chart that names nothing still asks for nothing.
+    chart.category_axis_text_font_family = None;
+    chart.value_axis_text_font_family = None;
     chart.text_font_family = None;
     let doc = Document {
         metadata: crate::ir::Metadata::default(),

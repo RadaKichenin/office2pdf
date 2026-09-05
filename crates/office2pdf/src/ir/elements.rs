@@ -350,7 +350,7 @@ pub struct Chart {
     /// What the chart area's own background should be, from the top-level fill
     /// inside `c:chartSpace/c:spPr` (#1217).
     pub chart_area_fill: ChartAreaFill,
-    /// The face every string the chart draws is set in, from
+    /// The default face for chart text, unless an axis overrides it, from
     /// `c:chartSpace/c:txPr/a:p/a:pPr/a:defRPr/a:latin@typeface`.
     ///
     /// `None` when the chart names none, which is the common case: the face
@@ -380,6 +380,11 @@ pub struct Chart {
     /// chart space states none of those properties, so the legend cannot be
     /// represented by [`Chart::text_style`] alone (issue #1236).
     pub legend_text_style: ChartTextStyle,
+    /// The category axis typeface from `c:catAx/c:txPr`; `None` inherits
+    /// [`Chart::text_font_family`]. The package loader resolves theme tokens.
+    pub category_axis_text_font_family: Option<String>,
+    /// The value axis typeface from `c:valAx/c:txPr`, with the same inheritance.
+    pub value_axis_text_font_family: Option<String>,
     /// What `c:catAx/c:txPr` declares for the category labels alone.
     pub category_axis_text_style: ChartTextStyle,
     /// What `c:valAx/c:txPr` declares for the value tick labels alone.
@@ -573,11 +578,25 @@ impl ChartTextStyle {
 }
 
 impl Chart {
+    /// The category axis face, falling back to the chart's default face.
+    pub fn category_axis_font_family(&self) -> Option<&str> {
+        self.category_axis_text_font_family
+            .as_deref()
+            .or(self.text_font_family.as_deref())
+    }
+
+    /// The value axis face, falling back to the chart's default face.
+    pub fn value_axis_font_family(&self) -> Option<&str> {
+        self.value_axis_text_font_family
+            .as_deref()
+            .or(self.text_font_family.as_deref())
+    }
+
     /// Every string the chart draws, concatenated.
     ///
-    /// [`Chart::text_font_family`] is one face for all of them, so the fallback
-    /// chain behind it has to cover each script that appears anywhere in the
-    /// chart — a Korean category label needs the East Asian chain that a Latin
+    /// The default and axis-specific fallback chains must cover each script
+    /// that appears anywhere in the chart — a Korean category label needs
+    /// the East Asian chain that a Latin
     /// family alone would not reach. Both the renderer, which emits the chain,
     /// and the font-context gate, which decides whether the search paths are
     /// scanned at all, have to sample the same strings (issue #668).

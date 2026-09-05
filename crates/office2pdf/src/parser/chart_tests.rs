@@ -3349,3 +3349,46 @@ fn axis_lines_keep_srgb_opacity_separate_from_color_and_weight() {
         );
     }
 }
+
+#[test]
+fn axis_typefaces_resolve_independently_and_inherit_the_chart_default() {
+    let fonts = crate::parser::drawingml::ThemeFontScheme {
+        major_latin: Some("Cambria".to_string()),
+        minor_latin: Some("Trebuchet MS".to_string()),
+    };
+    for (declared, resolved) in [
+        ("+mj-lt", Some("Cambria")),
+        ("+mn-lt", Some("Trebuchet MS")),
+        ("Arial", Some("Arial")),
+        ("", None),
+    ] {
+        for axis in ["catAx", "valAx"] {
+            let xml = format!(
+                r#"<c:chartSpace><c:chart><c:plotArea><c:lineChart></c:lineChart>
+                <c:{axis}><c:txPr><a:p><a:pPr><a:defRPr sz="1500"><a:latin typeface="{declared}"/>
+                </a:defRPr></a:pPr></a:p></c:txPr></c:{axis}>
+                </c:plotArea></c:chart><c:txPr><a:p><a:pPr><a:defRPr><a:latin typeface="Verdana"/>
+                </a:defRPr></a:pPr></a:p></c:txPr></c:chartSpace>"#
+            );
+            let mut chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
+            fonts.resolve_chart_text_fonts(&mut chart);
+            assert_eq!(chart.text_font_family.as_deref(), Some("Verdana"));
+            let (own, other, inherited) = if axis == "catAx" {
+                (
+                    &chart.category_axis_text_font_family,
+                    &chart.value_axis_text_font_family,
+                    chart.category_axis_font_family(),
+                )
+            } else {
+                (
+                    &chart.value_axis_text_font_family,
+                    &chart.category_axis_text_font_family,
+                    chart.value_axis_font_family(),
+                )
+            };
+            assert_eq!(own.as_deref(), resolved, "{axis} {declared}");
+            assert!(other.is_none());
+            assert_eq!(inherited, resolved.or(Some("Verdana")));
+        }
+    }
+}
