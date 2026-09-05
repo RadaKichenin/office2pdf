@@ -602,17 +602,35 @@ fn series_color(
     }
 }
 
-/// As [`series_color`], but for the plots that colour by data point rather
-/// than by series, so the accent advances with the point.
+/// Fill for plots that colour by data point rather than by series, so the
+/// accent advances with the point. Suppression leaves the slice slot intact.
 fn category_color(
     series: &crate::ir::ChartSeries,
     point_index: usize,
     palette: &[&str],
     theme_accents: &[Color],
 ) -> String {
+    if !series.paints_fill_for_point(point_index) {
+        return "none".to_string();
+    }
     match series.fill_for_point(point_index) {
         Some(color) => rgb(&color),
         None => automatic_color(theme_accents, point_index, palette),
+    }
+}
+
+/// A filled mark can be transparent while the same series still has a line
+/// or marker colour. Keep suppressed segments in the layout and stack.
+fn series_fill(
+    series: &crate::ir::ChartSeries,
+    series_index: usize,
+    point_index: usize,
+    theme_accents: &[Color],
+) -> String {
+    if series.paints_fill_for_point(point_index) {
+        series_color(series, series_index, point_index, theme_accents)
+    } else {
+        "none".to_string()
     }
 }
 
@@ -3846,7 +3864,7 @@ fn generate_chart_axis(
             // The palette is assigned over every series the chart declares, so
             // the colour keeps the series' own index while the band position
             // counts only the columns.
-            let color: String = series_color(s, s_index, cat_index, &chart.theme_accent_colors);
+            let color: String = series_fill(s, s_index, cat_index, &chart.theme_accent_colors);
             let offset: f64 = bars.lead + band_slot as f64 * bars.step;
             if horizontal {
                 // Bar charts stack categories bottom-up.
@@ -4220,11 +4238,16 @@ fn generate_chart_axis(
         let key_markup: String = if overlaid[s_index] {
             line_legend_key(s_index, s, &color)
         } else {
+            let fill: &str = if s.fill_mode == crate::ir::ChartFillMode::Suppressed {
+                "none"
+            } else {
+                &color
+            };
             format!(
                 "#box(width: {}pt, height: {}pt, fill: {})",
                 format_f64(key.width_pt),
                 format_f64(key.height_pt),
-                color
+                fill
             )
         };
         let _ = writeln!(
@@ -4267,9 +4290,13 @@ fn generate_chart_bar(out: &mut String, chart: &Chart) {
             let percent: u32 = (value / max_value * 100.0).round().min(100.0) as u32;
             // The fallback here indexes by series, not by point, because each
             // row of this table is one category across all series.
-            let color: String = match series.fill_for_point(row_index) {
-                Some(declared) => rgb(&declared),
-                None => colors[series_index % colors.len()].to_string(),
+            let color: String = match (
+                series.paints_fill_for_point(row_index),
+                series.fill_for_point(row_index),
+            ) {
+                (false, _) => "none".to_string(),
+                (true, Some(declared)) => rgb(&declared),
+                (true, None) => colors[series_index % colors.len()].to_string(),
             };
             let _ = writeln!(
                 out,
@@ -4285,7 +4312,11 @@ fn generate_chart_bar(out: &mut String, chart: &Chart) {
         for (index, series) in chart.series.iter().enumerate() {
             let default_name: String = format!("Series {}", index + 1);
             let name: &str = series.name.as_deref().unwrap_or(&default_name);
-            let color: &str = colors[index % colors.len()];
+            let color: &str = if series.fill_mode == crate::ir::ChartFillMode::Suppressed {
+                "none"
+            } else {
+                colors[index % colors.len()]
+            };
             let _ = writeln!(
                 out,
                 "#box(width: 10pt, height: 10pt, fill: {color}) #text(size: {}pt{})[{name}] ",

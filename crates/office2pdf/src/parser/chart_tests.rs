@@ -537,6 +537,59 @@ fn test_a_series_without_a_fill_leaves_the_palette_to_decide() {
 }
 
 #[test]
+fn no_fill_distinguishes_shape_declarations_from_outline_declarations() {
+    for outline in [r#"<a:ln><a:noFill/></a:ln>"#, r#"<a:ln/>"#] {
+        let xml = bar_chart_xml(r#"<c:barDir val="col"/>"#)
+            .replace("<c:tx>", &format!("<c:spPr>{outline}</c:spPr><c:tx>"));
+        let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
+        assert_eq!(chart.series[0].fill_mode, ChartFillMode::Automatic);
+        assert!(chart.series[0].paints_fill_for_point(0));
+    }
+    let xml = bar_chart_xml(r#"<c:barDir val="col"/>"#)
+        .replace("<c:tx>", r#"<c:spPr><a:ln/><a:noFill/></c:spPr><c:tx>"#);
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
+    assert!(!chart.series[0].paints_fill_for_point(0));
+}
+
+#[test]
+fn no_fill_point_overrides_are_sparse_and_do_not_inherit_outline_visibility() {
+    let xml = bar_chart_xml(r#"<c:barDir val="col"/>"#).replace(
+        "<c:tx>",
+        r#"<c:spPr><a:noFill/><a:ln><a:solidFill><a:srgbClr val="123456"/></a:solidFill></a:ln></c:spPr>
+        <c:dPt><c:idx val="2"/><c:spPr><a:solidFill><a:srgbClr val="abcdef"/></a:solidFill><a:ln><a:noFill/></a:ln></c:spPr></c:dPt>
+        <c:dPt><c:idx val="0"/><c:spPr><a:ln><a:solidFill><a:srgbClr val="654321"/></a:solidFill></a:ln></c:spPr></c:dPt>
+        <c:dPt><c:idx val="3"/><c:spPr><a:noFill/><a:ln><a:solidFill><a:srgbClr val="fedcba"/></a:solidFill></a:ln></c:spPr></c:dPt><c:tx>"#,
+    );
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
+    let series = &chart.series[0];
+    assert_eq!(
+        series.fill,
+        Some(Color::new(0x12, 0x34, 0x56)),
+        "stroke color survives noFill"
+    );
+    assert!(
+        !series.paints_fill_for_point(0),
+        "outline-only point inherits series noFill"
+    );
+    assert!(
+        !series.paints_fill_for_point(1),
+        "absent point inherits series noFill"
+    );
+    assert!(
+        series.paints_fill_for_point(2),
+        "explicit color restores fill"
+    );
+    assert!(
+        !series.paints_fill_for_point(3),
+        "point noFill wins over its outline color"
+    );
+    assert!(
+        !series.paints_fill_for_point(4),
+        "short override vectors inherit the series"
+    );
+}
+
+#[test]
 fn test_a_theme_colour_the_scheme_cannot_resolve_falls_through_to_the_palette() {
     // A host whose theme is missing or does not carry the named entry leaves
     // the colour unresolved, and an unresolved colour must not be mistaken for

@@ -22,6 +22,8 @@ fn test_codegen_chart_bar_visual_bars() {
             name: Some("Revenue".to_string()),
             values: vec![100.0, 250.0],
             fill: None,
+            fill_mode: crate::ir::ChartFillMode::Automatic,
+            point_fill_modes: Vec::new(),
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: None,
@@ -105,6 +107,8 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
             name: Some("Sales".to_string()),
             values: vec![8.200000000000001, 3.2],
             fill: None,
+            fill_mode: crate::ir::ChartFillMode::Automatic,
+            point_fill_modes: Vec::new(),
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: None,
@@ -176,6 +180,8 @@ fn test_codegen_chart_pie_draws_a_pie() {
             name: None,
             values: vec![60.0, 40.0],
             fill: None,
+            fill_mode: crate::ir::ChartFillMode::Automatic,
+            point_fill_modes: Vec::new(),
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: None,
@@ -252,6 +258,8 @@ fn test_codegen_chart_line_trend_indicators() {
             name: Some("Sales".to_string()),
             values: vec![10.0, 20.0, 15.0],
             fill: None,
+            fill_mode: crate::ir::ChartFillMode::Automatic,
+            point_fill_modes: Vec::new(),
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: None,
@@ -415,6 +423,8 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
             name: Some("Units".to_string()),
             values: vec![23334.0, 8331.0, 2727.0],
             fill: None,
+            fill_mode: crate::ir::ChartFillMode::Automatic,
+            point_fill_modes: Vec::new(),
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: None,
@@ -484,6 +494,8 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
             name: None,
             values: vec![115.0, 92.0, 138.0],
             fill: None,
+            fill_mode: crate::ir::ChartFillMode::Automatic,
+            point_fill_modes: Vec::new(),
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: None,
@@ -697,6 +709,8 @@ fn test_codegen_chart_line_plot() {
                 name: Some("A".to_string()),
                 values: vec![1.0, 2.0, 3.0],
                 fill: None,
+                fill_mode: crate::ir::ChartFillMode::Automatic,
+                point_fill_modes: Vec::new(),
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
                 number_format: None,
@@ -708,6 +722,8 @@ fn test_codegen_chart_line_plot() {
                 name: Some("B".to_string()),
                 values: vec![10.0, 9.0, 14.0],
                 fill: None,
+                fill_mode: crate::ir::ChartFillMode::Automatic,
+                point_fill_modes: Vec::new(),
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
                 number_format: None,
@@ -783,6 +799,8 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
             name: Some("Reading".to_string()),
             values: (1..=60).map(|value| value as f64).collect(),
             fill: None,
+            fill_mode: crate::ir::ChartFillMode::Automatic,
+            point_fill_modes: Vec::new(),
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: None,
@@ -857,6 +875,8 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
                 name: Some("Text".to_string()),
                 values: vec![4.0, 2.0, 2.0],
                 fill: None,
+                fill_mode: crate::ir::ChartFillMode::Automatic,
+                point_fill_modes: Vec::new(),
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
                 number_format: None,
@@ -868,6 +888,8 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
                 name: Some("Tables".to_string()),
                 values: vec![1.0, 1.0, 1.0],
                 fill: None,
+                fill_mode: crate::ir::ChartFillMode::Automatic,
+                point_fill_modes: Vec::new(),
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
                 number_format: None,
@@ -879,6 +901,8 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
                 name: Some("Graphics".to_string()),
                 values: vec![2.0, 4.0, 0.0],
                 fill: None,
+                fill_mode: crate::ir::ChartFillMode::Automatic,
+                point_fill_modes: Vec::new(),
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
                 number_format: None,
@@ -890,6 +914,8 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
                 name: Some("Structure".to_string()),
                 values: vec![2.0, 2.0, 3.0],
                 fill: None,
+                fill_mode: crate::ir::ChartFillMode::Automatic,
+                point_fill_modes: Vec::new(),
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
                 number_format: None,
@@ -1054,6 +1080,8 @@ fn legend_chart(position: LegendPosition) -> Chart {
                 name: Some("Text".to_string()),
                 values: vec![4.0, 2.0, 2.0],
                 fill: None,
+                fill_mode: crate::ir::ChartFillMode::Automatic,
+                point_fill_modes: Vec::new(),
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
                 number_format: None,
@@ -1065,6 +1093,8 @@ fn legend_chart(position: LegendPosition) -> Chart {
                 name: Some("Tables".to_string()),
                 values: vec![1.0, 1.0, 1.0],
                 fill: None,
+                fill_mode: crate::ir::ChartFillMode::Automatic,
+                point_fill_modes: Vec::new(),
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
                 number_format: None,
@@ -1281,6 +1311,8 @@ fn a_declared_series_fill_reaches_the_bars() {
             name: Some("LOC".to_string()),
             values: vec![23334.0, 8331.0],
             fill: Some(Color::new(0x4f, 0x81, 0xbd)),
+            fill_mode: crate::ir::ChartFillMode::Automatic,
+            point_fill_modes: Vec::new(),
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: None,
@@ -1348,6 +1380,8 @@ fn a_series_without_a_fill_still_takes_the_palette() {
             name: Some("LOC".to_string()),
             values: vec![23334.0, 8331.0],
             fill: None,
+            fill_mode: crate::ir::ChartFillMode::Automatic,
+            point_fill_modes: Vec::new(),
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: None,
@@ -1409,6 +1443,8 @@ fn per_point_fills_colour_each_bar_separately() {
             name: Some("Fixtures".to_string()),
             values: vec![115.0, 92.0, 138.0],
             fill: Some(Color::new(0x11, 0x11, 0x11)),
+            fill_mode: crate::ir::ChartFillMode::Automatic,
+            point_fill_modes: Vec::new(),
             point_fills: vec![
                 Some(Color::new(0x4f, 0x81, 0xbd)),
                 Some(Color::new(0xc0, 0x50, 0x4d)),
@@ -1477,6 +1513,8 @@ fn axis_titled_chart(category: Option<&str>, value: Option<&str>) -> Chart {
             name: Some("LOC".to_string()),
             values: vec![23334.0, 8331.0],
             fill: None,
+            fill_mode: crate::ir::ChartFillMode::Automatic,
+            point_fill_modes: Vec::new(),
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: None,
@@ -1591,6 +1629,8 @@ fn labelled_chart(labels: DataLabels) -> Chart {
             name: Some("Text".to_string()),
             values: vec![4.0, 2.0],
             fill: None,
+            fill_mode: crate::ir::ChartFillMode::Automatic,
+            point_fill_modes: Vec::new(),
             point_fills: Vec::new(),
             data_labels: labels,
             number_format: None,
@@ -1700,6 +1740,8 @@ fn pie_chart(values: Vec<f64>) -> Chart {
             name: None,
             values,
             fill: None,
+            fill_mode: crate::ir::ChartFillMode::Automatic,
+            point_fill_modes: Vec::new(),
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: None,
@@ -1908,6 +1950,8 @@ fn test_chart_default_gridline_matches_powerpoint() {
             name: Some("Revenue".to_string()),
             values: vec![100.0, 250.0],
             fill: None,
+            fill_mode: crate::ir::ChartFillMode::Automatic,
+            point_fill_modes: Vec::new(),
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: None,
@@ -2078,6 +2122,8 @@ fn tick_mark_chart(
             name: Some("Builds".to_string()),
             values: vec![4.0, 8.0, 6.0],
             fill: None,
+            fill_mode: crate::ir::ChartFillMode::Automatic,
+            point_fill_modes: Vec::new(),
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: None,
@@ -2693,6 +2739,8 @@ fn band_layout_chart(
                 name: Some(format!("Line {index}")),
                 values: values.to_vec(),
                 fill: None,
+                fill_mode: crate::ir::ChartFillMode::Automatic,
+                point_fill_modes: Vec::new(),
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
                 number_format: None,
@@ -2979,6 +3027,8 @@ fn two_series_bar_chart(theme_accent_colors: Vec<crate::ir::Color>) -> Chart {
                 name: Some("Revenue".to_string()),
                 values: vec![100.0],
                 fill: None,
+                fill_mode: crate::ir::ChartFillMode::Automatic,
+                point_fill_modes: Vec::new(),
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
                 number_format: None,
@@ -2990,6 +3040,8 @@ fn two_series_bar_chart(theme_accent_colors: Vec<crate::ir::Color>) -> Chart {
                 name: Some("Cost".to_string()),
                 values: vec![60.0],
                 fill: None,
+                fill_mode: crate::ir::ChartFillMode::Automatic,
+                point_fill_modes: Vec::new(),
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
                 number_format: None,
@@ -5408,6 +5460,8 @@ fn test_data_table_prints_a_series_number_format() {
             name: Some("Rate".to_string()),
             values: vec![0.024, 0.689],
             fill: None,
+            fill_mode: crate::ir::ChartFillMode::Automatic,
+            point_fill_modes: Vec::new(),
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: Some("0.0%".to_string()),
@@ -5474,6 +5528,8 @@ fn test_data_table_prints_a_declared_thousands_format() {
             name: Some("Revenue".to_string()),
             values: vec![1234567.0],
             fill: None,
+            fill_mode: crate::ir::ChartFillMode::Automatic,
+            point_fill_modes: Vec::new(),
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: Some("#,##0".to_string()),
@@ -5538,6 +5594,8 @@ fn test_data_table_without_a_number_format_prints_plainly() {
             name: Some("Rate".to_string()),
             values: vec![0.024],
             fill: None,
+            fill_mode: crate::ir::ChartFillMode::Automatic,
+            point_fill_modes: Vec::new(),
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: None,
@@ -5601,6 +5659,8 @@ fn test_a_currency_axis_label_is_escaped() {
             name: Some("Spend".to_string()),
             values: vec![1200.0],
             fill: None,
+            fill_mode: crate::ir::ChartFillMode::Automatic,
+            point_fill_modes: Vec::new(),
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: None,
@@ -5666,6 +5726,8 @@ fn single_series_chart(auto_title_deleted: bool) -> Chart {
             name: Some("Serie 1".to_string()),
             values: vec![1.0],
             fill: None,
+            fill_mode: crate::ir::ChartFillMode::Automatic,
+            point_fill_modes: Vec::new(),
             point_fills: Vec::new(),
             data_labels: DataLabels::default(),
             number_format: None,
@@ -5752,6 +5814,8 @@ fn automatic_title_chart(series_names: &[Option<&str>], auto_title_deleted: bool
                 name: name.map(str::to_string),
                 values: vec![1.0, 3.0, 5.0],
                 fill: None,
+                fill_mode: crate::ir::ChartFillMode::Automatic,
+                point_fill_modes: Vec::new(),
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
                 number_format: None,
@@ -6468,6 +6532,8 @@ fn combo_budget_chart() -> Chart {
         name: Some(name.to_string()),
         values,
         fill: None,
+        fill_mode: crate::ir::ChartFillMode::Automatic,
+        point_fill_modes: Vec::new(),
         point_fills: Vec::new(),
         data_labels: DataLabels::default(),
         number_format: None,
@@ -6487,6 +6553,8 @@ fn combo_budget_chart() -> Chart {
                 name: Some("Amount Spent".to_string()),
                 values: vec![25.0, 75.0],
                 fill: None,
+                fill_mode: crate::ir::ChartFillMode::Automatic,
+                point_fill_modes: Vec::new(),
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
                 number_format: None,
@@ -6681,6 +6749,8 @@ fn combo_line_and_scatter_chart() -> Chart {
                 name: Some("Cash Flow".to_string()),
                 values: vec![169.0, 69.0, 192.0],
                 fill: None,
+                fill_mode: crate::ir::ChartFillMode::Automatic,
+                point_fill_modes: Vec::new(),
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
                 number_format: None,
@@ -6692,6 +6762,8 @@ fn combo_line_and_scatter_chart() -> Chart {
                 name: Some("Positive Selected Period".to_string()),
                 values: vec![169.0],
                 fill: None,
+                fill_mode: crate::ir::ChartFillMode::Automatic,
+                point_fill_modes: Vec::new(),
                 point_fills: Vec::new(),
                 data_labels: DataLabels::default(),
                 number_format: None,
@@ -7873,4 +7945,129 @@ fn category_number_formats_keep_text_labels_and_quoted_semicolons() {
     let source = framed_chart_source(&chart, 480.0, 320.0);
     assert!(source.contains("[term;first]"));
     assert!(source.contains("[Tuition]"));
+}
+
+#[test]
+fn the_budget_cash_flow_chart_paints_only_its_explicitly_filled_bar() {
+    use std::io::Read;
+    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/xlsx/issue_1181_fit_to_height.xlsx");
+    let mut archive = zip::ZipArchive::new(std::fs::File::open(fixture).unwrap()).unwrap();
+    let mut xml = String::new();
+    archive
+        .by_name("xl/charts/chart1.xml")
+        .unwrap()
+        .read_to_string(&mut xml)
+        .unwrap();
+    let colors =
+        std::collections::HashMap::from([("accent3".to_string(), Color::new(0x48, 0xbb, 0x88))]);
+    let aliases = std::collections::HashMap::new();
+    let scheme = crate::parser::drawingml::SchemeColors {
+        colors: &colors,
+        aliases: &aliases,
+    };
+    let chart = crate::parser::chart::parse_chart_xml(&xml, &scheme).unwrap();
+    let source = framed_chart_source(&chart, 220.0, 200.0);
+    let painted_bars: Vec<_> = source
+        .lines()
+        .filter(|line| {
+            line.contains("rect(width:")
+                && line.contains("stroke: none))")
+                && !line.contains("width: 0pt")
+                && !line.contains("height: 0pt")
+                && !line.contains("fill: none")
+        })
+        .collect();
+    assert_eq!(
+        painted_bars.len(),
+        1,
+        "series and point noFill must leave only the explicit green bar: {painted_bars:?}"
+    );
+}
+
+#[test]
+fn no_fill_overrides_preserve_filled_chart_geometry_and_data_labels() {
+    use crate::ir::ChartFillMode;
+    for family in [
+        ChartType::Bar,
+        ChartType::Column,
+        ChartType::Pie,
+        ChartType::Doughnut,
+    ] {
+        let mut chart = sized_bar_chart(11.0);
+        chart.chart_type = family.clone();
+        chart.has_legend = false;
+        chart.categories = ["First", "Second", "Third"].map(str::to_string).to_vec();
+        chart.series[0].values = vec![100.0, 200.0, 300.0];
+        chart.series[0].fill = Some(Color::new(18, 52, 86));
+        chart.series[0].data_labels.show_value = true;
+        let before = framed_chart_source(&chart, 480.0, 320.0);
+        chart.series[0].fill_mode = ChartFillMode::Suppressed;
+        chart.series[0].point_fill_modes = vec![
+            ChartFillMode::Automatic,
+            ChartFillMode::Explicit,
+            ChartFillMode::Suppressed,
+        ];
+        let after = framed_chart_source(&chart, 480.0, 320.0);
+        assert_eq!(
+            before.matches("fill: rgb(18, 52, 86)").count(),
+            3,
+            "{family:?}"
+        );
+        assert_eq!(
+            after.matches("fill: rgb(18, 52, 86)").count(),
+            1,
+            "{family:?}"
+        );
+        let without_fill = |source: &str| {
+            source
+                .replace("fill: rgb(18, 52, 86)", "fill: PAINT")
+                .replace("fill: none", "fill: PAINT")
+        };
+        assert_eq!(
+            without_fill(&before),
+            without_fill(&after),
+            "{family:?}: only paint changes"
+        );
+    }
+}
+
+#[test]
+fn no_fill_keeps_positive_and_negative_segments_in_the_stack() {
+    use crate::ir::ChartFillMode;
+    for family in [ChartType::Bar, ChartType::Column] {
+        let mut chart = sized_bar_chart(11.0);
+        chart.chart_type = family;
+        chart.grouping = ChartGrouping::Stacked;
+        chart.has_legend = false;
+        chart.categories = ["Q1", "Q2", "Q3"].map(str::to_string).to_vec();
+        chart.series[0].values = vec![-10.0, 20.0, 30.0];
+        chart.series[0].fill = Some(Color::new(18, 52, 86));
+        chart.series[0].data_labels.show_value = true;
+        let mut second = chart.series[0].clone();
+        second.values = vec![5.0, -15.0, 10.0];
+        second.fill = Some(Color::new(98, 76, 54));
+        chart.series.push(second);
+        let before = framed_chart_source(&chart, 480.0, 320.0);
+        chart.series[0].fill_mode = ChartFillMode::Suppressed;
+        let after = framed_chart_source(&chart, 480.0, 320.0);
+        assert_eq!(before.matches("fill: rgb(18, 52, 86)").count(), 3);
+        assert_eq!(before.replace("fill: rgb(18, 52, 86)", "fill: none"), after);
+    }
+}
+
+#[test]
+fn no_fill_on_a_series_does_not_suppress_its_line_or_markers() {
+    for family in [ChartType::Line, ChartType::Area, ChartType::Scatter] {
+        let mut chart = sized_bar_chart(11.0);
+        chart.chart_type = family;
+        chart.series[0].fill = Some(Color::new(18, 52, 86));
+        let before = framed_chart_source(&chart, 480.0, 320.0);
+        chart.series[0].fill_mode = crate::ir::ChartFillMode::Suppressed;
+        let after = framed_chart_source(&chart, 480.0, 320.0);
+        assert_eq!(
+            before, after,
+            "shape noFill does not change a series stroke or marker"
+        );
+    }
 }
