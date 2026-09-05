@@ -4,13 +4,15 @@ The cases are the two real defects that motivated it (issues #664 and #684),
 plus the negatives that keep the tool from crying wolf.
 """
 
+import io
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from compare_text_layer import census, compare, normalize, render_report
+from compare_text_layer import census, compare, main, normalize, render_report
 
 
 class CensusTest(unittest.TestCase):
@@ -76,11 +78,25 @@ class ReportTest(unittest.TestCase):
     def test_clean_comparison_says_so_plainly(self):
         self.assertIn("intact", render_report(compare("abc", "abc")))
 
-    def test_content_loss_is_not_blamed_on_a_class(self):
-        # No class was injected, so the report must point at real loss rather
-        # than leaving the reader hunting for a formatting cause.
-        report = render_report(compare("alpha beta", "alpha"))
-        self.assertIn("genuine text loss", report)
+    def test_sequence_mismatch_requires_order_and_content_review(self):
+        # Reordered table columns can preserve every word (#1561). Neither
+        # that case nor an omitted word can be diagnosed from class deltas.
+        for output in ("right column left column", "left column"):
+            with self.subTest(output=output):
+                report = render_report(compare("left column right column", output))
+                self.assertIn("extraction order", report)
+                self.assertIn("missing or extra text", report)
+                self.assertNotIn("genuine text loss", report)
+
+    def test_reordered_columns_and_missing_words_still_fail_the_cli(self):
+        for output in ("right column left column", "left column"):
+            with self.subTest(output=output), patch(
+                "sys.argv", ["compare_text_layer.py", "gt.pdf", "out.pdf"]
+            ), patch(
+                "compare_text_layer.extract_text",
+                side_effect=["left column right column", output],
+            ), patch("sys.stdout", new_callable=io.StringIO):
+                self.assertEqual(main(), 1)
 
 
 if __name__ == "__main__":

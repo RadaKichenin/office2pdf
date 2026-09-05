@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Text-layer codepoint census: is the extracted text intact, independent of layout?
+"""Text-layer codepoint census: is the selectable and searchable text intact?
 
 Some defects are invisible in any raster and in any geometry comparison, because
 they change *what a reader can select and search for* rather than where ink
@@ -28,11 +28,11 @@ This tool answers two questions separately:
    Injected joiners, NBSPs, ligature codepoints and control characters show up
    as a class delta even when the rendered page is pixel-identical.
 2. **Content** — after undoing ligatures and collapsing whitespace, is the text
-   the same? A residual here is real text loss or gain, not a formatting
-   artefact.
+   sequence the same? A residual requires checking extraction order and
+   missing or extra text; sequence inequality alone does not prove text loss.
 
 Reporting them apart matters: a ligature changes the census without changing the
-content, while a dropped word changes both. Conflating them makes a cosmetic
+content, while a dropped word changes content. Conflating them makes a cosmetic
 difference look like data loss.
 
 Usage:
@@ -126,7 +126,7 @@ def census(text: str) -> dict[str, int]:
 
 
 def normalize(text: str) -> str:
-    """Undo ligatures and collapse whitespace, so only real content remains.
+    """Undo ligatures and collapse whitespace, retaining extraction order.
 
     Comparing normalized forms separates "the text is different" from "the text
     is encoded differently" — a distinction a raw diff cannot make.
@@ -182,8 +182,8 @@ def render_report(result: dict) -> str:
     else:
         lines.append(
             f"Normalized content DIFFERS: {result['content_length_gt']} chars in "
-            f"GT against {result['content_length_output']} in the output. This is "
-            "text gained or lost, not a formatting artefact."
+            f"GT against {result['content_length_output']} in the output. Review "
+            "extraction order and check for missing or extra text."
         )
 
     lines += ["", "## Reading", ""]
@@ -210,8 +210,8 @@ def render_report(result: dict) -> str:
         lines.append("Text layer is intact.")
     elif not (injected or ligatures or nbsp):
         lines.append(
-            "No class was injected, so the residual is genuine text loss or "
-            "gain — compare the extractions directly."
+            "No class was injected. Compare the extractions directly: a sequence "
+            "mismatch can reflect extraction order or missing or extra text."
         )
     return "\n".join(lines)
 
@@ -232,7 +232,7 @@ def main() -> int:
         print(json.dumps(result, indent=2, ensure_ascii=False))
     else:
         print(render_report(result))
-    # A census delta alone is not a failure; unexplained content loss is.
+    # A census delta alone is not a failure; a sequence mismatch needs review.
     return 0 if result["content_matches"] else 1
 
 
