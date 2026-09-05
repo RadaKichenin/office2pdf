@@ -965,6 +965,51 @@ class MatchAndDiffTest(unittest.TestCase):
         self.assertEqual((rects["unmatched_gt"], rects["unmatched_out"]), (2, 1))
         self.assertEqual(rects["geometry_mismatch_count"], 0)
 
+    def test_unequal_rule_counts_keep_retained_horizontal_and_vertical_lines(self) -> None:
+        # Removing chart gridlines must not unmatch unchanged table rules
+        # merely because their stroked path bounds have a zero extent (#1558).
+        for vertical in (False, True):
+            for reverse in (False, True):
+                for shift in (0.0, 1.0):
+                    with self.subTest(vertical=vertical, reverse=reverse, shift=shift):
+                        def rule(position: float) -> str:
+                            if vertical:
+                                return line_op(position, 20.0, position, 120.0)
+                            return line_op(20.0, position, 120.0, position)
+
+                        gt = "\n".join([rule(40.0), rule(80.0), rule(160.0)])
+                        out = "\n".join([rule(40.0 + shift), rule(160.0 + shift)])
+                        if reverse:
+                            gt, out = out, gt
+                        rects = self.diff(gt, out, fine_shift=0.5)["rects"]
+
+                        self.assertEqual(rects["matched"], 2)
+                        self.assertEqual(
+                            (rects["unmatched_gt"], rects["unmatched_out"]),
+                            (0, 1) if reverse else (1, 0),
+                        )
+                        self.assertEqual(
+                            rects["geometry_mismatch_count"], 2 if shift else 0
+                        )
+
+    def test_unequal_rule_counts_reject_unrelated_line_extents_and_paint(self) -> None:
+        retained = line_op(300.0, 300.0, 400.0, 300.0)
+        gt = "\n".join([line_op(20.0, 40.0, 120.0, 40.0), retained])
+        for unrelated in (
+            line_op(45.0, 40.0, 95.0, 40.0),  # Same centre, half the length.
+            line_op(70.0, 0.0, 70.0, 100.0),  # Perpendicular line.
+            line_op(20.0, 100.0, 120.0, 100.0),  # Outside the match radius.
+            line_op(20.0, 40.0, 120.0, 40.0, color="1 0 0"),
+        ):
+            with self.subTest(unrelated=unrelated):
+                out = "\n".join([unrelated, retained, line_op(500, 500, 600, 500)])
+                rects = self.diff(gt, out, fine_shift=0.5)["rects"]
+                self.assertEqual(rects["matched"], 1)
+                self.assertEqual(
+                    (rects["unmatched_gt"], rects["unmatched_out"]), (1, 2)
+                )
+                self.assertEqual(rects["geometry_mismatch_count"], 0)
+
     def test_unequal_rect_groups_do_not_pair_area_fill_with_nearby_rule(self) -> None:
         gt = "\n".join(
             [
