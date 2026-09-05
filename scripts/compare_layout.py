@@ -1492,15 +1492,21 @@ def ambiguous_rect_pair_allowed(reference: Rect, candidate: Rect) -> bool:
     )
     if center_delta > RECT_AMBIGUOUS_MATCH_RADIUS_PT:
         return False
-    if min(reference.width, reference.height, candidate.width, candidate.height) <= 0:
-        return False
-    extent_ratio = max(
-        reference.width / candidate.width,
-        candidate.width / reference.width,
-        reference.height / candidate.height,
-        candidate.height / reference.height,
-    )
-    return extent_ratio <= RECT_AMBIGUOUS_MAX_EXTENT_RATIO
+    extent_ratios: list[float] = []
+    for reference_extent, candidate_extent in (
+        (reference.width, candidate.width),
+        (reference.height, candidate.height),
+    ):
+        # Stroked horizontal/vertical paths have one zero bounding extent.
+        # Compare their length while keeping perpendicular lines incompatible.
+        if reference_extent == candidate_extent == 0:
+            continue
+        if min(reference_extent, candidate_extent) <= 0:
+            return False
+        extent_ratios.append(
+            max(reference_extent / candidate_extent, candidate_extent / reference_extent)
+        )
+    return bool(extent_ratios) and max(extent_ratios) <= RECT_AMBIGUOUS_MAX_EXTENT_RATIO
 
 
 def match_rect_groups(
