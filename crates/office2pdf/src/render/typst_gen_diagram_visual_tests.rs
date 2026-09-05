@@ -5990,6 +5990,7 @@ fn last_block_height(source: &str, prefix: &str) -> Option<f64> {
 #[test]
 fn declared_axis_and_gridline_lines_reach_the_generated_source() {
     let white = crate::ir::ChartLine::Explicit {
+        alpha: None,
         width_pt: Some(1.0),
         color: Some(Color::new(0xFF, 0xFF, 0xFF)),
     };
@@ -8099,5 +8100,48 @@ fn absent_major_gridlines_do_not_paint_rules_in_budget_charts() {
             actual == without_rules,
             "{part}: absent majorGridlines must not add rules"
         );
+    }
+}
+
+#[test]
+fn budget_gridlines_keep_their_declared_opacity() {
+    use std::io::Read;
+    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/xlsx/issue_1181_fit_to_height.xlsx");
+    let mut archive = zip::ZipArchive::new(std::fs::File::open(fixture).unwrap()).unwrap();
+    let colors = std::collections::HashMap::from([("bg1".to_string(), Color::new(255, 255, 255))]);
+    let aliases = std::collections::HashMap::new();
+    let scheme = crate::parser::drawingml::SchemeColors {
+        colors: &colors,
+        aliases: &aliases,
+    };
+    for part in ["xl/charts/chart3.xml", "xl/charts/chart4.xml"] {
+        let mut xml = String::new();
+        archive
+            .by_name(part)
+            .unwrap()
+            .read_to_string(&mut xml)
+            .unwrap();
+        assert!(xml.contains(r#"<a:alpha val="25000"/>"#));
+        let opaque_xml = xml.replace(r#"<a:alpha val="25000"/>"#, "");
+        let opaque_chart = crate::parser::chart::parse_chart_xml(&opaque_xml, &scheme).unwrap();
+        let opaque_source = framed_chart_source(&opaque_chart, 480.0, 240.0);
+        for (alpha, byte) in [(25000, 64), (50000, 128), (0, 0), (100000, 255)] {
+            let variant = xml.replace(
+                r#"<a:alpha val="25000"/>"#,
+                &format!(r#"<a:alpha val="{alpha}"/>"#),
+            );
+            let chart = crate::parser::chart::parse_chart_xml(&variant, &scheme).unwrap();
+            let source = framed_chart_source(&chart, 480.0, 240.0);
+            assert!(
+                source.contains(&format!("0.25pt + rgb(191, 191, 191, {byte})")),
+                "{part}: gridline alpha {alpha} must survive parsing and rendering"
+            );
+            assert_eq!(
+                source.replace(&format!("rgb(191, 191, 191, {byte})"), "rgb(191, 191, 191)"),
+                opaque_source,
+                "{part}: opacity must not change chart geometry or labels"
+            );
+        }
     }
 }

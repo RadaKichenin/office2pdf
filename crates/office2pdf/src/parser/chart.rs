@@ -1380,6 +1380,7 @@ fn parse_chart_line(
     let mut suppressed: bool = false;
     let mut width_pt: Option<f64> = None;
     let mut color: Option<Color> = None;
+    let mut alpha: Option<f64> = None;
     let mut in_line: bool = false;
     let mut in_solid_fill: bool = false;
 
@@ -1411,13 +1412,21 @@ fn parse_chart_line(
                 if in_solid_fill
                     && matches!(e.local_name().as_ref(), b"srgbClr" | b"schemeClr") =>
             {
-                color = color.or(drawingml::parse_color_from_start(reader, e, scheme).color);
+                let parsed = drawingml::parse_color_from_start(reader, e, scheme);
+                if color.is_none() {
+                    color = parsed.color;
+                    alpha = parsed.alpha;
+                }
             }
             Ok(Event::Empty(ref e))
                 if in_solid_fill
                     && matches!(e.local_name().as_ref(), b"srgbClr" | b"schemeClr") =>
             {
-                color = color.or(drawingml::parse_color_from_empty(e, scheme).color);
+                let parsed = drawingml::parse_color_from_empty(e, scheme);
+                if color.is_none() {
+                    color = parsed.color;
+                    alpha = parsed.alpha;
+                }
             }
             Ok(Event::End(ref e)) if e.local_name().as_ref() == b"ln" => {
                 in_line = false;
@@ -1433,7 +1442,11 @@ fn parse_chart_line(
     } else if suppressed {
         ChartLine::Suppressed
     } else {
-        ChartLine::Explicit { width_pt, color }
+        ChartLine::Explicit {
+            width_pt,
+            color,
+            alpha,
+        }
     }
 }
 

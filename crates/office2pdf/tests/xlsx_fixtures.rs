@@ -473,6 +473,7 @@ fn structure_any_sheets_chart_chrome_takes_its_declared_colour() {
     let expected = ChartLine::Explicit {
         width_pt: Some(0.75),
         color: Some(declared),
+        alpha: None,
     };
     assert_eq!(chart.major_gridline_line, expected, "major gridlines");
     assert_eq!(chart.category_axis_line, expected, "category axis");
