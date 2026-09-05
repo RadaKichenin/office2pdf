@@ -7347,7 +7347,7 @@ fn a_line_family_plot_honours_its_stated_rectangle() {
     );
     assert!(
         (jan.dy - automatic_jan.dy).abs() <= 0.02,
-        "the stated inner plot must not move Excel's automatic category-label band; got {jan:?}, automatic {automatic_jan:?}"
+        "implicit-size labels retain their uncalibrated automatic band; got {jan:?}, automatic {automatic_jan:?}"
     );
 
     let value_tick: PlacedBox = placed_box_holding(&source, "200");
@@ -8315,5 +8315,138 @@ fn category_axis_boundary_spaces_survive_each_axis_chart_renderer() {
         ] {
             assert!(source.contains(label), "{kind:?} must preserve {label}");
         }
+    }
+}
+
+/// Native Excel probes of the budget chart with only its category face/size
+/// changed. Seats are in chart-local points before the worksheet's 0.78 scale.
+/// Calibri's source metrics are available on every runner, including wasm.
+#[test]
+fn worksheet_line_category_baselines_follow_plot_space_and_font_size() {
+    for kind in [ChartType::Line, ChartType::Area] {
+        for (size, plot_height, native_baseline) in [
+            (12.0, MONTHLY_BUDGET_LINE_PLOT_LAYOUT.height, 67.0),
+            (15.0, MONTHLY_BUDGET_LINE_PLOT_LAYOUT.height, 70.0),
+            (24.0, MONTHLY_BUDGET_LINE_PLOT_LAYOUT.height, 68.0),
+            (12.0, 0.2, 40.0),
+            (15.0, 0.2, 45.0),
+            (24.0, 0.2, 59.0),
+        ] {
+            let mut chart = combo_line_and_scatter_chart();
+            chart.chart_type = kind.clone();
+            chart.series.truncate(1);
+            chart.legend_position = LegendPosition::Right;
+            chart.category_axis_text_font_family = Some("Calibri".to_string());
+            chart.category_axis_text_style.size_pt = Some(size);
+            chart.plot_area_layout = Some(crate::ir::ChartPlotAreaLayout {
+                height: plot_height,
+                ..MONTHLY_BUDGET_LINE_PLOT_LAYOUT
+            });
+            let source = framed_chart_source(&chart, 786.7143307086615, 75.54897637795276);
+            let label = placed_box_holding(&source, "jan");
+            assert!(
+                (label.dy - native_baseline).abs() < 0.01,
+                "{kind:?} {size}pt, plot height {plot_height}: native baseline {native_baseline}, got {label:?}"
+            );
+            let line = source.lines().find(|line| line.contains("[jan]")).unwrap();
+            assert!(
+                line.contains("top-edge: 0pt"),
+                "dy must locate the baseline: {line}"
+            );
+        }
+    }
+}
+
+#[test]
+fn worksheet_line_category_cap_rounds_the_remaining_line_space() {
+    let mut chart = combo_line_and_scatter_chart();
+    chart.legend_position = LegendPosition::Right;
+    chart.category_axis_text_font_family = Some("Calibri".to_string());
+    chart.category_axis_text_style.size_pt = Some(15.0);
+    chart.plot_area_layout = Some(crate::ir::ChartPlotAreaLayout {
+        height: 0.8,
+        ..MONTHLY_BUDGET_LINE_PLOT_LAYOUT
+    });
+    // One-factor native exports change only the drawing's bottom row offset.
+    // Calibri crosses the next baseline at +0.4pt; Cambria does so at +0.6pt,
+    // separating rounding the available line space from rounding the frame.
+    for (increment, native_baseline) in [
+        (0.0, 70.0),
+        (0.2, 70.0),
+        (0.4, 71.0),
+        (0.6, 71.0),
+        (1.0, 71.0),
+        (1.4, 72.0),
+    ] {
+        let source = framed_chart_source(&chart, 786.7143307086615, 75.54897637795276 + increment);
+        let label = placed_box_holding(&source, "jan");
+        assert!(
+            (label.dy - native_baseline).abs() < 0.01,
+            "height +{increment}pt: expected native baseline {native_baseline}, got {label:?}"
+        );
+    }
+}
+
+#[test]
+fn uncalibrated_line_category_labels_keep_the_existing_seat() {
+    let mut chart = combo_line_and_scatter_chart();
+    chart.legend_position = LegendPosition::Right;
+    chart.category_axis_text_font_family = Some("Calibri".to_string());
+    chart.category_axis_text_style.size_pt = Some(15.0);
+    chart.plot_area_layout = Some(MONTHLY_BUDGET_LINE_PLOT_LAYOUT);
+    for host in [
+        crate::ir::ChartHost::WordProcessing,
+        crate::ir::ChartHost::Presentation,
+        crate::ir::ChartHost::SpreadsheetChartsheet,
+    ] {
+        chart.host = host;
+        let source = framed_chart_source(&chart, 786.7143307086615, 75.54897637795276);
+        let label = placed_box_holding(&source, "jan");
+        assert!(
+            (label.dy - 60.54897637795276).abs() < 0.01,
+            "{host:?}: {label:?}"
+        );
+    }
+    chart.host = crate::ir::ChartHost::Spreadsheet;
+    let flowed = chart_source(chart.clone());
+    assert!(
+        !flowed
+            .lines()
+            .find(|line| line.contains("[jan]"))
+            .unwrap()
+            .contains("top-edge: 0pt")
+    );
+    chart.category_axis_text_style.size_pt = None;
+    let implicit = framed_chart_source(&chart, 786.7143307086615, 75.54897637795276);
+    assert!((placed_box_holding(&implicit, "jan").dy - 60.54897637795276).abs() < 0.01);
+}
+
+#[test]
+fn category_line_spacing_quantizes_the_faces_leading_before_seating() {
+    use crate::render::typst_gen::diagrams::line_category_baseline_pt;
+    // Native Arial exports distinguish its nonzero hhea leading from the
+    // zero-leading Calibri controls. Metrics are the source Office face's;
+    // supplying them directly keeps this numeric layout check font-portable.
+    let metrics = (1854.0 / 2048.0, 434.0 / 2048.0, 67.0 / 2048.0);
+    let height = 75.54897637795276;
+    for (size, fraction, native) in [
+        (12.0, 0.559_675_203_526_960_8, 67.0),
+        (15.0, 0.559_675_203_526_960_8, 71.0),
+        (18.0, 0.559_675_203_526_960_8, 70.0),
+        (24.0, 0.559_675_203_526_960_8, 70.0),
+        (12.0, 0.2, 39.0),
+        (15.0, 0.2, 44.0),
+        (24.0, 0.2, 58.0),
+    ] {
+        let baseline = line_category_baseline_pt(
+            height,
+            (0.07430787730224597 + fraction) * height,
+            size,
+            metrics,
+        );
+        assert!(
+            (baseline - native).abs() < 0.01,
+            "Arial {size}pt, plot height {fraction}: native {native}, got {baseline}"
+        );
     }
 }
