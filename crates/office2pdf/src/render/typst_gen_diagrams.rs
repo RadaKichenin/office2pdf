@@ -260,14 +260,8 @@ const CHART_SERIES_COLORS: [&str; 6] = [
     "rgb(112, 173, 71)",
 ];
 
-/// Side of an automatic series marker, in points.
-///
-/// Left at 5pt rather than changed. #635 reports the marker is about twice
-/// Excel's, but the only reference available here is a LibreOffice render of
-/// `WithChart.xlsx`, whose markers measure 5.0 x 5.0pt — the same as ours. That
-/// is not a measurement of Excel, so it does not disprove the report; it means
-/// there was nothing to size against, and guessing would be as likely to move
-/// away from Excel as toward it.
+/// Default marker size in points when `c:marker/c:size` is absent.
+/// A declared size overrides this in both the plot and its legend key (#1185).
 pub(super) const SERIES_MARKER_SIZE_PT: f64 = 5.0;
 
 /// Weight a line series' polyline is stroked at when the file states none.
@@ -456,18 +450,18 @@ const EXCEL_LEGEND_KEY_LINE_BOX_SHARE: f64 = 0.45;
 /// Entries beyond the second remain the order #635 states Excel uses, with
 /// nothing here checking them; that workbook has only two series.
 ///
-/// `symbol` is what the series' own `<c:marker><c:symbol>` names, and outranks
+/// The series' own `<c:marker><c:symbol>` names its symbol, and outranks
 /// the cycle entirely: the sequence only ever stood in for a symbol the file
 /// left automatic (issue #1107).
 fn write_series_marker(
     out: &mut String,
     series_index: usize,
-    symbol: Option<MarkerSymbol>,
+    series: &crate::ir::ChartSeries,
     x: f64,
     y: f64,
     color: &str,
 ) {
-    out.push_str(&series_marker_markup(series_index, symbol, x, y, color));
+    out.push_str(&series_marker_markup(series_index, series, x, y, color));
 }
 
 /// The `#place`d markup for one series marker centred on (`x`, `y`), and the
@@ -477,30 +471,52 @@ fn write_series_marker(
 /// plot draws, instead of restating the shape cycle (#801).
 fn series_marker_markup(
     series_index: usize,
-    symbol: Option<MarkerSymbol>,
+    series: &crate::ir::ChartSeries,
     x: f64,
     y: f64,
     color: &str,
 ) -> String {
-    let size: f64 = SERIES_MARKER_SIZE_PT;
+    let size: f64 = series.marker_style.size_pt.unwrap_or(SERIES_MARKER_SIZE_PT);
+    let fill: String = if series.marker_style.fill_mode == crate::ir::ChartFillMode::Suppressed {
+        "none".to_string()
+    } else {
+        marker_paint(
+            series.marker_style.fill,
+            series.marker_style.fill_alpha,
+            color,
+        )
+    };
+    let stroke: String = match series.marker_style.line {
+        crate::ir::ChartLine::Automatic | crate::ir::ChartLine::Suppressed => "none".to_string(),
+        crate::ir::ChartLine::Explicit {
+            width_pt,
+            color: outline,
+            alpha,
+        } => format!(
+            "{}pt + {}",
+            format_f64(width_pt.unwrap_or(0.75)),
+            marker_paint(outline, alpha, color)
+        ),
+    };
     let half: f64 = size / 2.0;
     let left: String = format_f64(x - half);
     let top: String = format_f64(y - half);
     let full: String = format_f64(size);
     let mid: String = format_f64(half);
 
-    let circle = || -> String { format!("circle(radius: {mid}pt, fill: {color}, stroke: none)") };
+    let circle =
+        || -> String { format!("circle(radius: {mid}pt, fill: {fill}, stroke: {stroke})") };
     let diamond = || -> String {
         format!(
-            "polygon(fill: {color}, stroke: none, ({mid}pt, 0pt), ({full}pt, {mid}pt), ({mid}pt, {full}pt), (0pt, {mid}pt))"
+            "polygon(fill: {fill}, stroke: {stroke}, ({mid}pt, 0pt), ({full}pt, {mid}pt), ({mid}pt, {full}pt), (0pt, {mid}pt))"
         )
     };
     let square = || -> String {
-        format!("rect(width: {full}pt, height: {full}pt, fill: {color}, stroke: none)")
+        format!("rect(width: {full}pt, height: {full}pt, fill: {fill}, stroke: {stroke})")
     };
     let triangle = || -> String {
         format!(
-            "polygon(fill: {color}, stroke: none, ({mid}pt, 0pt), ({full}pt, {full}pt), (0pt, {full}pt))"
+            "polygon(fill: {fill}, stroke: {stroke}, ({mid}pt, 0pt), ({full}pt, {full}pt), (0pt, {full}pt))"
         )
     };
     // A filled X.
@@ -508,11 +524,11 @@ fn series_marker_markup(
         let thin: String = format_f64(size / 3.0);
         let thick: String = format_f64(size * 2.0 / 3.0);
         format!(
-            "polygon(fill: {color}, stroke: none, ({thin}pt, 0pt), ({thick}pt, 0pt), ({thick}pt, {thin}pt), ({full}pt, {thin}pt), ({full}pt, {thick}pt), ({thick}pt, {thick}pt), ({thick}pt, {full}pt), ({thin}pt, {full}pt), ({thin}pt, {thick}pt), (0pt, {thick}pt), (0pt, {thin}pt), ({thin}pt, {thin}pt))"
+            "polygon(fill: {fill}, stroke: {stroke}, ({thin}pt, 0pt), ({thick}pt, 0pt), ({thick}pt, {thin}pt), ({full}pt, {thin}pt), ({full}pt, {thick}pt), ({thick}pt, {thick}pt), ({thick}pt, {full}pt), ({thin}pt, {full}pt), ({thin}pt, {thick}pt), (0pt, {thick}pt), (0pt, {thin}pt), ({thin}pt, {thin}pt))"
         )
     };
 
-    let shape: String = match symbol {
+    let shape: String = match series.marker_symbol {
         Some(MarkerSymbol::Off) => return String::new(),
         Some(MarkerSymbol::Circle) => circle(),
         Some(MarkerSymbol::Diamond) => diamond(),
@@ -527,6 +543,21 @@ fn series_marker_markup(
         },
     };
     format!("#place(top + left, dx: {left}pt, dy: {top}pt, {shape})\n")
+}
+
+/// Explicit marker paint overrides the series colour, including opacity.
+fn marker_paint(color: Option<Color>, alpha: Option<f64>, fallback: &str) -> String {
+    let paint = color
+        .as_ref()
+        .map(rgb)
+        .unwrap_or_else(|| fallback.to_string());
+    match alpha {
+        Some(alpha) => format!(
+            "{paint}.transparentize({}%)",
+            format_f64((1.0 - alpha.clamp(0.0, 1.0)) * 100.0)
+        ),
+        None => paint,
+    }
 }
 
 /// Whether this plot draws `series` as a line laid over the columns rather
@@ -563,7 +594,7 @@ fn line_legend_key(series_index: usize, series: &crate::ir::ChartSeries, color: 
         format_f64(series_line_pt(series)),
         series_marker_markup(
             series_index,
-            series.marker_symbol,
+            series,
             LEGEND_KEY_LEN_PT / 2.0,
             key_mid,
             color
@@ -4108,7 +4139,7 @@ fn generate_chart_axis(
             );
         }
         for (x, y) in &points {
-            write_series_marker(out, s_index, s.marker_symbol, *x, *y, &color);
+            write_series_marker(out, s_index, s, *x, *y, &color);
         }
     }
 
@@ -4651,7 +4682,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
         }
         // Point markers: the symbol the series names, else the shape cycle.
         for (x, y) in &points {
-            write_series_marker(out, s_index, s.marker_symbol, *x, *y, &color);
+            write_series_marker(out, s_index, s, *x, *y, &color);
         }
     }
 
@@ -4947,7 +4978,7 @@ fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64
             format_f64(series_line_pt(series))
         );
         for (x, y) in &points {
-            write_series_marker(out, series_index, series.marker_symbol, *x, *y, &color);
+            write_series_marker(out, series_index, series, *x, *y, &color);
         }
     }
 

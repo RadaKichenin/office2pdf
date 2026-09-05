@@ -3392,3 +3392,41 @@ fn axis_typefaces_resolve_independently_and_inherit_the_chart_default() {
         }
     }
 }
+
+#[test]
+fn marker_size_and_paint_are_independent_of_the_series() {
+    for size in [2, 14, 28, 72] {
+        let xml = line_series_with_marker(&format!(
+            r#"<c:marker><c:symbol val="circle"/><c:size val="{size}"/><c:spPr><a:solidFill><a:srgbClr val="008889"/></a:solidFill><a:ln w="9525"><a:solidFill><a:srgbClr val="112233"/></a:solidFill></a:ln></c:spPr></c:marker>"#
+        ));
+        let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
+        let marker = chart.series[0].marker_style;
+        assert_eq!(marker.size_pt, Some(f64::from(size)));
+        assert_eq!(marker.fill, Some(Color::new(0, 136, 137)));
+        assert_eq!(marker.fill_mode, ChartFillMode::Explicit);
+        assert_eq!(
+            marker.line,
+            ChartLine::Explicit {
+                width_pt: Some(0.75),
+                color: Some(Color::new(17, 34, 51)),
+                alpha: None
+            }
+        );
+        assert_ne!(chart.series[0].fill, marker.fill);
+        assert_ne!(chart.series[0].line_width_pt, Some(0.75));
+    }
+}
+
+#[test]
+fn marker_suppression_and_invalid_size_preserve_independent_defaults() {
+    for size in ["0", "1", "73", "14.5", "NaN"] {
+        let xml = line_series_with_marker(&format!(
+            r#"<c:marker><c:size val="{size}"/><c:spPr><a:noFill/><a:ln w="9525"><a:noFill/></a:ln></c:spPr></c:marker>"#
+        ));
+        let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
+        let marker = chart.series[0].marker_style;
+        assert_eq!(marker.size_pt, None);
+        assert_eq!(marker.fill_mode, ChartFillMode::Suppressed);
+        assert_eq!(marker.line, ChartLine::Suppressed);
+    }
+}
