@@ -8268,3 +8268,52 @@ fn axis_typefaces_reach_each_axis_chart_renderer() {
         );
     }
 }
+
+#[test]
+fn budget_month_axis_preserves_its_single_trailing_space() {
+    let data = include_bytes!("../../../../tests/fixtures/xlsx/issue_1181_fit_to_height.xlsx");
+    let (doc, _) = crate::parser::Parser::parse(
+        &crate::parser::xlsx::XlsxParser,
+        data,
+        &crate::config::ConvertOptions::default(),
+    )
+    .expect("the budget fixture parses");
+    let source = generate_typst(&doc).unwrap().source;
+    assert!(
+        source.contains(r#")[jan#" ";]"#),
+        "single trailing category spaces must survive the centered Typst text boundary"
+    );
+    assert!(source.contains(r#")[year#"  ";]"#));
+}
+
+#[test]
+fn category_axis_boundary_spaces_survive_each_axis_chart_renderer() {
+    for kind in [
+        ChartType::Bar,
+        ChartType::Column,
+        ChartType::Line,
+        ChartType::Area,
+        ChartType::Other(crate::ir::RADAR_CHART_LABEL.to_string()),
+    ] {
+        let mut chart = sized_bar_chart(11.0);
+        chart.chart_type = kind.clone();
+        chart.categories = [" Q1", "Q2 ", " Q3 ", "Q4", "Q5  ", " "]
+            .into_iter()
+            .map(str::to_string)
+            .collect();
+        for series in &mut chart.series {
+            series.values = vec![4.0, 8.0, 6.0, 3.0, 7.0, 5.0];
+        }
+        let source = framed_chart_source(&chart, 480.0, 320.0);
+        for label in [
+            r#")[#" ";Q1]"#,
+            r#")[Q2#" ";]"#,
+            r#")[#" ";Q3#" ";]"#,
+            ")[Q4]",
+            r#")[Q5#"  ";]"#,
+            r#")[#" ";]"#,
+        ] {
+            assert!(source.contains(label), "{kind:?} must preserve {label}");
+        }
+    }
+}
