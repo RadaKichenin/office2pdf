@@ -9,9 +9,9 @@
         "y": 115.2
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-e556223d5649",
       "region": "top"
@@ -25,9 +25,9 @@
         "y": 588.24
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-305bf7a991f0",
       "region": "center"
@@ -41,9 +41,9 @@
         "y": 485.76
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-a90f3e358291",
       "region": "center"
@@ -57,9 +57,9 @@
         "y": 385.2
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-093e7d1e51c2",
       "region": "top"
@@ -73,9 +73,9 @@
         "y": 604.32
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-599a989c74de",
       "region": "center"
@@ -89,9 +89,9 @@
         "y": 528.24
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-85eb37b75ecd",
       "region": "center"
@@ -121,9 +121,9 @@
         "y": 768.24
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-c0e027c7c705",
       "region": "center"
@@ -137,9 +137,9 @@
         "y": 1064.64
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-54f8abf89539",
       "region": "bottom"
@@ -153,9 +153,9 @@
         "y": 708.96
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-7e451d892dcb",
       "region": "center"
@@ -169,9 +169,9 @@
         "y": 946.08
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-be82ccaeb37f",
       "region": "bottom"
@@ -185,9 +185,9 @@
         "y": 827.52
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-b60e6b2f3301",
       "region": "bottom"
@@ -201,9 +201,9 @@
         "y": 499.68
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-dd6b51a88cf6",
       "region": "center"
@@ -233,9 +233,9 @@
         "y": 694.08
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-0e649fbd002a",
       "region": "center"
@@ -249,9 +249,9 @@
         "y": 753.36
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-78cfaf61d03a",
       "region": "center"
@@ -265,9 +265,9 @@
         "y": 812.64
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-bfcf75efb550",
       "region": "bottom"
@@ -281,9 +281,9 @@
         "y": 618.24
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-01bfb1455943",
       "region": "center"
@@ -313,9 +313,9 @@
         "y": 1020.24
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-4c91cefe8a90",
       "region": "bottom"
@@ -329,9 +329,9 @@
         "y": 606.24
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-9c3ae21a3b96",
       "region": "center"
@@ -345,9 +345,9 @@
         "y": 901.68
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-99af8a05577e",
       "region": "bottom"
@@ -361,9 +361,9 @@
         "y": 1021.2
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-d44e413b611f",
       "region": "bottom"
@@ -377,9 +377,9 @@
         "y": 902.64
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-7f09906b7cbc",
       "region": "bottom"
@@ -393,9 +393,9 @@
         "y": 546.72
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-14a80a39af24",
       "region": "center"
@@ -441,9 +441,9 @@
         "y": 634.8
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-48eec30b4bf9",
       "region": "center"
@@ -457,9 +457,9 @@
         "y": 871.92
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-498556bf0271",
       "region": "bottom"
@@ -473,9 +473,9 @@
         "y": 1049.76
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-5972009de8a0",
       "region": "bottom"
@@ -489,9 +489,9 @@
         "y": 931.2
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-92ea45086d7f",
       "region": "bottom"
@@ -505,9 +505,9 @@
         "y": 990.48
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-d98da82f5ba1",
       "region": "bottom"
@@ -521,9 +521,9 @@
         "y": 560.88
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-1850c257fbac",
       "region": "center"
@@ -537,9 +537,9 @@
         "y": 843.12
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-f435b2b191e9",
       "region": "bottom"
@@ -553,9 +553,9 @@
         "y": 961.68
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-cef015709942",
       "region": "bottom"
@@ -569,9 +569,9 @@
         "y": 783.84
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-77445c15fc23",
       "region": "center"
@@ -585,9 +585,9 @@
         "y": 665.28
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-7a4929a6ae63",
       "region": "center"
@@ -601,9 +601,9 @@
         "y": 724.56
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-5f6409d26fba",
       "region": "center"
@@ -617,9 +617,9 @@
         "y": 650.4
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-0b8110a1523b",
       "region": "center"
@@ -633,9 +633,9 @@
         "y": 857.28
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-4cd9a38e53c5",
       "region": "bottom"
@@ -649,9 +649,9 @@
         "y": 649.68
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-c70d84a2cc69",
       "region": "center"
@@ -665,9 +665,9 @@
         "y": 723.84
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-6b5381469533",
       "region": "center"
@@ -681,9 +681,9 @@
         "y": 960.96
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-c41e7f0321a4",
       "region": "bottom"
@@ -697,9 +697,9 @@
         "y": 664.56
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-90025ff3dd38",
       "region": "center"
@@ -713,9 +713,9 @@
         "y": 975.84
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-d8a190002af6",
       "region": "bottom"
@@ -729,9 +729,9 @@
         "y": 842.4
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-be9db2ce4dbe",
       "region": "bottom"
@@ -745,9 +745,9 @@
         "y": 783.12
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-e6e35baa6906",
       "region": "center"
@@ -761,9 +761,9 @@
         "y": 1035.12
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-d1a00a6e4fe7",
       "region": "bottom"
@@ -777,9 +777,9 @@
         "y": 916.56
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-df8bbdaaab25",
       "region": "bottom"
@@ -809,9 +809,9 @@
         "y": 546.0
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-6100c8e7b8b6",
       "region": "center"
@@ -825,9 +825,9 @@
         "y": 1109.04
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-3f3eba49c3c3",
       "region": "bottom-left"
@@ -841,9 +841,9 @@
         "y": 397.68
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-fa618bd9eeb6",
       "region": "left"
@@ -905,9 +905,9 @@
         "y": 130.56
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1566",
+        "kind": "issue",
+        "note": "Native contains the anchored vertical worksheet separator line; output has no matching line paint. This is an omitted DrawingML line shape, not edge antialiasing."
       },
       "id": "p2-9be12111645c",
       "region": "top"
@@ -937,9 +937,9 @@
         "y": 130.32
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1566",
+        "kind": "issue",
+        "note": "Native contains the anchored vertical worksheet separator line; output has no matching line paint. This is an omitted DrawingML line shape, not edge antialiasing."
       },
       "id": "p2-524d5035bf2f",
       "region": "top-right"
@@ -971,7 +971,7 @@
       "disposition": {
         "class": "shape-edge-antialiasing",
         "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "note": "Full-resolution crops retain the sparkline value vertices and color. Native embeds 42x18-pixel sparkline rasters in 31.98x14.04pt cells, while output uses vector strokes. These edge/blur residuals follow native bitmap resampling."
       },
       "id": "p2-df1bd06f522d",
       "region": "bottom-right"
@@ -987,7 +987,7 @@
       "disposition": {
         "class": "shape-edge-antialiasing",
         "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "note": "Full-resolution crops retain the sparkline value vertices and color. Native embeds 42x18-pixel sparkline rasters in 31.98x14.04pt cells, while output uses vector strokes. These edge/blur residuals follow native bitmap resampling."
       },
       "id": "p2-8ae9766dc952",
       "region": "right"
@@ -1001,9 +1001,9 @@
         "y": 1107.12
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-e36164d40faa",
       "region": "bottom-right"
@@ -1035,7 +1035,7 @@
       "disposition": {
         "class": "shape-edge-antialiasing",
         "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "note": "Full-resolution crops retain the sparkline value vertices and color. Native embeds 42x18-pixel sparkline rasters in 31.98x14.04pt cells, while output uses vector strokes. These edge/blur residuals follow native bitmap resampling."
       },
       "id": "p2-bdf5e77a3509",
       "region": "right"
@@ -1083,7 +1083,7 @@
       "disposition": {
         "class": "shape-edge-antialiasing",
         "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "note": "Full-resolution crops retain the sparkline value vertices and color. Native embeds 42x18-pixel sparkline rasters in 31.98x14.04pt cells, while output uses vector strokes. These edge/blur residuals follow native bitmap resampling."
       },
       "id": "p2-9f2c986b20c5",
       "region": "right"
@@ -1147,7 +1147,7 @@
       "disposition": {
         "class": "shape-edge-antialiasing",
         "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "note": "Full-resolution crops retain the sparkline value vertices and color. Native embeds 42x18-pixel sparkline rasters in 31.98x14.04pt cells, while output uses vector strokes. These edge/blur residuals follow native bitmap resampling."
       },
       "id": "p2-85eb123339cc",
       "region": "right"
@@ -1243,7 +1243,7 @@
       "disposition": {
         "class": "shape-edge-antialiasing",
         "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "note": "Full-resolution crops retain the sparkline value vertices and color. Native embeds 42x18-pixel sparkline rasters in 31.98x14.04pt cells, while output uses vector strokes. These edge/blur residuals follow native bitmap resampling."
       },
       "id": "p2-238cfe981235",
       "region": "bottom-right"
@@ -1289,9 +1289,9 @@
         "y": 560.88
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-8f14fbc098e6",
       "region": "left"
@@ -1483,7 +1483,7 @@
       "disposition": {
         "class": "shape-edge-antialiasing",
         "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "note": "Full-resolution crops retain the sparkline value vertices and color. Native embeds 42x18-pixel sparkline rasters in 31.98x14.04pt cells, while output uses vector strokes. These edge/blur residuals follow native bitmap resampling."
       },
       "id": "p2-04708ddcb738",
       "region": "bottom-right"
@@ -2091,7 +2091,7 @@
       "disposition": {
         "class": "shape-edge-antialiasing",
         "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "note": "Full-resolution crops retain the sparkline value vertices and color. Native embeds 42x18-pixel sparkline rasters in 31.98x14.04pt cells, while output uses vector strokes. These edge/blur residuals follow native bitmap resampling."
       },
       "id": "p2-06d49d8b11dc",
       "region": "bottom-right"
@@ -2715,7 +2715,7 @@
       "disposition": {
         "class": "shape-edge-antialiasing",
         "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "note": "Full-resolution crops retain the sparkline value vertices and color. Native embeds 42x18-pixel sparkline rasters in 31.98x14.04pt cells, while output uses vector strokes. These edge/blur residuals follow native bitmap resampling."
       },
       "id": "p2-3cf67cf2edc2",
       "region": "right"
@@ -3467,7 +3467,7 @@
       "disposition": {
         "class": "shape-edge-antialiasing",
         "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "note": "Full-resolution crops retain the sparkline value vertices and color. Native embeds 42x18-pixel sparkline rasters in 31.98x14.04pt cells, while output uses vector strokes. These edge/blur residuals follow native bitmap resampling."
       },
       "id": "p2-c6ebd0c2312c",
       "region": "right"
@@ -3769,9 +3769,9 @@
         "y": 1107.12
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-20ec8d698f43",
       "region": "bottom"
@@ -3785,9 +3785,9 @@
         "y": 1107.12
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-808d2d6379ef",
       "region": "bottom"
@@ -3801,9 +3801,9 @@
         "y": 1107.12
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-b43424b0b4ca",
       "region": "bottom-right"
@@ -3817,9 +3817,9 @@
         "y": 1107.12
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-91eedb3ef8a1",
       "region": "bottom"
@@ -3833,9 +3833,9 @@
         "y": 1107.12
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-ead239057ee3",
       "region": "bottom-right"
@@ -3849,9 +3849,9 @@
         "y": 1107.12
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-d690ad4af3a0",
       "region": "bottom"
@@ -3865,9 +3865,9 @@
         "y": 1107.12
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-46a23328a5d3",
       "region": "bottom"
@@ -3881,9 +3881,9 @@
         "y": 1107.12
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-64cf1345d477",
       "region": "bottom"
@@ -3897,9 +3897,9 @@
         "y": 1107.12
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-99f10f7953e1",
       "region": "bottom"
@@ -3913,9 +3913,9 @@
         "y": 1107.12
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-2de419c6e525",
       "region": "bottom"
@@ -3929,9 +3929,9 @@
         "y": 1107.12
       },
       "disposition": {
-        "class": "shape-edge-antialiasing",
-        "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing."
       },
       "id": "p2-eac0d642ecb1",
       "region": "bottom"
@@ -3963,7 +3963,7 @@
       "disposition": {
         "class": "shape-edge-antialiasing",
         "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "note": "Full-resolution crops retain the sparkline value vertices and color. Native embeds 42x18-pixel sparkline rasters in 31.98x14.04pt cells, while output uses vector strokes. These edge/blur residuals follow native bitmap resampling."
       },
       "id": "p2-c7c67c5b3743",
       "region": "right"
@@ -7531,7 +7531,7 @@
       "disposition": {
         "class": "shape-edge-antialiasing",
         "kind": "accepted-rendering",
-        "note": "Full-resolution 300 DPI page, chart, and table crops show matching element bounds. These thin residuals hug existing edges outside the changed cash-flow bar fills."
+        "note": "Full-resolution crops retain the sparkline value vertices and color. Native embeds 42x18-pixel sparkline rasters in 31.98x14.04pt cells, while output uses vector strokes. These edge/blur residuals follow native bitmap resampling."
       },
       "id": "p2-95dd1f9d29c8",
       "region": "bottom-right"
