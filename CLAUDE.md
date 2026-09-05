@@ -300,7 +300,8 @@ ligature swallowing letter-spacing so the run extracts as `o ffi c e 2 p d f`
 (#684 — measured 24 occurrences in the pre-fix output, against 0 of the
 `ofce2pdf` that issue's body reports). It reports a codepoint-class census and a normalized-content check
 separately — a class delta with matching content is an encoding difference, a
-content residual is real text loss. Costs milliseconds; run it on any fix that
+content residual needs review for extraction order or missing/extra text.
+Costs milliseconds; run it on any fix that
 touches text.
 
 The tool's `## Reading` section is the part to act on — it routes attention to
