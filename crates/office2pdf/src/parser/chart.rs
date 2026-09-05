@@ -392,6 +392,7 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
         legend_text_style,
         category_axis_text_style: category_axis.text_style,
         value_axis_text_style: value_axis.text_style,
+        category_axis_number_format: category_axis.number_format,
         value_axis_number_format: value_axis.number_format,
     })
 }

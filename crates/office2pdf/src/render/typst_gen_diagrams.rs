@@ -650,6 +650,24 @@ pub(super) fn chart_value_label_formatted(value: f64, number_format: Option<&str
     }
 }
 
+/// Format only the axis label: the original category still identifies data
+/// labels, legends, and plotted slots. Empty number-format sections suppress
+/// ink without deleting the axis or changing its layout band (#1267).
+fn formatted_category_axis_label(chart: &Chart, category: &str) -> String {
+    match chart.category_axis_number_format.as_deref() {
+        Some(format) => {
+            if let Ok(value) = category.parse::<f64>()
+                && let Some(literal) =
+                    crate::parser::xlsx::literal_number_format_text(format, value)
+            {
+                return literal;
+            }
+            umya_spreadsheet::helper::number_format::to_formatted_string(category, format)
+        }
+        None => category.to_string(),
+    }
+}
+
 /// The number format a chart's value axis and data labels take: the first one
 /// any series declares. A chart's series share one value axis, and Office
 /// writes the same code into each series' cache.
@@ -3911,6 +3929,11 @@ fn generate_chart_axis(
         if !category_axis_drawn {
             continue;
         }
+        let formatted_category: String = formatted_category_axis_label(chart, category);
+        if formatted_category.is_empty() {
+            continue;
+        }
+        let category: &str = &formatted_category;
         if horizontal {
             let row_top: f64 = plot.dy + plot_h - (cat_index as f64 + 1.0) * row;
             let _ = writeln!(
@@ -4430,6 +4453,11 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
     // Category axis labels.
     if category_axis_drawn {
         for (index, category) in chart.categories.iter().enumerate() {
+            let formatted_category: String = formatted_category_axis_label(chart, category);
+            if formatted_category.is_empty() {
+                continue;
+            }
+            let category: &str = &formatted_category;
             let x: f64 = point_x(index);
             let _ = writeln!(
                 out,
@@ -4771,6 +4799,11 @@ fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64
         let category_pt: f64 = chart_axis_text_pt(chart, chart.category_axis_text_style);
         let weight: String = chart_axis_text_attrs(chart, chart.category_axis_text_style);
         for (index, category) in chart.categories.iter().enumerate() {
+            let formatted_category: String = formatted_category_axis_label(chart, category);
+            if formatted_category.is_empty() {
+                continue;
+            }
+            let category: &str = &formatted_category;
             let a: f64 = angle(index);
             let label_x: f64 = centre_x + (radius + GAP) * a.cos();
             let label_y: f64 = centre_y + (radius + GAP) * a.sin();
