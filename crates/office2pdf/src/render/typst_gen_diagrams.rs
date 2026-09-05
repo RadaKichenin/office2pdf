@@ -2265,6 +2265,20 @@ fn chart_category_label_advance_pt(chart: &Chart, label: &str) -> Option<f64> {
         .map(|advance_em| advance_em * size_pt + ellipsis_pt + tracking_pt)
 }
 
+/// Category labels are standalone text blocks, so even one boundary space
+/// contributes to their aligned width. Literal markup drops that space (#1567).
+fn escape_category_axis_label(label: &str) -> String {
+    let mut escaped: String = escape_typst(label);
+    if escaped.starts_with(' ') {
+        escaped.replace_range(..1, r#"#" ";"#);
+    }
+    if escaped.ends_with(' ') {
+        escaped.pop();
+        escaped.push_str(r#"#" ";"#);
+    }
+    escaped
+}
+
 /// Typst content for a rotated category label, aligned as the native export
 /// aligns it.
 ///
@@ -2285,7 +2299,7 @@ fn chart_category_label_advance_pt(chart: &Chart, label: &str) -> Option<f64> {
 /// overflows leftwards across the retained text.
 fn rotated_category_label_content(chart: &Chart, category: &str, label: &str) -> String {
     let Some(stem) = label.strip_suffix('…').filter(|_| label != category) else {
-        return escape_typst(label);
+        return escape_category_axis_label(label);
     };
     let (family, bold, size_pt) = chart_category_label_face(chart);
     let tracking_pt: f64 = chart
@@ -2303,7 +2317,7 @@ fn rotated_category_label_content(chart: &Chart, category: &str, label: &str) ->
     };
     format!(
         "{}{}#box(width: 0pt)[#align(left)[#move(dx: {}pt)[…]]]",
-        escape_typst(stem),
+        escape_category_axis_label(stem),
         swallowed_space,
         format_f64(tracking_pt)
     )
@@ -3999,7 +4013,7 @@ fn generate_chart_axis(
                 format_f64(row),
                 format_f64(chart_axis_text_pt(chart, chart.category_axis_text_style)),
                 chart_category_text_attrs(chart),
-                escape_typst(category)
+                escape_category_axis_label(category)
             );
         } else if category_labels_rotated {
             // Every label hangs from the axis by its trailing end, pinned at
@@ -4034,7 +4048,7 @@ fn generate_chart_axis(
                 format_f64(chart_category_band_pt(chart)),
                 format_f64(chart_axis_text_pt(chart, chart.category_axis_text_style)),
                 chart_category_text_attrs(chart),
-                escape_typst(category)
+                escape_category_axis_label(category)
             );
         }
     }
@@ -4533,7 +4547,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
                 format_f64(category_label_y),
                 format_f64(chart_axis_text_pt(chart, chart.category_axis_text_style)),
                 chart_category_text_attrs(chart),
-                escape_typst(category)
+                escape_category_axis_label(category)
             );
         }
     }
@@ -4886,7 +4900,7 @@ fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64
                 format_f64(chart_label_box_h(category_pt)),
                 format_f64(category_pt),
                 weight,
-                escape_typst(category)
+                escape_category_axis_label(category)
             );
         }
     }
