@@ -44,8 +44,8 @@ use self::xlsx_cells::*;
 use self::xlsx_drawing::*;
 use self::xlsx_hf::*;
 
-// Re-export cell address types for cond_fmt module.
-pub(crate) use self::xlsx_cells::{CellPos, CellRange, parse_cell_ref};
+// Share cell addressing with conditional formatting and literal formats with charts.
+pub(crate) use self::xlsx_cells::{CellPos, CellRange, literal_number_format_text, parse_cell_ref};
 
 /// Parser for XLSX (Office Open XML Excel) spreadsheets.
 /// The margins Excel prints a sheet at when it states none: 0.7" left and

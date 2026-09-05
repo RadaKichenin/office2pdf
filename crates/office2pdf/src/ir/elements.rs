@@ -383,6 +383,9 @@ pub struct Chart {
     pub category_axis_text_style: ChartTextStyle,
     /// What `c:valAx/c:txPr` declares for the value tick labels alone.
     pub value_axis_text_style: ChartTextStyle,
+    /// `<c:catAx><c:numFmt formatCode>` formats numeric category labels.
+    /// Empty formatted labels retain their category slot and axis band.
+    pub category_axis_number_format: Option<String>,
     /// `<c:valAx><c:numFmt formatCode>` — how the value axis prints its tick
     /// labels. Outranks a series' cache format for the axis (issue #865).
     pub value_axis_number_format: Option<String>,

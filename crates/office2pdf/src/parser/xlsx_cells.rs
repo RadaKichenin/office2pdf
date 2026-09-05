@@ -225,15 +225,16 @@ fn literal_zero_section_text(format: &str) -> Option<String> {
     if !matches!(sections.len(), 3 | 4) {
         return None;
     }
-    if sections
-        .iter()
-        .any(|section| section_has_condition(section))
-    {
-        return None;
-    }
+    literal_number_format_text(format, 0.0)
+}
 
-    let mut literal = String::with_capacity(sections[2].len());
-    let mut chars = sections[2].chars();
+/// Decode a literal-only numeric section without relying on unreleased
+/// umya-spreadsheet fixes (upstream #361). Cells and chart axes share Excel's
+/// section selection; a blank section means no label, not the raw number.
+pub(crate) fn literal_number_format_text(format: &str, value: f64) -> Option<String> {
+    let section = selected_number_format_section(format, value)?;
+    let mut literal = String::with_capacity(section.len());
+    let mut chars = section.chars();
     let mut in_quotes = false;
     while let Some(ch) = chars.next() {
         if in_quotes {

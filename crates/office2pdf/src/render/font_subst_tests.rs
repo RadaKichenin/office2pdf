@@ -1417,6 +1417,7 @@ fn test_document_requests_font_families_true_for_a_chart_only_document() {
         legend_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_number_format: None,
         value_axis_number_format: None,
         auto_title_deleted: false,
         has_automatic_title: false,
