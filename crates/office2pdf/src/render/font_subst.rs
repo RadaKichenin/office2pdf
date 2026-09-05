@@ -1305,11 +1305,10 @@ fn visit_block_fonts(block: &Block, visitor: &mut impl FnMut(&str, &str) -> bool
     }
 }
 
-/// Offer the chart's own face to the visitor, paired with the strings it is
-/// drawn over.
+/// Offer the chart default and axis faces to the visitor with their text sample.
 ///
-/// A chart sets one face for every string it draws, so its scripts decide the
-/// chain the same way a run's text does. A document whose *only* font request
+/// Chart strings decide each face's fallback chain as a run's text does.
+/// A document whose *only* font request
 /// comes from a chart still needs the font search context, or the directories
 /// holding the requested face are never scanned and the chart falls back to the
 /// engine's default — which is the very thing resolving the theme font was
@@ -1318,12 +1317,15 @@ pub(super) fn visit_chart_fonts(
     chart: &crate::ir::Chart,
     visitor: &mut impl FnMut(&str, &str) -> bool,
 ) -> bool {
-    let Some(family) = chart.text_font_family.as_deref() else {
-        return true;
-    };
-    // The same strings the renderer builds the chain from, so the gate and the
-    // chain cannot disagree about which scripts the chart contains.
-    visitor(family, &chart.text_sample())
+    let sample: String = chart.text_sample();
+    [
+        chart.text_font_family.as_deref(),
+        chart.category_axis_text_font_family.as_deref(),
+        chart.value_axis_text_font_family.as_deref(),
+    ]
+    .into_iter()
+    .flatten()
+    .all(|family| visitor(family, &sample))
 }
 
 /// Walk a slice of blocks, calling `visitor` for each font family found.

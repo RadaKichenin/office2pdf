@@ -394,6 +394,8 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
         text_style,
         title_text_style,
         legend_text_style,
+        category_axis_text_font_family: category_axis.font_family,
+        value_axis_text_font_family: value_axis.font_family,
         category_axis_text_style: category_axis.text_style,
         value_axis_text_style: value_axis.text_style,
         category_axis_number_format: category_axis.number_format,
@@ -587,14 +589,14 @@ fn parse_chart_text_style(reader: &mut Reader<&[u8]>, scheme: &SchemeColors<'_>)
     parse_chart_text_properties(reader, scheme).1
 }
 
-/// Read an axis' run properties together with its body overflow policy.
+/// Read an axis typeface, run properties, and body overflow policy.
 fn parse_axis_text_properties(
     reader: &mut Reader<&[u8]>,
     scheme: &SchemeColors<'_>,
-) -> ChartTextStyle {
-    let (_, mut style, ellipsis) = parse_chart_text_properties(reader, scheme);
+) -> (Option<String>, ChartTextStyle) {
+    let (typeface, mut style, ellipsis) = parse_chart_text_properties(reader, scheme);
     style.ellipsis_overflow = ellipsis;
-    style
+    (typeface, style)
 }
 
 /// Take `a:defRPr`'s run properties, leaving untouched whatever it omits.
@@ -726,6 +728,7 @@ const EMU_PER_POINT: f64 = 12700.0;
 /// What one `<c:catAx>` or `<c:valAx>` element says about itself.
 #[derive(Default)]
 struct Axis {
+    font_family: Option<String>,
     title: Option<String>,
     major_tick_mark: AxisTickMark,
     deleted: bool,
@@ -800,7 +803,7 @@ fn parse_axis(reader: &mut Reader<&[u8]>, end_tag: &[u8], scheme: &SchemeColors<
                 axis.title = axis.title.or_else(|| parse_chart_title(reader, scheme).0);
             }
             Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"txPr" => {
-                axis.text_style = parse_axis_text_properties(reader, scheme);
+                (axis.font_family, axis.text_style) = parse_axis_text_properties(reader, scheme);
             }
             // The axis' own line, and the gridlines' — both are an `<a:ln>`
             // inside a `<c:spPr>`, and both are dropped without this (#900).

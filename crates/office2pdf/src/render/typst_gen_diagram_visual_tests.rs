@@ -55,6 +55,8 @@ fn test_codegen_chart_bar_visual_bars() {
         text_style: crate::ir::ChartTextStyle::default(),
         title_text_style: crate::ir::ChartTextStyle::default(),
         legend_text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_font_family: None,
+        value_axis_text_font_family: None,
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
@@ -140,6 +142,8 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
         text_style: crate::ir::ChartTextStyle::default(),
         title_text_style: crate::ir::ChartTextStyle::default(),
         legend_text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_font_family: None,
+        value_axis_text_font_family: None,
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
@@ -213,6 +217,8 @@ fn test_codegen_chart_pie_draws_a_pie() {
         text_style: crate::ir::ChartTextStyle::default(),
         title_text_style: crate::ir::ChartTextStyle::default(),
         legend_text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_font_family: None,
+        value_axis_text_font_family: None,
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
@@ -291,6 +297,8 @@ fn test_codegen_chart_line_trend_indicators() {
         text_style: crate::ir::ChartTextStyle::default(),
         title_text_style: crate::ir::ChartTextStyle::default(),
         legend_text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_font_family: None,
+        value_axis_text_font_family: None,
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
@@ -354,6 +362,8 @@ fn test_codegen_chart_empty_series() {
         text_style: crate::ir::ChartTextStyle::default(),
         title_text_style: crate::ir::ChartTextStyle::default(),
         legend_text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_font_family: None,
+        value_axis_text_font_family: None,
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
@@ -456,6 +466,8 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
         text_style: crate::ir::ChartTextStyle::default(),
         title_text_style: crate::ir::ChartTextStyle::default(),
         legend_text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_font_family: None,
+        value_axis_text_font_family: None,
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
@@ -527,6 +539,8 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
         text_style: crate::ir::ChartTextStyle::default(),
         title_text_style: crate::ir::ChartTextStyle::default(),
         legend_text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_font_family: None,
+        value_axis_text_font_family: None,
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
@@ -756,6 +770,8 @@ fn test_codegen_chart_line_plot() {
         text_style: crate::ir::ChartTextStyle::default(),
         title_text_style: crate::ir::ChartTextStyle::default(),
         legend_text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_font_family: None,
+        value_axis_text_font_family: None,
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
@@ -832,6 +848,8 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
         text_style: crate::ir::ChartTextStyle::default(),
         title_text_style: crate::ir::ChartTextStyle::default(),
         legend_text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_font_family: None,
+        value_axis_text_font_family: None,
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
@@ -951,6 +969,8 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
         text_style: crate::ir::ChartTextStyle::default(),
         title_text_style: crate::ir::ChartTextStyle::default(),
         legend_text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_font_family: None,
+        value_axis_text_font_family: None,
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
@@ -1127,6 +1147,8 @@ fn legend_chart(position: LegendPosition) -> Chart {
         text_style: crate::ir::ChartTextStyle::default(),
         title_text_style: crate::ir::ChartTextStyle::default(),
         legend_text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_font_family: None,
+        value_axis_text_font_family: None,
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
@@ -1344,6 +1366,8 @@ fn a_declared_series_fill_reaches_the_bars() {
         text_style: crate::ir::ChartTextStyle::default(),
         title_text_style: crate::ir::ChartTextStyle::default(),
         legend_text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_font_family: None,
+        value_axis_text_font_family: None,
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
@@ -1413,6 +1437,8 @@ fn a_series_without_a_fill_still_takes_the_palette() {
         text_style: crate::ir::ChartTextStyle::default(),
         title_text_style: crate::ir::ChartTextStyle::default(),
         legend_text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_font_family: None,
+        value_axis_text_font_family: None,
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
@@ -1480,6 +1506,8 @@ fn per_point_fills_colour_each_bar_separately() {
         text_style: crate::ir::ChartTextStyle::default(),
         title_text_style: crate::ir::ChartTextStyle::default(),
         legend_text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_font_family: None,
+        value_axis_text_font_family: None,
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
@@ -1546,6 +1574,8 @@ fn axis_titled_chart(category: Option<&str>, value: Option<&str>) -> Chart {
         text_style: crate::ir::ChartTextStyle::default(),
         title_text_style: crate::ir::ChartTextStyle::default(),
         legend_text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_font_family: None,
+        value_axis_text_font_family: None,
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
@@ -1662,6 +1692,8 @@ fn labelled_chart(labels: DataLabels) -> Chart {
         text_style: crate::ir::ChartTextStyle::default(),
         title_text_style: crate::ir::ChartTextStyle::default(),
         legend_text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_font_family: None,
+        value_axis_text_font_family: None,
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
@@ -1773,6 +1805,8 @@ fn pie_chart(values: Vec<f64>) -> Chart {
         text_style: crate::ir::ChartTextStyle::default(),
         title_text_style: crate::ir::ChartTextStyle::default(),
         legend_text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_font_family: None,
+        value_axis_text_font_family: None,
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
@@ -1983,6 +2017,8 @@ fn test_chart_default_gridline_matches_powerpoint() {
         text_style: crate::ir::ChartTextStyle::default(),
         title_text_style: crate::ir::ChartTextStyle::default(),
         legend_text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_font_family: None,
+        value_axis_text_font_family: None,
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
@@ -2155,6 +2191,8 @@ fn tick_mark_chart(
         text_style: crate::ir::ChartTextStyle::default(),
         title_text_style: crate::ir::ChartTextStyle::default(),
         legend_text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_font_family: None,
+        value_axis_text_font_family: None,
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
@@ -2773,6 +2811,8 @@ fn band_layout_chart(
         text_style: crate::ir::ChartTextStyle::default(),
         title_text_style: crate::ir::ChartTextStyle::default(),
         legend_text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_font_family: None,
+        value_axis_text_font_family: None,
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
@@ -3074,6 +3114,8 @@ fn two_series_bar_chart(theme_accent_colors: Vec<crate::ir::Color>) -> Chart {
         text_style: crate::ir::ChartTextStyle::default(),
         title_text_style: crate::ir::ChartTextStyle::default(),
         legend_text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_font_family: None,
+        value_axis_text_font_family: None,
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
@@ -5493,6 +5535,8 @@ fn test_data_table_prints_a_series_number_format() {
         text_style: crate::ir::ChartTextStyle::default(),
         title_text_style: crate::ir::ChartTextStyle::default(),
         legend_text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_font_family: None,
+        value_axis_text_font_family: None,
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
@@ -5561,6 +5605,8 @@ fn test_data_table_prints_a_declared_thousands_format() {
         text_style: crate::ir::ChartTextStyle::default(),
         title_text_style: crate::ir::ChartTextStyle::default(),
         legend_text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_font_family: None,
+        value_axis_text_font_family: None,
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
@@ -5627,6 +5673,8 @@ fn test_data_table_without_a_number_format_prints_plainly() {
         text_style: crate::ir::ChartTextStyle::default(),
         title_text_style: crate::ir::ChartTextStyle::default(),
         legend_text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_font_family: None,
+        value_axis_text_font_family: None,
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
@@ -5692,6 +5740,8 @@ fn test_a_currency_axis_label_is_escaped() {
         text_style: crate::ir::ChartTextStyle::default(),
         title_text_style: crate::ir::ChartTextStyle::default(),
         legend_text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_font_family: None,
+        value_axis_text_font_family: None,
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
@@ -5759,6 +5809,8 @@ fn single_series_chart(auto_title_deleted: bool) -> Chart {
         text_style: crate::ir::ChartTextStyle::default(),
         title_text_style: crate::ir::ChartTextStyle::default(),
         legend_text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_font_family: None,
+        value_axis_text_font_family: None,
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
@@ -5848,6 +5900,8 @@ fn automatic_title_chart(series_names: &[Option<&str>], auto_title_deleted: bool
         text_style: crate::ir::ChartTextStyle::default(),
         title_text_style: crate::ir::ChartTextStyle::default(),
         legend_text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_font_family: None,
+        value_axis_text_font_family: None,
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
@@ -6591,6 +6645,8 @@ fn combo_budget_chart() -> Chart {
         text_style: crate::ir::ChartTextStyle::default(),
         title_text_style: crate::ir::ChartTextStyle::default(),
         legend_text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_font_family: None,
+        value_axis_text_font_family: None,
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
@@ -6797,6 +6853,8 @@ fn combo_line_and_scatter_chart() -> Chart {
         text_style: crate::ir::ChartTextStyle::default(),
         title_text_style: crate::ir::ChartTextStyle::default(),
         legend_text_style: crate::ir::ChartTextStyle::default(),
+        category_axis_text_font_family: None,
+        value_axis_text_font_family: None,
         category_axis_text_style: crate::ir::ChartTextStyle::default(),
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
@@ -8143,5 +8201,70 @@ fn budget_gridlines_keep_their_declared_opacity() {
                 "{part}: opacity must not change chart geometry or labels"
             );
         }
+    }
+}
+
+#[test]
+fn budget_month_axis_uses_its_major_theme_font() {
+    let data = include_bytes!("../../../../tests/fixtures/xlsx/issue_1181_fit_to_height.xlsx");
+    let (doc, _) = crate::parser::Parser::parse(
+        &crate::parser::xlsx::XlsxParser,
+        data,
+        &crate::config::ConvertOptions::default(),
+    )
+    .expect("the budget fixture parses");
+    let source = generate_typst(&doc).unwrap().source;
+    for label in [
+        "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec", "year",
+    ] {
+        // Source categories retain trailing spaces (including escaped runs).
+        let prefix = format!(")[{label}");
+        let lines: Vec<_> = source
+            .lines()
+            .filter(|line| line.contains("#place(") && line.contains(&prefix))
+            .collect();
+        assert_eq!(
+            lines.len(),
+            1,
+            "one category label for {label}: {}",
+            source
+                .lines()
+                .filter(|line| line.contains(label))
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+        assert!(
+            lines[0].contains("font:") && lines[0].contains("Cambria"),
+            "axis +mj-lt must override the chart's Trebuchet MS: {}",
+            lines[0]
+        );
+    }
+}
+
+#[test]
+fn axis_typefaces_reach_each_axis_chart_renderer() {
+    for kind in [
+        ChartType::Bar,
+        ChartType::Column,
+        ChartType::Line,
+        ChartType::Area,
+        ChartType::Other(crate::ir::RADAR_CHART_LABEL.to_string()),
+    ] {
+        let mut chart = sized_bar_chart(11.0);
+        chart.chart_type = kind.clone();
+        chart.categories = vec!["Q1".to_string(), "Q2".to_string(), "Q3".to_string()];
+        chart.series[0].values = vec![4.0, 8.0, 6.0];
+        chart.series[1].values = vec![2.0, 6.0, 3.0];
+        chart.category_axis_text_font_family = Some("Cambria".to_string());
+        chart.value_axis_text_font_family = Some("Arial".to_string());
+        let source = framed_chart_source(&chart, 480.0, 320.0);
+        assert!(
+            source.contains("font: (\"Cambria\""),
+            "category font for {kind:?}"
+        );
+        assert!(
+            source.contains("font: (\"Arial\""),
+            "value font for {kind:?}"
+        );
     }
 }
