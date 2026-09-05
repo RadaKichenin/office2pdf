@@ -2416,6 +2416,7 @@ fn an_axis_and_its_gridlines_keep_the_line_they_declare() {
     let chart = parse_chart_xml(&xml, &scheme).expect("chart parses");
 
     let expected = ChartLine::Explicit {
+        alpha: None,
         width_pt: Some(1.0),
         color: Some(Color::new(0xFF, 0xFF, 0xFF)),
     };
@@ -2471,6 +2472,7 @@ fn a_text_slot_line_colour_resolves_against_the_theme() {
         "the chart frame"
     );
     let expected = ChartLine::Explicit {
+        alpha: None,
         width_pt: Some(0.75),
         color: Some(lifted),
     };
@@ -3295,6 +3297,7 @@ fn major_gridlines_distinguish_absent_empty_and_explicit_declarations() {
         (
             explicit,
             ChartLine::Explicit {
+                alpha: None,
                 width_pt: Some(2.0),
                 color: Some(Color::new(0x12, 0x34, 0x56)),
             },
@@ -3321,4 +3324,28 @@ fn a_present_automatic_value_gridline_is_not_replaced_by_category_styling() {
     );
     let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
     assert_eq!(chart.major_gridline_line, ChartLine::Automatic);
+}
+
+#[test]
+fn axis_lines_keep_srgb_opacity_separate_from_color_and_weight() {
+    for axis in ["catAx", "valAx"] {
+        let xml = bar_chart_xml(r#"<c:barDir val="col"/>"#).replace(
+            "</c:plotArea>",
+            &format!(r#"<c:{axis}><c:spPr><a:ln w="25400"><a:solidFill><a:srgbClr val="12abef"><a:alpha val="50000"/></a:srgbClr></a:solidFill></a:ln></c:spPr></c:{axis}></c:plotArea>"#),
+        );
+        let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
+        let line = if axis == "catAx" {
+            chart.category_axis_line
+        } else {
+            chart.value_axis_line
+        };
+        assert_eq!(
+            line,
+            ChartLine::Explicit {
+                width_pt: Some(2.0),
+                color: Some(Color::new(0x12, 0xab, 0xef)),
+                alpha: Some(0.5),
+            }
+        );
+    }
 }

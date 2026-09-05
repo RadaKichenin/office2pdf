@@ -1750,7 +1750,6 @@ pub struct TopBevel {
 /// ([`ChartAreaOutline`], issue #637): a present element without a line uses
 /// the automatic stroke, `<a:ln><a:noFill/></a:ln>` suppresses it, and a stated
 /// `<a:ln>` supplies its styling. Absent optional gridlines are also suppressed.
-/// The two enums have the same shape and are candidates for unification.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum ChartLine {
     /// The part states no `<a:ln>`; the renderer's automatic stroke applies.
@@ -1759,11 +1758,13 @@ pub enum ChartLine {
     /// Draw nothing: the line declares `<a:noFill/>`, or its optional
     /// chart element (such as major gridlines) is absent.
     Suppressed,
-    /// A stated line. Either half may still be absent: a `<a:ln>` naming only
-    /// a width keeps the automatic colour, and vice versa.
+    /// A stated line. An omitted width or colour keeps its automatic value.
     Explicit {
         width_pt: Option<f64>,
         color: Option<Color>,
+        /// Opacity from `<a:alpha>`: 0.0 is transparent and 1.0 is opaque.
+        /// `None` keeps the line opaque.
+        alpha: Option<f64>,
     },
 }
 

@@ -868,8 +868,7 @@ const MAJOR_UNIT_FRACTIONS: [(f64, f64); 3] = [(2.0, 0.2), (5.0, 0.5), (10.0, 1.
 pub(super) const CHART_AUTOMATIC_LINE: &str = "0.75pt + rgb(134, 134, 134)";
 
 /// The stroke to draw one piece of chart chrome with, or `None` when the part
-/// suppressed it with `<a:ln><a:noFill/></a:ln>` and nothing should be drawn
-/// at all (issue #900).
+/// suppresses its line or omits an optional gridline element.
 ///
 /// A stated line falls back to [`CHART_AUTOMATIC_LINE`] for whichever half it
 /// leaves out, so a `<a:ln>` naming only a width keeps the automatic colour.
@@ -877,13 +876,20 @@ fn chart_chrome_stroke(declared: crate::ir::ChartLine) -> Option<String> {
     match declared {
         crate::ir::ChartLine::Automatic => Some(CHART_AUTOMATIC_LINE.to_string()),
         crate::ir::ChartLine::Suppressed => None,
-        crate::ir::ChartLine::Explicit { width_pt, color } => Some(format!(
+        crate::ir::ChartLine::Explicit {
+            width_pt,
+            color,
+            alpha,
+        } => Some(format!(
             "{}pt + {}",
             format_f64(width_pt.unwrap_or(CHART_AUTOMATIC_LINE_PT)),
-            color.map_or_else(
-                || CHART_AUTOMATIC_LINE_RGB.to_string(),
-                |c| format!("rgb({}, {}, {})", c.r, c.g, c.b)
-            )
+            match alpha {
+                Some(alpha) => rgb_with_alpha(
+                    &color.unwrap_or(CHART_AUTOMATIC_LINE_COLOR),
+                    (alpha.clamp(0.0, 1.0) * 255.0).round() as u8,
+                ),
+                None => rgb(&color.unwrap_or(CHART_AUTOMATIC_LINE_COLOR)),
+            }
         )),
     }
 }
@@ -945,10 +951,7 @@ fn chart_area_stroke(outline: &ChartAreaOutline, host: crate::ir::ChartHost) -> 
         ChartAreaOutline::Explicit { width_pt, color } => format!(
             "{}pt + {}",
             format_f64(width_pt.unwrap_or(CHART_AUTOMATIC_LINE_PT)),
-            color.map_or_else(
-                || CHART_AUTOMATIC_LINE_RGB.to_string(),
-                |c| format!("rgb({}, {}, {})", c.r, c.g, c.b)
-            )
+            rgb(&color.unwrap_or(CHART_AUTOMATIC_LINE_COLOR))
         ),
     }
 }
@@ -968,7 +971,11 @@ fn chart_area_fill(fill: &ChartAreaFill) -> String {
 /// The width and colour [`CHART_AUTOMATIC_LINE`] is built from, for an explicit
 /// line that names only one of them.
 const CHART_AUTOMATIC_LINE_PT: f64 = 0.75;
-const CHART_AUTOMATIC_LINE_RGB: &str = "rgb(134, 134, 134)";
+const CHART_AUTOMATIC_LINE_COLOR: Color = Color {
+    r: 134,
+    g: 134,
+    b: 134,
+};
 
 /// Share of the tick-label font's ascent one major tick mark is long.
 ///
