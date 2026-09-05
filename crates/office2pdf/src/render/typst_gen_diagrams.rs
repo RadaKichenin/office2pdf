@@ -1509,21 +1509,31 @@ const AVENIR_NEXT_LT_PRO_CHART_LINE_METRICS_EM: (f64, f64) = (1972.0 / 2048.0, 5
 /// across only agree once it is excluded (Arial is the one of them that
 /// declares a non-zero gap).
 pub(super) fn chart_face_line_metrics_em(family: &str, bold: bool) -> Option<(f64, f64)> {
-    let normalized: String = family
-        .chars()
-        .filter(|character| character.is_ascii_alphanumeric())
-        .flat_map(char::to_lowercase)
-        .collect();
-    if !bold {
-        match normalized.as_str() {
-            "calibri" => return Some(CALIBRI_CHART_LINE_METRICS_EM),
-            "avenirnextltpro" => return Some(AVENIR_NEXT_LT_PRO_CHART_LINE_METRICS_EM),
-            _ => {}
-        }
+    if let Some((ascent, descent, _)) = calibrated_chart_line_metrics_em(family, bold) {
+        return Some((ascent, descent));
     }
     let ascent_em: f64 = crate::render::pdf::font_hhea_ascender_em(family)?;
     let (_, descent_em, _) = crate::render::pdf::font_line_metrics_em(family)?;
     Some((ascent_em, descent_em))
+}
+
+/// Keep all three metrics on the calibrated source face; a substitute's gap
+/// cannot be combined with the source face's ascent/descent (#1568).
+fn calibrated_chart_line_metrics_em(family: &str, bold: bool) -> Option<(f64, f64, f64)> {
+    if bold {
+        return None;
+    }
+    let normalized: String = family
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect();
+    let (ascent, descent) = match normalized.as_str() {
+        "calibri" => CALIBRI_CHART_LINE_METRICS_EM,
+        "avenirnextltpro" => AVENIR_NEXT_LT_PRO_CHART_LINE_METRICS_EM,
+        _ => return None,
+    };
+    Some((ascent, descent, 0.0))
 }
 
 /// Advance one chart string in the source Office face where a native metric is
@@ -4402,8 +4412,15 @@ fn worksheet_line_category_baseline(
     }
     let (_, frame_h) = frame?;
     let (family, bold, size) = chart_category_label_face(chart);
-    let (ascent, descent) = chart_face_line_metrics_em(family, bold)?;
-    let line_gap = crate::render::pdf::font_line_gap_em(family).unwrap_or(0.0);
+    let (ascent, descent, line_gap) =
+        calibrated_chart_line_metrics_em(family, bold).or_else(|| {
+            let (ascent, descent) = chart_face_line_metrics_em(family, bold)?;
+            Some((
+                ascent,
+                descent,
+                crate::render::pdf::font_line_gap_em(family).unwrap_or(0.0),
+            ))
+        })?;
     Some(line_category_baseline_pt(
         frame_h - legend_bottom,
         plot_bottom,
