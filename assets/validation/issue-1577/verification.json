@@ -1,0 +1,26 @@
+{
+  "library_tests": {
+    "passed": 2889,
+    "note": "Complete library suite including the two compiled native marker-center regressions."
+  },
+  "compiled_marker_regressions": {
+    "tests": [
+      "budget_compiled_marker_centers_match_native_placement_controls",
+      "gift_compiled_marker_centers_match_native_size_controls"
+    ],
+    "native_cases": 50
+  },
+  "xlsx_fixture_tests": {
+    "passed": 206
+  },
+  "workspace_clippy": "PASS: --locked --workspace --all-targets -- -D warnings",
+  "fmt_check": "PASS",
+  "git_diff_check": "PASS",
+  "strict_clusters": {
+    "pages": 4,
+    "clusters": 719,
+    "unresolved": 0
+  },
+  "fresh_cli_rebuild_reproduces_audited_pdfs": true,
+  "merged": false
+}

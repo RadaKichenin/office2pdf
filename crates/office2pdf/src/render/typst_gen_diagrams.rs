@@ -115,23 +115,23 @@ pub(super) fn generate_chart_in(out: &mut String, chart: &Chart, frame: Option<(
 
 /// Render a chart anchored on an Excel worksheet.
 ///
-/// `sheet_frame_top_pt` retains the converter's unscaled physical frame origin
+/// `sheet_frame_origin_pt` retains the converter's unscaled physical frame origin
 /// used by the column-axis snapping calibration (#1471). Plot and text keep
 /// that calibration here; its unscaled inset discrepancy is tracked in #1607.
-/// `sheet_paint_offset_pt` moves only the area fill/outline to the fitted sheet
-/// origin, preserving currently matched chart content while fixing #1542.
+/// `sheet_paint_offset_pt` aligns area paint and worksheet markers to the fitted
+/// sheet origin; column markers retain their separate vertical calibration.
 pub(super) fn generate_sheet_chart_in(
     out: &mut String,
     chart: &Chart,
     frame: (f64, f64),
-    sheet_frame_top_pt: f64,
+    sheet_frame_origin_pt: (f64, f64),
     sheet_paint_offset_pt: Option<(f64, f64)>,
 ) {
     generate_chart_in_with_sheet_origin(
         out,
         chart,
         Some(frame),
-        Some(sheet_frame_top_pt),
+        Some(sheet_frame_origin_pt),
         sheet_paint_offset_pt,
     );
 }
@@ -140,7 +140,7 @@ fn generate_chart_in_with_sheet_origin(
     out: &mut String,
     chart: &Chart,
     frame: Option<(f64, f64)>,
-    sheet_frame_top_pt: Option<f64>,
+    sheet_frame_origin_pt: Option<(f64, f64)>,
     sheet_paint_offset_pt: Option<(f64, f64)>,
 ) {
     // A framed chart is already bounded by its frame, so the page-break guard
@@ -159,7 +159,13 @@ fn generate_chart_in_with_sheet_origin(
         out.push_str("#[\n");
         out.push_str(scope);
     }
-    generate_chart_body(out, chart, frame, sheet_frame_top_pt, sheet_paint_offset_pt);
+    generate_chart_body(
+        out,
+        chart,
+        frame,
+        sheet_frame_origin_pt,
+        sheet_paint_offset_pt,
+    );
     if font_scope.is_some() {
         out.push_str("]\n");
     }
@@ -188,7 +194,7 @@ fn generate_chart_body(
     out: &mut String,
     chart: &Chart,
     frame: Option<(f64, f64)>,
-    sheet_frame_top_pt: Option<f64>,
+    sheet_frame_origin_pt: Option<(f64, f64)>,
     sheet_paint_offset_pt: Option<(f64, f64)>,
 ) {
     match chart_variant(chart) {
@@ -197,18 +203,30 @@ fn generate_chart_body(
                 out,
                 chart,
                 frame,
-                sheet_frame_top_pt,
+                sheet_frame_origin_pt,
                 sheet_paint_offset_pt,
             );
         }
         ChartVariant::LinePlot => {
-            return generate_chart_line_plot(out, chart, frame, sheet_paint_offset_pt);
+            return generate_chart_line_plot(
+                out,
+                chart,
+                frame,
+                sheet_frame_origin_pt,
+                sheet_paint_offset_pt,
+            );
         }
         ChartVariant::PiePlot => {
             return generate_chart_pie_plot(out, chart, frame, sheet_paint_offset_pt);
         }
         ChartVariant::RadarPlot => {
-            return generate_chart_radar_plot(out, chart, frame, sheet_paint_offset_pt);
+            return generate_chart_radar_plot(
+                out,
+                chart,
+                frame,
+                sheet_frame_origin_pt,
+                sheet_paint_offset_pt,
+            );
         }
         ChartVariant::BorderedTable => {}
     }
@@ -489,6 +507,41 @@ pub(super) fn excel_legend_trailing_gutter_pt(chart: &Chart, label: &str) -> Opt
 /// 0.82 print scale can resolve of a flat 0.45.
 const EXCEL_LEGEND_KEY_LINE_BOX_SHARE: f64 = 0.45;
 
+/// Worksheet-space origin and the existing plot calibration, before printing
+/// applies the sheet scale. Legend samples use their independent placement.
+#[derive(Clone, Copy)]
+struct WorksheetMarkerPlacement {
+    frame_origin: (f64, f64),
+    plot_offset: (f64, f64),
+}
+
+impl WorksheetMarkerPlacement {
+    fn center(self, series: &crate::ir::ChartSeries, x: f64, y: f64) -> (f64, f64) {
+        let size: f64 = series.marker_style.size_pt.unwrap_or(SERIES_MARKER_SIZE_PT);
+        // Native worksheet sprites use whole sheet-point positions. Explicit
+        // odd-width outlines (including the default 0.75pt) floor the point;
+        // even widths and unstroked automatic/suppressed outlines round it.
+        // Explicit zero width follows the floor path without outline padding.
+        let floor: bool = match series.marker_style.line {
+            crate::ir::ChartLine::Explicit { width_pt, .. } => {
+                let width: f64 = width_pt.unwrap_or(0.75);
+                width == 0.0 || width.round().max(1.0) % 2.0 == 1.0
+            }
+            crate::ir::ChartLine::Automatic | crate::ir::ChartLine::Suppressed => false,
+        };
+        let phase: f64 = (size % 2.0) / 2.0;
+        let position = |value: f64, origin: f64, offset: f64| {
+            let sheet: f64 = origin + value + offset;
+            let snapped: f64 = if floor { sheet.floor() } else { sheet.round() };
+            snapped - phase - origin
+        };
+        (
+            position(x, self.frame_origin.0, self.plot_offset.0),
+            position(y, self.frame_origin.1, self.plot_offset.1),
+        )
+    }
+}
+
 /// Marker shape for the `index`-th series, when the file asks for a default
 /// marker rather than naming a `c:symbol`.
 ///
@@ -514,7 +567,9 @@ fn write_series_marker(
     x: f64,
     y: f64,
     color: &str,
+    worksheet: Option<WorksheetMarkerPlacement>,
 ) {
+    let (x, y) = worksheet.map_or((x, y), |placement| placement.center(series, x, y));
     out.push_str(&series_marker_markup(series_index, series, x, y, color));
 }
 
@@ -3838,10 +3893,24 @@ fn generate_chart_axis(
     out: &mut String,
     chart: &Chart,
     frame: Option<(f64, f64)>,
-    sheet_frame_top_pt: Option<f64>,
+    sheet_frame_origin_pt: Option<(f64, f64)>,
     sheet_paint_offset_pt: Option<(f64, f64)>,
 ) {
     let horizontal: bool = matches!(chart.chart_type, ChartType::Bar);
+    let sheet_frame_top_pt: Option<f64> = sheet_frame_origin_pt.map(|origin| origin.1);
+    let worksheet_markers = sheet_frame_origin_pt.map(|frame_origin| {
+        let mut plot_offset = sheet_paint_offset_pt.unwrap_or((0.0, 0.0));
+        // The column plot's vertical coordinates already retain the native
+        // sheet-space calibration used by its value chrome (#1471/#1542).
+        // Applying the outer frame's vertical paint shift again moves them.
+        if !horizontal {
+            plot_offset.1 = 0.0;
+        }
+        WorksheetMarkerPlacement {
+            frame_origin,
+            plot_offset,
+        }
+    });
     let categories: usize = chart.categories.len();
     let series: &[crate::ir::ChartSeries] = &chart.series;
     let series_count: usize = series.len().max(1);
@@ -4265,7 +4334,7 @@ fn generate_chart_axis(
             );
         }
         for (x, y) in &points {
-            write_series_marker(out, s_index, s, *x, *y, &color);
+            write_series_marker(out, s_index, s, *x, *y, &color, worksheet_markers);
         }
     }
 
@@ -4611,8 +4680,13 @@ fn generate_chart_line_plot(
     out: &mut String,
     chart: &Chart,
     frame: Option<(f64, f64)>,
+    sheet_frame_origin_pt: Option<(f64, f64)>,
     sheet_paint_offset_pt: Option<(f64, f64)>,
 ) {
+    let worksheet_markers = sheet_frame_origin_pt.map(|frame_origin| WorksheetMarkerPlacement {
+        frame_origin,
+        plot_offset: sheet_paint_offset_pt.unwrap_or((0.0, 0.0)),
+    });
     const PLOT_W: f64 = 320.0;
     const PLOT_H: f64 = 210.0;
     const VALUE_GAP: f64 = 24.0; // value tick label gutter (left)
@@ -4863,7 +4937,7 @@ fn generate_chart_line_plot(
         }
         // Point markers: the symbol the series names, else the shape cycle.
         for (x, y) in &points {
-            write_series_marker(out, s_index, s, *x, *y, &color);
+            write_series_marker(out, s_index, s, *x, *y, &color, worksheet_markers);
         }
     }
 
@@ -4950,8 +5024,13 @@ fn generate_chart_radar_plot(
     out: &mut String,
     chart: &Chart,
     frame: Option<(f64, f64)>,
+    sheet_frame_origin_pt: Option<(f64, f64)>,
     sheet_paint_offset_pt: Option<(f64, f64)>,
 ) {
+    let worksheet_markers = sheet_frame_origin_pt.map(|frame_origin| WorksheetMarkerPlacement {
+        frame_origin,
+        plot_offset: sheet_paint_offset_pt.unwrap_or((0.0, 0.0)),
+    });
     /// Intrinsic plot size for a flowed radar, matching the pie's.
     const RADAR_DIAMETER: f64 = 200.0;
     const RADAR_LEGEND_ROW_H: f64 = 14.0;
@@ -5120,7 +5199,7 @@ fn generate_chart_radar_plot(
             series_stroke(series, &color)
         );
         for (x, y) in &points {
-            write_series_marker(out, series_index, series, *x, *y, &color);
+            write_series_marker(out, series_index, series, *x, *y, &color, worksheet_markers);
         }
     }
 

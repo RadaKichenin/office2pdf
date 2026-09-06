@@ -1,0 +1,27 @@
+{
+  "name": "issue-1577-budget-marker-size",
+  "base": "../../../tests/fixtures/xlsx/issue_1181_fit_to_height.xlsx",
+  "part": "xl/charts/chart2.xml",
+  "factor": "selected-period marker c:size/@val (both scatter series)",
+  "page": 2,
+  "variants": [
+    {
+      "value": "13",
+      "find": "<c:size val=\"14\"/>",
+      "replace": "<c:size val=\"13\"/>",
+      "count": 2
+    },
+    {
+      "value": "15",
+      "find": "<c:size val=\"14\"/>",
+      "replace": "<c:size val=\"15\"/>",
+      "count": 2
+    },
+    {
+      "value": "20",
+      "find": "<c:size val=\"14\"/>",
+      "replace": "<c:size val=\"20\"/>",
+      "count": 2
+    }
+  ]
+}

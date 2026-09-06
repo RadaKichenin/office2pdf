@@ -1340,12 +1340,15 @@ fn write_placed_sheet_anchor(
                     "#scale(x: {percent}%, y: {percent}%, origin: top + left)[",
                 );
             }
-            let sheet_frame_top_pt: f64 = dy_pt / coordinate_scale;
+            let sheet_frame_origin_pt: (f64, f64) = (
+                (left_pt + placement.x_offset_pt) / coordinate_scale,
+                dy_pt / coordinate_scale,
+            );
             generate_sheet_chart_in(
                 out,
                 &sheet_chart.chart,
                 (placement.width, placement.height),
-                sheet_frame_top_pt,
+                sheet_frame_origin_pt,
                 paint_offset_pt.map(|(dx, dy)| (dx / coordinate_scale, dy / coordinate_scale)),
             );
             if fitted {

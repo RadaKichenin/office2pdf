@@ -1,0 +1,241 @@
+[
+  {
+    "fixture": "budget",
+    "page": 1,
+    "changes": [],
+    "only_marker_translations": true
+  },
+  {
+    "fixture": "budget",
+    "page": 2,
+    "changes": [
+      {
+        "path": "page/1350",
+        "kind": "fill_path",
+        "before_transform": ".78 0 0 .78 189.48789 306.56343",
+        "after_transform": ".78 0 0 .78 189.54 305.76",
+        "unchanged_style": {
+          "winding": "nonzero",
+          "colorspace": "ICCBased(RGB,sRGB)",
+          "color": ".40392158 .7372549 .81960788",
+          "ri": "1",
+          "bp": "1",
+          "op": "0",
+          "opm": "0"
+        }
+      },
+      {
+        "path": "page/1351",
+        "kind": "stroke_path",
+        "before_transform": ".78 0 0 .78 189.48789 306.56343",
+        "after_transform": ".78 0 0 .78 189.54 305.76",
+        "unchanged_style": {
+          "linewidth": ".75",
+          "miterlimit": "4",
+          "linecap": "0,0,0",
+          "linejoin": "0",
+          "colorspace": "ICCBased(RGB,sRGB)",
+          "color": ".38431374 .7294118 .8117647",
+          "ri": "1",
+          "bp": "1",
+          "op": "0",
+          "opm": "0"
+        }
+      }
+    ],
+    "only_marker_translations": true
+  },
+  {
+    "fixture": "gift",
+    "page": 1,
+    "changes": [],
+    "only_marker_translations": true
+  },
+  {
+    "fixture": "gift",
+    "page": 2,
+    "changes": [
+      {
+        "path": "page/1/174",
+        "kind": "fill_path",
+        "before_transform": ".82 0 0 .82 349.5269 297.2224",
+        "after_transform": ".82 0 0 .82 349.32 296.83998",
+        "unchanged_style": {
+          "winding": "nonzero",
+          "colorspace": "ICCBased(RGB,sRGB)",
+          "color": "0 .53333339 .5372549",
+          "ri": "1",
+          "bp": "1",
+          "op": "0",
+          "opm": "0"
+        }
+      },
+      {
+        "path": "page/1/175",
+        "kind": "fill_path",
+        "before_transform": ".82 0 0 .82 415.7999 327.74867",
+        "after_transform": ".82 0 0 .82 414.92 327.18",
+        "unchanged_style": {
+          "winding": "nonzero",
+          "colorspace": "ICCBased(RGB,sRGB)",
+          "color": "0 .53333339 .5372549",
+          "ri": "1",
+          "bp": "1",
+          "op": "0",
+          "opm": "0"
+        }
+      },
+      {
+        "path": "page/1/176",
+        "kind": "fill_path",
+        "before_transform": ".82 0 0 .82 482.0729 327.74867",
+        "after_transform": ".82 0 0 .82 481.34 327.18",
+        "unchanged_style": {
+          "winding": "nonzero",
+          "colorspace": "ICCBased(RGB,sRGB)",
+          "color": "0 .53333339 .5372549",
+          "ri": "1",
+          "bp": "1",
+          "op": "0",
+          "opm": "0"
+        }
+      },
+      {
+        "path": "page/1/177",
+        "kind": "fill_path",
+        "before_transform": ".82 0 0 .82 548.34597 307.39784",
+        "after_transform": ".82 0 0 .82 547.76 306.68",
+        "unchanged_style": {
+          "winding": "nonzero",
+          "colorspace": "ICCBased(RGB,sRGB)",
+          "color": "0 .53333339 .5372549",
+          "ri": "1",
+          "bp": "1",
+          "op": "0",
+          "opm": "0"
+        }
+      },
+      {
+        "path": "page/1/178",
+        "kind": "fill_path",
+        "before_transform": ".82 0 0 .82 614.61898 327.74867",
+        "after_transform": ".82 0 0 .82 614.18 327.18",
+        "unchanged_style": {
+          "winding": "nonzero",
+          "colorspace": "ICCBased(RGB,sRGB)",
+          "color": "0 .53333339 .5372549",
+          "ri": "1",
+          "bp": "1",
+          "op": "0",
+          "opm": "0"
+        }
+      },
+      {
+        "path": "page/1/179",
+        "kind": "fill_path",
+        "before_transform": ".82 0 0 .82 680.89199 144.59095",
+        "after_transform": ".82 0 0 .82 680.6 144.32",
+        "unchanged_style": {
+          "winding": "nonzero",
+          "colorspace": "ICCBased(RGB,sRGB)",
+          "color": "0 .53333339 .5372549",
+          "ri": "1",
+          "bp": "1",
+          "op": "0",
+          "opm": "0"
+        }
+      },
+      {
+        "path": "page/1/180",
+        "kind": "fill_path",
+        "before_transform": ".82 0 0 .82 747.165 256.52064",
+        "after_transform": ".82 0 0 .82 746.2 255.83997",
+        "unchanged_style": {
+          "winding": "nonzero",
+          "colorspace": "ICCBased(RGB,sRGB)",
+          "color": "0 .53333339 .5372549",
+          "ri": "1",
+          "bp": "1",
+          "op": "0",
+          "opm": "0"
+        }
+      },
+      {
+        "path": "page/1/181",
+        "kind": "fill_path",
+        "before_transform": ".82 0 0 .82 813.438 327.74867",
+        "after_transform": ".82 0 0 .82 812.62 327.18",
+        "unchanged_style": {
+          "winding": "nonzero",
+          "colorspace": "ICCBased(RGB,sRGB)",
+          "color": "0 .53333339 .5372549",
+          "ri": "1",
+          "bp": "1",
+          "op": "0",
+          "opm": "0"
+        }
+      },
+      {
+        "path": "page/1/182",
+        "kind": "fill_path",
+        "before_transform": ".82 0 0 .82 879.711 327.74867",
+        "after_transform": ".82 0 0 .82 879.04 327.18",
+        "unchanged_style": {
+          "winding": "nonzero",
+          "colorspace": "ICCBased(RGB,sRGB)",
+          "color": "0 .53333339 .5372549",
+          "ri": "1",
+          "bp": "1",
+          "op": "0",
+          "opm": "0"
+        }
+      },
+      {
+        "path": "page/1/183",
+        "kind": "fill_path",
+        "before_transform": ".82 0 0 .82 945.9841 327.74867",
+        "after_transform": ".82 0 0 .82 945.46 327.18",
+        "unchanged_style": {
+          "winding": "nonzero",
+          "colorspace": "ICCBased(RGB,sRGB)",
+          "color": "0 .53333339 .5372549",
+          "ri": "1",
+          "bp": "1",
+          "op": "0",
+          "opm": "0"
+        }
+      },
+      {
+        "path": "page/1/184",
+        "kind": "fill_path",
+        "before_transform": ".82 0 0 .82 1012.2571 327.74867",
+        "after_transform": ".82 0 0 .82 1011.88 327.18",
+        "unchanged_style": {
+          "winding": "nonzero",
+          "colorspace": "ICCBased(RGB,sRGB)",
+          "color": "0 .53333339 .5372549",
+          "ri": "1",
+          "bp": "1",
+          "op": "0",
+          "opm": "0"
+        }
+      },
+      {
+        "path": "page/1/185",
+        "kind": "fill_path",
+        "before_transform": ".82 0 0 .82 1078.53 327.74867",
+        "after_transform": ".82 0 0 .82 1078.3 327.18",
+        "unchanged_style": {
+          "winding": "nonzero",
+          "colorspace": "ICCBased(RGB,sRGB)",
+          "color": "0 .53333339 .5372549",
+          "ri": "1",
+          "bp": "1",
+          "op": "0",
+          "opm": "0"
+        }
+      }
+    ],
+    "only_marker_translations": true
+  }
+]

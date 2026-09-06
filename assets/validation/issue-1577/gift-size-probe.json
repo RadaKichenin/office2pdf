@@ -1,0 +1,39 @@
+{
+  "name": "issue-1577-gift-marker-size",
+  "base": "../../../tests/fixtures/xlsx/issue_1603_gift_budget.xlsx",
+  "part": "xl/charts/chart1.xml",
+  "factor": "amount-spent marker c:size/@val",
+  "page": 2,
+  "variants": [
+    {
+      "value": "4",
+      "find": "<c:size val=\"5\"/>",
+      "replace": "<c:size val=\"4\"/>",
+      "count": 1
+    },
+    {
+      "value": "6",
+      "find": "<c:size val=\"5\"/>",
+      "replace": "<c:size val=\"6\"/>",
+      "count": 1
+    },
+    {
+      "value": "7",
+      "find": "<c:size val=\"5\"/>",
+      "replace": "<c:size val=\"7\"/>",
+      "count": 1
+    },
+    {
+      "value": "13",
+      "find": "<c:size val=\"5\"/>",
+      "replace": "<c:size val=\"13\"/>",
+      "count": 1
+    },
+    {
+      "value": "14",
+      "find": "<c:size val=\"5\"/>",
+      "replace": "<c:size val=\"14\"/>",
+      "count": 1
+    }
+  ]
+}

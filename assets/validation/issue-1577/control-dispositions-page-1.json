@@ -1,0 +1,581 @@
+{
+  "schema_version": 1,
+  "groups": [
+    {
+      "issue": "#1605",
+      "kind": "issue",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Fresh 300 DPI title panels show the top and left background edges beyond the native used-range clip; the previous bottom fill overlap is gone. Title glyph outlines retain content and weight.",
+      "cluster_ids": [
+        "p1-04fc3cd59115"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-00197543bb22"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-617172ae723e"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-d8601c31d8a1"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-449114e8d340"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-54087027f2cb"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-19aa7807db78"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-75f4ad47185b"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-77b22ce32654"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-ddfb176f0460"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-4d15a92f584b"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-d312a90bacc8"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-179ad8cb62e9"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-5d269da18401"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-54fa0b56f212"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-51041b6776a6"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-75f3d6cbd33b"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-0cd73d4d3709"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-9a5cf880df26"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-a617de020a26"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-efd7f1cc0500"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-5856dfe62a8b"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-25f28b58f68e"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-b6e28ade1477"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-598b16ed6c5a"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-ae5ebb0647fa"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-b918f4bf8125"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-3be5bf13a02b"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-ad95a0c865a5"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-b22b677458fb"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-53ce1cd57c98"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-8d6312fa38d3"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-0d6685f34ff5"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-202541150320"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-570ffb7e1a9c"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-bfeab553b264"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-bf7d89f7512e"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-896020d9bcdb"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-a22a6ecaeffe"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-e81851e5f816"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-c8441d025806"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-934813399fed"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-1ad185fb4e82"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-4f3847477ef5"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-590b6105f49d"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-71b93c753a44"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-6935e070b449"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-e1ecfd96809e"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-b8f6c5ce324f"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-44d60bdcd698"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-e887a866d962"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-64bbd2d4ca0f"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-b014879d7d19"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-5184515ddd59"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-09142b65e47c"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-2e2ea67db52f"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-c02c66b44b41"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-37f39f717a02"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-de59e9d3fa09"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-53707aad32c5"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-29ef7cd7e80d"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-7d901008e570"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-e5fc25de2744"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-eabc9c7cd920"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-86361dcc8788"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-462532f28b2c"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-7fa3b20d07fd"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-e61a28c64750"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-eaf5dc06d826"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-4cedfabc6bc5"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-be3e2c95492a"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Individually enumerated title/body/footer glyph fragments reviewed in full-page diff and matched title/body/footer crops. Text content, wrapping and paragraph gaps match. Title remains regular, Note: remains bold; no missing italic/underline or interior stroke-weight difference. All text-instance geometry is below the unchanged0.5pt gate. Page1 before/after decoded pixels are exactly equal.",
+      "cluster_ids": [
+        "p1-749fcf3c5732"
+      ]
+    }
+  ]
+}

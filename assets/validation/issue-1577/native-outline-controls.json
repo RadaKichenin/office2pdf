@@ -1,0 +1,2447 @@
+{
+  "base_repackaging_all_page_traces_identical": true,
+  "records": [
+    {
+      "fixture": "budget",
+      "mode": "base",
+      "source_sha256": "ac7862386da7878a3c2dad1cf19b2aec00395975d94f84d43d2dbe3ffa86954a",
+      "pdf_sha256": "0d3b5556d3360da3b4404e6a88ce3b12705dd1d41c659917582e715ace12aa37",
+      "markers": [
+        {
+          "center": [
+            195.0,
+            311.22
+          ],
+          "canvas": 16
+        }
+      ],
+      "probe": "marker-outline-probe",
+      "case": "budget_base"
+    },
+    {
+      "fixture": "budget",
+      "mode": "none",
+      "source_sha256": "6d11415cdca08ad20cba5796a3edb98e5b18377cf333e57c6e2d74520a3cc66a",
+      "pdf_sha256": "c45ac8a4d14ca0054e58a4f41eef3448cc76427aada8e1f05bebbbc4ed76c2d2",
+      "markers": [
+        {
+          "center": [
+            195.78,
+            311.99999
+          ],
+          "canvas": 16
+        }
+      ],
+      "probe": "marker-outline-probe",
+      "case": "budget_none"
+    },
+    {
+      "fixture": "budget",
+      "mode": "wide",
+      "source_sha256": "0469e1e3327ee2ed3cd54f4d2a45c848211d5101e1a9704b7e89da19805f090f",
+      "pdf_sha256": "74d0a6f893f00e06a6c07ff09e126228e1eac67f93cbd22ee6a4afce40f62b07",
+      "markers": [
+        {
+          "center": [
+            195.0,
+            311.21999
+          ],
+          "canvas": 18
+        }
+      ],
+      "probe": "marker-outline-probe",
+      "case": "budget_wide"
+    },
+    {
+      "fixture": "gift",
+      "mode": "base",
+      "source_sha256": "cfe2c3d9c6c77d19061319dce3ec357c9c58ca44949dc5702652d58545626ed9",
+      "pdf_sha256": "87cde39bc0e575f841ce408bca21fc4934625070be3f3c360d2991ad6ec4a608",
+      "markers": [
+        {
+          "center": [
+            351.37,
+            298.89003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            416.97,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            483.39,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            549.8100000000001,
+            308.73
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            616.23,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            682.65,
+            146.36999
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            748.25,
+            257.89
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            814.67,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            881.09,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            947.51,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            1013.93,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            1080.35,
+            329.23003
+          ],
+          "canvas": 7
+        }
+      ],
+      "probe": "marker-outline-probe",
+      "case": "gift_base"
+    },
+    {
+      "fixture": "gift",
+      "mode": "outline",
+      "source_sha256": "5f6d85003f840ac9282fab154225a7d7ac1559177f15676ec571191a34d38fb4",
+      "pdf_sha256": "96d0256471046a92f27755b6594b2099247e1a6d192245e15c3c8143bea5a0f7",
+      "markers": [
+        {
+          "center": [
+            350.55,
+            298.07
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            416.97,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            483.39,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            548.99,
+            308.73
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            615.41,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            681.83,
+            145.54998
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            748.25,
+            257.89
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            814.67,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            881.09,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            946.69,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            1013.11,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            1079.53,
+            329.23003
+          ],
+          "canvas": 7
+        }
+      ],
+      "probe": "marker-outline-probe",
+      "case": "gift_outline"
+    },
+    {
+      "fixture": "gift",
+      "mode": "wide",
+      "source_sha256": "1b8abbb83b16fbaf529f82338747968e0f059f652b9fa2746b6cf3806ca66aa0",
+      "pdf_sha256": "f633ac2156ee710da4092ef38e4fa321728d394b0506c4527cee43bde704f525",
+      "markers": [
+        {
+          "center": [
+            350.55,
+            298.07
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            416.96999999999997,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            483.39,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            548.99,
+            308.72999
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            615.4100000000001,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            681.83,
+            145.54999
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            748.25,
+            257.89001
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            814.6700000000001,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            881.09,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            946.69,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            1013.11,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            1079.53,
+            329.23
+          ],
+          "canvas": 9
+        }
+      ],
+      "probe": "marker-outline-probe",
+      "case": "gift_wide"
+    },
+    {
+      "fixture": "budget",
+      "mode": "base",
+      "source_sha256": "ac7862386da7878a3c2dad1cf19b2aec00395975d94f84d43d2dbe3ffa86954a",
+      "pdf_sha256": "5a2f83dada804377beb91c73ef949e5853396f35bb5fce7821da15f680cfef88",
+      "markers": [
+        {
+          "center": [
+            195.0,
+            311.22
+          ],
+          "canvas": 16
+        }
+      ],
+      "probe": "marker-width-probe",
+      "case": "budget_base"
+    },
+    {
+      "fixture": "gift",
+      "mode": "base",
+      "source_sha256": "cfe2c3d9c6c77d19061319dce3ec357c9c58ca44949dc5702652d58545626ed9",
+      "pdf_sha256": "514887759cb748407fed6b15931d7374abf99197c17ffdae135a7f8e5e9be929",
+      "markers": [
+        {
+          "center": [
+            351.37,
+            298.89003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            416.97,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            483.39,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            549.8100000000001,
+            308.73
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            616.23,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            682.65,
+            146.36999
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            748.25,
+            257.89
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            814.67,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            881.09,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            947.51,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            1013.93,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            1080.35,
+            329.23003
+          ],
+          "canvas": 7
+        }
+      ],
+      "probe": "marker-width-probe",
+      "case": "gift_base"
+    },
+    {
+      "fixture": "budget",
+      "mode": "w1.0",
+      "source_sha256": "22b2275aba6d711b67db977b39640da1d701d6403826dff9723410957ad8e055",
+      "pdf_sha256": "a83a7d06d45607b47d21ccef336e3be0075ada872a4618713831ca9fff93008b",
+      "markers": [
+        {
+          "center": [
+            195.0,
+            311.22
+          ],
+          "canvas": 16
+        }
+      ],
+      "probe": "marker-width-probe",
+      "case": "budget_w1_0"
+    },
+    {
+      "fixture": "budget",
+      "mode": "w1.5",
+      "source_sha256": "8649f2de68a2f7e4b6711ec36c11f82bb2fffc046d200bed00d45ebb74409c0f",
+      "pdf_sha256": "f72b7d699a9dbf1c567a56ac04aa174e72a990df1d0304419e004edb02f4baa6",
+      "markers": [
+        {
+          "center": [
+            195.78,
+            312.0
+          ],
+          "canvas": 18
+        }
+      ],
+      "probe": "marker-width-probe",
+      "case": "budget_w1_5"
+    },
+    {
+      "fixture": "budget",
+      "mode": "w2.0",
+      "source_sha256": "b7e4a9fb2db6c78304a77cdf8a0173ba1620904e3439c8f3b93c76a85f72a539",
+      "pdf_sha256": "0e45952c144c61ef4adc21250a5f404575a0d980b6a017039a7b78f7ac3e5518",
+      "markers": [
+        {
+          "center": [
+            195.78,
+            312.0
+          ],
+          "canvas": 18
+        }
+      ],
+      "probe": "marker-width-probe",
+      "case": "budget_w2_0"
+    },
+    {
+      "fixture": "budget",
+      "mode": "w2.25",
+      "source_sha256": "009190d7d6bf551c9ea5b4076d21f8c9f29bd7f3fc81bfc1ed5376a1513e99f2",
+      "pdf_sha256": "9e63a3aaa8ebc835717d8e735e969b4d9c868411bf3cb881f8f2371723913424",
+      "markers": [
+        {
+          "center": [
+            195.78,
+            312.0
+          ],
+          "canvas": 18
+        }
+      ],
+      "probe": "marker-width-probe",
+      "case": "budget_w2_25"
+    },
+    {
+      "fixture": "gift",
+      "mode": "w1.0",
+      "source_sha256": "a56f4400d94d14fcb5c0639b445e32f04478cf20d41f5842ada22cb397d2b7bb",
+      "pdf_sha256": "18adc97737c08754e0f9e37254b5276b7f632265fe464d78d83dd8302f2d3f75",
+      "markers": [
+        {
+          "center": [
+            350.55,
+            298.07
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            416.97,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            483.39,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            548.99,
+            308.73
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            615.41,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            681.83,
+            145.54998
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            748.25,
+            257.89
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            814.67,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            881.09,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            946.69,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            1013.11,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            1079.53,
+            329.23003
+          ],
+          "canvas": 7
+        }
+      ],
+      "probe": "marker-width-probe",
+      "case": "gift_w1_0"
+    },
+    {
+      "fixture": "gift",
+      "mode": "w1.5",
+      "source_sha256": "3607a4880ce13497b79ed3c91bbc29433f52208aa73431d75d592e970267d789",
+      "pdf_sha256": "986db7b0d6c080f740f29333efdc2e397e07bb8390fb314e34481d16ff297428",
+      "markers": [
+        {
+          "center": [
+            351.37,
+            298.89
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            416.96999999999997,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            483.39,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            549.8100000000001,
+            308.72999
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            616.23,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            682.6500000000001,
+            146.37
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            748.25,
+            257.89001
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            814.6700000000001,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            881.09,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            947.5100000000001,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            1013.9300000000001,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            1080.3500000000001,
+            329.23
+          ],
+          "canvas": 9
+        }
+      ],
+      "probe": "marker-width-probe",
+      "case": "gift_w1_5"
+    },
+    {
+      "fixture": "gift",
+      "mode": "w2.0",
+      "source_sha256": "1eb8aca91dccacfa66e40b28672881928b9d879c98941ed382766dd3dca2c49e",
+      "pdf_sha256": "467cb0695aef6d6711b98b42a832a0228189f296e1b271499742c4e8f0827865",
+      "markers": [
+        {
+          "center": [
+            351.37,
+            298.89
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            416.96999999999997,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            483.39,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            549.8100000000001,
+            308.72999
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            616.23,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            682.6500000000001,
+            146.37
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            748.25,
+            257.89001
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            814.6700000000001,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            881.09,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            947.5100000000001,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            1013.9300000000001,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            1080.3500000000001,
+            329.23
+          ],
+          "canvas": 9
+        }
+      ],
+      "probe": "marker-width-probe",
+      "case": "gift_w2_0"
+    },
+    {
+      "fixture": "gift",
+      "mode": "w2.25",
+      "source_sha256": "4a28a66c2add008cdac1543f7b42ba4cc361af314c89010052afc5aa95fd214f",
+      "pdf_sha256": "7f1c65023b6e58d6d60f14c6a523071f225110c5816a33783e224e02ed8dd58a",
+      "markers": [
+        {
+          "center": [
+            351.37,
+            298.89
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            416.96999999999997,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            483.39,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            549.8100000000001,
+            308.72999
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            616.23,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            682.6500000000001,
+            146.37
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            748.25,
+            257.89001
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            814.6700000000001,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            881.09,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            947.5100000000001,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            1013.9300000000001,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            1080.3500000000001,
+            329.23
+          ],
+          "canvas": 9
+        }
+      ],
+      "probe": "marker-width-probe",
+      "case": "gift_w2_25"
+    },
+    {
+      "fixture": "budget",
+      "mode": "base",
+      "source_sha256": "ac7862386da7878a3c2dad1cf19b2aec00395975d94f84d43d2dbe3ffa86954a",
+      "pdf_sha256": "86d353f0eda04c36773808e86bf79bc028973eac224f0b70836093b5c83adde5",
+      "markers": [
+        {
+          "center": [
+            195.0,
+            311.22
+          ],
+          "canvas": 16
+        }
+      ],
+      "probe": "marker-threshold-probe",
+      "case": "budget_base"
+    },
+    {
+      "fixture": "gift",
+      "mode": "base",
+      "source_sha256": "cfe2c3d9c6c77d19061319dce3ec357c9c58ca44949dc5702652d58545626ed9",
+      "pdf_sha256": "44646b41e930894d8bd8b9e8e7d9aba56bbbdc54de0e4f00b6b5291710735f43",
+      "markers": [
+        {
+          "center": [
+            351.37,
+            298.89003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            416.97,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            483.39,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            549.8100000000001,
+            308.73
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            616.23,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            682.65,
+            146.36999
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            748.25,
+            257.89
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            814.67,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            881.09,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            947.51,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            1013.93,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            1080.35,
+            329.23003
+          ],
+          "canvas": 7
+        }
+      ],
+      "probe": "marker-threshold-probe",
+      "case": "gift_base"
+    },
+    {
+      "fixture": "budget",
+      "mode": "w0.0",
+      "source_sha256": "e9e02f3f7c5da53c97c188cf56211c57d8249621c90c9dec90bf9d76c1c51715",
+      "pdf_sha256": "023450f20a0a246ec4de99886c2e2824e5ff6a1b892eb8e468a75e25968ddbd3",
+      "markers": [
+        {
+          "center": [
+            195.0,
+            311.21999
+          ],
+          "canvas": 14
+        }
+      ],
+      "probe": "marker-threshold-probe",
+      "case": "budget_w0_0"
+    },
+    {
+      "fixture": "budget",
+      "mode": "w0.49",
+      "source_sha256": "cd85e802b5009045aab13a3bb6d83f87cb90aceebf63224e4dcb64c58c9faad0",
+      "pdf_sha256": "adbfaf3d71fbb2db9ccd09f2608608f07c01b2f8e29938849efd7d53c5916f62",
+      "markers": [
+        {
+          "center": [
+            195.0,
+            311.22
+          ],
+          "canvas": 16
+        }
+      ],
+      "probe": "marker-threshold-probe",
+      "case": "budget_w0_49"
+    },
+    {
+      "fixture": "budget",
+      "mode": "w0.5",
+      "source_sha256": "a3a03c957b3787d5c3570edb958f6e10be22c80d7474553d9222ed8e49057c7b",
+      "pdf_sha256": "bbc3b841b5c31a0e53b176fe6834ed090b7b78c3d3a4e442346e4af6a81eeaf1",
+      "markers": [
+        {
+          "center": [
+            195.0,
+            311.22
+          ],
+          "canvas": 16
+        }
+      ],
+      "probe": "marker-threshold-probe",
+      "case": "budget_w0_5"
+    },
+    {
+      "fixture": "budget",
+      "mode": "w1.49",
+      "source_sha256": "57189d72eddb7baf2203f9cfc4149320bbe1fc39441625a131792b82a9f9bd54",
+      "pdf_sha256": "8fe5bcec7572d2e61dc3b1f62119651692304efa9c6bd0e180383d343c846033",
+      "markers": [
+        {
+          "center": [
+            195.0,
+            311.22
+          ],
+          "canvas": 16
+        }
+      ],
+      "probe": "marker-threshold-probe",
+      "case": "budget_w1_49"
+    },
+    {
+      "fixture": "budget",
+      "mode": "w2.49",
+      "source_sha256": "b48b95746940395312e16913fa6f0828948eb13e7ee161c39cc5aceb8f6e553d",
+      "pdf_sha256": "f16d4f08688903581b205dc6c4d71ecc1a6e92cb1a199b7309c4b27861987ac9",
+      "markers": [
+        {
+          "center": [
+            195.78,
+            312.0
+          ],
+          "canvas": 18
+        }
+      ],
+      "probe": "marker-threshold-probe",
+      "case": "budget_w2_49"
+    },
+    {
+      "fixture": "budget",
+      "mode": "w2.5",
+      "source_sha256": "b663aa6fd58412d044246f26b8fe2809d7d426189d87ec855c046d6ef2750099",
+      "pdf_sha256": "aad10771ba99ab78532cd9710b1976ea72b6346631c871fda1be0b2d7d711456",
+      "markers": [
+        {
+          "center": [
+            195.0,
+            311.21999
+          ],
+          "canvas": 18
+        }
+      ],
+      "probe": "marker-threshold-probe",
+      "case": "budget_w2_5"
+    },
+    {
+      "fixture": "budget",
+      "mode": "w3.49",
+      "source_sha256": "5255eb38e17cfcdc9ed563ab76a773bbddbadde219cbc218cdf2a4e8a8393b92",
+      "pdf_sha256": "dac3e90e3779d6ac20479a5f7c7be6074d9d0a274e5c069b7e9eac01b719acf3",
+      "markers": [
+        {
+          "center": [
+            195.0,
+            311.21999
+          ],
+          "canvas": 18
+        }
+      ],
+      "probe": "marker-threshold-probe",
+      "case": "budget_w3_49"
+    },
+    {
+      "fixture": "budget",
+      "mode": "w3.5",
+      "source_sha256": "31f0703b2ba4132e6d221dddb55514c82bcbe2b02f62c18a260916db8ff45514",
+      "pdf_sha256": "1e32f3c8f13862a04550d655b1c13bcc318d42b523a4f25ed16219c7db3cc181",
+      "markers": [
+        {
+          "center": [
+            195.78,
+            311.99999
+          ],
+          "canvas": 20
+        }
+      ],
+      "probe": "marker-threshold-probe",
+      "case": "budget_w3_5"
+    },
+    {
+      "fixture": "budget",
+      "mode": "w4.0",
+      "source_sha256": "b8dd78b1783ec95dea0584f2caa222c7da4c9349c11d92abf99ddb9b75808176",
+      "pdf_sha256": "2db90121e2c0bf82ab33860db7a2c1c9d8f9dadee576f3e86eda940fbfaed714",
+      "markers": [
+        {
+          "center": [
+            195.78,
+            311.99999
+          ],
+          "canvas": 20
+        }
+      ],
+      "probe": "marker-threshold-probe",
+      "case": "budget_w4_0"
+    },
+    {
+      "fixture": "gift",
+      "mode": "w0.0",
+      "source_sha256": "da7e3afccb7efd48c526b9c0ea7cac425aa8e32c9894f15fa5c04dcb888c11ca",
+      "pdf_sha256": "e3ae1d7bbfbb71fd9af6334b77c76a266f095c3f72264071d0d08592dae5e891",
+      "markers": [
+        {
+          "center": [
+            350.55,
+            298.07
+          ],
+          "canvas": 5
+        },
+        {
+          "center": [
+            416.97,
+            329.23
+          ],
+          "canvas": 5
+        },
+        {
+          "center": [
+            483.39,
+            329.23
+          ],
+          "canvas": 5
+        },
+        {
+          "center": [
+            548.99,
+            308.73003
+          ],
+          "canvas": 5
+        },
+        {
+          "center": [
+            615.41,
+            329.23
+          ],
+          "canvas": 5
+        },
+        {
+          "center": [
+            681.8299999999999,
+            145.54997
+          ],
+          "canvas": 5
+        },
+        {
+          "center": [
+            748.25,
+            257.89
+          ],
+          "canvas": 5
+        },
+        {
+          "center": [
+            814.67,
+            329.23
+          ],
+          "canvas": 5
+        },
+        {
+          "center": [
+            881.0899999999999,
+            329.23
+          ],
+          "canvas": 5
+        },
+        {
+          "center": [
+            946.6899999999999,
+            329.23
+          ],
+          "canvas": 5
+        },
+        {
+          "center": [
+            1013.1099999999999,
+            329.23
+          ],
+          "canvas": 5
+        },
+        {
+          "center": [
+            1079.53,
+            329.23
+          ],
+          "canvas": 5
+        }
+      ],
+      "probe": "marker-threshold-probe",
+      "case": "gift_w0_0"
+    },
+    {
+      "fixture": "gift",
+      "mode": "w0.49",
+      "source_sha256": "6e918d8257b6b35d5e654ef3703aad0857231a739df22f60b0efa4722bd313bf",
+      "pdf_sha256": "a31d76e20ab7862e72e2da73f04518d894baf22b89f6f4a09a424efa2e0398fe",
+      "markers": [
+        {
+          "center": [
+            350.55,
+            298.07
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            416.97,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            483.39,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            548.99,
+            308.73
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            615.41,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            681.83,
+            145.54998
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            748.25,
+            257.89
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            814.67,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            881.09,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            946.69,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            1013.11,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            1079.53,
+            329.23003
+          ],
+          "canvas": 7
+        }
+      ],
+      "probe": "marker-threshold-probe",
+      "case": "gift_w0_49"
+    },
+    {
+      "fixture": "gift",
+      "mode": "w0.5",
+      "source_sha256": "24b943110522b594746b3cb2c381851ab64f33509a181e00db150763a5c0cb4c",
+      "pdf_sha256": "9670695bd763c5ef18e9b84737e3de39fe35218490022aa4e9c7e81457f743e0",
+      "markers": [
+        {
+          "center": [
+            350.55,
+            298.07
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            416.97,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            483.39,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            548.99,
+            308.73
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            615.41,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            681.83,
+            145.54998
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            748.25,
+            257.89
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            814.67,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            881.09,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            946.69,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            1013.11,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            1079.53,
+            329.23003
+          ],
+          "canvas": 7
+        }
+      ],
+      "probe": "marker-threshold-probe",
+      "case": "gift_w0_5"
+    },
+    {
+      "fixture": "gift",
+      "mode": "w1.49",
+      "source_sha256": "7fa83f2f7812a4f202cb2ef275f21dc3e16343bc81c170131c7c076239da4379",
+      "pdf_sha256": "44b6f630d7817bef136700e201f7ef0a1b6f04c70af6837a190d375a920f903a",
+      "markers": [
+        {
+          "center": [
+            350.55,
+            298.07
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            416.97,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            483.39,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            548.99,
+            308.73
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            615.41,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            681.83,
+            145.54998
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            748.25,
+            257.89
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            814.67,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            881.09,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            946.69,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            1013.11,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            1079.53,
+            329.23003
+          ],
+          "canvas": 7
+        }
+      ],
+      "probe": "marker-threshold-probe",
+      "case": "gift_w1_49"
+    },
+    {
+      "fixture": "gift",
+      "mode": "w2.49",
+      "source_sha256": "60b134936fbc95497ca66d0c4f60bae713f8b69eadad1656d6b24fa984d0b63d",
+      "pdf_sha256": "45a5197a2447613247bc758ad51b65d6e459c2bf96f7d845a73a739c2050d783",
+      "markers": [
+        {
+          "center": [
+            351.37,
+            298.89
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            416.96999999999997,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            483.39,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            549.8100000000001,
+            308.72999
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            616.23,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            682.6500000000001,
+            146.37
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            748.25,
+            257.89001
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            814.6700000000001,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            881.09,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            947.5100000000001,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            1013.9300000000001,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            1080.3500000000001,
+            329.23
+          ],
+          "canvas": 9
+        }
+      ],
+      "probe": "marker-threshold-probe",
+      "case": "gift_w2_49"
+    },
+    {
+      "fixture": "gift",
+      "mode": "w2.5",
+      "source_sha256": "221bae294550382f0502fa5f0b24c53782a27b33382c98d93dd3758967ef3738",
+      "pdf_sha256": "678f1f0ed2181c99ea5d43f90c39da9839164592f62369b9c1fcf3a8ff56ac7b",
+      "markers": [
+        {
+          "center": [
+            350.55,
+            298.07
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            416.96999999999997,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            483.39,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            548.99,
+            308.72999
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            615.4100000000001,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            681.83,
+            145.54999
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            748.25,
+            257.89001
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            814.6700000000001,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            881.09,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            946.69,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            1013.11,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            1079.53,
+            329.23
+          ],
+          "canvas": 9
+        }
+      ],
+      "probe": "marker-threshold-probe",
+      "case": "gift_w2_5"
+    },
+    {
+      "fixture": "gift",
+      "mode": "w3.49",
+      "source_sha256": "a9e3705f83db518e0b17ee723603821abd503e5d64ddbd266a5cb7eddf3a8c3f",
+      "pdf_sha256": "e5dc65ab775bf9e78aed0c2b274f8f696be0c21ea429b86dd09dff6c78e0b80b",
+      "markers": [
+        {
+          "center": [
+            350.55,
+            298.07
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            416.96999999999997,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            483.39,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            548.99,
+            308.72999
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            615.4100000000001,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            681.83,
+            145.54999
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            748.25,
+            257.89001
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            814.6700000000001,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            881.09,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            946.69,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            1013.11,
+            329.23
+          ],
+          "canvas": 9
+        },
+        {
+          "center": [
+            1079.53,
+            329.23
+          ],
+          "canvas": 9
+        }
+      ],
+      "probe": "marker-threshold-probe",
+      "case": "gift_w3_49"
+    },
+    {
+      "fixture": "gift",
+      "mode": "w3.5",
+      "source_sha256": "727bf226564edf60f1170b8e18dae07fa567ae6a1eba36728ecfa837d8e9375e",
+      "pdf_sha256": "bafda6b1c7fa61c29e92a54d8dd59a7ccb1415d563f1cb60fdab93e986bebd60",
+      "markers": [
+        {
+          "center": [
+            351.37,
+            298.89005
+          ],
+          "canvas": 11
+        },
+        {
+          "center": [
+            416.96999999999997,
+            329.23
+          ],
+          "canvas": 11
+        },
+        {
+          "center": [
+            483.39,
+            329.23
+          ],
+          "canvas": 11
+        },
+        {
+          "center": [
+            549.81,
+            308.73
+          ],
+          "canvas": 11
+        },
+        {
+          "center": [
+            616.23,
+            329.23
+          ],
+          "canvas": 11
+        },
+        {
+          "center": [
+            682.65,
+            146.37
+          ],
+          "canvas": 11
+        },
+        {
+          "center": [
+            748.25,
+            257.89002
+          ],
+          "canvas": 11
+        },
+        {
+          "center": [
+            814.67,
+            329.23
+          ],
+          "canvas": 11
+        },
+        {
+          "center": [
+            881.09,
+            329.23
+          ],
+          "canvas": 11
+        },
+        {
+          "center": [
+            947.51,
+            329.23
+          ],
+          "canvas": 11
+        },
+        {
+          "center": [
+            1013.93,
+            329.23
+          ],
+          "canvas": 11
+        },
+        {
+          "center": [
+            1080.35,
+            329.23
+          ],
+          "canvas": 11
+        }
+      ],
+      "probe": "marker-threshold-probe",
+      "case": "gift_w3_5"
+    },
+    {
+      "fixture": "gift",
+      "mode": "w4.0",
+      "source_sha256": "00b44f7b50f8153197ba148d4c28e925d5c2d00906e7bed6a86440f4bb7898ee",
+      "pdf_sha256": "32181eb2219ced1a5d0e9ed6ca5b176e63ad74f5e51b7cc38ae1ae678cfb816c",
+      "markers": [
+        {
+          "center": [
+            351.37,
+            298.89005
+          ],
+          "canvas": 11
+        },
+        {
+          "center": [
+            416.96999999999997,
+            329.23
+          ],
+          "canvas": 11
+        },
+        {
+          "center": [
+            483.39,
+            329.23
+          ],
+          "canvas": 11
+        },
+        {
+          "center": [
+            549.81,
+            308.73
+          ],
+          "canvas": 11
+        },
+        {
+          "center": [
+            616.23,
+            329.23
+          ],
+          "canvas": 11
+        },
+        {
+          "center": [
+            682.65,
+            146.37
+          ],
+          "canvas": 11
+        },
+        {
+          "center": [
+            748.25,
+            257.89002
+          ],
+          "canvas": 11
+        },
+        {
+          "center": [
+            814.67,
+            329.23
+          ],
+          "canvas": 11
+        },
+        {
+          "center": [
+            881.09,
+            329.23
+          ],
+          "canvas": 11
+        },
+        {
+          "center": [
+            947.51,
+            329.23
+          ],
+          "canvas": 11
+        },
+        {
+          "center": [
+            1013.93,
+            329.23
+          ],
+          "canvas": 11
+        },
+        {
+          "center": [
+            1080.35,
+            329.23
+          ],
+          "canvas": 11
+        }
+      ],
+      "probe": "marker-threshold-probe",
+      "case": "gift_w4_0"
+    },
+    {
+      "fixture": "budget",
+      "mode": "base",
+      "source_sha256": "ac7862386da7878a3c2dad1cf19b2aec00395975d94f84d43d2dbe3ffa86954a",
+      "pdf_sha256": "234f2581eb207e633dc2eeaf4f9ddcb82b39438ff1f7a419cc4005a9ba0ef0b3",
+      "markers": [
+        {
+          "center": [
+            195.0,
+            311.22
+          ],
+          "canvas": 16
+        }
+      ],
+      "probe": "marker-suppressed-width-probe",
+      "case": "budget_base"
+    },
+    {
+      "fixture": "gift",
+      "mode": "base",
+      "source_sha256": "cfe2c3d9c6c77d19061319dce3ec357c9c58ca44949dc5702652d58545626ed9",
+      "pdf_sha256": "902d627beb30ed833b6b280edbb6fc2dcf16f30c0045d7c57e0b0a323e09d1fe",
+      "markers": [
+        {
+          "center": [
+            351.37,
+            298.89003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            416.97,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            483.39,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            549.8100000000001,
+            308.73
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            616.23,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            682.65,
+            146.36999
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            748.25,
+            257.89
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            814.67,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            881.09,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            947.51,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            1013.93,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            1080.35,
+            329.23003
+          ],
+          "canvas": 7
+        }
+      ],
+      "probe": "marker-suppressed-width-probe",
+      "case": "gift_base"
+    },
+    {
+      "fixture": "budget",
+      "mode": "w0.0",
+      "source_sha256": "f9614e431636fccb16c2f17f159e4e29864ce5c1da7757daad22ff204d545898",
+      "pdf_sha256": "d3a90a0e082c20f7d10c25f1e172b0c171ca433ac191a1ab6adae6f95e2bf3a7",
+      "markers": [
+        {
+          "center": [
+            195.78,
+            311.99999
+          ],
+          "canvas": 16
+        }
+      ],
+      "probe": "marker-suppressed-width-probe",
+      "case": "budget_w0_0"
+    },
+    {
+      "fixture": "budget",
+      "mode": "w1.5",
+      "source_sha256": "66f2ef22c08af94ec1e6791356ae342b022e1e2e5f9502899f99e6cfc07f4ff6",
+      "pdf_sha256": "15ef3bb97a13bac6f280ee598a9bef14d1ed1dc0f9dfaa50769aea549995b5cc",
+      "markers": [
+        {
+          "center": [
+            195.78,
+            311.99999
+          ],
+          "canvas": 16
+        }
+      ],
+      "probe": "marker-suppressed-width-probe",
+      "case": "budget_w1_5"
+    },
+    {
+      "fixture": "budget",
+      "mode": "w3.5",
+      "source_sha256": "45c20299cf29175016cbba93eb265629cf781256830e20f940ca9686e14e6aee",
+      "pdf_sha256": "0f0845df7ed6992695debee65a87950d76fce07c82c20108c847c20618160302",
+      "markers": [
+        {
+          "center": [
+            195.78,
+            311.99999
+          ],
+          "canvas": 16
+        }
+      ],
+      "probe": "marker-suppressed-width-probe",
+      "case": "budget_w3_5"
+    },
+    {
+      "fixture": "gift",
+      "mode": "w0.0",
+      "source_sha256": "705a63f98bcb575791345d47d7711068bfe45b7b3aab677b251b7acab4cefd17",
+      "pdf_sha256": "178c1ff0e4c345e28bfadec4f53f4a491041dbe7ed620af0fa86f8b118df4ace",
+      "markers": [
+        {
+          "center": [
+            351.37,
+            298.89003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            416.97,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            483.39,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            549.8100000000001,
+            308.73
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            616.23,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            682.65,
+            146.36999
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            748.25,
+            257.89
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            814.67,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            881.09,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            947.51,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            1013.93,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            1080.35,
+            329.23003
+          ],
+          "canvas": 7
+        }
+      ],
+      "probe": "marker-suppressed-width-probe",
+      "case": "gift_w0_0"
+    },
+    {
+      "fixture": "gift",
+      "mode": "w1.5",
+      "source_sha256": "9a1a78b48441013e3b809de48ce5174ce2368d62bbdaaa4b326c22f4343dd7f8",
+      "pdf_sha256": "177c393a4e445d330f9c75f8d24039cde0982b38de7fd12ff09489f96ce2a253",
+      "markers": [
+        {
+          "center": [
+            351.37,
+            298.89003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            416.97,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            483.39,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            549.8100000000001,
+            308.73
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            616.23,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            682.65,
+            146.36999
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            748.25,
+            257.89
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            814.67,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            881.09,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            947.51,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            1013.93,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            1080.35,
+            329.23003
+          ],
+          "canvas": 7
+        }
+      ],
+      "probe": "marker-suppressed-width-probe",
+      "case": "gift_w1_5"
+    },
+    {
+      "fixture": "gift",
+      "mode": "w3.5",
+      "source_sha256": "533c0c34bcd4e7961fd2b58e688910adfcf7f5450d6180e415e6d92395b25e57",
+      "pdf_sha256": "8fd397bcd89ab6b718a272e0e487a48d104517bf2d7159cf9325075aa80d0a0b",
+      "markers": [
+        {
+          "center": [
+            351.37,
+            298.89003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            416.97,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            483.39,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            549.8100000000001,
+            308.73
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            616.23,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            682.65,
+            146.36999
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            748.25,
+            257.89
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            814.67,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            881.09,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            947.51,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            1013.93,
+            329.23003
+          ],
+          "canvas": 7
+        },
+        {
+          "center": [
+            1080.35,
+            329.23003
+          ],
+          "canvas": 7
+        }
+      ],
+      "probe": "marker-suppressed-width-probe",
+      "case": "gift_w3_5"
+    }
+  ]
+}

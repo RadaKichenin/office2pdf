@@ -1,0 +1,58 @@
+{
+  "name": "issue-1577-budget-marker-outline",
+  "base": "../../../tests/fixtures/xlsx/issue_1181_fit_to_height.xlsx",
+  "part": "xl/charts/chart2.xml",
+  "factor": "positive selected-month marker outline",
+  "page": 2,
+  "variants": [
+    {
+      "value": "0",
+      "find": "(?s)(<c:scatterChart\\b.*?<c:ser\\b.*?<c:marker>.*?<a:ln\\b[^>]*\\bw=\")9525(\")",
+      "replace": "\\g<1>0\\g<2>",
+      "regex": true,
+      "count": 1
+    },
+    {
+      "value": "1.49",
+      "find": "(?s)(<c:scatterChart\\b.*?<c:ser\\b.*?<c:marker>.*?<a:ln\\b[^>]*\\bw=\")9525(\")",
+      "replace": "\\g<1>18923\\g<2>",
+      "regex": true,
+      "count": 1
+    },
+    {
+      "value": "1.5",
+      "find": "(?s)(<c:scatterChart\\b.*?<c:ser\\b.*?<c:marker>.*?<a:ln\\b[^>]*\\bw=\")9525(\")",
+      "replace": "\\g<1>19050\\g<2>",
+      "regex": true,
+      "count": 1
+    },
+    {
+      "value": "2",
+      "find": "(?s)(<c:scatterChart\\b.*?<c:ser\\b.*?<c:marker>.*?<a:ln\\b[^>]*\\bw=\")9525(\")",
+      "replace": "\\g<1>25400\\g<2>",
+      "regex": true,
+      "count": 1
+    },
+    {
+      "value": "2.5",
+      "find": "(?s)(<c:scatterChart\\b.*?<c:ser\\b.*?<c:marker>.*?<a:ln\\b[^>]*\\bw=\")9525(\")",
+      "replace": "\\g<1>31750\\g<2>",
+      "regex": true,
+      "count": 1
+    },
+    {
+      "value": "3.5",
+      "find": "(?s)(<c:scatterChart\\b.*?<c:ser\\b.*?<c:marker>.*?<a:ln\\b[^>]*\\bw=\")9525(\")",
+      "replace": "\\g<1>44450\\g<2>",
+      "regex": true,
+      "count": 1
+    },
+    {
+      "value": "suppressed",
+      "find": "(?s)(<c:scatterChart\\b.*?<c:ser\\b.*?<c:marker>.*?)<a:ln\\b[^>]*>.*?</a:ln>",
+      "replace": "\\g<1><a:ln><a:noFill/></a:ln>",
+      "regex": true,
+      "count": 1
+    }
+  ]
+}

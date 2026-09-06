@@ -1,0 +1,31 @@
+{
+  "base_commit": "295bc540e950d8bdbace56840c3861a55f667778",
+  "candidate_cli_sha256": "1b6849b8ecd09f8818ee7f1ef201d8a606071bd2af3439c50668ead2e5127680",
+  "candidate_cli_note": "Debug CLI built from the uncommitted runtime change; a later rebuild after comment/test-only edits produced byte-identical budget and gift PDFs.",
+  "font_paths": [
+    "/Applications/Microsoft Excel.app/Contents/Resources/DFonts"
+  ],
+  "fixtures": {
+    "budget": {
+      "source": "2b4a2d8dceda58758593c88409875efbda05780559154c02bd13fef4f7a1c65b",
+      "native": "86d353f0eda04c36773808e86bf79bc028973eac224f0b70836093b5c83adde5",
+      "before": "9d4abde8adca8aa9aabaf96d8cebe665d8386b98f79aa52c61bcd9a8fb78fddd",
+      "after": "5d0258cb303d1868e508f5af12c0f498cfd7c9a76966c0646f7d5dfd80d2d466",
+      "layout_exit": 1,
+      "text_layer_exit": 1,
+      "pages": 2
+    },
+    "gift": {
+      "source": "25f5dc75dab19ea12042979a61842314ddc226e3e45d447e36b2a2a104112613",
+      "native": "3fbaf583d4f56200db7f81943a0f6e712d6da25ea8701395bcde4131a9a751df",
+      "before": "04462e1a0dd16f37f95e48ece931b858ffbbb01c42156cc461de9e750292273b",
+      "after": "92e965e0c410c96fa0f302ca380d7c1ff8b173b91bf9561b4869a20933a38c88",
+      "layout_exit": 1,
+      "text_layer_exit": 1,
+      "pages": 2
+    }
+  },
+  "before_pdfs": "Converted from main 295bc540 with the same font path; the budget before PDF equals the #1603 head and main conversions.",
+  "evidence_images": "Full pages at 300 DPI keep their pixel dimensions; the narrower first page is white-padded to the second page width before vertical concatenation. Marker crops are 4 rows (native, before, after, 5% diff) per marker at 300 DPI.",
+  "state": "Candidate evidence; no merged fix is claimed."
+}

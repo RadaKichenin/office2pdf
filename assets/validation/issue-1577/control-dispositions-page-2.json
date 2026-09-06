@@ -1,0 +1,270 @@
+{
+  "schema_version": 1,
+  "groups": [
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Exact glyph-edge clusters reviewed in the matched title/sidebar/table/footer crops; content and emphasis are preserved. Separate individual centered-cell x shifts are tracked in #1600 (base-table-cell-positions.json), even where their fragmented pixels do not reach this material-cluster floor. A combined trace-line pass is not proof that every cell is aligned.",
+      "cluster_ids": [
+        "p2-7be815f58535"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Exact glyph-edge clusters reviewed in the matched title/sidebar/table/footer crops; content and emphasis are preserved. Separate individual centered-cell x shifts are tracked in #1600 (base-table-cell-positions.json), even where their fragmented pixels do not reach this material-cluster floor. A combined trace-line pass is not proof that every cell is aligned.",
+      "cluster_ids": [
+        "p2-c805a889d0bd"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Exact glyph-edge clusters reviewed in the matched title/sidebar/table/footer crops; content and emphasis are preserved. Separate individual centered-cell x shifts are tracked in #1600 (base-table-cell-positions.json), even where their fragmented pixels do not reach this material-cluster floor. A combined trace-line pass is not proof that every cell is aligned.",
+      "cluster_ids": [
+        "p2-36091b13cbf4"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Exact glyph-edge clusters reviewed in the matched title/sidebar/table/footer crops; content and emphasis are preserved. Separate individual centered-cell x shifts are tracked in #1600 (base-table-cell-positions.json), even where their fragmented pixels do not reach this material-cluster floor. A combined trace-line pass is not proof that every cell is aligned.",
+      "cluster_ids": [
+        "p2-3247d8d7eb4a"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Exact glyph-edge clusters reviewed in the matched title/sidebar/table/footer crops; content and emphasis are preserved. Separate individual centered-cell x shifts are tracked in #1600 (base-table-cell-positions.json), even where their fragmented pixels do not reach this material-cluster floor. A combined trace-line pass is not proof that every cell is aligned.",
+      "cluster_ids": [
+        "p2-311cdf4e6b8f"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Exact glyph-edge clusters reviewed in the matched title/sidebar/table/footer crops; content and emphasis are preserved. Separate individual centered-cell x shifts are tracked in #1600 (base-table-cell-positions.json), even where their fragmented pixels do not reach this material-cluster floor. A combined trace-line pass is not proof that every cell is aligned.",
+      "cluster_ids": [
+        "p2-0dad53b5660b"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Exact glyph-edge clusters reviewed in the matched title/sidebar/table/footer crops; content and emphasis are preserved. Separate individual centered-cell x shifts are tracked in #1600 (base-table-cell-positions.json), even where their fragmented pixels do not reach this material-cluster floor. A combined trace-line pass is not proof that every cell is aligned.",
+      "cluster_ids": [
+        "p2-29ffdc38e949"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Exact glyph-edge clusters reviewed in the matched title/sidebar/table/footer crops; content and emphasis are preserved. Separate individual centered-cell x shifts are tracked in #1600 (base-table-cell-positions.json), even where their fragmented pixels do not reach this material-cluster floor. A combined trace-line pass is not proof that every cell is aligned.",
+      "cluster_ids": [
+        "p2-678f7bbc58e5"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Exact glyph-edge clusters reviewed in the matched title/sidebar/table/footer crops; content and emphasis are preserved. Separate individual centered-cell x shifts are tracked in #1600 (base-table-cell-positions.json), even where their fragmented pixels do not reach this material-cluster floor. A combined trace-line pass is not proof that every cell is aligned.",
+      "cluster_ids": [
+        "p2-26e96a2b4c67"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Exact glyph-edge clusters reviewed in the matched title/sidebar/table/footer crops; content and emphasis are preserved. Separate individual centered-cell x shifts are tracked in #1600 (base-table-cell-positions.json), even where their fragmented pixels do not reach this material-cluster floor. A combined trace-line pass is not proof that every cell is aligned.",
+      "cluster_ids": [
+        "p2-860d654b3e80"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Exact glyph-edge clusters reviewed in the matched title/sidebar/table/footer crops; content and emphasis are preserved. Separate individual centered-cell x shifts are tracked in #1600 (base-table-cell-positions.json), even where their fragmented pixels do not reach this material-cluster floor. A combined trace-line pass is not proof that every cell is aligned.",
+      "cluster_ids": [
+        "p2-57d2ddf8efee"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Exact glyph-edge clusters reviewed in the matched title/sidebar/table/footer crops; content and emphasis are preserved. Separate individual centered-cell x shifts are tracked in #1600 (base-table-cell-positions.json), even where their fragmented pixels do not reach this material-cluster floor. A combined trace-line pass is not proof that every cell is aligned.",
+      "cluster_ids": [
+        "p2-746a6be331d7"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Exact glyph-edge clusters reviewed in the matched title/sidebar/table/footer crops; content and emphasis are preserved. Separate individual centered-cell x shifts are tracked in #1600 (base-table-cell-positions.json), even where their fragmented pixels do not reach this material-cluster floor. A combined trace-line pass is not proof that every cell is aligned.",
+      "cluster_ids": [
+        "p2-1f732ae9957b"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Exact glyph-edge clusters reviewed in the matched title/sidebar/table/footer crops; content and emphasis are preserved. Separate individual centered-cell x shifts are tracked in #1600 (base-table-cell-positions.json), even where their fragmented pixels do not reach this material-cluster floor. A combined trace-line pass is not proof that every cell is aligned.",
+      "cluster_ids": [
+        "p2-36e9ceadef5f"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Exact glyph-edge clusters reviewed in the matched title/sidebar/table/footer crops; content and emphasis are preserved. Separate individual centered-cell x shifts are tracked in #1600 (base-table-cell-positions.json), even where their fragmented pixels do not reach this material-cluster floor. A combined trace-line pass is not proof that every cell is aligned.",
+      "cluster_ids": [
+        "p2-1df39cabf3ab"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Exact glyph-edge clusters reviewed in the matched title/sidebar/table/footer crops; content and emphasis are preserved. Separate individual centered-cell x shifts are tracked in #1600 (base-table-cell-positions.json), even where their fragmented pixels do not reach this material-cluster floor. A combined trace-line pass is not proof that every cell is aligned.",
+      "cluster_ids": [
+        "p2-32b75b83cba9"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Exact glyph-edge clusters reviewed in the matched title/sidebar/table/footer crops; content and emphasis are preserved. Separate individual centered-cell x shifts are tracked in #1600 (base-table-cell-positions.json), even where their fragmented pixels do not reach this material-cluster floor. A combined trace-line pass is not proof that every cell is aligned.",
+      "cluster_ids": [
+        "p2-b61723c380e7"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Exact glyph-edge clusters reviewed in the matched title/sidebar/table/footer crops; content and emphasis are preserved. Separate individual centered-cell x shifts are tracked in #1600 (base-table-cell-positions.json), even where their fragmented pixels do not reach this material-cluster floor. A combined trace-line pass is not proof that every cell is aligned.",
+      "cluster_ids": [
+        "p2-99048268f087"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Exact glyph-edge clusters reviewed in the matched title/sidebar/table/footer crops; content and emphasis are preserved. Separate individual centered-cell x shifts are tracked in #1600 (base-table-cell-positions.json), even where their fragmented pixels do not reach this material-cluster floor. A combined trace-line pass is not proof that every cell is aligned.",
+      "cluster_ids": [
+        "p2-42242f1e7abc"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Exact glyph-edge clusters reviewed in the matched title/sidebar/table/footer crops; content and emphasis are preserved. Separate individual centered-cell x shifts are tracked in #1600 (base-table-cell-positions.json), even where their fragmented pixels do not reach this material-cluster floor. A combined trace-line pass is not proof that every cell is aligned.",
+      "cluster_ids": [
+        "p2-3d213c5e7ad9"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Exact glyph-edge clusters reviewed in the matched title/sidebar/table/footer crops; content and emphasis are preserved. Separate individual centered-cell x shifts are tracked in #1600 (base-table-cell-positions.json), even where their fragmented pixels do not reach this material-cluster floor. A combined trace-line pass is not proof that every cell is aligned.",
+      "cluster_ids": [
+        "p2-876ade0766d4"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Exact glyph-edge clusters reviewed in the matched title/sidebar/table/footer crops; content and emphasis are preserved. Separate individual centered-cell x shifts are tracked in #1600 (base-table-cell-positions.json), even where their fragmented pixels do not reach this material-cluster floor. A combined trace-line pass is not proof that every cell is aligned.",
+      "cluster_ids": [
+        "p2-3c50fb3d7164"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Exact glyph-edge clusters reviewed in the matched title/sidebar/table/footer crops; content and emphasis are preserved. Separate individual centered-cell x shifts are tracked in #1600 (base-table-cell-positions.json), even where their fragmented pixels do not reach this material-cluster floor. A combined trace-line pass is not proof that every cell is aligned.",
+      "cluster_ids": [
+        "p2-9721e29ce2cd"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Exact glyph-edge clusters reviewed in the matched title/sidebar/table/footer crops; content and emphasis are preserved. Separate individual centered-cell x shifts are tracked in #1600 (base-table-cell-positions.json), even where their fragmented pixels do not reach this material-cluster floor. A combined trace-line pass is not proof that every cell is aligned.",
+      "cluster_ids": [
+        "p2-0c2cfcf6229d"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Exact glyph-edge clusters reviewed in the matched title/sidebar/table/footer crops; content and emphasis are preserved. Separate individual centered-cell x shifts are tracked in #1600 (base-table-cell-positions.json), even where their fragmented pixels do not reach this material-cluster floor. A combined trace-line pass is not proof that every cell is aligned.",
+      "cluster_ids": [
+        "p2-97b15d1c11b4"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Exact glyph-edge clusters reviewed in the matched title/sidebar/table/footer crops; content and emphasis are preserved. Separate individual centered-cell x shifts are tracked in #1600 (base-table-cell-positions.json), even where their fragmented pixels do not reach this material-cluster floor. A combined trace-line pass is not proof that every cell is aligned.",
+      "cluster_ids": [
+        "p2-f4c7fa8b5afb"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Exact glyph-edge clusters reviewed in the matched title/sidebar/table/footer crops; content and emphasis are preserved. Separate individual centered-cell x shifts are tracked in #1600 (base-table-cell-positions.json), even where their fragmented pixels do not reach this material-cluster floor. A combined trace-line pass is not proof that every cell is aligned.",
+      "cluster_ids": [
+        "p2-c5c142cd12a9"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Exact glyph-edge clusters reviewed in the matched title/sidebar/table/footer crops; content and emphasis are preserved. Separate individual centered-cell x shifts are tracked in #1600 (base-table-cell-positions.json), even where their fragmented pixels do not reach this material-cluster floor. A combined trace-line pass is not proof that every cell is aligned.",
+      "cluster_ids": [
+        "p2-22708aa5dbd6"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Exact glyph-edge clusters reviewed in the matched title/sidebar/table/footer crops; content and emphasis are preserved. Separate individual centered-cell x shifts are tracked in #1600 (base-table-cell-positions.json), even where their fragmented pixels do not reach this material-cluster floor. A combined trace-line pass is not proof that every cell is aligned.",
+      "cluster_ids": [
+        "p2-0c9e7c228fe3"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Exact glyph-edge clusters reviewed in the matched title/sidebar/table/footer crops; content and emphasis are preserved. Separate individual centered-cell x shifts are tracked in #1600 (base-table-cell-positions.json), even where their fragmented pixels do not reach this material-cluster floor. A combined trace-line pass is not proof that every cell is aligned.",
+      "cluster_ids": [
+        "p2-dc058d2d009f"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Exact glyph-edge clusters reviewed in the matched title/sidebar/table/footer crops; content and emphasis are preserved. Separate individual centered-cell x shifts are tracked in #1600 (base-table-cell-positions.json), even where their fragmented pixels do not reach this material-cluster floor. A combined trace-line pass is not proof that every cell is aligned.",
+      "cluster_ids": [
+        "p2-1efcf85c858d"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Exact glyph-edge clusters reviewed in the matched title/sidebar/table/footer crops; content and emphasis are preserved. Separate individual centered-cell x shifts are tracked in #1600 (base-table-cell-positions.json), even where their fragmented pixels do not reach this material-cluster floor. A combined trace-line pass is not proof that every cell is aligned.",
+      "cluster_ids": [
+        "p2-6bbaec0e4a6d"
+      ]
+    },
+    {
+      "kind": "issue",
+      "issue": "#1604",
+      "note": "Matched full-scale crops show the grey zero-axis still overpaints the teal series line. Marker centers now match native; sprite/vector edge blur remains.",
+      "cluster_ids": [
+        "p2-c8a58f599d6d",
+        "p2-34e7286e7eb7"
+      ]
+    }
+  ]
+}

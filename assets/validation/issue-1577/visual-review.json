@@ -1,0 +1,30 @@
+{
+  "status": "All four candidate pages (budget pages 1-2, gift pages 1-2) visually reviewed at 300 DPI; every reported raster cluster has an explicit disposition and all four strict reports pass. This is not a claim that either workbook has no remaining defect.",
+  "dpi": 300,
+  "fine_threshold_pt": 0.5,
+  "base_commit": "295bc540e950d8bdbace56840c3861a55f667778",
+  "cluster_count": 719,
+  "pixel_identical_prior_reviewed_crops": 716,
+  "new_cluster_crops_reviewed": 3,
+  "marker_crops_reviewed": 13,
+  "full_page_images_reviewed": [
+    "budget page 1 and 2 side-by-side and 5% diff",
+    "gift page 1 and 2 side-by-side and 5% diff"
+  ],
+  "checklist": {
+    "page_count_order": "Both fixtures keep two fitted pages in native order: instruction page then worksheet page.",
+    "presence": "All titles, summaries, bar charts, cash-flow line, sparklines, tables, gift photos and footers are present. Omitted worksheet separator shapes remain #1566.",
+    "position_size": "The budget selected-period circle and all twelve gift amount-spent circles now sit on the native sprite centers (candidate-marker-centers.json, within 0.0001pt). Remaining text/frame offsets: #1272 chart frame, #1545 fitted row baselines, #1550 title row height, #1551 wrapped note pitch, #1552 footer baseline, #1620-#1623 bar-chart label and title offsets, #1543 gift column widths, #1600 centered cells, #1618 legend circle.",
+    "rotation_flip": "No rotation or reflection difference on any page.",
+    "fill": "Series, bar, marker, occasion-cell and panel fills retain native colours; marker fill and outline paint operations are unchanged apart from translation (exact-marker-only-delta.json). Used-range clip #1605 remains on both instruction pages.",
+    "stroke": "Cash-flow and amount-spent line strokes, gridlines and axes are unchanged. Fitted worksheet rules remain #1564 and the grey zero-axis overpaint of the teal series remains #1604.",
+    "shape_outline_geometry": "Vector circles keep their declared size and outline; native sprites have softened bitmap edges (shape-edge-antialiasing) at the same center.",
+    "text_content": "Native/converter text extraction is unchanged by this change for both fixtures (text-layer-verification.json). The budget monthly cash-after-expense header row still splits across two trace lines (#1545/#1551).",
+    "font_family_weight_style": "Cambria bold title, Trebuchet body/labels, Aptos footer, bold occasion names and Note: labels keep their weight and style on every page.",
+    "text_color": "Teal headings, grey body, orange negatives, white panel titles and brown labels match native.",
+    "alignment": "Remaining alignment residuals are tracked: #1545, #1550, #1552, #1600, #1620, #1621, #1622, #1623.",
+    "line_paragraph_spacing": "Instruction-page pitch and table row pitch are unchanged; #1551 wrapped note advance and #1545 fixed-row seating remain.",
+    "clipping_overflow": "No new clipping. Used-range fill extent remains #1605."
+  },
+  "marker_crops": "Each of the 13 marker crops shows native, before, after and diff rows: before centers sit on the plotted line vertex; after centers align with the native sprite. The remaining diff ring is the sprite edge blur against the vector edge, and the gift zero-value crops also show the tracked #1604 axis overpaint."
+}
