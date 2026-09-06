@@ -1,0 +1,39 @@
+{
+  "name": "issue-1590-series-stroke",
+  "base": "../../tests/fixtures/xlsx/issue_1181_fit_to_height.xlsx",
+  "part": "xl/charts/chart2.xml",
+  "factor": "series stroke cap or join",
+  "page": 2,
+  "variants": [
+    {
+      "value": "flat-cap",
+      "find": "<a:ln w=\"28575\" cap=\"rnd\" cmpd=\"sng\" algn=\"ctr\"><a:solidFill><a:schemeClr val=\"accent1\"><a:shade val=\"65000\"/><a:shade val=\"95000\"/><a:satMod val=\"105000\"/></a:schemeClr></a:solidFill><a:prstDash val=\"solid\"/><a:round/></a:ln>",
+      "replace": "<a:ln w=\"28575\" cap=\"flat\" cmpd=\"sng\" algn=\"ctr\"><a:solidFill><a:schemeClr val=\"accent1\"><a:shade val=\"65000\"/><a:shade val=\"95000\"/><a:satMod val=\"105000\"/></a:schemeClr></a:solidFill><a:prstDash val=\"solid\"/><a:round/></a:ln>",
+      "count": 1
+    },
+    {
+      "value": "square-cap",
+      "find": "<a:ln w=\"28575\" cap=\"rnd\" cmpd=\"sng\" algn=\"ctr\"><a:solidFill><a:schemeClr val=\"accent1\"><a:shade val=\"65000\"/><a:shade val=\"95000\"/><a:satMod val=\"105000\"/></a:schemeClr></a:solidFill><a:prstDash val=\"solid\"/><a:round/></a:ln>",
+      "replace": "<a:ln w=\"28575\" cap=\"sq\" cmpd=\"sng\" algn=\"ctr\"><a:solidFill><a:schemeClr val=\"accent1\"><a:shade val=\"65000\"/><a:shade val=\"95000\"/><a:satMod val=\"105000\"/></a:schemeClr></a:solidFill><a:prstDash val=\"solid\"/><a:round/></a:ln>",
+      "count": 1
+    },
+    {
+      "value": "miter-join",
+      "find": "<a:ln w=\"28575\" cap=\"rnd\" cmpd=\"sng\" algn=\"ctr\"><a:solidFill><a:schemeClr val=\"accent1\"><a:shade val=\"65000\"/><a:shade val=\"95000\"/><a:satMod val=\"105000\"/></a:schemeClr></a:solidFill><a:prstDash val=\"solid\"/><a:round/></a:ln>",
+      "replace": "<a:ln w=\"28575\" cap=\"rnd\" cmpd=\"sng\" algn=\"ctr\"><a:solidFill><a:schemeClr val=\"accent1\"><a:shade val=\"65000\"/><a:shade val=\"95000\"/><a:satMod val=\"105000\"/></a:schemeClr></a:solidFill><a:prstDash val=\"solid\"/><a:miter lim=\"800000\"/></a:ln>",
+      "count": 1
+    },
+    {
+      "value": "bevel-join",
+      "find": "<a:ln w=\"28575\" cap=\"rnd\" cmpd=\"sng\" algn=\"ctr\"><a:solidFill><a:schemeClr val=\"accent1\"><a:shade val=\"65000\"/><a:shade val=\"95000\"/><a:satMod val=\"105000\"/></a:schemeClr></a:solidFill><a:prstDash val=\"solid\"/><a:round/></a:ln>",
+      "replace": "<a:ln w=\"28575\" cap=\"rnd\" cmpd=\"sng\" algn=\"ctr\"><a:solidFill><a:schemeClr val=\"accent1\"><a:shade val=\"65000\"/><a:shade val=\"95000\"/><a:satMod val=\"105000\"/></a:schemeClr></a:solidFill><a:prstDash val=\"solid\"/><a:bevel/></a:ln>",
+      "count": 1
+    },
+    {
+      "value": "default-miter-limit",
+      "find": "<a:ln w=\"28575\" cap=\"rnd\" cmpd=\"sng\" algn=\"ctr\"><a:solidFill><a:schemeClr val=\"accent1\"><a:shade val=\"65000\"/><a:shade val=\"95000\"/><a:satMod val=\"105000\"/></a:schemeClr></a:solidFill><a:prstDash val=\"solid\"/><a:round/></a:ln>",
+      "replace": "<a:ln w=\"28575\" cap=\"rnd\" cmpd=\"sng\" algn=\"ctr\"><a:solidFill><a:schemeClr val=\"accent1\"><a:shade val=\"65000\"/><a:shade val=\"95000\"/><a:satMod val=\"105000\"/></a:schemeClr></a:solidFill><a:prstDash val=\"solid\"/><a:miter/></a:ln>",
+      "count": 1
+    }
+  ]
+}

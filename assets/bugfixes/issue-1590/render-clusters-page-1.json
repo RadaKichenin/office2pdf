@@ -1,0 +1,2151 @@
+{
+  "clusters": [
+    {
+      "area_pt2": 1553.9904,
+      "bbox_pt": {
+        "height": 4.08,
+        "width": 380.88,
+        "x": 64.08,
+        "y": 78.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-f31be2b2124a",
+      "region": "top"
+    },
+    {
+      "area_pt2": 365.6448,
+      "bbox_pt": {
+        "height": 0.96,
+        "width": 380.88,
+        "x": 64.08,
+        "y": 54.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-f60027141110",
+      "region": "top"
+    },
+    {
+      "area_pt2": 119.0016,
+      "bbox_pt": {
+        "height": 16.8,
+        "width": 11.28,
+        "x": 348.96,
+        "y": 60.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-98ffd1017b92",
+      "region": "top"
+    },
+    {
+      "area_pt2": 116.1216,
+      "bbox_pt": {
+        "height": 16.8,
+        "width": 11.04,
+        "x": 275.04,
+        "y": 60.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-b1f3252a29ba",
+      "region": "top"
+    },
+    {
+      "area_pt2": 110.016,
+      "bbox_pt": {
+        "height": 16.8,
+        "width": 11.76,
+        "x": 228.96,
+        "y": 60.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-343b60339fed",
+      "region": "top"
+    },
+    {
+      "area_pt2": 98.3808,
+      "bbox_pt": {
+        "height": 16.8,
+        "width": 11.04,
+        "x": 302.16,
+        "y": 60.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-bad362308455",
+      "region": "top"
+    },
+    {
+      "area_pt2": 96.768,
+      "bbox_pt": {
+        "height": 11.76,
+        "width": 18.72,
+        "x": 237.12,
+        "y": 246.48
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-c0fb58eadb78",
+      "region": "top"
+    },
+    {
+      "area_pt2": 95.6736,
+      "bbox_pt": {
+        "height": 16.8,
+        "width": 13.44,
+        "x": 148.08,
+        "y": 60.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-284c96be9334",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 95.6736,
+      "bbox_pt": {
+        "height": 16.8,
+        "width": 13.44,
+        "x": 324.24,
+        "y": 60.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-8c70623a5957",
+      "region": "top"
+    },
+    {
+      "area_pt2": 94.6368,
+      "bbox_pt": {
+        "height": 16.8,
+        "width": 11.28,
+        "x": 162.0,
+        "y": 60.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-cd99c7882a8d",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 87.7248,
+      "bbox_pt": {
+        "height": 16.8,
+        "width": 8.4,
+        "x": 287.04,
+        "y": 60.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-ce180c48c4ec",
+      "region": "top"
+    },
+    {
+      "area_pt2": 81.3888,
+      "bbox_pt": {
+        "height": 10.8,
+        "width": 18.24,
+        "x": 138.0,
+        "y": 259.44
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-d0524e2c3199",
+      "region": "left"
+    },
+    {
+      "area_pt2": 80.352,
+      "bbox_pt": {
+        "height": 16.8,
+        "width": 11.76,
+        "x": 263.04,
+        "y": 60.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-6a1b37b571ef",
+      "region": "top"
+    },
+    {
+      "area_pt2": 77.3568,
+      "bbox_pt": {
+        "height": 10.8,
+        "width": 13.68,
+        "x": 166.32,
+        "y": 259.44
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-3a98f2be6384",
+      "region": "left"
+    },
+    {
+      "area_pt2": 77.0688,
+      "bbox_pt": {
+        "height": 16.8,
+        "width": 11.52,
+        "x": 217.2,
+        "y": 60.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-2e65c2e6ccf5",
+      "region": "top"
+    },
+    {
+      "area_pt2": 77.0688,
+      "bbox_pt": {
+        "height": 16.8,
+        "width": 11.52,
+        "x": 201.12,
+        "y": 60.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-696192f20f45",
+      "region": "top"
+    },
+    {
+      "area_pt2": 77.0688,
+      "bbox_pt": {
+        "height": 16.8,
+        "width": 11.52,
+        "x": 337.2,
+        "y": 60.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-13b20251ccee",
+      "region": "top"
+    },
+    {
+      "area_pt2": 75.5712,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 16.08,
+        "x": 197.52,
+        "y": 248.64
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-cba9180b6198",
+      "region": "top"
+    },
+    {
+      "area_pt2": 75.2256,
+      "bbox_pt": {
+        "height": 17.04,
+        "width": 10.32,
+        "x": 189.12,
+        "y": 60.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-b2b388173d1c",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 72.2304,
+      "bbox_pt": {
+        "height": 16.8,
+        "width": 10.32,
+        "x": 314.16,
+        "y": 60.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-d86b56f8251e",
+      "region": "top"
+    },
+    {
+      "area_pt2": 66.9312,
+      "bbox_pt": {
+        "height": 10.56,
+        "width": 12.48,
+        "x": 174.48,
+        "y": 66.48
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-48ba14c524c3",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 66.2976,
+      "bbox_pt": {
+        "height": 10.32,
+        "width": 12.72,
+        "x": 175.68,
+        "y": 59.76
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-007417866d82",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 64.1664,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 14.4,
+        "x": 103.2,
+        "y": 97.44
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-d5822a148343",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 62.208,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 14.4,
+        "x": 340.32,
+        "y": 248.64
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-de11e4c34963",
+      "region": "top"
+    },
+    {
+      "area_pt2": 59.7312,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 15.12,
+        "x": 220.8,
+        "y": 98.4
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-542c3df08b90",
+      "region": "top"
+    },
+    {
+      "area_pt2": 58.0032,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 14.4,
+        "x": 90.24,
+        "y": 261.6
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-f13edc9fbc0a",
+      "region": "left"
+    },
+    {
+      "area_pt2": 54.6048,
+      "bbox_pt": {
+        "height": 8.88,
+        "width": 14.16,
+        "x": 274.08,
+        "y": 273.36
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-7f4f0cabfd79",
+      "region": "center"
+    },
+    {
+      "area_pt2": 53.5104,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 16.56,
+        "x": 167.28,
+        "y": 189.6
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-a4571cd43557",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 53.1072,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 14.88,
+        "x": 251.28,
+        "y": 274.56
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-60e884c89516",
+      "region": "center"
+    },
+    {
+      "area_pt2": 51.7248,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 10.8,
+        "x": 180.24,
+        "y": 157.44
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-8144bfe1899b",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 51.3216,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 15.84,
+        "x": 139.2,
+        "y": 99.6
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-e114a1e944fa",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 50.976,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 10.32,
+        "x": 120.24,
+        "y": 261.6
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-2dbd5d63f959",
+      "region": "left"
+    },
+    {
+      "area_pt2": 50.0544,
+      "bbox_pt": {
+        "height": 16.8,
+        "width": 5.04,
+        "x": 295.68,
+        "y": 60.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-8e47bbfd2218",
+      "region": "top"
+    },
+    {
+      "area_pt2": 49.9968,
+      "bbox_pt": {
+        "height": 10.32,
+        "width": 15.12,
+        "x": 420.72,
+        "y": 259.68
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-ece24995d8de",
+      "region": "top-right"
+    },
+    {
+      "area_pt2": 49.248,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 12.72,
+        "x": 354.48,
+        "y": 189.6
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-3f7f907d0523",
+      "region": "top"
+    },
+    {
+      "area_pt2": 48.4992,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 10.56,
+        "x": 387.12,
+        "y": 261.6
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-34d06102e997",
+      "region": "center"
+    },
+    {
+      "area_pt2": 47.232,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 14.64,
+        "x": 156.24,
+        "y": 189.6
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-74d6a4f8a333",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 47.1168,
+      "bbox_pt": {
+        "height": 9.36,
+        "width": 10.08,
+        "x": 297.84,
+        "y": 159.6
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-36667f48ea4b",
+      "region": "top"
+    },
+    {
+      "area_pt2": 46.4256,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 10.32,
+        "x": 323.04,
+        "y": 157.44
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-18a601e06526",
+      "region": "top"
+    },
+    {
+      "area_pt2": 44.4672,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 9.6,
+        "x": 362.16,
+        "y": 261.6
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-755a0450a065",
+      "region": "center"
+    },
+    {
+      "area_pt2": 44.4096,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 9.84,
+        "x": 163.92,
+        "y": 97.44
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-a38a58fe949e",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 43.6608,
+      "bbox_pt": {
+        "height": 11.76,
+        "width": 9.84,
+        "x": 399.36,
+        "y": 246.48
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-5ec8feafaed4",
+      "region": "top"
+    },
+    {
+      "area_pt2": 43.488,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 9.36,
+        "x": 186.24,
+        "y": 261.6
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-ebb3c6130390",
+      "region": "left"
+    },
+    {
+      "area_pt2": 40.896,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 9.84,
+        "x": 124.08,
+        "y": 188.4
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-c7d357a50951",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 40.32,
+      "bbox_pt": {
+        "height": 16.8,
+        "width": 3.6,
+        "x": 242.16,
+        "y": 60.0
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-e06d4789b538",
+      "region": "top"
+    },
+    {
+      "area_pt2": 38.3616,
+      "bbox_pt": {
+        "height": 10.8,
+        "width": 7.44,
+        "x": 379.2,
+        "y": 259.44
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-60b52836ed87",
+      "region": "center"
+    },
+    {
+      "area_pt2": 38.304,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 7.44,
+        "x": 173.76,
+        "y": 127.44
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-6383d17e20f5",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 37.2096,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 11.04,
+        "x": 100.32,
+        "y": 248.64
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-f38989946fc2",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 36.6336,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 9.6,
+        "x": 289.2,
+        "y": 261.6
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-e506130ff42d",
+      "region": "center"
+    },
+    {
+      "area_pt2": 36.6336,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 8.4,
+        "x": 92.16,
+        "y": 248.64
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-38dc4008d6cd",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 36.4608,
+      "bbox_pt": {
+        "height": 5.04,
+        "width": 13.2,
+        "x": 53.76,
+        "y": 763.2
+      },
+      "disposition": {
+        "issue": "#1552",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-8d2b4d283958",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 36.4032,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 8.16,
+        "x": 150.24,
+        "y": 248.64
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-33696d1d6fdc",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 35.712,
+      "bbox_pt": {
+        "height": 11.76,
+        "width": 7.2,
+        "x": 78.48,
+        "y": 246.48
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-0564d1d657d5",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 35.136,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 9.36,
+        "x": 208.32,
+        "y": 189.6
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-3cdde064195f",
+      "region": "top"
+    },
+    {
+      "area_pt2": 34.7328,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 8.88,
+        "x": 269.04,
+        "y": 272.4
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-9a986c809664",
+      "region": "center"
+    },
+    {
+      "area_pt2": 34.3872,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 9.6,
+        "x": 94.08,
+        "y": 99.6
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-eac720a90030",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 34.3296,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 10.08,
+        "x": 408.48,
+        "y": 99.6
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-1f91f109efb0",
+      "region": "top-right"
+    },
+    {
+      "area_pt2": 34.2144,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 10.56,
+        "x": 192.48,
+        "y": 99.6
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-54bc6bde1fed",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 33.408,
+      "bbox_pt": {
+        "height": 11.76,
+        "width": 9.12,
+        "x": 367.44,
+        "y": 246.48
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-f89b56853565",
+      "region": "top"
+    },
+    {
+      "area_pt2": 33.3504,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 9.6,
+        "x": 358.32,
+        "y": 159.6
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-9061d6fd5ec7",
+      "region": "top"
+    },
+    {
+      "area_pt2": 32.3712,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 8.4,
+        "x": 272.64,
+        "y": 248.64
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-c4b0c6adeb81",
+      "region": "top"
+    },
+    {
+      "area_pt2": 32.0256,
+      "bbox_pt": {
+        "height": 10.32,
+        "width": 5.76,
+        "x": 404.64,
+        "y": 259.68
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-4f40597024d1",
+      "region": "center"
+    },
+    {
+      "area_pt2": 31.6224,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 7.92,
+        "x": 276.72,
+        "y": 158.4
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-f2cac1f77c18",
+      "region": "top"
+    },
+    {
+      "area_pt2": 31.5648,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 5.76,
+        "x": 157.44,
+        "y": 97.44
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-c7dd8837942a",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 31.392,
+      "bbox_pt": {
+        "height": 11.52,
+        "width": 9.12,
+        "x": 170.4,
+        "y": 246.48
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-50e340b5537b",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 31.1616,
+      "bbox_pt": {
+        "height": 11.28,
+        "width": 5.52,
+        "x": 67.2,
+        "y": 246.72
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-c42ac5fcc15b",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 30.9312,
+      "bbox_pt": {
+        "height": 4.8,
+        "width": 10.56,
+        "x": 246.48,
+        "y": 72.24
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-e5ce70b2cc47",
+      "region": "top"
+    },
+    {
+      "area_pt2": 30.7584,
+      "bbox_pt": {
+        "height": 11.52,
+        "width": 5.28,
+        "x": 356.88,
+        "y": 246.48
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-966ed0468839",
+      "region": "top"
+    },
+    {
+      "area_pt2": 30.7008,
+      "bbox_pt": {
+        "height": 11.76,
+        "width": 6.0,
+        "x": 192.24,
+        "y": 246.48
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-86441666d173",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 30.6432,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 9.84,
+        "x": 290.16,
+        "y": 274.56
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-cc615df7344f",
+      "region": "center"
+    },
+    {
+      "area_pt2": 30.5856,
+      "bbox_pt": {
+        "height": 10.8,
+        "width": 9.6,
+        "x": 412.56,
+        "y": 247.44
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-ee1702a4c0f5",
+      "region": "top-right"
+    },
+    {
+      "area_pt2": 30.2976,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 8.4,
+        "x": 142.32,
+        "y": 188.4
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-5da01977b38a",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 30.2976,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 9.12,
+        "x": 192.24,
+        "y": 189.6
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-f5a057128441",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 30.24,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 6.0,
+        "x": 207.6,
+        "y": 157.44
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-57068288c704",
+      "region": "top"
+    },
+    {
+      "area_pt2": 30.24,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 6.0,
+        "x": 369.6,
+        "y": 97.44
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-32bcd5ba0fd6",
+      "region": "top"
+    },
+    {
+      "area_pt2": 30.1824,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 9.36,
+        "x": 363.36,
+        "y": 189.6
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-00ca188f9349",
+      "region": "top"
+    },
+    {
+      "area_pt2": 30.1824,
+      "bbox_pt": {
+        "height": 9.84,
+        "width": 5.52,
+        "x": 99.12,
+        "y": 272.4
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-6365c9b98b06",
+      "region": "left"
+    },
+    {
+      "area_pt2": 30.0672,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 6.96,
+        "x": 102.24,
+        "y": 159.6
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-7aada9a9e5bc",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 29.7792,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 10.08,
+        "x": 239.04,
+        "y": 261.6
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-7ab9c1171c48",
+      "region": "center"
+    },
+    {
+      "area_pt2": 29.664,
+      "bbox_pt": {
+        "height": 9.36,
+        "width": 6.48,
+        "x": 269.28,
+        "y": 187.44
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-3ce052391808",
+      "region": "top"
+    },
+    {
+      "area_pt2": 29.6064,
+      "bbox_pt": {
+        "height": 11.52,
+        "width": 5.52,
+        "x": 216.72,
+        "y": 248.64
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-2b163e5971e9",
+      "region": "top"
+    },
+    {
+      "area_pt2": 29.3184,
+      "bbox_pt": {
+        "height": 9.36,
+        "width": 8.64,
+        "x": 203.52,
+        "y": 97.44
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-9f3597c5c3a2",
+      "region": "top"
+    },
+    {
+      "area_pt2": 29.1456,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 12.0,
+        "x": 144.48,
+        "y": 129.6
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-328925382bf6",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 28.9152,
+      "bbox_pt": {
+        "height": 10.8,
+        "width": 5.28,
+        "x": 180.24,
+        "y": 259.44
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-43a59d1e07d2",
+      "region": "left"
+    },
+    {
+      "area_pt2": 27.7056,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 9.36,
+        "x": 330.24,
+        "y": 99.6
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-a686e40e4a88",
+      "region": "top"
+    },
+    {
+      "area_pt2": 27.5328,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 8.88,
+        "x": 238.08,
+        "y": 98.4
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-0b40fe5443f3",
+      "region": "top"
+    },
+    {
+      "area_pt2": 27.4752,
+      "bbox_pt": {
+        "height": 4.56,
+        "width": 9.84,
+        "x": 247.92,
+        "y": 59.76
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-686096d86be9",
+      "region": "top"
+    },
+    {
+      "area_pt2": 27.4176,
+      "bbox_pt": {
+        "height": 9.36,
+        "width": 5.28,
+        "x": 324.48,
+        "y": 99.6
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-ce683cdf4031",
+      "region": "top"
+    },
+    {
+      "area_pt2": 27.4176,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 7.2,
+        "x": 282.72,
+        "y": 187.44
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-b8da758d1f53",
+      "region": "top"
+    },
+    {
+      "area_pt2": 27.072,
+      "bbox_pt": {
+        "height": 3.84,
+        "width": 12.24,
+        "x": 318.24,
+        "y": 129.6
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-50533b2d547c",
+      "region": "top"
+    },
+    {
+      "area_pt2": 27.0144,
+      "bbox_pt": {
+        "height": 6.0,
+        "width": 8.64,
+        "x": 66.48,
+        "y": 762.24
+      },
+      "disposition": {
+        "issue": "#1552",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-8334eb303ff0",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 27.0144,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 5.28,
+        "x": 349.2,
+        "y": 127.44
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-88c0f3e999e5",
+      "region": "top"
+    },
+    {
+      "area_pt2": 27.0144,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 5.28,
+        "x": 395.04,
+        "y": 187.44
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-9852b647e5a8",
+      "region": "top"
+    },
+    {
+      "area_pt2": 26.9568,
+      "bbox_pt": {
+        "height": 9.36,
+        "width": 5.04,
+        "x": 305.76,
+        "y": 187.44
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-5d2491a0ce2c",
+      "region": "top"
+    },
+    {
+      "area_pt2": 26.8416,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 9.12,
+        "x": 101.52,
+        "y": 129.6
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-5d699d14593c",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 26.784,
+      "bbox_pt": {
+        "height": 11.28,
+        "width": 7.44,
+        "x": 303.12,
+        "y": 246.72
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-dc08e5fa92f4",
+      "region": "top"
+    },
+    {
+      "area_pt2": 26.5536,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 5.04,
+        "x": 221.04,
+        "y": 261.6
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-f33d276d023a",
+      "region": "center"
+    },
+    {
+      "area_pt2": 26.5536,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 5.04,
+        "x": 281.04,
+        "y": 261.6
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-49d6e3e6aeff",
+      "region": "center"
+    },
+    {
+      "area_pt2": 26.496,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 4.32,
+        "x": 67.2,
+        "y": 187.44
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-142028af63b1",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 26.3232,
+      "bbox_pt": {
+        "height": 9.36,
+        "width": 9.6,
+        "x": 201.84,
+        "y": 189.6
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-ceda702a01d1",
+      "region": "top"
+    },
+    {
+      "area_pt2": 26.208,
+      "bbox_pt": {
+        "height": 10.8,
+        "width": 5.52,
+        "x": 322.8,
+        "y": 247.44
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-6c66087fc2ad",
+      "region": "top"
+    },
+    {
+      "area_pt2": 26.0352,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 9.84,
+        "x": 329.28,
+        "y": 246.48
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-0f9d5e05f8c7",
+      "region": "top"
+    },
+    {
+      "area_pt2": 25.1712,
+      "bbox_pt": {
+        "height": 9.36,
+        "width": 7.44,
+        "x": 260.16,
+        "y": 248.64
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-e9a7e06a3964",
+      "region": "top"
+    },
+    {
+      "area_pt2": 24.8832,
+      "bbox_pt": {
+        "height": 11.28,
+        "width": 6.96,
+        "x": 391.68,
+        "y": 246.72
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-545468e0fade",
+      "region": "top"
+    },
+    {
+      "area_pt2": 24.8256,
+      "bbox_pt": {
+        "height": 10.8,
+        "width": 7.2,
+        "x": 124.08,
+        "y": 247.44
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-9ffabb0a3edd",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 24.8256,
+      "bbox_pt": {
+        "height": 8.4,
+        "width": 7.68,
+        "x": 134.16,
+        "y": 261.6
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-278659e4cbd0",
+      "region": "left"
+    },
+    {
+      "area_pt2": 24.192,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 4.8,
+        "x": 72.24,
+        "y": 261.6
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-930d4cfbb4fc",
+      "region": "left"
+    },
+    {
+      "area_pt2": 24.0768,
+      "bbox_pt": {
+        "height": 9.36,
+        "width": 7.2,
+        "x": 289.44,
+        "y": 248.64
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-f5106143e69f",
+      "region": "top"
+    },
+    {
+      "area_pt2": 23.3856,
+      "bbox_pt": {
+        "height": 10.8,
+        "width": 5.04,
+        "x": 145.2,
+        "y": 247.44
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-229373a80292",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 23.328,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 4.8,
+        "x": 217.92,
+        "y": 272.4
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-718b0f26af65",
+      "region": "center"
+    },
+    {
+      "area_pt2": 23.2128,
+      "bbox_pt": {
+        "height": 9.84,
+        "width": 6.72,
+        "x": 296.16,
+        "y": 272.4
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-e733b0ae4dd0",
+      "region": "center"
+    },
+    {
+      "area_pt2": 23.1552,
+      "bbox_pt": {
+        "height": 10.8,
+        "width": 6.0,
+        "x": 85.2,
+        "y": 247.44
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-52a5c70ddadb",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 23.1552,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 5.52,
+        "x": 346.08,
+        "y": 189.6
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-177cceb39a50",
+      "region": "top"
+    },
+    {
+      "area_pt2": 23.0976,
+      "bbox_pt": {
+        "height": 10.32,
+        "width": 6.24,
+        "x": 340.08,
+        "y": 259.68
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-afb057677113",
+      "region": "center"
+    },
+    {
+      "area_pt2": 23.0976,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 5.04,
+        "x": 180.0,
+        "y": 274.56
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-e549eb914045",
+      "region": "left"
+    },
+    {
+      "area_pt2": 23.04,
+      "bbox_pt": {
+        "height": 4.32,
+        "width": 9.84,
+        "x": 372.24,
+        "y": 248.64
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-e6d78efc91a6",
+      "region": "top"
+    },
+    {
+      "area_pt2": 22.8672,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 6.24,
+        "x": 225.6,
+        "y": 248.64
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-b81c86742a9d",
+      "region": "top"
+    },
+    {
+      "area_pt2": 22.8096,
+      "bbox_pt": {
+        "height": 4.56,
+        "width": 9.84,
+        "x": 123.12,
+        "y": 99.6
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-7b8a368c7b11",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 22.8096,
+      "bbox_pt": {
+        "height": 5.52,
+        "width": 9.6,
+        "x": 80.16,
+        "y": 189.6
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-3aaee165d8fa",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 22.6944,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 5.04,
+        "x": 307.68,
+        "y": 129.6
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-0de65a69572c",
+      "region": "top"
+    },
+    {
+      "area_pt2": 22.5216,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 8.4,
+        "x": 113.28,
+        "y": 189.6
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-4cf930ce6b3e",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 22.5216,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 6.48,
+        "x": 129.12,
+        "y": 97.44
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-7133ca8ae777",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 22.2912,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 6.72,
+        "x": 138.72,
+        "y": 248.64
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-c7636d6cb7e8",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 22.0608,
+      "bbox_pt": {
+        "height": 9.36,
+        "width": 6.0,
+        "x": 201.12,
+        "y": 272.64
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-ab83532ef689",
+      "region": "left"
+    },
+    {
+      "area_pt2": 22.0032,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 8.64,
+        "x": 132.24,
+        "y": 158.4
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-9002b2a6ee52",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 22.0032,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 6.72,
+        "x": 314.16,
+        "y": 99.6
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-dbb6f7693b32",
+      "region": "top"
+    },
+    {
+      "area_pt2": 21.9456,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 6.48,
+        "x": 261.36,
+        "y": 189.6
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-ee80c1393e0c",
+      "region": "top"
+    },
+    {
+      "area_pt2": 21.8304,
+      "bbox_pt": {
+        "height": 4.8,
+        "width": 8.4,
+        "x": 165.6,
+        "y": 66.72
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-a9684a640860",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 21.7728,
+      "bbox_pt": {
+        "height": 9.36,
+        "width": 5.52,
+        "x": 421.92,
+        "y": 248.64
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-ad6591cb4166",
+      "region": "top-right"
+    },
+    {
+      "area_pt2": 21.0816,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 5.04,
+        "x": 237.6,
+        "y": 189.6
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-c87273816087",
+      "region": "top"
+    },
+    {
+      "area_pt2": 20.9664,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 7.92,
+        "x": 222.24,
+        "y": 189.36
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-264b557d9032",
+      "region": "top"
+    },
+    {
+      "area_pt2": 20.8512,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 6.0,
+        "x": 303.12,
+        "y": 274.56
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-8cec1cdaaee1",
+      "region": "center"
+    },
+    {
+      "area_pt2": 20.8512,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 8.4,
+        "x": 335.28,
+        "y": 189.6
+      },
+      "disposition": {
+        "issue": "#1550",
+        "kind": "issue",
+        "note": "Full-scale 300-DPI GT/output/diff bands and footer crop inspected: title-row height and following origins (#1550), wrapped-note line pitch (#1551), and footer seating (#1552); fixed-row text seating also remains tracked in #1545. Exact material-cluster geometry and area match the individually reviewed before audit. Before/after paint traces preserve all other primitives; unchanged pixels retain their prior crop dispositions. New cap/join fragments are inspected separately below the material-cluster floor."
+      },
+      "id": "p1-e4bb846eeb70",
+      "region": "top"
+    }
+  ],
+  "dpi": 300,
+  "duplicate_disposition_cluster_ids": [],
+  "errors": [],
+  "fuzz_percent": 5,
+  "minimum_area_pt2": 20.0,
+  "page": 1,
+  "passed": true,
+  "renderer_observations": [],
+  "schema_version": 1,
+  "strict": true,
+  "summary": {
+    "dispositioned": 133,
+    "duplicate": 0,
+    "total": 133,
+    "undispositioned": 0,
+    "unknown": 0
+  },
+  "undispositioned_cluster_ids": [],
+  "unknown_disposition_cluster_ids": []
+}
