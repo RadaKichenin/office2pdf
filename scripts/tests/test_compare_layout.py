@@ -401,6 +401,97 @@ class MatchAndDiffTest(unittest.TestCase):
         self.assertEqual(vector["instances"]["fine_shifts"][0]["label"], "moved")
         self.assertEqual(compare_layout.audit_failures([vector]), 1)
 
+    def test_shared_baseline_keeps_each_cell_anchor(self) -> None:
+        gt = "\n".join([line_of("Name", 72, 100), line_of("Month", 200, 100)])
+        out = "\n".join([line_of("Name", 72, 100), line_of("Month", 199.25, 100)])
+
+        vector = self.diff(gt, out, fine_shift=0.5)
+
+        self.assertEqual(vector["lines"]["matched"], 1)
+        self.assertEqual(vector["instances"]["compared"], 2)
+        self.assertEqual(vector["instances"]["fine_shift_count"], 1)
+        shifted = vector["instances"]["fine_shifts"][0]
+        self.assertEqual(shifted["label"], "Month")
+        self.assertAlmostEqual(shifted["dx"], -0.75, places=4)
+        self.assertEqual(compare_layout.audit_failures([vector]), 1)
+
+    def test_middle_cell_shift_cannot_hide_between_fixed_endpoints(self) -> None:
+        gt = "\n".join(line_of(text, x, 100) for text, x in
+                       [("Name", 72), ("July", 200), ("Paid", 350)])
+        out = "\n".join(line_of(text, x, 100) for text, x in
+                        [("Name", 72), ("July", 194), ("Paid", 350)])
+
+        vector = self.diff(gt, out, fine_shift=0.5)
+
+        self.assertEqual(vector["instances"]["compared"], 3)
+        self.assertEqual(vector["instances"]["large_shift_count"], 1)
+        self.assertEqual(vector["instances"]["large_shifts"][0]["label"], "July")
+
+    def test_shared_baseline_cells_keep_independent_visibility(self) -> None:
+        text = "\n".join([line_of("Name", 72, 100), line_of("Month", 200, 100)])
+        cover = rect_op(195, 80, 240, 110)
+
+        vector = self.diff(text + "\n" + cover, cover + "\n" + text)
+
+        self.assertEqual(vector["visibility"]["mismatches"],
+                         [{"label": "Month", "gt": "hidden", "out": "painted"}])
+
+    def test_compact_cell_anchors_use_gaps_smaller_than_topology_gate(self) -> None:
+        # Native #982 headers have 18-22pt gaps at 9.84pt, below the
+        # conservative 24pt split/join threshold. Their anchors still matter.
+        gt = "\n".join([line_of("Paid?", 100, 100), line_of("Sent?", 147, 100)])
+        out = "\n".join([line_of("Paid?", 100, 100), line_of("Sent?", 146.25, 100)])
+        vector = self.diff(gt, out, fine_shift=0.5)
+        self.assertEqual(vector["instances"]["fine_shift_count"], 1)
+        self.assertEqual(vector["instances"]["fine_shifts"][0]["label"], "Sent?")
+
+    def test_cell_boundaries_survive_different_exporter_paint_operations(self) -> None:
+        gt = "\n".join([line_of("Name ", 72, 100), line_of("Month", 200, 100)])
+        out = text_op(
+            [(char, 72 + i * 6) for i, char in enumerate("Name")]
+            + [(char, 199.25 + i * 6) for i, char in enumerate("Month")],
+            baseline_y=100,
+        )
+        for reference, candidate in [(gt, out), (out, gt)]:
+            with self.subTest(reverse=reference == out):
+                vector = self.diff(reference, candidate, fine_shift=0.5)
+                self.assertEqual(vector["instances"]["compared"], 2)
+                self.assertEqual(vector["instances"]["fine_shift_count"], 1)
+                self.assertEqual(vector["instances"]["fine_shifts"][0]["label"], "Month")
+                self.assertEqual(vector["wraps"]["count"], 0)
+
+    def test_repeated_cells_keep_distinct_occurrence_labels(self) -> None:
+        gt = "\n".join(line_of("No", x, 100) for x in [100, 200, 300])
+        out = "\n".join(line_of("No", x, 100) for x in [100, 199.25, 300])
+        vector = self.diff(gt, out, fine_shift=0.5)
+        self.assertEqual(vector["instances"]["fine_shift_count"], 1)
+        self.assertEqual(vector["instances"]["fine_shifts"][0]["label"], "No [2/3]")
+
+    def test_normal_word_spacing_across_paint_operations_stays_one_instance(self) -> None:
+        page = "\n".join([line_of("Hello", 72, 100), line_of("world", 108, 100)])
+        vector = self.diff(page, page, fine_shift=0.5)
+        self.assertEqual(vector["instances"]["compared"], 1)
+        self.assertEqual(compare_layout.audit_failures([vector]), 0)
+
+    def test_issue_1609_pinned_native_table_rows_expose_cell_shifts(self) -> None:
+        fixture = Path(__file__).parent / "fixtures" / "issue-1609"
+        gt = compare_layout.parse_trace((fixture / "native.xml").read_text())[0]
+        out = compare_layout.parse_trace((fixture / "output.xml").read_text())[0]
+
+        vector = compare_layout.diff_page(gt, out, fine_shift=0.5)
+
+        self.assertEqual(vector["lines"]["matched"], 2)
+        self.assertEqual(vector["lines"]["missing"], 0)
+        self.assertEqual(vector["lines"]["extra"], 0)
+        shifts = {item["label"]: item for item in vector["instances"]["fine_shifts"]}
+        for label, dx in [("Month", -0.54931), ("Purchased?", -0.79040),
+                          ("Delivered?", -0.79031), ("July", -0.76732)]:
+            with self.subTest(cell=label):
+                self.assertIn(label, shifts)
+                self.assertAlmostEqual(shifts[label]["dx"], dx, places=4)
+        self.assertEqual(vector["instances"]["fine_shift_count"], 6)
+        self.assertEqual(compare_layout.audit_failures([vector]), 6)
+
     def test_coarse_audit_stays_clean_without_fine_shift_mode(self) -> None:
         gt = line_of("moved", 72, 120)
         out = line_of("moved", 72, 121.1)
