@@ -5257,3 +5257,93 @@ fn mixed_size_hard_breaks_round_each_lines_own_seat() {
         }
     }
 }
+
+/// A master's `<a:defRPr baseline="0">` reaches every run of its deck as a
+/// zero displacement. PowerPoint seats such a run exactly like an unshifted
+/// one, so its wrapped lines still round onto the text story's whole-point
+/// grid. The #841 deck's centred 98% footer lost that rounding and kept a
+/// fractional 23.52pt advance where PowerPoint emits 23.04pt (issue #1071).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_zero_baseline_shift_keeps_wrapped_lines_on_the_story_grid() {
+    use crate::ir::{BaselineShiftEm, LineSpacing, TextBoxVerticalAlign};
+
+    let compile = |anchor: TextBoxVerticalAlign,
+                   line_spacing: Option<f64>,
+                   shift: Option<BaselineShiftEm>| {
+        let paragraphs: Vec<Block> = ["First", "Second"]
+            .into_iter()
+            .map(|prefix| {
+                Block::Paragraph(Paragraph {
+                    style: ParagraphStyle {
+                        line_spacing: line_spacing.map(LineSpacing::Proportional),
+                        space_after: Some(6.0),
+                        ..ParagraphStyle::default()
+                    },
+                    runs: vec![Run {
+                        text: format!(
+                            "{prefix} paragraph: fill out our survey after the meeting and share the notes."
+                        ),
+                        style: TextStyle {
+                            font_family: Some("Libertinus Serif".into()),
+                            font_size: Some(20.0),
+                            baseline_shift: shift,
+                            ..TextStyle::default()
+                        },
+                        href: None,
+                        footnote: None,
+                    }],
+                })
+            })
+            .collect();
+        let document = make_doc(vec![make_fixed_page(
+            960.0,
+            540.0,
+            vec![make_fixed_text_box(
+                72.0,
+                144.25,
+                244.0,
+                220.0,
+                Insets::default(),
+                anchor,
+                paragraphs,
+            )],
+        )]);
+        crate::render::pdf::compiled_text_runs(&generate_typst(&document).unwrap().source, 0)
+            .unwrap()
+    };
+
+    for anchor in [
+        TextBoxVerticalAlign::Top,
+        TextBoxVerticalAlign::Center,
+        TextBoxVerticalAlign::Bottom,
+    ] {
+        for line_spacing in [None, Some(0.98)] {
+            let plain = compile(anchor, line_spacing, None);
+            let zero = compile(anchor, line_spacing, Some(BaselineShiftEm(0.0)));
+            assert_eq!(plain.len(), zero.len());
+            let mut baselines: Vec<f64> = zero.iter().map(|run| run.baseline_pt).collect();
+            baselines.sort_by(f64::total_cmp);
+            baselines.dedup_by(|a, b| (*a - *b).abs() < 0.001);
+            assert!(
+                baselines.len() >= 4,
+                "{anchor:?}, {line_spacing:?}: each paragraph must wrap: {baselines:?}"
+            );
+            let first = zero[0].baseline_pt;
+            for (unshifted, shifted) in plain.iter().zip(&zero) {
+                assert_eq!(unshifted.text, shifted.text);
+                assert!(
+                    (unshifted.baseline_pt - shifted.baseline_pt).abs() < 0.01,
+                    "{anchor:?}, {line_spacing:?}: a zero displacement must not move a line: {unshifted:?} vs {shifted:?}"
+                );
+                let offset = shifted.baseline_pt - first;
+                assert!(
+                    (offset - offset.round()).abs() < 0.01,
+                    "{anchor:?}, {line_spacing:?}: a zero-shift line must share the story grid: {first} -> {} ({:?})",
+                    shifted.baseline_pt,
+                    shifted.text,
+                );
+            }
+        }
+    }
+}
