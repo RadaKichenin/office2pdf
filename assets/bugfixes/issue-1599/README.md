@@ -16,6 +16,13 @@ cell-content overlays, so the later G7 bottom strip covers G8 until y=478.88pt.
 The same error occurs at the other three internal color boundaries. Text and
 row positions already agree; moving the rows would introduce another error.
 
+The right extensions of E2 and E5 also cover 0.82pt of the neighboring rose
+bands F2:Q2 and F5:Q5. Their pale fill uses theme 5 with tint 0.7999; the bands
+use theme 5 without a tint. Native paints the rose bands after the sidebar at
+x=276.34pt. The converter paints the pale extension at x=276.135..277.16pt
+afterward. The two vertical seams have the same overlay-order cause as the
+Occasion row seams, rather than a separate drawing-origin defect.
+
 ## Provenance
 
 - Workbook SHA-256: `25f5dc75dab19ea12042979a61842314ddc226e3e45d447e36b2a2a104112613`
