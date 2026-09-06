@@ -443,6 +443,25 @@ pub(crate) fn compiled_text_runs(
     typst_source: &str,
     page_index: usize,
 ) -> Result<Vec<PlacedTextRun>, ConvertError> {
+    compiled_text_runs_with_line_seating(typst_source, page_index, true)
+}
+
+/// Inspect Typst's fractional line advances before the completed-frame pass.
+/// These positions test layout height independently of the painted line grid.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+pub(crate) fn compiled_text_runs_before_line_seating(
+    typst_source: &str,
+    page_index: usize,
+) -> Result<Vec<PlacedTextRun>, ConvertError> {
+    compiled_text_runs_with_line_seating(typst_source, page_index, false)
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+fn compiled_text_runs_with_line_seating(
+    typst_source: &str,
+    page_index: usize,
+    apply_line_seating: bool,
+) -> Result<Vec<PlacedTextRun>, ConvertError> {
     use typst::layout::{Frame, FrameItem, Transform};
 
     fn collect(frame: &Frame, transform: Transform, out: &mut Vec<PlacedTextRun>) {
@@ -474,7 +493,9 @@ pub(crate) fn compiled_text_runs(
         let messages: Vec<String> = errors.iter().map(|e| e.message.to_string()).collect();
         ConvertError::Render(format!("Typst compilation failed: {}", messages.join("; ")))
     })?;
-    super::powerpoint_line_paint::adjust_paragraph_marks(&mut document);
+    if apply_line_seating {
+        super::powerpoint_line_paint::adjust_paragraph_marks(&mut document);
+    }
     let page = document.pages.get(page_index).ok_or_else(|| {
         ConvertError::Render(format!(
             "page {page_index} is past the document's {} pages",
@@ -749,42 +770,59 @@ fn powerpoint_line_seating_keeps_links_and_underlines_with_text() {
 #block(width: 150pt)[#underline[#link("https://example.com")[Server-side document conversion preserves links and emphasis across wrapped lines.]]]
 #metadata("office2pdf-pptx-paragraph-end")
 "##;
-    let world = MinimalWorld::new(source, &[], &[]);
-    let mut document = typst::compile::<typst::layout::PagedDocument>(&world)
-        .output
-        .unwrap();
-    let mut before = [Vec::new(), Vec::new(), Vec::new()];
-    positions(&document.pages[0].frame, Transform::identity(), &mut before);
-    super::powerpoint_line_paint::adjust_paragraph_marks(&mut document);
-    let mut after = [Vec::new(), Vec::new(), Vec::new()];
-    positions(&document.pages[0].frame, Transform::identity(), &mut after);
-    assert!(before[0].len() > 1, "the paragraph must wrap");
-    for kind in 0..2 {
-        assert_eq!(before[kind].len(), before[0].len());
-        assert_eq!(after[kind].len(), before[kind].len());
-        for line in 0..before[0].len() {
-            let expected = if line + 1 == before[0].len() {
-                0.0
-            } else {
-                1.0
-            };
-            assert!(
-                (after[kind][line] - before[kind][line] - expected).abs() < 0.001,
-                "kind {kind}, line {line}: {before:?} -> {after:?}",
-            );
+    for round_lines in [false, true] {
+        let source = if round_lines {
+            // A 20.4pt line advance carries a raw 16.4pt seat through a
+            // first baseline already painted at 16pt. Later lines need
+            // different movements, including +0.6pt rather than -0.4pt.
+            source
+                .replace("bottom-edge: 4pt", "bottom-edge: -4.4pt")
+                .replace(
+                    "(\"office2pdf-pptx-paragraph-mark\", 1.0)",
+                    "(\"office2pdf-pptx-paragraph-mark\", 0.0, (16.4, 16.0, 16.4))",
+                )
+        } else {
+            source.to_owned()
+        };
+        let world = MinimalWorld::new(&source, &[], &[]);
+        let mut document = typst::compile::<typst::layout::PagedDocument>(&world)
+            .output
+            .unwrap();
+        let mut before = [Vec::new(), Vec::new(), Vec::new()];
+        positions(&document.pages[0].frame, Transform::identity(), &mut before);
+        super::powerpoint_line_paint::adjust_paragraph_marks(&mut document);
+        let mut after = [Vec::new(), Vec::new(), Vec::new()];
+        positions(&document.pages[0].frame, Transform::identity(), &mut after);
+        assert!(before[0].len() > 1, "the paragraph must wrap");
+        for kind in 0..2 {
+            assert_eq!(before[kind].len(), before[0].len());
+            assert_eq!(after[kind].len(), before[kind].len());
+            for line in 0..before[0].len() {
+                let expected = if round_lines {
+                    [0.0, 0.6, 0.2, 0.8, 0.4][line % 5]
+                } else if line + 1 == before[0].len() {
+                    0.0
+                } else {
+                    1.0
+                };
+                assert!(
+                    (after[kind][line] - before[kind][line] - expected).abs() < 0.001,
+                    "kind {kind}, line {line}: {before:?} -> {after:?}",
+                );
+            }
         }
-    }
-    assert!(before[2].len() >= before[0].len());
-    assert_eq!(before[2].len(), after[2].len());
-    for (old, new) in before[2].iter().zip(&after[2]) {
-        let line = before[0]
-            .iter()
-            .enumerate()
-            .min_by(|(_, a), (_, b)| (*a - old).abs().total_cmp(&(*b - old).abs()))
-            .unwrap()
-            .0;
-        let expected = after[0][line] - before[0][line];
-        assert!((new - old - expected).abs() < 0.001);
+        assert!(before[2].len() >= before[0].len());
+        assert_eq!(before[2].len(), after[2].len());
+        for (old, new) in before[2].iter().zip(&after[2]) {
+            let line = before[0]
+                .iter()
+                .enumerate()
+                .min_by(|(_, a), (_, b)| (*a - old).abs().total_cmp(&(*b - old).abs()))
+                .unwrap()
+                .0;
+            let expected = after[0][line] - before[0][line];
+            assert!((new - old - expected).abs() < 0.001);
+        }
     }
 }
 

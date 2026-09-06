@@ -1,5 +1,181 @@
 use super::*;
 
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn wrapped_mixed_sizes_round_each_physical_lines_own_seat() {
+    use crate::ir::TextBoxVerticalAlign;
+
+    for anchor in [
+        TextBoxVerticalAlign::Top,
+        TextBoxVerticalAlign::Center,
+        TextBoxVerticalAlign::Bottom,
+    ] {
+        for small_first in [false, true] {
+            let mut runs = vec![
+                Run {
+                    text: "Standards Statements ".into(),
+                    style: TextStyle {
+                        font_family: Some("Libertinus Serif".into()),
+                        font_size: Some(20.0),
+                        bold: Some(true),
+                        ..TextStyle::default()
+                    },
+                    href: None,
+                    footnote: None,
+                },
+                Run {
+                    text: "by Grade Level ".into(),
+                    style: TextStyle {
+                        font_family: Some("Libertinus Serif".into()),
+                        font_size: Some(12.0),
+                        bold: Some(true),
+                        ..TextStyle::default()
+                    },
+                    href: None,
+                    footnote: None,
+                },
+            ];
+            if small_first {
+                runs.reverse();
+            }
+            let document = make_doc(vec![make_fixed_page(
+                960.0,
+                540.0,
+                vec![make_fixed_text_box(
+                    72.0,
+                    72.25,
+                    110.0,
+                    180.0,
+                    Insets::default(),
+                    anchor,
+                    vec![Block::Paragraph(Paragraph {
+                        style: ParagraphStyle {
+                            line_spacing: Some(LineSpacing::Proportional(0.9)),
+                            ..ParagraphStyle::default()
+                        },
+                        runs,
+                    })],
+                )],
+            )]);
+            let source = generate_typst(&document).unwrap();
+            let runs = crate::render::pdf::compiled_text_runs(&source.source, 0).unwrap();
+            let mut baselines: Vec<f64> = runs.iter().map(|run| run.baseline_pt).collect();
+            baselines.sort_by(f64::total_cmp);
+            baselines.dedup_by(|a, b| (*a - *b).abs() < 0.001);
+            assert_eq!(baselines.len(), 3);
+            // The two sizes have different raw-seat residuals. The running
+            // line boxes yield raw offsets 21.6/37.2pt or 18.96/40.56pt;
+            // each line's own raw seat determines which integer it paints on.
+            let expected = if small_first {
+                [0.0, 19.0, 41.0]
+            } else {
+                [0.0, 22.0, 37.0]
+            };
+            for (&baseline, offset) in baselines.iter().zip(expected) {
+                assert!(
+                    (baseline - baselines[0] - offset).abs() < 0.01,
+                    "{anchor:?}, small_first={small_first}: {baselines:?}, expected offsets {expected:?}",
+                );
+            }
+        }
+    }
+}
+
+/// Native wrapped-line probes retain one whole-point grid within each story,
+/// including centered/bottom anchors and fractional frame translations (#1584).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn wrapped_slide_lines_share_the_story_baseline_grid() {
+    use crate::ir::TextBoxVerticalAlign;
+
+    for (family, size) in [("Libertinus Serif", 17.0), ("DejaVu Sans Mono", 14.5)] {
+        for anchor in [
+            TextBoxVerticalAlign::Top,
+            TextBoxVerticalAlign::Center,
+            TextBoxVerticalAlign::Bottom,
+        ] {
+            for as_list in [false, true] {
+                let paragraphs: Vec<Paragraph> = ["First", "Second", "Third"]
+                    .into_iter()
+                    .map(|prefix| Paragraph {
+                        style: ParagraphStyle {
+                            space_after: Some(10.0),
+                            ..ParagraphStyle::default()
+                        },
+                        runs: vec![Run {
+                            text: format!(
+                                "{prefix} paragraph: server-side document conversion preserves text and emphasis across automatically wrapped lines."
+                            ),
+                            style: TextStyle {
+                                font_family: Some(family.into()),
+                                font_size: Some(size),
+                                ..TextStyle::default()
+                            },
+                            href: None,
+                            footnote: None,
+                        }],
+                    })
+                    .collect();
+                let content = if as_list {
+                    vec![Block::List(List {
+                        kind: ListKind::Unordered,
+                        items: paragraphs
+                            .into_iter()
+                            .map(|paragraph| ListItem {
+                                content: vec![paragraph],
+                                level: 0,
+                                start_at: None,
+                            })
+                            .collect(),
+                        level_styles: std::collections::BTreeMap::new(),
+                    })]
+                } else {
+                    paragraphs.into_iter().map(Block::Paragraph).collect()
+                };
+                let document = make_doc(vec![make_fixed_page(
+                    960.0,
+                    900.0,
+                    vec![make_fixed_text_box(
+                        72.0,
+                        144.25,
+                        280.0,
+                        450.0,
+                        Insets {
+                            top: 3.6,
+                            ..Insets::default()
+                        },
+                        anchor,
+                        content,
+                    )],
+                )]);
+                let source = generate_typst(&document).unwrap();
+                let runs = crate::render::pdf::compiled_text_runs(&source.source, 0).unwrap();
+                assert!(runs.iter().any(|run| run.text.contains("Third")));
+                if as_list {
+                    assert_eq!(runs.iter().filter(|run| run.text.contains('•')).count(), 3);
+                }
+                let first = runs.first().unwrap().baseline_pt;
+                let mut baselines: Vec<f64> = runs.iter().map(|run| run.baseline_pt).collect();
+                baselines.sort_by(f64::total_cmp);
+                baselines.dedup_by(|a, b| (*a - *b).abs() < 0.001);
+                assert!(
+                    baselines.len() >= 9,
+                    "each paragraph must wrap: {baselines:?}"
+                );
+                for run in &runs {
+                    let offset = run.baseline_pt - first;
+                    assert!(
+                        (offset - offset.round()).abs() < 0.01,
+                        "{family}, {anchor:?}, list={as_list}: wrapped baseline must share the story grid: {first} -> {} ({:?})",
+                        run.baseline_pt,
+                        run.text,
+                    );
+                }
+            }
+        }
+    }
+}
+
 /// Native quarter-point translations of the lecture frame retain its
 /// fractional content origin (#1583), including later paragraphs and bullets.
 #[cfg(not(target_arch = "wasm32"))]
@@ -187,9 +363,15 @@ fn embedded_paragraph_mark_changes_only_the_final_wrapped_baseline() {
     let (alone, _) = crate::render::pdf::powerpoint_line_box_em(family).unwrap();
     let (shared, _) =
         crate::render::pdf::powerpoint_line_box_em_for_families(&[family, mark]).unwrap();
+    // Select a visible face difference at the third line's running position;
+    // rounding only the first seat can hide that difference on the last line.
+    let preceding_advance_em = 2.0 * crate::render::pdf::POWERPOINT_LINE_HEIGHT_FACTOR;
     let size = (8..=72)
         .map(f64::from)
-        .find(|size| (alone * size).round() != (shared * size).round())
+        .find(|size| {
+            ((alone + preceding_advance_em) * size).round()
+                != ((shared + preceding_advance_em) * size).round()
+        })
         .unwrap();
     let compile = |mark| {
         compile_paragraph_mark_probe(
@@ -211,7 +393,11 @@ fn embedded_paragraph_mark_changes_only_the_final_wrapped_baseline() {
     };
     let plain = baselines(&plain);
     let marked = baselines(&marked);
-    assert!(plain.len() > 1, "the embedded-font control must wrap");
+    assert_eq!(
+        plain.len(),
+        3,
+        "the embedded-font control must occupy three lines"
+    );
     assert_eq!(plain.len(), marked.len());
     for (plain, marked) in plain[..plain.len() - 1].iter().zip(&marked) {
         assert!((plain - marked).abs() < 0.01);
@@ -4091,14 +4277,32 @@ fn powerpoint_soft_wrap_uses_each_lines_own_largest_font_size() {
     let (small_top_em, _) =
         powerpoint_percentage_line_box_em(plain_ascent_em, small_size_pt, line_spacing);
     let expected_transition_pt = large_bottom_em * large_size_pt + small_top_em * small_size_pt;
-    let transition_pt = small_baseline - second_large_baseline;
+    let layout_runs =
+        crate::render::pdf::compiled_text_runs_before_line_seating(&output.source, 0).unwrap();
+    let layout_baseline = |text: &str| {
+        layout_runs
+            .iter()
+            .find(|run| run.text == text)
+            .unwrap()
+            .baseline_pt
+    };
+    let transition_pt = layout_baseline("by") - layout_baseline("Statements");
     assert!(
         (transition_pt - expected_transition_pt).abs() < 0.01,
-        "the final line must take the preceding 20pt descent plus its own 12pt seat: \
+        "the final line box must take the preceding 20pt descent plus its own 12pt seat: \
          expected {expected_transition_pt}pt, got {transition_pt}pt; \
          baselines=({first_large_baseline}, {second_large_baseline}, {small_baseline})\n{}",
         output.source
     );
+    for baseline in [second_large_baseline, small_baseline] {
+        let offset = baseline - first_large_baseline;
+        assert!((offset - offset.round()).abs() < 0.01);
+    }
+    assert!((small_baseline - second_large_baseline - transition_pt).abs() < 1.0);
+    // This embedded face's 90% raw seats are 16.421pt at 20pt and 9.853pt
+    // at 12pt. The final raw baseline is 125.053pt, which paints at 125pt;
+    // carrying the first line's larger raw-seat residual paints it at 126pt.
+    assert!((small_baseline - 125.0).abs() < 0.01);
 }
 
 /// PowerPoint rounds every nominal glyph advance to the nearest 1/8pt before
@@ -4180,11 +4384,20 @@ fn slide_text_wraps_on_powerpoints_one_eighth_point_advance_grid() {
         baselines[0],
         output.source
     );
-    assert!(
-        (baselines[1] - baselines[0] - line_height_pt).abs() < 0.01,
-        "grid-rounded lines must retain PowerPoint's 1.2em advance: {baselines:?}\n{}",
-        output.source
-    );
+    let mut layout_baselines: Vec<f64> =
+        crate::render::pdf::compiled_text_runs_before_line_seating(&output.source, 0)
+            .unwrap()
+            .into_iter()
+            .filter(|run| run.text.contains('o'))
+            .map(|run| run.baseline_pt)
+            .collect();
+    layout_baselines.sort_by(f64::total_cmp);
+    layout_baselines.dedup_by(|left, right| (*left - *right).abs() < 0.01);
+    assert_eq!(layout_baselines.len(), 2);
+    assert!((layout_baselines[1] - layout_baselines[0] - line_height_pt).abs() < 0.01);
+    // The 20.4pt layout advance still controls centering above. Painting each
+    // physical line on the story grid makes this pair's visible step 20pt.
+    assert!((baselines[1] - baselines[0] - 20.0).abs() < 0.01);
 }
 
 /// A box barely one line tall does not scale its text unless the file asked

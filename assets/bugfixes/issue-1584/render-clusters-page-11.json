@@ -1,0 +1,55 @@
+{
+  "clusters": [
+    {
+      "area_pt2": 24.8832,
+      "bbox_pt": {
+        "height": 1.92,
+        "width": 12.96,
+        "x": 178.08,
+        "y": 341.76
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Regular explanation glyphs retain matching baseline, weight and content in matched full-scale crops; only edge rasterization differs."
+      },
+      "id": "p11-0eb006f1c800",
+      "region": "left"
+    },
+    {
+      "area_pt2": 24.8832,
+      "bbox_pt": {
+        "height": 1.92,
+        "width": 12.96,
+        "x": 323.52,
+        "y": 341.76
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Regular explanation glyphs retain matching baseline, weight and content in matched full-scale crops; only edge rasterization differs."
+      },
+      "id": "p11-2aaf9c82f991",
+      "region": "center"
+    }
+  ],
+  "dpi": 150,
+  "duplicate_disposition_cluster_ids": [],
+  "errors": [],
+  "fuzz_percent": 5,
+  "minimum_area_pt2": 20.0,
+  "page": 11,
+  "passed": true,
+  "renderer_observations": [],
+  "schema_version": 1,
+  "strict": true,
+  "summary": {
+    "dispositioned": 2,
+    "duplicate": 0,
+    "total": 2,
+    "undispositioned": 0,
+    "unknown": 0
+  },
+  "undispositioned_cluster_ids": [],
+  "unknown_disposition_cluster_ids": []
+}
