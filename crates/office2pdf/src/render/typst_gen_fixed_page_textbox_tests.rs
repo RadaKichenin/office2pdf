@@ -2643,11 +2643,25 @@ fn test_fixed_page_text_box_ordered_grid_normalizes_marker_spacing() {
         output.source
     );
     assert_eq!(
-        output.source.matches("#o2p-pptx-space()").count(),
+        output.source.matches("#o2p-pptx-space(").count(),
         2,
         "each marker owns exactly one normalized trailing space: {}",
         output.source
     );
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let runs = crate::render::pdf::compiled_text_runs(&output.source, 0).unwrap();
+        for (marker, body) in [("1.", "Alpha"), ("2.", "Beta")] {
+            let marker_run = runs.iter().find(|run| run.text == marker).unwrap();
+            let body_run = runs.iter().find(|run| run.text == body).unwrap();
+            assert!((marker_run.left_pt - 100.0).abs() < 0.01);
+            assert!(
+                (body_run.left_pt - 136.0).abs() < 0.01,
+                "a normalized marker gap must keep {body} at the 36pt indent: {body_run:?}"
+            );
+            assert!((marker_run.baseline_pt - body_run.baseline_pt).abs() < 0.01);
+        }
+    }
 }
 
 // ----- PowerPoint's line model (issue #513) -----

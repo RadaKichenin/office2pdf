@@ -104,8 +104,9 @@ pub(super) fn write_powerpoint_ligature_state(out: &mut String) {
 /// difference between exact and independently grid-rounded nominal glyph
 /// widths. Pair kerning therefore remains part of the shaped word instead of
 /// being lost to one-box-per-glyph output. Spaces remain real text characters
-/// and carry a weak correction, so they keep both extraction and line-break
-/// behavior. The word box measures and restores the active text edge below
+/// and carry their grid and neighboring pair adjustments in one weak correction,
+/// so both disappear at a line boundary while extraction stays intact. The
+/// word box measures and restores the active text edge below
 /// the baseline, so it occupies the same line box as unboxed text and cannot
 /// disturb vertical centring.
 pub(super) fn write_powerpoint_advance_grid_helpers(out: &mut String) {
@@ -123,10 +124,11 @@ pub(super) fn write_powerpoint_advance_grid_helpers(out: &mut String) {
     box(inset: (bottom: seat), baseline: seat)[#text(bottom-edge: "baseline")[#scale(x: target / natural * 100%, origin: left, body)]] + h(target - natural)
   }}
 }}
-#let o2p-pptx-space() = context {{
+#let o2p-pptx-space(left, right) = context {{
   let natural = measure(" ").width
   let target = calc.round(natural / o2p-pptx-advance-grid) * o2p-pptx-advance-grid
-  [#" "; #h(target - natural, weak: true)]
+  let pair-delta = measure(left + " " + right).width - measure(left).width - natural - measure(right).width
+  [#" "; #h(target - natural + pair-delta, weak: true)]
 }}
 #let o2p-pptx-snap-baseline(raw-seat, layout-seat, body, nonfinal-seat: none, round-position: true, round-lines: false, size-seats: none, origin: 0pt, marker: false) = context {{
   let top = here().position().y
@@ -4516,7 +4518,22 @@ fn write_powerpoint_grid_run_content(
         match ch {
             ' ' => {
                 write_powerpoint_grid_word(out, &source[token_start..offset]);
-                out.push_str("#o2p-pptx-space()");
+                let left = source[..offset]
+                    .chars()
+                    .next_back()
+                    .map(|ch| ch.to_string())
+                    .unwrap_or_default();
+                let right = source[offset + ch.len_utf8()..]
+                    .chars()
+                    .next()
+                    .map(|ch| ch.to_string())
+                    .unwrap_or_default();
+                let _ = write!(
+                    out,
+                    "#o2p-pptx-space(\"{}\", \"{}\")",
+                    escape_typst_string(&left),
+                    escape_typst_string(&right)
+                );
                 token_start = offset + ch.len_utf8();
             }
             '-' => {

@@ -274,6 +274,12 @@ pub(crate) fn make_legacy_kern_table() -> Vec<u8> {
 /// No face the repository ships states its pairs twice, so a test that needs
 /// the shape issue #1116 is about has to build one.
 pub(crate) fn make_face_carrying_both_kern_sources(data: &[u8]) -> Vec<u8> {
+    make_face_with_legacy_kern_table(data, &make_legacy_kern_table())
+}
+
+/// Attach a test's horizontal pair table to a shapeable face without changing
+/// its glyphs or nominal advances.
+pub(crate) fn make_face_with_legacy_kern_table(data: &[u8], kern: &[u8]) -> Vec<u8> {
     let read_u16 = |offset: usize| -> usize {
         usize::from(u16::from_be_bytes(
             data[offset..offset + 2].try_into().expect("two bytes"),
@@ -310,13 +316,12 @@ pub(crate) fn make_face_carrying_both_kern_sources(data: &[u8]) -> Vec<u8> {
     while !(body_start + body.len()).is_multiple_of(4) {
         body.push(0);
     }
-    let kern: Vec<u8> = make_legacy_kern_table();
     records.push((
         *b"kern",
         (body_start + body.len()) as u32,
         kern.len() as u32,
     ));
-    body.extend_from_slice(&kern);
+    body.extend_from_slice(kern);
 
     // A table directory is stated in tag order.
     records.sort_by_key(|(tag, _, _)| *tag);
