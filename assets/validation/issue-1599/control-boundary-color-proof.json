@@ -1,0 +1,373 @@
+{
+  "samples": [
+    {
+      "label": "Occasion y=572-0.1",
+      "page": 2,
+      "point": [
+        450,
+        571.9
+      ],
+      "colors": {
+        "native": [
+          0.2392157,
+          0.1686275,
+          0.1764706
+        ],
+        "before": [
+          0.23921569,
+          0.16862746,
+          0.1764706
+        ],
+        "after": [
+          0.23921569,
+          0.16862746,
+          0.1764706
+        ]
+      },
+      "max_after_channel_delta": 4.000000000670134e-08
+    },
+    {
+      "label": "Occasion y=572+0.1",
+      "page": 2,
+      "point": [
+        450,
+        572.1
+      ],
+      "colors": {
+        "native": [
+          0.3647059,
+          0.2156863,
+          0.3294118
+        ],
+        "before": [
+          0.23921569,
+          0.16862746,
+          0.1764706
+        ],
+        "after": [
+          0.3647059,
+          0.21568628,
+          0.32941178
+        ]
+      },
+      "max_after_channel_delta": 1.9999999989472883e-08
+    },
+    {
+      "label": "Occasion y=602-0.1",
+      "page": 2,
+      "point": [
+        450,
+        601.9
+      ],
+      "colors": {
+        "native": [
+          0.3647059,
+          0.2156863,
+          0.3294118
+        ],
+        "before": [
+          0.3647059,
+          0.21568628,
+          0.32941178
+        ],
+        "after": [
+          0.3647059,
+          0.21568628,
+          0.32941178
+        ]
+      },
+      "max_after_channel_delta": 1.9999999989472883e-08
+    },
+    {
+      "label": "Occasion y=602+0.1",
+      "page": 2,
+      "point": [
+        450,
+        602.1
+      ],
+      "colors": {
+        "native": [
+          0.4784314,
+          0.3882353,
+          0.4117647
+        ],
+        "before": [
+          0.3647059,
+          0.21568628,
+          0.32941178
+        ],
+        "after": [
+          0.47843138,
+          0.3882353,
+          0.4117647
+        ]
+      },
+      "max_after_channel_delta": 1.9999999989472883e-08
+    },
+    {
+      "label": "Occasion y=632-0.1",
+      "page": 2,
+      "point": [
+        450,
+        631.9
+      ],
+      "colors": {
+        "native": [
+          0.4784314,
+          0.3882353,
+          0.4117647
+        ],
+        "before": [
+          0.47843138,
+          0.3882353,
+          0.4117647
+        ],
+        "after": [
+          0.47843138,
+          0.3882353,
+          0.4117647
+        ]
+      },
+      "max_after_channel_delta": 1.9999999989472883e-08
+    },
+    {
+      "label": "Occasion y=632+0.1",
+      "page": 2,
+      "point": [
+        450,
+        632.1
+      ],
+      "colors": {
+        "native": [
+          0.2392157,
+          0.1686275,
+          0.1764706
+        ],
+        "before": [
+          0.47843138,
+          0.3882353,
+          0.4117647
+        ],
+        "after": [
+          0.23921569,
+          0.16862746,
+          0.1764706
+        ]
+      },
+      "max_after_channel_delta": 4.000000000670134e-08
+    },
+    {
+      "label": "Occasion y=662-0.1",
+      "page": 2,
+      "point": [
+        450,
+        661.9
+      ],
+      "colors": {
+        "native": [
+          0.2392157,
+          0.1686275,
+          0.1764706
+        ],
+        "before": [
+          0.23921569,
+          0.16862746,
+          0.1764706
+        ],
+        "after": [
+          0.23921569,
+          0.16862746,
+          0.1764706
+        ]
+      },
+      "max_after_channel_delta": 4.000000000670134e-08
+    },
+    {
+      "label": "Occasion y=662+0.1",
+      "page": 2,
+      "point": [
+        450,
+        662.1
+      ],
+      "colors": {
+        "native": [
+          0.3647059,
+          0.2156863,
+          0.3294118
+        ],
+        "before": [
+          0.23921569,
+          0.16862746,
+          0.1764706
+        ],
+        "after": [
+          0.3647059,
+          0.21568628,
+          0.32941178
+        ]
+      },
+      "max_after_channel_delta": 1.9999999989472883e-08
+    },
+    {
+      "label": "Sidebar y=80, x=329-0.5",
+      "page": 2,
+      "point": [
+        328.5,
+        80
+      ],
+      "colors": {
+        "native": [
+          0.972549,
+          0.9372549,
+          0.9411765
+        ],
+        "before": [
+          0.972549,
+          0.9372549,
+          0.9411765
+        ],
+        "after": [
+          0.972549,
+          0.9372549,
+          0.9411765
+        ]
+      },
+      "max_after_channel_delta": 0.0
+    },
+    {
+      "label": "Sidebar y=80, x=329+0.5",
+      "page": 2,
+      "point": [
+        329.5,
+        80
+      ],
+      "colors": {
+        "native": [
+          0.854902,
+          0.7137255,
+          0.7294118
+        ],
+        "before": [
+          0.972549,
+          0.9372549,
+          0.9411765
+        ],
+        "after": [
+          0.85490199,
+          0.7137255,
+          0.7294118
+        ]
+      },
+      "max_after_channel_delta": 1.0000000050247593e-08
+    },
+    {
+      "label": "Sidebar y=465, x=329-0.5",
+      "page": 2,
+      "point": [
+        328.5,
+        465
+      ],
+      "colors": {
+        "native": [
+          0.972549,
+          0.9372549,
+          0.9411765
+        ],
+        "before": [
+          0.972549,
+          0.9372549,
+          0.9411765
+        ],
+        "after": [
+          0.972549,
+          0.9372549,
+          0.9411765
+        ]
+      },
+      "max_after_channel_delta": 0.0
+    },
+    {
+      "label": "Sidebar y=465, x=329+0.5",
+      "page": 2,
+      "point": [
+        329.5,
+        465
+      ],
+      "colors": {
+        "native": [
+          0.854902,
+          0.7137255,
+          0.7294118
+        ],
+        "before": [
+          0.972549,
+          0.9372549,
+          0.9411765
+        ],
+        "after": [
+          0.85490199,
+          0.7137255,
+          0.7294118
+        ]
+      },
+      "max_after_channel_delta": 1.0000000050247593e-08
+    },
+    {
+      "label": "Title y=144-0.1",
+      "page": 1,
+      "point": [
+        100,
+        143.9
+      ],
+      "colors": {
+        "native": [
+          0.854902,
+          0.7137255,
+          0.7294118
+        ],
+        "before": [
+          0.85490199,
+          0.7137255,
+          0.7294118
+        ],
+        "after": [
+          0.85490199,
+          0.7137255,
+          0.7294118
+        ]
+      },
+      "max_after_channel_delta": 1.0000000050247593e-08
+    },
+    {
+      "label": "Title y=144+0.1",
+      "page": 1,
+      "point": [
+        100,
+        144.1
+      ],
+      "colors": {
+        "native": [
+          0.972549,
+          0.9372549,
+          0.9411765
+        ],
+        "before": [
+          0.85490199,
+          0.7137255,
+          0.7294118
+        ],
+        "after": [
+          0.972549,
+          0.9372549,
+          0.9411765
+        ]
+      },
+      "max_after_channel_delta": 0.0
+    }
+  ],
+  "sidebar_native_x": 329.0,
+  "sidebar_output_x_before_and_after": 329.275,
+  "sidebar_position_delta_pt": 0.275,
+  "geometry_gate_pt": 0.5,
+  "sampling_note": "The first plus/minus 0.1pt global-coordinate sidebar probe crossed the existing 0.275pt grid phase and failed. Sampling both sides at plus/minus 0.5pt checks final ownership without moving geometry or widening the 0.5pt audit gate. The 1pt late overlay is removed; exact coordinate parity is not claimed."
+}

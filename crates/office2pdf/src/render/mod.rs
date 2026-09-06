@@ -1,3 +1,4 @@
+mod excel_fill_paint;
 pub mod font_context;
 pub mod font_kern;
 pub mod font_subst;

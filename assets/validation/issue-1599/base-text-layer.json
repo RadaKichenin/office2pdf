@@ -1,0 +1,16 @@
+{
+  "census_gt": {
+    "space:SPACE": 171,
+    "control": 2
+  },
+  "census_output": {
+    "space:SPACE": 169,
+    "control": 2
+  },
+  "census_deltas": {
+    "space:SPACE": -2
+  },
+  "content_matches": false,
+  "content_length_gt": 1736,
+  "content_length_output": 1734
+}

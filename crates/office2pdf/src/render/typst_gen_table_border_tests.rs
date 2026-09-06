@@ -1748,7 +1748,7 @@ fn test_print_heading_boundary_keeps_both_coincident_bands() {
 // paints a cell's background over its box *plus* the 1pt strip on its bottom
 // and right grid boundaries, so neighbouring shadings overlap by exactly the
 // strip a border then covers. Typst's own cell `fill:` stops on the boundary,
-// so codegen must add that strip as an overlay.
+// so completed background rectangles are extended in the original fill layer.
 // ---------------------------------------------------------------------------
 
 /// The `#D9D9D9` band `TableStyleLight1` prints, as measured on a native
@@ -1758,86 +1758,6 @@ fn banded_cell(text: &str) -> TableCell {
         background: Some(Color::new(0xd9, 0xd9, 0xd9)),
         ..plain_text_cell(text)
     }
-}
-
-#[test]
-fn test_boundary_band_background_bleed_overlaps_its_cell_at_the_corner_junction() {
-    let table = boundary_band_table(
-        vec![fixed_row(vec![banded_cell("Anton"), plain_text_cell("44")])],
-        vec![69.0, 69.0],
-    );
-    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
-    let result = generate_typst(&doc).unwrap().source;
-
-    // The track itself still comes from Typst's own cell fill.
-    assert!(
-        result.contains("table.cell(fill: rgb(217, 217, 217))"),
-        "the cell must keep filling its own box: {result}"
-    );
-    // Bottom strip: its outer edge still lands 1pt past the row boundary, but
-    // its inner edge overlaps the cell fill by 0.25pt. Three same-colour paths
-    // that only meet at the boundary corner leave a one-pixel pinhole when the
-    // PDF is rasterised at 150 DPI (issue #1397).
-    assert!(
-        result.contains(
-            "#place(bottom + left, dx: -5pt, dy: 6pt, rect(width: 100% + 11pt, height: 1.25pt, fill: rgb(217, 217, 217), stroke: none))"
-        ),
-        "the background must overlap the cell before bleeding 1pt past the bottom boundary: {result}"
-    );
-    // The right strip follows the same inward overlap while preserving its
-    // measured outer edge and the 20pt row frame plus corner block.
-    assert!(
-        result.contains(
-            "#place(top + right, dx: 6pt, dy: -5pt, rect(width: 1.25pt, height: 21pt, fill: rgb(217, 217, 217), stroke: none))"
-        ),
-        "the background must overlap the cell before bleeding 1pt past the right boundary: {result}"
-    );
-    // An unshaded neighbour paints nothing.
-    assert_eq!(
-        result.matches("rect(width: 1.25pt").count(),
-        1,
-        "only the shaded cell may bleed: {result}"
-    );
-}
-
-/// Excel applies a fit-to-page transform after painting its sheet-space 1pt
-/// positive-axis background band. On the issue #1538 workbook's 0.82-scale
-/// page, the outer bleed is therefore 0.82pt and the 0.25pt seam overlap is
-/// 0.205pt, not the unscaled 1pt and 0.25pt emitted before this regression.
-#[test]
-fn a_fit_scaled_sheet_scales_its_excel_background_bleed() {
-    let mut table = boundary_band_table(vec![fixed_row(vec![banded_cell("Gift")])], vec![69.0]);
-    table.print_scale = Some(0.82);
-    table.seats_bottom_aligned_text_on_descender = true;
-    let doc = make_doc(vec![Page::Sheet(SheetPage {
-        name: "Gift budget and tracker".to_string(),
-        size: PageSize {
-            width: 1_190.55,
-            height: 841.89,
-        },
-        margins: Margins {
-            top: 54.0,
-            bottom: 54.0,
-            left: 50.0,
-            right: 50.0,
-        },
-        table,
-        header: None,
-        footer: None,
-        charts: Vec::new(),
-        images: Vec::new(),
-        text_boxes: Vec::new(),
-    })]);
-    let result = generate_typst(&doc).unwrap().source;
-
-    assert!(
-        result.contains("rect(width: 1.025pt, height: 20.82pt"),
-        "the right bleed must scale its band, overlap, and row-end extension: {result}"
-    );
-    assert!(
-        result.contains("height: 1.025pt"),
-        "the bottom bleed must scale its band and overlap: {result}"
-    );
 }
 
 /// A filled horizontal merge's visible Excel region reaches through its
@@ -1915,194 +1835,440 @@ fn a_centered_merged_fill_uses_the_excel_background_band_for_its_text_seat() {
     );
 }
 
-/// `Gift Budget and Tracker1.xlsx` (attached to #982) puts a rose title fill
-/// above pale body cells. The title's bottom bleed forms the visible rule, so
-/// the later cells' right-edge bleed must start below that positive-axis band;
-/// otherwise its later paint order cuts the two pale notches in issue #1475.
+/// Native #982 paints each later cell's fill over its predecessor's positive
+/// extension. Probe final rectangle colors inside both neighboring cells;
+/// inspecting each strip's dimensions alone missed the reversed order (#1599).
+#[cfg(not(target_arch = "wasm32"))]
 #[test]
-fn a_later_cell_fill_does_not_cut_through_the_rule_above_it() {
-    let rose = Color::new(218, 182, 186);
-    let pale_left = Color::new(248, 239, 240);
-    let pale_right = Color::new(247, 238, 239);
-    let header = TableCell {
-        background: Some(rose),
-        col_span: 2,
-        ..plain_text_cell("Title")
-    };
-    let body_left = TableCell {
-        background: Some(pale_left),
-        ..plain_text_cell("Left")
-    };
-    let body_right = TableCell {
-        background: Some(pale_right),
-        ..plain_text_cell("Right")
-    };
-    let table = boundary_band_table(
-        vec![
-            fixed_row(vec![header]),
-            fixed_row(vec![body_left, body_right]),
-        ],
-        vec![69.0, 20.0],
-    );
-    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
-    let result = generate_typst(&doc).unwrap().source;
+fn later_cell_fills_own_shared_boundaries_without_losing_outer_extensions() {
+    use crate::render::pdf::compiled_paint_sequence;
+    use typst::visualize::Color as PaintColor;
 
-    assert!(
-        result.contains(
-            "#place(top + right, dx: 6pt, dy: -4pt, rect(width: 1.25pt, height: 20pt, fill: rgb(248, 239, 240), stroke: none))"
-        ),
-        "the internal junction beneath the merge must preserve the title fill's 1pt bottom band: {result}"
-    );
-    assert!(
-        result.contains(
-            "#place(top + right, dx: 6pt, dy: -4pt, rect(width: 1.25pt, height: 20pt, fill: rgb(247, 238, 239), stroke: none))"
-        ),
-        "the exterior junction beneath the merge must preserve the title fill's 1pt bottom band: {result}"
-    );
-    assert!(
-        !result.contains(
-            "#place(top + right, dx: 6pt, dy: -5pt, rect(width: 1.25pt, height: 21pt, fill: rgb(248, 239, 240), stroke: none))"
-        ),
-        "the later fill must not begin on top of the preceding rule: {result}"
-    );
-}
-
-/// The second sheet in `Gift Budget and Tracker1.xlsx` has pale E cells beside
-/// a rose F:Q merge. Native Excel steps the shared corner: the lower-left
-/// cell's right bleed begins below the upper row, while the upper-right cell's
-/// bottom bleed begins to the right of the pale corner block. Letting either
-/// strip cross the other cuts a differently coloured 1pt notch (#1495).
-#[test]
-fn differently_colored_adjacent_fills_step_their_shared_corner() {
     let pale = Color::new(248, 239, 240);
     let rose = Color::new(218, 182, 186);
-    let upper_left = TableCell {
-        background: Some(pale),
-        ..plain_text_cell("E2")
+    let pale_paint = PaintColor::from_u8(248, 239, 240, 255);
+    let rose_paint = PaintColor::from_u8(218, 182, 186, 255);
+    let mut failures = Vec::new();
+    for scale in [1.0, 0.82] {
+        for (horizontal, merged) in [(false, false), (true, false), (false, true), (true, true)] {
+            let cell = |color| TableCell {
+                background: Some(color),
+                content: Vec::new(),
+                padding: Some(Insets {
+                    top: 0.0,
+                    bottom: 0.0,
+                    left: 0.0,
+                    right: 0.0,
+                }),
+                ..TableCell::default()
+            };
+            let row = |cells| TableRow {
+                cells,
+                height: Some(30.0 * scale),
+                minimum_height: None,
+            };
+            let merged_cell = |color| TableCell {
+                col_span: 2,
+                ..cell(color)
+            };
+            let (rows, widths) = if horizontal && merged {
+                (
+                    vec![row(vec![cell(pale), merged_cell(rose)])],
+                    vec![40.0 * scale, 20.0 * scale, 20.0 * scale],
+                )
+            } else if merged {
+                (
+                    vec![
+                        row(vec![merged_cell(pale)]),
+                        row(vec![cell(rose), cell(rose)]),
+                    ],
+                    vec![20.0 * scale; 2],
+                )
+            } else if horizontal {
+                (
+                    vec![row(vec![cell(pale), cell(rose)])],
+                    vec![40.0 * scale; 2],
+                )
+            } else {
+                (
+                    vec![row(vec![cell(pale)]), row(vec![cell(rose)])],
+                    vec![40.0 * scale],
+                )
+            };
+            let mut table = boundary_band_table(rows, widths);
+            table.print_scale = Some(scale);
+            table.seats_bottom_aligned_text_on_descender = true;
+            let doc = make_doc(vec![Page::Sheet(SheetPage {
+                name: "Fill ownership".into(),
+                size: PageSize {
+                    width: 300.0,
+                    height: 300.0,
+                },
+                margins: Margins {
+                    top: 30.0,
+                    bottom: 30.0,
+                    left: 30.0,
+                    right: 30.0,
+                },
+                table,
+                header: None,
+                footer: None,
+                charts: Vec::new(),
+                images: Vec::new(),
+                text_boxes: Vec::new(),
+            })]);
+            let output = generate_typst(&doc).unwrap();
+            let paints = compiled_paint_sequence(&output.source, &output.images, 0).unwrap();
+            let origin = paints
+                .iter()
+                .find(|paint| {
+                    paint.rectangle_fill == Some(pale_paint)
+                        && paint.bounds.2 - paint.bounds.0 > 20.0
+                        && paint.bounds.3 - paint.bounds.1 > 20.0
+                })
+                .expect("the first cell has a filled interior")
+                .bounds;
+            let visible_color = |x: f64, y: f64| {
+                paints
+                    .iter()
+                    .rev()
+                    .find(|paint| {
+                        paint.rectangle_fill.is_some()
+                            && paint.bounds.0 < x
+                            && x < paint.bounds.2
+                            && paint.bounds.1 < y
+                            && y < paint.bounds.3
+                    })
+                    .and_then(|paint| paint.rectangle_fill)
+            };
+            let x = origin.0;
+            let y = origin.1;
+            let width = 40.0 * scale;
+            let height = 30.0 * scale;
+            let probes = if horizontal {
+                vec![
+                    (
+                        "before column boundary",
+                        x + width - 0.5 * scale,
+                        y + height / 2.0,
+                        pale_paint,
+                    ),
+                    (
+                        "after column boundary",
+                        x + width + 0.5 * scale,
+                        y + height / 2.0,
+                        rose_paint,
+                    ),
+                    (
+                        "outer right extension",
+                        x + 2.0 * width + 0.5 * scale,
+                        y + height / 2.0,
+                        rose_paint,
+                    ),
+                    (
+                        "outer bottom extension",
+                        x + width + 10.0 * scale,
+                        y + height + 0.5 * scale,
+                        rose_paint,
+                    ),
+                ]
+            } else {
+                vec![
+                    (
+                        "before row boundary",
+                        x + width / 2.0,
+                        y + height - 0.5 * scale,
+                        pale_paint,
+                    ),
+                    (
+                        "after row boundary",
+                        x + width / 2.0,
+                        y + height + 0.5 * scale,
+                        rose_paint,
+                    ),
+                    (
+                        "outer bottom extension",
+                        x + width / 2.0,
+                        y + 2.0 * height + 0.5 * scale,
+                        rose_paint,
+                    ),
+                    (
+                        "outer right extension",
+                        x + width + 0.5 * scale,
+                        y + height + 10.0 * scale,
+                        rose_paint,
+                    ),
+                ]
+            };
+            for (label, px, py, expected) in probes {
+                let actual = visible_color(px, py);
+                if actual != Some(expected) {
+                    failures.push(format!("scale={scale}, horizontal={horizontal}, merged={merged}, {label}: {actual:?} != {expected:?}"));
+                }
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// Repainting a later cell's whole background can fix the fill seam while
+/// silently erasing a winning border from an earlier merged cell (#1599).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_later_fill_preserves_the_merged_cells_winning_bottom_border() {
+    use crate::render::pdf::compiled_paint_sequence;
+    use typst::visualize::Color as PaintColor;
+
+    let dark = Color::new(30, 40, 50);
+    let dark_paint = PaintColor::from_u8(30, 40, 50, 255);
+    let rose = Color::new(218, 182, 186);
+    let cell = |color| TableCell {
+        background: Some(color),
+        content: Vec::new(),
+        padding: Some(Insets {
+            top: 0.0,
+            bottom: 0.0,
+            left: 0.0,
+            right: 0.0,
+        }),
+        ..TableCell::default()
     };
-    let upper_right = TableCell {
-        background: Some(rose),
+    let upper = TableCell {
         col_span: 2,
-        ..plain_text_cell("F2:Q2")
-    };
-    let lower_left = TableCell {
-        background: Some(pale),
-        ..plain_text_cell("E3")
-    };
-    let table = boundary_band_table(
-        vec![
-            fixed_row(vec![upper_left, upper_right]),
-            fixed_row(vec![
-                lower_left,
-                plain_text_cell("F3"),
-                plain_text_cell("G3"),
-            ]),
-        ],
-        vec![20.0, 69.0, 69.0],
-    );
-    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
-    let result = generate_typst(&doc).unwrap().source;
-
-    assert!(
-        result.contains(
-            "#place(top + right, dx: 6pt, dy: -4pt, rect(width: 1.25pt, height: 20pt, fill: rgb(248, 239, 240), stroke: none))"
-        ),
-        "the lower-left bleed must start below the upper-right cell's bottom band: {result}"
-    );
-    assert!(
-        result.contains(
-            "#place(bottom + left, dx: -4pt, dy: 6pt, rect(width: 100% + 10pt, height: 1.25pt, fill: rgb(218, 182, 186), stroke: none))"
-        ),
-        "the upper-right bottom bleed must begin beyond the pale corner block: {result}"
-    );
-}
-
-/// With no filled cell starting on the upper-right side of a junction, the
-/// upper cell's bottom band remains the crossing owner. This is the G-column
-/// pattern on the fixture's second sheet; failing to trim produces four
-/// one-point notches between its differently coloured conditional fills.
-#[test]
-fn an_upper_fill_keeps_the_crossing_when_no_upper_right_fill_replaces_it() {
-    let dark = Color::new(61, 43, 45);
-    let purple = Color::new(93, 55, 84);
-    let upper_left = TableCell {
-        background: Some(dark),
-        ..plain_text_cell("G7")
-    };
-    let lower_left = TableCell {
-        background: Some(purple),
-        ..plain_text_cell("G8")
+        border: Some(CellBorder {
+            bottom: Some(BorderSide {
+                color: dark,
+                ..solid_side(3.0)
+            }),
+            ..CellBorder::default()
+        }),
+        ..cell(Color::new(248, 239, 240))
     };
     let table = boundary_band_table(
         vec![
-            fixed_row(vec![upper_left, plain_text_cell("H7")]),
-            fixed_row(vec![lower_left, plain_text_cell("H8")]),
+            fixed_row(vec![upper]),
+            fixed_row(vec![cell(rose), cell(rose)]),
         ],
-        vec![69.0, 69.0],
+        vec![40.0, 40.0],
     );
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
-    let result = generate_typst(&doc).unwrap().source;
-
-    assert!(
-        result.contains(
-            "#place(top + right, dx: 6pt, dy: -4pt, rect(width: 1.25pt, height: 20pt, fill: rgb(93, 55, 84), stroke: none))"
-        ),
-        "the lower vertical bleed must start below the upper cell's bottom band: {result}"
-    );
-}
-
-/// The bleed's vertical run obeys the same extent rule the vertical border
-/// bands do: a relative height inside `#place` resolves against the page in an
-/// auto-sized row, so the strip is painted as concrete twins instead.
-#[test]
-fn test_boundary_band_background_bleed_paints_twins_in_an_auto_row() {
-    let table = boundary_band_table(
-        vec![TableRow {
-            minimum_height: None,
-            cells: vec![banded_cell("Anton")],
-            height: None,
-        }],
-        vec![69.0],
-    );
-    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
-    let result = generate_typst(&doc).unwrap().source;
-
-    // `plain_text_cell` declares no font family, so no line metrics exist and
-    // the extent falls back to the ambient text size.
-    assert!(
-        result.contains(
-            "#place(top + right, dx: 6pt, dy: -5pt, rect(width: 1.25pt, height: 1.2em + 11pt, fill: rgb(217, 217, 217), stroke: none))"
-        ),
-        "the top twin must hang from the row's top boundary: {result}"
-    );
-    assert!(
-        result.contains(
-            "#place(bottom + right, dx: 6pt, dy: 6pt, rect(width: 1.25pt, height: 1.2em + 11pt, fill: rgb(217, 217, 217), stroke: none))"
-        ),
-        "the bottom twin must rise from 1pt past the bottom boundary: {result}"
-    );
-}
-
-/// The bleed belongs to Excel's convention alone: Word's own band model
-/// (issue #724) was measured on borders only, and PowerPoint and Word tables
-/// keep Typst's centred strokes.
-#[test]
-fn test_word_and_centred_stroke_tables_do_not_bleed_their_fills() {
-    for model in [
-        TableBorderPaintModel::WordPositiveAxisBands,
-        TableBorderPaintModel::CenteredStroke,
-    ] {
-        let table = Table {
-            rows: vec![fixed_row(vec![banded_cell("Anton")])],
-            column_widths: vec![69.0],
-            border_paint_model: model,
-            ..Table::default()
-        };
-        let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
-        let result = generate_typst(&doc).unwrap().source;
-        assert!(
-            !result.contains("rect(width: 1pt"),
-            "{model:?} must keep filling the cell box exactly: {result}"
+    let output = generate_typst(&doc).unwrap();
+    let paints = compiled_paint_sequence(&output.source, &output.images, 0).unwrap();
+    let border = paints
+        .iter()
+        .find(|paint| {
+            paint
+                .stroke
+                .is_some_and(|stroke| stroke.color == Some(dark_paint))
+        })
+        .expect("the declared 3pt border paints");
+    let point_y = (border.bounds.1 + border.bounds.3) / 2.0;
+    for fraction in [0.25, 0.75] {
+        let point_x = border.bounds.0 + fraction * (border.bounds.2 - border.bounds.0);
+        let color = paints.iter().rev().find_map(|paint| {
+            let (x0, y0, x1, y1) = paint.bounds;
+            if let Some(stroke) = paint.stroke {
+                let half = stroke.thickness_pt / 2.0;
+                if point_x > x0 - half
+                    && point_x < x1 + half
+                    && point_y > y0 - half
+                    && point_y < y1 + half
+                {
+                    return stroke.color;
+                }
+            }
+            if point_x > x0 && point_x < x1 && point_y > y0 && point_y < y1 {
+                return paint.rectangle_fill;
+            }
+            None
+        });
+        assert_eq!(
+            color,
+            Some(dark_paint),
+            "both lower cells preserve the resolved band"
         );
     }
+}
+
+/// The cell reached later in row order owns the corner overlap. An unfilled
+/// lower neighbor leaves the upper-right fill visible instead (#1495, #1599).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn row_order_determines_the_visible_fill_at_shared_corners() {
+    use crate::render::pdf::compiled_paint_sequence;
+    use typst::visualize::Color as PaintColor;
+    let pale = Color::new(248, 239, 240);
+    let rose = Color::new(218, 182, 186);
+    let green = Color::new(40, 120, 60);
+    for lower_filled in [false, true] {
+        let cell = |background| TableCell {
+            background,
+            content: Vec::new(),
+            ..TableCell::default()
+        };
+        let table = boundary_band_table(
+            vec![
+                fixed_row(vec![cell(Some(pale)), cell(Some(rose))]),
+                fixed_row(vec![cell(lower_filled.then_some(green)), cell(None)]),
+            ],
+            vec![40.0, 40.0],
+        );
+        let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+        let output = generate_typst(&doc).unwrap();
+        let paints = compiled_paint_sequence(&output.source, &output.images, 0).unwrap();
+        let first = paints
+            .iter()
+            .find(|p| p.rectangle_fill == Some(PaintColor::from_u8(248, 239, 240, 255)))
+            .unwrap();
+        let (x, y) = (first.bounds.0 + 40.5, first.bounds.1 + 20.5);
+        let visible = paints
+            .iter()
+            .rev()
+            .find(|p| {
+                p.rectangle_fill.is_some()
+                    && p.bounds.0 < x
+                    && x < p.bounds.2
+                    && p.bounds.1 < y
+                    && y < p.bounds.3
+            })
+            .and_then(|p| p.rectangle_fill);
+        let expected = if lower_filled {
+            PaintColor::from_u8(40, 120, 60, 255)
+        } else {
+            PaintColor::from_u8(218, 182, 186, 255)
+        };
+        assert_eq!(visible, Some(expected), "lower filled={lower_filled}");
+    }
+}
+
+/// A long automatic row needs continuous outer fill coverage; painting two
+/// estimated strips leaves a middle gap. Alpha must also apply only once at
+/// the inner seam, rather than darkening an overlap (#1190, #1397, #1599).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn automatic_row_fill_has_continuous_single_alpha_coverage() {
+    use crate::render::pdf::compiled_paint_sequence;
+    let cell = TableCell {
+        background: Some(Color::new(255, 0, 0)),
+        background_alpha: Some(0.5),
+        ..plain_text_cell(
+            "A long automatic row wraps these words over many lines to exceed twice the estimated single line height.",
+        )
+    };
+    let table = boundary_band_table(
+        vec![TableRow {
+            cells: vec![cell],
+            height: None,
+            minimum_height: None,
+        }],
+        vec![80.0],
+    );
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let output = generate_typst(&doc).unwrap();
+    let paints = compiled_paint_sequence(&output.source, &output.images, 0).unwrap();
+    let main = paints
+        .iter()
+        .find(|p| {
+            p.rectangle_fill.is_some()
+                && p.bounds.2 - p.bounds.0 > 70.0
+                && p.bounds.3 - p.bounds.1 > 40.0
+        })
+        .expect("the automatic row wraps to several lines");
+    let y = (main.bounds.1 + main.bounds.3) / 2.0;
+    for dx in [79.9, 80.5] {
+        let x = main.bounds.0 + dx;
+        let mut rgb = [1.0_f32; 3];
+        for paint in &paints {
+            if paint.bounds.0 < x
+                && x < paint.bounds.2
+                && paint.bounds.1 < y
+                && y < paint.bounds.3
+                && let Some(fill) = paint.rectangle_fill
+            {
+                let color = fill.to_rgb();
+                for (out, channel) in rgb.iter_mut().zip([color.red, color.green, color.blue]) {
+                    *out = channel * color.alpha + *out * (1.0 - color.alpha);
+                }
+            }
+        }
+        let expected = [1.0, 127.0 / 255.0, 127.0 / 255.0];
+        for (actual, expected) in rgb.into_iter().zip(expected) {
+            assert!((actual - expected).abs() < 0.00001, "dx={dx}: {rgb:?}");
+        }
+    }
+}
+
+/// An Excel table beside ordinary Word/PowerPoint tables must not change
+/// their fill extents, even when all three tables use the same paint.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn test_word_and_centred_stroke_tables_do_not_bleed_their_fills() {
+    use crate::render::pdf::compiled_paint_sequence;
+    use typst::visualize::Color as PaintColor;
+    let models = [
+        TableBorderPaintModel::ExcelBoundaryBands,
+        TableBorderPaintModel::WordPositiveAxisBands,
+        TableBorderPaintModel::CenteredStroke,
+    ];
+    let blocks = models
+        .into_iter()
+        .map(|model| {
+            Block::Table(Table {
+                rows: vec![fixed_row(vec![banded_cell("Anton")])],
+                column_widths: vec![69.0],
+                border_paint_model: model,
+                ..Table::default()
+            })
+        })
+        .collect();
+    let doc = make_doc(vec![make_flow_page(blocks)]);
+    let output = generate_typst(&doc).unwrap();
+    let paints = compiled_paint_sequence(&output.source, &output.images, 0).unwrap();
+    let fills: Vec<_> = paints
+        .iter()
+        .filter(|p| p.rectangle_fill == Some(PaintColor::from_u8(217, 217, 217, 255)))
+        .collect();
+    assert_eq!(fills.len(), 3);
+    for (index, fill) in fills.into_iter().enumerate() {
+        let bleed = if index == 0 { 1.0 } else { 0.0 };
+        assert!((fill.bounds.2 - fill.bounds.0 - 69.0 - bleed).abs() < 0.001);
+        assert!((fill.bounds.3 - fill.bounds.1 - 20.0 - bleed).abs() < 0.001);
+    }
+}
+
+/// The native Excel-for-Mac export places the first TableStyleLight1 body
+/// cell at (464, 73), extending its 69pt by 17pt track to (534, 91).
+/// Check the compiled fill itself so this real-fixture regression for #1190
+/// survives changes in how background coverage is generated (#1599).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn structure_light1_table_band_bleeds_past_its_bottom_and_right_boundaries() {
+    use crate::parser::Parser;
+    use crate::parser::xlsx::XlsxParser;
+    use crate::render::pdf::compiled_paint_sequence;
+    use typst::visualize::Color as PaintColor;
+
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/xlsx/ExcelTables.xlsx");
+    let data = std::fs::read(path).expect("fixture should be available");
+    let (document, _) = XlsxParser
+        .parse(&data, &crate::ConvertOptions::default())
+        .expect("fixture should parse");
+    let output = generate_typst(&document).expect("fixture should generate Typst");
+    let paints =
+        compiled_paint_sequence(&output.source, &output.images, 0).expect("fixture should compile");
+    let fills: Vec<_> = paints
+        .iter()
+        .filter(|paint| paint.rectangle_fill == Some(PaintColor::from_u8(217, 217, 217, 255)))
+        .map(|paint| paint.bounds)
+        .collect();
+    assert!(
+        fills.iter().any(|&(left, top, right, bottom)| {
+            (left - 464.0).abs() < 0.001
+                && (top - 73.0).abs() < 0.001
+                && (right - 534.0).abs() < 0.001
+                && (bottom - 91.0).abs() < 0.001
+        }),
+        "the first body cell must fill through the bottom and right boundaries: {fills:?}"
+    );
 }

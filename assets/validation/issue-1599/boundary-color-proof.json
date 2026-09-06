@@ -1,0 +1,492 @@
+[
+  {
+    "label": "Occasion y=478.06-0.1",
+    "page": 2,
+    "point": [
+      375,
+      477.96
+    ],
+    "colors": {
+      "native": {
+        "known": true,
+        "color": [
+          0.2392157,
+          0.1686275,
+          0.1764706
+        ]
+      },
+      "before": {
+        "known": true,
+        "color": [
+          0.23921569,
+          0.16862746,
+          0.1764706
+        ]
+      },
+      "after": {
+        "known": true,
+        "color": [
+          0.23921569,
+          0.16862746,
+          0.1764706
+        ]
+      }
+    },
+    "max_after_channel_delta": 4.000000000670134e-08
+  },
+  {
+    "label": "Occasion y=478.06+0.1",
+    "page": 2,
+    "point": [
+      375,
+      478.16
+    ],
+    "colors": {
+      "native": {
+        "known": true,
+        "color": [
+          0.3647059,
+          0.2156863,
+          0.3294118
+        ]
+      },
+      "before": {
+        "known": true,
+        "color": [
+          0.23921569,
+          0.16862746,
+          0.1764706
+        ]
+      },
+      "after": {
+        "known": true,
+        "color": [
+          0.3647059,
+          0.21568628,
+          0.32941178
+        ]
+      }
+    },
+    "max_after_channel_delta": 1.9999999989472883e-08
+  },
+  {
+    "label": "Occasion y=502.66-0.1",
+    "page": 2,
+    "point": [
+      375,
+      502.56
+    ],
+    "colors": {
+      "native": {
+        "known": true,
+        "color": [
+          0.3647059,
+          0.2156863,
+          0.3294118
+        ]
+      },
+      "before": {
+        "known": true,
+        "color": [
+          0.3647059,
+          0.21568628,
+          0.32941178
+        ]
+      },
+      "after": {
+        "known": true,
+        "color": [
+          0.3647059,
+          0.21568628,
+          0.32941178
+        ]
+      }
+    },
+    "max_after_channel_delta": 1.9999999989472883e-08
+  },
+  {
+    "label": "Occasion y=502.66+0.1",
+    "page": 2,
+    "point": [
+      375,
+      502.76000000000005
+    ],
+    "colors": {
+      "native": {
+        "known": true,
+        "color": [
+          0.4784314,
+          0.3882353,
+          0.4117647
+        ]
+      },
+      "before": {
+        "known": true,
+        "color": [
+          0.3647059,
+          0.21568628,
+          0.32941178
+        ]
+      },
+      "after": {
+        "known": true,
+        "color": [
+          0.47843138,
+          0.3882353,
+          0.4117647
+        ]
+      }
+    },
+    "max_after_channel_delta": 1.9999999989472883e-08
+  },
+  {
+    "label": "Occasion y=527.26-0.1",
+    "page": 2,
+    "point": [
+      375,
+      527.16
+    ],
+    "colors": {
+      "native": {
+        "known": true,
+        "color": [
+          0.4784314,
+          0.3882353,
+          0.4117647
+        ]
+      },
+      "before": {
+        "known": true,
+        "color": [
+          0.47843138,
+          0.3882353,
+          0.4117647
+        ]
+      },
+      "after": {
+        "known": true,
+        "color": [
+          0.47843138,
+          0.3882353,
+          0.4117647
+        ]
+      }
+    },
+    "max_after_channel_delta": 1.9999999989472883e-08
+  },
+  {
+    "label": "Occasion y=527.26+0.1",
+    "page": 2,
+    "point": [
+      375,
+      527.36
+    ],
+    "colors": {
+      "native": {
+        "known": true,
+        "color": [
+          0.2392157,
+          0.1686275,
+          0.1764706
+        ]
+      },
+      "before": {
+        "known": true,
+        "color": [
+          0.47843138,
+          0.3882353,
+          0.4117647
+        ]
+      },
+      "after": {
+        "known": true,
+        "color": [
+          0.23921569,
+          0.16862746,
+          0.1764706
+        ]
+      }
+    },
+    "max_after_channel_delta": 4.000000000670134e-08
+  },
+  {
+    "label": "Occasion y=551.86-0.1",
+    "page": 2,
+    "point": [
+      375,
+      551.76
+    ],
+    "colors": {
+      "native": {
+        "known": true,
+        "color": [
+          0.2392157,
+          0.1686275,
+          0.1764706
+        ]
+      },
+      "before": {
+        "known": true,
+        "color": [
+          0.23921569,
+          0.16862746,
+          0.1764706
+        ]
+      },
+      "after": {
+        "known": true,
+        "color": [
+          0.23921569,
+          0.16862746,
+          0.1764706
+        ]
+      }
+    },
+    "max_after_channel_delta": 4.000000000670134e-08
+  },
+  {
+    "label": "Occasion y=551.86+0.1",
+    "page": 2,
+    "point": [
+      375,
+      551.96
+    ],
+    "colors": {
+      "native": {
+        "known": true,
+        "color": [
+          0.3647059,
+          0.2156863,
+          0.3294118
+        ]
+      },
+      "before": {
+        "known": true,
+        "color": [
+          0.23921569,
+          0.16862746,
+          0.1764706
+        ]
+      },
+      "after": {
+        "known": true,
+        "color": [
+          0.3647059,
+          0.21568628,
+          0.32941178
+        ]
+      }
+    },
+    "max_after_channel_delta": 1.9999999989472883e-08
+  },
+  {
+    "label": "sidebar y=80 x276.34-0.1",
+    "page": 2,
+    "point": [
+      276.23999999999995,
+      80
+    ],
+    "colors": {
+      "native": {
+        "known": true,
+        "color": [
+          0.972549,
+          0.9372549,
+          0.9411765
+        ]
+      },
+      "before": {
+        "known": true,
+        "color": [
+          0.972549,
+          0.9372549,
+          0.9411765
+        ]
+      },
+      "after": {
+        "known": true,
+        "color": [
+          0.972549,
+          0.9372549,
+          0.9411765
+        ]
+      }
+    },
+    "max_after_channel_delta": 0.0
+  },
+  {
+    "label": "sidebar y=80 x276.34+0.1",
+    "page": 2,
+    "point": [
+      276.44,
+      80
+    ],
+    "colors": {
+      "native": {
+        "known": true,
+        "color": [
+          0.854902,
+          0.7137255,
+          0.7294118
+        ]
+      },
+      "before": {
+        "known": true,
+        "color": [
+          0.972549,
+          0.9372549,
+          0.9411765
+        ]
+      },
+      "after": {
+        "known": true,
+        "color": [
+          0.85490199,
+          0.7137255,
+          0.7294118
+        ]
+      }
+    },
+    "max_after_channel_delta": 1.0000000050247593e-08
+  },
+  {
+    "label": "sidebar y=394 x276.34-0.1",
+    "page": 2,
+    "point": [
+      276.23999999999995,
+      394
+    ],
+    "colors": {
+      "native": {
+        "known": true,
+        "color": [
+          0.972549,
+          0.9372549,
+          0.9411765
+        ]
+      },
+      "before": {
+        "known": true,
+        "color": [
+          0.972549,
+          0.9372549,
+          0.9411765
+        ]
+      },
+      "after": {
+        "known": true,
+        "color": [
+          0.972549,
+          0.9372549,
+          0.9411765
+        ]
+      }
+    },
+    "max_after_channel_delta": 0.0
+  },
+  {
+    "label": "sidebar y=394 x276.34+0.1",
+    "page": 2,
+    "point": [
+      276.44,
+      394
+    ],
+    "colors": {
+      "native": {
+        "known": true,
+        "color": [
+          0.854902,
+          0.7137255,
+          0.7294118
+        ]
+      },
+      "before": {
+        "known": true,
+        "color": [
+          0.972549,
+          0.9372549,
+          0.9411765
+        ]
+      },
+      "after": {
+        "known": true,
+        "color": [
+          0.85490199,
+          0.7137255,
+          0.7294118
+        ]
+      }
+    },
+    "max_after_channel_delta": 1.0000000050247593e-08
+  },
+  {
+    "label": "title y144-0.1",
+    "page": 1,
+    "point": [
+      200,
+      143.9
+    ],
+    "colors": {
+      "native": {
+        "known": true,
+        "color": [
+          0.854902,
+          0.7137255,
+          0.7294118
+        ]
+      },
+      "before": {
+        "known": true,
+        "color": [
+          0.85490199,
+          0.7137255,
+          0.7294118
+        ]
+      },
+      "after": {
+        "known": true,
+        "color": [
+          0.85490199,
+          0.7137255,
+          0.7294118
+        ]
+      }
+    },
+    "max_after_channel_delta": 1.0000000050247593e-08
+  },
+  {
+    "label": "title y144+0.1",
+    "page": 1,
+    "point": [
+      200,
+      144.1
+    ],
+    "colors": {
+      "native": {
+        "known": true,
+        "color": [
+          0.972549,
+          0.9372549,
+          0.9411765
+        ]
+      },
+      "before": {
+        "known": true,
+        "color": [
+          0.85490199,
+          0.7137255,
+          0.7294118
+        ]
+      },
+      "after": {
+        "known": true,
+        "color": [
+          0.972549,
+          0.9372549,
+          0.9411765
+        ]
+      }
+    },
+    "max_after_channel_delta": 0.0
+  }
+]

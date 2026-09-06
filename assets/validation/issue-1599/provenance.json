@@ -1,0 +1,42 @@
+{
+  "base": {
+    "source": {
+      "path": "base-source.xlsx",
+      "sha256": "25f5dc75dab19ea12042979a61842314ddc226e3e45d447e36b2a2a104112613"
+    },
+    "native": {
+      "path": "base-native.pdf",
+      "sha256": "2aa03cafa6a156d553a2f1e03e0458257319ff6416a188f1132ce7817ecaeae1"
+    },
+    "before": {
+      "path": "base-before.pdf",
+      "sha256": "6207183de72a132c65daf08b86f8d1a3f38197af053282b83d00fc79ec41cefa"
+    },
+    "after": {
+      "path": "base-after.pdf",
+      "sha256": "9040fa566c4fa7a7a65c86571471aad5b0941c7962e2411051a87e9d36e48449"
+    }
+  },
+  "unscaled": {
+    "source": {
+      "path": "unscaled-source.xlsx",
+      "sha256": "af4160ca276c3add9e3100f80c8df7156afbdf6ec7a0090161e015a7ccf5d5cb"
+    },
+    "native": {
+      "path": "unscaled-native.pdf",
+      "sha256": "0935ca38e497a657d2f972fb7ddfc3163cf69e8edfe6d79d230202b5db5d7bfa"
+    },
+    "before": {
+      "path": "unscaled-before.pdf",
+      "sha256": "60788eab1c0aa8af0d55db81be7adc48ec1a7ff97b2a1e148422e2d8da9c9805"
+    },
+    "after": {
+      "path": "unscaled-after.pdf",
+      "sha256": "2df2ad0f8f38a18428c67428225742edc250d900d427d1167c4494a4dfc70d39"
+    }
+  },
+  "baseline_commit": "64433df1fac9ae65d84a8347bfad1d2819b5260e",
+  "baseline_cli_sha256": "8658fa02013250873b298a66c4a4265969d7efcb5d392629093df726ff861846",
+  "reference_exporter": "Microsoft Excel for Mac 16.112",
+  "dpi": 300
+}
