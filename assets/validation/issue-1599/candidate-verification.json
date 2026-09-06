@@ -1,0 +1,18 @@
+{
+  "base_head": "64433df1fac9ae65d84a8347bfad1d2819b5260e",
+  "cli_sha256": "b8c655cf9e664c999038e2fe61c36e8db1ae15b52da2608f5c8a851dc0ba9fda",
+  "outputs": {
+    "base": {
+      "sha256": "9040fa566c4fa7a7a65c86571471aad5b0941c7962e2411051a87e9d36e48449",
+      "byte_identical_to_inspected_prototype": true,
+      "selectable_text_identical_to_before": true,
+      "layout_exit": 1
+    },
+    "unscaled": {
+      "sha256": "2df2ad0f8f38a18428c67428225742edc250d900d427d1167c4494a4dfc70d39",
+      "byte_identical_to_inspected_prototype": true,
+      "selectable_text_identical_to_before": true,
+      "layout_exit": 1
+    }
+  }
+}

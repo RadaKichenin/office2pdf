@@ -370,6 +370,7 @@ fn compile_to_pdf_inner(
     })?;
 
     super::powerpoint_line_paint::adjust_paragraph_marks(&mut document);
+    super::excel_fill_paint::adjust_cell_fills(&mut document);
 
     // Build PDF standards list
     let mut pdf_standards = Vec::new();
@@ -506,6 +507,7 @@ fn compiled_text_runs_with_line_seating(
     })?;
     if apply_line_seating {
         super::powerpoint_line_paint::adjust_paragraph_marks(&mut document);
+        super::excel_fill_paint::adjust_cell_fills(&mut document);
     }
     let page = document.pages.get(page_index).ok_or_else(|| {
         ConvertError::Render(format!(
@@ -581,6 +583,7 @@ pub(crate) fn compiled_image_boxes(
         ConvertError::Render(format!("Typst compilation failed: {}", messages.join("; ")))
     })?;
     super::powerpoint_line_paint::adjust_paragraph_marks(&mut document);
+    super::excel_fill_paint::adjust_cell_fills(&mut document);
     let page = document.pages.get(page_index).ok_or_else(|| {
         ConvertError::Render(format!(
             "page {page_index} is past the document's {} pages",
@@ -612,12 +615,15 @@ pub(crate) struct PaintedPrimitive {
     /// Page-space bounding box in points, as `(min x, min y, max x, max y)`.
     pub bounds: (f64, f64, f64, f64),
     pub stroke: Option<PaintedStroke>,
+    /// Solid rectangle fill; other shape geometry and paint types remain absent.
+    pub rectangle_fill: Option<typst::visualize::Color>,
 }
 
 /// Stroke geometry after compilation, before the enclosing frame transform.
 #[cfg(all(test, not(target_arch = "wasm32")))]
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct PaintedStroke {
+    pub color: Option<typst::visualize::Color>,
     pub thickness_pt: f64,
     pub cap: typst::visualize::LineCap,
     pub join: typst::visualize::LineJoin,
@@ -705,6 +711,7 @@ pub(crate) fn compiled_page_paint_sequences(
                 }
                 FrameItem::Image(_, size, _) => out.push(PaintedPrimitive {
                     kind: PaintedKind::Image,
+                    rectangle_fill: None,
                     bounds: transformed_bounds(at, size.x.to_pt(), size.y.to_pt()),
                     stroke: None,
                 }),
@@ -737,8 +744,18 @@ pub(crate) fn compiled_page_paint_sequences(
                     };
                     out.push(PaintedPrimitive {
                         kind: PaintedKind::Shape,
+                        rectangle_fill: match (&shape.geometry, &shape.fill) {
+                            (Geometry::Rect(_), Some(typst::visualize::Paint::Solid(color))) => {
+                                Some(*color)
+                            }
+                            _ => None,
+                        },
                         bounds,
                         stroke: shape.stroke.as_ref().map(|stroke| PaintedStroke {
+                            color: match &stroke.paint {
+                                typst::visualize::Paint::Solid(color) => Some(*color),
+                                _ => None,
+                            },
                             thickness_pt: stroke.thickness.to_pt(),
                             cap: stroke.cap,
                             join: stroke.join,
@@ -755,6 +772,7 @@ pub(crate) fn compiled_page_paint_sequences(
                     let bottom: (f64, f64) = place(at, width, size / 4.0);
                     out.push(PaintedPrimitive {
                         kind: PaintedKind::Text,
+                        rectangle_fill: None,
                         stroke: None,
                         bounds: (
                             top.0.min(bottom.0),
@@ -776,6 +794,7 @@ pub(crate) fn compiled_page_paint_sequences(
         ConvertError::Render(format!("Typst compilation failed: {}", messages.join("; ")))
     })?;
     super::powerpoint_line_paint::adjust_paragraph_marks(&mut document);
+    super::excel_fill_paint::adjust_cell_fills(&mut document);
     Ok(document
         .pages
         .iter()
@@ -836,6 +855,7 @@ fn powerpoint_line_seating_keeps_links_and_underlines_with_text() {
         let mut before = [Vec::new(), Vec::new(), Vec::new()];
         positions(&document.pages[0].frame, Transform::identity(), &mut before);
         super::powerpoint_line_paint::adjust_paragraph_marks(&mut document);
+        super::excel_fill_paint::adjust_cell_fills(&mut document);
         let mut after = [Vec::new(), Vec::new(), Vec::new()];
         positions(&document.pages[0].frame, Transform::identity(), &mut after);
         assert!(before[0].len() > 1, "the paragraph must wrap");

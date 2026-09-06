@@ -138,6 +138,7 @@ struct GenCtx {
     /// label, because the layer is a page foreground that has to recognise
     /// its own sheet's first printed page (issue #1168).
     next_sheet_drawing_layer_id: usize,
+    next_excel_fill_id: usize,
     table_depth: usize,
     /// Active section's Word document-grid line pitch, in points.
     line_grid_pitch: Option<f64>,
@@ -262,6 +263,7 @@ impl GenCtx {
             next_image_id: 0,
             next_text_box_id: 0,
             next_sheet_drawing_layer_id: 0,
+            next_excel_fill_id: 0,
             table_depth: 0,
             table_uses_powerpoint_line_box: false,
             line_grid_pitch: None,
