@@ -3719,7 +3719,7 @@ fn wrapped_sheet_cell_paces_its_lines_on_excels_advance() {
 }
 
 /// Excel paces a wrapped cell from the face the workbook declares even when
-/// office2pdf must paint a metric-compatible substitute. The #982 table
+/// office2pdf must paint a substitute with different line metrics. The #982 table
 /// header declares Segoe UI 12pt, which advances 16pt in sheet space and
 /// 13.12pt on its 0.82 fitted page. A host without Segoe UI paints bundled
 /// Selawik; selecting the advance table with that painted family collapses

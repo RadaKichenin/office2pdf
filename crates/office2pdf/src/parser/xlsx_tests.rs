@@ -327,7 +327,7 @@ fn test_reference_digit_advance_em_pins_excel_face_metrics() {
     assert_eq!(
         reference_digit_advance_em("Selawik"),
         Some(segoe),
-        "Microsoft's Selawik replacement is metric-compatible with Segoe UI"
+        "Selawik shares Segoe UI's decimal digit advance"
     );
     assert_eq!(
         reference_digit_advance_em("Definitely Not A Font"),

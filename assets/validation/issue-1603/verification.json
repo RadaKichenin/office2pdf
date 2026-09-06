@@ -1,0 +1,23 @@
+{
+  "library_tests": {
+    "passed": 2887,
+    "note": "Final complete library suite, including the public-fixture compiled-bounds regression and comment/test-name freshness changes."
+  },
+  "compiled_fixture_regression": {
+    "passed": 1,
+    "filtered_out": 2886
+  },
+  "xlsx_fixture_tests": {
+    "passed": 206
+  },
+  "focused_font_tests": {
+    "passed": 6
+  },
+  "workspace_clippy": "PASS: --locked --workspace --all-targets -- -D warnings",
+  "strict_clusters": {
+    "pages": 5,
+    "clusters": 368,
+    "unresolved": 0
+  },
+  "merged": false
+}

@@ -1,0 +1,16 @@
+{
+  "name": "issue-1603-legend-weight",
+  "base": "../../../tests/fixtures/xlsx/issue_1603_gift_budget.xlsx",
+  "part": "xl/charts/chart1.xml",
+  "factor": "c:legend a:defRPr/@b",
+  "page": 2,
+  "variants": [
+    {
+      "value": "bold",
+      "find": "(?s)(<c:legend\\b[^>]*>.*?\\bb=\")0(\".*?</c:legend>)",
+      "replace": "\\g<1>1\\g<2>",
+      "regex": true,
+      "count": 1
+    }
+  ]
+}

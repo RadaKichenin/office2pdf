@@ -1,0 +1,56 @@
+{
+  "source": "Microsoft Office cloud font cache, Segoe UI Version5.67;O365",
+  "fonts": [
+    {
+      "path": "$HOME/Library/Group Containers/UBF8T346G9.Office/FontCache/4/CloudFonts/Segoe UI/41119599467.ttf",
+      "sha256": "fcb0c4655a6bc4fd3e9fef00d5c90622e27710914cb1471e6b04c420bf489ded",
+      "names": {
+        "2": "Normal",
+        "1": "Segoe UI",
+        "4": "Segoe UI",
+        "5": "Version 5.67;O365",
+        "6": "SegoeUI"
+      },
+      "units_per_em": 2048,
+      "hhea": [
+        2210,
+        -514,
+        0
+      ],
+      "extraction": "python3 scripts/extract_font_advances.py FONT",
+      "font_binary_committed": false
+    },
+    {
+      "path": "$HOME/Library/Group Containers/UBF8T346G9.Office/FontCache/4/CloudFonts/Segoe UI/48155170935.ttf",
+      "sha256": "38444a06583e8e7a0669700ae55a018265491a101326d4e8c3fa32f704789829",
+      "names": {
+        "2": "Gras",
+        "4": "Segoe UI Gras",
+        "1": "Segoe UI",
+        "5": "Version 5.67;O365",
+        "6": "SegoeUI-Bold"
+      },
+      "units_per_em": 2048,
+      "hhea": [
+        2210,
+        -514,
+        0
+      ],
+      "extraction": "python3 scripts/extract_font_advances.py FONT",
+      "font_binary_committed": false
+    }
+  ],
+  "native_pdf_confirmation": "Native Gift Budget value-axis subset has hhea2210/-514/0 at2048units perem, matching the complete regularface; sourcefont files are not distributed.",
+  "fallback": {
+    "font": "crates/office2pdf/fonts/Selawik-Regular.ttf",
+    "sha256": "e9d98518d8ac2817782a9a382430463a2e0793ea68350b695bb727d9a830ee1c",
+    "hhea": [
+      2027,
+      -431,
+      0
+    ],
+    "units_per_em": 2048,
+    "basic_latin_advances": "identical to Segoe UI Regular in U+0020..U+007E; line metrics differ"
+  },
+  "native_controls": "native-font-size-controls.json"
+}

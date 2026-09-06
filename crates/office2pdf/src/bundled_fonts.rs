@@ -49,9 +49,9 @@ pub(crate) fn noto_sans_fonts() -> &'static [Font] {
     })
 }
 
-/// Selawik 1.01 Regular and Bold, Microsoft's OFL metric-compatible Segoe UI
-/// replacements, parsed once for deterministic native and WASM fallback
-/// (issue #1472).
+/// Selawik 1.01 Regular and Bold, Microsoft's OFL Segoe UI fallbacks, parsed
+/// once for deterministic native and WASM fallback (issue #1472). The regular
+/// face shares tested Basic Latin advances, but not source line metrics (#1603).
 pub(crate) fn selawik_fonts() -> &'static [Font] {
     SELAWIK_FONTS.get_or_init(|| {
         let fonts =
@@ -149,7 +149,7 @@ mod tests {
     }
 
     #[test]
-    fn bundled_selawik_has_regular_and_bold_metric_compatible_faces() {
+    fn bundled_selawik_has_regular_and_bold_faces() {
         let fonts = selawik_fonts();
         assert_eq!(fonts.len(), 2);
         assert!(

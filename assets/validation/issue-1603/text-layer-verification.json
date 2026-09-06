@@ -1,0 +1,123 @@
+{
+  "base": {
+    "before_after_equal": true,
+    "native_after_non_whitespace_equal": false,
+    "native_after_residuals": [
+      {
+        "tag": "delete",
+        "native": "MONTHLY OVERVIEW $200 ",
+        "after": ""
+      },
+      {
+        "tag": "delete",
+        "native": "$180 ",
+        "after": ""
+      },
+      {
+        "tag": "delete",
+        "native": " $160",
+        "after": ""
+      },
+      {
+        "tag": "delete",
+        "native": " $140",
+        "after": ""
+      },
+      {
+        "tag": "delete",
+        "native": " $120",
+        "after": ""
+      },
+      {
+        "tag": "insert",
+        "native": "",
+        "after": "MONTHLY OVERVIEW $200 $180 $160 $140 $120 "
+      },
+      {
+        "tag": "delete",
+        "native": " ",
+        "after": ""
+      },
+      {
+        "tag": "delete",
+        "native": " ",
+        "after": ""
+      }
+    ],
+    "missing_non_whitespace_characters": {},
+    "extra_non_whitespace_characters": {},
+    "disposition": "Same content characters; native export interleaves the sidebar with the chart title/value labels differently, and retains two extra whitespace separators. Baseline/current extraction is identical."
+  },
+  "unscaled": {
+    "before_after_equal": true,
+    "native_after_non_whitespace_equal": false,
+    "native_after_residuals": [
+      {
+        "tag": "insert",
+        "native": "",
+        "after": "MONTHLY OVERVIEW $200 "
+      },
+      {
+        "tag": "insert",
+        "native": "",
+        "after": "$180 "
+      },
+      {
+        "tag": "delete",
+        "native": "MONTHLY OVERVIEW ",
+        "after": ""
+      },
+      {
+        "tag": "replace",
+        "native": "200 $18",
+        "after": "4"
+      },
+      {
+        "tag": "delete",
+        "native": "0 $4",
+        "after": ""
+      },
+      {
+        "tag": "delete",
+        "native": " ",
+        "after": ""
+      },
+      {
+        "tag": "delete",
+        "native": " ",
+        "after": ""
+      },
+      {
+        "tag": "insert",
+        "native": "",
+        "after": " Oct"
+      },
+      {
+        "tag": "delete",
+        "native": "Oct Nov ",
+        "after": ""
+      },
+      {
+        "tag": "delete",
+        "native": " Notes Dec R",
+        "after": ""
+      },
+      {
+        "tag": "insert",
+        "native": "",
+        "after": " Notes"
+      }
+    ],
+    "missing_non_whitespace_characters": {
+      "e": 1,
+      "o": 1,
+      "c": 1,
+      "v": 1,
+      "N": 1,
+      "D": 1,
+      "R": 1
+    },
+    "extra_non_whitespace_characters": {},
+    "disposition": "Baseline/current extraction is identical. Chart labels cross the first tile and disappear from the next (#1598); native/output order also differs. Poppler additionally extracts a clipped native title R on page 3 at x=-8.96..5.608, y=453.856..483.28. The MuPDF page paint trace contains no R and the reviewed native page has no visible R there; this is hidden reference text, not a missing painted glyph."
+  }
+}

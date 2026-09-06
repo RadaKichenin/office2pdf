@@ -1,0 +1,30 @@
+{
+  "name": "issue-1603-legend-size",
+  "base": "../../../tests/fixtures/xlsx/issue_1603_gift_budget.xlsx",
+  "part": "xl/charts/chart1.xml",
+  "factor": "c:legend a:defRPr/@sz",
+  "page": 2,
+  "variants": [
+    {
+      "value": "6",
+      "find": "(?s)(<c:legend\\b[^>]*>.*?\\bsz=\")900(\".*?</c:legend>)",
+      "replace": "\\g<1>600\\g<2>",
+      "regex": true,
+      "count": 1
+    },
+    {
+      "value": "12",
+      "find": "(?s)(<c:legend\\b[^>]*>.*?\\bsz=\")900(\".*?</c:legend>)",
+      "replace": "\\g<1>1200\\g<2>",
+      "regex": true,
+      "count": 1
+    },
+    {
+      "value": "18",
+      "find": "(?s)(<c:legend\\b[^>]*>.*?\\bsz=\")900(\".*?</c:legend>)",
+      "replace": "\\g<1>1800\\g<2>",
+      "regex": true,
+      "count": 1
+    }
+  ]
+}

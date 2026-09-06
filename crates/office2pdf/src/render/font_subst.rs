@@ -1515,8 +1515,9 @@ pub(crate) fn document_requests_bundled_noto_sans(doc: &Document) -> bool {
         .any(|(family, _)| normalized_lookup_key(&family) == "aptos")
 }
 
-/// Whether this document names Segoe UI, whose open metric-compatible
-/// replacement is the bundled Selawik 1.01 family (issue #1472).
+/// Whether this document names Segoe UI, whose bundled OFL fallback is
+/// Selawik 1.01 (issue #1472). Regular Basic Latin advances match, but its
+/// line metrics differ from the source face (#1603).
 pub(crate) fn document_requests_bundled_selawik(doc: &Document) -> bool {
     collect_document_font_requests(doc)
         .into_iter()
