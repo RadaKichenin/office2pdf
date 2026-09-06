@@ -376,3 +376,162 @@ fn test_xlsx_chart_without_anchor_falls_back_to_end() {
         "an unanchored chart has no worksheet coordinates to overlay it at"
     );
 }
+
+/// A line-series package with a chart-local style relationship. Its stroke
+/// and values mirror the native Cash Flow controls for issue #1593.
+fn chart_with_related_stroke_style(local_line: &str, style_line: &str) -> Chart {
+    use std::io::Write;
+    let chart_xml = format!(
+        r#"<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><c:chart><c:plotArea><c:lineChart><c:ser><c:spPr>{local_line}</c:spPr><c:marker><c:symbol val="circle"/><c:size val="7"/><c:spPr><a:ln cap="flat"><a:bevel/></a:ln></c:spPr></c:marker><c:cat><c:strLit><c:pt idx="0"><c:v>Jan</c:v></c:pt><c:pt idx="1"><c:v>Jun</c:v></c:pt><c:pt idx="2"><c:v>Sep</c:v></c:pt></c:strLit></c:cat><c:val><c:numLit><c:pt idx="0"><c:v>169</c:v></c:pt><c:pt idx="1"><c:v>-771</c:v></c:pt><c:pt idx="2"><c:v>-721</c:v></c:pt></c:numLit></c:val></c:ser></c:lineChart></c:plotArea></c:chart></c:chartSpace>"#
+    );
+    let data = build_xlsx_with_chart(&[("A1", "Cash Flow")], &chart_xml);
+    let mut archive = zip::ZipArchive::new(Cursor::new(data)).unwrap();
+    let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    let options = zip::write::FileOptions::default();
+    for i in 0..archive.len() {
+        let mut entry = archive.by_index(i).unwrap();
+        writer.start_file(entry.name(), options).unwrap();
+        std::io::copy(&mut entry, &mut writer).unwrap();
+    }
+    writer
+        .start_file("xl/charts/_rels/chart1.xml.rels", options)
+        .unwrap();
+    writer.write_all(br#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdStyle" Type="http://schemas.microsoft.com/office/2011/relationships/chartStyle" Target="../chart-style/custom.xml"/></Relationships>"#).unwrap();
+    writer
+        .start_file("xl/chart-style/custom.xml", options)
+        .unwrap();
+    let style_xml = format!(
+        r#"<cs:chartStyle xmlns:cs="http://schemas.microsoft.com/office/drawing/2012/chartStyle" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><cs:dataPointMarker><cs:spPr><a:ln cap="sq"><a:bevel/></a:ln></cs:spPr></cs:dataPointMarker><cs:dataPointLine><cs:lnRef idx="1"><cs:styleClr val="auto"/></cs:lnRef><cs:lineWidthScale>3</cs:lineWidthScale><cs:spPr>{style_line}</cs:spPr></cs:dataPointLine></cs:chartStyle>"#
+    );
+    writer.write_all(style_xml.as_bytes()).unwrap();
+    let data = writer.finish().unwrap().into_inner();
+    let (doc, _) = XlsxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let chart = get_sheet_page(&doc, 0).charts[0].chart.clone();
+    assert_eq!(chart.series[0].values, [169.0, -771.0, -721.0]);
+    assert_eq!(chart.series[0].line_width_pt, Some(2.25));
+    assert_eq!(chart.series[0].fill, Some(Color::new(0x4f, 0xa0, 0xb4)));
+    assert_eq!(chart.series[0].marker_symbol, Some(MarkerSymbol::Circle));
+    assert_eq!(chart.series[0].marker_style.size_pt, Some(7.0));
+    chart
+}
+
+fn local_cash_flow_line(cap: Option<&str>, join: &str) -> String {
+    let cap = cap
+        .map(|value| format!(" cap=\"{value}\""))
+        .unwrap_or_default();
+    format!(
+        r#"<a:ln w="28575"{cap}><a:solidFill><a:srgbClr val="4FA0B4"/></a:solidFill>{join}</a:ln>"#
+    )
+}
+
+#[test]
+fn test_chart_style_inherits_round_cap() {
+    let chart = chart_with_related_stroke_style(
+        &local_cash_flow_line(None, "<a:round/>"),
+        "<a:ln cap=\"rnd\"><a:round/></a:ln>",
+    );
+    assert_eq!(chart.series[0].line_geometry.cap, Some(LineCap::Round));
+}
+
+#[test]
+fn test_chart_style_inherits_flat_cap() {
+    let chart = chart_with_related_stroke_style(
+        &local_cash_flow_line(None, "<a:round/>"),
+        "<a:ln cap=\"flat\"><a:round/></a:ln>",
+    );
+    assert_eq!(chart.series[0].line_geometry.cap, Some(LineCap::Flat));
+}
+
+#[test]
+fn test_chart_style_inherits_square_cap() {
+    let chart = chart_with_related_stroke_style(
+        &local_cash_flow_line(None, "<a:round/>"),
+        "<a:ln cap=\"sq\"><a:round/></a:ln>",
+    );
+    assert_eq!(chart.series[0].line_geometry.cap, Some(LineCap::Square));
+}
+
+#[test]
+fn test_chart_style_inherits_join_without_overriding_local_cap() {
+    let chart = chart_with_related_stroke_style(
+        &local_cash_flow_line(Some("flat"), ""),
+        "<a:ln cap=\"rnd\"><a:round/></a:ln>",
+    );
+    assert_eq!(chart.series[0].line_geometry.cap, Some(LineCap::Flat));
+    assert_eq!(chart.series[0].line_geometry.join, Some(LineJoin::Round));
+}
+
+#[test]
+fn test_chart_style_preserves_explicit_series_geometry() {
+    let chart = chart_with_related_stroke_style(
+        &local_cash_flow_line(Some("sq"), "<a:bevel/>"),
+        "<a:ln cap=\"rnd\"><a:miter lim=\"600000\"/></a:ln>",
+    );
+    assert_eq!(chart.series[0].line_geometry.cap, Some(LineCap::Square));
+    assert_eq!(chart.series[0].line_geometry.join, Some(LineJoin::Bevel));
+    assert_eq!(chart.series[0].line_geometry.miter_limit, None);
+}
+
+#[test]
+fn test_chart_style_preserves_local_default_miter_limit() {
+    let chart = chart_with_related_stroke_style(
+        &local_cash_flow_line(Some("rnd"), "<a:miter/>"),
+        "<a:ln cap=\"flat\"><a:miter lim=\"600000\"/></a:ln>",
+    );
+    assert_eq!(chart.series[0].line_geometry.cap, Some(LineCap::Round));
+    assert_eq!(chart.series[0].line_geometry.join, Some(LineJoin::Miter));
+    assert_eq!(chart.series[0].line_geometry.miter_limit, Some(8.0));
+}
+
+#[test]
+fn test_chart_style_does_not_borrow_marker_geometry_when_line_style_is_absent() {
+    let chart = chart_with_related_stroke_style(&local_cash_flow_line(None, ""), "");
+    assert_eq!(chart.series[0].line_geometry.cap, None);
+    assert_eq!(chart.series[0].line_geometry.join, None);
+}
+
+#[test]
+fn test_chart_style_ignores_nested_extension_strokes() {
+    let chart = chart_with_related_stroke_style(
+        &local_cash_flow_line(None, ""),
+        "<a:extLst><a:ext uri=\"test\"><a:ln cap=\"sq\"><a:bevel/></a:ln></a:ext></a:extLst>",
+    );
+    assert_eq!(chart.series[0].line_geometry.cap, None);
+    assert_eq!(chart.series[0].line_geometry.join, None);
+}
+
+#[test]
+fn test_chart_style_ignores_malformed_geometry() {
+    let chart = chart_with_related_stroke_style(
+        &local_cash_flow_line(None, ""),
+        "<a:ln cap=\"sq\"><a:miter/>",
+    );
+    assert_eq!(chart.series[0].line_geometry.cap, None);
+    assert_eq!(chart.series[0].line_geometry.join, None);
+}
+
+#[test]
+fn test_chart_style_native_fixture_resolves_positioned_chart_defaults() {
+    let data = std::fs::read(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/xlsx/issue_1593_inherited_series_cap.xlsx"
+    ))
+    .unwrap();
+    let (doc, _) = XlsxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let chart = doc
+        .pages
+        .iter()
+        .filter_map(|page| match page {
+            Page::Sheet(sheet) => Some(sheet),
+            _ => None,
+        })
+        .flat_map(|sheet| &sheet.charts)
+        .find(|anchor| anchor.chart.chart_type == ChartType::Line)
+        .unwrap();
+    let series = &chart.chart.series[0];
+    assert_eq!(series.line_geometry.cap, Some(LineCap::Round));
+    assert_eq!(series.line_geometry.join, Some(LineJoin::Round));
+    assert_eq!(series.line_width_pt, Some(2.25));
+    assert_eq!(series.values.len(), 13);
+    assert_eq!(series.values[0], 169.0);
+}

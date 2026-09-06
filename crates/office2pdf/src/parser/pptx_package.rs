@@ -1,4 +1,4 @@
-use crate::parser::chart as chart_parser;
+use crate::parser::chart_style::parse_chart_with_style;
 
 use super::*;
 
@@ -259,7 +259,8 @@ pub(super) fn load_chart_data<R: Read + std::io::Seek>(
         };
 
         if let Ok(chart_xml) = read_zip_entry(archive, &chart_path)
-            && let Some(mut chart) = chart_parser::parse_chart_xml(&chart_xml, scheme)
+            && let Some(mut chart) =
+                parse_chart_with_style(archive, &chart_path, &chart_xml, scheme)
         {
             // The shapes the chart's own drawing part lays over it, which the
             // chart XML can only name through a relationship (issue #1186).

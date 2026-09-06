@@ -933,7 +933,8 @@ pub struct ChartSeries {
     /// mixed-plot polylines and the legend key that samples them. A bar
     /// series' `<a:ln>` is its outline, which is a separate thing.
     pub line_width_pt: Option<f64>,
-    /// Direct series cap/join geometry, shared by the plotted line and legend.
+    /// Series cap/join geometry after local properties override chart-style
+    /// defaults, shared by the plotted line and legend.
     pub line_geometry: ChartStrokeGeometry,
 }
 
