@@ -8571,3 +8571,81 @@ fn marker_fill_and_outline_suppression_reach_the_plot_independently() {
     let filled = chart_source(chart);
     assert!(filled.contains("fill: rgb(0, 136, 137), stroke: none"));
 }
+
+/// A selected-period point can overlap the zero/category rule. Native Excel
+/// paints that rule first; an opaque marker covers it and a hollow one lets
+/// it show through. Inspect compiled paint order, not markup order (#1578).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn category_axis_paints_before_overlapping_line_plot_markers() {
+    use crate::ir::{ChartFillMode, ChartLine};
+    use crate::render::pdf::{PaintedKind, compiled_paint_sequence};
+
+    let mut failures = Vec::new();
+    for value in [0.0, 0.5] {
+        for (symbol, fill_mode) in [
+            (MarkerSymbol::Circle, ChartFillMode::Explicit),
+            (MarkerSymbol::Circle, ChartFillMode::Suppressed),
+            (MarkerSymbol::Off, ChartFillMode::Explicit),
+        ] {
+            let mut chart = combo_line_and_scatter_chart();
+            chart.series[0].values = vec![0.0, 30.0, -10.0];
+            chart.series[1].values = vec![value];
+            chart.series[1].marker_symbol = Some(symbol);
+            chart.series[1].marker_style = crate::ir::ChartMarkerStyle {
+                size_pt: Some(14.0),
+                fill_mode,
+                fill: Some(crate::ir::Color::new(204, 34, 68)),
+                line: ChartLine::Explicit {
+                    width_pt: Some(0.75),
+                    color: Some(crate::ir::Color::new(0, 136, 137)),
+                    alpha: Some(1.0),
+                },
+                ..Default::default()
+            };
+            chart.value_axis_min = Some(-20.0);
+            chart.value_axis_max = Some(40.0);
+            chart.major_gridline_line = ChartLine::Suppressed;
+            chart.category_axis_line = ChartLine::Explicit {
+                width_pt: Some(0.25),
+                color: Some(crate::ir::Color::new(191, 191, 191)),
+                alpha: Some(0.5),
+            };
+            let source = chart_source(chart);
+            let paints = compiled_paint_sequence(&source, &[], 0).unwrap();
+            let axes: Vec<_> = paints
+                .iter()
+                .enumerate()
+                .filter(|(_, item)| {
+                    let (x0, y0, x1, y1) = item.bounds;
+                    item.kind == PaintedKind::Shape && x1 - x0 > 100.0 && (y1 - y0).abs() < 0.01
+                })
+                .collect();
+            assert_eq!(axes.len(), 1, "the declared category rule remains present");
+            let markers: Vec<_> = paints
+                .iter()
+                .enumerate()
+                .filter(|(_, item)| {
+                    let (x0, y0, x1, y1) = item.bounds;
+                    item.kind == PaintedKind::Shape
+                        && (x1 - x0 - 14.0).abs() < 0.01
+                        && (y1 - y0 - 14.0).abs() < 0.01
+                })
+                .collect();
+            if symbol == MarkerSymbol::Off {
+                assert!(markers.is_empty(), "disabled markers must remain absent");
+                continue;
+            }
+            assert_eq!(markers.len(), 1, "the declared 14pt marker is retained");
+            let (axis_index, axis) = axes[0];
+            let (marker_index, marker) = markers[0];
+            assert!(axis.bounds.1 > marker.bounds.1 && axis.bounds.1 < marker.bounds.3);
+            if axis_index >= marker_index {
+                failures.push(format!(
+                    "value={value}, fill={fill_mode:?}: axis paint {axis_index} follows marker {marker_index}"
+                ));
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}

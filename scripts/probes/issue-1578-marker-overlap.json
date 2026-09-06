@@ -1,0 +1,27 @@
+{
+  "name": "issue-1578-marker-overlap-reproduction",
+  "base": "../../tests/fixtures/xlsx/issue_1181_fit_to_height.xlsx",
+  "part": "xl/charts/chart2.xml",
+  "factor": "series marker paint",
+  "page": 2,
+  "variants": [
+    {
+      "value": "red-fill",
+      "find": "<c:marker><c:symbol val=\"circle\"/><c:size val=\"14\"/><c:spPr><a:solidFill><a:schemeClr val=\"accent1\"/></a:solidFill><a:ln w=\"9525\" cap=\"flat\" cmpd=\"sng\" algn=\"ctr\"><a:solidFill><a:schemeClr val=\"accent1\"><a:shade val=\"95000\"/><a:satMod val=\"105000\"/></a:schemeClr></a:solidFill><a:prstDash val=\"solid\"/><a:round/></a:ln><a:effectLst/></c:spPr></c:marker>",
+      "replace": "<c:marker><c:symbol val=\"circle\"/><c:size val=\"14\"/><c:spPr><a:solidFill><a:srgbClr val=\"CC2244\"/></a:solidFill><a:ln w=\"9525\" cap=\"flat\" cmpd=\"sng\" algn=\"ctr\"><a:solidFill><a:schemeClr val=\"accent1\"><a:shade val=\"95000\"/><a:satMod val=\"105000\"/></a:schemeClr></a:solidFill><a:prstDash val=\"solid\"/><a:round/></a:ln><a:effectLst/></c:spPr></c:marker>",
+      "count": 1
+    },
+    {
+      "value": "no-fill",
+      "find": "<c:marker><c:symbol val=\"circle\"/><c:size val=\"14\"/><c:spPr><a:solidFill><a:schemeClr val=\"accent1\"/></a:solidFill><a:ln w=\"9525\" cap=\"flat\" cmpd=\"sng\" algn=\"ctr\"><a:solidFill><a:schemeClr val=\"accent1\"><a:shade val=\"95000\"/><a:satMod val=\"105000\"/></a:schemeClr></a:solidFill><a:prstDash val=\"solid\"/><a:round/></a:ln><a:effectLst/></c:spPr></c:marker>",
+      "replace": "<c:marker><c:symbol val=\"circle\"/><c:size val=\"14\"/><c:spPr><a:noFill/><a:ln w=\"9525\" cap=\"flat\" cmpd=\"sng\" algn=\"ctr\"><a:solidFill><a:schemeClr val=\"accent1\"><a:shade val=\"95000\"/><a:satMod val=\"105000\"/></a:schemeClr></a:solidFill><a:prstDash val=\"solid\"/><a:round/></a:ln><a:effectLst/></c:spPr></c:marker>",
+      "count": 1
+    },
+    {
+      "value": "disabled",
+      "find": "<c:marker><c:symbol val=\"circle\"/><c:size val=\"14\"/><c:spPr><a:solidFill><a:schemeClr val=\"accent1\"/></a:solidFill><a:ln w=\"9525\" cap=\"flat\" cmpd=\"sng\" algn=\"ctr\"><a:solidFill><a:schemeClr val=\"accent1\"><a:shade val=\"95000\"/><a:satMod val=\"105000\"/></a:schemeClr></a:solidFill><a:prstDash val=\"solid\"/><a:round/></a:ln><a:effectLst/></c:spPr></c:marker>",
+      "replace": "<c:marker><c:symbol val=\"none\"/><c:size val=\"14\"/><c:spPr><a:solidFill><a:schemeClr val=\"accent1\"/></a:solidFill><a:ln w=\"9525\" cap=\"flat\" cmpd=\"sng\" algn=\"ctr\"><a:solidFill><a:schemeClr val=\"accent1\"><a:shade val=\"95000\"/><a:satMod val=\"105000\"/></a:schemeClr></a:solidFill><a:prstDash val=\"solid\"/><a:round/></a:ln><a:effectLst/></c:spPr></c:marker>",
+      "count": 1
+    }
+  ]
+}

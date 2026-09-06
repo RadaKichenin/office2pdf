@@ -4659,36 +4659,9 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
         }
     }
 
-    // Series polylines + markers.
-    for (s_index, s) in series.iter().enumerate() {
-        let color: String = series_color(s, s_index, 0, &chart.theme_accent_colors);
-        let points: Vec<(f64, f64)> = s
-            .values
-            .iter()
-            .enumerate()
-            .map(|(index, value)| (point_x(index), point_y(*value)))
-            .collect();
-        if points.len() >= 2 {
-            let coords: String = points
-                .iter()
-                .map(|(x, y)| format!("({}pt, {}pt)", format_f64(*x), format_f64(*y)))
-                .collect::<Vec<_>>()
-                .join(", ");
-            let _ = writeln!(
-                out,
-                "#place(top + left, path(stroke: {}pt + {color}, {coords}))",
-                format_f64(series_line_pt(s))
-            );
-        }
-        // Point markers: the symbol the series names, else the shape cycle.
-        for (x, y) in &points {
-            write_series_marker(out, s_index, s, *x, *y, &color);
-        }
-    }
-
-    // Value/category axis lines and their major tick marks. The value axis
-    // always runs down the left edge here and the category axis along the
-    // bottom, whatever shape the series take.
+    // Native Excel paints axes and ticks before the series, so an opaque
+    // marker occludes the rule beneath it (#1578). Keep the value axis at
+    // the left edge and the category axis at value zero.
     let value_stroke = chart_chrome_stroke(chart.value_axis_line);
     let category_stroke = chart_chrome_stroke(chart.category_axis_line);
     if let (true, Some(stroke)) = (value_axis_drawn, value_stroke.as_deref()) {
@@ -4730,6 +4703,33 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
                     stroke,
                 );
             }
+        }
+    }
+
+    // Series polylines + markers.
+    for (s_index, s) in series.iter().enumerate() {
+        let color: String = series_color(s, s_index, 0, &chart.theme_accent_colors);
+        let points: Vec<(f64, f64)> = s
+            .values
+            .iter()
+            .enumerate()
+            .map(|(index, value)| (point_x(index), point_y(*value)))
+            .collect();
+        if points.len() >= 2 {
+            let coords: String = points
+                .iter()
+                .map(|(x, y)| format!("({}pt, {}pt)", format_f64(*x), format_f64(*y)))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let _ = writeln!(
+                out,
+                "#place(top + left, path(stroke: {}pt + {color}, {coords}))",
+                format_f64(series_line_pt(s))
+            );
+        }
+        // Point markers: the symbol the series names, else the shape cycle.
+        for (x, y) in &points {
+            write_series_marker(out, s_index, s, *x, *y, &color);
         }
     }
 
