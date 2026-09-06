@@ -1,6 +1,6 @@
-//! Chart XML parser for DOCX embedded charts.
+//! Shared chart XML parser for DOCX, PPTX and XLSX packages.
 //!
-//! Parses chart*.xml files from DOCX ZIP archives and extracts chart type,
+//! Parses chart*.xml parts and extracts chart type,
 //! title, category labels, and series data into IR `Chart` structs.
 
 use quick_xml::Reader;
@@ -132,6 +132,14 @@ fn bar_direction_chart_type(direction: Option<&str>) -> Option<ChartType> {
 
 /// Parse a chart XML file (e.g., `word/charts/chart1.xml`) into a `Chart` IR.
 pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Chart> {
+    parse_chart_xml_with_stroke_defaults(xml, scheme, crate::ir::ChartStrokeGeometry::default())
+}
+
+pub(super) fn parse_chart_xml_with_stroke_defaults(
+    xml: &str,
+    scheme: &SchemeColors<'_>,
+    stroke_defaults: crate::ir::ChartStrokeGeometry,
+) -> Option<Chart> {
     let mut reader = Reader::from_str(xml);
     let mut chart_type = None;
     let mut hole_size_percent: Option<u32> = None;
@@ -237,8 +245,21 @@ pub(crate) fn parse_chart_xml(xml: &str, scheme: &SchemeColors<'_>) -> Option<Ch
                     // line does not draw as a column and vice versa. Normalised
                     // against the chart's own family once it is settled, below
                     // (issue #1067).
+                    // dataPointLine is for 2-D line/scatter and unfilled radar.
+                    // line3DChart and filled radar normalize to the same IR
+                    // families but use different chart-style entries.
+                    let uses_line_defaults = matches!(tag, b"lineChart" | b"scatterChart")
+                        || (tag == b"radarChart" && plot.radar_style.as_deref() != Some("filled"));
                     for entry in &mut series[family_first_series..] {
                         entry.plot_type = Some(family.clone());
+                        if uses_line_defaults {
+                            let geometry = &mut entry.line_geometry;
+                            geometry.cap = geometry.cap.or(stroke_defaults.cap);
+                            if geometry.join.is_none() {
+                                geometry.join = stroke_defaults.join;
+                                geometry.miter_limit = stroke_defaults.miter_limit;
+                            }
+                        }
                     }
                     // The bar family governs the chart: the value scale and the
                     // category bands are the ones its columns are drawn to, and
@@ -1009,6 +1030,8 @@ struct PlotAreaProps {
     bar_direction: Option<String>,
     /// `<c:grouping>`.
     grouping: Option<String>,
+    /// `<c:radarStyle>` selects filled versus line-based radar styling.
+    radar_style: Option<String>,
     /// `<c:ofPieType>`, exclusive to `<c:ofPieChart>`.
     of_pie_type: Option<String>,
     /// `<c:gapWidth>`, exclusive to the bar family. Office writes it after the
@@ -1026,6 +1049,7 @@ impl PlotAreaProps {
         match e.local_name().as_ref() {
             b"barDir" => self.bar_direction = xml_util::get_attr_str(e, b"val"),
             b"grouping" => self.grouping = xml_util::get_attr_str(e, b"val"),
+            b"radarStyle" => self.radar_style = xml_util::get_attr_str(e, b"val"),
             b"ofPieType" => self.of_pie_type = xml_util::get_attr_str(e, b"val"),
             b"gapWidth" => self.gap_width = xml_util::get_attr_str(e, b"val"),
             b"overlap" => self.overlap = xml_util::get_attr_str(e, b"val"),
@@ -1581,6 +1605,76 @@ struct ShapeProperties {
     line_geometry: crate::ir::ChartStrokeGeometry,
 }
 
+/// Read only the chart style's direct dataPointLine shape properties. Other
+/// style roles and nested extension properties cannot supply series defaults.
+pub(super) fn parse_series_stroke_defaults(xml: &str) -> crate::ir::ChartStrokeGeometry {
+    let mut reader = Reader::from_str(xml);
+    let mut path: Vec<Vec<u8>> = Vec::new();
+    let mut geometry = crate::ir::ChartStrokeGeometry::default();
+    loop {
+        let event = reader.read_event();
+        let is_start = matches!(&event, Ok(Event::Start(_)));
+        match event {
+            Ok(Event::Start(ref element)) | Ok(Event::Empty(ref element)) => {
+                let name = element.local_name();
+                let in_series_shape = path.len() >= 3
+                    && path[0] == b"chartStyle"
+                    && path[1] == b"dataPointLine"
+                    && path[2] == b"spPr";
+                if in_series_shape && path.len() == 3 && name.as_ref() == b"ln" {
+                    geometry.cap = geometry.cap.or_else(|| read_line_cap(element));
+                }
+                if in_series_shape
+                    && path.len() == 4
+                    && path[3] == b"ln"
+                    && geometry.join.is_none()
+                    && let Some((join, limit)) = read_line_join(element)
+                {
+                    geometry.join = Some(join);
+                    geometry.miter_limit = limit;
+                }
+                if is_start {
+                    path.push(name.as_ref().to_vec());
+                }
+            }
+            Ok(Event::End(_)) => {
+                path.pop();
+            }
+            Ok(Event::Eof) if path.is_empty() => return geometry,
+            Ok(Event::Eof) | Err(_) => return crate::ir::ChartStrokeGeometry::default(),
+            _ => {}
+        }
+    }
+}
+
+fn read_line_cap(element: &quick_xml::events::BytesStart<'_>) -> Option<crate::ir::LineCap> {
+    match xml_util::get_attr_str(element, b"cap").as_deref() {
+        Some("flat") => Some(crate::ir::LineCap::Flat),
+        Some("rnd") => Some(crate::ir::LineCap::Round),
+        Some("sq") => Some(crate::ir::LineCap::Square),
+        _ => None,
+    }
+}
+
+fn read_line_join(
+    element: &quick_xml::events::BytesStart<'_>,
+) -> Option<(crate::ir::LineJoin, Option<f64>)> {
+    match element.local_name().as_ref() {
+        b"round" => Some((crate::ir::LineJoin::Round, None)),
+        b"bevel" => Some((crate::ir::LineJoin::Bevel, None)),
+        b"miter" => {
+            // DrawingML percentages use 100000 for 100%. Native Excel's
+            // omitted-limit control exports a ratio of 8.
+            let limit = xml_util::get_attr_str(element, b"lim")
+                .and_then(|value| value.parse::<f64>().ok())
+                .filter(|value| value.is_finite() && *value > 0.0)
+                .map_or(8.0, |value| value / 100_000.0);
+            Some((crate::ir::LineJoin::Miter, Some(limit)))
+        }
+        _ => None,
+    }
+}
+
 /// Read a `<c:spPr>` into its fill mode, colour hint, and stroke geometry,
 /// consuming up to `end_tag`.
 ///
@@ -1623,34 +1717,17 @@ fn parse_shape_properties(
                         .map(|emu| emu / EMU_PER_POINT)
                         .filter(|width_pt| *width_pt > 0.0)
                 });
-                properties.line_geometry.cap = properties.line_geometry.cap.or_else(|| {
-                    match xml_util::get_attr_str(e, b"cap").as_deref() {
-                        Some("flat") => Some(crate::ir::LineCap::Flat),
-                        Some("rnd") => Some(crate::ir::LineCap::Round),
-                        Some("sq") => Some(crate::ir::LineCap::Square),
-                        _ => None,
-                    }
-                });
+                properties.line_geometry.cap =
+                    properties.line_geometry.cap.or_else(|| read_line_cap(e));
             }
             Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))
                 if in_line && matches!(e.local_name().as_ref(), b"round" | b"bevel" | b"miter") =>
             {
-                if properties.line_geometry.join.is_none() {
-                    properties.line_geometry.join = Some(match e.local_name().as_ref() {
-                        b"round" => crate::ir::LineJoin::Round,
-                        b"bevel" => crate::ir::LineJoin::Bevel,
-                        _ => crate::ir::LineJoin::Miter,
-                    });
-                    if e.local_name().as_ref() == b"miter" {
-                        // DrawingML percentages use 100000 for 100%. Native
-                        // Excel's omitted-limit control exports a ratio of 8.
-                        properties.line_geometry.miter_limit = Some(
-                            xml_util::get_attr_str(e, b"lim")
-                                .and_then(|value| value.parse::<f64>().ok())
-                                .filter(|value| value.is_finite() && *value > 0.0)
-                                .map_or(8.0, |value| value / 100_000.0),
-                        );
-                    }
+                if properties.line_geometry.join.is_none()
+                    && let Some((join, limit)) = read_line_join(e)
+                {
+                    properties.line_geometry.join = Some(join);
+                    properties.line_geometry.miter_limit = limit;
                 }
             }
             Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"solidFill" => {

@@ -65,7 +65,9 @@ pub(in super::super) fn build_chart_context_from_xml(
     for (body_index, relationship_id) in chart_references {
         if let Some(chart_path) = chart_relationships.get(&relationship_id)
             && let Some(chart_xml) = read_zip_text(archive, chart_path)
-            && let Some(mut chart) = chart::parse_chart_xml(&chart_xml, &scheme)
+            && let Some(mut chart) = crate::parser::chart_style::parse_chart_with_style(
+                archive, chart_path, &chart_xml, &scheme,
+            )
         {
             chart.theme_accent_colors = theme_accents.clone();
             chart.host = crate::ir::ChartHost::WordProcessing;

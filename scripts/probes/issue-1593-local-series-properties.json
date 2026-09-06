@@ -1,0 +1,21 @@
+{
+  "name": "issue-1593-local-series-properties",
+  "base": "../../tests/fixtures/xlsx/issue_1181_fit_to_height.xlsx",
+  "part": "xl/charts/chart2.xml",
+  "factor": "omitted local series property",
+  "page": 2,
+  "variants": [
+    {
+      "value": "omitted-cap",
+      "find": "<a:ln w=\"28575\" cap=\"rnd\" cmpd=\"sng\" algn=\"ctr\"><a:solidFill><a:schemeClr val=\"accent1\"><a:shade val=\"65000\"/><a:shade val=\"95000\"/><a:satMod val=\"105000\"/></a:schemeClr></a:solidFill><a:prstDash val=\"solid\"/><a:round/></a:ln>",
+      "replace": "<a:ln w=\"28575\" cmpd=\"sng\" algn=\"ctr\"><a:solidFill><a:schemeClr val=\"accent1\"><a:shade val=\"65000\"/><a:shade val=\"95000\"/><a:satMod val=\"105000\"/></a:schemeClr></a:solidFill><a:prstDash val=\"solid\"/><a:round/></a:ln>",
+      "count": 1
+    },
+    {
+      "value": "omitted-join",
+      "find": "<a:ln w=\"28575\" cap=\"rnd\" cmpd=\"sng\" algn=\"ctr\"><a:solidFill><a:schemeClr val=\"accent1\"><a:shade val=\"65000\"/><a:shade val=\"95000\"/><a:satMod val=\"105000\"/></a:schemeClr></a:solidFill><a:prstDash val=\"solid\"/><a:round/></a:ln>",
+      "replace": "<a:ln w=\"28575\" cap=\"rnd\" cmpd=\"sng\" algn=\"ctr\"><a:solidFill><a:schemeClr val=\"accent1\"><a:shade val=\"65000\"/><a:shade val=\"95000\"/><a:satMod val=\"105000\"/></a:schemeClr></a:solidFill><a:prstDash val=\"solid\"/></a:ln>",
+      "count": 1
+    }
+  ]
+}

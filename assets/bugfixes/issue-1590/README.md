@@ -60,10 +60,10 @@ Remaining independent findings: chart frame #1272; fitted drawing origin
 #1542; column width #1543; fixed-row text #1545; title-row height #1550;
 wrapped-note pitch #1551; footer baseline #1552; worksheet rules #1564;
 missing chart separators #1566; cached marker value #1577. Native marker and
-sparkline bitmap edges also differ from vector output. Omitted local stroke
-properties do not yet inherit the related chart style (#1593); separate
-style-only round/flat/square controls reproduce that gap. This change preserves
-explicit local properties and does not invent a universal round default.
+sparkline bitmap edges also differ from vector output. At this baseline, omitted local stroke
+properties did not inherit the related chart style. The follow-up fix and
+style-only round/flat/square controls are documented in
+[issue #1593](../issue-1593/README.md). Explicit local properties retain precedence.
 
 ## Reproduction
 
