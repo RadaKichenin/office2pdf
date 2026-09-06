@@ -53,6 +53,26 @@ difference, missing/extra/reflowed text, changed wraps, a painted-text visibilit
 mismatch, a visible-fill occlusion, or a text or rectangle geometry shift above
 the configured fine or large threshold.
 
+### Composed fill coverage
+
+Rectangle diagnostics retain raw matched dimensions and source-operation
+indices. For a raw fill geometry finding, the layout audit also compares the
+opaque flat-fill layer after rectangular clipping and paint-order composition.
+Only equivalent coverage makes that finding informational; a real difference
+or unmodeled coverage keeps the geometry finding active. Per-edge coverage
+separates an already-painted edge from an error elsewhere in the same fill.
+The fine/coarse gate is unchanged; coincident trace coordinates use the existing
+0.01pt epsilon, clamped to the active gate when it is finer. Each coordinate
+cluster is bounded to that full span.
+
+Images, shading, nonrectangular paths/clips, translucent paint, soft masks, and
+non-normal groups cannot establish flat-fill equivalence. A mask or tile marks
+the page's fill coverage unmodeled because its later graphics-state effect is
+not reconstructed. Later opaque fills may cover unknown image/path paint. Comparisons exceeding 100,000 partition cells also
+remain unmodeled. Text and strokes have their own audits; this fill-layer proof
+does not replace pixel inspection. Raw findings and unknown regions remain in
+the JSON report even when other edges match.
+
 ### Verified reference-exporter differences
 
 Do not change correct Office behavior merely to match a PDF made by another

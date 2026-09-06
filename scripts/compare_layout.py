@@ -25,7 +25,10 @@ visible ink. It then matches lines by their text and reports typed deviations:
   and paint order rather than by the raw rectangle count;
 - a fill/stroke path census plus geometry-aware x/y/size/edge deltas for
   axis-aligned rectangles and straight lines. Touching same-paint operation
-  splits are merged before matching while raw counts stay visible.
+  splits are merged before matching. Raw fill geometry findings become
+  informational only when composed opaque flat-fill coverage is equivalent;
+  differing or unmodeled coverage retains the finding and names the affected
+  regions. Raw dimensions and per-edge coverage remain available.
 
 A noise floor (default 0.12pt — native Word exports quantise coordinates to a
 0.24pt grid; use 0.5 for Excel GT, whose Quartz export rounds every advance to
@@ -249,12 +252,20 @@ class Line:
         return self.x1 - self.x0
 
 
+@dataclass(frozen=True)
+class CoveragePaint:
+    bbox: tuple[float, float, float, float] | None
+    color: tuple[float, float, float] | None
+    known: bool
+
+
 @dataclass
 class PageLayout:
     lines: list[Line]
     rects: list[Rect]
     paints: list[Paint] = field(default_factory=list)
     media_box: tuple[float, float, float, float] | None = None
+    coverage_paints: list[CoveragePaint] | None = None
 
 
 def unescape(text: str) -> str:
@@ -852,6 +863,226 @@ def classify_line_visibility(line: Line, paints: list[Paint]) -> str:
     return "painted"
 
 
+COVERAGE_EVENT_RE = re.compile(
+    r"<(?P<path>fill_path|stroke_path|clip_path|clip_stroke_path)\b[^>]*>"
+    r".*?</(?P=path)>|"
+    r"<(?P<text>fill_text|ignore_text|clip_text|clip_stroke_text)\b[^>]*>"
+    r".*?</(?P=text)>|"
+    r"<(?:fill_image|fill_image_mask|clip_image_mask|fill_shade|pop_clip|group|mask|tile)"
+    r"\b[^>]*>|</(?:group|mask|tile)>",
+    re.S,
+)
+
+
+def collect_fill_coverage(
+    content: str, media_box: tuple[float, float, float, float] | None
+) -> list[CoveragePaint]:
+    """Collect the composed fill layer with conservative clip/opacity handling.
+
+    Text and strokes have separate audits and are not background fills. Images,
+    shading, nonrectangular paths, soft masks, and nonopaque paint cannot prove
+    flat-fill equivalence. Unknown paint remains bounded conservatively and
+    may itself be hidden by a later, fully known opaque rectangle.
+    """
+    paints: list[CoveragePaint] = []
+    clip = media_box
+    clip_known = True
+    clip_stack: list[tuple[tuple[float, float, float, float] | None, bool]] = []
+    # Mask/tile definitions can affect later paint outside their XML block.
+    # Do not infer their graphics-state lifetime from group nesting.
+    group_known = not bool(re.search(r"<(?:begin_|end_)?(?:mask|tile)\b", content))
+    group_stack: list[bool] = []
+    for event in COVERAGE_EVENT_RE.finditer(content):
+        operation = event.group()
+        tag_match = re.match(r"<(/?)(\w+)\b([^>]*)>", operation)
+        assert tag_match is not None
+        closing, tag, attrs = tag_match.groups()
+        if tag in {"group", "mask", "tile"}:
+            if closing:
+                group_known = group_stack.pop() if group_stack else False
+            else:
+                group_stack.append(group_known)
+                group_known = (
+                    group_known and tag == "group" and parse_alpha(attrs) == 1.0
+                    and 'blendmode="Normal"' in attrs and 'knockout="1"' not in attrs
+                )
+            continue
+        if tag == "pop_clip":
+            clip, clip_known = clip_stack.pop() if clip_stack else (media_box, False)
+            continue
+        if tag.startswith("clip_"):
+            clip_stack.append((clip, clip_known))
+            bbox = None
+            if tag == "clip_path":
+                matched = CLIP_PATH_RE.fullmatch(operation)
+                assert matched is not None
+                bbox = axis_aligned_rect_bbox(*matched.groups())
+            if bbox is None:
+                clip_known = False
+                # An image mask's transformed unit square is a conservative
+                # bound even though its internal alpha coverage is unknown.
+                if tag == "clip_image_mask":
+                    transform = parse_transform(attrs)
+                    if transform is not None:
+                        bbox = transformed_bbox(transform, [(0, 0), (1, 0), (1, 1), (0, 1)])
+            if bbox is not None:
+                clip = bbox if clip is None else intersect_bboxes(clip, bbox)
+            continue
+        if tag in {"fill_text", "ignore_text", "stroke_path"}:
+            continue
+        if parse_alpha(attrs) == 0.0:
+            continue
+        bbox = None
+        color = None
+        known = False
+        if tag == "fill_path":
+            matched = PATH_RE.fullmatch(operation)
+            assert matched is not None
+            _, path_attrs, path_body = matched.groups()
+            bbox = axis_aligned_rect_bbox(path_attrs, path_body)
+            color = parse_rgb(attrs)
+            known = bbox is not None and color is not None and parse_alpha(attrs) == 1.0
+            if bbox is None:
+                # A Bezier curve stays inside its control-point hull. Its
+                # complete vertex/control-point box bounds unknown fill ink
+                # without poisoning unrelated worksheet regions.
+                transform = parse_transform(path_attrs)
+                xs = [float(value) for value in re.findall(r'\bx(?:1|2)?="([-0-9.e]+)"', path_body)]
+                ys = [float(value) for value in re.findall(r'\by(?:1|2)?="([-0-9.e]+)"', path_body)]
+                if transform is not None and xs and len(xs) == len(ys):
+                    bbox = transformed_bbox(transform, list(zip(xs, ys)))
+        elif tag in {"fill_image", "fill_image_mask"}:
+            transform = parse_transform(attrs)
+            if transform is not None:
+                bbox = transformed_bbox(transform, [(0, 0), (1, 0), (1, 1), (0, 1)])
+        if bbox is None:
+            bbox = clip
+        elif clip is not None:
+            bbox = intersect_bboxes(bbox, clip)
+        if bbox is not None and (bbox[0] >= bbox[2] or bbox[1] >= bbox[3]):
+            continue
+        paints.append(CoveragePaint(bbox, color, known and clip_known and group_known))
+    return paints
+
+
+def compare_fill_coverage(
+    gt: PageLayout,
+    out: PageLayout,
+    sample: dict,
+    coordinate_epsilon_pt: float = RECT_COVERAGE_EPSILON_PT,
+) -> dict:
+    """Prove equivalence only when every resolved fill region agrees.
+
+    Keep the existing rectangle gate. Its raw finding can be explained only
+    by a full coverage proof; different or unmodeled coverage retains it.
+    Coincident edges use the existing trace epsilon, clamped by the caller
+    to the active fine/coarse gate so normalization cannot widen that gate.
+    """
+    if gt.coverage_paints is None or out.coverage_paints is None:
+        return {"status": "unmodeled", "reason": "fill trace unavailable"}
+    boxes = [sample["gt_bbox"], sample["out_bbox"]]
+    if any(min(box[2] - box[0], box[3] - box[1]) <= coordinate_epsilon_pt for box in boxes):
+        return {"status": "unmodeled", "reason": "primitive thinner than trace epsilon"}
+    region = (min(b[0] for b in boxes), min(b[1] for b in boxes),
+              max(b[2] for b in boxes), max(b[3] for b in boxes))
+    layers: list[list[CoveragePaint]] = []
+    for page in [gt, out]:
+        assert page.coverage_paints is not None
+        layers.append([
+            CoveragePaint(region if paint.bbox is None else intersect_bboxes(region, paint.bbox),
+                          paint.color, paint.known)
+            for paint in page.coverage_paints
+            if paint.bbox is None or bboxes_overlap(region, paint.bbox)
+        ])
+    def snap_coordinates(values: set[float]) -> dict[float, float]:
+        groups: list[list[float]] = []
+        for value in sorted(values):
+            if not groups or value - groups[-1][0] > coordinate_epsilon_pt:
+                groups.append([])
+            groups[-1].append(value)
+        return {value: statistics.median(group) for group in groups for value in group}
+
+    # Normalize coincident trace edges before partitioning. Skipping every
+    # thin partition cell could otherwise hide a broad defect subdivided by
+    # many unrelated edges. A cluster's full span is bounded by the epsilon;
+    # close-coordinate chains cannot collapse a material-width region.
+    x_map = snap_coordinates({x for box in boxes for x in (box[0], box[2])} | {
+        x for layer in layers for paint in layer for x in (paint.bbox[0], paint.bbox[2])
+    })
+    y_map = snap_coordinates({y for box in boxes for y in (box[1], box[3])} | {
+        y for layer in layers for paint in layer for y in (paint.bbox[1], paint.bbox[3])
+    })
+    boxes = [[x_map[b[0]], y_map[b[1]], x_map[b[2]], y_map[b[3]]] for b in boxes]
+    region = (x_map[region[0]], y_map[region[1]], x_map[region[2]], y_map[region[3]])
+    layers = [[
+        CoveragePaint((x_map[p.bbox[0]], y_map[p.bbox[1]], x_map[p.bbox[2]], y_map[p.bbox[3]]),
+                      p.color, p.known)
+        for p in layer
+    ] for layer in layers]
+    xs = sorted(set(x_map.values()))
+    ys = sorted(set(y_map.values()))
+    if (len(xs) - 1) * (len(ys) - 1) > 100_000:
+        return {"status": "unmodeled", "reason": "coverage partition exceeds 100000 cells"}
+
+    def visible_color(layer: list[CoveragePaint], x: float, y: float) -> tuple:
+        for paint in reversed(layer):
+            assert paint.bbox is not None
+            if paint.bbox[0] < x < paint.bbox[2] and paint.bbox[1] < y < paint.bbox[3]:
+                return paint.known, paint.color
+        return True, None
+
+    edge_regions = {
+        "left": (min(b[0] for b in boxes), region[1], max(b[0] for b in boxes), region[3]),
+        "right": (min(b[2] for b in boxes), region[1], max(b[2] for b in boxes), region[3]),
+        "top": (region[0], min(b[1] for b in boxes), region[2], max(b[1] for b in boxes)),
+        "bottom": (region[0], min(b[3] for b in boxes), region[2], max(b[3] for b in boxes)),
+    }
+    edge_status = {
+        edge: "equivalent" if min(box[2] - box[0], box[3] - box[1]) > coordinate_epsilon_pt
+        else "unchanged"
+        for edge, box in edge_regions.items()
+    }
+
+    def mark_edges(box: tuple[float, float, float, float], status: str) -> None:
+        for edge, edge_box in edge_regions.items():
+            if edge_status[edge] == "unchanged" or not bboxes_overlap(box, edge_box):
+                continue
+            if edge_status[edge] != "different":
+                edge_status[edge] = status
+
+    mismatches: list[list[float]] = []
+    unmodeled_samples: list[list[float]] = []
+    mismatch_area = 0.0
+    unknown_area = 0.0
+    for x0, x1 in zip(xs, xs[1:]):
+        for y0, y1 in zip(ys, ys[1:]):
+            colors = [visible_color(layer, (x0 + x1) / 2, (y0 + y1) / 2) for layer in layers]
+            area = (x1 - x0) * (y1 - y0)
+            if not all(known for known, _ in colors):
+                unknown_area += area
+                if len(unmodeled_samples) < RECT_SAMPLE_LIMIT:
+                    unmodeled_samples.append([x0, y0, x1, y1])
+                mark_edges((x0, y0, x1, y1), "unmodeled")
+                continue
+            first, second = colors[0][1], colors[1][1]
+            equal = first is second or (
+                first is not None and second is not None and color_delta(first, second) <= 1e-6
+            )
+            if not equal:
+                mismatch_area += area
+                mark_edges((x0, y0, x1, y1), "different")
+                if len(mismatches) < RECT_SAMPLE_LIMIT:
+                    mismatches.append([x0, y0, x1, y1])
+    return {
+        "status": "different" if mismatch_area else "unmodeled" if unknown_area else "equivalent",
+        "mismatch_area_pt2": mismatch_area,
+        "unmodeled_area_pt2": unknown_area,
+        "unmodeled_samples": unmodeled_samples,
+        "mismatch_samples": mismatches,
+        "raw_edge_coverage": edge_status,
+    }
+
+
 def parse_trace(trace_xml: str) -> list[PageLayout]:
     pages: list[PageLayout] = []
     for page_match in PAGE_RE.finditer(trace_xml):
@@ -1017,6 +1248,7 @@ def parse_trace(trace_xml: str) -> list[PageLayout]:
                 rects=rects,
                 paints=paints,
                 media_box=media_box,
+                coverage_paints=collect_fill_coverage(content, media_box),
             )
         )
     return pages
@@ -1746,10 +1978,19 @@ def diff_page(
         key=lambda sample: (-sample["max_abs_delta"], sample["gt_indices"])
     )
     rect_geometry_threshold = fine_shift if fine_shift is not None else large_shift
-    rect_geometry_mismatches = [
-        sample
-        for sample in rect_samples
+    raw_geometry_mismatches = [
+        sample for sample in rect_samples
         if sample["max_abs_delta"] > rect_geometry_threshold
+    ]
+    for sample in raw_geometry_mismatches:
+        if sample["kind"] == "fill":
+            sample["visible_coverage"] = compare_fill_coverage(
+                gt, out, sample,
+                coordinate_epsilon_pt=min(RECT_COVERAGE_EPSILON_PT, rect_geometry_threshold),
+            )
+    rect_geometry_mismatches = [
+        sample for sample in raw_geometry_mismatches
+        if sample.get("visible_coverage", {}).get("status") != "equivalent"
     ]
     rect_center_deltas = [
         max(abs(sample["center_dx"]), abs(sample["center_dy"]))
@@ -1827,6 +2068,14 @@ def diff_page(
             ),
             "mean_center_delta": stats(rect_center_deltas)["mean_abs"],
             "geometry_threshold": rect_geometry_threshold,
+            "raw_geometry_mismatch_count": len(raw_geometry_mismatches),
+            "raw_geometry_mismatch_samples": raw_geometry_mismatches[:RECT_SAMPLE_LIMIT],
+            "coverage_equivalent_count": len(raw_geometry_mismatches) - len(rect_geometry_mismatches),
+            "coverage_unmodeled_count": sum(
+                sample.get("visible_coverage", {}).get("status") == "unmodeled"
+                or sample.get("visible_coverage", {}).get("unmodeled_area_pt2", 0) > 0
+                for sample in raw_geometry_mismatches
+            ),
             "geometry_mismatch_count": len(rect_geometry_mismatches),
             "geometry_mismatch_samples": rect_geometry_mismatches[:RECT_SAMPLE_LIMIT],
             "samples": rect_samples[:RECT_SAMPLE_LIMIT],
@@ -1950,9 +2199,15 @@ def render_reading(vectors: list[dict]) -> str:
             )
         if vector["rects"]["geometry_mismatch_count"]:
             examples = "; ".join(
-                f"{item['kind']} GT {item['gt_bbox']} -> output {item['out_bbox']} "
-                f"(dx {item['dx']:+.2f}, dy {item['dy']:+.2f}, "
-                f"dw {item['dwidth']:+.2f}, dh {item['dheight']:+.2f}pt)"
+                (
+                    f"fill coverage {item['visible_coverage']['status']}: "
+                    f"{item['visible_coverage'].get('mismatch_samples', [])}; "
+                    f"raw edge coverage {item['visible_coverage'].get('raw_edge_coverage', {})}"
+                    if "visible_coverage" in item else
+                    f"{item['kind']} GT {item['gt_bbox']} -> output {item['out_bbox']} "
+                    f"(dx {item['dx']:+.2f}, dy {item['dy']:+.2f}, "
+                    f"dw {item['dwidth']:+.2f}, dh {item['dheight']:+.2f}pt)"
+                )
                 for item in vector["rects"]["geometry_mismatch_samples"]
             )
             page_notes.append(
@@ -1961,6 +2216,15 @@ def render_reading(vectors: list[dict]) -> str:
                 f"{examples}. Inspect the recorded source operation indices and corresponding "
                 "render cluster"
             )
+        equivalent = vector["rects"].get("coverage_equivalent_count", 0)
+        unmodeled = vector["rects"].get("coverage_unmodeled_count", 0)
+        if equivalent:
+            page_notes.append(
+                f"{equivalent} raw fill geometry finding(s) explained by equivalent composed "
+                "coverage; raw dimensions remain informational diagnostics"
+            )
+        if unmodeled:
+            page_notes.append(f"{unmodeled} fill coverage comparison(s) unmodeled; raw findings retained")
         if not page_notes:
             page_notes.append("no deviation past the noise floor")
         lines.append(f"- page {index}: " + "; ".join(page_notes))
