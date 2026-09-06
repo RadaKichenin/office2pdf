@@ -9,9 +9,9 @@ visible ink. It then matches lines by their text and reports typed deviations:
 - matched / missing / extra lines, safe split/join topology differences for
   distant text objects, and wrap-point differences (text that is present but
   breaks at a different word) counted separately from real loss;
-- spatial-anchor dy statistics, per-line dx0, line-width drift, inter-line
-  pitch deltas between consecutive matched lines. Horizontal text uses its
-  true baseline; a rotated or skewed `fill_text` stays one visual run and uses
+- spatial-anchor dy statistics, dx0 and width drift for independently painted
+  cell/object fragments, and inter-line pitch deltas between matched lines.
+  Horizontal text uses its true baseline; a rotated or skewed `fill_text` stays one visual run and uses
   the minimum fully transformed glyph x/y as its comparable anchor;
 - painted visibility from the page media box, active rectangular clips, and
   trace order: text outside the visible bounds, covered by a later opaque
@@ -1115,6 +1115,62 @@ def split_distant_text_objects(line: Line) -> list[Line]:
     ]
 
 
+def matched_text_fragments(gt: Line, out: Line) -> list[tuple[Line, Line]]:
+    """Compare cell/object anchors without changing whole-line text matching.
+
+    A paint boundary with at least one em of empty space supplies an anchor.
+    Use boundaries from either exporter: the other may batch cells into one
+    paint or move a cell enough to narrow the gap. Equal normalized text maps
+    the cuts by character offset, independent of whitespace and paint batching.
+    Only shared glyph boundaries are usable, so a multi-character glyph is
+    never divided. The stricter split/join topology heuristic stays separate.
+    """
+    def offsets(line: Line) -> tuple[dict[int, int], set[int]]:
+        glyphs = line.visible_glyphs
+        indices = {0: 0}
+        cuts: set[int] = set()
+        offset = 0
+        for index, glyph in enumerate(glyphs):
+            if index:
+                previous = glyphs[index - 1]
+                gap = glyph.x - (previous.x + previous.advance)
+                if (
+                    previous.paint_index != glyph.paint_index
+                    and gap >= max(previous.size, glyph.size)
+                ):
+                    cuts.add(offset)
+            offset += len(glyph.unicode)
+            indices[offset] = index + 1
+        return indices, cuts
+
+    gt_indices, gt_cuts = offsets(gt)
+    out_indices, out_cuts = offsets(out)
+    cuts = sorted(
+        cut for cut in (gt_cuts | out_cuts) & gt_indices.keys() & out_indices.keys()
+        if 0 < cut < len(gt.key)
+    )
+    if not cuts:
+        return [(gt, out)]
+
+    boundaries = [0, *cuts, len(gt.key)]
+
+    def fragments(line: Line, indices: dict[int, int]) -> list[Line]:
+        glyphs = line.visible_glyphs
+        result: list[Line] = []
+        for start, end in zip(boundaries, boundaries[1:]):
+            group = glyphs[indices[start]:indices[end]]
+            result.append(
+                Line(
+                    y=statistics.median(glyph.y for glyph in group),
+                    glyphs=group,
+                    visibility=line.visibility,
+                )
+            )
+        return result
+
+    return list(zip(fragments(gt, gt_indices), fragments(out, out_indices)))
+
+
 def ordered_unique_segment_match(
     joined_line: Line, candidates: list[Line]
 ) -> tuple[list[Line], list[Line]] | None:
@@ -1614,13 +1670,14 @@ def diff_page(
     extra = [line for line in extra if line.visibility != "hidden"]
     topology_groups, topology, missing, extra = take_topology_equivalents(missing, extra)
     topology_matches = [pair for group in topology_groups for pair in group]
-    for gt_line, out_line in topology_matches:
-        # The original joined line can mix visible and occluded distant
-        # objects. Reclassify each synthetic segment so topology equivalence
-        # cannot suppress an independently real visibility mismatch.
+    line_matches = exact_matches + topology_matches
+    fragment_groups = [matched_text_fragments(a, b) for a, b in line_matches]
+    matches = [pair for group in fragment_groups for pair in group]
+    for gt_line, out_line in matches:
+        # A shared baseline can mix visible and occluded cells. Reclassify
+        # each fragment so visible neighbors cannot hide an occluded object.
         gt_line.visibility = classify_line_visibility(gt_line, gt.paints)
         out_line.visibility = classify_line_visibility(out_line, out.paints)
-    matches = exact_matches + topology_matches
     matches.sort(key=lambda pair: (pair[0].y, pair[0].x0))
     wraps, missing, extra = take_wrap_differences(missing, extra)
     reflow, missing, extra = take_reflows(missing, extra)
@@ -1635,7 +1692,10 @@ def diff_page(
     deviant_lines = sum(
         1
         for gt_line, out_line in exact_matches
-        if abs(out_line.y - gt_line.y) > noise_floor
+        if any(
+            abs(b.y - a.y) > noise_floor
+            for a, b in matched_text_fragments(gt_line, out_line)
+        )
     ) + sum(
         any(abs(out_line.y - gt_line.y) > noise_floor for gt_line, out_line in group)
         for group in topology_groups
@@ -1702,8 +1762,8 @@ def diff_page(
     )
 
     pitch_deltas: list[float] = []
-    matched_gt = {id(gt_line) for gt_line, _ in matches}
-    ordered = [pair for pair in matches]
+    matched_gt = {id(gt_line) for gt_line, _ in line_matches}
+    ordered = list(line_matches)
     ordered.sort(key=lambda pair: pair[0].y)
     for (gt_a, out_a), (gt_b, out_b) in zip(ordered, ordered[1:]):
         if id(gt_a) in matched_gt and id(gt_b) in matched_gt:

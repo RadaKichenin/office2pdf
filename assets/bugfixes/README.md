@@ -42,6 +42,16 @@ python3 scripts/compare_layout.py --json --audit --fine-shift 0.5 gt.pdf after.p
   > assets/bugfixes/issue-<number>/layout-audit.json
 ```
 
+The layout audit retains whole-line text matching but compares independent
+cell/object anchors within a shared baseline. A separate text paint with at
+least one em of empty space identifies a fragment boundary; a boundary on
+either side is mapped to the same text offset on the other. This prevents a
+fixed first cell from hiding later cells' movement or visibility differences.
+Normal word spacing stays together, and the stricter split/join topology rules
+remain unchanged. Closely packed text without such a boundary still needs the
+pixel comparison and manual crop inspection.
+
+
 The command exits nonzero when material findings remain but still writes the
 report. Change both `after.jpg` and `layout-audit.json` in a raster-changing fix
 pull request; use the text-layer-only exception above when the current render is
