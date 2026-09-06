@@ -1,5 +1,96 @@
 use super::*;
 
+/// Native quarter-point translations of the lecture frame retain its
+/// fractional content origin (#1583), including later paragraphs and bullets.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn top_anchored_slide_text_preserves_fractional_origin() {
+    for (family, size, as_list) in [
+        ("Libertinus Serif", 17.0, false),
+        ("DejaVu Sans Mono", 14.5, true),
+    ] {
+        let compile = |translation: f64| {
+            let paragraphs: Vec<Paragraph> =
+                ["First paragraph", "Second paragraph", "Third paragraph"]
+                    .into_iter()
+                    .map(|text| Paragraph {
+                        style: ParagraphStyle {
+                            space_after: Some(10.0),
+                            ..ParagraphStyle::default()
+                        },
+                        runs: vec![Run {
+                            text: text.into(),
+                            style: TextStyle {
+                                font_family: Some(family.into()),
+                                font_size: Some(size),
+                                ..TextStyle::default()
+                            },
+                            href: None,
+                            footnote: None,
+                        }],
+                    })
+                    .collect();
+            let content = if as_list {
+                vec![Block::List(List {
+                    kind: ListKind::Unordered,
+                    items: paragraphs
+                        .into_iter()
+                        .map(|paragraph| ListItem {
+                            content: vec![paragraph],
+                            level: 0,
+                            start_at: None,
+                        })
+                        .collect(),
+                    level_styles: std::collections::BTreeMap::new(),
+                })]
+            } else {
+                paragraphs.into_iter().map(Block::Paragraph).collect()
+            };
+            let document = make_doc(vec![make_fixed_page(
+                960.0,
+                540.0,
+                vec![make_fixed_text_box(
+                    72.0,
+                    144.0 + translation,
+                    600.0,
+                    250.0,
+                    Insets {
+                        top: 3.6,
+                        ..Insets::default()
+                    },
+                    crate::ir::TextBoxVerticalAlign::Top,
+                    content,
+                )],
+            )]);
+            let output = generate_typst(&document).unwrap();
+            crate::render::pdf::compiled_text_runs(&output.source, 0).unwrap()
+        };
+        let original = compile(0.0);
+        assert!(original.iter().any(|run| run.text.contains("Third")));
+        if as_list {
+            assert_eq!(
+                original.iter().filter(|run| run.text.contains('•')).count(),
+                3
+            );
+        }
+        for translation in [0.25, 0.5, 0.75] {
+            let moved = compile(translation);
+            assert_eq!(original.len(), moved.len());
+            for (before, after) in original.iter().zip(&moved) {
+                assert_eq!(before.text, after.text);
+                assert!((before.left_pt - after.left_pt).abs() < 0.01);
+                assert!(
+                    (after.baseline_pt - before.baseline_pt - translation).abs() < 0.01,
+                    "{family} {:?} must follow its text-box translation of {translation}pt: {} -> {}",
+                    before.text,
+                    before.baseline_pt,
+                    after.baseline_pt,
+                );
+            }
+        }
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn wrapped_powerpoint_bullet_follows_its_first_line() {
@@ -3242,18 +3333,19 @@ fn consecutive_slide_paragraphs_keep_powerpoints_full_line_advance() {
     }
 }
 
-/// PowerPoint rounds each paragraph's baseline at its absolute slide position,
-/// not the baseline seat relative to the paragraph's fractional top. The four
+/// PowerPoint rounds each paragraph's running baseline within its text story,
+/// not only the seat relative to the paragraph's fractional top. The four
 /// 17pt lines on slide 3 of `08_marketing_report_en.pptx` start at 126.0,
 /// 156.4, 186.8, and 217.2pt; its native Arial baselines therefore land on
 /// 142, 172, 203, and 233pt rather than carrying those fractional tops through
-/// (#1259). The exact integer sequence depends on whether the test host resolves
+/// (#1259). This fixture has an integer story origin; #1583 tests fractional
+/// origins separately. The exact integer sequence depends on whether the host resolves
 /// Arial itself or a fallback face, but every painted baseline
 /// must be integral and the fractional 30.4pt advance must produce both 30pt
 /// and 31pt painted steps.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
-fn consecutive_fractional_slide_paragraph_tops_snap_absolute_baselines() {
+fn consecutive_fractional_slide_paragraph_tops_snap_within_story() {
     let paragraphs = ["First", "Second", "Third", "Fourth"]
         .into_iter()
         .map(|text| {

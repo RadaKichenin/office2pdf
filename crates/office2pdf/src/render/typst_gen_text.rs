@@ -128,9 +128,9 @@ pub(super) fn write_powerpoint_advance_grid_helpers(out: &mut String) {
   let target = calc.round(natural / o2p-pptx-advance-grid) * o2p-pptx-advance-grid
   [#" "; #h(target - natural, weak: true)]
 }}
-#let o2p-pptx-snap-baseline(raw-seat, layout-seat, body, nonfinal-seat: none, absolute: true, origin: 0pt, marker: false) = context {{
+#let o2p-pptx-snap-baseline(raw-seat, layout-seat, body, nonfinal-seat: none, round-position: true, origin: 0pt, marker: false) = context {{
   let top = here().position().y
-  let target = if absolute {{ calc.round((top + raw-seat) / 1pt) * 1pt }} else {{ top + layout-seat }}
+  let target = if round-position {{ origin + calc.round((top - origin + raw-seat) / 1pt) * 1pt }} else {{ top + layout-seat }}
   let paint = move(dy: target - (top + layout-seat), body)
   if nonfinal-seat == none {{ paint }} else {{
     let delta = (origin + calc.round((top - origin + nonfinal-seat) / 1pt) * 1pt - target) / 1pt
@@ -962,19 +962,19 @@ fn can_adjust_powerpoint_physical_lines(runs: &[Run]) -> bool {
     })
 }
 
-/// PowerPoint rounds a centered story before translating it into its box.
+/// PowerPoint rounds within a text story before translating it into its box.
 /// Capture the story origin once so later paragraphs share that local grid.
 pub(super) fn write_powerpoint_relative_baseline_scope_open(out: &mut String) {
     out.push_str("#context { let o2p-pptx-grid-origin = here().position().y; [\n");
 }
 
-/// Fixed slide text uses absolute seating at a top anchor and keeps its
-/// existing relative seating when centered or bottom anchored. Floating Word
+/// Top-anchored slide text rounds paragraph positions within the story;
+/// centered/bottom text keeps its existing layout seats. Floating Word
 /// text boxes share the generator but must not inherit the slide paint pass.
 #[derive(Clone, Copy)]
 pub(super) enum PowerPointBaselineMode {
     Disabled,
-    Absolute,
+    Top,
     Relative,
 }
 
@@ -986,9 +986,9 @@ impl PowerPointBaselineMode {
     ) -> Option<PowerPointBaselineSnap> {
         match self {
             Self::Disabled => None,
-            Self::Absolute => powerpoint_absolute_baseline_snap(runs, style),
+            Self::Top => powerpoint_baseline_snap(runs, style),
             Self::Relative => {
-                let mut snap = powerpoint_absolute_baseline_snap(runs, style)?;
+                let mut snap = powerpoint_baseline_snap(runs, style)?;
                 if !can_adjust_powerpoint_physical_lines(runs) {
                     return None;
                 }
@@ -997,8 +997,8 @@ impl PowerPointBaselineMode {
                     ..style.clone()
                 };
                 snap.nonfinal_seat_pt =
-                    Some(powerpoint_absolute_baseline_snap(runs, &unmarked_style)?.raw_seat_pt);
-                snap.absolute = false;
+                    Some(powerpoint_baseline_snap(runs, &unmarked_style)?.raw_seat_pt);
+                snap.round_position = false;
                 Some(snap)
             }
         }
@@ -1007,15 +1007,15 @@ impl PowerPointBaselineMode {
 
 /// Metric and layout seats for a fixed slide paragraph. The nonfinal seat
 /// excludes the paragraph-end font; its paint adjustment waits until Typst
-/// has selected the actual wrapped lines. Top-anchored text retains absolute
-/// rounding (#1259), while centered/bottom text rounds within the story before
-/// its anchor translation. Neither adjustment changes the layout height.
+/// has selected the actual wrapped lines. Top-anchored paragraphs round their
+/// running positions within the story; centered/bottom text retains its
+/// anchor-relative layout seats. Neither adjustment changes the layout height.
 #[derive(Clone, Copy, PartialEq)]
 pub(super) struct PowerPointBaselineSnap {
     raw_seat_pt: f64,
     layout_seat_pt: f64,
     nonfinal_seat_pt: Option<f64>,
-    absolute: bool,
+    round_position: bool,
 }
 
 impl PowerPointBaselineSnap {
@@ -1041,8 +1041,9 @@ impl PowerPointBaselineSnap {
         if let Some(seat) = self.nonfinal_seat_pt {
             let _ = write!(out, ", nonfinal-seat: {}pt", format_f64(seat));
         }
-        if !self.absolute {
-            out.push_str(", absolute: false, origin: o2p-pptx-grid-origin");
+        out.push_str(", origin: o2p-pptx-grid-origin");
+        if !self.round_position {
+            out.push_str(", round-position: false");
         }
         if marker {
             out.push_str(", marker: true");
@@ -1051,7 +1052,7 @@ impl PowerPointBaselineSnap {
     }
 }
 
-pub(super) fn powerpoint_absolute_baseline_snap(
+pub(super) fn powerpoint_baseline_snap(
     runs: &[Run],
     style: &ParagraphStyle,
 ) -> Option<PowerPointBaselineSnap> {
@@ -1085,7 +1086,7 @@ pub(super) fn powerpoint_absolute_baseline_snap(
                 paragraph_mark_font_family: None,
                 ..style.clone()
             };
-            powerpoint_absolute_baseline_snap(runs, &unmarked_style)
+            powerpoint_baseline_snap(runs, &unmarked_style)
                 .map(|snap| snap.raw_seat_pt)
                 .filter(|seat| (seat - raw_seat_pt).abs() > 0.0001)
         });
@@ -1093,7 +1094,7 @@ pub(super) fn powerpoint_absolute_baseline_snap(
         raw_seat_pt,
         layout_seat_pt,
         nonfinal_seat_pt,
-        absolute: true,
+        round_position: true,
     })
 }
 

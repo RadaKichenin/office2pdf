@@ -1872,10 +1872,7 @@ fn generate_fixed_text_box(
             "  #let text_box_content_{text_box_id} = block(width: {}pt)[",
             format_f64(inner_width_pt),
         );
-        let relative_grid = !matches!(text_box.vertical_align, TextBoxVerticalAlign::Top);
-        if relative_grid {
-            write_powerpoint_relative_baseline_scope_open(out);
-        }
+        write_powerpoint_relative_baseline_scope_open(out);
         for (index, block) in text_box.content.iter().enumerate() {
             if index > 0 {
                 out.push('\n');
@@ -1888,15 +1885,13 @@ fn generate_fixed_text_box(
                 Some(inner_width_pt),
                 text_box.no_wrap,
                 if matches!(text_box.vertical_align, TextBoxVerticalAlign::Top) {
-                    PowerPointBaselineMode::Absolute
+                    PowerPointBaselineMode::Top
                 } else {
                     PowerPointBaselineMode::Relative
                 },
             )?;
         }
-        if relative_grid {
-            out.push_str("] }\n");
-        }
+        out.push_str("] }\n");
         out.push_str("  ]\n");
     }
 
