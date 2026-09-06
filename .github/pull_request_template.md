@@ -1,3 +1,13 @@
+## File submission policy
+
+Before attaching or committing files, read the [submission policy](https://github.com/developer0hye/office2pdf/blob/main/CONTRIBUTING.md).
+Complete a security review and obtain your organization's internal approval for
+public sharing where applicable. You are responsible for lawful disclosure;
+the project and maintainers disclaim related liability to the extent permitted
+by applicable law.
+
+- [ ] Any submitted sample files or attachments satisfy the submission policy, or none are submitted.
+
 ## Summary
 
 <!-- What changed and why? -->
