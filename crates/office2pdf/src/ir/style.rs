@@ -116,10 +116,11 @@ pub struct ParagraphStyle {
     /// The font family of the paragraph mark — the empty run PowerPoint keeps
     /// after the last character, written as `<a:endParaRPr>`.
     ///
-    /// It carries no glyph, but it is a font on the line, and PowerPoint's
-    /// 1.2em line box is shared by every font on the line: a mark left without
-    /// a typeface falls to the theme's minor Latin font and drags the shared
-    /// box to that face's proportions (issue #1176). `None` for a format whose
+    /// It carries no glyph, but its font shares the final physical line's
+    /// 1.2em box. For an unwrapped paragraph this is its only line; earlier
+    /// wrapped lines use their text fonts alone (#1177). A mark without a
+    /// typeface falls to the theme's minor Latin font and changes that final
+    /// line's proportions (#1176). `None` for a format whose
     /// line box does not work that way, or a paragraph whose mark resolves to
     /// no family at all.
     pub paragraph_mark_font_family: Option<Box<str>>,

@@ -364,10 +364,12 @@ fn compile_to_pdf_inner(
     let _compilation_guard = TypstCompilationGuard::begin();
 
     let warned = typst::compile::<typst::layout::PagedDocument>(world);
-    let document = warned.output.map_err(|errors| {
+    let mut document = warned.output.map_err(|errors| {
         let messages: Vec<String> = errors.iter().map(|e| e.message.to_string()).collect();
         ConvertError::Render(format!("Typst compilation failed: {}", messages.join("; ")))
     })?;
+
+    super::powerpoint_line_paint::adjust_paragraph_marks(&mut document);
 
     // Build PDF standards list
     let mut pdf_standards = Vec::new();
@@ -468,10 +470,11 @@ pub(crate) fn compiled_text_runs(
     let font_paths: &[PathBuf] = super::font_context::default_font_search_paths();
     let world = MinimalWorld::new(typst_source, &[], font_paths);
     let warned = typst::compile::<typst::layout::PagedDocument>(&world);
-    let document = warned.output.map_err(|errors| {
+    let mut document = warned.output.map_err(|errors| {
         let messages: Vec<String> = errors.iter().map(|e| e.message.to_string()).collect();
         ConvertError::Render(format!("Typst compilation failed: {}", messages.join("; ")))
     })?;
+    super::powerpoint_line_paint::adjust_paragraph_marks(&mut document);
     let page = document.pages.get(page_index).ok_or_else(|| {
         ConvertError::Render(format!(
             "page {page_index} is past the document's {} pages",
@@ -541,10 +544,11 @@ pub(crate) fn compiled_image_boxes(
 
     let world = MinimalWorld::new(typst_source, images, &[]);
     let warned = typst::compile::<typst::layout::PagedDocument>(&world);
-    let document = warned.output.map_err(|errors| {
+    let mut document = warned.output.map_err(|errors| {
         let messages: Vec<String> = errors.iter().map(|e| e.message.to_string()).collect();
         ConvertError::Render(format!("Typst compilation failed: {}", messages.join("; ")))
     })?;
+    super::powerpoint_line_paint::adjust_paragraph_marks(&mut document);
     let page = document.pages.get(page_index).ok_or_else(|| {
         ConvertError::Render(format!(
             "page {page_index} is past the document's {} pages",
@@ -701,10 +705,11 @@ pub(crate) fn compiled_paint_sequence(
 
     let world = MinimalWorld::new(typst_source, images, &[]);
     let warned = typst::compile::<typst::layout::PagedDocument>(&world);
-    let document = warned.output.map_err(|errors| {
+    let mut document = warned.output.map_err(|errors| {
         let messages: Vec<String> = errors.iter().map(|e| e.message.to_string()).collect();
         ConvertError::Render(format!("Typst compilation failed: {}", messages.join("; ")))
     })?;
+    super::powerpoint_line_paint::adjust_paragraph_marks(&mut document);
     let page = document.pages.get(page_index).ok_or_else(|| {
         ConvertError::Render(format!(
             "page {page_index} is past the document's {} pages",
@@ -714,6 +719,73 @@ pub(crate) fn compiled_paint_sequence(
     let mut painted: Vec<PaintedPrimitive> = Vec::new();
     collect(&page.frame, Transform::identity(), &mut painted);
     Ok(painted)
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+#[test]
+fn powerpoint_line_seating_keeps_links_and_underlines_with_text() {
+    use typst::layout::{Frame, FrameItem, Transform};
+
+    fn positions(frame: &Frame, transform: Transform, output: &mut [Vec<f64>; 3]) {
+        for (point, item) in frame.items() {
+            let at = transform.pre_concat(Transform::translate(point.x, point.y));
+            match item {
+                FrameItem::Group(group) => {
+                    positions(&group.frame, at.pre_concat(group.transform), output);
+                }
+                FrameItem::Text(_) => output[0].push(at.ty.to_pt()),
+                FrameItem::Link(..) => output[1].push(at.ty.to_pt()),
+                FrameItem::Shape(..) => output[2].push(at.ty.to_pt()),
+                _ => {}
+            }
+        }
+    }
+
+    let source = r##"
+#set page(width: 300pt, height: 200pt, margin: 0pt)
+#set text(font: "Libertinus Serif", size: 16pt, top-edge: 16pt, bottom-edge: 4pt)
+#set par(leading: 0pt)
+#metadata(("office2pdf-pptx-paragraph-mark", 1.0))
+#block(width: 150pt)[#underline[#link("https://example.com")[Server-side document conversion preserves links and emphasis across wrapped lines.]]]
+#metadata("office2pdf-pptx-paragraph-end")
+"##;
+    let world = MinimalWorld::new(source, &[], &[]);
+    let mut document = typst::compile::<typst::layout::PagedDocument>(&world)
+        .output
+        .unwrap();
+    let mut before = [Vec::new(), Vec::new(), Vec::new()];
+    positions(&document.pages[0].frame, Transform::identity(), &mut before);
+    super::powerpoint_line_paint::adjust_paragraph_marks(&mut document);
+    let mut after = [Vec::new(), Vec::new(), Vec::new()];
+    positions(&document.pages[0].frame, Transform::identity(), &mut after);
+    assert!(before[0].len() > 1, "the paragraph must wrap");
+    for kind in 0..2 {
+        assert_eq!(before[kind].len(), before[0].len());
+        assert_eq!(after[kind].len(), before[kind].len());
+        for line in 0..before[0].len() {
+            let expected = if line + 1 == before[0].len() {
+                0.0
+            } else {
+                1.0
+            };
+            assert!(
+                (after[kind][line] - before[kind][line] - expected).abs() < 0.001,
+                "kind {kind}, line {line}: {before:?} -> {after:?}",
+            );
+        }
+    }
+    assert!(before[2].len() >= before[0].len());
+    assert_eq!(before[2].len(), after[2].len());
+    for (old, new) in before[2].iter().zip(&after[2]) {
+        let line = before[0]
+            .iter()
+            .enumerate()
+            .min_by(|(_, a), (_, b)| (*a - old).abs().total_cmp(&(*b - old).abs()))
+            .unwrap()
+            .0;
+        let expected = after[0][line] - before[0][line];
+        assert!((new - old - expected).abs() < 0.001);
+    }
 }
 
 /// Convert the current system time to a Typst `Datetime` in UTC.
@@ -1645,8 +1717,8 @@ fn powerpoint_face_unit_line(ascent: f64, descent: f64) -> Option<(f64, f64)> {
 /// usWin pair differs from hhea's (2017/619 against 1802/-455/1024) — sides
 /// with usWin, which hhea cannot express at all (issue #1176).
 ///
-/// **The paragraph mark counts as a font on the line.** The same probe with
-/// only the `<a:endParaRPr>` typeface varied moves every seat: an Arial run
+/// **The paragraph mark counts on the final physical line.** The same
+/// single-line probe with only `<a:endParaRPr>` varied moves every seat: an Arial run
 /// whose mark is Calibri (usWin 1950/550) seats at 0.94377em, one whose mark is
 /// Verdana at 0.97621em, Malgun Gothic 0.97420em, MS Gothic 0.98306em and
 /// Meiryo 0.88107em — 70 cells, all inside the half-grid, none of them the run

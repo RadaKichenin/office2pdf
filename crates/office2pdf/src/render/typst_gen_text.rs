@@ -128,10 +128,15 @@ pub(super) fn write_powerpoint_advance_grid_helpers(out: &mut String) {
   let target = calc.round(natural / o2p-pptx-advance-grid) * o2p-pptx-advance-grid
   [#" "; #h(target - natural, weak: true)]
 }}
-#let o2p-pptx-snap-baseline(raw-seat, layout-seat, body) = context {{
+#let o2p-pptx-snap-baseline(raw-seat, layout-seat, body, nonfinal-seat: none, absolute: true, origin: 0pt, marker: false) = context {{
   let top = here().position().y
-  let target = calc.round((top + raw-seat) / 1pt) * 1pt
-  move(dy: target - (top + layout-seat), body)
+  let target = if absolute {{ calc.round((top + raw-seat) / 1pt) * 1pt }} else {{ top + layout-seat }}
+  let paint = move(dy: target - (top + layout-seat), body)
+  if nonfinal-seat == none {{ paint }} else {{
+    let delta = (origin + calc.round((top - origin + nonfinal-seat) / 1pt) * 1pt - target) / 1pt
+    let kind = if marker {{ "office2pdf-pptx-list-marker" }} else {{ "office2pdf-pptx-paragraph-mark" }}
+    metadata((kind, delta)) + paint + metadata("office2pdf-pptx-paragraph-end")
+  }}
 }}"#
     );
 }
@@ -759,14 +764,11 @@ fn powerpoint_paragraph_line_model(runs: &[Run], style: &ParagraphStyle) -> Opti
     Some((ascent_em, percent))
 }
 
-/// Every font on a slide paragraph's line: the families its runs declare, plus
-/// the one its paragraph mark ends up in.
-///
-/// PowerPoint shares one 1.2em box across all of them — see
-/// [`crate::render::pdf::powerpoint_line_box_split_em`], which measures the
-/// mark's part of it. A run declaring no family of its own rides whatever the
-/// line already has rather than dragging the renderer's default face into the
-/// box; when nothing names a family, that default is the only face there is.
+/// Families sharing the paragraph's nominal final-line box, including the
+/// end mark. Typst keeps this box for layout; the completed-line paint pass
+/// removes the mark's seating contribution from automatically wrapped
+/// nonfinal lines. An undeclared run family inherits the named families, or
+/// the renderer's default when no family is declared.
 fn powerpoint_line_families<'a>(runs: &'a [Run], style: &'a ParagraphStyle) -> Vec<&'a str> {
     let mut families: Vec<&str> = Vec::new();
     let mut push = |family: &'a str| {
@@ -949,29 +951,103 @@ pub(super) fn powerpoint_line_height_settings(
     ))
 }
 
-/// The two baseline seats a fixed slide paragraph needs to snap at layout
-/// time: PowerPoint's unrounded metric seat and the already-rounded seat that
-/// forms the paragraph's Typst line box.
-///
-/// The paragraph top can be fractional after earlier line advances and
-/// DrawingML paragraph spacing, so only Typst knows the absolute coordinate to
-/// round. Keeping the layout seat alongside the raw one lets the contextual
-/// helper translate paint without changing the line box or later paragraph
-/// tops (issue #1259).
+/// Explicit breaks already have a separate line-stack model.
+/// TODO(scripted line seating): shifted glyph baselines need logical line IDs
+/// before the completed-frame pass can distinguish them from separate lines.
+fn can_adjust_powerpoint_physical_lines(runs: &[Run]) -> bool {
+    runs.iter().all(|run| {
+        run.style.vertical_align.is_none()
+            && run.style.baseline_shift.is_none()
+            && !run.text.contains(['\n', '\r', '\u{000B}'])
+    })
+}
+
+/// PowerPoint rounds a centered story before translating it into its box.
+/// Capture the story origin once so later paragraphs share that local grid.
+pub(super) fn write_powerpoint_relative_baseline_scope_open(out: &mut String) {
+    out.push_str("#context { let o2p-pptx-grid-origin = here().position().y; [\n");
+}
+
+/// Fixed slide text uses absolute seating at a top anchor and keeps its
+/// existing relative seating when centered or bottom anchored. Floating Word
+/// text boxes share the generator but must not inherit the slide paint pass.
+#[derive(Clone, Copy)]
+pub(super) enum PowerPointBaselineMode {
+    Disabled,
+    Absolute,
+    Relative,
+}
+
+impl PowerPointBaselineMode {
+    pub(super) fn for_paragraph(
+        self,
+        runs: &[Run],
+        style: &ParagraphStyle,
+    ) -> Option<PowerPointBaselineSnap> {
+        match self {
+            Self::Disabled => None,
+            Self::Absolute => powerpoint_absolute_baseline_snap(runs, style),
+            Self::Relative => {
+                let mut snap = powerpoint_absolute_baseline_snap(runs, style)?;
+                if !can_adjust_powerpoint_physical_lines(runs) {
+                    return None;
+                }
+                let unmarked_style = ParagraphStyle {
+                    paragraph_mark_font_family: None,
+                    ..style.clone()
+                };
+                snap.nonfinal_seat_pt =
+                    Some(powerpoint_absolute_baseline_snap(runs, &unmarked_style)?.raw_seat_pt);
+                snap.absolute = false;
+                Some(snap)
+            }
+        }
+    }
+}
+
+/// Metric and layout seats for a fixed slide paragraph. The nonfinal seat
+/// excludes the paragraph-end font; its paint adjustment waits until Typst
+/// has selected the actual wrapped lines. Top-anchored text retains absolute
+/// rounding (#1259), while centered/bottom text rounds within the story before
+/// its anchor translation. Neither adjustment changes the layout height.
 #[derive(Clone, Copy, PartialEq)]
 pub(super) struct PowerPointBaselineSnap {
     raw_seat_pt: f64,
     layout_seat_pt: f64,
+    nonfinal_seat_pt: Option<f64>,
+    absolute: bool,
 }
 
 impl PowerPointBaselineSnap {
     pub(super) fn write_open(self, out: &mut String) {
+        self.write_scope_open(out, false);
+    }
+
+    pub(super) fn write_marker_open(self, out: &mut String) {
+        self.write_scope_open(out, true);
+    }
+
+    pub(super) fn adjusts_physical_lines(self) -> bool {
+        self.nonfinal_seat_pt.is_some()
+    }
+
+    fn write_scope_open(self, out: &mut String, marker: bool) {
         let _ = write!(
             out,
-            "#o2p-pptx-snap-baseline({}pt, {}pt)[",
+            "#o2p-pptx-snap-baseline({}pt, {}pt",
             format_f64(self.raw_seat_pt),
             format_f64(self.layout_seat_pt),
         );
+        if let Some(seat) = self.nonfinal_seat_pt {
+            let _ = write!(out, ", nonfinal-seat: {}pt", format_f64(seat));
+        }
+        if !self.absolute {
+            out.push_str(", absolute: false, origin: o2p-pptx-grid-origin");
+        }
+        if marker {
+            out.push_str(", marker: true");
+        }
+        out.push_str(")[");
     }
 }
 
@@ -1000,9 +1076,24 @@ pub(super) fn powerpoint_absolute_baseline_snap(
     };
     let raw_seat_pt: f64 = raw_seat_em * font_size_pt;
     let layout_seat_pt: f64 = powerpoint_paragraph_line_box_em(runs, style)?.0 * font_size_pt;
+    let nonfinal_seat_pt = style
+        .paragraph_mark_font_family
+        .as_ref()
+        .filter(|_| can_adjust_powerpoint_physical_lines(runs))
+        .and_then(|_| {
+            let unmarked_style = ParagraphStyle {
+                paragraph_mark_font_family: None,
+                ..style.clone()
+            };
+            powerpoint_absolute_baseline_snap(runs, &unmarked_style)
+                .map(|snap| snap.raw_seat_pt)
+                .filter(|seat| (seat - raw_seat_pt).abs() > 0.0001)
+        });
     Some(PowerPointBaselineSnap {
         raw_seat_pt,
         layout_seat_pt,
+        nonfinal_seat_pt,
+        absolute: true,
     })
 }
 
