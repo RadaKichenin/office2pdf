@@ -128,14 +128,16 @@ pub(super) fn write_powerpoint_advance_grid_helpers(out: &mut String) {
   let target = calc.round(natural / o2p-pptx-advance-grid) * o2p-pptx-advance-grid
   [#" "; #h(target - natural, weak: true)]
 }}
-#let o2p-pptx-snap-baseline(raw-seat, layout-seat, body, nonfinal-seat: none, round-position: true, origin: 0pt, marker: false) = context {{
+#let o2p-pptx-snap-baseline(raw-seat, layout-seat, body, nonfinal-seat: none, round-position: true, round-lines: false, size-seats: none, origin: 0pt, marker: false) = context {{
   let top = here().position().y
   let target = if round-position {{ origin + calc.round((top - origin + raw-seat) / 1pt) * 1pt }} else {{ top + layout-seat }}
   let paint = move(dy: target - (top + layout-seat), body)
-  if nonfinal-seat == none {{ paint }} else {{
-    let delta = (origin + calc.round((top - origin + nonfinal-seat) / 1pt) * 1pt - target) / 1pt
+  if not round-lines and nonfinal-seat == none {{ paint }} else {{
+    let nonfinal = if nonfinal-seat == none {{ raw-seat }} else {{ nonfinal-seat }}
+    let delta = (origin + calc.round((top - origin + nonfinal) / 1pt) * 1pt - target) / 1pt
+    let grid = if round-lines {{ ((top - origin + raw-seat) / 1pt, (target - origin) / 1pt, (top - origin + nonfinal) / 1pt) }} else {{ none }}
     let kind = if marker {{ "office2pdf-pptx-list-marker" }} else {{ "office2pdf-pptx-paragraph-mark" }}
-    metadata((kind, delta)) + paint + metadata("office2pdf-pptx-paragraph-end")
+    metadata((kind, delta, grid, size-seats)) + paint + metadata("office2pdf-pptx-paragraph-end")
   }}
 }}"#
     );
@@ -1005,17 +1007,19 @@ impl PowerPointBaselineMode {
     }
 }
 
-/// Metric and layout seats for a fixed slide paragraph. The nonfinal seat
-/// excludes the paragraph-end font; its paint adjustment waits until Typst
-/// has selected the actual wrapped lines. Top-anchored paragraphs round their
-/// running positions within the story; centered/bottom text retains its
-/// anchor-relative layout seats. Neither adjustment changes the layout height.
+/// Metric and layout seats for a fixed slide paragraph. After Typst wraps,
+/// physical lines round their running positions within the story, using each
+/// line's font size and excluding the paragraph-end font from nonfinal lines.
+/// Unwrapped centered/bottom text retains its anchor-relative layout seat.
+/// These paint adjustments do not change wrapping or layout height.
 #[derive(Clone, Copy, PartialEq)]
 pub(super) struct PowerPointBaselineSnap {
     raw_seat_pt: f64,
     layout_seat_pt: f64,
     nonfinal_seat_pt: Option<f64>,
     round_position: bool,
+    round_lines: bool,
+    mixed_size_seats: Option<(f64, f64)>,
 }
 
 impl PowerPointBaselineSnap {
@@ -1028,7 +1032,7 @@ impl PowerPointBaselineSnap {
     }
 
     pub(super) fn adjusts_physical_lines(self) -> bool {
-        self.nonfinal_seat_pt.is_some()
+        self.round_lines || self.nonfinal_seat_pt.is_some()
     }
 
     fn write_scope_open(self, out: &mut String, marker: bool) {
@@ -1044,6 +1048,23 @@ impl PowerPointBaselineSnap {
         out.push_str(", origin: o2p-pptx-grid-origin");
         if !self.round_position {
             out.push_str(", round-position: false");
+        }
+        if self.round_lines {
+            out.push_str(", round-lines: true");
+        }
+        if let Some((advance_em, marked_em)) = self.mixed_size_seats {
+            let nonfinal = self.nonfinal_seat_pt.unwrap_or(self.raw_seat_pt);
+            let nonfinal_em = marked_em * nonfinal / self.raw_seat_pt;
+            let _ = write!(
+                out,
+                ", size-seats: ({}, {}, {}, {}, {}, {})",
+                format_f64(marked_em),
+                format_f64(nonfinal_em),
+                format_f64(advance_em),
+                format_f64(self.layout_seat_pt),
+                format_f64(self.raw_seat_pt),
+                format_f64(nonfinal),
+            );
         }
         if marker {
             out.push_str(", marker: true");
@@ -1095,6 +1116,15 @@ pub(super) fn powerpoint_baseline_snap(
         layout_seat_pt,
         nonfinal_seat_pt,
         round_position: true,
+        round_lines: can_adjust_powerpoint_physical_lines(runs),
+        mixed_size_seats: PowerPointRunLineMetrics::for_mixed_declared_sizes(runs, style)
+            .filter(|_| raw_seat_pt > 0.0)
+            .map(|metrics| {
+                powerpoint_percentage_line_box_seat_em(
+                    metrics.plain_ascent_em,
+                    metrics.line_spacing,
+                )
+            }),
     })
 }
 
