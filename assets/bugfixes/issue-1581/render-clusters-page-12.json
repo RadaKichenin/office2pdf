@@ -1,0 +1,43 @@
+{
+  "clusters": [],
+  "dpi": 150,
+  "duplicate_disposition_cluster_ids": [],
+  "errors": [],
+  "fuzz_percent": 5,
+  "minimum_area_pt2": 20.0,
+  "page": 12,
+  "passed": true,
+  "renderer_observations": [
+    {
+      "bbox_pt": {
+        "height": 35.0,
+        "width": 270.0,
+        "x": 70.0,
+        "y": 48.0
+      },
+      "class": "glyph-edge-rasterization",
+      "note": "Full-scale crop shows matching bold Arial heading shapes; sparse edge pixels on e/h differ with rasterization."
+    },
+    {
+      "bbox_pt": {
+        "height": 90.0,
+        "width": 220.0,
+        "x": 70.0,
+        "y": 125.0
+      },
+      "class": "glyph-edge-rasterization",
+      "note": "Full-scale regular Arial body crop preserves symbol glyphs, spacing and wrap topology. Sparse edge fragments remain; the 0.5pt layout audit passes and no material cluster occurs."
+    }
+  ],
+  "schema_version": 1,
+  "strict": true,
+  "summary": {
+    "dispositioned": 0,
+    "duplicate": 0,
+    "total": 0,
+    "undispositioned": 0,
+    "unknown": 0
+  },
+  "undispositioned_cluster_ids": [],
+  "unknown_disposition_cluster_ids": []
+}

@@ -4474,7 +4474,10 @@ fn write_run_segment(
 ///
 /// PowerPoint's Latin runs break at spaces and ASCII hyphens, both modelled by
 /// [`write_powerpoint_grid_run_content`]. Common Latin punctuation is safe to
-/// shape inside the same words. CJK, bidi, and other Unicode scripts keep their
+/// shape inside the same words, including the Latin mathematical signs ×, ÷,
+/// and ±. Native PowerPoint width probes keep these inside numeric expressions
+/// while retaining breaks at surrounding spaces and ASCII hyphens (#1581).
+/// CJK, bidi, and other Unicode scripts keep their
 /// existing Typst shaping and line breaking until the helper can preserve
 /// their script-specific opportunities just as precisely.
 fn can_snap_powerpoint_run(text: &str) -> bool {
@@ -4484,7 +4487,7 @@ fn can_snap_powerpoint_run(text: &str) -> bool {
                 || (ch.is_ascii_graphic() && ch != '\u{7f}')
                 || matches!(
                     ch,
-                    '\u{2010}'..='\u{2015}' | '\u{2018}'..='\u{201f}' | '\u{2026}'
+                    '×' | '÷' | '±' | '\u{2010}'..='\u{2015}' | '\u{2018}'..='\u{201f}' | '\u{2026}'
                 )
         })
 }
