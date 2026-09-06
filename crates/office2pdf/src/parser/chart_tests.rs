@@ -3108,6 +3108,60 @@ fn a_layout_this_does_not_model_keeps_the_automatic_rectangle() {
     }
 }
 
+/// A stated rectangle larger than the chart area, or starting before it, is
+/// not laid out as written: native Excel for Mac 16 exports of the reported
+/// workbook with one value of the cash-flow chart's layout rewritten — `c:x`
+/// -0.1, `c:y` -0.1, `c:w` 1.05 or 1.2, `c:h` 1.05 — each dropped the whole
+/// manual layout, the plot taking the automatic inset on all four sides with
+/// the stated `c:x` and `c:y` ignored too, so such a rectangle keeps the
+/// automatic layout (issue #1272). A rectangle exactly the chart area's width
+/// still counts.
+#[test]
+fn a_plot_larger_than_its_chart_area_or_starting_before_it_keeps_the_automatic_rectangle() {
+    let too_wide: String = REPORTED_MANUAL_LAYOUT.replace(
+        r#"<c:w val="0.64139311135561661"/>"#,
+        r#"<c:w val="1.05"/>"#,
+    );
+    let too_tall: String = REPORTED_MANUAL_LAYOUT.replace(
+        r#"<c:h val="0.55711705789303645"/>"#,
+        r#"<c:h val="1.05"/>"#,
+    );
+    let before_left: String = REPORTED_MANUAL_LAYOUT.replace(
+        r#"<c:x val="0.30222298185081131"/>"#,
+        r#"<c:x val="-0.1"/>"#,
+    );
+    let above_top: String = REPORTED_MANUAL_LAYOUT.replace(
+        r#"<c:y val="0.34625485336714895"/>"#,
+        r#"<c:y val="-0.1"/>"#,
+    );
+    let full_width: String =
+        REPORTED_MANUAL_LAYOUT.replace(r#"<c:w val="0.64139311135561661"/>"#, r#"<c:w val="1"/>"#);
+
+    for (case, layout) in [
+        ("w 1.05", too_wide),
+        ("h 1.05", too_tall),
+        ("x -0.1", before_left),
+        ("y -0.1", above_top),
+    ] {
+        let xml: String = manual_plot_layout_chart_xml(&layout);
+        let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
+        assert_eq!(chart.plot_area_layout, None, "{case}");
+    }
+
+    let xml: String = manual_plot_layout_chart_xml(&full_width);
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
+    assert_eq!(
+        chart.plot_area_layout,
+        Some(crate::ir::ChartPlotAreaLayout {
+            x: 0.3022229818508113,
+            y: 0.34625485336714895,
+            width: 1.0,
+            height: 0.5571170578930364,
+        }),
+        "a rectangle exactly the chart area's width is still stated"
+    );
+}
+
 /// `c:layout` is written by the title, the legend and every data-label group
 /// too, and only the plot area's own says where the plot sits.
 #[test]

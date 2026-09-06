@@ -478,6 +478,17 @@ fn parse_plot_area_layout(reader: &mut Reader<&[u8]>) -> Option<ChartPlotAreaLay
     if !(x.is_finite() && y.is_finite() && width > 0.0 && height > 0.0) {
         return None;
     }
+    // A rectangle that starts before the chart area or is larger than it is
+    // dropped whole: native Excel for Mac 16 exports of
+    // `tests/fixtures/xlsx/issue_1181_fit_to_height.xlsx` with one value of the
+    // cash-flow chart's layout rewritten — `c:x` -0.1, `c:y` -0.1, `c:w` 1.05
+    // or 1.2, `c:h` 1.05 — each laid that plot out automatically, the same
+    // inset on all four sides with the stated `c:x` and `c:y` ignored too,
+    // where `c:x` 0 and `c:w` 1 both still counted (issue #1272). A rectangle
+    // that merely runs past the far edge is kept; the renderer pulls it back.
+    if x < 0.0 || y < 0.0 || width > 1.0 || height > 1.0 {
+        return None;
+    }
     Some(ChartPlotAreaLayout {
         x,
         y,
