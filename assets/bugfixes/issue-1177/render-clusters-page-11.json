@@ -1,0 +1,235 @@
+{
+  "clusters": [
+    {
+      "area_pt2": 32.9472,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 9.6,
+        "x": 697.44,
+        "y": 181.44
+      },
+      "disposition": {
+        "issue": "#1583",
+        "kind": "issue"
+      },
+      "id": "p11-6a989e448d9d",
+      "region": "right"
+    },
+    {
+      "area_pt2": 32.9472,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 9.6,
+        "x": 675.84,
+        "y": 181.44
+      },
+      "disposition": {
+        "issue": "#1583",
+        "kind": "issue"
+      },
+      "id": "p11-cbc4034486b9",
+      "region": "right"
+    },
+    {
+      "area_pt2": 25.1136,
+      "bbox_pt": {
+        "height": 2.88,
+        "width": 11.52,
+        "x": 610.08,
+        "y": 233.28
+      },
+      "disposition": {
+        "issue": "#1583",
+        "kind": "issue"
+      },
+      "id": "p11-b88ee28275c0",
+      "region": "center"
+    },
+    {
+      "area_pt2": 24.8832,
+      "bbox_pt": {
+        "height": 1.92,
+        "width": 12.96,
+        "x": 178.08,
+        "y": 341.76
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Regular explanation glyphs retain matching baseline, weight and content in matched full-scale crops; only edge rasterization differs."
+      },
+      "id": "p11-0eb006f1c800",
+      "region": "left"
+    },
+    {
+      "area_pt2": 24.8832,
+      "bbox_pt": {
+        "height": 1.92,
+        "width": 12.96,
+        "x": 323.52,
+        "y": 341.76
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Regular explanation glyphs retain matching baseline, weight and content in matched full-scale crops; only edge rasterization differs."
+      },
+      "id": "p11-2aaf9c82f991",
+      "region": "center"
+    },
+    {
+      "area_pt2": 24.192,
+      "bbox_pt": {
+        "height": 2.88,
+        "width": 11.04,
+        "x": 539.04,
+        "y": 183.84
+      },
+      "disposition": {
+        "issue": "#1583",
+        "kind": "issue"
+      },
+      "id": "p11-b02d68a593ee",
+      "region": "center"
+    },
+    {
+      "area_pt2": 23.04,
+      "bbox_pt": {
+        "height": 2.4,
+        "width": 10.08,
+        "x": 697.44,
+        "y": 191.04
+      },
+      "disposition": {
+        "issue": "#1583",
+        "kind": "issue"
+      },
+      "id": "p11-65e8a79c811d",
+      "region": "right"
+    },
+    {
+      "area_pt2": 23.04,
+      "bbox_pt": {
+        "height": 2.4,
+        "width": 10.08,
+        "x": 675.84,
+        "y": 191.04
+      },
+      "disposition": {
+        "issue": "#1583",
+        "kind": "issue"
+      },
+      "id": "p11-7abd0f354dc7",
+      "region": "right"
+    },
+    {
+      "area_pt2": 22.3488,
+      "bbox_pt": {
+        "height": 2.88,
+        "width": 9.6,
+        "x": 589.92,
+        "y": 184.8
+      },
+      "disposition": {
+        "issue": "#1583",
+        "kind": "issue"
+      },
+      "id": "p11-3c14ca0197c5",
+      "region": "center"
+    },
+    {
+      "area_pt2": 22.1184,
+      "bbox_pt": {
+        "height": 2.4,
+        "width": 9.6,
+        "x": 590.4,
+        "y": 191.04
+      },
+      "disposition": {
+        "issue": "#1583",
+        "kind": "issue"
+      },
+      "id": "p11-d2e4094b9b72",
+      "region": "center"
+    },
+    {
+      "area_pt2": 21.1968,
+      "bbox_pt": {
+        "height": 2.4,
+        "width": 9.6,
+        "x": 557.28,
+        "y": 177.6
+      },
+      "disposition": {
+        "issue": "#1583",
+        "kind": "issue"
+      },
+      "id": "p11-15caf2724b1f",
+      "region": "top"
+    },
+    {
+      "area_pt2": 20.9664,
+      "bbox_pt": {
+        "height": 2.4,
+        "width": 9.6,
+        "x": 557.28,
+        "y": 182.4
+      },
+      "disposition": {
+        "issue": "#1583",
+        "kind": "issue"
+      },
+      "id": "p11-12bd3dcf8566",
+      "region": "center"
+    },
+    {
+      "area_pt2": 20.2752,
+      "bbox_pt": {
+        "height": 1.92,
+        "width": 10.56,
+        "x": 529.92,
+        "y": 155.52
+      },
+      "disposition": {
+        "issue": "#1583",
+        "kind": "issue"
+      },
+      "id": "p11-f2eac403c381",
+      "region": "top"
+    },
+    {
+      "area_pt2": 20.0448,
+      "bbox_pt": {
+        "height": 2.4,
+        "width": 9.12,
+        "x": 644.16,
+        "y": 191.04
+      },
+      "disposition": {
+        "issue": "#1583",
+        "kind": "issue"
+      },
+      "id": "p11-a3c448268052",
+      "region": "right"
+    }
+  ],
+  "dpi": 150,
+  "duplicate_disposition_cluster_ids": [],
+  "errors": [],
+  "fuzz_percent": 5,
+  "minimum_area_pt2": 20.0,
+  "page": 11,
+  "passed": true,
+  "renderer_observations": [],
+  "schema_version": 1,
+  "strict": true,
+  "summary": {
+    "dispositioned": 14,
+    "duplicate": 0,
+    "total": 14,
+    "undispositioned": 0,
+    "unknown": 0
+  },
+  "undispositioned_cluster_ids": [],
+  "unknown_disposition_cluster_ids": []
+}

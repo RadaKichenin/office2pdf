@@ -68,10 +68,10 @@ pub(super) fn apply_typeface_to_style(
 /// A mark that declares no typeface inherits the presentation's default text
 /// style, whose `<a:latin typeface="+mn-lt"/>` names the theme's minor Latin
 /// font. That fallback has to be the real face rather than the renderer's own
-/// default, because PowerPoint shares one line box across every font on the
-/// line and the mark is one of them: the golden mocks' bare marks are what
-/// pull an Arial frame's first baseline from the face's own 0.97238em share
-/// down to the 0.94377em the exports show (issue #1176).
+/// default, because the mark shares the final physical line's box with its
+/// text fonts. For the golden mocks' unwrapped Arial paragraphs, bare marks
+/// change the only line's ascent share from 0.97238em to 0.94377em (#1176).
+/// Earlier wrapped lines exclude the mark (#1177).
 pub(super) fn pptx_paragraph_mark_font_family(
     end_run_style: &TextStyle,
     theme: &ThemeData,

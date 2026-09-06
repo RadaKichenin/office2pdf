@@ -1,5 +1,269 @@
 use super::*;
 
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn wrapped_powerpoint_bullet_follows_its_first_line() {
+    use crate::internal::{Parser, PptxParser};
+
+    let fixture = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/golden_mocks/business/sources/pptx/01_startup_pitch_en.pptx");
+    let data = std::fs::read(fixture).expect("startup pitch fixture");
+    let (document, _) = PptxParser
+        .parse(&data, &crate::config::ConvertOptions::default())
+        .unwrap();
+    let Page::Fixed(mut page) = document.pages[1].clone() else {
+        panic!("PowerPoint slide must be fixed");
+    };
+    page.elements
+        .retain(|element| matches!(element.kind, FixedElementKind::TextBox(_)));
+    let document = make_doc(vec![Page::Fixed(page)]);
+    let output = generate_typst(&document).unwrap();
+    let runs = crate::render::pdf::compiled_text_runs(&output.source, 0).unwrap();
+    let markers: Vec<_> = runs.iter().filter(|run| run.text.contains('•')).collect();
+    assert_eq!(markers.len(), 3);
+    for (marker, (first_word, last_word)) in markers.iter().zip([
+        ("Server", "fragile"),
+        ("Enterprises", "compliance"),
+        ("Fidelity", "risk"),
+    ]) {
+        let first = runs
+            .iter()
+            .find(|run| run.text.contains(first_word))
+            .unwrap();
+        let last = runs
+            .iter()
+            .find(|run| run.text.contains(last_word))
+            .unwrap();
+        assert!(last.baseline_pt > first.baseline_pt + 10.0);
+        assert!(
+            (marker.baseline_pt - first.baseline_pt).abs() < 0.01,
+            "the bullet must follow its own wrapped first line: marker={}, body={}",
+            marker.baseline_pt,
+            first.baseline_pt,
+        );
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn compile_paragraph_mark_probe(
+    mark: &str,
+    width: f64,
+    vertical_align: crate::ir::TextBoxVerticalAlign,
+    family: &str,
+    size: f64,
+    text: &str,
+) -> Vec<crate::render::pdf::PlacedTextRun> {
+    let paragraph = Paragraph {
+        style: ParagraphStyle {
+            paragraph_mark_font_family: Some(mark.into()),
+            ..ParagraphStyle::default()
+        },
+        runs: vec![Run {
+            text: text.to_string(),
+            style: TextStyle {
+                font_family: Some(family.to_string()),
+                font_size: Some(size),
+                ..TextStyle::default()
+            },
+            href: None,
+            footnote: None,
+        }],
+    };
+    let document = make_doc(vec![make_fixed_page(
+        960.0,
+        540.0,
+        vec![make_fixed_text_box(
+            72.0,
+            126.0,
+            width,
+            200.0,
+            Insets::default(),
+            vertical_align,
+            vec![Block::Paragraph(paragraph)],
+        )],
+    )]);
+    let output = generate_typst(&document).unwrap();
+    crate::render::pdf::compiled_text_runs(&output.source, 0).unwrap()
+}
+
+/// Native one-factor exports of the startup pitch change only the final
+/// physical line when the paragraph-end face changes (#1177).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn embedded_paragraph_mark_changes_only_the_final_wrapped_baseline() {
+    let family = "Libertinus Serif";
+    let mark = "DejaVu Sans Mono";
+    let (alone, _) = crate::render::pdf::powerpoint_line_box_em(family).unwrap();
+    let (shared, _) =
+        crate::render::pdf::powerpoint_line_box_em_for_families(&[family, mark]).unwrap();
+    let size = (8..=72)
+        .map(f64::from)
+        .find(|size| (alone * size).round() != (shared * size).round())
+        .unwrap();
+    let compile = |mark| {
+        compile_paragraph_mark_probe(
+            mark,
+            size * 20.0,
+            crate::ir::TextBoxVerticalAlign::Top,
+            family,
+            size,
+            "Server-side document conversion still depends on LibreOffice or headless browsers — heavy, slow, and fragile.",
+        )
+    };
+    let plain = compile(family);
+    let marked = compile(mark);
+    let baselines = |runs: &[crate::render::pdf::PlacedTextRun]| {
+        let mut ys: Vec<f64> = runs.iter().map(|run| run.baseline_pt).collect();
+        ys.sort_by(f64::total_cmp);
+        ys.dedup_by(|a, b| (*a - *b).abs() < 0.01);
+        ys
+    };
+    let plain = baselines(&plain);
+    let marked = baselines(&marked);
+    assert!(plain.len() > 1, "the embedded-font control must wrap");
+    assert_eq!(plain.len(), marked.len());
+    for (plain, marked) in plain[..plain.len() - 1].iter().zip(&marked) {
+        assert!((plain - marked).abs() < 0.01);
+    }
+    assert!(
+        (plain.last().unwrap() - marked.last().unwrap()).abs() > 0.5,
+        "the mark must still affect the final line: {plain:?}, {marked:?}",
+    );
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn wrapped_powerpoint_paragraph_mark_only_seats_the_last_line() {
+    let compile = |mark: &str, width: f64| {
+        compile_paragraph_mark_probe(
+            mark,
+            width,
+            crate::ir::TextBoxVerticalAlign::Top,
+            "Arial",
+            17.0,
+            "Server-side document conversion still depends on LibreOffice or headless browsers — heavy, slow, and fragile.",
+        )
+    };
+    let arial = compile("Arial", 480.0);
+    let calibri = compile("Calibri", 480.0);
+    let baseline = |runs: &[crate::render::pdf::PlacedTextRun], needle: &str| {
+        runs.iter()
+            .find(|run| run.text.contains(needle))
+            .unwrap()
+            .baseline_pt
+    };
+    let first_arial = baseline(&arial, "Server");
+    let first_calibri = baseline(&calibri, "Server");
+    assert!(
+        baseline(&arial, "fragile") > first_arial + 10.0,
+        "probe must wrap"
+    );
+    assert!(
+        (first_arial - first_calibri).abs() < 0.01,
+        "a paragraph-end face must not move the first wrapped line: Arial={first_arial}, Calibri={first_calibri}"
+    );
+    assert_eq!(
+        arial
+            .iter()
+            .map(|run| (&run.text, run.left_pt))
+            .collect::<Vec<_>>(),
+        calibri
+            .iter()
+            .map(|run| (&run.text, run.left_pt))
+            .collect::<Vec<_>>(),
+        "changing the mark must preserve shaping and wrapping"
+    );
+    for mark in ["Arial", "Calibri"] {
+        let unwrapped = compile(mark, 880.0);
+        assert!(
+            (baseline(&unwrapped, "Server") - baseline(&unwrapped, "fragile")).abs() < 0.01,
+            "wide control must stay on one line"
+        );
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn centered_korean_paragraph_mark_only_seats_the_last_line() {
+    let compile = |mark| {
+        compile_paragraph_mark_probe(
+            mark,
+            345.6,
+            crate::ir::TextBoxVerticalAlign::Center,
+            "Malgun Gothic",
+            15.0,
+            "아니다. p-값은 귀무가설이 참이라는 가정 아래, 관측된 것 이상으로 극단적인 데이터가 나올 확률이다.",
+        )
+    };
+    let own = compile("Malgun Gothic");
+    let marked = compile("Calibri");
+    assert_eq!(own.len(), marked.len());
+    let last = own.last().unwrap().baseline_pt;
+    assert!(last > own[0].baseline_pt + 10.0, "probe must wrap");
+    for (left, right) in own.iter().zip(&marked) {
+        assert_eq!(left.text, right.text);
+        assert!((left.left_pt - right.left_pt).abs() < 0.01);
+        if left.baseline_pt < last - 0.01 {
+            assert!(
+                (left.baseline_pt - right.baseline_pt).abs() < 0.01,
+                "the centered nonfinal line must ignore the mark: {left:?} vs {right:?}"
+            );
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_subscript_is_not_a_separate_powerpoint_line() {
+    let compile = |mark: &str| {
+        let mut normal = Run {
+            text: "CO".to_string(),
+            style: TextStyle::default(),
+            href: None,
+            footnote: None,
+        };
+        normal.style.font_family = Some("Arial".to_string());
+        normal.style.font_size = Some(17.0);
+        let mut subscript = normal.clone();
+        subscript.text = "2".to_string();
+        subscript.style.vertical_align = Some(crate::ir::VerticalTextAlign::Subscript);
+        let mut suffix = normal.clone();
+        suffix.text = " emissions".to_string();
+        let paragraph = Paragraph {
+            runs: vec![normal, subscript, suffix],
+            style: ParagraphStyle {
+                paragraph_mark_font_family: Some(mark.into()),
+                ..ParagraphStyle::default()
+            },
+        };
+        let doc = make_doc(vec![make_fixed_page(
+            960.0,
+            540.0,
+            vec![make_fixed_text_box(
+                72.0,
+                126.0,
+                480.0,
+                100.0,
+                Insets::default(),
+                crate::ir::TextBoxVerticalAlign::Top,
+                vec![Block::Paragraph(paragraph)],
+            )],
+        )]);
+        crate::render::pdf::compiled_text_runs(&generate_typst(&doc).unwrap().source, 0).unwrap()
+    };
+    let own = compile("Arial");
+    let marked = compile("Calibri");
+    assert_eq!(own.len(), marked.len());
+    let shift = marked[0].baseline_pt - own[0].baseline_pt;
+    for (left, right) in own.iter().zip(&marked) {
+        assert_eq!(left.text, right.text);
+        assert!(
+            ((right.baseline_pt - left.baseline_pt) - shift).abs() < 0.01,
+            "one line must retain its script offset: {left:?} vs {right:?}"
+        );
+    }
+}
+
 fn assert_powerpoint_grid_words_in_order(source: &str, words: &[&str]) {
     let mut remainder = source;
     for word in words {
@@ -2473,13 +2737,14 @@ fn the_unwrapped_label_lands_on_its_native_first_baseline() {
     );
 }
 
-/// The paragraph mark's face reaches the emitted line box.
+/// The paragraph mark's face reaches an unwrapped paragraph's only line box.
 ///
 /// PowerPoint's 1.2em box is shared by every font on the line and the mark —
 /// the empty run `<a:endParaRPr>` describes — is one of them, so a mark set in
 /// a deeper-descended face seats the text higher than the run's own share
-/// would (issue #1176). The golden mocks' Korean titles are that case: Malgun
-/// Gothic runs with bare marks, which fall to the theme's Calibri.
+/// would (issue #1176). Wrapped paragraphs apply this only to their final
+/// physical line (#1177). The golden mocks' single-line Korean titles use
+/// Malgun Gothic runs with bare marks, which fall to the theme's Calibri.
 ///
 /// Both faces here are Typst's own embedded ones so the test does not depend on
 /// what the host has installed, and the size is chosen as the first one where

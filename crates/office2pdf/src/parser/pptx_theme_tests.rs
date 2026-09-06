@@ -956,13 +956,13 @@ fn a_direct_shadow_wins_over_the_effect_ref() {
     assert_eq!(shadow.color, Color::new(0, 0xFF, 0));
 }
 
-/// The paragraph mark's family reaches the IR, because PowerPoint's line box is
-/// shared by every font on the line and the mark is one of them (issue #1176).
+/// The paragraph mark's family reaches the IR because it shares the final
+/// physical line's box with the text fonts (#1176, #1177).
 ///
 /// A mark that declares no typeface inherits the presentation's default text
 /// style, whose `<a:latin typeface="+mn-lt"/>` names the theme's minor Latin
 /// font — so it is that face, not the run's and not the renderer's default,
-/// that shares the box with the text.
+/// that shares this single-line fixture's box with the text.
 #[test]
 fn a_bare_paragraph_mark_takes_the_theme_minor_latin_font() {
     let runs_xml = r#"<a:r><a:rPr sz="4000"><a:latin typeface="Malgun Gothic"/><a:ea typeface="Malgun Gothic"/></a:rPr><a:t>2025년 4분기</a:t></a:r><a:endParaRPr lang="en-US" sz="4000"/>"#;

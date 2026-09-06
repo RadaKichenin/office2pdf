@@ -127,7 +127,7 @@ fn write_list_open(
             merge_marker_style(fallback_marker_style, explicit_marker_style.as_ref());
         out.push_str("marker: [");
         if let Some(snap) = baseline_snap {
-            snap.write_open(out);
+            snap.write_marker_open(out);
         }
         if let Some(indent) = indent {
             write_marker_box_open(out, indent.marker_width_pt);
@@ -155,7 +155,7 @@ fn write_ordered_list_numbering_function(
     let pattern: &str = style.numbering_pattern.unwrap_or("1.");
     out.push_str("numbering: (..nums) => [");
     if let Some(snap) = baseline_snap {
-        snap.write_open(out);
+        snap.write_marker_open(out);
     }
     if let Some(indent) = indent {
         write_marker_box_open(out, indent.marker_width_pt);
@@ -490,6 +490,15 @@ pub(super) fn generate_list_with_spacing_model(
                 .or_else(|| eojeol_wrap.line_box_em.filter(|_| wrapper_spans_full_line))
         })
         .flatten();
+    // Typst lays out markers separately from their item bodies. Keep one
+    // scope for this flat slide list so each marker follows its own body's
+    // first physical line after wrapping has been decided.
+    let adjusts_lines = eojeol_wrap
+        .baseline_snap
+        .is_some_and(PowerPointBaselineSnap::adjusts_physical_lines);
+    if adjusts_lines {
+        out.push_str("#context { metadata(\"office2pdf-pptx-list-start\") + [\n");
+    }
     write_list_open(
         out,
         "#",
@@ -513,6 +522,9 @@ pub(super) fn generate_list_with_spacing_model(
         &eojeol_wrap,
     )?;
     out.push_str(")\n");
+    if adjusts_lines {
+        out.push_str("] + metadata(\"office2pdf-pptx-list-end\") }\n");
+    }
     if needs_wrapper {
         out.push_str("]\n");
     }
@@ -650,7 +662,7 @@ pub(super) fn generate_fixed_text_list(
     include_item_spacing: bool,
     available_width_pt: Option<f64>,
     uses_powerpoint_line: bool,
-    snap_absolute_baselines: bool,
+    baseline_mode: PowerPointBaselineMode,
 ) -> Result<(), ConvertError> {
     let paragraph: &Paragraph = &list.items[0].content[0];
     let style: &ParagraphStyle = &paragraph.style;
@@ -747,9 +759,8 @@ pub(super) fn generate_fixed_text_list(
         if use_stack {
             out.push('[');
         }
-        let baseline_snap: Option<PowerPointBaselineSnap> = snap_absolute_baselines
-            .then(|| powerpoint_absolute_baseline_snap(&item_paragraph.runs, &item_paragraph.style))
-            .flatten()
+        let baseline_snap: Option<PowerPointBaselineSnap> = baseline_mode
+            .for_paragraph(&item_paragraph.runs, &item_paragraph.style)
             .filter(|_| !suppress_marker);
         if let Some(snap) = baseline_snap {
             snap.write_open(out);
