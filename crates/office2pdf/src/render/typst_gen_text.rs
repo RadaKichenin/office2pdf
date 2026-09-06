@@ -958,12 +958,25 @@ pub(super) fn powerpoint_line_height_settings(
 /// Explicit breaks already have a separate line-stack model.
 /// TODO(scripted line seating): shifted glyph baselines need logical line IDs
 /// before the completed-frame pass can distinguish them from separate lines.
+///
+/// A zero displacement is no displacement. Masters routinely state
+/// `<a:defRPr baseline="0">`, which every run of the deck inherits, and
+/// PowerPoint seats those runs exactly like unshifted ones — so they keep the
+/// story-grid rounding a raised or lowered run has to forgo (issue #1071).
 fn can_adjust_powerpoint_physical_lines(runs: &[Run]) -> bool {
     runs.iter().all(|run| {
         run.style.vertical_align.is_none()
-            && run.style.baseline_shift.is_none()
+            && !has_baseline_displacement(&run.style)
             && !run.text.contains(['\n', '\r', '\u{000B}'])
     })
+}
+
+/// Whether the run is actually raised or lowered, as opposed to carrying an
+/// inherited `baseline="0"` that leaves it on the line.
+fn has_baseline_displacement(style: &TextStyle) -> bool {
+    style
+        .baseline_shift
+        .is_some_and(|BaselineShiftEm(shift_em)| shift_em != 0.0)
 }
 
 /// PowerPoint rounds within a text story before translating it into its box.

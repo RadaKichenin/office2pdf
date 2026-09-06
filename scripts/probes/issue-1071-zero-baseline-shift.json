@@ -1,0 +1,22 @@
+{
+  "name": "issue-1071-zero-baseline-shift",
+  "base": "../../tests/golden_mocks/business/sources/pptx/01_startup_pitch_en.pptx",
+  "part": "ppt/slides/slide2.xml",
+  "factor": "a:rPr baseline=\"0\" on the wrapped body runs",
+  "page": 2,
+  "variants": [
+    {
+      "value": "t-baseline0",
+      "find": "<a:rPr lang=\"en-US\" sz=\"1700\" dirty=\"0\">",
+      "replace": "<a:rPr lang=\"en-US\" sz=\"1700\" baseline=\"0\" dirty=\"0\">",
+      "count": 3
+    },
+    {
+      "value": "ctr-baseline0",
+      "find": "<a:bodyPr wrap=\"square\" rtlCol=\"0\" anchor=\"t\">(.*?)<a:rPr lang=\"en-US\" sz=\"1700\" dirty=\"0\">(.*?)<a:rPr lang=\"en-US\" sz=\"1700\" dirty=\"0\">(.*?)<a:rPr lang=\"en-US\" sz=\"1700\" dirty=\"0\">",
+      "replace": "<a:bodyPr wrap=\"square\" rtlCol=\"0\" anchor=\"ctr\">\\1<a:rPr lang=\"en-US\" sz=\"1700\" baseline=\"0\" dirty=\"0\">\\2<a:rPr lang=\"en-US\" sz=\"1700\" baseline=\"0\" dirty=\"0\">\\3<a:rPr lang=\"en-US\" sz=\"1700\" baseline=\"0\" dirty=\"0\">",
+      "regex": true,
+      "count": 1
+    }
+  ]
+}
