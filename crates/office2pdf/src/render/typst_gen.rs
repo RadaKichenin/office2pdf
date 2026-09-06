@@ -964,8 +964,8 @@ fn generate_table_page(
 
     // Excel paints a fitted sheet's grid against a paper box constructed in
     // declared sheet space and then scaled. Cell text has its own already
-    // calibrated seats, so only the table paint takes this translation; the
-    // cell writer counter-shifts its content by the inverse (#1538).
+    // calibrated seats, so the cell writer counter-shifts its content by the
+    // inverse (#1538). Floating drawing paint uses this same sheet origin.
     let paint_offset_pt: Option<(f64, f64)> =
         scaled_sheet_paint_offset_pt(page, &size, centering_inset_pt);
 
@@ -979,7 +979,7 @@ fn generate_table_page(
     // below, have had the print scale folded into their sizes by the parser
     // and need that factor to recover the same coordinate system (#1238).
     let drawings: Option<SheetDrawingLayer> = with_sheet_advance_grid(Some(1.0), || {
-        sheet_drawing_layer(page, centering_inset_pt, ctx)
+        sheet_drawing_layer(page, centering_inset_pt, paint_offset_pt, ctx)
     });
 
     write_table_page_setup(
@@ -1125,7 +1125,10 @@ fn horizontal_centering_inset_pt(page: &SheetPage, size: &PageSize) -> Option<f6
 
 /// A drawing overlaid on a sheet at its anchor's absolute coordinates.
 enum SheetAnchor<'a> {
-    Chart(&'a crate::ir::SheetChart),
+    Chart {
+        sheet_chart: &'a crate::ir::SheetChart,
+        paint_offset_pt: Option<(f64, f64)>,
+    },
     Image(&'a crate::ir::SheetImage),
     TextBox(&'a crate::ir::SheetTextBox),
 }
@@ -1203,6 +1206,7 @@ struct SheetDrawingLayer {
 fn sheet_drawing_layer(
     page: &SheetPage,
     centering_inset_pt: Option<f64>,
+    paint_offset_pt: Option<(f64, f64)>,
     ctx: &mut GenCtx,
 ) -> Option<SheetDrawingLayer> {
     let placed_charts: Vec<&crate::ir::SheetChart> = page
@@ -1222,8 +1226,12 @@ fn sheet_drawing_layer(
     let marker: String =
         format!("#block(width: 100%, height: 0pt, spacing: 0pt)[#metadata(none)<{label}>]");
 
-    let left_pt: f64 = page.margins.left + centering_inset_pt.unwrap_or(0.0);
-    let top_pt: f64 = page.margins.top;
+    // The page foreground does not inherit the table body's move. Apply its
+    // fitted sheet-space origin explicitly to drawing paint (#1542). Chart
+    // content retains its existing calibration through the chart writer.
+    let (paint_dx_pt, paint_dy_pt) = paint_offset_pt.unwrap_or((0.0, 0.0));
+    let left_pt: f64 = page.margins.left + centering_inset_pt.unwrap_or(0.0) + paint_dx_pt;
+    let top_pt: f64 = page.margins.top + paint_dy_pt;
 
     let mut foreground = String::new();
     // Typst has no z-index, so the page a foreground belongs to is decided by
@@ -1239,9 +1247,12 @@ fn sheet_drawing_layer(
             .expect("only placed charts reach the drawing layer");
         write_placed_sheet_drawing(
             &mut foreground,
-            &SheetAnchor::Chart(sheet_chart),
-            left_pt,
-            top_pt + placement.y_offset_pt,
+            &SheetAnchor::Chart {
+                sheet_chart,
+                paint_offset_pt,
+            },
+            left_pt - paint_dx_pt,
+            top_pt - paint_dy_pt + placement.y_offset_pt,
             ctx,
         );
     }
@@ -1293,7 +1304,10 @@ fn write_placed_sheet_anchor(
     ctx: &mut GenCtx,
 ) {
     match anchor {
-        SheetAnchor::Chart(sheet_chart) => {
+        SheetAnchor::Chart {
+            sheet_chart,
+            paint_offset_pt,
+        } => {
             let Some(placement) = sheet_chart.placement else {
                 return;
             };
@@ -1310,6 +1324,11 @@ fn write_placed_sheet_anchor(
             // with its geometry (issue #1069). The corner it grows from is the
             // anchor's, which is where the enclosing `place` put it.
             let fitted: bool = placement.print_scale != 1.0;
+            let coordinate_scale: f64 = if placement.print_scale > 0.0 {
+                placement.print_scale
+            } else {
+                1.0
+            };
             if fitted {
                 // Excel's fit scale is a whole percent, so rounding here keeps
                 // 0.82 from printing as 82.00000000000001%.
@@ -1319,16 +1338,13 @@ fn write_placed_sheet_anchor(
                     "#scale(x: {percent}%, y: {percent}%, origin: top + left)[",
                 );
             }
-            let sheet_frame_top_pt: f64 = if placement.print_scale > 0.0 {
-                dy_pt / placement.print_scale
-            } else {
-                dy_pt
-            };
+            let sheet_frame_top_pt: f64 = dy_pt / coordinate_scale;
             generate_sheet_chart_in(
                 out,
                 &sheet_chart.chart,
                 (placement.width, placement.height),
                 sheet_frame_top_pt,
+                paint_offset_pt.map(|(dx, dy)| (dx / coordinate_scale, dy / coordinate_scale)),
             );
             if fitted {
                 out.push(']');

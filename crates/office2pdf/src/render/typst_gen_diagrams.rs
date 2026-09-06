@@ -110,21 +110,30 @@ pub(super) fn generate_chart(out: &mut String, chart: &Chart) {
 /// empty slide underneath (issue #548). Flowed charts have no frame and keep
 /// the intrinsic size.
 pub(super) fn generate_chart_in(out: &mut String, chart: &Chart, frame: Option<(f64, f64)>) {
-    generate_chart_in_with_sheet_origin(out, chart, frame, None);
+    generate_chart_in_with_sheet_origin(out, chart, frame, None, None);
 }
 
 /// Render a chart anchored on an Excel worksheet.
 ///
-/// `sheet_frame_top_pt` is the chart frame's top in Excel's unscaled sheet
-/// coordinate space. Excel uses that phase when it snaps column-chart axis
-/// chrome before applying the worksheet print scale (issue #1471).
+/// `sheet_frame_top_pt` retains the converter's unscaled physical frame origin
+/// used by the column-axis snapping calibration (#1471). Plot and text keep
+/// that calibration here; its unscaled inset discrepancy is tracked in #1607.
+/// `sheet_paint_offset_pt` moves only the area fill/outline to the fitted sheet
+/// origin, preserving currently matched chart content while fixing #1542.
 pub(super) fn generate_sheet_chart_in(
     out: &mut String,
     chart: &Chart,
     frame: (f64, f64),
     sheet_frame_top_pt: f64,
+    sheet_paint_offset_pt: Option<(f64, f64)>,
 ) {
-    generate_chart_in_with_sheet_origin(out, chart, Some(frame), Some(sheet_frame_top_pt));
+    generate_chart_in_with_sheet_origin(
+        out,
+        chart,
+        Some(frame),
+        Some(sheet_frame_top_pt),
+        sheet_paint_offset_pt,
+    );
 }
 
 fn generate_chart_in_with_sheet_origin(
@@ -132,6 +141,7 @@ fn generate_chart_in_with_sheet_origin(
     chart: &Chart,
     frame: Option<(f64, f64)>,
     sheet_frame_top_pt: Option<f64>,
+    sheet_paint_offset_pt: Option<(f64, f64)>,
 ) {
     // A framed chart is already bounded by its frame, so the page-break guard
     // only concerns the flowed case.
@@ -149,7 +159,7 @@ fn generate_chart_in_with_sheet_origin(
         out.push_str("#[\n");
         out.push_str(scope);
     }
-    generate_chart_body(out, chart, frame, sheet_frame_top_pt);
+    generate_chart_body(out, chart, frame, sheet_frame_top_pt, sheet_paint_offset_pt);
     if font_scope.is_some() {
         out.push_str("]\n");
     }
@@ -179,14 +189,27 @@ fn generate_chart_body(
     chart: &Chart,
     frame: Option<(f64, f64)>,
     sheet_frame_top_pt: Option<f64>,
+    sheet_paint_offset_pt: Option<(f64, f64)>,
 ) {
     match chart_variant(chart) {
         ChartVariant::AxisPlot => {
-            return generate_chart_axis(out, chart, frame, sheet_frame_top_pt);
+            return generate_chart_axis(
+                out,
+                chart,
+                frame,
+                sheet_frame_top_pt,
+                sheet_paint_offset_pt,
+            );
         }
-        ChartVariant::LinePlot => return generate_chart_line_plot(out, chart, frame),
-        ChartVariant::PiePlot => return generate_chart_pie_plot(out, chart, frame),
-        ChartVariant::RadarPlot => return generate_chart_radar_plot(out, chart, frame),
+        ChartVariant::LinePlot => {
+            return generate_chart_line_plot(out, chart, frame, sheet_paint_offset_pt);
+        }
+        ChartVariant::PiePlot => {
+            return generate_chart_pie_plot(out, chart, frame, sheet_paint_offset_pt);
+        }
+        ChartVariant::RadarPlot => {
+            return generate_chart_radar_plot(out, chart, frame, sheet_paint_offset_pt);
+        }
         ChartVariant::BorderedTable => {}
     }
 
@@ -3100,18 +3123,18 @@ fn write_chart_area_start(
     content_extent: (f64, f64),
     title_h: f64,
     fixed_title_band: bool,
+    sheet_paint_offset_pt: Option<(f64, f64)>,
 ) -> bool {
     let wraps_title: bool = title.is_some();
     if let Some(title) = title {
         let (area_w, area_h): (f64, f64) =
             chart_area.unwrap_or((content_extent.0, content_extent.1 + title_h));
-        let _ = writeln!(
+        write_offset_paint_box_start(
             out,
-            "#box(width: {}pt, height: {}pt, fill: {}, stroke: {})[",
-            format_f64(area_w),
-            format_f64(area_h),
-            chart_area_fill(&chart.chart_area_fill),
-            chart_area_stroke(&chart.chart_area_outline, chart.host)
+            (area_w, area_h),
+            &chart_area_fill(&chart.chart_area_fill),
+            &chart_area_stroke(&chart.chart_area_outline, chart.host),
+            sheet_paint_offset_pt,
         );
         if let (crate::ir::ChartHost::Presentation, Some(layout), Some(frame)) =
             (chart.host, chart.title_layout, chart_area)
@@ -3141,15 +3164,44 @@ fn write_chart_area_start(
     } else {
         chart_area_fill(&chart.chart_area_fill)
     };
-    let _ = writeln!(
+    write_offset_paint_box_start(
         out,
-        "#box(width: {}pt, height: {}pt, fill: {}, stroke: {})[",
-        format_f64(content_extent.0),
-        format_f64(content_extent.1),
-        content_fill,
-        content_stroke
+        content_extent,
+        &content_fill,
+        &content_stroke,
+        if wraps_title {
+            None
+        } else {
+            sheet_paint_offset_pt
+        },
     );
     wraps_title
+}
+
+/// Paint a box on the fitted sheet origin while retaining its content layout.
+/// The chart plot and text use independently calibrated coordinates (#1542).
+fn write_offset_paint_box_start(
+    out: &mut String,
+    extent: (f64, f64),
+    fill: &str,
+    stroke: &str,
+    offset: Option<(f64, f64)>,
+) {
+    let width = format_f64(extent.0);
+    let height = format_f64(extent.1);
+    if let Some((dx, dy)) = offset {
+        let _ = writeln!(
+            out,
+            "#box(width: {width}pt, height: {height}pt)[#place(top + left, dx: {}pt, dy: {}pt, box(width: {width}pt, height: {height}pt, fill: {fill}, stroke: {stroke}))",
+            format_f64(dx),
+            format_f64(dy)
+        );
+    } else {
+        let _ = writeln!(
+            out,
+            "#box(width: {width}pt, height: {height}pt, fill: {fill}, stroke: {stroke})["
+        );
+    }
 }
 
 /// Close the inner content box and, for a titled chart, its full-area wrapper.
@@ -3748,6 +3800,7 @@ fn generate_chart_axis(
     chart: &Chart,
     frame: Option<(f64, f64)>,
     sheet_frame_top_pt: Option<f64>,
+    sheet_paint_offset_pt: Option<(f64, f64)>,
 ) {
     let horizontal: bool = matches!(chart.chart_type, ChartType::Bar);
     let categories: usize = chart.categories.len();
@@ -3809,6 +3862,7 @@ fn generate_chart_axis(
         (total_w, total_h),
         title_h,
         true,
+        sheet_paint_offset_pt,
     );
 
     // The plotting rectangle: the one `c:plotArea/c:layout` states, else the
@@ -4512,7 +4566,12 @@ pub(super) fn line_category_baseline_pt(
 /// Render a line/area chart as a polyline plot over a value axis, matching
 /// the native Excel/PowerPoint composition (gridlines, tick labels, category
 /// axis, markers, legend).
-fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64, f64)>) {
+fn generate_chart_line_plot(
+    out: &mut String,
+    chart: &Chart,
+    frame: Option<(f64, f64)>,
+    sheet_paint_offset_pt: Option<(f64, f64)>,
+) {
     const PLOT_W: f64 = 320.0;
     const PLOT_H: f64 = 210.0;
     const VALUE_GAP: f64 = 24.0; // value tick label gutter (left)
@@ -4602,6 +4661,7 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
         (total_w, total_h),
         title_h,
         false,
+        sheet_paint_offset_pt,
     );
 
     // `<c:delete val="1"/>` switches an axis off; see `generate_chart_axis`.
@@ -4843,7 +4903,12 @@ fn is_radar(chart: &Chart) -> bool {
 /// Before this the family fell through to the bordered-table fallback, so a
 /// slide whose primary content was a radar lost it entirely and showed a plain
 /// table of the series values instead (issue #679).
-fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64, f64)>) {
+fn generate_chart_radar_plot(
+    out: &mut String,
+    chart: &Chart,
+    frame: Option<(f64, f64)>,
+    sheet_paint_offset_pt: Option<(f64, f64)>,
+) {
     /// Intrinsic plot size for a flowed radar, matching the pie's.
     const RADAR_DIAMETER: f64 = 200.0;
     const RADAR_LEGEND_ROW_H: f64 = 14.0;
@@ -4921,6 +4986,7 @@ fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64
         (total_w, total_h),
         title_h,
         false,
+        sheet_paint_offset_pt,
     );
 
     // Office puts the first category at twelve o'clock and runs clockwise, the
@@ -5106,7 +5172,12 @@ fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64
 
 /// Render a pie chart as a circle of wedges, each sized by its share of the
 /// series total, with the legend on the edge `<c:legendPos>` asks for.
-fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, f64)>) {
+fn generate_chart_pie_plot(
+    out: &mut String,
+    chart: &Chart,
+    frame: Option<(f64, f64)>,
+    sheet_paint_offset_pt: Option<(f64, f64)>,
+) {
     const PIE_DIAMETER: f64 = 200.0;
     const PIE_LEGEND_ROW_H: f64 = 14.0;
 
@@ -5158,6 +5229,7 @@ fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, 
         (total_w, total_h),
         title_h,
         false,
+        sheet_paint_offset_pt,
     );
 
     // Office starts the first wedge at twelve o'clock and sweeps clockwise.

@@ -1,0 +1,204 @@
+{
+  "native": [
+    {
+      "order": 60,
+      "operation": "clip_path",
+      "bbox": [
+        51.0,
+        55.0,
+        474.0,
+        418.0
+      ],
+      "color": null
+    },
+    {
+      "order": 66,
+      "operation": "fill_path",
+      "bbox": [
+        50.0,
+        54.0,
+        474.0,
+        145.0
+      ],
+      "color": ".854902 .7137255 .7294118"
+    },
+    {
+      "order": 73,
+      "operation": "clip_path",
+      "bbox": [
+        51.0,
+        55.0,
+        474.0,
+        418.0
+      ],
+      "color": null
+    },
+    {
+      "order": 79,
+      "operation": "fill_path",
+      "bbox": [
+        50.0,
+        144.0,
+        474.0,
+        418.0
+      ],
+      "color": ".972549 .9372549 .9411765"
+    }
+  ],
+  "v3": [
+    {
+      "order": 3,
+      "operation": "fill_path",
+      "bbox": [
+        50.0,
+        54.0,
+        473.0,
+        144.0
+      ],
+      "color": ".85490199 .7137255 .7294118"
+    },
+    {
+      "order": 9,
+      "operation": "fill_path",
+      "bbox": [
+        50.0,
+        144.0,
+        453.0,
+        183.0
+      ],
+      "color": ".972549 .9372549 .9411765"
+    },
+    {
+      "order": 51,
+      "operation": "fill_path",
+      "bbox": [
+        453.0,
+        144.0,
+        473.0,
+        183.0
+      ],
+      "color": ".972549 .9372549 .9411765"
+    },
+    {
+      "order": 93,
+      "operation": "fill_path",
+      "bbox": [
+        50.0,
+        143.75,
+        474.0,
+        145.0
+      ],
+      "color": ".85490199 .7137255 .7294118"
+    },
+    {
+      "order": 99,
+      "operation": "fill_path",
+      "bbox": [
+        472.75,
+        54.0,
+        474.0,
+        145.0
+      ],
+      "color": ".85490199 .7137255 .7294118"
+    },
+    {
+      "order": 138,
+      "operation": "fill_path",
+      "bbox": [
+        452.75,
+        145.0,
+        454.0,
+        184.0
+      ],
+      "color": ".972549 .9372549 .9411765"
+    },
+    {
+      "order": 227,
+      "operation": "fill_path",
+      "bbox": [
+        472.75,
+        145.0,
+        474.0,
+        184.0
+      ],
+      "color": ".972549 .9372549 .9411765"
+    }
+  ],
+  "source": [
+    {
+      "cell": {
+        "r": "A1",
+        "s": "1",
+        "t": "s"
+      },
+      "style": {
+        "numFmtId": "164",
+        "fontId": "4",
+        "fillId": "2",
+        "borderId": "0",
+        "xfId": "0",
+        "applyFont": "true",
+        "applyBorder": "true",
+        "applyAlignment": "true",
+        "applyProtection": "false"
+      },
+      "fill": "<ns0:fill xmlns:ns0=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><ns0:patternFill patternType=\"solid\"><ns0:fgColor theme=\"5\" /><ns0:bgColor rgb=\"FFFFCC99\" /></ns0:patternFill></ns0:fill>"
+    },
+    {
+      "cell": {
+        "r": "B1",
+        "s": "1"
+      },
+      "style": {
+        "numFmtId": "164",
+        "fontId": "4",
+        "fillId": "2",
+        "borderId": "0",
+        "xfId": "0",
+        "applyFont": "true",
+        "applyBorder": "true",
+        "applyAlignment": "true",
+        "applyProtection": "false"
+      },
+      "fill": "<ns0:fill xmlns:ns0=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><ns0:patternFill patternType=\"solid\"><ns0:fgColor theme=\"5\" /><ns0:bgColor rgb=\"FFFFCC99\" /></ns0:patternFill></ns0:fill>"
+    },
+    {
+      "cell": {
+        "r": "A2",
+        "s": "2",
+        "t": "s"
+      },
+      "style": {
+        "numFmtId": "164",
+        "fontId": "5",
+        "fillId": "3",
+        "borderId": "0",
+        "xfId": "0",
+        "applyFont": "true",
+        "applyBorder": "false",
+        "applyAlignment": "true",
+        "applyProtection": "false"
+      },
+      "fill": "<ns0:fill xmlns:ns0=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><ns0:patternFill patternType=\"solid\"><ns0:fgColor theme=\"5\" tint=\"0.7999\" /><ns0:bgColor rgb=\"FFFFFFFF\" /></ns0:patternFill></ns0:fill>"
+    },
+    {
+      "cell": {
+        "r": "B2",
+        "s": "3"
+      },
+      "style": {
+        "numFmtId": "164",
+        "fontId": "0",
+        "fillId": "3",
+        "borderId": "0",
+        "xfId": "0",
+        "applyFont": "false",
+        "applyBorder": "false",
+        "applyAlignment": "true",
+        "applyProtection": "false"
+      },
+      "fill": "<ns0:fill xmlns:ns0=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><ns0:patternFill patternType=\"solid\"><ns0:fgColor theme=\"5\" tint=\"0.7999\" /><ns0:bgColor rgb=\"FFFFFFFF\" /></ns0:patternFill></ns0:fill>"
+    }
+  ],
+  "conclusion": "Native rose raw bottom 145 is covered by later pale fill starting144. Converter pale main starts144 but rose bottom extension paints later through145: same overlay-order defect as #1599. Native used-range clip startsx51/y55, independently #1605."
+}

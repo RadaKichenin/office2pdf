@@ -1070,6 +1070,14 @@ fn test_fitted_sheet_draws_the_whole_chart_shrunk() {
 /// The sheet of [`test_table_page_with_anchored_chart_overlays_the_grid`],
 /// printed at `print_scale`.
 fn sheet_source_with_chart_print_scale(print_scale: f64) -> String {
+    generate_typst(&make_doc(vec![Page::Sheet(
+        sheet_page_with_chart_print_scale(print_scale),
+    )]))
+    .unwrap()
+    .source
+}
+
+fn sheet_page_with_chart_print_scale(print_scale: f64) -> SheetPage {
     use crate::ir::{Chart, ChartGrouping, ChartSeries, ChartType, DataLabels, LegendPosition};
 
     let chart = Chart {
@@ -1129,7 +1137,7 @@ fn sheet_source_with_chart_print_scale(print_scale: f64) -> String {
         user_shapes: Vec::new(),
     };
 
-    let page = Page::Sheet(SheetPage {
+    SheetPage {
         name: "Sheet1".to_string(),
         size: PageSize::default(),
         margins: Margins::default(),
@@ -1149,9 +1157,7 @@ fn sheet_source_with_chart_print_scale(print_scale: f64) -> String {
         }],
         images: Vec::new(),
         text_boxes: Vec::new(),
-    });
-
-    generate_typst(&make_doc(vec![page])).unwrap().source
+    }
 }
 
 #[test]
@@ -3985,4 +3991,280 @@ fn test_a_later_sheet_does_not_repeat_the_previous_sheets_drawings() {
         0,
         "a sheet with no drawings of its own prints none"
     );
+}
+
+/// Restate the drawing geometry of the public #982 workbook without making
+/// the regression depend on an installed Segoe UI face. The original fits at
+/// 82%; its 100% control splits at a 1,070pt column group. Both native exports
+/// keep the same declared chart and picture dimensions before scaling.
+#[cfg(not(target_arch = "wasm32"))]
+fn gift_drawing_origin_probe(scale: f64) -> Vec<crate::render::pdf::PaintedPrimitive> {
+    gift_drawing_origin_probe_with_grid_scale(scale, true)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn gift_drawing_origin_probe_with_grid_scale(
+    scale: f64,
+    fitted_grid: bool,
+) -> Vec<crate::render::pdf::PaintedPrimitive> {
+    gift_drawing_origin_probe_with_chart(scale, fitted_grid, |_| {})
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn gift_drawing_origin_probe_with_chart(
+    scale: f64,
+    fitted_grid: bool,
+    configure: impl FnOnce(&mut Chart),
+) -> Vec<crate::render::pdf::PaintedPrimitive> {
+    let mut sheet = sheet_page_with_chart_print_scale(scale);
+    sheet.size = PageSize {
+        width: 1_190.55,
+        height: 841.89,
+    };
+    sheet.margins = Margins {
+        top: 54.0,
+        bottom: 54.0,
+        left: 50.0,
+        right: 50.0,
+    };
+    sheet.table = Table {
+        rows: vec![TableRow {
+            cells: vec![TableCell::default()],
+            height: Some(20.0),
+            minimum_height: None,
+        }],
+        column_widths: vec![if scale == 1.0 { 1_070.0 } else { 1_078.3 }],
+        centers_between_print_margins: true,
+        print_scale: (fitted_grid && scale < 1.0).then_some(scale),
+        ..Table::default()
+    };
+    let chart = &mut sheet.charts[0];
+    chart.placement = Some(crate::ir::SheetChartPlacement {
+        x_offset_pt: 285.9874 * scale,
+        y_offset_pt: 78.0126 * scale,
+        width: 1_015.9784,
+        height: 307.9732,
+        print_scale: scale,
+    });
+    chart.chart.host = crate::ir::ChartHost::Spreadsheet;
+    chart.chart.chart_type = ChartType::Column;
+    chart.chart.text_font_family = Some("Calibri".to_string());
+    chart.chart.text_style.size_pt = Some(9.0);
+    chart.chart.categories = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ]
+    .into_iter()
+    .map(str::to_string)
+    .collect();
+    chart.chart.series[0].values = vec![
+        30.0, 0.0, 0.0, 20.0, 0.0, 180.0, 70.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+    ];
+    chart.chart.title = None;
+    chart.chart.has_legend = true;
+    chart.chart.legend_position = LegendPosition::Bottom;
+    chart.chart.auto_title_deleted = true;
+    chart.chart.chart_area_fill = crate::ir::ChartAreaFill::Solid(Color {
+        r: 255,
+        g: 255,
+        b: 255,
+    });
+    chart.chart.chart_area_outline = ChartAreaOutline::Suppressed;
+    configure(&mut chart.chart);
+
+    let Page::Sheet(picture_sheet) = sheet_with_a_picture_over_a_filled_panel() else {
+        unreachable!("the picture helper builds a sheet")
+    };
+    sheet.images = picture_sheet.images;
+    let picture = &mut sheet.images[0];
+    picture.x_offset_pt = 10.935437 * scale;
+    picture.y_offset_pt = 467.40316 * scale;
+    picture.image.width = Some(234.94803 * scale);
+    picture.image.height = Some(171.0504 * scale);
+
+    let output = generate_typst(&make_doc(vec![Page::Sheet(sheet)])).unwrap();
+    crate::render::pdf::compiled_paint_sequence(&output.source, &output.images, 0)
+        .expect("the drawing-origin probe compiles")
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn assert_gift_drawing_bounds(
+    scale: f64,
+    expected_chart: (f64, f64, f64, f64),
+    expected_image: (f64, f64, f64, f64),
+) {
+    use crate::render::pdf::PaintedKind;
+
+    let painted = gift_drawing_origin_probe(scale);
+    let chart = painted
+        .iter()
+        .find(|item| {
+            item.kind == PaintedKind::Shape
+                && ((item.bounds.2 - item.bounds.0) - 1_015.9784 * scale).abs() < 0.01
+                && ((item.bounds.3 - item.bounds.1) - 307.9732 * scale).abs() < 0.01
+        })
+        .expect("the chart paints its full declared frame");
+    let image = painted
+        .iter()
+        .find(|item| item.kind == PaintedKind::Image)
+        .expect("the anchored image is present");
+    for (name, actual, expected) in [
+        ("chart", chart.bounds, expected_chart),
+        ("image", image.bounds, expected_image),
+    ] {
+        for (edge, actual, expected) in [
+            ("left", actual.0, expected.0),
+            ("top", actual.1, expected.1),
+            ("right", actual.2, expected.2),
+            ("bottom", actual.3, expected.3),
+        ] {
+            assert!(
+                (actual - expected).abs() < 0.01,
+                "{name} {edge} at {scale}: got {actual}pt, expected {expected}pt"
+            );
+        }
+    }
+}
+
+/// Fresh native Excel page-2 frame/image bounds for issue #1542. This checks
+/// compiled page coordinates, so moving a grid-only marker cannot satisfy it.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn fitted_drawing_frames_use_the_native_sheet_origin() {
+    assert_gift_drawing_bounds(
+        0.82,
+        (289.4497, 117.2703, 1_122.5520, 369.8083),
+        (63.90705, 436.57063, 256.56445, 576.83193),
+    );
+}
+
+/// Freeze the existing 100% control. Its 0.275pt horizontal native difference
+/// is below the visual gate and is independent of the fitted-origin defect.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn unscaled_drawing_frames_keep_their_existing_origin() {
+    assert_gift_drawing_bounds(
+        1.0,
+        (345.2624, 132.0126, 1_361.2408, 439.9858),
+        (70.210437, 521.40316, 305.158467, 692.45356),
+    );
+}
+
+/// The fitted source's chart text already matches native Excel. Its paint
+/// origin correction must not displace those independent text seats beyond
+/// the existing visual gate. The physical-origin control uses the same chart
+/// and font resolution, so font availability cannot hide a translation.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn fitted_drawing_frames_preserve_matched_chart_text() {
+    use crate::render::pdf::PaintedKind;
+
+    let text_bounds = |fitted_grid| {
+        gift_drawing_origin_probe_with_grid_scale(0.82, fitted_grid)
+            .into_iter()
+            .filter(|item| item.kind == PaintedKind::Text)
+            .map(|item| item.bounds)
+            .collect::<Vec<_>>()
+    };
+    let physical = text_bounds(false);
+    let fitted = text_bounds(true);
+    assert!(!physical.is_empty(), "the chart must contain text");
+    assert_eq!(physical.len(), fitted.len());
+    for (index, (before, after)) in physical.into_iter().zip(fitted).enumerate() {
+        assert!(
+            (before.0 - after.0).abs() <= 0.5 && (before.1 - after.1).abs() <= 0.5,
+            "chart text run {index} moved beyond 0.5pt: {before:?} -> {after:?}"
+        );
+    }
+}
+
+/// The source's plot grid already agrees with native Excel. A corrected outer
+/// drawing frame must not translate that independently positioned content.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn fitted_drawing_frames_preserve_matched_plot_grid() {
+    let grid = |fitted_grid| {
+        gift_drawing_origin_probe_with_grid_scale(0.82, fitted_grid)
+            .into_iter()
+            .filter(|item| {
+                item.stroke.is_some()
+                    && item.bounds.2 - item.bounds.0 > 700.0
+                    && item.bounds.3 - item.bounds.1 < 1.0
+            })
+            .map(|item| item.bounds)
+            .collect::<Vec<_>>()
+    };
+    let before = grid(false);
+    let after = grid(true);
+    assert!(before.len() >= 5, "the probe must contain plot gridlines");
+    assert_eq!(before.len(), after.len());
+    for (index, (before, after)) in before.into_iter().zip(after).enumerate() {
+        assert!(
+            (before.0 - after.0).abs() < 0.01 && (before.1 - after.1).abs() < 0.01,
+            "gridline {index}: {before:?} -> {after:?}"
+        );
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn fitted_drawing_frames_preserve_independent_legend_geometry() {
+    use crate::render::pdf::PaintedKind;
+
+    let key = |fitted_grid| {
+        gift_drawing_origin_probe_with_grid_scale(0.82, fitted_grid)
+            .into_iter()
+            .find(|item| {
+                item.kind == PaintedKind::Shape
+                    && item.stroke.is_none()
+                    && item.bounds.1 > 340.0
+                    && item.bounds.2 - item.bounds.0 < 25.0
+                    && item.bounds.3 - item.bounds.1 < 10.0
+            })
+            .expect("the bottom legend contains a filled key")
+            .bounds
+    };
+    let before = key(false);
+    let after = key(true);
+    for (before, after, offset) in [
+        (before.0, after.0, 0.0),
+        (before.1, after.1, 0.0),
+        (before.2, after.2, 0.0),
+        (before.3, after.3, 0.0),
+    ] {
+        assert!((after - before - offset).abs() < 0.01);
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn fitted_drawing_frames_preserve_chart_text_flow_at_other_scales() {
+    use crate::render::pdf::PaintedKind;
+
+    for scale in [0.64, 0.78] {
+        for chart_type in [ChartType::Column, ChartType::Bar, ChartType::Line] {
+            let bounds = |fitted_grid| {
+                gift_drawing_origin_probe_with_chart(scale, fitted_grid, |chart| {
+                    chart.chart_type = chart_type.clone();
+                    chart.title = Some("Budget by month\nPlanned and actual spending".to_string());
+                    chart.auto_title_deleted = false;
+                    chart.series[0].name = Some("Planned spending\nCurrent year".to_string());
+                    chart.categories[0] = "Beginning of January".to_string();
+                })
+                .into_iter()
+                .filter(|item| item.kind == PaintedKind::Text)
+                .map(|item| item.bounds)
+                .collect::<Vec<_>>()
+            };
+            let before = bounds(false);
+            let after = bounds(true);
+            assert!(!before.is_empty());
+            assert_eq!(before.len(), after.len(), "{chart_type:?} at {scale}");
+            for (index, (before, after)) in before.into_iter().zip(after).enumerate() {
+                assert!(
+                    (before.0 - after.0).abs() <= 0.5 && (before.1 - after.1).abs() <= 0.5,
+                    "{chart_type:?} at {scale}, run {index}: {before:?} -> {after:?}"
+                );
+            }
+        }
+    }
 }

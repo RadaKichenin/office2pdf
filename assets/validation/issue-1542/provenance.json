@@ -1,0 +1,37 @@
+{
+  "source_url": "https://github.com/user-attachments/files/30941041/Gift.Budget.and.Tracker1.xlsx",
+  "baseline_commit": "6d78f1aa26f7ac3f12b4602e77afdf8ff506d1da",
+  "font_path": "/Applications/Microsoft Excel.app/Contents/Resources/DFonts",
+  "dpi": 300,
+  "sha256": {
+    "source": "25f5dc75dab19ea12042979a61842314ddc226e3e45d447e36b2a2a104112613",
+    "control_source": "af4160ca276c3add9e3100f80c8df7156afbdf6ec7a0090161e015a7ccf5d5cb",
+    "native": "2aa03cafa6a156d553a2f1e03e0458257319ff6416a188f1132ce7817ecaeae1",
+    "before": "81b93282a27291eb3ebf77ca02229a4d36e5dabc9916b742a083ce0130763c25",
+    "after": "6207183de72a132c65daf08b86f8d1a3f38197af053282b83d00fc79ec41cefa",
+    "control_native": "0935ca38e497a657d2f972fb7ddfc3163cf69e8edfe6d79d230202b5db5d7bfa",
+    "control_before": "60788eab1c0aa8af0d55db81be7adc48ec1a7ff97b2a1e148422e2d8da9c9805",
+    "control_after": "60788eab1c0aa8af0d55db81be7adc48ec1a7ff97b2a1e148422e2d8da9c9805",
+    "before_cli": "fe4f1f1523a0afa2699812e0d4a2f083f9213435adabf36dbae12fc27371fdcf",
+    "after_cli": "d626844d4581b3894554690b8d76aa8526e1220faf506f232dad86bd10c488ec",
+    "cargo_lock": "750f50c507b281f84b945b09573333ffa02dc45cddd566481af8535ae101e612"
+  },
+  "page1_before_after_exact_AE": 0,
+  "control_before_after_byte_identical": true,
+  "shared_page1_exact_AE": {
+    "gt": 0,
+    "output": 0
+  },
+  "strict_cluster_counts": {
+    "original": [
+      72,
+      40
+    ],
+    "control": [
+      72,
+      164,
+      24
+    ]
+  },
+  "scope": "Chart frame and image origin corrected; independent tracked visual defects remain."
+}

@@ -1,0 +1,407 @@
+{
+  "clusters": [
+    {
+      "area_pt2": 394.7328,
+      "bbox_pt": {
+        "height": 5.04,
+        "width": 221.04,
+        "x": 471.84,
+        "y": 387.84
+      },
+      "disposition": {
+        "issue": "#1598",
+        "kind": "issue",
+        "note": "Matched original-resolution chart continuation crop: eleven grey rules, turquoise line and three markers are omitted."
+      },
+      "id": "p3-541e70b04b9e",
+      "region": "center"
+    },
+    {
+      "area_pt2": 211.968,
+      "bbox_pt": {
+        "height": 0.96,
+        "width": 220.8,
+        "x": 472.08,
+        "y": 167.52
+      },
+      "disposition": {
+        "issue": "#1598",
+        "kind": "issue",
+        "note": "Matched original-resolution chart continuation crop: eleven grey rules, turquoise line and three markers are omitted."
+      },
+      "id": "p3-47885312cf2c",
+      "region": "top"
+    },
+    {
+      "area_pt2": 211.968,
+      "bbox_pt": {
+        "height": 0.96,
+        "width": 220.8,
+        "x": 472.08,
+        "y": 341.52
+      },
+      "disposition": {
+        "issue": "#1598",
+        "kind": "issue",
+        "note": "Matched original-resolution chart continuation crop: eleven grey rules, turquoise line and three markers are omitted."
+      },
+      "id": "p3-76ff6c5a8c15",
+      "region": "center"
+    },
+    {
+      "area_pt2": 211.968,
+      "bbox_pt": {
+        "height": 0.96,
+        "width": 220.8,
+        "x": 472.08,
+        "y": 365.52
+      },
+      "disposition": {
+        "issue": "#1598",
+        "kind": "issue",
+        "note": "Matched original-resolution chart continuation crop: eleven grey rules, turquoise line and three markers are omitted."
+      },
+      "id": "p3-7bd623f656e7",
+      "region": "center"
+    },
+    {
+      "area_pt2": 158.976,
+      "bbox_pt": {
+        "height": 0.72,
+        "width": 220.8,
+        "x": 472.08,
+        "y": 291.6
+      },
+      "disposition": {
+        "issue": "#1598",
+        "kind": "issue",
+        "note": "Matched original-resolution chart continuation crop: eleven grey rules, turquoise line and three markers are omitted."
+      },
+      "id": "p3-ce3f4f0459af",
+      "region": "center"
+    },
+    {
+      "area_pt2": 158.976,
+      "bbox_pt": {
+        "height": 0.72,
+        "width": 220.8,
+        "x": 472.08,
+        "y": 316.56
+      },
+      "disposition": {
+        "issue": "#1598",
+        "kind": "issue",
+        "note": "Matched original-resolution chart continuation crop: eleven grey rules, turquoise line and three markers are omitted."
+      },
+      "id": "p3-1c16976aadd9",
+      "region": "center"
+    },
+    {
+      "area_pt2": 158.976,
+      "bbox_pt": {
+        "height": 0.72,
+        "width": 220.8,
+        "x": 472.08,
+        "y": 142.56
+      },
+      "disposition": {
+        "issue": "#1598",
+        "kind": "issue",
+        "note": "Matched original-resolution chart continuation crop: eleven grey rules, turquoise line and three markers are omitted."
+      },
+      "id": "p3-8b754d6d9296",
+      "region": "top"
+    },
+    {
+      "area_pt2": 158.976,
+      "bbox_pt": {
+        "height": 0.72,
+        "width": 220.8,
+        "x": 472.08,
+        "y": 192.72
+      },
+      "disposition": {
+        "issue": "#1598",
+        "kind": "issue",
+        "note": "Matched original-resolution chart continuation crop: eleven grey rules, turquoise line and three markers are omitted."
+      },
+      "id": "p3-25d9b1a8930a",
+      "region": "top"
+    },
+    {
+      "area_pt2": 158.976,
+      "bbox_pt": {
+        "height": 0.72,
+        "width": 220.8,
+        "x": 472.08,
+        "y": 216.72
+      },
+      "disposition": {
+        "issue": "#1598",
+        "kind": "issue",
+        "note": "Matched original-resolution chart continuation crop: eleven grey rules, turquoise line and three markers are omitted."
+      },
+      "id": "p3-5b237d3fe7f0",
+      "region": "top"
+    },
+    {
+      "area_pt2": 158.976,
+      "bbox_pt": {
+        "height": 0.72,
+        "width": 220.8,
+        "x": 472.08,
+        "y": 241.68
+      },
+      "disposition": {
+        "issue": "#1598",
+        "kind": "issue",
+        "note": "Matched original-resolution chart continuation crop: eleven grey rules, turquoise line and three markers are omitted."
+      },
+      "id": "p3-eee05c9d8a5d",
+      "region": "top"
+    },
+    {
+      "area_pt2": 158.976,
+      "bbox_pt": {
+        "height": 0.72,
+        "width": 220.8,
+        "x": 472.08,
+        "y": 266.64
+      },
+      "disposition": {
+        "issue": "#1598",
+        "kind": "issue",
+        "note": "Matched original-resolution chart continuation crop: eleven grey rules, turquoise line and three markers are omitted."
+      },
+      "id": "p3-09fe8de11ec0",
+      "region": "top"
+    },
+    {
+      "area_pt2": 59.904,
+      "bbox_pt": {
+        "height": 49.92,
+        "width": 1.2,
+        "x": 471.84,
+        "y": 63.12
+      },
+      "disposition": {
+        "class": "shape-edge-antialiasing",
+        "kind": "accepted-rendering",
+        "note": "Both rose bands retain size/color; trace edges differ by 0.225pt at their centered sheet origin, below the unchanged 0.5pt gate. Inspected full-page and edge crops show only the corresponding narrow boundary rim."
+      },
+      "id": "p3-60be89008733",
+      "region": "top"
+    },
+    {
+      "area_pt2": 59.904,
+      "bbox_pt": {
+        "height": 49.92,
+        "width": 1.2,
+        "x": 471.84,
+        "y": 444.0
+      },
+      "disposition": {
+        "class": "shape-edge-antialiasing",
+        "kind": "accepted-rendering",
+        "note": "Both rose bands retain size/color; trace edges differ by 0.225pt at their centered sheet origin, below the unchanged 0.5pt gate. Inspected full-page and edge crops show only the corresponding narrow boundary rim."
+      },
+      "id": "p3-0a866784a835",
+      "region": "center"
+    },
+    {
+      "area_pt2": 46.2528,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 12.0,
+        "x": 503.76,
+        "y": 516.0
+      },
+      "disposition": {
+        "issue": "#1600",
+        "kind": "issue",
+        "note": "Matched header and Yes crops retain baselines but shift horizontally by -1.41445pt / -0.55874pt in the trace."
+      },
+      "id": "p3-0a879e222e4e",
+      "region": "center"
+    },
+    {
+      "area_pt2": 35.4816,
+      "bbox_pt": {
+        "height": 6.48,
+        "width": 11.52,
+        "x": 514.32,
+        "y": 515.76
+      },
+      "disposition": {
+        "issue": "#1600",
+        "kind": "issue",
+        "note": "Matched header and Yes crops retain baselines but shift horizontally by -1.41445pt / -0.55874pt in the trace."
+      },
+      "id": "p3-89f22f28b6ba",
+      "region": "center"
+    },
+    {
+      "area_pt2": 34.1568,
+      "bbox_pt": {
+        "height": 5.28,
+        "width": 12.48,
+        "x": 129.6,
+        "y": 811.68
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Matched table-body and footer regions preserve text, regular weight, colors and baselines within the 0.5pt gate; these six fragments follow glyph outlines."
+      },
+      "id": "p3-ee7f0b77fd94",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 32.3712,
+      "bbox_pt": {
+        "height": 8.4,
+        "width": 8.16,
+        "x": 490.08,
+        "y": 513.6
+      },
+      "disposition": {
+        "issue": "#1600",
+        "kind": "issue",
+        "note": "Matched header and Yes crops retain baselines but shift horizontally by -1.41445pt / -0.55874pt in the trace."
+      },
+      "id": "p3-561642dd5f83",
+      "region": "center"
+    },
+    {
+      "area_pt2": 27.072,
+      "bbox_pt": {
+        "height": 6.48,
+        "width": 9.12,
+        "x": 115.92,
+        "y": 811.92
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Matched table-body and footer regions preserve text, regular weight, colors and baselines within the 0.5pt gate; these six fragments follow glyph outlines."
+      },
+      "id": "p3-9114be56a843",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 24.6528,
+      "bbox_pt": {
+        "height": 8.4,
+        "width": 5.04,
+        "x": 678.48,
+        "y": 582.72
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Matched table-body and footer regions preserve text, regular weight, colors and baselines within the 0.5pt gate; these six fragments follow glyph outlines."
+      },
+      "id": "p3-73ffd5084586",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 23.1552,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 5.28,
+        "x": 656.4,
+        "y": 582.72
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Matched table-body and footer regions preserve text, regular weight, colors and baselines within the 0.5pt gate; these six fragments follow glyph outlines."
+      },
+      "id": "p3-663fa744cb47",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 23.1552,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 5.28,
+        "x": 611.52,
+        "y": 585.12
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Matched table-body and footer regions preserve text, regular weight, colors and baselines within the 0.5pt gate; these six fragments follow glyph outlines."
+      },
+      "id": "p3-1d35984b4ee3",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 22.176,
+      "bbox_pt": {
+        "height": 7.92,
+        "width": 6.48,
+        "x": 503.52,
+        "y": 642.96
+      },
+      "disposition": {
+        "issue": "#1600",
+        "kind": "issue",
+        "note": "Matched header and Yes crops retain baselines but shift horizontally by -1.41445pt / -0.55874pt in the trace."
+      },
+      "id": "p3-bb09bf8a190b",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 21.6,
+      "bbox_pt": {
+        "height": 8.88,
+        "width": 3.12,
+        "x": 530.88,
+        "y": 513.12
+      },
+      "disposition": {
+        "issue": "#1600",
+        "kind": "issue",
+        "note": "Matched header and Yes crops retain baselines but shift horizontally by -1.41445pt / -0.55874pt in the trace."
+      },
+      "id": "p3-9f41ad55584d",
+      "region": "center"
+    },
+    {
+      "area_pt2": 20.16,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 6.48,
+        "x": 148.56,
+        "y": 811.44
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Matched table-body and footer regions preserve text, regular weight, colors and baselines within the 0.5pt gate; these six fragments follow glyph outlines."
+      },
+      "id": "p3-81dc77e0486b",
+      "region": "bottom-left"
+    }
+  ],
+  "dpi": 300,
+  "duplicate_disposition_cluster_ids": [],
+  "errors": [],
+  "fuzz_percent": 5,
+  "minimum_area_pt2": 20.0,
+  "page": 3,
+  "passed": true,
+  "renderer_observations": [],
+  "schema_version": 1,
+  "strict": true,
+  "summary": {
+    "dispositioned": 24,
+    "duplicate": 0,
+    "total": 24,
+    "undispositioned": 0,
+    "unknown": 0
+  },
+  "undispositioned_cluster_ids": [],
+  "unknown_disposition_cluster_ids": []
+}
