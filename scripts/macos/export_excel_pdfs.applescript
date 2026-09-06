@@ -7,6 +7,7 @@ on run argv
 
     tell application "Microsoft Excel"
         launch
+        set previousDisplayAlerts to display alerts
         set display alerts to false
         repeat with argumentIndex from 2 to (count argv) by 2
             set outputId to item argumentIndex of argv
@@ -52,7 +53,9 @@ on run argv
                 set end of failures to outputId & ": " & errorMessage & " (" & errorNumber & ")"
             end try
         end repeat
-        quit
+        -- Each job closes only its own workbook. Application-wide quit can
+        -- close unrelated workbooks or mask completed exports with error -128.
+        set display alerts to previousDisplayAlerts
     end tell
 
     if (count failures) > 0 then error my joinLines(failures)
