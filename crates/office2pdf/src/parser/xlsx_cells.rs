@@ -1501,15 +1501,31 @@ pub(super) fn recomputed_default_row_height_pt(
 /// the very face its theme scheme resolves to (issue #1140). A row whose
 /// cells name some *other* face has no series of its own here.
 fn measured_row_height_pt(font: &NormalFont, size_pt: f64) -> Option<f64> {
-    let measured: &[(f64, f64)] = if font.uses_theme_scheme {
-        &UI_SCRIPT_FACE_ROW_HEIGHTS
-    } else if font.family.eq_ignore_ascii_case("Calibri") {
+    if font.uses_theme_scheme {
+        return measured_series_row_height_pt(&UI_SCRIPT_FACE_ROW_HEIGHTS, size_pt);
+    }
+    measured_family_row_height_pt(&font.family, size_pt)
+}
+
+/// The row a face named outright recomputes for a `size_pt` line, or `None`
+/// where the family has no measured series or the size sits between its
+/// points. A cell font is looked up here by the family it declares; the
+/// Normal font goes through [`measured_row_height_pt`], which also knows
+/// whether a theme scheme resolves it to the UI face.
+fn measured_family_row_height_pt(family: &str, size_pt: f64) -> Option<f64> {
+    let measured: &[(f64, f64)] = if family.eq_ignore_ascii_case("Calibri") {
         &CALIBRI_RECOMPUTED_ROW_HEIGHTS
-    } else if font.family.eq_ignore_ascii_case("Aptos") {
+    } else if family.eq_ignore_ascii_case("Aptos") {
         &APTOS_RECOMPUTED_ROW_HEIGHTS
     } else {
-        named_face_row_heights(&font.family)?
+        named_face_row_heights(family)?
     };
+    measured_series_row_height_pt(measured, size_pt)
+}
+
+/// The entry of one measured `(size, row)` series at exactly `size_pt`.
+/// Nothing interpolates: the measured points step too irregularly.
+fn measured_series_row_height_pt(measured: &[(f64, f64)], size_pt: f64) -> Option<f64> {
     measured
         .iter()
         .find(|(measured_size_pt, _)| (size_pt - measured_size_pt).abs() < 0.01)
@@ -2038,10 +2054,11 @@ fn measured_printed_grid_row_height(height: f64, normal_font: Option<&NormalFont
 /// its fractional-height and theme controls are measured.
 ///
 /// Both declared and recomputed worksheet heights go through here. An
-/// auto-sized row additionally prints at the taller of this track and the
-/// height its own font needs: the same `ht=15` row measures 14.00pt in Arial
-/// 10 and 15.00pt in Malgun Gothic 10 in the golden exports. That font term is
-/// not applied yet (issue #709), so Korean auto rows print 1.00pt short.
+/// auto-sized row's worksheet height already carries what its own cells
+/// need — the tallest cell font (issue #1140) and the point a wrapped
+/// single-line cell adds (issue #709) — so the same `ht=15` row reaches this
+/// mapping as 15 under wrapped Arial 10 and 16 under wrapped Malgun Gothic
+/// 10, printing the 14.00pt and 15.00pt the golden exports show.
 ///
 /// Keep this conversion in the XLSX parser rather than the generic table
 /// renderer so DOCX/PPTX table heights retain their native semantics.
@@ -2209,7 +2226,9 @@ fn cell_wraps_past_one_line(
 /// was sized by its own content box instead of by Excel's track — 15.00pt
 /// against Excel's 14.00pt on the six Latin workbooks (issue #710), and
 /// 22.32pt against 15.00pt on the Korean ones, where the East Asian line
-/// factor compounds it (issue #709).
+/// factor compounded it (issue #709). A wrapped cell that fits its line still
+/// counts for one point of Excel's own recompute, which `auto_row_height_pt`
+/// folds into the track.
 fn printed_row_height(
     sheet: &umya_spreadsheet::Worksheet,
     row_idx: u32,
@@ -2294,16 +2313,117 @@ fn auto_row_height_pt(
     let Some(font) = normal_font else {
         return base_height_pt;
     };
+    let wrapped_height_pt: f64 =
+        wrapped_cell_row_height_pt(sheet, row_idx, font, base_height_pt).unwrap_or(base_height_pt);
     let Some(tallest_cell_size_pt) = tallest_cell_font_size_pt(sheet, row_idx) else {
-        return base_height_pt;
+        return wrapped_height_pt;
     };
     if tallest_cell_size_pt <= font.size_pt {
-        return base_height_pt;
+        return wrapped_height_pt;
     }
     let unmeasured_height_pt: f64 = cached_height_pt.unwrap_or(base_height_pt);
     measured_row_height_pt(font, tallest_cell_size_pt)
         .unwrap_or(unmeasured_height_pt)
-        .max(base_height_pt)
+        .max(wrapped_height_pt)
+}
+
+/// The point a wrapped cell adds to the row its face recomputes, once its
+/// text is laid out rather than merely measured.
+const WRAPPED_CELL_ROW_LIFT_PT: f64 = 1.0;
+
+/// The tallest row any wrapped, unmerged, non-empty cell of this auto row
+/// re-measures it to, or `None` where no cell lifts it above
+/// `base_height_pt`.
+///
+/// Excel sizes an unwrapped cell's row from a per-face table (the series
+/// above), but a `wrapText` cell is laid out, and the laid-out line costs
+/// one point more than the table row of the same face and size — even when
+/// the text fits one line. Native Excel-for-Mac readings of
+/// `row height of row N`, one single-line cell per auto row, fifteen faces
+/// at fourteen sizes, under a Normal font of Arial 8 (so an 11pt default
+/// masks nothing), issue #709:
+///
+/// | face at 10pt | unwrapped | wrapped |
+/// | --- | ---: | ---: |
+/// | Arial, Times New Roman, Verdana, Tahoma, Georgia | 13 | 14 |
+/// | Courier New, Segoe UI, Calibri, Aptos | 14 | 15 |
+/// | Malgun Gothic, 맑은 고딕 | 15 | 16 |
+///
+/// Every one of the 210 wrapped readings is its unwrapped twin plus one, and
+/// the unwrapped column reproduces every series above exactly, which is the
+/// probe's control. Korean text, bold weight and the cell's own width move
+/// nothing; an empty wrapped cell and a wrapped cell inside a merged range
+/// read the bare unwrapped row.
+///
+/// Under a taller Normal font the lift shows only where the face's own row
+/// reaches the default: swept again under Calibri 9, 11 and 12, Arial 11 and
+/// 12, Segoe UI 10 and Malgun Gothic 10, a wrapped cell whose face recomputes
+/// at least the default row reads one point over the larger of the two, and
+/// one whose face recomputes a shorter row mostly keeps the default. "Mostly"
+/// is the open edge: a face recomputing exactly one point under the default
+/// still lifts under some Normal fonts (Arial 11 under Calibri 11 reads 16,
+/// this model says 15). That case is left at the default rather than guessed,
+/// so nothing here prints a row taller than Excel's.
+///
+/// This is what every Korean business mock's data rows carry — a wrapped
+/// Malgun Gothic 10 cell under Calibri 11 reads 16, and the compacting grid
+/// prints 15.00pt where the bare 15 printed 14.
+fn wrapped_cell_row_height_pt(
+    sheet: &umya_spreadsheet::Worksheet,
+    row_idx: u32,
+    normal_font: &NormalFont,
+    base_height_pt: f64,
+) -> Option<f64> {
+    sheet
+        .get_collection_by_row(&row_idx)
+        .into_iter()
+        .filter(|cell| {
+            cell.get_style()
+                .get_alignment()
+                .is_some_and(|alignment| *alignment.get_wrap_text())
+        })
+        .filter(|cell| !cell.get_value().trim().is_empty())
+        .filter(|cell| {
+            let coordinate = cell.get_coordinate();
+            !cell_sits_in_a_merged_range(
+                sheet,
+                *coordinate.get_col_num(),
+                *coordinate.get_row_num(),
+            )
+        })
+        .filter_map(|cell| match cell.get_style().get_font() {
+            Some(font) if !font.get_name().is_empty() => {
+                measured_family_row_height_pt(font.get_name(), *font.get_size())
+            }
+            _ => measured_row_height_pt(normal_font, normal_font.size_pt),
+        })
+        .filter(|face_row_height_pt| *face_row_height_pt >= base_height_pt)
+        .map(|face_row_height_pt| face_row_height_pt + WRAPPED_CELL_ROW_LIFT_PT)
+        .max_by(f64::total_cmp)
+}
+
+/// Whether the cell at (`col`, `row`) lies inside any merged range of the
+/// sheet, its top-left member included.
+fn cell_sits_in_a_merged_range(sheet: &umya_spreadsheet::Worksheet, col: u32, row: u32) -> bool {
+    sheet.get_merge_cells().iter().any(|range| {
+        let start_col: u32 = range
+            .get_coordinate_start_col()
+            .map(|c| *c.get_num())
+            .unwrap_or(1);
+        let start_row: u32 = range
+            .get_coordinate_start_row()
+            .map(|r| *r.get_num())
+            .unwrap_or(1);
+        let end_col: u32 = range
+            .get_coordinate_end_col()
+            .map(|c| *c.get_num())
+            .unwrap_or(start_col);
+        let end_row: u32 = range
+            .get_coordinate_end_row()
+            .map(|r| *r.get_num())
+            .unwrap_or(start_row);
+        (start_col..=end_col).contains(&col) && (start_row..=end_row).contains(&row)
+    })
 }
 
 /// The largest font size any cell of this row states, ignoring cells that

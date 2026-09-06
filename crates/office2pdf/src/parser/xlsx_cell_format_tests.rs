@@ -1422,7 +1422,11 @@ fn test_wrapping_row_whose_text_fits_takes_the_native_track() {
     // content box: 15.00pt against Excel's 14.00pt across the six Latin
     // workbooks (issue #710), and 22.32pt against 15.00pt across the Korean
     // ones (issue #709). A single short word cannot wrap, so the row prints
-    // its mapped track like any other.
+    // a mapped track like any other — Excel's own recompute for a wrapped
+    // Calibri 11 cell under a Calibri 11 Normal font, which the native
+    // reading puts one point over the unwrapped 15 (issue #709), compacted
+    // to the 15pt track. What must not happen is the `None` of a
+    // content-driven row.
     let data = build_xlsx_formatted_over_a_compacting_grid(|sheet| {
         let cell = sheet.get_cell_mut("A1");
         cell.set_value("OK");
@@ -1436,8 +1440,8 @@ fn test_wrapping_row_whose_text_fits_takes_the_native_track() {
     let tp = get_sheet_page(&doc, 0);
     assert_eq!(
         tp.table.rows[0].height,
-        Some(14.0),
-        "a wrapText cell that fits its column still prints Excel's 14pt track"
+        Some(15.0),
+        "a wrapText cell that fits its column still prints Excel's mapped track"
     );
 }
 
@@ -2219,5 +2223,236 @@ fn merged_range_keeps_the_top_left_members_own_sides() {
     assert!(
         plain.border.is_none(),
         "a merge whose members declare nothing keeps no border"
+    );
+}
+
+// ── A wrapped single-line cell lifts its auto row (issue #709) ────────
+
+/// The four Korean business mocks, whose Normal font names Calibri 11
+/// outright, so their printed grid compacts (issue #1094).
+const PAYROLL_KO_MOCK: &[u8] =
+    include_bytes!("../../../../tests/golden_mocks/business/sources/xlsx/04_payroll_ko.xlsx");
+const QUOTATION_KO_MOCK: &[u8] =
+    include_bytes!("../../../../tests/golden_mocks/business/sources/xlsx/01_quotation_ko.xlsx");
+
+/// One auto row over the compacting Calibri 11 grid holding a single cell of
+/// `text` in `family` at `size_pt`, with or without `wrapText`, and no `ht`
+/// at all — Excel's own recompute decides the whole row.
+fn printed_auto_row_height(family: &str, size_pt: f64, text: &str, wraps: bool) -> Option<f64> {
+    let data = build_xlsx_formatted_over_a_compacting_grid(|sheet| {
+        sheet.get_column_dimension_mut("A").set_width(40.0);
+        let cell = sheet.get_cell_mut("A1");
+        cell.set_value(text);
+        let style = cell.get_style_mut();
+        if wraps {
+            style.get_alignment_mut().set_wrap_text(true);
+        }
+        let font = style.get_font_mut();
+        font.set_name(family);
+        font.set_size(size_pt);
+    });
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    get_sheet_page(&doc, 0).table.rows[0].height
+}
+
+/// A wrapped cell whose text fits one line still re-measures its auto row:
+/// Excel gives it one point more than the row its face recomputes at that
+/// size, and the compacting grid prints that.
+///
+/// Native Excel-for-Mac readings of `row height of row N` over a Calibri 11
+/// Normal font (the business mocks' configuration), one wrapped single-line
+/// cell per auto row, no `ht`:
+///
+/// | cell font | unwrapped | wrapped | printed (x0.92) |
+/// | --- | ---: | ---: | ---: |
+/// | Malgun Gothic 10 | 15 | 16 | 15 |
+/// | Malgun Gothic 14 | 20 | 21 | 19 |
+/// | Arial 12 | 16 | 17 | 16 |
+/// | Calibri 11 | 15 | 16 | 15 |
+///
+/// The Malgun Gothic 10 row is the one every Korean mock's data rows print:
+/// 15.00pt in all four golden exports where the unlifted track prints 14.
+#[test]
+fn test_a_wrapped_single_line_cell_lifts_its_auto_row_one_point_over_its_face_recompute() {
+    for (family, size_pt, text, expected) in [
+        ("Malgun Gothic", 10.0, "김민준", 15.0),
+        ("Malgun Gothic", 14.0, "김민준", 19.0),
+        ("Arial", 12.0, "Quarterly total", 16.0),
+        ("Calibri", 11.0, "Quarterly total", 15.0),
+    ] {
+        assert_eq!(
+            printed_auto_row_height(family, size_pt, text, true),
+            Some(expected),
+            "a wrapped {family} {size_pt}pt cell"
+        );
+    }
+}
+
+/// The lift needs the face's recompute to reach the row's default: a face
+/// that recomputes a shorter row than the Normal font's leaves the default
+/// standing, wrapped or not. Measured the same way: Arial 10 (13pt own row)
+/// and Malgun Gothic 9 (14pt) both read 15 under Calibri 11, wrapped, which
+/// prints 14 — the track every Latin business mock's wrapped Arial 10 data
+/// rows print (issue #710).
+#[test]
+fn test_a_wrapped_cell_whose_face_recompute_sits_under_the_default_row_keeps_the_default() {
+    for (family, size_pt, text) in [
+        ("Arial", 10.0, "Quarterly total"),
+        ("Malgun Gothic", 9.0, "김민준"),
+        ("Calibri", 10.0, "Quarterly total"),
+    ] {
+        assert_eq!(
+            printed_auto_row_height(family, size_pt, text, true),
+            Some(14.0),
+            "a wrapped {family} {size_pt}pt cell"
+        );
+    }
+}
+
+/// Without `wrapText` the same cell sizes its row by the face's bare
+/// recompute: quotation rows 11-13 hold unwrapped Malgun Gothic 10 totals and
+/// print 14.00pt in the native export.
+#[test]
+fn test_an_unwrapped_cell_takes_no_wrap_point() {
+    assert_eq!(
+        printed_auto_row_height("Malgun Gothic", 10.0, "김민준", false),
+        Some(14.0)
+    );
+}
+
+/// A wrapped cell with nothing in it has no line to re-measure: the probe's
+/// empty wrapped Malgun Gothic 10 cell read the bare 15, printed 14.
+#[test]
+fn test_an_empty_wrapped_cell_takes_no_wrap_point() {
+    let data = build_xlsx_formatted_over_a_compacting_grid(|sheet| {
+        let empty = sheet.get_cell_mut("A1");
+        empty.set_value("");
+        let style = empty.get_style_mut();
+        style.get_alignment_mut().set_wrap_text(true);
+        let font = style.get_font_mut();
+        font.set_name("Malgun Gothic");
+        font.set_size(10.0);
+        // An unwrapped neighbour so the row exists to be measured.
+        let neighbour = sheet.get_cell_mut("B1");
+        neighbour.set_value("E-1021");
+        neighbour.get_style_mut().get_font_mut().set_name("Arial");
+    });
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    assert_eq!(get_sheet_page(&doc, 0).table.rows[0].height, Some(14.0));
+}
+
+/// A face with no measured recompute contributes no lift either; the probe
+/// cannot say what Excel does with it, so the row keeps its default rather
+/// than borrowing another face's point.
+#[test]
+fn test_a_wrapped_cell_in_an_unmeasured_face_takes_no_wrap_point() {
+    assert_eq!(
+        printed_auto_row_height("Noto Sans CJK SC", 10.0, "김민준", true),
+        Some(14.0)
+    );
+}
+
+/// A wrapped cell inside a merged range does not re-measure the row: the
+/// probe's `A:B` merge of a wrapped Malgun Gothic 10 cell read the bare 15,
+/// and the payroll mock's merged, wrapped `합계` label prints its row at 14.
+#[test]
+fn test_a_merged_wrapped_cell_takes_no_wrap_point() {
+    let data = build_xlsx_formatted_over_a_compacting_grid(|sheet| {
+        let cell = sheet.get_cell_mut("A1");
+        cell.set_value("공급가액 합계");
+        let style = cell.get_style_mut();
+        style.get_alignment_mut().set_wrap_text(true);
+        let font = style.get_font_mut();
+        font.set_name("Malgun Gothic");
+        font.set_size(10.0);
+        sheet.add_merge_cells("A1:B1");
+    });
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    assert_eq!(get_sheet_page(&doc, 0).table.rows[0].height, Some(14.0));
+}
+
+/// A `customHeight` track is the user's, not Excel's recompute: the payroll
+/// mock's row 9 carries `ht=15 customHeight="true"` and prints 14.00pt.
+#[test]
+fn test_a_fixed_track_ignores_the_wrap_point() {
+    let data = build_xlsx_formatted_over_a_compacting_grid(|sheet| {
+        let cell = sheet.get_cell_mut("A1");
+        cell.set_value("클라우드 인프라");
+        let style = cell.get_style_mut();
+        style.get_alignment_mut().set_wrap_text(true);
+        let font = style.get_font_mut();
+        font.set_name("Malgun Gothic");
+        font.set_size(10.0);
+        let row = sheet.get_row_dimension_mut(&1);
+        row.set_height(15.0);
+        row.set_custom_height(true);
+    });
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    assert_eq!(get_sheet_page(&doc, 0).table.rows[0].height, Some(14.0));
+}
+
+/// An `ht` recorded without `customHeight` is a cache Excel discards
+/// (issue #1151), so the wrapped cell's lift still applies over it — exactly
+/// the shape of payroll rows 4-8 and attendance rows 4-9.
+#[test]
+fn test_a_cached_auto_height_still_takes_the_wrap_point() {
+    let data = build_xlsx_formatted_over_a_compacting_grid(|sheet| {
+        let cell = sheet.get_cell_mut("A1");
+        cell.set_value("E-1021");
+        let style = cell.get_style_mut();
+        style.get_alignment_mut().set_wrap_text(true);
+        let font = style.get_font_mut();
+        font.set_name("Malgun Gothic");
+        font.set_size(10.0);
+        let row = sheet.get_row_dimension_mut(&1);
+        row.set_height(15.0);
+        row.set_custom_height(false);
+    });
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    assert_eq!(get_sheet_page(&doc, 0).table.rows[0].height, Some(15.0));
+}
+
+/// The payroll mock end to end against its native export's row bands, read
+/// off the horizontal rules with `mutool draw -F trace`: header row 3 at
+/// 23.00pt, the five wrapped Malgun Gothic 10 data rows at 15.00pt each, and
+/// the fixed total row 9 at 14.00pt.
+#[test]
+fn test_the_payroll_mocks_korean_data_rows_print_excels_fifteen_point_track() {
+    let heights: Vec<Option<f64>> = printed_row_heights_over_all_pages(PAYROLL_KO_MOCK);
+    assert_eq!(heights[2], Some(23.0), "header row 3, got {heights:?}");
+    assert_eq!(
+        &heights[3..8],
+        &[Some(15.0); 5],
+        "data rows 4-8, got {heights:?}"
+    );
+    assert_eq!(heights[8], Some(14.0), "total row 9, got {heights:?}");
+}
+
+/// The quotation mock carries every gate at once: unwrapped Korean rows 3-4
+/// (14.00pt), wrapped Malgun data rows 7-10 (15.00pt), and rows 11-13 whose
+/// only unmerged Malgun cell is an unwrapped total (14.00pt) — all read off
+/// the native export's rules.
+#[test]
+fn test_the_quotation_mocks_rows_take_the_lift_only_where_a_wrapped_cell_sits_unmerged() {
+    let heights: Vec<Option<f64>> = printed_row_heights_over_all_pages(QUOTATION_KO_MOCK);
+    assert_eq!(
+        &heights[2..4],
+        &[Some(14.0); 2],
+        "rows 3-4, got {heights:?}"
+    );
+    assert_eq!(
+        &heights[6..10],
+        &[Some(15.0); 4],
+        "rows 7-10, got {heights:?}"
+    );
+    assert_eq!(
+        &heights[10..13],
+        &[Some(14.0); 3],
+        "rows 11-13, got {heights:?}"
     );
 }
