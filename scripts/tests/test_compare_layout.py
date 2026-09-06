@@ -887,13 +887,17 @@ class MatchAndDiffTest(unittest.TestCase):
         rects = self.diff(gt, out, fine_shift=0.5)["rects"]
 
         self.assertEqual(rects["matched"], 2)
-        self.assertEqual(rects["geometry_mismatch_count"], 2)
+        # Both raw pairs remain available, but the smaller same-color
+        # rectangle is hidden by the outer one. Only the outer edge moves.
+        self.assertEqual(rects["raw_geometry_mismatch_count"], 2)
+        self.assertEqual(rects["geometry_mismatch_count"], 1)
+        self.assertEqual(rects["coverage_equivalent_count"], 1)
         self.assertEqual(
-            [sample["gt_bbox"] for sample in rects["geometry_mismatch_samples"]],
+            [sample["gt_bbox"] for sample in rects["raw_geometry_mismatch_samples"]],
             [[0.0, 0.0, 100.0, 10.0], [30.0, 0.0, 70.0, 10.0]],
         )
         self.assertEqual(
-            [sample["out_bbox"] for sample in rects["geometry_mismatch_samples"]],
+            [sample["out_bbox"] for sample in rects["raw_geometry_mismatch_samples"]],
             [[1.0, 0.0, 99.0, 10.0], [29.0, 0.0, 71.0, 10.0]],
         )
 
@@ -917,6 +921,129 @@ class MatchAndDiffTest(unittest.TestCase):
         self.assertEqual(rects["matched"], 1)
         self.assertEqual(rects["geometry_mismatch_count"], 0)
         self.assertEqual(compare_layout.audit_failures([vector]), 0)
+
+    def fill_coverage_probe(self, overpaint: bool = False) -> tuple[str, str]:
+        # The native lower-left corner is hidden by a later pale cell. The
+        # split output deliberately leaves that corner unpainted, so its blue
+        # primitive union is L-shaped although final visible coverage agrees.
+        blue = ".2 .3 .8"
+        pale = ".9 .9 .9"
+        cover = rect_op(50, 93, 55, 95, color=pale)
+        gt = "\n".join([rect_op(50, 54, 150, 94, color=blue), cover])
+        out = "\n".join([
+            rect_op(50, 54, 149, 93, color=blue), cover,
+            rect_op(50 if overpaint else 55, 92.75, 150, 94, color=blue),
+            rect_op(148.75, 54, 150, 94, color=blue),
+        ])
+        return gt, out
+
+    def test_composed_fill_coverage_resolves_raw_split_rectangle_deficit(self) -> None:
+        gt, out = self.fill_coverage_probe()
+        vector = self.diff(gt, out, fine_shift=0.5)
+        self.assertEqual(vector["rects"]["geometry_mismatch_count"], 0)
+        self.assertEqual(vector["rects"]["raw_geometry_mismatch_count"], 1)
+        self.assertEqual(vector["rects"]["coverage_equivalent_count"], 1)
+        self.assertEqual(compare_layout.audit_failures([vector]), 0)
+
+    def test_composed_fill_coverage_keeps_contrasting_overlap_finding(self) -> None:
+        gt, out = self.fill_coverage_probe(overpaint=True)
+        vector = self.diff(gt, out, fine_shift=0.5)
+        self.assertGreater(compare_layout.audit_failures([vector]), 0)
+        self.assertEqual(vector["rects"]["coverage_equivalent_count"], 0)
+
+    def test_clipping_cannot_make_a_hidden_extension_count_as_visible(self) -> None:
+        gt, out = self.fill_coverage_probe()
+        clip = rect_op(0, 0, 149, 200).replace("fill_path", "clip_path")
+        out = clip + "\n" + out + "\n<pop_clip/>"
+        vector = self.diff(gt, out, fine_shift=0.5)
+        self.assertGreater(vector["rects"]["geometry_mismatch_count"], 0)
+        self.assertEqual(vector["rects"]["coverage_equivalent_count"], 0)
+
+    def test_opaque_image_coverage_is_explicitly_unmodeled(self) -> None:
+        gt, out = self.fill_coverage_probe()
+        image = '<fill_image alpha="1" transform="100 0 0 40 50 54"/>'
+        vector = self.diff(gt + image, out + image, fine_shift=0.5)
+        self.assertGreater(vector["rects"]["geometry_mismatch_count"], 0)
+        self.assertGreater(vector["rects"]["coverage_unmodeled_count"], 0)
+
+    def test_visible_overlap_does_not_discredit_an_equivalent_right_edge(self) -> None:
+        gt, out = self.fill_coverage_probe()
+        out += rect_op(70, 60, 80, 80, color=".9 .9 .9")
+        vector = self.diff(gt, out, fine_shift=0.5)
+        coverage = vector["rects"]["raw_geometry_mismatch_samples"][0]["visible_coverage"]
+        self.assertEqual(coverage["status"], "different")
+        self.assertEqual(coverage["raw_edge_coverage"]["right"], "equivalent")
+        self.assertGreater(vector["rects"]["geometry_mismatch_count"], 0)
+
+    def test_equivalent_rectangular_clips_resolve_raw_geometry(self) -> None:
+        gt, out = self.fill_coverage_probe()
+        clip = rect_op(0, 0, 149, 200).replace("fill_path", "clip_path")
+        vector = self.diff(clip + gt + "<pop_clip/>", clip + out + "<pop_clip/>", fine_shift=0.5)
+        self.assertEqual(vector["rects"]["geometry_mismatch_count"], 0)
+        self.assertEqual(vector["rects"]["coverage_equivalent_count"], 1)
+
+    def test_translucent_fill_coverage_cannot_clear_a_raw_finding(self) -> None:
+        gt, out = self.fill_coverage_probe()
+        tint = rect_op(50, 54, 150, 94, alpha=0.5)
+        vector = self.diff(gt + tint, out + tint, fine_shift=0.5)
+        self.assertGreater(vector["rects"]["coverage_unmodeled_count"], 0)
+        self.assertGreater(vector["rects"]["geometry_mismatch_count"], 0)
+
+    def test_later_opaque_fills_can_resolve_an_unknown_underlay(self) -> None:
+        gt, out = self.fill_coverage_probe()
+        image = '<fill_image alpha="1" transform="100 0 0 40 50 54"/>'
+        vector = self.diff(image + gt, image + out, fine_shift=0.5)
+        self.assertEqual(vector["rects"]["geometry_mismatch_count"], 0)
+        self.assertEqual(vector["rects"]["coverage_unmodeled_count"], 0)
+
+    def test_issue_1608_native_band_right_edge_is_already_painted(self) -> None:
+        folder = Path(__file__).parent / "fixtures" / "issue-1608"
+        gt = compare_layout.parse_trace((folder / "native.xml").read_text())[0]
+        out = compare_layout.parse_trace((folder / "output.xml").read_text())[0]
+        vector = compare_layout.diff_page(gt, out, fine_shift=0.5)
+        samples = vector["rects"]["raw_geometry_mismatch_samples"]
+        band = next(item for item in samples if abs(item["gt_bbox"][0] - 276.34) < 0.001)
+        self.assertAlmostEqual(band["edges"]["right"], -0.82, places=4)
+        coverage = band["visible_coverage"]
+        self.assertEqual(coverage["raw_edge_coverage"]["right"], "equivalent")
+        # The left-side pale overpaint and lower-left color ownership remain
+        # real #1599 findings; the already-painted right edge is not a deficit.
+        self.assertEqual(coverage["status"], "different")
+        self.assertEqual(coverage["raw_edge_coverage"]["bottom"], "different")
+        self.assertEqual(coverage["unmodeled_area_pt2"], 0)
+        self.assertAlmostEqual(coverage["mismatch_area_pt2"], 33.095194, places=4)
+        self.assertGreater(vector["rects"]["geometry_mismatch_count"], 0)
+        self.assertIn("raw edge coverage", compare_layout.render_reading([vector]))
+
+    def test_dense_hidden_edges_cannot_partition_away_visible_overlap(self) -> None:
+        gt, out = self.fill_coverage_probe()
+        underlay = "\n".join(
+            rect_op(70 + i * 0.009, 54, 70 + i * 0.009 + 0.003, 94, color="0 0 0")
+            for i in range(120)
+        )
+        out += rect_op(70, 60, 71.08, 80, color=".9 .9 .9")
+        pages = [compare_layout.parse_trace(trace_document(underlay + body))[0]
+                 for body in [gt, out]]
+        coverage = compare_layout.compare_fill_coverage(
+            *pages, {"gt_bbox": [50, 54, 150, 94], "out_bbox": [50, 54, 149, 93]}
+        )
+        self.assertEqual(coverage["status"], "different")
+        self.assertGreater(coverage["mismatch_area_pt2"], 20)
+
+    def test_mask_or_tile_scope_cannot_be_proven_by_group_nesting(self) -> None:
+        gt, out = self.fill_coverage_probe()
+        for tag in ["mask", "tile"]:
+            with self.subTest(tag=tag):
+                prefix = f'<{tag} bbox="0 0 200 200"></{tag}>'
+                vector = self.diff(prefix + gt, prefix + out, fine_shift=0.5)
+                self.assertGreater(vector["rects"]["coverage_unmodeled_count"], 0)
+                self.assertGreater(vector["rects"]["geometry_mismatch_count"], 0)
+
+    def test_coverage_epsilon_never_overrides_a_finer_geometry_gate(self) -> None:
+        vector = self.diff(rect_op(50, 54, 150, 94), rect_op(50.005, 54, 150.005, 94),
+                           fine_shift=0.001)
+        self.assertEqual(vector["rects"]["geometry_mismatch_count"], 1)
+        self.assertEqual(vector["rects"]["coverage_equivalent_count"], 0)
 
     def test_boundary_bleed_completes_nominal_rectangle_coverage(self) -> None:
         gt = rect_op(50.0, 54.0, 474.0, 145.0, color=".85 .71 .73")
