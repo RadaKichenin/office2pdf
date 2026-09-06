@@ -227,6 +227,15 @@ XML they do not model — and saving rewrites only edited entries. The
 `office2pdf` rendering pipeline stays a derived projection for PDF
 preview/export; it is not the editable source of truth.
 
+## Contributing files
+
+Before attaching files to help improve office2pdf, complete a security review
+and obtain your organization's internal approval for public sharing where
+applicable. Submitters are responsible for authorized, lawful disclosure;
+office2pdf and its maintainers disclaim related liability to the extent
+permitted by applicable law. Read the [submission policy](CONTRIBUTING.md)
+before submitting documents, screenshots, logs, or test fixtures.
+
 ## License
 
 Licensed under [Apache License, Version 2.0](LICENSE).
