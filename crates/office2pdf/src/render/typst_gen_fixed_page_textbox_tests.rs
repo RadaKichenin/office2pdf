@@ -4305,6 +4305,133 @@ fn powerpoint_soft_wrap_uses_each_lines_own_largest_font_size() {
     assert!((small_baseline - 125.0).abs() < 0.01);
 }
 
+/// A symbol inside a Latin run must not disable rounding for all its words.
+/// The following bold run exposes the accumulated text width independently of
+/// generated markup; kerning is disabled to isolate nominal advances (#1581).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn slide_latin_math_symbols_keep_powerpoints_advance_grid() {
+    let mut failures = Vec::new();
+    for (family, font_size_pt) in [("Libertinus Serif", 17.0), ("DejaVu Sans Mono", 14.5)] {
+        for symbol in ['x', '×', '÷', '±'] {
+            let text = format!("Rate 2.1{symbol} per unit ");
+            let advances = crate::render::pdf::glyph_advances_em(family, false, &text)
+                .expect("the embedded probe face must resolve");
+            let expected_end_pt = 72.0
+                + advances
+                    .iter()
+                    .map(|em| (em * font_size_pt * 8.0).round() / 8.0)
+                    .sum::<f64>();
+            let style = TextStyle {
+                font_family: Some(family.to_string()),
+                font_size: Some(font_size_pt),
+                pair_kerning: Some(crate::ir::PairKerning::Never),
+                ..TextStyle::default()
+            };
+            let doc = make_doc(vec![make_fixed_page(
+                960.0,
+                540.0,
+                vec![make_fixed_text_box(
+                    72.0,
+                    72.0,
+                    800.0,
+                    100.0,
+                    Insets::default(),
+                    crate::ir::TextBoxVerticalAlign::Top,
+                    vec![Block::Paragraph(Paragraph {
+                        style: ParagraphStyle::default(),
+                        runs: vec![
+                            Run {
+                                text,
+                                style: style.clone(),
+                                href: None,
+                                footnote: None,
+                            },
+                            Run {
+                                text: "END".to_string(),
+                                style: TextStyle {
+                                    bold: Some(true),
+                                    ..style
+                                },
+                                href: None,
+                                footnote: None,
+                            },
+                        ],
+                    })],
+                )],
+            )]);
+            let output = generate_typst(&doc).unwrap();
+            let runs = crate::render::pdf::compiled_text_runs(&output.source, 0).unwrap();
+            let marker = runs
+                .iter()
+                .find(|run| run.text == "END")
+                .expect("bold end marker");
+            if (marker.left_pt - expected_end_pt).abs() >= 0.01 {
+                failures.push(format!(
+                    "{family} {font_size_pt}pt {symbol}: end={}, expected={expected_end_pt}",
+                    marker.left_pt
+                ));
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// Numeric expressions remain whole words, while spaces and explicit hyphens
+/// retain the wrap opportunities observed in native PowerPoint width probes.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn slide_latin_math_symbols_preserve_word_and_hyphen_breaks() {
+    for symbol in ['×', '÷', '±'] {
+        let expression = format!("2{symbol}3");
+        let doc = make_doc(vec![make_fixed_page(
+            960.0,
+            540.0,
+            vec![make_fixed_text_box(
+                72.0,
+                72.0,
+                52.0,
+                200.0,
+                Insets::default(),
+                crate::ir::TextBoxVerticalAlign::Top,
+                vec![Block::Paragraph(Paragraph {
+                    style: ParagraphStyle::default(),
+                    runs: vec![Run {
+                        text: format!("Rates {expression} lower-cost units"),
+                        style: TextStyle {
+                            font_family: Some("Libertinus Serif".to_string()),
+                            font_size: Some(17.0),
+                            ..TextStyle::default()
+                        },
+                        href: None,
+                        footnote: None,
+                    }],
+                })],
+            )],
+        )]);
+        let output = generate_typst(&doc).unwrap();
+        let runs = crate::render::pdf::compiled_text_runs(&output.source, 0).unwrap();
+        let mut lines: Vec<(f64, String)> = Vec::new();
+        for run in runs {
+            if let Some((_, text)) = lines
+                .iter_mut()
+                .find(|(y, _)| (*y - run.baseline_pt).abs() < 0.01)
+            {
+                text.push_str(&run.text);
+            } else {
+                lines.push((run.baseline_pt, run.text));
+            }
+        }
+        lines.sort_by(|left, right| left.0.total_cmp(&right.0));
+        let text: Vec<&str> = lines.iter().map(|(_, text)| text.trim()).collect();
+        assert_eq!(
+            text,
+            ["Rates", &expression, "lower-", "cost", "units"],
+            "symbol {symbol}: {lines:?}"
+        );
+    }
+}
+
 /// PowerPoint rounds every nominal glyph advance to the nearest 1/8pt before
 /// it decides where a line ends. Ten 17pt Libertinus `o` glyphs are a stable,
 /// environment-free edge case: their exact Typst advances fit this box, while
