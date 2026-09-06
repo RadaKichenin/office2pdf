@@ -2235,3 +2235,40 @@ fn test_word_and_centred_stroke_tables_do_not_bleed_their_fills() {
         assert!((fill.bounds.3 - fill.bounds.1 - 20.0 - bleed).abs() < 0.001);
     }
 }
+
+/// The native Excel-for-Mac export places the first TableStyleLight1 body
+/// cell at (464, 73), extending its 69pt by 17pt track to (534, 91).
+/// Check the compiled fill itself so this real-fixture regression for #1190
+/// survives changes in how background coverage is generated (#1599).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn structure_light1_table_band_bleeds_past_its_bottom_and_right_boundaries() {
+    use crate::parser::Parser;
+    use crate::parser::xlsx::XlsxParser;
+    use crate::render::pdf::compiled_paint_sequence;
+    use typst::visualize::Color as PaintColor;
+
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/xlsx/ExcelTables.xlsx");
+    let data = std::fs::read(path).expect("fixture should be available");
+    let (document, _) = XlsxParser
+        .parse(&data, &crate::ConvertOptions::default())
+        .expect("fixture should parse");
+    let output = generate_typst(&document).expect("fixture should generate Typst");
+    let paints =
+        compiled_paint_sequence(&output.source, &output.images, 0).expect("fixture should compile");
+    let fills: Vec<_> = paints
+        .iter()
+        .filter(|paint| paint.rectangle_fill == Some(PaintColor::from_u8(217, 217, 217, 255)))
+        .map(|paint| paint.bounds)
+        .collect();
+    assert!(
+        fills.iter().any(|&(left, top, right, bottom)| {
+            (left - 464.0).abs() < 0.001
+                && (top - 73.0).abs() < 0.001
+                && (right - 534.0).abs() < 0.001
+                && (bottom - 91.0).abs() < 0.001
+        }),
+        "the first body cell must fill through the bottom and right boundaries: {fills:?}"
+    );
+}

@@ -71,8 +71,10 @@ Eight compiled-paint cases failed before the correction: normal/merged cells,
 row/column adjacency, scales 1 and 0.82. They now verify final visible ownership
 and outer extension. Additional tests cover the winning merged bottom border,
 row order at shared corners, single-alpha automatic rows, and isolation from
-Word/centered-stroke tables. Current validation: 998 generator tests, 2,883
-library tests, workspace Clippy with warnings denied, formatting and diff checks.
+Word/centered-stroke tables. The real `ExcelTables.xlsx` fill-extension
+regression now checks compiled bounds instead of the removed overlay markup.
+Current validation: 2,884 library tests (including the 999 generator tests),
+206 XLSX fixture tests, workspace Clippy with warnings denied, formatting and diff checks.
 
 ## Full visual audit and model vision findings
 
