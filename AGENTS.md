@@ -5,6 +5,12 @@
 - If a dependency limitation or bug breaks PDF conversion, clone that library, fix and test it upstream, and open a PR. Follow its repository conventions and match the tone and scope of its recently merged PRs.
 - Before every commit, delegate a read-only freshness audit and wait for `PASS:`. Codex must use `documentation_freshness_reviewer`; Claude Code must use `documentation-freshness-reviewer`. Compare existing documentation, examples, and code comments with the current code and configuration; update or remove stale versions, commands, APIs, behavior, defaults, paths, architecture, limitations, and unverified claims in the same commit.
 
+## Worktree and Branch Cleanup
+
+- After a task is verified complete, its PR is merged, and CI passes on the exact merge commit on `main`, remove its worktree and delete its local and remote topic branches in the same turn. No additional confirmation is needed.
+- Before cleanup, check `git worktree list`, worktree status, merge ancestry, and open PRs. Preserve active work, uncommitted changes, and commits not merged into `main`.
+- Preserve required evidence and shared build data outside the worktree before deleting it. Use `git worktree remove` and `git branch -d`; do not force-delete unfinished work. Prune stale worktree and remote-tracking records afterward.
+
 ## Release Rules
 
 - Follow `RELEASING.md` end to end in one turn; a version bump or GitHub Release alone is not completion.
