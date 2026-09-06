@@ -54,8 +54,11 @@ text loss.
 
 The six focused compiled-paint regressions cover fitted frame/image bounds,
 unscaled bounds, chart text, grid positions, filled legend geometry, and text
-flow at 0.64/0.78 scales with Column/Bar/Line charts. The generator suite passed
-964 tests. Earlier candidates that moved the matching plot or line legend were
+flow at 0.64/0.78 scales with Column/Bar/Line charts. After the Clippy correction,
+`cargo test --locked -p office2pdf --lib render::typst_gen` passed 1,000 tests,
+and workspace Clippy passed with warnings denied. The rebuilt CLI produced
+byte-identical original and unscaled PDFs, preserving this visual evidence.
+Earlier candidates that moved the matching plot or line legend were
 rejected; the retained candidate changes only the intended paint origin.
 
 ## Full visual audit

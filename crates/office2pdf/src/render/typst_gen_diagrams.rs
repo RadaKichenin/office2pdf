@@ -3104,6 +3104,11 @@ fn write_manual_chart_title(
     );
 }
 
+struct ChartTitleBand {
+    height: f64,
+    fixed: bool,
+}
+
 /// Open a chart area's one outer outline and its title-bearing content stack.
 ///
 /// `c:chartSpace/c:spPr` is a sibling of `c:chart`, so its stroke and fill
@@ -3112,7 +3117,7 @@ fn write_manual_chart_title(
 /// box the remaining content extent. An untitled chart keeps one box (#1216,
 /// #1217).
 ///
-/// `fixed_title_band` preserves the axis plot's measured fixed-height title.
+/// A fixed title band preserves the axis plot's measured title height.
 /// The line, radar and pie families keep their existing intrinsic title plus
 /// 4pt gap; only the ownership of the surrounding stroke changes.
 fn write_chart_area_start(
@@ -3121,14 +3126,13 @@ fn write_chart_area_start(
     title: Option<&str>,
     chart_area: Option<(f64, f64)>,
     content_extent: (f64, f64),
-    title_h: f64,
-    fixed_title_band: bool,
+    title_band: ChartTitleBand,
     sheet_paint_offset_pt: Option<(f64, f64)>,
 ) -> bool {
     let wraps_title: bool = title.is_some();
     if let Some(title) = title {
         let (area_w, area_h): (f64, f64) =
-            chart_area.unwrap_or((content_extent.0, content_extent.1 + title_h));
+            chart_area.unwrap_or((content_extent.0, content_extent.1 + title_band.height));
         write_offset_paint_box_start(
             out,
             (area_w, area_h),
@@ -3139,17 +3143,25 @@ fn write_chart_area_start(
         if let (crate::ir::ChartHost::Presentation, Some(layout), Some(frame)) =
             (chart.host, chart.title_layout, chart_area)
         {
-            write_manual_chart_title(out, chart, title, frame, layout, title_h, fixed_title_band);
+            write_manual_chart_title(
+                out,
+                chart,
+                title,
+                frame,
+                layout,
+                title_band.height,
+                title_band.fixed,
+            );
         } else {
             write_chart_title(
                 out,
                 chart,
                 title,
                 chart_area,
-                fixed_title_band.then_some(title_h),
+                title_band.fixed.then_some(title_band.height),
             );
         }
-        if !fixed_title_band {
+        if !title_band.fixed {
             out.push_str("#v(4pt)\n");
         }
     }
@@ -3860,8 +3872,10 @@ fn generate_chart_axis(
         area_title,
         chart_area,
         (total_w, total_h),
-        title_h,
-        true,
+        ChartTitleBand {
+            height: title_h,
+            fixed: true,
+        },
         sheet_paint_offset_pt,
     );
 
@@ -4659,8 +4673,10 @@ fn generate_chart_line_plot(
         chart.title.as_deref(),
         chart_area,
         (total_w, total_h),
-        title_h,
-        false,
+        ChartTitleBand {
+            height: title_h,
+            fixed: false,
+        },
         sheet_paint_offset_pt,
     );
 
@@ -4984,8 +5000,10 @@ fn generate_chart_radar_plot(
         chart.title.as_deref(),
         chart_area,
         (total_w, total_h),
-        title_h,
-        false,
+        ChartTitleBand {
+            height: title_h,
+            fixed: false,
+        },
         sheet_paint_offset_pt,
     );
 
@@ -5227,8 +5245,10 @@ fn generate_chart_pie_plot(
         chart.title.as_deref(),
         chart_area,
         (total_w, total_h),
-        title_h,
-        false,
+        ChartTitleBand {
+            height: title_h,
+            fixed: false,
+        },
         sheet_paint_offset_pt,
     );
 

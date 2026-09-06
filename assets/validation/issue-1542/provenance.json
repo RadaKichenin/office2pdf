@@ -33,5 +33,18 @@
       24
     ]
   },
-  "scope": "Chart frame and image origin corrected; independent tracked visual defects remain."
+  "scope": "Chart frame and image origin corrected; independent tracked visual defects remain.",
+  "ci_correction_verification": {
+    "cli_sha256": "33d93607937d87765310870a8cdac5ac7310936234b458545b0597a21a32bad8",
+    "outputs": {
+      "base": {
+        "sha256": "6207183de72a132c65daf08b86f8d1a3f38197af053282b83d00fc79ec41cefa",
+        "byte_identical_to_v3": true
+      },
+      "unscaled": {
+        "sha256": "60788eab1c0aa8af0d55db81be7adc48ec1a7ff97b2a1e148422e2d8da9c9805",
+        "byte_identical_to_v3": true
+      }
+    }
+  }
 }

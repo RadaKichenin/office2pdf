@@ -4042,7 +4042,7 @@ fn gift_drawing_origin_probe_with_chart(
     chart.placement = Some(crate::ir::SheetChartPlacement {
         x_offset_pt: 285.9874 * scale,
         y_offset_pt: 78.0126 * scale,
-        width: 1_015.9784,
+        width: 1_015.978_4,
         height: 307.9732,
         print_scale: scale,
     });
@@ -4099,7 +4099,7 @@ fn assert_gift_drawing_bounds(
         .iter()
         .find(|item| {
             item.kind == PaintedKind::Shape
-                && ((item.bounds.2 - item.bounds.0) - 1_015.9784 * scale).abs() < 0.01
+                && ((item.bounds.2 - item.bounds.0) - 1_015.978_4 * scale).abs() < 0.01
                 && ((item.bounds.3 - item.bounds.1) - 307.9732 * scale).abs() < 0.01
         })
         .expect("the chart paints its full declared frame");
@@ -4132,7 +4132,7 @@ fn assert_gift_drawing_bounds(
 fn fitted_drawing_frames_use_the_native_sheet_origin() {
     assert_gift_drawing_bounds(
         0.82,
-        (289.4497, 117.2703, 1_122.5520, 369.8083),
+        (289.4497, 117.2703, 1_122.552_0, 369.8083),
         (63.90705, 436.57063, 256.56445, 576.83193),
     );
 }
@@ -4144,7 +4144,7 @@ fn fitted_drawing_frames_use_the_native_sheet_origin() {
 fn unscaled_drawing_frames_keep_their_existing_origin() {
     assert_gift_drawing_bounds(
         1.0,
-        (345.2624, 132.0126, 1_361.2408, 439.9858),
+        (345.2624, 132.0126, 1_361.240_8, 439.9858),
         (70.210437, 521.40316, 305.158467, 692.45356),
     );
 }
