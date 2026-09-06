@@ -1,0 +1,1069 @@
+{
+  "schema_version": 1,
+  "groups": [
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Title band bottom and bold text are 4pt lower from the excessive auto row; centered title also shifts left 1.00293pt, tracked in #1600.",
+      "cluster_ids": [
+        "p1-f31be2b2124a"
+      ]
+    },
+    {
+      "issue": "#1605",
+      "kind": "issue",
+      "note": "Native clip [51,55,445,326] hides the raw title fill top at y=54; output has no corresponding clip. Distinct from row height.",
+      "cluster_ids": [
+        "p1-f60027141110"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Title band bottom and bold text are 4pt lower from the excessive auto row; centered title also shifts left 1.00293pt, tracked in #1600.",
+      "cluster_ids": [
+        "p1-98ffd1017b92"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Title band bottom and bold text are 4pt lower from the excessive auto row; centered title also shifts left 1.00293pt, tracked in #1600.",
+      "cluster_ids": [
+        "p1-b1f3252a29ba"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Title band bottom and bold text are 4pt lower from the excessive auto row; centered title also shifts left 1.00293pt, tracked in #1600.",
+      "cluster_ids": [
+        "p1-343b60339fed"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Title band bottom and bold text are 4pt lower from the excessive auto row; centered title also shifts left 1.00293pt, tracked in #1600.",
+      "cluster_ids": [
+        "p1-bad362308455"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-c0fb58eadb78"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Title band bottom and bold text are 4pt lower from the excessive auto row; centered title also shifts left 1.00293pt, tracked in #1600.",
+      "cluster_ids": [
+        "p1-284c96be9334"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Title band bottom and bold text are 4pt lower from the excessive auto row; centered title also shifts left 1.00293pt, tracked in #1600.",
+      "cluster_ids": [
+        "p1-8c70623a5957"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Title band bottom and bold text are 4pt lower from the excessive auto row; centered title also shifts left 1.00293pt, tracked in #1600.",
+      "cluster_ids": [
+        "p1-cd99c7882a8d"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Title band bottom and bold text are 4pt lower from the excessive auto row; centered title also shifts left 1.00293pt, tracked in #1600.",
+      "cluster_ids": [
+        "p1-ce180c48c4ec"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-d0524e2c3199"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Title band bottom and bold text are 4pt lower from the excessive auto row; centered title also shifts left 1.00293pt, tracked in #1600.",
+      "cluster_ids": [
+        "p1-6a1b37b571ef"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-3a98f2be6384"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Title band bottom and bold text are 4pt lower from the excessive auto row; centered title also shifts left 1.00293pt, tracked in #1600.",
+      "cluster_ids": [
+        "p1-2e65c2e6ccf5"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Title band bottom and bold text are 4pt lower from the excessive auto row; centered title also shifts left 1.00293pt, tracked in #1600.",
+      "cluster_ids": [
+        "p1-696192f20f45"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Title band bottom and bold text are 4pt lower from the excessive auto row; centered title also shifts left 1.00293pt, tracked in #1600.",
+      "cluster_ids": [
+        "p1-13b20251ccee"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-cba9180b6198"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Title band bottom and bold text are 4pt lower from the excessive auto row; centered title also shifts left 1.00293pt, tracked in #1600.",
+      "cluster_ids": [
+        "p1-b2b388173d1c"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Title band bottom and bold text are 4pt lower from the excessive auto row; centered title also shifts left 1.00293pt, tracked in #1600.",
+      "cluster_ids": [
+        "p1-d86b56f8251e"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Title band bottom and bold text are 4pt lower from the excessive auto row; centered title also shifts left 1.00293pt, tracked in #1600.",
+      "cluster_ids": [
+        "p1-48ba14c524c3"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Title band bottom and bold text are 4pt lower from the excessive auto row; centered title also shifts left 1.00293pt, tracked in #1600.",
+      "cluster_ids": [
+        "p1-007417866d82"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-d5822a148343"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-de11e4c34963"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-542c3df08b90"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-f13edc9fbc0a"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-7f4f0cabfd79"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-a4571cd43557"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-60e884c89516"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-8144bfe1899b"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-e114a1e944fa"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-2dbd5d63f959"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Title band bottom and bold text are 4pt lower from the excessive auto row; centered title also shifts left 1.00293pt, tracked in #1600.",
+      "cluster_ids": [
+        "p1-8e47bbfd2218"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-ece24995d8de"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-3f7f907d0523"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-34d06102e997"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-74d6a4f8a333"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-36667f48ea4b"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-18a601e06526"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-755a0450a065"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-a38a58fe949e"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-5ec8feafaed4"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-ebb3c6130390"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-c7d357a50951"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Title band bottom and bold text are 4pt lower from the excessive auto row; centered title also shifts left 1.00293pt, tracked in #1600.",
+      "cluster_ids": [
+        "p1-e06d4789b538"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-60b52836ed87"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-6383d17e20f5"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-f38989946fc2"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-e506130ff42d"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-38dc4008d6cd"
+      ]
+    },
+    {
+      "issue": "#1552",
+      "kind": "issue",
+      "note": "Mixed-size footer baseline is 0.77732pt high; the visible black Aptos text and tiny gray prefix are both retained.",
+      "cluster_ids": [
+        "p1-8d2b4d283958"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-33696d1d6fdc"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-0564d1d657d5"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-3cdde064195f"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-9a986c809664"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-eac720a90030"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-1f91f109efb0"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-54bc6bde1fed"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-f89b56853565"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-9061d6fd5ec7"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-c4b0c6adeb81"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-4f40597024d1"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-f2cac1f77c18"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-c7dd8837942a"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-50e340b5537b"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-c42ac5fcc15b"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Title band bottom and bold text are 4pt lower from the excessive auto row; centered title also shifts left 1.00293pt, tracked in #1600.",
+      "cluster_ids": [
+        "p1-e5ce70b2cc47"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-966ed0468839"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-86441666d173"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-cc615df7344f"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-ee1702a4c0f5"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-5da01977b38a"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-f5a057128441"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-57068288c704"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-32bcd5ba0fd6"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-00ca188f9349"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-6365c9b98b06"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-7aada9a9e5bc"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-7ab9c1171c48"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-3ce052391808"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-2b163e5971e9"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-9f3597c5c3a2"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-328925382bf6"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-43a59d1e07d2"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-a686e40e4a88"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-0b40fe5443f3"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Title band bottom and bold text are 4pt lower from the excessive auto row; centered title also shifts left 1.00293pt, tracked in #1600.",
+      "cluster_ids": [
+        "p1-686096d86be9"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-ce683cdf4031"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-b8da758d1f53"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-50533b2d547c"
+      ]
+    },
+    {
+      "issue": "#1552",
+      "kind": "issue",
+      "note": "Mixed-size footer baseline is 0.77732pt high; the visible black Aptos text and tiny gray prefix are both retained.",
+      "cluster_ids": [
+        "p1-8334eb303ff0"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-88c0f3e999e5"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-9852b647e5a8"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-5d2491a0ce2c"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-5d699d14593c"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-dc08e5fa92f4"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-f33d276d023a"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-49d6e3e6aeff"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-142028af63b1"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-ceda702a01d1"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-6c66087fc2ad"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-0f9d5e05f8c7"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-e9a7e06a3964"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-545468e0fade"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-9ffabb0a3edd"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-278659e4cbd0"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-930d4cfbb4fc"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-f5106143e69f"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-229373a80292"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-718b0f26af65"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-e733b0ae4dd0"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-52a5c70ddadb"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-177cceb39a50"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-afb057677113"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-e549eb914045"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-e6d78efc91a6"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-b81c86742a9d"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-7b8a368c7b11"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-3aaee165d8fa"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-0de65a69572c"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-4cf930ce6b3e"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-7133ca8ae777"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-c7636d6cb7e8"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-ab83532ef689"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-9002b2a6ee52"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-dbb6f7693b32"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-ee80c1393e0c"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Title band bottom and bold text are 4pt lower from the excessive auto row; centered title also shifts left 1.00293pt, tracked in #1600.",
+      "cluster_ids": [
+        "p1-a9684a640860"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-ad6591cb4166"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-c87273816087"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-264b557d9032"
+      ]
+    },
+    {
+      "issue": "#1551",
+      "kind": "issue",
+      "note": "Three-line note pitch is 11.88966pt instead of 13pt. Absolute placement also contains #1550 and #1545.",
+      "cluster_ids": [
+        "p1-8cec1cdaaee1"
+      ]
+    },
+    {
+      "issue": "#1550",
+      "kind": "issue",
+      "note": "Following fixed-row text is 2pt lower: excessive title row and independent fixed-row seating #1545. Glyph shapes, weight and color retained.",
+      "cluster_ids": [
+        "p1-e4bb846eeb70"
+      ]
+    }
+  ]
+}

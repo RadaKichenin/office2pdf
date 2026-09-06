@@ -1,0 +1,3845 @@
+{
+  "schema_version": 1,
+  "groups": [
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-e556223d5649"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-305bf7a991f0"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-599a989c74de"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-093e7d1e51c2"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-a90f3e358291"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-85eb37b75ecd"
+      ]
+    },
+    {
+      "issue": "#1272",
+      "kind": "issue",
+      "note": "Fresh full-scale crop confirms rightmost cash-flow bar and zero-axis frame displacement; source data and bar color retained.",
+      "cluster_ids": [
+        "p2-e444e941be34"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-7e451d892dcb"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-54f8abf89539"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-be82ccaeb37f"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-b60e6b2f3301"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-c0e027c7c705"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-dd6b51a88cf6"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-0e649fbd002a"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-78cfaf61d03a"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-bfcf75efb550"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-01bfb1455943"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-aa6ad4b82d30"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-4c91cefe8a90"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-99af8a05577e"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-9c3ae21a3b96"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-d44e413b611f"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-7f09906b7cbc"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-14a80a39af24"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-5972009de8a0"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-d98da82f5ba1"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-48eec30b4bf9"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-498556bf0271"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-92ea45086d7f"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-1850c257fbac"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-77445c15fc23"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-f435b2b191e9"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-7a4929a6ae63"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-0b8110a1523b"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-cef015709942"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-5f6409d26fba"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-c70d84a2cc69"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-d1a00a6e4fe7"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-6b5381469533"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-90025ff3dd38"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-df8bbdaaab25"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-be9db2ce4dbe"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-4cd9a38e53c5"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-d8a190002af6"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-c41e7f0321a4"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-e6e35baa6906"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-a91439930258"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-6100c8e7b8b6"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-3f3eba49c3c3"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-fa618bd9eeb6"
+      ]
+    },
+    {
+      "issue": "#1272",
+      "kind": "issue",
+      "note": "Matched income bar crops retain edge placement differences covered by the anchored-chart frame investigation #1272; do not combine with marker placement.",
+      "cluster_ids": [
+        "p2-443c5e16028d"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-901e34b6d27f"
+      ]
+    },
+    {
+      "issue": "#1566",
+      "kind": "issue",
+      "note": "Native contains the anchored vertical worksheet separator line; output has no matching line paint. This is an omitted DrawingML line shape, not edge antialiasing.",
+      "cluster_ids": [
+        "p2-9be12111645c"
+      ]
+    },
+    {
+      "issue": "#1566",
+      "kind": "issue",
+      "note": "Native contains the anchored vertical worksheet separator line; output has no matching line paint. This is an omitted DrawingML line shape, not edge antialiasing.",
+      "cluster_ids": [
+        "p2-524d5035bf2f"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-579dc8e7f843"
+      ]
+    },
+    {
+      "class": "shape-edge-antialiasing",
+      "kind": "accepted-rendering",
+      "note": "Full-resolution crops retain the sparkline value vertices and color. Native embeds 42x18-pixel sparkline rasters in 31.98x14.04pt cells, while output uses vector strokes. These edge/blur residuals follow native bitmap resampling.",
+      "cluster_ids": [
+        "p2-df1bd06f522d"
+      ]
+    },
+    {
+      "class": "shape-edge-antialiasing",
+      "kind": "accepted-rendering",
+      "note": "Full-resolution crops retain the sparkline value vertices and color. Native embeds 42x18-pixel sparkline rasters in 31.98x14.04pt cells, while output uses vector strokes. These edge/blur residuals follow native bitmap resampling.",
+      "cluster_ids": [
+        "p2-8ae9766dc952"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-e36164d40faa"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-e00111c722d9"
+      ]
+    },
+    {
+      "class": "shape-edge-antialiasing",
+      "kind": "accepted-rendering",
+      "note": "Full-resolution crops retain the sparkline value vertices and color. Native embeds 42x18-pixel sparkline rasters in 31.98x14.04pt cells, while output uses vector strokes. These edge/blur residuals follow native bitmap resampling.",
+      "cluster_ids": [
+        "p2-bdf5e77a3509"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-8ff94bbbf01b"
+      ]
+    },
+    {
+      "class": "shape-edge-antialiasing",
+      "kind": "accepted-rendering",
+      "note": "Full-resolution crops retain the sparkline value vertices and color. Native embeds 42x18-pixel sparkline rasters in 31.98x14.04pt cells, while output uses vector strokes. These edge/blur residuals follow native bitmap resampling.",
+      "cluster_ids": [
+        "p2-9f2c986b20c5"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-1ec81f8df57d"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-0a66f73c069d"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-4203973e9859"
+      ]
+    },
+    {
+      "class": "shape-edge-antialiasing",
+      "kind": "accepted-rendering",
+      "note": "Full-resolution crops retain the sparkline value vertices and color. Native embeds 42x18-pixel sparkline rasters in 31.98x14.04pt cells, while output uses vector strokes. These edge/blur residuals follow native bitmap resampling.",
+      "cluster_ids": [
+        "p2-85eb123339cc"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-458c877815ca"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-481a555617b8"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-ca64cbf4a2d5"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-ee38bb6f3fc4"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-d98a19f82fc4"
+      ]
+    },
+    {
+      "class": "shape-edge-antialiasing",
+      "kind": "accepted-rendering",
+      "note": "Full-resolution crops retain the sparkline value vertices and color. Native embeds 42x18-pixel sparkline rasters in 31.98x14.04pt cells, while output uses vector strokes. These edge/blur residuals follow native bitmap resampling.",
+      "cluster_ids": [
+        "p2-238cfe981235"
+      ]
+    },
+    {
+      "issue": "#1620",
+      "kind": "issue",
+      "note": "Category labels retain a measured approximately 0.74pt left shift. Expense-label vertical cadence is separately tracked in #1621; these were incorrectly grouped under closed #1542 in the older audit.",
+      "cluster_ids": [
+        "p2-147123c8b5b2"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-8f14fbc098e6"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-569bf549f435"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-9a85d8d4734f"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-1e77d1b5c736"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-97c5979fd1e9"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-d212137e71c3"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-a21af117172d"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-17d6650bc62d"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-3c044ac617b5"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-02c602467563"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-3e454e6504ff"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-754a1fcf275d"
+      ]
+    },
+    {
+      "class": "shape-edge-antialiasing",
+      "kind": "accepted-rendering",
+      "note": "Full-resolution crops retain the sparkline value vertices and color. Native embeds 42x18-pixel sparkline rasters in 31.98x14.04pt cells, while output uses vector strokes. These edge/blur residuals follow native bitmap resampling.",
+      "cluster_ids": [
+        "p2-04708ddcb738"
+      ]
+    },
+    {
+      "issue": "#1620",
+      "kind": "issue",
+      "note": "Category labels retain a measured approximately 0.74pt left shift. Expense-label vertical cadence is separately tracked in #1621; these were incorrectly grouped under closed #1542 in the older audit.",
+      "cluster_ids": [
+        "p2-b59623b56f84"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-4f95e659267a"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-b41887c669af"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-a26e72cb0f54"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-42a8ff54d26a"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-a77271537e15"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-088d3e757858"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-557b1e85100a"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-71062d50d1a7"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-e5d3548f0785"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-f95be713c8f8"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-32a140e4b3e1"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-7097a1096bfa"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-5ea96d8abd25"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-4d1912bef995"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-0b36d7bb0075"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-13b92d46379d"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-4120ffe42fdd"
+      ]
+    },
+    {
+      "issue": "#1272",
+      "kind": "issue",
+      "note": "Matched income bar crops retain edge placement differences covered by the anchored-chart frame investigation #1272; do not combine with marker placement.",
+      "cluster_ids": [
+        "p2-601193fa5868"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-a341f87e8dee"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-e88e28276dce"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-53d7284bcb93"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-77fcfd88fe15"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-502331c15e7f"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-12c51222ab3b"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-9fb1e7b3747b"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-e784492f65dd"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-3a5a4915c9f2"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-76b909da410f"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-2774c2dd5eb9"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-19e82ff60110"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-0b41aaf97ddd"
+      ]
+    },
+    {
+      "issue": "#1620",
+      "kind": "issue",
+      "note": "Category labels retain a measured approximately 0.74pt left shift. Expense-label vertical cadence is separately tracked in #1621; these were incorrectly grouped under closed #1542 in the older audit.",
+      "cluster_ids": [
+        "p2-95b2de143568"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-cd64b29dae2e"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-a0c9cc57eada"
+      ]
+    },
+    {
+      "class": "shape-edge-antialiasing",
+      "kind": "accepted-rendering",
+      "note": "Full-resolution crops retain the sparkline value vertices and color. Native embeds 42x18-pixel sparkline rasters in 31.98x14.04pt cells, while output uses vector strokes. These edge/blur residuals follow native bitmap resampling.",
+      "cluster_ids": [
+        "p2-06d49d8b11dc"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-a349bd962b3a"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-4923309c949e"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-898e5c1f23a6"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-37c80209179d"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-143635b519e1"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-57eb641d25c4"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-31a2ab26520b"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-34ad7e849c82"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-178bb3cd5151"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-2a5758672295"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-d5921e0efa14"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-36df0e0af08b"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-b933e791ea32"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-612b59aa1f20"
+      ]
+    },
+    {
+      "issue": "#1620",
+      "kind": "issue",
+      "note": "Category labels retain a measured approximately 0.74pt left shift. Expense-label vertical cadence is separately tracked in #1621; these were incorrectly grouped under closed #1542 in the older audit.",
+      "cluster_ids": [
+        "p2-136a95f49593"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-1acb32deb7bb"
+      ]
+    },
+    {
+      "issue": "#1272",
+      "kind": "issue",
+      "note": "Income bar edge geometry remains different in the matched chart crop; preserve this chart-frame investigation separately from marker placement.",
+      "cluster_ids": [
+        "p2-cd7eb92828d6"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-656c71ea7e34"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-35d596e0c040"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-388da9e42512"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-3eb092f38ba8"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-f4ef055c9e96"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-5e0881b741e7"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-e97fc7e3cca3"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-0a78f594dae1"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-fc7dd2b2063d"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-a75cdc73ba71"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-880619b3e5f0"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-7ee78bb4012b"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-d18ee3a00c63"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-137c63669f3c"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-f7e2b56ce17e"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-11cfc700f468"
+      ]
+    },
+    {
+      "issue": "#1620",
+      "kind": "issue",
+      "note": "Category labels retain a measured approximately 0.74pt left shift. Expense-label vertical cadence is separately tracked in #1621; these were incorrectly grouped under closed #1542 in the older audit.",
+      "cluster_ids": [
+        "p2-0b58fdb0886f"
+      ]
+    },
+    {
+      "issue": "#1620",
+      "kind": "issue",
+      "note": "Category labels retain a measured approximately 0.74pt left shift. Expense-label vertical cadence is separately tracked in #1621; these were incorrectly grouped under closed #1542 in the older audit.",
+      "cluster_ids": [
+        "p2-89c0ea973b6e"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-1cfc04616114"
+      ]
+    },
+    {
+      "class": "shape-edge-antialiasing",
+      "kind": "accepted-rendering",
+      "note": "Full-resolution crops retain the sparkline value vertices and color. Native embeds 42x18-pixel sparkline rasters in 31.98x14.04pt cells, while output uses vector strokes. These edge/blur residuals follow native bitmap resampling.",
+      "cluster_ids": [
+        "p2-3cf67cf2edc2"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-550c7c559e89"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-724dafc58a79"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-2aac3c0ce500"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-7b7890f18b49"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-0418b751d658"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-5610e1919de5"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-e0e2c69458b1"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-975d740803cb"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-1d4cf27a1d30"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-b875d429fbba"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-4d4e4f238a3d"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-d41aec79cd8b"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-e0646ba20eda"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-229c8a95d4b5"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-60fbc7973116"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-a4efe13a7e3f"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-6661f805074c"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-70a8764203ca"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-b9fd3a662609"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-9774793e16f1"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-ca5cca7c0ba5"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-66363075615a"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-7bd71d57f3c2"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-6444e5cbbffd"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-fdb31a34d4fa"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-0597ba775ac7"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-9deb8d5d2b9c"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-df911c85fec5"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-62efd50c2716"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-0903be09805e"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-d4573c6db114"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-6e92149f9f83"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-7984296ddf9e"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-bdf463f88548"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-fdff3a39d2a8"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-459f5161a47b"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-abf898af6662"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-caf35a49b9b3"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-22468d12c2a6"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-617382c46c63"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-eefe465e327e"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-26be0b81808b"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-ef35a58a4130"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-c2853fd94aa4"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-54a8b54e4300"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-bc6ecb5a46fa"
+      ]
+    },
+    {
+      "class": "shape-edge-antialiasing",
+      "kind": "accepted-rendering",
+      "note": "Full-resolution crops retain the sparkline value vertices and color. Native embeds 42x18-pixel sparkline rasters in 31.98x14.04pt cells, while output uses vector strokes. These edge/blur residuals follow native bitmap resampling.",
+      "cluster_ids": [
+        "p2-c6ebd0c2312c"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-1c5ce4071b82"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-4c49441b8a1d"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-f03d0cd3f910"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-2dfe56c7b4da"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-66b5c6a87b75"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-99bdfb721f53"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-3ff4f8ebd7aa"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-1be1ecd09c83"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-ddd09ca91833"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-bce175d71146"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-f4d9fe9d5b19"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-cec0c71835c8"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-7e021f887021"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-eeadbd91833f"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-33cf1ee65efb"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-d1e72066bc26"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-b43424b0b4ca"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-91eedb3ef8a1"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-d690ad4af3a0"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-46a23328a5d3"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-eac0d642ecb1"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-2de419c6e525"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-99f10f7953e1"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-64cf1345d477"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-ead239057ee3"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-20ec8d698f43"
+      ]
+    },
+    {
+      "issue": "#1564",
+      "kind": "issue",
+      "note": "Full-resolution worksheet crops and native/output PDF paint traces show fitted rules with different thickness and boundary placement. These rule-edge residuals are tracked in #1564, not accepted as antialiasing.",
+      "cluster_ids": [
+        "p2-808d2d6379ef"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-ecd8462c2443"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-102d32eeafba"
+      ]
+    },
+    {
+      "class": "shape-edge-antialiasing",
+      "kind": "accepted-rendering",
+      "note": "Full-resolution crops retain the sparkline value vertices and color. Native embeds 42x18-pixel sparkline rasters in 31.98x14.04pt cells, while output uses vector strokes. These edge/blur residuals follow native bitmap resampling.",
+      "cluster_ids": [
+        "p2-c7c67c5b3743"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-ea8ca6fea814"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-8f54a70860b2"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-7edaea85b01e"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-a07d1450abcf"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-23e0461e002b"
+      ]
+    },
+    {
+      "issue": "#1620",
+      "kind": "issue",
+      "note": "Category labels retain a measured approximately 0.74pt left shift. Expense-label vertical cadence is separately tracked in #1621; these were incorrectly grouped under closed #1542 in the older audit.",
+      "cluster_ids": [
+        "p2-26f6f0c0b0cf"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-b971ff16f4ec"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-3e765a077d32"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-d38ff05d2145"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-2329b587af28"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-653aeb2d5e3f"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-006816a3f34b"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-3733276c4c2b"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-468eb02375d5"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-9c3a9b8c955e"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-f6762c0a9048"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-8ea9232dbeb9"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-464e72da2b96"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-1c96b831366a"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-c0cbd4ad2c0b"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-aa0907d80a99"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-d9341c9cbc4f"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-24b6cb4f0595"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-9e55abfa67dd"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-c0290af4dd27"
+      ]
+    },
+    {
+      "issue": "#1620",
+      "kind": "issue",
+      "note": "Category labels retain a measured approximately 0.74pt left shift. Expense-label vertical cadence is separately tracked in #1621; these were incorrectly grouped under closed #1542 in the older audit.",
+      "cluster_ids": [
+        "p2-e746b2692a33"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-7c3b064ef44a"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-d292c9dc4ccb"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-60a0e04c18d4"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-68fcbb3f5eba"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-9f7e1510c3dd"
+      ]
+    },
+    {
+      "class": "glyph-edge-rasterization",
+      "kind": "accepted-rendering",
+      "note": "The full-resolution crop shows matching CASH FLOW heading content, font family, weight, and placement; this remaining residual follows the heading glyph edges.",
+      "cluster_ids": [
+        "p2-68ec8ee844ea"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-849cff554bc7"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-b4641a91c9be"
+      ]
+    },
+    {
+      "issue": "#1620",
+      "kind": "issue",
+      "note": "Category labels retain a measured approximately 0.74pt left shift. Expense-label vertical cadence is separately tracked in #1621; these were incorrectly grouped under closed #1542 in the older audit.",
+      "cluster_ids": [
+        "p2-e06b2b7d5548"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-a6116e26e53d"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-8b71a065c521"
+      ]
+    },
+    {
+      "issue": "#1620",
+      "kind": "issue",
+      "note": "Category labels retain a measured approximately 0.74pt left shift. Expense-label vertical cadence is separately tracked in #1621; these were incorrectly grouped under closed #1542 in the older audit.",
+      "cluster_ids": [
+        "p2-e77c0311eeca"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-3252ff3b82f5"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-01b4faf86f19"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-af45f1e4df16"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-888a251ad3e7"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-7f2373edfbe9"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-2f08bcad3d2a"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-d9e9a061bec3"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-4b24d29d0632"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-70e753caa02b"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-0b4cb0174073"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-79eb91c57104"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-47d3c35f9f80"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-8299f9194f0f"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-0665cf380fbc"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-4afad1eb0bf5"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-01b334bf4c82"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-58e9fb23a034"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-75edb913821d"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-cd298ead69fd"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-d05463c37f75"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-71b077e3d58d"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-ff0cf809c41f"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-8169662204bb"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-5cc806591e7d"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-5ef1d37be9b8"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-cec7bbb48e51"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-b9caeeaeb0f9"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-73c6e3080bf5"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-2b8aa3dbc8ea"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-42f33d8f35ed"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-7218d489280d"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-998aa0fbdc62"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-43f02025eb7b"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-387b64dc4a60"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-ad2b289bd511"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-b3bc65596fd6"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-245ba113109b"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-8e0b261950db"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-61fd5b3b7628"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-3ff75231c1fa"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-2b707cc0fc7c"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-ce33a163db31"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-6a112fb29fcf"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-05255f627621"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-a90e17782085"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-a7fa49ee1b0f"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-5fa047c29fba"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-cff41355d758"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-8c12cf8c1756"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-3136e87e2d26"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-9f6bc3617366"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-130993bf8832"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-a515f6a53c07"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-7ad1f66ad3fd"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-473d62d88113"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-24fc559f564b"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-fa8f8e7204dc"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-7fbb0ba5a592"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-d66084b1117b"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-f34bcf07e811"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-044cde944df6"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-df1efd0cf006"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-297035d838cc"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-1d509235d6e6"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-b3c24a320b3e"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-486ad19df916"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-b15d86ffdf8c"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-a6c1b2fca212"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-78bf16be4e76"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-da1b20a428b5"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-727807ce1859"
+      ]
+    },
+    {
+      "issue": "#1620",
+      "kind": "issue",
+      "note": "Category labels retain a measured approximately 0.74pt left shift. Expense-label vertical cadence is separately tracked in #1621; these were incorrectly grouped under closed #1542 in the older audit.",
+      "cluster_ids": [
+        "p2-3e0e01350195"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-14185e93839b"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-be4a591df231"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-8f60bae6d699"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-48c3e758f439"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-10538f5c9fe0"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-139a15ec6e0a"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-6bc718f4f55c"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-2d82e3a4efd9"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-df0847ad1376"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-83435b45f4bc"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-8e44dc18f0c9"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-ea75eaf9bc9e"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-3ea41204b452"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-2dd64f63c528"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-f54a4f2a1cf7"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-b12d654b31f1"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-c54bd08c6829"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-83304b1679fa"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-6657feec9a17"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-78f044e6fc98"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-6b3287ca7406"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-406a0fd5b33d"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-9c41c358ecea"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-c706aec2aab5"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-156fd7ea9cce"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-defd981dbbfb"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-2afea9d1ed89"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-ec71451ccaaf"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-66445e3d927c"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-10fe4bbd98ff"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-4d7c19924dda"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-493369d5ec29"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-25e0fbe840cf"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-6f0da7941e21"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-090e1ef6b819"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-9f516cc37543"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-44e8ada5ccf3"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-eafb356dc23b"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-1365fbf06f29"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-16d74d25efb0"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-e72721e323fe"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-c3c878b059b8"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-c27a423ca636"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-9a3febc5d24c"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-a653cfb449da"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-f907184b7373"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-e135b8a0669a"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-41b2041f3890"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-fbbd514f8101"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-d8dcd0de2167"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-acebc0edbcbf"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-3bf5a75ba18c"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-6e135ea68e45"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-515a3378a012"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-f00252c0fb06"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-525afd7799f8"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-b03b05cdf9dd"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-18dbc074c492"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-e3f3e87904eb"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-630814affbae"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-9a4a3e597e25"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-bd8b84c40c42"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-bec70cb759b6"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-32c664236a24"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-9c8745578154"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-5a789c74eee9"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-2dbee56e3a63"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-95f4a0e73469"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-d79f7203f095"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-903b74aeb5d5"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-e4f1991d1c7a"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-cf9cc305e0ec"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-03297022c4fa"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-ed3202cdde5c"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-2f4af6917f17"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-aa5b2ff5245b"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-789abc2a79dc"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-0243973b2206"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-1fc2d29a147e"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-4d0f985be753"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-2af92a782afe"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-45baa0d720e1"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-f46f6f78c5a8"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-6ab615690758"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-4e14dc8c60dd"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-47f13c175b08"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-6681e2746c07"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-97d7299068e5"
+      ]
+    },
+    {
+      "issue": "#1620",
+      "kind": "issue",
+      "note": "Category labels retain a measured approximately 0.74pt left shift. Expense-label vertical cadence is separately tracked in #1621; these were incorrectly grouped under closed #1542 in the older audit.",
+      "cluster_ids": [
+        "p2-2bc40b60989c"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-8362111ffaa5"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-3175f851ef21"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-165a02fb9b5c"
+      ]
+    },
+    {
+      "issue": "#1620",
+      "kind": "issue",
+      "note": "Category labels retain a measured approximately 0.74pt left shift. Expense-label vertical cadence is separately tracked in #1621; these were incorrectly grouped under closed #1542 in the older audit.",
+      "cluster_ids": [
+        "p2-4e0d9ddfeb64"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-c966aca72c0e"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-2978ccec95a3"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-c3366cfe7813"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-2b1e275ce695"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-11ee3edde858"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-62032dffb0ad"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-fbac84eef5eb"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-d0453cb6fddc"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-363155f378cf"
+      ]
+    },
+    {
+      "class": "shape-edge-antialiasing",
+      "kind": "accepted-rendering",
+      "note": "Full-resolution crops retain the sparkline value vertices and color. Native embeds 42x18-pixel sparkline rasters in 31.98x14.04pt cells, while output uses vector strokes. These edge/blur residuals follow native bitmap resampling.",
+      "cluster_ids": [
+        "p2-95dd1f9d29c8"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-0c0393d5b516"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-dab2cd49e410"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-47b9616ceeda"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-322be91f7e77"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-6128510efeaa"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-be9fa2e5f0c9"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-f8fde9629c41"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-b91d4c7cd2a0"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-6a8d8863f596"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-a955eed6335e"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-2345ba296c88"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-b340e574a088"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-13ba2b7e7882"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-f1f43d51d13a"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-30655e0edf56"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-21175a0e9d2a"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-e0d565eaa1d9"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-723a5b374c6e"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-fdd87fd66403"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-f3bf49327771"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-509397b3dea1"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-81d039b17ddd"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-fd96d631e201"
+      ]
+    },
+    {
+      "issue": "#1623",
+      "kind": "issue",
+      "note": "The large left-aligned Cambria title starts 1.255pt left; its separate fixed-row baseline discrepancy remains tracked in #1545.",
+      "cluster_ids": [
+        "p2-7c880b00ba7b"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-cf56ec3b6692"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-aae176fc8b82"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-74a1d4e8bee0"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-02d66496c6d9"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-d62481d7fd4c"
+      ]
+    },
+    {
+      "issue": "#1545",
+      "kind": "issue",
+      "note": "The remaining fitted fixed-row text baseline cadence is tracked in #1545 and is outside this category-axis number-format fix.",
+      "cluster_ids": [
+        "p2-11f7ab6aca17"
+      ]
+    },
+    {
+      "kind": "accepted-rendering",
+      "note": "Matched300DPI GT/before/after/diff crops show aligned marker centers. Native16x16 bitmap has softened edges versus vector circle; actual PDF center matches native(195,311.22). Fill, stroke and circle path are unchanged.",
+      "cluster_ids": [
+        "p2-2ccc64c2a522"
+      ],
+      "class": "shape-edge-antialiasing"
+    }
+  ]
+}

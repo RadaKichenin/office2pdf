@@ -1,0 +1,121 @@
+[
+  {
+    "value": "0",
+    "patch_count": 1,
+    "matching_native_package_sha256": [
+      "e9e02f3f7c5da53c97c188cf56211c57d8249621c90c9dec90bf9d76c1c51715"
+    ],
+    "controls": [
+      [
+        "budget_w0_0",
+        [
+          195.0,
+          311.21999
+        ],
+        14
+      ]
+    ]
+  },
+  {
+    "value": "1.49",
+    "patch_count": 1,
+    "matching_native_package_sha256": [
+      "57189d72eddb7baf2203f9cfc4149320bbe1fc39441625a131792b82a9f9bd54"
+    ],
+    "controls": [
+      [
+        "budget_w1_49",
+        [
+          195.0,
+          311.22
+        ],
+        16
+      ]
+    ]
+  },
+  {
+    "value": "1.5",
+    "patch_count": 1,
+    "matching_native_package_sha256": [
+      "8649f2de68a2f7e4b6711ec36c11f82bb2fffc046d200bed00d45ebb74409c0f"
+    ],
+    "controls": [
+      [
+        "budget_w1_5",
+        [
+          195.78,
+          312.0
+        ],
+        18
+      ]
+    ]
+  },
+  {
+    "value": "2",
+    "patch_count": 1,
+    "matching_native_package_sha256": [
+      "b7e4a9fb2db6c78304a77cdf8a0173ba1620904e3439c8f3b93c76a85f72a539"
+    ],
+    "controls": [
+      [
+        "budget_w2_0",
+        [
+          195.78,
+          312.0
+        ],
+        18
+      ]
+    ]
+  },
+  {
+    "value": "2.5",
+    "patch_count": 1,
+    "matching_native_package_sha256": [
+      "b663aa6fd58412d044246f26b8fe2809d7d426189d87ec855c046d6ef2750099"
+    ],
+    "controls": [
+      [
+        "budget_w2_5",
+        [
+          195.0,
+          311.21999
+        ],
+        18
+      ]
+    ]
+  },
+  {
+    "value": "3.5",
+    "patch_count": 1,
+    "matching_native_package_sha256": [
+      "31f0703b2ba4132e6d221dddb55514c82bcbe2b02f62c18a260916db8ff45514"
+    ],
+    "controls": [
+      [
+        "budget_w3_5",
+        [
+          195.78,
+          311.99999
+        ],
+        20
+      ]
+    ]
+  },
+  {
+    "value": "suppressed",
+    "patch_count": 1,
+    "matching_native_package_sha256": [
+      "6d11415cdca08ad20cba5796a3edb98e5b18377cf333e57c6e2d74520a3cc66a"
+    ],
+    "controls": [
+      [
+        "budget_none",
+        [
+          195.78,
+          311.99999
+        ],
+        16
+      ]
+    ]
+  }
+]

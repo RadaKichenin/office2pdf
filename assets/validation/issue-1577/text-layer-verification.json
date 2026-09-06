@@ -1,0 +1,23 @@
+{
+  "note": "compare_text_layer.py --json output is identical before and after the marker change for both fixtures; the native/converter residuals predate this change.",
+  "fixtures": {
+    "budget": {
+      "before_equals_after": true,
+      "content_matches_native": false,
+      "content_length_gt": 3355,
+      "content_length_output": 3355,
+      "census_deltas": {
+        "space:SPACE": 2
+      }
+    },
+    "gift": {
+      "before_equals_after": true,
+      "content_matches_native": false,
+      "content_length_gt": 1736,
+      "content_length_output": 1734,
+      "census_deltas": {
+        "space:SPACE": -2
+      }
+    }
+  }
+}

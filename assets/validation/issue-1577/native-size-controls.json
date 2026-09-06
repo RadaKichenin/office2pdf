@@ -1,0 +1,425 @@
+{
+  "scope": "Native marker-size controls for the committed size probe specs. Each patched chart part is byte-identical to the measured native package; every other package member equals the base fixture.",
+  "records": [
+    {
+      "fixture": "budget",
+      "probe": "issue-1577-budget-marker-size",
+      "marker_size_pt": 13.0,
+      "source_sha256": "9019d7d56ced24feb57854d333407582a1ad212f430d6cdf9e2cb2c132db37ee",
+      "native_pdf_sha256": "a3bb05140cb862ecc71e9dc41a99ac6cb2e7b829e19379a4fae152572e9a51e2",
+      "patched_part_identical": true,
+      "other_members_identical": true,
+      "native_marker_centers_pt": [
+        [
+          194.60999999999999,
+          310.82999
+        ]
+      ],
+      "native_canvas_px": [
+        "15"
+      ]
+    },
+    {
+      "fixture": "budget",
+      "probe": "issue-1577-budget-marker-size",
+      "marker_size_pt": 15.0,
+      "source_sha256": "e17938d9f80a3390adc5eae72dba2b2ba7aefabfc87b4df98c32ec768591211b",
+      "native_pdf_sha256": "7b82a6917e001bbb8c82a3ca505975ad23028ac0a45ce6f43071bbc794a9e3fa",
+      "patched_part_identical": true,
+      "other_members_identical": true,
+      "native_marker_centers_pt": [
+        [
+          194.60999999999999,
+          310.83
+        ]
+      ],
+      "native_canvas_px": [
+        "17"
+      ]
+    },
+    {
+      "fixture": "budget",
+      "probe": "issue-1577-budget-marker-size",
+      "marker_size_pt": 20.0,
+      "source_sha256": "fcc75f30f511311b1ee7ca4f444d01978271fe0287b8754aeb87c9fc3a3c4a5e",
+      "native_pdf_sha256": "f65a1a02c1a92362512fe1cf7cfb76a0a58ceeb77a70ddf2cb04569ea4577c62",
+      "patched_part_identical": true,
+      "other_members_identical": true,
+      "native_marker_centers_pt": [
+        [
+          195.0,
+          311.21999
+        ]
+      ],
+      "native_canvas_px": [
+        "22"
+      ]
+    },
+    {
+      "fixture": "gift",
+      "probe": "issue-1577-gift-marker-size",
+      "marker_size_pt": 4.0,
+      "source_sha256": "99edf75870b8ecc939b3443b33d143e2c224b98daea91297328935f3ea85bf22",
+      "native_pdf_sha256": "c72c5fe9ba74b62620ca83756350ced8be5ca988f7c095da18a133008338eb18",
+      "patched_part_identical": true,
+      "other_members_identical": true,
+      "native_marker_centers_pt": [
+        [
+          351.78,
+          299.29999999999995
+        ],
+        [
+          417.38,
+          329.64
+        ],
+        [
+          483.79999999999995,
+          329.64
+        ],
+        [
+          550.22,
+          309.13997
+        ],
+        [
+          616.64,
+          329.64
+        ],
+        [
+          683.0600000000001,
+          146.77999
+        ],
+        [
+          748.6600000000001,
+          258.30001
+        ],
+        [
+          815.08,
+          329.64
+        ],
+        [
+          881.5,
+          329.64
+        ],
+        [
+          947.9200000000001,
+          329.64
+        ],
+        [
+          1014.34,
+          329.64
+        ],
+        [
+          1080.76,
+          329.64
+        ]
+      ],
+      "native_canvas_px": [
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6,
+        6
+      ]
+    },
+    {
+      "fixture": "gift",
+      "probe": "issue-1577-gift-marker-size",
+      "marker_size_pt": 6.0,
+      "source_sha256": "21fdcf07feedc84acefe362b7f7b1fcb00799b4a22cd4da0ea8b6956321f5dae",
+      "native_pdf_sha256": "9b1a888892a467923700fbb49b3ea5d1616f1d60e4f36f61670d27b417b44969",
+      "patched_part_identical": true,
+      "other_members_identical": true,
+      "native_marker_centers_pt": [
+        [
+          351.78,
+          299.30003
+        ],
+        [
+          417.38,
+          329.64002999999997
+        ],
+        [
+          483.79999999999995,
+          329.64002999999997
+        ],
+        [
+          550.22,
+          309.14
+        ],
+        [
+          616.64,
+          329.64002999999997
+        ],
+        [
+          683.06,
+          146.78
+        ],
+        [
+          748.66,
+          258.30001999999996
+        ],
+        [
+          815.0799999999999,
+          329.64002999999997
+        ],
+        [
+          881.5,
+          329.64002999999997
+        ],
+        [
+          947.92,
+          329.64002999999997
+        ],
+        [
+          1014.3399999999999,
+          329.64002999999997
+        ],
+        [
+          1080.76,
+          329.64002999999997
+        ]
+      ],
+      "native_canvas_px": [
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8
+      ]
+    },
+    {
+      "fixture": "gift",
+      "probe": "issue-1577-gift-marker-size",
+      "marker_size_pt": 7.0,
+      "source_sha256": "dc1dd83a615a82b4cb412e9db330a73009129ffbc1f41134308bab64d653c7aa",
+      "native_pdf_sha256": "190f9aad5634372a107d53cc2d766280874bccbdaefebe8781aa56c31698d569",
+      "patched_part_identical": true,
+      "other_members_identical": true,
+      "native_marker_centers_pt": [
+        [
+          351.37,
+          298.89
+        ],
+        [
+          416.96999999999997,
+          329.23
+        ],
+        [
+          483.39,
+          329.23
+        ],
+        [
+          549.8100000000001,
+          308.72999
+        ],
+        [
+          616.23,
+          329.23
+        ],
+        [
+          682.6500000000001,
+          146.37
+        ],
+        [
+          748.25,
+          257.89001
+        ],
+        [
+          814.6700000000001,
+          329.23
+        ],
+        [
+          881.09,
+          329.23
+        ],
+        [
+          947.5100000000001,
+          329.23
+        ],
+        [
+          1013.9300000000001,
+          329.23
+        ],
+        [
+          1080.3500000000001,
+          329.23
+        ]
+      ],
+      "native_canvas_px": [
+        9,
+        9,
+        9,
+        9,
+        9,
+        9,
+        9,
+        9,
+        9,
+        9,
+        9,
+        9
+      ]
+    },
+    {
+      "fixture": "gift",
+      "probe": "issue-1577-gift-marker-size",
+      "marker_size_pt": 13.0,
+      "source_sha256": "95c013b8b9d74c5bd2ca4926543ba5c683bea43467d38856be36d6164c22e183",
+      "native_pdf_sha256": "50186ee0905109a2ab40965ff881759de639629fd8ed5e0878d0a2c354e99028",
+      "patched_part_identical": true,
+      "other_members_identical": true,
+      "native_marker_centers_pt": [
+        [
+          351.37,
+          298.89
+        ],
+        [
+          416.96999999999997,
+          329.23003
+        ],
+        [
+          483.39,
+          329.23003
+        ],
+        [
+          549.81,
+          308.73003
+        ],
+        [
+          616.23,
+          329.23003
+        ],
+        [
+          682.65,
+          146.37002
+        ],
+        [
+          748.25,
+          257.88998
+        ],
+        [
+          814.67,
+          329.23003
+        ],
+        [
+          881.09,
+          329.23003
+        ],
+        [
+          947.51,
+          329.23003
+        ],
+        [
+          1013.93,
+          329.23003
+        ],
+        [
+          1080.3500000000001,
+          329.23003
+        ]
+      ],
+      "native_canvas_px": [
+        15,
+        15,
+        15,
+        15,
+        15,
+        15,
+        15,
+        15,
+        15,
+        15,
+        15,
+        15
+      ]
+    },
+    {
+      "fixture": "gift",
+      "probe": "issue-1577-gift-marker-size",
+      "marker_size_pt": 14.0,
+      "source_sha256": "645e43cc21984f861f35dd008d7b19d19548fa7e18a3fedebd638f6682ac207b",
+      "native_pdf_sha256": "97a29f16228cd58ac8be48a6ea298c4b55d9bc2a11b15f25ddb13ffa6f0eca55",
+      "patched_part_identical": true,
+      "other_members_identical": true,
+      "native_marker_centers_pt": [
+        [
+          351.78000000000003,
+          299.3
+        ],
+        [
+          417.38,
+          329.64003
+        ],
+        [
+          483.8,
+          329.64003
+        ],
+        [
+          550.2199999999999,
+          309.14003
+        ],
+        [
+          616.64,
+          329.64003
+        ],
+        [
+          683.06,
+          146.78003
+        ],
+        [
+          748.66,
+          258.29999
+        ],
+        [
+          815.0799999999999,
+          329.64003
+        ],
+        [
+          881.5,
+          329.64003
+        ],
+        [
+          947.92,
+          329.64003
+        ],
+        [
+          1014.3399999999999,
+          329.64003
+        ],
+        [
+          1080.76,
+          329.64003
+        ]
+      ],
+      "native_canvas_px": [
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16
+      ]
+    }
+  ],
+  "all_patches_reproduce_native_packages": true
+}

@@ -8461,6 +8461,208 @@ fn budget_scatter_marker_retains_its_declared_size() {
     );
 }
 
+/// Native Excel's selected-month circle uses a worksheet raster grid. Odd
+/// marker sizes move the ink center by half a sheet point in both directions;
+/// changing the cached value would not reproduce this size-dependent phase.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn budget_compiled_marker_centers_match_native_placement_controls() {
+    let data = include_bytes!("../../../../tests/fixtures/xlsx/issue_1181_fit_to_height.xlsx");
+    use crate::ir::ChartLine;
+    let outline = |width| ChartLine::Explicit {
+        width_pt: Some(width),
+        color: None,
+        alpha: None,
+    };
+    // Expected centers come from native exports that independently change
+    // marker size, outline width/suppression, or both vertical anchor ends.
+    for (size, line, shift_y, (native_x, native_y)) in [
+        (13.0, outline(0.75), 0.0, (194.61, 310.83)),
+        (14.0, outline(0.75), 0.0, (195.0, 311.22)),
+        (15.0, outline(0.75), 0.0, (194.61, 310.83)),
+        (20.0, outline(0.75), 0.0, (195.0, 311.22)),
+        (14.0, ChartLine::Suppressed, 0.0, (195.78, 312.0)),
+        (14.0, outline(0.0), 0.0, (195.0, 311.22)),
+        (14.0, outline(1.49), 0.0, (195.0, 311.22)),
+        (14.0, outline(1.5), 0.0, (195.78, 312.0)),
+        (14.0, outline(2.0), 0.0, (195.78, 312.0)),
+        (14.0, outline(2.5), 0.0, (195.0, 311.22)),
+        (14.0, outline(3.5), 0.0, (195.78, 312.0)),
+        (14.0, outline(0.75), 0.25, (195.0, 312.0)),
+        (14.0, outline(0.75), 1.0, (195.0, 312.0)),
+        (14.0, outline(0.75), 1.25, (195.0, 312.78)),
+    ] {
+        let (mut doc, _) = crate::parser::Parser::parse(
+            &crate::parser::xlsx::XlsxParser,
+            data,
+            &crate::config::ConvertOptions::default(),
+        )
+        .expect("the public budget fixture parses");
+        let mut changed: usize = 0;
+        for page in &mut doc.pages {
+            if let crate::ir::Page::Sheet(sheet) = page {
+                for anchored in &mut sheet.charts {
+                    for series in &mut anchored.chart.series {
+                        if series.marker_symbol == Some(MarkerSymbol::Circle)
+                            && series.marker_style.size_pt == Some(14.0)
+                            && series.values.iter().any(|value| value.is_finite())
+                        {
+                            series.marker_style.size_pt = Some(size);
+                            series.marker_style.line = line;
+                            let placement = anchored.placement.as_mut().expect("anchored chart");
+                            // Pagination already scales the anchor offset.
+                            placement.y_offset_pt += shift_y * placement.print_scale;
+                            changed += 1;
+                        }
+                    }
+                }
+            }
+        }
+        assert_eq!(changed, 1, "only the selected-month marker changes");
+        let output = generate_typst(&doc).unwrap();
+        let pages =
+            crate::render::pdf::compiled_page_paint_sequences(&output.source, &output.images)
+                .expect("the budget size control compiles");
+        assert_eq!(pages.len(), 2);
+        let circles: Vec<_> = pages[1]
+            .iter()
+            .filter(|paint| {
+                let (left, top, right, bottom) = paint.bounds;
+                paint.kind == crate::render::pdf::PaintedKind::Shape
+                    && paint.rectangle_fill.is_none()
+                    && left > 175.0
+                    && right < 215.0
+                    && top > 290.0
+                    && bottom < 330.0
+                    && (right - left - size * 0.78).abs() < 0.01
+                    && (bottom - top - size * 0.78).abs() < 0.01
+            })
+            .collect();
+        assert_eq!(circles.len(), 1, "one {size}pt plot circle");
+        let (left, top, right, bottom) = circles[0].bounds;
+        let actual = ((left + right) / 2.0, (top + bottom) / 2.0);
+        assert!(
+            (actual.0 - native_x).abs() < 0.01 && (actual.1 - native_y).abs() < 0.01,
+            "{size}pt marker, {line:?}, anchor dy {shift_y}: native ({native_x}, {native_y}), actual {actual:?}"
+        );
+    }
+}
+
+/// Native gift-workbook size controls pin every plotted circle, including
+/// zero values and different column bands, after source-font gutter recovery.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn gift_compiled_marker_centers_match_native_size_controls() {
+    let data = include_bytes!("../../../../tests/fixtures/xlsx/issue_1603_gift_budget.xlsx");
+    for (size, native) in [
+        (
+            4.0,
+            [
+                (351.78000, 299.30000),
+                (417.38000, 329.64000),
+                (483.80000, 329.64000),
+                (550.22000, 309.13997),
+                (616.64000, 329.64000),
+                (683.06000, 146.77999),
+                (748.66000, 258.30001),
+                (815.08000, 329.64000),
+                (881.50000, 329.64000),
+                (947.92000, 329.64000),
+                (1014.34000, 329.64000),
+                (1080.76000, 329.64000),
+            ],
+        ),
+        (
+            5.0,
+            [
+                (351.37000, 298.89003),
+                (416.97000, 329.23003),
+                (483.39000, 329.23003),
+                (549.81000, 308.73000),
+                (616.23000, 329.23003),
+                (682.65000, 146.36999),
+                (748.25000, 257.89000),
+                (814.67000, 329.23003),
+                (881.09000, 329.23003),
+                (947.51000, 329.23003),
+                (1013.93000, 329.23003),
+                (1080.35000, 329.23003),
+            ],
+        ),
+        (
+            6.0,
+            [
+                (351.78000, 299.30003),
+                (417.38000, 329.64003),
+                (483.80000, 329.64003),
+                (550.22000, 309.14000),
+                (616.64000, 329.64003),
+                (683.06000, 146.78000),
+                (748.66000, 258.30002),
+                (815.08000, 329.64003),
+                (881.50000, 329.64003),
+                (947.92000, 329.64003),
+                (1014.34000, 329.64003),
+                (1080.76000, 329.64003),
+            ],
+        ),
+    ] {
+        let (mut doc, _) = crate::parser::Parser::parse(
+            &crate::parser::xlsx::XlsxParser,
+            data,
+            &crate::config::ConvertOptions::default(),
+        )
+        .expect("the public gift fixture parses");
+        let mut changed: usize = 0;
+        for page in &mut doc.pages {
+            if let crate::ir::Page::Sheet(sheet) = page {
+                for anchored in &mut sheet.charts {
+                    for series in &mut anchored.chart.series {
+                        if series.marker_symbol == Some(MarkerSymbol::Circle)
+                            && series.marker_style.size_pt == Some(5.0)
+                        {
+                            series.marker_style.size_pt = Some(size);
+                            changed += 1;
+                        }
+                    }
+                }
+            }
+        }
+        assert_eq!(changed, 1, "only the amount-spent marker changes");
+        let output = generate_typst(&doc).unwrap();
+        let pages =
+            crate::render::pdf::compiled_page_paint_sequences(&output.source, &output.images)
+                .expect("the gift marker control compiles");
+        assert_eq!(pages.len(), 2);
+        let mut circles: Vec<_> = pages[1]
+            .iter()
+            .filter(|paint| {
+                let (left, top, right, bottom) = paint.bounds;
+                paint.kind == crate::render::pdf::PaintedKind::Shape
+                    && paint.rectangle_fill.is_none()
+                    && left > 300.0
+                    && right < 1125.0
+                    && top > 120.0
+                    && bottom < 340.0
+                    && (right - left - size * 0.82).abs() < 0.01
+                    && (bottom - top - size * 0.82).abs() < 0.01
+            })
+            .map(|paint| {
+                let (left, top, right, bottom) = paint.bounds;
+                ((left + right) / 2.0, (top + bottom) / 2.0)
+            })
+            .collect();
+        circles.sort_by(|a, b| a.0.total_cmp(&b.0));
+        assert_eq!(circles.len(), native.len());
+        for (index, (actual, expected)) in circles.iter().zip(native).enumerate() {
+            assert!(
+                (actual.0 - expected.0).abs() < 0.015 && (actual.1 - expected.1).abs() < 0.015,
+                "{size}pt marker {index}: native {expected:?}, actual {actual:?}"
+            );
+        }
+    }
+}
+
 #[test]
 fn budget_month_axis_preserves_its_single_trailing_space() {
     let data = include_bytes!("../../../../tests/fixtures/xlsx/issue_1181_fit_to_height.xlsx");
