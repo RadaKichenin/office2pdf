@@ -3430,3 +3430,31 @@ fn marker_suppression_and_invalid_size_preserve_independent_defaults() {
         assert_eq!(marker.line, ChartLine::Suppressed);
     }
 }
+
+#[test]
+fn nested_stroke_geometry_does_not_supply_missing_series_properties() {
+    let xml = line_series_with_marker(
+        r#"<c:marker><c:symbol val="circle"/><c:spPr><a:ln w="12700" cap="rnd"><a:round/></a:ln></c:spPr></c:marker>
+        <c:dPt><c:idx val="0"/><c:spPr><a:ln cap="sq"><a:miter lim="200000"/></a:ln></c:spPr></c:dPt>
+        <c:dLbls><c:spPr><a:ln cap="flat"><a:bevel/></a:ln></c:spPr></c:dLbls>"#,
+    );
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
+    let geometry = chart.series[0].line_geometry;
+    assert_eq!(geometry.cap, None);
+    assert_eq!(geometry.join, None);
+    assert_eq!(geometry.miter_limit, None);
+    assert_eq!(chart.series[0].line_width_pt, None);
+}
+
+#[test]
+fn an_empty_series_line_keeps_its_cap_without_inventing_a_join() {
+    let xml = line_series_with_marker(r#"<c:spPr><a:ln w="28575" cap="sq"/></c:spPr>"#);
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).unwrap();
+    assert_eq!(
+        chart.series[0].line_geometry.cap,
+        Some(crate::ir::LineCap::Square)
+    );
+    assert_eq!(chart.series[0].line_geometry.join, None);
+    assert_eq!(chart.series[0].line_geometry.miter_limit, None);
+    assert_eq!(chart.series[0].line_width_pt, Some(2.25));
+}

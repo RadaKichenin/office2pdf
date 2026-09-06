@@ -1124,6 +1124,7 @@ fn parse_single_series(
     let mut marker_symbol: Option<MarkerSymbol> = None;
     let mut marker_style = ChartMarkerStyle::default();
     let mut line_width_pt: Option<f64> = None;
+    let mut line_geometry = crate::ir::ChartStrokeGeometry::default();
 
     loop {
         match reader.read_event() {
@@ -1135,7 +1136,7 @@ fn parse_single_series(
                     values = parsed;
                     number_format = format_code;
                 }
-                // The series' own fill and stroke weight. This match is flat,
+                // The series' own fill and stroke geometry. This match is flat,
                 // so it would also see a `<c:spPr>` nested inside a sibling
                 // element; every element that can carry one is consumed by its
                 // own branch first, leaving only the series-level one here.
@@ -1146,6 +1147,11 @@ fn parse_single_series(
                         fill_mode = properties.fill_mode;
                     }
                     line_width_pt = line_width_pt.or(properties.line_width_pt);
+                    line_geometry.cap = line_geometry.cap.or(properties.line_geometry.cap);
+                    line_geometry.join = line_geometry.join.or(properties.line_geometry.join);
+                    line_geometry.miter_limit = line_geometry
+                        .miter_limit
+                        .or(properties.line_geometry.miter_limit);
                 }
                 b"dPt" => {
                     if let Some((index, color, mode)) = parse_data_point(reader, scheme) {
@@ -1203,6 +1209,7 @@ fn parse_single_series(
             marker_symbol,
             marker_style,
             line_width_pt,
+            line_geometry,
         },
         categories,
     )
@@ -1571,9 +1578,10 @@ struct ShapeProperties {
     /// The width `<a:ln w="…">` states, in points. `None` when the element
     /// carries no `<a:ln>`, or one that names no usable width.
     line_width_pt: Option<f64>,
+    line_geometry: crate::ir::ChartStrokeGeometry,
 }
 
-/// Read a `<c:spPr>` into its fill mode, colour hint, and stroke weight,
+/// Read a `<c:spPr>` into its fill mode, colour hint, and stroke geometry,
 /// consuming up to `end_tag`.
 ///
 /// A chart part declares no theme of its own, so `<a:schemeClr>` resolves
@@ -1615,6 +1623,35 @@ fn parse_shape_properties(
                         .map(|emu| emu / EMU_PER_POINT)
                         .filter(|width_pt| *width_pt > 0.0)
                 });
+                properties.line_geometry.cap = properties.line_geometry.cap.or_else(|| {
+                    match xml_util::get_attr_str(e, b"cap").as_deref() {
+                        Some("flat") => Some(crate::ir::LineCap::Flat),
+                        Some("rnd") => Some(crate::ir::LineCap::Round),
+                        Some("sq") => Some(crate::ir::LineCap::Square),
+                        _ => None,
+                    }
+                });
+            }
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))
+                if in_line && matches!(e.local_name().as_ref(), b"round" | b"bevel" | b"miter") =>
+            {
+                if properties.line_geometry.join.is_none() {
+                    properties.line_geometry.join = Some(match e.local_name().as_ref() {
+                        b"round" => crate::ir::LineJoin::Round,
+                        b"bevel" => crate::ir::LineJoin::Bevel,
+                        _ => crate::ir::LineJoin::Miter,
+                    });
+                    if e.local_name().as_ref() == b"miter" {
+                        // DrawingML percentages use 100000 for 100%. Native
+                        // Excel's omitted-limit control exports a ratio of 8.
+                        properties.line_geometry.miter_limit = Some(
+                            xml_util::get_attr_str(e, b"lim")
+                                .and_then(|value| value.parse::<f64>().ok())
+                                .filter(|value| value.is_finite() && *value > 0.0)
+                                .map_or(8.0, |value| value / 100_000.0),
+                        );
+                    }
+                }
             }
             Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"solidFill" => {
                 in_solid_fill = true;

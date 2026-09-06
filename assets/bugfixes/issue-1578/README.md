@@ -24,9 +24,10 @@ In the red control's page-2 trace, native paints the axis before the marker.
 The old output reversed that order; the fixed output agrees with native.
 All five before/after cases preserve every paint primitive, including its
 geometry and paint, and have identical page-1 traces. Layout and text-layer
-reports retain their baseline findings. Non-whitespace text matches native;
-the stricter text-layer report retains eight extra space-census entries over
-the five-page collection, so it is not an exact text-layer match.
+reports retain their baseline findings. Non-whitespace text matches native with
+`pdftotext -layout`. Default extraction retains table reading-order differences
+and eight extra space-census entries over the five-page collection, so it is
+not an exact text-layer match.
 
 A portable compiled-frame regression covers opaque, hollow and disabled
 markers at two overlapping values. The four enabled-marker cases fail before

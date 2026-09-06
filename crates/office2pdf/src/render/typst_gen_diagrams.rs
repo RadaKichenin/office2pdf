@@ -284,6 +284,37 @@ fn series_line_pt(series: &crate::ir::ChartSeries) -> f64 {
     series.line_width_pt.unwrap_or(SERIES_LINE_PT)
 }
 
+/// Keep the plot and its legend sample on the same declared stroke geometry.
+fn series_stroke(series: &crate::ir::ChartSeries, color: &str) -> String {
+    let geometry = series.line_geometry;
+    let width = format_f64(series_line_pt(series));
+    if geometry.cap.is_none() && geometry.join.is_none() && geometry.miter_limit.is_none() {
+        return format!("{width}pt + {color}");
+    }
+    let mut stroke = format!("(paint: {color}, thickness: {width}pt");
+    if let Some(cap) = geometry.cap {
+        let cap = match cap {
+            crate::ir::LineCap::Flat => "butt",
+            crate::ir::LineCap::Round => "round",
+            crate::ir::LineCap::Square => "square",
+        };
+        let _ = write!(stroke, ", cap: \"{cap}\"");
+    }
+    if let Some(join) = geometry.join {
+        let join = match join {
+            crate::ir::LineJoin::Round => "round",
+            crate::ir::LineJoin::Bevel => "bevel",
+            crate::ir::LineJoin::Miter => "miter",
+        };
+        let _ = write!(stroke, ", join: \"{join}\"");
+    }
+    if let Some(limit) = geometry.miter_limit {
+        let _ = write!(stroke, ", miter-limit: {}", format_f64(limit));
+    }
+    stroke.push(')');
+    stroke
+}
+
 /// `baseline:` offset that sets the legend key against its label.
 ///
 /// The native export puts the key line 2.64pt above its label's baseline, and
@@ -584,14 +615,14 @@ fn line_legend_key(series_index: usize, series: &crate::ir::ChartSeries, color: 
     let key_mid: f64 = SERIES_MARKER_SIZE_PT / 2.0;
     format!(
         "#box(width: {}pt, height: {}pt, baseline: {}pt)[\
-         #place(top + left, dx: 0pt, dy: {}pt, line(end: ({}pt, 0pt), stroke: {}pt + {color}))\
+         #place(top + left, dx: 0pt, dy: {}pt, line(end: ({}pt, 0pt), stroke: {}))\
          {}]",
         format_f64(LEGEND_KEY_LEN_PT),
         format_f64(SERIES_MARKER_SIZE_PT),
         format_f64(LEGEND_KEY_BASELINE_PT),
         format_f64(key_mid),
         format_f64(LEGEND_KEY_LEN_PT),
-        format_f64(series_line_pt(series)),
+        series_stroke(series, color),
         series_marker_markup(
             series_index,
             series,
@@ -4134,8 +4165,8 @@ fn generate_chart_axis(
                 .join(", ");
             let _ = writeln!(
                 out,
-                "#place(top + left, path(stroke: {}pt + {color}, {coords}))",
-                format_f64(series_line_pt(s))
+                "#place(top + left, path(stroke: {}, {coords}))",
+                series_stroke(s, &color)
             );
         }
         for (x, y) in &points {
@@ -4723,8 +4754,8 @@ fn generate_chart_line_plot(out: &mut String, chart: &Chart, frame: Option<(f64,
                 .join(", ");
             let _ = writeln!(
                 out,
-                "#place(top + left, path(stroke: {}pt + {color}, {coords}))",
-                format_f64(series_line_pt(s))
+                "#place(top + left, path(stroke: {}, {coords}))",
+                series_stroke(s, &color)
             );
         }
         // Point markers: the symbol the series names, else the shape cycle.
@@ -4974,8 +5005,8 @@ fn generate_chart_radar_plot(out: &mut String, chart: &Chart, frame: Option<(f64
             .join(", ");
         let _ = writeln!(
             out,
-            "#place(top + left, path(closed: true, stroke: {}pt + {color}, {coords}))",
-            format_f64(series_line_pt(series))
+            "#place(top + left, path(closed: true, stroke: {}, {coords}))",
+            series_stroke(series, &color)
         );
         for (x, y) in &points {
             write_series_marker(out, series_index, series, *x, *y, &color);

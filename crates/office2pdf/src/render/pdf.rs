@@ -611,6 +611,17 @@ pub(crate) struct PaintedPrimitive {
     pub kind: PaintedKind,
     /// Page-space bounding box in points, as `(min x, min y, max x, max y)`.
     pub bounds: (f64, f64, f64, f64),
+    pub stroke: Option<PaintedStroke>,
+}
+
+/// Stroke geometry after compilation, before the enclosing frame transform.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct PaintedStroke {
+    pub thickness_pt: f64,
+    pub cap: typst::visualize::LineCap,
+    pub join: typst::visualize::LineJoin,
+    pub miter_limit: f64,
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
@@ -637,6 +648,21 @@ pub(crate) fn compiled_paint_sequence(
     images: &[ImageAsset],
     page_index: usize,
 ) -> Result<Vec<PaintedPrimitive>, ConvertError> {
+    let pages = compiled_page_paint_sequences(typst_source, images)?;
+    pages.get(page_index).cloned().ok_or_else(|| {
+        ConvertError::Render(format!(
+            "page {page_index} is past the document's {} pages",
+            pages.len()
+        ))
+    })
+}
+
+/// Compile a probe collection once and preserve each page's paint sequence.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+pub(crate) fn compiled_page_paint_sequences(
+    typst_source: &str,
+    images: &[ImageAsset],
+) -> Result<Vec<Vec<PaintedPrimitive>>, ConvertError> {
     use typst::layout::{Frame, FrameItem, Transform};
     use typst::visualize::Geometry;
 
@@ -680,6 +706,7 @@ pub(crate) fn compiled_paint_sequence(
                 FrameItem::Image(_, size, _) => out.push(PaintedPrimitive {
                     kind: PaintedKind::Image,
                     bounds: transformed_bounds(at, size.x.to_pt(), size.y.to_pt()),
+                    stroke: None,
                 }),
                 FrameItem::Shape(shape, _) => {
                     let bounds: (f64, f64, f64, f64) = match &shape.geometry {
@@ -711,6 +738,12 @@ pub(crate) fn compiled_paint_sequence(
                     out.push(PaintedPrimitive {
                         kind: PaintedKind::Shape,
                         bounds,
+                        stroke: shape.stroke.as_ref().map(|stroke| PaintedStroke {
+                            thickness_pt: stroke.thickness.to_pt(),
+                            cap: stroke.cap,
+                            join: stroke.join,
+                            miter_limit: stroke.miter_limit.get(),
+                        }),
                     });
                 }
                 FrameItem::Text(text) => {
@@ -722,6 +755,7 @@ pub(crate) fn compiled_paint_sequence(
                     let bottom: (f64, f64) = place(at, width, size / 4.0);
                     out.push(PaintedPrimitive {
                         kind: PaintedKind::Text,
+                        stroke: None,
                         bounds: (
                             top.0.min(bottom.0),
                             top.1.min(bottom.1),
@@ -742,15 +776,15 @@ pub(crate) fn compiled_paint_sequence(
         ConvertError::Render(format!("Typst compilation failed: {}", messages.join("; ")))
     })?;
     super::powerpoint_line_paint::adjust_paragraph_marks(&mut document);
-    let page = document.pages.get(page_index).ok_or_else(|| {
-        ConvertError::Render(format!(
-            "page {page_index} is past the document's {} pages",
-            document.pages.len()
-        ))
-    })?;
-    let mut painted: Vec<PaintedPrimitive> = Vec::new();
-    collect(&page.frame, Transform::identity(), &mut painted);
-    Ok(painted)
+    Ok(document
+        .pages
+        .iter()
+        .map(|page| {
+            let mut painted: Vec<PaintedPrimitive> = Vec::new();
+            collect(&page.frame, Transform::identity(), &mut painted);
+            painted
+        })
+        .collect())
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]

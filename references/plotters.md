@@ -12,7 +12,7 @@ Pure Rust drawing library for data visualization. Supports SVG, PNG, and bitmap 
 ## Why relevant
 
 - Most mature Rust charting library. Could render OOXML chart data (bar, line, pie, scatter) into SVG/PNG for embedding in Typst output.
-- Currently office2pdf renders charts as fallback data tables — plotters could enable actual chart rendering.
+- office2pdf renders supported chart families with Typst primitives; unsupported families retain fallback data tables. Plotters is an alternative backend reference.
 - Pure Rust, WASM-compatible = aligns with our no-external-dependency philosophy.
 
 ## When to consult

@@ -851,6 +851,25 @@ pub struct ChartMarkerStyle {
     pub line: ChartLine,
 }
 
+/// DrawingML's geometry at the endpoint of an open stroke.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LineCap {
+    Flat,
+    Round,
+    Square,
+}
+
+/// Geometry declared by a chart series' own `c:spPr/a:ln`.
+/// Missing properties remain absent; related chart-style inheritance is separate.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ChartStrokeGeometry {
+    pub cap: Option<LineCap>,
+    pub join: Option<LineJoin>,
+    /// Extension relative to line width; native Excel uses 8 for `a:miter`
+    /// without `lim`. Round and bevel joins have no miter limit.
+    pub miter_limit: Option<f64>,
+}
+
 /// A data series within a chart.
 #[derive(Debug, Clone)]
 pub struct ChartSeries {
@@ -914,6 +933,8 @@ pub struct ChartSeries {
     /// mixed-plot polylines and the legend key that samples them. A bar
     /// series' `<a:ln>` is its outline, which is a separate thing.
     pub line_width_pt: Option<f64>,
+    /// Direct series cap/join geometry, shared by the plotted line and legend.
+    pub line_geometry: ChartStrokeGeometry,
 }
 
 impl ChartSeries {
