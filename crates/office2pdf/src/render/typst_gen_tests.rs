@@ -241,6 +241,10 @@ mod fixed_page_tests;
 #[path = "typst_gen_fixed_page_textbox_tests.rs"]
 mod fixed_page_textbox_tests;
 
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "typst_gen_powerpoint_kerning_tests.rs"]
+mod powerpoint_kerning_tests;
+
 // ── SheetPage codegen tests ──────────────────────────────────────────
 
 /// Helper to create a SheetPage.

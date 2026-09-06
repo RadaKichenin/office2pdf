@@ -443,7 +443,17 @@ pub(crate) fn compiled_text_runs(
     typst_source: &str,
     page_index: usize,
 ) -> Result<Vec<PlacedTextRun>, ConvertError> {
-    compiled_text_runs_with_line_seating(typst_source, page_index, true)
+    compiled_text_runs_with_line_seating(typst_source, page_index, true, &[])
+}
+
+/// Inspect placement with caller-provided faces, independent of host fonts.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+pub(crate) fn compiled_text_runs_with_fonts(
+    typst_source: &str,
+    page_index: usize,
+    fonts: &[Font],
+) -> Result<Vec<PlacedTextRun>, ConvertError> {
+    compiled_text_runs_with_line_seating(typst_source, page_index, true, fonts)
 }
 
 /// Inspect Typst's fractional line advances before the completed-frame pass.
@@ -453,7 +463,7 @@ pub(crate) fn compiled_text_runs_before_line_seating(
     typst_source: &str,
     page_index: usize,
 ) -> Result<Vec<PlacedTextRun>, ConvertError> {
-    compiled_text_runs_with_line_seating(typst_source, page_index, false)
+    compiled_text_runs_with_line_seating(typst_source, page_index, false, &[])
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
@@ -461,6 +471,7 @@ fn compiled_text_runs_with_line_seating(
     typst_source: &str,
     page_index: usize,
     apply_line_seating: bool,
+    fonts: &[Font],
 ) -> Result<Vec<PlacedTextRun>, ConvertError> {
     use typst::layout::{Frame, FrameItem, Transform};
 
@@ -487,7 +498,7 @@ fn compiled_text_runs_with_line_seating(
     // The same font set the conversion pipeline compiles with, so a probe sees
     // the faces `font_hhea_ascender_em` measured rather than a substitute.
     let font_paths: &[PathBuf] = super::font_context::default_font_search_paths();
-    let world = MinimalWorld::new(typst_source, &[], font_paths);
+    let world = MinimalWorld::new_with_in_memory_fonts(typst_source, &[], font_paths, fonts);
     let warned = typst::compile::<typst::layout::PagedDocument>(&world);
     let mut document = warned.output.map_err(|errors| {
         let messages: Vec<String> = errors.iter().map(|e| e.message.to_string()).collect();
