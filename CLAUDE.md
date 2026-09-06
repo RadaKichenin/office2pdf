@@ -89,7 +89,7 @@
 - **Use git worktrees** for all branch work. Do not use `git checkout`/`git switch` in the main repo.
   - Create: `git worktree add ../<repo-name>-<branch-name> -b <type>/<short-description>`
   - Work and push from inside the worktree.
-  - Do not delete worktrees immediately after task completion — remove only when starting new work or upon user confirmation.
+  - Once the task is verified complete, its PR is merged, and exact-merge CI passes on `main`, remove its worktree and local/remote topic branches in the same turn. Follow the preservation checks in `AGENTS.md`; no additional confirmation is needed.
 
 ## PR Merge Procedure
 
@@ -101,7 +101,7 @@ Follow all steps in order:
 4. Wait for CI to pass: `gh pr checks <number> --watch`. Abort if tests fail.
 5. Final code review via `gh pr diff <number>` — check for debug statements, hardcoded paths, credentials, unused imports.
 6. Merge: `gh pr merge <number> --merge`. **Never use `--delete-branch`** (worktree depends on the branch).
-7. Return to main repo, `git pull` to sync.
+7. Return to main repo, `git pull` to sync; verify completion and CI on the exact merge commit, then preserve required evidence and shared build data outside the worktree.
 8. Remove worktree: `git worktree remove ../<repo-name>-<branch-name>`
 9. Delete local branch: `git branch -d <branch-name>`
 10. Delete remote branch: `git push origin --delete <branch-name>`
