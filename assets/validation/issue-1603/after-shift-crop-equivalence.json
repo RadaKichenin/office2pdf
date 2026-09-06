@@ -1,0 +1,47 @@
+{
+  "base-1": {
+    "same": [],
+    "changed": []
+  },
+  "base-2": {
+    "same": [],
+    "changed": []
+  },
+  "unscaled-1": {
+    "same": [],
+    "changed": []
+  },
+  "unscaled-2": {
+    "same": [
+      "unscaled-page-2/page-2-shift-03-filloutasmuchasyoucanatthe.png",
+      "unscaled-page-2/page-2-shift-05-beginningofeachnewyear-enter.png",
+      "unscaled-page-2/page-2-shift-06-namesoffamilyandfriends-select.png",
+      "unscaled-page-2/page-2-shift-08-giftoccasion-selectmonthof.png",
+      "unscaled-page-2/page-2-shift-10-event-andtypeinhowmuchyou.png",
+      "unscaled-page-2/page-2-shift-12-wanttospend-eachpersonmay.png",
+      "unscaled-page-2/page-2-shift-14-appearmultipletimeswithinthe.png",
+      "unscaled-page-2/page-2-shift-16-tableforeachdifferentoccasion.png",
+      "unscaled-page-2/page-2-shift-17-birthday-holiday-shower-etc-40.png",
+      "unscaled-page-2/page-2-shift-20-budgetedspentonline.png"
+    ],
+    "changed": [
+      "unscaled-page-2/page-2-shift-01-200.png",
+      "unscaled-page-2/page-2-shift-02-180.png",
+      "unscaled-page-2/page-2-shift-04-160.png",
+      "unscaled-page-2/page-2-shift-07-140.png",
+      "unscaled-page-2/page-2-shift-09-120.png",
+      "unscaled-page-2/page-2-shift-11-100.png",
+      "unscaled-page-2/page-2-shift-13-80.png",
+      "unscaled-page-2/page-2-shift-15-60.png",
+      "unscaled-page-2/page-2-shift-18-0.png",
+      "unscaled-page-2/page-2-shift-19-birthdaybudgetholidaybudgetothergiftbudgetamount.png"
+    ]
+  },
+  "unscaled-3": {
+    "same": [
+      "unscaled-page-3/page-3-shift-01-delivered-notes.png",
+      "unscaled-page-3/page-3-shift-02-yes.png"
+    ],
+    "changed": []
+  }
+}

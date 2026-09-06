@@ -1,0 +1,27 @@
+{
+  "base_commit": "33b71cafb28650e060796aa05b970c5cf77468f3",
+  "cli_sha256": "5f353ec20c94992751584f5b54e6ffe0b42eb40a991d843a56e031605ea7ce81",
+  "font_paths": [
+    "/Applications/Microsoft Excel.app/Contents/Resources/DFonts"
+  ],
+  "fresh_native_unscaled_all_page_traces_identical": true,
+  "fixtures": {
+    "base": {
+      "source": "25f5dc75dab19ea12042979a61842314ddc226e3e45d447e36b2a2a104112613",
+      "native": "3fbaf583d4f56200db7f81943a0f6e712d6da25ea8701395bcde4131a9a751df",
+      "before": "9040fa566c4fa7a7a65c86571471aad5b0941c7962e2411051a87e9d36e48449",
+      "after": "04462e1a0dd16f37f95e48ece931b858ffbbb01c42156cc461de9e750292273b",
+      "layout_exit": 1,
+      "text_layer_exit": 1
+    },
+    "unscaled": {
+      "source": "af4160ca276c3add9e3100f80c8df7156afbdf6ec7a0090161e015a7ccf5d5cb",
+      "native": "867996e4abb6bae8b6cf110c875082f6b5b2e973baca838cc7e9ccb7ad9625d0",
+      "before": "2df2ad0f8f38a18428c67428225742edc250d900d427d1167c4494a4dfc70d39",
+      "after": "75d6fabf630584ab7220f0552d46fe315ce90950c55db7e49ab0e298ef8f2fe1",
+      "layout_exit": 1,
+      "text_layer_exit": 1
+    }
+  },
+  "state": "Candidate evidence; no merged fix is claimed."
+}

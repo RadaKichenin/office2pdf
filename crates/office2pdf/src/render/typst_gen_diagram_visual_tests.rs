@@ -7075,6 +7075,110 @@ fn an_excel_bar_legend_key_is_the_flat_bar_excel_draws() {
     }
 }
 
+/// Fresh native Gift Budget exports vary only the legend size. Heights are
+/// measured in printed points at the workbook's 0.82 fit scale (#1603).
+#[test]
+fn segoe_ui_legend_keys_retain_native_heights_without_the_office_font() {
+    for (size, bold, native_height) in [
+        (6.0, false, 2.9447),
+        (9.0, false, 4.4169),
+        (12.0, false, 5.8892),
+        (18.0, false, 8.8357),
+        (9.0, true, 4.4169),
+    ] {
+        let mut chart = excel_bottom_legend_chart("Segoe UI", size);
+        chart.legend_text_style.bold = Some(bold);
+        let source = chart_source(chart);
+        let keys = emitted_legend_key_boxes(&source);
+        assert_eq!(keys.len(), 2);
+        for (width, height, _) in keys {
+            assert!((width * 0.82 - 15.744).abs() < 0.01);
+            assert!(
+                (height * 0.82 - native_height).abs() < 0.01,
+                "{size}pt Segoe UI: native key height {native_height}, got {}",
+                height * 0.82
+            );
+        }
+    }
+}
+
+/// Native after-export plot getters from the same workbook, with only its
+/// value-axis size varied. The getter excludes the 4pt chart-area inset.
+#[test]
+fn segoe_ui_axis_gutters_preserve_native_plot_width_without_the_office_font() {
+    let frame = (1015.977952755906, 307.973236083984);
+    for (size, bold, inside_left, native_width) in [
+        (6.0, false, 21.588503937008, 979.389448818898),
+        (9.0, false, 31.121574803150, 969.856377952756),
+        (12.0, false, 40.676614173228, 960.301338582677),
+        (18.0, false, 59.767637795276, 941.210314960630),
+        (9.0, true, 32.421732283465, 968.556220472441),
+    ] {
+        let mut chart = excel_bottom_legend_chart("Segoe UI", 9.0);
+        chart.value_axis_text_style.size_pt = Some(size);
+        chart.value_axis_text_style.bold = Some(bold);
+        chart.value_axis_number_format = Some("\\$#,##0".to_string());
+        chart.series[0].values = vec![180.0];
+        let (left, _, right, _) = axis_plot_rect(&chart, frame, false);
+        assert!(
+            (left - (inside_left + 4.0)).abs() < 0.015,
+            "{size}pt Segoe UI: native plot left {}, got {left}",
+            inside_left + 4.0
+        );
+        assert!(
+            (right - left - native_width).abs() < 0.015,
+            "{size}pt Segoe UI: native plot width {native_width}, got {}",
+            right - left
+        );
+    }
+}
+
+/// Pin the actual filled-key rectangles after parsing and compiling the public
+/// workbook, including their baseline placement rather than only markup size.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn gift_budget_compiled_legend_keys_match_native_bounds() {
+    let data = include_bytes!("../../../../tests/fixtures/xlsx/issue_1603_gift_budget.xlsx");
+    let (doc, _) = crate::parser::Parser::parse(
+        &crate::parser::xlsx::XlsxParser,
+        data,
+        &crate::config::ConvertOptions::default(),
+    )
+    .expect("the public gift-budget fixture parses");
+    let output = generate_typst(&doc).unwrap();
+    let pages = crate::render::pdf::compiled_page_paint_sequences(&output.source, &output.images)
+        .expect("the gift-budget fixture compiles");
+    assert_eq!(pages.len(), 2);
+    let keys: Vec<_> = pages[1]
+        .iter()
+        .filter(|paint| {
+            let (left, top, right, bottom) = paint.bounds;
+            paint.rectangle_fill.is_some()
+                && (right - left - 15.744).abs() < 0.01
+                && top > 350.0
+                && bottom < 365.0
+        })
+        .collect();
+    let native = [
+        (548.2121, 355.3613, 563.9561, 359.7782),
+        (631.7659, 355.3613, 647.5099, 359.7782),
+        (713.1958, 355.3613, 728.9398, 359.7782),
+    ];
+    assert_eq!(keys.len(), native.len());
+    for (key, (left, top, right, bottom)) in keys.iter().zip(native) {
+        let actual = key.bounds;
+        assert!(
+            (actual.0 - left).abs() < 0.5
+                && (actual.1 - top).abs() < 0.5
+                && (actual.2 - right).abs() < 0.5
+                && (actual.3 - bottom).abs() < 0.5,
+            "native key {:?}, actual {actual:?}",
+            (left, top, right, bottom)
+        );
+        assert!(((actual.3 - actual.1) - (bottom - top)).abs() < 0.01);
+    }
+}
+
 #[test]
 fn an_excel_chartsheet_legend_key_scales_as_a_square_with_its_text() {
     // Excel for Mac 16.100 gives the `any_sheets.xlsx` chartsheet a native

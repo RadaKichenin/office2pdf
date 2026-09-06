@@ -1554,8 +1554,8 @@ const PPTX_ROTATED_CATEGORY_LABEL_X_INSET_EM: f64 = 0.279;
 ///   SHA-256
 ///   `0924698340c40827289297ad9b9c5d36d3f91d2e7a7e75e76ae4b8d82c46616a`.
 ///
-/// The arrays below are the command's `advances` output. The renderer still
-/// measures every other family normally.
+/// The arrays below are the command's `advances` output. Segoe UI is recorded
+/// separately below; the renderer measures uncalibrated families normally.
 const CALIBRI_CHART_ADVANCE: [u16; 95] = [
     463, 667, 821, 1020, 1038, 1464, 1397, 452, 621, 621, 1020, 1020, 511, 627, 517, 791, 1038,
     1038, 1038, 1038, 1038, 1038, 1038, 1038, 1038, 1038, 548, 548, 1020, 1020, 1020, 949, 1831,
@@ -1574,7 +1574,29 @@ const AVENIR_NEXT_LT_PRO_CHART_ADVANCE: [u16; 95] = [
     1300, 737, 909, 649, 1190, 999, 1528, 991, 999, 905, 614, 455, 614, 1364,
 ];
 
-/// The `hhea` ascent and descent of the same two faces, in their shared
+/// Segoe UI Regular and Bold, Version 5.67;O365. Source hashes and extraction
+/// commands are recorded in `assets/validation/issue-1603/font-provenance.json`.
+/// These advances keep chart geometry independent of whether Office's cloud
+/// font or the bundled Selawik substitute is available (#1603).
+const SEGOE_UI_CHART_ADVANCE: [u16; 95] = [
+    561, 582, 803, 1210, 1104, 1676, 1639, 471, 618, 618, 854, 1401, 444, 819, 444, 798, 1104,
+    1104, 1104, 1104, 1104, 1104, 1104, 1104, 1104, 1104, 444, 444, 1401, 1401, 1401, 918, 1956,
+    1321, 1174, 1268, 1436, 1036, 1000, 1405, 1454, 545, 731, 1188, 964, 1839, 1532, 1544, 1147,
+    1544, 1225, 1088, 1073, 1407, 1272, 1913, 1208, 1132, 1168, 618, 776, 618, 1401, 850, 549,
+    1042, 1204, 946, 1206, 1071, 641, 1206, 1159, 496, 496, 1018, 496, 1764, 1159, 1200, 1204,
+    1206, 712, 869, 694, 1159, 981, 1480, 940, 991, 926, 618, 490, 618, 1401,
+];
+
+const SEGOE_UI_BOLD_CHART_ADVANCE: [u16; 95] = [
+    565, 670, 1010, 1213, 1178, 1776, 1740, 600, 756, 756, 932, 1448, 555, 828, 555, 908, 1178,
+    1178, 1178, 1178, 1178, 1178, 1178, 1178, 1178, 1178, 555, 555, 1448, 1448, 1448, 897, 1954,
+    1440, 1313, 1278, 1510, 1090, 1065, 1456, 1569, 649, 912, 1329, 1047, 1960, 1618, 1553, 1258,
+    1553, 1337, 1148, 1200, 1481, 1366, 2058, 1342, 1243, 1243, 756, 893, 756, 1448, 850, 643,
+    1102, 1270, 983, 1268, 1108, 785, 1268, 1233, 582, 582, 1145, 582, 1876, 1239, 1252, 1270,
+    1268, 815, 901, 797, 1239, 1110, 1633, 1131, 1102, 981, 756, 668, 756, 1448,
+];
+
+/// The `hhea` ascent and descent of the calibrated faces, in their shared
 /// 2048-unit em, as `(ascent, descent)` with the descent positive.
 ///
 /// Read out of the very font files the advance tables above were extracted
@@ -1585,6 +1607,9 @@ const AVENIR_NEXT_LT_PRO_CHART_ADVANCE: [u16; 95] = [
 /// resolved and move the plot with it.
 const CALIBRI_CHART_LINE_METRICS_EM: (f64, f64) = (1950.0 / 2048.0, 550.0 / 2048.0);
 const AVENIR_NEXT_LT_PRO_CHART_LINE_METRICS_EM: (f64, f64) = (1972.0 / 2048.0, 512.0 / 2048.0);
+
+/// Both Segoe UI faces above have this bare line box and zero line gap.
+const SEGOE_UI_CHART_LINE_METRICS_EM: (f64, f64) = (2210.0 / 2048.0, 514.0 / 2048.0);
 
 /// The `hhea` ascent and descent of `family`, in em units and with the descent
 /// positive, in the source Office face where one is part of the calibration.
@@ -1605,14 +1630,18 @@ pub(super) fn chart_face_line_metrics_em(family: &str, bold: bool) -> Option<(f6
 /// Keep all three metrics on the calibrated source face; a substitute's gap
 /// cannot be combined with the source face's ascent/descent (#1568).
 fn calibrated_chart_line_metrics_em(family: &str, bold: bool) -> Option<(f64, f64, f64)> {
-    if bold {
-        return None;
-    }
     let normalized: String = family
         .chars()
         .filter(|c| c.is_ascii_alphanumeric())
         .flat_map(char::to_lowercase)
         .collect();
+    if normalized == "segoeui" {
+        let (ascent, descent) = SEGOE_UI_CHART_LINE_METRICS_EM;
+        return Some((ascent, descent, 0.0));
+    }
+    if bold {
+        return None;
+    }
     let (ascent, descent) = match normalized.as_str() {
         "calibri" => CALIBRI_CHART_LINE_METRICS_EM,
         "avenirnextltpro" => AVENIR_NEXT_LT_PRO_CHART_LINE_METRICS_EM,
@@ -1629,14 +1658,12 @@ fn chart_text_advance_em(family: &str, bold: bool, text: &str) -> Option<f64> {
         .filter(|character| character.is_ascii_alphanumeric())
         .flat_map(char::to_lowercase)
         .collect();
-    let native: Option<&[u16; 95]> = if !bold {
-        match normalized.as_str() {
-            "calibri" => Some(&CALIBRI_CHART_ADVANCE),
-            "avenirnextltpro" => Some(&AVENIR_NEXT_LT_PRO_CHART_ADVANCE),
-            _ => None,
-        }
-    } else {
-        None
+    let native: Option<&[u16; 95]> = match (normalized.as_str(), bold) {
+        ("calibri", false) => Some(&CALIBRI_CHART_ADVANCE),
+        ("avenirnextltpro", false) => Some(&AVENIR_NEXT_LT_PRO_CHART_ADVANCE),
+        ("segoeui", false) => Some(&SEGOE_UI_CHART_ADVANCE),
+        ("segoeui", true) => Some(&SEGOE_UI_BOLD_CHART_ADVANCE),
+        _ => None,
     };
     if let Some(advances) = native {
         let units: Option<u32> = text.chars().try_fold(0_u32, |sum, character| {

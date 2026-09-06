@@ -1,0 +1,47 @@
+{
+  "status": "All five candidate pages visually reviewed; every reported raster cluster has an explicit disposition. This is not a claim that all workbook defects are fixed.",
+  "dpi": 300,
+  "fine_threshold_pt": 0.5,
+  "base_commit": "33b71cafb28650e060796aa05b970c5cf77468f3",
+  "cluster_count": 368,
+  "pixel_identical_prior_reviewed_crops": 335,
+  "new_cluster_crops_reviewed": 33,
+  "changed_shift_crops_reviewed": 10,
+  "unchanged_shift_crops": 12,
+  "checklist": {
+    "page_count_order": "Both exporters have 2 fitted pages and 3 unscaled pages, with the instruction page followed by worksheet tiles.",
+    "presence": "Chart continuation is absent on unscaled page 3 and overflows page 2 (#1598). Table, gift photo and sidebar elements are retained.",
+    "position_size": "Original filled-key bounds pass 0.5pt and heights pass 0.001pt. Unscaled legend retains the #1607 baseline offset. Column widths #1543 and centered cells #1600 remain. Plot markers #1577 and vector legend marker #1618 remain.",
+    "rotation_flip": "No changed rotation or reflection in the chart, table or gift photograph.",
+    "fill": "Series colors, stack order, occasion cells and sidebar colors retained. Used-range title-fill clipping remains #1605.",
+    "stroke": "Grey solid major lines and teal series stroke remain. Zero-axis overpaint remains #1604; unscaled vertical grid positions #1607; right-edge clipping #1598.",
+    "text_content": "Before/current normalized extraction is identical in both cases. Native/current ordering and whitespace differ; missing last-tile chart labels remain #1598.",
+    "font_emphasis": "Regular titles and body runs retain weight; Note and white occasion names retain bold. No independent italic/underline deviation identified in these pages.",
+    "text_color": "Purple body/sidebar, grey chart labels, blue-grey headers and white occasion names retained.",
+    "alignment_spacing": "Fitted instruction wraps unchanged. Wrapped unscaled sidebar starts too high (#1606); centered worksheet cells #1600; chart content #1607.",
+    "clipping": "Unscaled chart tile clipping #1598 and used-range fill clipping #1605 remain."
+  },
+  "hairline_inventory": [
+    "11 horizontal major gridlines including the zero axis; solid grey, no newly missing dash pattern; unscaled positions #1607 and continuation #1598.",
+    "Teal series stroke and legend sample retained; coincident axis overpaint #1604."
+  ],
+  "vision_evidence": [
+    "Full-page GT/output overviews and whole-page differences for fitted pages 1/2 and unscaled pages 2/3; identical instruction page reused.",
+    "All 33 new exact cluster crops, including 5 tall full-scale chart panels and all thin line panels, inspected with GT/output/diff.",
+    "10 changed matched shift crops inspected; original and unscaled native/before/after legend crops inspected.",
+    "6pt legend native/output crop inspected; row width #1616, marker diameter #1617 and vector sample placement #1618 are separate."
+  ],
+  "remaining_issues": [
+    1543,
+    1577,
+    1598,
+    1600,
+    1604,
+    1605,
+    1606,
+    1607,
+    1616,
+    1617,
+    1618
+  ]
+}

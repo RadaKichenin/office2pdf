@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "groups": [
+    {
+      "kind": "accepted-rendering",
+      "class": "glyph-edge-rasterization",
+      "note": "Current GT/output/diff crops have identical decoded pixels to the individually reviewed main 33b71caf baseline crops (after-crop-equivalence.json). Re-audited on the current #1599 candidate using full pages, matched cluster crops and diff panels. Exact glyph-edge clusters reviewed in the matched title/sidebar/table/footer crops; content and emphasis are preserved. Separate individual centered-cell x shifts are tracked in #1600 (base-table-cell-positions.json), even where their fragmented pixels do not reach this material-cluster floor. A combined trace-line pass is not proof that every cell is aligned.",
+      "cluster_ids": [
+        "p2-7be815f58535",
+        "p2-c805a889d0bd",
+        "p2-36091b13cbf4",
+        "p2-3247d8d7eb4a",
+        "p2-311cdf4e6b8f",
+        "p2-0dad53b5660b",
+        "p2-29ffdc38e949",
+        "p2-678f7bbc58e5",
+        "p2-26e96a2b4c67",
+        "p2-860d654b3e80",
+        "p2-57d2ddf8efee",
+        "p2-746a6be331d7",
+        "p2-1f732ae9957b",
+        "p2-36e9ceadef5f",
+        "p2-1df39cabf3ab",
+        "p2-32b75b83cba9",
+        "p2-b61723c380e7",
+        "p2-42242f1e7abc",
+        "p2-99048268f087",
+        "p2-876ade0766d4",
+        "p2-3d213c5e7ad9",
+        "p2-3c50fb3d7164",
+        "p2-9721e29ce2cd",
+        "p2-0c2cfcf6229d",
+        "p2-f4c7fa8b5afb",
+        "p2-97b15d1c11b4",
+        "p2-c5c142cd12a9",
+        "p2-22708aa5dbd6",
+        "p2-0c9e7c228fe3",
+        "p2-dc058d2d009f",
+        "p2-1efcf85c858d",
+        "p2-6bbaec0e4a6d"
+      ]
+    },
+    {
+      "kind": "issue",
+      "issue": "#1604",
+      "note": "Both exact clusters show the grey zero-axis overpainting the teal line; circular marker centers retain #1577 placement differences.",
+      "cluster_ids": [
+        "p2-1e61840817e5",
+        "p2-27b529a49b87"
+      ]
+    }
+  ]
+}

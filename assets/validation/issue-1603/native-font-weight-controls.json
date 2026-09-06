@@ -1,0 +1,47 @@
+{
+  "legend_bold_native_key_bounds_pt": [
+    [
+      539.3795,
+      355.3613,
+      555.1235,
+      359.7782
+    ],
+    [
+      627.9716,
+      355.3613,
+      643.7156,
+      359.7782
+    ],
+    [
+      713.8453,
+      355.3613,
+      729.5893,
+      359.7782
+    ]
+  ],
+  "axis_bold_native_inside_left_pt": 32.421732283465,
+  "axis_bold_native_inside_width_pt": 968.556220472441,
+  "source_pdf_hashes": {
+    "base_all_page_traces_identical": true,
+    "records": {
+      "base": {
+        "mode": null,
+        "size_pt": 9,
+        "source_sha256": "cfe2c3d9c6c77d19061319dce3ec357c9c58ca44949dc5702652d58545626ed9",
+        "pdf_sha256": "e266e052eaa92fc23d879bc5786098134d9b31de08755efd333de01510558ad6"
+      },
+      "axis_bold": {
+        "mode": "axis",
+        "size_pt": 9,
+        "source_sha256": "fe4a5d9e4f61ff12441abc63c4f3198847385c458fe4ff13c895c310655bfd89",
+        "pdf_sha256": "cb96d2ed404ed87d6798a9c44e38056250979937cc212cc56e475a4136d5763e"
+      },
+      "legend_bold": {
+        "mode": "legend",
+        "size_pt": 9,
+        "source_sha256": "a2d613b077d96a9cf06df50ac7109596f3d553aa1d6597ec3cd82f58944e7c2b",
+        "pdf_sha256": "f6ab80229a9648fa47446f3a5603a91ab66b1feb7216762839d01bdf40a40759"
+      }
+    }
+  }
+}

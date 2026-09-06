@@ -2352,7 +2352,7 @@ pub(super) fn word_cell_line_box(
     // Select that advance with the workbook's declared family even when the
     // line-box metrics above come from the face office2pdf actually paints:
     // Excel's Segoe UI pitch does not become Selawik's just because a host
-    // needs the bundled metric-compatible substitute (issue #1498).
+    // needs the bundled Selawik substitute (issue #1498).
     // Excel evaluates that advance at the size the cell *declares* and prints
     // it through the sheet's `fitToWidth` scale, which the parser has already
     // folded into `font_size`; the scaled advance is no whole number of points.
