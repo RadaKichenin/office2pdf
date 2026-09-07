@@ -29,6 +29,11 @@ pub(crate) struct FontSearchContext {
     /// needs this: the declared family leads the font list even for a script
     /// it cannot write, and Typst falls through to the next entry per glyph.
     family_scripts: HashMap<String, u8>,
+    /// The OS/2 weight classes each available family ships a face at. A
+    /// request naming a weight member — `Calibri Light`, `Segoe UI Semibold`
+    /// — is only that member where the base family actually holds a face at
+    /// the weight the name states (issue #1286).
+    family_weights: HashMap<String, HashSet<u16>>,
     /// Filesystem-free faces available to WASM metric lookups while codegen is
     /// running under this context.
     in_memory_book: typst::text::FontBook,
@@ -62,6 +67,18 @@ impl FontSearchContext {
         self.family_scripts
             .get(&normalize_family_name(family))
             .is_some_and(|scripts| scripts & script_bit(script) != 0)
+    }
+
+    /// Whether `family` ships a face at exactly `weight`.
+    ///
+    /// Exact because the font book indexes a weight member under its base
+    /// family: `calibril.ttf` is `Calibri` at 300, and asking whether that
+    /// family holds a 300 face is the only way to ask whether the light member
+    /// exists at all (issue #1286).
+    pub(crate) fn has_face_weight(&self, family: &str, weight: typst::text::FontWeight) -> bool {
+        self.family_weights
+            .get(&normalize_family_name(family))
+            .is_some_and(|weights| weights.contains(&weight.to_number()))
     }
 
     pub(crate) fn knows_script_coverage(&self, family: &str) -> bool {
@@ -117,6 +134,7 @@ impl FontSearchContext {
             available_families,
             italic_families,
             family_scripts,
+            family_weights,
         } = index_families_from_book(&self.in_memory_book);
         self.user_families
             .extend(available_families.iter().cloned());
@@ -124,6 +142,12 @@ impl FontSearchContext {
         self.italic_families.extend(italic_families);
         for (family, scripts) in family_scripts {
             *self.family_scripts.entry(family).or_default() |= scripts;
+        }
+        for (family, weights) in family_weights {
+            self.family_weights
+                .entry(family)
+                .or_default()
+                .extend(weights);
         }
         self
     }
@@ -169,6 +193,7 @@ impl FontSearchContext {
                 .collect(),
             italic_families: HashSet::new(),
             family_scripts: HashMap::new(),
+            family_weights: HashMap::new(),
             in_memory_book: typst::text::FontBook::new(),
             in_memory_fonts: Vec::new(),
             last_resort_font_family: None,
@@ -275,6 +300,7 @@ pub(crate) fn resolve_font_search_context(user_font_paths: &[PathBuf]) -> FontSe
         available_families,
         italic_families,
         family_scripts,
+        family_weights,
     } = index_families_from_paths(&search_paths, true);
 
     debug!(
@@ -293,6 +319,7 @@ pub(crate) fn resolve_font_search_context(user_font_paths: &[PathBuf]) -> FontSe
         user_families,
         italic_families,
         family_scripts,
+        family_weights,
         in_memory_book: typst::text::FontBook::new(),
         in_memory_fonts: Vec::new(),
         last_resort_font_family: None,
@@ -327,6 +354,7 @@ struct FamilyIndex {
     available_families: HashSet<String>,
     italic_families: HashSet<String>,
     family_scripts: HashMap<String, u8>,
+    family_weights: HashMap<String, HashSet<u16>>,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -350,6 +378,7 @@ fn index_families_from_book(book: &typst::text::FontBook) -> FamilyIndex {
         available_families: HashSet::new(),
         italic_families: HashSet::new(),
         family_scripts: HashMap::new(),
+        family_weights: HashMap::new(),
     };
     for (family, infos) in book.families() {
         let key: String = normalize_family_name(family);
@@ -372,6 +401,13 @@ fn index_families_from_book(book: &typst::text::FontBook) -> FamilyIndex {
             })
             .fold(0, |bits, (script, _)| bits | script_bit(*script));
         index.family_scripts.insert(key.clone(), scripts);
+        index.family_weights.insert(
+            key.clone(),
+            infos
+                .iter()
+                .map(|info| info.variant.weight.to_number())
+                .collect(),
+        );
         index.available_families.insert(key);
     }
     index
@@ -445,6 +481,40 @@ where
         }
     }
     canonicalized
+}
+
+/// Faces built for tests from the tracked Noto Serif, so a test can index a
+/// real font book without depending on what the host installs.
+#[cfg(test)]
+pub(crate) mod test_faces {
+    use typst::foundations::Bytes;
+    use typst::text::Font;
+
+    /// The tracked Noto Serif face with its OS/2 `usWeightClass` rewritten.
+    ///
+    /// Typst indexes a face under its trimmed family name at the weight its
+    /// OS/2 table states, so the rewritten face lands as `Noto Serif` at
+    /// `weight_class` — the shape of `calibril.ttf`, which the book registers
+    /// as `Calibri` at 300 and never as `Calibri Light` (issue #1286).
+    pub(crate) fn noto_serif_at_weight(weight_class: u16) -> Font {
+        let mut bytes: Vec<u8> = include_bytes!("../../fonts/NotoSerif-Regular.ttf").to_vec();
+        let table_count = usize::from(u16::from_be_bytes([bytes[4], bytes[5]]));
+        let os2_offset: usize = (0..table_count)
+            .map(|record| 12 + record * 16)
+            .find(|&record| &bytes[record..record + 4] == b"OS/2")
+            .map(|record| {
+                u32::from_be_bytes([
+                    bytes[record + 8],
+                    bytes[record + 9],
+                    bytes[record + 10],
+                    bytes[record + 11],
+                ]) as usize
+            })
+            .expect("a TrueType face carries an OS/2 table");
+        // `OS/2`: version (2 bytes), xAvgCharWidth (2), usWeightClass (2).
+        bytes[os2_offset + 4..os2_offset + 6].copy_from_slice(&weight_class.to_be_bytes());
+        Font::new(Bytes::new(bytes), 0).expect("the rewritten face parses")
+    }
 }
 
 #[cfg(test)]

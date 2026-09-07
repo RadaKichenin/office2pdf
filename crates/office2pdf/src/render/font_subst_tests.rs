@@ -1628,3 +1628,117 @@ fn a_brand_token_only_counts_at_the_start_of_the_family() {
     assert_eq!(substitutes("Old Aptos"), None);
     assert_eq!(substitutes("Aptosia"), None);
 }
+
+// --- Style-suffixed family names (issue #1286) ---
+
+use crate::render::font_context::test_faces::noto_serif_at_weight;
+
+fn in_memory_context(fonts: &[typst::text::Font]) -> FontSearchContext {
+    crate::render::font_context::resolve_font_search_context_from_fonts(fonts)
+}
+
+#[test]
+fn typographic_family_trims_the_suffixes_typst_trims() {
+    // Typst indexes every face under its name-table family with style
+    // suffixes trimmed, so a request has to be trimmed the same way before it
+    // can be compared with what the book holds.
+    assert_eq!(typographic_family("Calibri Light"), "Calibri");
+    assert_eq!(typographic_family("Segoe UI Semibold"), "Segoe UI");
+    assert_eq!(typographic_family("Pretendard ExtraBold"), "Pretendard");
+    assert_eq!(typographic_family("Pretendard Extra Bold"), "Pretendard");
+    assert_eq!(
+        typographic_family("Franklin Gothic Demi"),
+        "Franklin Gothic"
+    );
+    assert_eq!(typographic_family("Arial Narrow"), "Arial");
+    assert_eq!(typographic_family("Arial Black"), "Arial");
+    // No suffix, and a style word that is not at the end, stay whole.
+    assert_eq!(typographic_family("Calibri"), "Calibri");
+    assert_eq!(typographic_family("Malgun Gothic"), "Malgun Gothic");
+    assert_eq!(typographic_family("Blackadder ITC"), "Blackadder ITC");
+}
+
+#[test]
+fn a_weight_suffix_states_the_weight_of_the_member_it_names() {
+    use typst::text::FontWeight;
+    assert_eq!(
+        weight_stated_by_family_name("Calibri Light"),
+        Some(FontWeight::LIGHT)
+    );
+    assert_eq!(
+        weight_stated_by_family_name("Segoe UI Semibold"),
+        Some(FontWeight::SEMIBOLD)
+    );
+    assert_eq!(
+        weight_stated_by_family_name("Pretendard Extra Bold"),
+        Some(FontWeight::EXTRABOLD)
+    );
+    assert_eq!(
+        weight_stated_by_family_name("Franklin Gothic Medium"),
+        Some(FontWeight::MEDIUM)
+    );
+    assert_eq!(
+        weight_stated_by_family_name("Arial Black"),
+        Some(FontWeight::BLACK)
+    );
+    assert_eq!(
+        weight_stated_by_family_name("Segoe UI Bold"),
+        Some(FontWeight::BOLD)
+    );
+}
+
+#[test]
+fn a_family_name_stating_no_weight_suffix_states_no_weight() {
+    // A stretch suffix is not a weight, and a weight word that is not the
+    // trailing suffix names a family, not a member of one.
+    assert_eq!(weight_stated_by_family_name("Arial Narrow"), None);
+    assert_eq!(weight_stated_by_family_name("Calibri"), None);
+    assert_eq!(weight_stated_by_family_name("Blackadder ITC"), None);
+    assert_eq!(weight_stated_by_family_name("Lightning Sans"), None);
+}
+
+#[test]
+fn a_suffixed_family_is_available_where_the_base_family_ships_that_weight() {
+    // The book indexes the rewritten face as `Noto Serif` at 300; a request
+    // for `Noto Serif Light` is that face.
+    let context = in_memory_context(&[noto_serif_at_weight(300)]);
+    let available = with_font_search_context(Some(&context), || {
+        is_primary_font_available("Noto Serif Light")
+    });
+    assert!(
+        available,
+        "the light member is indexed under the base family"
+    );
+}
+
+#[test]
+fn a_suffixed_family_is_unavailable_where_the_base_family_lacks_that_weight() {
+    // Only the regular member is indexed, so nothing answers to the light
+    // request and the stated weight must stay unclaimed.
+    let context = in_memory_context(&[noto_serif_at_weight(400)]);
+    let available = with_font_search_context(Some(&context), || {
+        is_primary_font_available("Noto Serif Light")
+    });
+    assert!(!available, "no face at weight 300 is indexed");
+
+    let other_family = in_memory_context(&[noto_serif_at_weight(300)]);
+    let available = with_font_search_context(Some(&other_family), || {
+        is_primary_font_available("Noto Sans Light")
+    });
+    assert!(!available, "the base family itself is not indexed");
+}
+
+#[test]
+fn a_suffixed_request_paints_through_its_base_family() {
+    // Typst never finds a family called `Noto Serif Light`, so the stated
+    // weight can only land on the member it names if the base family follows
+    // the request in the paint chain.
+    let context = in_memory_context(&[noto_serif_at_weight(300)]);
+    let chain = with_font_search_context(Some(&context), || {
+        font_with_fallbacks_for_text("Noto Serif Light", "Heading")
+    });
+    assert!(
+        chain.starts_with("(\"Noto Serif Light\", \"Noto Serif\""),
+        "the base family must follow the suffixed request, got {chain}"
+    );
+}

@@ -26,8 +26,10 @@
 
 use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap};
+
 #[cfg(target_arch = "wasm32")]
 use std::path::PathBuf;
+use typst::text::FontWeight;
 
 use crate::ir::{
     Block, Document, FixedElementKind, HFInline, HeaderFooter, Page, Paragraph, Table,
@@ -169,6 +171,107 @@ fn alias_family(font_family: &str) -> Option<&'static str> {
     }
 }
 
+/// The family name Typst indexes a face under: the name-table family with its
+/// style suffixes trimmed.
+///
+/// A port of typst-library's private `typographic_family`, kept byte-for-byte
+/// in its suffix, modifier and separator lists. Its job is to trim a *request*
+/// the way the book trimmed the *face*: `calibril.ttf` declares `Calibri
+/// Light` and is registered as `Calibri` at weight 300, so a lookup keyed on
+/// `Calibri Light` finds nothing even where Office ships the face. A trailing
+/// suffix only counts when a separator precedes it, so `CalibriLight` and
+/// `Blackadder ITC` stay whole (issue #1286).
+fn typographic_family(family: &str) -> &str {
+    const SEPARATORS: [char; 3] = [' ', '-', '_'];
+    const MODIFIERS: &[&str] = &[
+        "extra", "ext", "ex", "x", "semi", "sem", "sm", "demi", "dem", "ultra",
+    ];
+    #[rustfmt::skip]
+    const SUFFIXES: &[&str] = &[
+        "normal", "italic", "oblique", "slanted",
+        "thin", "th", "hairline", "light", "lt", "regular", "medium", "med",
+        "md", "bold", "bd", "demi", "extb", "black", "blk", "bk", "heavy",
+        "narrow", "condensed", "cond", "cn", "cd", "compressed", "expanded", "exp",
+    ];
+
+    let family: &str = family.trim().trim_start_matches('.');
+    let lower: String = family.to_ascii_lowercase();
+    let mut len: usize = usize::MAX;
+    let mut trimmed: &str = lower.as_str();
+
+    while trimmed.len() < len {
+        len = trimmed.len();
+
+        let mut tail: &str = trimmed;
+        let mut shortened: bool = false;
+        while let Some(rest) = SUFFIXES.iter().find_map(|suffix| tail.strip_suffix(suffix)) {
+            shortened = true;
+            tail = rest;
+        }
+        if !shortened {
+            break;
+        }
+
+        if let Some(rest) = tail.strip_suffix(SEPARATORS) {
+            trimmed = rest;
+            tail = rest;
+        }
+
+        if let Some(rest) = MODIFIERS
+            .iter()
+            .find_map(|modifier| tail.strip_suffix(modifier))
+            && let Some(stripped) = rest.strip_suffix(SEPARATORS)
+        {
+            trimmed = stripped;
+        }
+    }
+
+    &family[..len]
+}
+
+/// The weight a family name states in its style suffix, as the member of the
+/// base family it denotes: `Calibri Light` is `Calibri` at 300, `Segoe UI
+/// Semibold` is `Segoe UI` at 600, `Arial Black` is `Arial` at 900.
+///
+/// Only the suffix counts, and only a weight suffix: a stretch such as `Arial
+/// Narrow` states no weight, and a weight word inside the name — `Blackadder
+/// ITC`, `Lightning Sans` — names a family, not a member of one.
+///
+/// TODO(no Typst name for 350): `Semilight` and `Demilight` are trimmed by the
+/// book but have no named weight the emitter can state, so they answer `None`
+/// and keep the pre-#1286 behaviour.
+pub(crate) fn weight_stated_by_family_name(font_family: &str) -> Option<FontWeight> {
+    let requested: &str = font_family.trim();
+    let base_family: &str = typographic_family(requested);
+    if base_family.len() >= requested.len() {
+        return None;
+    }
+    let suffix: String = requested[base_family.len()..]
+        .chars()
+        .filter(|character| !matches!(character, ' ' | '-' | '_'))
+        .map(|character| character.to_ascii_lowercase())
+        .collect();
+    Some(match suffix.as_str() {
+        "thin" | "hairline" => FontWeight::THIN,
+        "extralight" | "ultralight" => FontWeight::EXTRALIGHT,
+        "light" => FontWeight::LIGHT,
+        "medium" => FontWeight::MEDIUM,
+        "semibold" | "demibold" | "demi" => FontWeight::SEMIBOLD,
+        "bold" => FontWeight::BOLD,
+        "extrabold" | "ultrabold" | "extb" => FontWeight::EXTRABOLD,
+        "black" | "heavy" => FontWeight::BLACK,
+        _ => return None,
+    })
+}
+
+/// The base family a weight-suffixed request has to reach for its member:
+/// `Some("Calibri")` for `Calibri Light`, `None` for a name stating no
+/// weight.
+fn weight_member_base_family(font_family: &str) -> Option<&str> {
+    weight_stated_by_family_name(font_family)?;
+    Some(typographic_family(font_family.trim()))
+}
+
 /// What a candidate list is being built for.
 ///
 /// The two answers differ once a family's own substitutes are exhausted.
@@ -196,8 +299,22 @@ fn fallback_candidates(
     let mut candidates: Vec<String> = Vec::new();
     let requested = font_family.trim();
 
+    // Typst never finds a family called `Calibri Light`: the book holds that
+    // face as `Calibri` at 300. The base family follows the request so the
+    // weight the run states lands on the member it names; a metrics lookup
+    // stays off it, since that resolves the regular variant, which is not the
+    // member the name denotes (issue #1286).
+    if purpose == ChainPurpose::Paint
+        && let Some(base_family) = weight_member_base_family(requested)
+    {
+        candidates.push(base_family.to_string());
+    }
+
     if let Some(alias) = alias_family(requested)
         && !alias.eq_ignore_ascii_case(requested)
+        && !candidates
+            .iter()
+            .any(|candidate| candidate.eq_ignore_ascii_case(alias))
     {
         candidates.push(alias.to_string());
     }
@@ -629,6 +746,13 @@ fn requested_family_leads(font_family: &str, context: Option<&FontSearchContext>
 /// Check whether the given font family (or its alias) is available in the
 /// current font context. Returns `true` when no context is active to preserve
 /// existing behaviour.
+///
+/// A name stating a weight member — `Calibri Light`, `Segoe UI Semibold` — is
+/// available when the base family the book indexes it under ships a face at
+/// that weight. The book never lists the suffixed name itself, so without this
+/// the check answered `false` for the theme heading face of every Word
+/// package on a host where Office ships it, and the inferred weight was
+/// dropped for Typst's `#heading` bold (issue #1286).
 pub fn is_primary_font_available(font_family: &str) -> bool {
     ACTIVE_FONT_CONTEXT.with(|cell| {
         let guard = cell.borrow();
@@ -641,8 +765,14 @@ pub fn is_primary_font_available(font_family: &str) -> bool {
         if ctx.has_family(font_family) {
             return true;
         }
-        if let Some(alias) = alias_family(font_family) {
-            return ctx.has_family(alias);
+        if let Some(alias) = alias_family(font_family)
+            && ctx.has_family(alias)
+        {
+            return true;
+        }
+        if let Some(weight) = weight_stated_by_family_name(font_family) {
+            let base_family: &str = typographic_family(font_family.trim());
+            return ctx.has_face_weight(base_family, weight);
         }
         false
     })

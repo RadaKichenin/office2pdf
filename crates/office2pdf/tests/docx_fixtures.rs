@@ -1864,3 +1864,83 @@ fn structure_korean_alignment_autospace_widens_every_alignment() {
         "every alignment takes Word's quarter em at every boundary"
     );
 }
+
+// ---------------------------------------------------------------------------
+// styles_en.docx — theme-major heading weight (issue #1286)
+// ---------------------------------------------------------------------------
+
+/// Whether an Office application bundle on this host ships `calibril.ttf`,
+/// the light member of Calibri. The default font search indexes exactly these
+/// bundle directories, so their contents decide what the conversion can draw.
+fn host_office_bundle_ships_calibri_light() -> bool {
+    let mut app_roots: Vec<PathBuf> = vec![PathBuf::from("/Applications")];
+    if let Some(home) = std::env::var_os("HOME") {
+        app_roots.push(PathBuf::from(home).join("Applications"));
+    }
+    app_roots.iter().any(|root| {
+        [
+            "Microsoft Word.app",
+            "Microsoft PowerPoint.app",
+            "Microsoft Excel.app",
+        ]
+        .iter()
+        .any(|app| {
+            root.join(app)
+                .join("Contents/Resources/DFonts/calibril.ttf")
+                .is_file()
+        })
+    })
+}
+
+/// The `BaseFont` names a PDF embeds, subset tags stripped.
+fn embedded_base_font_names(pdf: &[u8]) -> Vec<String> {
+    let text = String::from_utf8_lossy(pdf);
+    let mut names: Vec<String> = text
+        .match_indices("/BaseFont")
+        .filter_map(|(index, _)| {
+            let rest = &text[index + "/BaseFont".len()..];
+            let rest = rest.trim_start();
+            let name = rest.strip_prefix('/')?;
+            let end = name
+                .find(|character: char| {
+                    character.is_whitespace() || character == '/' || character == '>'
+                })
+                .unwrap_or(name.len());
+            let name = &name[..end];
+            Some(
+                name.split_once('+')
+                    .map_or(name, |(_, base)| base)
+                    .to_string(),
+            )
+        })
+        .collect();
+    names.sort();
+    names.dedup();
+    names
+}
+
+/// Every built-in `Heading N` names the theme's `majorHAnsi` face, `Calibri
+/// Light`, and a native Word export of `styles_en.docx` embeds `Calibri-Light`
+/// for both headings. The font book indexes the light member under `Calibri`
+/// at weight 300, so an availability check keyed on the untrimmed name dropped
+/// the inferred weight and the headings drew in `Calibri-Bold` (issue #1286).
+///
+/// Runs only where an Office bundle ships the face; elsewhere the conversion
+/// cannot draw it and the case is not this one.
+#[test]
+fn a_theme_major_heading_draws_the_light_member_where_office_ships_it() {
+    if !host_office_bundle_ships_calibri_light() {
+        eprintln!("[SKIP] no Office bundle on this host ships calibril.ttf");
+        return;
+    }
+    let result =
+        office2pdf::convert(fixture_path("styles_en.docx")).expect("conversion should succeed");
+    let names = embedded_base_font_names(&result.pdf);
+    // The native export also embeds `Calibri-Bold`, for the fixture's `strong`
+    // run, so the bold face's presence proves nothing either way; the light
+    // face's presence is what flipped.
+    assert!(
+        names.iter().any(|name| name == "Calibri-Light"),
+        "the headings must embed the light member Word embeds, got {names:?}"
+    );
+}
