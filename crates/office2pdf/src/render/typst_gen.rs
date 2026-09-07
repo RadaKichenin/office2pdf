@@ -60,6 +60,10 @@ pub(crate) use self::text::is_cjk_like;
 pub(crate) use self::text::{
     COMPACTED_SHEET_CELL_MIN_DESCENT_SEAT_PT, SHEET_CELL_MIN_DESCENT_SEAT_PT,
 };
+pub(crate) use self::text::{
+    EAST_ASIAN_AUTO_SPACE_EM, EAST_ASIAN_AUTO_SPACE_GLYPH, EAST_ASIAN_JUSTIFIED_GAP_CEILING_EM,
+    EAST_ASIAN_JUSTIFIED_GAP_RATIO_TERM_PERCENT,
+};
 
 /// An image asset to be embedded in the Typst compilation.
 #[derive(Debug, Clone)]

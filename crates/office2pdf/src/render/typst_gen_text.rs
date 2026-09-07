@@ -20,16 +20,23 @@ const HANGUL_KINSOKU_BREAK_CHAR: char = '\u{200B}';
 const EAST_ASIAN_AUTO_SPACE_CHAR: char = '\u{E001}';
 /// Word's automatic space at such a boundary, as a fraction of the run's font
 /// size. Measured as exactly a quarter em on a native export at two sizes.
-const EAST_ASIAN_AUTO_SPACE_EM: f64 = 0.25;
+pub(crate) const EAST_ASIAN_AUTO_SPACE_EM: f64 = 0.25;
 
 /// The character the auto space is drawn with: a no-break space, so the
 /// boundary it marks stays as unbreakable as the eojeol frame kept it.
-const EAST_ASIAN_AUTO_SPACE_GLYPH: &str = "\u{00A0}";
+pub(crate) const EAST_ASIAN_AUTO_SPACE_GLYPH: &str = "\u{00A0}";
 
 /// How wide Word lets an expandable gap of a justified line grow before it
 /// levels every gap on that line to one common width, in ems of the gap's own
 /// text (issue #1053).
-const EAST_ASIAN_JUSTIFIED_GAP_CEILING_EM: f64 = 0.5;
+pub(crate) const EAST_ASIAN_JUSTIFIED_GAP_CEILING_EM: f64 = 0.5;
+
+/// The ratio term of that ceiling, in percent. `justification-limits`
+/// rejects a ratio of zero, so the smallest positive one stands in for "no
+/// ratio term": it adds 4 nanopoints to a 10.5pt space. The completed-frame
+/// pass that separates Word's phases reads a line's stretch back through the
+/// same formula, so it shares the constant (issue #1280).
+pub(crate) const EAST_ASIAN_JUSTIFIED_GAP_RATIO_TERM_PERCENT: f64 = 0.0001;
 
 /// PowerPoint snaps nominal glyph advances to this grid before accumulating
 /// them into a line. Typst keeps the font's exact fractional advances, so the
@@ -164,6 +171,12 @@ pub(super) fn write_powerpoint_advance_grid_helpers(out: &mut String) {
 /// which is what keeps the mid-word break that #521's frame existed to
 /// prevent from reopening. See [`write_east_asian_justification_limits`] for
 /// the ceiling that makes the stretch match Word's.
+///
+/// The metadata in front of it is for the completed-frame pass that
+/// separates Word's phases (issue #1280): there an auto space and a word
+/// space are both space glyphs, and the tag is the one inline marker Typst
+/// maps to no text at all, so it opens no break where the no-break space
+/// forbids one.
 fn east_asian_auto_space(run: &Run) -> String {
     let width: String = match run.style.font_size {
         Some(size) => format!("{}pt", format_f64(size * EAST_ASIAN_AUTO_SPACE_EM)),
@@ -180,7 +193,10 @@ fn east_asian_auto_space(run: &Run) -> String {
         params.push_str(", ");
     }
     let _ = write!(params, "spacing: {width}");
-    format!("#text({params})[\\u{{00A0}}]")
+    format!(
+        "#metadata(\"{}\")#text({params})[\\u{{00A0}}]",
+        crate::render::word_justified_gap_phases::AUTO_SPACE_MARKER
+    )
 }
 
 pub(super) fn generate_paragraph(
@@ -2677,17 +2693,19 @@ pub(super) fn write_par_settings(out: &mut String, style: &ParagraphStyle, runs:
 /// #1193 line: 6.803pt for both kinds against Word's 6.8065pt and 6.8028pt,
 /// where the rigid quarter em gave 8.70pt and 2.62pt.
 ///
-/// The phases in between are not separable — one ratio drives every gap — so
-/// an ordinary justified line, whose demand never reaches the ceiling, now
-/// moves its auto spaces where Word leaves them: 0.27pt per gap on the
-/// fixture's second line, against 4.18pt per gap the other way before.
+/// The phases in between are not separable here — one ratio drives every
+/// gap — so an ordinary justified line, whose demand never reaches the
+/// ceiling, would move its auto spaces where Word leaves them: 0.27pt per gap
+/// on the fixture's second line. The completed-frame pass in
+/// `word_justified_gap_phases` re-spreads such a line the way Word does,
+/// reading each gap's stretch back through this ceiling, which is why the
+/// ceiling's constants are shared with it (issue #1280).
 ///
-/// `justification-limits` rejects a ratio of zero, so the smallest positive
-/// one stands in for "no ratio term": at 0.0001% it adds 4 nanopoints to a
-/// 10.5pt space. The `em` resolves against each glyph's own size rather than
-/// the paragraph's, so a line mixing sizes caps each gap at its own half em.
-/// The floor stays [`JUSTIFIED_SPACING_FLOOR`], which is calibrated on the
-/// corpus and has nothing to do with this ceiling.
+/// The ratio term is [`EAST_ASIAN_JUSTIFIED_GAP_RATIO_TERM_PERCENT`]. The
+/// `em` resolves against each glyph's own size rather than the paragraph's,
+/// so a line mixing sizes caps each gap at its own half em. The floor stays
+/// [`JUSTIFIED_SPACING_FLOOR`], which is calibrated on the corpus and has
+/// nothing to do with this ceiling.
 ///
 /// Scoped to the paragraphs that carry the auto space: Typst's line breaker
 /// prices a line against the allowance it is given, so a document-wide
@@ -2701,7 +2719,7 @@ pub(super) fn write_east_asian_justification_limits(out: &mut String, runs: &[Ru
     }
     let _ = writeln!(
         out,
-        "  #set par(justification-limits: (spacing: (min: {JUSTIFIED_SPACING_FLOOR}, max: 0.0001% + {EAST_ASIAN_JUSTIFIED_GAP_CEILING_EM}em)))"
+        "  #set par(justification-limits: (spacing: (min: {JUSTIFIED_SPACING_FLOOR}, max: {EAST_ASIAN_JUSTIFIED_GAP_RATIO_TERM_PERCENT}% + {EAST_ASIAN_JUSTIFIED_GAP_CEILING_EM}em)))"
     );
 }
 

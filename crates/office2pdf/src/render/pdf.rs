@@ -350,6 +350,17 @@ pub(crate) fn compile_page_count_with_fonts(
     Ok(document.pages.len() as u32)
 }
 
+/// The passes that move Typst's completed line paint into place.
+///
+/// Typst supplies the shaping, wrapping and line boxes; each pass reads its
+/// own codegen marker and leaves every other frame alone, so their order only
+/// has to be the same wherever a compiled document is inspected or exported.
+fn apply_completed_frame_passes(document: &mut typst::layout::PagedDocument) {
+    super::powerpoint_line_paint::adjust_paragraph_marks(document);
+    super::excel_fill_paint::adjust_cell_fills(document);
+    super::word_justified_gap_phases::spread_justified_gaps_as_word_does(document);
+}
+
 fn compile_to_pdf_inner(
     world: &MinimalWorld,
     pdf_standard: Option<PdfStandard>,
@@ -369,8 +380,7 @@ fn compile_to_pdf_inner(
         ConvertError::Render(format!("Typst compilation failed: {}", messages.join("; ")))
     })?;
 
-    super::powerpoint_line_paint::adjust_paragraph_marks(&mut document);
-    super::excel_fill_paint::adjust_cell_fills(&mut document);
+    apply_completed_frame_passes(&mut document);
 
     // Build PDF standards list
     let mut pdf_standards = Vec::new();
@@ -506,8 +516,7 @@ fn compiled_text_runs_with_line_seating(
         ConvertError::Render(format!("Typst compilation failed: {}", messages.join("; ")))
     })?;
     if apply_line_seating {
-        super::powerpoint_line_paint::adjust_paragraph_marks(&mut document);
-        super::excel_fill_paint::adjust_cell_fills(&mut document);
+        apply_completed_frame_passes(&mut document);
     }
     let page = document.pages.get(page_index).ok_or_else(|| {
         ConvertError::Render(format!(
@@ -582,8 +591,7 @@ pub(crate) fn compiled_image_boxes(
         let messages: Vec<String> = errors.iter().map(|e| e.message.to_string()).collect();
         ConvertError::Render(format!("Typst compilation failed: {}", messages.join("; ")))
     })?;
-    super::powerpoint_line_paint::adjust_paragraph_marks(&mut document);
-    super::excel_fill_paint::adjust_cell_fills(&mut document);
+    apply_completed_frame_passes(&mut document);
     let page = document.pages.get(page_index).ok_or_else(|| {
         ConvertError::Render(format!(
             "page {page_index} is past the document's {} pages",
@@ -793,8 +801,7 @@ pub(crate) fn compiled_page_paint_sequences(
         let messages: Vec<String> = errors.iter().map(|e| e.message.to_string()).collect();
         ConvertError::Render(format!("Typst compilation failed: {}", messages.join("; ")))
     })?;
-    super::powerpoint_line_paint::adjust_paragraph_marks(&mut document);
-    super::excel_fill_paint::adjust_cell_fills(&mut document);
+    apply_completed_frame_passes(&mut document);
     Ok(document
         .pages
         .iter()
@@ -854,8 +861,7 @@ fn powerpoint_line_seating_keeps_links_and_underlines_with_text() {
             .unwrap();
         let mut before = [Vec::new(), Vec::new(), Vec::new()];
         positions(&document.pages[0].frame, Transform::identity(), &mut before);
-        super::powerpoint_line_paint::adjust_paragraph_marks(&mut document);
-        super::excel_fill_paint::adjust_cell_fills(&mut document);
+        apply_completed_frame_passes(&mut document);
         let mut after = [Vec::new(), Vec::new(), Vec::new()];
         positions(&document.pages[0].frame, Transform::identity(), &mut after);
         assert!(before[0].len() > 1, "the paragraph must wrap");
