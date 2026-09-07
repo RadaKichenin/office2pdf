@@ -276,12 +276,15 @@ fn build_test_pptx_with_layout_master_and_image(
     slide_xml: &str,
     layout_xml: &str,
     master_xml: &str,
+    image_extension: &str,
     image_bytes: &[u8],
 ) -> Vec<u8> {
     let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
     let opts = FileOptions::default();
 
-    let ct = r#"<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="bmp" ContentType="image/bmp"/><Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/><Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/><Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/></Types>"#;
+    let ct = format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="{image_extension}" ContentType="image/{image_extension}"/><Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/><Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/><Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/></Types>"#
+    );
     zip.start_file("[Content_Types].xml", opts).unwrap();
     zip.write_all(ct.as_bytes()).unwrap();
 
@@ -310,7 +313,10 @@ fn build_test_pptx_with_layout_master_and_image(
     zip.start_file("ppt/slides/_rels/slide1.xml.rels", opts)
         .unwrap();
     zip.write_all(
-        br#"<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/><Relationship Id="rId10" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.bmp"/></Relationships>"#,
+        format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/><Relationship Id="rId10" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.{image_extension}"/></Relationships>"#
+        )
+        .as_bytes(),
     )
     .unwrap();
 
@@ -329,7 +335,8 @@ fn build_test_pptx_with_layout_master_and_image(
         .unwrap();
     zip.write_all(master_xml.as_bytes()).unwrap();
 
-    zip.start_file("ppt/media/image1.bmp", opts).unwrap();
+    zip.start_file(format!("ppt/media/image1.{image_extension}"), opts)
+        .unwrap();
     zip.write_all(image_bytes).unwrap();
 
     zip.finish().unwrap().into_inner()
@@ -349,6 +356,7 @@ fn test_picture_placeholder_inherits_layout_geometry() {
         &slide,
         &layout,
         &master,
+        "bmp",
         &image_tests::make_test_bmp(),
     );
 
@@ -360,6 +368,196 @@ fn test_picture_placeholder_inherits_layout_geometry() {
         .find(|element| matches!(element.kind, FixedElementKind::Image(_)))
         .expect("no image element on page");
     assert_geometry(element, 2_286_000, 1_143_000, 4_572_000, 3_429_000);
+}
+
+// ── Picture placeholder shape geometry (issue #1373) ─────────────────
+
+/// A layout picture placeholder that states its own outline: the "crop to
+/// shape" a template applies to every photo dropped into it. Mirrors a real
+/// template's `<a:noFill/>` and invisible outline.
+fn make_shaped_picture_placeholder_sp(
+    ph_attrs: &str,
+    (x, y, cx, cy): (i64, i64, i64, i64),
+    geometry_xml: &str,
+) -> String {
+    format!(
+        r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="Picture Placeholder"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph {ph_attrs}/></p:nvPr></p:nvSpPr><p:spPr><a:xfrm><a:off x="{x}" y="{y}"/><a:ext cx="{cx}" cy="{cy}"/></a:xfrm>{geometry_xml}<a:noFill/><a:ln w="387350"><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US"/><a:t>Click icon to add picture</a:t></a:r></a:p></p:txBody></p:sp>"#
+    )
+}
+
+/// A slide picture bound to a placeholder, with the given `<p:spPr>` body.
+fn make_placeholder_pic(ph_attrs: &str, sp_pr_body: &str) -> String {
+    format!(
+        r#"<p:pic><p:nvPicPr><p:cNvPr id="3" name="Picture"/><p:cNvPicPr/><p:nvPr><p:ph {ph_attrs}/></p:nvPr></p:nvPicPr><p:blipFill><a:blip r:embed="rId10"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr>{sp_pr_body}</p:spPr></p:pic>"#
+    )
+}
+
+/// An opaque 16x16 PNG: large enough that its corners lie outside any
+/// inscribed ellipse or centred triangle while its centre lies inside.
+fn make_opaque_png() -> Vec<u8> {
+    let mut png = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+        16,
+        16,
+        image::Rgba([200, 120, 40, 255]),
+    ))
+    .write_to(&mut png, image::ImageFormat::Png)
+    .unwrap();
+    png.into_inner()
+}
+
+fn first_image(page: &FixedPage) -> (&FixedElement, &ImageData) {
+    let element = page
+        .elements
+        .iter()
+        .find(|element| matches!(element.kind, FixedElementKind::Image(_)))
+        .expect("no image element on page");
+    (element, image_tests::get_image(element))
+}
+
+/// Alpha at the top-left corner and at the centre of a decoded image.
+fn corner_and_centre_alpha(image: &ImageData) -> (u8, u8) {
+    let decoded = image::load_from_memory(&image.data)
+        .expect("image data decodes")
+        .into_rgba8();
+    let (width, height) = decoded.dimensions();
+    (
+        decoded.get_pixel(0, 0)[3],
+        decoded.get_pixel(width / 2, height / 2)[3],
+    )
+}
+
+const ELLIPSE_PRSTGEOM: &str = r#"<a:prstGeom prst="ellipse"><a:avLst/></a:prstGeom>"#;
+
+/// Issue #1373: a photo dropped into a template's circular picture placeholder
+/// carries `<p:spPr/>` and inherits the layout's `ellipse` exactly as it
+/// inherits the layout's position. Painting the whole raster leaves the
+/// photo's rectangular canvas visible around the circle.
+#[test]
+fn test_picture_placeholder_inherits_the_layout_ellipse_clip() {
+    let slide = make_slide_with_shapes(&[make_placeholder_pic(r#"type="pic" idx="14""#, "")]);
+    let layout = make_layout_with_shapes(&[make_shaped_picture_placeholder_sp(
+        r#"type="pic" idx="14""#,
+        (1_772_412, 2_219_248, 2_414_016, 2_414_016),
+        ELLIPSE_PRSTGEOM,
+    )]);
+    let master = make_master_with_shapes(&[]);
+    let data = build_test_pptx_with_layout_master_and_image(
+        &slide,
+        &layout,
+        &master,
+        "png",
+        &make_opaque_png(),
+    );
+
+    let doc = parse_document(&data);
+    let page = first_fixed_page(&doc);
+    let (element, image) = first_image(page);
+    assert_geometry(element, 1_772_412, 2_219_248, 2_414_016, 2_414_016);
+    // An ellipse is baked into the alpha channel, never a Typst radius.
+    assert_eq!(image.clip_shape, None);
+    assert_eq!(image.format, ImageFormat::Png);
+    let (corner, centre) = corner_and_centre_alpha(image);
+    assert_eq!(
+        corner, 0,
+        "corner outside the inherited ellipse must be transparent"
+    );
+    assert_eq!(
+        centre, 255,
+        "centre inside the inherited ellipse must stay opaque"
+    );
+}
+
+/// DrawingML inherits each shape property on its own: a picture that restates
+/// its `<a:xfrm>` but stays silent on geometry still takes the layout's clip.
+#[test]
+fn test_picture_with_its_own_xfrm_still_inherits_the_layout_clip() {
+    let slide = make_slide_with_shapes(&[make_placeholder_pic(
+        r#"type="pic" idx="17""#,
+        r#"<a:xfrm><a:off x="8005572" y="2196083"/><a:ext cx="2414016" cy="2414016"/></a:xfrm>"#,
+    )]);
+    let layout = make_layout_with_shapes(&[make_shaped_picture_placeholder_sp(
+        r#"type="pic" idx="17""#,
+        (100, 200, 1_000_000, 1_000_000),
+        ELLIPSE_PRSTGEOM,
+    )]);
+    let master = make_master_with_shapes(&[]);
+    let data = build_test_pptx_with_layout_master_and_image(
+        &slide,
+        &layout,
+        &master,
+        "png",
+        &make_opaque_png(),
+    );
+
+    let doc = parse_document(&data);
+    let page = first_fixed_page(&doc);
+    let (element, image) = first_image(page);
+    assert_geometry(element, 8_005_572, 2_196_083, 2_414_016, 2_414_016);
+    let (corner, centre) = corner_and_centre_alpha(image);
+    assert_eq!(
+        corner, 0,
+        "the slide's own xfrm does not cancel the inherited clip"
+    );
+    assert_eq!(centre, 255);
+}
+
+/// A picture that states its own geometry has answered; the layout's ellipse
+/// must not override a slide-side rectangle.
+#[test]
+fn test_a_picture_declared_geometry_overrides_the_layout_clip() {
+    let png = make_opaque_png();
+    let slide = make_slide_with_shapes(&[make_placeholder_pic(
+        r#"type="pic" idx="14""#,
+        r#"<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>"#,
+    )]);
+    let layout = make_layout_with_shapes(&[make_shaped_picture_placeholder_sp(
+        r#"type="pic" idx="14""#,
+        (1_772_412, 2_219_248, 2_414_016, 2_414_016),
+        ELLIPSE_PRSTGEOM,
+    )]);
+    let master = make_master_with_shapes(&[]);
+    let data = build_test_pptx_with_layout_master_and_image(&slide, &layout, &master, "png", &png);
+
+    let doc = parse_document(&data);
+    let page = first_fixed_page(&doc);
+    let (_, image) = first_image(page);
+    assert_eq!(image.clip_shape, None);
+    assert_eq!(
+        image.data, png,
+        "an unclipped rectangle keeps the original bytes"
+    );
+}
+
+/// A layout picture placeholder can also be an `<a:custGeom>`; that path
+/// inherits along the same chain and is baked into the alpha mask.
+#[test]
+fn test_picture_placeholder_inherits_the_layout_custom_geometry_mask() {
+    let slide = make_slide_with_shapes(&[make_placeholder_pic(r#"type="pic" idx="14""#, "")]);
+    let layout = make_layout_with_shapes(&[make_shaped_picture_placeholder_sp(
+        r#"type="pic" idx="14""#,
+        (1_772_412, 2_219_248, 2_414_016, 2_414_016),
+        TRIANGLE_CUSTGEOM,
+    )]);
+    let master = make_master_with_shapes(&[]);
+    let data = build_test_pptx_with_layout_master_and_image(
+        &slide,
+        &layout,
+        &master,
+        "png",
+        &make_opaque_png(),
+    );
+
+    let doc = parse_document(&data);
+    let page = first_fixed_page(&doc);
+    let (_, image) = first_image(page);
+    assert_eq!(image.format, ImageFormat::Png);
+    let (corner, centre) = corner_and_centre_alpha(image);
+    assert_eq!(
+        corner, 0,
+        "the top-left corner lies outside the inherited triangle"
+    );
+    assert_eq!(centre, 255, "the centre lies inside the inherited triangle");
 }
 
 // ── Layout placeholder fill ──────────────────────────────────────────
