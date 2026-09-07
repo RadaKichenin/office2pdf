@@ -1,5 +1,7 @@
 use super::*;
 use crate::ir::PairKerning;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::render::word_justified_gap_phases::{GapBudget, GapKind, spread_demand_as_word_does};
 
 // ── Unicode NFC normalization tests ──────────────────────────────
 
@@ -1090,19 +1092,17 @@ fn a_heavily_stretched_justified_line_gives_every_gap_one_width() {
 
     // A gap is a run holding nothing but a space, and the width the line gave
     // it is the distance to whatever it sits before.
-    let mut word_gaps: Vec<f64> = Vec::new();
-    let mut auto_gaps: Vec<f64> = Vec::new();
-    for (index, run) in line.iter().enumerate() {
-        let Some(next) = line.get(index + 1) else {
-            break;
-        };
-        let width: f64 = next.left_pt - run.left_pt;
-        match run.text.as_str() {
-            " " => word_gaps.push(width),
-            "\u{00A0}" => auto_gaps.push(width),
-            _ => {}
-        }
-    }
+    let gaps: Vec<(GapKind, f64)> = line_gap_widths(&line);
+    let word_gaps: Vec<f64> = gaps
+        .iter()
+        .filter(|(kind, _)| *kind == GapKind::WordSpace)
+        .map(|(_, width)| *width)
+        .collect();
+    let auto_gaps: Vec<f64> = gaps
+        .iter()
+        .filter(|(kind, _)| *kind == GapKind::AutoSpace)
+        .map(|(_, width)| *width)
+        .collect();
 
     // A word space is a run of its own only where the eojeols around it are
     // framed. The coverage guard proves the chain can shape the Hangul; this
@@ -1115,31 +1115,102 @@ fn a_heavily_stretched_justified_line_gives_every_gap_one_width() {
         !auto_gaps.is_empty(),
         "the line's auto spaces are gaps the justifier can see"
     );
-    let widest: f64 = word_gaps
-        .iter()
-        .chain(&auto_gaps)
-        .copied()
-        .fold(f64::MIN, f64::max);
-    let narrowest: f64 = word_gaps
-        .iter()
-        .chain(&auto_gaps)
-        .copied()
-        .fold(f64::MAX, f64::min);
-    assert!(
-        widest - narrowest < 0.05,
-        "every gap on the line takes one common width, \
-         but they run {narrowest:.4}pt to {widest:.4}pt"
-    );
 
-    // 6.80pt is Word's width for *this* face at 10.5pt. A runner that
-    // substitutes another Korean face stretches the same line over its own
-    // advances, and only the shared width above carries over.
+    // How far the line is stretched depends on the face the host shapes it
+    // with, and with it the phase Word would be in (issue #1280). The
+    // paragraph's last line is never justified, so its word spaces are the
+    // face's natural space; the auto space is a quarter em by construction.
+    let last_line_baseline: f64 = runs
+        .iter()
+        .find(|run| run.text.contains("납입하여야"))
+        .expect("the wrapping paragraph's last line")
+        .baseline_pt;
+    let mut last_line: Vec<&crate::render::pdf::PlacedTextRun> = runs
+        .iter()
+        .filter(|run| (run.baseline_pt - last_line_baseline).abs() < 0.01)
+        .collect();
+    last_line.sort_by(|left, right| left.left_pt.total_cmp(&right.left_pt));
+    let natural_word_spaces: Vec<f64> = line_gap_widths(&last_line)
+        .into_iter()
+        .filter(|(kind, _)| *kind == GapKind::WordSpace)
+        .map(|(_, width)| width)
+        .collect();
+    assert!(
+        !natural_word_spaces.is_empty(),
+        "the unjustified last line carries the face's natural word space"
+    );
+    let natural_word_space: f64 =
+        natural_word_spaces.iter().sum::<f64>() / natural_word_spaces.len() as f64;
+    let budgets: Vec<GapBudget> = gaps
+        .iter()
+        .map(|(kind, _)| GapBudget {
+            kind: *kind,
+            natural: match kind {
+                GapKind::WordSpace => natural_word_space,
+                GapKind::AutoSpace => 2.625,
+            },
+            ceiling: 5.25,
+        })
+        .collect();
+    let demand: f64 = gaps
+        .iter()
+        .zip(&budgets)
+        .map(|((_, width), budget)| width - budget.natural)
+        .sum();
+    let expected: Vec<f64> = spread_demand_as_word_does(&budgets, demand);
+    for ((kind, width), want) in gaps.iter().zip(&expected) {
+        assert!(
+            (width - want).abs() < 0.05,
+            "a {kind:?} on a line stretched {demand:.2}pt sits at {want:.4}pt in \
+             Word's phases, but measured {width:.4}pt: {gaps:?}"
+        );
+    }
+
+    // 6.80pt is Word's width for *this* face at 10.5pt, where the 55.06pt
+    // demand is past every ceiling and every gap takes one common width. A
+    // runner that substitutes another Korean face stretches the same line
+    // over its own advances and may sit in another phase.
     if line.iter().any(|run| run.family == "Malgun Gothic") {
+        let widest: f64 = word_gaps
+            .iter()
+            .chain(&auto_gaps)
+            .copied()
+            .fold(f64::MIN, f64::max);
+        let narrowest: f64 = word_gaps
+            .iter()
+            .chain(&auto_gaps)
+            .copied()
+            .fold(f64::MAX, f64::min);
+        assert!(
+            widest - narrowest < 0.05,
+            "every gap on the line takes one common width, \
+             but they run {narrowest:.4}pt to {widest:.4}pt"
+        );
         assert!(
             (narrowest - 6.80).abs() < 0.05,
             "Word's common width here is 6.80pt, not {narrowest:.4}pt"
         );
     }
+}
+
+/// The gaps of a compiled line, in order: each run holding nothing but a
+/// space, and the width the line gave it — the distance to whatever it sits
+/// before.
+#[cfg(not(target_arch = "wasm32"))]
+fn line_gap_widths(line: &[&crate::render::pdf::PlacedTextRun]) -> Vec<(GapKind, f64)> {
+    let mut gaps: Vec<(GapKind, f64)> = Vec::new();
+    for (index, run) in line.iter().enumerate() {
+        let Some(next) = line.get(index + 1) else {
+            break;
+        };
+        let width: f64 = next.left_pt - run.left_pt;
+        match run.text.as_str() {
+            " " => gaps.push((GapKind::WordSpace, width)),
+            "\u{00A0}" => gaps.push((GapKind::AutoSpace, width)),
+            _ => {}
+        }
+    }
+    gaps
 }
 
 /// The completed frame is where Word's phases are applied (issue #1280), and
@@ -1213,19 +1284,17 @@ fn a_lightly_stretched_justified_line_fills_its_word_spaces_first() {
         return;
     }
 
-    let mut word_gaps: Vec<f64> = Vec::new();
-    let mut auto_gaps: Vec<f64> = Vec::new();
-    for (index, run) in line.iter().enumerate() {
-        let Some(next) = line.get(index + 1) else {
-            break;
-        };
-        let width: f64 = next.left_pt - run.left_pt;
-        match run.text.as_str() {
-            " " => word_gaps.push(width),
-            "\u{00A0}" => auto_gaps.push(width),
-            _ => {}
-        }
-    }
+    let gaps: Vec<(GapKind, f64)> = line_gap_widths(&line);
+    let word_gaps: Vec<f64> = gaps
+        .iter()
+        .filter(|(kind, _)| *kind == GapKind::WordSpace)
+        .map(|(_, width)| *width)
+        .collect();
+    let auto_gaps: Vec<f64> = gaps
+        .iter()
+        .filter(|(kind, _)| *kind == GapKind::AutoSpace)
+        .map(|(_, width)| *width)
+        .collect();
     if word_gaps.is_empty() {
         return;
     }
