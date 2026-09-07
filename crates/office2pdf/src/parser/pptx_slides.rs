@@ -3140,6 +3140,24 @@ impl<'a> SlideXmlParser<'a> {
                     self.pic.cy = geometry.cy;
                     self.pic.rotation_deg = geometry.rotation_deg;
                 }
+                // A template's picture placeholder is often an `ellipse` or a
+                // custom path: PowerPoint crops every photo dropped into it to
+                // that outline. The outline inherits on its own, independent of
+                // the frame above, so a picture that restates its `<a:xfrm>`
+                // still takes the layout's clip. Without it the photo's full
+                // rectangular canvas paints around the circle (issue #1373).
+                if self.pic.has_placeholder
+                    && self.pic.prst_geom.is_none()
+                    && self.pic.custom_geometry.is_empty()
+                    && let Some(map) = self.placeholder_geometry
+                    && let Some(inherited) = map.lookup_shape_geometry(
+                        self.pic.ph_type.as_deref(),
+                        self.pic.ph_idx.as_deref(),
+                    )
+                {
+                    self.pic.custom_geometry = inherited.subpaths.to_vec();
+                    self.pic.prst_geom = Some(inherited.preset.unwrap_or("rect").to_string());
+                }
                 let (element, picture_warnings) =
                     finalize_picture(&self.pic, self.ctx.images, self.ctx.warning_context);
                 self.warnings.extend(picture_warnings);
