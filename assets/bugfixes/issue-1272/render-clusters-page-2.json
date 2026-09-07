@@ -1,0 +1,2695 @@
+{
+  "clusters": [
+    {
+      "area_pt2": 1870.3872,
+      "bbox_pt": {
+        "height": 2.88,
+        "width": 649.44,
+        "x": 79.68,
+        "y": 384.96
+      },
+      "disposition": {
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-width and table-row horizontal rules: the 150 DPI crops and the MuPDF traces show the native 0.78pt boundary bands against the output's centered 1pt strokes, the fitted worksheet rule residual tracked in #1564. Unchanged by this plot pull-back."
+      },
+      "id": "p2-e49797f6f12b",
+      "region": "top"
+    },
+    {
+      "area_pt2": 1558.656,
+      "bbox_pt": {
+        "height": 2.4,
+        "width": 649.44,
+        "x": 79.68,
+        "y": 115.2
+      },
+      "disposition": {
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-width and table-row horizontal rules: the 150 DPI crops and the MuPDF traces show the native 0.78pt boundary bands against the output's centered 1pt strokes, the fitted worksheet rule residual tracked in #1564. Unchanged by this plot pull-back."
+      },
+      "id": "p2-c1dae5e854c8",
+      "region": "top"
+    },
+    {
+      "area_pt2": 1558.656,
+      "bbox_pt": {
+        "height": 2.4,
+        "width": 649.44,
+        "x": 79.68,
+        "y": 485.76
+      },
+      "disposition": {
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-width and table-row horizontal rules: the 150 DPI crops and the MuPDF traces show the native 0.78pt boundary bands against the output's centered 1pt strokes, the fitted worksheet rule residual tracked in #1564. Unchanged by this plot pull-back."
+      },
+      "id": "p2-8a7de3eab384",
+      "region": "center"
+    },
+    {
+      "area_pt2": 1558.656,
+      "bbox_pt": {
+        "height": 2.4,
+        "width": 649.44,
+        "x": 79.68,
+        "y": 604.32
+      },
+      "disposition": {
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-width and table-row horizontal rules: the 150 DPI crops and the MuPDF traces show the native 0.78pt boundary bands against the output's centered 1pt strokes, the fitted worksheet rule residual tracked in #1564. Unchanged by this plot pull-back."
+      },
+      "id": "p2-45474f5d8322",
+      "region": "center"
+    },
+    {
+      "area_pt2": 1246.9248,
+      "bbox_pt": {
+        "height": 1.92,
+        "width": 649.44,
+        "x": 79.68,
+        "y": 694.08
+      },
+      "disposition": {
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-width and table-row horizontal rules: the 150 DPI crops and the MuPDF traces show the native 0.78pt boundary bands against the output's centered 1pt strokes, the fitted worksheet rule residual tracked in #1564. Unchanged by this plot pull-back."
+      },
+      "id": "p2-379f0b7837a0",
+      "region": "center"
+    },
+    {
+      "area_pt2": 1246.9248,
+      "bbox_pt": {
+        "height": 1.92,
+        "width": 649.44,
+        "x": 79.68,
+        "y": 812.64
+      },
+      "disposition": {
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-width and table-row horizontal rules: the 150 DPI crops and the MuPDF traces show the native 0.78pt boundary bands against the output's centered 1pt strokes, the fitted worksheet rule residual tracked in #1564. Unchanged by this plot pull-back."
+      },
+      "id": "p2-b2bd2129fbe8",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 996.2496,
+      "bbox_pt": {
+        "height": 10.08,
+        "width": 649.44,
+        "x": 79.68,
+        "y": 611.52
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "The MONTHLY EXPENSE header band: its text sits 2.16pt above the native baseline (#1545) over the brown separator rule that #1564 tracks. Unchanged by this plot pull-back."
+      },
+      "id": "p2-be129b025993",
+      "region": "center"
+    },
+    {
+      "area_pt2": 968.3712,
+      "bbox_pt": {
+        "height": 3.36,
+        "width": 649.44,
+        "x": 79.68,
+        "y": 588.48
+      },
+      "disposition": {
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-width and table-row horizontal rules: the 150 DPI crops and the MuPDF traces show the native 0.78pt boundary bands against the output's centered 1pt strokes, the fitted worksheet rule residual tracked in #1564. Unchanged by this plot pull-back."
+      },
+      "id": "p2-1cb08bfe15eb",
+      "region": "center"
+    },
+    {
+      "area_pt2": 936.8064,
+      "bbox_pt": {
+        "height": 1.92,
+        "width": 488.16,
+        "x": 165.6,
+        "y": 560.64
+      },
+      "disposition": {
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-width and table-row horizontal rules: the 150 DPI crops and the MuPDF traces show the native 0.78pt boundary bands against the output's centered 1pt strokes, the fitted worksheet rule residual tracked in #1564. Unchanged by this plot pull-back."
+      },
+      "id": "p2-6c0639451a47",
+      "region": "center"
+    },
+    {
+      "area_pt2": 718.848,
+      "bbox_pt": {
+        "height": 1.92,
+        "width": 374.4,
+        "x": 279.36,
+        "y": 931.2
+      },
+      "disposition": {
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-width and table-row horizontal rules: the 150 DPI crops and the MuPDF traces show the native 0.78pt boundary bands against the output's centered 1pt strokes, the fitted worksheet rule residual tracked in #1564. Unchanged by this plot pull-back."
+      },
+      "id": "p2-061fc7dbd20f",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 718.848,
+      "bbox_pt": {
+        "height": 1.92,
+        "width": 374.4,
+        "x": 279.36,
+        "y": 1034.88
+      },
+      "disposition": {
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-width and table-row horizontal rules: the 150 DPI crops and the MuPDF traces show the native 0.78pt boundary bands against the output's centered 1pt strokes, the fitted worksheet rule residual tracked in #1564. Unchanged by this plot pull-back."
+      },
+      "id": "p2-21fb32c7fcbf",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 718.848,
+      "bbox_pt": {
+        "height": 1.92,
+        "width": 374.4,
+        "x": 279.36,
+        "y": 916.32
+      },
+      "disposition": {
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-width and table-row horizontal rules: the 150 DPI crops and the MuPDF traces show the native 0.78pt boundary bands against the output's centered 1pt strokes, the fitted worksheet rule residual tracked in #1564. Unchanged by this plot pull-back."
+      },
+      "id": "p2-ae9a1f2b19e6",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 718.848,
+      "bbox_pt": {
+        "height": 1.92,
+        "width": 374.4,
+        "x": 279.36,
+        "y": 1049.76
+      },
+      "disposition": {
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-width and table-row horizontal rules: the 150 DPI crops and the MuPDF traces show the native 0.78pt boundary bands against the output's centered 1pt strokes, the fitted worksheet rule residual tracked in #1564. Unchanged by this plot pull-back."
+      },
+      "id": "p2-d2458cfbe7a6",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 539.136,
+      "bbox_pt": {
+        "height": 1.44,
+        "width": 374.4,
+        "x": 279.36,
+        "y": 723.84
+      },
+      "disposition": {
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-width and table-row horizontal rules: the 150 DPI crops and the MuPDF traces show the native 0.78pt boundary bands against the output's centered 1pt strokes, the fitted worksheet rule residual tracked in #1564. Unchanged by this plot pull-back."
+      },
+      "id": "p2-104506d35c41",
+      "region": "center"
+    },
+    {
+      "area_pt2": 539.136,
+      "bbox_pt": {
+        "height": 1.44,
+        "width": 374.4,
+        "x": 279.36,
+        "y": 842.4
+      },
+      "disposition": {
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-width and table-row horizontal rules: the 150 DPI crops and the MuPDF traces show the native 0.78pt boundary bands against the output's centered 1pt strokes, the fitted worksheet rule residual tracked in #1564. Unchanged by this plot pull-back."
+      },
+      "id": "p2-36d40f09be8b",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 539.136,
+      "bbox_pt": {
+        "height": 1.44,
+        "width": 374.4,
+        "x": 279.36,
+        "y": 960.96
+      },
+      "disposition": {
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-width and table-row horizontal rules: the 150 DPI crops and the MuPDF traces show the native 0.78pt boundary bands against the output's centered 1pt strokes, the fitted worksheet rule residual tracked in #1564. Unchanged by this plot pull-back."
+      },
+      "id": "p2-4aed52adf04c",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 539.136,
+      "bbox_pt": {
+        "height": 1.44,
+        "width": 374.4,
+        "x": 279.36,
+        "y": 975.84
+      },
+      "disposition": {
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-width and table-row horizontal rules: the 150 DPI crops and the MuPDF traces show the native 0.78pt boundary bands against the output's centered 1pt strokes, the fitted worksheet rule residual tracked in #1564. Unchanged by this plot pull-back."
+      },
+      "id": "p2-6535ee58b5d7",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 539.136,
+      "bbox_pt": {
+        "height": 1.44,
+        "width": 374.4,
+        "x": 279.36,
+        "y": 857.28
+      },
+      "disposition": {
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-width and table-row horizontal rules: the 150 DPI crops and the MuPDF traces show the native 0.78pt boundary bands against the output's centered 1pt strokes, the fitted worksheet rule residual tracked in #1564. Unchanged by this plot pull-back."
+      },
+      "id": "p2-6ed533ba4d53",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 539.136,
+      "bbox_pt": {
+        "height": 1.44,
+        "width": 374.4,
+        "x": 279.36,
+        "y": 1064.64
+      },
+      "disposition": {
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-width and table-row horizontal rules: the 150 DPI crops and the MuPDF traces show the native 0.78pt boundary bands against the output's centered 1pt strokes, the fitted worksheet rule residual tracked in #1564. Unchanged by this plot pull-back."
+      },
+      "id": "p2-fcd90fd0dfaa",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 539.136,
+      "bbox_pt": {
+        "height": 1.44,
+        "width": 374.4,
+        "x": 279.36,
+        "y": 946.08
+      },
+      "disposition": {
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-width and table-row horizontal rules: the 150 DPI crops and the MuPDF traces show the native 0.78pt boundary bands against the output's centered 1pt strokes, the fitted worksheet rule residual tracked in #1564. Unchanged by this plot pull-back."
+      },
+      "id": "p2-6976ae96beb2",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 539.136,
+      "bbox_pt": {
+        "height": 1.44,
+        "width": 374.4,
+        "x": 279.36,
+        "y": 708.96
+      },
+      "disposition": {
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-width and table-row horizontal rules: the 150 DPI crops and the MuPDF traces show the native 0.78pt boundary bands against the output's centered 1pt strokes, the fitted worksheet rule residual tracked in #1564. Unchanged by this plot pull-back."
+      },
+      "id": "p2-5da87568af4a",
+      "region": "center"
+    },
+    {
+      "area_pt2": 539.136,
+      "bbox_pt": {
+        "height": 1.44,
+        "width": 374.4,
+        "x": 279.36,
+        "y": 827.52
+      },
+      "disposition": {
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-width and table-row horizontal rules: the 150 DPI crops and the MuPDF traces show the native 0.78pt boundary bands against the output's centered 1pt strokes, the fitted worksheet rule residual tracked in #1564. Unchanged by this plot pull-back."
+      },
+      "id": "p2-de6c396ee4dc",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 162.2016,
+      "bbox_pt": {
+        "height": 1.92,
+        "width": 84.48,
+        "x": 79.68,
+        "y": 560.64
+      },
+      "disposition": {
+        "issue": "#1564",
+        "kind": "issue",
+        "note": "Full-width and table-row horizontal rules: the 150 DPI crops and the MuPDF traces show the native 0.78pt boundary bands against the output's centered 1pt strokes, the fitted worksheet rule residual tracked in #1564. Unchanged by this plot pull-back."
+      },
+      "id": "p2-a58cd6997ed5",
+      "region": "left"
+    },
+    {
+      "area_pt2": 88.704,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 24.96,
+        "x": 733.92,
+        "y": 1098.72
+      },
+      "disposition": {
+        "class": "shape-edge-antialiasing",
+        "kind": "accepted-rendering",
+        "note": "Sparkline column: the full-resolution crops show matching value vertices, colour and extent; native embeds a small bitmap per sparkline where the output strokes a vector path, so these residuals hug the stroke edges."
+      },
+      "id": "p2-a591a69fb2df",
+      "region": "bottom-right"
+    },
+    {
+      "area_pt2": 88.4736,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 21.12,
+        "x": 89.76,
+        "y": 819.84
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-57150b5b3c40",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 76.4928,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 12.0,
+        "x": 109.92,
+        "y": 308.64
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "The CASH FLOW caption: the full-resolution crop shows matching content, face, weight and placement, and the layout audit reports no shift past 0.5pt for it; the residual follows the bold glyph edges."
+      },
+      "id": "p2-ffdec58f24a2",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 72.576,
+      "bbox_pt": {
+        "height": 16.8,
+        "width": 7.68,
+        "x": 137.76,
+        "y": 78.24
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-bcd67f480205",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 68.8896,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 16.8,
+        "x": 353.28,
+        "y": 492.96
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-8d5f87dbb7b5",
+      "region": "center"
+    },
+    {
+      "area_pt2": 68.4288,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 18.24,
+        "x": 383.52,
+        "y": 229.44
+      },
+      "disposition": {
+        "issue": "#1620",
+        "kind": "issue",
+        "note": "Category labels of the two summary bar charts: 0.73-0.74pt left of native (#1620) with the row seating of #1621; the crops show matching text, face and bar geometry."
+      },
+      "id": "p2-151ee37bda45",
+      "region": "top"
+    },
+    {
+      "area_pt2": 60.1344,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 12.96,
+        "x": 357.12,
+        "y": 611.52
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-b21173435f01",
+      "region": "center"
+    },
+    {
+      "area_pt2": 54.8352,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 20.64,
+        "x": 734.88,
+        "y": 905.76
+      },
+      "disposition": {
+        "class": "shape-edge-antialiasing",
+        "kind": "accepted-rendering",
+        "note": "Sparkline column: the full-resolution crops show matching value vertices, colour and extent; native embeds a small bitmap per sparkline where the output strokes a vector path, so these residuals hug the stroke edges."
+      },
+      "id": "p2-11ab83f3387f",
+      "region": "bottom-right"
+    },
+    {
+      "area_pt2": 53.9136,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 10.56,
+        "x": 482.4,
+        "y": 492.96
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-f4c73defafec",
+      "region": "center"
+    },
+    {
+      "area_pt2": 51.84,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 18.24,
+        "x": 734.4,
+        "y": 1024.32
+      },
+      "disposition": {
+        "class": "shape-edge-antialiasing",
+        "kind": "accepted-rendering",
+        "note": "Sparkline column: the full-resolution crops show matching value vertices, colour and extent; native embeds a small bitmap per sparkline where the output strokes a vector path, so these residuals hug the stroke edges."
+      },
+      "id": "p2-c682b5d2af68",
+      "region": "bottom-right"
+    },
+    {
+      "area_pt2": 51.1488,
+      "bbox_pt": {
+        "height": 5.28,
+        "width": 15.84,
+        "x": 386.4,
+        "y": 184.8
+      },
+      "disposition": {
+        "issue": "#1620",
+        "kind": "issue",
+        "note": "Category labels of the two summary bar charts: 0.73-0.74pt left of native (#1620) with the row seating of #1621; the crops show matching text, face and bar geometry."
+      },
+      "id": "p2-956b3537ef63",
+      "region": "top"
+    },
+    {
+      "area_pt2": 48.8448,
+      "bbox_pt": {
+        "height": 22.08,
+        "width": 7.2,
+        "x": 159.36,
+        "y": 73.44
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-c0cb249b9193",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 44.928,
+      "bbox_pt": {
+        "height": 21.12,
+        "width": 4.8,
+        "x": 169.44,
+        "y": 72.0
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-437b1f4f6c6e",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 44.2368,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 9.6,
+        "x": 360.48,
+        "y": 431.52
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-77c9e8e8a17a",
+      "region": "center"
+    },
+    {
+      "area_pt2": 43.776,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 13.92,
+        "x": 744.96,
+        "y": 446.4
+      },
+      "disposition": {
+        "class": "shape-edge-antialiasing",
+        "kind": "accepted-rendering",
+        "note": "Sparkline column: the full-resolution crops show matching value vertices, colour and extent; native embeds a small bitmap per sparkline where the output strokes a vector path, so these residuals hug the stroke edges."
+      },
+      "id": "p2-4cdfaf46ead7",
+      "region": "right"
+    },
+    {
+      "area_pt2": 43.776,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 10.08,
+        "x": 391.2,
+        "y": 611.52
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-5aca95bcda88",
+      "region": "center"
+    },
+    {
+      "area_pt2": 42.624,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 9.6,
+        "x": 636.0,
+        "y": 492.96
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-e92c8b1c5549",
+      "region": "right"
+    },
+    {
+      "area_pt2": 41.0112,
+      "bbox_pt": {
+        "height": 21.12,
+        "width": 3.36,
+        "x": 251.04,
+        "y": 73.44
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-544ba8ae26b5",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 41.0112,
+      "bbox_pt": {
+        "height": 21.12,
+        "width": 3.36,
+        "x": 261.12,
+        "y": 73.44
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-c790a29f7bbf",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 41.0112,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 15.84,
+        "x": 734.88,
+        "y": 579.84
+      },
+      "disposition": {
+        "class": "shape-edge-antialiasing",
+        "kind": "accepted-rendering",
+        "note": "Sparkline column: the full-resolution crops show matching value vertices, colour and extent; native embeds a small bitmap per sparkline where the output strokes a vector path, so these residuals hug the stroke edges."
+      },
+      "id": "p2-0d6f26ceb4ed",
+      "region": "right"
+    },
+    {
+      "area_pt2": 40.32,
+      "bbox_pt": {
+        "height": 21.12,
+        "width": 1.92,
+        "x": 267.36,
+        "y": 72.0
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-9a767dfa414e",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 40.32,
+      "bbox_pt": {
+        "height": 21.12,
+        "width": 1.92,
+        "x": 257.28,
+        "y": 72.0
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-d4f6e4500d9a",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 39.6288,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 10.08,
+        "x": 297.6,
+        "y": 492.96
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-9f561f5a34bf",
+      "region": "center"
+    },
+    {
+      "area_pt2": 39.3984,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 9.12,
+        "x": 117.12,
+        "y": 818.88
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-4586200456f1",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 37.5552,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 8.16,
+        "x": 636.0,
+        "y": 611.52
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-5c60b075defc",
+      "region": "right"
+    },
+    {
+      "area_pt2": 37.5552,
+      "bbox_pt": {
+        "height": 16.32,
+        "width": 4.32,
+        "x": 131.52,
+        "y": 78.24
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-9210f6685a87",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 37.3248,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 7.68,
+        "x": 640.32,
+        "y": 431.52
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-3f95475e1f2d",
+      "region": "right"
+    },
+    {
+      "area_pt2": 37.3248,
+      "bbox_pt": {
+        "height": 14.88,
+        "width": 7.68,
+        "x": 123.36,
+        "y": 80.64
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-2760d94008d6",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 37.0944,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 11.04,
+        "x": 669.12,
+        "y": 448.32
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-4eb3211044d9",
+      "region": "right"
+    },
+    {
+      "area_pt2": 36.864,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 12.96,
+        "x": 372.96,
+        "y": 216.0
+      },
+      "disposition": {
+        "issue": "#1620",
+        "kind": "issue",
+        "note": "Category labels of the two summary bar charts: 0.73-0.74pt left of native (#1620) with the row seating of #1621; the crops show matching text, face and bar geometry."
+      },
+      "id": "p2-c41b0ca10a43",
+      "region": "top"
+    },
+    {
+      "area_pt2": 36.6336,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 10.08,
+        "x": 391.2,
+        "y": 492.96
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-fe46fcc03fc4",
+      "region": "center"
+    },
+    {
+      "area_pt2": 36.4032,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 7.68,
+        "x": 743.04,
+        "y": 816.96
+      },
+      "disposition": {
+        "class": "shape-edge-antialiasing",
+        "kind": "accepted-rendering",
+        "note": "Sparkline column: the full-resolution crops show matching value vertices, colour and extent; native embeds a small bitmap per sparkline where the output strokes a vector path, so these residuals hug the stroke edges."
+      },
+      "id": "p2-6a71a8a34bf8",
+      "region": "bottom-right"
+    },
+    {
+      "area_pt2": 36.1728,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 8.64,
+        "x": 549.12,
+        "y": 431.52
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-be335360fdca",
+      "region": "center"
+    },
+    {
+      "area_pt2": 35.9424,
+      "bbox_pt": {
+        "height": 14.88,
+        "width": 7.2,
+        "x": 113.28,
+        "y": 78.24
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-ca5c22743a97",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 35.4816,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 8.64,
+        "x": 708.0,
+        "y": 431.52
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-71aac8f10ecd",
+      "region": "right"
+    },
+    {
+      "area_pt2": 35.2512,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 8.16,
+        "x": 542.4,
+        "y": 432.0
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-ad46dfb4dd84",
+      "region": "center"
+    },
+    {
+      "area_pt2": 35.0208,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 5.76,
+        "x": 333.12,
+        "y": 431.52
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-b1496abaac21",
+      "region": "center"
+    },
+    {
+      "area_pt2": 34.0992,
+      "bbox_pt": {
+        "height": 15.36,
+        "width": 4.32,
+        "x": 146.88,
+        "y": 79.68
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-ea15e2d044ef",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 33.8688,
+      "bbox_pt": {
+        "height": 4.8,
+        "width": 9.6,
+        "x": 372.48,
+        "y": 261.6
+      },
+      "disposition": {
+        "issue": "#1620",
+        "kind": "issue",
+        "note": "Category labels of the two summary bar charts: 0.73-0.74pt left of native (#1620) with the row seating of #1621; the crops show matching text, face and bar geometry."
+      },
+      "id": "p2-657c934dfaba",
+      "region": "top"
+    },
+    {
+      "area_pt2": 33.8688,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 8.16,
+        "x": 297.6,
+        "y": 611.52
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-f6e83a31bad5",
+      "region": "center"
+    },
+    {
+      "area_pt2": 33.6384,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 5.76,
+        "x": 353.28,
+        "y": 431.52
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-896705b73124",
+      "region": "center"
+    },
+    {
+      "area_pt2": 33.6384,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 9.12,
+        "x": 391.68,
+        "y": 260.64
+      },
+      "disposition": {
+        "issue": "#1620",
+        "kind": "issue",
+        "note": "Category labels of the two summary bar charts: 0.73-0.74pt left of native (#1620) with the row seating of #1621; the crops show matching text, face and bar geometry."
+      },
+      "id": "p2-e5dec5dc8a79",
+      "region": "top"
+    },
+    {
+      "area_pt2": 33.408,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 6.72,
+        "x": 82.08,
+        "y": 907.68
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-1943c782bc10",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 33.408,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 9.6,
+        "x": 365.76,
+        "y": 199.68
+      },
+      "disposition": {
+        "issue": "#1620",
+        "kind": "issue",
+        "note": "Category labels of the two summary bar charts: 0.73-0.74pt left of native (#1620) with the row seating of #1621; the crops show matching text, face and bar geometry."
+      },
+      "id": "p2-fd40dd4b7685",
+      "region": "top"
+    },
+    {
+      "area_pt2": 33.1776,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 10.08,
+        "x": 121.92,
+        "y": 258.72
+      },
+      "disposition": {
+        "issue": "#1620",
+        "kind": "issue",
+        "note": "Category labels of the two summary bar charts: 0.73-0.74pt left of native (#1620) with the row seating of #1621; the crops show matching text, face and bar geometry."
+      },
+      "id": "p2-ff1f49f353d5",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 33.1776,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 12.0,
+        "x": 738.24,
+        "y": 461.28
+      },
+      "disposition": {
+        "class": "shape-edge-antialiasing",
+        "kind": "accepted-rendering",
+        "note": "Sparkline column: the full-resolution crops show matching value vertices, colour and extent; native embeds a small bitmap per sparkline where the output strokes a vector path, so these residuals hug the stroke edges."
+      },
+      "id": "p2-876b102df3dc",
+      "region": "right"
+    },
+    {
+      "area_pt2": 32.9472,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 6.24,
+        "x": 416.16,
+        "y": 611.52
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-a21be0ac3184",
+      "region": "center"
+    },
+    {
+      "area_pt2": 32.4864,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 6.24,
+        "x": 747.36,
+        "y": 698.4
+      },
+      "disposition": {
+        "class": "shape-edge-antialiasing",
+        "kind": "accepted-rendering",
+        "note": "Sparkline column: the full-resolution crops show matching value vertices, colour and extent; native embeds a small bitmap per sparkline where the output strokes a vector path, so these residuals hug the stroke edges."
+      },
+      "id": "p2-e17230393728",
+      "region": "right"
+    },
+    {
+      "area_pt2": 31.5648,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 7.2,
+        "x": 387.84,
+        "y": 431.52
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-af324a105884",
+      "region": "center"
+    },
+    {
+      "area_pt2": 31.3344,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 6.72,
+        "x": 423.36,
+        "y": 431.52
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-49eb4b14e425",
+      "region": "center"
+    },
+    {
+      "area_pt2": 31.104,
+      "bbox_pt": {
+        "height": 21.12,
+        "width": 1.92,
+        "x": 384.96,
+        "y": 72.0
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-9223c7b6eb82",
+      "region": "top"
+    },
+    {
+      "area_pt2": 30.8736,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 5.76,
+        "x": 747.84,
+        "y": 757.92
+      },
+      "disposition": {
+        "class": "shape-edge-antialiasing",
+        "kind": "accepted-rendering",
+        "note": "Sparkline column: the full-resolution crops show matching value vertices, colour and extent; native embeds a small bitmap per sparkline where the output strokes a vector path, so these residuals hug the stroke edges."
+      },
+      "id": "p2-3a4ed0f15c5a",
+      "region": "right"
+    },
+    {
+      "area_pt2": 30.8736,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 6.72,
+        "x": 574.08,
+        "y": 432.48
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-4d947af24ae3",
+      "region": "right"
+    },
+    {
+      "area_pt2": 30.6432,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 8.64,
+        "x": 360.96,
+        "y": 229.44
+      },
+      "disposition": {
+        "issue": "#1620",
+        "kind": "issue",
+        "note": "Category labels of the two summary bar charts: 0.73-0.74pt left of native (#1620) with the row seating of #1621; the crops show matching text, face and bar geometry."
+      },
+      "id": "p2-6693ca7a9c34",
+      "region": "top"
+    },
+    {
+      "area_pt2": 30.4128,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 7.2,
+        "x": 353.76,
+        "y": 229.44
+      },
+      "disposition": {
+        "issue": "#1620",
+        "kind": "issue",
+        "note": "Category labels of the two summary bar charts: 0.73-0.74pt left of native (#1620) with the row seating of #1621; the crops show matching text, face and bar geometry."
+      },
+      "id": "p2-7c0d7945015c",
+      "region": "top"
+    },
+    {
+      "area_pt2": 30.4128,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 7.68,
+        "x": 456.0,
+        "y": 492.96
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-9a364195b338",
+      "region": "center"
+    },
+    {
+      "area_pt2": 30.4128,
+      "bbox_pt": {
+        "height": 14.4,
+        "width": 3.84,
+        "x": 358.56,
+        "y": 80.64
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-0d7920ef8108",
+      "region": "top"
+    },
+    {
+      "area_pt2": 30.1824,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 6.72,
+        "x": 133.44,
+        "y": 760.8
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-c6b920a03c1f",
+      "region": "left"
+    },
+    {
+      "area_pt2": 30.1824,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 6.24,
+        "x": 416.16,
+        "y": 492.96
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-fbba4a60a75a",
+      "region": "center"
+    },
+    {
+      "area_pt2": 29.952,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 6.24,
+        "x": 332.64,
+        "y": 611.52
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-572cf52b28b3",
+      "region": "center"
+    },
+    {
+      "area_pt2": 29.952,
+      "bbox_pt": {
+        "height": 12.96,
+        "width": 3.36,
+        "x": 118.08,
+        "y": 80.16
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-a5a5a682714b",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 29.7216,
+      "bbox_pt": {
+        "height": 20.64,
+        "width": 1.44,
+        "x": 189.12,
+        "y": 72.0
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-3c938b9da8eb",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 29.7216,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 9.12,
+        "x": 733.92,
+        "y": 760.32
+      },
+      "disposition": {
+        "class": "shape-edge-antialiasing",
+        "kind": "accepted-rendering",
+        "note": "Sparkline column: the full-resolution crops show matching value vertices, colour and extent; native embeds a small bitmap per sparkline where the output strokes a vector path, so these residuals hug the stroke edges."
+      },
+      "id": "p2-9506a02f2216",
+      "region": "right"
+    },
+    {
+      "area_pt2": 29.7216,
+      "bbox_pt": {
+        "height": 18.72,
+        "width": 9.6,
+        "x": 199.2,
+        "y": 81.12
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-e4225ee90d8e",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 29.7216,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 8.16,
+        "x": 543.84,
+        "y": 492.96
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-4a71df7fa605",
+      "region": "center"
+    },
+    {
+      "area_pt2": 29.0304,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 5.28,
+        "x": 673.92,
+        "y": 611.52
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-d6a65c4e6746",
+      "region": "right"
+    },
+    {
+      "area_pt2": 29.0304,
+      "bbox_pt": {
+        "height": 14.4,
+        "width": 6.72,
+        "x": 369.6,
+        "y": 78.24
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-930f9b597228",
+      "region": "top"
+    },
+    {
+      "area_pt2": 29.0304,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 6.24,
+        "x": 733.92,
+        "y": 698.4
+      },
+      "disposition": {
+        "class": "shape-edge-antialiasing",
+        "kind": "accepted-rendering",
+        "note": "Sparkline column: the full-resolution crops show matching value vertices, colour and extent; native embeds a small bitmap per sparkline where the output strokes a vector path, so these residuals hug the stroke edges."
+      },
+      "id": "p2-048317910191",
+      "region": "right"
+    },
+    {
+      "area_pt2": 29.0304,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 5.76,
+        "x": 612.96,
+        "y": 431.52
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-1d638ee07ab0",
+      "region": "right"
+    },
+    {
+      "area_pt2": 28.8,
+      "bbox_pt": {
+        "height": 12.48,
+        "width": 3.36,
+        "x": 122.88,
+        "y": 81.12
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-f3221943a656",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 28.5696,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 5.76,
+        "x": 740.64,
+        "y": 698.4
+      },
+      "disposition": {
+        "class": "shape-edge-antialiasing",
+        "kind": "accepted-rendering",
+        "note": "Sparkline column: the full-resolution crops show matching value vertices, colour and extent; native embeds a small bitmap per sparkline where the output strokes a vector path, so these residuals hug the stroke edges."
+      },
+      "id": "p2-76bc106371df",
+      "region": "right"
+    },
+    {
+      "area_pt2": 28.5696,
+      "bbox_pt": {
+        "height": 13.44,
+        "width": 3.84,
+        "x": 378.24,
+        "y": 81.6
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-727493edbfa3",
+      "region": "top"
+    },
+    {
+      "area_pt2": 28.3392,
+      "bbox_pt": {
+        "height": 19.68,
+        "width": 1.44,
+        "x": 331.68,
+        "y": 74.88
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-7eca2fa949e4",
+      "region": "top"
+    },
+    {
+      "area_pt2": 27.8784,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 8.64,
+        "x": 642.24,
+        "y": 1100.64
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-4554bfe7437b",
+      "region": "bottom-right"
+    },
+    {
+      "area_pt2": 27.8784,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 4.8,
+        "x": 646.08,
+        "y": 132.96
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-209a4d244286",
+      "region": "top-right"
+    },
+    {
+      "area_pt2": 27.4176,
+      "bbox_pt": {
+        "height": 4.8,
+        "width": 10.56,
+        "x": 638.4,
+        "y": 465.12
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-5e8c4eb94fb0",
+      "region": "right"
+    },
+    {
+      "area_pt2": 27.1872,
+      "bbox_pt": {
+        "height": 12.96,
+        "width": 5.28,
+        "x": 170.88,
+        "y": 82.08
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-53fdce9a760e",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 26.9568,
+      "bbox_pt": {
+        "height": 18.72,
+        "width": 1.44,
+        "x": 184.32,
+        "y": 74.4
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-14ee8418c8cc",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 26.496,
+      "bbox_pt": {
+        "height": 13.44,
+        "width": 5.76,
+        "x": 306.24,
+        "y": 78.72
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-eb7484e54576",
+      "region": "top"
+    },
+    {
+      "area_pt2": 26.496,
+      "bbox_pt": {
+        "height": 13.44,
+        "width": 5.76,
+        "x": 271.68,
+        "y": 78.72
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-049b9880c59e",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 26.496,
+      "bbox_pt": {
+        "height": 13.44,
+        "width": 5.76,
+        "x": 406.08,
+        "y": 78.72
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-dd31813fd959",
+      "region": "top"
+    },
+    {
+      "area_pt2": 26.2656,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 6.24,
+        "x": 327.84,
+        "y": 581.76
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-37a973518410",
+      "region": "center"
+    },
+    {
+      "area_pt2": 26.2656,
+      "bbox_pt": {
+        "height": 18.24,
+        "width": 1.44,
+        "x": 87.36,
+        "y": 74.88
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-09debc415b02",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 26.2656,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 5.76,
+        "x": 138.24,
+        "y": 611.52
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-8cd7ef9263f6",
+      "region": "left"
+    },
+    {
+      "area_pt2": 25.8048,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 4.8,
+        "x": 172.32,
+        "y": 403.68
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-915447492f3a",
+      "region": "left"
+    },
+    {
+      "area_pt2": 25.5744,
+      "bbox_pt": {
+        "height": 4.32,
+        "width": 8.16,
+        "x": 390.24,
+        "y": 200.64
+      },
+      "disposition": {
+        "issue": "#1620",
+        "kind": "issue",
+        "note": "Category labels of the two summary bar charts: 0.73-0.74pt left of native (#1620) with the row seating of #1621; the crops show matching text, face and bar geometry."
+      },
+      "id": "p2-07583c53ec9a",
+      "region": "top"
+    },
+    {
+      "area_pt2": 25.1136,
+      "bbox_pt": {
+        "height": 4.8,
+        "width": 7.2,
+        "x": 695.52,
+        "y": 493.44
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-67c552cf8093",
+      "region": "right"
+    },
+    {
+      "area_pt2": 24.8832,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 4.32,
+        "x": 120.0,
+        "y": 760.8
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-72b40c4e0e17",
+      "region": "left"
+    },
+    {
+      "area_pt2": 24.8832,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 4.8,
+        "x": 99.36,
+        "y": 432.48
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-b79674288769",
+      "region": "left"
+    },
+    {
+      "area_pt2": 24.4224,
+      "bbox_pt": {
+        "height": 12.96,
+        "width": 1.92,
+        "x": 355.68,
+        "y": 79.2
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-d3e8c21ef3f5",
+      "region": "top"
+    },
+    {
+      "area_pt2": 23.9616,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 4.8,
+        "x": 450.72,
+        "y": 492.96
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-f3cccbcc91c3",
+      "region": "center"
+    },
+    {
+      "area_pt2": 23.9616,
+      "bbox_pt": {
+        "height": 12.96,
+        "width": 2.4,
+        "x": 350.88,
+        "y": 80.64
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-3393470727b7",
+      "region": "top"
+    },
+    {
+      "area_pt2": 23.7312,
+      "bbox_pt": {
+        "height": 2.88,
+        "width": 11.04,
+        "x": 291.36,
+        "y": 99.36
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-1861f4f5e2d4",
+      "region": "top"
+    },
+    {
+      "area_pt2": 23.7312,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 5.76,
+        "x": 613.44,
+        "y": 611.52
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-a87cc2480e48",
+      "region": "right"
+    },
+    {
+      "area_pt2": 23.7312,
+      "bbox_pt": {
+        "height": 12.96,
+        "width": 2.4,
+        "x": 178.56,
+        "y": 80.16
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-4f56e3fd42ab",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 23.7312,
+      "bbox_pt": {
+        "height": 2.88,
+        "width": 11.04,
+        "x": 391.2,
+        "y": 99.36
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-d1ca1824745f",
+      "region": "top"
+    },
+    {
+      "area_pt2": 23.5008,
+      "bbox_pt": {
+        "height": 5.28,
+        "width": 8.16,
+        "x": 670.56,
+        "y": 968.64
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-0b5bcca1d401",
+      "region": "bottom-right"
+    },
+    {
+      "area_pt2": 23.5008,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 6.72,
+        "x": 300.96,
+        "y": 1101.12
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-cfa6d8832e58",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 23.5008,
+      "bbox_pt": {
+        "height": 5.28,
+        "width": 5.76,
+        "x": 402.24,
+        "y": 230.88
+      },
+      "disposition": {
+        "issue": "#1620",
+        "kind": "issue",
+        "note": "Category labels of the two summary bar charts: 0.73-0.74pt left of native (#1620) with the row seating of #1621; the crops show matching text, face and bar geometry."
+      },
+      "id": "p2-e3a31583e84b",
+      "region": "top"
+    },
+    {
+      "area_pt2": 23.5008,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 5.28,
+        "x": 148.8,
+        "y": 432.48
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-5f3b44f34597",
+      "region": "left"
+    },
+    {
+      "area_pt2": 23.2704,
+      "bbox_pt": {
+        "height": 5.28,
+        "width": 7.68,
+        "x": 146.4,
+        "y": 465.12
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-42defc2733c5",
+      "region": "left"
+    },
+    {
+      "area_pt2": 23.2704,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 7.2,
+        "x": 514.08,
+        "y": 1100.16
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-80aeab566853",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 23.2704,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 4.32,
+        "x": 297.6,
+        "y": 431.52
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-f2b0e2e791e7",
+      "region": "center"
+    },
+    {
+      "area_pt2": 23.2704,
+      "bbox_pt": {
+        "height": 4.8,
+        "width": 9.12,
+        "x": 671.04,
+        "y": 672.48
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-72396c7ecc93",
+      "region": "right"
+    },
+    {
+      "area_pt2": 23.2704,
+      "bbox_pt": {
+        "height": 13.92,
+        "width": 6.72,
+        "x": 98.4,
+        "y": 78.72
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-66105752fc03",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 23.04,
+      "bbox_pt": {
+        "height": 4.8,
+        "width": 6.24,
+        "x": 366.72,
+        "y": 246.72
+      },
+      "disposition": {
+        "issue": "#1620",
+        "kind": "issue",
+        "note": "Category labels of the two summary bar charts: 0.73-0.74pt left of native (#1620) with the row seating of #1621; the crops show matching text, face and bar geometry."
+      },
+      "id": "p2-641f9e610be1",
+      "region": "top"
+    },
+    {
+      "area_pt2": 22.8096,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 5.76,
+        "x": 82.56,
+        "y": 611.52
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-b915b92c77f9",
+      "region": "left"
+    },
+    {
+      "area_pt2": 22.5792,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 6.24,
+        "x": 672.48,
+        "y": 864.48
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-d52e083be5c9",
+      "region": "bottom-right"
+    },
+    {
+      "area_pt2": 22.3488,
+      "bbox_pt": {
+        "height": 12.0,
+        "width": 1.92,
+        "x": 152.64,
+        "y": 81.12
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-411c57090426",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 22.3488,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 4.8,
+        "x": 450.72,
+        "y": 611.52
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-4bf4f385933a",
+      "region": "center"
+    },
+    {
+      "area_pt2": 22.3488,
+      "bbox_pt": {
+        "height": 12.0,
+        "width": 1.92,
+        "x": 424.32,
+        "y": 81.12
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-ce55844aa472",
+      "region": "top"
+    },
+    {
+      "area_pt2": 22.3488,
+      "bbox_pt": {
+        "height": 5.28,
+        "width": 6.24,
+        "x": 136.32,
+        "y": 435.36
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-fc7505c17f30",
+      "region": "left"
+    },
+    {
+      "area_pt2": 22.3488,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 4.8,
+        "x": 94.08,
+        "y": 492.96
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-8395e280d642",
+      "region": "left"
+    },
+    {
+      "area_pt2": 22.1184,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 5.76,
+        "x": 664.32,
+        "y": 431.52
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-d327b1125b68",
+      "region": "right"
+    },
+    {
+      "area_pt2": 21.888,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 5.28,
+        "x": 673.92,
+        "y": 492.96
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-9583ce6cc811",
+      "region": "right"
+    },
+    {
+      "area_pt2": 21.888,
+      "bbox_pt": {
+        "height": 4.32,
+        "width": 7.68,
+        "x": 670.56,
+        "y": 554.4
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-e96b3d51434a",
+      "region": "right"
+    },
+    {
+      "area_pt2": 21.888,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 4.8,
+        "x": 94.08,
+        "y": 611.52
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-30232635949e",
+      "region": "left"
+    },
+    {
+      "area_pt2": 21.888,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 4.32,
+        "x": 328.8,
+        "y": 431.52
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-db5c9aa4d180",
+      "region": "center"
+    },
+    {
+      "area_pt2": 21.888,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 7.2,
+        "x": 487.68,
+        "y": 448.8
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-3c53e205f8c9",
+      "region": "center"
+    },
+    {
+      "area_pt2": 21.6576,
+      "bbox_pt": {
+        "height": 11.52,
+        "width": 3.36,
+        "x": 374.4,
+        "y": 80.16
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-990baef51ec1",
+      "region": "top"
+    },
+    {
+      "area_pt2": 21.6576,
+      "bbox_pt": {
+        "height": 5.28,
+        "width": 7.2,
+        "x": 637.44,
+        "y": 449.28
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-9d84c343fce5",
+      "region": "right"
+    },
+    {
+      "area_pt2": 21.6576,
+      "bbox_pt": {
+        "height": 10.08,
+        "width": 2.88,
+        "x": 166.08,
+        "y": 430.56
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-9ae56051ea3a",
+      "region": "left"
+    },
+    {
+      "area_pt2": 21.4272,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 6.24,
+        "x": 332.64,
+        "y": 492.96
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-9c73434f8eb8",
+      "region": "center"
+    },
+    {
+      "area_pt2": 21.4272,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 6.24,
+        "x": 752.16,
+        "y": 816.96
+      },
+      "disposition": {
+        "class": "shape-edge-antialiasing",
+        "kind": "accepted-rendering",
+        "note": "Sparkline column: the full-resolution crops show matching value vertices, colour and extent; native embeds a small bitmap per sparkline where the output strokes a vector path, so these residuals hug the stroke edges."
+      },
+      "id": "p2-37c4b1ac164d",
+      "region": "bottom-right"
+    },
+    {
+      "area_pt2": 21.1968,
+      "bbox_pt": {
+        "height": 5.28,
+        "width": 6.72,
+        "x": 99.36,
+        "y": 909.6
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-cfcde8f893e7",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 21.1968,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 4.8,
+        "x": 122.88,
+        "y": 492.96
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-253c2c45c2c6",
+      "region": "left"
+    },
+    {
+      "area_pt2": 21.1968,
+      "bbox_pt": {
+        "height": 12.96,
+        "width": 6.24,
+        "x": 97.92,
+        "y": 72.48
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-4e9bbe377391",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 20.9664,
+      "bbox_pt": {
+        "height": 4.8,
+        "width": 6.24,
+        "x": 139.2,
+        "y": 259.68
+      },
+      "disposition": {
+        "issue": "#1620",
+        "kind": "issue",
+        "note": "Category labels of the two summary bar charts: 0.73-0.74pt left of native (#1620) with the row seating of #1621; the crops show matching text, face and bar geometry."
+      },
+      "id": "p2-54a75cade146",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 20.9664,
+      "bbox_pt": {
+        "height": 4.32,
+        "width": 7.2,
+        "x": 126.24,
+        "y": 205.92
+      },
+      "disposition": {
+        "issue": "#1620",
+        "kind": "issue",
+        "note": "Category labels of the two summary bar charts: 0.73-0.74pt left of native (#1620) with the row seating of #1621; the crops show matching text, face and bar geometry."
+      },
+      "id": "p2-722221f8c63e",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 20.736,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 4.32,
+        "x": 82.08,
+        "y": 759.36
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-23c274b2a72e",
+      "region": "left"
+    },
+    {
+      "area_pt2": 20.736,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 4.8,
+        "x": 422.88,
+        "y": 611.52
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-79eec977f214",
+      "region": "center"
+    },
+    {
+      "area_pt2": 20.736,
+      "bbox_pt": {
+        "height": 13.92,
+        "width": 1.92,
+        "x": 365.28,
+        "y": 79.2
+      },
+      "disposition": {
+        "issue": "#1623",
+        "kind": "issue",
+        "note": "Glyph slivers of the Cambria 42pt title, which starts 1.255pt left of native (#1623); the full-resolution title crop shows matching content, weight and size."
+      },
+      "id": "p2-d9d9d94ad6d7",
+      "region": "top"
+    },
+    {
+      "area_pt2": 20.736,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 4.32,
+        "x": 414.72,
+        "y": 431.52
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-4b2e0182c473",
+      "region": "center"
+    },
+    {
+      "area_pt2": 20.5056,
+      "bbox_pt": {
+        "height": 4.32,
+        "width": 7.68,
+        "x": 358.56,
+        "y": 539.52
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-2ab5d9867f9e",
+      "region": "center"
+    },
+    {
+      "area_pt2": 20.5056,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 3.36,
+        "x": 511.68,
+        "y": 431.52
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-b1fd3cb74322",
+      "region": "center"
+    },
+    {
+      "area_pt2": 20.5056,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 4.8,
+        "x": 385.92,
+        "y": 611.52
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-943d6bbddcdf",
+      "region": "center"
+    },
+    {
+      "area_pt2": 20.5056,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 5.76,
+        "x": 541.92,
+        "y": 581.76
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-002ef656aa5f",
+      "region": "center"
+    },
+    {
+      "area_pt2": 20.5056,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 5.76,
+        "x": 94.56,
+        "y": 241.92
+      },
+      "disposition": {
+        "issue": "#1620",
+        "kind": "issue",
+        "note": "Category labels of the two summary bar charts: 0.73-0.74pt left of native (#1620) with the row seating of #1621; the crops show matching text, face and bar geometry."
+      },
+      "id": "p2-728efa6ab2ef",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 20.5056,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 5.28,
+        "x": 736.8,
+        "y": 819.84
+      },
+      "disposition": {
+        "class": "shape-edge-antialiasing",
+        "kind": "accepted-rendering",
+        "note": "Sparkline column: the full-resolution crops show matching value vertices, colour and extent; native embeds a small bitmap per sparkline where the output strokes a vector path, so these residuals hug the stroke edges."
+      },
+      "id": "p2-fa2df3f79c6b",
+      "region": "bottom-right"
+    },
+    {
+      "area_pt2": 20.5056,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 6.24,
+        "x": 136.32,
+        "y": 205.92
+      },
+      "disposition": {
+        "issue": "#1620",
+        "kind": "issue",
+        "note": "Category labels of the two summary bar charts: 0.73-0.74pt left of native (#1620) with the row seating of #1621; the crops show matching text, face and bar geometry."
+      },
+      "id": "p2-8291d6087b9e",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 20.0448,
+      "bbox_pt": {
+        "height": 5.28,
+        "width": 5.76,
+        "x": 456.0,
+        "y": 611.52
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-3c45ed618306",
+      "region": "center"
+    },
+    {
+      "area_pt2": 20.0448,
+      "bbox_pt": {
+        "height": 4.8,
+        "width": 7.68,
+        "x": 673.44,
+        "y": 1043.04
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-05bfc41ad922",
+      "region": "bottom-right"
+    },
+    {
+      "area_pt2": 20.0448,
+      "bbox_pt": {
+        "height": 5.28,
+        "width": 8.64,
+        "x": 221.28,
+        "y": 432.96
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-7f93d923155c",
+      "region": "left"
+    },
+    {
+      "area_pt2": 20.0448,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 4.32,
+        "x": 700.32,
+        "y": 552.48
+      },
+      "disposition": {
+        "issue": "#1545",
+        "kind": "issue",
+        "note": "Worksheet cell text: baselines 1.38-2.16pt above native (#1545); right-aligned numbers also sit 2.20pt right of native, tracked separately as a horizontal residual. Content, face and colour match in the crops."
+      },
+      "id": "p2-08ea5d9b687a",
+      "region": "right"
+    }
+  ],
+  "dpi": 150,
+  "duplicate_disposition_cluster_ids": [],
+  "errors": [],
+  "fuzz_percent": 5,
+  "minimum_area_pt2": 20.0,
+  "page": 2,
+  "passed": true,
+  "renderer_observations": [],
+  "schema_version": 1,
+  "strict": true,
+  "summary": {
+    "dispositioned": 167,
+    "duplicate": 0,
+    "total": 167,
+    "undispositioned": 0,
+    "unknown": 0
+  },
+  "undispositioned_cluster_ids": [],
+  "unknown_disposition_cluster_ids": []
+}

@@ -7452,6 +7452,132 @@ fn the_bars_and_category_labels_follow_a_stated_plot_rectangle() {
     );
 }
 
+// ----- A stated plot rectangle that overruns its chart area (issue #1272) -----
+
+/// The chart area the reported workbook's drawing anchor gives its
+/// `january cash flow:` bar chart, in points before the sheet's 0.78 print
+/// scale. The native export prints it 123.38 x 161.86pt, which is this at 0.78.
+const CASH_FLOW_BAR_CHART_FRAME: (f64, f64) = (158.18, 207.51);
+
+/// That chart's `c:plotArea/c:layout/c:manualLayout`, verbatim: a plot the
+/// full chart-area width, starting 9.2% of the way in.
+const CASH_FLOW_BAR_PLOT_LAYOUT: crate::ir::ChartPlotAreaLayout = crate::ir::ChartPlotAreaLayout {
+    x: 0.091_961_072_570_217_49,
+    y: 0.327_691_879_586_070_1,
+    width: 1.0,
+    height: 0.594_654_619_546_440_2,
+};
+
+/// One pull-back case: the layout as stated and the plot edges the native
+/// export puts it at, as `[left, top, right, bottom]` fractions of the frame.
+type PulledBackPlotCase = (&'static str, crate::ir::ChartPlotAreaLayout, [f64; 4]);
+
+/// A stated rectangle that would run past the chart area is pulled back until
+/// its far edge lands on the chart area's, along that axis alone.
+///
+/// Native Excel for Mac 16 exports of the reported workbook with one value of
+/// the cash-flow chart's layout rewritten per variant, the plot read off its
+/// plot-area fill and its category axis as fractions of the printed chart
+/// area: the file's own `x` 0.092 with `w` 1 prints from the chart area's left
+/// edge, and so do `x` 0.2 and `x` 0; `w` 0.95 starts at 0.05 and `x` 0.3 with
+/// `w` 0.8 at 0.2, each given back exactly its overrun; `w` 0.9 keeps its 0.092
+/// because it fits. Down the frame, `y` 0.5 comes back to 0.4053 and `h` 0.7
+/// pulls `y` 0.3277 back to 0.3, the other axis holding still throughout.
+/// Taking the fractions as written had put this chart's plot 13.9pt right of
+/// the export's (issue #1272).
+#[test]
+fn a_stated_plot_rectangle_that_overruns_the_chart_area_is_pulled_back_inside_it() {
+    let (frame_w, frame_h) = CASH_FLOW_BAR_CHART_FRAME;
+    let as_written = CASH_FLOW_BAR_PLOT_LAYOUT;
+    let cases: [PulledBackPlotCase; 8] = [
+        (
+            "x 0.092 w 1, as the file states",
+            as_written,
+            [0.0, 0.3277, 1.0, 0.9224],
+        ),
+        (
+            "x 0.2 w 1",
+            crate::ir::ChartPlotAreaLayout {
+                x: 0.2,
+                ..as_written
+            },
+            [0.0, 0.3277, 1.0, 0.9224],
+        ),
+        (
+            "x 0 w 1",
+            crate::ir::ChartPlotAreaLayout {
+                x: 0.0,
+                ..as_written
+            },
+            [0.0, 0.3277, 1.0, 0.9224],
+        ),
+        (
+            "w 0.9 fits and stays where it is",
+            crate::ir::ChartPlotAreaLayout {
+                width: 0.9,
+                ..as_written
+            },
+            [0.092, 0.3277, 0.992, 0.9224],
+        ),
+        (
+            "w 0.95 gives back its 0.042 overrun",
+            crate::ir::ChartPlotAreaLayout {
+                width: 0.95,
+                ..as_written
+            },
+            [0.05, 0.3277, 1.0, 0.9224],
+        ),
+        (
+            "x 0.3 w 0.8 gives back its 0.1 overrun",
+            crate::ir::ChartPlotAreaLayout {
+                x: 0.3,
+                width: 0.8,
+                ..as_written
+            },
+            [0.2, 0.3277, 1.0, 0.9224],
+        ),
+        (
+            "y 0.5 comes back up the frame",
+            crate::ir::ChartPlotAreaLayout {
+                y: 0.5,
+                ..as_written
+            },
+            [0.0, 0.4053, 1.0, 1.0],
+        ),
+        (
+            "h 0.7 pulls y back to 0.3",
+            crate::ir::ChartPlotAreaLayout {
+                height: 0.7,
+                ..as_written
+            },
+            [0.0, 0.3, 1.0, 1.0],
+        ),
+    ];
+
+    for (case, layout, [left, top, right, bottom]) in cases {
+        let mut chart: Chart = cash_flow_bar_chart();
+        chart.plot_area_layout = Some(layout);
+        let actual = axis_plot_rect(&chart, CASH_FLOW_BAR_CHART_FRAME, false);
+        let expected = (
+            left * frame_w,
+            top * frame_h,
+            right * frame_w,
+            bottom * frame_h,
+        );
+        let errors = [
+            ("left", actual.0, expected.0),
+            ("top", actual.1, expected.1),
+            ("right", actual.2, expected.2),
+            ("bottom", actual.3, expected.3),
+        ]
+        .map(|(edge, actual, expected)| (edge, actual, expected, (actual - expected).abs()));
+        assert!(
+            errors.iter().all(|(_, _, _, error)| *error <= 0.05),
+            "{case}: plot edges {errors:?}"
+        );
+    }
+}
+
 // ----- Line-family plot rectangles (issue #1265) -----
 
 /// The chart area and inner plot rectangle of `xl/charts/chart2.xml` in

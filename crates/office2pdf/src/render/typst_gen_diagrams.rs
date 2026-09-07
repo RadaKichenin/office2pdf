@@ -2854,16 +2854,12 @@ fn automatic_plot_origin(chart: &Chart, content_frame: Option<(f64, f64)>) -> (f
 /// The fractions are of the whole chart area, whose top edge is `title_h` above
 /// the box, so the stated `y` comes back down by that much.
 ///
-/// Nothing here is clamped to the frame, because Excel does not clamp it
-/// either: `chart1.xml` of `tests/fixtures/xlsx/issue_1181_fit_to_height.xlsx`
-/// states `x` 0.092 with `w` 1, and the native export draws that plot a full
-/// chart-area width from 9.2% in — 11.35pt of printed plot past the chart's own
-/// right edge, with the plot-area fill measuring 123.381pt against a 123.3807pt
-/// chart area. (Excel does pull a plot back in eventually: probes at `x` 0.5 and
-/// at `w` 0.9 both landed their right edge on the same 309.26pt of a chart area
-/// running 80.14..320.36pt. What sets that limit is not established, and no
-/// chart in the corpus reaches it, so the stated fractions are taken as
-/// written.)
+/// A rectangle that would run past the chart area is pulled back inside it
+/// along that axis — see [`pulled_back_plot_edge`]. `chart1.xml` of
+/// `tests/fixtures/xlsx/issue_1181_fit_to_height.xlsx` states `x` 0.092 with
+/// `w` 1, and its native export draws the plot from the chart area's own left
+/// edge; taken as written, the plot sat 13.9pt right of the export's
+/// (issue #1272).
 ///
 /// `None` for a chart that states no rectangle, and for an unframed one: a
 /// flowed chart sizes itself from its own content, so there is no chart area to
@@ -2876,11 +2872,35 @@ fn stated_plot_rect(
     let layout: crate::ir::ChartPlotAreaLayout = chart.plot_area_layout?;
     let (frame_w, frame_h) = frame?;
     Some((
-        layout.x * frame_w,
-        layout.y * frame_h - title_h,
+        pulled_back_plot_edge(layout.x, layout.width) * frame_w,
+        pulled_back_plot_edge(layout.y, layout.height) * frame_h - title_h,
         layout.width * frame_w,
         layout.height * frame_h,
     ))
+}
+
+/// Excel's reading of a stated plot edge whose rectangle would overrun the
+/// chart area: the plot keeps its size and comes back until its far edge lands
+/// on the chart area's, and no further.
+///
+/// Measured on native Excel for Mac 16 exports of
+/// `tests/fixtures/xlsx/issue_1181_fit_to_height.xlsx` with one value of its
+/// cash-flow chart's layout rewritten per variant, the plot read off its
+/// plot-area fill and category axis. Along the width, `x` 0.092, 0.2 and 0
+/// with `w` 1 all print from the left edge; `w` 0.95 starts at 0.05 and `x` 0.3
+/// with `w` 0.8 at 0.2, each given back exactly its overrun; `w` 0.9 keeps its
+/// 0.092 because it fits. Down the frame, `y` 0.5 comes back to 0.4053 and
+/// `h` 0.7 pulls `y` 0.3277 back to 0.3, the other axis holding still every
+/// time. A rectangle larger than the chart area, or one starting before it,
+/// never reaches here: the parser keeps the automatic layout for it, as Excel
+/// does, so the pulled-back edge is never negative.
+///
+/// That chart has no tick labels. Where an axis carries them, Excel's limit
+/// sits inside the chart area by the labels' own overhang — the `january
+/// income:` chart of the same workbook stops its plot's right edge at 0.9538
+/// of the chart area for `x` 0.33 and above — which this does not model.
+fn pulled_back_plot_edge(edge: f64, size: f64) -> f64 {
+    edge.min(1.0 - size)
 }
 
 /// The plotting rectangle of a framed axis plot, in the plot box's own
