@@ -3329,3 +3329,42 @@ fn test_sheet_cell_grid_puts_the_last_origin_on_the_grid() {
         "'OK' should be tracked -0.02pt so its second glyph lands 7pt along, got {tracking}"
     );
 }
+
+// ── Style-suffixed family names state their weight (issue #1286) ──
+
+/// A run naming the light member of a family draws in that member where the
+/// host ships it. The font book indexes `calibril.ttf` as `Calibri` at 300,
+/// never as `Calibri Light`, so an availability check keyed on the untrimmed
+/// name dropped the inferred weight and Typst's `#heading` bold took over on
+/// every theme heading (issue #1286).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_run_naming_a_light_member_states_its_weight_where_the_face_is_indexed() {
+    use crate::render::font_context::resolve_font_search_context_from_fonts;
+    use crate::render::font_context::test_faces::noto_serif_at_weight;
+
+    let run = Run {
+        text: "Heading 1".to_string(),
+        style: TextStyle {
+            font_family: Some("Noto Serif Light".to_string()),
+            font_size: Some(16.0),
+            ..TextStyle::default()
+        },
+        href: None,
+        footnote: None,
+    };
+
+    let light_indexed = resolve_font_search_context_from_fonts(&[noto_serif_at_weight(300)]);
+    let source = generated_source(std::slice::from_ref(&run), &light_indexed);
+    assert!(
+        source.contains("weight: \"light\""),
+        "the indexed light member must be asked for by weight, got:\n{source}"
+    );
+
+    let regular_only = resolve_font_search_context_from_fonts(&[noto_serif_at_weight(400)]);
+    let source = generated_source(std::slice::from_ref(&run), &regular_only);
+    assert!(
+        !source.contains("weight:"),
+        "with no light member indexed the run must state no weight, got:\n{source}"
+    );
+}

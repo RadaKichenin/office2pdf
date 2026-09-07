@@ -4855,29 +4855,38 @@ pub(super) fn has_text_properties(style: &TextStyle) -> bool {
         || style.baseline_shift.is_some()
 }
 
+/// The Typst weight name a family name's style suffix states, so the run asks
+/// for the member the name denotes: `Calibri Light` for `weight: "light"`.
+///
+/// Shares its parse with the availability check, so the weight a run states
+/// is the one [`font_subst::is_primary_font_available`] vouched for. A name
+/// stating no weight, or `Regular`, states nothing the run does not already
+/// inherit.
 fn inferred_font_weight(font_family: &str) -> Option<&'static str> {
-    let lower = font_family.trim().to_ascii_lowercase();
-    if lower.contains("extrabold") || lower.contains("extra bold") {
-        Some("extrabold")
-    } else if lower.contains("semibold") || lower.contains("semi bold") {
-        Some("semibold")
-    } else if lower.contains("medium") {
-        Some("medium")
-    } else if lower.contains("light") {
-        Some("light")
-    } else {
-        None
-    }
+    let weight: typst::text::FontWeight = font_subst::weight_stated_by_family_name(font_family)?;
+    Some(match weight {
+        typst::text::FontWeight::THIN => "thin",
+        typst::text::FontWeight::EXTRALIGHT => "extralight",
+        typst::text::FontWeight::LIGHT => "light",
+        typst::text::FontWeight::MEDIUM => "medium",
+        typst::text::FontWeight::SEMIBOLD => "semibold",
+        typst::text::FontWeight::BOLD => "bold",
+        typst::text::FontWeight::EXTRABOLD => "extrabold",
+        typst::text::FontWeight::BLACK => "black",
+        _ => return None,
+    })
 }
 
 fn font_weight_rank(weight: &str) -> u8 {
     match weight {
-        "light" => 1,
-        "medium" => 2,
-        "semibold" => 3,
-        "bold" => 4,
-        "extrabold" => 5,
-        "black" => 6,
+        "thin" => 1,
+        "extralight" => 2,
+        "light" => 3,
+        "medium" => 4,
+        "semibold" => 5,
+        "bold" => 6,
+        "extrabold" => 7,
+        "black" => 8,
         _ => 0,
     }
 }
