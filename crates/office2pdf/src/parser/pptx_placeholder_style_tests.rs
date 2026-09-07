@@ -368,3 +368,47 @@ fn test_run_typeface_overrides_inherited_default_font() {
     assert_eq!(style.font_family.as_deref(), Some("Malgun Gothic"));
     assert_eq!(style.bold, Some(true));
 }
+
+/// Slide 12 of the #1375 deck, reduced: the master body style paces every
+/// level at 90%, the placeholder's heading paragraph states 130% and its body
+/// paragraph 110%, and the box saves `fontScale="70000"
+/// lnSpcReduction="20000"`. A native PowerPoint export paints the 35pt heading
+/// at 25pt and the 22pt body at 15pt, and paces the body at 110% - 20% = 90%,
+/// the same pitch as the unreduced 90% neighbours on that slide. The third
+/// paragraph states no spacing of its own; ECMA-376 21.1.2.1.2 subtracts the
+/// reduction from each paragraph's line spacing, and the inherited 90% is that
+/// spacing, so it loses the same 20%.
+#[test]
+fn saved_normal_autofit_composes_with_inherited_line_spacing_by_subtraction() {
+    let body_style = r#"<p:bodyStyle><a:lvl1pPr><a:lnSpc><a:spcPct val="90000"/></a:lnSpc><a:defRPr sz="1600"/></a:lvl1pPr></p:bodyStyle>"#;
+    let placeholder = r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="Placeholder"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph type="body" idx="23"/></p:nvPr></p:nvSpPr><p:spPr><a:xfrm><a:off x="7046600" y="3002770"/><a:ext cx="4422244" cy="1648628"/></a:xfrm></p:spPr><p:txBody><a:bodyPr><a:normAutofit fontScale="70000" lnSpcReduction="20000"/></a:bodyPr><a:lstStyle/><a:p><a:pPr><a:lnSpc><a:spcPct val="130000"/></a:lnSpc></a:pPr><a:r><a:rPr lang="en-US" sz="3500" b="1"/><a:t>Heading 2</a:t></a:r></a:p><a:p><a:pPr><a:lnSpc><a:spcPct val="110000"/></a:lnSpc></a:pPr><a:r><a:rPr lang="en-US" sz="2200" i="1"/><a:t>Lorem ipsum dolor sit amet</a:t></a:r></a:p><a:p><a:r><a:rPr lang="en-US" sz="2200" i="1"/><a:t>Inherited pitch</a:t></a:r></a:p></p:txBody></p:sp>"#;
+    let slide = make_slide(&[placeholder.to_string()]);
+    let layout = make_layout(&[]);
+    let master = make_master_with_tx_styles(body_style);
+    let data = build_test_pptx_with_layout_master(SLIDE_CX, SLIDE_CY, &slide, &layout, &master);
+
+    let doc = parse_document(&data);
+    let runs = collect_runs(&doc);
+    let (_, heading_style, heading_paragraph) = run_for(&runs, "Heading 2");
+    let (_, body_style_resolved, body_paragraph) = run_for(&runs, "Lorem ipsum");
+    let (_, inherited_style, inherited_paragraph) = run_for(&runs, "Inherited pitch");
+
+    assert_eq!(heading_style.font_size, Some(25.0));
+    assert_eq!(body_style_resolved.font_size, Some(15.0));
+    assert_eq!(inherited_style.font_size, Some(15.0));
+    assert!(
+        matches!(heading_paragraph.line_spacing, Some(LineSpacing::Proportional(value)) if (value - 1.1).abs() < 1e-9),
+        "130% - 20% = 110%, got {:?}",
+        heading_paragraph.line_spacing
+    );
+    assert!(
+        matches!(body_paragraph.line_spacing, Some(LineSpacing::Proportional(value)) if (value - 0.9).abs() < 1e-9),
+        "110% - 20% = 90%, got {:?}",
+        body_paragraph.line_spacing
+    );
+    assert!(
+        matches!(inherited_paragraph.line_spacing, Some(LineSpacing::Proportional(value)) if (value - 0.7).abs() < 1e-9),
+        "the inherited 90% is a stated value and loses the same 20%, got {:?}",
+        inherited_paragraph.line_spacing
+    );
+}
