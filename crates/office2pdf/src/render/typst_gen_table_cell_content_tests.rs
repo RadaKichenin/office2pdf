@@ -2398,6 +2398,168 @@ fn row_spanning_cell_keeps_its_declared_alignment_in_a_tight_row() {
     );
 }
 
+/// A table style's rule on a sheet row's boundary does not shrink the room
+/// Excel gives that row's text. `table-multiple.xlsx` sheet 1 re-exported with
+/// `TableStyleLight1`, `Medium2`, `Medium9`, `Medium16` and `Medium22` seats
+/// the header labels on the same 67pt baseline as the rule-free table, while
+/// counting each rule's half-width as inset made the 17pt row read as tight
+/// and swapped its bottom seat for the centred line one point higher
+/// (issue #1277).
+///
+/// The same face, size, padding and track with and without the rule must
+/// resolve the same seat: a row roomy enough to honour its cells' declared
+/// alignments stays roomy when a rule lands on its boundary.
+#[test]
+fn boundary_rule_does_not_make_a_roomy_sheet_row_tight() {
+    let Some((_, _, pitch_em)) = crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+    let font_size: f64 = 10.0;
+    let padding = Insets {
+        top: 1.0,
+        right: 2.0,
+        bottom: 1.5,
+        left: 3.0,
+    };
+    // Bare, the row's text box clears the line by more than the half-point
+    // quantisation slack; the two half-widths of a 1pt rule above and below
+    // would eat that room and nothing else.
+    let track_pt: f64 = pitch_em * font_size + padding.top + padding.bottom + 0.9;
+    let rule = || {
+        Some(BorderSide {
+            width: 1.0,
+            color: Color::white(),
+            style: BorderLineStyle::Solid,
+            join: LineJoin::Round,
+        })
+    };
+    let make_cell = |text: &str, ruled: bool| TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: text.to_string(),
+                style: TextStyle {
+                    font_family: Some("Libertinus Serif".to_string()),
+                    font_size: Some(font_size),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })],
+        border: ruled.then(|| CellBorder {
+            top: rule(),
+            bottom: rule(),
+            left: None,
+            right: None,
+        }),
+        ..TableCell::default()
+    };
+    let make_row = |ruled: bool| TableRow {
+        minimum_height: None,
+        cells: vec![make_cell("Item", ruled), make_cell("Quantity", ruled)],
+        height: Some(track_pt),
+    };
+    let source_for = |ruled: bool| {
+        let table = Table {
+            rows: vec![make_row(ruled)],
+            column_widths: vec![53.0, 65.0],
+            default_cell_padding: Some(padding),
+            default_vertical_align: Some(CellVerticalAlign::Bottom),
+            seats_bottom_aligned_text_on_descender: true,
+            border_paint_model: TableBorderPaintModel::ExcelBoundaryBands,
+            prints_gridlines: false,
+            prints_headings: false,
+            ..Table::default()
+        };
+        let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+        generate_typst(&doc).unwrap().source
+    };
+    let bare = source_for(false);
+    let ruled = source_for(true);
+
+    assert_eq!(
+        bare.matches("align: horizon").count(),
+        0,
+        "the rule-free row has room for its bottom seat: {bare}"
+    );
+    assert_eq!(
+        ruled.matches("align: horizon").count(),
+        0,
+        "a rule on the row's boundary must not collapse it onto the centred line: {ruled}"
+    );
+}
+
+/// Triangulation: the rule's layout share is what must not count, not the
+/// tightness gate itself. A row already tight without any rule keeps
+/// anchoring every cell on its one centred line when a rule lands on its
+/// boundary (issues #839, #1277).
+#[test]
+fn boundary_rule_leaves_a_tight_sheet_row_tight() {
+    let Some((_, _, pitch_em)) = crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+    let font_size: f64 = 10.0;
+    let padding = Insets {
+        top: 1.0,
+        right: 2.0,
+        bottom: 1.5,
+        left: 3.0,
+    };
+    let track_pt: f64 = pitch_em * font_size + padding.top + padding.bottom + 0.25;
+    let table = Table {
+        rows: vec![TableRow {
+            minimum_height: None,
+            cells: vec![TableCell {
+                content: vec![Block::Paragraph(Paragraph {
+                    style: ParagraphStyle::default(),
+                    runs: vec![Run {
+                        text: "Item".to_string(),
+                        style: TextStyle {
+                            font_family: Some("Libertinus Serif".to_string()),
+                            font_size: Some(font_size),
+                            ..TextStyle::default()
+                        },
+                        href: None,
+                        footnote: None,
+                    }],
+                })],
+                border: Some(CellBorder {
+                    top: None,
+                    bottom: Some(BorderSide {
+                        width: 3.0,
+                        color: Color::white(),
+                        style: BorderLineStyle::Solid,
+                        join: LineJoin::Round,
+                    }),
+                    left: None,
+                    right: None,
+                }),
+                ..TableCell::default()
+            }],
+            height: Some(track_pt),
+        }],
+        column_widths: vec![53.0],
+        default_cell_padding: Some(padding),
+        default_vertical_align: Some(CellVerticalAlign::Bottom),
+        seats_bottom_aligned_text_on_descender: true,
+        border_paint_model: TableBorderPaintModel::ExcelBoundaryBands,
+        prints_gridlines: false,
+        prints_headings: false,
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert_eq!(
+        result.matches("align: horizon").count(),
+        1,
+        "a tight row stays on its centred line under a 3pt rule: {result}"
+    );
+}
+
 /// Excel lays an unmerged printed sheet cell out in whole device points: its
 /// line box is the face's `hhea` ascent and descent each rounded to a point,
 /// centred in the row's track with the odd leftover point given to the space

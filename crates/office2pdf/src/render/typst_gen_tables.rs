@@ -560,13 +560,20 @@ fn sheet_row_shared_line(
     // The tallest content box among the cells this track alone holds; a cell
     // spanning several tracks has more room than the track and is judged out
     // of scope by its `row_span` in `generate_table_cell` anyway.
+    //
+    // Measured on Excel's own text box, which a rule on the row's boundary
+    // never shrinks: `cell_inset_with_border`'s half-width share is the room
+    // Typst's layout gives the stroke, not room Excel takes from the text.
+    // Counting it turned the 17pt header row of `table-multiple.xlsx` tight
+    // under every table style that rules it, swapping its bottom seat for the
+    // centred line one point higher (issue #1277).
     let max_content_pt: f64 = row
         .cells
         .iter()
         .filter(|cell| cell.col_span > 0 && cell.row_span == 1)
         .map(|cell| {
-            let inset: Insets = cell_inset_with_border(cell, default_cell_padding);
-            track_pt - inset.top - inset.bottom
+            let text_box_inset: Insets = cell.padding.unwrap_or(default_cell_padding);
+            track_pt - text_box_inset.top - text_box_inset.bottom
         })
         .fold(f64::NAN, f64::max);
     // A NaN (no cells hold this track alone) fails the comparison and bails.

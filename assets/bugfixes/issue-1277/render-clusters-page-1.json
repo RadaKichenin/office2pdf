@@ -1,0 +1,183 @@
+{
+  "clusters": [
+    {
+      "area_pt2": 55.0656,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 12.0,
+        "x": 111.36,
+        "y": 60.96
+      },
+      "disposition": {
+        "issue": "#1380",
+        "kind": "issue",
+        "note": "Header labels and body text: the native export resolves the theme-scheme Calibri 11 font to Malgun Gothic on the Korean-UI reference Mac (embedded MalgunGothic/MalgunGothicBold), while office2pdf paints Calibri; the glyph shapes and advances differ (width worst 14.0%) although every matched baseline agrees to 0.00pt."
+      },
+      "id": "p1-b5972c74e960",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 47.0016,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 11.52,
+        "x": 161.76,
+        "y": 58.56
+      },
+      "disposition": {
+        "issue": "#1380",
+        "kind": "issue",
+        "note": "Header labels and body text: the native export resolves the theme-scheme Calibri 11 font to Malgun Gothic on the Korean-UI reference Mac (embedded MalgunGothic/MalgunGothicBold), while office2pdf paints Calibri; the glyph shapes and advances differ (width worst 14.0%) although every matched baseline agrees to 0.00pt."
+      },
+      "id": "p1-cba6036f4442",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 39.168,
+      "bbox_pt": {
+        "height": 10.08,
+        "width": 9.12,
+        "x": 195.36,
+        "y": 59.52
+      },
+      "disposition": {
+        "issue": "#1380",
+        "kind": "issue",
+        "note": "Header labels and body text: the native export resolves the theme-scheme Calibri 11 font to Malgun Gothic on the Korean-UI reference Mac (embedded MalgunGothic/MalgunGothicBold), while office2pdf paints Calibri; the glyph shapes and advances differ (width worst 14.0%) although every matched baseline agrees to 0.00pt."
+      },
+      "id": "p1-39b5c349a799",
+      "region": "top"
+    },
+    {
+      "area_pt2": 30.6432,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 7.68,
+        "x": 107.52,
+        "y": 109.44
+      },
+      "disposition": {
+        "issue": "#1380",
+        "kind": "issue",
+        "note": "Header labels and body text: the native export resolves the theme-scheme Calibri 11 font to Malgun Gothic on the Korean-UI reference Mac (embedded MalgunGothic/MalgunGothicBold), while office2pdf paints Calibri; the glyph shapes and advances differ (width worst 14.0%) although every matched baseline agrees to 0.00pt."
+      },
+      "id": "p1-17eda10c4260",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 29.2608,
+      "bbox_pt": {
+        "height": 5.28,
+        "width": 7.2,
+        "x": 126.24,
+        "y": 95.52
+      },
+      "disposition": {
+        "issue": "#1380",
+        "kind": "issue",
+        "note": "Header labels and body text: the native export resolves the theme-scheme Calibri 11 font to Malgun Gothic on the Korean-UI reference Mac (embedded MalgunGothic/MalgunGothicBold), while office2pdf paints Calibri; the glyph shapes and advances differ (width worst 14.0%) although every matched baseline agrees to 0.00pt."
+      },
+      "id": "p1-4a2e6253e276",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 27.648,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 8.16,
+        "x": 131.52,
+        "y": 111.84
+      },
+      "disposition": {
+        "issue": "#1380",
+        "kind": "issue",
+        "note": "Header labels and body text: the native export resolves the theme-scheme Calibri 11 font to Malgun Gothic on the Korean-UI reference Mac (embedded MalgunGothic/MalgunGothicBold), while office2pdf paints Calibri; the glyph shapes and advances differ (width worst 14.0%) although every matched baseline agrees to 0.00pt."
+      },
+      "id": "p1-7f10a9761f44",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 22.8096,
+      "bbox_pt": {
+        "height": 15.84,
+        "width": 1.44,
+        "x": 49.92,
+        "y": 106.08
+      },
+      "disposition": {
+        "class": "shape-edge-antialiasing",
+        "kind": "accepted-rendering",
+        "note": "Left edge of the header band and the two darker stripe bands: both traces fill the bands from x=50.0pt (layout audit rectangle dx 0.0, dwidth 0.0); the 5% fuzz catches the band edge landing on a different sub-pixel in the two page rasters, one column wide at 150 DPI."
+      },
+      "id": "p1-64cb482bb57d",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 22.8096,
+      "bbox_pt": {
+        "height": 15.84,
+        "width": 1.44,
+        "x": 49.92,
+        "y": 54.24
+      },
+      "disposition": {
+        "class": "shape-edge-antialiasing",
+        "kind": "accepted-rendering",
+        "note": "Left edge of the header band and the two darker stripe bands: both traces fill the bands from x=50.0pt (layout audit rectangle dx 0.0, dwidth 0.0); the 5% fuzz catches the band edge landing on a different sub-pixel in the two page rasters, one column wide at 150 DPI."
+      },
+      "id": "p1-dad5528d2495",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 21.4272,
+      "bbox_pt": {
+        "height": 14.88,
+        "width": 1.44,
+        "x": 49.92,
+        "y": 72.96
+      },
+      "disposition": {
+        "class": "shape-edge-antialiasing",
+        "kind": "accepted-rendering",
+        "note": "Left edge of the header band and the two darker stripe bands: both traces fill the bands from x=50.0pt (layout audit rectangle dx 0.0, dwidth 0.0); the 5% fuzz catches the band edge landing on a different sub-pixel in the two page rasters, one column wide at 150 DPI."
+      },
+      "id": "p1-b7b13991bc88",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 20.0448,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 4.8,
+        "x": 120.96,
+        "y": 95.04
+      },
+      "disposition": {
+        "issue": "#1380",
+        "kind": "issue",
+        "note": "Header labels and body text: the native export resolves the theme-scheme Calibri 11 font to Malgun Gothic on the Korean-UI reference Mac (embedded MalgunGothic/MalgunGothicBold), while office2pdf paints Calibri; the glyph shapes and advances differ (width worst 14.0%) although every matched baseline agrees to 0.00pt."
+      },
+      "id": "p1-05bce8daa519",
+      "region": "top-left"
+    }
+  ],
+  "dpi": 150,
+  "duplicate_disposition_cluster_ids": [],
+  "errors": [],
+  "fuzz_percent": 5,
+  "minimum_area_pt2": 20.0,
+  "page": 1,
+  "passed": true,
+  "renderer_observations": [],
+  "schema_version": 1,
+  "strict": true,
+  "summary": {
+    "dispositioned": 10,
+    "duplicate": 0,
+    "total": 10,
+    "undispositioned": 0,
+    "unknown": 0
+  },
+  "undispositioned_cluster_ids": [],
+  "unknown_disposition_cluster_ids": []
+}
