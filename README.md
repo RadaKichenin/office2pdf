@@ -112,7 +112,9 @@ office2pdf report.docx --font-path /usr/share/fonts/custom
 ```
 
 On macOS, `office2pdf` automatically searches fonts bundled in Microsoft Office
-applications before falling back to regular system fonts. It does not
+applications before falling back to regular system fonts. Where a face under
+`/System/Library/Fonts` shares the PostScript name of the bundled face, line
+boxes are measured from the system copy, as Word does. It does not
 automatically read the mutable per-user `CloudFonts` or `PreviewFont` caches,
 whose contents depend on previously opened documents. Pass such a cache (or any
 other custom font directory) explicitly with `--font-path` or

@@ -1192,9 +1192,25 @@ fn best_face(family: &str) -> Option<typst::text::Font> {
         return Some(font);
     }
 
+    let data = active_font_data();
+    best_face_index(&data, family)
+        .and_then(|index| data.fonts.get(index))
+        .and_then(|slot| slot.get())
+}
+
+/// The font set the compiler shapes with: the caller's search paths when a
+/// conversion has set them, else the Office bundle, each ahead of the system.
+#[cfg(not(target_arch = "wasm32"))]
+fn active_font_data() -> Arc<CachedFontData> {
     let search_paths = super::font_subst::active_font_search_paths()
         .unwrap_or_else(|| super::font_context::default_font_search_paths().to_vec());
-    let data = get_fonts_for_extra_paths(&search_paths);
+    get_fonts_for_extra_paths(&search_paths)
+}
+
+/// Index into `data` of the face the compiler will shape `family` with; see
+/// [`best_face`] for the alias and substitute chain walked.
+#[cfg(not(target_arch = "wasm32"))]
+fn best_face_index(data: &CachedFontData, family: &str) -> Option<usize> {
     super::font_subst::family_candidates(family)
         .iter()
         .find_map(|candidate| {
@@ -1203,8 +1219,121 @@ fn best_face(family: &str) -> Option<typst::text::Font> {
                 typst::text::FontVariant::default(),
             )
         })
-        .and_then(|index| data.fonts.get(index))
-        .and_then(|slot| slot.get())
+}
+
+/// The face Word measures a line box by, which is not always the face it
+/// draws with.
+///
+/// On macOS each Office application registers its bundled `DFonts` beside the
+/// system's copies, and when a system-shipped face shares the bundled face's
+/// PostScript name, Word paces the line on the *system* face's `hhea` while
+/// its export embeds the bundled outlines. Measured on Times New Roman: the
+/// bundle's `times.ttf` (Version 7.00;O365) declares an `hhea` line gap of 0
+/// and the system's `Times New Roman.ttf` (5.01) declares 87/2048, and a
+/// native Word export embeds the version 7 outlines yet advances 12pt lines by
+/// 13.80pt = 2355/2048em — the system copy's sum. The same file installed
+/// under another family name, so that no system copy shares its name, paces at
+/// its own 2268/2048em (issue #1284).
+///
+/// Only a *system-shipped* face shadows the bundle. A user-installed copy in
+/// `~/Library/Fonts` sharing the bundled face's PostScript name left Word's
+/// Rockwell on the bundled metrics even after a relaunch, and a system face
+/// with a different PostScript name (Apple's `Rockwell-Regular` beside the
+/// bundle's `Rockwell`, Apple's `Symbol` beside the bundle's `SymbolMT`)
+/// shadows nothing. `/Library/Fonts` was not measured and is treated as not
+/// shadowing.
+///
+/// Returns the shaped face itself whenever no such system copy exists, so
+/// every host without an Office bundle is unaffected.
+#[cfg(not(target_arch = "wasm32"))]
+fn line_metric_face(family: &str) -> Option<typst::text::Font> {
+    if let Some(font) =
+        super::font_subst::active_in_memory_font(family, typst::text::FontVariant::default())
+    {
+        return Some(font);
+    }
+    let data = active_font_data();
+    line_metric_face_in(
+        &data,
+        super::font_context::default_font_search_paths(),
+        macos_system_font_dirs(),
+        family,
+    )
+}
+
+/// [`line_metric_face`] over an explicit font set: `office_font_dirs` hold the
+/// application-bundled faces and `system_font_dirs` the faces that may shadow
+/// them.
+#[cfg(not(target_arch = "wasm32"))]
+fn line_metric_face_in(
+    data: &CachedFontData,
+    office_font_dirs: &[PathBuf],
+    system_font_dirs: &[PathBuf],
+    family: &str,
+) -> Option<typst::text::Font> {
+    let shaped_index: usize = best_face_index(data, family)?;
+    let shaped_slot = data.fonts.get(shaped_index)?;
+    let shaped: typst::text::Font = shaped_slot.get()?;
+    let is_under =
+        |path: &std::path::Path, dirs: &[PathBuf]| dirs.iter().any(|dir| path.starts_with(dir));
+    let Some(shaped_path) = shaped_slot.path() else {
+        return Some(shaped);
+    };
+    if !is_under(shaped_path, office_font_dirs) {
+        return Some(shaped);
+    }
+    let Some(shaped_name) = postscript_name(&shaped) else {
+        return Some(shaped);
+    };
+    let family_key: String = data.book.info(shaped_index)?.family.to_lowercase();
+    let shadowing: Option<typst::text::Font> = data
+        .book
+        .select_family(&family_key)
+        .filter(|&index| index != shaped_index)
+        .filter_map(|index| {
+            let slot = data.fonts.get(index)?;
+            let path = slot.path()?;
+            (is_under(path, system_font_dirs) && !is_under(path, office_font_dirs))
+                .then(|| slot.get())
+                .flatten()
+        })
+        .find(|candidate| postscript_name(candidate).as_deref() == Some(shaped_name.as_str()));
+    if shadowing.is_some() {
+        tracing::debug!(
+            family,
+            postscript_name = %shaped_name,
+            bundled = %shaped_path.display(),
+            "line metrics follow the system face that shadows the Office-bundled copy"
+        );
+    }
+    shadowing.or(Some(shaped))
+}
+
+/// The face's `name` table PostScript name (ID 6), the key macOS registers a
+/// font under.
+#[cfg(not(target_arch = "wasm32"))]
+fn postscript_name(font: &typst::text::Font) -> Option<String> {
+    const POST_SCRIPT_NAME_ID: u16 = 6;
+    font.ttf()
+        .names()
+        .into_iter()
+        .filter(|name| name.name_id == POST_SCRIPT_NAME_ID)
+        .find_map(|name| name.to_string())
+}
+
+/// Where macOS ships its own faces. Only these shadow an Office bundle's copy
+/// of the same face (see [`line_metric_face`]); the per-user font directory
+/// measurably does not.
+#[cfg(not(target_arch = "wasm32"))]
+fn macos_system_font_dirs() -> &'static [PathBuf] {
+    static DIRS: std::sync::LazyLock<Vec<PathBuf>> = std::sync::LazyLock::new(|| {
+        if cfg!(target_os = "macos") {
+            vec![PathBuf::from("/System/Library/Fonts")]
+        } else {
+            Vec::new()
+        }
+    });
+    &DIRS
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -1220,6 +1349,7 @@ fn best_face(family: &str) -> Option<typst::text::Font> {
 fn cached_family_metric(
     cache: &OnceLock<Mutex<HashMap<String, Option<f64>>>>,
     family: &str,
+    resolve: fn(&str) -> Option<typst::text::Font>,
     compute: impl FnOnce(&typst::text::Font) -> Option<f64>,
 ) -> Option<f64> {
     if let Some(font) =
@@ -1228,7 +1358,7 @@ fn cached_family_metric(
         return compute(&font);
     }
     if super::font_subst::active_font_search_paths().is_some() {
-        return best_face(family).and_then(|font| compute(&font));
+        return resolve(family).and_then(|font| compute(&font));
     }
 
     let cache = cache.get_or_init(|| Mutex::new(HashMap::new()));
@@ -1241,7 +1371,7 @@ fn cached_family_metric(
         return *cached;
     }
 
-    let value: Option<f64> = best_face(family).and_then(|font| compute(&font));
+    let value: Option<f64> = resolve(family).and_then(|font| compute(&font));
     cache
         .lock()
         .expect("metrics cache mutex should not be poisoned")
@@ -1249,7 +1379,8 @@ fn cached_family_metric(
     value
 }
 
-/// The `hhea` ascender of the best face for `family`, in em units.
+/// The `hhea` ascender of the face Word measures `family` by, in em units
+/// (see [`line_metric_face`]).
 ///
 /// This is the ascent Word measures a header story's first baseline by, and it
 /// is deliberately *not* [`font_line_metrics_em`]'s first element: that one
@@ -1286,7 +1417,7 @@ fn cached_family_metric(
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn font_hhea_ascender_em(family: &str) -> Option<f64> {
     static ASCENDER_CACHE: OnceLock<Mutex<HashMap<String, Option<f64>>>> = OnceLock::new();
-    cached_family_metric(&ASCENDER_CACHE, family, |font| {
+    cached_family_metric(&ASCENDER_CACHE, family, line_metric_face, |font| {
         let ttf = font.ttf();
         Some(f64::from(ttf.tables().hhea.ascender) / f64::from(ttf.units_per_em()).max(1.0))
     })
@@ -1315,7 +1446,7 @@ pub(crate) fn font_hhea_ascender_em(family: &str) -> Option<f64> {
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn font_cap_height_em(family: &str) -> Option<f64> {
     static CAP_HEIGHT_CACHE: OnceLock<Mutex<HashMap<String, Option<f64>>>> = OnceLock::new();
-    cached_family_metric(&CAP_HEIGHT_CACHE, family, |font| {
+    cached_family_metric(&CAP_HEIGHT_CACHE, family, best_face, |font| {
         Some(font.metrics().cap_height.get())
     })
 }
@@ -1325,7 +1456,8 @@ pub(crate) fn font_cap_height_em(family: &str) -> Option<f64> {
     best_face(family).map(|font| font.metrics().cap_height.get())
 }
 
-/// The best face for `family`'s bare `hhea` line gap, in em units.
+/// The bare `hhea` line gap of the face Word measures `family` by, in em
+/// units (see [`line_metric_face`]).
 ///
 /// [`font_line_metrics_em`] folds the gap into its first element, because that
 /// is where Word puts the baseline. Excel does not: it rounds the ascender,
@@ -1337,7 +1469,7 @@ pub(crate) fn font_line_gap_em(family: &str) -> Option<f64> {
     use std::collections::HashMap;
     use std::sync::Mutex;
     static LINE_GAP_CACHE: OnceLock<Mutex<HashMap<String, Option<f64>>>> = OnceLock::new();
-    cached_family_metric(&LINE_GAP_CACHE, family, |font| {
+    cached_family_metric(&LINE_GAP_CACHE, family, line_metric_face, |font| {
         let ttf = font.ttf();
         let upem = f64::from(ttf.units_per_em()).max(1.0);
         Some(f64::from(ttf.line_gap()) / upem)
@@ -1352,8 +1484,12 @@ pub(crate) fn font_line_gap_em(family: &str) -> Option<f64> {
     Some(f64::from(ttf.line_gap()) / upem)
 }
 
-/// Line metrics of the best face for `family`, in em units:
+/// Line metrics of the face Word measures `family` by, in em units:
 /// `(above baseline, below baseline, Word single-line pitch)`.
+///
+/// That is [`line_metric_face`], not always [`best_face`]: where a
+/// system-shipped copy shadows the Office bundle's, Word paces on the system
+/// copy's `hhea` (issue #1284).
 ///
 /// The first two split the third at the point Word puts the baseline —
 /// `hhea` ascender plus line gap — so they always sum to the pitch. Typst's
@@ -1385,7 +1521,7 @@ pub(crate) fn font_line_metrics_em(family: &str) -> Option<(f64, f64, f64)> {
         return Some(metrics_for(&font));
     }
     if super::font_subst::active_font_search_paths().is_some() {
-        return best_face(family).map(|font| metrics_for(&font));
+        return line_metric_face(family).map(|font| metrics_for(&font));
     }
 
     let cache = METRICS_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
@@ -1398,7 +1534,7 @@ pub(crate) fn font_line_metrics_em(family: &str) -> Option<(f64, f64, f64)> {
         return *cached;
     }
 
-    let metrics: Option<(f64, f64, f64)> = best_face(family).map(|font| {
+    let metrics: Option<(f64, f64, f64)> = line_metric_face(family).map(|font| {
         // Word seats the baseline `hhea ascender + lineGap` below the top
         // of the line, not at the font's ascender/descender proportion of
         // the box — measured to 0.0005em on Arial (issue #508). Typst's
