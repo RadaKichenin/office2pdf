@@ -459,10 +459,17 @@ impl ThemeFontScheme {
     pub(crate) fn resolve_chart_text_fonts(&self, chart: &mut crate::ir::Chart) {
         chart.text_font_family =
             self.resolve_chart_text_typeface(chart.text_font_family.as_deref());
+        let secondary_axis_family: Option<&mut Option<String>> = chart
+            .secondary_value_axis
+            .as_mut()
+            .map(|axis| &mut axis.text_font_family);
         for family in [
             &mut chart.category_axis_text_font_family,
             &mut chart.value_axis_text_font_family,
-        ] {
+        ]
+        .into_iter()
+        .chain(secondary_axis_family)
+        {
             *family = family
                 .as_deref()
                 .and_then(|declared| self.resolve_typeface(declared));

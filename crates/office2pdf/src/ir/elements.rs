@@ -395,6 +395,13 @@ pub struct Chart {
     /// `<c:valAx><c:numFmt formatCode>` — how the value axis prints its tick
     /// labels. Outranks a series' cache format for the axis (issue #865).
     pub value_axis_number_format: Option<String>,
+    /// The second value axis of a combo plot area, when a chart family plots
+    /// against it (issue #1374). See [`ChartSecondaryValueAxis`].
+    ///
+    /// `None` for every single-axis chart, and for a plot area whose second
+    /// `<c:valAx>` no family references: an axis nothing is read against is
+    /// not drawn.
+    pub secondary_value_axis: Option<ChartSecondaryValueAxis>,
     /// `<c:autoTitleDeleted val="1"/>` — the chart declines the automatic
     /// title Office would otherwise supply: its single series' name, or the
     /// placeholder printed when nothing names one (issues #883 and #1146).
@@ -656,6 +663,64 @@ impl Default for BarBandLayout {
     }
 }
 
+/// Which of a plot area's value axes a series is read against (issue #1374).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ChartValueAxisRole {
+    /// The axis the first chart family of the plot area references, or the
+    /// only one — every series of a single-axis chart.
+    #[default]
+    Primary,
+    /// The other value axis, which the family that declared this series
+    /// references through its own `<c:axId>` pair.
+    Secondary,
+}
+
+/// Which edge of the plot a value axis is drawn along, from `<c:axPos>`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ValueAxisSide {
+    /// `l` — down the plot's left edge, where Office puts a primary axis.
+    Left,
+    /// `r` — down the plot's right edge, where Office puts a secondary axis.
+    /// The default because a secondary axis that names no side sits there.
+    #[default]
+    Right,
+}
+
+/// The second value axis a combo plot area declares, from the `<c:valAx>` a
+/// chart family other than the first references by `<c:axId>` (issue #1374).
+///
+/// It carries the same scale, format and furniture settings the primary axis
+/// keeps on [`Chart`] itself; a series reads against it when its
+/// [`ChartSeries::value_axis`] is [`ChartValueAxisRole::Secondary`].
+///
+/// TODO(secondary axis title and gridlines): `<c:title>` and
+/// `<c:majorGridlines>` on the secondary axis are read past; the plot's
+/// gridlines remain the primary axis' own.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ChartSecondaryValueAxis {
+    /// Which plot edge the axis runs along.
+    pub side: ValueAxisSide,
+    /// Whether `<c:delete>` switched the axis off. Its series still read
+    /// against its scale; only the axis' own furniture goes.
+    pub deleted: bool,
+    /// `<c:numFmt formatCode>`, when it states one that is not `General`.
+    pub number_format: Option<String>,
+    /// `<c:majorUnit>` — the tick interval the part states.
+    pub major_unit: Option<f64>,
+    /// `<c:scaling><c:min>` — the value the axis starts at.
+    pub min: Option<f64>,
+    /// `<c:scaling><c:max>` — the value the axis ends at.
+    pub max: Option<f64>,
+    /// Where the axis puts its major tick marks, from `<c:majorTickMark>`.
+    pub major_tick_mark: AxisTickMark,
+    /// What `<c:spPr>` says about the axis' own line.
+    pub line: ChartLine,
+    /// The typeface `<c:txPr>` names; `None` inherits the chart's default.
+    pub text_font_family: Option<String>,
+    /// What `<c:txPr>` declares for the tick labels alone.
+    pub text_style: ChartTextStyle,
+}
+
 /// Which side of an axis line its major tick marks project from, from
 /// `<c:majorTickMark>` (`ST_TickMark`).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -910,6 +975,16 @@ pub struct ChartSeries {
     /// `None` — the ordinary case — means the chart's own family, which is
     /// what every series of a single-family chart is.
     pub plot_type: Option<ChartType>,
+    /// Which value axis this series is read against, from the `<c:axId>` pair
+    /// of the family that declared it (issue #1374).
+    ///
+    /// A combo plot area may give its second family an axis group of its own,
+    /// so a percentage series and a ratio series can share one plot: the
+    /// `Success Ratios` chart of the #1220 deck reads its profit margin
+    /// against a 0..20% axis on the left and its acid test against a 0..7
+    /// axis on the right. Reading both against one collapsed scale printed the
+    /// margin as a flat line under a 0..700% axis.
+    pub value_axis: ChartValueAxisRole,
     /// The point symbol this series' own `<c:marker><c:symbol>` names.
     ///
     /// `None` means the file named none this renderer draws, so the automatic

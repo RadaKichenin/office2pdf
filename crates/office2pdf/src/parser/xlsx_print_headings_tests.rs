@@ -387,6 +387,7 @@ fn test_drawings_shift_with_the_inset_grid() {
             value_axis_text_style: crate::ir::ChartTextStyle::default(),
             category_axis_number_format: None,
             value_axis_number_format: None,
+            secondary_value_axis: None,
             auto_title_deleted: false,
             has_automatic_title: false,
             title_layout: None,

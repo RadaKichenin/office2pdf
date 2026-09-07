@@ -10,9 +10,10 @@ use super::drawingml::{self, SchemeColors};
 use super::xml_util;
 use crate::ir::{
     AxisTickMark, BarBandLayout, Chart, ChartAreaFill, ChartAreaOutline, ChartFillMode,
-    ChartGrouping, ChartHost, ChartLine, ChartMarkerStyle, ChartPlotAreaLayout, ChartSeries,
-    ChartTextStyle, ChartTitleLayout, ChartType, Color, DataLabelPosition, DataLabels,
-    LegendPosition, MarkerSymbol,
+    ChartGrouping, ChartHost, ChartLine, ChartMarkerStyle, ChartPlotAreaLayout,
+    ChartSecondaryValueAxis, ChartSeries, ChartTextStyle, ChartTitleLayout, ChartType,
+    ChartValueAxisRole, Color, DataLabelPosition, DataLabels, LegendPosition, MarkerSymbol,
+    ValueAxisSide,
 };
 
 /// Mapping from XML chart element tag names to their corresponding `ChartType`.
@@ -159,8 +160,14 @@ pub(super) fn parse_chart_xml_with_stroke_defaults(
     // string for one of those, so the element's absence and its emptiness are
     // different states and `title` alone cannot tell them apart (issue #1146).
     let mut has_automatic_title: bool = false;
-    let mut category_axis: Axis = Axis::default();
-    let mut value_axis: Axis = Axis::default();
+    // Every axis the plot area declares, in document order. A combo plot area
+    // may carry two of each — one pair per axis group — and which family reads
+    // against which is settled by `<c:axId>` reference once the whole plot
+    // area has been read (issue #1374).
+    let mut category_axes: Vec<Axis> = Vec::new();
+    let mut value_axes: Vec<Axis> = Vec::new();
+    // The series each family declared, with the `<c:axId>` pair it names.
+    let mut family_axis_ids: Vec<(std::ops::Range<usize>, Vec<String>)> = Vec::new();
     // `c:chartSpace/c:spPr` is a *sibling* of `c:chart`, and the schema puts it
     // after it. This loop is flat over every Start event, so without that
     // marker a `c:spPr` belonging to `c:plotArea` would be read as the chart
@@ -217,9 +224,9 @@ pub(super) fn parse_chart_xml_with_stroke_defaults(
                     title_text_style = style;
                     title_layout = layout;
                 } else if tag == b"catAx" {
-                    category_axis = parse_axis(&mut reader, b"catAx", scheme);
+                    category_axes.push(parse_axis(&mut reader, b"catAx", scheme));
                 } else if tag == b"valAx" {
-                    value_axis = parse_axis(&mut reader, b"valAx", scheme);
+                    value_axes.push(parse_axis(&mut reader, b"valAx", scheme));
                 } else if let Some(ct) = chart_type_for_tag(tag) {
                     let mut plot: PlotAreaProps = PlotAreaProps::default();
                     let family_first_series: usize = series.len();
@@ -231,6 +238,8 @@ pub(super) fn parse_chart_xml_with_stroke_defaults(
                         &mut plot,
                         scheme,
                     );
+                    family_axis_ids
+                        .push((family_first_series..series.len(), plot.axis_ids.clone()));
                     let family: ChartType = match ct {
                         // `<c:ofPieChart>` names its shape in a child element,
                         // so the label waits until the body has been read.
@@ -339,6 +348,12 @@ pub(super) fn parse_chart_xml_with_stroke_defaults(
         }
     }
 
+    let AxisGroups {
+        category_axis,
+        value_axis,
+        secondary_value_axis,
+    } = resolve_axis_groups(category_axes, value_axes, &family_axis_ids, &mut series);
+
     // Charts may omit <c:cat> entirely; Excel then labels the category axis
     // 1..N (the point count of the longest series).
     if categories.is_empty() {
@@ -421,6 +436,21 @@ pub(super) fn parse_chart_xml_with_stroke_defaults(
         value_axis_text_style: value_axis.text_style,
         category_axis_number_format: category_axis.number_format,
         value_axis_number_format: value_axis.number_format,
+        secondary_value_axis: secondary_value_axis.map(|axis| ChartSecondaryValueAxis {
+            side: match axis.position.as_deref() {
+                Some("l") => ValueAxisSide::Left,
+                _ => ValueAxisSide::Right,
+            },
+            deleted: axis.deleted,
+            number_format: axis.number_format,
+            major_unit: axis.major_unit,
+            min: axis.min,
+            max: axis.max,
+            major_tick_mark: axis.major_tick_mark,
+            line: axis.line,
+            text_font_family: axis.font_family,
+            text_style: axis.text_style,
+        }),
     })
 }
 
@@ -757,9 +787,96 @@ fn parse_chart_area_properties(
 /// EMU in one point. `a:ln/@w` is in EMU.
 const EMU_PER_POINT: f64 = 12700.0;
 
+/// The axes a plot area's families read against, settled by reference.
+struct AxisGroups {
+    /// The category axis of the primary group — the one whose furniture is
+    /// drawn.
+    category_axis: Axis,
+    /// The value axis of the primary group.
+    value_axis: Axis,
+    /// The value axis of a second group, when some family reads against it.
+    secondary_value_axis: Option<Axis>,
+}
+
+/// Settle which `<c:catAx>` and `<c:valAx>` each family plots against.
+///
+/// The primary group is the one the first family references through its
+/// `<c:axId>` pair — Office writes the primary group's families first — and
+/// falls back to the first axis of each kind for a part naming no ids, which
+/// is what every single-group chart amounts to. A family referencing another
+/// `<c:valAx>` puts its series on the secondary axis, which is kept only when
+/// something reads against it. Document order of the axis elements plays no
+/// part: the #1220 deck writes its axes primary-first, but nothing requires
+/// that (issue #1374).
+///
+/// TODO(three value axes): ECMA-376 allows only two axis groups in a 2-D plot
+/// area, so a third referenced `<c:valAx>` is read as the primary one.
+fn resolve_axis_groups(
+    mut category_axes: Vec<Axis>,
+    mut value_axes: Vec<Axis>,
+    family_axis_ids: &[(std::ops::Range<usize>, Vec<String>)],
+    series: &mut [ChartSeries],
+) -> AxisGroups {
+    fn referenced<'a>(ids: &'a [String], axes: &[Axis]) -> Option<&'a str> {
+        ids.iter()
+            .map(String::as_str)
+            .find(|id| axes.iter().any(|axis| axis.id.as_deref() == Some(*id)))
+    }
+    fn take(axes: &mut Vec<Axis>, id: Option<&str>) -> Option<Axis> {
+        let index: usize = axes
+            .iter()
+            .position(|axis| axis.id.is_some() && axis.id.as_deref() == id)?;
+        Some(axes.remove(index))
+    }
+    fn take_or_first(axes: &mut Vec<Axis>, id: Option<&str>) -> Axis {
+        take(axes, id)
+            .or_else(|| (!axes.is_empty()).then(|| axes.remove(0)))
+            .unwrap_or_default()
+    }
+
+    let primary_ids: &[String] = family_axis_ids
+        .first()
+        .map(|(_, ids)| ids.as_slice())
+        .unwrap_or(&[]);
+    let primary_value_id: Option<String> = referenced(primary_ids, &value_axes)
+        .map(str::to_string)
+        .or_else(|| value_axes.first().and_then(|axis| axis.id.clone()));
+    let primary_category_id: Option<String> = referenced(primary_ids, &category_axes)
+        .map(str::to_string)
+        .or_else(|| category_axes.first().and_then(|axis| axis.id.clone()));
+
+    let mut secondary_value_id: Option<String> = None;
+    for (range, ids) in family_axis_ids {
+        let Some(id) = referenced(ids, &value_axes) else {
+            continue;
+        };
+        if primary_value_id.as_deref() == Some(id) {
+            continue;
+        }
+        let secondary_id: &str = secondary_value_id.get_or_insert_with(|| id.to_string());
+        if secondary_id != id {
+            continue;
+        }
+        for entry in &mut series[range.clone()] {
+            entry.value_axis = ChartValueAxisRole::Secondary;
+        }
+    }
+
+    let secondary_value_axis: Option<Axis> = take(&mut value_axes, secondary_value_id.as_deref());
+    AxisGroups {
+        category_axis: take_or_first(&mut category_axes, primary_category_id.as_deref()),
+        value_axis: take_or_first(&mut value_axes, primary_value_id.as_deref()),
+        secondary_value_axis,
+    }
+}
+
 /// What one `<c:catAx>` or `<c:valAx>` element says about itself.
 #[derive(Default)]
 struct Axis {
+    /// `<c:axId>` — the identity a chart family references this axis by.
+    id: Option<String>,
+    /// `<c:axPos>` — the plot edge the axis runs along: `l`, `r`, `t` or `b`.
+    position: Option<String>,
     font_family: Option<String>,
     title: Option<String>,
     major_tick_mark: AxisTickMark,
@@ -877,6 +994,16 @@ fn parse_axis(reader: &mut Reader<&[u8]>, end_tag: &[u8], scheme: &SchemeColors<
                 if e.local_name().as_ref() == b"delete" =>
             {
                 axis.deleted = ct_boolean(e);
+            }
+            Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e))
+                if e.local_name().as_ref() == b"axId" =>
+            {
+                axis.id = xml_util::get_attr_str(e, b"val");
+            }
+            Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e))
+                if e.local_name().as_ref() == b"axPos" =>
+            {
+                axis.position = xml_util::get_attr_str(e, b"val");
             }
             Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e))
                 if e.local_name().as_ref() == b"numFmt" =>
@@ -1052,6 +1179,9 @@ struct PlotAreaProps {
     overlap: Option<String>,
     /// `<c:holeSize>`, exclusive to the doughnut family (issue #679).
     hole_size: Option<String>,
+    /// `<c:axId>`, one per axis the family plots against, trailing the series
+    /// like `<c:gapWidth>` does (issue #1374).
+    axis_ids: Vec<String>,
 }
 
 impl PlotAreaProps {
@@ -1065,6 +1195,7 @@ impl PlotAreaProps {
             b"gapWidth" => self.gap_width = xml_util::get_attr_str(e, b"val"),
             b"overlap" => self.overlap = xml_util::get_attr_str(e, b"val"),
             b"holeSize" => self.hole_size = xml_util::get_attr_str(e, b"val"),
+            b"axId" => self.axis_ids.extend(xml_util::get_attr_str(e, b"val")),
             _ => return false,
         }
         true
@@ -1241,6 +1372,7 @@ fn parse_single_series(
             // Filled in by the caller, which knows the family element this
             // series was read inside (issue #1067).
             plot_type: None,
+            value_axis: ChartValueAxisRole::Primary,
             marker_symbol,
             marker_style,
             line_width_pt,
