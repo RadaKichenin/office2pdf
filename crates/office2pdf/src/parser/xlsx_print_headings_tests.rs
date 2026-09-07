@@ -217,8 +217,8 @@ fn test_heading_text_uses_the_workbook_normal_font_and_center_alignment() {
         family: "Verdana".to_string(),
         size_pt: 10.0,
         color: None,
-        uses_theme_scheme: false,
-        theme_declares_script_faces: false,
+        theme_scheme: None,
+        theme_ui_script_faces: ThemeUiScriptFaces::default(),
     };
     augment_page_with_print_headings(&mut page, &[337], 1, Some(&verdana));
 
@@ -237,6 +237,41 @@ fn test_heading_text_uses_the_workbook_normal_font_and_center_alignment() {
     assert_eq!(run.style.font_family.as_deref(), Some("Verdana"));
     assert_eq!(run.style.font_size, Some(10.0));
     assert_ne!(run.style.bold, Some(true));
+}
+
+/// Heading digits and letters follow the Normal font, so under a
+/// theme-scheme Normal font they paint in the face the theme resolves to,
+/// not the name the stylesheet declares (issue #1380).
+#[test]
+fn test_heading_cells_paint_in_the_resolved_normal_face() {
+    let mut page = make_page(
+        vec![80.0],
+        vec![TableRow {
+            minimum_height: None,
+            cells: vec![text_cell("x")],
+            height: Some(18.0),
+        }],
+    );
+    let scheme_font = NormalFont {
+        family: "Calibri".to_string(),
+        size_pt: 12.0,
+        color: None,
+        theme_scheme: Some(ThemeFontSlot::Minor),
+        theme_ui_script_faces: ThemeUiScriptFaces {
+            minor: Some("맑은 고딕".to_string()),
+            major: None,
+        },
+    };
+    augment_page_with_print_headings(&mut page, &[7], 1, Some(&scheme_font));
+
+    let gutter_cell = &page.table.rows[1].cells[0];
+    let Block::Paragraph(paragraph) = &gutter_cell.content[0] else {
+        panic!("gutter cell must hold a paragraph");
+    };
+    let run = &paragraph.runs[0];
+    assert_eq!(run.text, "7");
+    assert_eq!(run.style.font_family.as_deref(), Some("맑은 고딕"));
+    assert_eq!(run.style.font_size, Some(12.0));
 }
 
 #[test]

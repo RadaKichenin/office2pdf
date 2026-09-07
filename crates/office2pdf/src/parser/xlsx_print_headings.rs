@@ -21,6 +21,8 @@ use crate::ir::{
 };
 
 use super::xlsx_cells::NormalFont;
+#[cfg(test)]
+use super::xlsx_cells::{ThemeFontSlot, ThemeUiScriptFaces};
 
 /// Layout width of the row-number gutter track, in points.
 ///
@@ -122,10 +124,11 @@ fn heading_cell(text: String, text_style: TextStyle, border: CellBorder) -> Tabl
 
 /// GT: heading digits and letters are the workbook Normal face at the Normal
 /// size (Verdana Regular 10pt on the measured sheets), pure black, not bold —
-/// the same face and size as default cell text.
+/// the same face and size as default cell text, so a theme-scheme Normal font
+/// puts them in the face it resolves to (issue #1380).
 fn heading_text_style(normal_font: Option<&NormalFont>) -> TextStyle {
     TextStyle {
-        font_family: normal_font.map(|font| font.family.clone()),
+        font_family: normal_font.map(|font| font.resolved_family().to_string()),
         font_size: normal_font.map(|font| font.size_pt),
         ..TextStyle::default()
     }

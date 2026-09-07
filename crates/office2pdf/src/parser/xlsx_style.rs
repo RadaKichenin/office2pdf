@@ -1,6 +1,8 @@
 use crate::ir::{BorderLineStyle, BorderSide, CellBorder, Color, LineJoin, TextStyle};
 use crate::parser::xml_util::parse_argb_color;
 
+use super::xlsx_cells::ThemeFontSlot;
+
 /// Resolve a style colour, following `<color theme="N" tint="T"/>` into the
 /// workbook's colour scheme.
 ///
@@ -85,12 +87,13 @@ pub(super) fn extract_cell_text_style(
     // A font the cell style names wins; otherwise the cell inherits the
     // workbook Normal font. Calibri is not special-cased: it is the most
     // common Normal font, and dropping it left those workbooks to the
-    // renderer's serif default (issue #462).
+    // renderer's serif default (issue #462). Either way the face is the one
+    // Excel resolves: a `<scheme>` defers it to the theme (issue #1380).
     let font_name: &str = font.get_name();
     let font_family: Option<String> = if font_name.is_empty() {
-        normal_font.map(|normal| normal.family.clone())
+        normal_font.map(|normal| normal.resolved_family().to_string())
     } else {
-        Some(font_name.to_string())
+        Some(scheme_resolved_family(font, normal_font).unwrap_or_else(|| font_name.to_string()))
     };
 
     let raw_size: f64 = *font.get_size();
@@ -139,10 +142,30 @@ fn normal_font_text_style(normal_font: Option<&super::xlsx_cells::NormalFont>) -
         return TextStyle::default();
     };
     TextStyle {
-        font_family: Some(normal.family.clone()),
+        font_family: Some(normal.resolved_family().to_string()),
         font_size: Some(normal.size_pt),
         ..TextStyle::default()
     }
+}
+
+/// The face a cell or rich-run font that carries its own `<scheme>` paints
+/// in: the theme's UI-script face of that scheme's slot, the same list the
+/// Normal font resolves through. `None` for a font naming its face outright
+/// (`scheme` absent or `none`) or a theme naming no face for the slot, both
+/// of which stay on the declared name (issue #1380).
+///
+/// The theme faces ride on the Normal font because both are read from the
+/// same stylesheet and theme parts; a workbook with no readable stylesheet
+/// has no cell fonts to resolve either.
+fn scheme_resolved_family(
+    font: &umya_spreadsheet::Font,
+    normal_font: Option<&super::xlsx_cells::NormalFont>,
+) -> Option<String> {
+    let slot: ThemeFontSlot = ThemeFontSlot::parse(font.get_scheme())?;
+    normal_font?
+        .theme_ui_script_faces
+        .face(slot)
+        .map(str::to_string)
 }
 
 /// Overlay a rich-text run's own font properties onto the cell-level style.
@@ -153,11 +176,14 @@ pub(super) fn apply_rich_run_font(
     base: &TextStyle,
     font: &umya_spreadsheet::Font,
     theme: Option<&umya_spreadsheet::structs::drawing::Theme>,
+    normal_font: Option<&super::xlsx_cells::NormalFont>,
 ) -> TextStyle {
     let mut style = base.clone();
 
     let font_name: &str = font.get_name();
-    if !font_name.is_empty() {
+    if let Some(resolved) = scheme_resolved_family(font, normal_font) {
+        style.font_family = Some(resolved);
+    } else if !font_name.is_empty() {
         style.font_family = Some(font_name.to_string());
     }
 
