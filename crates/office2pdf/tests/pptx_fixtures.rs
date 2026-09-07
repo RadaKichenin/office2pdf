@@ -581,7 +581,11 @@ fn custom_geo_slide_6_title_uses_its_saved_normal_autofit_scale() {
         })
         .expect("slide 6 title run");
 
-    assert_eq!(run.style.font_size, Some(32.4));
+    assert_eq!(
+        run.style.font_size,
+        Some(32.0),
+        "the native export paints 36pt x 0.9 = 32.4pt at a whole 32pt"
+    );
     assert!(
         !text_box.auto_fit,
         "fontScale=90000 already states PowerPoint's fitted size"

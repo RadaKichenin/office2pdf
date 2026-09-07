@@ -698,8 +698,10 @@ pub(super) struct PptxTextBoxSettings {
     pub(super) no_wrap: bool,
     pub(super) auto_fit: bool,
     /// PowerPoint's completed normal-autofit answer, as a fraction of each
-    /// run's declared font size. `None` leaves font sizes unscaled; dynamic
-    /// fitting is requested only when both saved autofit values are absent.
+    /// run's declared font size; the scaled size paints at a whole point (see
+    /// [`round_pptx_scaled_font_size`]). `None` leaves font sizes unscaled;
+    /// dynamic fitting is requested only when both saved autofit values are
+    /// absent.
     pub(super) normal_autofit_font_scale: Option<f64>,
     /// Fraction subtracted from the original percentage line spacing by
     /// normal autofit.
@@ -751,9 +753,26 @@ pub(super) fn extract_pptx_normal_autofit(
         .filter(|value| (0.0..=1.0).contains(value));
 }
 
+/// PowerPoint paints a saved `fontScale` at the nearest whole point, half up.
+///
+/// One-factor native probe (#1375: `fontScale` varied on a slide whose body
+/// declares 22pt and its heading 35pt; macOS PowerPoint 16.x, Quartz
+/// PDFContext): 62.5% paints 14/22pt, 70% 15/25pt, 75% 17/26pt, 80% 18/28pt,
+/// 85% 19/30pt, 92.5% 20/32pt, 97.5% 21/34pt, and the #1303 fixture's 36pt
+/// title at 90% paints 32pt. The exact halves 24.5 -> 25 and 16.5 -> 17 rule
+/// out truncation and round-half-even, and the line advance follows the
+/// rounded size too. The product is first settled on a 1/1000pt grid because
+/// `35 * 0.7` is `24.499999...` in binary and would otherwise round down.
+fn round_pptx_scaled_font_size(declared_size_pt: f64, font_scale: f64) -> f64 {
+    const SETTLE_GRID_PER_PT: f64 = 1000.0;
+    let scaled_pt: f64 =
+        (declared_size_pt * font_scale * SETTLE_GRID_PER_PT).round() / SETTLE_GRID_PER_PT;
+    scaled_pt.round()
+}
+
 fn scale_pptx_text_style_font_size(style: &mut TextStyle, font_scale: f64) {
     if let Some(font_size) = style.font_size.as_mut() {
-        *font_size *= font_scale;
+        *font_size = round_pptx_scaled_font_size(*font_size, font_scale);
     }
 }
 
@@ -780,22 +799,26 @@ pub(super) fn apply_pptx_saved_normal_autofit(
                 _ => {}
             }
             if let Some(size) = entry.paragraph_mark_font_size_pt.as_mut() {
-                *size *= font_scale;
+                *size = round_pptx_scaled_font_size(*size, font_scale);
             }
         }
 
         let Some(reduction) = settings.normal_autofit_line_spacing_reduction else {
             continue;
         };
-        let retained_spacing: f64 = 1.0 - reduction;
+        // ECMA-376 21.1.2.1.2 subtracts the reduction from the percentage:
+        // 110% less 20% paces at 90%, not at 110% x 0.8 = 88%. The native
+        // export of the #1375 deck paints that paragraph at the same pitch as
+        // its unreduced 90% neighbours. A paragraph stating no percentage
+        // starts from the 100% default.
         entry.paragraph.style.line_spacing = match entry.paragraph.style.line_spacing {
             Some(LineSpacing::Proportional(factor)) => {
-                Some(LineSpacing::Proportional(factor * retained_spacing))
+                Some(LineSpacing::Proportional((factor - reduction).max(0.0)))
             }
             // ECMA-376 limits lnSpcReduction to percentage line spacing;
             // point-based a:spcPts is an absolute rule and stays unchanged.
             Some(LineSpacing::Exact(points)) => Some(LineSpacing::Exact(points)),
-            None => Some(LineSpacing::Proportional(retained_spacing)),
+            None => Some(LineSpacing::Proportional(1.0 - reduction)),
         };
     }
 }

@@ -937,10 +937,13 @@ fn parse_normal_autofit_text_box(attributes: &str, paragraphs_xml: &str) -> Text
     text_box
 }
 
+/// PowerPoint paints a saved `fontScale` at the nearest whole point, half up:
+/// a native export of the #1303 fixture sets its 36pt title at 32pt, not
+/// 36 x 0.9 = 32.4pt, and the #1375 deck's 22pt body at 15pt, not 15.4pt.
 #[test]
 fn normal_autofit_applies_powerpoints_saved_font_scale() {
     for (attributes, expected_font_size) in [
-        (r#"fontScale="90000""#, 32.4),
+        (r#"fontScale="90000""#, 32.0),
         (r#"fontScale="75.000%""#, 27.0),
     ] {
         let text_box = parse_normal_autofit_text_box(
@@ -955,6 +958,51 @@ fn normal_autofit_applies_powerpoints_saved_font_scale() {
         assert!(
             !text_box.auto_fit,
             "a saved fontScale is PowerPoint's completed answer, not a request to shrink again"
+        );
+    }
+}
+
+/// One-factor native probe on the #1375 deck (`fontScale` varied on the
+/// slide-12 body placeholder, 22pt body and 35pt heading, macOS PowerPoint
+/// 16.x, Quartz PDFContext): every painted size is the scaled size rounded
+/// half up to a whole point, including the exact halves 24.5 -> 25 and
+/// 16.5 -> 17 that round-half-even or truncation would send the other way.
+#[test]
+fn normal_autofit_rounds_the_scaled_size_half_up_to_a_whole_point() {
+    for (font_scale, body_sz, heading_sz, expected_body, expected_heading) in [
+        ("62500", "2200", "3500", 14.0, 22.0),
+        ("70000", "2200", "3500", 15.0, 25.0),
+        ("75000", "2200", "3500", 17.0, 26.0),
+        ("80000", "2200", "3500", 18.0, 28.0),
+        ("85000", "2200", "3500", 19.0, 30.0),
+        ("92500", "2200", "3500", 20.0, 32.0),
+        ("97500", "2200", "3500", 21.0, 34.0),
+        ("90000", "3600", "1050", 32.0, 9.0),
+    ] {
+        let text_box = parse_normal_autofit_text_box(
+            &format!(r#"fontScale="{font_scale}""#),
+            &format!(
+                concat!(
+                    r#"<a:p><a:r><a:rPr sz="{heading_sz}" b="1"/><a:t>Heading</a:t></a:r></a:p>"#,
+                    r#"<a:p><a:r><a:rPr sz="{body_sz}" i="1"/><a:t>Body</a:t></a:r></a:p>"#,
+                ),
+                heading_sz = heading_sz,
+                body_sz = body_sz,
+            ),
+        );
+        let sizes: Vec<Option<f64>> = text_box
+            .content
+            .iter()
+            .map(|block| match block {
+                Block::Paragraph(paragraph) => paragraph.runs[0].style.font_size,
+                other => panic!("expected a paragraph, got {other:?}"),
+            })
+            .collect();
+
+        assert_eq!(
+            sizes,
+            vec![Some(expected_heading), Some(expected_body)],
+            "fontScale={font_scale} on sz={heading_sz}/{body_sz}"
         );
     }
 }
@@ -975,10 +1023,15 @@ fn normal_autofit_scales_explicit_list_marker_sizes_too() {
             .marker_style
             .as_ref()
             .and_then(|style| style.font_size),
-        Some(13.5)
+        Some(14.0),
+        "a 15pt bullet at 90% is 13.5pt, which PowerPoint paints at 14pt"
     );
 }
 
+/// ECMA-376 21.1.2.1.2 subtracts `lnSpcReduction` from the percentage line
+/// spacing, so 120% less 20% is 100%. The multiplicative reading (120% x 0.8 =
+/// 96%) paced the #1375 deck's 110%-less-20% body at 88% where PowerPoint
+/// paints 90%, the same pitch as its 90% neighbours.
 #[test]
 fn normal_autofit_reduces_only_percentage_line_spacing() {
     let text_box = parse_normal_autofit_text_box(
@@ -1000,7 +1053,7 @@ fn normal_autofit_reduces_only_percentage_line_spacing() {
         .collect();
     assert!(matches!(
         paragraphs[0].style.line_spacing,
-        Some(LineSpacing::Proportional(value)) if (value - 0.96).abs() < 1e-9
+        Some(LineSpacing::Proportional(value)) if (value - 1.0).abs() < 1e-9
     ));
     assert!(matches!(
         paragraphs[1].style.line_spacing,
