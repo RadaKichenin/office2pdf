@@ -1142,6 +1142,115 @@ fn a_heavily_stretched_justified_line_gives_every_gap_one_width() {
     }
 }
 
+/// The completed frame is where Word's phases are applied (issue #1280), and
+/// there an auto space and a word space are both just space glyphs. Codegen
+/// marks each auto space for it.
+#[test]
+fn the_east_asian_auto_space_is_marked_for_the_completed_frame() {
+    let doc = make_doc(vec![make_flow_page(vec![korean_paragraph(
+        "2026\u{E001}년 8\u{E001}월 계약",
+        Some(Alignment::Justify),
+        Some("Malgun Gothic"),
+    )])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert_eq!(
+        result
+            .matches("#metadata(\"office2pdf-docx-auto-space\")#text(")
+            .count(),
+        2,
+        "every auto space is marked, immediately before it: {result}"
+    );
+    assert_eq!(
+        result.matches("[\\u{00A0}]").count(),
+        2,
+        "the marker adds no glyph of its own: {result}"
+    );
+}
+
+/// Word's phase 1, measured on `korean_alignment_autospace.docx`: the second
+/// line of the wrapping justified paragraph stretches 3.05pt over twelve word
+/// spaces and four auto spaces, and its native Word export puts the word
+/// spaces at 3.9493pt while the auto spaces stay at 2.6240pt, their quarter
+/// em. Typst's single ratio had moved the auto spaces to 2.89pt and the word
+/// spaces only to 3.86pt, displacing the second `2026` by 0.45pt (issue
+/// #1280).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_lightly_stretched_justified_line_fills_its_word_spaces_first() {
+    if !host_can_shape_korean_family("Malgun Gothic") {
+        return;
+    }
+
+    let data = std::fs::read(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/docx/korean_alignment_autospace.docx"
+    ))
+    .expect("fixture");
+    let (doc, _warnings) = crate::parser::Parser::parse(
+        &crate::parser::docx::DocxParser,
+        &data,
+        &crate::config::ConvertOptions::default(),
+    )
+    .expect("parse");
+    let source = generate_typst(&doc).unwrap().source;
+    let runs = crate::render::pdf::compiled_text_runs(&source, 0).expect("compile");
+
+    // The lightly stretched line is the wrapping paragraph's second, which
+    // carries `각각` — a token that appears nowhere else in the file.
+    let baseline: f64 = runs
+        .iter()
+        .find(|run| run.text.contains("각각"))
+        .expect("the wrapping paragraph's second line")
+        .baseline_pt;
+    let mut line: Vec<&crate::render::pdf::PlacedTextRun> = runs
+        .iter()
+        .filter(|run| (run.baseline_pt - baseline).abs() < 0.01)
+        .collect();
+    line.sort_by(|left, right| left.left_pt.total_cmp(&right.left_pt));
+    // The whole line has to be Word's line for its phase to be Word's phase.
+    if !line.iter().all(|run| run.family == "Malgun Gothic") {
+        return;
+    }
+
+    let mut word_gaps: Vec<f64> = Vec::new();
+    let mut auto_gaps: Vec<f64> = Vec::new();
+    for (index, run) in line.iter().enumerate() {
+        let Some(next) = line.get(index + 1) else {
+            break;
+        };
+        let width: f64 = next.left_pt - run.left_pt;
+        match run.text.as_str() {
+            " " => word_gaps.push(width),
+            "\u{00A0}" => auto_gaps.push(width),
+            _ => {}
+        }
+    }
+    if word_gaps.is_empty() {
+        return;
+    }
+    assert_eq!(
+        auto_gaps.len(),
+        4,
+        "the line's four auto spaces: {auto_gaps:?}"
+    );
+
+    for gap in &auto_gaps {
+        assert!(
+            (gap - 2.625).abs() < 0.01,
+            "an auto space stays at its quarter em while the word spaces are \
+             short of half an em, but measured {gap:.4}pt (Word: 2.6240pt)"
+        );
+    }
+    for gap in &word_gaps {
+        assert!(
+            (gap - 3.949).abs() < 0.03,
+            "the word spaces take the whole 3.05pt demand, 3.9493pt each in \
+             Word's export, but measured {gap:.4}pt"
+        );
+    }
+}
+
 /// The ceiling is Word's answer for a line carrying the auto space. Typst's
 /// line breaker prices a line against the allowance it is given, so stating
 /// it where no auto space exists would move breaks in ordinary justified

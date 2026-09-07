@@ -1239,3 +1239,263 @@ fn the_world_hands_typst_a_one_source_face_unchanged() {
     ));
     assert_eq!(handed_over.data().len(), font.data().len());
 }
+
+/// One expandable gap of a compiled line: a space glyph and the width the
+/// line gave it, in page points.
+struct CompiledGap {
+    left_pt: f64,
+    width_pt: f64,
+    is_auto_space: bool,
+}
+
+/// The gaps of the first line of `frame`, left to right, read from the glyph
+/// advances the exporter will paint. The auto space is the run codegen emits
+/// for it: one no-break space of its own.
+fn first_line_gaps(frame: &typst::layout::Frame) -> Vec<CompiledGap> {
+    use typst::layout::{FrameItem, Transform};
+
+    fn collect(
+        frame: &typst::layout::Frame,
+        transform: Transform,
+        out: &mut Vec<(f64, CompiledGap)>,
+    ) {
+        for (position, item) in frame.items() {
+            let at = transform.pre_concat(Transform::translate(position.x, position.y));
+            match item {
+                FrameItem::Group(group) => {
+                    collect(&group.frame, at.pre_concat(group.transform), out)
+                }
+                FrameItem::Text(text) => {
+                    let mut cursor: f64 = at.tx.to_pt();
+                    for glyph in &text.glyphs {
+                        let width: f64 = glyph.x_advance.at(text.size).to_pt();
+                        let is_space: bool = text.text[glyph.range()]
+                            .chars()
+                            .all(|c| matches!(c, ' ' | '\u{00A0}' | '\u{3000}'));
+                        if is_space && width > 0.0 {
+                            out.push((
+                                at.ty.to_pt(),
+                                CompiledGap {
+                                    left_pt: cursor,
+                                    width_pt: width,
+                                    is_auto_space: text.text == "\u{00A0}",
+                                },
+                            ));
+                        }
+                        cursor += width;
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let mut gaps: Vec<(f64, CompiledGap)> = Vec::new();
+    collect(frame, Transform::identity(), &mut gaps);
+    let first_baseline: f64 = gaps
+        .iter()
+        .map(|(baseline, _)| *baseline)
+        .fold(f64::MAX, f64::min);
+    let mut line: Vec<CompiledGap> = gaps
+        .into_iter()
+        .filter(|(baseline, _)| (baseline - first_baseline).abs() < 0.001)
+        .map(|(_, gap)| gap)
+        .collect();
+    line.sort_by(|a, b| a.left_pt.total_cmp(&b.left_pt));
+    line
+}
+
+/// A justified Latin line in the embedded Libertinus Serif, carrying the same
+/// auto-space emission and ceiling codegen writes for a Korean paragraph, and
+/// stretched by exactly `demand` (a Typst length expression that may use
+/// `sp`, the face's word space). The face makes the numbers the same on every
+/// target; the phases do not depend on the script.
+fn justified_auto_space_line_source(demand: &str, tail: &str) -> String {
+    format!(
+        r##"
+#set page(width: 400pt, height: 200pt, margin: 0pt)
+#set text(font: "Libertinus Serif", size: 10.5pt)
+#set par(justify: true, linebreaks: "simple", leading: 0pt)
+#set par(justification-limits: (spacing: (min: 80%, max: 0.0001% + 0.5em)))
+#let gap = [#metadata("office2pdf-docx-auto-space")#text(spacing: 2.625pt)[\u{{00A0}}]]
+#let first = [alpha beta gamma delta#gap;epsilon zeta eta theta#gap;{tail}]
+#context {{
+  let sp = measure([n n]).width - measure([nn]).width
+  block(width: measure(first).width + ({demand}))[#first wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww]
+}}
+"##
+    )
+}
+
+fn compile_first_line_gaps(source: &str) -> (Vec<CompiledGap>, Vec<CompiledGap>) {
+    let world = MinimalWorld::new(source, &[], &[]);
+    let mut document = typst::compile::<typst::layout::PagedDocument>(&world)
+        .output
+        .unwrap();
+    let before: Vec<CompiledGap> = first_line_gaps(&document.pages[0].frame);
+    apply_completed_frame_passes(&mut document);
+    let after: Vec<CompiledGap> = first_line_gaps(&document.pages[0].frame);
+    (before, after)
+}
+
+/// Word's phase 1 (issue #1280): while the word spaces of a justified line
+/// are short of half an em, they take the whole stretch demand and the East
+/// Asian/Latin auto spaces stay at their quarter em. Typst's one ratio moves
+/// both, so the completed line is re-spread.
+#[test]
+fn a_lightly_stretched_justified_line_keeps_its_auto_spaces_at_a_quarter_em() {
+    let source = justified_auto_space_line_source("1.5pt", "iota kappa");
+    let (before, after) = compile_first_line_gaps(&source);
+
+    assert_eq!(before.len(), 9, "seven word spaces and two auto spaces");
+    assert_eq!(after.len(), 9);
+    assert!(
+        before
+            .iter()
+            .filter(|gap| gap.is_auto_space)
+            .all(|gap| gap.width_pt > 2.625 + 0.01),
+        "Typst stretches the auto spaces from the first point of demand"
+    );
+
+    let auto_widths: Vec<f64> = after
+        .iter()
+        .filter(|gap| gap.is_auto_space)
+        .map(|gap| gap.width_pt)
+        .collect();
+    let word_widths: Vec<f64> = after
+        .iter()
+        .filter(|gap| !gap.is_auto_space)
+        .map(|gap| gap.width_pt)
+        .collect();
+    assert_eq!(auto_widths.len(), 2);
+    assert_eq!(word_widths.len(), 7);
+    for width in &auto_widths {
+        assert!(
+            (width - 2.625).abs() < 1e-6,
+            "an auto space stays at its quarter em: {width}"
+        );
+    }
+    for width in &word_widths {
+        assert!(
+            (width - word_widths[0]).abs() < 1e-6,
+            "the word spaces share the demand equally: {word_widths:?}"
+        );
+    }
+    let total_before: f64 = before.iter().map(|gap| gap.width_pt).sum();
+    let total_after: f64 = after.iter().map(|gap| gap.width_pt).sum();
+    assert!(
+        (total_before - total_after).abs() < 1e-6,
+        "the line keeps its width"
+    );
+    // The word spaces took back what the auto spaces had been given.
+    assert!(
+        word_widths[0]
+            > before
+                .iter()
+                .find(|gap| !gap.is_auto_space)
+                .unwrap()
+                .width_pt
+    );
+}
+
+/// Word's phase 2: past the word spaces' half em the auto spaces take the
+/// remainder equally while the word spaces stay pinned.
+#[test]
+fn a_heavier_justified_line_pins_its_word_spaces_at_half_an_em() {
+    let source = justified_auto_space_line_source("7 * (5.25pt - sp) + 1pt", "iota kappa");
+    let (before, after) = compile_first_line_gaps(&source);
+
+    let auto_widths: Vec<f64> = after
+        .iter()
+        .filter(|gap| gap.is_auto_space)
+        .map(|gap| gap.width_pt)
+        .collect();
+    let word_widths: Vec<f64> = after
+        .iter()
+        .filter(|gap| !gap.is_auto_space)
+        .map(|gap| gap.width_pt)
+        .collect();
+    assert_eq!(auto_widths.len(), 2);
+    assert_eq!(word_widths.len(), 7);
+    for width in &word_widths {
+        assert!(
+            (width - 5.25).abs() < 1e-6,
+            "a word space sits at its half em: {width}"
+        );
+    }
+    let total_before: f64 = before.iter().map(|gap| gap.width_pt).sum();
+    let remainder: f64 = total_before - 7.0 * 5.25 - 2.0 * 2.625;
+    assert!(remainder > 0.5, "the demand reaches phase 2: {remainder}");
+    for width in &auto_widths {
+        assert!(
+            (width - (2.625 + remainder / 2.0)).abs() < 1e-6,
+            "the auto spaces share the remainder: {width}"
+        );
+    }
+}
+
+/// Re-spreading moves every later item of the line by the same amount its
+/// text moved: a link and an underline drawn over a word that sits between
+/// the gaps stay on it. (The last word never moves: the line keeps its
+/// width.)
+#[test]
+fn the_re_spread_line_moves_links_and_underlines_with_their_text() {
+    use typst::layout::{Frame, FrameItem, Transform};
+    use typst::visualize::Geometry;
+
+    /// `(x, width)` of the run named, its link, and its underline.
+    fn anchors(frame: &Frame, transform: Transform, out: &mut [Vec<(f64, f64)>; 3]) {
+        for (position, item) in frame.items() {
+            let at = transform.pre_concat(Transform::translate(position.x, position.y));
+            match item {
+                FrameItem::Group(group) => {
+                    anchors(&group.frame, at.pre_concat(group.transform), out)
+                }
+                FrameItem::Text(text) if text.text.as_str() == "iota" => {
+                    out[0].push((at.tx.to_pt(), text.width().to_pt()));
+                }
+                FrameItem::Link(_, size) => out[1].push((at.tx.to_pt(), size.x.to_pt())),
+                FrameItem::Shape(shape, _) => {
+                    if let Geometry::Line(to) = shape.geometry {
+                        out[2].push((at.tx.to_pt(), to.x.to_pt()));
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let source = justified_auto_space_line_source(
+        "1.5pt",
+        r#"#underline(evade: false)[#link("https://example.com")[iota]] kappa"#,
+    );
+    let world = MinimalWorld::new(&source, &[], &[]);
+    let mut document = typst::compile::<typst::layout::PagedDocument>(&world)
+        .output
+        .unwrap();
+    let mut before = [Vec::new(), Vec::new(), Vec::new()];
+    anchors(&document.pages[0].frame, Transform::identity(), &mut before);
+    apply_completed_frame_passes(&mut document);
+    let mut after = [Vec::new(), Vec::new(), Vec::new()];
+    anchors(&document.pages[0].frame, Transform::identity(), &mut after);
+
+    assert_eq!(before[0].len(), 1, "one `iota` run");
+    assert_eq!(after[1].len(), 1, "one link");
+    assert_eq!(after[2].len(), 1, "one underline");
+    let (text_x, text_width) = after[0][0];
+    assert!(
+        (text_x - before[0][0].0).abs() > 0.01,
+        "a word between the gaps moves when they are re-spread"
+    );
+    for (kind, name) in [(1, "link"), (2, "underline")] {
+        let (x, width) = after[kind][0];
+        assert!(
+            (x - text_x).abs() < 1e-6,
+            "the {name} starts where its text starts: {x} vs {text_x}"
+        );
+        assert!(
+            (width - text_width).abs() < 1e-6,
+            "the {name} is as wide as its text: {width} vs {text_width}"
+        );
+    }
+}
