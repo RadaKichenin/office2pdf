@@ -1499,3 +1499,203 @@ fn the_re_spread_line_moves_links_and_underlines_with_their_text() {
         );
     }
 }
+
+/// A private directory of font files that is removed when the test ends.
+struct TempFontDir {
+    path: PathBuf,
+}
+
+impl TempFontDir {
+    fn new(label: &str) -> Self {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be valid")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("office2pdf-{label}-{unique}"));
+        std::fs::create_dir_all(&path).expect("temp font dir should be creatable");
+        Self { path }
+    }
+}
+
+impl Drop for TempFontDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.path);
+    }
+}
+
+/// The tracked Noto Serif face, which every runner has.
+fn tracked_noto_serif_bytes() -> Vec<u8> {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fonts/NotoSerif-Regular.ttf");
+    std::fs::read(path).expect("the tracked Noto Serif face should be readable")
+}
+
+/// Rewrite the `hhea` line gap of a TrueType file in place, leaving every
+/// other table — the PostScript name above all — untouched.
+fn with_hhea_line_gap(mut font_bytes: Vec<u8>, line_gap: i16) -> Vec<u8> {
+    let table_count = usize::from(u16::from_be_bytes([font_bytes[4], font_bytes[5]]));
+    let hhea_offset: usize = (0..table_count)
+        .map(|record| 12 + record * 16)
+        .find(|&record| &font_bytes[record..record + 4] == b"hhea")
+        .map(|record| {
+            u32::from_be_bytes([
+                font_bytes[record + 8],
+                font_bytes[record + 9],
+                font_bytes[record + 10],
+                font_bytes[record + 11],
+            ]) as usize
+        })
+        .expect("a TrueType face carries an hhea table");
+    // `hhea`: version (4 bytes), ascender (2), descender (2), lineGap (2).
+    font_bytes[hhea_offset + 8..hhea_offset + 10].copy_from_slice(&line_gap.to_be_bytes());
+    font_bytes
+}
+
+/// Index the given directories in order, the way [`get_fonts_for_extra_paths`]
+/// indexes the Office bundle ahead of the system, without the host's fonts.
+fn font_data_for_dirs(font_dirs: &[PathBuf]) -> CachedFontData {
+    let mut searcher = FontSearcher::new();
+    searcher.include_system_fonts(false);
+    searcher.include_embedded_fonts(false);
+    let font_data = searcher.search_with(font_dirs.iter().map(|path| path.as_path()));
+    CachedFontData {
+        book: LazyHash::new(font_data.book),
+        fonts: font_data.fonts,
+    }
+}
+
+fn hhea_line_gap(font: &Font) -> i16 {
+    font.ttf().tables().hhea.line_gap
+}
+
+const NOTO_SERIF_LINE_GAP: i16 = 0;
+const REWRITTEN_LINE_GAP: i16 = 200;
+
+/// Word draws with the face an Office application bundles, but it paces the
+/// line on the system-shipped face that shares that face's PostScript name.
+/// Measured on Times New Roman, whose bundled copy declares no `hhea` line gap
+/// while the system copy declares 87/2048 (issue #1284).
+#[test]
+fn a_system_face_sharing_the_bundled_faces_postscript_name_supplies_the_line_metrics() {
+    let bundle = TempFontDir::new("office-bundle");
+    let system = TempFontDir::new("system-fonts");
+    std::fs::write(
+        bundle.path.join("NotoSerif-Regular.ttf"),
+        with_hhea_line_gap(tracked_noto_serif_bytes(), REWRITTEN_LINE_GAP),
+    )
+    .unwrap();
+    std::fs::write(
+        system.path.join("NotoSerif-Regular.ttf"),
+        tracked_noto_serif_bytes(),
+    )
+    .unwrap();
+    let data = font_data_for_dirs(&[bundle.path.clone(), system.path.clone()]);
+
+    // The premise: the bundled copy is the face the compiler shapes with.
+    let shaped_index = best_face_index(&data, "Noto Serif").expect("the family is indexed");
+    let shaped = data.fonts[shaped_index]
+        .get()
+        .expect("the bundled face loads");
+    assert!(
+        data.fonts[shaped_index]
+            .path()
+            .unwrap()
+            .starts_with(&bundle.path)
+    );
+    assert_eq!(hhea_line_gap(&shaped), REWRITTEN_LINE_GAP);
+
+    let measured = line_metric_face_in(
+        &data,
+        std::slice::from_ref(&bundle.path),
+        std::slice::from_ref(&system.path),
+        "Noto Serif",
+    )
+    .expect("a line-metric face resolves");
+    assert_eq!(
+        hhea_line_gap(&measured),
+        NOTO_SERIF_LINE_GAP,
+        "the line box must follow the system copy's hhea, not the bundled one's"
+    );
+}
+
+/// A copy outside the system font directories does not shadow the bundle: a
+/// user-installed Rockwell sharing the bundled face's PostScript name left
+/// Word's pitch on the bundled metrics, even after a relaunch (issue #1284).
+#[test]
+fn a_user_installed_face_sharing_the_postscript_name_does_not_shadow_the_bundle() {
+    let bundle = TempFontDir::new("office-bundle");
+    let user = TempFontDir::new("user-fonts");
+    std::fs::write(
+        bundle.path.join("NotoSerif-Regular.ttf"),
+        with_hhea_line_gap(tracked_noto_serif_bytes(), REWRITTEN_LINE_GAP),
+    )
+    .unwrap();
+    std::fs::write(
+        user.path.join("NotoSerif-Regular.ttf"),
+        tracked_noto_serif_bytes(),
+    )
+    .unwrap();
+    let data = font_data_for_dirs(&[bundle.path.clone(), user.path.clone()]);
+
+    let measured =
+        line_metric_face_in(&data, std::slice::from_ref(&bundle.path), &[], "Noto Serif")
+            .expect("a line-metric face resolves");
+    assert_eq!(hhea_line_gap(&measured), REWRITTEN_LINE_GAP);
+}
+
+/// When the compiler already shapes with a face outside the bundle, that face
+/// is the one measured; nothing is swapped underneath it.
+#[test]
+fn a_face_resolved_outside_the_bundle_keeps_its_own_line_metrics() {
+    let bundle = TempFontDir::new("office-bundle");
+    let system = TempFontDir::new("system-fonts");
+    std::fs::write(
+        bundle.path.join("NotoSerif-Regular.ttf"),
+        with_hhea_line_gap(tracked_noto_serif_bytes(), REWRITTEN_LINE_GAP),
+    )
+    .unwrap();
+    std::fs::write(
+        system.path.join("NotoSerif-Regular.ttf"),
+        with_hhea_line_gap(tracked_noto_serif_bytes(), 300),
+    )
+    .unwrap();
+    // System first: the resolved face is the system copy itself.
+    let data = font_data_for_dirs(&[system.path.clone(), bundle.path.clone()]);
+
+    let measured = line_metric_face_in(
+        &data,
+        std::slice::from_ref(&bundle.path),
+        std::slice::from_ref(&system.path),
+        "Noto Serif",
+    )
+    .expect("a line-metric face resolves");
+    assert_eq!(hhea_line_gap(&measured), 300);
+}
+
+/// The defect as filed: on a Mac with Office installed, `Times New Roman`
+/// resolves Word's bundled `times.ttf` (`hhea` 1825 / -443 / 0) while Word
+/// paces on the system copy's 1825 / -443 / 87, so a native export sets a
+/// 12pt body line 13.80pt apart and ours set it 13.29pt apart (issue #1284).
+#[test]
+fn times_new_roman_line_box_follows_the_system_copy_beside_the_office_bundle() {
+    let bundled = std::path::Path::new(
+        "/Applications/Microsoft Word.app/Contents/Resources/DFonts/times.ttf",
+    );
+    let system = std::path::Path::new("/System/Library/Fonts/Supplemental/Times New Roman.ttf");
+    if !bundled.exists() || !system.exists() {
+        return;
+    }
+    let (top_em, bottom_em, pitch_em) =
+        font_line_metrics_em("Times New Roman").expect("the face is installed");
+    let tolerance = 1e-9;
+    assert!((top_em - 1912.0 / 2048.0).abs() < tolerance, "top {top_em}");
+    assert!(
+        (bottom_em - 443.0 / 2048.0).abs() < tolerance,
+        "bottom {bottom_em}"
+    );
+    assert!(
+        (pitch_em - 2355.0 / 2048.0).abs() < tolerance,
+        "pitch {pitch_em}"
+    );
+    let gap_em = font_line_gap_em("Times New Roman").expect("the face is installed");
+    assert!((gap_em - 87.0 / 2048.0).abs() < tolerance, "gap {gap_em}");
+}
