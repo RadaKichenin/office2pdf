@@ -1421,6 +1421,7 @@ fn test_document_requests_font_families_true_for_a_chart_only_document() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
         value_axis_number_format: None,
+        secondary_value_axis: None,
         auto_title_deleted: false,
         has_automatic_title: false,
         title_layout: None,
@@ -1486,6 +1487,27 @@ fn test_document_requests_font_families_true_for_a_chart_only_document() {
     }));
     assert_eq!(faces, ["Cambria", "Arial"]);
     assert!(!visit_chart_fonts(&chart, &mut |family, _| family != "Arial"));
+
+    // A secondary axis' own face is a request like the primary's (#1374).
+    chart.secondary_value_axis = Some(crate::ir::ChartSecondaryValueAxis {
+        side: crate::ir::ValueAxisSide::Right,
+        deleted: false,
+        number_format: None,
+        major_unit: None,
+        min: None,
+        max: None,
+        major_tick_mark: crate::ir::AxisTickMark::None,
+        line: crate::ir::ChartLine::Automatic,
+        text_font_family: Some("Georgia".to_string()),
+        text_style: crate::ir::ChartTextStyle::default(),
+    });
+    let mut faces = Vec::new();
+    assert!(visit_chart_fonts(&chart, &mut |family, _| {
+        faces.push(family.to_string());
+        true
+    }));
+    assert_eq!(faces, ["Cambria", "Arial", "Georgia"]);
+    chart.secondary_value_axis = None;
 
     // A chart that names nothing still asks for nothing.
     chart.category_axis_text_font_family = None;

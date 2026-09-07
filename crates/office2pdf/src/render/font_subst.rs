@@ -1452,6 +1452,11 @@ pub(super) fn visit_chart_fonts(
         chart.text_font_family.as_deref(),
         chart.category_axis_text_font_family.as_deref(),
         chart.value_axis_text_font_family.as_deref(),
+        // The secondary axis names its face independently too (issue #1374).
+        chart
+            .secondary_value_axis
+            .as_ref()
+            .and_then(|axis| axis.text_font_family.as_deref()),
     ]
     .into_iter()
     .flatten()

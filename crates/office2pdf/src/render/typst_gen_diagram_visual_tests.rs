@@ -28,6 +28,7 @@ fn test_codegen_chart_bar_visual_bars() {
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            value_axis: crate::ir::ChartValueAxisRole::Primary,
             marker_symbol: None,
             marker_style: Default::default(),
             line_width_pt: None,
@@ -63,6 +64,7 @@ fn test_codegen_chart_bar_visual_bars() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
         value_axis_number_format: None,
+        secondary_value_axis: None,
         auto_title_deleted: false,
         has_automatic_title: false,
         title_layout: None,
@@ -117,6 +119,7 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            value_axis: crate::ir::ChartValueAxisRole::Primary,
             marker_symbol: None,
             marker_style: Default::default(),
             line_width_pt: None,
@@ -152,6 +155,7 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
         value_axis_number_format: None,
+        secondary_value_axis: None,
         auto_title_deleted: false,
         has_automatic_title: false,
         title_layout: None,
@@ -194,6 +198,7 @@ fn test_codegen_chart_pie_draws_a_pie() {
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            value_axis: crate::ir::ChartValueAxisRole::Primary,
             marker_symbol: None,
             marker_style: Default::default(),
             line_width_pt: None,
@@ -229,6 +234,7 @@ fn test_codegen_chart_pie_draws_a_pie() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
         value_axis_number_format: None,
+        secondary_value_axis: None,
         auto_title_deleted: false,
         has_automatic_title: false,
         title_layout: None,
@@ -276,6 +282,7 @@ fn test_codegen_chart_line_trend_indicators() {
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            value_axis: crate::ir::ChartValueAxisRole::Primary,
             marker_symbol: None,
             marker_style: Default::default(),
             line_width_pt: None,
@@ -311,6 +318,7 @@ fn test_codegen_chart_line_trend_indicators() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
         value_axis_number_format: None,
+        secondary_value_axis: None,
         auto_title_deleted: false,
         has_automatic_title: false,
         title_layout: None,
@@ -376,6 +384,7 @@ fn test_codegen_chart_empty_series() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
         value_axis_number_format: None,
+        secondary_value_axis: None,
         auto_title_deleted: false,
         has_automatic_title: false,
         title_layout: None,
@@ -447,6 +456,7 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            value_axis: crate::ir::ChartValueAxisRole::Primary,
             marker_symbol: None,
             marker_style: Default::default(),
             line_width_pt: None,
@@ -482,6 +492,7 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
         value_axis_number_format: None,
+        secondary_value_axis: None,
         auto_title_deleted: false,
         has_automatic_title: false,
         title_layout: None,
@@ -522,6 +533,7 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            value_axis: crate::ir::ChartValueAxisRole::Primary,
             marker_symbol: None,
             marker_style: Default::default(),
             line_width_pt: None,
@@ -557,6 +569,7 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
         value_axis_number_format: None,
+        secondary_value_axis: None,
         auto_title_deleted: false,
         has_automatic_title: false,
         title_layout: None,
@@ -741,6 +754,7 @@ fn test_codegen_chart_line_plot() {
                 data_labels: DataLabels::default(),
                 number_format: None,
                 plot_type: None,
+                value_axis: crate::ir::ChartValueAxisRole::Primary,
                 marker_symbol: None,
                 marker_style: Default::default(),
                 line_width_pt: None,
@@ -756,6 +770,7 @@ fn test_codegen_chart_line_plot() {
                 data_labels: DataLabels::default(),
                 number_format: None,
                 plot_type: None,
+                value_axis: crate::ir::ChartValueAxisRole::Primary,
                 marker_symbol: None,
                 marker_style: Default::default(),
                 line_width_pt: None,
@@ -792,6 +807,7 @@ fn test_codegen_chart_line_plot() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
         value_axis_number_format: None,
+        secondary_value_axis: None,
         auto_title_deleted: false,
         has_automatic_title: false,
         title_layout: None,
@@ -837,6 +853,7 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            value_axis: crate::ir::ChartValueAxisRole::Primary,
             marker_symbol: None,
             marker_style: Default::default(),
             line_width_pt: None,
@@ -872,6 +889,7 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
         value_axis_number_format: None,
+        secondary_value_axis: None,
         auto_title_deleted: false,
         has_automatic_title: false,
         title_layout: None,
@@ -917,6 +935,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
                 data_labels: DataLabels::default(),
                 number_format: None,
                 plot_type: None,
+                value_axis: crate::ir::ChartValueAxisRole::Primary,
                 marker_symbol: None,
                 marker_style: Default::default(),
                 line_width_pt: None,
@@ -932,6 +951,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
                 data_labels: DataLabels::default(),
                 number_format: None,
                 plot_type: None,
+                value_axis: crate::ir::ChartValueAxisRole::Primary,
                 marker_symbol: None,
                 marker_style: Default::default(),
                 line_width_pt: None,
@@ -947,6 +967,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
                 data_labels: DataLabels::default(),
                 number_format: None,
                 plot_type: None,
+                value_axis: crate::ir::ChartValueAxisRole::Primary,
                 marker_symbol: None,
                 marker_style: Default::default(),
                 line_width_pt: None,
@@ -962,6 +983,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
                 data_labels: DataLabels::default(),
                 number_format: None,
                 plot_type: None,
+                value_axis: crate::ir::ChartValueAxisRole::Primary,
                 marker_symbol: None,
                 marker_style: Default::default(),
                 line_width_pt: None,
@@ -1001,6 +1023,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
         value_axis_number_format: None,
+        secondary_value_axis: None,
         auto_title_deleted: false,
         has_automatic_title: false,
         title_layout: None,
@@ -1132,6 +1155,7 @@ fn legend_chart(position: LegendPosition) -> Chart {
                 data_labels: DataLabels::default(),
                 number_format: None,
                 plot_type: None,
+                value_axis: crate::ir::ChartValueAxisRole::Primary,
                 marker_symbol: None,
                 marker_style: Default::default(),
                 line_width_pt: None,
@@ -1147,6 +1171,7 @@ fn legend_chart(position: LegendPosition) -> Chart {
                 data_labels: DataLabels::default(),
                 number_format: None,
                 plot_type: None,
+                value_axis: crate::ir::ChartValueAxisRole::Primary,
                 marker_symbol: None,
                 marker_style: Default::default(),
                 line_width_pt: None,
@@ -1183,6 +1208,7 @@ fn legend_chart(position: LegendPosition) -> Chart {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
         value_axis_number_format: None,
+        secondary_value_axis: None,
         auto_title_deleted: false,
         has_automatic_title: false,
         title_layout: None,
@@ -1369,6 +1395,7 @@ fn a_declared_series_fill_reaches_the_bars() {
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            value_axis: crate::ir::ChartValueAxisRole::Primary,
             marker_symbol: None,
             marker_style: Default::default(),
             line_width_pt: None,
@@ -1404,6 +1431,7 @@ fn a_declared_series_fill_reaches_the_bars() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
         value_axis_number_format: None,
+        secondary_value_axis: None,
         auto_title_deleted: false,
         has_automatic_title: false,
         title_layout: None,
@@ -1442,6 +1470,7 @@ fn a_series_without_a_fill_still_takes_the_palette() {
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            value_axis: crate::ir::ChartValueAxisRole::Primary,
             marker_symbol: None,
             marker_style: Default::default(),
             line_width_pt: None,
@@ -1477,6 +1506,7 @@ fn a_series_without_a_fill_still_takes_the_palette() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
         value_axis_number_format: None,
+        secondary_value_axis: None,
         auto_title_deleted: false,
         has_automatic_title: false,
         title_layout: None,
@@ -1513,6 +1543,7 @@ fn per_point_fills_colour_each_bar_separately() {
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            value_axis: crate::ir::ChartValueAxisRole::Primary,
             marker_symbol: None,
             marker_style: Default::default(),
             line_width_pt: None,
@@ -1548,6 +1579,7 @@ fn per_point_fills_colour_each_bar_separately() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
         value_axis_number_format: None,
+        secondary_value_axis: None,
         auto_title_deleted: false,
         has_automatic_title: false,
         title_layout: None,
@@ -1583,6 +1615,7 @@ fn axis_titled_chart(category: Option<&str>, value: Option<&str>) -> Chart {
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            value_axis: crate::ir::ChartValueAxisRole::Primary,
             marker_symbol: None,
             marker_style: Default::default(),
             line_width_pt: None,
@@ -1618,6 +1651,7 @@ fn axis_titled_chart(category: Option<&str>, value: Option<&str>) -> Chart {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
         value_axis_number_format: None,
+        secondary_value_axis: None,
         auto_title_deleted: false,
         has_automatic_title: false,
         title_layout: None,
@@ -1703,6 +1737,7 @@ fn labelled_chart(labels: DataLabels) -> Chart {
             data_labels: labels,
             number_format: None,
             plot_type: None,
+            value_axis: crate::ir::ChartValueAxisRole::Primary,
             marker_symbol: None,
             marker_style: Default::default(),
             line_width_pt: None,
@@ -1738,6 +1773,7 @@ fn labelled_chart(labels: DataLabels) -> Chart {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
         value_axis_number_format: None,
+        secondary_value_axis: None,
         auto_title_deleted: false,
         has_automatic_title: false,
         title_layout: None,
@@ -1818,6 +1854,7 @@ fn pie_chart(values: Vec<f64>) -> Chart {
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            value_axis: crate::ir::ChartValueAxisRole::Primary,
             marker_symbol: None,
             marker_style: Default::default(),
             line_width_pt: None,
@@ -1853,6 +1890,7 @@ fn pie_chart(values: Vec<f64>) -> Chart {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
         value_axis_number_format: None,
+        secondary_value_axis: None,
         auto_title_deleted: false,
         has_automatic_title: false,
         title_layout: None,
@@ -2032,6 +2070,7 @@ fn test_chart_default_gridline_matches_powerpoint() {
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            value_axis: crate::ir::ChartValueAxisRole::Primary,
             marker_symbol: None,
             marker_style: Default::default(),
             line_width_pt: None,
@@ -2067,6 +2106,7 @@ fn test_chart_default_gridline_matches_powerpoint() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
         value_axis_number_format: None,
+        secondary_value_axis: None,
         auto_title_deleted: false,
         has_automatic_title: false,
         title_layout: None,
@@ -2208,6 +2248,7 @@ fn tick_mark_chart(
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            value_axis: crate::ir::ChartValueAxisRole::Primary,
             marker_symbol: None,
             marker_style: Default::default(),
             line_width_pt: None,
@@ -2243,6 +2284,7 @@ fn tick_mark_chart(
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
         value_axis_number_format: None,
+        secondary_value_axis: None,
         auto_title_deleted: false,
         has_automatic_title: false,
         title_layout: None,
@@ -2829,6 +2871,7 @@ fn band_layout_chart(
                 data_labels: DataLabels::default(),
                 number_format: None,
                 plot_type: None,
+                value_axis: crate::ir::ChartValueAxisRole::Primary,
                 marker_symbol: None,
                 marker_style: Default::default(),
                 line_width_pt: None,
@@ -2865,6 +2908,7 @@ fn band_layout_chart(
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
         value_axis_number_format: None,
+        secondary_value_axis: None,
         auto_title_deleted: false,
         has_automatic_title: false,
         title_layout: None,
@@ -3121,6 +3165,7 @@ fn two_series_bar_chart(theme_accent_colors: Vec<crate::ir::Color>) -> Chart {
                 data_labels: DataLabels::default(),
                 number_format: None,
                 plot_type: None,
+                value_axis: crate::ir::ChartValueAxisRole::Primary,
                 marker_symbol: None,
                 marker_style: Default::default(),
                 line_width_pt: None,
@@ -3136,6 +3181,7 @@ fn two_series_bar_chart(theme_accent_colors: Vec<crate::ir::Color>) -> Chart {
                 data_labels: DataLabels::default(),
                 number_format: None,
                 plot_type: None,
+                value_axis: crate::ir::ChartValueAxisRole::Primary,
                 marker_symbol: None,
                 marker_style: Default::default(),
                 line_width_pt: None,
@@ -3172,6 +3218,7 @@ fn two_series_bar_chart(theme_accent_colors: Vec<crate::ir::Color>) -> Chart {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
         value_axis_number_format: None,
+        secondary_value_axis: None,
         auto_title_deleted: false,
         has_automatic_title: false,
         title_layout: None,
@@ -5560,6 +5607,7 @@ fn test_data_table_prints_a_series_number_format() {
             data_labels: DataLabels::default(),
             number_format: Some("0.0%".to_string()),
             plot_type: None,
+            value_axis: crate::ir::ChartValueAxisRole::Primary,
             marker_symbol: None,
             marker_style: Default::default(),
             line_width_pt: None,
@@ -5595,6 +5643,7 @@ fn test_data_table_prints_a_series_number_format() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
         value_axis_number_format: None,
+        secondary_value_axis: None,
         auto_title_deleted: false,
         has_automatic_title: false,
         title_layout: None,
@@ -5632,6 +5681,7 @@ fn test_data_table_prints_a_declared_thousands_format() {
             data_labels: DataLabels::default(),
             number_format: Some("#,##0".to_string()),
             plot_type: None,
+            value_axis: crate::ir::ChartValueAxisRole::Primary,
             marker_symbol: None,
             marker_style: Default::default(),
             line_width_pt: None,
@@ -5667,6 +5717,7 @@ fn test_data_table_prints_a_declared_thousands_format() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
         value_axis_number_format: None,
+        secondary_value_axis: None,
         auto_title_deleted: false,
         has_automatic_title: false,
         title_layout: None,
@@ -5702,6 +5753,7 @@ fn test_data_table_without_a_number_format_prints_plainly() {
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            value_axis: crate::ir::ChartValueAxisRole::Primary,
             marker_symbol: None,
             marker_style: Default::default(),
             line_width_pt: None,
@@ -5737,6 +5789,7 @@ fn test_data_table_without_a_number_format_prints_plainly() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
         value_axis_number_format: None,
+        secondary_value_axis: None,
         auto_title_deleted: false,
         has_automatic_title: false,
         title_layout: None,
@@ -5771,6 +5824,7 @@ fn test_a_currency_axis_label_is_escaped() {
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            value_axis: crate::ir::ChartValueAxisRole::Primary,
             marker_symbol: None,
             marker_style: Default::default(),
             line_width_pt: None,
@@ -5806,6 +5860,7 @@ fn test_a_currency_axis_label_is_escaped() {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
         value_axis_number_format: Some("\"$\"#,##0".to_string()),
+        secondary_value_axis: None,
         auto_title_deleted: false,
         has_automatic_title: false,
         title_layout: None,
@@ -5842,6 +5897,7 @@ fn single_series_chart(auto_title_deleted: bool) -> Chart {
             data_labels: DataLabels::default(),
             number_format: None,
             plot_type: None,
+            value_axis: crate::ir::ChartValueAxisRole::Primary,
             marker_symbol: None,
             marker_style: Default::default(),
             line_width_pt: None,
@@ -5877,6 +5933,7 @@ fn single_series_chart(auto_title_deleted: bool) -> Chart {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
         value_axis_number_format: None,
+        secondary_value_axis: None,
         auto_title_deleted,
         has_automatic_title: false,
         title_layout: None,
@@ -5934,6 +5991,7 @@ fn automatic_title_chart(series_names: &[Option<&str>], auto_title_deleted: bool
                 data_labels: DataLabels::default(),
                 number_format: None,
                 plot_type: None,
+                value_axis: crate::ir::ChartValueAxisRole::Primary,
                 marker_symbol: None,
                 marker_style: Default::default(),
                 line_width_pt: None,
@@ -5970,6 +6028,7 @@ fn automatic_title_chart(series_names: &[Option<&str>], auto_title_deleted: bool
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
         value_axis_number_format: None,
+        secondary_value_axis: None,
         auto_title_deleted,
         has_automatic_title: true,
         title_layout: None,
@@ -6657,6 +6716,7 @@ fn combo_budget_chart() -> Chart {
         data_labels: DataLabels::default(),
         number_format: None,
         plot_type: None,
+        value_axis: crate::ir::ChartValueAxisRole::Primary,
         marker_symbol: None,
         marker_style: Default::default(),
         line_width_pt: None,
@@ -6680,6 +6740,7 @@ fn combo_budget_chart() -> Chart {
                 data_labels: DataLabels::default(),
                 number_format: None,
                 plot_type: Some(ChartType::Line),
+                value_axis: crate::ir::ChartValueAxisRole::Primary,
                 marker_symbol: None,
                 marker_style: Default::default(),
                 line_width_pt: None,
@@ -6719,6 +6780,7 @@ fn combo_budget_chart() -> Chart {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
         value_axis_number_format: None,
+        secondary_value_axis: None,
         auto_title_deleted: true,
         has_automatic_title: false,
         title_layout: None,
@@ -6880,6 +6942,7 @@ fn combo_line_and_scatter_chart() -> Chart {
                 data_labels: DataLabels::default(),
                 number_format: None,
                 plot_type: None,
+                value_axis: crate::ir::ChartValueAxisRole::Primary,
                 marker_symbol: Some(MarkerSymbol::Off),
                 marker_style: Default::default(),
                 line_width_pt: None,
@@ -6895,6 +6958,7 @@ fn combo_line_and_scatter_chart() -> Chart {
                 data_labels: DataLabels::default(),
                 number_format: None,
                 plot_type: Some(ChartType::Scatter),
+                value_axis: crate::ir::ChartValueAxisRole::Primary,
                 marker_symbol: Some(MarkerSymbol::Circle),
                 marker_style: Default::default(),
                 line_width_pt: None,
@@ -6931,6 +6995,7 @@ fn combo_line_and_scatter_chart() -> Chart {
         value_axis_text_style: crate::ir::ChartTextStyle::default(),
         category_axis_number_format: None,
         value_axis_number_format: None,
+        secondary_value_axis: None,
         auto_title_deleted: true,
         has_automatic_title: false,
         title_layout: None,
@@ -9230,4 +9295,270 @@ fn declared_series_stroke_geometry_reaches_plots_and_legends() {
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// The `Success Ratios` line chart of the #1220 deck, reduced to its two axis
+/// groups: a profit margin read against a 0..20% primary axis and an acid-test
+/// ratio read against a 0..7 secondary axis on the right (issue #1374).
+fn dual_axis_line_chart() -> Chart {
+    let mut chart: Chart = two_series_bar_chart(Vec::new());
+    chart.chart_type = ChartType::Line;
+    chart.has_legend = false;
+    chart.categories = vec![
+        "Year 1".to_string(),
+        "Year 2".to_string(),
+        "Year 3".to_string(),
+    ];
+    chart.series[0].name = Some("Profit Margin".to_string());
+    chart.series[0].values = vec![0.12, 0.1495, 0.1766];
+    chart.series[0].number_format = Some("0.00%".to_string());
+    chart.series[1].name = Some("ACID Test".to_string());
+    chart.series[1].values = vec![2.34, 3.66, 6.77];
+    chart.series[1].value_axis = crate::ir::ChartValueAxisRole::Secondary;
+    chart.value_axis_max = Some(0.2);
+    chart.value_axis_number_format = Some("0%".to_string());
+    chart.value_axis_major_tick_mark = AxisTickMark::None;
+    chart.secondary_value_axis = Some(crate::ir::ChartSecondaryValueAxis {
+        side: crate::ir::ValueAxisSide::Right,
+        deleted: false,
+        number_format: None,
+        major_unit: None,
+        min: None,
+        max: Some(7.0),
+        major_tick_mark: AxisTickMark::None,
+        line: crate::ir::ChartLine::Suppressed,
+        text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+    });
+    chart
+}
+
+/// Every value tick label the source prints at the default text size, with
+/// the x offset of the box holding it. A value label is centred on its
+/// gridline in a box of stated height; a category label's box states none,
+/// which is what tells the two apart.
+fn emitted_value_labels(source: &str) -> Vec<(f64, String)> {
+    let marker: String = format!("text(size: {}pt)[", format_f64(CHART_DEFAULT_TEXT_PT));
+    source
+        .lines()
+        .filter(|line| {
+            line.contains("#place") && line.contains("box(width: ") && line.contains("height: ")
+        })
+        .filter_map(|line| {
+            let label: &str = line.rsplit_once(marker.as_str())?.1.split_once(']')?.0;
+            Some((
+                leading_pt(line.split_once("dx: ")?.1)?,
+                label.replace('\\', ""),
+            ))
+        })
+        .collect()
+}
+
+/// The points of the `index`-th emitted `path(...)`, in placement coordinates.
+fn emitted_path_points_of(source: &str, index: usize) -> Vec<(f64, f64)> {
+    let line: &str = source
+        .lines()
+        .filter(|line| line.contains("path(stroke:"))
+        .nth(index)
+        .unwrap_or_default();
+    line.match_indices("(")
+        .filter_map(|(start, _)| {
+            let body: &str = line[start + 1..].split_once(')')?.0;
+            let (x, y) = body.split_once(", ")?;
+            Some((
+                x.strip_suffix("pt")?.parse().ok()?,
+                y.strip_suffix("pt")?.parse().ok()?,
+            ))
+        })
+        .collect()
+}
+
+/// Each series is read against its own axis: the acid test's 6.77 sits at
+/// 6.77/7 of the plot height, and the profit margin's 0.1766 at 0.1766/0.2 of
+/// it. Before this both were read against one collapsed 0..7 scale, which
+/// drew the margin as a flat line along the plot floor (issue #1374).
+#[test]
+fn a_secondary_axis_series_is_scaled_against_its_own_axis() {
+    let source: String = chart_source(dual_axis_line_chart());
+    let (_, plot_y, _, plot_h) = plot_rect(&emitted_lines(&source));
+
+    let margin: Vec<(f64, f64)> = emitted_path_points_of(&source, 0);
+    let acid: Vec<(f64, f64)> = emitted_path_points_of(&source, 1);
+    assert_eq!(margin.len(), 3, "three margin points in:\n{source}");
+    assert_eq!(acid.len(), 3, "three acid-test points in:\n{source}");
+
+    let expected_margin_y: f64 = plot_y + (1.0 - 0.1766 / 0.2) * plot_h;
+    let expected_acid_y: f64 = plot_y + (1.0 - 6.77 / 7.0) * plot_h;
+    assert!(
+        (margin[2].1 - expected_margin_y).abs() < 0.05,
+        "the margin's 17.66% sits at {expected_margin_y:.2}pt on the 0..20% axis, got {:.2}pt",
+        margin[2].1
+    );
+    assert!(
+        (acid[2].1 - expected_acid_y).abs() < 0.05,
+        "the acid test's 6.77 sits at {expected_acid_y:.2}pt on the 0..7 axis, got {:.2}pt",
+        acid[2].1
+    );
+}
+
+/// The primary axis prints its own 0%..20% ticks on the left and the
+/// secondary its 0..7 on the right of the plot, each in its own format.
+#[test]
+fn each_value_axis_prints_its_own_ticks_on_its_own_side() {
+    let source: String = chart_source(dual_axis_line_chart());
+    let (plot_x, _, plot_w, _) = plot_rect(&emitted_lines(&source));
+    let labels: Vec<(f64, String)> = emitted_value_labels(&source);
+
+    let left: Vec<&str> = labels
+        .iter()
+        .filter(|(dx, _)| *dx < plot_x)
+        .map(|(_, label)| label.as_str())
+        .collect();
+    let right: Vec<&str> = labels
+        .iter()
+        .filter(|(dx, _)| *dx >= plot_x + plot_w)
+        .map(|(_, label)| label.as_str())
+        .collect();
+    assert_eq!(
+        left,
+        ["0%", "5%", "10%", "15%", "20%"],
+        "left labels in:\n{source}"
+    );
+    assert_eq!(
+        right,
+        ["0", "1", "2", "3", "4", "5", "6", "7"],
+        "right labels in:\n{source}"
+    );
+}
+
+/// A framed chart keeps its secondary labels inside the frame: the plot gives
+/// up a right-hand gutter for them, as it always has a left-hand one.
+#[test]
+fn a_framed_chart_reserves_a_gutter_for_its_secondary_axis_labels() {
+    let (frame_w, frame_h) = (400.0, 200.0);
+    let source: String = framed_chart_source(&dual_axis_line_chart(), frame_w, frame_h);
+    let (plot_x, _, plot_w, _) = plot_rect(&emitted_lines(&source));
+
+    let right_boxes: Vec<PlacedBox> = ["0", "7"]
+        .iter()
+        .map(|label| placed_box_holding(&source, label))
+        .collect();
+    for placed in right_boxes {
+        assert!(
+            placed.dx >= plot_x + plot_w,
+            "a secondary label starts right of the plot edge {:.2}pt, got {:.2}pt in:\n{source}",
+            plot_x + plot_w,
+            placed.dx
+        );
+        assert!(
+            placed.dx + placed.width <= frame_w + 1e-6,
+            "a secondary label box ends inside the {frame_w}pt frame, got {:.2}pt in:\n{source}",
+            placed.dx + placed.width
+        );
+    }
+}
+
+/// A switched-off secondary axis prints no labels and reserves no gutter, but
+/// its series still reads against its scale — hiding the axis is not the same
+/// as putting the series on the primary one.
+#[test]
+fn a_deleted_secondary_axis_keeps_its_scale_but_prints_nothing() {
+    let mut chart: Chart = dual_axis_line_chart();
+    chart
+        .secondary_value_axis
+        .as_mut()
+        .expect("the fixture carries a secondary axis")
+        .deleted = true;
+    let (frame_w, frame_h) = (400.0, 200.0);
+    let source: String = framed_chart_source(&chart, frame_w, frame_h);
+    let visible: String = framed_chart_source(&dual_axis_line_chart(), frame_w, frame_h);
+    let (plot_x, plot_y, plot_w, plot_h) = plot_rect(&emitted_lines(&source));
+    let (_, _, visible_plot_w, _) = plot_rect(&emitted_lines(&visible));
+
+    let labels: Vec<(f64, String)> = emitted_value_labels(&source);
+    assert!(
+        labels.iter().all(|(dx, _)| *dx < plot_x),
+        "a deleted secondary axis prints no label right of the plot in:\n{source}"
+    );
+    assert!(
+        plot_w > visible_plot_w,
+        "the plot reclaims the gutter a deleted axis would have used: {plot_w:.2}pt vs {visible_plot_w:.2}pt"
+    );
+    let acid: Vec<(f64, f64)> = emitted_path_points_of(&source, 1);
+    let expected_acid_y: f64 = plot_y + (1.0 - 6.77 / 7.0) * plot_h;
+    assert!(
+        (acid[2].1 - expected_acid_y).abs() < 0.05,
+        "the acid test still reads against its 0..7 axis at {expected_acid_y:.2}pt, got {:.2}pt",
+        acid[2].1
+    );
+}
+
+/// The budget columns with their spend line read against a secondary 0..200
+/// axis: the classic column-and-line combo, where the line's own scale keeps
+/// it legible over columns of a different magnitude (issue #1374).
+fn combo_budget_chart_with_secondary_line() -> Chart {
+    let mut chart: Chart = combo_budget_chart();
+    chart.series[2].value_axis = crate::ir::ChartValueAxisRole::Secondary;
+    chart.secondary_value_axis = Some(crate::ir::ChartSecondaryValueAxis {
+        side: crate::ir::ValueAxisSide::Right,
+        deleted: false,
+        number_format: None,
+        major_unit: Some(50.0),
+        min: None,
+        max: Some(200.0),
+        major_tick_mark: AxisTickMark::None,
+        line: crate::ir::ChartLine::Suppressed,
+        text_font_family: None,
+        text_style: crate::ir::ChartTextStyle::default(),
+    });
+    chart
+}
+
+/// A line laid over columns reads against the secondary axis its family
+/// references, and that axis prints its own ticks right of the plot — while
+/// the columns keep the primary scale their stacks set.
+#[test]
+fn a_line_over_columns_reads_against_its_secondary_axis() {
+    let (frame_w, frame_h) = (400.0, 240.0);
+    let source: String =
+        framed_chart_source(&combo_budget_chart_with_secondary_line(), frame_w, frame_h);
+    let (plot_x, plot_y, plot_w, plot_h) = plot_rect(&emitted_lines(&source));
+
+    let points: Vec<(f64, f64)> = emitted_path_points(&source);
+    assert_eq!(points.len(), 2, "two spend points in:\n{source}");
+    let expected_y: f64 = plot_y + plot_h - (75.0 / 200.0) * plot_h;
+    assert!(
+        (points[1].1 - expected_y).abs() < 0.05,
+        "75 on a 0..200 axis sits at {expected_y:.2}pt, got {:.2}pt in:\n{source}",
+        points[1].1
+    );
+
+    let labels: Vec<(f64, String)> = emitted_value_labels(&source);
+    let right: Vec<&str> = labels
+        .iter()
+        .filter(|(dx, _)| *dx >= plot_x + plot_w)
+        .map(|(_, label)| label.as_str())
+        .collect();
+    assert_eq!(
+        right,
+        ["0", "50", "100", "150", "200"],
+        "right labels in:\n{source}"
+    );
+    let primary_max: f64 = labels
+        .iter()
+        .filter(|(dx, _)| *dx < plot_x)
+        .filter_map(|(_, label)| label.parse::<f64>().ok())
+        .fold(0.0, f64::max);
+    assert!(
+        primary_max < 200.0,
+        "the columns' axis stops at their tallest stack of 150, got {primary_max} in:\n{source}"
+    );
+    for label in ["0", "200"] {
+        let placed: PlacedBox = placed_box_holding(&source, label);
+        assert!(
+            placed.dx + placed.width <= frame_w + 1e-6,
+            "a secondary label box ends inside the {frame_w}pt frame, got {:.2}pt in:\n{source}",
+            placed.dx + placed.width
+        );
+    }
 }

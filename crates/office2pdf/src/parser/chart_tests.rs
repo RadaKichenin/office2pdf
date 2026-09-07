@@ -3512,3 +3512,251 @@ fn an_empty_series_line_keeps_its_cap_without_inventing_a_join() {
     assert_eq!(chart.series[0].line_geometry.miter_limit, None);
     assert_eq!(chart.series[0].line_width_pt, Some(2.25));
 }
+
+/// The `Success Ratios` chart of the #1220 deck, reduced to its axis groups:
+/// two `<c:lineChart>` families, each referencing its own `<c:axId>` pair.
+/// The first plots a profit margin against a 0..20% axis on the left; the
+/// second plots an acid-test ratio against a 0..7 axis on the right, whose
+/// category axis is switched off. `axes_xml` is the four axis elements, so a
+/// test can reorder or drop them.
+fn dual_axis_line_chart_xml(axes_xml: &str) -> String {
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+            <c:chart><c:plotArea>
+                <c:lineChart>
+                    <c:grouping val="standard"/>
+                    <c:ser>
+                        <c:idx val="0"/><c:order val="0"/>
+                        <c:tx><c:strRef><c:strCache><c:pt idx="0"><c:v>Profit Margin</c:v></c:pt></c:strCache></c:strRef></c:tx>
+                        <c:cat><c:strRef><c:strCache>
+                            <c:pt idx="0"><c:v>Year 1</c:v></c:pt>
+                            <c:pt idx="1"><c:v>Year 2</c:v></c:pt>
+                            <c:pt idx="2"><c:v>Year 3</c:v></c:pt>
+                        </c:strCache></c:strRef></c:cat>
+                        <c:val><c:numRef><c:numCache><c:formatCode>0.00%</c:formatCode>
+                            <c:pt idx="0"><c:v>0.12</c:v></c:pt>
+                            <c:pt idx="1"><c:v>0.1495</c:v></c:pt>
+                            <c:pt idx="2"><c:v>0.1766</c:v></c:pt>
+                        </c:numCache></c:numRef></c:val>
+                    </c:ser>
+                    <c:marker val="1"/>
+                    <c:axId val="680487736"/><c:axId val="680492856"/>
+                </c:lineChart>
+                <c:lineChart>
+                    <c:grouping val="standard"/>
+                    <c:ser>
+                        <c:idx val="1"/><c:order val="1"/>
+                        <c:tx><c:strRef><c:strCache><c:pt idx="0"><c:v>ACID Test</c:v></c:pt></c:strCache></c:strRef></c:tx>
+                        <c:val><c:numRef><c:numCache><c:formatCode>General</c:formatCode>
+                            <c:pt idx="0"><c:v>2.34</c:v></c:pt>
+                            <c:pt idx="1"><c:v>3.66</c:v></c:pt>
+                            <c:pt idx="2"><c:v>6.77</c:v></c:pt>
+                        </c:numCache></c:numRef></c:val>
+                    </c:ser>
+                    <c:marker val="1"/>
+                    <c:axId val="680495736"/><c:axId val="680494136"/>
+                </c:lineChart>
+                {axes_xml}
+            </c:plotArea></c:chart>
+        </c:chartSpace>"#
+    )
+}
+
+const PRIMARY_CATEGORY_AXIS_XML: &str = r#"<c:catAx><c:axId val="680487736"/>
+    <c:scaling><c:orientation val="minMax"/></c:scaling>
+    <c:delete val="0"/><c:axPos val="b"/>
+    <c:majorTickMark val="none"/><c:crossAx val="680492856"/>
+</c:catAx>"#;
+
+const PRIMARY_VALUE_AXIS_XML: &str = r#"<c:valAx><c:axId val="680492856"/>
+    <c:scaling><c:orientation val="minMax"/><c:max val="0.2"/></c:scaling>
+    <c:delete val="0"/><c:axPos val="l"/><c:majorGridlines/>
+    <c:numFmt formatCode="0%" sourceLinked="0"/>
+    <c:majorTickMark val="none"/><c:crossAx val="680487736"/>
+</c:valAx>"#;
+
+const SECONDARY_VALUE_AXIS_XML: &str = r#"<c:valAx><c:axId val="680494136"/>
+    <c:scaling><c:orientation val="minMax"/><c:max val="7"/></c:scaling>
+    <c:delete val="0"/><c:axPos val="r"/>
+    <c:numFmt formatCode="General" sourceLinked="1"/>
+    <c:majorTickMark val="out"/><c:crossAx val="680495736"/>
+    <c:crosses val="max"/>
+    <c:spPr><a:noFill/><a:ln><a:noFill/></a:ln></c:spPr>
+</c:valAx>"#;
+
+const SECONDARY_CATEGORY_AXIS_XML: &str = r#"<c:catAx><c:axId val="680495736"/>
+    <c:scaling><c:orientation val="minMax"/></c:scaling>
+    <c:delete val="1"/><c:axPos val="b"/>
+    <c:majorTickMark val="out"/><c:crossAx val="680494136"/>
+</c:catAx>"#;
+
+fn dual_axis_line_chart() -> Chart {
+    let axes: String = format!(
+        "{PRIMARY_CATEGORY_AXIS_XML}{PRIMARY_VALUE_AXIS_XML}{SECONDARY_VALUE_AXIS_XML}{SECONDARY_CATEGORY_AXIS_XML}"
+    );
+    parse_chart_xml(&dual_axis_line_chart_xml(&axes), &SchemeColors::empty()).expect("chart parses")
+}
+
+/// Each family's `<c:axId>` pair says which value axis its series are read
+/// against. Before this every series read against whichever `<c:valAx>` was
+/// written last, so the profit margin drew flat under the acid test's 0..7
+/// scale (issue #1374).
+#[test]
+fn a_combo_plot_area_reads_each_series_against_the_axis_its_family_references() {
+    let chart = dual_axis_line_chart();
+
+    assert_eq!(chart.series.len(), 2);
+    assert_eq!(chart.series[0].value_axis, ChartValueAxisRole::Primary);
+    assert_eq!(chart.series[1].value_axis, ChartValueAxisRole::Secondary);
+}
+
+/// The primary axis is the one the first family references, whatever the
+/// document order of the axis elements — and it keeps its own scale, format
+/// and gridlines rather than the last-written axis' ones.
+#[test]
+fn the_primary_value_axis_is_the_one_the_first_family_references() {
+    let chart = dual_axis_line_chart();
+
+    assert_eq!(chart.value_axis_max, Some(0.2));
+    assert_eq!(chart.value_axis_min, None);
+    assert_eq!(chart.value_axis_number_format.as_deref(), Some("0%"));
+    assert_eq!(chart.value_axis_major_tick_mark, AxisTickMark::None);
+    assert_eq!(chart.major_gridline_line, ChartLine::Automatic);
+    assert!(!chart.value_axis_deleted);
+}
+
+#[test]
+fn the_secondary_value_axis_keeps_its_own_scale_format_and_side() {
+    let chart = dual_axis_line_chart();
+
+    let secondary: ChartSecondaryValueAxis = chart
+        .secondary_value_axis
+        .expect("the second family's axis reaches the model");
+    assert_eq!(secondary.max, Some(7.0));
+    assert_eq!(secondary.min, None);
+    assert_eq!(secondary.major_unit, None);
+    // `General` is no format, and the primary's `0%` must not leak across.
+    assert_eq!(secondary.number_format, None);
+    assert_eq!(secondary.side, ValueAxisSide::Right);
+    assert!(!secondary.deleted);
+    assert_eq!(secondary.major_tick_mark, AxisTickMark::Outside);
+    assert_eq!(secondary.line, ChartLine::Suppressed);
+}
+
+/// The secondary group's category axis is switched off in the #1220 deck, as
+/// Office always writes it — the two groups share one visible category axis.
+/// Reading the last `<c:catAx>` as *the* category axis hid every category
+/// label and its axis line along with it.
+#[test]
+fn a_switched_off_secondary_category_axis_leaves_the_primary_one_drawn() {
+    let chart = dual_axis_line_chart();
+
+    assert!(!chart.category_axis_deleted);
+    assert_eq!(chart.category_axis_major_tick_mark, AxisTickMark::None);
+}
+
+/// Office writes the primary group's axes first, but the association is by
+/// reference: with the secondary `<c:valAx>` written first, the first family
+/// still reads against the axis its own `<c:axId>` names.
+#[test]
+fn the_primary_axis_is_found_by_reference_not_by_position() {
+    let axes: String = format!(
+        "{SECONDARY_VALUE_AXIS_XML}{SECONDARY_CATEGORY_AXIS_XML}{PRIMARY_CATEGORY_AXIS_XML}{PRIMARY_VALUE_AXIS_XML}"
+    );
+    let chart = parse_chart_xml(&dual_axis_line_chart_xml(&axes), &SchemeColors::empty())
+        .expect("chart parses");
+
+    assert_eq!(chart.value_axis_max, Some(0.2));
+    assert_eq!(chart.value_axis_number_format.as_deref(), Some("0%"));
+    assert!(!chart.category_axis_deleted);
+    assert_eq!(chart.series[1].value_axis, ChartValueAxisRole::Secondary);
+    assert_eq!(
+        chart.secondary_value_axis.map(|axis| axis.max),
+        Some(Some(7.0))
+    );
+}
+
+/// A second `<c:valAx>` no family references is not an axis anything is read
+/// against, so it is not kept: both families here name the primary pair.
+#[test]
+fn a_value_axis_no_family_references_is_not_a_secondary_axis() {
+    let axes: String = format!(
+        "{PRIMARY_CATEGORY_AXIS_XML}{PRIMARY_VALUE_AXIS_XML}{SECONDARY_VALUE_AXIS_XML}{SECONDARY_CATEGORY_AXIS_XML}"
+    );
+    let xml: String = dual_axis_line_chart_xml(&axes).replace(
+        r#"<c:axId val="680495736"/><c:axId val="680494136"/>"#,
+        r#"<c:axId val="680487736"/><c:axId val="680492856"/>"#,
+    );
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).expect("chart parses");
+
+    assert!(chart.secondary_value_axis.is_none());
+    assert!(
+        chart
+            .series
+            .iter()
+            .all(|series| series.value_axis == ChartValueAxisRole::Primary)
+    );
+    assert_eq!(chart.value_axis_max, Some(0.2));
+}
+
+/// A combo plot area whose families state no `<c:axId>` at all — the shape
+/// the hand-written fixtures take — has one axis group, and every series is
+/// on it.
+#[test]
+fn families_naming_no_axis_all_read_the_primary_axis() {
+    let chart = parse_chart_xml(&combo_bar_and_line_chart_xml(), &SchemeColors::empty()).unwrap();
+
+    assert!(chart.secondary_value_axis.is_none());
+    assert!(
+        chart
+            .series
+            .iter()
+            .all(|series| series.value_axis == ChartValueAxisRole::Primary)
+    );
+}
+
+/// The secondary axis names its face through the same theme placeholders the
+/// primary does — the #1220 deck writes `+mn-lt` on all four axes — so the
+/// loader resolves it the same way, or its labels fall to the engine default
+/// serif beside sans-serif primary labels (issue #1374).
+#[test]
+fn the_secondary_axis_typeface_resolves_through_the_theme() {
+    let fonts = crate::parser::drawingml::ThemeFontScheme {
+        major_latin: Some("Cambria".to_string()),
+        minor_latin: Some("Trebuchet MS".to_string()),
+    };
+    for (declared, resolved) in [
+        ("+mj-lt", Some("Cambria")),
+        ("+mn-lt", Some("Trebuchet MS")),
+        ("Arial", Some("Arial")),
+        ("", None),
+    ] {
+        let secondary_axis: String = SECONDARY_VALUE_AXIS_XML.replace(
+            "</c:valAx>",
+            &format!(
+                r#"<c:txPr><a:p><a:pPr><a:defRPr sz="1500"><a:latin typeface="{declared}"/>
+                </a:defRPr></a:pPr></a:p></c:txPr></c:valAx>"#
+            ),
+        );
+        let axes: String = format!(
+            "{PRIMARY_CATEGORY_AXIS_XML}{PRIMARY_VALUE_AXIS_XML}{secondary_axis}{SECONDARY_CATEGORY_AXIS_XML}"
+        );
+        let mut chart = parse_chart_xml(&dual_axis_line_chart_xml(&axes), &SchemeColors::empty())
+            .expect("chart parses");
+        fonts.resolve_chart_text_fonts(&mut chart);
+
+        let secondary = chart
+            .secondary_value_axis
+            .expect("the secondary axis reaches the model");
+        assert_eq!(
+            secondary.text_font_family.as_deref(),
+            resolved,
+            "{declared}"
+        );
+        assert_eq!(secondary.text_style.size_pt, Some(15.0));
+        // The primary axis names no face of its own and is untouched.
+        assert!(chart.value_axis_text_font_family.is_none());
+    }
+}
